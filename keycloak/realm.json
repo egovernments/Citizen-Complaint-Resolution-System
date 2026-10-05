@@ -52,7 +52,7 @@
     "VERIFY_EMAIL": {}
   },
   "userProfile": {
-    "$comment": "DIGIT owns names (D3, D17): the BFF writes the whole name into firstName and leaves lastName empty, so lastName is not required. People cannot edit either name in Keycloak. firstName keeps Keycloak's default requirement: Keycloak does not demand a field the person may not edit, so a nameless account still signs in (checked by tests/live-check.py). \"required\": null removes the requirement; a missing key leaves it as it is.",
+    "$comment": "DIGIT owns names (D3, D17): the BFF writes the whole name into firstName and leaves lastName empty, so lastName is not required. People cannot edit either name in Keycloak. firstName keeps Keycloak's default requirement: Keycloak does not demand a field the person may not edit, so a nameless account still signs in (checked by tests/live-check.py). \"required\": null removes the requirement; a missing key leaves it as it is. The digit.* attributes are the BFF's records about a person (identity-bff.md \u00a75.1): view and edit for admin only, so the person never sees or edits them in the account console, while the BFF's admin service account reads and writes them. They are declared because Keycloak caps each value of an undeclared attribute at 2048 characters (400 error-invalid-length). Limits, per value, from the v1 schemas in backend/identity-bff/docs/contract/schemas: digit.bindings holds at most 64 records of at most ~720 characters (every optional field present, 50-character tenant ids, 64-character subjects) = 45,908, so 65536. digit.accounts holds at most 64 entries of at most ~38,000 characters (128 roles of 64-character codes on 203-character dotted tenant ids, a 180-character userName) = 2,429,745, so 4194304; a realistic entry is a few hundred characters. Every other digit.* value is under 600 characters (digit.linkPending at most 570; the multivalued ones are short ids), so they keep 2048, the limit they have today, and no stored value becomes invalid. Attributes not declared here (phoneNumber, retired digit.* names) stay admin-only through unmanagedAttributePolicy ADMIN_EDIT. Declared attributes are added to an existing realm on the next run. backend/identity-bff/tests/unit/keycloak-user-profile.test.ts checks that every digit.* user attribute the BFF writes is declared here.",
     "attributes": {
       "firstName": {
         "permissions": {
@@ -76,6 +76,161 @@
           ]
         },
         "required": null
+      },
+      "digit.accounts": {
+        "permissions": {
+          "view": [
+            "admin"
+          ],
+          "edit": [
+            "admin"
+          ]
+        },
+        "validations": {
+          "length": {
+            "max": 4194304
+          }
+        }
+      },
+      "digit.bindings": {
+        "permissions": {
+          "view": [
+            "admin"
+          ],
+          "edit": [
+            "admin"
+          ]
+        },
+        "validations": {
+          "length": {
+            "max": 65536
+          }
+        }
+      },
+      "digit.boundUuids": {
+        "permissions": {
+          "view": [
+            "admin"
+          ],
+          "edit": [
+            "admin"
+          ]
+        },
+        "validations": {
+          "length": {
+            "max": 2048
+          }
+        },
+        "multivalued": true
+      },
+      "digit.linkPending": {
+        "permissions": {
+          "view": [
+            "admin"
+          ],
+          "edit": [
+            "admin"
+          ]
+        },
+        "validations": {
+          "length": {
+            "max": 2048
+          }
+        }
+      },
+      "digit.accountLinks": {
+        "permissions": {
+          "view": [
+            "admin"
+          ],
+          "edit": [
+            "admin"
+          ]
+        },
+        "validations": {
+          "length": {
+            "max": 2048
+          }
+        },
+        "multivalued": true
+      },
+      "digit.accountLinkBlocks": {
+        "permissions": {
+          "view": [
+            "admin"
+          ],
+          "edit": [
+            "admin"
+          ]
+        },
+        "validations": {
+          "length": {
+            "max": 2048
+          }
+        },
+        "multivalued": true
+      },
+      "digit.citizenRegistrations": {
+        "permissions": {
+          "view": [
+            "admin"
+          ],
+          "edit": [
+            "admin"
+          ]
+        },
+        "validations": {
+          "length": {
+            "max": 2048
+          }
+        },
+        "multivalued": true
+      },
+      "digit.managedTenants": {
+        "permissions": {
+          "view": [
+            "admin"
+          ],
+          "edit": [
+            "admin"
+          ]
+        },
+        "validations": {
+          "length": {
+            "max": 2048
+          }
+        },
+        "multivalued": true
+      },
+      "digit.identityBffSignup": {
+        "permissions": {
+          "view": [
+            "admin"
+          ],
+          "edit": [
+            "admin"
+          ]
+        },
+        "validations": {
+          "length": {
+            "max": 2048
+          }
+        }
+      },
+      "digit.identityBffPhoneOtp": {
+        "permissions": {
+          "view": [
+            "admin"
+          ],
+          "edit": [
+            "admin"
+          ]
+        },
+        "validations": {
+          "length": {
+            "max": 2048
+          }
+        }
       }
     }
   },

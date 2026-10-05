@@ -240,6 +240,67 @@ def _():
     assert profile["unmanagedAttributePolicy"] == "ADMIN_EDIT"
 
 
+def declared_digit_attributes():
+    return {name: config for name, config in DECLARED["userProfile"]["attributes"].items()
+            if name.startswith("digit.")}
+
+
+@check("§5.1 digit.* user attributes: declared admin-only with their length limits")
+def _():
+    by_name = {a["name"]: a for a in admin("GET", "/users/profile")["attributes"]}
+    for name, wanted in declared_digit_attributes().items():
+        stored = by_name.get(name)
+        assert stored, f"{name} is not declared"
+        assert stored["permissions"] == {"view": ["admin"], "edit": ["admin"]}, stored
+        assert stored["validations"]["length"] == wanted["validations"]["length"], stored
+        assert stored.get("multivalued", False) == wanted.get("multivalued", False), stored
+    return f"{len(declared_digit_attributes())} attributes"
+
+
+@check("§5.1 an existing realm without the digit.* declarations gets them on the next run")
+def _():
+    profile = admin("GET", "/users/profile")
+    profile["attributes"] = [a for a in profile["attributes"] if not a["name"].startswith("digit.")]
+    admin("PUT", "/users/profile", profile)
+    configure()
+    names = {a["name"] for a in admin("GET", "/users/profile")["attributes"]}
+    assert set(declared_digit_attributes()) <= names, set(declared_digit_attributes()) - names
+
+
+@check("§5.1 the BFF writes and reads back a digit.bindings value over 2048 characters")
+def _():
+    # Keycloak caps an undeclared attribute at 2048 characters (400
+    # error-invalid-length); the realm declares digit.bindings with more.
+    user_id = create_user("emp-long-attributes", "long-attributes@example.test")
+    record = {"tenantId": "t" * 50, "uuid": "00000000-0000-4000-8000-000000000000", "state": "active",
+              "invitationVersion": 1, "createdAt": 1, "boundAt": 1,
+              "createdBy": {"kind": "browser", "subject": "s" * 36, "requestId": "a" * 64}}
+    bindings = json.dumps({"v": 1, "bindings": [dict(record, tenantId=f"t{i:02d}" + "t" * 47) for i in range(64)]})
+    assert len(bindings) > 2048, len(bindings)
+    bound = [f"t{i:02d}{'t' * 47}|{record['uuid']}" for i in range(64)]
+    token = service_token()  # the BFF's own admin client, not the master admin
+    user = admin("GET", f"/users/{user_id}", token=token)
+    admin("PUT", f"/users/{user_id}", {"email": user["email"], "attributes": {
+        "digit.bindings": [bindings], "digit.boundUuids": bound}}, token=token)
+    stored = admin("GET", f"/users/{user_id}", token=token)["attributes"]
+    assert stored["digit.bindings"] == [bindings], len(stored["digit.bindings"][0])
+    assert sorted(stored["digit.boundUuids"]) == sorted(bound)
+    found = admin("GET", "/users?" + urllib.parse.urlencode(
+        {"q": f"digit.boundUuids:{bound[7]}", "briefRepresentation": "false"}), token=token)
+    assert [u["id"] for u in found] == [user_id], found
+    # Past the declared limit Keycloak still refuses (the BFF logs it, §5.1).
+    limit = declared_digit_attributes()["digit.bindings"]["validations"]["length"]["max"]
+    try:
+        admin("PUT", f"/users/{user_id}", {"email": user["email"], "attributes": {
+            "digit.bindings": ["x" * (limit + 1)]}}, token=token)
+        raise AssertionError("a value over the declared limit was accepted")
+    except urllib.error.HTTPError as error:
+        assert error.code == 400 and b"error-invalid-length" in error.read(), error
+    # The declarations do not get in the way of signing in.
+    assert SignIn().password("emp-long-attributes").tokens()["access_token"]
+    return f"{len(bindings)} characters"
+
+
 @check("§12 identity providers and their mappers use IMPORT")
 def _():
     providers = admin("GET", "/identity-provider/instances")

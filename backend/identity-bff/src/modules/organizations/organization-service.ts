@@ -310,6 +310,17 @@ export async function request(
   }
   if (!accepted.includes(response.status)) {
     const detail = await response.text().catch(() => "");
+    const tooLong = response.status === 400 && /error-invalid-length/.test(detail)
+      ? /"field":"(digit\.[^"]+)"/.exec(detail)?.[1] : undefined;
+    if (tooLong) {
+      // One of the BFF's own records outgrew the realm's limit for it (2048
+      // characters while it is undeclared). Not the caller's fault: identity
+      // is unavailable until the realm allows it, and that is logged (§5.1).
+      console.error(`Keycloak refused ${init.method ?? "GET"} ${path.split("?")[0]}: ${tooLong} is longer than ` +
+        `the realm allows (${detail}). keycloak/realm.json must declare it with a larger limit; ` +
+        "configure-keycloak.sh applies that.");
+      throw new IdentityAdminError(`Keycloak refused ${tooLong} as too long`, 503);
+    }
     throw new IdentityAdminError(
       `Keycloak Admin API returned ${response.status}${detail ? `: ${detail}` : ""}`,
       response.status === 400 || response.status === 404 || response.status === 409
