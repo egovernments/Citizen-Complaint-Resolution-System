@@ -103,8 +103,17 @@ describe("binding actor validation", () => {
     it.each(["otherroot", "pgx"])("rejects SUPERUSER@%s: a workspace role never covers another root", async (tenantId) => {
       await expect(linkAs([{ code: "SUPERUSER", tenantId: "pg" }], [{ code: "SUPERUSER", tenantId }])).rejects.toMatchObject({ code: "ROLE_ESCALATION_FORBIDDEN" });
     });
-    it("does not guard operational roles at another root", async () => {
-      await expect(linkAs([{ code: "SUPERUSER", tenantId: "pg" }], [{ code: "GRO", tenantId: "otherroot" }])).resolves.toBeUndefined();
+    it.each(["otherroot", "pgx"])("still checks operational roles at another root (%s)", async (tenantId) => {
+      await expect(linkAs([{ code: "SUPERUSER", tenantId: "pg" }], [{ code: "GRO", tenantId }])).rejects.toMatchObject({ code: "ROLE_ESCALATION_FORBIDDEN" });
+    });
+  });
+  describe("operational roles outside the workspace subtree are checked", () => {
+    it.each(["otherroot", "pgx", "otherroot.citya"])("rejects GRO@%s unless the caller holds GRO there or above", async (tenantId) => {
+      await expect(linkAs([], [{ code: "GRO", tenantId }])).rejects.toMatchObject({ code: "ROLE_ESCALATION_FORBIDDEN" });
+      f.accounts.pop();
+      await expect(linkAs([{ code: "GRO", tenantId: "pg" }], [{ code: "GRO", tenantId }])).rejects.toMatchObject({ code: "ROLE_ESCALATION_FORBIDDEN" });
+      f.accounts.pop();
+      await expect(linkAs([{ code: "GRO", tenantId: tenantId.split(".")[0] }], [{ code: "GRO", tenantId }])).resolves.toBeUndefined();
     });
   });
 });

@@ -151,7 +151,7 @@ describe("resumable workspace membership", () => {
     expect(f.users.get("new-1")).toMatchObject({ email: "new@example.test", emailVerified: false, username: input.email });
     expect(f.activations).toBe(before);
   });
-  it.each(["self", "higher role", "admin role at a sub-tenant", "same role in another tenant", "founder, role at another root", "other binding", "other membership"])("denies admin email recovery for %s without changing the identity or sending email", async (reason) => {
+  it.each(["self", "higher role", "admin role at a sub-tenant", "same role in another tenant", "founder, role at another root", "operational role at another root", "other binding", "other membership"])("denies admin email recovery for %s without changing the identity or sending email", async (reason) => {
     await linkWorkspaceMember(input);
     if (reason === "higher role") f.targetRoles.push({ code: "SUPERUSER", tenantId: "pg" });
     if (reason === "admin role at a sub-tenant") f.targetRoles.push({ code: "HRMS_ADMIN", tenantId: "pg.citya" });
@@ -163,6 +163,7 @@ describe("resumable workspace membership", () => {
       f.targetRoles.push({ code: "HRMS_ADMIN", tenantId: "other" });
       f.callerRoles.push({ code: "SUPERUSER", tenantId: "pg" });
     }
+    if (reason === "operational role at another root") f.targetRoles.push({ code: "GRO", tenantId: "other" });
     if (reason === "other membership") f.members.add("other:new-1");
     if (reason === "other binding") {
       const user = f.users.get("new-1")!;
@@ -177,10 +178,11 @@ describe("resumable workspace membership", () => {
     expect(f.users.get("new-1")).toEqual(before);
     expect(f.emails).toBe(emails);
   });
-  // Same rule as _link: operational roles are not guarded, and the founder may act on any role within the workspace.
+  // Same rule as _link: operational roles inside the workspace are not guarded, and the founder may act on any role within the workspace.
   it.each([
     ["an operational role the caller lacks", [{ code: "GRO", tenantId: "pg" }, { code: "PGR_LME", tenantId: "pg.citya" }], []],
     ["an administrative role the caller holds", [{ code: "HRMS_ADMIN", tenantId: "pg.citya" }], [{ code: "HRMS_ADMIN", tenantId: "pg" }]],
+    ["an operational role at another root the caller holds", [{ code: "GRO", tenantId: "other.city" }], [{ code: "GRO", tenantId: "other" }]],
     ["any role, for the founder", [{ code: "HRMS_ADMIN", tenantId: "pg.citya" }, { code: "INTERNAL_MICROSERVICE_ROLE", tenantId: "pg" }], [{ code: "SUPERUSER", tenantId: "pg" }]],
   ])("allows admin email recovery for %s", async (_reason, targetRoles, callerRoles) => {
     await linkWorkspaceMember(input);

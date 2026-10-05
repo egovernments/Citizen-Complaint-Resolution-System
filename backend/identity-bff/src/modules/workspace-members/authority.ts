@@ -55,16 +55,18 @@ export async function validateBinding(input: { subject: string; tenantId: string
 }
 
 /**
- * The role rule shared by `_link` and `_updateEmail`. Only administrative target roles count (ADMINISTRATIVE_ROLES or
- * `*_ADMIN`), including HRMS roles at sub-tenants (pg.citya under pg): the caller must hold the same code at the
- * role's tenant or a tenant above it (pg covers pg and pg.citya, never pgx or another root). A SUPERUSER at the workspace (the founder) skips that
- * check for target roles inside the workspace subtree, so may grant any role there; roles at another root still need it.
+ * The role rule shared by `_link` and `_updateEmail`. A target role is checked when it is administrative
+ * (ADMINISTRATIVE_ROLES or `*_ADMIN`, including HRMS roles at sub-tenants such as pg.citya under pg) or when it sits
+ * outside the workspace subtree (any role at pgx or another root, since the caller's DIGIT token would carry it). The
+ * caller must hold the same code at the role's tenant or a tenant above it (pg covers pg and pg.citya, never pgx or
+ * another root). A SUPERUSER at the workspace (the founder) skips that check for target roles inside the workspace
+ * subtree, so may grant any role there; roles outside it still need it.
  */
 export function mayManageRoles(callerRoles: DigitRole[], targetRoles: DigitRole[], tenantId: string): boolean {
   const founder = callerRoles.some((c) => c.code === "SUPERUSER" && c.tenantId === tenantId);
   const inWorkspace = (roleTenant: string) => roleTenant === tenantId || roleTenant.startsWith(`${tenantId}.`);
   const covers = (callerTenant: string, roleTenant: string) =>
     callerTenant === roleTenant || roleTenant.startsWith(`${callerTenant}.`);
-  return !targetRoles.some((r) => isAdministrativeRole(r.code) && !(founder && inWorkspace(r.tenantId))
-    && !callerRoles.some((c) => c.code === r.code && covers(c.tenantId, r.tenantId)));
+  const checked = (r: DigitRole) => inWorkspace(r.tenantId) ? isAdministrativeRole(r.code) && !founder : true;
+  return !targetRoles.some((r) => checked(r) && !callerRoles.some((c) => c.code === r.code && covers(c.tenantId, r.tenantId)));
 }

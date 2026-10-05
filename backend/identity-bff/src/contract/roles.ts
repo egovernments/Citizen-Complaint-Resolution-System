@@ -1,8 +1,9 @@
 /**
  * Administrative DIGIT role codes: roles that administer a workspace or act as
  * the platform. Linking an account (`_link`) and an admin email change
- * (`_updateEmail`) are guarded only by these, plus every other `*_ADMIN` code;
- * operational roles (GRO, CSR, PGR_LME, SUPERVISOR, …) are never checked.
+ * (`_updateEmail`) check these, plus every other `*_ADMIN` code, inside the
+ * workspace subtree; operational roles (GRO, CSR, PGR_LME, SUPERVISOR, …) are
+ * checked only when held outside it.
  * docs/identity-bff.md §3.3 names this constant and lists the same codes;
  * tests/contract/catalogue.test.ts keeps the two identical.
  */
