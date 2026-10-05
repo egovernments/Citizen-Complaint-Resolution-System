@@ -475,9 +475,10 @@ Body `{surface?: "citizen"}`. The tenant comes only from the session's bound ten
 Caller: a session with **live DIGIT `ACCOUNT_ADMIN`** at `tenantId` (D5), read live from egov-user and never from Keycloak.
 
 ```
-{tenantId, digitUuid, email, reinvite?: boolean}
+{tenantId, digitUuid, email, reinvite?: boolean, resend?: boolean}
 201 {binding: {subject, tenantId, digitUuid, state: "active", boundAt}, identityUserCreated: true, activationEmailSent: boolean}
 200 {binding: {subject, tenantId, digitUuid, state: "pending" | "active", invitationVersion, expiresAt?}, identityUserCreated: false}
+200 {binding, identityUserCreated: false, activationEmailSent: true, activationEmail: "password_setup" | "verify_email"}   (resend)
 ```
 
 - `tenantId` must be the workspace tenant of an `ACTIVE` Organization (`WORKSPACE_TENANT_REQUIRED`). `digitUuid` must be an active EMPLOYEE account there and not a `kcbff-` account. `email` is required (D18) and is normalized by trimming and lower-casing.
@@ -496,24 +497,32 @@ Caller: a session with **live DIGIT `ACCOUNT_ADMIN`** at `tenantId` (D5), read l
   6. Mirror, and clear the marker in the final PUT.
 
   Keycloak blocks any session until the password is set.
-- **Existing person:** a `pending` binding with `invitationVersion` and `expiresAt` = now + the tenant's invitation expiry (D22, §5.2). No membership until `_accept`. No email; the invitation appears in `/session`.
+- **Existing person:** a `pending` binding with `invitationVersion` and `expiresAt` = now + the tenant's invitation expiry (D22, §5.2). No membership until `_accept`. The invitation appears in `/session`; the only email is Keycloak's `VERIFY_EMAIL` to an unverified invitee (`_accept` needs a verified email).
 - **Repeats:**
   - The request id is `linkRequestId(caller, tenantId, digitUuid, email)` (`src/modules/bindings/link-request-id.ts`). Only a person whose `digit.linkPending.requestId` equals it resumes the new-user branch. Any other existing person takes the existing-user branch.
   - A repeat returns the current state. It never demotes `active` and never resurrects `removed`.
   - `reinvite: true` on a `pending` or `removed` key issues `invitationVersion + 1` with a fresh expiry, which makes the old version stale. On a `removed` key the re-invite may name a different uuid (the person's new DIGIT record). Without it, a `removed` key → `BINDING_REMOVED`.
-- **Locks:** person → uuid.
+- **Resend** (`resend: true`; not with `reinvite`): re-sends sign-in setup for the person found by `email` whose `pending` or `active` binding at `tenantId` is `digitUuid`. The binding is never changed, so a retry is safe.
+  - The admin and target checks above apply. No such binding → `DIGIT_ACCOUNT_NOT_FOUND`; a `removed` (or expired) one → `BINDING_REMOVED`.
+  - Under the person lease, read fresh: if Keycloak still has `UPDATE_PASSWORD` pending, or the person has neither a password nor a linked provider, it sends the password-setup email (§3.2.6, with `VERIFY_EMAIL` when unverified) → `activationEmail: "password_setup"`. Else, if the email is unverified, it sends `VERIFY_EMAIL` → `"verify_email"`. Else → 409 `ACTIVATION_NOT_NEEDED` (nothing is sent; a pending invitee then accepts from `/session`).
+  - One send per member per 60 s (`{p}:identity:member-resend:*`, §7.2); a repeat inside the window → 429 `RESEND_TOO_SOON` with `Retry-After`. A failed send releases the window.
+- **Locks:** person → uuid (resend: person only).
 - Errors: as listed in `routes.ts`, including `BINDING_BUSY`, `IDENTITY_BUSY`, `DIGIT_UNAVAILABLE` and `IDENTITY_UNAVAILABLE` (503).
 
-#### 3.3.7 `GET /identity/v1/workspace-members?tenantId=&first=&max=` (item 9)
+#### 3.3.7 `GET /identity/v1/workspace-members?tenantId=&first=&max=&state=` (item 9)
 
-Caller: live `ACCOUNT_ADMIN` at `tenantId`. `first` defaults to 0, and `max` to 100 (at most 500).
+Caller: live `ACCOUNT_ADMIN` at `tenantId`. `first` defaults to 0, and `max` to 100 (at most 500). `state` is `active`, `pending` or `removed`; without it, `pending` and `active` are listed.
 
 ```
-200 {members: [{subject, email, name, digitUuid, state: "active" | "pending", invitationVersion, boundAt?, expiresAt?, missing?: true}]}
+200 {members: [{subject, email, name, digitUuid, state: "active" | "pending" | "removed", invitationVersion,
+                boundAt?, expiresAt?, removedAt?, digitActive?, roles?: [{code, tenantId}], missing?: true}],
+     nextFirst?}
 ```
 
-- It lists `pending` and `active` bindings (an expired invitation counts as removed and is left out). Keycloak's attribute search only matches whole values, so the BFF pages through the realm's users, keeps those with a `digit.boundUuids` value starting `<tenantId>|`, and reads each binding from `digit.bindings`. This costs one pass over the realm's users; the member list is an infrequent admin read.
-- `missing: true` marks a DIGIT account that has disappeared (design §4).
+- `first`/`max` page the Keycloak search `q=digit.bindingTenants:<tenantId>&exact=true` (§5.1), so one request reads at most `max` users, whatever the realm size. Order is Keycloak's (username). The state filter applies after the page is read, so a page may hold fewer than `max` members: continue with `first = nextFirst` until `nextFirst` is absent.
+- A binding written before `digit.bindingTenants` existed is listed once the next reconcile pass backfills the index.
+- Read-only: it takes no lease and writes nothing. An expired invitation is reported as `removed` (with `removedAt = expiresAt`); reconcile persists it later.
+- No per-member DIGIT calls (only the caller's live `ACCOUNT_ADMIN` check). `name` is the Keycloak `firstName` (the mirrored DIGIT name, §5.1). `digitActive`, `roles` and `missing: true` come from the person's `digit.accounts` staff entry for this tenant, which exists only for `active` bindings and is as fresh as the last mirror.
 - Errors: `INVALID_REQUEST` 400; `SESSION_REQUIRED` / `SESSION_REVOKED` 401; `ADMIN_REQUIRED` 403; 503.
 
 #### 3.3.8 `POST /identity/v1/workspace-members/_remove` (items 9, 10)
@@ -657,6 +666,17 @@ Organization membership **only**, and idempotent. The role projection and the ma
 - **`account-links/_link`, `_unlink`, `GET account-links`** keep today's shapes. After item 14 they accept `userType: "CITIZEN"` only, and `EMPLOYEE` → `INVALID_REQUEST`. They are how an admin resolves `CITIZEN_ACCOUNT_AMBIGUOUS`. Until item 14, an `EMPLOYEE` link writes an `active` binding (item 19 runs the bulk conversion).
 - `tenant-routes/_backfill`, `tenant-groups/_ensure` and `role-assignments/_ensure` keep today's shapes until item 14 deletes them.
 
+### 3.6 Console employee flows
+
+The console calls HRMS first, then the BFF. The BFF never writes HRMS (§1), and each BFF call is safe to repeat with the same body, so recovery from a partial failure is always "retry the BFF call", never "undo HRMS".
+
+- **Add:** HRMS `_create` → `_link {tenantId, digitUuid, email}`. A new person gets an `active` binding and the setup email (201); an existing person gets a `pending` invitation (200). If `_link` fails, retry it with the same body (the request id resumes, §9.2). An HRMS employee with no binding can't sign in, so an abandoned add is harmless.
+- **Edit name:** HRMS `_update` only. The mirror copies the name into Keycloak on the next reconcile or sign-in.
+- **Edit email:** `_updateEmail` only (active bindings; D18). Don't write the email to HRMS: the BFF writes it to DIGIT after the person verifies it. For a `pending` member, `_remove` and `_link` again with the new address.
+- **Remove (D23):** HRMS deactivate → `_remove`. Deactivating first cuts access at once (access needs DIGIT `active`, and reconcile revokes `DIGIT_INACTIVE` tokens) even if `_remove` then fails; retry `_remove`, which is idempotent. If the HRMS call fails, stop: nothing changed.
+- **Reinvite:** HRMS reactivate → `_link {reinvite: true}`. Without the reactivation, `_link` → `DIGIT_ACCOUNT_NOT_FOUND`. The result is a new `pending` invitation the person accepts from `/session`. If `_link` fails, retry it; to abandon, deactivate in HRMS again.
+- **Resend:** `_link {resend: true}` only; no HRMS call. `ACTIVATION_NOT_NEEDED`: the member is already set up (a pending one accepts from `/session`). `RESEND_TOO_SOON`: wait `Retry-After`. `DIGIT_ACCOUNT_NOT_FOUND` for a known member: the employee is inactive in HRMS.
+
 ## 4. Error codes
 
 `src/contract/error-codes.ts` is the source; `tests/contract/catalogue.test.ts` fails if this table differs from it. "result" = delivered only through `auth-results`. Retry: **yes** = retry with back-off; **no** = don't; **after-change** = only after the named condition changes.
@@ -730,6 +750,8 @@ Organization membership **only**, and idempotent. The role projection and the ma
 | `BINDING_REMOVED` | 409 | after-change | The binding is removed; send reinvite:true to invite again |
 | `BINDING_CONFLICT` | 409 | no | This person already has a different DIGIT account at the tenant |
 | `BINDING_BUSY` | 503 | yes | The DIGIT-account (uuid) lock wait timed out; Retry-After is set |
+| `ACTIVATION_NOT_NEEDED` | 409 | no | _link resend: the member already has a sign-in method and a verified email |
+| `RESEND_TOO_SOON` | 429 | after-change | _link resend: per-member cooldown; Retry-After is set |
 | `INVITATION_STALE` | 409 | no | The invitation was removed, replaced, expired or never existed |
 | `INVITATION_EMAIL_UNVERIFIED` | 403 | after-change | The accepting account's email is not verified in Keycloak |
 | `IDENTITY_EMAIL_CHANGED` | 409 | after-change | A Keycloak user matches by username but its email has changed |
@@ -774,6 +796,7 @@ Every write follows the safe writer rule (design §4):
 | `digit.accounts` | one JSON value, v1 | the sync module (mirror); the credential writer (`credential`) | `docs/contract/schemas/digit.accounts.v1.schema.json` |
 | `digit.bindings` | one JSON value, v1 | the binding service | `docs/contract/schemas/digit.bindings.v1.schema.json` |
 | `digit.boundUuids` | many values `<tenantId>\|<uuid>` | the binding service, in the **same PUT** as `digit.bindings` | `docs/contract/schemas/digit.boundUuids.schema.json` |
+| `digit.bindingTenants` | many values: the `tenantId` of every `digit.bindings` record, `removed` included | the binding service, in the **same PUT** as `digit.bindings`; reconcile backfills users written before it existed | `docs/contract/schemas/digit.bindingTenants.schema.json` |
 | `digit.linkPending` | one JSON value, v1 | `_link`, inside the user-create POST; cleared by its final PUT | `docs/contract/schemas/digit.linkPending.v1.schema.json` |
 | `digit.accountLinkBlocks` | today's encoding, CITIZEN values only | internal citizen unlink | — |
 | `digit.identityBffSignup`, `digit.identityBffPhoneOtp` | `["true"]` | as today | — |
@@ -898,6 +921,7 @@ A `nil` reply means the session was revoked: answer 401 and never recreate it. A
 | `{p}:identity:password-setup:{id}` | setup attempt JSON (`returnTo` already holds the surface's path) | 2700 s | S |
 | `{p}:identity:magic-link-signup-limit:{ip\|email}:{ref}` | counter | 1800 s | S |
 | `{p}:identity:password-setup-limit:{ip\|account}:{ref}` | counter | 900 s | S |
+| `{p}:identity:member-resend:{tenantId}:{uuid}` | `"1"` (`_link` resend cooldown, `SET NX`) | 60 s | S |
 
 The magic-link and password-setup IP limit keys switch from the raw IP to `ipRef` (item 15).
 

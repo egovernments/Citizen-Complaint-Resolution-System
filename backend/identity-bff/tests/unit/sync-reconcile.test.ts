@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({ request: vi.fn(), read: vi.fn(), bindings: vi.
 vi.mock("../../src/modules/organizations/organization-service.js", () => ({ request: mocks.request,
   isOrganizationMember: mocks.member, IdentityAdminError: class extends Error {} }));
 vi.mock("../../src/modules/sync/digit-reader.js", () => ({ readDigitAccount: mocks.read }));
-vi.mock("../../src/modules/bindings/store.js", () => ({ readBindings: mocks.bindings, bindingsFor: vi.fn() }));
+vi.mock("../../src/modules/bindings/store.js", () => ({ readBindings: mocks.bindings, bindingsFor: vi.fn(), indexBindingTenants: vi.fn() }));
 vi.mock("../../src/modules/revocation/index.js", () => ({ revokeAccount: mocks.revoke,
   revokePerson: mocks.person, revokeTenantMembers: mocks.tenant }));
 vi.mock("../../src/modules/onboarding/organization-reader.js", () => ({ readOrganizationByTenant: mocks.organization,

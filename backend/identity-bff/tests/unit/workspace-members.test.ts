@@ -1,8 +1,10 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { initCache, closeCache } from "../../src/infrastructure/redis.js";
+import { initCache, closeCache, getRedis } from "../../src/infrastructure/redis.js";
+import { withPersonLease } from "../../src/modules/accounts/person-lease.js";
+import { indexBindingTenants } from "../../src/modules/bindings/store.js";
 import { config } from "../../src/infrastructure/config.js";
 import type { UserRepresentation } from "../../src/modules/sync/keycloak-writer.js";
-const f = vi.hoisted(() => ({ users: new Map<string, UserRepresentation>(), members: new Set<string>(), crash: "", emails: 0, activations: 0, revoked: [] as string[], createCount: 0, conflict: false, targetRoles: [] as Array<{code: string; tenantId: string}>, callerRoles: [] as Array<{code: string; tenantId: string}> }));
+const f = vi.hoisted(() => ({ users: new Map<string, UserRepresentation>(), members: new Set<string>(), crash: "", emails: 0, activations: 0, revoked: [] as string[], createCount: 0, conflict: false, targetRoles: [] as Array<{code: string; tenantId: string}>, callerRoles: [] as Array<{code: string; tenantId: string}>, passwords: new Set<string>() }));
 function bindingDoc(user: UserRepresentation) { return JSON.parse(user.attributes?.["digit.bindings"]?.[0] || '{"v":1,"bindings":[]}'); }
 vi.mock("../../src/modules/organizations/organization-service.js", () => {
   const fail = (step: string) => { if (f.crash === step) { f.crash = ""; throw new Error(`crash:${step}`); } };
@@ -18,9 +20,9 @@ vi.mock("../../src/modules/organizations/organization-service.js", () => {
         let users = [...f.users.values()];
         for (const field of ["email", "username"]) if (url.searchParams.has(field)) users = users.filter((u) => u[field] === url.searchParams.get(field));
         const q = url.searchParams.get("q");
-        if (q) users = users.filter((u) => u.attributes?.["digit.boundUuids"]?.includes(q.slice("digit.boundUuids:".length)));
+        if (q) users = users.filter((u) => u.attributes?.[q.slice(0, q.indexOf(":"))]?.includes(q.slice(q.indexOf(":") + 1)));
         const first = Number(url.searchParams.get("first") || 0);
-        return Response.json(users.slice(first, first + 100));
+        return Response.json(users.slice(first, first + Number(url.searchParams.get("max") || 100)));
       }
       if (url.pathname.includes("/execute-actions-email")) { f.emails++; fail("email"); return new Response(null, { status: 204 }); }
       if (url.pathname.startsWith("/organizations/") && init?.method === "DELETE") {
@@ -43,6 +45,7 @@ vi.mock("../../src/modules/organizations/organization-service.js", () => {
     isOrganizationMember: vi.fn(async (org: string, subject: string) => f.members.has(`${org}:${subject}`)),
     ensureOrganizationMembership: vi.fn(async ({ organizationId, userId }: { organizationId: string; userId: string }) => { f.members.add(`${organizationId}:${userId}`); fail("membership"); }),
     sendPasswordSetupEmail: vi.fn(async () => { f.emails++; fail("email"); }),
+    inspectPasswordSetupAccountById: vi.fn(async (id: string) => ({ userId: id, hasPassword: f.passwords.has(id), federatedProviders: [], emailVerified: f.users.get(id)?.emailVerified === true })),
   };
 });
 vi.mock("../../src/modules/workspace-members/authority.js", () => ({
@@ -78,7 +81,7 @@ const uuid = "00000000-0000-4000-8000-000000000001";
 const input = { actor: "admin", tenantId: "pg", digitUuid: uuid, email: "employee@example.test" };
 beforeAll(() => { Object.assign(config, { cachePrefix: `members-test-${process.pid}`, identityCredentialKeyCurrent: 1 }); initCache(); });
 afterAll(() => closeCache());
-beforeEach(() => { f.users.clear(); f.members.clear(); f.crash = ""; f.emails = 0; f.activations = 0; f.revoked = []; f.createCount = 0; f.conflict = false; f.targetRoles = [{ code: "EMPLOYEE", tenantId: "pg" }]; f.callerRoles = [{ code: "ACCOUNT_ADMIN", tenantId: "pg" }, ...f.targetRoles]; });
+beforeEach(async () => { await getRedis().del(`${config.cachePrefix}:identity:member-resend:pg:${uuid}`); f.passwords.clear(); f.users.clear(); f.members.clear(); f.crash = ""; f.emails = 0; f.activations = 0; f.revoked = []; f.createCount = 0; f.conflict = false; f.targetRoles = [{ code: "EMPLOYEE", tenantId: "pg" }]; f.callerRoles = [{ code: "ACCOUNT_ADMIN", tenantId: "pg" }, ...f.targetRoles]; });
 
 describe("resumable workspace membership", () => {
   it.each(["create", "membership", "binding", "activation", "email", "mirror", "clear"])("resumes after a crash at %s without creating another identity", async (step) => {
@@ -92,17 +95,16 @@ describe("resumable workspace membership", () => {
     expect(f.activations).toBe(1);
     expect(bindingDoc(f.users.get("new-1")!).bindings).toHaveLength(1);
   });
-  it("pages members before the per-member DIGIT lookups", async () => {
-    const bind = (id: string, state: string, extra: object = {}) => f.users.set(id, { id, email: `${id}@example.test`, attributes: {
+  it("pages members from the index without per-member DIGIT lookups", async () => {
+    const bind = (id: string, state: string, extra: object = {}) => f.users.set(id, { id, email: `${id}@example.test`, attributes: { "digit.bindingTenants": ["pg"],
       "digit.bindings": [JSON.stringify({ v: 1, bindings: [{ tenantId: "pg", uuid: `uuid-${id}`, state, invitationVersion: 1, createdAt: 1, createdBy: { kind: "conversion" }, ...extra }] })] } });
-    for (const id of ["m5", "m3", "m1", "m4", "m2"]) bind(id, "active", { boundAt: 2 });
+    for (const id of ["m1", "m2", "m3"]) bind(id, "active", { boundAt: 2 });
     bind("m0", "removed", { removedAt: 3 });
     bind("m15", "pending", { expiresAt: Date.now() - 1 });
     vi.mocked(readDigitAccount).mockClear();
-    const { members } = await listWorkspaceMembers("admin", "pg", 1, 2);
-    expect(members.map((m) => m.subject)).toEqual(["m2", "m3"]);
-    expect(members[0]).toEqual({ subject: "m2", email: "m2@example.test", name: "Employee", digitUuid: "uuid-m2", state: "active", invitationVersion: 1, boundAt: 2 });
-    expect(readDigitAccount).toHaveBeenCalledTimes(2);
+    const { members } = await listWorkspaceMembers("admin", "pg");
+    expect(members.map((m) => m.subject).sort()).toEqual(["m1", "m2", "m3"]);   // removed and expired invitations are left out
+    expect(readDigitAccount).not.toHaveBeenCalled();
   });
   it("uses the existing-user branch for another workspace's in-flight user", async () => {
     f.crash = "create"; await expect(linkWorkspaceMember(input)).rejects.toThrow();
@@ -233,5 +235,80 @@ describe("resumable workspace membership", () => {
     await expect(linkWorkspaceMember(input)).rejects.toMatchObject({ code: "DIGIT_UNAVAILABLE" });
     expect(f.users.get("new-1")?.attributes?.["digit.linkPending"]).toBeDefined();
     await expect(linkWorkspaceMember(input)).resolves.toMatchObject({ binding: { state: "active" } });
+  });
+});
+
+describe("admin resend of the activation email", () => {
+  const resend = { ...input, resend: true };
+  it("re-sends password setup to a new employee who has not set a password, then cools down", async () => {
+    await linkWorkspaceMember(input);
+    const before = structuredClone(f.users.get("new-1")); const emails = f.emails;
+    await expect(linkWorkspaceMember(resend)).resolves.toMatchObject({ activationEmailSent: true, activationEmail: "password_setup", binding: { state: "active" } });
+    expect(f.emails).toBe(emails + 1);
+    await expect(linkWorkspaceMember(resend)).rejects.toMatchObject({ code: "RESEND_TOO_SOON", status: 429, retryAfter: expect.any(Number) });
+    expect(f.emails).toBe(emails + 1);
+    expect(f.users.get("new-1")).toEqual(before);
+  });
+  it("sends the verify email to an unverified invitee who already has a password", async () => {
+    f.users.set("existing", { id: "existing", email: input.email, username: input.email, enabled: true, emailVerified: false, attributes: {} });
+    f.passwords.add("existing");
+    await linkWorkspaceMember(input);
+    await expect(linkWorkspaceMember(resend)).resolves.toMatchObject({ activationEmail: "verify_email", binding: { state: "pending" } });
+  });
+  it("refuses a member who is already set up, without sending or starting the cooldown", async () => {
+    f.users.set("existing", { id: "existing", email: input.email, username: input.email, enabled: true, emailVerified: true, attributes: {} });
+    f.passwords.add("existing");
+    await linkWorkspaceMember(input); const emails = f.emails;
+    await expect(linkWorkspaceMember(resend)).rejects.toMatchObject({ code: "ACTIVATION_NOT_NEEDED", status: 409 });
+    expect(f.emails).toBe(emails);
+    expect(await getRedis().exists(`${config.cachePrefix}:identity:member-resend:pg:${uuid}`)).toBe(0);
+  });
+  it("refuses removed and unknown members", async () => {
+    await expect(linkWorkspaceMember(resend)).rejects.toMatchObject({ code: "DIGIT_ACCOUNT_NOT_FOUND" });
+    await linkWorkspaceMember(input); await removeWorkspaceMember("admin", "pg", uuid);
+    await expect(linkWorkspaceMember(resend)).rejects.toMatchObject({ code: "BINDING_REMOVED" });
+  });
+  it("releases the cooldown when the send fails", async () => {
+    await linkWorkspaceMember(input);
+    f.crash = "email";
+    await expect(linkWorkspaceMember(resend)).rejects.toThrow("crash:email");
+    await expect(linkWorkspaceMember(resend)).resolves.toMatchObject({ activationEmail: "password_setup" });
+  });
+});
+
+describe("workspace member list", () => {
+  const bind = (id: string, binding: Record<string, unknown>, entries?: unknown[]) => f.users.set(id, { id, email: `${id}@example.test`, firstName: id, attributes: {
+    "digit.bindings": [JSON.stringify({ v: 1, bindings: [{ tenantId: "pg", invitationVersion: 1, createdAt: 1, createdBy: { kind: "conversion" }, ...binding }] })],
+    "digit.bindingTenants": ["pg"], ...(entries && { "digit.accounts": [JSON.stringify({ v: 1, entries })] }) } });
+  beforeEach(() => {
+    bind("a-active", { uuid: "u1", state: "active", boundAt: 5 }, [{ kind: "staff", tenantId: "pg", uuid: "u1", boundAt: 5, active: false, roles: [{ code: "GRO", tenantId: "pg" }] }]);
+    bind("b-pending", { uuid: "u2", state: "pending", expiresAt: Date.now() + 3600_000 });
+    bind("c-expired", { uuid: "u3", state: "pending", expiresAt: 10 });
+    bind("d-removed", { uuid: "u4", state: "removed", removedAt: 20 });
+  });
+  it("lists live members with mirrored DIGIT status and roles, by default", async () => {
+    const { members, nextFirst } = await listWorkspaceMembers("admin", "pg");
+    expect(members.map((m) => [m.subject, m.state])).toEqual([["a-active", "active"], ["b-pending", "pending"]]);
+    expect(members[0]).toMatchObject({ digitActive: false, roles: [{ code: "GRO", tenantId: "pg" }], name: "a-active" });
+    expect(members[1]).not.toHaveProperty("digitActive");
+    expect(nextFirst).toBeUndefined();
+  });
+  it("filters removed members, reporting an expired invitation as removed without writing it", async () => {
+    const before = structuredClone(f.users.get("c-expired"));
+    const { members } = await listWorkspaceMembers("admin", "pg", 0, 100, "removed");
+    expect(members.map((m) => [m.subject, m.removedAt])).toEqual([["c-expired", 10], ["d-removed", 20]]);
+    expect(f.users.get("c-expired")).toEqual(before);
+  });
+  it("pages the indexed search and returns the next offset", async () => {
+    const page = await listWorkspaceMembers("admin", "pg", 0, 2, "active");
+    expect(page).toEqual({ members: [expect.objectContaining({ subject: "a-active" })], nextFirst: 2 });
+    expect((await listWorkspaceMembers("admin", "pg", 2, 2, "active")).members).toEqual([]);
+  });
+  it("indexes every binding tenant on write, and backfills older records", async () => {
+    await linkWorkspaceMember(input);
+    expect(f.users.get("new-1")?.attributes?.["digit.bindingTenants"]).toEqual(["pg"]);
+    delete f.users.get("a-active")!.attributes!["digit.bindingTenants"];
+    await withPersonLease("a-active", () => indexBindingTenants("a-active"));
+    expect(f.users.get("a-active")?.attributes?.["digit.bindingTenants"]).toEqual(["pg"]);
   });
 });

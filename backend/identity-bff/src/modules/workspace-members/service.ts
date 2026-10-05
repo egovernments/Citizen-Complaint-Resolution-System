@@ -5,7 +5,8 @@ import { linkRequestId, normalizeLinkEmail } from "../bindings/link-request-id.j
 import { invitationExpiryHours } from "../bindings/invitations.js";
 import { accept, bindingsFromUser, createPending, effectiveBinding, ensureActive, readBindings, readBindingUser, remove, type Binding } from "../bindings/store.js";
 import { BindingConflictError, BindingError, type BindingUser } from "../bindings/types.js";
-import { ensureOrganizationMembership, isOrganizationMember, request } from "../organizations/organization-service.js";
+import { ensureOrganizationMembership, inspectPasswordSetupAccountById, isOrganizationMember, request } from "../organizations/organization-service.js";
+import { getRedis } from "../../infrastructure/redis.js";
 import { createdId, paged, readUser } from "../../integrations/keycloak/admin-api.js";
 import { readOnboardingOrganizations } from "../onboarding/organization-reader.js";
 import { organizationAttribute } from "../onboarding/primitives.js";
@@ -65,7 +66,8 @@ async function linkAudit(subject: string, tenantId: string, uuid: string, actor:
   await audit({ event, outcome: "SUCCESS", subject, tenantId, digitUserUuid: uuid, actor, method: "ADMIN", userType: "EMPLOYEE" });
 }
 
-export async function linkWorkspaceMember(input: { actor: string; tenantId: string; digitUuid: string; email: string; reinvite?: boolean }) {
+export async function linkWorkspaceMember(input: { actor: string; tenantId: string; digitUuid: string; email: string; reinvite?: boolean; resend?: boolean }) {
+  if (input.resend) return resendActivation(input);
   const email = normalizeLinkEmail(input.email);
   const requestId = linkRequestId(input.actor, input.tenantId, input.digitUuid, email);
   const actor = { kind: "browser" as const, subject: input.actor, requestId };
@@ -123,6 +125,42 @@ export async function linkWorkspaceMember(input: { actor: string; tenantId: stri
   });
 }
 
+const RESEND_COOLDOWN_SECONDS = 60;
+
+export class ResendTooSoonError extends BindingError {
+  constructor(readonly retryAfter: number) { super("RESEND_TOO_SOON", "An activation email was sent recently"); }
+}
+
+/** `_link` with `resend: true`: re-sends sign-in setup for a live binding; the binding itself never changes. */
+async function resendActivation(input: { actor: string; tenantId: string; digitUuid: string; email: string }) {
+  const email = normalizeLinkEmail(input.email);
+  const actor = { kind: "browser" as const, subject: input.actor, requestId: linkRequestId(input.actor, input.tenantId, input.digitUuid, email) };
+  await validateBinding({ subject: "", tenantId: input.tenantId, uuid: input.digitUuid, actor });
+  const subject = (await findPerson(email))?.id;
+  if (!subject) throw new BindingError("DIGIT_ACCOUNT_NOT_FOUND", "No binding matches the employee and email");
+  return withPersonLease(subject, async (lease) => {
+    const user = await readBindingUser(subject);
+    const record = bindingsFromUser(user).find((b) => b.tenantId === input.tenantId);
+    const binding = record && effectiveBinding(record);
+    if (normalizeLinkEmail(user.email || "") !== email || binding?.uuid !== input.digitUuid) throw new BindingError("DIGIT_ACCOUNT_NOT_FOUND", "No binding matches the employee and email");
+    if (binding.state === "removed") throw new BindingError("BINDING_REMOVED", "This binding was removed");
+    const account = await inspectPasswordSetupAccountById(subject);
+    if (!account) throw new BindingError("IDENTITY_UNAVAILABLE", "The identity is not available");
+    const needsPassword = user.requiredActions?.includes("UPDATE_PASSWORD") || (!account.hasPassword && !account.federatedProviders.length);
+    if (!needsPassword && account.emailVerified) throw new BindingError("ACTIVATION_NOT_NEEDED", "The member has already set up sign-in");
+    const key = `${config.cachePrefix}:identity:member-resend:${input.tenantId}:${input.digitUuid}`;
+    if (await getRedis().set(key, "1", "EX", RESEND_COOLDOWN_SECONDS, "NX") !== "OK") throw new ResendTooSoonError(Math.max(1, await getRedis().ttl(key)));
+    try {
+      await lease.assertHeld();
+      if (needsPassword) await sendPasswordSetup({ userId: subject, hadPassword: account.hasPassword, emailVerified: account.emailVerified,
+        returnTo: config.identityPostLoginRedirect, clientId: config.keycloakBffClientId });
+      else await sendVerifyEmail(subject);
+    } catch (error) { await getRedis().del(key); throw error; }
+    return { binding: publicBinding(subject, binding), identityUserCreated: false, activationEmailSent: true,
+      activationEmail: needsPassword ? "password_setup" as const : "verify_email" as const };
+  });
+}
+
 export async function acceptWorkspaceInvitation(subject: string, tenantId: string, invitationVersion: number) {
   return withPersonLease(subject, async (lease) => {
     const pending = (await readBindings(subject)).find((b) => b.tenantId === tenantId);
@@ -154,33 +192,29 @@ async function membersAt(tenantId: string) {
   return result;
 }
 
-/** Runs fn over items with at most `limit` in flight, keeping input order in the result. */
-async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const results = new Array<R>(items.length);
-  let next = 0;
-  const worker = async () => { while (next < items.length) { const i = next++; results[i] = await fn(items[i]); } };
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-  return results;
-}
+export type MemberState = Binding["state"];
 
-export async function listWorkspaceMembers(actor: string, tenantId: string, first = 0, max = 100) {
+/**
+ * One indexed Keycloak page (`digit.bindingTenants`), so the cost is O(max), not O(realm).
+ * Read-only: expiry is applied in the response, never written, and no lease is taken.
+ * DIGIT status and roles come from the `digit.accounts` mirror (active bindings only).
+ */
+export async function listWorkspaceMembers(actor: string, tenantId: string, first = 0, max = 100, state?: MemberState) {
   await requireAccountAdmin(actor, tenantId);
-  // Page on the realm snapshot first, then enrich only the page: the per-member binding
-  // re-read (which also persists lazy expiry) and DIGIT lookups cost O(page), not O(members).
-  const page = (await membersAt(tenantId))
-    .filter((row) => effectiveBinding(row.binding).state !== "removed")
-    .sort((a, b) => a.user.id!.localeCompare(b.user.id!))
-    .slice(first, first + max);
-  const members = await mapLimit(page, 8, async (row) => {
-    const binding = (await readBindings(row.user.id!)).find((b) => b.tenantId === tenantId);
-    if (!binding || binding.state === "removed") return null;
-    const account = await readDigitAccount(tenantId, binding.uuid);
-    return { subject: row.user.id!, email: row.user.email, name: account?.name || row.user.firstName || "",
-      digitUuid: binding.uuid, state: binding.state, invitationVersion: binding.invitationVersion,
-      ...(binding.boundAt !== undefined && { boundAt: binding.boundAt }), ...(binding.expiresAt !== undefined && { expiresAt: binding.expiresAt }),
-      ...(!account && { missing: true }) };
+  const query = new URLSearchParams({ q: `digit.bindingTenants:${tenantId}`, exact: "true", briefRepresentation: "false", first: String(first), max: String(max) });
+  const users = await (await request(`/users?${query}`)).json() as BindingUser[];
+  const members = users.flatMap((user) => {
+    const record = bindingsFromUser(user).find((b) => b.tenantId === tenantId);
+    const binding = record && effectiveBinding(record);
+    if (!user.id || !binding || (state ? binding.state !== state : binding.state === "removed")) return [];
+    let entry;
+    try { entry = accountEntries(user).find((e) => e.kind === "staff" && e.tenantId === tenantId && e.uuid === binding.uuid); } catch { /* unmirrored */ }
+    return [{ subject: user.id, email: user.email, name: user.firstName || "", digitUuid: binding.uuid, state: binding.state,
+      invitationVersion: binding.invitationVersion, ...(binding.boundAt !== undefined && { boundAt: binding.boundAt }),
+      ...(binding.expiresAt !== undefined && { expiresAt: binding.expiresAt }), ...(binding.removedAt !== undefined && { removedAt: binding.removedAt }),
+      ...(entry && { digitActive: entry.active, roles: entry.roles }), ...(entry?.missing && { missing: true as const }) }];
   });
-  return { members: members.filter((m) => m !== null) };
+  return { members, ...(users.length === max && { nextFirst: first + max }) };
 }
 
 export async function removeWorkspaceMember(actor: string, tenantId: string, digitUuid: string) {

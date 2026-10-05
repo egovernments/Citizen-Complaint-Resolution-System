@@ -111,6 +111,8 @@ export const ERROR_CODES = {
   BINDING_REMOVED: { status: 409, retry: "after-change", meaning: "The binding is removed; send reinvite:true to invite again" },
   BINDING_CONFLICT: { status: 409, retry: "no", meaning: "This person already has a different DIGIT account at the tenant" },
   BINDING_BUSY: { status: 503, retry: "yes", meaning: "The DIGIT-account (uuid) lock wait timed out; Retry-After is set" },
+  ACTIVATION_NOT_NEEDED: { status: 409, retry: "no", meaning: "_link resend: the member already has a sign-in method and a verified email" },
+  RESEND_TOO_SOON: { status: 429, retry: "after-change", meaning: "_link resend: per-member cooldown; Retry-After is set" },
   INVITATION_STALE: { status: 409, retry: "no", meaning: "The invitation was removed, replaced, expired or never existed" },
   INVITATION_EMAIL_UNVERIFIED: { status: 403, retry: "after-change", meaning: "The accepting account's email is not verified in Keycloak" },
   IDENTITY_EMAIL_CHANGED: { status: 409, retry: "after-change", meaning: "A Keycloak user matches by username but its email has changed" },

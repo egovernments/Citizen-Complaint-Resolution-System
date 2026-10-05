@@ -82,6 +82,13 @@ describe("digit.boundUuids values", () => {
   });
 });
 
+describe("digit.bindingTenants values", () => {
+  it("accepts a plain tenant id", () => expect(schemaErrors("digit.bindingTenants", "pg")).toEqual([]));
+  it.each(["pg.citya", `pg|${UUID}`, ""])("rejects %s", (value) => {
+    expect(schemaErrors("digit.bindingTenants", value)).not.toEqual([]);
+  });
+});
+
 describe("digit.linkPending v1", () => {
   const marker = {
     v: 1, tenantId: "pg", digitUuid: UUID, email: "asha.k@example.org", actor: "admin-sub", createdAt: 1791100000000,
