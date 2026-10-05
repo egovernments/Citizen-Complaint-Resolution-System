@@ -9,6 +9,8 @@ import {
   createSignup,
   deriveAccountCode,
   findSignup,
+  isOperationReady,
+  isOperationSettled,
   isValidAccountCode,
   isValidUrlSlug,
   RESERVED_URL_SLUGS,
@@ -192,5 +194,26 @@ describe('workspace discovery contract', () => {
   it('keeps empty membership discovery separate from invitations', async () => {
     __setFetchForTests(async () => new Response(JSON.stringify({ tenants: [], onboardingRequired: true }), { status: 200 }));
     expect((await tenants()).tenants).toEqual([]);
+  });
+});
+
+describe('operation readiness (CCRS#2303)', () => {
+  it('keeps polling a success whose outcome is not yet published', () => {
+    // SUCCEEDED is written a tick before the identity side lists the tenant.
+    expect(isOperationSettled({ status: 'SUCCEEDED' })).toBe(false);
+    expect(isOperationSettled({ status: 'SUCCEEDED', lifecyclePublishedAt: null })).toBe(false);
+    expect(isOperationReady({ status: 'SUCCEEDED', lifecyclePublishedAt: null })).toBe(false);
+  });
+
+  it('is ready once the success is published', () => {
+    expect(isOperationSettled({ status: 'SUCCEEDED', lifecyclePublishedAt: 1 })).toBe(true);
+    expect(isOperationReady({ status: 'SUCCEEDED', lifecyclePublishedAt: 1 })).toBe(true);
+  });
+
+  it('settles failures without waiting for publication', () => {
+    expect(isOperationSettled({ status: 'RETRYABLE_FAILED' })).toBe(true);
+    expect(isOperationSettled({ status: 'TERMINAL_FAILED' })).toBe(true);
+    expect(isOperationReady({ status: 'TERMINAL_FAILED', lifecyclePublishedAt: 1 })).toBe(false);
+    expect(isOperationSettled({ status: 'RUNNING' })).toBe(false);
   });
 });
