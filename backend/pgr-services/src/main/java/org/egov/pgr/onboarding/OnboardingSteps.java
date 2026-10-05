@@ -31,6 +31,27 @@ public class OnboardingSteps {
         this.client = client; this.seed = seed; this.mapper = mapper; this.identifiers = identifiers;
     }
 
+    /**
+     * mdms-v2 persists writes asynchronously, so a record read straight after its create is often not
+     * yet visible. Instead of failing the whole step (and waiting out the runner's retry backoff, which
+     * made a signup take minutes), re-read a few times with these pauses first. Empty (the default for
+     * directly constructed instances, e.g. tests) means a single read, as before.
+     */
+    private long[] visibilityWaitsMs = new long[0];
+    @org.springframework.beans.factory.annotation.Value("${pgr.onboarding.mdms-visibility-waits-ms:150,300,600,1200}")
+    void setVisibilityWaitsMs(long[] waits) { this.visibilityWaitsMs = waits == null ? new long[0] : waits.clone(); }
+
+    /** Reads until {@code visible} holds or the configured pauses run out; returns the last read. */
+    private JsonNode awaitVisible(java.util.function.Supplier<JsonNode> read, java.util.function.Predicate<JsonNode> visible) {
+        JsonNode result = read.get();
+        for (long wait : visibilityWaitsMs) {
+            if (visible.test(result)) return result;
+            try { Thread.sleep(wait); } catch (InterruptedException e) { Thread.currentThread().interrupt(); return result; }
+            result = read.get();
+        }
+        return result;
+    }
+
     public void perform(String step, OnboardingSignup signup, OnboardingOperation operation, OnboardingProgress progress) {
         // Submit refuses a reserved tenant id, but a signup queued before that check existed may
         // still carry `default` or a state root. Refuse it terminally before any write, at every
@@ -303,7 +324,8 @@ public class OnboardingSteps {
         if (!found.isEmpty()) return;
         var body = asMap(schema); body.put("tenantId", tenant); body.put("description", code); body.put("isActive", true);
         createProjectedRecord(scope, "mdms", "/egov-mdms-service/schema/v1/_create", Map.of("SchemaDefinition", body));
-        found = client.read("mdms", "/egov-mdms-service/schema/v1/_search", Map.of("SchemaDefCriteria", Map.of("tenantId", tenant, "codes", List.of(code)))).path("SchemaDefinitions");
+        found = awaitVisible(() -> client.read("mdms", "/egov-mdms-service/schema/v1/_search", Map.of("SchemaDefCriteria", Map.of("tenantId", tenant, "codes", List.of(code)))).path("SchemaDefinitions"),
+                rows -> rows.isArray() && !rows.isEmpty());
         if (!found.isArray() || found.isEmpty()) throw new OnboardingFailure("MDMS_SCHEMA_NOT_VISIBLE", true);
     }
     public JsonNode records(String tenant, String schema, String id) {
@@ -321,7 +343,7 @@ public class OnboardingSteps {
         if (rows.isEmpty()) {
             createProjectedRecord(scope, "mdms", "/egov-mdms-service/v2/_create/" + schema, Map.of("Mdms", Map.of(
                     "tenantId", tenant, "schemaCode", schema, "uniqueIdentifier", id, "isActive", true, "data", data)));
-            rows = records(tenant, schema, id);
+            rows = awaitVisible(() -> records(tenant, schema, id), r -> !r.isEmpty());
         }
         if (rows.isEmpty()) throw new OnboardingFailure("MDMS_RECORD_NOT_VISIBLE", true);
         if (!rows.get(0).path("isActive").asBoolean(true)) throw new OnboardingFailure("BASELINE_RECORD_INACTIVE", false);
@@ -329,8 +351,9 @@ public class OnboardingSteps {
             var record = asMap(rows.get(0));
             var merged = asMap(rows.get(0).path("data")); merged.putAll(data); record.put("data", merged);
             client.write(scope, "mdms", "/egov-mdms-service/v2/_update/" + schema, Map.of("Mdms", record));
-            JsonNode visible = records(tenant, schema, id).path(0).path("data");
-            for (var field : data.entrySet()) if (!Objects.equals(visible.get(field.getKey()), mapper.valueToTree(field.getValue())))
+            java.util.function.Predicate<JsonNode> applied = r -> data.entrySet().stream()
+                    .allMatch(f -> Objects.equals(r.path(0).path("data").get(f.getKey()), mapper.valueToTree(f.getValue())));
+            if (!applied.test(awaitVisible(() -> records(tenant, schema, id), applied)))
                 throw new OnboardingFailure("MDMS_RECORD_NOT_VISIBLE", true);
         }
     }

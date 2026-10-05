@@ -16,6 +16,7 @@ public class OnboardingStepsTest {
     private List<String> writes=new ArrayList<>();private List<JsonNode> employees=new ArrayList<>();private Map<String,Object> createdUser;
     private List<Object> workflows=new ArrayList<>();
     private OnboardingFailure createFailure;
+    private int lagReads; private final Map<String,Integer> lagging=new HashMap<>();
     @Before @SuppressWarnings("unchecked") public void setup() throws Exception {
         client=mock(OnboardingProvisionerClient.class);steps=new OnboardingSteps(client,new PlatformBaseline(mapper),mapper);
         signup=OnboardingSignup.builder().id(UUID.randomUUID()).requestedTenantId("newtown").accountName("New Town").accountCode("NEW-TOWN").urlSlug("newtown").countryCode("IN").timeZone("Asia/Kolkata").financialYearPolicy("APRIL_MARCH")
@@ -34,9 +35,10 @@ public class OnboardingStepsTest {
                 if(path.contains("/v2/_search")) {
                     Map<String,Object> criteria=(Map<String,Object>)body.get("MdmsCriteria");String prefix=criteria.get("tenantId")+"|"+criteria.get("schemaCode")+"|";
                     List<String> ids=(List<String>)criteria.get("uniqueIdentifiers");
+                    if(ids!=null&&ids.size()==1&&lagging.merge(prefix+ids.get(0),-1,Integer::sum)>=0) return mapper.valueToTree(Map.of("mdms",List.of()));
                     return mapper.valueToTree(Map.of("mdms",rows.entrySet().stream().filter(e->e.getKey().startsWith(prefix)&&(ids==null||ids.contains(e.getKey().substring(prefix.length())))).map(Map.Entry::getValue).toList()));
                 }
-                Map<String,Object> row=(Map<String,Object>)body.get("Mdms");String key=row.get("tenantId")+"|"+row.get("schemaCode")+"|"+row.get("uniqueIdentifier");rows.put(key,mapper.valueToTree(row));writes.add("record:"+row.get("schemaCode"));return mapper.createObjectNode();
+                Map<String,Object> row=(Map<String,Object>)body.get("Mdms");String key=row.get("tenantId")+"|"+row.get("schemaCode")+"|"+row.get("uniqueIdentifier");rows.put(key,mapper.valueToTree(row));if(path.contains("/v2/_create/"))lagging.put(key,lagReads);writes.add("record:"+row.get("schemaCode"));return mapper.createObjectNode();
             }
             if(service.equals("hrms")) {
                 if(path.contains("_search")) { assertTrue("stock HRMS requires explicit offset",path.contains("&offset=0")); assertTrue("founder uniqueness search needs two results",path.contains("&limit=2")); return mapper.valueToTree(Map.of("Employees",employees)); }
@@ -128,6 +130,21 @@ public class OnboardingStepsTest {
         rows.put("newtown|tenant.tenants|newtown",mapper.valueToTree(Map.of("data",Map.of("code","newtown"))));
         OnboardingFailure failure=assertThrows(OnboardingFailure.class,()->steps.perform("TENANT_FOUNDATION",signup,op,progress));assertEquals("TENANT_TAKEN",failure.getCode());assertFalse(failure.isRetryable());
         verify(client,never()).write(any(),eq("enc"),anyString(),anyMap());verify(client,never()).write(any(),eq("hrms"),anyString(),anyMap());
+    }
+    @Test public void withoutVisibilityWaitsALaggingRecordFailsTheStep(){
+        // mdms-v2 persists asynchronously: each created record is invisible to the first two reads after its create.
+        lagReads=2;
+        assertEquals("MDMS_RECORD_NOT_VISIBLE",assertThrows(OnboardingFailure.class,()->steps.perform("TENANT_FOUNDATION",signup,op,progress)).getCode());
+    }
+    @Test public void aRecordThatBecomesVisibleWithinTheWaitsDoesNotFailTheStep(){
+        lagReads=2;steps.setVisibilityWaitsMs(new long[]{0,0,0});
+        prerequisites();
+        assertTrue(writes.contains("record:tenant.tenants"));
+    }
+    @Test public void aRecordStillInvisibleAfterTheConfiguredWaitsFailsRetryably(){
+        lagReads=5;steps.setVisibilityWaitsMs(new long[]{0,0});
+        OnboardingFailure failure=assertThrows(OnboardingFailure.class,()->steps.perform("TENANT_FOUNDATION",signup,op,progress));
+        assertEquals("MDMS_RECORD_NOT_VISIBLE",failure.getCode());assertTrue(failure.isRetryable());
     }
     @Test public void founderValidationIsCorrectableAndDuplicateProjectionIsRetried(){
         prerequisites();createFailure=new OnboardingFailure("INVALID_MOBILE",false);
