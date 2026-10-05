@@ -8,7 +8,6 @@ import {
   type SessionUser,
   type TenantOption,
   authMethods,
-  logout,
   requestPasswordSetup,
   session,
   type Invitation,
@@ -19,7 +18,7 @@ import { AuthShell } from '@/components/signup/AuthPanel';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { clearLocalSession, SESSION_EXPIRED_KEY } from '@/lib/session';
+import { SESSION_EXPIRED_KEY, signOutThisDevice } from '@/lib/session';
 import { useAuthResult } from '@/hooks/useAuthResult';
 
 type Phase = 'loading' | 'methods' | 'tenants' | 'noAccess' | 'invitations' | 'entering';
@@ -130,12 +129,9 @@ export default function LoginPage() {
   };
 
   const signOut = async () => {
-    try {
-      await logout();
-      clearLocalSession();
-      setIdentityUser(null); setError(null); setNotice(null); setShowPasswordSetup(false); setPhase('loading');
-      await load();
-    } catch (caught) { setError(caught instanceof Error ? caught.message : 'Sign-out failed. Please retry.'); }
+    await signOutThisDevice();
+    setIdentityUser(null); setError(null); setNotice(null); setShowPasswordSetup(false); setPhase('loading');
+    await load();
   };
 
   const resultError = authResult.result?.status === 'failed' ? authResult.result.message : null;

@@ -23,6 +23,7 @@ vi.mock('@/lib/session', () => ({
   SESSION_EXPIRED_KEY: 'crs-session-expired',
   clearLocalSession: vi.fn(),
   installDigitContext: vi.fn(),
+  signOutThisDevice: vi.fn(),
 }));
 
 import * as api from '@/api/onboarding';
@@ -152,5 +153,19 @@ describe('configurator sign in', () => {
 
     await waitFor(() => expect(api.selectContext).toHaveBeenCalledWith('ke.bomet'));
     expect(localSession.installDigitContext).toHaveBeenCalledWith(context, signedIn.user, [1, 2, 3, 4, 5]);
+  });
+
+  it('signs out through the fail-open helper and returns to sign-in', async () => {
+    vi.mocked(api.session).mockResolvedValueOnce(signedIn).mockResolvedValue({ authenticated: false });
+    vi.mocked(api.tenants).mockResolvedValue({
+      tenants: [{ tenantId: 'ke.bomet', name: 'Bomet County', organizationAlias: 'bomet', roles: ['EMPLOYEE'] }],
+      selectionRequired: false,
+      onboardingRequired: false,
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: /sign out/i }));
+    await waitFor(() => expect(localSession.signOutThisDevice).toHaveBeenCalled());
+    expect(await screen.findByRole('button', { name: /^log in$/i })).toBeInTheDocument();
+    expect(api.logout).not.toHaveBeenCalled();
   });
 });

@@ -456,15 +456,39 @@ test("BFF logout does not call native token revocation even with a stored user",
 });
 
 
-test("failed BFF logout retains local state for retry on every scope", async () => {
-  for (const scope of ["current", "others", "all"]) {
-    const { cleared, replacedWith } = await withBrowser(
-      "/bomet-county/digit-ui/employee/pgr/inbox", "employee", async () => {
-        window.fetch = async () => json(503, {});
-        await assert.rejects(UserService.logout(scope));
-      },
-    );
-    assert.deepEqual(cleared, []);
-    assert.equal(replacedWith, null);
+test("failed BFF sign-out of this device still clears local credentials and leaves", async () => {
+  for (const response of [json(503, {}), json(403, { code: "UNTRUSTED_ORIGIN" })]) {
+    for (const scope of ["current", "all"]) {
+      const { cleared, replacedWith } = await withBrowser(
+        "/bomet-county/digit-ui/employee/pgr/inbox", "employee", async () => {
+          window.fetch = async () => response;
+          await UserService.logout(scope);
+        },
+      );
+      assert.deepEqual(cleared.sort(), ["local", "session"]);
+      assert.equal(replacedWith, "https://example.test/bomet-county/digit-ui/employee/user/login");
+    }
   }
+});
+
+test("an unreachable BFF does not keep the device signed in", async () => {
+  const { cleared, replacedWith } = await withBrowser(
+    "/bomet-county/digit-ui/citizen/pgr/complaints", "citizen", async () => {
+      window.fetch = async () => { throw new TypeError("Failed to fetch"); };
+      await UserService.logout();
+    },
+  );
+  assert.deepEqual(cleared.sort(), ["local", "session"]);
+  assert.equal(replacedWith, "https://example.test/bomet-county/digit-ui/citizen/login");
+});
+
+test("failed sign-out of other devices keeps this session and reports the failure", async () => {
+  const { cleared, replacedWith } = await withBrowser(
+    "/bomet-county/digit-ui/employee/pgr/inbox", "employee", async () => {
+      window.fetch = async () => json(503, {});
+      await assert.rejects(UserService.logout("others"));
+    },
+  );
+  assert.deepEqual(cleared, []);
+  assert.equal(replacedWith, null);
 });

@@ -57,10 +57,22 @@ export const UserService = {
       // same tenant's login page for that surface.
       const surface = tenantContext()?.surface || getAuthSurface();
       const appBasePath = tenantContext()?.appBasePath || window.contextPath || currentAppBasePath();
-      await identityBffLogout({ surface, scope, fetchImpl: window.fetch.bind(window) });
-      if (scope !== "others") {
-        window.localStorage.clear();
-        window.sessionStorage.clear();
+      const fetchImpl = window.fetch.bind(window);
+      // "others" keeps this session, so a failure is reported and nothing local changes.
+      if (scope === "others") {
+        await identityBffLogout({ surface, scope, fetchImpl });
+        return;
+      }
+      // Fail open: the DIGIT token lives in localStorage, so a BFF outage or an
+      // UNTRUSTED_ORIGIN 403 must not leave a shared device signed in. Clear local
+      // state first, then revoke the BFF session best-effort.
+      window.localStorage.clear();
+      window.sessionStorage.clear();
+      try {
+        await identityBffLogout({ surface, scope, fetchImpl });
+      } catch (e) {
+        // The BFF session cookie may outlive this; the local DIGIT session is gone.
+      } finally {
         window.location.replace(
           `${window.location.origin}${identityBffLogoutRedirect(appBasePath, surface)}`,
         );

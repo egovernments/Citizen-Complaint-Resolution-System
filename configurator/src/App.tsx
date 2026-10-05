@@ -1,7 +1,6 @@
 import AccountPage from '@/identity/AccountPage';
 import MembersPage from '@/identity/MembersPage';
 import WorkspacePage from '@/identity/WorkspacePage';
-import { logout as identityLogout } from '@/api/onboarding';
 import { recordStep } from '@/identity/workspace';
 import { toast } from '@/hooks/use-toast';
 import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
@@ -58,7 +57,7 @@ import HelpModal from './components/ui/HelpModal';
 import { Toaster } from './components/ui/toaster';
 import { apiClient, getApiBaseUrl, getConfiguredRootTenant } from './api';
 import { identifyUser, trackEvent } from './lib/telemetry';
-import { clearLocalSession, SESSION_EXPIRED_KEY } from './lib/session';
+import { clearLocalSession, SESSION_EXPIRED_KEY, signOutThisDevice } from './lib/session';
 import PageViewTracker from './components/PageViewTracker';
 import './App.css';
 import { LEGACY_PGR_DASHBOARD_ENABLED, ONBOARDING_GATE_ENABLED } from '@/config/featureFlags';
@@ -427,11 +426,10 @@ function App() {
   };
 
   const logout = async () => {
-    await identityLogout();
     trackEvent('logout', { tenant: state.tenant });
-    // Storage, both API clients and the cached providers. Shared with the
-    // signup flow so there is one definition of what a DIGIT sign-out clears.
-    clearLocalSession();
+    // Storage, both API clients and the cached providers first, then the BFF
+    // session best-effort, so sign-out never fails closed.
+    await signOutThisDevice();
     setState(s => ({ ...s, isAuthenticated: false, user: null, mode: 'onboarding', currentPhase: 1, completedPhases: [], targetTenant: s.tenant }));
   };
 

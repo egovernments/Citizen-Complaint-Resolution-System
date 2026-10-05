@@ -1,7 +1,7 @@
 import { apiClient } from '@/api';
 import { digitClient, resetProviders } from '@/providers/bridge';
 import { clearUser } from '@/lib/telemetry';
-import { API_ORIGIN, type DigitContext, type SessionUser } from '@/api/onboarding';
+import { API_ORIGIN, logout as identityLogout, type DigitContext, type SessionUser } from '@/api/onboarding';
 
 /** The one blob App restores a DIGIT session from. */
 export const AUTH_STORAGE_KEY = 'crs-auth-state';
@@ -35,6 +35,21 @@ export function clearLocalSession(): void {
     } catch {
       // In-memory teardown, and one failing must not skip the rest.
     }
+  }
+}
+
+/**
+ * Sign this device out. Fails open: the DIGIT token is cleared first, so a BFF
+ * outage or a 403 (e.g. UNTRUSTED_ORIGIN) can never leave a shared device
+ * signed in. Revoking the identity session is then best-effort; its cookie is
+ * HttpOnly and expires on its own.
+ */
+export async function signOutThisDevice(scope: 'current' | 'all' = 'current'): Promise<void> {
+  clearLocalSession();
+  try {
+    await identityLogout(scope);
+  } catch {
+    // Best-effort: the local session is already gone.
   }
 }
 
