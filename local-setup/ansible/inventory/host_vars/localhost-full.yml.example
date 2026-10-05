@@ -179,11 +179,10 @@ asset_s3_bucket: "pg-egov-assets"
 #         `hmr`       — esbuild dev server in tmux, live-reload on save.
 digit_ui_mode: container
 
-# Build and serve the Vite/React-19 citizen SPA at /citizen/, separate from the
-# legacy /digit-ui/ bundle. Pair with nginx_features.digit_ui_v2 — building it
-# without the nginx flag leaves the bundle on disk and unreachable.
-# Values: true | false.
-enable_digit_ui_v2: true
+# The Vite/React-19 citizen SPA at /citizen/. Keep false: D26 retired its
+# citizen sign-in and the deploy refuses `true`. Citizens use
+# /<tenant-slug>/digit-ui/citizen instead.
+enable_digit_ui_v2: false
 
 # Unset by default, so deploy builds the reviewed vendored `digit-ui-v2/` and
 # sibling `ui-shared/` sources from this checkout. To test an external source,
@@ -378,7 +377,7 @@ nginx_features:
   api_pgr: false           # /api/pgr/ — proxied to MCP for the dashboard
   mcp: true                # /mcp + /v1/* — needs enable_mcp: true
   keycloak: true           # /auth/ + /identity/v1/ — needs enable_keycloak: true
-  digit_ui_v2: true        # /citizen/ — needs enable_digit_ui_v2: true
+  digit_ui_v2: false       # /citizen/ — retired with enable_digit_ui_v2 (D26)
   integration_tests: false      # /tests/ + /tests-v2/
   integration_tests_runner: false  # /tests/api/
 

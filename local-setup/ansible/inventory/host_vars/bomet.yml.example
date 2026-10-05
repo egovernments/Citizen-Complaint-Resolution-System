@@ -183,7 +183,7 @@ nginx_features:
   api_pgr: false
   mcp: true                        # kit: false — paired with enable_mcp above
   keycloak: true
-  digit_ui_v2: true
+  digit_ui_v2: false               # /citizen/ — retired with enable_digit_ui_v2 (D26)
   integration_tests: false         # pair with enable_integration_tests above
   integration_tests_runner: false  # pair with enable_integration_tests_runner above
 
@@ -195,7 +195,7 @@ enable_keycloak: true
 # deploy refuses `keycloak` here (the old browser-adapter path is gone).
 auth_provider: ""
 keycloak_client_id: digit-ui
-enable_digit_ui_v2: true
+enable_digit_ui_v2: false          # retired by D26; the deploy refuses true
 digit_ui_esbuild_branch: feat/keycloak-auth-adapter
 # Left unset on purpose: the citizen SPA builds from the vendored in-tree
 # digit-ui-v2/ source, so this box ships the revision it is deployed from

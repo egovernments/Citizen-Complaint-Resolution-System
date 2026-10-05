@@ -112,7 +112,45 @@ def r_keycloak(cfg):
 )
 def r_digit_ui_v2(cfg):
     if get(cfg, "nginx_features.digit_ui_v2") is True and get(cfg, "enable_digit_ui_v2") is not True:
-        yield (FAIL, "nginx_features.digit_ui_v2: true requires enable_digit_ui_v2: true.")
+        yield (FAIL, "nginx_features.digit_ui_v2: true serves /citizen/ but nothing builds it "
+                     "(enable_digit_ui_v2 is off, and retired since D26) — set it false.")
+
+
+def as_bool(val):
+    """Ansible's `| bool`: true, 'yes', 'on', 'true', '1' and 1 are true."""
+    if isinstance(val, bool):
+        return val
+    return str(val).strip().lower() in ("yes", "on", "true", "1")
+
+
+# The two rules below mirror D26 refusals in playbook-deploy.yml ("preflight —
+# identity requires enable_keycloak: true" and "preflight — refuse retired
+# digit-ui-v2 citizen identity"), so a host_vars copied from an example fails
+# here in seconds instead of at the start of the play. Keep them in step.
+@rule(
+    "identity-needs-keycloak",
+    "Since D26 every DIGIT UI sign-in (employee and citizen) goes through the "
+    "Identity BFF, which only runs with Keycloak; the old DIGIT OTP/password "
+    "login pages are gone. Without it /<slug>/digit-ui/ cannot resolve its "
+    "tenant and nobody can sign in, so the playbook refuses the deploy (#2271).",
+)
+def r_identity_needs_keycloak(cfg):
+    if not as_bool(get(cfg, "enable_keycloak", False)):
+        yield (FAIL, "enable_keycloak must be true: every sign-in goes through the Identity BFF "
+                     "since D26. Set enable_keycloak: true and nginx_features.keycloak: true, with "
+                     "the keycloak_* and identity_digit_admin_password bootstrap_secrets.")
+
+
+@rule(
+    "digit-ui-v2-retired",
+    "D26 removed digit-ui-v2's fixed-OTP citizen login, direct egov-user "
+    "account creation and profile writes; the playbook refuses "
+    "enable_digit_ui_v2: true (#2271).",
+)
+def r_digit_ui_v2_retired(cfg):
+    if as_bool(get(cfg, "enable_digit_ui_v2", False)):
+        yield (FAIL, "enable_digit_ui_v2 is no longer supported (D26). Set it false and publish "
+                     "/<tenant-slug>/digit-ui/citizen instead.")
 
 
 @rule(
@@ -402,8 +440,20 @@ SELF_TEST_CASES = [
       "db_fast_path_ack_data_wipe": True,
       "bootstrap_secrets": {"elasticsearch_master_password": "nope"}},
      {"fastpath-master-password"}),
-    ("keycloak provider without stack fires twice", {"auth_provider": "keycloak"},
-     {"keycloak-combo"}),
+    ("keycloak provider without stack fires twice",
+     {"auth_provider": "keycloak", "enable_keycloak": False},
+     {"keycloak-combo", "identity-needs-keycloak"}),
+    # ── D26 refusals mirrored from playbook-deploy.yml ──
+    ("enable_keycloak false fires", {"enable_keycloak": False},
+     {"identity-needs-keycloak"}),
+    ("enable_keycloak unset fires", {"enable_keycloak": None},
+     {"identity-needs-keycloak"}),
+    ("enable_keycloak as the string 'true' is clean", {"enable_keycloak": "true"}, set()),
+    ("enable_digit_ui_v2 true fires", {"enable_digit_ui_v2": True},
+     {"digit-ui-v2-retired"}),
+    ("enable_digit_ui_v2 'yes' fires", {"enable_digit_ui_v2": "yes"},
+     {"digit-ui-v2-retired"}),
+    ("enable_digit_ui_v2 false is clean", {"enable_digit_ui_v2": False}, set()),
     ("keycloak fully wired is clean", {"auth_provider": "keycloak", "enable_keycloak": True,
       "bootstrap_secrets": {"keycloak_admin_password": "x"}},
      set()),
@@ -441,14 +491,18 @@ SELF_TEST_CASES = [
     ("matomo fully wired is clean",
      {"enable_matomo": True, "nginx_features": {"matomo": True}},
      set()),
-    ("empty config is clean", {}, set()),
+    ("empty config is clean (with the required enable_keycloak)", {}, set()),
 ]
+
+# Every case runs on top of this, unless it sets the key itself: the D26
+# keycloak rule would otherwise fire on every minimal case above.
+SELF_TEST_BASE = {"enable_keycloak": True}
 
 
 def self_test():
     failures = 0
     for desc, cfg, expected in SELF_TEST_CASES:
-        fired = {rule_id for _, rule_id, _, _ in run_rules(cfg)}
+        fired = {rule_id for _, rule_id, _, _ in run_rules({**SELF_TEST_BASE, **cfg})}
         if fired != expected:
             print(f"[self-test FAIL] {desc}: expected {sorted(expected)}, fired {sorted(fired)}")
             failures += 1

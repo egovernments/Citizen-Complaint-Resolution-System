@@ -307,6 +307,60 @@ describe('host_vars templates — db_fast_path ack (#2082)', () => {
   });
 });
 
+// Dhruv, #2271 review 3, item 1: three example host_vars still set
+// `enable_digit_ui_v2: true`, which the playbook has refused since D26, and the
+// static tests stayed green because preflight.py mirrored neither D26 refusal.
+// Every tracked example now goes through preflight.py. The fast-path rules are
+// the only ones allowed to fire: every example ships db_fast_path with the
+// data-wipe ack off on purpose (#2082), and the non-dump examples carry a
+// placeholder master password. Anything else is a copy-and-deploy trap.
+describe('example host_vars pass preflight.py (#2271)', () => {
+  const HOST_VARS = 'local-setup/ansible/inventory/host_vars';
+  const BY_DESIGN = new Set(['fastpath-data-wipe-ack', 'fastpath-master-password']);
+  const templates = fs
+    .readdirSync(path.join(REPO_ROOT, HOST_VARS))
+    .filter((f) => f.endsWith('.yml.example') || f === '_example.yml')
+    .sort();
+
+  const preflight = (file: string) => {
+    try {
+      return execFileSync('python3', ['local-setup/scripts/preflight.py', `${HOST_VARS}/${file}`],
+        { cwd: REPO_ROOT, encoding: 'utf8' });
+    } catch (e: any) {
+      return e.stdout ?? '';
+    }
+  };
+
+  test('covers every tracked example', () => {
+    expect(templates).toEqual(expect.arrayContaining([
+      '_example.yml', 'bomet.yml.example', 'localhost-full.yml.example',
+      'localhost-slim.yml.example', 'maputo.yml.example', 'quickstart.yml.example',
+    ]));
+  });
+
+  test.each(templates)('%s trips no rule beyond the fast-path ack', (file) => {
+    const out = preflight(file);
+    expect(out).toContain(`── preflight: ${HOST_VARS}/${file}`);
+    const unexpected = out.split('\n')
+      .filter((l: string) => l.startsWith('[FAIL]'))
+      .filter((l: string) => !BY_DESIGN.has(l.slice('[FAIL] '.length).split(':')[0]));
+    expect(unexpected).toEqual([]);
+  });
+
+  test('preflight.py mirrors both D26 refusals in the playbook', () => {
+    const script = read('local-setup/scripts/preflight.py');
+    const playbook = read('local-setup/ansible/playbook-deploy.yml');
+    expect(playbook).toContain('- name: "preflight — identity requires enable_keycloak: true"');
+    expect(playbook).toContain('- name: "preflight — refuse retired digit-ui-v2 citizen identity"');
+    expect(script).toMatch(/"identity-needs-keycloak"/);
+    expect(script).toMatch(/"digit-ui-v2-retired"/);
+    const selfTest = execFileSync('python3', ['local-setup/scripts/preflight.py', '--self-test'],
+      { cwd: REPO_ROOT, encoding: 'utf8' });
+    expect(selfTest).toContain('[self-test ok ] enable_keycloak false fires');
+    expect(selfTest).toContain('[self-test ok ] enable_digit_ui_v2 true fires');
+  });
+});
+
 // issue #2111. ansible.cfg sets `executable = /bin/bash` so `set -o pipefail`
 // works on Debian/Ubuntu targets, where /bin/sh is dash. Ansible ALSO derives
 // the shell PLUGIN name from that basename, and ships none called "bash" — so
