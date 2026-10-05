@@ -139,12 +139,33 @@ public class OnboardingRunnerReadinessTest {
     /** A rejected password is not retried on the backoff schedule: each retry is a failed login toward lockout. */
     @Test
     public void rejectedCredentialsAreNotRetriedUntilTheLongInterval() {
+        when(provisioner.hasLoggedIn()).thenReturn(true);
         currentFailure = OnboardingRunner.CREDENTIALS_REJECTED;
         List<Long> checks = checkTimes(5000, 6 * 60 * 60_000L);
         assertEquals(List.of(0L, OnboardingRunner.CREDENTIALS_REJECTED_RECHECK_MS), checks);
         assertEquals(OnboardingRunner.CREDENTIALS_REJECTED, runner.pausedReason());
         assertEquals(1, pauseErrors());
         assertTrue(logs.list.get(0).getFormattedMessage().contains("locks the account"));
+    }
+
+    /**
+     * Review #2269 round 3: on a fresh deploy pgr-services starts before the playbook creates the
+     * provisioner, so its first logins are rejected. Before any successful login the runner must keep
+     * re-checking (not sleep 6 h), but slowly enough to stay under egov-user's lockout (5 per 30 min).
+     */
+    @Test
+    public void aRejectionBeforeAnySuccessfulLoginIsRecheckedUnderTheLockoutThreshold() {
+        when(provisioner.hasLoggedIn()).thenReturn(false);
+        currentFailure = OnboardingRunner.CREDENTIALS_REJECTED;
+        List<Long> checks = checkTimes(5000, 60 * 60_000L);
+        assertTrue("re-checked within the hour, not after 6 h", checks.size() >= 6);
+        for (Long start : checks) {
+            long inWindow = checks.stream().filter(t -> t >= start && t < start + 30 * 60_000L).count();
+            assertTrue("at most 3 failed logins in any 30 min window", inWindow <= 3);
+        }
+        assertEquals(OnboardingRunner.CREDENTIALS_REJECTED, runner.pausedReason());
+        assertEquals(1, pauseErrors());
+        assertTrue(logs.list.get(0).getFormattedMessage().contains("may not exist yet"));
     }
 
     @Test

@@ -33,6 +33,12 @@ public class OnboardingRunner implements SmartLifecycle {
      * not retried on the backoff schedule: once per this interval, or at once after a restart.
      */
     static final long CREDENTIALS_REJECTED_RECHECK_MS = 6 * 60 * 60_000L;
+    /**
+     * Before the first successful login a 400/401 usually means the account does not exist yet (a fresh
+     * deploy creates the provisioner after pgr-services starts). Re-check every 10 min: at most 3 failed
+     * logins per 30 min, under egov-user's lockout of 5, so a genuinely wrong password still cannot lock it.
+     */
+    static final long FIRST_LOGIN_REJECTED_RECHECK_MS = 10 * 60_000L;
     static final String CREDENTIALS_REJECTED = OnboardingProvisionerClient.CREDENTIALS_REJECTED;
     private final OnboardingWorkerService worker;
     private final OnboardingRepository repository;
@@ -127,7 +133,12 @@ public class OnboardingRunner implements SmartLifecycle {
 
     private void pause(String reason, long now) {
         if (!reason.equals(notReady)) {
-            if (CREDENTIALS_REJECTED.equals(reason)) {
+            if (CREDENTIALS_REJECTED.equals(reason) && !provisioner.hasLoggedIn()) {
+                log.error("PGR onboarding runner PAUSED ({}): egov-user rejected the provisioner login before it ever "
+                        + "succeeded. On a fresh deploy the account may not exist yet; re-checking every {} min (under "
+                        + "egov-user's lockout of 5 failures in 30 minutes). If it persists, fix "
+                        + "PGR_DIGIT_PROVISIONER_USERNAME/PASSWORD/TENANT_ID.", reason, FIRST_LOGIN_REJECTED_RECHECK_MS / 60_000);
+            } else if (CREDENTIALS_REJECTED.equals(reason)) {
                 log.error("PGR onboarding runner PAUSED ({}): egov-user rejected the provisioner login. Not retrying "
                         + "for {} h: every attempt is a failed login, and egov-user locks the account after 5 in 30 "
                         + "minutes. An operator must fix PGR_DIGIT_PROVISIONER_PASSWORD (or USERNAME/TENANT_ID, or the "
@@ -143,7 +154,7 @@ public class OnboardingRunner implements SmartLifecycle {
         notReady = reason;
         long delay;
         if (CREDENTIALS_REJECTED.equals(reason)) {
-            delay = CREDENTIALS_REJECTED_RECHECK_MS;
+            delay = provisioner.hasLoggedIn() ? CREDENTIALS_REJECTED_RECHECK_MS : FIRST_LOGIN_REJECTED_RECHECK_MS;
         } else {
             delay = Math.min(NOT_READY_RECHECK_MS << Math.min(failedChecks, 10), NOT_READY_MAX_RECHECK_MS);
             failedChecks++;
