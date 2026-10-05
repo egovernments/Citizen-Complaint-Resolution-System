@@ -21,6 +21,13 @@ import java.util.function.LongSupplier;
 public class BaselineUpgrader {
     static final String STEP = "BASELINE_UPGRADE";
     static final long LEASE_MS = 600_000;
+    /**
+     * Consecutive failures at the same point before the upgrade of a workspace stops for good. MDMS projection lag
+     * takes up to ~14 attempts; with backoff capped at an hour, 30 is roughly 19 hours at one record.
+     */
+    static final int MAX_FAILURES = 30;
+    /** Progress key naming the step, schema or record being worked on: where a failure happened. */
+    static final String AT = "at";
     private final WorkspaceRepository workspaces;
     private final OnboardingRepository onboarding;
     private final OnboardingSteps steps;
@@ -45,12 +52,18 @@ public class BaselineUpgrader {
         var claim = workspaces.claimUpgrade(seed.versionNumber(), token, now + LEASE_MS, now);
         if (claim.isEmpty()) return false;
         String tenant = claim.get().get("tenantId").toString(), from = claim.get().get("seedVersion").toString();
+        var progress = (Map<String, Object>) claim.get().get("progress");
+        progress.put(AT, "start");
         try {
-            upgrade(tenant, Integer.parseInt(from), (Map<String, Object>) claim.get().get("progress"), token);
+            upgrade(tenant, Integer.parseInt(from), progress, token);
         } catch (OnboardingFailure failure) {
             if ("ONBOARDING_LEASE_LOST".equals(failure.getCode())) return true;
-            log.warn("Platform seed upgrade of {} from v{} failed ({}); it will be retried", tenant, from, failure.getCode());
-            workspaces.retryUpgrade(tenant, token, failure.getCode(), failure.isRetryable(), clock.getAsLong());
+            String at = progress.get(AT).toString();
+            // A non-retryable failure stops at once: the same request would be refused again.
+            if (workspaces.retryUpgrade(tenant, token, failure.getCode(), failure.isRetryable(), at, MAX_FAILURES, clock.getAsLong()))
+                log.warn("Platform seed upgrade of {} from v{} STOPPED at {} ({}); it will not be retried until an operator clears "
+                        + "upgrade_stopped_at for it (see onboarding-workspace-contract.md)", tenant, from, at, failure.getCode());
+            else log.info("Platform seed upgrade of {} from v{} failed at {} ({}); it will be retried", tenant, from, at, failure.getCode());
         }
         // Unexpected failures leave the lease to expire: the next claim resumes from the last checkpoint.
         return true;
@@ -66,7 +79,7 @@ public class BaselineUpgrader {
             if (!workspaces.upgradeCheckpoint(tenant, token, progress, now + LEASE_MS, now)) throw new OnboardingFailure("ONBOARDING_LEASE_LOST", true);
         };
         var kept = (List<String>) progress.computeIfAbsent("kept", k -> new ArrayList<String>());
-        step(progress, save, "records", () -> records(scope, signup, save, kept));
+        step(progress, save, "records", () -> records(scope, signup, progress, save, kept));
         step(progress, save, "localization-packs", () -> packs(scope, signup, progress, kept));
         if (from < 2) {
             step(progress, save, "state-info", () -> stateInfo(scope, signup, kept));
@@ -82,18 +95,24 @@ public class BaselineUpgrader {
 
     private void step(Map<String, Object> progress, Runnable save, String name, Runnable action) {
         if ("DONE".equals(progress.get(name))) return;
+        progress.put(AT, name);
         action.run();
         progress.put(name, "DONE");
         save.run();
     }
 
     /** Schemas, seed records (actions and role-actions included), workflows and the signup-derived masters, create-if-absent. */
-    private void records(OnboardingProgress.WriteScope scope, OnboardingSignup signup, Runnable save, List<String> kept) {
+    private void records(OnboardingProgress.WriteScope scope, OnboardingSignup signup, Map<String, Object> progress, Runnable save, List<String> kept) {
         String tenant = signup.getRequestedTenantId();
-        for (JsonNode schema : seed.schemas()) steps.ensureSchema(scope, tenant, schema);
+        // Schemas first, as PLATFORM_BASELINE does: a workspace provisioned before the baseline existed may lack them.
+        for (JsonNode schema : seed.schemas()) {
+            progress.put(AT, "records:schema:" + schema.path("code").asText());
+            steps.ensureSchema(scope, tenant, schema);
+        }
         int done = 0;
         for (JsonNode row : seed.records()) {
             String code = row.path("schemaCode").asText(), id = row.path("uniqueIdentifier").asText();
+            progress.put(AT, "records:" + code + ":" + id);
             try { steps.ensureRecord(scope, tenant, code, id, steps.substitute(row.path("data"), tenant)); }
             catch (OnboardingFailure failure) {
                 if (!"BASELINE_RECORD_INACTIVE".equals(failure.getCode())) throw failure;
@@ -101,6 +120,7 @@ public class BaselineUpgrader {
             }
             if (++done % 100 == 0) save.run(); // extends the lease
         }
+        progress.put(AT, "records:masters");
         for (JsonNode workflow : seed.workflows()) steps.ensureWorkflow(scope, tenant, workflow);
         steps.ensureIdFormat(scope, signup);
         steps.ensureMobileRule(scope, signup);

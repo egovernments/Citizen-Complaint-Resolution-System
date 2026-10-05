@@ -26,11 +26,19 @@ An absent legacy row is synthesized as DONE with all steps DONE, version 0, seed
 
 The platform seed (`src/main/resources/onboarding/platform-baseline-v1.json`) carries its own `version`; that field is the only place it is set. Bump it whenever the seed's content changes. The baseline only creates what is missing, so a workspace onboarded on an older version does not get new content by itself.
 
-`BaselineUpgrader` closes that gap. When the onboarding runner is on and has no signup waiting, each runner tick upgrades at most one workspace whose `seedVersion` is a number below the current version. Legacy rows (seedVersion null) are never upgraded. The worker leases the row with `FOR UPDATE SKIP LOCKED`, so several PGR instances never upgrade the same workspace at once. It uses the provisioner account on the internal service hosts, as the onboarding steps do. Each step is saved on the row as it finishes, so after a crash the next lease continues from the last finished step. A failed upgrade is retried with backoff (up to an hour, or a day for a non-retryable error); the error code is kept in `upgrade_error_code`.
+`BaselineUpgrader` closes that gap. When the onboarding runner is on and has no signup waiting, each runner tick upgrades at most one workspace whose `seedVersion` is a number below the current version. Legacy rows (seedVersion null) are never upgraded. The worker leases the row with `FOR UPDATE SKIP LOCKED`, so several PGR instances never upgrade the same workspace at once. It uses the provisioner account on the internal service hosts, as the onboarding steps do. Each step is saved on the row as it finishes, so after a crash the next lease continues from the last finished step. A failed upgrade is retried with backoff of up to an hour. The error code is kept in `upgrade_error_code`, and the point where it failed (a step, schema or record such as `records:common-masters.StateInfo:<T>`) in `upgrade_failed_step`.
+
+The upgrade of a workspace stops for good after 30 failures in a row at the same point (about 19 hours with backoff; ordinary MDMS lag clears within about 14), or at once on a non-retryable error. PGR logs one WARN, `Platform seed upgrade of <T> from v<n> STOPPED at <point> (<code>)`, sets `upgrade_stopped_at`, and does not claim that workspace again. Other workspaces keep upgrading. After fixing the cause, clear the stop with:
+
+```sql
+UPDATE eg_pgr_onboarding_workspace SET upgrade_stopped_at=NULL, upgrade_attempts=0, upgrade_failed_step=NULL, upgrade_next_attempt_at=NULL WHERE tenant_id='<tenant>';
+```
+
+The next idle runner tick resumes it from its last finished step. To list stopped workspaces: `SELECT tenant_id, upgrade_failed_step, upgrade_error_code FROM eg_pgr_onboarding_workspace WHERE upgrade_stopped_at IS NOT NULL;`
 
 Steps, all safe to repeat:
 
-1. Create any missing schemas, seed records (actions and role-actions included), the PGR workflow, IdFormat, MobileNumberValidation and DashboardConfig. Records that exist are not rewritten; a record the founder deactivated stays inactive.
+1. Create any missing schemas first, then any missing seed records (actions and role-actions included), the PGR workflow, IdFormat, MobileNumberValidation and DashboardConfig. Records that exist are not rewritten; a record the founder deactivated stays inactive.
 2. For each current StateInfo locale that has seeded packs, add the pack messages the tenant lacks and the `TENANT_TENANTS_<T>` key where the locale has the rainmaker-common pack. Existing messages are not rewritten. If the tenant has no messages of its own there (`default` answers), it is left alone.
 3. From seed v1 only: rewrite `StateInfo.languages` with the current rule (en_IN first) if it still holds exactly what v1 wrote.
 4. From seed v1 only: delete `TENANT_TENANTS_<T>` from locales with no seeded rainmaker-common pack, if its text is still the workspace name. That one key hides every `default` message for the locale (#2257).

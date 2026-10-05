@@ -88,7 +88,11 @@ public class BaselineUpgraderTest {
 
     @SuppressWarnings("unchecked")
     private JsonNode write(String service, String path, Map<String, Object> body) {
-        if (path.contains("_create/") || path.contains("_update/")) {
+        if (path.endsWith("schema/v1/_create")) {
+            String code = ((Map<String, Object>) body.get("SchemaDefinition")).get("code").toString(); schemas.add(code); writes.add("schema:" + code);
+        } else if (path.contains("_create/") || path.contains("_update/")) {
+            var mdms = (Map<String, Object>) body.get("Mdms");
+            if (!schemas.contains(mdms.get("schemaCode").toString())) throw new OnboardingFailure("SCHEMA_DEFINITION_NOT_FOUND", false);
             var row = (Map<String, Object>) body.get("Mdms"); put(row.get("schemaCode").toString(), row.get("uniqueIdentifier").toString(), (Map<String, Object>) row.get("data"));
             writes.add((path.contains("_create/") ? "create:" : "update:") + row.get("schemaCode") + ":" + row.get("uniqueIdentifier"));
         } else if (path.endsWith("_upsert") || path.endsWith("_delete")) {
@@ -156,13 +160,45 @@ public class BaselineUpgraderTest {
         assertEquals(List.of(), writes);
     }
 
+    @Test public void workspaceProvisionedBeforeTheBaselineGetsItsSchemasThenItsRecords() {
+        // As on a workspace from the pre-baseline flow: no StateInfo-era masters and no schema for them.
+        String schema = "ACCESSCONTROL-ACTIONS-TEST.actions-test";
+        schemas.remove(schema); rows.keySet().removeIf(key -> key.startsWith("walkone|" + schema + "|"));
+        upgrade();
+        int created = writes.indexOf("schema:" + schema), firstRecord = writes.indexOf("create:" + schema + ":4560");
+        assertTrue(writes.toString(), created >= 0 && firstRecord > created);
+        long actions = 0; for (JsonNode row : seed.records()) if (schema.equals(row.path("schemaCode").asText())) actions++;
+        assertEquals(actions, writes.stream().filter(w -> w.startsWith("create:" + schema + ":")).count());
+        assertEquals(1, writes.stream().filter(w -> w.startsWith("schema:")).count());
+    }
+
+    @Test public void repeatedFailuresAtOnePointStopTheWorkspaceWithOneWarning() {
+        var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(BaselineUpgrader.class);
+        var appender = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>(); appender.start(); logger.addAppender(appender);
+        try {
+            int[] failures = {0};
+            // The repository stops the row on the MAX_FAILURES-th failure at one point and never hands it out again.
+            when(workspaces.retryUpgrade(anyString(), any(), anyString(), anyBoolean(), anyString(), anyInt(), anyLong()))
+                    .thenAnswer(call -> ++failures[0] >= (int) call.getArgument(5));
+            when(workspaces.claimUpgrade(anyLong(), any(), anyLong(), anyLong())).thenAnswer(call -> failures[0] >= BaselineUpgrader.MAX_FAILURES ? Optional.empty()
+                    : Optional.of(new LinkedHashMap<>(Map.of("tenantId", "walkone", "seedVersion", "1", "progress", new LinkedHashMap<>()))));
+            doThrow(new OnboardingFailure("MDMS_RECORD_NOT_VISIBLE", true)).when(client).read(eq("workflow"), anyString(), anyMap());
+            for (int tick = 0; tick < BaselineUpgrader.MAX_FAILURES + 10; tick++) upgrader.upgradeNext();
+            verify(workspaces, times(BaselineUpgrader.MAX_FAILURES)).retryUpgrade(eq("walkone"), any(), eq("MDMS_RECORD_NOT_VISIBLE"), eq(true),
+                    eq("records:masters"), eq(BaselineUpgrader.MAX_FAILURES), anyLong());
+            var warnings = appender.list.stream().filter(e -> e.getLevel() == ch.qos.logback.classic.Level.WARN).toList();
+            assertEquals(1, warnings.size());
+            assertTrue(warnings.get(0).getFormattedMessage(), warnings.get(0).getFormattedMessage().contains("STOPPED at records:masters (MDMS_RECORD_NOT_VISIBLE)"));
+        } finally { logger.detachAppender(appender); }
+    }
+
     @Test public void lostLeaseStopsBeforeTheNextWrite() {
         when(workspaces.claimUpgrade(anyLong(), any(), anyLong(), anyLong())).thenReturn(Optional.of(new LinkedHashMap<>(Map.of(
                 "tenantId", "walkone", "seedVersion", "1", "progress", new LinkedHashMap<>(Map.of("records", "DONE", "localization-packs", "DONE"))))));
         when(workspaces.upgradeCheckpoint(anyString(), any(), anyMap(), anyLong(), anyLong())).thenReturn(false);
         assertTrue(upgrader.upgradeNext());
         assertEquals("only the StateInfo write before the failed checkpoint", List.of("update:common-masters.StateInfo:walkone"), writes);
-        verify(workspaces, never()).retryUpgrade(anyString(), any(), anyString(), anyBoolean(), anyLong());
+        verify(workspaces, never()).retryUpgrade(anyString(), any(), anyString(), anyBoolean(), anyString(), anyInt(), anyLong());
         verify(workspaces, never()).finishUpgrade(anyString(), any(), anyString(), any(), anyLong());
     }
 
@@ -171,7 +207,7 @@ public class BaselineUpgraderTest {
                 "tenantId", "walkone", "seedVersion", "1", "progress", new LinkedHashMap<>()))));
         doThrow(new OnboardingFailure("PROVISIONING_UNAVAILABLE", true)).when(client).read(eq("workflow"), anyString(), anyMap());
         assertTrue(upgrader.upgradeNext());
-        verify(workspaces).retryUpgrade(eq("walkone"), any(), eq("PROVISIONING_UNAVAILABLE"), eq(true), anyLong());
+        verify(workspaces).retryUpgrade(eq("walkone"), any(), eq("PROVISIONING_UNAVAILABLE"), eq(true), eq("records:masters"), eq(BaselineUpgrader.MAX_FAILURES), anyLong());
         verify(workspaces).claimUpgrade(eq((long) seed.versionNumber()), any(), anyLong(), anyLong());
 
         var off = new BaselineUpgrader(workspaces, mock(OnboardingRepository.class), steps, client, seed, mapper, false);

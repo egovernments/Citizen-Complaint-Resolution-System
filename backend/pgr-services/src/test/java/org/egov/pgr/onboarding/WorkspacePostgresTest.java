@@ -257,7 +257,7 @@ public class WorkspacePostgresTest {
         jdbc.update("INSERT INTO eg_pgr_onboarding_workspace_name VALUES (?,?)","cafe\u0301\u00a0council","example");
         var flyway=org.flywaydb.core.Flyway.configure().dataSource(source).defaultSchema(schema)
                 .baselineOnMigrate(true).baselineVersion("20261004010000").locations("classpath:db/migration/main").load();
-        assertEquals(3,flyway.migrate().migrationsExecuted);
+        assertEquals(4,flyway.migrate().migrationsExecuted);
         assertEquals("café council",jdbc.queryForObject("SELECT normalized_name FROM eg_pgr_onboarding_workspace_name",String.class));
         assertEquals(0,flyway.migrate().migrationsExecuted);
     }
@@ -276,7 +276,7 @@ public class WorkspacePostgresTest {
     }
 
     @Test public void seedUpgradeLeasesOneOlderWorkspaceAtATimeAndSkipsLockedRows() throws Exception {
-        var migration = new ResourceDatabasePopulator(new ClassPathResource("db/migration/main/V20261005010000__onboarding_baseline_upgrade.sql")); migration.execute(source);
+        upgradeColumns();
         for (String tenant : List.of("alpha", "beta", "fresh")) {
             var signup = signup(tenant); tx.execute(s -> { onboarding.settleSignup(signup.getId(), "ACTIVE", "CONSUMED", tenant.equals("fresh") ? "2" : "1", 2L); return null; });
         }
@@ -304,7 +304,7 @@ public class WorkspacePostgresTest {
         assertFalse("the expired holder lost its lease", repository.holdsUpgrade("alpha", first, now + 600_001));
 
         // A failure releases the lease and backs off; the row is not claimable until the retry is due.
-        repository.retryUpgrade("beta", second, "PROVISIONING_UNAVAILABLE", true, now);
+        assertFalse(repository.retryUpgrade("beta", second, "PROVISIONING_UNAVAILABLE", true, "records:masters", 30, now));
         assertEquals("PROVISIONING_UNAVAILABLE", jdbc.queryForObject("SELECT upgrade_error_code FROM eg_pgr_onboarding_workspace WHERE tenant_id='beta'", String.class));
         assertTrue(repository.claimUpgrade(2, UUID.randomUUID(), now + 600_000, now + 500).isEmpty());
         assertEquals("beta", repository.claimUpgrade(2, second, now + 600_000, now + 1_000).orElseThrow().get("tenantId"));
@@ -318,6 +318,43 @@ public class WorkspacePostgresTest {
         assertEquals("beta's lease expired; alpha is done", "beta", repository.claimUpgrade(2, UUID.randomUUID(), now + 1_300_000, now + 700_000).orElseThrow().get("tenantId"));
         assertEquals("1", jdbc.queryForObject("SELECT seed_version FROM eg_pgr_onboarding_workspace WHERE tenant_id='beta'", String.class));
         assertNull(jdbc.queryForObject("SELECT seed_version FROM eg_pgr_onboarding_workspace WHERE tenant_id='legacy'", String.class));
+    }
+
+    private void upgradeColumns() {
+        new ResourceDatabasePopulator(new ClassPathResource("db/migration/main/V20261005010000__onboarding_baseline_upgrade.sql"),
+                new ClassPathResource("db/migration/main/V20261005020000__onboarding_baseline_upgrade_stop.sql")).execute(source);
+    }
+
+    @Test public void seedUpgradeStopsAfterRepeatedFailuresAtOnePointWithoutBlockingOthers() {
+        upgradeColumns();
+        for (String tenant : List.of("delta", "gamma", "omega")) {
+            var signup = signup(tenant); tx.execute(s -> { onboarding.settleSignup(signup.getId(), "ACTIVE", "CONSUMED", "1", 2L); return null; });
+        }
+        long t = 1_000_000; UUID token = UUID.randomUUID();
+        assertEquals("delta", repository.claimUpgrade(2, UUID.randomUUID(), Long.MAX_VALUE / 2, t).orElseThrow().get("tenantId")); // busy elsewhere
+        assertEquals("gamma", repository.claimUpgrade(2, token, t + 600_000, t).orElseThrow().get("tenantId"));
+        assertEquals("omega", repository.claimUpgrade(2, token, 300_000_000, t).orElseThrow().get("tenantId")); // its lease ends at t=3e8
+
+        // Failures at a new point restart the count; the 30th in a row at one point stops gamma.
+        assertFalse(repository.retryUpgrade("gamma", token, "MDMS_RECORD_NOT_VISIBLE", true, "records:common-masters.StateInfo:a", 30, t));
+        for (int failure = 1; failure <= 30; failure++) {
+            t += 7_200_000; // past the longest backoff
+            assertEquals("gamma", repository.claimUpgrade(2, token, t + 600_000, t).orElseThrow().get("tenantId"));
+            assertEquals(failure == 30, repository.retryUpgrade("gamma", token, "MDMS_RECORD_NOT_VISIBLE", true, "records:common-masters.StateInfo:b", 30, t));
+        }
+        assertEquals(Map.of("upgrade_attempts", 30, "upgrade_failed_step", "records:common-masters.StateInfo:b", "upgrade_error_code", "MDMS_RECORD_NOT_VISIBLE"),
+                jdbc.queryForMap("SELECT upgrade_attempts,upgrade_failed_step,upgrade_error_code FROM eg_pgr_onboarding_workspace WHERE tenant_id='gamma'"));
+
+        // Stopped gamma is never claimed again; omega still is. A non-retryable failure stops at once.
+        t = 400_000_000;
+        assertEquals("omega", repository.claimUpgrade(2, token, t + 600_000, t).orElseThrow().get("tenantId"));
+        assertTrue(repository.retryUpgrade("omega", token, "SIGNUP_WRITE_SCOPE_DENIED", false, "state-info", 30, t));
+        assertTrue(repository.claimUpgrade(2, token, t + 600_000, t + 100_000_000).isEmpty());
+
+        // The documented operator reset makes gamma claimable again, with a fresh count.
+        jdbc.update("UPDATE eg_pgr_onboarding_workspace SET upgrade_stopped_at=NULL, upgrade_attempts=0, upgrade_failed_step=NULL, upgrade_next_attempt_at=NULL WHERE tenant_id='gamma'");
+        assertEquals("gamma", repository.claimUpgrade(2, token, t + 600_000, t).orElseThrow().get("tenantId"));
+        assertFalse(repository.retryUpgrade("gamma", token, "MDMS_RECORD_NOT_VISIBLE", true, "records:common-masters.StateInfo:b", 30, t));
     }
 
     @Test public void authenticatedRouteResumesPartialRenameWithFreshTokenAndNeverPersistsTokens() throws Exception {
