@@ -95,6 +95,8 @@ describe("onboarding HTTP contract", () => {
     expect(await (await post(routes[2].path, input)).json()).toEqual({ organization, created: true });
     expect(dependencies.primitives.ensure).toHaveBeenCalledWith({ ...input, slug: "workspace" });
     for (const restartNo of [-1, 1.2, "1", Number.MAX_SAFE_INTEGER + 1, null]) await expectContractError(await post(routes[2].path, { ...input, restartNo }), routes[2], "INVALID_REQUEST");
+    // Slug rules, docs §2.4.1: reserved route words and fewer than two letters are refused.
+    for (const slug of ["citizen", "pgr-services", "a1", "-ws"]) await expectContractError(await post(routes[2].path, { ...input, slug }), routes[2], "INVALID_REQUEST");
   });
   it("returns lifecycle, membership and binding response shapes", async () => {
     const input = { operationId: "operation", restartNo: 0, subject: "founder", tenantId: "tenant", digitUuid: "digit-founder" };

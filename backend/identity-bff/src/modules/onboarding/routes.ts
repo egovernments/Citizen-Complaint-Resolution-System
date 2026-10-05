@@ -6,6 +6,7 @@ import { bearerMatches } from "../../app/request-security.js";
 import { currentSession } from "../sessions/current-session.js";
 import { DigitUnavailableError } from "../managed-accounts/digit-user-client.js";
 import { OnboardingError } from "./errors.js";
+import { validUrlSlug } from "../access-context/url-slug.js";
 import type { OnboardingPrimitives } from "./primitives.js";
 
 const PREFIX = "/internal/identity/v1";
@@ -104,7 +105,7 @@ export function registerOnboardingRoutes(app: express.Application, dependencies:
   route("/organizations/_ensure", async (req) => {
     const body = req.body ?? {};
     const slug = string(body.slug, "slug").toLowerCase();
-    if (!/^[a-z0-9][a-z0-9-]{1,62}$/.test(slug)) throw new OnboardingError("INVALID_REQUEST", "slug is invalid");
+    if (!validUrlSlug(slug)) throw new OnboardingError("INVALID_REQUEST", "slug is invalid");
     return dependencies.primitives.ensure({ ...attempt(body), tenantId: string(body.tenantId, "tenantId"), slug, name: string(body.name, "name") });
   });
   route("/organizations/_lifecycle", async (req) => {
