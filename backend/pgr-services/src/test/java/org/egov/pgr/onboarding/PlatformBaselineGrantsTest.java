@@ -12,6 +12,7 @@ public class PlatformBaselineGrantsTest {
     // (configurator/src/api/config.ts) + "/" + schema code, as used by mdmsService.create/update/
     // setActive/upsertMapConfig from configurator/src/onboarding/** (brandingApi.ts,
     // complaints/complaintsApi.ts, departments/mastersApi.ts, geography/BoundaryImport.tsx).
+    // configurator/src/identity/workspace.ts (workspace settings) writes identity.invitationPolicy.
     // Keep in sync when a setup step writes a new master.
     private static final List<String> WORKSPACE_SETUP_MDMS_WRITES = List.of(
             "/mdms-v2/v2/_update/tenant.tenants",
@@ -21,7 +22,8 @@ public class PlatformBaselineGrantsTest {
             "/mdms-v2/v2/_create/common-masters.Department", "/mdms-v2/v2/_update/common-masters.Department",
             "/mdms-v2/v2/_create/common-masters.Designation", "/mdms-v2/v2/_update/common-masters.Designation",
             "/mdms-v2/v2/_create/RAINMAKER-PGR.MapConfig", "/mdms-v2/v2/_update/RAINMAKER-PGR.MapConfig",
-            "/mdms-v2/v2/_create/CMS-BOUNDARY.HierarchySchema");
+            "/mdms-v2/v2/_create/CMS-BOUNDARY.HierarchySchema",
+            "/mdms-v2/v2/_create/identity.invitationPolicy", "/mdms-v2/v2/_update/identity.invitationPolicy");
 
     @Test public void everyWorkspaceSetupMdmsWriteIsGrantedToAFounderRole() throws Exception {
         var seed = new PlatformBaseline(new ObjectMapper());
@@ -31,7 +33,8 @@ public class PlatformBaselineGrantsTest {
             JsonNode data = row.path("data");
             if ("ACCESSCONTROL-ACTIONS-TEST.actions-test".equals(row.path("schemaCode").asText())) {
                 assertTrue("duplicate action id " + data.path("id"), ids.add(data.path("id").asLong()));
-                if (data.path("enabled").asBoolean()) actions.computeIfAbsent(data.path("url").asText(), k -> new HashSet<>()).add(data.path("id").asLong());
+                // egov-accesscontrol loads actions with filter [*]['id','url'] and never reads "enabled".
+                actions.computeIfAbsent(data.path("url").asText(), k -> new HashSet<>()).add(data.path("id").asLong());
             }
             if ("ACCESSCONTROL-ROLEACTIONS.roleactions".equals(row.path("schemaCode").asText()))
                 grants.computeIfAbsent(data.path("actionid").asLong(), k -> new HashSet<>()).add(data.path("rolecode").asText());
