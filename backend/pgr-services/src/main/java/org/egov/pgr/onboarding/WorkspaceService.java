@@ -28,8 +28,9 @@ public class WorkspaceService {
         if(row==null){if(version!=0)WorkspaceRepository.conflict("WORKSPACE_VERSION_CONFLICT");return response(tenant,null);}
         if(((Number)row.get("version")).longValue()!=version)WorkspaceRepository.conflict("WORKSPACE_VERSION_CONFLICT");
         if(Boolean.TRUE.equals(row.get("legacy")))return response(row,null,repository.rename(tenant,null).orElse(null));
-        Map<String,Boolean> probes=gateway.probes(tenant);
-        if("DONE".equals(state)&&!Boolean.TRUE.equals(probes.get(step))) WorkspaceRepository.conflict("WORKSPACE_PROBE_INCOMPLETE");
+        // Only DONE needs evidence, and only for its own step: other writes must not depend on MDMS, boundary or HRMS.
+        Map<String,Boolean> probes="DONE".equals(state)?Map.of(step,gateway.probe(tenant,step)):null;
+        if(probes!=null&&!probes.get(step)) WorkspaceRepository.conflict("WORKSPACE_PROBE_INCOMPLETE");
         Map<String,Object> steps=(Map<String,Object>)row.get("steps");
         steps.put(step,new LinkedHashMap<>(Map.of("state",state,"updatedAt",System.currentTimeMillis(),"updatedBy",actor)));
         boolean done=steps.values().stream().allMatch(v->Set.of("DONE","SKIPPED").contains(((Map<?,?>)v).get("state")));

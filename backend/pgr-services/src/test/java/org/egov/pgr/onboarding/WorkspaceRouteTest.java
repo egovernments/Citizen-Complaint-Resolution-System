@@ -58,25 +58,70 @@ public class WorkspaceRouteTest {
         assertEquals(0,lookups.get());currentUser=Map.of("uuid","admin","active",false,"roles",List.of());
         mvc.perform(post("/v2/onboarding/workspaces/_search").contentType("application/json").content(request())).andExpect(status().isUnauthorized());verifyNoInteractions(repository);
     }
+    private void mdms(String schema,String json) throws Exception {when(mdms.records("example",schema,"tenant.tenants".equals(schema)?"example":null)).thenReturn(mapper.readTree(json));}
+    private void boundaries(String children) throws Exception {
+        when(client.read(eq("boundary"),eq("/boundary-service/boundary-relationships/_search?tenantId=example&hierarchyType=ADMIN&codes=example&includeChildren=true"),any()))
+                .thenReturn(mapper.readTree("{\"TenantBoundary\":[{\"boundary\":[{\"code\":\"example\",\"children\":"+children+"}]}]}"));
+    }
+    private static final String WATER="{\"tenantId\":\"example\",\"data\":{\"code\":\"WATER\",\"active\":true}}";
     @Test public void probesExcludePlatformPrerequisitesAndInactiveRows() throws Exception {
         when(mdms.records(eq("example"),anyString(),any())).thenReturn(mapper.readTree("[]"));
-        when(mdms.records("example","tenant.tenants","example")).thenReturn(mapper.readTree("[{\"data\":{\"imageId\":null}}]"));
-        when(mdms.records("example","common-masters.Department",null)).thenReturn(mapper.readTree("[{\"tenantId\":\"parent\",\"data\":{\"code\":\"INHERITED\"}},{\"tenantId\":\"example\",\"data\":{\"code\":\"ONBOARDING_ADMIN\"}},{\"isActive\":false,\"data\":{\"code\":\"WATER\"}}]"));
-        when(client.read(eq("boundary"),anyString(),any())).thenReturn(mapper.readTree("{\"Boundary\":[{\"code\":\"example\"}]}"));
+        mdms("tenant.tenants","[{\"data\":{\"imageId\":null}}]");
+        mdms("common-masters.Department","[{\"tenantId\":\"parent\",\"data\":{\"code\":\"INHERITED\"}},{\"tenantId\":\"example\",\"data\":{\"code\":\"ONBOARDING_ADMIN\"}},{\"isActive\":false,\"data\":{\"code\":\"WATER\"}}]");
+        mdms("common-masters.Designation","[{\"tenantId\":\"example\",\"data\":{\"code\":\"ONBOARDING_FOUNDER\"}}]");
+        boundaries("[]");
         when(client.read(eq("hrms"),anyString(),any())).thenReturn(mapper.readTree("{\"Employees\":[{\"code\":\"FOUNDER_1\"}]}"));
-        assertTrue(gateway.probes("example").values().stream().noneMatch(Boolean.TRUE::equals));
-        when(mdms.records("example","tenant.tenants","example")).thenReturn(mapper.readTree("[{\"data\":{\"imageId\":\"logo\"}}]"));
-        when(mdms.records("example","common-masters.Department",null)).thenReturn(mapper.readTree("[{\"tenantId\":\"example\",\"data\":{\"code\":\"WATER\",\"active\":true}}]"));
-        when(mdms.records("example","RAINMAKER-PGR.ComplaintHierarchy",null)).thenReturn(mapper.readTree("[{\"tenantId\":\"example\",\"data\":{\"department\":\"WATER\",\"slaHours\":24}}]"));
-        when(client.read(eq("boundary"),anyString(),any())).thenReturn(mapper.readTree("{\"Boundary\":[{\"code\":\"WARD_1\"}]}"));
+        assertEquals(List.of(false,false,false,false,false),new ArrayList<>(gateway.probes("example").values()));
+        mdms("tenant.tenants","[{\"data\":{\"imageId\":\"logo\"}}]");
+        mdms("common-masters.Department","["+WATER+"]");
+        mdms("common-masters.Designation","[{\"tenantId\":\"example\",\"data\":{\"code\":\"ENGINEER\"}}]");
+        mdms("RAINMAKER-PGR.ComplaintHierarchy","[{\"tenantId\":\"example\",\"data\":{\"code\":\"Water\"}},{\"tenantId\":\"example\",\"data\":{\"code\":\"Leak\",\"parentCode\":\"Water\",\"department\":\"WATER\",\"slaHours\":24}}]");
+        boundaries("[{\"code\":\"WARD_1\",\"children\":[]}]");
         when(client.read(eq("hrms"),anyString(),any())).thenReturn(mapper.readTree("{\"Employees\":[{\"code\":\"EMP_1\",\"user\":{\"active\":true}}]}"));
-        assertTrue(gateway.probes("example").values().stream().allMatch(Boolean.TRUE::equals));
+        assertEquals(Map.of("BRANDING",true,"GEOGRAPHY",true,"DEPARTMENTS",true,"EMPLOYEES",true,"COMPLAINT_TYPES",true),gateway.probes("example"));
     }
-    @Test public void unreadableProbeReturns503InsteadOfFalseReadiness() throws Exception {
+    @Test public void departmentsNeedARealDesignation() throws Exception {
+        mdms("common-masters.Department","["+WATER+"]");
+        mdms("common-masters.Designation","[{\"tenantId\":\"example\",\"data\":{\"code\":\"ONBOARDING_FOUNDER\"}},{\"tenantId\":\"parent\",\"data\":{\"code\":\"CLERK\"}},{\"tenantId\":\"example\",\"data\":{\"code\":\"OLD\",\"active\":false}}]");
+        assertFalse(gateway.probe("example","DEPARTMENTS"));
+        mdms("common-masters.Designation","[{\"tenantId\":\"example\",\"data\":{\"code\":\"CLERK\"}}]");
+        assertTrue(gateway.probe("example","DEPARTMENTS"));
+        mdms("common-masters.Department","[]");
+        assertFalse(gateway.probe("example","DEPARTMENTS"));
+    }
+    @Test public void complaintTypesNeedALeafWithBothALiveDepartmentAndAnSla() throws Exception {
+        mdms("common-masters.Department","["+WATER+",{\"tenantId\":\"example\",\"data\":{\"code\":\"ROADS\",\"active\":false}}]");
+        for(String rows:List.of(
+                "{\"code\":\"A\",\"department\":\"WATER\"}",                                   // no SLA
+                "{\"code\":\"A\",\"slaHours\":24}",                                             // no department
+                "{\"code\":\"A\",\"department\":\"ROADS\",\"slaHours\":24}",                 // inactive department
+                "{\"code\":\"A\",\"department\":\"GHOST\",\"slaHours\":24}",                 // unknown department
+                "{\"code\":\"A\",\"department\":\"WATER\",\"slaHours\":24}},{\"tenantId\":\"example\",\"data\":{\"code\":\"B\",\"parentCode\":\"A\"}")) { // parent, not leaf
+            mdms("RAINMAKER-PGR.ComplaintHierarchy","[{\"tenantId\":\"example\",\"data\":"+rows+"}]");
+            assertFalse(rows,gateway.probe("example","COMPLAINT_TYPES"));
+        }
+        mdms("RAINMAKER-PGR.ComplaintHierarchy","[{\"tenantId\":\"example\",\"data\":{\"code\":\"A\",\"department\":\"WATER\",\"slaHours\":24}}]");
+        assertTrue(gateway.probe("example","COMPLAINT_TYPES"));
+    }
+    @Test public void geographyNeedsABoundaryReachableUnderTheRoot() throws Exception {
+        when(client.read(eq("boundary"),anyString(),any())).thenReturn(mapper.readTree("{\"TenantBoundary\":[{\"boundary\":[{\"code\":\"ORPHAN\",\"children\":[]}]}]}"));
+        assertFalse(gateway.probe("example","GEOGRAPHY"));
+        boundaries("[]");assertFalse(gateway.probe("example","GEOGRAPHY"));
+        boundaries("[{\"code\":\"WARD_1\",\"children\":[]}]");assertTrue(gateway.probe("example","GEOGRAPHY"));
+    }
+    @Test public void unreadableProbeReadsNullOnSearchButFailsTheDoneWrite() throws Exception {
         when(repository.find("example",false)).thenReturn(Optional.of(new LinkedHashMap<>(Map.of("tenantId","example","legacy",false))));
+        when(mdms.records(eq("example"),anyString(),any())).thenReturn(mapper.readTree("[]"));
         when(mdms.records("example","tenant.tenants","example")).thenThrow(new OnboardingFailure("MDMS_DOWN",true));
+        when(client.read(eq("hrms"),anyString(),any())).thenThrow(new OnboardingFailure("HRMS_DOWN",true));
+        boundaries("[]");
         mvc.perform(post("/v2/onboarding/workspaces/_search").contentType("application/json").content(request()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.Probes.BRANDING").value(org.hamcrest.Matchers.nullValue()))
+                .andExpect(jsonPath("$.Probes.EMPLOYEES").value(org.hamcrest.Matchers.nullValue())).andExpect(jsonPath("$.Probes.GEOGRAPHY").value(false));
+        when(repository.find("example",true)).thenReturn(Optional.of(new LinkedHashMap<>(Map.of("tenantId","example","version",0L,"legacy",false))));
+        mvc.perform(post("/v2/onboarding/workspaces/_update").contentType("application/json").content(request().replace("BRANDING","EMPLOYEES").replace("SKIPPED","DONE")))
                 .andExpect(status().isServiceUnavailable()).andExpect(jsonPath("$.Errors[0].code").value("WORKSPACE_DEPENDENCY_UNAVAILABLE"));
+        verify(repository,never()).update(any(),anyLong(),any());
     }
     @Test public void unreadableBffNameCheckReturns503WithoutRenameWrites() throws Exception {
         when(repository.find("example",true)).thenReturn(Optional.of(new LinkedHashMap<>(Map.of("tenantId","example","version",0L))));

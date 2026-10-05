@@ -43,26 +43,50 @@ public class WorkspaceGateway {
                     e.getStatusCode().is4xxClientError()?"WORKSPACE_AUTH_REQUIRED":"WORKSPACE_DEPENDENCY_UNAVAILABLE");return null;
         } catch(RestClientException e){fail(HttpStatus.SERVICE_UNAVAILABLE,"WORKSPACE_DEPENDENCY_UNAVAILABLE");return null;}
     }
+    /** Advisory readout for _search: a probe whose dependency fails reads null instead of failing the call. */
     public Map<String,Boolean> probes(String tenant) {
         Map<String,Boolean> probes=new LinkedHashMap<>();
-        JsonNode tenantRecord=tenant(tenant);
-        probes.put("BRANDING",!tenantRecord.path("data").path("imageId").asText("").isBlank());
-        boolean department=false;
-        for(JsonNode row:mdms.records(tenant,"common-masters.Department",null)) if(ownedActive(row,tenant) && !row.path("data").path("code").asText().isBlank() && !"ONBOARDING_ADMIN".equals(row.path("data").path("code").asText())) department=true;
-        probes.put("DEPARTMENTS",department);
-        boolean complaint=false;
-        for(JsonNode row:mdms.records(tenant,"RAINMAKER-PGR.ComplaintHierarchy",null)) if(ownedActive(row,tenant) && (!row.path("data").path("department").asText("").isBlank()||row.path("data").path("slaHours").asDouble(0)>0)) complaint=true;
-        probes.put("COMPLAINT_TYPES",complaint);
-        JsonNode boundaries=client.read("boundary","/boundary-service/boundary/_search?tenantId="+tenant+"&limit=1000",Map.of()).path("Boundary");
-        requireArray(boundaries); boolean geography=false;
-        for(JsonNode boundary:boundaries) if(!boundary.path("code").asText().isBlank() && !tenant.equals(boundary.path("code").asText()) && boundary.path("isActive").asBoolean(true))geography=true;
-        probes.put("GEOGRAPHY",geography);
-        JsonNode employees=client.read("hrms","/egov-hrms/employees/_search?tenantId="+tenant+"&offset=0&limit=1000",Map.of()).path("Employees");
-        requireArray(employees);boolean employee=false;
-        for(JsonNode row:employees) if(!row.path("code").asText().isBlank() && !row.path("code").asText().startsWith("FOUNDER_") && row.path("isActive").asBoolean(true) && row.path("user").path("active").asBoolean(true))employee=true;
-        probes.put("EMPLOYEES",employee);
+        for(String step:WorkspaceRepository.STEPS) try{probes.put(step,probe(tenant,step));}catch(RuntimeException e){probes.put(step,null);}
         return probes;
     }
+    /** One step's live check; dependency failures propagate so DONE is never granted on an unreadable probe. */
+    public boolean probe(String tenant,String step) {
+        switch(step) {
+            case "BRANDING": return !tenant(tenant).path("data").path("imageId").asText("").isBlank();
+            case "DEPARTMENTS": {
+                if(departments(tenant).isEmpty())return false;
+                for(JsonNode row:mdms.records(tenant,"common-masters.Designation",null)) if(ownedActive(row,tenant) && !code(row).isBlank() && !"ONBOARDING_FOUNDER".equals(code(row)))return true;
+                return false;
+            }
+            case "COMPLAINT_TYPES": {
+                Set<String> departments=departments(tenant), parents=new HashSet<>(); List<JsonNode> rows=new ArrayList<>();
+                for(JsonNode row:mdms.records(tenant,"RAINMAKER-PGR.ComplaintHierarchy",null)) if(ownedActive(row,tenant)) {rows.add(row);parents.add(row.path("data").path("parentCode").asText(""));}
+                // A leaf is a row nothing else names as its parent; it must route to a live department with an SLA.
+                for(JsonNode row:rows) if(!code(row).isBlank() && !parents.contains(code(row)) && departments.contains(row.path("data").path("department").asText("")) && row.path("data").path("slaHours").asDouble(0)>0)return true;
+                return false;
+            }
+            case "GEOGRAPHY": {
+                JsonNode trees=client.read("boundary","/boundary-service/boundary-relationships/_search?tenantId="+tenant+"&hierarchyType=ADMIN&codes="+tenant+"&includeChildren=true",Map.of()).path("TenantBoundary");
+                requireArray(trees);
+                for(JsonNode tree:trees) for(JsonNode root:tree.path("boundary")) if(tenant.equals(root.path("code").asText()))
+                    for(JsonNode child:root.path("children")) if(!child.path("code").asText().isBlank() && !tenant.equals(child.path("code").asText()))return true;
+                return false;
+            }
+            case "EMPLOYEES": {
+                JsonNode employees=client.read("hrms","/egov-hrms/employees/_search?tenantId="+tenant+"&offset=0&limit=1000",Map.of()).path("Employees");
+                requireArray(employees);
+                for(JsonNode row:employees) if(!row.path("code").asText().isBlank() && !row.path("code").asText().startsWith("FOUNDER_") && row.path("isActive").asBoolean(true) && row.path("user").path("active").asBoolean(true))return true;
+                return false;
+            }
+            default: throw new IllegalArgumentException(step);
+        }
+    }
+    private Set<String> departments(String tenant) {
+        Set<String> codes=new HashSet<>();
+        for(JsonNode row:mdms.records(tenant,"common-masters.Department",null)) if(ownedActive(row,tenant) && !code(row).isBlank() && !"ONBOARDING_ADMIN".equals(code(row)))codes.add(code(row));
+        return codes;
+    }
+    private static String code(JsonNode row){return row.path("data").path("code").asText("");}
     public JsonNode tenant(String tenant) {
         JsonNode rows=mdms.records(tenant,"tenant.tenants",tenant);
         if(rows.size()!=1 || !active(rows.get(0))) fail(HttpStatus.CONFLICT,"WORKSPACE_TENANT_NOT_FOUND");
