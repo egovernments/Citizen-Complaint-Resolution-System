@@ -65,7 +65,7 @@ public class WorkspacePostgresTest {
                 .financialYearPolicy("APRIL").acceptedTermsVersion("1").tenantMetadata(Map.of()).createdAt(1L).updatedAt(1L).version(1).build();
         onboarding.insertSignup(signup, "create-" + tenant); return signup;
     }
-    private void activate(OnboardingSignup signup) { tx.execute(s -> { onboarding.settleSignup(signup.getId(), "ACTIVE", "CONSUMED", 2L); return null; }); }
+    private void activate(OnboardingSignup signup) { tx.execute(s -> { onboarding.settleSignup(signup.getId(), "ACTIVE", "CONSUMED", "1", 2L); return null; }); }
     private Map<String,Object> rename(String tenant, String name, long version) { return Map.of("tenantId", tenant, "name", name, "version", version); }
     private Map<String,Object> update(String tenant, long version) { return Map.of("tenantId", tenant, "step", "BRANDING", "state", "SKIPPED", "version", version); }
     private int count(String table) { return jdbc.queryForObject("SELECT count(*) FROM " + table, Integer.class); }
@@ -74,7 +74,7 @@ public class WorkspacePostgresTest {
     @Test public void activationIsAtomicIdempotentAndAudited() {
         var signup = signup("example");
         assertThrows(IllegalStateException.class, () -> tx.execute(s -> {
-            onboarding.settleSignup(signup.getId(), "ACTIVE", "CONSUMED", 2L); throw new IllegalStateException("crash");
+            onboarding.settleSignup(signup.getId(), "ACTIVE", "CONSUMED", "1", 2L); throw new IllegalStateException("crash");
         }));
         assertEquals("DRAFT", onboarding.findSignup(signup.getId()).orElseThrow().getStatus());
         assertEquals(0, count("eg_pgr_onboarding_workspace")); assertEquals(0, count("eg_pgr_onboarding_workspace_event"));

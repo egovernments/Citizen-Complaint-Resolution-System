@@ -273,18 +273,18 @@ public class OnboardingRepository {
                 "updated_at = ? WHERE id = ? AND status = 'PROVISIONING'", now, signupId);
     }
 
-    public void settleSignup(UUID signupId, String signupStatus, String identifierStatus, long now) {
+    public void settleSignup(UUID signupId, String signupStatus, String identifierStatus, String seedVersion, long now) {
         jdbcTemplate.update("UPDATE eg_pgr_onboarding_signup SET status = ?, version = version + 1, updated_at = ? " +
                 "WHERE id = ?", signupStatus, now, signupId);
         jdbcTemplate.update("UPDATE eg_pgr_onboarding_identifier SET status = ? WHERE signup_id = ?",
                 identifierStatus, signupId);
         if ("ACTIVE".equals(signupStatus)) {
             jdbcTemplate.update("WITH created AS (INSERT INTO eg_pgr_onboarding_workspace(tenant_id,status,steps,version,seed_version,updated_at,updated_by) " +
-                            "SELECT requested_tenant_id,'NOT_STARTED',?::jsonb,1,'1',?,owner_subject FROM eg_pgr_onboarding_signup WHERE id=? " +
+                            "SELECT requested_tenant_id,'NOT_STARTED',?::jsonb,1,?,?,owner_subject FROM eg_pgr_onboarding_signup WHERE id=? " +
                             "ON CONFLICT DO NOTHING RETURNING tenant_id) " +
                             "INSERT INTO eg_pgr_onboarding_workspace_event(id,tenant_id,event_type,version,details,created_at,created_by) " +
                             "SELECT ?,tenant_id,'CREATED',1,'{}'::jsonb,?,'pgr-onboarding' FROM created",
-                    json(WorkspaceRepository.initialSteps("NOT_STARTED",now,"pgr-onboarding")),now,signupId,UUID.randomUUID(),now);
+                    json(WorkspaceRepository.initialSteps("NOT_STARTED",now,"pgr-onboarding")),seedVersion,now,signupId,UUID.randomUUID(),now);
         }
     }
 
