@@ -8,7 +8,7 @@ import { bootstrapPlatform } from './src/tools/platform-bootstrap.js';
 function fixture(role = 'SUPERUSER') {
   const schemas = new Map<string, unknown>();
   const rows = new Map<string, any>();
-  const users: any[] = [], employees: any[] = [];
+  const users: any[] = [], employees: any[] = [], workflows: any[] = [];
   let sourceReads = 0, writes = 0, directCalls = 0;
   let verified: any;
   const search = (c: any) => [...rows.values()].filter(r => r.tenantId === c.tenantId && r.schemaCode === c.schemaCode
@@ -40,6 +40,8 @@ function fixture(role = 'SUPERUSER') {
     boundarySearch: async (_tenant: string, _type: unknown, opts: any) => opts.codes.map((code: string) => ({ code })),
     boundaryRelationshipTreeSearch: async (tenant: string, type: string) => [{ hierarchyType: type, boundary: [{ code: tenant, boundaryType: 'ROOT' }] }],
     employeeSearch: async () => employees,
+    workflowBusinessServiceSearch: async (tenant: string, codes: string[]) => workflows.filter(w => w.tenantId === tenant && codes.includes(w.businessService)),
+    workflowBusinessServiceCreate: async (tenant: string, definition: any) => { workflows.push({ ...definition, tenantId: tenant }); return definition; },
     employeeCreate: async (_tenant: string, values: any[]) => { employees.push(...values); },
   };
   const fetcher = async (input: string | URL | Request, init?: RequestInit) => {
@@ -70,7 +72,7 @@ function fixture(role = 'SUPERUSER') {
   };
   /** A row by `schema/uid` at a tenant; the city target unless given. */
   const row = (key: string, tenant = 'in.newtown') => rows.get(`${tenant}|${key}`);
-  return { row, options: { api: api as any, fetcher: fetcher as typeof fetch, mdmsHost: 'http://mdms.test', userHost: 'http://user.test', direct: true, stateTenant: 'in', db, deriveMobile: () => '9876543210', defaultPassword: () => 'test-only-password' }, schemas, rows, users, employees, sql, reads: () => sourceReads, writes: () => writes, directCalls: () => directCalls, verifyAs: (value: any) => { verified = value; } };
+  return { row, options: { api: api as any, fetcher: fetcher as typeof fetch, mdmsHost: 'http://mdms.test', userHost: 'http://user.test', direct: true, stateTenant: 'in', db, deriveMobile: () => '9876543210', defaultPassword: () => 'test-only-password' }, schemas, rows, users, employees, workflows, sql, reads: () => sourceReads, writes: () => writes, directCalls: () => directCalls, verifyAs: (value: any) => { verified = value; } };
 }
 
 test('canonical baseline records satisfy schemas and exclude workspace business data', () => {
@@ -124,7 +126,7 @@ test('bootstrap uses canonical inventory, country-only source lookup, and replay
   const f = fixture(), seed = loadPlatformSeed();
   const first = await bootstrapPlatform({ target_tenant: 'in.newtown', source_tenant: 'in' }, f.options);
   assert.equal(first.seedVersion, '1'); assert.equal(first.summary.schemas_copied, seed.schemas.length);
-  assert.equal(first.summary.data_copied, seed.records.length + 3); assert.equal(first.summary.workflows_created, 0);
+  assert.equal(first.summary.data_copied, seed.records.length + 3); assert.equal(first.summary.workflows_created, 1);
   assert.equal(first.summary.admin_employee_provisioned, true); assert.equal(f.reads(), 1);
   assert.ok(!JSON.stringify([...f.rows.values()]).includes('{tenantid}'));
   const writes = f.writes(); const second = await bootstrapPlatform({ target_tenant: 'in.newtown', country: 'IN' }, f.options);
@@ -471,4 +473,29 @@ test('a city bootstrap lists the city under its root as Tenant.<city> and in the
     const replay = await bootstrapPlatform({ target_tenant: 'ke.nairobi', country: 'KE' }, { ...f.options, direct });
     assert.equal(f.writes(), writes, 'a replay writes nothing'); assert.equal(replay.summary.data_copied, 0);
   }
+});
+
+test('bootstrap creates the seeded PGR workflow once and reports failures (#2269 review item 1a)', async () => {
+  const seed = loadPlatformSeed() as any;
+  const f = fixture();
+  const first = await bootstrapPlatform({ target_tenant: 'ke', country: 'KE' }, f.options);
+  assert.equal(first.success, true); assert.deepEqual(first.results.workflow.created, ['PGR']);
+  assert.equal(f.workflows.length, 1);
+  assert.equal(f.workflows[0].tenantId, 'ke'); assert.equal(f.workflows[0].business, 'pgr-services');
+  assert.equal(f.workflows[0].states.length, seed.workflow[0].states.length);
+  assert.ok(!JSON.stringify(f.workflows).includes('{tenantid}'));
+  const replay = await bootstrapPlatform({ target_tenant: 'ke', country: 'KE' }, f.options);
+  assert.deepEqual(replay.results.workflow.skipped, ['PGR']); assert.equal(f.workflows.length, 1);
+  await bootstrapPlatform({ target_tenant: 'ke', country: 'KE', user_only: true }, f.options);
+  assert.equal(f.workflows.length, 1, 'user_only touches no workflow');
+
+  const duplicate = fixture();
+  duplicate.options.api.workflowBusinessServiceCreate = async () => { throw new Error('BusinessService already exists'); };
+  const raced = await bootstrapPlatform({ target_tenant: 'ke', country: 'KE' }, duplicate.options);
+  assert.equal(raced.success, true); assert.deepEqual(raced.results.workflow.skipped, ['PGR']);
+  const broken = fixture();
+  broken.options.api.workflowBusinessServiceCreate = async () => { throw new Error('HTTP 500'); };
+  const failed = await bootstrapPlatform({ target_tenant: 'ke', country: 'KE' }, broken.options);
+  assert.equal(failed.success, false); assert.equal(failed.summary.workflows_failed, 1);
+  assert.match(failed.results.workflow.failed[0], /^PGR: HTTP 500/);
 });

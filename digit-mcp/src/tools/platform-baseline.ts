@@ -13,6 +13,8 @@ export interface PlatformSeed {
   countryMobileRules: Record<string, CountryMobileRule>;
   schemas: { code: string; definition: Record<string, unknown> }[];
   records: { schemaCode: string; uniqueIdentifier: string; data: Record<string, unknown> }[];
+  /** Workflow business services, `{tenantid}`-templated; created by workflow-v2, not MDMS. */
+  workflow?: Record<string, unknown>[];
 }
 
 /** Both source and published builds receive the same generated resource at build time. */

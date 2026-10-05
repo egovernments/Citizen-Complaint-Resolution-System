@@ -13,7 +13,7 @@ Bootstrap creates missing schemas and baseline records, substitutes the target t
 
 A root's tenant record is written at the root. A city's (`<root>.<city>`) is written under its root as `Tenant.<city>` with `parent: <root>`, never at city scope, so the city appears in the root's tenant list; the city is also appended to `tenants[]` of each root `tenant.citymodule` record.
 
-The country mobile rule comes from the seed's `countryMobileRules` (selected by `country`, or by a seeded `mobile_prefix`); `source_tenant` is an explicit opt-in to read it from a live tenant instead, and nothing else is read from it. Workspace branding, geography, business departments/designations, complaint hierarchy, and workflow setup are configured separately. Existing active records are skipped; inactive baseline records fail instead of being silently reactivated. New records must become visible before bootstrap continues. Replays reuse an existing administrator and employee.
+The country mobile rule comes from the seed's `countryMobileRules` (selected by `country`, or by a seeded `mobile_prefix`); `source_tenant` is an explicit opt-in to read it from a live tenant instead, and nothing else is read from it. Bootstrap also creates the seed's PGR workflow business service (the same `workflow` entry PGR onboarding uses) at the target when workflow-v2 has none; an accepted create is not re-searched, because workflow-v2 caches searches in-JVM. Workspace branding, geography, business departments/designations, and complaint hierarchy are configured separately. Existing active records are skipped; inactive baseline records fail instead of being silently reactivated. New records must become visible before bootstrap continues. Replays reuse an existing administrator and employee.
 
 ## Authorization and transport
 
@@ -42,7 +42,7 @@ An operator may explicitly enable direct MDMS with `MCP_PLATFORM_BOOTSTRAP_DIREC
 
 ## Response and retry
 
-The response retains `success`, `source`, `target`, `summary`, `adminUser`, `adminEmployee`, `results`, `localizations`, and `nextSteps`, and includes `seedVersion`. `results.schemas` and `results.data` report copied/skipped items. Workflow and localization counters remain zero because platform bootstrap does not clone those resources. `results.warnings` describes ignored legacy inputs and `summary.warnings` counts them.
+The response retains `success`, `source`, `target`, `summary`, `adminUser`, `adminEmployee`, `results`, `localizations`, and `nextSteps`, and includes `seedVersion`. `results.schemas` and `results.data` report copied/skipped items; `results.workflow` reports created/skipped/failed business services, and a workflow failure sets `success: false` (the deploy then stops and prints it). `results.warnings` describes ignored legacy inputs and `summary.warnings` counts them.
 
 Failures reject the call. After correcting authorization, missing country rules, inactive records, or unavailable services, retry the same target; already visible records are reused. Ambiguous administrator or employee matches fail rather than selecting an arbitrary record.
 

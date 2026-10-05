@@ -229,6 +229,22 @@ export async function bootstrapPlatform(args: Record<string, unknown>, options: 
     // The seed carries no PG- complaint-ID prefix; derive it from the target (idgen reads only [..] tokens).
     await record('common-masters.IdFormat', 'pgr.servicerequestid', { idname: 'pgr.servicerequestid',
       format: `${target.toUpperCase().replace(/[^A-Z0-9-]/g, '-')}-PGR-[cy:yyyy-MM-dd]-[SEQ_EG_PGR_ID]` });
+    // The PGR business service from the same seed PGR onboarding uses; without it no complaint
+    // can be created on a fresh non-pg tenant (#2269 review item 1a).
+    for (const definition of seed.workflow ?? []) {
+      const code = String(definition.businessService);
+      try {
+        // workflow-v2 caches searches in-JVM, so an accepted create is the checkpoint: re-searching
+        // before its persister lands would pin an empty result (as in OnboardingSteps).
+        if ((await api.workflowBusinessServiceSearch(target, [code])).length) { results.workflow.skipped.push(code); continue; }
+        await api.workflowBusinessServiceCreate(target, substituteTenant(definition, target));
+        results.workflow.created.push(code);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (/duplicate|already exists/i.test(message)) results.workflow.skipped.push(code);
+        else results.workflow.failed.push(`${code}: ${message}`);
+      }
+    }
   }
   await api.generateEncKey(target);
   const username = auth.user?.userName || 'ADMIN';
@@ -283,10 +299,10 @@ export async function bootstrapPlatform(args: Record<string, unknown>, options: 
     employeeProvisioned = true;
   }
   return {
-    success: true, source, target, seedVersion: seed.version, ...(args.user_only === true ? { user_only: true, admin_user_provisioned: true } : {}),
+    success: results.workflow.failed.length === 0, source, target, seedVersion: seed.version, ...(args.user_only === true ? { user_only: true, admin_user_provisioned: true } : {}),
     summary: { schemas_copied: results.schemas.copied.length, schemas_skipped: results.schemas.skipped.length, schemas_failed: 0,
       data_copied: results.data.copied.length, data_skipped: results.data.skipped.length, data_failed: 0,
-      workflows_created: 0, workflows_skipped: 0, workflows_failed: 0, localizations_copied: 0, localizations_failed: 0,
+      workflows_created: results.workflow.created.length, workflows_skipped: results.workflow.skipped.length, workflows_failed: results.workflow.failed.length, localizations_copied: 0, localizations_failed: 0,
       locales_seen: 0, admin_user_provisioned: true, admin_employee_provisioned: employeeProvisioned, access_floor_seeded: accessFloorSeeded, warnings: results.warnings.length },
     adminUser: { provisioned: true, username, tenantId: target, roles: employeeRoles.map((role) => role.code) },
     adminEmployee: { provisioned: employeeProvisioned, code: username, department: 'ONBOARDING_ADMIN', designation: 'ONBOARDING_FOUNDER' },
