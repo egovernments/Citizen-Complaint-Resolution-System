@@ -972,6 +972,7 @@ grafana_anonymous_enabled: false
 
 # ── Deploy behaviour ──
 # run_playwright_tests: false           # browser E2E; ANDed with run_ci_tests
+# e2e_tenant_slug: ""                  # URL slug the browser E2E opens (/<slug>/digit-ui/); defaults to digit_ui_default_tenant_slug, skipped if both empty
 # seed_notifications: false             # OVERRIDE. Unset, it follows enable_novu:
 #                                       # the notification masters are seeded
 #                                       # whenever the notification stack runs.
@@ -1208,7 +1209,7 @@ nginx_features:
   api_pgr: false             # /api/pgr/ — proxied to MCP server
   mcp: true                  # /mcp + /v1/* — MCP HTTP transport + REST shim (requires enable_mcp: true)
   keycloak: true             # /auth/ + /identity/v1/ — requires enable_keycloak: true
-  digit_ui_v2: false         # /citizen/ — Vite + React 19 SPA (requires enable_digit_ui_v2: true)
+  digit_ui_v2: false         # /citizen/ — retired by D26 (the deploy refuses enable_digit_ui_v2: true); leave false
   integration_tests: false   # /tests/ + -v2/ — test dashboards (requires enable_integration_tests: true)
   integration_tests_runner: false  # /tests/api/ — RUN-button daemon proxy (requires enable_integration_tests_runner: true)
   matomo: false              # /matomo/matomo.js + .php — the two Matomo TRACKING endpoints only

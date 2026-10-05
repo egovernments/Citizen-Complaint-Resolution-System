@@ -2274,6 +2274,11 @@
               index index.html index.htm;
               try_files $uri $uri/ /digit-ui/index.html;
 
+              # A missing asset is a 404, not the SPA shell with a 200 (#2271 review 3).
+              location ~ "[.](?:js|css|map|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|otf|eot)$" {
+                try_files $uri =404;
+              }
+
               sub_filter '</head>' '<script src="/digit-ui/globalConfigs.js"></script></head>';
             }
 
@@ -8551,19 +8556,37 @@
       timeout: 600
 
       when: run_ci_tests | default(false) and (run_playwright_tests | default(false))
+    # D26: the UI is served only on tenant routes (/<slug>/digit-ui/), which the host
+    # nginx answers, not the :18080 container. The specs need the tenant's URL slug.
+    - name: Skip Playwright E2E without a tenant URL slug
+      ansible.builtin.debug:
+        msg: >-
+          Playwright E2E skipped: set e2e_tenant_slug (or digit_ui_default_tenant_slug)
+          to the seeded tenant's URL slug; every spec opens /<slug>/digit-ui/.
+      when:
+        - run_ci_tests | default(false) and (run_playwright_tests | default(false))
+        - (e2e_tenant_slug | default(digit_ui_default_tenant_slug | default(''), true)) | length == 0
+
     - name: Wait for DIGIT UI to serve pages (up to 10 min)
-      shell: curl -sf http://127.0.0.1:18080/digit-ui/ -o /dev/null
+      shell: >-
+        curl -sf {{ _e2e_base_url }}/{{ _e2e_tenant_slug }}/digit-ui/ -o /dev/null
+      vars:
+        _e2e_base_url: "{{ ('https://' if (tls_enabled | default(true)) else 'http://') + domain }}"
+        _e2e_tenant_slug: "{{ e2e_tenant_slug | default(digit_ui_default_tenant_slug | default(''), true) }}"
       register: ui_health
       retries: 60
       delay: 10
       until: ui_health.rc == 0
       changed_when: false
 
-      when: run_ci_tests | default(false) and (run_playwright_tests | default(false))
+      when:
+        - run_ci_tests | default(false) and (run_playwright_tests | default(false))
+        - (e2e_tenant_slug | default(digit_ui_default_tenant_slug | default(''), true)) | length > 0
     - name: Run Playwright E2E tests (Bomet tenant)
       shell: |
         cd {{ digit_dir }}/e2e-tests
-        BASE_URL=http://127.0.0.1:18080 \
+        BASE_URL={{ ('https://' if (tls_enabled | default(true)) else 'http://') + domain }} \
+        E2E_TENANT_SLUG={{ e2e_tenant_slug | default(digit_ui_default_tenant_slug | default(''), true) }} \
         DIGIT_TENANT={{ boot_tenant | mandatory }} \
         DIGIT_USERNAME=BOMET_ADMIN \
         DIGIT_PASSWORD=eGov@123 \
@@ -8584,7 +8607,9 @@
       timeout: 900
       ignore_errors: yes
 
-      when: run_ci_tests | default(false) and (run_playwright_tests | default(false))
+      when:
+        - run_ci_tests | default(false) and (run_playwright_tests | default(false))
+        - (e2e_tenant_slug | default(digit_ui_default_tenant_slug | default(''), true)) | length > 0
     - name: Show Playwright test results
       debug:
         var: playwright_result.stdout_lines | default(['(no output - possibly timed out)'])

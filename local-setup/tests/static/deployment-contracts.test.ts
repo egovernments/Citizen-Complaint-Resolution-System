@@ -1764,6 +1764,8 @@ describe('D26 legacy identity paths are retired', () => {
     test.each([
       'local-setup/ansible/templates/nginx-site.conf.j2',
       'local-setup/nginx/digit-ui.conf',
+      // The config Ansible actually deploys in container mode (Dhruv, #2271 round 4).
+      'local-setup/ansible/playbook-deploy.yml',
       'digit-ui-esbuild/docker/nginx.conf',
       'devops/deploy-as-code/charts/urban/digit-ui/templates/globalconfigs-configmap.yaml',
     ])('%s 404s a missing asset instead of serving the SPA shell', (file) => {

@@ -152,7 +152,6 @@ locale_default: "en"
 mdms_context: "mdms-v2"
 hrms_context: "egov-hrms"
 invalid_employee_roles: ["SYSTEM"]
-auth_provider: "digit"
 
 # Empty defaults — tenants set actual values in host_vars/_example.yml.
 asset_s3_bucket: ""           # filestore S3 fallback bucket
