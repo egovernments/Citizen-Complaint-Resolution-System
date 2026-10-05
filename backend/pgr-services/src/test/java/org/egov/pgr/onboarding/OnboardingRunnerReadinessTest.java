@@ -42,7 +42,7 @@ public class OnboardingRunnerReadinessTest {
         provisioner = mock(OnboardingProvisionerClient.class);
         OnboardingRepository repository = mock(OnboardingRepository.class);
         when(repository.checkpoint(any(), any(), anyLong())).thenReturn(true);
-        runner = new OnboardingRunner(worker, repository, steps, publisher, provisioner, 5000);
+        runner = new OnboardingRunner(worker, repository, steps, publisher, provisioner, null, 5000);
         runner.clock = () -> now;
         when(worker.claim(anyString(), anyLong())).thenReturn(Optional.empty());
         logs.start();
@@ -82,6 +82,27 @@ public class OnboardingRunnerReadinessTest {
         assertEquals("PROVISIONER_NOT_CONFIGURED", runner.pausedReason());
         // Not on every 5 s poll: re-checked after 30 s, then 60 s (backoff), within these 100 s.
         verify(provisioner, times(3)).verifyReady();
+    }
+
+    @Test
+    public void seedUpgradesRunOnlyOnIdleTicksWithAReadyProvisioner() {
+        BaselineUpgrader upgrader = mock(BaselineUpgrader.class);
+        runner = new OnboardingRunner(worker, mock(OnboardingRepository.class), steps, publisher, provisioner, upgrader, 5000);
+        runner.clock = () -> now;
+        doThrow(new OnboardingFailure("PROVISIONER_NOT_CONFIGURED", true)).doNothing().when(provisioner).verifyReady();
+        runner.tick();
+        verify(upgrader, never()).upgradeNext();
+
+        now += OnboardingRunner.NOT_READY_RECHECK_MS;
+        runner.tick(); // no signup waiting
+        verify(upgrader).upgradeNext();
+
+        Map<String, Object> claim = new LinkedHashMap<>();
+        claim.put("Operation", OnboardingOperation.builder().id(UUID.randomUUID()).signupId(UUID.randomUUID()).completedSteps(new ArrayList<>(OnboardingRunner.STEPS)).build());
+        claim.put("Signup", new OnboardingSignup()); claim.put("leaseToken", UUID.randomUUID().toString());
+        when(worker.claim(anyString(), anyLong())).thenReturn(Optional.of(claim));
+        now += 5000; runner.tick(); // a signup goes first
+        verify(upgrader, times(1)).upgradeNext();
     }
 
     @Test

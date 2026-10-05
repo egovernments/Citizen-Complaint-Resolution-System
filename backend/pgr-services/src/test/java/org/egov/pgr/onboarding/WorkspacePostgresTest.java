@@ -257,7 +257,7 @@ public class WorkspacePostgresTest {
         jdbc.update("INSERT INTO eg_pgr_onboarding_workspace_name VALUES (?,?)","cafe\u0301\u00a0council","example");
         var flyway=org.flywaydb.core.Flyway.configure().dataSource(source).defaultSchema(schema)
                 .baselineOnMigrate(true).baselineVersion("20261004010000").locations("classpath:db/migration/main").load();
-        assertEquals(2,flyway.migrate().migrationsExecuted);
+        assertEquals(3,flyway.migrate().migrationsExecuted);
         assertEquals("café council",jdbc.queryForObject("SELECT normalized_name FROM eg_pgr_onboarding_workspace_name",String.class));
         assertEquals(0,flyway.migrate().migrationsExecuted);
     }
@@ -273,6 +273,51 @@ public class WorkspacePostgresTest {
         assertEquals("other",jdbc.queryForObject("SELECT tenant_id FROM eg_pgr_onboarding_workspace_name WHERE normalized_name='café'",String.class));
         assertEquals("third",jdbc.queryForObject("SELECT tenant_id FROM eg_pgr_onboarding_workspace_name WHERE normalized_name=?",String.class,"north\u00a0office"));
         assertEquals(0,(int)jdbc.queryForObject("SELECT count(*) FROM flyway_schema_history WHERE version='20261004020000'",Integer.class));
+    }
+
+    @Test public void seedUpgradeLeasesOneOlderWorkspaceAtATimeAndSkipsLockedRows() throws Exception {
+        var migration = new ResourceDatabasePopulator(new ClassPathResource("db/migration/main/V20261005010000__onboarding_baseline_upgrade.sql")); migration.execute(source);
+        for (String tenant : List.of("alpha", "beta", "fresh")) {
+            var signup = signup(tenant); tx.execute(s -> { onboarding.settleSignup(signup.getId(), "ACTIVE", "CONSUMED", tenant.equals("fresh") ? "2" : "1", 2L); return null; });
+        }
+        repository.materializeLegacy("legacy"); // seed_version NULL: not onboarded here, never upgraded
+        long now = 1_000_000; UUID first = UUID.randomUUID(), second = UUID.randomUUID(), third = UUID.randomUUID();
+        assertEquals("alpha", repository.claimUpgrade(2, first, now + 600_000, now).orElseThrow().get("tenantId"));
+        // Another worker's claim transaction holds beta's row: SKIP LOCKED passes over it instead of waiting.
+        var locked = new CountDownLatch(1); var release = new CountDownLatch(1); var pool = Executors.newFixedThreadPool(1);
+        try {
+            var holder = pool.submit(() -> tx.execute(s -> { jdbc.queryForList("SELECT 1 FROM eg_pgr_onboarding_workspace WHERE tenant_id='beta' FOR UPDATE"); locked.countDown(); await(release); return null; }));
+            await(locked);
+            assertTrue(repository.claimUpgrade(2, second, now + 600_000, now).isEmpty());
+            release.countDown(); holder.get(10, TimeUnit.SECONDS);
+        } finally { release.countDown(); pool.shutdownNow(); }
+        var beta = repository.claimUpgrade(2, second, now + 600_000, now).orElseThrow();
+        assertEquals("beta", beta.get("tenantId")); assertEquals("1", beta.get("seedVersion")); assertEquals(Map.of(), beta.get("progress"));
+        assertTrue(repository.claimUpgrade(2, third, now + 600_000, now).isEmpty()); // fresh is current; legacy has no seed
+
+        // Checkpoints and writes need the live lease; a crash resumes the stored progress once the lease expires.
+        assertFalse(repository.upgradeCheckpoint("alpha", second, Map.of("records", "DONE"), now + 600_000, now));
+        assertTrue(repository.upgradeCheckpoint("alpha", first, Map.of("records", "DONE"), now + 600_000, now));
+        assertTrue(repository.holdsUpgrade("alpha", first, now)); assertFalse(repository.holdsUpgrade("alpha", first, now + 600_001));
+        var resumed = repository.claimUpgrade(2, third, now + 1_200_000, now + 600_001).orElseThrow();
+        assertEquals("alpha", resumed.get("tenantId")); assertEquals(Map.of("records", "DONE"), resumed.get("progress"));
+        assertFalse("the expired holder lost its lease", repository.holdsUpgrade("alpha", first, now + 600_001));
+
+        // A failure releases the lease and backs off; the row is not claimable until the retry is due.
+        repository.retryUpgrade("beta", second, "PROVISIONING_UNAVAILABLE", true, now);
+        assertEquals("PROVISIONING_UNAVAILABLE", jdbc.queryForObject("SELECT upgrade_error_code FROM eg_pgr_onboarding_workspace WHERE tenant_id='beta'", String.class));
+        assertTrue(repository.claimUpgrade(2, UUID.randomUUID(), now + 600_000, now + 500).isEmpty());
+        assertEquals("beta", repository.claimUpgrade(2, second, now + 600_000, now + 1_000).orElseThrow().get("tenantId"));
+
+        // Finishing bumps seed_version and records one event, only for the lease holder; the workspace version is untouched.
+        long version = (Long) repository.find("alpha", false).orElseThrow().get("version");
+        assertFalse(repository.finishUpgrade("alpha", first, "2", Map.of("from", "1"), now + 600_002));
+        assertTrue(repository.finishUpgrade("alpha", third, "2", Map.of("from", "1", "to", "2"), now + 600_002));
+        var alpha = repository.find("alpha", false).orElseThrow(); assertEquals("2", alpha.get("seedVersion")); assertEquals(version, alpha.get("version"));
+        assertEquals(1, (int) jdbc.queryForObject("SELECT count(*) FROM eg_pgr_onboarding_workspace_event WHERE tenant_id='alpha' AND event_type='SEED_UPGRADED' AND details->>'to'='2'", Integer.class));
+        assertEquals("beta's lease expired; alpha is done", "beta", repository.claimUpgrade(2, UUID.randomUUID(), now + 1_300_000, now + 700_000).orElseThrow().get("tenantId"));
+        assertEquals("1", jdbc.queryForObject("SELECT seed_version FROM eg_pgr_onboarding_workspace WHERE tenant_id='beta'", String.class));
+        assertNull(jdbc.queryForObject("SELECT seed_version FROM eg_pgr_onboarding_workspace WHERE tenant_id='legacy'", String.class));
     }
 
     @Test public void authenticatedRouteResumesPartialRenameWithFreshTokenAndNeverPersistsTokens() throws Exception {

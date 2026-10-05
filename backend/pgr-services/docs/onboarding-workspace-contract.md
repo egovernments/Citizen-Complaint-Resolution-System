@@ -18,9 +18,26 @@ Workspace setup is separate from identity provisioning. The BFF carries no works
 
 Both return `Workspace` and `Probes`. Search additionally returns `Rename`, containing the latest rename operation or null. Workspace has tenantId, status, steps, version, seedVersion, updatedAt, updatedBy, optional lastErrorCode, and legacy. Each of BRANDING, GEOGRAPHY, DEPARTMENTS, EMPLOYEES and COMPLAINT_TYPES has `{state, updatedAt, updatedBy, lastErrorCode?}`. On search, existing rows return five advisory probes under Probes; a probe whose dependency (MDMS, boundary or HRMS) fails reads null, never true, and the search still succeeds. Update returns only the probe it ran: `{<step>: true}` for an accepted DONE, null for any other state. Probes: BRANDING, the tenant record has an imageId; GEOGRAPHY, the ADMIN `boundary-relationships` tree under the tenant's root boundary has at least one child; DEPARTMENTS, an owned active Department other than ONBOARDING_ADMIN and an owned active Designation other than ONBOARDING_FOUNDER; EMPLOYEES, an active non-founder employee with an active user; COMPLAINT_TYPES, an owned active ComplaintHierarchy leaf (no row names it as parentCode) whose department is one of those Departments and whose slaHours is above 0, and every department named by an owned active leaf has at least one active HRMS employee with an active user, a current assignment (`isCurrentAssignment`) in that department and the GRO role at the tenant. GRO visibility is department OWN, so a routed department without a GRO would leave its complaints in PENDINGFORASSIGNMENT. Within one search, EMPLOYEES and COMPLAINT_TYPES share a single HRMS employee read; an HRMS failure makes both null.
 
-Fresh rows start NOT_STARTED, version 1, seedVersion "1", legacy false. Updates compare the supplied version atomically and increment it once. Step states are NOT_STARTED, IN_PROGRESS, DONE or SKIPPED; only BRANDING may be SKIPPED. DONE runs that step's probe alone and requires it to pass; a dependency failure there returns 503. NOT_STARTED, IN_PROGRESS and SKIPPED writes run no probe. Overall DONE requires every step DONE or SKIPPED. Updates append audit events.
+Fresh rows start NOT_STARTED, version 1, seedVersion set to the platform seed version the tenant was onboarded with, legacy false. Updates compare the supplied version atomically and increment it once. Step states are NOT_STARTED, IN_PROGRESS, DONE or SKIPPED; only BRANDING may be SKIPPED. DONE runs that step's probe alone and requires it to pass; a dependency failure there returns 503. NOT_STARTED, IN_PROGRESS and SKIPPED writes run no probe. Overall DONE requires every step DONE or SKIPPED. Updates append audit events.
 
 An absent legacy row is synthesized as DONE with all steps DONE, version 0, seedVersion null, legacy true, and null updatedAt/updatedBy at both workspace and step level. The entire Probes block is null. Search performs no writes or dependency probes for that legacy case.
+
+## Platform seed upgrades
+
+The platform seed (`src/main/resources/onboarding/platform-baseline-v1.json`) carries its own `version`; that field is the only place it is set. Bump it whenever the seed's content changes. The baseline only creates what is missing, so a workspace onboarded on an older version does not get new content by itself.
+
+`BaselineUpgrader` closes that gap. When the onboarding runner is on and has no signup waiting, each runner tick upgrades at most one workspace whose `seedVersion` is a number below the current version. Legacy rows (seedVersion null) are never upgraded. The worker leases the row with `FOR UPDATE SKIP LOCKED`, so several PGR instances never upgrade the same workspace at once. It uses the provisioner account on the internal service hosts, as the onboarding steps do. Each step is saved on the row as it finishes, so after a crash the next lease continues from the last finished step. A failed upgrade is retried with backoff (up to an hour, or a day for a non-retryable error); the error code is kept in `upgrade_error_code`.
+
+Steps, all safe to repeat:
+
+1. Create any missing schemas, seed records (actions and role-actions included), the PGR workflow, IdFormat, MobileNumberValidation and DashboardConfig. Records that exist are not rewritten; a record the founder deactivated stays inactive.
+2. For each current StateInfo locale that has seeded packs, add the pack messages the tenant lacks and the `TENANT_TENANTS_<T>` key where the locale has the rainmaker-common pack. Existing messages are not rewritten. If the tenant has no messages of its own there (`default` answers), it is left alone.
+3. From seed v1 only: rewrite `StateInfo.languages` with the current rule (en_IN first) if it still holds exactly what v1 wrote.
+4. From seed v1 only: delete `TENANT_TENANTS_<T>` from locales with no seeded rainmaker-common pack, if its text is still the workspace name. That one key hides every `default` message for the locale (#2257).
+5. Bust the localization cache if steps 2 or 4 changed anything.
+6. Set `seedVersion` to the current version and record a `SEED_UPGRADED` workspace event. Its details list `from`, `to` and `kept`: what was left alone because the founder changed it.
+
+Turn it off with `PGR_ONBOARDING_BASELINE_UPGRADE_ENABLED=false` (Ansible: `pgr_onboarding_baseline_upgrade_enabled: false`). It is on by default and only runs while `PGR_ONBOARDING_RUNNER_ENABLED` is true. Each upgraded workspace logs `Workspace <T> upgraded from platform seed v<from> to v<to>`.
 
 ## Agreed errors and rename replay contract
 

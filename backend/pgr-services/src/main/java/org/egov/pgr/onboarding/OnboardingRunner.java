@@ -46,6 +46,8 @@ public class OnboardingRunner implements SmartLifecycle {
     private final OnboardingLifecyclePublisher publisher;
     /** Null only in tests that drive {@link #tick()} directly: no readiness gate. */
     private final OnboardingProvisionerClient provisioner;
+    /** Null only in tests: no seed upgrades. */
+    private final BaselineUpgrader upgrader;
     private final long pollMs;
     private final String workerId = "pgr:" + UUID.randomUUID();
     LongSupplier clock = System::currentTimeMillis;
@@ -61,15 +63,15 @@ public class OnboardingRunner implements SmartLifecycle {
 
     OnboardingRunner(OnboardingWorkerService worker, OnboardingRepository repository, OnboardingSteps steps,
                      OnboardingLifecyclePublisher publisher, long pollMs) {
-        this(worker, repository, steps, publisher, null, pollMs);
+        this(worker, repository, steps, publisher, null, null, pollMs);
     }
 
     @Autowired
     public OnboardingRunner(OnboardingWorkerService worker, OnboardingRepository repository, OnboardingSteps steps,
                             OnboardingLifecyclePublisher publisher, OnboardingProvisionerClient provisioner,
-                            @Value("${pgr.onboarding.runner.poll-ms:5000}") long pollMs) {
+                            BaselineUpgrader upgrader, @Value("${pgr.onboarding.runner.poll-ms:5000}") long pollMs) {
         this.worker = worker; this.repository = repository; this.steps = steps; this.publisher = publisher;
-        this.provisioner = provisioner; this.pollMs = Math.max(100, pollMs);
+        this.provisioner = provisioner; this.upgrader = upgrader; this.pollMs = Math.max(100, pollMs);
     }
 
     public void tick() {
@@ -78,8 +80,11 @@ public class OnboardingRunner implements SmartLifecycle {
         // each signup's 12 automatic retries and leave it RETRYABLE_FAILED with no next retry.
         // Leave the work PENDING instead until the provisioner is fixed.
         if (!provisionerReady()) return;
-        worker.claim(workerId, 120).ifPresent(claim -> process((OnboardingOperation) claim.get("Operation"),
-                (OnboardingSignup) claim.get("Signup"), UUID.fromString(claim.get("leaseToken").toString())));
+        var claim = worker.claim(workerId, 120);
+        if (claim.isPresent()) process((OnboardingOperation) claim.get().get("Operation"),
+                (OnboardingSignup) claim.get().get("Signup"), UUID.fromString(claim.get().get("leaseToken").toString()));
+        // Signups go first; with none waiting, bring one workspace on an older platform seed up to date.
+        else if (upgrader != null) upgrader.upgradeNext();
     }
 
     public void process(OnboardingOperation operation, OnboardingSignup signup, UUID token) {

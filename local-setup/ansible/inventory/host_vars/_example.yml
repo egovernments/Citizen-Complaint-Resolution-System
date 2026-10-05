@@ -776,6 +776,9 @@ identity_reconciliation_interval_seconds: 900
 # PGR is the only onboarding runner (the BFF worker is gone). Rendered on only
 # with enable_keycloak: signups arrive through the identity BFF.
 pgr_onboarding_runner_enabled: true
+# Idle runner ticks bring workspaces onboarded on an older platform seed up to
+# the current one (create-if-absent; founder edits are kept).
+pgr_onboarding_baseline_upgrade_enabled: true
 identity_digit_admin_username: "ADMIN"  # use a dedicated ACCOUNT_ADMIN in production
 identity_digit_admin_tenant_id: "pg"
 # Platform provisioner the runner signs in as (PGR only, internal APIs). It must

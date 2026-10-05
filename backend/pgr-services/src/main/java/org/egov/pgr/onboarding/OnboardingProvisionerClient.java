@@ -95,7 +95,7 @@ public class OnboardingProvisionerClient {
         Set<String> reads = Set.of("mdms:" + mdmsSchemaSearchPath(), "mdms:" + mdmsSearchPath(),
                 "hrms:/egov-hrms/employees/_search", "boundary:/boundary-service/boundary/_search",
                 "boundary:/boundary-service/boundary-hierarchy-definition/_search", "boundary:/boundary-service/boundary-relationships/_search",
-                "workflow:/egov-workflow-v2/egov-wf/businessservice/_search");
+                "workflow:/egov-workflow-v2/egov-wf/businessservice/_search", "localization:/localization/messages/v1/_search");
         if (!reads.contains(service + ":" + endpoint) || path.contains("#")) denied();
         var request = new LinkedHashMap<>(body); request.put("RequestInfo", requestInfo());
         return exchange(base(service) + path, request, null);
@@ -145,7 +145,9 @@ public class OnboardingProvisionerClient {
     private void validateSignupWrite(OnboardingProgress.WriteScope scope, String service, String path, JsonNode body) {
         String tenant = scope.tenant(), step = scope.step();
         if (tenant == null || !tenant.matches("[a-z][a-z0-9]*") || path == null) denied();
-        boolean foundation = "TENANT_FOUNDATION".equals(step), baseline = "PLATFORM_BASELINE".equals(step);
+        // A seed upgrade (BaselineUpgrader) may make the baseline's MDMS, workflow and localization writes, never its boundary ones.
+        boolean foundation = "TENANT_FOUNDATION".equals(step), upgrade = BaselineUpgrader.STEP.equals(step),
+                baseline = "PLATFORM_BASELINE".equals(step) || upgrade;
         JsonNode payload;
         if ("mdms".equals(service) && "/egov-mdms-service/schema/v1/_create".equals(path) && (foundation || baseline)) {
             payload = body.path("SchemaDefinition"); requireTenant(payload, tenant);
@@ -167,7 +169,14 @@ public class OnboardingProvisionerClient {
             if (!body.path("messages").isArray() || body.path("messages").isEmpty()) denied();
             for (JsonNode message : body.path("messages")) if (!("TENANT_TENANTS_" + tenant.toUpperCase(Locale.ROOT)).equals(message.path("code").asText())
                     && !baselinePacks.isPackMessage(message)) denied(); // only the committed tenant-neutral packs, verbatim
-        } else if ("boundary".equals(service) && baseline) {
+        } else if ("localization".equals(service) && upgrade && "/localization/messages/v1/_delete".equals(path)) {
+            requireTenant(body, tenant); // only the tenant's own name key, which v1 wrote into locales without a pack
+            if (!body.path("messages").isArray() || body.path("messages").isEmpty()) denied();
+            for (JsonNode message : body.path("messages")) if (!("TENANT_TENANTS_" + tenant.toUpperCase(Locale.ROOT)).equals(message.path("code").asText())
+                    || !OnboardingSteps.TENANT_NAME_MODULE.equals(message.path("module").asText())) denied();
+        } else if ("localization".equals(service) && upgrade && "/localization/messages/cache-bust".equals(path)) {
+            if (!body.isEmpty()) denied();
+        } else if ("boundary".equals(service) && baseline && !upgrade) {
             if ("/boundary-service/boundary-hierarchy-definition/_create".equals(path)) {
                 payload = body.path("BoundaryHierarchy"); requireTenant(payload, tenant);
                 if (!OnboardingSteps.WORKSPACE_HIERARCHY.equals(payload.path("hierarchyType").asText())) denied();
