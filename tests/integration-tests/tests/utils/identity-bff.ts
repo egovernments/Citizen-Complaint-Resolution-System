@@ -88,11 +88,10 @@ export async function hostedSignIn(page: Page, config: {
     await page.locator('#password').fill(config.password);
     const consent = page.locator('#privacy-component-check');
     if (await consent.count()) {
-      // Employee PrivacyConsent (keycloak/theme-src Privacy.tsx): the real
-      // input sits transparent on top of the styled box label, so it is the
-      // element a user's click lands on; checking it is the real interaction
-      // and clicking the label behind it is rejected as intercepted.
-      await consent.check();
+      // Employee PrivacyConsent (keycloak/theme-src Privacy.tsx): the transparent
+      // input and the styled label's svg overlap, and which one wins the hit-test
+      // varies by build (8c gate run 4), so tick the input without the hit-test.
+      await consent.check({ force: true });
       await expect(consent).toBeChecked();
     }
     await page.locator('#kc-login, button[type="submit"]').first().click();
