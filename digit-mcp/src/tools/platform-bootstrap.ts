@@ -332,9 +332,11 @@ export async function bootstrapPlatform(args: Record<string, unknown>, options: 
     const missing = employeeRoles.filter((role) => !held.some((r) => r.code === role.code && r.tenantId === role.tenantId));
     if (args.user_only) {
       // Re-provisioning re-encrypts mobile/password under the now-active state key and is the
-      // recovery path after credential drift, so it also clears a lockout from failed logins.
+      // recovery path after credential drift, so it also clears a lockout from failed logins
+      // (44650d3b2). `active` is left as it is: an operator may have deactivated this ADMIN on
+      // purpose, and a deploy must not bring it back (#2269 round-3 item 7).
       await api.userUpdate({ ...existing[0], mobileNumber: adminMobile(), password: api.getLoginPassword() || options.defaultPassword(),
-        active: true, accountLocked: false, roles: [...held, ...missing] });
+        accountLocked: false, roles: [...held, ...missing] });
     } else if (missing.length) {
       await api.userUpdate({ ...existing[0], roles: [...held, ...missing] });
     }

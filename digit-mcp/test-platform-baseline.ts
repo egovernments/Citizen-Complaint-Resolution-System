@@ -631,3 +631,18 @@ test('a regex without a prefix never defaults to +91 (#2269 round-3 item 6)', as
   await bootstrapPlatform({ target_tenant: 'in.newtown', country: 'KE', mobile_regex: '^0?[17][0-9]{8}$' }, country.options);
   assert.equal(country.row('common-masters.MobileNumberValidation/+254').data.mobileNumberRegex, '^0?[17][0-9]{8}$');
 });
+
+test('user_only never reactivates a deactivated administrator (#2269 round-3 item 7)', async () => {
+  const f = fixture();
+  f.users.push({ uuid: 'founder', userName: 'admin', active: false, accountLocked: true, roles: [] });
+  const args = { target_tenant: 'in.newtown', source_tenant: 'in', user_only: true, mobile_regex: '^[6-9][0-9]{9}$', mobile_prefix: '' };
+  await bootstrapPlatform(args, f.options);
+  assert.equal(f.users[0].active, false, 'a deactivated ADMIN stays deactivated');
+  assert.equal(f.users[0].accountLocked, false, 'the lockout from credential drift is still cleared');
+  await bootstrapPlatform({ target_tenant: 'in.newtown', country: 'IN' }, f.options);
+  assert.equal(f.users[0].active, false, 'a full bootstrap does not reactivate it either');
+
+  const fresh = fixture();
+  await bootstrapPlatform(args, fresh.options);
+  assert.equal(fresh.users.length, 1); assert.equal(fresh.users[0].active, true, 'a created ADMIN is active');
+});

@@ -36,7 +36,7 @@ An operator may explicitly enable direct MDMS with `MCP_PLATFORM_BOOTSTRAP_DIREC
 | `mobile_length` | integer | Generated administrator mobile length; default 10. |
 | `admin_mobile` | string | Explicit administrator mobile number. |
 | `user_validation` | array | Explicit countryCode/mobileNumberRegex rules; supersedes mobile regex/prefix inputs. |
-| `user_only` | boolean | Skip seed and employee setup; create or update the administrator user after encryption-key registration (re-encrypts mobile and password, clears `accountLocked`, adds missing roles). |
+| `user_only` | boolean | Skip seed and employee setup; create or update the administrator user after encryption-key registration (re-encrypts mobile and password, clears `accountLocked`, adds missing roles; never changes `active`, so a deactivated administrator stays deactivated). A created administrator is active. |
 | `pincode_allowlist` | array | Legacy compatibility input; ignored with a warning. Configure postal codes in the workspace. |
 | `dashboard_roles` | array | Legacy compatibility input; ignored with a warning. Configure dashboard access in the workspace. |
 
