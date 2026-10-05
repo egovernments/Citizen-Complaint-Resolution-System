@@ -600,6 +600,20 @@ describe('tenant-scoped digit-ui routing', () => {
   });
 });
 
+describe('Keycloak realm proxy client address', () => {
+  // Deliberately NOT $proxy_add_x_forwarded_for: Keycloak takes the leftmost
+  // X-Forwarded-For entry, so appending would let a caller choose the IP that
+  // brute-force detection records. Behind an LB, use nginx realip instead.
+  test('/auth/realms/ sets X-Forwarded-For to the peer address', () => {
+    const nginx = read('local-setup/ansible/templates/nginx-site.conf.j2');
+    const block = /location \^~ \/auth\/realms\/ \{([\s\S]*?)\n  \}/.exec(nginx);
+    expect(block).not.toBeNull();
+    expect(block![1]).toContain('proxy_set_header X-Forwarded-For $remote_addr;');
+    expect(block![1]).not.toContain('$proxy_add_x_forwarded_for');
+    expect(nginx).toMatch(/set_real_ip_from[\s\S]{0,200}location \^~ \/auth\/realms\//);
+  });
+});
+
 describe('reserved tenant URL slugs (identity-bff docs §2.4.1)', () => {
   const doc = read('backend/identity-bff/docs/identity-bff.md');
   const block = /<!-- reserved-url-slugs:begin -->([\s\S]*?)<!-- reserved-url-slugs:end -->/.exec(doc);
