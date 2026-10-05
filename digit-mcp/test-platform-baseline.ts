@@ -28,7 +28,10 @@ function fixture(role = 'SUPERUSER') {
     userSearch: async () => users,
     userCreate: async (value: any) => { users.push({ ...value, uuid: 'founder' }); },
     userUpdate: async (value: any) => { users[0] = value; },
-    boundaryHierarchySearch: async () => [{}], boundarySearch: async () => [{}], boundaryRelationshipTreeSearch: async () => [{}],
+    // Default: the WORKSPACE root already exists, so tests not about boundaries make no boundary writes.
+    boundaryHierarchySearch: async (_tenant: string, type: string) => [{ hierarchyType: type }],
+    boundarySearch: async (_tenant: string, _type: unknown, opts: any) => opts.codes.map((code: string) => ({ code })),
+    boundaryRelationshipTreeSearch: async (tenant: string, type: string) => [{ hierarchyType: type, boundary: [{ code: tenant, boundaryType: 'ROOT' }] }],
     employeeSearch: async () => employees,
     employeeCreate: async (_tenant: string, values: any[]) => { employees.push(...values); },
   };
@@ -346,4 +349,59 @@ test('user_only merges administrator roles, clears a lockout and is idempotent (
   fresh.users[0].roles = fresh.users[0].roles.filter((r: any) => r.code !== 'GRO').concat({ code: 'CUSTOM', tenantId: 'in.newtown' });
   await bootstrapPlatform({ target_tenant: 'in.newtown', country: 'IN' }, fresh.options);
   assert.ok(fresh.users[0].roles.some((r: any) => r.code === 'GRO') && fresh.users[0].roles.some((r: any) => r.code === 'CUSTOM'));
+});
+
+test('bootstrap roots the founder in the reserved WORKSPACE hierarchy, as PGR onboarding does (#2269 review item 4)', async () => {
+  const f = fixture(), api = f.options.api as any;
+  const hierarchies: any[] = [], entities: string[] = [], relationships: any[] = [];
+  // A legacy ADMIN/ROOT from an older MCP bootstrap must not satisfy the WORKSPACE checks.
+  api.boundaryHierarchySearch = async (_tenant: string, type: string) =>
+    [{ hierarchyType: 'ADMIN', boundaryHierarchy: [{ boundaryType: 'ROOT' }] }, ...hierarchies.filter(h => h.hierarchyType === type)];
+  api.boundaryHierarchyCreate = async (tenant: string, hierarchyType: string, levels: any[]) => { hierarchies.push({ tenant, hierarchyType, levels }); };
+  api.boundarySearch = async (_tenant: string, _type: unknown, opts: any) => entities.filter(code => opts.codes.includes(code)).map(code => ({ code }));
+  api.boundaryCreate = async (_tenant: string, values: any[]) => { entities.push(...values.map(v => v.code)); };
+  // Stock boundary-service returns an empty wrapper when there is no relationship yet.
+  api.boundaryRelationshipTreeSearch = async (_tenant: string, type: string) => [{ hierarchyType: type,
+    boundary: relationships.filter(r => r.hierarchyType === type).map(r => ({ code: r.code, boundaryType: r.boundaryType, tenantId: r.tenant })) }];
+  api.boundaryRelationshipCreate = async (tenant: string, code: string, hierarchyType: string, boundaryType: string, parent: string | null) => {
+    relationships.push({ tenant, code, hierarchyType, boundaryType, parent });
+  };
+  await bootstrapPlatform({ target_tenant: 'in.newtown', country: 'IN' }, f.options);
+  assert.deepEqual(hierarchies, [{ tenant: 'in.newtown', hierarchyType: 'WORKSPACE', levels: [{ boundaryType: 'ROOT', parentBoundaryType: null, active: true }] }]);
+  assert.deepEqual(entities, ['in.newtown']);
+  assert.deepEqual(relationships, [{ tenant: 'in.newtown', code: 'in.newtown', hierarchyType: 'WORKSPACE', boundaryType: 'ROOT', parent: null }]);
+  assert.equal(f.employees[0].jurisdictions[0].hierarchy, 'WORKSPACE');
+  assert.equal(f.employees[0].jurisdictions[0].boundaryType, 'ROOT');
+  f.employees.length = 0;
+  await bootstrapPlatform({ target_tenant: 'in.newtown', country: 'IN' }, f.options);
+  assert.equal(hierarchies.length + entities.length + relationships.length, 3, 'a replay creates nothing');
+});
+
+test('city_setup never inherits the reserved ROOT level as city geography (#2269 review item 4)', async () => {
+  const { ToolRegistry } = await import('./src/tools/registry.js');
+  const { registerMdmsTenantTools } = await import('./src/tools/mdms-tenant.js');
+  const { digitApi } = await import('./src/services/digit-api.js');
+  const registry = new ToolRegistry(); registerMdmsTenantTools(registry);
+  const created: { tenant: string; type: string; levels: string[] }[] = [], related: string[] = [];
+  const stubs: Record<string, unknown> = {
+    isAuthenticated: () => true,
+    getAuthInfo: () => ({ authenticated: true, user: { userName: 'admin', tenantId: 'in', roles: [{ code: 'SUPERUSER', tenantId: 'in' }] } }),
+    getLoginPassword: () => 'test-only-password', generateEncKey: async () => true,
+    mdmsV2SearchRaw: async () => [{ isActive: true, data: {} }], mdmsV2Create: async () => ({}),
+    userSearch: async () => [], userCreate: async () => ({}), userUpdate: async () => ({}),
+    workflowBusinessServiceSearch: async () => [{ businessService: 'PGR' }], workflowBusinessServiceCreate: async () => ({}),
+    boundaryHierarchySearch: async () => [{ boundaryHierarchy: [{ boundaryType: 'ROOT', parentBoundaryType: null }] }],
+    boundaryHierarchyCreate: async (tenant: string, type: string, levels: any[]) => { created.push({ tenant, type, levels: levels.map(l => l.boundaryType) }); },
+    boundaryCreate: async () => [], employeeSearch: async () => [{}],
+    boundaryRelationshipCreate: async (_t: string, _c: string, _h: string, type: string) => { related.push(type); return {}; },
+  };
+  const api = digitApi as any, saved = Object.fromEntries(Object.keys(stubs).map(k => [k, api[k]]));
+  Object.assign(api, stubs);
+  try {
+    const result = JSON.parse(await registry.getTool('city_setup')!.handler({ tenant_id: 'in.newtown', city_name: 'Newtown' }) as string);
+    assert.equal(result.steps.boundaries.hierarchyReused, false);
+    assert.ok(created.length > 0);
+    for (const h of created) assert.ok(!h.levels.includes('ROOT') && h.levels.length > 1, JSON.stringify(h));
+    assert.ok(!related.includes('ROOT'));
+  } finally { Object.assign(api, saved); }
 });

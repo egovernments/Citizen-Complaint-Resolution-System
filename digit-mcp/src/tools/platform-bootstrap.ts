@@ -5,6 +5,20 @@ import { loadPlatformSeed, substituteTenant } from './platform-baseline.js';
 /** PGR operating roles the deploy administrator held before the seed existed (#2269 review item 2). */
 export const DEPLOY_ADMIN_PGR_ROLES = ['CITIZEN', 'CSR', 'GRO', 'PGR_LME', 'DGRO'];
 
+/** Reserved founder hierarchy; shared with PGR onboarding (OnboardingSteps.WORKSPACE_HIERARCHY). */
+export const WORKSPACE_HIERARCHY = 'WORKSPACE';
+
+/** A TenantBoundary wrapper is returned even without relationships; only the root node proves one. */
+function hasWorkspaceRoot(trees: Record<string, unknown>[], tenant: string): boolean {
+  return trees.some((tree) => {
+    const type = tree.hierarchyType as unknown;
+    const code = type && typeof type === 'object' ? (type as { code?: unknown }).code : type;
+    if (code && code !== WORKSPACE_HIERARCHY) return false;
+    const roots = Array.isArray(tree.boundary) ? tree.boundary : tree.boundary ? [tree.boundary] : [];
+    return roots.some((root: any) => root?.code === tenant && root?.boundaryType === 'ROOT');
+  });
+}
+
 interface BootstrapOptions {
   deriveMobile(regex: string, length: number, requested?: string): string;
   defaultPassword(): string;
@@ -178,14 +192,17 @@ export async function bootstrapPlatform(args: Record<string, unknown>, options: 
   }
   let employeeProvisioned = false;
   if (!args.user_only) {
-    if (!(await api.boundaryHierarchySearch(target, 'ADMIN')).length) {
-      await api.boundaryHierarchyCreate(target, 'ADMIN', [{ boundaryType: 'ROOT', parentBoundaryType: null, active: true }]);
+    // Founder jurisdiction lives in the reserved WORKSPACE hierarchy, as in PGR onboarding
+    // (OnboardingSteps.WORKSPACE_HIERARCHY). A one-level ADMIN/ROOT could never grow levels and
+    // blocked the operational ADMIN hierarchy (#2260, #2269 review item 4).
+    if (!(await api.boundaryHierarchySearch(target, WORKSPACE_HIERARCHY)).some((h) => h.hierarchyType === WORKSPACE_HIERARCHY)) {
+      await api.boundaryHierarchyCreate(target, WORKSPACE_HIERARCHY, [{ boundaryType: 'ROOT', parentBoundaryType: null, active: true }]);
     }
-    if (!(await api.boundarySearch(target, 'ADMIN', { codes: [target] })).length) {
+    if (!(await api.boundarySearch(target, undefined, { codes: [target] })).some((b) => b.code === target)) {
       await api.boundaryCreate(target, [{ code: target }]);
     }
-    if (!(await api.boundaryRelationshipTreeSearch(target, 'ADMIN')).length) {
-      await api.boundaryRelationshipCreate(target, target, 'ADMIN', 'ROOT', null);
+    if (!hasWorkspaceRoot(await api.boundaryRelationshipTreeSearch(target, WORKSPACE_HIERARCHY), target)) {
+      await api.boundaryRelationshipCreate(target, target, WORKSPACE_HIERARCHY, 'ROOT', null);
     }
     const employees = await api.employeeSearch(target, { codes: [username], limit: 2 });
     if (employees.length > 1) throw new Error('Ambiguous bootstrap employee');
@@ -195,7 +212,7 @@ export async function bootstrapPlatform(args: Record<string, unknown>, options: 
       const now = Date.now();
       await api.employeeCreate(target, [{ tenantId: target, code: username, employeeType: 'PERMANENT', employeeStatus: 'EMPLOYED',
         dateOfAppointment: now, isActive: true, user: users[0], assignments: [{ department: 'ONBOARDING_ADMIN', designation: 'ONBOARDING_FOUNDER', fromDate: now, isCurrentAssignment: true }],
-        jurisdictions: [{ tenantId: target, hierarchy: 'ADMIN', boundaryType: 'ROOT', boundary: target, roles: employeeRoles }] }]);
+        jurisdictions: [{ tenantId: target, hierarchy: WORKSPACE_HIERARCHY, boundaryType: 'ROOT', boundary: target, roles: employeeRoles }] }]);
     }
     employeeProvisioned = true;
   }

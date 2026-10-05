@@ -1590,8 +1590,11 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
             const existing = await digitApi.boundaryHierarchySearch(root, 'ADMIN');
             if (existing.length > 0) {
               const hier = existing[0] as { boundaryHierarchy?: { boundaryType: string; parentBoundaryType?: string }[] };
-              if (hier.boundaryHierarchy) {
-                hierarchyLevels = buildOrderedLevels(hier.boundaryHierarchy);
+              // ROOT is the reserved founder placeholder (WORKSPACE hierarchy). Older MCP
+              // bootstraps wrote it as a one-level ADMIN; never inherit that as geography.
+              const levels = hier.boundaryHierarchy ? buildOrderedLevels(hier.boundaryHierarchy) : [];
+              if (levels.length && !levels.includes('ROOT')) {
+                hierarchyLevels = levels;
                 boundaryResult.hierarchyReused = true;
               }
             }

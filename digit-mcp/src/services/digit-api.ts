@@ -617,8 +617,12 @@ class DigitApiClient {
     tenantId: string,
     hierarchyType?: string
   ): Promise<Record<string, unknown>[]> {
+    // Stock boundary-service binds relationship search criteria from the query string
+    // only (body criteria are ignored); the body copy is kept for older adapters.
+    const params = new URLSearchParams({ tenantId });
+    if (hierarchyType) params.set('hierarchyType', hierarchyType);
     const data = await this.request<{ TenantBoundary?: Record<string, unknown>[] }>(
-      this.endpoint('BOUNDARY_RELATIONSHIP_SEARCH'),
+      `${this.endpoint('BOUNDARY_RELATIONSHIP_SEARCH')}?${params.toString()}`,
       {
         RequestInfo: this.buildRequestInfo(),
         BoundaryRelationship: {

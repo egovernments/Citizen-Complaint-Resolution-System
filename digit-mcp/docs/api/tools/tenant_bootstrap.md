@@ -9,7 +9,7 @@ Bootstrap a tenant from the versioned platform baseline shared with PGR onboardi
 The canonical resource is `backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json`.
 The MCP build stages these same bytes into `dist/data/`; published npm packages and Docker images resolve the resource locally at runtime. Generated copies are not committed.
 
-Bootstrap creates missing schemas and baseline records, substitutes the target tenant into seed data, creates the tenant self-record and mobile validation records, and provisions the administrator user, employee, and minimal ADMIN boundary. The administrator username follows the authenticated caller (falling back to `ADMIN`); founder roles come from the seed.
+Bootstrap creates missing schemas and baseline records, substitutes the target tenant into seed data, creates the tenant self-record and mobile validation records, and provisions the administrator user and employee. The employee's jurisdiction is the tenant's root boundary in the reserved `WORKSPACE` hierarchy, as in PGR onboarding; the operational (`ADMIN`) hierarchy is created later by the workspace Geography step or `city_setup`, which never reuses a `ROOT` level as geography. The administrator username follows the authenticated caller (falling back to `ADMIN`); its roles are the seed's founder roles plus CITIZEN, CSR, GRO, PGR_LME and DGRO. Roles are only ever added: an existing administrator keeps every role it holds.
 
 The country mobile rule comes from the seed's `countryMobileRules` (selected by `country`, or by a seeded `mobile_prefix`); `source_tenant` is an explicit opt-in to read it from a live tenant instead, and nothing else is read from it. Workspace branding, geography, business departments/designations, complaint hierarchy, and workflow setup are configured separately. Existing active records are skipped; inactive baseline records fail instead of being silently reactivated. New records must become visible before bootstrap continues. Replays reuse an existing administrator and employee.
 
@@ -32,7 +32,7 @@ An operator may explicitly enable direct MDMS with `MCP_PLATFORM_BOOTSTRAP_DIREC
 | `mobile_length` | integer | Generated administrator mobile length; default 10. |
 | `admin_mobile` | string | Explicit administrator mobile number. |
 | `user_validation` | array | Explicit countryCode/mobileNumberRegex rules; supersedes mobile regex/prefix inputs. |
-| `user_only` | boolean | Skip seed and employee setup; create or update the administrator user after encryption-key registration. |
+| `user_only` | boolean | Skip seed and employee setup; create or update the administrator user after encryption-key registration (re-encrypts mobile and password, clears `accountLocked`, adds missing roles). |
 | `pincode_allowlist` | array | Legacy compatibility input; ignored with a warning. Configure postal codes in the workspace. |
 | `dashboard_roles` | array | Legacy compatibility input; ignored with a warning. Configure dashboard access in the workspace. |
 
