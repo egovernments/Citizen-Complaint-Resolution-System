@@ -18,6 +18,7 @@ public class PlatformBaseline {
     public String version() { return seed.path("version").asText(); }
     public JsonNode schemas() { return seed.path("schemas"); }
     public JsonNode records() { return seed.path("records"); }
+    public JsonNode workflows() { return seed.path("workflow"); }
     public JsonNode founderRoles() { return seed.path("founderRoles"); }
     public JsonNode countryMobileRule(String country) {
         return seed.path("countryMobileRules").path(country.toUpperCase(java.util.Locale.ROOT)).deepCopy();

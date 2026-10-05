@@ -85,6 +85,17 @@ public class OnboardingSteps {
             String code = row.path("schemaCode").asText(), id = row.path("uniqueIdentifier").asText();
             progress.record("mdms:" + code + ":" + id, () -> ensureRecord(scope, tenant, code, id, substitute(row.path("data"), tenant)));
         }
+        for (JsonNode workflow : seed.workflows()) {
+            String code = workflow.path("businessService").asText();
+            progress.record("workflow:" + code, () -> {
+                JsonNode found = client.read("workflow", "/egov-workflow-v2/egov-wf/businessservice/_search?tenantId=" + tenant + "&businessServices=" + code, Map.of()).path("BusinessServices");
+                if (!found.isArray()) throw new OnboardingFailure("WORKFLOW_INVALID_RESPONSE", true);
+                // workflow-v2 caches searches in-JVM: re-searching before its persister lands would pin an
+                // empty result, so an accepted create is the checkpoint and a replay searches again.
+                if (found.isEmpty()) createProjectedRecord(scope, "workflow", "/egov-workflow-v2/egov-wf/businessservice/_create",
+                        Map.of("BusinessServices", List.of(substitute(workflow, tenant))));
+            });
+        }
         progress.record("mobile", () -> {
             // Country master is deployment-owned; never inherit a regex from an unrelated tenant.
             JsonNode rules = records(signup.getCountryCode().toLowerCase(Locale.ROOT), "common-masters.MobileNumberValidation", null);
