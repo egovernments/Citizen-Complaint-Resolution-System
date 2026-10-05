@@ -1,10 +1,8 @@
 import type express from "express";
 import { currentSession } from "../sessions/current-session.js";
-import { withPersonLease } from "../accounts/person-lease.js";
 import { propagateIdentifiers } from "../sync/identifiers.js";
 import { endPhoneSessions } from "../revocation/index.js";
-import { assertPhoneAvailable, completePhoneProof, phoneSignIn, PhoneProofError, type PhoneEffects } from "./phone-service.js";
-import { withPhoneLock } from "./phone-lock.js";
+import { completePhoneProof, phoneSignIn, PhoneProofError, type PhoneEffects } from "./phone-service.js";
 import { asyncRoute } from "../../app/async-route.js";
 import { hasTrustedWriteOrigin } from "../../app/request-security.js";
 import { boundTenantOf, routeForSlug, type PublicTenantRoute } from "../access-context/tenant-route.js";
@@ -15,7 +13,7 @@ import { DigitUnavailableError } from "../managed-accounts/digit-user-client.js"
 import {
   IdentityAdminError,
 } from "../organizations/organization-service.js";
-import { requireCurrentSession, sessionCookie } from "../sessions/session-store.js";
+import { sessionCookie } from "../sessions/session-store.js";
 import { config } from "../../infrastructure/config.js";
 import { audit } from "./audit.js";
 import { fixedOtpCode, OtpDeliveryError, otpSender, phoneOtpAvailable } from "./otp-sender.js";
@@ -86,7 +84,9 @@ async function requestContext(request: express.Request, response: express.Respon
 export function registerCitizenOtpRoutes(app: express.Application, phoneEffects: PhoneEffects = { endPhoneSessions, propagateIdentifiers }): void {
   /**
    * Sends a sign-in code to a mobile number valid for the route tenant. The
-   * answer does not depend on whether the number has an account.
+   * answer does not depend on whether the number has an account, for any
+   * purpose: step-up and change refuse a number someone else owns only at
+   * `_verify`.
    */
   app.post("/identity/v1/citizen/otp/_send", asyncRoute(async (request, response) => {
     if (!hasTrustedWriteOrigin(request)) {
@@ -120,13 +120,10 @@ export function registerCitizenOtpRoutes(app: express.Application, phoneEffects:
           code: "INVALID_MOBILE_NUMBER",
         });
       }
-      if (current) await withPersonLease(current.session.claims.sub, async lease => {
-        await requireCurrentSession(lease, current.sessionId);
-        await withPhoneLock(phoneNumber, async lock => {
-          await assertPhoneAvailable(phoneNumber, current.session.claims.sub);
-          await lock.assertHeld();
-        });
-      });
+      // Step-up and change do NOT check here whether another person owns the
+      // number: a 409 before any rate charge let a signed-in caller list the
+      // registered numbers. Ownership is enforced at `_verify`, under the
+      // phone lock, once the caller has proved they hold the number.
       const phoneRef = privateRef("phone", phoneNumber);
       const base = { event: "OTP_SEND" as const, tenantId: tenant.tenantId, urlSlug: tenant.urlSlug, phoneRef, ipRef };
 

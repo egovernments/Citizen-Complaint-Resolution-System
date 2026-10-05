@@ -2300,8 +2300,12 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
         attributes: { phoneNumber: ["+254799000612"], phoneNumberVerified: ["true"] } });
       const refused = await proofPost("_verify", { challengeId, code });
       expect([refused.status, (await refused.json()).code]).toEqual([409, "PHONE_IN_USE"]);
-      const blockedSend = await proofPost("_send", { mobileNumber: "799000612" });
-      expect([blockedSend.status, (await blockedSend.json()).code]).toEqual([409, "PHONE_IN_USE"]);
+      // The send answers as for any number (no ownership oracle, and charged);
+      // only proving the code reaches the ownership refusal.
+      const ownedSend = await proofPost("_send", { mobileNumber: "799000612" });
+      expect(ownedSend.status).toBe(202);
+      const owned = await proofPost("_verify", { challengeId: (await ownedSend.json()).challengeId, code: lastCode() });
+      expect([owned.status, (await owned.json()).code]).toEqual([409, "PHONE_IN_USE"]);
       expect((await getIdentitySession(sessionId))?.claims.phone_number_verified).not.toBe(true);
     });
 
