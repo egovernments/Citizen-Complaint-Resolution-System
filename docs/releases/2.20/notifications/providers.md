@@ -134,6 +134,8 @@ An admin of any other root on the same box, such as an onboarded workspace, gets
 
 ## Adding a provider
 
+For a step-by-step walkthrough with a worked example (provider file, tests, catalog entry, migration mirror, chart copy and a local end-to-end test), see [adding-a-provider.md](./adding-a-provider.md). This section is the reference it follows.
+
 Every new gateway follows one rule: **one provider class in Novu, plus one catalog entry here.** novu-bridge never carries gateway-specific code.
 
 ```
@@ -158,8 +160,9 @@ The provider must decide success from **what the gateway says**, not the HTTP st
 
 1. In `ProviderCatalog`:
    - Add a type constant and put it in `TYPES_LONGEST_FIRST`, so that no type is a prefix-match for a longer one.
-   - For a DIGIT provider, also add a `NOVU_PROVIDER_*` constant and a `TYPE_BY_NOVU_SMS_PROVIDER` entry.
-2. Add the entry to `types()`. The field **keys must be the Novu provider's credential keys**, because `toNovuCredentials` copies exactly the declared keys:
+   - Add the type's channel to `CHANNEL_BY_TYPE`.
+   - For a DIGIT provider, also add a `NOVU_PROVIDER_*` constant, put it in `WORKER_NOVU_PROVIDERS` (so `NOVU_BRIDGE_DIGIT_WORKER_PROVIDERS=false` hides and refuses it), and add a `TYPE_BY_NOVU_SMS_PROVIDER` entry.
+2. Add the entry to `allTypes()` (which `types()` filters). The field **keys must be the Novu provider's credential keys**, because `toNovuCredentials` copies exactly the declared keys:
    ```java
    types.add(ProviderType.builder()
            .type(ACME).label("ACME SMS").channel("SMS").transport("novu")
