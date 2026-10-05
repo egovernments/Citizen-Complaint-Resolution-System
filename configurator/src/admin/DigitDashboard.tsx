@@ -60,21 +60,22 @@ function ResourceCard({ resource }: { resource: string }) {
       onClick={() => navigate(`/manage/${resource}`)}
       className="text-left w-full h-full rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 group"
     >
-      <DigitCard className="h-full w-full mb-0 p-4 flex items-center min-h-[88px] border border-transparent transition-all duration-150 group-hover:shadow-md group-hover:border-primary/40 group-hover:bg-accent/5">
-        <div className="flex items-center gap-3.5 w-full">
-          <div className="w-11 h-11 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
+      {/* The DIGIT console's stat card: a brand-tinted hairline that lifts on hover. */}
+      <DigitCard className="h-full mb-0 p-5 sm:p-5 min-h-[88px] flex items-center border-primary/10 transition duration-200 group-hover:shadow-md group-hover:-translate-y-0.5">
+        <div className="flex items-center gap-4 w-full">
+          <div className="w-11 h-11 bg-primary/10 rounded-xl flex items-center justify-center flex-shrink-0">
             <Icon className="w-5 h-5 text-primary" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-2xl font-bold text-foreground leading-tight tracking-tight">
+            <p className="text-2xl font-bold text-foreground">
               {isPending ? '...' : error ? '—' : (total ?? 0)}
             </p>
             {error ? (
-              <p className="text-xs text-destructive mt-0.5 truncate" title={error instanceof Error ? error.message : String(error)}>
+              <p className="text-xs text-destructive mt-0.5 truncate max-w-[14rem]" title={error instanceof Error ? error.message : String(error)}>
                 {error instanceof Error ? error.message : 'Error loading data'}
               </p>
             ) : null}
-            <p className="text-sm font-medium text-muted-foreground truncate" title={label}>
+            <p className="text-xs text-muted-foreground mt-1 truncate" title={label}>
               {label}
             </p>
           </div>
@@ -97,7 +98,7 @@ export function DigitDashboard() {
       <h1 className="text-2xl sm:text-3xl font-bold font-condensed text-foreground">
         {translate('app.header.title')}
       </h1>
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">
         {resources.map((resource) => (
           <ResourceCard key={resource} resource={resource} />
         ))}
