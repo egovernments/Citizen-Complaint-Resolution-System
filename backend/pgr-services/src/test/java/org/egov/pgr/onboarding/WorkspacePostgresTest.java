@@ -49,6 +49,8 @@ public class WorkspacePostgresTest {
         when(gateway.requireAdmin(anyString(), any())).thenReturn("admin");
         when(gateway.tenant(anyString())).thenAnswer(call -> mapper.valueToTree(Map.of("data", Map.of("name", "Old " + call.getArgument(0)))));
         when(gateway.languages(anyString())).thenReturn(List.of("en_IN", "hi_IN"));
+        // These tests cover multi-locale rename publication; which locales qualify is WorkspaceServiceTest's concern.
+        when(gateway.seedsTenantNameModule(anyString())).thenReturn(true);
         when(gateway.probes(anyString())).thenReturn(Map.of("BRANDING", true, "DEPARTMENTS", true, "GEOGRAPHY", true, "EMPLOYEES", true, "COMPLAINT_TYPES", true));
         service = transactional(new WorkspaceService(repository, gateway, new OnboardingIdentifierService()));
     }

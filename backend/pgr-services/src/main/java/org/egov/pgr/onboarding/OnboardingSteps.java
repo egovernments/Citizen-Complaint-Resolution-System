@@ -121,19 +121,19 @@ public class OnboardingSteps {
             validateMobileRule(rule);
             ensureRecord(scope, tenant, "common-masters.MobileNumberValidation", rule.path("countryCode").asText(), asMap(rule));
         });
+        var locales = locales(signup);
         progress.record("state-info", () -> {
             var data = new LinkedHashMap<String, Object>(); data.put("code", tenant); data.put("name", signup.getAccountName());
             for (String k : List.of("qrCodeURL", "bannerUrl", "logoUrl", "logoUrlWhite", "statelogo")) data.put(k, "");
             data.put("hasLocalisation", true); data.put("defaultUrl", Map.of("citizen", "", "employee", ""));
-            data.put("languages", signup.getLanguages().stream().map(l -> Map.of("label", l, "value", locale(l, signup.getCountryCode()))).toList());
+            // digit-ui defaults to the first entry, so en_IN (the one locale with full packs) leads.
+            data.put("languages", locales.entrySet().stream().map(e -> Map.of("label", e.getValue(), "value", e.getKey())).toList());
             data.put("localizationModules", List.of(Map.of("label", "common", "value", "rainmaker-common")));
             ensureRecord(scope, tenant, "common-masters.StateInfo", tenant, data, true);
         });
         // egov-localization serves the first tenant in [T, default] holding ANY message for the requested
         // modules, so T must own whole packs before its first key (#2257). digit-ui boot pins en_IN.
-        var locales = new LinkedHashSet<>(List.of("en_IN"));
-        for (String language : signup.getLanguages()) locales.add(locale(language, signup.getCountryCode()));
-        for (String loc : locales) seed.localizationPacks(loc).forEach((module, messages) ->
+        for (String loc : locales.keySet()) seed.localizationPacks(loc).forEach((module, messages) ->
                 progress.record("localization-pack:" + loc + ":" + module, () -> {
                     for (int i = 0; i < messages.size(); i += 500) {
                         var chunk = new ArrayList<JsonNode>();
@@ -141,10 +141,14 @@ public class OnboardingSteps {
                         client.write(scope, "localization", "/localization/messages/v1/_upsert", Map.of("tenantId", tenant, "messages", chunk));
                     }
                 }));
-        for (String language : signup.getLanguages()) progress.record("localization:" + language, () -> client.write(scope, "localization",
+        // The tenant-name key goes only where T now owns the whole rainmaker-common pack: anywhere else this one
+        // key would make T the answering tenant for that locale and hide every `default` message (#2257).
+        // Checkpoint names stay keyed by signup language so operations started before this rule replay cleanly.
+        for (var language : locales.entrySet()) if (seedsTenantNameModule(language.getKey()))
+            progress.record("localization:" + language.getValue(), () -> client.write(scope, "localization",
                 "/localization/messages/v1/_upsert", Map.of("tenantId", tenant, "messages", List.of(Map.of(
                         "code", "TENANT_TENANTS_" + tenant.toUpperCase(Locale.ROOT), "message", signup.getAccountName(),
-                        "module", "rainmaker-common", "locale", locale(language, signup.getCountryCode()))))));
+                        "module", TENANT_NAME_MODULE, "locale", language.getKey())))));
         // The dashboard (digit-ui and KpiCatalogService) reads its zone from the tenant's own "default" record.
         progress.record("dashboard-config", () -> ensureRecord(scope, tenant, "dss.DashboardConfig", "default",
                 Map.of("id", "default", "timeZone", signup.getTimeZone())));
@@ -331,5 +335,35 @@ public class OnboardingSteps {
         catch (Exception e) { throw new IllegalStateException("Invalid baseline", e); }
     }
     private Map<String,Object> asMap(JsonNode node) { return mapper.convertValue(node, new TypeReference<LinkedHashMap<String,Object>>() {}); }
-    public static String locale(String language, String country) { return language.replace('-', '_').contains("_") ? language.replace('-', '_') : language + "_" + country; }
+
+    /** Module holding TENANT_TENANTS_&lt;T&gt;. */
+    static final String TENANT_NAME_MODULE = "rainmaker-common";
+    /** True when the baseline seeds the whole tenant-name module in this locale, so T may hold its name key there. */
+    public boolean seedsTenantNameModule(String locale) { return seed.localizationPacks(locale).containsKey(TENANT_NAME_MODULE); }
+
+    /** StateInfo locales, in order, mapped to their label (the signup language): en_IN first, then each signup language. */
+    LinkedHashMap<String, String> locales(OnboardingSignup signup) {
+        var locales = new LinkedHashMap<String, String>(); locales.put("en_IN", "en");
+        for (String language : signup.getLanguages()) locales.putIfAbsent(locale(language, signup.getCountryCode()), language);
+        return locales;
+    }
+
+    /**
+     * The DIGIT locale for a signup language. Packs and DIGIT deployments key a language by one locale code, not
+     * by the signup country (digit-ui boots en_IN; the committed packs are en_IN, hi_IN, fr_FR and pt_BR), so:
+     * <ul>
+     *   <li>an explicit region is kept: {@code pt-br} becomes {@code pt_BR};</li>
+     *   <li>a bare language with a committed pack uses that pack's locale: en is en_IN, fr is fr_FR, pt is pt_BR,
+     *       hi is hi_IN, whatever the country;</li>
+     *   <li>any other language takes the signup country, the DIGIT convention for locally added languages:
+     *       sw in KE is sw_KE, am in ET is am_ET. No pack exists, so the tenant serves it from {@code default}.</li>
+     * </ul>
+     */
+    String locale(String language, String country) {
+        String[] parts = language.replace('-', '_').split("_", 2);
+        String lang = parts[0].toLowerCase(Locale.ROOT);
+        if (parts.length == 2) return lang + "_" + parts[1].toUpperCase(Locale.ROOT);
+        for (String pack : seed.localeCodes()) if (pack.startsWith(lang + "_")) return pack;
+        return lang + "_" + country.toUpperCase(Locale.ROOT);
+    }
 }

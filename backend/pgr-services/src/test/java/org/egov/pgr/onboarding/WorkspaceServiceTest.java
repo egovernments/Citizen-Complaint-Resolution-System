@@ -73,6 +73,7 @@ public class WorkspaceServiceTest {
         verify(gateway,never()).requireNameAvailable(any());
     }
     @Test public void newRenameCapturesAllLanguagesAndHoldsBothNames(){
+        row.put("legacy",true);
         when(repository.find("test",true)).thenReturn(Optional.of(row));
         when(gateway.tenant("test")).thenReturn(new ObjectMapper().valueToTree(Map.of("data",Map.of("name","Old Name"))));
         when(gateway.languages("test")).thenReturn(List.of("en_IN","hi_IN"));
@@ -80,6 +81,16 @@ public class WorkspaceServiceTest {
         service.rename(Map.of("tenantId","test","name","New Name","version",1));
         verify(repository).reserveName("test","old name");verify(repository).reserveName("test","new name");
         verify(repository).beginRename("test","New Name","new name","old name",1L,List.of("en_IN","hi_IN"),"admin");
+    }
+    /** An onboarded tenant owns rainmaker-common only where the baseline seeded it; the name key never goes elsewhere (#2257). */
+    @Test public void onboardedRenameSkipsLocalesWithoutTheSeededTenantNamePack(){
+        when(repository.find("test",true)).thenReturn(Optional.of(row));
+        when(gateway.tenant("test")).thenReturn(new ObjectMapper().valueToTree(Map.of("data",Map.of("name","Old Name"))));
+        when(gateway.languages("test")).thenReturn(List.of("en_IN","hi_IN","sw_KE"));
+        when(gateway.seedsTenantNameModule("en_IN")).thenReturn(true);
+        when(repository.beginRename(any(),any(),any(),any(),anyLong(),anyList(),any())).thenReturn(Map.of("id","rename","status","PENDING","version",2L));
+        service.rename(Map.of("tenantId","test","name","New Name","version",1));
+        verify(repository).beginRename("test","New Name","new name","old name",1L,List.of("en_IN"),"admin");
     }
     @Test public void partialRenameRetriesOnlyUnacknowledgedWrites(){
         Map<String,Object> rename=new LinkedHashMap<>(Map.of("id",UUID.randomUUID().toString(),"tenantId","test","name","New Name","version",2L,

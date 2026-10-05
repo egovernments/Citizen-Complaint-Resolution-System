@@ -46,6 +46,8 @@ public class PlatformBaseline {
         return seed.path("countryMobileRules").path(country.toUpperCase(java.util.Locale.ROOT)).deepCopy();
     }
     public SortedMap<String, JsonNode> localizationPacks(String locale) { return packs.getOrDefault(locale, new TreeMap<>()); }
+    /** Locales with at least one committed pack, sorted. */
+    public SortedSet<String> localeCodes() { return new TreeSet<>(packs.keySet()); }
     public boolean isPackMessage(JsonNode m) {
         return packMessages.contains(List.of(m.path("locale").asText(), m.path("module").asText(), m.path("code").asText(), m.path("message").asText()));
     }
