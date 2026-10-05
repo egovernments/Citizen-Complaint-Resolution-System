@@ -2645,6 +2645,23 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       }
     });
 
+    it("answers a JSON 503 when MDMS fails during verify, and keeps the code usable", async () => {
+      const { challengeId } = await (await send("799000528")).json();
+      const code = lastCode();
+      const mdmsUrl = config.digitMdmsSearchUrl;
+      // MobileNumberValidation is read live; a 404 from the fake is an MDMS outage.
+      (config as any).digitMdmsSearchUrl = `${mdmsUrl}-unavailable`;
+      try {
+        const down = await verify(challengeId, code);
+        expect(down.status).toBe(503);
+        expect(down.headers.get("content-type")).toMatch(/application\/json/);
+        expect((await down.json()).code).toBe("IDENTITY_UNAVAILABLE");
+      } finally {
+        (config as any).digitMdmsSearchUrl = mdmsUrl;
+      }
+      expect((await verify(challengeId, code)).status).toBe(200);
+    });
+
     it("sends nothing when Redis fails to store the challenge", async () => {
       const count = sent.length;
       const redis = getRedis();

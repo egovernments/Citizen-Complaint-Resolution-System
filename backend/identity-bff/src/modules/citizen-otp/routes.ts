@@ -27,6 +27,8 @@ import {
   releaseChallenge,
   replacePreviousChallenge,
   reserveSend,
+  type CodeCheck,
+  type OtpChallenge,
   type OtpPurpose,
 } from "./otp-store.js";
 
@@ -209,12 +211,34 @@ export function registerCitizenOtpRoutes(app: express.Application, phoneEffects:
       return response.status(400).json({ error: "A challenge and a six-digit code are required", code: "INVALID_REQUEST" });
     }
     const ipRef = privateRef("ip", request.ip || "unknown");
-    // Switching phone_otp off also stops codes already sent (e.g. after codes
-    // leaked through the log sender), not only new ones.
+    const expired = () => response.status(400).json({
+      error: "This code has expired. Request a new one.",
+      code: "OTP_EXPIRED",
+    });
+
+    // Everything up to the code check runs inside one catch, so an MDMS or
+    // Keycloak outage answers the JSON 503 contract error, never Express's
+    // HTML page, and leaves the code unclaimed for a retry.
+    let challenge: OtpChallenge | null;
+    let national: ReturnType<typeof splitE164>;
+    let check: CodeCheck;
     try {
+      // Switching phone_otp off also stops codes already sent (e.g. after codes
+      // leaked through the log sender), not only new ones.
       if (!(purpose === "signin" ? await phoneOtpEnabled() : phoneOtpAvailable())) {
         return response.status(400).json({ error: "Phone sign-in is not enabled", code: "PHONE_OTP_DISABLED" });
       }
+      challenge = await readChallenge(challengeId);
+      // A challenge is usable only from the tenant route it was sent for.
+      if (!challenge || challenge.tenant.urlSlug !== route.urlSlug || challenge.tenant.tenantId !== route.tenantId ||
+          challenge.purpose !== purpose || (current && (challenge.subject !== current.session.claims.sub || challenge.sessionRef !== privateRef("session", current.sessionId)))) {
+        await audit({ event: "OTP_VERIFY", outcome: "REFUSED", reason: "OTP_EXPIRED", urlSlug: route.urlSlug, ipRef, challengeId });
+        return expired();
+      }
+      const rule = await mobileValidationForRoute(route);
+      national = rule && splitE164(challenge.phoneNumber, rule);
+      if (!national) return expired();
+      check = await claimCode(challenge, code, fixedOtpCode());
     } catch (error) {
       if (error instanceof PhoneProofError) return response.status(error.status).json({ code: error.code, error: error.message });
       if (error instanceof IdentityAdminError || error instanceof DigitUnavailableError) {
@@ -223,27 +247,10 @@ export function registerCitizenOtpRoutes(app: express.Application, phoneEffects:
       }
       throw error;
     }
-    const expired = () => response.status(400).json({
-      error: "This code has expired. Request a new one.",
-      code: "OTP_EXPIRED",
-    });
-
-    const challenge = await readChallenge(challengeId);
-    // A challenge is usable only from the tenant route it was sent for.
-    if (!challenge || challenge.tenant.urlSlug !== route.urlSlug || challenge.tenant.tenantId !== route.tenantId ||
-        challenge.purpose !== purpose || (current && (challenge.subject !== current.session.claims.sub || challenge.sessionRef !== privateRef("session", current.sessionId)))) {
-      await audit({ event: "OTP_VERIFY", outcome: "REFUSED", reason: "OTP_EXPIRED", urlSlug: route.urlSlug, ipRef, challengeId });
-      return expired();
-    }
     const tenant = challenge.tenant;
     const phoneRef = privateRef("phone", challenge.phoneNumber);
     const base = { tenantId: tenant.tenantId, urlSlug: tenant.urlSlug, phoneRef, ipRef, challengeId };
 
-    const rule = await mobileValidationForRoute(route);
-    const national = rule && splitE164(challenge.phoneNumber, rule);
-    if (!national) return expired();
-
-    const check = await claimCode(challenge, code, fixedOtpCode());
     if (check.status === "MISSING") {
       await audit({ ...base, event: "OTP_VERIFY", outcome: "REFUSED", reason: "OTP_EXPIRED" });
       return expired();

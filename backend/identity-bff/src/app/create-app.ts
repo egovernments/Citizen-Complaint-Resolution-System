@@ -5,6 +5,7 @@ import { SessionRevokedError } from "../modules/sessions/session-store.js";
 import { IdentityAdminError } from "../modules/organizations/organization-service.js";
 import { LeaseBusyError, LeaseLostError } from "../modules/accounts/person-lease.js";
 import { IdentityUnavailableError } from "../modules/authentication/oidc.js";
+import { DigitUnavailableError } from "../modules/managed-accounts/digit-user-client.js";
 import { surfaceRegistry } from "../modules/authentication/surfaces.js";
 import { config } from "../infrastructure/config.js";
 import { registerControlPlaneRoutes } from "../modules/control-plane/routes.js";
@@ -55,16 +56,26 @@ export function createIdentityApp(): express.Application {
   registerWorkspaceMemberRoutes(app);
   registerAccessContextRoutes(app);
   registerControlPlaneRoutes(app);
-  app.use((error: unknown, _req: express.Request, res: express.Response, next: express.NextFunction) => {
-    if (error instanceof AccountActionError || error instanceof LeaseBusyError || error instanceof LeaseLostError) {
-      if (error instanceof LeaseBusyError || error instanceof LeaseLostError) res.setHeader("Retry-After", "1");
-      return res.status(error.status).json({ code: error.code, error: error.message });
-    }
-    if (error instanceof SessionRevokedError) return res.status(401).json({ code: "SESSION_REVOKED", error: "This session has ended" });
-    if (error instanceof IdentityUnavailableError || error instanceof IdentityAdminError) {
-      return res.status(503).json({ code: "IDENTITY_UNAVAILABLE", error: "Identity service is temporarily unavailable" });
-    }
-    next(error);
-  });
+  app.use(identityErrorHandler);
   return app;
+}
+
+/** Maps known failures that escape a route to their JSON contract errors. */
+export function identityErrorHandler(
+  error: unknown, _req: express.Request, res: express.Response, next: express.NextFunction,
+): unknown {
+  if (error instanceof AccountActionError || error instanceof LeaseBusyError || error instanceof LeaseLostError) {
+    if (error instanceof LeaseBusyError || error instanceof LeaseLostError) res.setHeader("Retry-After", "1");
+    return res.status(error.status).json({ code: error.code, error: error.message });
+  }
+  if (error instanceof SessionRevokedError) return res.status(401).json({ code: "SESSION_REVOKED", error: "This session has ended" });
+  if (error instanceof IdentityUnavailableError || error instanceof IdentityAdminError) {
+    return res.status(503).json({ code: "IDENTITY_UNAVAILABLE", error: "Identity service is temporarily unavailable" });
+  }
+  // A DIGIT (egov-user or MDMS) outage a route did not map itself: the JSON
+  // contract error, never Express's HTML page.
+  if (error instanceof DigitUnavailableError) {
+    return res.status(503).json({ code: "DIGIT_UNAVAILABLE", error: "DIGIT is temporarily unavailable" });
+  }
+  return next(error);
 }
