@@ -7,8 +7,8 @@ import { readDigitAccount } from "../workspace-members/authority.js";
 import { liveMembershipsForSubject, tenantOption, type TenantOption } from "./tenant-directory.js";
 
 /** Fresh authorization; inactive DIGIT employees remain visible with a reason. */
-export async function resolveTenantOptions(claims: KeycloakClaims, _live = false): Promise<TenantOption[]> {
-  const tenants = new Set((await liveMembershipsForSubject(claims.sub)).map((m) => m.tenantId));
+export async function resolveTenantOptions(claims: KeycloakClaims, live = false): Promise<TenantOption[]> {
+  const tenants = new Set((await liveMembershipsForSubject(claims.sub, live)).map((m) => m.tenantId));
   for (const binding of await readBindings(claims.sub)) if (binding.state === "active") tenants.add(binding.tenantId);
   const result: TenantOption[] = [];
   for (const tenantId of tenants) {

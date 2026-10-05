@@ -2,7 +2,7 @@ import express from "express";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { config } from "../../src/infrastructure/config.js";
 import { closeCache, initCache } from "../../src/infrastructure/redis.js";
 import { readBindings, remove } from "../../src/modules/bindings/store.js";
@@ -10,9 +10,13 @@ import { onboardingDependencies } from "../../src/modules/onboarding/production.
 import { createIdentitySession, getIdentitySession, saveSelectedIdentityContext } from "../../src/modules/sessions/session-store.js";
 import { onboardingAuthorization, registerOnboardingRoutes } from "../../src/modules/onboarding/routes.js";
 import { clearTenantCaches } from "../../src/modules/access-context/tenant-directory.js";
+import { resolveTenantOptions } from "../../src/modules/access-context/tenant-options.js";
+import { staffAccess } from "../../src/modules/bindings/predicate.js";
+import type { KeycloakClaims } from "../../src/modules/authentication/types.js";
 import { createFakeDigitUser } from "../../mocks/fake-digit-user.js";
 
-const digit = createFakeDigitUser({ tenants: ["workspace"] });
+const digitTenants = ["workspace"];
+const digit = createFakeDigitUser({ tenants: digitTenants });
 let server: Server, base: string;
 const attempt = { operationId: "operation", restartNo: 0, tenantId: "workspace", slug: "workspace", name: "Workspace" };
 let subject: string, uuid: string;
@@ -93,6 +97,28 @@ describe("onboarding routes with real core binding and revocation providers", ()
     expect(response.status).toBe(409);
     expect(await response.json()).toMatchObject({ code: "BINDING_CONFLICT" });
     expect(await readBindings(subject)).toMatchObject([{ state: "removed" }]);
+  });
+  it("lists and selects a tenant that reached MDMS after its root was cached (#2303)", async () => {
+    expect((await post("bindings/_ensure", { ...attempt, subject, digitUuid: uuid })).status).toBe(200);
+    expect((await post("organizations/_lifecycle", { ...attempt, state: "ACTIVE" })).status).toBe(200);
+    const claims = { sub: subject } as KeycloakClaims;
+    // The root is looked up (and cached) while the tenant record is not visible yet.
+    digitTenants.splice(0);
+    try {
+      expect(await resolveTenantOptions(claims, true)).toEqual([]);
+      expect(await staffAccess(subject, "workspace")).toMatchObject({ allowed: false, denial: "TENANT_INACTIVE" });
+    } finally { digitTenants.push("workspace"); }
+    // Provisioning finishes a few seconds later; nothing waits out the 5-minute TTL.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(Date.now() + 6_000);
+      expect((await resolveTenantOptions(claims, true)).map((option) => option.tenantId)).toEqual(["workspace"]);
+      clearTenantCaches(); digitTenants.splice(0);
+      expect(await staffAccess(subject, "workspace")).toMatchObject({ allowed: false, denial: "TENANT_INACTIVE" });
+      digitTenants.push("workspace");
+      vi.setSystemTime(Date.now() + 6_000);
+      expect(await staffAccess(subject, "workspace")).toMatchObject({ allowed: true, via: "binding" });
+    } finally { vi.useRealTimers(); }
   });
   it("revokes selected member sessions on FAILED and repairs publication on repeats", async () => {
     expect((await post("bindings/_ensure", { ...attempt, subject, digitUuid: uuid })).status).toBe(200);
