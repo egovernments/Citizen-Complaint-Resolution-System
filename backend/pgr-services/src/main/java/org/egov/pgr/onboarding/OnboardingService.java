@@ -68,7 +68,10 @@ public class OnboardingService {
         if (!"DRAFT".equals(signup.getStatus())) {
             throw new CustomException("ONBOARDING_DRAFT_LOCKED", "Only a draft signup can be edited");
         }
-        if (repository.findOperationBySignup(id).isPresent()) {
+        Optional<OnboardingOperation> prior = repository.findOperationBySignup(id);
+        if (prior.isPresent()) {
+            if (prior.get().getLifecycleDecision() != null && prior.get().getLifecyclePublishedAt() == null)
+                throw new CustomException("ONBOARDING_PUBLICATION_PENDING", "The previous attempt is still settling");
             // A reopened draft (see OnboardingWorkerService) already has a tenant and
             // organization materialized under these names. Only the field the worker
             // rejected may change; anything else would orphan that provisioned state.
@@ -129,6 +132,7 @@ public class OnboardingService {
             throw new CustomException("ONBOARDING_DRAFT_LOCKED", "Signup cannot be submitted in its current state");
         }
         validateComplete(signup);
+        repository.snapshotFounder(signup.getId(), principal);
         long now = System.currentTimeMillis();
         for (OnboardingIdentifierService.Identifier identifier : identifiers.forSignup(signup)) {
             repository.reserveIdentifier(identifier.type(), identifier.value(), signup.getId(), now);
@@ -154,6 +158,10 @@ public class OnboardingService {
         return "DRAFT".equals(signup.getStatus()) && "TERMINAL_FAILED".equals(operation.getStatus());
     }
 
+    public boolean hasPriorAttempt(UUID signupId) {
+        return repository.findOperationBySignup(signupId).isPresent();
+    }
+
     public List<OnboardingOperation> searchOperations(OnboardingPrincipal principal, Map<String, Object> values) {
         UUID id = requiredUuid(values.get("id"), "Operation.id");
         return repository.findOwnedOperation(id, principal.getIssuer(), principal.getSubject())
@@ -166,7 +174,13 @@ public class OnboardingService {
         OnboardingOperation operation = repository.findOwnedOperation(
                         id, principal.getIssuer(), principal.getSubject())
                 .orElseThrow(() -> new CustomException("ONBOARDING_OPERATION_NOT_FOUND", "Operation was not found"));
-        return repository.retry(operation, System.currentTimeMillis());
+        // Same lock order as submit: signup, then operation. A worker claim that won
+        // first makes retry fail without changing the snapshot used by that worker.
+        repository.findOwnedSignupForUpdate(operation.getSignupId(), principal.getIssuer(), principal.getSubject())
+                .orElseThrow(() -> new CustomException("ONBOARDING_SIGNUP_NOT_FOUND", "Signup was not found"));
+        OnboardingOperation retried = repository.retry(operation, System.currentTimeMillis());
+        repository.snapshotFounder(operation.getSignupId(), principal);
+        return retried;
     }
 
     private OnboardingSignup ownedSignup(UUID id, OnboardingPrincipal principal) {
@@ -234,14 +248,13 @@ public class OnboardingService {
     }
 
     private void applyKeepingProvisionedIdentifiers(OnboardingSignup signup, Map<String, Object> values) {
-        String accountName = signup.getAccountName();
+        String tenantId = signup.getRequestedTenantId();
         String accountCode = signup.getAccountCode();
-        String urlSlug = signup.getUrlSlug();
+
         String countryCode = signup.getCountryCode();
         apply(signup, values);
-        if (!Objects.equals(accountName, signup.getAccountName())
-                || !Objects.equals(accountCode, signup.getAccountCode())
-                || !Objects.equals(urlSlug, signup.getUrlSlug())
+        signup.setRequestedTenantId(tenantId);
+        if (!Objects.equals(accountCode, signup.getAccountCode())
                 || !Objects.equals(countryCode, signup.getCountryCode())) {
             throw new CustomException("ONBOARDING_PROVISIONED_FIELD_LOCKED",
                     "Provisioned identifiers cannot change after a failed submission");

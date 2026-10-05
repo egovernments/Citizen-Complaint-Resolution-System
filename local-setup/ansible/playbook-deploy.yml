@@ -2300,6 +2300,24 @@
     # /root/DIGIT-MCP on the controller:
     #
     #   ansible-playbook ... --tags mcp-publish
+    - name: "MCP publish — ensure generated data directory"
+      ansible.builtin.file:
+        path: /root/DIGIT-MCP/data
+        state: directory
+        mode: "0755"
+      delegate_to: localhost
+      become: false
+      tags: ['mcp-publish', 'never']
+
+    - name: "MCP publish — stage canonical PGR platform baseline"
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json"
+        dest: /root/DIGIT-MCP/data/platform-baseline-v1.json
+        mode: "0644"
+      delegate_to: localhost
+      become: false
+      tags: ['mcp-publish', 'never']
+
     - name: Build + push digit-mcp image to VPC registry
       shell: |
         set -e
@@ -2361,6 +2379,15 @@
         - enable_mcp | default(false)
         - build_mcp | default(false)
 
+    - name: "MCP build — copy canonical PGR platform baseline to target"
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json"
+        dest: "{{ digit_dir }}/.build/platform-baseline-v1.json"
+        mode: "0644"
+      when:
+        - enable_mcp | default(false)
+        - build_mcp | default(false)
+
     - name: "MCP build — sync vendored digit-mcp source to target"
       synchronize:
         src: "{{ playbook_dir }}/../../digit-mcp/"
@@ -2374,13 +2401,16 @@
         - (mcp_repo_url | default('-')) == '-'
 
     - name: "Build digit-mcp image locally (when build_mcp)"
-      ansible.builtin.command: >-
-        bash {{ digit_dir }}/.build/mcp-build.sh
-        "{{ mcp_repo }}"
-        "{{ mcp_repo_url | default('-') }}"
-        "{{ mcp_ref | default('') }}"
-        "{{ mcp_image }}"
-        "{{ docker_default_platform | default('') }}"
+      ansible.builtin.command:
+        argv:
+          - bash
+          - "{{ digit_dir }}/.build/mcp-build.sh"
+          - "{{ mcp_repo }}"
+          - "{{ mcp_repo_url | default('-') }}"
+          - "{{ mcp_ref | default('') }}"
+          - "{{ mcp_image }}"
+          - "{{ docker_default_platform | default('') }}"
+          - "{{ digit_dir }}/.build/platform-baseline-v1.json"
       register: mcp_build_run
       changed_when: true
       when:
@@ -3176,6 +3206,9 @@
           identity_session_introspection_token: >-
             {{ _identity_stored.identity_session_introspection_token | default('', true)
                or lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
+          identity_onboarding_token: >-
+            {{ _identity_stored.identity_onboarding_token | default('', true)
+               or lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
           pgr_onboarding_worker_token: >-
             {{ _identity_stored.pgr_onboarding_worker_token | default('', true)
                or lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
@@ -3221,6 +3254,7 @@
           KEYCLOAK_ADMIN_CLIENT_SECRET={{ identity_secrets.keycloak_admin_client_secret }}
           IDENTITY_CONTROL_PLANE_TOKEN={{ identity_secrets.identity_control_plane_token }}
           IDENTITY_SESSION_INTROSPECTION_TOKEN={{ identity_secrets.identity_session_introspection_token }}
+          IDENTITY_ONBOARDING_TOKEN={{ identity_secrets.identity_onboarding_token }}
           PGR_ONBOARDING_WORKER_TOKEN={{ identity_secrets.pgr_onboarding_worker_token }}
           IDENTITY_CITIZEN_OTP_SECRET={{ bao_secrets_identity.json.data.data.identity_citizen_otp_secret | default('') }}
           {% if (identity_staff_credential_mode | default('rotate')) == 'derived' %}
@@ -3228,7 +3262,8 @@
           IDENTITY_CREDENTIAL_KEY_CURRENT={{ bao_secrets_identity.json.data.data.identity_credential_key_current }}
           {% endif %}
           IDENTITY_DIGIT_ADMIN_PASSWORD={{ bao_secrets_identity.json.data.data.identity_digit_admin_password | default(bao_secrets_identity.json.data.data.token_exchange_system_password | default('eGov@123')) }}
-          IDENTITY_DIGIT_PROVISIONER_PASSWORD={{ bao_secrets_identity.json.data.data.identity_digit_provisioner_password | default('') }}
+          PGR_DIGIT_PROVISIONER_PASSWORD={{ bao_secrets_identity.json.data.data.pgr_digit_provisioner_password | default(bao_secrets_identity.json.data.data.identity_digit_provisioner_password | default('')) }}
+          PGR_DIGIT_OAUTH_CLIENT_SECRET={{ bao_secrets_identity.json.data.data.pgr_digit_oauth_client_secret | default('') }}
         marker: "# {mark} KEYCLOAK SECRETS"
         create: false
         mode: '0600'

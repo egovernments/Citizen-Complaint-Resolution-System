@@ -1,7 +1,6 @@
 import { parseStaffCredentialConfig } from "./staff-credential-config.js";
 const keycloakBffClientId =
   process.env.KEYCLOAK_BFF_CLIENT_ID || "digit-identity-bff";
-const digitMdmsCreateUrl = process.env.DIGIT_MDMS_CREATE_URL || "";
 const identityCookieName =
   process.env.IDENTITY_COOKIE_NAME || "digit_identity_session";
 const digitGatewayHost =
@@ -193,39 +192,11 @@ export const config = {
   digitAdminPassword: process.env.DIGIT_ADMIN_PASSWORD || "",
   digitAdminTenantId: process.env.DIGIT_ADMIN_TENANT_ID || "",
   digitAdminUserType: process.env.DIGIT_ADMIN_USER_TYPE || "EMPLOYEE",
-  // Optional MDMS_ADMIN credential for onboarding tenant-foundation writes.
-  digitProvisionerUsername: process.env.DIGIT_PROVISIONER_USERNAME || "",
-  digitProvisionerPassword: process.env.DIGIT_PROVISIONER_PASSWORD || "",
-  digitProvisionerTenantId: process.env.DIGIT_PROVISIONER_TENANT_ID || "",
-  digitMdmsCreateUrl,
-  digitMdmsV2SearchUrl:
-    process.env.DIGIT_MDMS_V2_SEARCH_URL ||
-    digitMdmsCreateUrl.replace(/\/_create\/?$/, "/_search") ||
-    `${digitGatewayHost}/mdms-v2/v2/_search`,
-  digitMdmsSchemaSearchUrl:
-    process.env.DIGIT_MDMS_SCHEMA_SEARCH_URL ||
-    `${digitGatewayHost}/mdms-v2/schema/v1/_search`,
-  digitMdmsSchemaCreateUrl:
-    process.env.DIGIT_MDMS_SCHEMA_CREATE_URL ||
-    `${digitGatewayHost}/mdms-v2/schema/v1/_create`,
+  // Read-only MDMS tenant used by readiness checks.
   digitFoundationSourceTenant:
     process.env.DIGIT_FOUNDATION_SOURCE_TENANT ||
     process.env.DIGIT_BOOTSTRAP_SOURCE_TENANT ||
     "pg",
-  // Idempotent egov-enc-service key creation for a new tenant (internal URL).
-  digitEncGenerateKeyUrl: process.env.DIGIT_ENC_GENERATE_KEY_URL || "",
-  // Optional in-process worker that provisions submitted PGR onboarding operations.
-  onboardingWorkerEnabled: process.env.ONBOARDING_WORKER_ENABLED === "true",
-  pgrOnboardingWorkerUrl: process.env.PGR_ONBOARDING_WORKER_URL || "",
-  pgrOnboardingWorkerToken: process.env.PGR_ONBOARDING_WORKER_TOKEN || "",
-  onboardingWorkerIntervalSeconds: parseInt(process.env.ONBOARDING_WORKER_INTERVAL_SECONDS || "15"),
-  onboardingWorkerLeaseSeconds: parseInt(process.env.ONBOARDING_WORKER_LEASE_SECONDS || "120"),
-  onboardingTenantAdminGroup:
-    process.env.ONBOARDING_TENANT_ADMIN_GROUP || "tenant-admins",
-  onboardingTenantAdminRoles: csv(
-    process.env.ONBOARDING_TENANT_ADMIN_ROLES ||
-      "TENANT_ADMIN,GRO,ACCOUNT_ADMIN,MDMS_ADMIN,LOC_ADMIN,SUPERUSER",
-  ),
   digitManagedBaseRoles: csv(process.env.DIGIT_MANAGED_BASE_ROLES || "EMPLOYEE"),
   digitManagedRoleAllowlist: csv(
     process.env.DIGIT_MANAGED_ROLE_ALLOWLIST ||

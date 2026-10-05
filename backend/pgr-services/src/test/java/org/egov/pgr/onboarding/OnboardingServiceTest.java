@@ -189,7 +189,7 @@ public class OnboardingServiceTest {
     }
 
     @Test
-    public void aReopenedDraftCannotMoveIdentifiersAlreadyMaterializedByTheWorker() {
+    public void aReopenedDraftCannotMoveItsMaterializedAccountCode() {
         UUID signupId = UUID.randomUUID();
         when(repository.findOwnedSignup(signupId, "https://issuer", "subject-1"))
                 .thenReturn(Optional.of(signup(signupId)));
@@ -198,7 +198,7 @@ public class OnboardingServiceTest {
                         .status("TERMINAL_FAILED").attempt(1).build()));
         Map<String, Object> values = new LinkedHashMap<>();
         values.put("id", signupId.toString());
-        values.put("urlSlug", "somewhere-else");
+        values.put("accountCode", "SOMEWHERE-ELSE");
 
         CustomException exception = assertThrows(CustomException.class,
                 () -> service.update(principal, values));

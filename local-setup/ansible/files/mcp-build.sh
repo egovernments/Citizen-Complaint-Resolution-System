@@ -7,11 +7,20 @@
 # locally-built image instead of pulling from a registry — no GHCR / VPC
 # dependency. (DIGIT-MCP is node:22-alpine; cross-builds trivially.)
 #
-# Usage: mcp-build.sh <repo_dir> <repo_url> <git_ref> <image_tag> [platform]
+# Usage: mcp-build.sh <repo_dir> <repo_url> <git_ref> <image_tag> <platform-or-empty> <canonical_seed>
 #   prints the image tag on the last line (the playbook captures it).
-set -uo pipefail
+set -euo pipefail
 
 REPO_DIR="$1"; REPO_URL="$2"; REF="${3:-main}"; TAG="$4"; PLATFORM="${5:-}"
+SEED_SOURCE="${6:-}"
+
+# Always refresh from the controller's canonical PGR resource. Never reuse an
+# old generated seed left by a previous checkout or require Node on the target.
+[ -n "$SEED_SOURCE" ] && [ -f "$SEED_SOURCE" ] || {
+  echo "ERROR: canonical platform baseline is required as argument 6" >&2; exit 2;
+}
+# Resolve before changing directory; callers may pass a relative source path.
+SEED_SOURCE="$(cd "$(dirname "$SEED_SOURCE")" && pwd)/$(basename "$SEED_SOURCE")"
 
 command -v docker >/dev/null 2>&1 || { echo "ERROR: docker not on PATH" >&2; exit 1; }
 
@@ -31,6 +40,9 @@ else
   git clone --quiet --branch "$REF" --single-branch "$REPO_URL" "$REPO_DIR" 2>/dev/null \
     || git clone --quiet "$REPO_URL" "$REPO_DIR"
 fi
+
+mkdir -p "$REPO_DIR/data"
+cp "$SEED_SOURCE" "$REPO_DIR/data/platform-baseline-v1.json"
 
 cd "$REPO_DIR" || { echo "ERROR: cannot cd $REPO_DIR" >&2; exit 2; }
 
