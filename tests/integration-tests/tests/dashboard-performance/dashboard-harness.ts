@@ -263,7 +263,7 @@ export class NetworkRecorder {
     const request = response.request();
     const call = this.ensureCall(request);
     call.status = response.status();
-    const length = Number((await response.allHeaders().catch((): Record<string, string> => ({})))['content-length'] || 0);
+    const length = Number((await response.allHeaders().catch(() => ({})))['content-length'] || 0);
     if (Number.isFinite(length)) call.responseBytes = length;
     if (response.ok() && /\/analytics(?:\/public)?\/packs(?:\?|$)/.test(response.url())) {
       response.json().then((payload) => this.packPayloads.push(payload)).catch(() => {});
