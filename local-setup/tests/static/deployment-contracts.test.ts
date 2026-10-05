@@ -1409,7 +1409,7 @@ describe('identity-bff compose wiring', () => {
 
   test('pgr-services sends the same onboarding bearer the BFF requires', () => {
     expect(service('pgr-services')).toContain(
-      'PGR_ONBOARDING_IDENTITY_BFF_TOKEN: ${PGR_ONBOARDING_IDENTITY_BFF_TOKEN:-${IDENTITY_ONBOARDING_TOKEN:-${IDENTITY_SESSION_INTROSPECTION_TOKEN:-}}}'
+      'PGR_ONBOARDING_IDENTITY_BFF_TOKEN: ${IDENTITY_ONBOARDING_TOKEN:-}'
     );
   });
 
