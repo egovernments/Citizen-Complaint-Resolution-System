@@ -47,7 +47,7 @@ public class WorkspaceGatewayTest {
                 requests.add(Map.of("path",path,"body",request,"authorization",Objects.toString(exchange.getRequestHeaders().getFirst("Authorization"),""),"query",Objects.toString(exchange.getRequestURI().getRawQuery(),"")));
                 switch(path) {
                     case "/user/_details" -> response=Map.of("uuid","admin","active",true,"roles",List.of(Map.of("code","ACCOUNT_ADMIN","tenantId","example")));
-                    case "/boundary-service/boundary/_search" -> response=Map.of("Boundary",List.of(Map.of("code","example")));
+                    case "/boundary-service/boundary-relationships/_search" -> response=Map.of("TenantBoundary",List.of(Map.of("boundary",List.of(Map.of("code","example","children",List.of())))));
                     case "/egov-hrms/employees/_search" -> {
                         var query=UriComponentsBuilder.fromUri(exchange.getRequestURI()).build().getQueryParams();
                         // Stock EmployeeQueryBuilder needs both boxed pagination fields.
@@ -145,9 +145,10 @@ public class WorkspaceGatewayTest {
                 Map.of("code","DISABLED_USER","user",Map.of("active",false)));
         workspaceSearch().andExpect(status().isOk()).andExpect(jsonPath("$.Probes.EMPLOYEES").value(false));
     }
-    @Test public void paginatedHrmsFailureStillReturnsDependencyUnavailable() throws Exception {
+    @Test public void hrmsFailureDegradesOnlyTheEmployeesProbeOnSearch() throws Exception {
         hrmsStatus=503;
-        workspaceSearch().andExpect(status().isServiceUnavailable()).andExpect(jsonPath("$.Errors[0].code").value("WORKSPACE_DEPENDENCY_UNAVAILABLE"));
+        workspaceSearch().andExpect(status().isOk()).andExpect(jsonPath("$.Probes.EMPLOYEES").value(org.hamcrest.Matchers.nullValue()))
+                .andExpect(jsonPath("$.Probes.GEOGRAPHY").value(false));
     }
     private org.springframework.test.web.servlet.ResultActions workspaceSearch() throws Exception {
         var repository=mock(WorkspaceRepository.class);
