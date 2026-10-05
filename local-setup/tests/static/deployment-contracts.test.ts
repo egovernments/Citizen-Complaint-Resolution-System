@@ -108,6 +108,9 @@ describe('ansible playbook-deploy.yml', () => {
       'keycloak_admin_client_secret',
       'identity_control_plane_token',
       'identity_session_introspection_token',
+      'keycloak_employee_client_secret',
+      'keycloak_citizen_client_secret',
+      'identity_citizen_otp_secret',
       'identity_onboarding_token',
     ];
 
@@ -131,6 +134,25 @@ describe('ansible playbook-deploy.yml', () => {
       expect(playbook).toContain(
         'bao_secrets_identity.json.data.data | combine(identity_secrets)'
       );
+    });
+
+    // 8c gate report 4, Part A: the digit-ui surface secrets, the phone-OTP
+    // HMAC secret and the onboarding bearer were documented but never
+    // generated or passed, so a converged box skipped the digit-ui clients
+    // and answered 503 on employee/citizen sign-in.
+    test('the digit-ui surface secrets reach the Keycloak configurator', () => {
+      const start = playbook.indexOf('identity-bootstrap — reconcile Organizations realm and BFF clients');
+      expect(start).toBeGreaterThan(-1);
+      const task = playbook.slice(start, start + 4000);
+      for (const [env, key] of [
+        ['KEYCLOAK_EMPLOYEE_CLIENT_SECRET', 'keycloak_employee_client_secret'],
+        ['KEYCLOAK_CITIZEN_CLIENT_SECRET', 'keycloak_citizen_client_secret'],
+      ]) {
+        expect(task).toContain(`${env}: "{{ identity_secrets.${key} }}"`);
+        expect(playbook).toContain(`${env}={{ identity_secrets.${key} }}`);
+      }
+      expect(playbook).toContain('IDENTITY_CITIZEN_OTP_SECRET={{ identity_secrets.identity_citizen_otp_secret }}');
+      expect(playbook).toContain('IDENTITY_ONBOARDING_TOKEN={{ identity_secrets.identity_onboarding_token }}');
     });
 
     test('an empty Keycloak admin password fails the deploy closed', () => {
@@ -1355,5 +1377,44 @@ describe('standalone Identity BFF and Keycloak deployment contract', () => {
     expect(service(full, 'egov-user')).toContain(variable);
     expect(service(full, 'identity-bff')).toContain(variable);
     expect(read('backend/identity-bff/deploy/digit-compose/docker-compose.identity.yml')).toContain(variable);
+  });
+});
+
+// 8c gate report 4, Part A: the BFF container must receive every setting the
+// deploy resolves for it, and pgr-services must send the BFF's onboarding bearer.
+describe('identity-bff compose wiring', () => {
+  const compose = read('local-setup/docker-compose.egov-digit.yaml');
+  const service = (name: string) => {
+    const start = compose.indexOf(`\n  ${name}:\n`);
+    expect(start).toBeGreaterThan(-1);
+    const next = compose.slice(start + 1).search(/\n  [a-z0-9-]+:\n/);
+    return compose.slice(start, next < 0 ? undefined : start + 1 + next);
+  };
+
+  test('passes the surface secrets, OTP secret, onboarding token and OTP mint URL', () => {
+    const bff = service('identity-bff');
+    for (const line of [
+      'KEYCLOAK_EMPLOYEE_CLIENT_SECRET: ${KEYCLOAK_EMPLOYEE_CLIENT_SECRET:-}',
+      'KEYCLOAK_CITIZEN_CLIENT_SECRET: ${KEYCLOAK_CITIZEN_CLIENT_SECRET:-}',
+      'IDENTITY_CITIZEN_OTP_SECRET: ${IDENTITY_CITIZEN_OTP_SECRET:-}',
+      'IDENTITY_ONBOARDING_TOKEN: ${IDENTITY_ONBOARDING_TOKEN:-}',
+      'DIGIT_OTP_CREATE_URL: ${DIGIT_OTP_CREATE_URL:-http://egov-otp:8089/otp/v1/_create}',
+    ]) {
+      expect(bff).toContain(line);
+    }
+    // the code no longer reads these
+    expect(bff).not.toContain('IDENTITY_ORGANIZATION_ADMIN_ROLES');
+    expect(bff).not.toContain('IDENTITY_ORGANIZATION_MEMBER_GROUP');
+  });
+
+  test('pgr-services sends the same onboarding bearer the BFF requires', () => {
+    expect(service('pgr-services')).toContain(
+      'PGR_ONBOARDING_IDENTITY_BFF_TOKEN: ${PGR_ONBOARDING_IDENTITY_BFF_TOKEN:-${IDENTITY_ONBOARDING_TOKEN:-${IDENTITY_SESSION_INTROSPECTION_TOKEN:-}}}'
+    );
+  });
+
+  test('Ansible can override the OTP mint URL without losing the compose default', () => {
+    const env = read('local-setup/ansible/templates/digit.env.j2');
+    expect(env).toContain("DIGIT_OTP_CREATE_URL={{ identity_digit_otp_create_url | default('') }}");
   });
 });

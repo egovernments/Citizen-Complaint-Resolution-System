@@ -6,6 +6,7 @@ import {
   DigitUnavailableError,
   passwordLogin,
 } from "./digit-user-client.js";
+import { fixedOtpCode } from "../citizen-otp/otp-sender.js";
 
 /**
  * Obtains a normal user-scoped DIGIT token for one BFF-managed CITIZEN
@@ -57,6 +58,13 @@ function requestInfo() {
  */
 export class EgovOtpCitizenTokenMinter implements CitizenTokenMinter {
   async mint(account: DigitAccount, verifiedMobileNumber: string): Promise<DigitLogin> {
+    // With the fixed OTP on, egov-user accepts that value as the CITIZEN
+    // password grant, and egov-otp may not be running (no `otp` profile).
+    const fixed = fixedOtpCode();
+    return this.login(account, fixed ?? await this.createOtp(account, verifiedMobileNumber));
+  }
+
+  private async createOtp(account: DigitAccount, verifiedMobileNumber: string): Promise<string> {
     if (!config.digitOtpCreateUrl) {
       throw new DigitUnavailableError("DIGIT citizen token minting is not configured");
     }
@@ -93,6 +101,10 @@ export class EgovOtpCitizenTokenMinter implements CitizenTokenMinter {
     if (typeof otp !== "string" || !otp) {
       throw new DigitUnavailableError("DIGIT OTP create returned no OTP");
     }
+    return otp;
+  }
+
+  private async login(account: DigitAccount, otp: string): Promise<DigitLogin> {
     try {
       return await passwordLogin({
         username: account.userName,
