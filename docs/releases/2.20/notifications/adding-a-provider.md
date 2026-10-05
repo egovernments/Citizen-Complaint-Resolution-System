@@ -8,6 +8,8 @@ It is a tutorial. For how the pieces work and why, see [providers.md](./provider
 - [DIGIT's worker providers](./providers.md#digits-worker-providers)
 - [Gateway notes](./providers.md#gateway-notes)
 
+On a **2.12** deployment, which has no provider catalog, follow [Adding an SMS Gateway That Novu Does Not Ship](../../2.12/notifications/adding-an-sms-gateway.md) instead. It wires the same worker provider in through the deployment's own files.
+
 The example gateway, **AcmeSMS, is fictional**. Nothing about it exists in the repo. Every snippet below was applied to a scratch copy of `develop`, and all of its tests were run: worker, Java, Python and static.
 
 ## 0. Do you need a provider file at all?

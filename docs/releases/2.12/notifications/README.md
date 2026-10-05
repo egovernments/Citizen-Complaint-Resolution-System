@@ -217,6 +217,9 @@ and no Novu workflow.
 If your SMSCountry panel shows an AuthKey/AuthToken pair you are on their newer
 REST v0.1 API, which is not supported.
 
+Using a different SMS gateway? If Novu ships a provider for it, or cannot drive it
+at all, see [Adding an SMS Gateway That Novu Does Not Ship](adding-an-sms-gateway.md).
+
 Set these and re-run `./deploy.sh mycity`:
 
 | Setting | What it is | Example |
