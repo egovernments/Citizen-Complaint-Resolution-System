@@ -107,6 +107,22 @@
           }
         }
       },
+      "digit.bindingTenants": {
+        "permissions": {
+          "view": [
+            "admin"
+          ],
+          "edit": [
+            "admin"
+          ]
+        },
+        "validations": {
+          "length": {
+            "max": 2048
+          }
+        },
+        "multivalued": true
+      },
       "digit.boundUuids": {
         "permissions": {
           "view": [
