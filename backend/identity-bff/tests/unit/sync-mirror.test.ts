@@ -90,6 +90,14 @@ describe("DIGIT mirror", () => {
     expect(user.firstName).toBe("Before");
   });
 
+  it.each(["", "   ", "****"])("drops a stored entry name when DIGIT later returns %j", async (name) => {
+    await mirrorPerson(subject);
+    expect(mirrorEntries()[0].name).toBe("Staff Name");
+    accounts.staff!.name = name;
+    await mirrorPerson(subject);
+    expect(mirrorEntries()[0]).not.toHaveProperty("name");
+  });
+
   it("records each staff entry's own tenant name, never another tenant's or the citizen's", async () => {
     user.attributes!["digit.bindings"] = [bindings(
       { tenantId: "tenant", uuid: "staff", state: "active", boundAt: 10 },
