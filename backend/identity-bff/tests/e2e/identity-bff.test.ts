@@ -2616,6 +2616,31 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       }
     });
 
+    it("refunds the IP charge and cooldown of a send refused by the per-phone cap", async () => {
+      Object.assign(config as any, {
+        identityCitizenOtpResendSeconds: 60, identityCitizenOtpPhoneSendLimit: 1, identityCitizenOtpIpSendLimit: 1,
+      });
+      try {
+        expect((await send("799000526", "203.0.113.70")).status).toBe(202);
+        const ip = "203.0.113.71";
+        for (let press = 0; press < 2; press += 1) {
+          // The real window each time, never a cooldown armed by a refusal.
+          const capped = await send("799000526", ip);
+          expect(capped.status).toBe(429);
+          expect((await capped.json()).code).toBe("OTP_RATE_LIMITED");
+          expect(Number(capped.headers.get("retry-after"))).toBeGreaterThan(60);
+        }
+        // Refusals spent nothing from this address's one-send budget.
+        expect((await send("799000527", ip)).status).toBe(202);
+      } finally {
+        Object.assign(config as any, {
+          identityCitizenOtpResendSeconds: 0,
+          identityCitizenOtpPhoneSendLimit: otpConfig.identityCitizenOtpPhoneSendLimit,
+          identityCitizenOtpIpSendLimit: otpConfig.identityCitizenOtpIpSendLimit,
+        });
+      }
+    });
+
     it("sends nothing when Redis fails to store the challenge", async () => {
       const count = sent.length;
       const redis = getRedis();

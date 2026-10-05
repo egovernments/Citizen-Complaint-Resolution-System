@@ -92,6 +92,11 @@ export async function reserveSend(phoneNumber: string, ip: string): Promise<Send
   }
   const phoneSends = await countInWindow(phoneSendsKey(phoneRef), window);
   if (phoneSends.count > config.identityCitizenOtpPhoneSendLimit) {
+    // Nothing was sent: give back the IP charge and the cooldown, so a number
+    // at its cap neither drains the address's shared budget nor turns the
+    // next attempt into a misleading OTP_RESEND_TOO_SOON.
+    await uncount(ipSendsKey(ipRef));
+    if (cooldown) await getRedis().del(cooldownKey(phoneRef, ipRef));
     return { allowed: false, reason: "PHONE_LIMIT", retryAfter: Math.max(1, phoneSends.ttl) };
   }
   return { allowed: true, reservation: { phoneRef, ipRef, cooldown } };
