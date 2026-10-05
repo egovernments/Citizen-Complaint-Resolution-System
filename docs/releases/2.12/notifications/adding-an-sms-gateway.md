@@ -16,8 +16,8 @@ you have done [Verify the Novu key](README.md#verify-the-novu-key).
 | Your gateway | What to do |
 |---|---|
 | SMSCountry, legacy bulk API | Not this guide. Use [Enable SMS](README.md#enable-sms), which posts to SMSCountry directly |
-| One Novu 2.3.0 already ships (see the command below) | Skip Steps 1 and 2. Create its integration in Step 4 with Novu's provider id and credential keys |
-| Takes a JSON POST, replies in JSON with a message id, and signals failure with a real HTTP error status | Novu's own `generic-sms` provider may be enough. Skip Steps 1 and 2 |
+| One Novu 2.3.0 already ships (see the command below) | Skip Steps 1 and 2, and leave the `novu-worker` block out of Step 3: it loads files you did not create, and the worker would not start. Make Step 3's `host_vars` settings, then create the integration in Step 4 with Novu's provider id and credential keys |
+| Takes a JSON POST, replies in JSON with a message id, and signals failure with a real HTTP error status | Novu's own `generic-sms` provider may be enough. Skip Steps 1 and 2 and the `novu-worker` block of Step 3, as above |
 | Anything else: form-encoded requests, plain-text replies, failures reported as HTTP 200, unusual auth | This guide, all steps |
 
 To list the SMS providers Novu ships:
@@ -32,13 +32,14 @@ On 2.3.0 this lists `africas-talking`, `clickatell`, `infobip`, `kannel`, `plivo
 ## How it works
 
 The Novu worker is the process that calls SMS gateways. When an SMS step runs, it asks its
-`SmsFactory` for the handler matching the integration's `providerId`. Four files sit beside
+`SmsFactory` for the handler matching the integration's `providerId`. These files sit beside
 the worker:
 
 | File | What it does |
 |---|---|
 | `register.js` | Loaded before the worker starts (`NODE_OPTIONS=--require …`). It wraps `SmsFactory.getHandler`: an integration whose `providerId` is one of yours gets your handler, and every other one goes to Novu unchanged. It refuses to start the worker if a provider file fails to load, or if the image is not a Novu version it was tested against (2.3.0). It also strips credentials from every error a send throws, before Novu stores the error |
 | `novu.js` | Finds the Novu classes your provider extends (`BaseProvider`, `BaseSmsHandler`, axios) inside the image |
+| `smscountry.js`, `jasmin.js`, `ozeki.js` | DIGIT's providers for those three gateways. `register.js` loads them too |
 | `<gateway>.js` | Your provider: one class that sends a message, and one handler that builds it from the integration's credentials |
 
 Novu's API and dashboard stay stock. The API accepts any `providerId` string, so an
@@ -48,7 +49,7 @@ What changes on a 2.12 deployment:
 
 | Piece | Where it lives |
 |---|---|
-| The four files | `local-setup/configs/novu-worker-providers/` in your deployment checkout. Every deploy copies `local-setup/configs/` to `/opt/digit/configs/` |
+| The provider files | `local-setup/configs/novu-worker-providers/` in your deployment checkout. Every deploy copies `local-setup/configs/` to `/opt/digit/configs/` |
 | Loading them into the worker | Your per-tenant compose file, `local-setup/docker-compose.<tenant>.yml` |
 | The integration | Created through Novu's API (Step 4). For SMS, the 2.12 Configurator form only offers Twilio's fields |
 | Choosing it for SMS | Making it Novu's primary SMS integration (Step 5) |
@@ -68,6 +69,11 @@ for f in register.js novu.js smscountry.js jasmin.js ozeki.js; do
 done
 ```
 
+That commit's `register.js` already has the redaction boundary (`sealErrors`). None of these
+files had changed on `develop` since, as of 2026-10-05. If
+`git log origin/develop -- backend/novu-bridge/novu-worker-providers/` shows a later commit,
+copy from that commit instead and re-run the load check at the end of Step 2.
+
 `register.js` loads SMSCountry, Jasmin and Ozeki by default. Keeping them is harmless. They
 only handle integrations whose `providerId` is `smscountry`, `jasmin` or `ozeki`, and a
 2.12 deployment creates none. If you do have one of those gateways, you already have its
@@ -75,7 +81,7 @@ provider: skip to Step 3.
 
 ## Step 2: Write the provider
 
-Create `local-setup/configs/novu-worker-providers/<gateway>.js`. The example below is for a
+Create `local-setup/configs/novu-worker-providers/<gateway>.js`, here `acme-sms.js`. The example below is for a
 made-up gateway, "ACME", that takes `POST {"to","from","text"}` with a bearer API key and
 replies `{"status":"accepted","messageId":"…"}`. Change the request and the reply check to
 match your gateway's API documentation.
@@ -142,7 +148,7 @@ Then add your handler to `loadHandlers()` in `register.js`:
 ```js
 function loadHandlers() {
   return [require('./smscountry').SmsCountryHandler, require('./jasmin').JasminHandler,
-          require('./ozeki').OzekiHandler, require('./acme').AcmeSmsHandler];
+          require('./ozeki').OzekiHandler, require('./acme-sms').AcmeSmsHandler];
 }
 ```
 
@@ -170,6 +176,7 @@ docker run --rm -e DIGIT_NOVU_PROVIDERS=required \
   -v "$PWD/local-setup/configs/novu-worker-providers:/opt/digit-novu-providers:ro" \
   --entrypoint node ghcr.io/novuhq/novu/worker:2.3.0 \
   -e "console.log(require('/opt/digit-novu-providers/register.js').register().join(', '))"
+# [digit-novu-providers] SMS providers registered in the Novu worker: smscountry, jasmin, ozeki, acme-sms
 # smscountry, jasmin, ozeki, acme-sms
 ```
 
@@ -271,7 +278,7 @@ loses primary, and that is fine as long as `novu_bridge_integration_id_whatsapp`
 ## Step 6: Check it works
 
 1. **One message.** In the Configurator, open **Notifications → Providers** and **Test** with
-   channel `SMS` and your own number. This uses the same `complaints-sms` workflow and
+   channel `SMS`, your own number and a message. **Send Test** stays disabled until both are filled in. This uses the same `complaints-sms` workflow and
    primary integration as a real notification. A success there only means Novu accepted it.
 2. **What the gateway said.** In Novu, the message's job should be `completed`, and its
    last execution detail should carry your gateway's message id:
@@ -287,7 +294,7 @@ loses primary, and that is fine as long as `novu_bridge_integration_id_whatsapp`
    the integration that sent the message. Go by the message id in `raw` and by the gateway's
    own report.
 3. **The handset**, and the gateway's delivery report. Accepted is not the same as delivered.
-4. **WhatsApp, if enabled.** Run **Test** with channel `WHATSAPP`, and check that it still goes
+4. **WhatsApp, if enabled.** Run **Test** with channel `WHATSAPP` and an approved Content SID, and check that it still goes
    through Twilio.
 5. **A real complaint.** Trigger a transition, then check **Notifications → Logs**.
 
