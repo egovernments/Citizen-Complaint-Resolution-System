@@ -1,7 +1,16 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import type express from "express";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { identityErrorHandler } from "../../src/app/create-app.js";
+import { config } from "../../src/infrastructure/config.js";
+import { closeCache, getRedis, initCache } from "../../src/infrastructure/redis.js";
+import { withPersonLease } from "../../src/modules/accounts/person-lease.js";
+import { IdentityAdminError, updateAccountLinkValues } from "../../src/modules/organizations/organization-service.js";
+import { updateKeycloakUser } from "../../src/modules/sync/keycloak-writer.js";
+
+vi.mock("../../src/integrations/keycloak/admin-session.js", () => ({ getAdminToken: vi.fn(async () => "admin-token"), resetAdminToken: vi.fn() }));
 
 const src = fileURLToPath(new URL("../../src", import.meta.url));
 const realm = JSON.parse(readFileSync(fileURLToPath(new URL("../../../../keycloak/realm.json", import.meta.url)), "utf8"));
@@ -66,5 +75,57 @@ describe("keycloak/realm.json declares every digit.* user attribute (§5.1)", ()
     expect(declared["digit.accounts"].validations!.length!.max)
       .toBeGreaterThan(JSON.stringify({ v: 1, mirroredAt: n, entries: Array(64).fill(entry) }).length);
     expect(declared["digit.linkPending"].validations!.length!.max).toBeGreaterThan(JSON.stringify(linkPending).length);
+  });
+});
+
+describe("a digit.* write Keycloak refuses as too long", () => {
+  const prefix = `keycloak-user-profile-${process.pid}`;
+  let refusal: { field: string; status: number } = { field: "digit.bindings", status: 400 };
+  beforeAll(() => {
+    Object.assign(config, { cachePrefix: prefix });
+    initCache(`redis://localhost:${process.env.REDIS_PORT || "16379"}`);
+  });
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    refusal = { field: "digit.bindings", status: 400 };
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => init?.method === "PUT"
+      ? new Response(JSON.stringify({ field: refusal.field, errorMessage: "error-invalid-length",
+        params: [refusal.field, 0, 2048] }), { status: refusal.status })
+      : Response.json({ id: "person", email: "person@example.invalid", attributes: {} }));
+  });
+  afterAll(async () => {
+    vi.restoreAllMocks();
+    const keys = await getRedis().keys(`${prefix}:*`);
+    if (keys.length) await getRedis().del(...keys);
+    await closeCache();
+  });
+
+  const writeBindings = () => withPersonLease("person", () => updateKeycloakUser("person", user =>
+    ({ ...user, attributes: { ...user.attributes, "digit.bindings": ["x".repeat(2049)] } })));
+
+  it("is logged and answers IDENTITY_UNAVAILABLE, not a 400 blamed on the caller", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const error = await writeBindings().catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(IdentityAdminError);
+    expect((error as IdentityAdminError).status).toBe(503);
+    expect(log).toHaveBeenCalledWith(expect.stringMatching(/PUT \/users\/person: digit\.bindings is longer than the realm allows.*keycloak\/realm\.json/));
+
+    const res = { status: vi.fn().mockReturnThis(), json: vi.fn().mockReturnThis(), setHeader: vi.fn() };
+    identityErrorHandler(error, {} as express.Request, res as unknown as express.Response, vi.fn());
+    expect(res.status).toHaveBeenCalledWith(503);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: "IDENTITY_UNAVAILABLE" }));
+  });
+
+  it("covers the list-valued writers too", async () => {
+    refusal = { field: "digit.accountLinks", status: 400 };
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    await expect(updateAccountLinkValues("person", values => [...values, "EMPLOYEE|pg|uuid"]))
+      .rejects.toMatchObject({ status: 503 });
+    expect(log).toHaveBeenCalledWith(expect.stringContaining("digit.accountLinks"));
+  });
+
+  it("leaves other 400s as they are", async () => {
+    refusal = { field: "firstName", status: 400 };
+    await expect(writeBindings()).rejects.toMatchObject({ status: 400 });
   });
 });
