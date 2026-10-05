@@ -9,6 +9,8 @@ function fixture(role = 'SUPERUSER') {
   const schemas = new Map<string, unknown>();
   const rows = new Map<string, any>();
   const users: any[] = [], employees: any[] = [], workflows: any[] = [];
+  /** egov-localization rows keyed `tenant|locale`; upserts replace by module and code. */
+  const messages = new Map<string, any[]>(); let cacheBusts = 0;
   let sourceReads = 0, writes = 0, directCalls = 0;
   let verified: any;
   const search = (c: any) => [...rows.values()].filter(r => r.tenantId === c.tenantId && r.schemaCode === c.schemaCode
@@ -40,6 +42,17 @@ function fixture(role = 'SUPERUSER') {
     boundarySearch: async (_tenant: string, _type: unknown, opts: any) => opts.codes.map((code: string) => ({ code })),
     boundaryRelationshipTreeSearch: async (tenant: string, type: string) => [{ hierarchyType: type, boundary: [{ code: tenant, boundaryType: 'ROOT' }] }],
     employeeSearch: async () => employees,
+    localizationSearch: async (tenant: string, locale: string, module?: string) =>
+      (messages.get(`${tenant}|${locale}`) ?? []).filter(m => !module || m.module === module),
+    localizationUpsert: async (tenant: string, locale: string, values: any[]) => {
+      const held = messages.get(`${tenant}|${locale}`) ?? [];
+      for (const m of values) {
+        const index = held.findIndex(h => h.module === m.module && h.code === m.code);
+        if (index >= 0) held[index] = { ...m, locale }; else held.push({ ...m, locale });
+      }
+      messages.set(`${tenant}|${locale}`, held); return values;
+    },
+    localizationCacheBust: async () => { cacheBusts++; },
     workflowBusinessServiceSearch: async (tenant: string, codes: string[]) => workflows.filter(w => w.tenantId === tenant && codes.includes(w.businessService)),
     workflowBusinessServiceCreate: async (tenant: string, definition: any) => { workflows.push({ ...definition, tenantId: tenant }); return definition; },
     employeeCreate: async (_tenant: string, values: any[]) => { employees.push(...values); },
@@ -72,7 +85,7 @@ function fixture(role = 'SUPERUSER') {
   };
   /** A row by `schema/uid` at a tenant; the city target unless given. */
   const row = (key: string, tenant = 'in.newtown') => rows.get(`${tenant}|${key}`);
-  return { row, options: { api: api as any, fetcher: fetcher as typeof fetch, mdmsHost: 'http://mdms.test', userHost: 'http://user.test', direct: true, stateTenant: 'in', db, deriveMobile: () => '9876543210', defaultPassword: () => 'test-only-password' }, schemas, rows, users, employees, workflows, sql, reads: () => sourceReads, writes: () => writes, directCalls: () => directCalls, verifyAs: (value: any) => { verified = value; } };
+  return { row, options: { api: api as any, fetcher: fetcher as typeof fetch, mdmsHost: 'http://mdms.test', userHost: 'http://user.test', direct: true, stateTenant: 'in', db, deriveMobile: () => '9876543210', defaultPassword: () => 'test-only-password' }, schemas, rows, users, employees, workflows, messages, cacheBusts: () => cacheBusts, sql, reads: () => sourceReads, writes: () => writes, directCalls: () => directCalls, verifyAs: (value: any) => { verified = value; } };
 }
 
 test('canonical baseline records satisfy schemas and exclude workspace business data', () => {
@@ -498,4 +511,50 @@ test('bootstrap creates the seeded PGR workflow once and reports failures (#2269
   const failed = await bootstrapPlatform({ target_tenant: 'ke', country: 'KE' }, broken.options);
   assert.equal(failed.success, false); assert.equal(failed.summary.workflows_failed, 1);
   assert.match(failed.results.workflow.failed[0], /^PGR: HTTP 500/);
+});
+
+test('bootstrap copies the source tenant localization packs as before the seed (#2269 review item 1b)', async () => {
+  const f = fixture();
+  const msg = (code: string, message: string, module = 'rainmaker-common') => ({ code, message, module });
+  const ke = loadPlatformSeed().countryMobileRules.KE;
+  // Source pg.citest is thin; its root pg holds the packs. StateInfo lists the locales.
+  f.rows.set('pg.citest|common-masters.StateInfo/pg', { tenantId: 'pg.citest', schemaCode: 'common-masters.StateInfo', uniqueIdentifier: 'pg',
+    isActive: true, data: { languages: [{ value: 'en_IN' }, { value: 'fr_FR' }] } });
+  await f.options.api.localizationUpsert('pg.citest', 'en_IN', [msg('CS_COMMON_SUBMIT', 'Submit (city)'), msg('SERVICEDEFS.WATER', 'Water', 'rainmaker-pgr')]);
+  await f.options.api.localizationUpsert('pg', 'en_IN', [msg('CS_COMMON_SUBMIT', 'Submit'), msg('CS_HEADER', 'Complaints', 'rainmaker-pgr'), msg('HR_EMPLOYEE', 'Employee', 'rainmaker-hr')]);
+  await f.options.api.localizationUpsert('pg', 'fr_FR', [msg('CS_COMMON_SUBMIT', 'Soumettre')]);
+  await bootstrapPlatform({ target_tenant: 'ke', country: 'KE' }, f.options);
+  await f.options.api.localizationUpsert('ke', 'en_IN', [msg('TENANT_TENANTS_KE_NAIROBI', 'Nairobi City County')]);
+  const result = await bootstrapPlatform({ target_tenant: 'ke.nairobi', source_tenant: 'pg.citest', user_validation: [ke] }, f.options);
+  const at = (tenant: string, locale: string) => new Map((f.messages.get(`${tenant}|${locale}`) ?? []).map((m: any) => [`${m.module}::${m.code}`, m.message]));
+  const en = at('ke.nairobi', 'en_IN');
+  assert.equal(en.get('rainmaker-common::CS_COMMON_SUBMIT'), 'Submit (city)', 'the source wins over its root');
+  assert.equal(en.get('rainmaker-pgr::CS_HEADER'), 'Complaints'); assert.equal(en.get('rainmaker-hr::HR_EMPLOYEE'), 'Employee');
+  assert.ok(![...en.keys()].some(k => k.includes('SERVICEDEFS')), 'complaint types stay workspace-owned');
+  assert.ok([...en.keys()].some(k => k.startsWith('rainmaker-dashboard::')), 'dashboard pack floor');
+  assert.equal(en.get('rainmaker-common::TENANT_TENANTS_KE_NAIROBI'), 'Nairobi');
+  assert.equal(at('ke', 'en_IN').get('rainmaker-common::TENANT_TENANTS_KE_NAIROBI'), 'Nairobi City County', 'an existing tenant name is kept');
+  assert.equal(at('ke.nairobi', 'fr_FR').get('rainmaker-common::CS_COMMON_SUBMIT'), 'Soumettre');
+  assert.deepEqual(result.localizations.map((l: any) => l.locale), ['en_IN', 'fr_FR']);
+  assert.equal(result.localizations[0].copied, en.size - 1, 'every en_IN message but the tenant name came from the packs');
+  assert.equal(result.summary.localizations_failed, 0); assert.equal(result.success, true);
+  assert.ok(f.cacheBusts() >= 1);
+
+  // Without source_tenant nothing is copied and nextSteps says so; user_only copies nothing.
+  const none = fixture();
+  const bare = await bootstrapPlatform({ target_tenant: 'ke', country: 'KE' }, none.options);
+  assert.equal(none.messages.size, 0); assert.ok(bare.nextSteps.some((s: string) => s.includes('source_tenant')));
+  const userOnly = fixture();
+  await bootstrapPlatform({ target_tenant: 'ke', source_tenant: 'pg', user_validation: [ke], user_only: true }, userOnly.options);
+  assert.equal(userOnly.messages.size, 0);
+
+  // A row the service rejects is isolated, counted and fails the run.
+  const poisoned = fixture(), upsert = poisoned.options.api.localizationUpsert;
+  await upsert('pg', 'en_IN', [msg('GOOD', 'ok'), msg('BAD', 'x')]);
+  poisoned.options.api.localizationUpsert = async (tenant: string, locale: string, values: any[]) => {
+    if (values.some(v => v.code === 'BAD')) throw new Error('HTTP 400'); return upsert(tenant, locale, values);
+  };
+  const partial = await bootstrapPlatform({ target_tenant: 'ke', source_tenant: 'pg', user_validation: [ke] }, poisoned.options);
+  assert.equal(partial.success, false); assert.equal(partial.summary.localizations_failed, 1);
+  assert.ok(poisoned.messages.get('ke|en_IN').some((m: any) => m.code === 'GOOD'));
 });

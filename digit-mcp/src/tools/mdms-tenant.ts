@@ -1209,8 +1209,8 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
     risk: 'write',
     description:
       'Bootstrap a tenant using the versioned platform baseline shared with PGR. Requires an authenticated platform administrator. Uses the gateway by default; direct MDMS requires server opt-in and live state-admin verification. ' +
-      'Seeds platform access/security/HRMS prerequisites and an ADMIN user. Workspace business masters are configured separately. ' +
-      'The country mobile rule comes from the seed (country, or a seeded mobile_prefix); source_tenant opts in to reading it from a live tenant instead. No schemas or business data are cloned.',
+      'Seeds platform access/security/HRMS prerequisites, the PGR workflow and an ADMIN user; a city (<root>.<city>) is listed under its root. Workspace business masters are configured separately. ' +
+      'The country mobile rule comes from the seed (country, or a seeded mobile_prefix); source_tenant opts in to reading it from a live tenant instead, and to copying that tenant\'s localization packs. No schemas or business data are cloned.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -1224,7 +1224,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         },
         source_tenant: {
           type: 'string',
-          description: 'Explicit opt-in: read the country mobile rule from this live tenant instead of the seed. Platform schemas and records always come from the versioned seed.',
+          description: 'Explicit opt-in: read the country mobile rule from this live tenant instead of the seed, and copy its localization packs (and its root\'s) to the target. Platform schemas and records always come from the versioned seed.',
         },
         mobile_regex: {
           type: 'string',

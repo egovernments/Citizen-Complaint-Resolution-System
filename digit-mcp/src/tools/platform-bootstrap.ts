@@ -3,6 +3,7 @@ import { digitApi } from '../services/digit-api.js';
 import { digitDb } from '../services/digit-db.js';
 import { adminRoleCodes, checkToolAccess } from '../services/auth.js';
 import { loadPlatformSeed, substituteTenant } from './platform-baseline.js';
+import { DASHBOARD_L10N_PACKS } from './dashboard-l10n-seed.js';
 
 /** PGR operating roles the deploy administrator held before the seed existed (#2269 review item 2). */
 export const DEPLOY_ADMIN_PGR_ROLES = ['CITIZEN', 'CSR', 'GRO', 'PGR_LME', 'DGRO'];
@@ -152,6 +153,57 @@ export async function bootstrapPlatform(args: Record<string, unknown>, options: 
       results.data.copied.push(`tenant.citymodule/${row.uniqueIdentifier} (${target})`);
     }
   }
+  const localizations: { locale: string; copied: number; failed: number }[] = [];
+  async function copyLocalizations() {
+    // Copies the source tenant's message packs as tenant_bootstrap did before the seed (#2269
+    // review item 1b): locales from the source StateInfo, messages from the source and its root,
+    // the dashboard packs as a floor. Whole modules are written before the tenant-name key, since
+    // egov-localization stops falling back once a tenant holds any message for a module (#2257).
+    if (!args.source_tenant) return; // nextSteps says how to get them
+    const sources = [...new Set([source, source.split('.')[0]])];
+    const stateInfo = await api.mdmsV2SearchRaw(source, 'common-masters.StateInfo', { limit: 5 }).catch(() => []);
+    const languages = ((stateInfo[0]?.data as { languages?: { value?: unknown }[] } | undefined)?.languages ?? [])
+      .map((language) => language?.value).filter((value): value is string => typeof value === 'string' && value.length > 0);
+    const segment = target.split('.').pop()!;
+    const tenantName = { code: `TENANT_TENANTS_${target.toUpperCase().replace(/\./g, '_')}`,
+      message: segment.charAt(0).toUpperCase() + segment.slice(1).toLowerCase(), module: 'rainmaker-common' };
+    for (const locale of [...new Set(['en_IN', ...languages])]) {
+      const messages = new Map<string, { code: string; message: string; module: string }>();
+      for (const tenant of sources) {
+        for (const m of await api.localizationSearch(tenant, locale).catch(() => [] as Record<string, unknown>[])) {
+          const code = typeof m.code === 'string' ? m.code.trim() : '';
+          const module = typeof m.module === 'string' ? m.module.trim() : 'rainmaker-common';
+          // Complaint types are workspace-owned and seeded with them, as ComplaintHierarchy is.
+          if (!code || code.startsWith('SERVICEDEFS') || typeof m.message !== 'string') continue;
+          if (!messages.has(`${module}::${code}`)) messages.set(`${module}::${code}`, { code, message: m.message, module });
+        }
+      }
+      for (const m of DASHBOARD_L10N_PACKS[locale] ?? []) if (!messages.has(`${m.module}::${m.code}`)) messages.set(`${m.module}::${m.code}`, m);
+      if (!messages.size) continue;
+      const result = { locale, copied: 0, failed: 0 };
+      const batch = [...messages.values()];
+      for (let offset = 0; offset < batch.length; offset += 500) {
+        const chunk = batch.slice(offset, offset + 500);
+        try { await api.localizationUpsert(target, locale, chunk); result.copied += chunk.length; continue; } catch { /* isolate the bad row */ }
+        for (const m of chunk) {
+          try { await api.localizationUpsert(target, locale, [m]); result.copied++; } catch (error) {
+            if (/duplicate|already exists|unique/i.test(error instanceof Error ? error.message : String(error))) result.copied++;
+            else result.failed++;
+          }
+        }
+      }
+      // The tenant name is branding an operator may have changed: create it only where absent.
+      for (const tenant of cityRoot ? [target, cityRoot] : [target]) {
+        try {
+          const held = await api.localizationSearch(tenant, locale, 'rainmaker-common');
+          if (!held.some((m) => m.code === tenantName.code)) await api.localizationUpsert(tenant, locale, [tenantName]);
+        } catch { result.failed++; }
+      }
+      localizations.push(result);
+    }
+    // Drop egov-localization's cached (empty) packs; the next UI load reads the database.
+    await api.localizationCacheBust().catch(() => results.warnings.push('Localization cache bust failed; packs appear after the cache expires.'));
+  }
   let rules = args.user_validation as Record<string, unknown>[] | undefined;
   if (!rules) {
     // The seed is the default source; reading a live tenant's rule is an explicit source_tenant opt-in.
@@ -245,6 +297,7 @@ export async function bootstrapPlatform(args: Record<string, unknown>, options: 
         else results.workflow.failed.push(`${code}: ${message}`);
       }
     }
+    await copyLocalizations();
   }
   await api.generateEncKey(target);
   const username = auth.user?.userName || 'ADMIN';
@@ -299,13 +352,14 @@ export async function bootstrapPlatform(args: Record<string, unknown>, options: 
     employeeProvisioned = true;
   }
   return {
-    success: results.workflow.failed.length === 0, source, target, seedVersion: seed.version, ...(args.user_only === true ? { user_only: true, admin_user_provisioned: true } : {}),
+    success: results.workflow.failed.length === 0 && localizations.every((l) => l.failed === 0), source, target, seedVersion: seed.version, ...(args.user_only === true ? { user_only: true, admin_user_provisioned: true } : {}),
     summary: { schemas_copied: results.schemas.copied.length, schemas_skipped: results.schemas.skipped.length, schemas_failed: 0,
       data_copied: results.data.copied.length, data_skipped: results.data.skipped.length, data_failed: 0,
-      workflows_created: results.workflow.created.length, workflows_skipped: results.workflow.skipped.length, workflows_failed: results.workflow.failed.length, localizations_copied: 0, localizations_failed: 0,
-      locales_seen: 0, admin_user_provisioned: true, admin_employee_provisioned: employeeProvisioned, access_floor_seeded: accessFloorSeeded, warnings: results.warnings.length },
+      workflows_created: results.workflow.created.length, workflows_skipped: results.workflow.skipped.length, workflows_failed: results.workflow.failed.length, localizations_copied: localizations.reduce((n, l) => n + l.copied, 0),
+      localizations_failed: localizations.reduce((n, l) => n + l.failed, 0), locales_seen: localizations.length, admin_user_provisioned: true, admin_employee_provisioned: employeeProvisioned, access_floor_seeded: accessFloorSeeded, warnings: results.warnings.length },
     adminUser: { provisioned: true, username, tenantId: target, roles: employeeRoles.map((role) => role.code) },
     adminEmployee: { provisioned: employeeProvisioned, code: username, department: 'ONBOARDING_ADMIN', designation: 'ONBOARDING_FOUNDER' },
-    localizations: [], results, nextSteps: ['Configure workspace branding, geography, departments, employees and complaint types.'],
+    localizations, results, nextSteps: ['Configure workspace branding, geography, departments, employees and complaint types.',
+      ...(!args.user_only && !args.source_tenant ? ['Localizations were not copied: re-run with source_tenant to copy its message packs.'] : [])],
   };
 }
