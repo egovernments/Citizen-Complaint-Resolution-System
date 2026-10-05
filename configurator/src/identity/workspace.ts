@@ -25,7 +25,9 @@ export interface Rename {
 }
 export interface WorkspaceView {
   Workspace: Workspace;
-  Probes: Record<WorkspaceStep, boolean> | null;
+  /** Advisory. A probe whose dependency check failed is null (unknown / not ready); _update returns only the
+   *  probe it ran, and legacy rows return null for the whole block. Never treat a missing or null probe as true. */
+  Probes: Partial<Record<WorkspaceStep, boolean | null>> | null;
   Rename: Rename | null;
 }
 const base = '/pgr-services/v2/onboarding/workspaces';
