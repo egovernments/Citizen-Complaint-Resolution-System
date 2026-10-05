@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import { withRedisLease } from "../../infrastructure/redis.js";
 import { config } from "../../infrastructure/config.js";
 import { getAdminToken } from "../../integrations/keycloak/admin-session.js";
+import type { UserRepresentation } from "../sync/keycloak-writer.js";
+import { createdId, findUser, paged, readUser } from "../../integrations/keycloak/admin-api.js";
 
 interface OrganizationRepresentation {
   id?: string;
@@ -23,18 +25,6 @@ interface RoleRepresentation {
   name: string;
 }
 
-interface UserRepresentation {
-  id?: string;
-  username?: string;
-  email?: string;
-  emailVerified?: boolean;
-  firstName?: string;
-  lastName?: string;
-  enabled?: boolean;
-  attributes?: Record<string, string[]>;
-  requiredActions?: string[];
-}
-
 interface CredentialRepresentation {
   id?: string;
   type?: string;
@@ -49,9 +39,7 @@ const MANAGED_TENANTS_ATTRIBUTE = "digit.managedTenants";
 const BFF_SIGNUP_USER_ATTRIBUTE = "digit.identityBffSignup";
 
 export async function managedTenantsFromIdentity(userId: string): Promise<string[]> {
-  const response = await request(`/users/${encodeURIComponent(userId)}`);
-  const user = await response.json() as UserRepresentation;
-  return [...new Set(user.attributes?.[MANAGED_TENANTS_ATTRIBUTE] || [])].sort();
+  return [...new Set((await readUser(userId)).attributes?.[MANAGED_TENANTS_ATTRIBUTE] || [])].sort();
 }
 
 /**
@@ -78,9 +66,7 @@ const CITIZEN_REGISTRATIONS_ATTRIBUTE = "digit.citizenRegistrations";
 
 /** Raw `digit.citizenRegistrations` values of one Keycloak user. */
 export async function citizenRegistrationValues(userId: string): Promise<string[]> {
-  const response = await request(`/users/${encodeURIComponent(userId)}`);
-  const user = await response.json() as UserRepresentation;
-  return [...(user.attributes?.[CITIZEN_REGISTRATIONS_ATTRIBUTE] || [])];
+  return [...((await readUser(userId)).attributes?.[CITIZEN_REGISTRATIONS_ATTRIBUTE] || [])];
 }
 
 /**
@@ -92,14 +78,7 @@ export function updateCitizenRegistrationValues(
   userId: string,
   update: (values: string[]) => string[] | null,
 ): Promise<string[]> {
-  return withUserAttributeLease(userId, () => writeCitizenRegistrationValues(userId, update));
-}
-
-async function writeCitizenRegistrationValues(
-  userId: string,
-  update: (values: string[]) => string[] | null,
-): Promise<string[]> {
-  return updateUserAttributeValues(userId, CITIZEN_REGISTRATIONS_ATTRIBUTE, update);
+  return withUserAttributeLease(userId, () => updateUserAttributeValues(userId, CITIZEN_REGISTRATIONS_ATTRIBUTE, update));
 }
 
 const ACCOUNT_LINKS_ATTRIBUTE = "digit.accountLinks";
@@ -112,8 +91,7 @@ const ACCOUNT_LINK_BLOCKS_ATTRIBUTE = "digit.accountLinkBlocks";
  * must not re-form automatically.
  */
 export async function accountLinkValues(userId: string): Promise<{ links: string[]; blocks: string[] }> {
-  const response = await request(`/users/${encodeURIComponent(userId)}`);
-  const user = await response.json() as UserRepresentation;
+  const user = await readUser(userId);
   return {
     links: [...(user.attributes?.[ACCOUNT_LINKS_ATTRIBUTE] || [])],
     blocks: [...(user.attributes?.[ACCOUNT_LINK_BLOCKS_ATTRIBUTE] || [])],
@@ -147,8 +125,7 @@ export async function usersWithAccountLink(value: string): Promise<string[]> {
 export async function findEnabledIdentityUser(input: { id?: string; email?: string }): Promise<string | null> {
   let user: UserRepresentation | null = null;
   if (input.id) {
-    const response = await request(`/users/${encodeURIComponent(input.id)}`, {}, [200, 404]);
-    user = response.status === 404 ? null : await response.json() as UserRepresentation;
+    user = await findUser(input.id);
   } else if (input.email) {
     user = await findIdentityUserByEmail(input.email.trim().toLowerCase());
   }
@@ -193,8 +170,7 @@ async function updateUserAttributeValues(
   attributeName: string,
   update: (values: string[]) => string[] | null,
 ): Promise<string[]> {
-  const response = await request(`/users/${encodeURIComponent(userId)}`);
-  const user = await response.json() as UserRepresentation;
+  const user = await readUser(userId);
   const current = [...(user.attributes?.[attributeName] || [])];
   const next = update(current);
   if (!next) return current;
@@ -336,17 +312,6 @@ export async function request(
     );
   }
   return response;
-}
-
-async function paged<T>(path: string): Promise<T[]> {
-  const values: T[] = [];
-  for (let first = 0; ; first += 100) {
-    const separator = path.includes("?") ? "&" : "?";
-    const response = await request(`${path}${separator}first=${first}&max=100`);
-    const page = await response.json() as T[];
-    values.push(...page);
-    if (page.length < 100) return values;
-  }
 }
 
 function mappedTenant(organization: OrganizationRepresentation): string | null {
@@ -769,8 +734,7 @@ export async function ensureOrganization(input: {
         },
       }),
     }, [201]);
-    const location = response.headers.get("location");
-    const id = location?.split("/").filter(Boolean).pop();
+    const id = createdId(response);
     if (id) {
       organization = { id, name: input.name, alias: input.alias };
     } else {
@@ -830,8 +794,7 @@ export async function ensureOrganization(input: {
  * Only a verified email is passed on; the subject itself is the link key.
  */
 export async function readIdentityUserProfile(userId: string): Promise<IdentityUserProfile> {
-  const response = await request(`/users/${encodeURIComponent(userId)}`);
-  const user = await response.json() as UserRepresentation;
+  const user = await readUser(userId);
   if (user.id !== userId || user.enabled === false) {
     throw new IdentityAdminError("Keycloak user is not active", 404);
   }
@@ -866,8 +829,7 @@ async function writeVerifiedSignupIdentityProfile(input: {
   firstName: string;
   lastName: string;
 }): Promise<boolean> {
-  const response = await request(`/users/${encodeURIComponent(input.userId)}`);
-  const user = await response.json() as UserRepresentation;
+  const user = await readUser(input.userId);
   if (user.id !== input.userId || user.enabled === false ||
       user.email?.trim().toLowerCase() !== input.email || user.emailVerified !== true) {
     throw new IdentityAdminError("The verified magic-link identity does not match the signup");
@@ -922,7 +884,7 @@ export async function ensureMagicLinkSignupIdentity(input: {
       // Under the user's attribute lease, with a fresh read, sending only the
       // profile and attributes: never the stale `enabled`.
       await withUserAttributeLease(userId, async () => {
-        const current = await (await request(`/users/${encodeURIComponent(userId)}`)).json() as UserRepresentation;
+        const current = await readUser(userId);
         await request(`/users/${encodeURIComponent(userId)}`, {
           method: "PUT",
           body: JSON.stringify({
@@ -949,7 +911,7 @@ export async function ensureMagicLinkSignupIdentity(input: {
       attributes: { [BFF_SIGNUP_USER_ATTRIBUTE]: ["true"] },
     }),
   }, [201, 409]);
-  const id = response.headers.get("location")?.split("/").filter(Boolean).pop();
+  const id = createdId(response);
   if (response.status === 201 && id) return { id, created: true };
 
   // A concurrent request may have won the create. Resolve the same unique
@@ -1020,10 +982,8 @@ export async function findVerifiedPhoneUsers(phoneNumber: string): Promise<UserR
  * another person).
  */
 export async function phoneIdentityStillValid(userId: string, phoneNumber: string): Promise<boolean> {
-  const response = await request(`/users/${encodeURIComponent(userId)}`, {}, [200, 404]);
-  if (response.status === 404) return false;
-  const user = await response.json() as UserRepresentation;
-  return user.enabled !== false && verifiedPhoneOwner(user, phoneNumber);
+  const user = await findUser(userId);
+  return user !== null && user.enabled !== false && verifiedPhoneOwner(user, phoneNumber);
 }
 
 /**
@@ -1066,13 +1026,13 @@ async function createPhoneIdentityUser(
       },
     }),
   }, [201, 409]);
-  const id = response.headers.get("location")?.split("/").filter(Boolean).pop();
+  const id = createdId(response);
   if (response.status === 201 && id) {
     // Keycloak drops unmanaged attributes silently unless the realm keeps
     // them. A user without its verified phone would never be found again and
     // would block every later sign-in for the number, so it is removed and
     // the misconfiguration is reported instead.
-    const created = await (await request(`/users/${encodeURIComponent(id)}`)).json() as UserRepresentation;
+    const created = await readUser(id);
     if (!verifiedPhoneOwner(created, phoneNumber)) {
       await request(`/users/${encodeURIComponent(id)}`, { method: "DELETE" }, [204, 404]);
       console.error(
@@ -1114,8 +1074,7 @@ export async function inspectPasswordSetupAccount(
 export async function inspectPasswordSetupAccountById(
   userId: string,
 ): Promise<PasswordSetupInspection | null> {
-  const response = await request(`/users/${encodeURIComponent(userId)}`);
-  const user = await response.json() as UserRepresentation;
+  const user = await readUser(userId);
   if (!user.id || user.enabled === false) return null;
   const [credentialsResponse, identitiesResponse] = await Promise.all([
     request(`/users/${encodeURIComponent(user.id)}/credentials`),
@@ -1222,7 +1181,7 @@ async function ensureOrganizationGroup(
     method: "POST",
     body: JSON.stringify({ name }),
   }, [201, 204, 409]);
-  const id = response.headers.get("location")?.split("/").filter(Boolean).pop();
+  const id = createdId(response);
   if (id) return { id, name };
   response = await request(`${base}?${query}`);
   groups = await response.json() as GroupRepresentation[];
@@ -1309,7 +1268,7 @@ export async function ensureOrganizationTenantGroup(input: {
       method: "POST",
       body: JSON.stringify({ name: groupName, attributes }),
     }, [201]);
-    const id = response.headers.get("location")?.split("/").filter(Boolean).pop();
+    const id = createdId(response);
     if (!id) throw new IdentityAdminError("Keycloak did not return the subtenant group id");
     group = { id, name: groupName, attributes };
   } else {

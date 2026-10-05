@@ -6,6 +6,7 @@ import { invitationExpiryHours } from "../bindings/invitations.js";
 import { accept, bindingsFromUser, createPending, ensureActive, readBindings, readBindingUser, remove, type Binding } from "../bindings/store.js";
 import { BindingConflictError, BindingError, type BindingUser } from "../bindings/types.js";
 import { ensureOrganizationMembership, isOrganizationMember, request } from "../organizations/organization-service.js";
+import { createdId, paged } from "../../integrations/keycloak/admin-api.js";
 import { readOnboardingOrganizations } from "../onboarding/organization-reader.js";
 import { organizationAttribute } from "../onboarding/primitives.js";
 import { updateKeycloakUser } from "../sync/keycloak-writer.js";
@@ -79,7 +80,7 @@ export async function linkWorkspaceMember(input: { actor: string; tenantId: stri
           email, requestId, actor: input.actor, createdAt: Date.now() })],
       },
     }) }, [201, 409]);
-    const id = created.headers.get("location")?.split("/").filter(Boolean).pop();
+    const id = createdId(created);
     user = id ? await readBindingUser(id) : await findPerson(email);
     if (!user?.id) throw new BindingError("IDENTITY_UNAVAILABLE", "Identity creation did not return a user");
   }
@@ -141,14 +142,11 @@ export async function acceptWorkspaceInvitation(subject: string, tenantId: strin
 /** Includes tombstones so retries finish removal side effects after a crash. */
 async function membersAt(tenantId: string) {
   const result: Array<{ user: BindingUser; binding: Binding }> = [];
-  for (let first = 0; ; first += 100) {
-    const users = await (await request(`/users?briefRepresentation=false&first=${first}&max=100`)).json() as BindingUser[];
-    for (const user of users) {
-      const binding = bindingsFromUser(user).find((b) => b.tenantId === tenantId);
-      if (user.id && binding) result.push({ user, binding });
-    }
-    if (users.length < 100) return result;
+  for (const user of await paged<BindingUser>("/users?briefRepresentation=false")) {
+    const binding = bindingsFromUser(user).find((b) => b.tenantId === tenantId);
+    if (user.id && binding) result.push({ user, binding });
   }
+  return result;
 }
 
 export async function listWorkspaceMembers(actor: string, tenantId: string, first = 0, max = 100) {

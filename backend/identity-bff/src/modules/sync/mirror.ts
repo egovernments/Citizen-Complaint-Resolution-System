@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { config } from "../../infrastructure/config.js";
 import { getRedis } from "../../infrastructure/redis.js";
 import { withPersonLease, LeaseLostError, type PersonLease } from "../accounts/person-lease.js";
-import { request } from "../organizations/organization-service.js";
+import { readUser } from "../../integrations/keycloak/admin-api.js";
 import { readBindings } from "../bindings/store.js";
 import type { DigitAccount } from "../managed-accounts/digit-user-client.js";
 import { updateKeycloakUser, type UserRepresentation } from "./keycloak-writer.js";
@@ -24,7 +24,7 @@ const masked = (value: string) => /\*{2,}/.test(value);
 /** Caller holds the lease. Only bindings and already-resolved citizens seed entries. */
 export async function readMirrorSnapshot(subject: string, hint: MirrorHint = {}): Promise<MirrorSnapshot> {
   const bindings = await readBindings(subject);
-  const user = await (await request(`/users/${encodeURIComponent(subject)}`)).json() as UserRepresentation;
+  const user = await readUser(subject);
   const previous = accountEntries(user);
   const candidates: AccountEntry[] = bindings.filter(binding => binding.state === "active").map(binding => {
     const existing = previous.find(entry => entry.kind === "staff" && entry.tenantId === binding.tenantId && entry.uuid === binding.uuid);

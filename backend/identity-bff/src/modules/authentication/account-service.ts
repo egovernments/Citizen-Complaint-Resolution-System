@@ -1,5 +1,6 @@
 import { withPersonLease } from "../accounts/person-lease.js";
 import { enabledIdentityProviders, identityClient, request } from "../organizations/organization-service.js";
+import { readUser } from "../../integrations/keycloak/admin-api.js";
 import { requireCurrentSession } from "../sessions/session-store.js";
 import type { IdentitySession } from "../sessions/types.js";
 import { surfaceConfig, surfaceContextKind, type IdentitySurface } from "./surfaces.js";
@@ -59,7 +60,7 @@ export async function unlinkProvider(subject: string, sessionId: string, surface
     const session = await requireCurrentSession(lease, sessionId);
     const account = await accountMetadata(session, surface);
     if (!account.providers.some(provider => provider.alias === alias)) throw new AccountActionError("PROVIDER_NOT_LINKED", 404, "This provider is not linked");
-    const user = await (await request(`/users/${encodeURIComponent(subject)}`)).json() as { enabled?: boolean; attributes?: Record<string, string[]> };
+    const user = await readUser(subject);
     if (user.enabled === false) throw new AccountActionError("SESSION_REVOKED", 401, "This session has ended");
     const phone = surfaceContextKind(surface) === "citizen" && user.attributes?.phoneNumberVerified?.includes("true") && user.attributes?.phoneNumber?.some(value => /^\+[1-9]\d{3,14}$/.test(value));
     const primaryCount = Number(account.credentials.some(credential => credential.type === "password")) + account.providers.length + Number(Boolean(phone));

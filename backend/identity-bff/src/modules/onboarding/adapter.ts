@@ -2,6 +2,7 @@ import { clearTenantCaches, isActiveDigitTenant } from "../access-context/tenant
 import { OnboardingError } from "./errors.js";
 import { OnboardingPrimitives, organizationAttribute, type OnboardingOrganization } from "./primitives.js";
 import { onboardingAdminRequest, readOnboardingOrganizations } from "./organization-reader.js";
+import { createdId } from "../../integrations/keycloak/admin-api.js";
 import type { OnboardingFence } from "./locks.js";
 import type { FounderIdentity, Identifier, OnboardingRouteDependencies } from "./routes.js";
 
@@ -61,7 +62,7 @@ export function createOnboardingDependencies(core: CoreOnboardingDependencies): 
     async create(organization) {
       const response = await onboardingAdminRequest("/organizations", { method: "POST", body: JSON.stringify(organization) }, [201, 409]);
       if (response.status === 409) throw new OnboardingError("SLUG_TAKEN", "The Organization name or slug is already reserved");
-      const id = response.headers.get("location")?.split("/").filter(Boolean).pop();
+      const id = createdId(response);
       if (!id) {
         const created = (await readOnboardingOrganizations()).find((org) => org.alias === organization.alias &&
           organizationAttribute(org, "operationId") === organizationAttribute({ ...organization, id: "" }, "operationId"));

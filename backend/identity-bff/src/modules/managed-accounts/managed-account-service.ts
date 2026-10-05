@@ -4,7 +4,7 @@ import { accountEntries } from "../sync/state.js";
 import { requireCurrentSession } from "../sessions/session-store.js";
 import { currentPersonLease, withPersonLease } from "../accounts/person-lease.js";
 import { staffCredentialMode, staffLogin } from "../accounts/credential-service.js";
-import { request } from "../organizations/organization-service.js";
+import { readUser } from "../../integrations/keycloak/admin-api.js";
 import { createHash, randomInt } from "node:crypto";
 import { getRedis } from "../../infrastructure/redis.js";
 import { config } from "../../infrastructure/config.js";
@@ -510,8 +510,7 @@ export async function managedUserLogin(
       }
       login = await citizenTokenMinter().mint(account, verifiedMobileNumber);
     } else if (staffCredentialMode() === "derived") {
-      const response = await request(`/users/${encodeURIComponent(identity.subject)}`);
-      const user = await response.json() as { attributes?: Record<string, string[]> };
+      const user = await readUser(identity.subject);
       let keyVersion: number | undefined;
       try {
         const entry = accountEntries(user).find((entry) => entry.kind === "staff" &&

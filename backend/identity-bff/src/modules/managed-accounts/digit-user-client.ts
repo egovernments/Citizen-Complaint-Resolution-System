@@ -143,7 +143,7 @@ const USER_REQUEST_FIELDS = [
 ] as const;
 
 /** Only the documented login-profile fields are kept, cached or returned. */
-function loginProfile(value: Record<string, unknown>): Record<string, unknown> {
+export function loginProfile(value: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(USER_REQUEST_FIELDS.flatMap((field) =>
     field in value ? [[field, value[field]]] : []));
 }

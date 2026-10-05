@@ -1,10 +1,9 @@
 import { withPersonLease } from "../accounts/person-lease.js";
 import { writeDigitIdentifiers } from "../accounts/digit-writer.js";
 import { readBindings } from "../bindings/store.js";
-import { request } from "../organizations/organization-service.js";
+import { readUser } from "../../integrations/keycloak/admin-api.js";
 import { splitE164 } from "../citizens/citizen-registration.js";
 import { mobileValidationForRoute } from "../citizen-otp/mobile-validation.js";
-import type { UserRepresentation } from "./keycloak-writer.js";
 import { accountEntries } from "./state.js";
 
 export interface PropagationResult { written: number; unchanged: number; skipped: number }
@@ -14,7 +13,7 @@ export function propagateIdentifiers(subject: string): Promise<PropagationResult
   return withPersonLease(subject, async lease => {
     await lease.assertHeld();
     const bindings = await readBindings(subject);
-    const user = await (await request(`/users/${encodeURIComponent(subject)}`)).json() as UserRepresentation;
+    const user = await readUser(subject);
     const result: PropagationResult = { written: 0, unchanged: 0, skipped: 0 };
     const email = user.emailVerified === true && user.email?.trim() && !/\*{2,}/.test(user.email)
       ? user.email.trim() : undefined;

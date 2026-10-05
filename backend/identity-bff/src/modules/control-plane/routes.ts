@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import type express from "express";
 import { config } from "../../infrastructure/config.js";
+import { asyncRoute } from "../../app/async-route.js";
 import {
   ensureOrganizationRoleAssignment,
   ensureOrganizationTenantGroup,
@@ -30,12 +31,6 @@ import {
 import { onboardingAuthorization, registerOnboardingRoutes } from "../onboarding/routes.js";
 import { onboardingDependencies } from "../onboarding/production.js";
 import { backfillTenantRoutes } from "../tenant-routes/backfill.js";
-
-function asyncRoute(
-  handler: (req: express.Request, res: express.Response) => Promise<unknown>,
-): express.RequestHandler {
-  return (req, res, next) => void handler(req, res).catch(next);
-}
 
 function sameSecret(actual: string, expected: string): boolean {
   const left = Buffer.from(actual);

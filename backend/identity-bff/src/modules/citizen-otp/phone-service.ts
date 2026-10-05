@@ -1,9 +1,10 @@
 import { randomUUID } from "node:crypto";
 import type { BoundTenant } from "../authentication/surfaces.js";
 import { withPersonLease } from "../accounts/person-lease.js";
-import { request, findVerifiedPhoneUsers, ensurePhoneIdentityUser, IdentityAdminError } from "../organizations/organization-service.js";
+import { findVerifiedPhoneUsers, ensurePhoneIdentityUser, IdentityAdminError } from "../organizations/organization-service.js";
+import { readUser } from "../../integrations/keycloak/admin-api.js";
 import { requireCurrentSession, touchIdentitySession, SessionRevokedError, createPhoneOtpSession } from "../sessions/session-store.js";
-import { updateKeycloakUser, type UserRepresentation } from "../sync/keycloak-writer.js";
+import { updateKeycloakUser } from "../sync/keycloak-writer.js";
 import { privateRef, type OtpChallenge } from "./otp-store.js";
 import { withPhoneLock } from "./phone-lock.js";
 
@@ -27,7 +28,7 @@ export async function completePhoneProof(challenge: OtpChallenge, sessionId: str
     if (session.boundTenant?.tenantId !== challenge.tenant.tenantId) throw new PhoneProofError("OTP_EXPIRED", 400, "This code belongs to another tenant");
     await withPhoneLock(challenge.phoneNumber, async lock => {
       await assertPhoneAvailable(challenge.phoneNumber, subject);
-      const user = await (await request(`/users/${encodeURIComponent(subject)}`)).json() as UserRepresentation;
+      const user = await readUser(subject);
       if (user.enabled === false) throw new PhoneProofError("IDENTITY_DISABLED", 403, "This account is disabled");
       const freshPhone = user.attributes?.phoneNumberVerified?.includes("true") ? user.attributes?.phoneNumber?.[0] : undefined;
       // A stale session cannot overwrite a phone already changed by another session.

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { config } from "../../infrastructure/config.js";
 import { getRedis } from "../../infrastructure/redis.js";
 import { LeaseLostError, personLeaseKey, type PersonLease } from "../accounts/person-lease.js";
-import { DigitUnavailableError, revokeToken, type DigitLogin } from "../managed-accounts/digit-user-client.js";
+import { DigitUnavailableError, loginProfile, revokeToken, type DigitLogin } from "../managed-accounts/digit-user-client.js";
 
 export interface AccountRef { tenantId: string; uuid: string }
 export interface TokenRecord {
@@ -116,9 +116,7 @@ export async function cachedToken(lease: PersonLease, account: AccountRef): Prom
     await forgetToken(lease, account, token.accessToken);
     return null;
   }
-  const fields = ["id", "uuid", "userName", "name", "mobileNumber", "countryCode", "emailId", "locale", "type", "roles", "active", "tenantId", "permanentCity"];
-  return { accessToken: token.accessToken, expiresAt: token.expiresAt,
-    user: Object.fromEntries(fields.filter(field => field in user).map(field => [field, user[field]])) };
+  return { accessToken: token.accessToken, expiresAt: token.expiresAt, user: loginProfile(user) };
 }
 
 /** Never erase a replacement token, even if a timed-out effect finishes late. */

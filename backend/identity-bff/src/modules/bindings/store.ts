@@ -1,6 +1,6 @@
 import { withPersonLease } from "../accounts/person-lease.js";
 import { withUuidLock } from "../accounts/uuid-lock.js";
-import { request } from "../organizations/organization-service.js";
+import { paged, readUser } from "../../integrations/keycloak/admin-api.js";
 import { updateKeycloakUser } from "../sync/keycloak-writer.js";
 import { validateBinding } from "../workspace-members/authority.js";
 import { BindingConflictError, BindingError, type Binding, type BindingActor, type BindingUser } from "./types.js";
@@ -29,9 +29,7 @@ export function bindingsFromUser(user: BindingUser): Binding[] {
   }
 }
 
-export async function readBindingUser(subject: string): Promise<BindingUser> {
-  return (await request(`/users/${encodeURIComponent(subject)}`)).json() as Promise<BindingUser>;
-}
+export const readBindingUser = (subject: string): Promise<BindingUser> => readUser(subject);
 
 export function effectiveBinding(binding: Binding, now = Date.now()): Binding {
   return binding.state === "pending" && binding.expiresAt! <= now
@@ -75,16 +73,11 @@ export async function readBindings(subject: string): Promise<Binding[]> {
 /** Exact uuid search, with full pagination and client-side attribute checks. */
 async function ownersOf(tenantId: string, uuid: string): Promise<string[]> {
   const value = `${tenantId}|${uuid}`;
-  const owners: string[] = [];
-  for (let first = 0; ; first += 100) {
-    const query = new URLSearchParams({ q: `digit.boundUuids:${value}`, briefRepresentation: "false", first: String(first), max: "100" });
-    const users = await (await request(`/users?${query}`)).json() as BindingUser[];
-    for (const user of users) {
-      if (user.id && user.attributes?.["digit.boundUuids"]?.includes(value) &&
-          bindingsFromUser(user).some((b) => b.tenantId === tenantId && b.uuid === uuid && effectiveBinding(b).state !== "removed")) owners.push(user.id);
-    }
-    if (users.length < 100) return owners;
-  }
+  const query = new URLSearchParams({ q: `digit.boundUuids:${value}`, briefRepresentation: "false" });
+  return (await paged<BindingUser>(`/users?${query}`)).flatMap((user) =>
+    user.id && user.attributes?.["digit.boundUuids"]?.includes(value) &&
+    bindingsFromUser(user).some((b) => b.tenantId === tenantId && b.uuid === uuid && effectiveBinding(b).state !== "removed")
+      ? [user.id] : []);
 }
 
 /**
@@ -97,16 +90,13 @@ async function ownersOf(tenantId: string, uuid: string): Promise<string[]> {
 export async function bindingsFor(tenantId: string): Promise<Array<{ subject: string; binding: Binding }>> {
   const result: Array<{ subject: string; binding: Binding }> = [];
   // Keycloak q matches attribute values exactly; a tenant is a prefix, not a value.
-  for (let first = 0; ; first += 100) {
-    const users = await (await request(`/users?briefRepresentation=false&first=${first}&max=100`)).json() as BindingUser[];
-    for (const user of users) {
-      if (!user.id || !user.attributes?.["digit.boundUuids"]?.some((v) => v.startsWith(`${tenantId}|`))) continue;
-      for (const binding of bindingsFromUser(user).map((b) => effectiveBinding(b))) {
-        if (binding.tenantId === tenantId && binding.state !== "removed") result.push({ subject: user.id, binding });
-      }
+  for (const user of await paged<BindingUser>("/users?briefRepresentation=false")) {
+    if (!user.id || !user.attributes?.["digit.boundUuids"]?.some((v) => v.startsWith(`${tenantId}|`))) continue;
+    for (const binding of bindingsFromUser(user).map((b) => effectiveBinding(b))) {
+      if (binding.tenantId === tenantId && binding.state !== "removed") result.push({ subject: user.id, binding });
     }
-    if (users.length < 100) return result;
   }
+  return result;
 }
 
 type BindingInput = { subject: string; tenantId: string; uuid: string; actor: BindingActor };
