@@ -16,9 +16,7 @@ import LanguageSelection from "./Home/LanguageSelection";
 import LocationSelection from "./Home/LocationSelection";
 import UserProfile from "./Home/UserProfile";
 import HowItWorks from "./HowItWorks/howItWorks";
-import Login from "./Login";
-import IdentityBffCitizenLogin from "./Login/IdentityBffCitizenLogin";
-import { isIdentityBffAuth } from "@egovernments/digit-ui-libraries";
+import IdentityBffCitizenLogin from "./IdentityBffCitizenLogin";
 import Search from "./SearchApp";
 import StaticDynamicCard from "./StaticDynamicComponent/StaticDynamicCard";
 import ImageComponent from "../../components/ImageComponent";
@@ -226,15 +224,11 @@ const Home = ({
               BFF (Keycloak; citizen methods are open, #2189); registration
               is the same flow. */}
           <Route path={`${path}/login`}>
-            {isIdentityBffAuth() ? <IdentityBffCitizenLogin t={t} /> : <Login stateCode={stateCode} />}
+            <IdentityBffCitizenLogin t={t} />
           </Route>
 
           <Route path={`${path}/register`}>
-            {isIdentityBffAuth() ? (
-              <IdentityBffCitizenLogin t={t} />
-            ) : (
-              <Login stateCode={stateCode} isUserRegistered={false} />
-            )}
+            <IdentityBffCitizenLogin t={t} />
           </Route>
 
           {/* /user/profile must require an active citizen session. The

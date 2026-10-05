@@ -1,9 +1,9 @@
 /* eslint-disable react/prop-types */
 // Citizen "Provide your mobile number" — v2 (Tailwind + shadcn-style chrome).
 //
-// Strangler-fig replacement for the legacy InputCard / FieldV1 markup.
-// Same parent contract: `onSelect({ mobileNumber })` continues the
-// login flow (sendOtp + history.push to /otp). The MDMS-driven
+// Shared phone-number step for the tenant-scoped Identity BFF login.
+// Its parent contract, `onSelect({ mobileNumber })`, continues the
+// BFF challenge flow. The MDMS-driven
 // `validationConfig` (Kenyan pattern + prefix on naipepea) is read
 // exactly the same way.
 //
@@ -25,7 +25,7 @@ import {
   Field as V2Field,
 } from "@egovernments/digit-ui-components-v2";
 import { Phone } from "lucide-react";
-import Header from "../../../components/Header";
+import Header from "../Header";
 
 const SelectMobileNumber = ({
   t,
@@ -184,7 +184,7 @@ const SelectMobileNumber = ({
 };
 
 /**
- * A sign-in step's own text. Login/index.js hands every step its texts already
+ * A sign-in step's own text. The BFF page hands every step its texts already
  * translated, and these cards used to put them through t() a second time: a
  * translated sentence is not a key, so that lookup always missed and every
  * language got the English fallback, and the OTP step lost the number it
@@ -193,8 +193,8 @@ const SelectMobileNumber = ({
 export const stepText = (text, fallback) => (text && !/^[A-Z][A-Z0-9_.]*$/.test(text) ? text : fallback);
 
 /**
- * Centered full-viewport shell. Used by SelectMobileNumber, SelectOtp,
- * and SelectName so every step shares the same visual container —
+ * Centered full-viewport shell. Used by the phone and OTP steps so both
+ * share the same visual container —
  * subtle page bg, brand-tinted card, one-column rhythm.
  */
 export function V2LoginShell({ children }) {

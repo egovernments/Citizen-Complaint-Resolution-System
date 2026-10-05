@@ -6,21 +6,9 @@ import { parseTenantRoute } from "../tenant/tenantRoute";
  * DIGIT serves two surfaces from a single bundle: citizen
  * (`/<contextPath>/citizen/...`) and employee (`/<contextPath>/employee/...`).
  * Canonical tenant-scoped routes (`/{tenantSlug}/digit-ui/{employee|citizen}`)
- * always use the Identity BFF on both surfaces. Legacy routes retain their
- * per-surface provider settings during migration.
- *
- * Config keys (globalConfigs):
- *   CITIZEN_AUTH_PROVIDER  - provider for the citizen surface
- *                            (default: AUTH_PROVIDER || "digit")
- *   EMPLOYEE_AUTH_PROVIDER - provider for the employee surface (default: "digit")
- *   AUTH_PROVIDER          - legacy/global key; honoured for the CITIZEN surface
- *                            only, for backward compatibility.
- *
- * The employee surface NEVER inherits the global AUTH_PROVIDER. A deployment
- * that turns on Keycloak for citizens must not silently break employee login
- * (which has no SSO path): the employee bundle would otherwise run the Keycloak
- * adapter, time out, and leave the login page wedged. That is exactly the
- * regression this split fixes.
+ * always use the Identity BFF on both surfaces. Legacy `/<contextPath>/...`
+ * routes use DIGIT password/OTP auth; the browser Keycloak provider and its
+ * `*_AUTH_PROVIDER` config keys were removed with the tenantless login (#2072).
  */
 
 export function getAuthSurface(pathname) {
@@ -36,19 +24,11 @@ export function getAuthSurface(pathname) {
 
 export function getAuthProvider(pathname) {
   const path = pathname || (typeof window !== "undefined" ? window.location.pathname : "");
-  const cfg = (key) => typeof window !== "undefined" && window.globalConfigs?.getConfig(key);
   const tenantSurface = parseTenantRoute(path)?.surface;
   if (tenantSurface === "employee" || tenantSurface === "citizen") {
     return "identity-bff";
   }
-  if (getAuthSurface(path) === "employee") {
-    return cfg("EMPLOYEE_AUTH_PROVIDER") || "digit";
-  }
-  return cfg("CITIZEN_AUTH_PROVIDER") || cfg("AUTH_PROVIDER") || "digit";
-}
-
-export function isKeycloakAuth(pathname) {
-  return getAuthProvider(pathname) === "keycloak";
+  return "digit";
 }
 
 export function isIdentityBffAuth(pathname) {
@@ -74,10 +54,8 @@ export function privateRouteLogin(pathname, contextPath) {
   }
   const parts = (pathname || "").split("/").filter(Boolean);
   const surface = parts[1] === "employee" ? "employee" : "citizen";
-  const loginPath = isKeycloakAuth(pathname)
-    ? `/${contextPath}/user/login`
-    : (surface === "employee"
-      ? `/${contextPath}/employee/user/language-selection`
-      : `/${contextPath}/citizen/login`);
+  const loginPath = surface === "employee"
+    ? `/${contextPath}/employee/user/language-selection`
+    : `/${contextPath}/citizen/login`;
   return { surface, loginPath };
 }

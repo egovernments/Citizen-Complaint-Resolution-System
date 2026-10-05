@@ -1,12 +1,11 @@
 import React, { useState, useEffect, Fragment } from 'react';
-import { loginConfig } from '../config';
 import { useTranslation } from "react-i18next";
 
 const Carousel = ({bannerImages=[]}) => {
     const [currentSlide, setCurrentSlide] = useState(0);
     const { t } = useTranslation();
 
-    const carouselItems = bannerImages|| loginConfig[0]?.bannerImages || [];
+    const carouselItems = bannerImages || [];
 
     const nextSlide = () => {
         setCurrentSlide(prev => (prev === carouselItems.length - 1 ? 0 : prev + 1));

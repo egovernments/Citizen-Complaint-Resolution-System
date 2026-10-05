@@ -112,7 +112,6 @@ const defaultValidationConfig = {
         window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS")?.mobileNumberRegex ||
         window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS")?.mobileNumberPattern ||
         "/^[0-9]{6,15}$/",
-      password: "/^([a-zA-Z0-9@#$%]{8,15})$/i",
     },
   ],
 };
@@ -136,10 +135,6 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
   const [profilePic, setProfilePic] = useState(null);
   const [profileImg, setProfileImg] = useState("");
   const [openUploadSlide, setOpenUploadSide] = useState(false);
-  const [changepassword, setChangepassword] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
   const [toast, setToast] = useState(null);
   const [loading, setLoading] = useState(false);
   const [windowWidth, setWindowWidth] = React.useState(window.innerWidth);
@@ -482,7 +477,6 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
   let validation = {};
   const editScreen = false; // To-do: Deubug and make me dynamic or remove if not needed
   const onClickAddPic = () => setOpenUploadSide(!openUploadSlide);
-  const TogleforPassword = () => setChangepassword(!changepassword);
   const setGenderName = (value) => setGender(value);
   const closeFileUploadDrawer = () => setOpenUploadSide(false);
 
@@ -539,63 +533,6 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
     }
   };
 
-  const setUserCurrentPassword = (value) => {
-    // The state setter was previously missing — only the validity
-    // check ran, so the typed value never made it into the
-    // `currentPassword` state. That left the save handler's gate
-    // `currentPassword.length && newPassword.length && confirmPassword.length`
-    // permanently false, the change-password branch never fired, and
-    // the API call was never made — silently breaking the entire
-    // "Update password" flow for both citizens and employees. The
-    // v2-styled employee form makes the bug visually obvious because
-    // the controlled V2Input refuses keystrokes; the legacy TextInput
-    // hid it because it wasn't bound to state. Mirror the sibling
-    // handlers (`setUserNewPassword`, `setUserConfirmPassword`).
-    setCurrentPassword(value);
-    if (!validationConfig?.password?.test(value)) {
-      setErrors({
-        ...errors,
-        currentPassword: {
-          type: "pattern",
-          message: "CORE_COMMON_PROFILE_PASSWORD_INVALID",
-        },
-      });
-    } else {
-      setErrors({ ...errors, currentPassword: null });
-    }
-  };
-
-  const setUserNewPassword = (value) => {
-    setNewPassword(value);
-    if (!validationConfig?.password?.test(value)) {
-      setErrors({
-        ...errors,
-        newPassword: {
-          type: "pattern",
-          message: "CORE_COMMON_PROFILE_PASSWORD_INVALID",
-        },
-      });
-    } else {
-      setErrors({ ...errors, newPassword: null });
-    }
-  };
-
-  const setUserConfirmPassword = (value) => {
-    setConfirmPassword(value);
-
-    if (!validationConfig?.password?.test(value)) {
-      setErrors({
-        ...errors,
-        confirmPassword: {
-          type: "pattern",
-          message: "CORE_COMMON_PROFILE_PASSWORD_INVALID",
-        },
-      });
-    } else {
-      setErrors({ ...errors, confirmPassword: null });
-    }
-  };
-
   const removeProfilePic = () => {
     setProfilePic(null);
     setProfileImg(null);
@@ -638,37 +575,6 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
           type: "error",
           message: t("CORE_COMMON_PROFILE_EMAIL_INVALID"),
         });
-      }
-
-      const trimmedCurrentPassword = currentPassword.trim();
-      const trimmedNewPassword = newPassword.trim();
-      const trimmedConfirmPassword = confirmPassword.trim();
-
-      setCurrentPassword(trimmedCurrentPassword);
-      setNewPassword(trimmedNewPassword);
-      setConfirmPassword(trimmedConfirmPassword);
-
-      if (changepassword && (trimmedCurrentPassword && trimmedNewPassword && trimmedConfirmPassword)) {
-        if (trimmedNewPassword !== trimmedConfirmPassword) {
-          throw JSON.stringify({
-            type: "error",
-            message: t("CORE_COMMON_PROFILE_PASSWORD_MISMATCH"),
-          });
-        }
-
-        if (!(trimmedCurrentPassword.length && trimmedNewPassword.length && trimmedConfirmPassword.length)) {
-          throw JSON.stringify({
-            type: "error",
-            message: t("CORE_COMMON_PROFILE_PASSWORD_INVALID"),
-          });
-        }
-
-        if (!validationConfig?.password?.test(trimmedNewPassword) && !validationConfig?.password?.test(trimmedConfirmPassword)) {
-          throw JSON.stringify({
-            type: "error",
-            message: t("CORE_COMMON_PROFILE_PASSWORD_INVALID"),
-          });
-        }
       }
 
       let responseInfo;
@@ -760,48 +666,7 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
         }
       }
 
-      if (currentPassword.length && newPassword.length && confirmPassword.length) {
-        // `type` was previously hardcoded to "EMPLOYEE" — the user
-        // service uses this field to scope the username lookup, so a
-        // citizen hitting Update Password got a `UserNotFoundException`
-        // because no EMPLOYEE record matched their mobile-as-username.
-        // Derive from the `userType` prop the route passes in
-        // (`"citizen"` from /citizen/user/profile, `"employee"` from
-        // /employee/user/profile) so the lookup runs against the
-        // correct user table on both sides.
-        const requestData = {
-          existingPassword: currentPassword,
-          newPassword: newPassword,
-          tenantId: tenant,
-          type: userType === "employee" ? "EMPLOYEE" : "CITIZEN",
-          username: userInfo?.userName,
-          confirmPassword: confirmPassword,
-        };
-
-        if (newPassword === confirmPassword) {
-          try {
-            const res = await Digit.UserService.changePassword(requestData, tenant);
-
-            const { responseInfo: changePasswordResponseInfo } = res;
-            if (changePasswordResponseInfo?.status && changePasswordResponseInfo.status === "200") {
-              showToast("success", t("CORE_COMMON_PROFILE_UPDATE_SUCCESS_WITH_PASSWORD"), 5000);
-              setTimeout(() => Digit.UserService.logout(), 2000);
-            } else {
-              throw "";
-            }
-          } catch (error) {
-            throw JSON.stringify({
-              type: "error",
-              message: error.Errors?.at(0)?.description ? error.Errors.at(0).description : "CORE_COMMON_PROFILE_UPDATE_ERROR_WITH_PASSWORD",
-            });
-          }
-        } else {
-          throw JSON.stringify({
-            type: "error",
-            message: "CORE_COMMON_PROFILE_ERROR_PASSWORD_NOT_MATCH",
-          });
-        }
-      } else if (responseInfo?.status && responseInfo.status === "200") {
+      if (responseInfo?.status && responseInfo.status === "200") {
         if ((userType === "citizen" || Digit.Utils.getMultiRootTenant()) && enableUserPreferences) {
           await saveUserPreferences();
         }
@@ -1626,97 +1491,6 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
           </V2Field>
         </V2Card>
 
-        {/* Password change card — only mounted when the deployment is
-            not using OTP-based login, matching the legacy gate. Not on
-            tenant routes either: the Identity BFF sets the DIGIT password
-            itself and rotates it on every sign-in (profile work: #2208). */}
-        {!Digit.Utils.getOTPBasedLogin() && !isIdentityBffAuth() ? (
-          <V2Card
-            style={{
-              padding: "24px",
-              display: "flex",
-              flexDirection: "column",
-              gap: "16px",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: "12px",
-              }}
-            >
-              <h2
-                style={{
-                  margin: 0,
-                  fontSize: "1rem",
-                  fontWeight: 600,
-                  color:
-                    "var(--color-primary-1, var(--color-primary-main, #c84c0e))",
-                }}
-              >
-                {tr("CORE_COMMON_CHANGE_PASSWORD", "Change password")}
-              </h2>
-              <V2Button
-                variant={changepassword ? "outline" : "secondary"}
-                onClick={TogleforPassword}
-                type="button"
-              >
-                {changepassword
-                  ? tr("CORE_COMMON_CANCEL", "Cancel")
-                  : tr("CORE_COMMON_CHANGE_PASSWORD", "Change password")}
-              </V2Button>
-            </div>
-
-            {changepassword ? (
-              <>
-                <V2Field
-                  label={tr("CORE_COMMON_PROFILE_CURRENT_PASSWORD", "Current password")}
-                  htmlFor="profile-current-password"
-                  error={errors?.currentPassword ? t(errors.currentPassword.message) : undefined}
-                >
-                  <V2Input
-                    id="profile-current-password"
-                    type="password"
-                    value={currentPassword}
-                    onChange={(e) => setUserCurrentPassword(e.target.value)}
-                    invalid={!!errors?.currentPassword}
-                    autoComplete="current-password"
-                  />
-                </V2Field>
-                <V2Field
-                  label={tr("CORE_COMMON_PROFILE_NEW_PASSWORD", "New password")}
-                  htmlFor="profile-new-password"
-                  error={errors?.newPassword ? t(errors.newPassword.message) : undefined}
-                >
-                  <V2Input
-                    id="profile-new-password"
-                    type="password"
-                    value={newPassword}
-                    onChange={(e) => setUserNewPassword(e.target.value)}
-                    invalid={!!errors?.newPassword}
-                    autoComplete="new-password"
-                  />
-                </V2Field>
-                <V2Field
-                  label={tr("CORE_COMMON_PROFILE_CONFIRM_PASSWORD", "Confirm new password")}
-                  htmlFor="profile-confirm-password"
-                  error={errors?.confirmPassword ? t(errors.confirmPassword.message) : undefined}
-                >
-                  <V2Input
-                    id="profile-confirm-password"
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(e) => setUserConfirmPassword(e.target.value)}
-                    invalid={!!errors?.confirmPassword}
-                    autoComplete="new-password"
-                  />
-                </V2Field>
-              </>
-            ) : null}
-          </V2Card>
-        ) : null}
       </div>
 
       <div

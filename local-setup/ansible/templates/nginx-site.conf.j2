@@ -578,13 +578,21 @@ server {
   # gateway is deliberately not opened because it does not normalize spoofed
   # anonymous userInfo. The real data boundary remains server-side.
   location = /digit-ui/public-dashboard {
-    return 302 /digit-ui/public-dashboard.html;
+{% if digit_ui_default_tenant_slug | default('') | length > 0 %}
+    return 302 /{{ digit_ui_default_tenant_slug }}/digit-ui/public-dashboard.html;
+{% else %}
+    return 404;
+{% endif %}
   }
 
   # Backwards-compatible alias for the first public-dashboard preview. The
   # explicit digit-ui path is canonical and is what the configurator exposes.
   location = /dashboard {
-    return 302 /digit-ui/public-dashboard;
+{% if digit_ui_default_tenant_slug | default('') | length > 0 %}
+    return 302 /{{ digit_ui_default_tenant_slug }}/digit-ui/public-dashboard;
+{% else %}
+    return 404;
+{% endif %}
   }
 
   # Canonical tenant-scoped DIGIT UI. The public slug remains in the browser
@@ -629,9 +637,18 @@ server {
   # (`node esbuild.build.js`) — no inner Docker container, no esbuild
   # dev server. Faster, fewer moving parts, smaller blast radius.
   location = /digit-ui {
-    return 302 /digit-ui/;
+{% if digit_ui_default_tenant_slug | default('') | length > 0 %}
+    return 302 /{{ digit_ui_default_tenant_slug }}/digit-ui/;
+{% else %}
+    return 404;
+{% endif %}
   }
   location /digit-ui/ {
+{% if digit_ui_default_tenant_slug | default('') | length > 0 %}
+    if ($request_uri ~ "^/digit-ui/") { return 302 /{{ digit_ui_default_tenant_slug }}$request_uri; }
+{% else %}
+    if ($request_uri ~ "^/digit-ui/") { return 404; }
+{% endif %}
     alias /opt/digit-ui-esbuild/build/;
     try_files $uri $uri/ /digit-ui/index.html;
     sub_filter_once on;
@@ -694,10 +711,13 @@ server {
   }
 
 {% if nginx_features.root_to_digit_ui | default(false) %}
-  # Bare domain -> citizen app login. Lands users in the digit-ui SPA
-  # instead of Kong's default response. Exact match (=), so the catch-all
-  # below still proxies everything else to Kong.
-  location = / { return 302 /digit-ui/citizen/login; }
+  # Bare domain enters the canonical tenant route. Without a configured
+  # default, fail closed instead of resurrecting tenantless legacy login.
+{% if digit_ui_default_tenant_slug | default('') | length > 0 %}
+  location = / { return 302 /{{ digit_ui_default_tenant_slug }}/digit-ui/citizen/login; }
+{% else %}
+  location = / { return 404; }
+{% endif %}
 {% endif %}
 
   # API calls go to Kong directly.
@@ -718,9 +738,18 @@ server {
   # into the HMR `else` and sent /user/oauth/token to
   # :{{ upstream_esbuild_port }} (no API there) → 504 on every login.
   location = /digit-ui {
-    return 302 /digit-ui/;
+{% if digit_ui_default_tenant_slug | default('') | length > 0 %}
+    return 302 /{{ digit_ui_default_tenant_slug }}/digit-ui/;
+{% else %}
+    return 404;
+{% endif %}
   }
   location /digit-ui/ {
+{% if digit_ui_default_tenant_slug | default('') | length > 0 %}
+    if ($request_uri ~ "^/digit-ui/") { return 302 /{{ digit_ui_default_tenant_slug }}$request_uri; }
+{% else %}
+    if ($request_uri ~ "^/digit-ui/") { return 404; }
+{% endif %}
     proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_esbuild_port }};
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
@@ -775,6 +804,27 @@ server {
   # digit-ui in HMR mode: esbuild dev server (tmux session) on :18080.
   # Serves both /digit-ui/* (the SPA) and proxies API calls to Kong.
   # Live reloads on file save in /opt/digit-ui-esbuild.
+  location = /digit-ui {
+{% if digit_ui_default_tenant_slug | default('') | length > 0 %}
+    return 302 /{{ digit_ui_default_tenant_slug }}/digit-ui/;
+{% else %}
+    return 404;
+{% endif %}
+  }
+  location /digit-ui/ {
+{% if digit_ui_default_tenant_slug | default('') | length > 0 %}
+    if ($request_uri ~ "^/digit-ui/") { return 302 /{{ digit_ui_default_tenant_slug }}$request_uri; }
+{% else %}
+    if ($request_uri ~ "^/digit-ui/") { return 404; }
+{% endif %}
+    proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_esbuild_port }};
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_read_timeout 120s;
+    proxy_buffering off;
+  }
   location / {
     proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_esbuild_port }};
     proxy_set_header Host $host;

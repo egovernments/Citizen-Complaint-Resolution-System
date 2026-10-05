@@ -8,12 +8,12 @@ import {
   verifyCitizenOtp,
 } from "@egovernments/digit-ui-libraries";
 
-import { SignInFailureCard, useIdentityBffSignIn } from "../../../components/IdentityBffSignIn";
-import { loginSteps } from "./config";
-import { setCitizenDetail } from "../../../components/citizenSession";
-import SelectMobileNumber, { V2LoginShell } from "./SelectMobileNumber";
-import SelectOtp from "./SelectOtp";
-import { useMobileValidationConfig } from "./useMobileValidationConfig";
+import { SignInFailureCard, useIdentityBffSignIn } from "../../components/IdentityBffSignIn";
+import { setCitizenDetail } from "../../components/citizenSession";
+import { loginSteps } from "../../components/IdentityLogin/citizenConfig";
+import SelectMobileNumber, { V2LoginShell } from "../../components/IdentityLogin/SelectMobileNumber";
+import SelectOtp from "../../components/IdentityLogin/SelectOtp";
+import { useMobileValidationConfig } from "../../components/IdentityLogin/useMobileValidationConfig";
 
 /**
  * Citizen sign-in on canonical tenant routes. When the BFF offers `phone_otp`

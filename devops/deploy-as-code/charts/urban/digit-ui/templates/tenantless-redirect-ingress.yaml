@@ -1,0 +1,35 @@
+{{- if and .Values.ingress.enabled (ne (.Values.ingress.defaultTenantSlug | default "") "") -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ template "common.name" . }}-tenantless-redirect
+{{- if .Values.global.namespace }}
+  namespace: {{ .Values.global.namespace }}
+{{- else if .Values.ingress.namespace }}
+  namespace: {{ .Values.ingress.namespace }}
+{{- else }}
+  namespace: {{ .Values.namespace }}
+{{- end }}
+  annotations:
+    nginx.ingress.kubernetes.io/temporal-redirect: /{{ .Values.ingress.defaultTenantSlug }}$request_uri
+  labels:
+{{- include "common.labels" . | nindent 4 }}
+spec:
+  rules:
+{{- if .Values.ingress.host }}
+  {{- tpl .Values.ingress.host . | nindent 2 }}
+{{- else if .Values.ingress.hostName }}
+  - host: {{ .Values.ingress.hostName }}
+{{- else }}
+  - host: {{ .Values.global.domain }}
+{{- end }}
+    http:
+      paths:
+        - path: /digit-ui
+          pathType: Prefix
+          backend:
+            service:
+              name: {{ .Values.ingress.serviceName | default (include "common.name" .) }}
+              port:
+                number: {{ .Values.ingress.servicePort | default .Values.httpPort }}
+{{- end }}

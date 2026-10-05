@@ -1,8 +1,8 @@
 import React from "react";
 import { Loader } from "@egovernments/digit-ui-components";
 
-import { SignInFailureCard, useIdentityBffSignIn } from "../../../components/IdentityBffSignIn";
-import { setEmployeeDetail, V2LoginShell } from "./login";
+import { SignInFailureCard, useIdentityBffSignIn } from "../../components/IdentityBffSignIn";
+import { setEmployeeDetail, V2LoginShell } from "../../components/IdentityLogin/EmployeeLoginShell";
 
 /**
  * Employee sign-in on canonical tenant routes. The Identity BFF sends the

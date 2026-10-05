@@ -587,6 +587,23 @@
           flipping auth_provider.
       when: _keycloak_login_surfaces | length > 0
 
+    - name: "preflight — refuse retired digit-ui-v2 citizen identity"
+      ansible.builtin.fail:
+        msg: >-
+          enable_digit_ui_v2 is no longer supported. D26 retired its fixed-OTP
+          citizen login, direct egov-user account creation and profile writes.
+          Publish the canonical /<tenant-slug>/digit-ui/citizen route instead.
+      when: enable_digit_ui_v2 | default(false)
+
+    - name: "preflight — validate digit_ui_default_tenant_slug"
+      ansible.builtin.assert:
+        that:
+          - digit_ui_default_tenant_slug is match('^[a-z0-9][a-z0-9-]{1,62}$')
+        fail_msg: >-
+          digit_ui_default_tenant_slug must be a 2-63 character lowercase
+          tenant route slug containing only letters, digits and hyphens.
+      when: digit_ui_default_tenant_slug | default('') | length > 0
+
     # ==================== WSL2 resource config (.wslconfig) ====================
     # WSL2 defaults to ~50% of host RAM for the VM; the JVM stack then
     # thrashes the VM into a freeze (deploy hangs, new WSL sessions won't
@@ -1730,6 +1747,36 @@
         replace: ""
       register: kong_otp_unmock
       when: enable_otp_services | default(false)
+
+    # D26: with Keycloak enabled, legacy native identity endpoints default
+    # closed. An explicit identity_legacy_user_endpoints:true is the rollback
+    # switch for a non-complete deployment.
+    - name: "Kong — remove legacy identity endpoints from AUTH_OPTIONAL"
+      ansible.builtin.replace:
+        path: "{{ digit_dir }}/kong/.kong.yml.pinned"
+        regexp: '(?m)^.*-- identity-legacy-user-endpoint\n'
+        replace: ''
+      when: >-
+        not (identity_legacy_user_endpoints
+             | default(not (enable_keycloak | default(false))))
+
+    - name: "Kong — remove the legacy OTP validation mock route"
+      ansible.builtin.replace:
+        path: "{{ digit_dir }}/kong/.kong.yml.pinned"
+        regexp: '(?ms)^# identity-legacy-otp-mock-start\n.*?^# identity-legacy-otp-mock-end\n'
+        replace: ''
+      when: >-
+        not (identity_legacy_user_endpoints
+             | default(not (enable_keycloak | default(false))))
+
+    - name: "Kong — reopen legacy identity endpoints only when explicitly enabled"
+      ansible.builtin.replace:
+        path: "{{ digit_dir }}/kong/.kong.yml.pinned"
+        regexp: '(?ms)^- name: identity-legacy-user-endpoints-denied # identity-legacy-user-deny-start\n.*?^# identity-legacy-user-deny-end\n'
+        replace: ''
+      when: >-
+        identity_legacy_user_endpoints
+        | default(not (enable_keycloak | default(false)))
 
     - name: "Kong — write the pinned config back IN PLACE (preserves the inode)"
       ansible.builtin.shell: |

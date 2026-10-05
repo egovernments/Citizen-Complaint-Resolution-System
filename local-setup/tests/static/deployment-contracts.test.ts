@@ -1612,3 +1612,86 @@ describe('identity-bff compose wiring', () => {
     expect(env).toContain("DIGIT_OTP_CREATE_URL={{ identity_digit_otp_create_url | default('') }}");
   });
 });
+
+describe('D26 legacy identity paths are retired', () => {
+  const playbook = read('local-setup/ansible/playbook-deploy.yml');
+  const nginx = read('local-setup/ansible/templates/nginx-site.conf.j2');
+  const kong = read('local-setup/kong/kong.yml');
+
+  test('tenantless digit-ui paths redirect only through an explicit default slug', () => {
+    expect(nginx).toContain('return 302 /{{ digit_ui_default_tenant_slug }}/digit-ui/;');
+    expect(nginx).toContain('return 302 /{{ digit_ui_default_tenant_slug }}$request_uri;');
+    expect(nginx).toContain('return 302 /{{ digit_ui_default_tenant_slug }}/digit-ui/citizen/login;');
+    expect(nginx.match(/if \(\$request_uri ~ "\^\/digit-ui\/"\) \{ return 404; \}/g)).toHaveLength(3);
+    expect(playbook).toContain('digit_ui_default_tenant_slug is match');
+  });
+
+  test('Helm publishes only tenant-scoped digit-ui routes by default', () => {
+    expect(read('devops/deploy-as-code/charts/urban/digit-ui/values.yaml')).toContain('legacyPathEnabled: false');
+    expect(read('devops/deploy-as-code/charts/urban/digit-ui/templates/ingress.yaml'))
+      .toContain('if .Values.ingress.legacyPathEnabled');
+    expect(read('devops/deploy-as-code/charts/urban/digit-ui/templates/tenantless-redirect-ingress.yaml'))
+      .toContain('temporal-redirect: /{{ .Values.ingress.defaultTenantSlug }}$request_uri');
+    expect(read('devops/deploy-as-code/charts/core-services/configmaps/values.yaml'))
+      .toContain('defaultTenantSlug: ""');
+  });
+
+  test('Kong denies legacy native endpoints but preserves oauth token', () => {
+    const nativePaths = [
+      '- /user/password/nologin/_update',
+      '- /user/citizen/_create',
+      '- /user-otp/v1/_send',
+    ];
+    const denyBlock = kong.slice(
+      kong.indexOf('identity-legacy-user-deny-start'),
+      kong.indexOf('identity-legacy-user-deny-end'),
+    );
+    for (const path of nativePaths) expect(denyBlock).toContain(path);
+    expect(denyBlock).not.toContain('- /otp');
+    expect(kong).toContain('# identity-legacy-otp-mock-start');
+    expect(playbook).toContain('identity-legacy-otp-mock-start');
+    expect(kong).toContain('["/user/oauth/token"]=true');
+    expect(kong).toContain('isInternal is not accepted at the public gateway');
+    expect(playbook).toContain('identity_legacy_user_endpoints');
+    expect(playbook).toContain('default(not (enable_keycloak | default(false)))');
+
+    // Mirror the two Ansible replacements for the Keycloak/default-false
+    // configuration: the three native calls leave AUTH_OPTIONAL, the mock
+    // service disappears, and oauth remains available for refresh/internal use.
+    const keycloakConfig = kong
+      .replace(/^.*-- identity-legacy-user-endpoint\n/gm, '')
+      .replace(/^# identity-legacy-otp-mock-start\n[\s\S]*?^# identity-legacy-otp-mock-end\n/m, '');
+    const authOptional = keycloakConfig.slice(0, keycloakConfig.indexOf('services:'));
+    const legacyAuthPaths = [...nativePaths.map((path) => path.slice(2)), '/otp/v1/_validate'];
+    for (const path of legacyAuthPaths) {
+      expect(authOptional).not.toContain(`["${path}"]=true`);
+    }
+    expect(authOptional).toContain('["/user/oauth/token"]=true');
+    expect(keycloakConfig).not.toContain('name: otp-validate-mock');
+    expect(keycloakConfig).toContain('name: identity-legacy-user-endpoints-denied');
+  });
+
+  test('digit-ui-v2 cannot be deployed after its citizen identity removal', () => {
+    expect(playbook).toContain('enable_digit_ui_v2 is no longer supported');
+    expect(playbook).toContain('D26 retired its fixed-OTP');
+  });
+
+  test('legacy UI implementations are absent and BFF-flow specs remain', () => {
+    for (const removed of [
+      'digit-ui-esbuild/packages/modules/core/src/pages/citizen/Login/index.js',
+      'digit-ui-esbuild/packages/modules/core/src/pages/citizen/Login/SelectName.js',
+      'digit-ui-esbuild/packages/modules/core/src/pages/employee/Login/login.js',
+      'digit-ui-esbuild/packages/modules/core/src/pages/employee/Otp/index.js',
+      'digit-ui-esbuild/packages/modules/core/src/pages/employee/ForgotPassword/index.js',
+      'digit-ui-esbuild/packages/modules/core/src/pages/employee/ChangePassword/index.js',
+      'digit-ui-v2/src/pages/CitizenLoginPage.tsx',
+      'digit-ui-v2/src/pages/CitizenProfilePage.tsx',
+    ]) expect(fs.existsSync(path.join(REPO_ROOT, removed))).toBe(false);
+    expect(read('tests/integration-tests/tests/utils/citizen-login.ts'))
+      .toContain("/identity/v1/citizen/otp/_send");
+    expect(read('tests/integration-tests/tests/employee/login.spec.ts'))
+      .toContain("staffContext(page");
+    expect(read('tests/integration-tests/tests/keycloak/new-citizen-provisioning.spec.ts'))
+      .toContain("selectContext(page.request, BASE_URL, 'citizen'");
+  });
+});

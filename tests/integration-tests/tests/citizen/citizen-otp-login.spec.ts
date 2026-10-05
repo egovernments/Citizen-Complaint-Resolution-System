@@ -45,7 +45,7 @@ If this fails, every other citizen test will fail downstream — pairs with the 
   test('citizen can log in with OTP and reach home page', {
     annotation: {
       type: 'description',
-      description: `End-to-end OTP login walk for a brand-new citizen — exercises the auto-register-on-first-login path with the mock OTP. Asserts the citizen lands on a valid post-login URL with a Citizen.token in localStorage and no error fallback.
+      description: `End-to-end BFF OTP login walk for a brand-new citizen — exercises the challenge, verification and tenant context-selection path. Asserts the citizen lands on a valid post-login URL with a Citizen.token in localStorage and no error fallback.
 
 Steps:
 1. citizenOtpLoginViaUI(page, CITIZEN_PHONE) — drives the phone form, OTP form, language/city pickers.

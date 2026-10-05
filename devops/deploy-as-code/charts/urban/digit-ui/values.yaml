@@ -7,6 +7,11 @@ labels:
 ingress:
   enabled: true
   context: "digit-ui"
+  # D26: canonical UI URLs are tenant-scoped. Keep the old /digit-ui ingress
+  # absent; tenant-ingress.yaml is the only public digit-ui route.
+  legacyPathEnabled: false
+  # Optional migration redirect: /digit-ui/... -> /<slug>/digit-ui/...
+  defaultTenantSlug: ""
 
 # Init Containers Configs
 initContainers: {}

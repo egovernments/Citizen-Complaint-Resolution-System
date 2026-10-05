@@ -111,6 +111,11 @@ tenant_id: ke.mycity
 # Defaults to `pg` (the dump's always-seeded tenant) when unset.
 ui_state_tenant_id: ke.mycity
 
+# Optional public landing tenant. When set, `/` and the retired tenantless
+# `/digit-ui/...` paths redirect to `/<slug>/digit-ui/...`. Leave empty to
+# return 404 and require the user to choose an organization-specific URL.
+digit_ui_default_tenant_slug: ""
+
 # REQUIRED — and, unlike the other UI settings, it has NO default in
 # group_vars and none at the point of use: globalConfigs.js.j2 renders it
 # bare, so omitting it aborts the deploy with an undefined-variable error.
@@ -750,6 +755,10 @@ novu_bridge_smscountry_password: ""
 # back with `bao kv get -field=<key> kv/digit/<tenant>`; rotate one with
 # `bao kv put`, and the next deploy pushes it into Keycloak.
 enable_keycloak: false
+# Rollback switch for D26. Defaults to false when Keycloak is enabled and true
+# otherwise. Keep false after identity completion; it closes native create,
+# reset and OTP endpoints at Kong while preserving /user/oauth/token.
+# identity_legacy_user_endpoints: false
 keycloak_organization_realm: "digit"
 identity_bff_image: ""
 identity_keycloak_image: ""
