@@ -689,6 +689,11 @@ server {
 {{ tenantless_digit_ui_guard('    ') }}
     alias /opt/digit-ui-esbuild/build/;
     try_files $uri $uri/ /digit-ui/index.html;
+    # A missing asset is a 404, not the SPA shell with a 200 (#2271 review 3).
+    # Same extension list as tenantless_digit_ui_guard above.
+    location ~ "[.](?:js|css|map|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|otf|eot)$" {
+      try_files $uri =404;
+    }
     sub_filter_once on;
     sub_filter_types text/html;
     # Inject globalConfigs.js + (optional) tenant theme tokens into <head>. Theme

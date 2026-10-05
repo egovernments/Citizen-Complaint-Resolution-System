@@ -1757,6 +1757,24 @@ describe('D26 legacy identity paths are retired', () => {
         .toContain('rewrite ^ /{{ .Values.ingress.context }}/public-dashboard.html last;');
     });
 
+    // Low (Dhruv, #2271 review 3): a URL with an asset extension that matched
+    // no file (/digit-ui/citizen.js, login;.js) got index.html with a 200. Each
+    // nginx that serves the bundle now answers those with a 404, using the
+    // guard's extension list (verified in nginx:alpine for all four configs).
+    test.each([
+      'local-setup/ansible/templates/nginx-site.conf.j2',
+      'local-setup/nginx/digit-ui.conf',
+      'digit-ui-esbuild/docker/nginx.conf',
+      'devops/deploy-as-code/charts/urban/digit-ui/templates/globalconfigs-configmap.yaml',
+    ])('%s 404s a missing asset instead of serving the SPA shell', (file) => {
+      const conf = read(file);
+      const extensions = guardSource![1].match(/\[\.\]\(\?:([^)]+)\)/)![1];
+      const nested = new RegExp(
+        `try_files \\$uri \\$uri/ /[^;]+/index\\.html;[\\s\\S]*?\\n(\\s+)location ~ "\\[\\.\\]\\(\\?:${extensions.replace(/[|?]/g, '\\$&')}\\)\\$" \\{\\n\\s+try_files \\$uri =404;\\n\\1\\}`,
+      );
+      expect(conf).toMatch(nested);
+    });
+
     test('Helm routes the assets whenever the legacy ingress is off', () => {
       expect(helmAssets).toContain('if and .Values.ingress.enabled (not .Values.ingress.legacyPathEnabled)');
       expect(helmAssets).toContain('nginx.ingress.kubernetes.io/use-regex');

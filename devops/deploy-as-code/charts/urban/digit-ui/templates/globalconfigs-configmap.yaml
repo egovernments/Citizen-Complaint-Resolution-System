@@ -34,6 +34,11 @@ data:
         try_files $uri $uri/ /{{ .Values.ingress.context }}/index.html;
 
         sub_filter '</head>' '<script src="/{{ .Values.ingress.context }}/globalConfigs.js"></script></head>';
+
+        # A missing asset is a 404, not the SPA shell with a 200.
+        location ~ "[.](?:js|css|map|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|otf|eot)$" {
+          try_files $uri =404;
+        }
       }
 
       # The public dashboard is a second HTML entry beside index.html. Its
