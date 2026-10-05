@@ -130,17 +130,25 @@ describe("Keycloak session id from a signed token", () => {
     return { sessionId: sessionCookie.split(";")[0].split("=")[1], kcSessionId: `kc-sid-${nonce}` };
   }
   it("a callback stores the token's sid as kcSessionId and writes the kc-session index", async () => {
+    const before = Math.floor(Date.now() / 1000) * 1000;
     const { sessionId, kcSessionId } = await signIn();
     expect(await getIdentitySession(sessionId)).toMatchObject({ kcSessionId, oidcClientId: config.keycloakBffClientId });
+    // auth_time (s) is stored as authTime (ms) and kept by a refresh that lacks it (GET /session refreshes here).
+    const { authTime } = (await getIdentitySession(sessionId))!;
+    expect(authTime).toBeGreaterThanOrEqual(before); expect(authTime! % 1000).toBe(0);
+    expect((await fetch(`${base}/identity/v1/session`, { headers: { Cookie: cookie(sessionId) } })).status).toBe(200);
+    expect(await getIdentitySession(sessionId)).toMatchObject({ authTime });
     expect(await getRedis().get(kcSessionSubjectKey(kcSessionId))).toBe("identity-user-1");
   });
   it("B3: a self UPDATE_PASSWORD keeps the initiating session and ends the others", async () => {
     const initiator = await signIn(); const other = await signIn();
+    // Both sessions authenticated before the change, so only B3 can keep the initiator.
+    const changedAt = Date.now() + 2000;
     const details = { credential_type: "password", code_id: initiator.kcSessionId };
     const shape = { userId: "identity-user-1", clientId: config.keycloakBffClientId, details };
     // Keycloak 26.7.3 emits the UPDATE_PASSWORD twin 1 ms before UPDATE_CREDENTIAL.
-    await applyKeycloakEvent("user", { ...shape, id: "twin", time: Date.now() - 1, type: "UPDATE_PASSWORD" });
-    await applyKeycloakEvent("user", { ...shape, id: "change", time: Date.now(), type: "UPDATE_CREDENTIAL" });
+    await applyKeycloakEvent("user", { ...shape, id: "twin", time: changedAt - 1, type: "UPDATE_PASSWORD" });
+    await applyKeycloakEvent("user", { ...shape, id: "change", time: changedAt, type: "UPDATE_CREDENTIAL" });
     await drainRevocationJobs();
     expect(await getIdentitySession(initiator.sessionId)).not.toBeNull();
     expect(await getIdentitySession(other.sessionId)).toBeNull();

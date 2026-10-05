@@ -852,6 +852,7 @@ A pending binding past `expiresAt` counts as `removed` everywhere, even before a
 | `kcSessionId` | at create and refresh, from the token's `sid` | Matches Keycloak events to this session (§10) |
 | `phoneRef` | citizen sessions | `privateRef("phone", e164)`. Ends "sessions carrying the old number" on a phone change |
 | `createdAt`, `lastSeenAt` | at create; at touch (at most once a minute) | `GET /session` `sessions[]` |
+| `authTime` | at create and refresh, from the access token's `auth_time` (seconds) × 1000; a refresh without the claim keeps the stored value | Which sessions a credential change ends (§10). Keycloak's clock, like the event's `time`; `createdAt` (BFF clock, code-exchange time) is never used for this |
 
 **Write rules:**
 - create: `SET … NX EX`;
@@ -1104,15 +1105,24 @@ Probed on Keycloak 26.7.3 on 2026-10-04; the event shapes the poller matches are
 | Disable | admin `UPDATE` + `USER`, path `users/{id}`, `representation.enabled === false` | Revoke everything for the person. A missing `enabled` is not a disable. Keycloak keeps the sessions; the refresh fails later |
 | Delete | admin `DELETE` + `USER`, path `users/{id}` | Write an audit record first, then revoke. This also covers the person's memberships, which emit no event of their own |
 | Logout-all (admin) | admin `ACTION` + `USER`, path `users/{id}/logout` | Raise the generation; revoke everything. No user events come with it |
-| Admin credential reset | admin `ACTION` + `USER`, path `users/{id}/reset-password` | Revoke everything. Keycloak does **not** end sessions itself |
-| Self password change | user `UPDATE_CREDENTIAL` with `details.credential_type = "password"` (its twin `UPDATE_PASSWORD` fires 1 ms earlier; act once) | Keep the BFF session whose `kcSessionId` = **`details.code_id`** (the event has **no `sessionId`**) and whose client = the event's `clientId`. Raise the generation, rewrite that one session's generation, and revoke the others (D25/B3). Keep a DIGIT token only if that session is its **only** holder; a token an ended session also holds is revoked, and the kept session gets a fresh token at its next `_select` (§8). No match → revoke everything |
-| Other credential change | user `UPDATE_CREDENTIAL` / `REMOVE_CREDENTIAL` for another `credential_type` | Revoke everything |
+| Admin credential reset | admin `ACTION` + `USER`, path `users/{id}/reset-password` | Revoke everything the change does not spare (below). Keycloak does **not** end sessions itself |
+| Self password change | user `UPDATE_CREDENTIAL` with `details.credential_type = "password"` (its twin `UPDATE_PASSWORD` fires 1 ms earlier; act once) | Keep the BFF session whose `kcSessionId` = **`details.code_id`** (the event has **no `sessionId`**) and whose client = the event's `clientId`. Raise the generation, rewrite that session's generation and those of the sessions the change spares (below), and revoke the others (D25/B3). DIGIT tokens follow the only-holders rule (below). No match → revoke everything the change does not spare |
+| Other credential change | user `UPDATE_CREDENTIAL` / `REMOVE_CREDENTIAL` for another `credential_type` | Revoke everything the change does not spare (below) |
 | Sign out other devices | user `LOGOUT` with `details.logout_triggered_by_required_action` | End the BFF session with that `kcSessionId` |
 | Normal logout | user `LOGOUT`, `sessionId` + `clientId` | End the BFF session with that `kcSessionId` |
 | Single session (admin) | admin `DELETE` + `USER_SESSION`, path `sessions/{sid}` | End the BFF session with that `kcSessionId` (the path has no user id) |
 | Membership removed | admin `DELETE` + `ORGANIZATION_MEMBERSHIP`, path `organizations/{orgId}/members/{userId}` | Revoke the person's tokens at that Organization's tenant |
 | Organization deleted, disabled or `FAILED` | admin `DELETE` + `ORGANIZATION` (path `organizations/{orgId}`), or an `UPDATE` with `enabled === false` | Revoke every member at that tenant. A delete has no per-member events |
 | Email verified or changed | user `VERIFY_EMAIL` / `UPDATE_EMAIL` | Write the verified email to DIGIT (D18) |
+
+**What a credential change spares.** The three credential rows end only sessions that authenticated before the change. The cutoff is the event's `time`, compared on Keycloak's own clock:
+- **The changing session.** A BFF session whose `kcSessionId` equals the event's Keycloak session survives, whatever its client or `auth_time`. In 26.7.3 that session is `details.code_id`, because the event has no `sessionId`. That session just proved the new password or the action token. Matching on it is needed because `auth_time` has whole-second precision, so an inline required action can stamp `auth_time` × 1000 below the event `time`.
+- **Later authentications.** A session survives if its `authTime` is at or after `time`. If `authTime` is missing, the BFF uses `start` of the session's Keycloak session from `GET /users/{id}/sessions` (`view-users`). If neither is known, the session counts as older.
+- **Never `createdAt`.** A code issued for an old-password login and exchanged after the change would otherwise survive.
+- **No skew allowance.** Both times come from Keycloak. A sign-in in the same second as the change counts as older and must sign in again (fail closed).
+- **Password setup by action token.** The 26.7.3 probe in `keycloak/tests/live-check.py` shows that the action token leaves **no** SSO session. The sign-in that follows authenticates afresh, so its `auth_time` falls after the event.
+- **Generation.** Every surviving session has its generation rewritten together with the raise.
+- **DIGIT tokens.** A DIGIT token survives only if surviving sessions (the B3 session and the sessions the change spares) are its **only** holders. A token that an ended session also holds may already be on a pre-change device, so it is revoked with an egov-user logout, even if the B3 session holds it too. A surviving holder gets a fresh token at its next `_select` (§8).
 
 - Admin events name the caller's client by **internal id**, not `clientId`.
 - Membership **adds** carry no user id, so the BFF never acts on them.

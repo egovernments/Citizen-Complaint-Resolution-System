@@ -8,7 +8,7 @@ import { currentSession } from "../../src/modules/sessions/current-session.js";
 import { checkpointKey, getPollerReadiness, pollKeycloakEvents, seenKey } from "../../src/modules/revocation/poller.js";
 import { applyKeycloakEvent, type IdentifierEffects } from "../../src/modules/revocation/event-effects.js";
 import type { EventSource, EventStream, KeycloakEvent } from "../../src/modules/revocation/event-source.js";
-import { drainRevocationJobs, recordToken, revokePerson } from "../../src/modules/revocation/index.js";
+import { drainRevocationJobs, holdToken, recordToken, revokePerson } from "../../src/modules/revocation/index.js";
 import { key, readToken } from "../../src/modules/revocation/inventory.js";
 import { startRevocationWorkers } from "../../src/modules/revocation/workers.js";
 import * as keycloak from "../../src/modules/revocation/keycloak.js";
@@ -24,9 +24,9 @@ let events: Record<EventStream, KeycloakEvent[]>;
 let source: EventSource;
 let sync: IdentifierEffects;
 const effect = (stream: EventStream, event: KeycloakEvent) => applyKeycloakEvent(stream, event, sync);
-async function session(sid = "kc-session", client = "client", refresh = false) {
+async function session(sid = "kc-session", client = "client", refresh = false, authTime?: number) {
   return (await createIdentitySession({ ...tokens, accessExpiresIn: refresh ? 1 : 600 },
-    { sub: subject, email: "test@example.invalid", ...{ sid } }, client)).sessionId;
+    { sub: subject, email: "test@example.invalid", ...{ sid }, ...(authTime !== undefined && { auth_time: authTime }) }, client)).sessionId;
 }
 const event = (id: string, extra: Partial<KeycloakEvent> = {}): KeycloakEvent => ({ id, time: now - 100, userId: subject, ...extra });
 const adminEvent = (kind: "disable" | "logout" | "credential") => event(kind, {
@@ -44,6 +44,7 @@ beforeEach(async () => {
   vi.spyOn(keycloak, "getRevocationUser").mockImplementation(async id => ({ id }));
   vi.spyOn(digit, "revokeToken").mockResolvedValue();
   vi.spyOn(keycloak, "endKeycloakSession").mockResolvedValue();
+  vi.spyOn(keycloak, "keycloakSessionStarts").mockResolvedValue(new Map());
   for (const stream of ["user", "admin"] as const) await getRedis().hset(checkpointKey(stream), { time: now - 1000, idsAtTime: "[]" });
 });
 afterAll(async () => { vi.restoreAllMocks(); await cleanup(); await closeCache(); });
@@ -163,10 +164,118 @@ describe("Keycloak event poller", () => {
     await pollKeycloakEvents({ source, effect, now: now + 1 });
     expect(await getIdentitySession(keep)).toBeNull();
   });
-  it("a mismatched password-change client exempts no session", async () => {
-    const sid = await session();
-    events.user = [event("password", { type: "UPDATE_CREDENTIAL", details: { credential_type: "password", code_id: "kc-session" }, clientId: "other-client" })];
-    await pollKeycloakEvents({ source, effect, now }); expect(await getIdentitySession(sid)).toBeNull();
+  // Credential events are timed `now - 100`; Keycloak's auth_time is in whole seconds.
+  const authedAfter = () => Math.ceil(now / 1000);
+  const authedBefore = () => Math.floor((now - 100) / 1000) - 1;
+  const setupEvent = (extra: Partial<KeycloakEvent> = {}) => event("setup", { type: "UPDATE_CREDENTIAL", clientId: "employee-client",
+    details: { credential_type: "password", code_id: "kc-action-token" }, ...extra });
+  it("live repro: a sign-in authenticated after an action-token password setup survives; an older one is revoked", async () => {
+    const old = await session("kc-old", "employee-client", false, authedBefore());
+    const fresh = await session("kc-fresh", "employee-client", false, authedAfter());
+    expect(await getIdentitySession(fresh)).toMatchObject({ authTime: authedAfter() * 1000 });
+    events.user = [setupEvent()];
+    await pollKeycloakEvents({ source, effect, now });
+    expect(await getIdentitySession(old)).toBeNull();
+    expect(await getIdentitySession(fresh)).toMatchObject({ revocationGeneration: 1 });
+    expect(await currentSession(sessionCookie(fresh, 600))).not.toBeNull();
+  });
+  it("a delayed code exchange of an old-password login is revoked though created after the change", async () => {
+    // Authenticated before the change, code exchanged (BFF session created) after it.
+    const late = await session("kc-attacker", "employee-client", false, authedBefore());
+    expect((await getIdentitySession(late))!.createdAt).toBeGreaterThan(now - 100);
+    events.user = [setupEvent({ details: { credential_type: "password", code_id: "kc-owner" } })];
+    await pollKeycloakEvents({ source, effect, now });
+    expect(await getIdentitySession(late)).toBeNull();
+  });
+  it("the Keycloak session that made the change survives whatever its client and auth_time", async () => {
+    const changer = await session("kc-changer", "other-client", false, authedBefore());
+    const other = await session("kc-other", "employee-client", false, authedBefore());
+    events.user = [setupEvent({ details: { credential_type: "password", code_id: "kc-changer" } })];
+    await pollKeycloakEvents({ source, effect, now });
+    expect(await getIdentitySession(changer)).toMatchObject({ revocationGeneration: 1 });
+    expect(await getIdentitySession(other)).toBeNull();
+  });
+  it("a self password change keeps the initiating session (B3) and later sign-ins, and ends older ones", async () => {
+    const keep = await session("kc-session", "client", false, authedBefore());
+    const other = await session("other", "client", false, authedBefore());
+    const fresh = await session("fresh", "client", false, authedAfter());
+    events.user = [event("password", { type: "UPDATE_CREDENTIAL", details: { credential_type: "password", code_id: "kc-session" }, clientId: "client" })];
+    await pollKeycloakEvents({ source, effect, now });
+    expect(await getIdentitySession(keep)).toMatchObject({ revocationGeneration: 1 });
+    expect(await getIdentitySession(fresh)).toMatchObject({ revocationGeneration: 1 });
+    expect(await getIdentitySession(other)).toBeNull();
+  });
+  it("without auth_time, the Keycloak session start from the Admin API decides", async () => {
+    const later = await session("kc-later"); const earlier = await session("kc-earlier");
+    vi.mocked(keycloak.keycloakSessionStarts).mockResolvedValue(new Map([["kc-later", authedAfter() * 1000], ["kc-earlier", authedBefore() * 1000]]));
+    events.user = [setupEvent()];
+    await pollKeycloakEvents({ source, effect, now });
+    expect(keycloak.keycloakSessionStarts).toHaveBeenCalledWith(subject);
+    expect(await getIdentitySession(later)).not.toBeNull();
+    expect(await getIdentitySession(earlier)).toBeNull();
+  });
+  it.each(["no Keycloak session", "an Admin API failure"])("without auth_time and with %s, the session counts as older", async kind => {
+    const sid = await session("kc-unknown");
+    if (kind === "an Admin API failure") vi.mocked(keycloak.keycloakSessionStarts).mockRejectedValue(new Error("down"));
+    events.user = [setupEvent()];
+    await pollKeycloakEvents({ source, effect, now });
+    expect(await getIdentitySession(sid)).toBeNull();
+  });
+  it("an admin password reset also spares sessions authenticated after it", async () => {
+    const old = await session("kc-old", "client", false, authedBefore()); const fresh = await session("kc-fresh", "client", false, authedAfter());
+    events.admin = [adminEvent("credential")];
+    await pollKeycloakEvents({ source, effect, now });
+    expect(await getIdentitySession(old)).toBeNull();
+    expect(await getIdentitySession(fresh)).not.toBeNull();
+  });
+  it("a spared session keeps a DIGIT token only it holds, not one an ended session also holds", async () => {
+    const old = await session("kc-old", "client", false, authedBefore()); const fresh = await session("kc-fresh", "client", false, authedAfter());
+    const shared = { tenantId: "tenant", uuid: "shared" };
+    await withPersonLease(subject, async lease => {
+      await recordToken(lease, account, { accessToken: "own", expiresAt: Date.now() + 600000, user: account }, "staff");
+      await recordToken(lease, shared, { accessToken: "shared", expiresAt: Date.now() + 600000, user: shared }, "staff");
+      await holdToken(lease, account, fresh); await holdToken(lease, shared, fresh); await holdToken(lease, shared, old);
+    });
+    events.user = [setupEvent()];
+    await pollKeycloakEvents({ source, effect, now });
+    expect(await readToken(account)).toMatchObject({ accessToken: "own" });
+    expect(await readToken(shared)).toBeNull();
+    expect(digit.revokeToken).toHaveBeenCalledWith("shared");
+    expect(digit.revokeToken).not.toHaveBeenCalledWith("own");
+  });
+  it.each(["client", "other-client"])("event client %s: the changer survives; a token it shares with an ended session is revoked", async client => {
+    const sid = await session(); const old = await session("kc-old");
+    await withPersonLease(subject, async lease => {
+      await recordToken(lease, account, { accessToken: "shared", expiresAt: Date.now() + 600000, user: account }, "staff");
+      await holdToken(lease, account, sid); await holdToken(lease, account, old);
+    });
+    events.user = [event("password", { type: "UPDATE_CREDENTIAL", details: { credential_type: "password", code_id: "kc-session" }, clientId: client })];
+    await pollKeycloakEvents({ source, effect, now });
+    expect(await getIdentitySession(sid)).not.toBeNull(); expect(await getIdentitySession(old)).toBeNull();
+    expect(await readToken(account)).toBeNull();
+    expect(digit.revokeToken).toHaveBeenCalledExactlyOnceWith("shared");
+  });
+  it.each([false, true])("B3 keep and an auth_time-spared session as T's only holders keep T; an ended third holder revokes it (%s)", async ended => {
+    const keep = await session("kc-session", "client", false, authedBefore());
+    const fresh = await session("kc-fresh", "client", false, authedAfter());
+    const old = await session("kc-old", "client", false, authedBefore());
+    await withPersonLease(subject, async lease => {
+      await recordToken(lease, account, { accessToken: "shared", expiresAt: Date.now() + 600000, user: account }, "staff");
+      await holdToken(lease, account, keep); await holdToken(lease, account, fresh);
+      if (ended) await holdToken(lease, account, old);
+    });
+    events.user = [event("password", { type: "UPDATE_CREDENTIAL", details: { credential_type: "password", code_id: "kc-session" }, clientId: "client" })];
+    await pollKeycloakEvents({ source, effect, now });
+    expect(await getIdentitySession(keep)).toMatchObject({ revocationGeneration: 1 });
+    expect(await getIdentitySession(fresh)).toMatchObject({ revocationGeneration: 1 });
+    expect(await getIdentitySession(old)).toBeNull();
+    if (ended) {
+      expect(await readToken(account)).toBeNull();
+      expect(digit.revokeToken).toHaveBeenCalledExactlyOnceWith("shared");
+    } else {
+      expect(await readToken(account)).toMatchObject({ accessToken: "shared" });
+      expect(digit.revokeToken).not.toHaveBeenCalled();
+    }
   });
   it("unmapped Organization deletion waits for a durable reconcile request before checkpoint", async () => {
     events.admin = [event("org-delete", { operationType: "DELETE", resourceType: "ORGANIZATION", resourcePath: "organizations/missing" })];

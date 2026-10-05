@@ -16,6 +16,8 @@ export interface IdentitySession {
   phoneRef?: string;
   createdAt?: number;
   lastSeenAt?: number;
+  /** Keycloak `auth_time` × 1000 (ms epoch, Keycloak's clock). Decides credential-change survival (§10). */
+  authTime?: number;
   claims: KeycloakClaims;
   /** OIDC client that created this session; absent on older sessions. */
   oidcClientId?: string;

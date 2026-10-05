@@ -15,6 +15,7 @@ mocked. Covers:
 
 import copy
 import hashlib
+import html
 import hmac
 import json
 import os
@@ -550,6 +551,49 @@ def _():
     assert changed and changed[0]["details"].get("code_id")
     assert changed[0]["clientId"] == EMPLOYEE[0]
 
+
+
+def jwt_claims(token):
+    import base64
+    part = token.split(".")[1]
+    return json.loads(base64.urlsafe_b64decode(part + "=" * (-len(part) % 4)))
+
+
+@check("frozen §10: credential-change survivors — auth_time in the access token, action token leaves no SSO session")
+def _():
+    # Password setup by action token (execute-actions-email, as the BFF sends it).
+    user = admin("POST", "/users", {"username": "emp-setup", "email": "setup@example.test",
+                                    "emailVerified": True, "enabled": True})
+    started = time.time()
+    query = urllib.parse.urlencode({"client_id": EMPLOYEE[0], "lifespan": 600,
+                                    "redirect_uri": REDIRECT.removesuffix("/callback") + "/password/setup-complete/live"})
+    urllib.request.urlopen(urllib.request.Request(
+        f"{KC}/admin/realms/{REALM}/users/{user}/execute-actions-email?{query}",
+        data=json.dumps(["UPDATE_PASSWORD"]).encode(), method="PUT",
+        headers={"Authorization": f"Bearer {master_token()}", "Content-Type": "application/json"})).read()
+    browser = Browser()
+    page = browser.request(first_link(mail_to("setup@example.test", started)))
+    proceed = re.search(r'href="([^"]*login-actions/action-token[^"]*)"', page.body)
+    if proceed:
+        page = browser.request(urllib.parse.urljoin(page.url, html.unescape(proceed.group(1))))
+    action, fields = page.form("password-new", "password-confirm")
+    fields.update({"password-new": "Setup-pass-1", "password-confirm": "Setup-pass-1"})
+    browser.request(action, fields)
+    [setup] = events("UPDATE_CREDENTIAL", user)
+    assert setup.get("sessionId") is None and setup["details"].get("code_id"), setup
+    # No SSO session survives the action token, so the next sign-in authenticates afresh.
+    assert admin("GET", f"/users/{user}/sessions") == [], "action token left an SSO session"
+    # A required action inside a sign-in: the event's code_id is that sign-in's sid.
+    create_user("emp-inline", "inline@example.test")
+    signin = SignIn(kc_action="UPDATE_PASSWORD").password("emp-inline")
+    signin.submit(("password-new", "password-confirm"),
+                  {"password-new": "Inline-pass-2", "password-confirm": "Inline-pass-2"})
+    access = jwt_claims(signin.tokens()["access_token"])
+    [inline] = events("UPDATE_CREDENTIAL", admin("GET", "/users?username=emp-inline&exact=true")[0]["id"])
+    assert isinstance(access.get("auth_time"), int), access
+    assert inline["details"]["code_id"] == access["sid"], (inline, access)
+    started_ms = admin("GET", f"/users/{access['sub']}/sessions")[0]["start"]
+    return f"auth_time={access['auth_time']} session start={started_ms} event time={inline['time']}"
 
 @check("frozen §10: membership removal identifies the person in resourcePath")
 def _():
