@@ -3209,9 +3209,6 @@
           identity_onboarding_token: >-
             {{ _identity_stored.identity_onboarding_token | default('', true)
                or lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
-          pgr_onboarding_worker_token: >-
-            {{ _identity_stored.pgr_onboarding_worker_token | default('', true)
-               or lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
       when: enable_keycloak | default(false)
       no_log: true
 
@@ -3255,7 +3252,6 @@
           IDENTITY_CONTROL_PLANE_TOKEN={{ identity_secrets.identity_control_plane_token }}
           IDENTITY_SESSION_INTROSPECTION_TOKEN={{ identity_secrets.identity_session_introspection_token }}
           IDENTITY_ONBOARDING_TOKEN={{ identity_secrets.identity_onboarding_token }}
-          PGR_ONBOARDING_WORKER_TOKEN={{ identity_secrets.pgr_onboarding_worker_token }}
           IDENTITY_CITIZEN_OTP_SECRET={{ bao_secrets_identity.json.data.data.identity_citizen_otp_secret | default('') }}
           {% if (identity_staff_credential_mode | default('rotate')) == 'derived' %}
           IDENTITY_CREDENTIAL_KEYS={{ bao_secrets_identity.json.data.data.identity_credential_keys }}

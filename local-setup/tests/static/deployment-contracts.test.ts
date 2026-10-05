@@ -109,7 +109,6 @@ describe('ansible playbook-deploy.yml', () => {
       'identity_control_plane_token',
       'identity_session_introspection_token',
       'identity_onboarding_token',
-      'pgr_onboarding_worker_token',
     ];
 
     test('none of them is derived from another secret', () => {

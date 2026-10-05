@@ -730,11 +730,10 @@ novu_bridge_smscountry_password: ""
 #
 # Secrets: `keycloak_admin_password` must be set in OpenBao (the deploy fails
 # closed without it — an empty value makes compose fall back to the literal
-# `admin`). The seven identity secrets — keycloak_bff_client_secret,
+# `admin`). The six identity secrets — keycloak_bff_client_secret,
 # keycloak_magic_link_client_secret, keycloak_admin_client_secret,
-# identity_control_plane_token, identity_session_introspection_token,
-# identity_onboarding_token and
-# pgr_onboarding_worker_token — are generated independently on first deploy
+# identity_control_plane_token, identity_session_introspection_token and
+# identity_onboarding_token — are generated independently on first deploy
 # and stored in OpenBao, so none of them is derivable from another. Read one
 # back with `bao kv get -field=<key> kv/digit/<tenant>`; rotate one with
 # `bao kv put`, and the next deploy pushes it into Keycloak.
