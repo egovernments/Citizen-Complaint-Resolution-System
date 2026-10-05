@@ -206,6 +206,7 @@ All locks are Redis leases: `SET key token NX PX ttl`, released by compare-and-d
 | POST | `/identity/v1/workspace-members/_remove` | session | live | 9, 10 |
 | POST | `/identity/v1/workspace-members/_updateEmail` | session | live | 9 |
 | POST | `/identity/v1/workspace-invitations/_accept` | session | live | 9 |
+| POST | `/identity/v1/workspace-invitations/_decline` | session | live | 9 |
 | POST | `/identity/v1/account/providers/_unlink` | session | changing | 4 |
 | POST | `/internal/identity/v1/sessions/_introspect` | introspection | live | 11 |
 | POST | `/internal/identity/v1/identifiers/_check` | introspection | live | 11 |
@@ -561,6 +562,20 @@ Caller: live `ACCOUNT_ADMIN` at `tenantId`. The configurator calls it right afte
 - A repeat on an already-`active` binding at the same version returns `200`.
 - The inviter's authority is not re-checked at accept; the invitation was authorized when it was made.
 
+#### 3.3.9a `POST /identity/v1/workspace-invitations/_decline` (item 9)
+
+```
+?surface=configurator|employee   (optional; default configurator)
+{tenantId, invitationVersion: integer}
+200 {declined: true}
+```
+
+- The invitee turns down their own invitation. Same session and surface rules as `_accept`. It acts only on the signed-in person's binding; there is no way to name anyone else.
+- The binding must be `pending`, unexpired, and at that version. Otherwise → 409 `INVITATION_STALE` (also for "no invitation" and for an `active` binding: a member leaves through the admin's `_remove`).
+- Under person → uuid the binding becomes `removed` with `removedBy: {kind: "browser", subject: <invitee>}`, which releases the uuid. A pending binding has no membership or token, so nothing is revoked. Then mirror, and audit `ACCOUNT_LINK_REVOKE` with `detail: "INVITATION_DECLINED"`.
+- A repeat at the same version, after the invitee's own decline, returns `200`.
+- The admin can invite again with `_link` `reinvite: true`.
+
 #### 3.3.10 `POST /identity/v1/account/providers/_unlink` (item 4)
 
 ```
@@ -829,6 +844,7 @@ Every write follows the safe writer rule (design §4):
 | none → `pending` (v1) | `_link` (existing person) | the same |
 | `pending` → `active` | `_accept` by the bound person | version equal and not expired, else `INVITATION_STALE` |
 | `pending` / `active` → `removed` | `_remove`; operator unlink (until item 14) | releases the uuid, removes membership, revokes |
+| `pending` → `removed` | `_decline` by the bound person | version equal and not expired, else `INVITATION_STALE`; releases the uuid |
 | `pending` → `removed` | expiry (`removedBy.kind = "expiry"`), written by reconcile, or lazily by the next reader | releases the uuid |
 | `pending` / `removed` → `pending` (v+1) | `_link` with `reinvite: true` | uuid unowned |
 | `active` → `pending` | **never** | — |
