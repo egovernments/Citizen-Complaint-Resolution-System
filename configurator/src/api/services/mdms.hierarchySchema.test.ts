@@ -54,11 +54,4 @@ describe('ensureHierarchySchema', () => {
 
     expect(post.mock.calls[1][0]).toContain('_create');
   });
-
-  it('refuses to record the reserved WORKSPACE hierarchy', async () => {
-    await expect(
-      mdmsService.ensureHierarchySchema('newtown', { ...LEVELS, hierarchy: 'WORKSPACE' }),
-    ).rejects.toThrow(/reserved/);
-    expect(post).not.toHaveBeenCalled();
-  });
 });

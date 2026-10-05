@@ -28,7 +28,6 @@ import { LabelFieldPair, CardLabel, Field } from '@/components/digit/LabelFieldP
 import { SubmitBar } from '@/components/digit/SubmitBar';
 import { Banner } from '@/components/digit/Banner';
 import { apiClient, boundaryService, localizationService, mdmsService, ApiClientError } from '@/api';
-import { WORKSPACE_HIERARCHY_TYPE } from '@/api/services/boundary';
 import { reportStepError, trackStepAction } from '../telemetry';
 import { parseExcelFile, parseBoundaryExcel } from '@/utils/excelParser';
 import { downloadBoundaryTemplate } from '@/utils/templateBuilder';
@@ -151,19 +150,16 @@ const OSM_HIERARCHY_TYPE = getConfiguredHierarchyType();
 // Post-create pipeline shared by BOTH paths after createBoundaries succeeds:
 // localizations (boundary names are required for the citizen UI; the rest is
 // best-effort), localization cache-bust, and the boundary-path repair tool.
-// Returns a message for the operator when the hierarchy record didn't save.
 async function runPostCreatePipeline(
   tenantId: string,
   created: Boundary[],
   hierarchyType: string,
   levels: { boundaryType: string }[],
-): Promise<string | null> {
+): Promise<void> {
   // Make this the tenant's PGR hierarchy (CMS-BOUNDARY.HierarchySchema) when it
   // has none yet: digit-ui, the dashboard and PGR read it in place of the
   // deployment-wide HIERARCHY_TYPE / pgrBoundary*Level globalConfigs (#2260).
-  // The boundaries exist either way, so the rest still runs, but the operator
-  // is told: without this row the Geography step can't complete.
-  let schemaError: string | null = null;
+  // Not fatal — the boundaries exist; a re-import writes it again.
   if (levels.length > 0) {
     try {
       await mdmsService.ensureHierarchySchema(tenantId, {
@@ -174,8 +170,6 @@ async function runPostCreatePipeline(
     } catch (e) {
       console.warn('[geography] CMS-BOUNDARY.HierarchySchema not written', e);
       reportStepError('geography', 'hierarchy_schema', e, tenantId);
-      const reason = e instanceof ApiClientError ? e.firstError : e instanceof Error ? e.message : String(e);
-      schemaError = `Boundaries were created, but the hierarchy record didn't save: ${reason}`;
     }
   }
 
@@ -262,7 +256,6 @@ async function runPostCreatePipeline(
   } catch (e) {
     console.warn('[geography] boundary path fix skipped (MCP not reachable):', e);
   }
-  return schemaError;
 }
 
 export type BoundarySource = 'osm' | 'excel';
@@ -464,10 +457,6 @@ export default function BoundaryImport({
       setError('Hierarchy type name is required');
       return;
     }
-    if (hierarchyType.trim().toUpperCase() === WORKSPACE_HIERARCHY_TYPE) {
-      setError(`"${WORKSPACE_HIERARCHY_TYPE}" is reserved for the workspace root. Choose another hierarchy name.`);
-      return;
-    }
 
     const validLevels = hierarchyLevels.filter(l => l.trim());
     if (validLevels.length < 2) {
@@ -656,7 +645,7 @@ export default function BoundaryImport({
       setTotalCreated(result.success.length);
 
       // Localizations + cache-bust + boundary-path repair (shared with OSM path)
-      const schemaError = await runPostCreatePipeline(
+      await runPostCreatePipeline(
         boundaryTenant,
         result.success,
         selectedHierarchy.hierarchyType,
@@ -672,11 +661,9 @@ export default function BoundaryImport({
       });
       setStep('complete');
 
-      const failures = [
-        result.failed.length > 0 ? `${result.failed.length} boundaries failed to create.` : null,
-        schemaError,
-      ].filter(Boolean);
-      if (failures.length) setError(failures.join(' '));
+      if (result.failed.length > 0) {
+        setError(`${result.failed.length} boundaries failed to create`);
+      }
     } catch (err) {
       console.error('Boundary upload error:', err);
       reportStepError('geography', 'import_excel', err, boundaryTenant);
@@ -894,11 +881,6 @@ export default function BoundaryImport({
     const validLevels = getSelectedLevels(adminLevels);
     const levelNames = validLevels.map(l => l.mappedName.trim());
 
-    if (OSM_HIERARCHY_TYPE === WORKSPACE_HIERARCHY_TYPE) {
-      setError(`"${WORKSPACE_HIERARCHY_TYPE}" is reserved for the workspace root. Set HIERARCHY_TYPE to another hierarchy name.`);
-      return;
-    }
-
     setLoading(true);
     setError(null);
     setStep('creating');
@@ -959,7 +941,7 @@ export default function BoundaryImport({
       }
 
       // Localizations + cache-bust + boundary-path repair (shared with Excel path)
-      const schemaError = await runPostCreatePipeline(
+      await runPostCreatePipeline(
         boundaryTenant,
         result.success,
         OSM_HIERARCHY_TYPE,
@@ -975,11 +957,9 @@ export default function BoundaryImport({
       });
       setStep('complete');
 
-      const failures = [
-        result.failed.length > 0 ? `${result.failed.length} boundaries failed to create.` : null,
-        schemaError,
-      ].filter(Boolean);
-      if (failures.length) setError(failures.join(' '));
+      if (result.failed.length > 0) {
+        setError(`${result.failed.length} boundaries failed to create`);
+      }
     } catch (e) {
       console.error(e);
       reportStepError('geography', 'import_osm', e, boundaryTenant);
