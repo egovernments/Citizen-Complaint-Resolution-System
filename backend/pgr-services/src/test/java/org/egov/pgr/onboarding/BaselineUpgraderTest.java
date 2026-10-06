@@ -31,6 +31,8 @@ public class BaselineUpgraderTest {
         when(workspaces.finishUpgrade(anyString(), any(), anyString(), any(), anyLong())).thenAnswer(call -> {
             finished = (Map<String, Object>) call.getArgument(3); return true; });
         upgrader = new BaselineUpgrader(workspaces, onboarding, steps, client, seed, mapper, true);
+        when(client.mdmsSchemaSearchPath()).thenReturn("/egov-mdms-service/schema/v1/_search");
+        when(client.mdmsSearchPath()).thenReturn("/egov-mdms-service/v2/_search");
         when(client.read(anyString(), anyString(), anyMap())).thenAnswer(call -> read(call.getArgument(0), call.getArgument(1), call.getArgument(2)));
         when(client.write(any(), anyString(), anyString(), anyMap())).thenAnswer(call -> write(call.getArgument(1), call.getArgument(2), call.getArgument(3)));
         v1Workspace();
