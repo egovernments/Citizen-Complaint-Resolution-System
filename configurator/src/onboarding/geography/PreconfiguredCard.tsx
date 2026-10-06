@@ -64,7 +64,15 @@ function Confidence({ set }: { set: OfficialSet }) {
  * tenant's — so a tenant without one is told why the option is unavailable
  * rather than asked to pick.
  */
-export function PreconfiguredCard({ state, onUse }: { state: PreconfiguredState; onUse: () => void }) {
+export function PreconfiguredCard({
+  state,
+  onUse,
+  onRetry,
+}: {
+  state: PreconfiguredState;
+  onUse: () => void;
+  onRetry: () => void;
+}) {
   return (
     <div className="flex flex-col rounded-lg border border-border bg-card p-4" data-testid="preconfigured-card">
       <div className="w-10 h-10 rounded-md bg-primary/10 text-primary flex items-center justify-center">
@@ -92,9 +100,19 @@ export function PreconfiguredCard({ state, onUse }: { state: PreconfiguredState;
         )}
         {state.status === 'none' && (
           <p className="text-xs leading-5 text-muted-foreground" data-testid="option-unavailable">
-            We don't hold preconfigured boundaries for {countryName(state.country.country)} yet. Fetch or upload them
+            We don't hold preconfigured boundaries for {countryName(state.country)} yet. Fetch or upload them
             instead.
           </p>
+        )}
+        {state.status === 'error' && (
+          <div className="space-y-2" data-testid="preconfigured-error">
+            <p className="text-xs leading-5 text-muted-foreground">
+              We hold official boundaries for {countryName(state.country)}, but couldn't load them just now.
+            </p>
+            <Button variant="outline" size="sm" onClick={onRetry} className="h-8 px-3">
+              Try again
+            </Button>
+          </div>
         )}
         {state.status === 'ready' && (
           <>

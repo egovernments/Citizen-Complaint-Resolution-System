@@ -10,11 +10,12 @@ import { StepHeader } from '../StepHeader';
 import { EmptyState, OptionCard, StepActions } from '../StepParts';
 import { adjacentSteps, stepById } from '../steps';
 import { probeGate, useStepProbe } from '../stepProbe';
-import { useTurbopassSources } from '@/hooks/useTurbopassSources';
+import { useTurbopassHealth } from '@/hooks/useTurbopassSources';
 import { usePreconfiguredBoundaries } from '@/hooks/usePreconfiguredBoundaries';
 import { countryName, type OfficialSet } from '@/utils/officialBoundaries';
 import { TURBOPASS_UNAVAILABLE_MESSAGE } from '@/utils/turbopassSuggestions';
 import BoundaryImport, { type BoundarySource } from './BoundaryImport';
+import { plural } from '@/utils/plural';
 import { PreconfiguredCard } from './PreconfiguredCard';
 
 const STEP = stepById('geography');
@@ -46,12 +47,6 @@ async function loadHierarchies(tenant: string): Promise<HierarchySummary[]> {
   );
 }
 
-function plural(word: string): string {
-  if (/[^aeiou]y$/.test(word)) return word.slice(0, -1) + 'ies';
-  if (/(s|x|ch|sh)$/.test(word)) return word + 'es';
-  return word + 's';
-}
-
 /** "3 districts · 12 wards", in level order. */
 function summaryLine(hierarchy: HierarchySummary): string {
   const parts = hierarchy.levels
@@ -76,9 +71,11 @@ export default function GeographyStep() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   // Fetching boundaries needs the turbopass service; say so up front when it's missing.
-  const boundarySources = useTurbopassSources();
+  // One /health read serves both the Fetch sources and Preconfigured.
+  const health = useTurbopassHealth();
+  const boundarySources = health?.sources ?? null;
   // "Preconfigured": the official set turbopass holds for the tenant's country.
-  const preconfigured = usePreconfiguredBoundaries(tenant);
+  const preconfigured = usePreconfiguredBoundaries(tenant, health?.officialCountries ?? null);
   const [preconfiguredSet, setPreconfiguredSet] = useState<OfficialSet | null>(null);
 
   useEffect(() => {
@@ -158,10 +155,11 @@ export default function GeographyStep() {
         <h3 className="text-lg font-semibold text-foreground">How do you want to bring in your geography?</h3>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 lg:gap-6">
           <PreconfiguredCard
-            state={preconfigured}
+            state={preconfigured.state}
+            onRetry={preconfigured.retry}
             onUse={() => {
-              if (preconfigured.status !== 'ready') return;
-              setPreconfiguredSet(preconfigured.set);
+              if (preconfigured.state.status !== 'ready') return;
+              setPreconfiguredSet(preconfigured.state.set);
               setSource('osm');
             }}
           />

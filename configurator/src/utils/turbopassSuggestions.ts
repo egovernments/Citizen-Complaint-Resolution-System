@@ -182,9 +182,12 @@ export function turbopassSearchUrl(
   source: string,
   match: string,
   onboardableOnly: boolean,
+  /** ISO alpha-2: only that country's places, filtered by the server before its result limit. */
+  country?: string | null,
 ): string {
   const qs = new URLSearchParams({ q: term, source, match });
   if (onboardableOnly && isOfflineSource(source)) qs.set('min_descendants', '1');
+  if (country) qs.set('country', country);
   return `${base}/boundary/search?${qs.toString()}`;
 }
 

@@ -9,7 +9,7 @@ const MZ = (sets as unknown as Record<string, OfficialSet>).MZ;
 describe('PreconfiguredCard', () => {
   it('shows the detected boundaries, a read-only country and the confidence', () => {
     const onUse = vi.fn();
-    render(<PreconfiguredCard state={{ status: 'ready', country: { country: 'MZ', from: 'tenant' }, set: MZ }} onUse={onUse} />);
+    render(<PreconfiguredCard state={{ status: 'ready', country: 'MZ', set: MZ }} onUse={onUse} onRetry={vi.fn()} />);
     expect(screen.getByText('Boundaries detected')).toBeTruthy();
     expect(screen.getByTestId('preconfigured-country').textContent).toBe('Mozambique');
     expect(screen.getByText('Province → District → Administrative Post → Locality')).toBeTruthy();
@@ -22,7 +22,7 @@ describe('PreconfiguredCard', () => {
   });
 
   it('explains the confidence, and this set\'s, from the (i)', () => {
-    render(<PreconfiguredCard state={{ status: 'ready', country: { country: 'MZ', from: 'tenant' }, set: MZ }} onUse={vi.fn()} />);
+    render(<PreconfiguredCard state={{ status: 'ready', country: 'MZ', set: MZ }} onUse={vi.fn()} onRetry={vi.fn()} />);
     expect(screen.queryByRole('tooltip')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'What confidence means' }));
     const tip = screen.getByRole('tooltip');
@@ -33,10 +33,18 @@ describe('PreconfiguredCard', () => {
   });
 
   it('says why it is unavailable instead of offering a country picker', () => {
-    const { rerender } = render(<PreconfiguredCard state={{ status: 'unknown-country' }} onUse={vi.fn()} />);
+    const { rerender } = render(<PreconfiguredCard state={{ status: 'unknown-country' }} onUse={vi.fn()} onRetry={vi.fn()} />);
     expect(screen.getByTestId('option-unavailable').textContent).toContain('no country recorded from signup');
     expect(screen.queryByRole('button')).toBeNull();
-    rerender(<PreconfiguredCard state={{ status: 'none', country: { country: 'TZ', from: 'tenant' } }} onUse={vi.fn()} />);
+    rerender(<PreconfiguredCard state={{ status: 'none', country: 'TZ' }} onUse={vi.fn()} onRetry={vi.fn()} />);
     expect(screen.getByTestId('option-unavailable').textContent).toContain('Tanzania');
+  });
+
+  it('offers a retry when a listed country\'s set could not be loaded', () => {
+    const onRetry = vi.fn();
+    render(<PreconfiguredCard state={{ status: 'error', country: 'KE' }} onUse={vi.fn()} onRetry={onRetry} />);
+    expect(screen.getByTestId('preconfigured-error').textContent).toContain('official boundaries for Kenya');
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(onRetry).toHaveBeenCalledOnce();
   });
 });

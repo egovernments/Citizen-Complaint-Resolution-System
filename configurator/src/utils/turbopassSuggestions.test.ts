@@ -118,6 +118,13 @@ describe('turbopassSearchUrl', () => {
     expect(turbopassSearchUrl('/turbopass', 'Delhi', 'geoapify', 'substring', true)).not.toContain('min_descendants');
   });
 
+  it('asks the server to keep one country when given one', () => {
+    expect(turbopassSearchUrl('/turbopass', 'San', 'official', 'substring', true, 'LR')).toBe(
+      '/turbopass/boundary/search?q=San&source=official&match=substring&min_descendants=1&country=LR',
+    );
+    expect(turbopassSearchUrl('/turbopass', 'San', 'official', 'substring', false, null)).not.toContain('country');
+  });
+
   it('filters the official sets like overture — they are offline too', () => {
     for (const src of ['official', 'cod', 'geoboundaries']) {
       expect(turbopassSearchUrl('/turbopass', 'Nairobi', src, 'substring', true)).toContain('min_descendants=1');

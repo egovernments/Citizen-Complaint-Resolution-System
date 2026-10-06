@@ -7,6 +7,7 @@
 // what "confirmed" means; it does not mean the government endorsed this file,
 // and "one source only" means it couldn't be checked, not that it is wrong.
 import { DATASET_NAMES } from './turbopassSuggestions';
+import { plural } from './plural';
 
 export interface OfficialLevel {
   level: string;
@@ -30,7 +31,6 @@ export interface OfficialSet {
   dataset_date: string | null;
   quality: string | null;
   url: string | null;
-  root: { id: string; name: string | null } | null;
   agreement_measured: boolean;
   levels: OfficialLevel[];
   other: { source: string; usable: boolean; dataset_date: string | null; quality: string | null; note: string | null } | null;
@@ -61,17 +61,22 @@ export const STATUS_LABEL: Record<LevelStatus, string> = {
   unmeasured: 'Not measured',
 };
 
-/** One line under a level: what its status rests on. */
-export function statusDetail(level: OfficialLevel, set: OfficialSet): string {
+/**
+ * One line under a level: what its status rests on. The figures are for the
+ * whole country; `place` names the smaller area actually fetched, when it is
+ * one, so a district's 3 regions aren't read against the country's 30.
+ */
+export function statusDetail(level: OfficialLevel, set: OfficialSet, place?: string | null): string {
   const other = set.other ? datasetName(set.other.source) : 'the other source';
+  const across = place ? `Across all of ${countryName(set.country)}, not just ${place}: ` : '';
   switch (levelStatus(level)) {
     case 'single':
       return `${other} has no areas at this level, so it couldn't be checked.`;
     case 'unmeasured':
-      return 'This server measured no agreement for this set.';
+      return `Not checked: ${other} couldn't be compared at this level (it failed to load, or its version of the level didn't nest).`;
     default:
       return (
-        `${level.matched}% of ${level.areas.toLocaleString('en-US')} areas closely match ${other}` +
+        `${across}${level.matched}% of ${level.areas.toLocaleString('en-US')} areas closely match ${other}` +
         ` (${(level.other_areas ?? 0).toLocaleString('en-US')} areas there).` +
         (level.unmatched.length ? ` Drawn differently: ${joinNames(level.unmatched)}.` : '')
       );
@@ -109,12 +114,6 @@ function newest(date: string | null | undefined): number | null {
   return years.length ? years[years.length - 1] : null;
 }
 
-function plural(word: string): string {
-  if (/[^aeiou]y$/i.test(word)) return word.slice(0, -1) + 'ies';
-  if (/(s|x|ch|sh)$/i.test(word)) return word + 'es';
-  return word + 's';
-}
-
 function levelWord(level: OfficialLevel): string {
   return plural((level.name ?? `level ${level.admin_level} area`).toLowerCase());
 }
@@ -143,7 +142,11 @@ export function confidenceHeadline(set: OfficialSet): string | null {
   const status = levels.map(levelStatus);
   const of = (s: LevelStatus) => levels.filter((_, i) => status[i] === s);
   const single = of('single');
+  const unmeasured = of('unmeasured');
   const deepest = levels[levels.length - 1];
+  // Nothing could be compared (the other source was down at build time): no verdict.
+  if (unmeasured.length === levels.length) return null;
+  const notChecked = unmeasured.length ? `${levelList(unmeasured)} couldn't be checked.` : null;
 
   if (single.length === levels.length) {
     return levels.length === 1
@@ -166,8 +169,9 @@ export function confidenceHeadline(set: OfficialSet): string | null {
   const confirmed = of('confirmed');
 
   // Nothing confirmed and the other source is years older: the map changed.
-  if (!confirmed.length && otherIsOlder && mine! - theirs! > OLDER_SOURCE_YEARS) {
-    const first = levels.find((l) => levelStatus(l) !== 'single' && l.other_areas !== l.areas) ?? levels[0];
+  const compared = levels.filter((l) => ['partly', 'differs'].includes(levelStatus(l)));
+  if (!confirmed.length && compared.length && otherIsOlder && mine! - theirs! > OLDER_SOURCE_YEARS) {
+    const first = compared.find((l) => l.other_areas !== l.areas) ?? compared[0];
     parts.push(
       `Differs from ${second}: ${first.areas.toLocaleString('en-US')} ${levelWord(first)} here, ` +
         `${(first.other_areas ?? 0).toLocaleString('en-US')} there. This set is the newer one.`,
@@ -193,6 +197,7 @@ export function confidenceHeadline(set: OfficialSet): string | null {
     if (named) parts.push(`${joinNames(named.unmatched)} ${named.unmatched.length === 1 ? 'is' : 'are'} drawn differently.`);
   }
   if (singleSentence) parts.push(singleSentence);
+  if (notChecked) parts.push(notChecked);
   return parts.join(' ');
 }
 
@@ -230,7 +235,8 @@ export function confidenceLevel(set: OfficialSet): Confidence | null {
   const checked = set.levels
     .map(levelStatus)
     .filter((s) => s === 'confirmed' || s === 'partly' || s === 'differs');
-  if (checked.length === 0) return 'low';
+  // Nothing compared because the comparison couldn't run is unknown, not Low.
+  if (checked.length === 0) return set.levels.some((l) => levelStatus(l) === 'unmeasured') ? null : 'low';
   if (checked.every((s) => s === 'confirmed')) return 'high';
   if (checked.includes('differs')) {
     const mine = newest(set.dataset_date);

@@ -69,6 +69,27 @@ describe('confidenceHeadline for the 12 priority countries', () => {
   });
 });
 
+describe('levels the bootstrap could not compare', () => {
+  // The other source failed to load at build time: every level is null, not 0.
+  const down = (set: OfficialSet): OfficialSet => ({
+    ...set,
+    levels: set.levels.map((l) => ({ ...l, other_areas: null, matched: null, unmatched: [] })),
+  });
+
+  it('gives no verdict when nothing could be compared, instead of Low', () => {
+    expect(confidenceHeadline(down(SETS.ZA))).toBeNull();
+    expect(confidenceLevel(down(SETS.ZA))).toBeNull();
+    expect(statusDetail(down(SETS.ZA).levels[0], SETS.ZA)).toMatch(/^Not checked: geoBoundaries couldn't be compared/);
+  });
+
+  it('names the levels that could not be checked next to the ones that were', () => {
+    // Rwanda with COD's villages dropped by its nesting check: compared levels stand, ADM5 is unmeasured.
+    const rw = { ...SETS.RW, levels: SETS.RW.levels.map((l) => (l.level === 'ADM5' ? { ...l, other_areas: null } : l)) };
+    expect(confidenceHeadline(rw)).toBe('Confirmed down to sectors. Cells come from one source only. Villages couldn\'t be checked.');
+    expect(confidenceLevel(rw)).toBe('high');
+  });
+});
+
 describe('dates and source lines', () => {
   it('formats COD dates as month + year and geoBoundaries year lists as a span', () => {
     expect(formatDatasetDate('2019-10-31')).toBe('Oct 2019');
@@ -77,6 +98,13 @@ describe('dates and source lines', () => {
     expect(formatDatasetDate('')).toBeNull();
     expect(sourceLine(SETS.ZA)).toBe('OCHA COD-AB · Nov 2020');
     expect(sourceLine(SETS.KE)).toBe('geoBoundaries · 2020');
+  });
+
+  it('says the figures are country-wide when a smaller place was fetched', () => {
+    expect(statusDetail(SETS.RW.levels[1], SETS.RW, 'Karongi')).toBe(
+      'Across all of Rwanda, not just Karongi: 93.3% of 30 areas closely match OCHA COD-AB (30 areas there). ' +
+        'Drawn differently: Karongi and Rutsiro.',
+    );
   });
 
   it('explains a level in one line', () => {

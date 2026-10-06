@@ -3,8 +3,8 @@
 // the boundary XLSX; we parse the FeatureCollection, key each feature by
 // `properties.code` (preferred) or normalized `properties.name`, and
 // attach the matching geometry to each boundary row before it's POSTed to
-// boundary-service. boundary-service only accepts Point + Polygon, so
-// MultiPolygons are collapsed to their largest ring.
+// boundary-service. boundary-service only accepts Point + single-ring
+// Polygon, so holes and extra parts are folded into one ring (keyholeRing).
 import type { BoundaryGeometry } from '@/api/types';
 
 /** Lowercase, strip diacritics, strip "Distrito Municipal de " prefix,
@@ -21,36 +21,69 @@ export function normalizeForMatch(s: string): string {
     .replace(/^_+|_+$/g, '');
 }
 
-/** boundary-service /boundary/_create rejects MultiPolygon, and any polygon
- *  with a hole ("Polygon must not be empty neither should it contain any
- *  holes"). Collapse a MultiPolygon to the part with the most coordinates (the
- *  main contiguous piece) and keep only the outer ring. Five of the twelve
- *  official country outlines have a hole (a lake, an enclave), and when the
- *  country fails every area under it fails too. Which area contains which is
- *  worked out before this, from the full shapes, so dropping holes here only
- *  changes the stored outline. */
+type Ring = number[][];
+
+/** Shoelace signed area; positive when the ring runs counter-clockwise. */
+function signedArea(ring: Ring): number {
+  let sum = 0;
+  for (let k = 0; k < ring.length - 1; k++) sum += ring[k][0] * ring[k + 1][1] - ring[k + 1][0] * ring[k][1];
+  return sum / 2;
+}
+
+function oriented(ring: Ring, counterClockwise: boolean): Ring {
+  return signedArea(ring) > 0 === counterClockwise ? ring : [...ring].reverse();
+}
+
+function isRing(r: unknown): r is Ring {
+  return Array.isArray(r) && r.length >= 4 && r.every((pt) => Array.isArray(pt) && pt.length >= 2);
+}
+
+/**
+ * Every part and hole of a (Multi)Polygon as ONE ring, joined by zero-width
+ * cuts back to the first point (a "keyhole"). Each cut is walked there and
+ * back, so it cancels out of a point-in-polygon test: under even-odd (turf's
+ * booleanPointInPolygon, which PGR runs on stored boundaries, and Leaflet's
+ * fill) and — with parts counter-clockwise and holes clockwise — under nonzero
+ * too. A complaint in an enclave still lands in the enclave, and islands stay.
+ */
+function keyholeRing(polygons: Ring[][]): Ring {
+  const first = oriented(polygons[0][0], true);
+  const anchor = first[0];
+  const out: Ring = [...first];
+  polygons.forEach((rings, p) =>
+    rings.forEach((ring, k) => {
+      if (p === 0 && k === 0) return;
+      out.push(...oriented(ring, k === 0), anchor);
+    }),
+  );
+  return out;
+}
+
+/** boundary-service /boundary/_create takes Point and single-ring Polygon only:
+ *  it rejects MultiPolygon, and any polygon with a hole ("Polygon must not be
+ *  empty neither should it contain any holes"). Five of the twelve official
+ *  country outlines have a hole (a lake, an enclave such as Lesotho in South
+ *  Africa); when the country is refused, every area under it fails too. So a
+ *  polygon with holes, or several parts, is stored as one keyhole ring (see
+ *  keyholeRing): accepted by boundary-service, and it keeps both the enclaves
+ *  out and the islands in. */
 export function coerceForBoundaryService(geom: { type?: string; coordinates?: unknown }): BoundaryGeometry | undefined {
   if (!geom || !geom.type) return undefined;
   if (geom.type === 'Point') {
     return geom as BoundaryGeometry;
   }
-  if (geom.type === 'Polygon') {
-    const rings = geom.coordinates as number[][][];
-    return Array.isArray(rings) && rings.length > 1 ? { type: 'Polygon', coordinates: [rings[0]] } : (geom as BoundaryGeometry);
+  const polygons: Ring[][] =
+    geom.type === 'Polygon' && Array.isArray(geom.coordinates)
+      ? [geom.coordinates as Ring[]]
+      : geom.type === 'MultiPolygon' && Array.isArray(geom.coordinates)
+        ? (geom.coordinates as Ring[][])
+        : [];
+  const usable = polygons.map((rings) => (Array.isArray(rings) ? rings.filter(isRing) : [])).filter((rings) => rings.length > 0);
+  if (usable.length === 0) return undefined; // LineString, MultiPoint, empty — unsupported here
+  if (usable.length === 1 && usable[0].length === 1) {
+    return geom.type === 'Polygon' ? (geom as BoundaryGeometry) : { type: 'Polygon', coordinates: [usable[0][0]] };
   }
-  if (geom.type === 'MultiPolygon' && Array.isArray(geom.coordinates)) {
-    const polys = geom.coordinates as unknown[][][];
-    if (polys.length === 0) return undefined;
-    let largestIdx = 0;
-    let largestPoints = 0;
-    for (let i = 0; i < polys.length; i++) {
-      const outer = polys[i]?.[0];
-      const pts = Array.isArray(outer) ? outer.length : 0;
-      if (pts > largestPoints) { largestPoints = pts; largestIdx = i; }
-    }
-    return { type: 'Polygon', coordinates: [(polys[largestIdx] as number[][][])[0]] };
-  }
-  return undefined; // LineString, MultiPoint, etc. — unsupported here
+  return { type: 'Polygon', coordinates: [keyholeRing(usable)] };
 }
 
 export interface ParsedGeoJsonSidecar {

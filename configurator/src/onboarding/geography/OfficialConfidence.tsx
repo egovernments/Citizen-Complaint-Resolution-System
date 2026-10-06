@@ -79,7 +79,7 @@ export function LevelStatusBadge({ level }: { level: OfficialLevel }) {
  * What the official set is and how far it is confirmed: the headline, its
  * source and date, and what "confirmed" does and doesn't mean.
  */
-export function OfficialSetSummary({ set }: { set: OfficialSet }) {
+export function OfficialSetSummary({ set, place = null }: { set: OfficialSet; place?: string | null }) {
   const headline = confidenceHeadline(set);
   return (
     <section className="flex items-start gap-3 rounded-lg border border-border bg-card p-4" data-testid="official-set-summary">
@@ -95,6 +95,11 @@ export function OfficialSetSummary({ set }: { set: OfficialSet }) {
         {headline && (
           <p className="text-sm text-foreground" data-testid="confidence-headline">
             {headline}
+          </p>
+        )}
+        {place && headline && (
+          <p className="text-xs text-muted-foreground" data-testid="confidence-scope">
+            These figures are for all of {countryName(set.country)}, not just {place}.
           </p>
         )}
         <p className="text-xs leading-5 text-muted-foreground">
