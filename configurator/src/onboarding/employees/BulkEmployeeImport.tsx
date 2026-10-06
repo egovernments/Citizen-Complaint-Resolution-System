@@ -272,7 +272,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
           let compiled: RegExp | null = null;
           try { compiled = new RegExp(mobileRules.mobileNumberRegex); } catch { compiled = null; }
           if (compiled && !compiled.test(emp.mobileNumber)) {
-            errors.push(mobileRules.errorMessage);
+            errors.push(t('bulk_employees.mobile_format', 'Mobile number does not match the configured format'));
           }
         } else if (!/^\d{9,10}$/.test(emp.mobileNumber)) {
           errors.push(t('bulk_employees.mobile_digits', 'Mobile number must be 9-10 digits'));
@@ -446,7 +446,8 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
       emp.assignments?.[0]?.designation || '',
     ]);
 
-    const csv = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const field = (value: string) => `"${String(value).replace(/"/g, '""')}"`;
+    const csv = [headers, ...rows].map((r) => r.map(field).join(',')).join('\n');
 
     // Download CSV
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -532,10 +533,10 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
               {loadingRefs ? t('bulk_employees.loading_refs', 'Loading reference data...') : t('bulk_employees.available', 'Available data from DIGIT:')}
             </p>
             <ul className="text-xs sm:text-sm text-muted-foreground mt-1 space-y-1">
-              <li>• {t('bulk_employees.departments_loaded', 'Departments: %{count} loaded', { count: departments.length })}</li>
-              <li>• {t('bulk_employees.designations_loaded', 'Designations: %{count} loaded', { count: designations.length })}</li>
-              <li>• {t('bulk_employees.roles_available', 'Roles: %{count} available', { count: roles.length })}</li>
-              <li>• {t('bulk_employees.boundaries_loaded', 'Boundaries: %{count} loaded', { count: boundaries.length })}</li>
+              <li>• {t('bulk_employees.departments_loaded', 'Departments: %{smart_count} loaded', { smart_count: departments.length })}</li>
+              <li>• {t('bulk_employees.designations_loaded', 'Designations: %{smart_count} loaded', { smart_count: designations.length })}</li>
+              <li>• {t('bulk_employees.roles_available', 'Roles: %{smart_count} available', { smart_count: roles.length })}</li>
+              <li>• {t('bulk_employees.boundaries_loaded', 'Boundaries: %{smart_count} loaded', { smart_count: boundaries.length })}</li>
             </ul>
           </div>
 
@@ -575,10 +576,10 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
             </p>
 
             <div className="grid grid-cols-2 gap-2 sm:gap-4 text-xs sm:text-sm mb-3 sm:mb-4">
-              <div className="text-success">✓ {t('bulk_employees.departments_loaded', 'Departments: %{count} loaded', { count: departments.length })}</div>
-              <div className="text-success">✓ {t('bulk_employees.designations_loaded', 'Designations: %{count} loaded', { count: designations.length })}</div>
-              <div className="text-success">✓ {t('bulk_employees.roles_available', 'Roles: %{count} available', { count: roles.length })}</div>
-              <div className="text-success">✓ {t('bulk_employees.boundaries_loaded', 'Boundaries: %{count} loaded', { count: boundaries.length })}</div>
+              <div className="text-success">✓ {t('bulk_employees.departments_loaded', 'Departments: %{smart_count} loaded', { smart_count: departments.length })}</div>
+              <div className="text-success">✓ {t('bulk_employees.designations_loaded', 'Designations: %{smart_count} loaded', { smart_count: designations.length })}</div>
+              <div className="text-success">✓ {t('bulk_employees.roles_available', 'Roles: %{smart_count} available', { smart_count: roles.length })}</div>
+              <div className="text-success">✓ {t('bulk_employees.boundaries_loaded', 'Boundaries: %{smart_count} loaded', { smart_count: boundaries.length })}</div>
             </div>
 
             <p className="text-xs sm:text-sm mb-2 text-muted-foreground">{t('bulk_employees.required_columns', 'Required columns:')}</p>
@@ -588,15 +589,14 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
               </li>
               <li>
                 • <strong>mobileNumber</strong> -{' '}
-                {mobileRules
-                  ? [
-                      t('bulk_employees.col_mobile', 'mobile number'),
-                      mobileRules.countryCode ? `(${mobileRules.countryCode})` : null,
-                      t('bulk_employees.col_mobile_matching', 'matching %{pattern}', { pattern: mobileRules.mobileNumberRegex }),
-                    ]
-                      .filter(Boolean)
-                      .join(' ')
-                  : t('bulk_employees.col_mobile_rule', 'mobile number (validated against the tenant rule)')}
+                {!mobileRules
+                  ? t('bulk_employees.col_mobile_rule', 'mobile number (validated against the tenant rule)')
+                  : mobileRules.countryCode
+                    ? t('bulk_employees.col_mobile_code', 'mobile number (%{code}) matching %{pattern}', {
+                        code: mobileRules.countryCode,
+                        pattern: mobileRules.mobileNumberRegex,
+                      })
+                    : t('bulk_employees.col_mobile_pattern', 'mobile number matching %{pattern}', { pattern: mobileRules.mobileNumberRegex })}
               </li>
               <li>
                 • <strong>department</strong> - {t('bulk_employees.col_department', 'Department code')}
@@ -611,8 +611,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
                 • <strong>jurisdictions</strong> - {t('bulk_employees.col_jurisdictions', 'Comma-separated boundary codes')}
               </li>
               <li>
-                • <strong>dob</strong> - {t('bulk_employees.col_dob', 'Date of birth (YYYY-MM-DD)')},{' '}
-                <em>{t('bulk_employees.optional', 'optional')}</em>
+                • <strong>dob</strong> - {t('bulk_employees.col_dob', 'Date of birth (YYYY-MM-DD), optional')}
               </li>
             </ul>
 
@@ -723,9 +722,9 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
           </div>
 
           <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-4">
-            {t('bulk_employees.summary_total', 'Summary: %{count} total', { count: employees.length })} |{' '}
-            <span className="text-success">{t('bulk_employees.summary_valid', '%{count} valid', { count: validCount })}</span> |{' '}
-            <span className="text-destructive">{t('bulk_employees.summary_errors', '%{count} errors', { count: errorCount })}</span>
+            {t('bulk_employees.summary_total', 'Summary: %{smart_count} total', { smart_count: employees.length })} |{' '}
+            <span className="text-success">{t('bulk_employees.summary_valid', '%{smart_count} valid', { smart_count: validCount })}</span> |{' '}
+            <span className="text-destructive">{t('bulk_employees.summary_errors', '%{smart_count} errors', { smart_count: errorCount })}</span>
           </p>
 
           {errorCount > 0 && (
@@ -742,7 +741,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
                         {e.name}: {e.error}
                       </li>
                     ))}
-                  {errorCount > 3 && <li>{t('bulk_employees.more_errors', '...and %{count} more errors', { count: errorCount - 3 })}</li>}
+                  {errorCount > 3 && <li>{t('bulk_employees.more_errors', '...and %{smart_count} more errors', { smart_count: errorCount - 3 })}</li>}
                 </ul>
               </AlertDescription>
             </Alert>
@@ -770,7 +769,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
                 </Button>
               )}
               <SubmitBar
-                label={t('bulk_employees.create_count', 'Create %{count} Employees', { count: validCount })}
+                label={t('bulk_employees.create_count', 'Create %{smart_count} Employees', { smart_count: validCount })}
                 onSubmit={() => setShowConfirmDialog(true)}
                 disabled={validCount === 0}
                 icon={<ChevronRight className="w-4 h-4" />}
@@ -794,7 +793,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
             <p className="text-xs sm:text-sm text-muted-foreground mt-2">
               {t('bulk_employees.created_of', '%{created} of %{total} employees created', { created: createdCount, total: validCount })}
               {failedCount > 0 && (
-                <span className="text-destructive"> {t('bulk_employees.failed_paren', '(%{count} failed)', { count: failedCount })}</span>
+                <span className="text-destructive"> {t('bulk_employees.failed_paren', '(%{smart_count} failed)', { smart_count: failedCount })}</span>
               )}
             </p>
           </div>
@@ -977,10 +976,10 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
               {t('bulk_employees.confirm_title', 'Confirm Employee Creation')}
             </DialogTitle>
             <DialogDescription className="text-xs sm:text-sm">
-              {t('bulk_employees.confirm_intro', 'You’re about to create %{count} employees. This will:', { count: validCount })}
+              {t('bulk_employees.confirm_intro', 'You’re about to create %{smart_count} employees. This will:', { smart_count: validCount })}
               <ul className="mt-2 space-y-1">
-                <li>• {t('bulk_employees.confirm_records', 'Create %{count} HRMS records', { count: validCount })}</li>
-                <li>• {t('bulk_employees.confirm_accounts', 'Create %{count} user accounts', { count: validCount })}</li>
+                <li>• {t('bulk_employees.confirm_records', 'Create %{smart_count} HRMS records', { smart_count: validCount })}</li>
+                <li>• {t('bulk_employees.confirm_accounts', 'Create %{smart_count} user accounts', { smart_count: validCount })}</li>
                 <li>• {t('bulk_employees.confirm_roles', 'Assign roles and jurisdictions')}</li>
               </ul>
             </DialogDescription>
@@ -990,7 +989,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
             <Alert variant="warning">
               <AlertDescription className="text-xs sm:text-sm">
                 <strong>{t('bulk_employees.note', 'Note:')}</strong>{' '}
-                {t('bulk_employees.rows_skipped', '%{count} row(s) with errors will be skipped.', { count: errorCount })}
+                {t('bulk_employees.rows_skipped', '%{smart_count} row(s) with errors will be skipped.', { smart_count: errorCount })}
               </AlertDescription>
             </Alert>
           )}
@@ -1004,7 +1003,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
             >
               {t('common.cancel', 'Cancel')}
             </Button>
-            <SubmitBar label={t('bulk_employees.create_count', 'Create %{count} Employees', { count: validCount })} onSubmit={handleCreateEmployees} />
+            <SubmitBar label={t('bulk_employees.create_count', 'Create %{smart_count} Employees', { smart_count: validCount })} onSubmit={handleCreateEmployees} />
           </DialogFooter>
         </DialogContent>
       </Dialog>

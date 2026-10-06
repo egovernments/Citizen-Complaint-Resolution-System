@@ -126,7 +126,7 @@ export function TypeDialog({
             <label htmlFor={`${id}-department`} className="block text-sm font-medium text-foreground">{t('complaints.handled_by_label', 'Handled by')}</label>
             <Select value={department} onValueChange={setDepartment}>
               <SelectTrigger id={`${id}-department`} className="bg-card">
-                <SelectValue placeholder={t('complaints.choose_department', 'Choose a department')} />
+                <SelectValue placeholder={t('common.choose_department', 'Choose a department')} />
               </SelectTrigger>
               <SelectContent>
                 {departments.map((choice) => (

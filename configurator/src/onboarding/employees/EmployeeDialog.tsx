@@ -331,7 +331,7 @@ export function EmployeeDialog({
               <>
                 <Select value={departments[0] ?? ''} onValueChange={(code) => setDepartments([code])}>
                   <SelectTrigger id={`${id}-departments`} className="bg-card">
-                    <SelectValue placeholder={t('complaints.choose_department', 'Choose a department')} />
+                    <SelectValue placeholder={t('common.choose_department', 'Choose a department')} />
                   </SelectTrigger>
                   <SelectContent>
                     {departmentChoices.map((choice) => (

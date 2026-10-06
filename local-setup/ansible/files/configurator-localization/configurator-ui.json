@@ -5736,6 +5736,18 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.branding.no_tenant_record",
+    "message": "The workspace %{tenant} has no tenant record to brand.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.branding.rename_in_settings",
+    "message": "Change the workspace name in Workspace settings.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.branding.replace",
     "message": "Replace",
     "module": "configurator-ui",
@@ -5827,7 +5839,7 @@
   },
   {
     "code": "app.onboarding.bulk_employees.boundaries_loaded",
-    "message": "Boundaries: %{count} loaded",
+    "message": "Boundaries: %{smart_count} loaded",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -5863,7 +5875,7 @@
   },
   {
     "code": "app.onboarding.bulk_employees.col_dob",
-    "message": "Date of birth (YYYY-MM-DD)",
+    "message": "Date of birth (YYYY-MM-DD), optional",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -5874,14 +5886,14 @@
     "locale": "en_IN"
   },
   {
-    "code": "app.onboarding.bulk_employees.col_mobile",
-    "message": "mobile number",
+    "code": "app.onboarding.bulk_employees.col_mobile_code",
+    "message": "mobile number (%{code}) matching %{pattern}",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
   {
-    "code": "app.onboarding.bulk_employees.col_mobile_matching",
-    "message": "matching %{pattern}",
+    "code": "app.onboarding.bulk_employees.col_mobile_pattern",
+    "message": "mobile number matching %{pattern}",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -5905,19 +5917,19 @@
   },
   {
     "code": "app.onboarding.bulk_employees.confirm_accounts",
-    "message": "Create %{count} user accounts",
+    "message": "Create %{smart_count} user accounts",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
   {
     "code": "app.onboarding.bulk_employees.confirm_intro",
-    "message": "You’re about to create %{count} employees. This will:",
+    "message": "You’re about to create %{smart_count} employees. This will:",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
   {
     "code": "app.onboarding.bulk_employees.confirm_records",
-    "message": "Create %{count} HRMS records",
+    "message": "Create %{smart_count} HRMS records",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -5935,7 +5947,7 @@
   },
   {
     "code": "app.onboarding.bulk_employees.create_count",
-    "message": "Create %{count} Employees",
+    "message": "Create %{smart_count} Employees",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -5977,7 +5989,7 @@
   },
   {
     "code": "app.onboarding.bulk_employees.departments_loaded",
-    "message": "Departments: %{count} loaded",
+    "message": "Departments: %{smart_count} loaded",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -5995,7 +6007,7 @@
   },
   {
     "code": "app.onboarding.bulk_employees.designations_loaded",
-    "message": "Designations: %{count} loaded",
+    "message": "Designations: %{smart_count} loaded",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -6091,7 +6103,7 @@
   },
   {
     "code": "app.onboarding.bulk_employees.failed_paren",
-    "message": "(%{count} failed)",
+    "message": "(%{smart_count} failed)",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -6192,8 +6204,14 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.bulk_employees.mobile_format",
+    "message": "Mobile number does not match the configured format",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.bulk_employees.more_errors",
-    "message": "...and %{count} more errors",
+    "message": "...and %{smart_count} more errors",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -6218,12 +6236,6 @@
   {
     "code": "app.onboarding.bulk_employees.note",
     "message": "Note:",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
-    "code": "app.onboarding.bulk_employees.optional",
-    "message": "optional",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -6283,13 +6295,13 @@
   },
   {
     "code": "app.onboarding.bulk_employees.roles_available",
-    "message": "Roles: %{count} available",
+    "message": "Roles: %{smart_count} available",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
   {
     "code": "app.onboarding.bulk_employees.rows_skipped",
-    "message": "%{count} row(s) with errors will be skipped.",
+    "message": "%{smart_count} row(s) with errors will be skipped.",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -6325,19 +6337,19 @@
   },
   {
     "code": "app.onboarding.bulk_employees.summary_errors",
-    "message": "%{count} errors",
+    "message": "%{smart_count} errors",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
   {
     "code": "app.onboarding.bulk_employees.summary_total",
-    "message": "Summary: %{count} total",
+    "message": "Summary: %{smart_count} total",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
   {
     "code": "app.onboarding.bulk_employees.summary_valid",
-    "message": "%{count} valid",
+    "message": "%{smart_count} valid",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -6416,6 +6428,12 @@
   {
     "code": "app.onboarding.common.choose_another_file",
     "message": "Choose another file",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.common.choose_department",
+    "message": "Choose a department",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -6602,12 +6620,6 @@
   {
     "code": "app.onboarding.complaints.categories",
     "message": "Complaint categories",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
-    "code": "app.onboarding.complaints.choose_department",
-    "message": "Choose a department",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -7500,6 +7512,18 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.employees.gone",
+    "message": "This employee no longer exists. Reload and try again.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.gone_from_hrms",
+    "message": "Employee no longer exists in HRMS.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.employees.has_account_sees_invite",
     "message": "%{name} already has an account, so they’ll see the invitation when they next sign in.",
     "module": "configurator-ui",
@@ -7520,6 +7544,18 @@
   {
     "code": "app.onboarding.employees.invitation_sent",
     "message": "Invitation sent to %{email}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.invite_move_failed",
+    "message": "The old invitation was withdrawn, but the new one didn’t go out. Use Invite again to send it.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.invite_move_failed_reason",
+    "message": "The old invitation was withdrawn, but the new one didn’t go out. Use Invite again to send it. %{reason}",
     "module": "configurator-ui",
     "locale": "en_IN"
   },

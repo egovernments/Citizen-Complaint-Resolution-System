@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { ONBOARDING_STEPS } from './steps';
 import { BRAND_THEMES } from './brandThemes';
 import { STEP_REQUIREMENT, WORKSPACE_ERRORS } from './errors';
-import { INVITE_ERRORS } from './employees/inviteStatus';
+import { INVITE_ERRORS } from './employees/inviteErrors';
 
 /**
  * Onboarding's English lives in the code, as each t(key, english) call's fallback. The two
@@ -35,10 +35,10 @@ function sources(dir: string): string[] {
   });
 }
 
-/** t('key', 'English') calls, the key as written (bare, or app.* for a shared label). */
+/** t('key', 'English') and MessageError('key', 'English') calls, the key as written (bare, or app.* for a shared label). */
 function staticCalls(): Map<string, string> {
   const found = new Map<string, string>();
-  const call = /\bt\(\s*'([^']+)'\s*,\s*'((?:[^'\\]|\\.)*)'/g;
+  const call = /\b(?:t|MessageError)\(\s*'([^']+)'\s*,\s*'((?:[^'\\]|\\.)*)'/g;
   for (const file of [...sources(path.join(CONFIGURATOR, 'src/onboarding')), path.join(CONFIGURATOR, 'src/App.tsx')]) {
     for (const [, key, raw] of readFileSync(file, 'utf8').matchAll(call)) {
       const english = raw.replace(/\\n/g, '\n').replace(/\\'/g, "'");
