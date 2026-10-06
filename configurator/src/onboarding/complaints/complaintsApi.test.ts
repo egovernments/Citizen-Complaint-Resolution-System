@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { mdmsService } from '@/api';
+import { localizationService, mdmsService } from '@/api';
 import type { MdmsRecord } from '@/api/types';
 import { loadComplaints, nextData, rowsFingerprint, rowsFor, saveComplaints, type ComplaintDraft } from './complaintsApi';
 
 vi.mock('@/api', () => ({
-  mdmsService: { searchRecords: vi.fn(), create: vi.fn(async () => ({})), update: vi.fn(async () => ({})), setActive: vi.fn(async () => ({})) },
+  mdmsService: { searchRecords: vi.fn(), create: vi.fn(async () => ({})), update: vi.fn(async () => ({})), setActive: vi.fn(async () => ({})), getStateInfoLocales: vi.fn(async () => ['en_KE']) },
   localizationService: {
     uploadComplaintTypeLocalizations: vi.fn(async () => ({ success: 1, failed: 0 })),
     cacheBust: vi.fn(async () => undefined),
@@ -103,7 +103,26 @@ describe('loadComplaints', () => {
         ? [row('PGR', { levels: [{ levelCode: 'AUTHORITY_TYPE' }, { levelCode: 'MAIN_CATEGORY' }, { levelCode: 'SUB_TYPE' }] }, { schemaCode: schema })]
         : [row('A', { levelCode: 'SUB_TYPE', department: 'X', slaHours: 24 })],
     );
-    expect(await loadComplaints('acme')).toEqual({ editable: false, leafCount: 1, levels: ['AUTHORITY_TYPE', 'MAIN_CATEGORY', 'SUB_TYPE'] });
+    expect(await loadComplaints('acme')).toEqual({
+      editable: false,
+      leafCount: 1,
+      levels: ['AUTHORITY_TYPE', 'MAIN_CATEGORY', 'SUB_TYPE'],
+      departments: ['X'],
+    });
+  });
+
+  it('routes a spreadsheet hierarchy by its leaves only', async () => {
+    search.mockImplementation(async (_tenant, schema) =>
+      schema === 'RAINMAKER-PGR.ComplaintHierarchyDefinition'
+        ? [row('PGR', { levels: [{ levelCode: 'MAIN_CATEGORY' }, { levelCode: 'SUB_TYPE' }, { levelCode: 'DETAIL' }] }, { schemaCode: schema })]
+        : [
+            row('Water', { levelCode: 'MAIN_CATEGORY', department: 'PARENT_ONLY' }),
+            row('Leak', { levelCode: 'SUB_TYPE', parentCode: 'Water', department: 'WATER', slaHours: 24 }),
+            row('Meter', { levelCode: 'SUB_TYPE', parentCode: 'Water', department: 'WATER', slaHours: 24 }),
+          ],
+    );
+    const loaded = await loadComplaints('acme');
+    expect(loaded.editable === false && loaded.departments).toEqual(['WATER']);
   });
 });
 
@@ -143,6 +162,8 @@ describe('saveComplaints', () => {
       expect.objectContaining({ parentCode: 'StreetLighting', path: 'StreetLighting.StreetLightsBrokenLamp', department: 'ROADS', slaHours: 72 }),
     );
     expect(setActive).toHaveBeenCalledWith(existing[1], false);
+    // Labels go to digit-ui's en_IN and the workspace's StateInfo locale alike.
+    expect(vi.mocked(localizationService.uploadComplaintTypeLocalizations).mock.calls.map((call) => call[2])).toEqual(['en_IN', 'en_KE']);
   });
 });
 

@@ -11,6 +11,7 @@ import { toast } from '@/hooks/use-toast';
 import { StepHeader } from '../StepHeader';
 import { EmptyState, OptionCard, StepActions } from '../StepParts';
 import { adjacentSteps, stepById } from '../steps';
+import { probeGate, useStepProbe } from '../stepProbe';
 import { describeSaveError } from '../errors';
 import { reportStepError, trackStepAction } from '../telemetry';
 import { MasterDialog } from './MasterDialog';
@@ -238,6 +239,16 @@ export default function DepartmentsStep() {
   const loaded = departments !== null && designations !== null;
   const empty = loaded && departments.length === 0 && designations.length === 0;
   const ready = loaded && departments.length > 0 && designations.length > 0;
+  const { probe, recheck } = useStepProbe(
+    state.tenant,
+    'DEPARTMENTS',
+    [...(departments ?? []), ...(designations ?? [])].map((record) => `${record.uniqueIdentifier}:${record.isActive !== false}`).join(','),
+  );
+  const gate = probeGate(
+    'DEPARTMENTS',
+    { ready: !!ready, hint: loaded && !ready ? 'Add at least one department and one designation to continue.' : undefined },
+    probe,
+  );
 
   return (
     <div className="space-y-8">
@@ -327,15 +338,22 @@ export default function DepartmentsStep() {
       )}
 
       {!bulk && (
-        <StepActions
-          onBack={previous ? () => navigate(previous.path) : undefined}
-          onContinue={async () => {
-            if (!await completePhase(STEP.number)) return;
-            if (next) navigate(next.path);
-          }}
-          disabled={!ready}
-          hint={loaded && !ready ? 'Add at least one department and one designation to continue.' : undefined}
-        />
+        <div className="flex flex-wrap items-center gap-3">
+          <StepActions
+            onBack={previous ? () => navigate(previous.path) : undefined}
+            onContinue={async () => {
+              if (!await completePhase(STEP.number)) return;
+              if (next) navigate(next.path);
+            }}
+            disabled={gate.disabled}
+            hint={gate.hint}
+          />
+          {gate.canRecheck && (
+            <Button variant="ghost" size="sm" onClick={recheck}>
+              Check again
+            </Button>
+          )}
+        </div>
       )}
 
       <MasterDialog

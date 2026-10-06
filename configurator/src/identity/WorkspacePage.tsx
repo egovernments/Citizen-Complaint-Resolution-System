@@ -4,6 +4,7 @@ import { useApp } from '@/App';
 import { ApiClientError } from '@/api/client';
 import { clearTranslationCache } from '@/providers/i18nProvider';
 import { announceOrganisation, useOrganisation } from '@/onboarding/organisation';
+import { describeWorkspaceError } from '@/onboarding/errors';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -80,7 +81,7 @@ export default function WorkspacePage() {
           if (acceptedId.current === next.Rename.id) clearRequest();
         }
       } catch (e) {
-        if (live) { setError(e instanceof Error ? e.message : 'Could not load workspace.'); timer = setTimeout(refresh, 5000); }
+        if (live) { setError(describeWorkspaceError(e)); timer = setTimeout(refresh, 5000); }
       }
     };
     void refresh();
@@ -93,7 +94,7 @@ export default function WorkspacePage() {
     let live = true;
     void invitationPolicy(tenantId).then(row => {
       if (live && row) setHours(String(row.data.invitationExpiryHours ?? 336));
-    }).catch(e => { if (live) setError(e.message); });
+    }).catch(e => { if (live) setError(describeWorkspaceError(e)); });
     return () => { live = false; };
   }, [tenantId, canEditPolicy]);
 
@@ -110,7 +111,7 @@ export default function WorkspacePage() {
       setRetry(operation.status === 'PENDING'); setPoll(value => value + 1);
       setNotice(operation.status === 'PENDING' ? 'Name change is pending. Select Retry name change to continue.' : `Workspace name updated to ${operation.name}.`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not request name change.');
+      setError(describeWorkspaceError(e));
       // A token can expire/be denied after acceptance or a partial write. Keep
       // the original request for explicit replay using a fresh login's token.
       const authFailure = e instanceof ApiClientError && [401, 403].includes(e.statusCode);

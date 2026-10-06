@@ -10,6 +10,7 @@ import { toast } from '@/hooks/use-toast';
 import { StepHeader } from '../StepHeader';
 import { EmptyState, OptionCard, StepActions } from '../StepParts';
 import { adjacentSteps, stepById } from '../steps';
+import { probeGate, useStepProbe } from '../stepProbe';
 import { describeSaveError } from '../errors';
 import { reportStepError, trackStepAction } from '../telemetry';
 import { EmployeeDialog } from './EmployeeDialog';
@@ -76,6 +77,12 @@ export default function EmployeesStep() {
   // The signed-in admin is an employee too; they are listed but can't be removed from here.
   const isSelf = (employee: Employee) => !!state.user?.uuid && employee.user?.uuid === state.user.uuid;
   const others = (employees ?? []).filter((employee) => !isSelf(employee));
+  const { probe, recheck } = useStepProbe(state.tenant, 'EMPLOYEES', others.map((employee) => employee.code).join(','));
+  const gate = probeGate(
+    'EMPLOYEES',
+    { ready: others.length > 0, hint: others.length === 0 ? 'Add at least one employee to continue.' : undefined },
+    probe,
+  );
 
   const add = async (input: NewEmployee) => {
     if (!options) return;
@@ -286,15 +293,22 @@ export default function EmployeesStep() {
         </section>
       )}
 
-      <StepActions
-        onBack={previous ? () => navigate(previous.path) : undefined}
-        onContinue={async () => {
-          if (!await completePhase(STEP.number)) return;
-          if (next) navigate(next.path);
-        }}
-        disabled={others.length === 0}
-        hint={others.length === 0 ? 'Add at least one employee to continue.' : undefined}
-      />
+      <div className="flex flex-wrap items-center gap-3">
+        <StepActions
+          onBack={previous ? () => navigate(previous.path) : undefined}
+          onContinue={async () => {
+            if (!await completePhase(STEP.number)) return;
+            if (next) navigate(next.path);
+          }}
+          disabled={gate.disabled}
+          hint={gate.hint}
+        />
+        {gate.canRecheck && (
+          <Button variant="ghost" size="sm" onClick={recheck}>
+            Check again
+          </Button>
+        )}
+      </div>
 
       <EmployeeDialog
         open={adding}

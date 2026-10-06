@@ -3,6 +3,9 @@ import { apiClient } from '../client';
 import { ENDPOINTS, BOUNDARY_SEARCH_LIMIT } from '../config';
 import type { Boundary, BoundaryHierarchy, BoundaryLevel } from '../types';
 
+/** Reserved by the platform baseline for the founder's root jurisdiction. */
+export const WORKSPACE_HIERARCHY_TYPE = 'WORKSPACE';
+
 export const boundaryService = {
   // ============================================
   // Hierarchy Methods
@@ -19,8 +22,10 @@ export const boundaryService = {
       },
     });
 
-    const hierarchies = response.BoundaryHierarchy || [];
-    return hierarchies as BoundaryHierarchy[];
+    // WORKSPACE holds only the tenant's root boundary for the founder's
+    // jurisdiction (platform baseline); it is never an operational hierarchy.
+    const hierarchies = (response.BoundaryHierarchy || []) as BoundaryHierarchy[];
+    return hierarchies.filter((h) => h.hierarchyType !== WORKSPACE_HIERARCHY_TYPE);
   },
 
   // Create a new boundary hierarchy.
