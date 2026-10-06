@@ -116,13 +116,17 @@ configure:
   # identity-citizen-otp-secret key and an OTP channel (IDENTITY_OTP_SENDER).
   citizenSigninMethods: "phone_otp"
   # Required by the script: password recovery, invitations and email
-  # verification send mail. Password: Secret key keycloak-smtp-password.
+  # verification send mail. `auth` defaults to false, as in
+  # configure-keycloak.sh (a relay that takes no login). With auth: true the
+  # render fails unless `user` is set and keycloak-smtp-password is present
+  # (checked in secret.values, or in existingSecret when the cluster can be
+  # read); the Job then also refuses to start without that key.
   smtp:
     host: ""
     port: "587"
     from: ""
     fromDisplayName: "DIGIT Identity"
-    auth: true
+    auth: false
     user: ""
     ssl: false
     starttls: true

@@ -97,8 +97,14 @@ settings below exist.
 
 4. **SMTP.** Required, as under Ansible: password setup and reset, invitations
    and email verification all send mail. Set
-   `identity.keycloak.configure.smtp.host` and `.from` (and `user`, `port`,
-   `starttls`, `ssl`, `auth`); the render fails while they are empty.
+   `identity.keycloak.configure.smtp.host` and `.from` (and `port`,
+   `starttls`, `ssl`); the render fails while they are empty. `auth` defaults
+   to `false`, as in `configure-keycloak.sh`, for a relay that takes no login.
+   For an authenticated relay set `auth: true` and `user`, and put the password
+   in the Secret's `keycloak-smtp-password`: the render fails while `user` is
+   empty, or while the password is missing from `secret.values` (or from
+   `existingSecret`, when the render can read the cluster), and the Job does
+   not start without that key.
 
 ## Enable
 
@@ -115,6 +121,7 @@ identity:
       smtp:
         host: "smtp.example.org"
         from: "no-reply@example.org"
+        auth: true
         user: "smtp-user"
   identity-bff:
     image:

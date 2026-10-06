@@ -23,6 +23,27 @@ so a change to either is a release diff and `helmfile apply` re-runs the Job.
 {{- $identity := .Values.identity }}
 {{- $quickstart := eq (toString .Values.global.setup) "quickstart" }}
 {{- $smtp := .Values.configure.smtp }}
+{{- $smtpAuth := eq (toString $smtp.auth) "true" }}
+{{- /* SMTP auth with no credentials stores smtpServer.auth=true with an empty
+       login: every Keycloak mail then fails at SMTP login while the install
+       reports success. The password is checked where the render can see it:
+       secret.values, or existingSecret when lookup reaches the cluster (helm
+       template and client-side dry runs cannot; the non-optional secretKeyRef
+       below then stops the pod instead). */ -}}
+{{- if $smtpAuth }}
+{{-   if not $smtp.user }}
+{{-     fail "keycloak: configure.smtp.auth is true but configure.smtp.user is empty. Set the SMTP login, or auth: false for a relay that takes none." }}
+{{-   end }}
+{{-   $noPassword := "keycloak: configure.smtp.auth is true but the Secret has no keycloak-smtp-password." }}
+{{-   if .Values.secret.existingSecret }}
+{{-     $found := lookup "v1" "Secret" .Release.Namespace .Values.secret.existingSecret }}
+{{-     if and $found (not (index ($found.data | default dict) "keycloak-smtp-password")) }}
+{{-       fail $noPassword }}
+{{-     end }}
+{{-   else if not (index (.Values.secret.values | default dict) "keycloak-smtp-password") }}
+{{-     fail $noPassword }}
+{{-   end }}
+{{- end }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -135,7 +156,7 @@ spec:
                   name: {{ $secret }}
                   key: {{ $key }}
             {{- end }}
-            {{- range $env, $key := dict "KEYCLOAK_MAGIC_LINK_CLIENT_SECRET" "keycloak-magic-link-client-secret" "KEYCLOAK_SMTP_PASSWORD" "keycloak-smtp-password" "KEYCLOAK_GOOGLE_CLIENT_SECRET" "keycloak-google-client-secret" "KEYCLOAK_GITHUB_CLIENT_SECRET" "keycloak-github-client-secret" }}
+            {{- range $env, $key := dict "KEYCLOAK_MAGIC_LINK_CLIENT_SECRET" "keycloak-magic-link-client-secret" "KEYCLOAK_GOOGLE_CLIENT_SECRET" "keycloak-google-client-secret" "KEYCLOAK_GITHUB_CLIENT_SECRET" "keycloak-github-client-secret" }}
             - name: {{ $env }}
               valueFrom:
                 secretKeyRef:
@@ -143,6 +164,12 @@ spec:
                   key: {{ $key }}
                   optional: true
             {{- end }}
+            - name: KEYCLOAK_SMTP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secret }}
+                  key: keycloak-smtp-password
+                  optional: {{ not $smtpAuth }}
             - name: KEYCLOAK_SMTP_HOST
               value: {{ required "configure.smtp.host is required: Keycloak sends password recovery, invitation and verification mail" $smtp.host | quote }}
             - name: KEYCLOAK_SMTP_PORT
@@ -152,7 +179,7 @@ spec:
             - name: KEYCLOAK_SMTP_FROM_DISPLAY_NAME
               value: {{ $smtp.fromDisplayName | quote }}
             - name: KEYCLOAK_SMTP_AUTH
-              value: {{ $smtp.auth | toString | quote }}
+              value: {{ $smtpAuth | toString | quote }}
             - name: KEYCLOAK_SMTP_USER
               value: {{ $smtp.user | quote }}
             - name: KEYCLOAK_SMTP_SSL

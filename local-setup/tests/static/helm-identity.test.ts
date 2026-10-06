@@ -156,6 +156,16 @@ describe('keycloak chart: realm-configure Job', () => {
     expect(job).toMatch(/- name: PATH\n\s+value: \/identity-config\/bin:/);
   });
 
+  // smtpServer.auth=true with no login makes every Keycloak mail fail at
+  // SMTP login while the install reports success.
+  test('SMTP auth defaults to off, as in the script, and auth without credentials is refused', () => {
+    expect(read(`${KC}/values.yaml`)).toMatch(/^ {4}auth: false$/m);
+    expect(read('keycloak/configure-keycloak.sh')).toContain('local smtp_auth=${KEYCLOAK_SMTP_AUTH:-false}');
+    expect(job).toContain('configure.smtp.auth is true but configure.smtp.user is empty');
+    expect(job).toContain('configure.smtp.auth is true but the Secret has no keycloak-smtp-password');
+    expect(job).toMatch(/key: keycloak-smtp-password\n\s+optional: \{\{ not \$smtpAuth \}\}/);
+  });
+
   // Keycloak drops an empty client attribute, and the BFF reads a missing
   // digit.auth.signin.methods on the citizen client as misconfigured: /readyz
   // stays 503 and the pod never takes traffic.
