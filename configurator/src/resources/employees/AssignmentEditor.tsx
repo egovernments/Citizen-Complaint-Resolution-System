@@ -16,6 +16,7 @@ import { uniqueBy } from '@/lib/uniqueBy';
 import type { Employee, EmployeeAssignment } from '@/api/types';
 import { useEmployeeLookup } from '@/admin/hrms/useEmployeeLookup';
 import { ReportingToSelect } from './ReportingToSelect';
+import { pickerChoices } from '@/lib/systemRecords';
 
 export interface AssignmentEditorProps {
   source?: string;
@@ -171,19 +172,24 @@ export function AssignmentEditor({
   // Both pickers submit `code`, so two master records sharing a code would
   // render as duplicate SelectItems with the same value — Radix marks every one
   // of them checked and concatenates their labels into the trigger (#1923).
+  // The founder's provisioned department and designation aren't offered, unless a saved row holds one.
+  const record = useRecordContext<Employee>();
+  const held = useMemo(
+    () => (record?.assignments ?? []).flatMap((assignment) => [assignment.department, assignment.designation]),
+    [record],
+  );
   const departmentChoices = useMemo(
-    () => uniqueBy(departments, (d) => d.code),
-    [departments],
+    () => pickerChoices(uniqueBy(departments, (d) => d.code), (d) => d.code, held),
+    [departments, held],
   );
   const designationChoices = useMemo(
-    () => uniqueBy(designations, (d) => d.code),
-    [designations],
+    () => pickerChoices(uniqueBy(designations, (d) => d.code), (d) => d.code, held),
+    [designations, held],
   );
 
   const { employees: managerCandidates, isLoading: managersLoading } = useEmployeeLookup(tenantFilter);
   // On the edit form this is the employee being edited; on create there's no
   // record yet, so nothing needs to be excluded from the manager list.
-  const record = useRecordContext<Employee>();
   const ownUuid = record?.uuid;
 
   // The dates each assignment is stored with, read off the record rather than

@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { describeSaveError } from '../errors';
 import type { Employee } from '@/api/types';
+import { pickerChoices } from '@/lib/systemRecords';
 import { currentAssignment, type Choice, type EmployeeChanges, type EmployeeOptions, type NewEmployee } from './employeesApi';
 
 /** A labelled list of checkboxes, with a filter once it gets long. */
@@ -164,6 +165,13 @@ export function EmployeeDialog({
   }
 
   const editing = !!employee;
+  // The founder's own records stay off the lists, but an edit still shows a value they already hold.
+  const held = useMemo(() => {
+    const assignment = employee ? currentAssignment(employee) : undefined;
+    return [assignment?.department, assignment?.designation];
+  }, [employee]);
+  const departmentChoices = useMemo(() => pickerChoices(options.departments, (choice) => choice.code, held), [options.departments, held]);
+  const designationChoices = useMemo(() => pickerChoices(options.designations, (choice) => choice.code, held), [options.designations, held]);
   // Departments from earlier assignments: kept on the record, shown, not edited here.
   const pastDepartments = useMemo(() => {
     if (!employee) return [];
@@ -305,7 +313,7 @@ export function EmployeeDialog({
                     <SelectValue placeholder="Choose a department" />
                   </SelectTrigger>
                   <SelectContent>
-                    {options.departments.map((choice) => (
+                    {departmentChoices.map((choice) => (
                       <SelectItem key={choice.code} value={choice.code}>
                         {choice.name}
                       </SelectItem>
@@ -321,7 +329,7 @@ export function EmployeeDialog({
             <CheckList
               legend="Departments"
               hint="Choose one or more. The first is their main one."
-              choices={options.departments}
+              choices={departmentChoices}
               picked={departments}
               onChange={setDepartments}
               error={errors.departments}
@@ -337,7 +345,7 @@ export function EmployeeDialog({
                 <SelectValue placeholder="Choose a designation" />
               </SelectTrigger>
               <SelectContent>
-                {options.designations.map((choice) => (
+                {designationChoices.map((choice) => (
                   <SelectItem key={choice.code} value={choice.code}>
                     {choice.name}
                   </SelectItem>

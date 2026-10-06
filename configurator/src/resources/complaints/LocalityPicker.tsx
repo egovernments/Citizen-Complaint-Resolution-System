@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { uniqueBy } from '@/lib/uniqueBy';
+import { pickerChoices } from '@/lib/systemRecords';
 
 interface HierarchyLevel {
   boundaryType: string;
@@ -85,8 +86,11 @@ export function LocalityPicker({
   // tenant's and two tenants may both name theirs "ADMIN" (#1923).
   const hierarchyChoices = useMemo(() => {
     if (!hierarchies) return [] as { value: string; label: string }[];
-    return uniqueBy(
-      hierarchies.map((h) => ({ value: h.hierarchyType, label: h.hierarchyType })),
+    return pickerChoices(
+      uniqueBy(
+        hierarchies.map((h) => ({ value: h.hierarchyType, label: h.hierarchyType })),
+        (c) => c.value,
+      ),
       (c) => c.value,
     );
   }, [hierarchies]);

@@ -5,6 +5,7 @@ import { boundaryService, hrmsService, localizationService, mdmsService } from '
 import type { Employee, EmployeeJurisdiction } from '@/api/types';
 import { listMasters, recordDepartments, recordName } from '../departments/mastersApi';
 import { readLocales } from '../labelLocales';
+import { allowedEmployeeRoles } from '@/lib/systemRecords';
 
 /**
  * Employees for the Employees step: the choices the add dialog offers (from
@@ -95,7 +96,7 @@ export async function loadEmployeeOptions(tenantId: string): Promise<EmployeeOpt
       name: recordName(record),
       departments: recordDepartments(record),
     })),
-    roles: roles.map((role) => ({ code: role.code, name: role.name || role.code })),
+    roles: allowedEmployeeRoles(roles.map((role) => ({ code: role.code, name: role.name || role.code }))),
     boundaries,
     mobilePattern,
   };
