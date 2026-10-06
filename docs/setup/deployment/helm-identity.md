@@ -181,6 +181,10 @@ every deploy, and it is idempotent.
   such a diff. `helmfile sync` upgrades, and so reruns the Job, every time.
 - The `keycloak` release is installed with `wait: true` and `identity-bff`
   `needs` it, so the realm exists before the BFF starts.
+- The Job's `configure.activeDeadlineSeconds` (600 s, every retry included)
+  stays below the release `timeout` (900 s), so a failing reconcile fails on
+  the Job's own deadline rather than Helm giving up while it still retries.
+  Raise both together.
 - A successful run is deleted; a failed one stays for `kubectl -n egov logs
   job/keycloak-realm-configure` until the next upgrade replaces it.
 

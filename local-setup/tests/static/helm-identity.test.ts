@@ -213,6 +213,13 @@ describe('identity helmfile wiring', () => {
     expect(helmfile).toMatch(/- name: identity-bff\n[\s\S]*?needs:\n\s+- keycloak/);
   });
 
+  test("the keycloak release's timeout outlasts the realm-configure Job's deadline", () => {
+    const timeout = Number(/- name: keycloak\n[\s\S]*?\n {4}timeout: (\d+)\n/.exec(helmfile)?.[1]);
+    const deadline = Number(/^ {2}activeDeadlineSeconds: (\d+)$/m.exec(read(`${KC}/values.yaml`))?.[1]);
+    expect(deadline).toBeGreaterThan(0);
+    expect(timeout).toBeGreaterThan(deadline);
+  });
+
   test('digit-helmfile.yaml includes it', () => {
     expect(read('devops/deploy-as-code/digit-helmfile.yaml')).toMatch(
       /^ {2}- path: \.\/charts\/identity\/identity-helmfile\.yaml$/m);

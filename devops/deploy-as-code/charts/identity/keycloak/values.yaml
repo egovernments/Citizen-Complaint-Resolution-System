@@ -99,7 +99,12 @@ configure:
   # turned Ready, not Keycloak's first start.
   loginAttempts: 12
   backoffLimit: 3
-  activeDeadlineSeconds: 1200
+  # The whole Job, every retry included. Keep it BELOW the keycloak release's
+  # `timeout` in identity-helmfile.yaml (900 s): Helm waits on the hook for at
+  # most that long, and giving up first would mark the release failed (and skip
+  # identity-bff, which needs it) while the Job is still retrying. Below it,
+  # the Job ends on its own deadline and Helm reports the Job's failure.
+  activeDeadlineSeconds: 600
   # Keycloak SSL requirement for the realm. Empty = "external", or "none"
   # when global.setup is "quickstart" (plain-HTTP clusters).
   sslRequired: ""

@@ -56,6 +56,13 @@ releases:
     installed: {{ $enabled }}
     missingFileHandler: Warn
     wait: true
+    # Helm applies this to each wait in turn: the Deployment's readiness (a
+    # first start runs Keycloak's database migrations), then the realm-configure
+    # hook Job. It must exceed the Job's configure.activeDeadlineSeconds
+    # (keycloak/values.yaml, 600 s, all retries included) so the Job, not Helm,
+    # decides when the reconcile has failed: a Helm timeout first would fail the
+    # release with the Job still running and skip identity-bff (needs: keycloak).
+    # local-setup/tests/static/helm-identity.test.ts checks the ordering.
     timeout: 900
     values:
       - global:
