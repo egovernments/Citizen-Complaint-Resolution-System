@@ -209,7 +209,6 @@ config:
   DIGIT_ROLE_CLIENT_ID: "digit-ui"
   DIGIT_CITIZEN_OTP_IDENTITY: "mobileNumber"
   DIGIT_CITIZEN_ROLES: "CITIZEN"
-  DIGIT_FOUNDATION_SOURCE_TENANT: "pg"
   DIGIT_TIMEOUT_MS: ""                    # BFF default: 10000
   DIGIT_TOKEN_REFRESH_SKEW_SECONDS: ""    # BFF default: 60
   DIGIT_USER_LEASE_SECONDS: ""            # BFF default: 30
