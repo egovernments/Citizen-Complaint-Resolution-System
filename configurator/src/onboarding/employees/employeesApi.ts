@@ -260,11 +260,14 @@ export async function updateEmployeeDetails(
   try {
     await linkMember(employee.tenantId, uuid, email, true);
   } catch (error) {
-    throw new MessageError(
-      'employees.invite_move_failed',
-      'The old invitation was withdrawn, but the new one didn’t go out. Use Invite again to send it. %{reason}',
-      { reason: error instanceof Error ? error.message : '' },
-    );
+    const reason = error instanceof Error ? error.message : '';
+    throw reason
+      ? new MessageError(
+          'employees.invite_move_failed_reason',
+          'The old invitation was withdrawn, but the new one didn’t go out. Use Invite again to send it. %{reason}',
+          { reason },
+        )
+      : new MessageError('employees.invite_move_failed', 'The old invitation was withdrawn, but the new one didn’t go out. Use Invite again to send it.');
   }
   return { email: 'invited' };
 }
