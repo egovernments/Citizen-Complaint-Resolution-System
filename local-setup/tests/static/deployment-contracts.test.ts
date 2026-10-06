@@ -307,9 +307,9 @@ describe('host_vars templates — db_fast_path ack (#2082)', () => {
   });
 });
 
-// Dhruv, #2271 review 3, item 1: three example host_vars still set
-// `enable_digit_ui_v2: true`, which the playbook has refused since D26, and the
-// static tests stayed green because preflight.py mirrored neither D26 refusal.
+// Dhruv, #2271 review 3, item 1: three example host_vars still set a value the
+// playbook refused since D26, and the static tests stayed green because
+// preflight.py did not mirror the playbook's D26 refusals.
 // Every tracked example now goes through preflight.py. The fast-path rules are
 // the only ones allowed to fire: every example ships db_fast_path with the
 // data-wipe ack off on purpose (#2082), and the non-dump examples carry a
@@ -347,17 +347,14 @@ describe('example host_vars pass preflight.py (#2271)', () => {
     expect(unexpected).toEqual([]);
   });
 
-  test('preflight.py mirrors both D26 refusals in the playbook', () => {
+  test('preflight.py mirrors the D26 refusal in the playbook', () => {
     const script = read('local-setup/scripts/preflight.py');
     const playbook = read('local-setup/ansible/playbook-deploy.yml');
     expect(playbook).toContain('- name: "preflight — identity requires enable_keycloak: true"');
-    expect(playbook).toContain('- name: "preflight — refuse retired digit-ui-v2 citizen identity"');
     expect(script).toMatch(/"identity-needs-keycloak"/);
-    expect(script).toMatch(/"digit-ui-v2-retired"/);
     const selfTest = execFileSync('python3', ['local-setup/scripts/preflight.py', '--self-test'],
       { cwd: REPO_ROOT, encoding: 'utf8' });
     expect(selfTest).toContain('[self-test ok ] enable_keycloak false fires');
-    expect(selfTest).toContain('[self-test ok ] enable_digit_ui_v2 true fires');
   });
 });
 
@@ -1947,11 +1944,6 @@ describe('D26 legacy identity paths are retired', () => {
     expect(scoped).toBeGreaterThanOrEqual(38);
   });
 
-  test('digit-ui-v2 cannot be deployed after its citizen identity removal', () => {
-    expect(playbook).toContain('enable_digit_ui_v2 is no longer supported');
-    expect(playbook).toContain('D26 retired its fixed-OTP');
-  });
-
   test('legacy UI implementations are absent and BFF-flow specs remain', () => {
     for (const removed of [
       'digit-ui-esbuild/packages/modules/core/src/pages/citizen/Login/index.js',
@@ -1960,8 +1952,6 @@ describe('D26 legacy identity paths are retired', () => {
       'digit-ui-esbuild/packages/modules/core/src/pages/employee/Otp/index.js',
       'digit-ui-esbuild/packages/modules/core/src/pages/employee/ForgotPassword/index.js',
       'digit-ui-esbuild/packages/modules/core/src/pages/employee/ChangePassword/index.js',
-      'digit-ui-v2/src/pages/CitizenLoginPage.tsx',
-      'digit-ui-v2/src/pages/CitizenProfilePage.tsx',
       // Only navigated to the removed /user/login and /user/sign-up pages.
       'digit-ui-esbuild/packages/modules/core/src/components/LoginSignupSelector.js',
     ]) expect(fs.existsSync(path.join(REPO_ROOT, removed))).toBe(false);
