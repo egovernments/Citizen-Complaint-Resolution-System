@@ -10,6 +10,7 @@ text, from the `NOTIFICATIONS.*` MDMS masters that operators edit in the Configu
 | Upgrade a 2.12 deployment | [migration.md](./migration.md) |
 | Connect a module, swap the DIGIT seams (developers) | [developer-guide.md](./developer-guide.md) |
 | Understand the providers, DIGIT's worker providers, or add a provider | [providers.md](./providers.md) — [How providers work](./providers.md#how-providers-work), [DIGIT's worker providers](./providers.md#digits-worker-providers), [Adding a provider](./providers.md#adding-a-provider) |
+| Add a new SMS gateway, step by step (developers) | [adding-a-provider.md](./adding-a-provider.md) — a worked example from the provider file to a test send on a local stack |
 | Configure the Kafka / Redpanda topics novu-bridge consumes | [kafka-events.md](./kafka-events.md) |
 | Integrate against the published interface | [contract/](./contract/README.md) — schemas, OpenAPI, [error codes](./contract/error-codes.md), [outputs](./contract/outputs.md) |
 
