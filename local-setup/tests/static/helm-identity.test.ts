@@ -137,7 +137,19 @@ describe('keycloak chart: realm-configure Job', () => {
 
   test('is a post-install and post-upgrade hook', () => {
     expect(job).toContain('"helm.sh/hook": post-install,post-upgrade');
-    expect(job).toContain('exec /identity-config/configure-keycloak.sh');
+    expect(job).toContain('command: ["/identity-config/configure-keycloak.sh"]');
+  });
+
+  // Hook Jobs are recreated on every hook run (before-hook-creation), so a
+  // pod-template checksum triggers nothing; and with wait: true Helm starts
+  // post-install/upgrade hooks only once the Deployment is Ready.
+  test('carries no pod-template checksum and no wait loop, only a short login retry', () => {
+    expect(job).not.toContain('checksum/realm-config');
+    expect(job).not.toContain('/dev/tcp');
+    expect(job).toMatch(/- name: KEYCLOAK_LOGIN_ATTEMPTS\n\s+value: \{\{ \.Values\.configure\.loginAttempts \| toString \| quote \}\}/);
+    expect(read(`${KC}/values.yaml`)).toMatch(/^ {2}loginAttempts: \d+$/m);
+    // One attempt under Compose/Ansible, which run the script on a healthy container.
+    expect(read('keycloak/configure-keycloak.sh')).toContain('readonly LOGIN_ATTEMPTS=${KEYCLOAK_LOGIN_ATTEMPTS:-1}');
   });
 
   // helm reads files only from inside a chart, so the chart carries copies.

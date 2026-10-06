@@ -94,8 +94,10 @@ extraServerEnv: {}
 # every deploy.
 configure:
   enabled: true
-  # How long the Job waits for Keycloak to answer before it gives up.
-  waitSeconds: 600
+  # kcadm login attempts, 5 s apart. Helm starts the hook only once the
+  # Deployment is Ready (wait: true), so this covers a Service that has just
+  # turned Ready, not Keycloak's first start.
+  loginAttempts: 12
   backoffLimit: 3
   activeDeadlineSeconds: 1200
   # Keycloak SSL requirement for the realm. Empty = "external", or "none"

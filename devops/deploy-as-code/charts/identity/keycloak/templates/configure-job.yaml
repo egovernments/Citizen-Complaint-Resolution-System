@@ -13,8 +13,10 @@ The client secrets come from the same Secret (or the same env-secrets.yaml
 values) as the identity-bff chart's, so Keycloak's clients and the BFF cannot
 disagree about one.
 
-The pod template's checksum annotation changes with the script or realm.json,
-so a change to either is a release diff and `helmfile apply` re-runs the Job.
+Helm runs post-install/post-upgrade hooks only after the release's resources
+are ready (the helmfile installs it with wait: true), so Keycloak is already
+serving when the Job starts; the script retries its first kcadm login a few
+times (configure.loginAttempts) for a Service that has only just turned Ready.
 */ -}}
 {{- $_ := include "common.name" . }}
 {{- if .Values.configure.enabled }}
@@ -62,8 +64,6 @@ spec:
     metadata:
       labels:
         app: {{ template "common.name" . }}-realm-configure
-      annotations:
-        checksum/realm-config: {{ printf "%s%s%s" (.Files.Get "files/configure-keycloak.sh") (.Files.Get "files/realm.json") (.Files.Get "files/docker") | sha256sum }}
     spec:
       restartPolicy: Never
       securityContext:
@@ -89,32 +89,7 @@ spec:
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]
-          command: ["/bin/bash", "-c"]
-          args:
-            - |
-              set -euo pipefail
-              # Keycloak answers on the Service once its database migrations
-              # are done; the Job can start before that on a first install.
-              server=${KEYCLOAK_KCADM_SERVER#http://}
-              host=${server%%:*}; port=${server##*:}
-              ready() {
-                exec 3<>"/dev/tcp/$host/$port" || return 1
-                printf 'GET /realms/master HTTP/1.0\r\nHost: %s\r\n\r\n' "$host" >&3
-                local status=""
-                IFS= read -r status <&3 || true
-                exec 3<&-
-                case "$status" in *" 200 "*) return 0 ;; esac
-                return 1
-              }
-              deadline=$((SECONDS + {{ .Values.configure.waitSeconds }}))
-              until ready 2>/dev/null; do
-                if [ "$SECONDS" -ge "$deadline" ]; then
-                  echo "Keycloak at $KEYCLOAK_KCADM_SERVER did not answer within {{ .Values.configure.waitSeconds }}s" >&2
-                  exit 1
-                fi
-                sleep 5
-              done
-              exec /identity-config/configure-keycloak.sh
+          command: ["/identity-config/configure-keycloak.sh"]
           volumeMounts:
             - name: realm-config
               mountPath: /identity-config
@@ -126,6 +101,8 @@ spec:
               value: {{ include "keycloak.serviceUrl" . | quote }}
             - name: KEYCLOAK_CONTAINER
               value: {{ template "common.name" . }}
+            - name: KEYCLOAK_LOGIN_ATTEMPTS
+              value: {{ .Values.configure.loginAttempts | toString | quote }}
             - name: KEYCLOAK_REALM_CONFIG
               value: /identity-config/realm.json
             - name: KEYCLOAK_ORGANIZATION_REALM

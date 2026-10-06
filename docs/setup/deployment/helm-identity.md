@@ -167,15 +167,18 @@ every deploy, and it is idempotent.
   `docker exec` calls into the keycloak container become local calls through a
   small shim (`files/docker`), and kcadm talks to the Service
   (`KEYCLOAK_KCADM_SERVER`).
-- It waits up to `configure.waitSeconds` for Keycloak to answer, then
-  authenticates as the bootstrap admin from the Secret. With that admin given,
-  the script creates no temporary admin.
+- Helm starts it only after the Keycloak Deployment is Ready (the release is
+  installed with `wait: true`), so it does not wait for Keycloak's first start.
+  It retries its first kcadm login up to `configure.loginAttempts` times, 5 s
+  apart, as the bootstrap admin from the Secret. With that admin given, the
+  script creates no temporary admin.
 - The chart carries copies of the script and `realm.json` in `files/` (helm
   reads only files inside a chart). `local-setup/tests/static/helm-identity.test.ts`
   fails when they differ from `keycloak/`.
-- The pod template carries a checksum of those files, so changing either is a
-  release diff and `helmfile apply` reruns the Job. `helmfile sync` reruns it
-  every time.
+- The hook runs on a Helm install or upgrade, not on every `helmfile apply`:
+  apply upgrades the release only when its diff is non-empty. Changing the
+  chart's copy of the script or `realm.json` changes the ConfigMap, which is
+  such a diff. `helmfile sync` upgrades, and so reruns the Job, every time.
 - The `keycloak` release is installed with `wait: true` and `identity-bff`
   `needs` it, so the realm exists before the BFF starts.
 - A successful run is deleted; a failed one stays for `kubectl -n egov logs

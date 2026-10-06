@@ -124,12 +124,28 @@ cleanup() {
 }
 trap cleanup EXIT
 
-docker exec \
+# One attempt by default: Ansible runs this after the container is healthy.
+# The Helm Job allows a few, for a Service that has just become Ready.
+readonly LOGIN_ATTEMPTS=${KEYCLOAK_LOGIN_ATTEMPTS:-1}
+case "$LOGIN_ATTEMPTS" in
+  '' | *[!0-9]* | 0)
+    printf 'KEYCLOAK_LOGIN_ATTEMPTS must be a positive number\n' >&2
+    exit 1 ;;
+esac
+login_attempt=1
+until docker exec \
   -e KCADM_USERNAME="$KC_BOOTSTRAP_ADMIN_USERNAME" \
   -e KCADM_PASSWORD="$KC_BOOTSTRAP_ADMIN_PASSWORD" \
   -e KCADM_SERVER="$KCADM_SERVER" \
   "$KEYCLOAK_CONTAINER" sh -c \
-  '/opt/keycloak/bin/kcadm.sh config credentials --config '"$KC_CONFIG"' --server "$KCADM_SERVER" --realm master --user "$KCADM_USERNAME" --password "$KCADM_PASSWORD" >/dev/null'
+  '/opt/keycloak/bin/kcadm.sh config credentials --config '"$KC_CONFIG"' --server "$KCADM_SERVER" --realm master --user "$KCADM_USERNAME" --password "$KCADM_PASSWORD" >/dev/null'; do
+  if [ "$login_attempt" -ge "$LOGIN_ATTEMPTS" ]; then
+    printf 'kcadm could not sign in to %s after %s attempt(s)\n' "$KCADM_SERVER" "$login_attempt" >&2
+    exit 1
+  fi
+  login_attempt=$((login_attempt + 1))
+  sleep 5
+done
 
 # Writes the JSON on stdin to an Admin API path in the realm.
 kc_put() {
