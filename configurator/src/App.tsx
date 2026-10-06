@@ -2,6 +2,7 @@ import AccountPage from '@/identity/AccountPage';
 import MembersPage from '@/identity/MembersPage';
 import WorkspacePage from '@/identity/WorkspacePage';
 import { completedSteps, searchWorkspace, updateWorkspace, WORKSPACE_STEPS } from '@/identity/workspace';
+import { describeStepCompletionError } from '@/onboarding/errors';
 import { toast } from '@/hooks/use-toast';
 import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { useState, createContext, useContext, useEffect, useCallback } from 'react';
@@ -444,7 +445,7 @@ function App() {
       if (finishesOnboarding(phase, state.completedPhases)) trackEvent('onboarding_complete', { tenant: state.tenant });
       return true;
     } catch (error) {
-      toast({ variant: 'destructive', title: 'Could not complete setup step', description: error instanceof Error ? error.message : 'Reload and retry.' });
+      toast({ variant: 'destructive', title: 'Could not complete setup step', description: describeStepCompletionError(error, WORKSPACE_STEPS[phase - 1]) });
       return false;
     }
   };

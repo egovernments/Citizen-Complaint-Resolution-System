@@ -43,7 +43,7 @@ export interface ComplaintDraft {
 export type LoadedComplaints =
   | { editable: true; draft: ComplaintDraft; records: MdmsRecord[]; hasDefinition: boolean }
   /** Set up some other way (a spreadsheet with its own levels): shown, not edited, here. */
-  | { editable: false; leafCount: number; levels: string[] };
+  | { editable: false; leafCount: number; levels: string[]; departments: string[] };
 
 const stateRootOf = (tenantId: string) => tenantId.split('.')[0];
 const dataOf = (record: MdmsRecord) => record.data as Record<string, unknown>;
@@ -77,7 +77,13 @@ export async function loadComplaints(tenantId: string): Promise<LoadedComplaints
 
   if (definition && definedLevels.join('|') !== LEVELS.join('|')) {
     const leafCount = active.filter((record) => dataOf(record).department != null || dataOf(record).slaHours != null).length;
-    return { editable: false, leafCount, levels: definedLevels };
+    // A leaf is a row no other row names as its parent; complaints filed on it go to its department.
+    const parents = new Set(active.map((record) => text(dataOf(record).parentCode)));
+    const departments = active
+      .filter((record) => !parents.has(codeOf(record)))
+      .map((record) => text(dataOf(record).department))
+      .filter(Boolean);
+    return { editable: false, leafCount, levels: definedLevels, departments: Array.from(new Set(departments)) };
   }
 
   const byOrder = (a: MdmsRecord, b: MdmsRecord) => Number(dataOf(a).order ?? 0) - Number(dataOf(b).order ?? 0);

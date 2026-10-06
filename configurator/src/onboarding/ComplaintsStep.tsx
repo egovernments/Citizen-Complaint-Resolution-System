@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, LayoutGrid, ListTree, MessageSquareText, Plus } from 'lucide-react';
+import { FileText, LayoutGrid, ListTree, MessageSquareText, Plus, UserRoundX } from 'lucide-react';
 import { useApp } from '../App';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { DigitCard } from '@/components/digit/DigitCard';
 import { ComplaintHierarchySetup } from '@/components/ComplaintHierarchySetup';
 import { toast } from '@/hooks/use-toast';
+import type { Employee } from '@/api/types';
 import { StepHeader } from './StepHeader';
 import { EmptyState, OptionCard, StepActions } from './StepParts';
 import { adjacentSteps, stepById } from './steps';
@@ -15,6 +16,8 @@ import { describeSaveError } from './errors';
 import { reportStepError, trackStepAction } from './telemetry';
 import { listMasters, recordName } from './departments/mastersApi';
 import { TypeDialog } from './complaints/TypeDialog';
+import { departmentsWithoutGro } from './complaints/groCoverage';
+import { listEmployees } from './employees/employeesApi';
 import {
   loadComplaints,
   rowsFingerprint,
@@ -27,6 +30,7 @@ import {
 } from './complaints/complaintsApi';
 
 const STEP = stepById('complaints');
+const EMPLOYEES_STEP = stepById('employees');
 const { previous } = adjacentSteps('complaints');
 
 const RESOLUTION_CHOICES = [
@@ -77,6 +81,8 @@ export default function ComplaintsStep() {
 
   const [loaded, setLoaded] = useState<LoadedComplaints | null>(null);
   const [departments, setDepartments] = useState<{ code: string; name: string }[]>([]);
+  // null until read, or when HRMS can't be read: the server still checks on finish.
+  const [employees, setEmployees] = useState<Employee[] | null>(null);
   const [draft, setDraft] = useState<ComplaintDraft | null>(null);
   const [dirty, setDirty] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -89,11 +95,16 @@ export default function ComplaintsStep() {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([loadComplaints(tenant), listMasters(tenant, 'department')])
-      .then(([result, departmentRecords]) => {
+    Promise.all([
+      loadComplaints(tenant),
+      listMasters(tenant, 'department'),
+      listEmployees(tenant).then((list) => list.active).catch(() => null),
+    ])
+      .then(([result, departmentRecords, employeeRecords]) => {
         if (cancelled) return;
         setLoaded(result);
         setDepartments(departmentRecords.map((record) => ({ code: record.uniqueIdentifier, name: recordName(record) })));
+        setEmployees(employeeRecords);
         const basis = result.editable ? rowsFingerprint(result.records) : '';
         const saved = result.editable ? readDraft(tenant) : null;
         const stored = saved && saved.basis === basis ? saved.draft : null;
@@ -125,6 +136,25 @@ export default function ComplaintsStep() {
   };
 
   const departmentName = useMemo(() => new Map(departments.map((choice) => [choice.code, choice.name])), [departments]);
+
+  const routedDepartments = !loaded ? [] : loaded.editable ? (draft?.types ?? []).map((type) => type.department) : loaded.departments;
+  const withoutGro = employees ? departmentsWithoutGro(routedDepartments, employees, tenant) : [];
+  const groHint = withoutGro.length > 0 ? 'Each department needs a GRO before you can finish.' : undefined;
+  const groNotice = withoutGro.length > 0 && (
+    <Alert>
+      <UserRoundX className="h-4 w-4" />
+      <AlertDescription className="space-y-3">
+        <p>
+          No one can assign complaints for{' '}
+          <span className="font-medium text-foreground">{withoutGro.map((code) => departmentName.get(code) ?? code).join(', ')}</span>.
+          Every department a complaint category goes to needs at least one employee with the GRO role. A DGRO doesn’t count.
+        </p>
+        <Button variant="outline" size="sm" onClick={() => navigate(EMPLOYEES_STEP.path)}>
+          Add a GRO in Employees
+        </Button>
+      </AlertDescription>
+    </Alert>
+  );
 
   const finish = async () => {
     if (!await completePhase(STEP.number)) return;
@@ -234,11 +264,13 @@ export default function ComplaintsStep() {
             </p>
           </div>
         </div>
+        {groNotice}
         <StepActions
           onBack={previous ? () => navigate(previous.path) : undefined}
           onContinue={finish}
           continueLabel="Finish setup"
-          disabled={loaded.leafCount === 0}
+          disabled={loaded.leafCount === 0 || withoutGro.length > 0}
+          hint={groHint}
         />
       </div>
     );
@@ -393,14 +425,16 @@ export default function ComplaintsStep() {
         </Alert>
       )}
 
+      {groNotice}
+
       <div className="flex flex-wrap items-center gap-3">
         <StepActions
           onBack={previous ? () => navigate(previous.path) : undefined}
           onContinue={save}
           continueLabel="Finish setup"
           busy={saving}
-          disabled={types.length === 0}
-          hint={types.length === 0 ? 'Add at least one complaint category to finish.' : undefined}
+          disabled={types.length === 0 || withoutGro.length > 0}
+          hint={types.length === 0 ? 'Add at least one complaint category to finish.' : groHint}
         />
         {dirty && loaded.draft.types.length > 0 && (
           <Button

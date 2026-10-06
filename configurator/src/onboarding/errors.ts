@@ -14,3 +14,20 @@ export function describeSaveError(err: unknown, fallback: string): string {
   }
   return message || fallback;
 }
+
+/** What each step's server check (pgr-services WorkspaceGateway) looks for, for when it refuses DONE. */
+const INCOMPLETE: Record<string, string> = {
+  BRANDING: 'Add a logo to finish branding, or skip the step.',
+  GEOGRAPHY: 'Add at least two levels of places, for example counties and the wards inside them.',
+  DEPARTMENTS: 'Add at least one department and one designation.',
+  EMPLOYEES: 'Add at least one employee who can sign in.',
+  COMPLAINT_TYPES:
+    'Every department a complaint category goes to needs an employee with the GRO role (a DGRO doesn’t count), and at least one category needs a department and a resolution time.',
+};
+
+/** A refused step completion, in words; other failures keep their own message. */
+export function describeStepCompletionError(err: unknown, step: string): string {
+  const code = err instanceof ApiClientError ? err.errors[0]?.code : undefined;
+  if (code === 'WORKSPACE_PROBE_INCOMPLETE' && INCOMPLETE[step]) return `This step isn’t complete yet. ${INCOMPLETE[step]}`;
+  return err instanceof Error ? err.message : 'Reload and retry.';
+}
