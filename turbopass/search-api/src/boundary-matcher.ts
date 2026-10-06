@@ -286,11 +286,15 @@ export class BoundaryIndex {
   // `minDescendants` drops places with fewer areas under them — the configurator
   // asks for 1, because a place with nothing under it can never form a
   // hierarchy (97.9% of the IN+KE+MZ build are such leaves).
+  // `country` (ISO alpha-2) keeps one country's places. It applies during the
+  // scan, before `limit`: filtering afterwards could leave nothing when the
+  // best `limit` matches all lie in other countries.
   search(
     query: string,
     mode: MatchMode,
     limit: number,
     minDescendants = 0,
+    country?: string,
   ): BoundaryHit[] {
     const q = normalizeName(query);
     if (!q) return [];
@@ -301,6 +305,7 @@ export class BoundaryIndex {
     const best: Scored[] = [];
     if (limit < 1) return [];
     for (const entry of this.entries) {
+      if (country && entry.row.country !== country) continue;
       if (
         minDescendants > 0 &&
         (this.descendants.get(entry.row.id) ?? 0) < minDescendants

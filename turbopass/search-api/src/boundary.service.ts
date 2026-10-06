@@ -453,6 +453,7 @@ export class BoundaryService {
     match: MatchMode = 'substring',
     limit = 10,
     minDescendants = 0,
+    country?: string,
   ): Promise<any> {
     if (source === 'geoapify') {
       const apiKey = this.configService.get<string>('GEOAPIFY_API_KEY');
@@ -483,7 +484,7 @@ export class BoundaryService {
     } else if (isOfflineSource(source)) {
       const index = this.offlineIndex(source);
       try {
-        const hits = index.search(query, match, limit, minDescendants);
+        const hits = index.search(query, match, limit, minDescendants, country);
         if (hits.length === 0) {
           return { type: 'FeatureCollection', features: [] };
         }

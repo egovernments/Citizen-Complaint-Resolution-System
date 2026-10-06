@@ -150,7 +150,7 @@ class Agreement(unittest.TestCase):
     def test_identical_sources_match_everywhere(self):
         best, report = self.checked(nested_country('cod'))
         other, _ = self.checked(nested_country('geoboundaries'))
-        official.add_agreement(best, [best, other], report)
+        official.add_agreement(best, [best, other], {'cod': report})
         self.assertEqual([(r['level'], r['other_areas'], r['matched']) for r in report[1:]],
                          [('ADM1', 4, 100.0), ('ADM2', 16, 100.0)])
         self.assertNotIn('matched', report[0])  # the country row is not compared
@@ -162,7 +162,7 @@ class Agreement(unittest.TestCase):
         cells = other.levels[2].gdf
         cells.loc[0, 'geometry'] = box(0.05, 0.0, 0.15, 0.1)
         other, _ = self.checked(other)
-        official.add_agreement(best, [best, other], report)
+        official.add_agreement(best, [best, other], {'cod': report})
         adm2 = report[2]
         self.assertEqual(adm2['matched'], round(100 * 15 / 16, 1))
         self.assertEqual(adm2['unmatched'], ['A0-0'])
@@ -177,7 +177,7 @@ class Agreement(unittest.TestCase):
             {'name': list('WXYZ'), 'code': list('WXYZ'), 'parent_code': ['TST'] * 4},
             geometry=strips, crs='EPSG:4326'), 'CC BY')]
         other, _ = self.checked(other)
-        official.add_agreement(best, [best, other], report)
+        official.add_agreement(best, [best, other], {'cod': report})
         self.assertEqual(report[1]['matched'], 0.0)
         self.assertEqual(report[1]['unmatched'], [])  # 4 off > MAX_NAMED_MISMATCHES
         # The other source stops at ADM1: ADM2 has no second source.
@@ -186,8 +186,25 @@ class Agreement(unittest.TestCase):
     def test_no_usable_second_source(self):
         best, report = self.checked(nested_country('cod'))
         gadm = official.Dataset('geoboundaries', 'TST', usable=False)
-        official.add_agreement(best, [best, gadm], report)
+        official.add_agreement(best, [best, gadm], {'cod': report})
         self.assertEqual({(r['other_areas'], r['matched']) for r in report[1:]}, {(0, None)})
+
+
+    def test_a_source_that_failed_to_load_is_not_measured_rather_than_absent(self):
+        best, report = self.checked(nested_country('cod'))
+        down = official.Dataset('geoboundaries', 'TST', usable=False, note='failed: URLError: timed out')
+        official.add_agreement(best, [best, down], {'cod': report})
+        self.assertEqual({(r['other_areas'], r['matched']) for r in report[1:]}, {(None, None)})
+
+    def test_a_level_the_other_source_dropped_is_not_measured(self):
+        best, report = self.checked(nested_country('cod'))
+        other = nested_country('geoboundaries')
+        other.levels[2] = official.Level(2, other.levels[2].gdf.iloc[:4].reset_index(drop=True), 'CC BY')  # truncated
+        other, other_report = self.checked(other)
+        self.assertFalse(other_report[2]['kept'])
+        official.add_agreement(best, [best, other], {'cod': report, 'geoboundaries': other_report})
+        self.assertEqual(report[1]['matched'], 100.0)
+        self.assertEqual((report[2]['other_areas'], report[2]['matched']), (None, None))
 
 
 class CodFiles(unittest.TestCase):
@@ -211,6 +228,11 @@ class CodFiles(unittest.TestCase):
         cols = {'ADM2_PT': ['Acrelândia'], 'ADM2_REF': ['r'], 'ADM2_PCODE': ['BR1200013'], 'ADM1_PCODE': ['BR12']}
         f = official.cod_frame(gpd.GeoDataFrame(cols, geometry=[box(0, 0, 1, 1)], crs='EPSG:4326'), 2)
         self.assertEqual(f.iloc[0]['name'], 'Acrelândia')
+
+    def test_a_latin_script_language_wins_over_alphabetical_order(self):
+        cols = {'ADM1_AR': ['جيبوتي'], 'ADM1_FR': ['Djibouti'], 'ADM1_PCODE': ['DJ01'], 'ADM0_PCODE': ['DJ']}
+        f = official.cod_frame(gpd.GeoDataFrame(cols, geometry=[box(0, 0, 1, 1)], crs='EPSG:4326'), 1)
+        self.assertEqual(f.iloc[0]['name'], 'Djibouti')
 
 
 class Download(unittest.TestCase):

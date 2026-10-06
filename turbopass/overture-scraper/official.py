@@ -31,8 +31,9 @@ source's rows. What was kept, skipped and why lands in `official_datasets`.
 Agreement: each kept level of the chosen set is compared with the same level of
 the other source. An area is "matched" when the other source has an area whose
 overlap with it is at least MATCH_IOU of their combined area; the level report
-gets other_areas (0 = the other source has no such level), matched (% of the
-chosen areas) and, when only a few areas are off, their names. The configurator
+gets other_areas (0 = the other source has no such level; None = it couldn't
+be compared: that source failed to load, or its level failed the nesting
+check), matched (% of the chosen areas) and, when only a few areas are off, their names. The configurator
 shows this as the set's confidence: evidence from an independently drawn
 source, not proof that the boundaries are current.
 
@@ -77,6 +78,8 @@ EQUAL_AREA = 'EPSG:6933'
 SLIVER_M = 50.0  # half the width of a gap ignored as a sliver
 MAX_ADM = 5
 SOURCES = ('cod', 'geoboundaries')
+# Name columns to prefer, in order, when a COD has several languages and no English.
+LATIN_NAME_LANGUAGES = ('fr', 'pt', 'es')
 MATCH_IOU = 0.8           # shared area / combined area for two areas to count as the same
 MAX_NAMED_MISMATCHES = 3  # name the unmatched areas only when there are this few
 HDX_PACKAGE = 'https://data.humdata.org/api/3/action/package_show?id=cod-ab-{iso3}'
@@ -183,8 +186,12 @@ def cod_frame(gdf, n):
         # Single-language sets name the column by language instead: Brazil's
         # is ADM1_PT / ADM2_PT. Without this every area came out unnamed, and
         # the configurator skips unnamed areas, so Brazil couldn't be onboarded.
+        # With several (ADM1_AR + ADM1_FR), prefer a Latin-script language: the
+        # configurator skips names it can't romanize, so Arabic would leave the
+        # level unusable again.
         langs = sorted(c for c in cols if re.fullmatch(rf'adm{n}_[a-z]{{2}}', c))
-        name = langs[0] if langs else None
+        latin = [f'adm{n}_{lang}' for lang in LATIN_NAME_LANGUAGES if f'adm{n}_{lang}' in langs]
+        name = (latin or langs or [None])[0]
     code = _first(cols, f'adm{n}_pcode', f'admin{n}pcode')
     parent = _first(cols, f'adm{n - 1}_pcode', f'admin{n - 1}pcode') if n > 0 else None
     return gpd.GeoDataFrame({
@@ -423,13 +430,33 @@ def agreement(level, other):
     }
 
 
-def add_agreement(best, datasets, report):
-    """Write the chosen set's per-level agreement with the other source into its report."""
-    others = [d for d in datasets if d is not best and d.usable]
-    other_levels = {lv.n: lv for lv in others[0].levels} if others else {}
-    by_level = {r['level']: r for r in report}
+NOT_MEASURED = {'other_areas': None, 'matched': None, 'unmatched': []}
+
+
+def add_agreement(best, datasets, reports):
+    """Write the chosen set's per-level agreement with the other source into its report.
+
+    other_areas = 0 ("one source only") is kept for a real absence: no other
+    dataset, one ruled out on its own terms (a GADM-derived licence), or one
+    that stops above this level. When the comparison could not run — the other
+    source failed to load (an outage), or its level failed the nesting check —
+    the level is left unmeasured (None) instead: saying "the other source has
+    no areas here" would be a claim the check never made.
+    """
+    others = [d for d in datasets if d is not best]
+    other = next((d for d in others if d.usable), None)
+    failed = other is None and any(d.note.startswith('failed') for d in others)
+    other_kept = {lv.n: lv for lv in other.levels} if other else {}
+    other_dropped = {r['level'] for r in reports.get(other.source, []) if not r['kept']} if other else set()
+    by_level = {r['level']: r for r in reports[best.source]}
     for lv in best.levels[1:]:
-        by_level[f'ADM{lv.n}'].update(agreement(lv, other_levels.get(lv.n)))
+        key = f'ADM{lv.n}'
+        if lv.n in other_kept:
+            by_level[key].update(agreement(lv, other_kept[lv.n]))
+        elif failed or key in other_dropped:
+            by_level[key].update(NOT_MEASURED)
+        else:
+            by_level[key].update(agreement(lv, None))
 
 
 # ---------------------------------------------------------------- writing
@@ -548,7 +575,7 @@ def main():
         best = choose(datasets)
         if best is not None:
             try:
-                add_agreement(best, datasets, reports[best.source])
+                add_agreement(best, datasets, reports)
             except Exception as e:  # the comparison is informative; it must not cost the country its set
                 print(f'  {alpha2}: agreement check failed ({type(e).__name__}: {e})')
         cur.execute(f'DELETE FROM boundaries WHERE country = ? AND source IN ({placeholders})', (alpha2, *sources))
@@ -568,11 +595,11 @@ def main():
             print(f"  {alpha2} {ds.source:13} {'CHOSEN ' if chosen else '       '}levels {kept}"
                   f"{'  (' + ds.note + ')' if ds.note else ''}")
             for r in reports.get(ds.source, []):
-                if chosen and r.get('other_areas') is not None and r['level'] != 'ADM0':
+                if chosen and 'other_areas' in r and r['level'] != 'ADM0':
                     print(f"      {r['level']} vs other source: " + (
                         f"{r['matched']}% of {r['areas_kept']:,} matched ({r['other_areas']:,} there)"
                         + (f"; off: {', '.join(r['unmatched'])}" if r['unmatched'] else '')
-                        if r['other_areas'] else 'no second source'))
+                        if r['other_areas'] else 'no second source' if r['other_areas'] == 0 else 'not measured'))
                 if not r['kept']:
                     print(f"      dropped {r['level']}: {r['coverage']}% coverage of {r['parent']}, {r['orphans']}% outside it")
         conn.commit()
