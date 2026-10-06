@@ -250,6 +250,24 @@ export async function revokeAccount(subject: string, account: AccountRef, reason
   await runJob(id);
 }
 
+/**
+ * Runs the person's queued revocation jobs under the lease the caller holds (#2286).
+ * `_select` calls it before reading the token cache: otherwise it could hand out a
+ * cached token that a job already queued for the person (e.g. a credential change)
+ * revokes as soon as the worker gets the lease. A failing job stays queued and fails the caller.
+ */
+export async function runPendingRevocations(lease: PersonLease): Promise<void> {
+  const pattern = `${lease.subject.replace(/[*?[\]\\]/g, "\\$&")}|*`;
+  const pending: Array<[string, number]> = [];
+  let cursor = "0";
+  do {
+    const [next, items] = await getRedis().zscan(key("revoke-jobs"), cursor, "MATCH", pattern, "COUNT", 100);
+    for (let i = 0; i < items.length; i += 2) pending.push([items[i], Number(items[i + 1])]);
+    cursor = next;
+  } while (cursor !== "0");
+  for (const [id] of pending.sort((a, b) => a[1] - b[1])) await runJob(id);
+}
+
 export async function drainRevocationJobs(limit = 100): Promise<void> {
   for (const id of await getRedis().zrangebyscore(key("revoke-jobs"), "-inf", Date.now(), "LIMIT", 0, limit)) {
     try { await runJob(id); }

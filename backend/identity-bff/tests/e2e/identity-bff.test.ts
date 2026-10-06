@@ -1696,6 +1696,55 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
     }
   });
 
+  it("#2286: _select during a pending credential-change job never returns a token the job then revokes", async () => {
+    const subject = "managed-b3-pending";
+    const tenantId = "ke.bomet";
+    const identity = managedIdentity(config.keycloakIssuer, subject, tenantId);
+    expect((await kcAdmin("/users", { id: subject, username: subject, enabled: true })).status).toBe(201);
+    await ensureOrganizationMembership({ organizationId: "org-bomet-id", userId: subject });
+    const account = digit.addAccount({
+      userName: identity.username, name: "Managed employee", mobileNumber: "0712345002", emailId: null,
+      tenantId, type: "EMPLOYEE", active: true, identificationMark: identity.marker,
+      roles: [{ code: "EMPLOYEE", tenantId }], password: "Initial@123",
+    });
+    const makeSession = async (device: string) => {
+      const { sessionId } = await createIdentitySession({ accessToken: "test-session", accessExpiresIn: 3600 },
+        { sub: subject, sid: `${subject}-${device}` }, config.keycloakEmployeeClientId,
+        { surface: "employee", boundTenant: { urlSlug: "bomet-county", tenantId, rootTenantId: tenantId, name: "Bomet" } });
+      return { sessionId, kcSessionId: `${subject}-${device}`, cookie: `digit_identity_session_employee=${sessionId}` };
+    };
+    const select = (cookie: string) => fetch(`${app()}/identity/v1/contexts/_select`, {
+      method: "POST", headers: { Cookie: cookie, Origin: "http://localhost:3000", "Content-Type": "application/json" },
+      body: JSON.stringify({ surface: "employee", tenantId }),
+    });
+    const details = (token: string) => fetch(`${config.digitUserServiceUrl}/_details?access_token=${encodeURIComponent(token)}`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+    });
+    const previousMode = config.identityStaffCredentialMode;
+    config.identityStaffCredentialMode = "rotate";
+    try {
+      const s1 = await makeSession("s1"), s2 = await makeSession("s2");
+      const shared = (await (await select(s1.cookie)).json()).access_token;
+      expect((await (await select(s2.cookie)).json()).access_token).toBe(shared);
+      // The poller queues the job; S2's _select wins the person lease before the worker runs it.
+      await applyKeycloakEvent("user", { id: "b3-pending", time: Date.now(), type: "UPDATE_CREDENTIAL", userId: subject,
+        clientId: config.keycloakEmployeeClientId, details: { credential_type: "password", code_id: s2.kcSessionId } });
+      const selected = await select(s2.cookie);
+      expect(selected.status).toBe(200);
+      const token = (await selected.json()).access_token;
+      expect(token).not.toBe(shared);
+      expect((await details(shared)).status).toBe(401);
+      // The ended device can no longer select either.
+      expect((await select(s1.cookie)).status).toBe(401);
+      await drainRevocationJobs();
+      expect(await getIdentitySession(s1.sessionId)).toBeNull();
+      expect((await details(token)).status).toBe(200);
+      expect(await getRedis().smembers(tokenHoldersKey(account))).toEqual([sessionTokenRef(s2.sessionId)]);
+    } finally {
+      config.identityStaffCredentialMode = previousMode;
+    }
+  });
+
   it("creates a CitizenRegistration and a DIGIT CITIZEN token for the bound tenant", async () => {
     const accountsBefore = digit.accounts.size;
     const cookie = await signIn("citizen");
