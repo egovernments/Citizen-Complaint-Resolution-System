@@ -1,4 +1,5 @@
 import React from 'react';
+import { MASTER_SCREEN_META } from './masterScreens';
 import { EditBase, useEditContext, Form, useResourceContext, useRedirect, type TransformData, type RaRecord } from 'ra-core';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Save, RefreshCw } from 'lucide-react';
@@ -215,7 +216,9 @@ export function DigitEdit({ title, children, resource, id, redirect = 'list', tr
       // as a full override of its post-update handler and silently drops the
       // built-in redirect. Drive the redirect ourselves from inside onSuccess.
       transform={transform}
+      queryOptions={{ meta: MASTER_SCREEN_META }}
       mutationOptions={{
+        meta: MASTER_SCREEN_META,
         onError: (err) => capture(err),
         onSuccess: (data) => {
           clear();
