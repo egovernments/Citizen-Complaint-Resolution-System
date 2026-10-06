@@ -1,13 +1,10 @@
-import { useMemo, useState } from 'react';
-import { useWatch, useFormContext } from 'react-hook-form';
+import { useMemo } from 'react';
+import { useWatch } from 'react-hook-form';
 import { useGetList, useInput, type InputProps } from 'ra-core';
-import { Copy, KeyRound } from 'lucide-react';
 import { DigitEdit, DigitFormInput, DigitFormSelect, v } from '@/admin';
 import { FieldSection } from '@/admin/fields';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Button } from '@/components/ui/button';
-import { DEFAULT_PASSWORD } from '@/api/config';
 import { useMobileValidator } from '@/admin/hrms/useMobileValidator';
 import { useApp } from '../../App';
 import { RolesEditor } from './RolesEditor';
@@ -93,63 +90,6 @@ function DateEpochField({ label, help, className, ...inputProps }: DateEpochFiel
   );
 }
 
-function PasswordResetSection() {
-  const pwd = useWatch({ name: 'user.password' }) as string | undefined;
-  const { setValue } = useFormContext();
-  const [copied, setCopied] = useState(false);
-  const [revealed, setRevealed] = useState(false);
-
-  const handleCopy = async () => {
-    if (!pwd) return;
-    try {
-      await navigator.clipboard.writeText(pwd);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      setCopied(false);
-    }
-  };
-
-  const keepExisting = () => {
-    setValue('user.password', '', { shouldDirty: true });
-    setRevealed(false);
-  };
-
-  return (
-    <div className="space-y-3">
-      {!revealed ? (
-        <div className="flex items-center gap-3">
-          <Button type="button" variant="outline" size="sm" onClick={() => setRevealed(true)} className="gap-2">
-            <KeyRound className="w-4 h-4" />
-            Reset password
-          </Button>
-          <p className="text-xs text-muted-foreground">
-            Leave closed to keep the existing password.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          <DigitFormInput
-            source="user.password"
-            label="New password"
-            placeholder={DEFAULT_PASSWORD}
-            help="Employee must rotate on next login."
-          />
-          <div className="flex items-center gap-2">
-            <Button type="button" variant="ghost" size="sm" onClick={handleCopy} disabled={!pwd} className="gap-1.5">
-              <Copy className="w-3.5 h-3.5" />
-              {copied ? 'Copied' : 'Copy'}
-            </Button>
-            <Button type="button" variant="ghost" size="sm" onClick={keepExisting}>
-              Keep existing
-            </Button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 function DeactivationReasonSection({ choices }: { choices: { value: string; label: string }[] }) {
   const status = useWatch({ name: 'employeeStatus' }) as string | undefined;
   if (status !== 'INACTIVE' && status !== 'RETIRED') return null;
@@ -197,9 +137,7 @@ export function EmployeeEdit() {
 
   const transform = (data: Record<string, unknown>): Record<string, unknown> => {
     const user = { ...((data.user as Record<string, unknown> | undefined) ?? {}) };
-    if (typeof user.password === 'string' && user.password === '') {
-      delete user.password;
-    }
+    delete user.password;
 
     const status = typeof data.employeeStatus === 'string' ? data.employeeStatus : '';
     const isInactive = status === 'INACTIVE' || status === 'RETIRED';
@@ -234,7 +172,7 @@ export function EmployeeEdit() {
             maxLength={mobileRules.maxLength}
             help={mobileRules.errorMessage}
           />
-          <DigitFormInput source="user.emailId" label="Email" type="email" validate={v.emailOptional} />
+          <DigitFormInput source="user.emailId" label="Email" type="email" disabled help="Use Members to change verified email; personal email changes are in Your account." />
           <DigitFormSelect
             source="user.gender"
             label="Gender"
@@ -272,9 +210,7 @@ export function EmployeeEdit() {
         <JurisdictionEditor tenantId={tenantId} />
       </FieldSection>
 
-      <FieldSection title="Account Password">
-        <PasswordResetSection />
-      </FieldSection>
+
     </DigitEdit>
   );
 }

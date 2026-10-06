@@ -41,12 +41,17 @@ const customEnglishMessages: TranslationMessages = {
     nav: {
       dashboard: 'Dashboard',
       notifications: 'Notifications',
+      // Menu entries INSIDE the Notifications group: no "Notification" prefix —
+      // the group already says it. Page titles (app.resources.*) keep the long
+      // form so a screen read out of context is still unambiguous.
       notification_configure: 'Configure',
-      notification_routing: 'Notification Routing',
-      notification_templates: 'Notification Templates',
+      notification_channels: 'Channels',
+      notification_events: 'Events',
+      notification_routing: 'Routing',
+      notification_templates: 'Templates',
       notification_provider_templates: 'Provider Templates (WhatsApp)',
-      notification_logs: 'Notification Logs',
-      notification_providers: 'Notification Providers',
+      notification_logs: 'Logs',
+      notification_providers: 'Providers',
       notification_preferences: 'User Preferences',
       tenant_management: 'Tenant Management',
       tenants: 'Tenants',
@@ -57,7 +62,7 @@ const customEnglishMessages: TranslationMessages = {
       analytics_providers: 'Analytics Providers',
       complaint_management: 'Complaint Management',
       complaint_hierarchies: 'Complaint Hierarchies',
-      complaint_types: 'Complaint Types',
+      complaint_types: 'Complaint Categories',
       complaints: 'Complaints',
       localization: 'Localization',
       people: 'People',
@@ -74,11 +79,21 @@ const customEnglishMessages: TranslationMessages = {
       switch_to_onboarding: 'Switch to Onboarding',
       pgr_dashboard: 'PGR Dashboard',
       public_dashboard: 'Public Dashboard',
+      main: 'Main',
+      search: 'Search',
+      no_matches: 'No matches',
+      collapse_sidebar: 'Collapse sidebar',
+      expand_sidebar: 'Expand sidebar',
+      open_menu: 'Open menu',
+      close_menu: 'Close menu',
     },
     header: {
       management_mode: 'Management Mode',
       title: 'DIGIT Management Studio',
       brand: 'Complaints Management',
+      help: 'Help',
+      account: 'Account',
+      sign_out: 'Sign out',
     },
     dashboard: {
       date: {
@@ -91,7 +106,7 @@ const customEnglishMessages: TranslationMessages = {
       },
     },
     resources: {
-      complaint_types: 'Complaint Types',
+      complaint_types: 'Complaint Categories',
       departments: 'Departments',
       designations: 'Designations',
       tenants: 'Tenants',
@@ -117,7 +132,7 @@ const customEnglishMessages: TranslationMessages = {
       service_code: 'Service Code',
       department: 'Department',
       sla_hours: 'SLA (hrs)',
-      menu_path: 'Complaint Type',
+      menu_path: 'Complaint Category',
       parent: 'Parent',
       city: 'City',
       district: 'District',
@@ -125,6 +140,7 @@ const customEnglishMessages: TranslationMessages = {
       designation: 'Designation',
       username: 'Username',
       type: 'Type',
+      complaint_subcategory: 'Subcategory',
       roles: 'Roles',
       boundary_type: 'Boundary Type',
       tenant: 'Tenant',
@@ -170,6 +186,16 @@ const customEnglishMessages: TranslationMessages = {
       reset: 'Reset',
       rows_per_page: 'Rows per page:',
     },
+    channels: {
+      // Notifications → Channels screen (the channel card, moved off Providers).
+      title: 'Notification Channels',
+      subtitle_before: 'Switch each channel on and choose the provider it sends through. Add or change the accounts themselves under',
+      // The Enable/Disable tooltip on a tenant not yet migrated. %{command} is
+      // NOTIFICATION_MIGRATE_COMMAND — a deploy no longer copies anything.
+      legacy_tooltip: "This tenant's channel policy is still in the legacy master. Move it with the migration script on the server: %{command}",
+      // Shown instead of the controls to a user without a provider-admin role.
+      admin_only: 'Read-only: switching a channel on or off, or choosing its provider, needs the SUPERUSER, MDMS_ADMIN or ACCOUNT_ADMIN role.',
+    },
     providers: {
       // Notification Providers screen — self-service actions.
       add: 'Add Provider',
@@ -187,27 +213,60 @@ const customEnglishMessages: TranslationMessages = {
       field_content_sid: 'Content SID',
       field_variables: 'Variables (comma-separated)',
       body_placeholder: 'Test message text',
-      // Column headers.
+      // Column headers. Every one of these is used as a bare `label:` on the
+      // providers datagrid (no `{ _: default }` at the call site), so a missing
+      // key renders as the raw `app.providers.col_*` string in the header row.
       col_channel: 'Channel',
       col_provider: 'Provider',
       col_name: 'Name',
       col_active: 'Active',
       col_primary: 'Primary',
-      // Credential field labels.
+      col_type: 'Type',
+      col_selected: 'In use',
+      // Credential field labels, looked up by credentialFieldLabel() in this order:
+      // cred.<type>.<key> (per provider type), then the bridge catalog's own label,
+      // then cred.<key> (generic), then the raw key. The generic keys therefore only
+      // label a field the catalog sent without a label, and must stay provider-neutral:
+      // `user` / `password` / `from` are shared by SMTP, SMSCountry, Ozeki and Jasmin,
+      // and a generic "SMTP User" once labelled all of them. Types without an entry
+      // here (smscountry, ozeki, jasmin, any new one) show the catalog's labels.
       cred: {
         account_sid: 'Account SID',
         token: 'Auth Token',
         from: 'From',
-        host: 'SMTP Host',
-        port: 'SMTP Port',
-        user: 'SMTP User',
-        password: 'SMTP Password',
+        host: 'Host',
+        port: 'Port',
+        user: 'Username',
+        password: 'Password',
         secure: 'Use TLS (secure)',
+        twilio_sms: {
+          account_sid: 'Account SID',
+          token: 'Auth Token',
+          from: 'From',
+        },
+        twilio_whatsapp: {
+          account_sid: 'Account SID',
+          token: 'Auth Token',
+          from: 'From',
+        },
+        smtp: {
+          host: 'SMTP Host',
+          port: 'SMTP Port',
+          user: 'SMTP User',
+          password: 'SMTP Password',
+          from: 'From',
+          secure: 'Use TLS (secure)',
+        },
       },
       // Row actions.
-      verify: 'Verify',
+      verify: 'Check status',
+      verify_hint: 'Confirms the provider exists and is switched on. It does not prove the credentials — send a test for that.',
       test: 'Test',
-      templates: 'Templates',
+      // The row action that lists Novu's delivery workflows. NOT "Templates":
+      // message text lives on Notifications → Templates and approved WhatsApp
+      // templates on Provider Templates (WhatsApp); three different things
+      // under one word is how an operator edits the wrong screen.
+      delivery_workflows: 'Delivery workflows',
       verified: 'Verified',
       failed: 'Failed',
       status: 'Status',
@@ -217,9 +276,9 @@ const customEnglishMessages: TranslationMessages = {
       send_test: 'Send Test',
       view_logs: 'View Notification Logs',
       whatsapp_sid_hint: 'Approved WhatsApp ContentSids are listed on the Provider Templates screen.',
-      // Templates dialog.
-      templates_title: 'Novu Workflows',
-      templates_hint: 'Delivery workflows configured in Novu for this channel — not provider templates (Twilio has no SMS template registry). SMS/Email message text is managed under Notification Templates. Copy a workflow ID to reference it.',
+      // Delivery-workflows dialog (Novu plumbing, not message templates).
+      delivery_workflows_title: 'Delivery workflows (Novu)',
+      delivery_workflows_hint: 'The delivery plumbing configured in Novu for this channel. These are NOT message templates: your message text lives on Notifications → Templates, and approved WhatsApp templates on Provider Templates (WhatsApp). Copy a workflow ID to reference it.',
       templates_empty: 'No Novu workflows found for this channel.',
       whatsapp_sid_note: 'WhatsApp ContentSids are managed on the Provider Templates screen, not here.',
       copy: 'Copy',
@@ -229,8 +288,8 @@ const customEnglishMessages: TranslationMessages = {
       msg_missing: 'Fill in the name and all required credential fields.',
       msg_created: 'Provider created.',
       msg_create_failed: 'Could not create provider.',
-      msg_verify_ok: 'Provider verified.',
-      msg_verify_fail: 'Provider not active.',
+      msg_verify_ok: 'Provider is set up and switched on.',
+      msg_verify_fail: 'Provider not found, or switched off.',
       msg_no_id: 'This provider has no integration id to verify.',
       msg_test_sent: 'Test dispatched via Novu.',
       msg_test_failed: 'Test delivery failed.',
@@ -259,6 +318,63 @@ const customEnglishMessages: TranslationMessages = {
       sync_persist: 'Persist %{n} selected',
       sync_persist_done: 'Provider templates persisted.',
       sync_persist_summary: '%{ok} saved, %{fail} failed.',
+      // Admin-only actions and the in-use lock.
+      admin_only: 'Read-only: adding, changing or testing a provider needs the SUPERUSER, MDMS_ADMIN or ACCOUNT_ADMIN role at the state tenant.',
+      in_use_locked: 'Selected for %{channel}. Pick another provider for %{channel} on Channels before disabling or deleting this one.',
+      msg_disable_in_use: 'This provider is still selected for a channel, so it was not disabled. Open Channels, pick another provider for that channel, then disable this one.',
+    },
+    notification_guard: {
+      // A notification save attempted before the configuration its check needs has loaded.
+      config_loading: 'The notification configuration is still loading, so this change cannot be checked yet — wait a moment and save again.',
+    },
+    notification_validate: {
+      // Workflow screen → "Validate notifications": no verdict without the configuration.
+      loading: 'Loading the notification configuration…',
+      not_configured: 'Not configured: this tenant has no notification event catalogue, so there is nothing to validate against.',
+    },
+    otp_wording: {
+      // Notifications → Configure: "Login and registration OTP (SMS)" section.
+      // %s and %% below are the OTP service's own format syntax, shown to the
+      // operator literally; polyglot only interpolates %{name}.
+      title: 'Login and registration OTP (SMS)',
+      subtitle: 'The text of the one-time-password SMS sent for login, registration and password reset. The OTP service writes this SMS itself; it is not an event and has no routing.',
+      wording_only: 'Only the wording is changed here. Whether OTPs are sent, and through which provider, is set on Channels (SMS): OTPs use the same SMS channel, provider and log as every other SMS.',
+      timing: 'A saved change is used by the next OTP. The OTP service reads the wording from localization for every OTP and keeps no copy, and saving clears localization\'s cache.',
+      languages: 'Citizens get the wording in the language their app is set to; a request with no language gets en_IN. A language with no OTP wording stored gets the built-in English text.',
+      stored_at: 'Stored as localization messages: tenant %{tenant}, module %{module}.',
+      language: 'Language',
+      purpose_login: 'Login',
+      purpose_register: 'Registration',
+      purpose_passwordreset: 'Password reset',
+      source_builtin: 'Default (built into the OTP service)',
+      source_missing: 'Missing: OTPs of this type fail',
+      source_inherited: 'Inherited from tenant %{tenant}',
+      source_stored_default: 'Default wording, stored in localization',
+      source_custom: 'Custom',
+      missing_hint: 'No message for this code, while this language holds other egov-user messages: the OTP service cannot build the SMS and the request fails. Save a wording to fix it.',
+      broken: 'In %{locale}, egov-user holds messages but not all three OTP codes, so the OTP types marked Missing fail today. Saving any one of them writes all three.',
+      inherited_note: 'In %{locale}, tenant %{tenant} serves the same egov-user messages as %{parent} (usually inherited from it). A save writes that whole set at %{tenant}, so none of it is lost.',
+      edit: 'Edit wording',
+      reset: 'Reset to default',
+      textarea_label: '%{purpose} OTP wording',
+      code_hint: 'Put %s exactly once where the code goes. Write %% for a literal percent sign.',
+      preview: 'Preview with a 6-digit code:',
+      segments: '%{segments} SMS segment(s) · %{encoding} · %{units} characters',
+      save: 'Save wording',
+      saving: 'Saving…',
+      cancel: 'Cancel',
+      blocked: 'This wording cannot be saved: %{reason}',
+      saved: 'OTP wording saved. The next OTP sent in %{locale} uses it.',
+      save_failed: 'Save failed: %{error}',
+      confirm_reset: 'Replace the %{purpose} OTP wording for %{locale} with the built-in default?',
+      reset_deleted: 'Stored OTP wording for %{locale} removed; the OTP service is back on its built-in text.',
+      reset_written: 'Default wording restored as a stored message. It is not deleted because other egov-user messages exist in %{locale}, and the OTP service would then fail this OTP type.',
+      reset_none: 'Already the built-in wording.',
+      readonly_role: 'Read-only: changing this wording needs a role with the localization write action (%{action}), the same permission the Localization screens need.',
+      readonly_unknown: 'Read-only: your permission to change localization could not be checked.',
+      no_tenant: 'No tenant selected.',
+      loading: 'Loading…',
+      load_failed: 'Could not read the OTP wording from localization: %{error}',
     },
   },
 };

@@ -79,7 +79,7 @@ public class IdentitySessionClient {
                     identity.get("issuer").toString(),
                     identity.get("subject").toString(),
                     stringValue(identity.get("email")),
-                    stringValue(identity.get("name")));
+                    stringValue(identity.get("name")), Boolean.TRUE.equals(identity.get("emailVerified")));
         } catch (RestClientResponseException exception) {
             if (exception.getStatusCode().value() == 401) throw unauthenticated();
             throw unavailable("Identity service is unavailable");

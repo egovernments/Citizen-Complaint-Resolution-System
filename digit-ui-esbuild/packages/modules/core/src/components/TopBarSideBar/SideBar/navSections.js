@@ -67,8 +67,10 @@ export const insertModuleSections = (items = [], sections = [], isHome = isEmplo
  * or an external page, in the sidebar, as the old citizen sidebar listed them.
  * A module that registers its own section is skipped: the section already
  * offers its pages, and its landing page would be a second way to them.
+ * `contextPath` is the MDMS app id (`digit-ui`), not a tenant route base;
+ * `rebaseUrl` moves an app URL onto the tenant route.
  */
-export const mdmsLinkRows = (linkData, { contextPath, labelFor, hasOwnSection = () => false } = {}) =>
+export const mdmsLinkRows = (linkData, { contextPath, labelFor, hasOwnSection = () => false, rebaseUrl = (url) => url } = {}) =>
   Object.keys(linkData || {})
     .sort((a, b) => b.localeCompare(a))
     .flatMap((code) => {
@@ -79,7 +81,7 @@ export const mdmsLinkRows = (linkData, { contextPath, labelFor, hasOwnSection = 
         {
           key: `mdms-${code}`,
           label: labelFor ? labelFor(code) : code,
-          navigationUrl: entry.sidebarURL,
+          navigationUrl: external ? entry.sidebarURL : rebaseUrl(entry.sidebarURL),
           icon: { icon: entry.leftIcon || (external ? "OpenInNew" : "Apps"), width: ICON_SIZE, height: ICON_SIZE },
         },
       ];
@@ -101,4 +103,17 @@ export const withTenantSegment = (url, contextPath, tenantId) => {
     }
   }
   return url;
+};
+
+/**
+ * Whether the tenant has published its public dashboard from the Configurator:
+ * `publicDashboardEnabled` on `dss.DashboardConfig`, picked the way
+ * pgr-services and the Configurator pick it (the record whose id is "default",
+ * else the first). Only an explicit true counts, as it does in pgr-services,
+ * which refuses the page's data otherwise.
+ */
+export const publicDashboardEnabled = (records) => {
+  const list = Array.isArray(records) ? records.filter(Boolean) : [];
+  const record = list.find((entry) => String(entry?.id ?? "").trim() === "default") || list[0];
+  return record?.publicDashboardEnabled === true;
 };

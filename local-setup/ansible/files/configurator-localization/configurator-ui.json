@@ -49,7 +49,7 @@
   },
   {
     "code": "app.nav.complaint_types",
-    "message": "Complaint Types",
+    "message": "Complaint Categories",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -145,7 +145,7 @@
   },
   {
     "code": "app.resources.complaint_types",
-    "message": "Complaint Types",
+    "message": "Complaint Categories",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -289,7 +289,7 @@
   },
   {
     "code": "app.fields.menu_path",
-    "message": "Complaint Type",
+    "message": "Complaint Category",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -583,7 +583,7 @@
   },
   {
     "code": "app.resources.complaint_hierarchy",
-    "message": "Complaint Types",
+    "message": "Complaint Categories",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -4990,5 +4990,653 @@
     "message": "Provedores de análise",
     "module": "configurator-ui",
     "locale": "pt_BR"
+  },
+  {
+    "code": "app.nav.main",
+    "message": "Main",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.nav.main",
+    "message": "मुख्य",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.nav.main",
+    "message": "Principal",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.nav.main",
+    "message": "Principal",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.nav.search",
+    "message": "Search",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.nav.search",
+    "message": "खोजें",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.nav.search",
+    "message": "Rechercher",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.nav.search",
+    "message": "Pesquisar",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.nav.no_matches",
+    "message": "No matches",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.nav.no_matches",
+    "message": "कोई मेल नहीं मिला",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.nav.no_matches",
+    "message": "Aucun résultat",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.nav.no_matches",
+    "message": "Nenhum resultado",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.nav.collapse_sidebar",
+    "message": "Collapse sidebar",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.nav.collapse_sidebar",
+    "message": "साइडबार छोटा करें",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.nav.collapse_sidebar",
+    "message": "Réduire la barre latérale",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.nav.collapse_sidebar",
+    "message": "Recolher a barra lateral",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.nav.expand_sidebar",
+    "message": "Expand sidebar",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.nav.expand_sidebar",
+    "message": "साइडबार बड़ा करें",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.nav.expand_sidebar",
+    "message": "Développer la barre latérale",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.nav.expand_sidebar",
+    "message": "Expandir a barra lateral",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.header.help",
+    "message": "Help",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.header.help",
+    "message": "सहायता",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.header.help",
+    "message": "Aide",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.header.help",
+    "message": "Ajuda",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.nav.open_menu",
+    "message": "Open menu",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.nav.open_menu",
+    "message": "मेनू खोलें",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.nav.open_menu",
+    "message": "Ouvrir le menu",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.nav.open_menu",
+    "message": "Abrir menu",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.nav.close_menu",
+    "message": "Close menu",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.nav.close_menu",
+    "message": "मेनू बंद करें",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.nav.close_menu",
+    "message": "Fermer le menu",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.nav.close_menu",
+    "message": "Fechar menu",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.header.account",
+    "message": "Account",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.header.account",
+    "message": "खाता",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.header.account",
+    "message": "Compte",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.header.account",
+    "message": "Conta",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.header.sign_out",
+    "message": "Sign out",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.header.sign_out",
+    "message": "साइन आउट करें",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.header.sign_out",
+    "message": "Se déconnecter",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.header.sign_out",
+    "message": "Sair",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.complaint_subcategory",
+    "message": "Subcategory",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.complaint_subcategory",
+    "message": "उपश्रेणी",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.complaint_subcategory",
+    "message": "Sous-catégorie",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.complaint_subcategory",
+    "message": "Subcategoria",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.nav.notification_configure",
+    "message": "Configure",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.nav.notification_channels",
+    "message": "Channels",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.nav.notification_events",
+    "message": "Events",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.nav.notification_provider_templates",
+    "message": "Provider Templates (WhatsApp)",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.nav.notification_logs",
+    "message": "Logs",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.nav.notification_providers",
+    "message": "Providers",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.nav.notification_preferences",
+    "message": "User Preferences",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.notification_provider_template",
+    "message": "Legacy (PGR) Provider Templates",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.notification_channel",
+    "message": "Legacy (PGR) Notification Channels",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.notifications_channel",
+    "message": "Notification Channels",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.notifications_event_catalogue",
+    "message": "Notification Events",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.notifications_routing",
+    "message": "Notification Routing",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.notifications_template",
+    "message": "Notification Templates",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.notifications_provider_template",
+    "message": "Notification Provider Templates",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.nav.notification_configure",
+    "message": "कॉन्फ़िगर करें",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.nav.notification_channels",
+    "message": "चैनल",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.nav.notification_events",
+    "message": "इवेंट",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.nav.notification_provider_templates",
+    "message": "प्रदाता टेम्पलेट (WhatsApp)",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.nav.notification_logs",
+    "message": "लॉग",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.nav.notification_providers",
+    "message": "प्रदाता",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.nav.notification_preferences",
+    "message": "उपयोगकर्ता प्राथमिकताएं",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.notification_provider_template",
+    "message": "लेगेसी (PGR) प्रदाता टेम्पलेट",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.notification_channel",
+    "message": "लेगेसी (PGR) अधिसूचना चैनल",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.notifications_channel",
+    "message": "अधिसूचना चैनल",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.notifications_event_catalogue",
+    "message": "अधिसूचना इवेंट",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.notifications_routing",
+    "message": "अधिसूचना रूटिंग",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.notifications_template",
+    "message": "अधिसूचना टेम्पलेट",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.notifications_provider_template",
+    "message": "अधिसूचना प्रदाता टेम्पलेट",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.nav.notification_configure",
+    "message": "Configurer",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.nav.notification_channels",
+    "message": "Canaux",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.nav.notification_events",
+    "message": "Événements",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.nav.notification_provider_templates",
+    "message": "Modèles fournisseur (WhatsApp)",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.nav.notification_logs",
+    "message": "Journaux",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.nav.notification_providers",
+    "message": "Fournisseurs",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.nav.notification_preferences",
+    "message": "Préférences utilisateur",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.notification_provider_template",
+    "message": "Hérité (PGR) — Modèles fournisseur",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.notification_channel",
+    "message": "Hérité (PGR) — Canaux de notification",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.notifications_channel",
+    "message": "Canaux de notification",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.notifications_event_catalogue",
+    "message": "Événements de notification",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.notifications_routing",
+    "message": "Routage des notifications",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.notifications_template",
+    "message": "Modèles de notification",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.notifications_provider_template",
+    "message": "Modèles fournisseur de notification",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.nav.notification_configure",
+    "message": "Configurar",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.nav.notification_channels",
+    "message": "Canais",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.nav.notification_events",
+    "message": "Eventos",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.nav.notification_provider_templates",
+    "message": "Modelos do provedor (WhatsApp)",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.nav.notification_logs",
+    "message": "Registros",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.nav.notification_providers",
+    "message": "Provedores",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.nav.notification_preferences",
+    "message": "Preferências do usuário",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.notification_provider_template",
+    "message": "Herdado (PGR) — Modelos do provedor",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.notification_channel",
+    "message": "Herdado (PGR) — Canais de notificação",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.notifications_channel",
+    "message": "Canais de notificação",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.notifications_event_catalogue",
+    "message": "Eventos de notificação",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.notifications_routing",
+    "message": "Roteamento de notificações",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.notifications_template",
+    "message": "Modelos de notificação",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.notifications_provider_template",
+    "message": "Modelos de provedor de notificação",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.providers.admin_only",
+    "message": "Read-only: adding, changing or testing a provider needs the SUPERUSER, MDMS_ADMIN or ACCOUNT_ADMIN role at the state tenant.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.providers.in_use_locked",
+    "message": "Selected for %{channel}. Pick another provider for %{channel} on Channels before disabling or deleting this one.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.providers.msg_disable_in_use",
+    "message": "This provider is still selected for a channel, so it was not disabled. Open Channels, pick another provider for that channel, then disable this one.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.notification_validate.loading",
+    "message": "Loading the notification configuration…",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.notification_validate.not_configured",
+    "message": "Not configured: this tenant has no notification event catalogue, so there is nothing to validate against.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.channels.legacy_tooltip",
+    "message": "This tenant's channel policy is still in the legacy master. Move it with the migration script on the server: %{command}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.channels.admin_only",
+    "message": "Read-only: switching a channel on or off, or choosing its provider, needs the SUPERUSER, MDMS_ADMIN or ACCOUNT_ADMIN role.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.notification_guard.config_loading",
+    "message": "The notification configuration is still loading, so this change cannot be checked yet — wait a moment and save again.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
   }
 ]

@@ -85,6 +85,23 @@ public class MDMSUtilsSlaCacheTest {
     }
 
     @Test
+    void tenantWithoutComplaintTypes_isEmptyNotAnError() {
+        when(config.getNotificationMdmsCacheTtlMs()).thenReturn(60000L);
+        // A new workspace before its complaint-types step: MDMS answers without the RAINMAKER-PGR module.
+        Map<String, Object> mdmsRes = new LinkedHashMap<>();
+        mdmsRes.put("MdmsRes", new LinkedHashMap<>());
+        when(serviceRequestRepository.fetchResult(any(StringBuilder.class), any())).thenReturn(mdmsRes);
+        ch.qos.logback.classic.Logger logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(MDMSUtils.class);
+        ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent> appender = new ch.qos.logback.core.read.ListAppender<>();
+        appender.start(); logger.addAppender(appender);
+        try {
+            assertTrue(mdmsUtils.getServiceCodeToSlaMillis(TENANT).isEmpty());
+            assertTrue(appender.list.stream().noneMatch(e -> e.getLevel().isGreaterOrEqual(ch.qos.logback.classic.Level.WARN)),
+                    "a tenant with no complaint types must not log a warning or error");
+        } finally { logger.detachAppender(appender); }
+    }
+
+    @Test
     void slaHours_areConvertedToMillis() {
         when(config.getNotificationMdmsCacheTtlMs()).thenReturn(60000L);
         when(serviceRequestRepository.fetchResult(any(StringBuilder.class), any()))

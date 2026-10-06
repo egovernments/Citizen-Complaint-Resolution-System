@@ -3120,6 +3120,16 @@ button[class*="toast-close"] svg,
   align-self: stretch !important;
 }
 
+/* The side column (the links card and the filter) took a flat 20% of the row:
+ * 230px on a wide desktop but 130px on an 820px tablet, where "Assigned to Me"
+ * broke mid-word and the filter dropdowns cut their labels short. It keeps its
+ * 20% wherever that's enough, and never drops below 13rem. */
+@media (min-width: 48rem) {
+  .v2-pgr-inbox .digit-sections-parent.inbox {
+    grid-template-columns: minmax(13rem, 20%) minmax(0, 1fr) !important;
+  }
+}
+
 /* ...except the links panel, which is in the FIRST grid row, not the second.
  * The rule above was written for the table/filter row and catching row 1 as
  * well left the links card stretched to the height of the search form beside
@@ -8098,6 +8108,39 @@ html :is(.employee, .citizen) .digit-logout-popup-wrapper [class*="popup-footer"
   padding: 8px 28px !important;
 }
 
+/* Labels stay on one line while the rail widens.
+ *
+ * A row's label lands the moment the rail starts to open, while the rail is
+ * still 80px wide. Free to wrap, "File a Complaint" and "My Complaints" ran to
+ * two lines until the rail passed about 230px, so their rows grew and every row
+ * below dropped 12px and came back up as the width caught up: the jitter on
+ * open. On one line, clipped until the rail has room, each row keeps its final
+ * height for the whole animation. */
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item .item-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* Icons hold their place while the rail narrows.
+ *
+ * Collapsed, vendor centres each row and its wrapper. The class lands the
+ * moment the rail starts to close, while it is still 272px wide, so every icon
+ * jumped from x=28 to the middle (x=124) and then slid back as the width
+ * shrank: the jitter on close. Left-aligned, the 28px padding keeps the icon at
+ * x=28 throughout, and at the final 80px that is still dead centre (28 + 24 + 28).
+ * Vendor also gives a collapsed icon 12px of side margin, which the centring
+ * hid; open, the icon has none, so it goes here too. */
+:is(.employee, .citizen) .digit-sidebar.collapsed .digit-sidebar-items-container .item-child-wrapper,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.collapsed {
+  justify-content: flex-start !important;
+}
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.collapsed .icon {
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
 /* Optical alignment of the bar's right edge.
  *
  * Both sides sit 24px from the edge geometrically — measured, the boxes agree
@@ -8287,6 +8330,18 @@ html .header-dropdown-option:focus-visible {
   }
 }
 
+/* A narrow search card (a tablet, beside the filter column) can't hold three
+ * fields in a row: at 418px the phone input behind its +254 prefix was about
+ * 30px wide. Two to a row there, the actions still on their own row below.
+ * Tablets and up only: phones keep their one-field-per-row layout. */
+@media (min-width: 48rem) {
+  @container pgr-inbox-search (max-width: 37.99rem) {
+    .v2-pgr-inbox .digit-section.search .digit-search-field-wrapper {
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+  }
+}
+
 @container pgr-inbox-search (min-width: 50rem) {
   .v2-pgr-inbox .digit-section.search .digit-search-field-wrapper {
     grid-template-columns: repeat(3, minmax(0, 1fr)) auto !important;
@@ -8297,6 +8352,139 @@ html .header-dropdown-option:focus-visible {
     grid-column: auto !important;
     margin-bottom: 2px !important;
   }
+}
+
+/* An error under one field (an invalid mobile number, say) made that cell
+ * taller, and with the cells bottom-aligned its input rose above the inputs
+ * beside it. Each field is a label, an input and an optional error, so the
+ * cells of a row share those three tracks (subgrid): labels sit level above
+ * the inputs even when one wraps, the inputs stay in line, and an error only
+ * opens space under its own row. Tablet and up; phones stack the fields. */
+@media (min-width: 48rem) {
+  .v2-pgr-inbox .digit-section.search .digit-search-field-wrapper {
+    row-gap: 0 !important;
+    align-items: stretch !important;
+  }
+  .v2-pgr-inbox .digit-section.search .digit-search-field-wrapper > .digit-inbox-search-composer-label-pair {
+    display: grid !important;
+    grid-row: span 3;
+    grid-template-rows: subgrid;
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 0 !important;
+    margin: 0 !important;
+    /* Room under each row of fields, carried into the error track by the
+     * empty item below so the track keeps it with no error in it. */
+    padding-bottom: 16px;
+  }
+  /* Every part placed outright, in one column. Left to auto-placement, two
+   * items pinned to the error track would open a second column for the
+   * cell. */
+  .v2-pgr-inbox .digit-section.search .digit-inbox-search-composer-label-pair > * {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .v2-pgr-inbox .digit-section.search .digit-search-field-wrapper > .digit-inbox-search-composer-label-pair::after {
+    content: "";
+    grid-column: 1;
+    grid-row: 3;
+  }
+  /* A short label sits on its input when a neighbour's label wraps. The
+   * vendor spaced label and input with an 8px flex gap; a margin does it here,
+   * since a gap would also open under every input with no error below it. */
+  .v2-pgr-inbox .digit-section.search .digit-inbox-search-composer-label-pair > :first-child {
+    grid-row: 1;
+    align-self: end;
+    margin-bottom: 8px !important;
+  }
+  /* Date Range renders an empty spacer between its label and its picker,
+   * which would push the picker down into the error track; the picker also
+   * carried a -8px pull-up written for the old flex layout. */
+  .v2-pgr-inbox .digit-section.search .digit-inbox-search-composer-label-pair > .filter-label:empty {
+    display: none !important;
+  }
+  .v2-pgr-inbox .digit-section.search .digit-inbox-search-composer-label-pair > .digit-employee-select-wrap {
+    margin-top: 0 !important;
+  }
+  .v2-pgr-inbox .digit-section.search .digit-inbox-search-composer-label-pair > .digit-error-icon-message-wrap {
+    grid-row: 3;
+    align-self: start;
+    margin-top: 4px !important;
+  }
+}
+/* One row of fields with the actions inline: the buttons go in the input
+ * track, so an error under a field never moves them, and nothing pads the
+ * card below the row. */
+@container pgr-inbox-search (min-width: 50rem) {
+  .v2-pgr-inbox .digit-section.search .digit-search-field-wrapper > .digit-inbox-search-composer-label-pair {
+    padding-bottom: 0;
+  }
+  .v2-pgr-inbox .digit-section.search .digit-search-field-wrapper > .digit-search-button-wrapper {
+    /* Both lines: a row alone would auto-place it in the first column. */
+    grid-row: 2 !important;
+    grid-column: -2 / -1 !important;
+    align-self: center !important;
+    margin-bottom: 0 !important;
+  }
+}
+
+/* Search and Clear, sized to their labels. Both took the vendor's 105px
+ * minimum, so two five-letter labels spanned 234px of the row. Clear is an
+ * outlined Secondary beside Search: the same height, padding and corners,
+ * where the vendor drew it 32px tall and square-cornered, with a 16px label.
+ * Its stroke and label take the theme's secondary tokens: the vendor paints
+ * both in --color-primary-main, a pale yellow on white on yellow-primary
+ * tenants. */
+.v2-pgr-inbox .digit-section.search .digit-search-button-wrapper {
+  gap: 12px !important;
+}
+.v2-pgr-inbox .digit-section.search .digit-search-button-wrapper :is(.digit-button-primary, .digit-button-secondary) {
+  width: auto !important;
+  min-width: 5rem !important;
+  height: 40px !important;
+  padding: 0 20px !important;
+  border-radius: 6px !important;
+}
+.v2-pgr-inbox .digit-section.search .digit-search-button-wrapper .digit-button-secondary {
+  border: 1px solid var(--color-button-secondary-border, var(--color-primary-1, #204F37)) !important;
+}
+.v2-pgr-inbox .digit-section.search .digit-search-button-wrapper .digit-button-secondary .digit-button-label {
+  margin: 0 !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  color: var(--color-button-secondary-text, var(--color-primary-1, #204F37)) !important;
+}
+
+/* The filter card's Clear All, outlined like Clear above and the same size as
+ * Apply beside it: the vendor's Secondary is square-cornered, with its stroke
+ * and label in --color-primary-main. */
+.v2-pgr-inbox .digit-section.filter .button-container .digit-button-secondary {
+  height: 40px !important;
+  border: 1px solid var(--color-button-secondary-border, var(--color-primary-1, #204F37)) !important;
+  border-radius: 6px !important;
+}
+/* Every Clear label matches the Search and Apply labels beside it: the
+ * vendor's Secondary also tightens its letter-spacing. */
+.v2-pgr-inbox .digit-section.filter .button-container .digit-button-secondary .digit-button-label,
+.v2-pgr-inbox .digit-section.search .digit-search-button-wrapper .digit-button-secondary .digit-button-label,
+.digit-popup-wrapper .digit-search-button-wrapper .digit-button-secondary .digit-button-label {
+  margin: 0 !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  letter-spacing: normal !important;
+  color: var(--color-button-secondary-text, var(--color-primary-1, #204F37)) !important;
+}
+
+/* The phone search and filter sheets stack Clear over a full-width Search.
+ * Clear kept the vendor's square corners and its stroke and label in
+ * --color-primary-main; the same corners and secondary tokens as above. */
+.digit-popup-wrapper .digit-search-button-wrapper .digit-button-secondary {
+  border: 1px solid var(--color-button-secondary-border, var(--color-primary-1, #204F37)) !important;
+  border-radius: 6px !important;
+}
+.digit-popup-wrapper .digit-search-button-wrapper .digit-button-secondary .digit-button-label {
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  color: var(--color-button-secondary-text, var(--color-primary-1, #204F37)) !important;
 }
 
 /* The filter card was padded twice: 20px on the card, then 24px again on
@@ -8311,6 +8499,69 @@ html .header-dropdown-option:focus-visible {
 }
 .v2-pgr-inbox .digit-section.filter .content-container {
   padding: 0 !important;
+}
+
+/* Side by side, the filter column (County/Sub County/Ward and ~10 statuses,
+ * ~1310px) outgrew a 10-row table (~840px) and the stretched table card was
+ * left with a tall blank band under its pagination.
+ *
+ * The table now sets the row height: `contain: size` takes the filter's
+ * content out of the row's sizing, and its fields scroll inside the card
+ * with Apply / Clear All kept in view below them. The floor of about one
+ * screen keeps a one- or two-row table from squeezing the filter into a
+ * sliver; the table card then stretches to it with the pagination at its
+ * foot. */
+@media (min-width: 48rem) {
+  .v2-pgr-inbox .digit-sections-parent.inbox > .digit-section.filter {
+    contain: size;
+    /* Vendor's `height: fit-content` would keep it out of the row stretch. */
+    height: auto !important;
+    min-height: max(24rem, calc(100vh - 8rem));
+    display: flex;
+    flex-direction: column;
+  }
+  .v2-pgr-inbox .digit-section.filter > .digit-tab-main,
+  .v2-pgr-inbox .digit-section.filter .filter-card {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .v2-pgr-inbox .digit-section.filter .filter-card > .content-container {
+    flex: 0 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    /* Room for the fields' focus rings at the scroll edges. */
+    padding: 0 4px !important;
+    margin: 0 -4px;
+  }
+  /* The section already insets the card by 24px; vendor pads the buttons by
+   * another 24px all round. */
+  .v2-pgr-inbox .digit-section.filter .filter-card > .button-container {
+    flex: none;
+    padding: 16px 0 0 !important;
+  }
+  /* Vendor marks the header and buttons `with-shadow` while the fields
+   * overflow. Its 1px shadow hugged the unpadded header like a box; a
+   * hairline under the header and over the buttons marks the scroll edges. */
+  .v2-pgr-inbox .digit-section.filter .filter-card > .filter-header.with-shadow {
+    box-shadow: none !important;
+    padding-bottom: 12px !important;
+    margin-bottom: 0 !important;
+    border-bottom: 1px solid var(--color-border, #d6d5d4);
+  }
+  .v2-pgr-inbox .digit-section.filter .filter-card > .filter-header.with-shadow + .content-container {
+    padding-top: 12px !important;
+  }
+  .v2-pgr-inbox .digit-section.filter .filter-card > .button-container.with-shadow {
+    box-shadow: none !important;
+    border-top: 1px solid var(--color-border, #d6d5d4);
+  }
+  .v2-pgr-inbox .digit-table-card > div:last-child:has(> .rdt_Pagination) {
+    margin-top: auto;
+  }
 }
 
 /* The module icon belongs to the title's first line. Centred on the whole
@@ -8572,15 +8823,27 @@ html .header-dropdown-option:focus-visible {
   box-sizing: border-box;
   padding: 0 0 0 28px;
   border-top: 1px solid rgba(255, 255, 255, 0.14);
+  /* The lockup travels with the rail rather than jumping (the rail's own
+   * 0.28s and easing, AppSideNav's transitionDuration). Clipped, not squeezed,
+   * while the rail is still too narrow for it. */
+  overflow: hidden;
+  transition: padding-left 0.28s cubic-bezier(0.4, 0, 0.2, 1);
 }
+/* Closed, the lockup sits centred in the 80px rail: (80 - 56) / 2 = 12px. A
+ * padding, not justify-content: center, because centring can't animate and
+ * snapped the lockup from x=28 to the middle of the still-wide rail. */
 :is(.employee, .citizen) .digit-sidebar .digit-sidebar-foot.closed .digit-sidebar-egov-band {
-  justify-content: center;
-  padding-left: 0;
+  padding-left: 12px;
 }
 .digit-sidebar-foot .digit-sidebar-egov {
   display: block;
   height: 18px;
   width: auto;
+}
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-egov {
+  flex: 0 0 auto;
+  max-width: none;
+  transition: height 0.28s cubic-bezier(0.4, 0, 0.2, 1);
 }
 :is(.employee, .citizen) .digit-sidebar .digit-sidebar-foot.closed .digit-sidebar-egov {
   height: 14px;
@@ -8972,7 +9235,8 @@ html[data-sidebar-pinned] .citizen .main.center-container.citizen-home-container
  * ========================================================================== */
 .cms-file,
 .cms-receipt,
-.cms-details {
+.cms-details,
+.cms-complaints {
   /* The theme's own button tokens, as the shared Button reads them, so the
    * accents here follow each tenant the way its buttons do. */
   --cms-accent: var(--color-button-secondary-text, var(--color-primary-2, #2563EB));
@@ -9479,14 +9743,30 @@ html[data-sidebar-pinned] .citizen .main.center-container.citizen-home-container
   font-size: 13.5px;
 }
 
-/* Footer: why Next is held, then Back / Next */
+/* .body-container clips sideways overflow with overflow-x:hidden, which also
+ * makes it a scroll container. It never scrolls itself (it grows with the
+ * page and the window scrolls), so a sticky footer inside it would pin to a
+ * box that doesn't move. clip clips the same without becoming a scroller. */
+.body-container:has(.cms-file) {
+  overflow-x: clip;
+}
+
+/* Footer: why Next is held, then Back / Next. Pinned to the bottom of the
+ * screen at every width, so a long step (the map, the boundary levels, postal
+ * code and landmark) never hides the way on behind a scroll. */
 .cms-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 16px;
   padding: 16px 28px 20px;
+  background: #FFFFFF;
   border-top: 1px solid #EEF1F6;
+  border-radius: 0 0 14px 14px;
+  box-shadow: 0 -8px 16px -12px rgba(17, 24, 39, 0.18);
 }
 .cms-hint {
   flex: 1;
@@ -9907,15 +10187,13 @@ html[data-sidebar-pinned] .citizen .main.center-container.citizen-home-container
     height: 82px;
   }
 
-  /* Footer pinned to the bottom of the screen */
+  /* Full width on a phone, clear of the home indicator */
   .cms-footer {
-    position: sticky;
-    bottom: 0;
-    z-index: 2;
     display: block;
     padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
     background: #FFFFFF;
     border-top: 1px solid var(--cms-line);
+    border-radius: 0;
   }
   .cms-hint {
     margin-bottom: 10px;
@@ -9935,6 +10213,43 @@ html[data-sidebar-pinned] .citizen .main.center-container.citizen-home-container
   }
   .cms-footer .cms-next {
     flex: 1;
+  }
+
+  /* Back / Next sit on "Powered by DIGIT" at the foot of the screen on every
+   * step. A short step (Complaint Details) left the bar under its last field
+   * with a grey band below it; a long one pinned the bar to the very bottom,
+   * over the page footer, which then showed only at the end of the page.
+   * The card now fills the page so the bar starts at its foot, and the page
+   * footer sticks too, with the bar stacked on top of it. */
+  .citizen .pgr-citizen-wrapper:has(> .cms-file) {
+    display: flex;
+    flex-direction: column;
+  }
+  .pgr-citizen-wrapper > .cms-file,
+  .cms-file > .cms-file-card {
+    flex: 1 0 auto;
+  }
+  .cms-file > .cms-file-card {
+    display: flex;
+    flex-direction: column;
+  }
+  .cms-file-card > .cms-footer {
+    margin-top: auto;
+    bottom: calc(var(--v2-page-footer-height, 40px) + env(safe-area-inset-bottom, 0px));
+    padding-bottom: 12px;
+  }
+  /* !important beats the phone rule that un-fixes this footer everywhere
+   * (`position: static !important`); sticky never covers content, since the
+   * footer still takes its own place at the end of the page. The page column
+   * beside it is a flex item at z-index 100, so the card painted over the
+   * pinned footer until it was raised above that. */
+  .citizen:has(.cms-file) > .citizen-home-footer {
+    position: sticky !important;
+    bottom: 0;
+    z-index: 101;
+    box-sizing: border-box;
+    height: calc(var(--v2-page-footer-height, 40px) + env(safe-area-inset-bottom, 0px));
+    padding-bottom: env(safe-area-inset-bottom, 0px) !important;
   }
 
   .cms-sheet-overlay {
@@ -10222,5 +10537,318 @@ html[data-sidebar-pinned] .citizen .main.center-container.citizen-home-container
   }
   .cms-details-actions > button {
     width: 100%;
+  }
+}
+
+/* ==========================================================================
+ * Citizen My Complaints as an inbox (#2223)
+ *
+ * The employee inbox's shape for a citizen's own complaints: a table on a
+ * desktop (Complaint No., Concern, Status, Filed on), a list on a phone, both
+ * in the theme's table and status colours, with a search above and a pager
+ * below. Each row opens the complaint.
+ * ========================================================================== */
+.cms-complaints-head {
+  display: flex;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 1rem 1.5rem 0.5rem;
+}
+.cms-complaints-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+}
+.cms-complaints-title h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--color-primary-1, var(--color-primary-main, #c84c0e));
+}
+.cms-complaints-count {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--cms-muted);
+}
+.cms-complaints-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.5rem 1.5rem 1.5rem;
+}
+.cms-complaints-search {
+  position: relative;
+  max-width: 420px;
+  margin-bottom: 16px;
+}
+/* Room for the icon. A global rule pads every search input 12px with
+ * !important and three :not()s of weight, so this matches it and comes later. */
+.cms-complaints .cms-complaints-search input.cms-complaints-search-field[type="search"] {
+  padding-left: 36px !important;
+}
+.cms-complaints-search-icon {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  width: 16px;
+  height: 16px;
+  transform: translateY(-50%);
+  color: var(--cms-muted);
+  pointer-events: none;
+}
+.cms-complaints-card {
+  background: #FFFFFF;
+  border: 1px solid var(--color-table-border, var(--cms-line));
+  border-radius: 12px;
+  overflow: hidden;
+  /* The table or the list follows the card's own width, not the viewport's:
+   * the rail takes width from it independently. */
+  container: cms-complaints / inline-size;
+}
+
+/* Desktop: the table. Fixed layout, so a long description is cut rather than
+ * widening the Concern column past the card. */
+.cms-complaints-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.cms-complaints-col-number { width: 236px; }
+.cms-complaints-col-status { width: 210px; }
+.cms-complaints-col-date { width: 120px; }
+.cms-complaints-col-go { width: 44px; }
+.cms-complaints-table th {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-table-border, var(--cms-line));
+  background: var(--color-table-header-bg, #F3F4F6);
+  color: var(--color-table-header-text, var(--cms-ink-2));
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+}
+.cms-complaints-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--color-table-border, var(--cms-line));
+  color: var(--color-table-row-text, var(--cms-ink));
+  font-size: 14px;
+  vertical-align: middle;
+}
+.cms-complaints-table tbody tr {
+  cursor: pointer;
+}
+.cms-complaints-table tbody tr:hover td {
+  background: var(--color-table-hover, #F9FAFB);
+}
+.cms-complaints-number {
+  color: var(--cms-accent);
+  font-weight: 500;
+  white-space: nowrap;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
+  text-underline-offset: 3px;
+}
+.cms-complaints-number:focus-visible {
+  outline: 2px solid var(--cms-accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+.cms-complaints-concern {
+  display: block;
+  font-weight: 600;
+  color: var(--cms-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cms-complaints-desc {
+  display: block;
+  margin-top: 3px;
+  font-size: 13px;
+  color: var(--cms-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cms-complaints-date {
+  color: var(--cms-muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.cms-complaints-go {
+  color: #9CA3AF;
+  text-align: right;
+}
+.cms-complaints-go svg,
+svg.cms-complaints-go {
+  width: 18px;
+  height: 18px;
+  vertical-align: middle;
+}
+
+/* Status, in the theme's status colours, toned by where the complaint is. */
+.cms-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cms-status-pill::before {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.cms-status-pill.is-open {
+  background: var(--color-status-warning-bg, #FFF4D7);
+  color: var(--color-status-warning-text, #7A4E00);
+}
+.cms-status-pill.is-closed {
+  background: var(--color-status-success-bg, #EAF6ED);
+  color: var(--color-status-success-text, #2E7D32);
+}
+.cms-status-pill.is-rejected {
+  background: var(--color-status-error-bg, #FDECEC);
+  color: var(--color-status-error-text, #C62828);
+}
+
+/* A narrow card (a phone, a tablet beside the rail): the list. The table's
+ * fixed columns need about 610px, so below 48rem Concern would be a sliver;
+ * each complaint becomes one row with status and date, then its concern, two
+ * lines of description and its number. */
+.cms-complaints-list {
+  display: none;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cms-complaints-list li + li {
+  border-top: 1px solid var(--color-table-border, var(--cms-line));
+}
+.cms-complaints-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  color: inherit;
+  text-decoration: none;
+}
+.cms-complaints-item:active {
+  background: var(--color-table-hover, #F9FAFB);
+}
+.cms-complaints-item:focus-visible {
+  outline: 2px solid var(--cms-accent);
+  outline-offset: -2px;
+}
+.cms-complaints-item-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.cms-complaints-item-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.cms-complaints-item .cms-complaints-concern {
+  font-size: 15px;
+  line-height: 1.3;
+  white-space: normal;
+}
+.cms-complaints-item .cms-complaints-desc {
+  margin-top: 0;
+  line-height: 1.4;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.cms-complaints-item .cms-complaints-number {
+  font-size: 12.5px;
+  text-decoration: none;
+}
+.cms-complaints-item .cms-complaints-date {
+  font-size: 12.5px;
+}
+
+.cms-complaints-pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--color-table-border, var(--cms-line));
+  font-size: 13px;
+  color: var(--cms-muted);
+}
+.cms-complaints-table + .cms-complaints-list + .cms-complaints-pager {
+  /* The last table row draws its own rule above the pager. */
+  border-top: 0;
+}
+.cms-complaints-pager-buttons {
+  display: inline-flex;
+  gap: 6px;
+}
+.cms-complaints-pager button {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--color-table-border, var(--cms-line));
+  border-radius: 6px;
+  background: #FFFFFF;
+  color: var(--cms-ink-2);
+  cursor: pointer;
+}
+.cms-complaints-pager button:disabled {
+  color: #C5C5C5;
+  cursor: default;
+}
+.cms-complaints-pager button svg {
+  width: 16px;
+  height: 16px;
+}
+
+@container cms-complaints (max-width: 47.99rem) {
+  .cms-complaints-table {
+    display: none;
+  }
+  .cms-complaints-list {
+    display: block;
+  }
+  /* The list ends without a rule, so the pager draws its own. */
+  .cms-complaints-table + .cms-complaints-list + .cms-complaints-pager {
+    border-top: 1px solid var(--color-table-border, var(--cms-line));
+  }
+}
+@media (max-width: 47.99rem) {
+  .cms-complaints-head {
+    padding: 1rem 1rem 0.5rem;
+  }
+  .cms-complaints-body {
+    padding: 0.5rem 1rem 1.5rem;
+  }
+  .cms-complaints-search {
+    max-width: none;
   }
 }

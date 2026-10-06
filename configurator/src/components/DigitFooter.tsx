@@ -1,5 +1,5 @@
-import digitFooterColor from '@/assets/digit-footer.png';
-import digitFooterBw from '@/assets/digit-footer-bw.png';
+import digitMarkColor from '@/assets/digit-mark.png';
+import digitMarkBw from '@/assets/digit-mark-bw.png';
 
 // Link target when the deployment has not configured DIGIT_HOME_URL.
 const DEFAULT_HOME_URL = 'https://egov.org.in/digit/';
@@ -24,9 +24,9 @@ export interface DigitFooterProps {
 }
 
 /**
- * "Powered by DIGIT" attribution (CCRS#1841), matching the citizen/employee
- * shells. The asset is the full lockup — wordmark and logo in one image — so
- * this renders an image, not text beside an icon.
+ * "Powered by DIGIT" attribution (CCRS#1841). Stock, it is "Powered by" set as
+ * text beside the bundled DIGIT mark; a deployment that configures its own
+ * lockup gets that single image instead.
  *
  * Resolution order, and why it differs from the dashboard's DashboardFooter:
  * that component reads globalConfigs only, because nginx injects
@@ -42,22 +42,41 @@ export interface DigitFooterProps {
  * globalConfigs can opt out or rebrand without a code change.
  */
 export function DigitFooter({ variant = 'color', className }: DigitFooterProps) {
-  const bundled = variant === 'bw' ? digitFooterBw : digitFooterColor;
   const configured = configuredUrl(variant === 'bw' ? 'DIGIT_FOOTER_BW' : 'DIGIT_FOOTER');
-  const logoUrl = configured ?? bundled;
 
   // Never paint a broken-image icon plus alt text — the failure mode that
   // caused #1836. An empty configured value means "hide it".
-  if (!logoUrl) return null;
+  if (configured === '') return null;
 
+  const linkProps = {
+    href: configuredUrl('DIGIT_HOME_URL') || DEFAULT_HOME_URL,
+    target: '_blank',
+    rel: 'noopener noreferrer',
+  };
+
+  // A deployment's own lockup is shown as it is, text and all.
+  if (configured) {
+    return (
+      <a {...linkProps} className={['inline-flex items-center', className].filter(Boolean).join(' ')}>
+        <img src={configured} alt="Powered by DIGIT" className="h-4 w-auto" />
+      </a>
+    );
+  }
+
+  // The stock attribution sets "Powered by" as live text beside the bundled
+  // DIGIT mark, in the DIGIT console's weight: the full lockup image carried a
+  // light, thin "Powered by" that read fainter than the console's. The image's
+  // alt names the whole attribution, so the visible words stay out of the
+  // accessibility tree rather than being read twice.
   return (
-    <a
-      href={configuredUrl('DIGIT_HOME_URL') || DEFAULT_HOME_URL}
-      target="_blank"
-      rel="noopener noreferrer"
-      className={['inline-flex items-center', className].filter(Boolean).join(' ')}
-    >
-      <img src={logoUrl} alt="Powered by DIGIT" className="h-5 w-auto" />
+    <a {...linkProps} className={['inline-flex h-4 items-center gap-1.5', className].filter(Boolean).join(' ')}>
+      <span
+        aria-hidden="true"
+        className={`text-[13px] font-medium leading-none ${variant === 'bw' ? 'text-white/85' : 'text-foreground'}`}
+      >
+        Powered by
+      </span>
+      <img src={variant === 'bw' ? digitMarkBw : digitMarkColor} alt="Powered by DIGIT" className="h-[13px] w-auto" />
     </a>
   );
 }

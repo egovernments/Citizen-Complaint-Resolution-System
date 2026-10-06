@@ -42,6 +42,10 @@ RUN for sp in packages/*/; do \
 ARG BASE_PATH
 ARG VITE_ENABLE_LEGACY_PGR_DASHBOARD=false
 ENV VITE_ENABLE_LEGACY_PGR_DASHBOARD=${VITE_ENABLE_LEGACY_PGR_DASHBOARD}
+# Compulsory onboarding (src/config/featureFlags.ts). Off until the backend
+# records which accounts have finished; true sends unfinished ones there first.
+ARG VITE_ENABLE_ONBOARDING_GATE=false
+ENV VITE_ENABLE_ONBOARDING_GATE=${VITE_ENABLE_ONBOARDING_GATE}
 RUN npx vite build --base="${BASE_PATH}" \
  && test -f dist/index.html
 

@@ -3,6 +3,7 @@ import type { DigitApiClient } from '../client/DigitApiClient.js';
 import type { MdmsRecord } from '../client/types.js';
 import { getResourceConfig, type ResourceConfig } from './resourceRegistry.js';
 import { migrateThemeConfigToV3 } from './themeConfigMigration.js';
+import { buildNotificationLogQuery } from './notificationLogQuery.js';
 
 /** Extended data provider type with DIGIT-specific custom methods */
 export type DigitDataProvider = DataProvider & {
@@ -470,6 +471,15 @@ function clientSort(records: RaRecord[], field: string, order: string): RaRecord
 // the session ADMIN tenant).
 const TENANT_OVERRIDE_KEY = '__tenantId';
 
+/** Tenant an MDMS read/write must target: explicit __tenantId override, else the state root for
+ *  state-level masters, else the session tenant. */
+function mdmsTenantFor(client: DigitApiClient, config: ResourceConfig, tenantId: string, filter?: Record<string, unknown>): string {
+  const override = filter?.[TENANT_OVERRIDE_KEY];
+  if (typeof override === 'string' && override.trim()) return override.trim();
+  if (config.stateLevel) return client.stateTenantId || tenantId.split('.')[0] || tenantId;
+  return tenantId;
+}
+
 function pickTenant(tenantId: string, filter?: Record<string, unknown>): string {
   const override = filter?.[TENANT_OVERRIDE_KEY];
   return typeof override === 'string' && override.trim() ? override.trim() : tenantId;
@@ -584,7 +594,7 @@ async function mdmsGetList(
   filter?: Record<string, unknown>,
   includeInactive = false,
 ): Promise<RaRecord[]> {
-  const tenant = pickTenant(tenantId, filter);
+  const tenant = mdmsTenantFor(client, config, tenantId, filter);
   // No isActive push-down here: the leaf-adapter (adaptHierarchyLeaves) needs inactive
   // rows too, to resolve a leaf's parent name even when that parent has since been
   // deactivated. Non-leaf-adapter callers filter isActive themselves below.
@@ -957,8 +967,34 @@ async function userGetList(client: DigitApiClient, config: ResourceConfig, tenan
   return users.map((u) => normalizeRecord(u, config));
 }
 
+/**
+ * Workflow business services for the tenant.
+ *
+ * `filter.businessServices` narrows the search; WITHOUT it every business
+ * service the tenant has is returned, because egov-workflow-v2's `_search`
+ * omits the `businessServices` query param entirely when the list is empty and
+ * then answers with all of them.
+ *
+ * This used to default to `['PGR']`, and that single literal was a ceiling, not
+ * a default: every screen reading this resource — including the notification
+ * Configure tab's picker — could only ever see PGR, whatever the tenant
+ * actually had configured. A product with an IM or TL workflow got a picker
+ * with one entry and no way to tell that was a client-side constant. PGR keeps
+ * working identically: it is simply one of the services that comes back, and a
+ * caller that genuinely wants only PGR still passes the filter (see the
+ * `getOne` path below, which searches by the requested id).
+ */
 async function workflowBsGetList(client: DigitApiClient, config: ResourceConfig, tenantId: string, filter?: Record<string, unknown>): Promise<RaRecord[]> {
-  const codes = filter?.businessServices ? filter.businessServices as string[] : ['PGR'];
+  const requested = filter?.businessServices;
+  const listed = Array.isArray(requested)
+    ? (requested as string[]).map((c) => String(c).trim()).filter((c) => c !== '')
+    : typeof requested === 'string' && requested.trim() !== ''
+      ? [requested.trim()]
+      : [];
+  // An empty filter is not a filter: collapse it to `undefined` so the caller
+  // cannot accidentally ask for "no business services" and get all of them by
+  // a coincidence of the client's param handling.
+  const codes = listed.length > 0 ? listed : undefined;
   const services = await client.workflowBusinessServiceSearch(tenantId, codes);
   return services.map((s) => normalizeRecord(s, config));
 }
@@ -1245,16 +1281,15 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
       if (config.type === 'custom') {
         const filter = filterValues;
         if (resource === 'notification-log') {
-          const { records, total } = await customFetchList(client, config, tenantId, {
-            referenceNumber: typeof filter.referenceNumber === 'string' ? filter.referenceNumber : undefined,
-            // Substring-style search on the complaint number → prefix match server-side.
-            referenceNumberPrefix: typeof filter.referenceNumber === 'string' && filter.referenceNumber ? true : undefined,
-            transactionId: typeof filter.transactionId === 'string' ? filter.transactionId : undefined,
-            channel: typeof filter.channel === 'string' ? filter.channel : undefined,
-            status: typeof filter.status === 'string' ? filter.status : undefined,
-            limit: perPage,
-            offset: (page - 1) * perPage,
-          });
+          // Filter → query-param mapping lives in notificationLogQuery.ts, which
+          // is unit-tested: it is the only place the /logs parameter names
+          // (channel incl. NONE, sourcePath, includeTest, …) are written down.
+          const { records, total } = await customFetchList(
+            client,
+            config,
+            tenantId,
+            buildNotificationLogQuery(filter, page, perPage),
+          );
           return { data: records, total };
         }
         // Generic custom list (e.g. notification-provider): fetch-all then
@@ -1339,7 +1374,7 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
           return { data: found };
         }
         // Try uniqueIdentifier lookup first (fast path for records we created)
-        const records = await client.mdmsSearch(tenantId, config.schema!, { uniqueIdentifiers: [String(params.id)] });
+        const records = await client.mdmsSearch(mdmsTenantFor(client, config, tenantId), config.schema!, { uniqueIdentifiers: [String(params.id)] });
         // Master Show/Edit screens (meta.showInactive) also resolve a
         // deactivated record so it can be viewed and re-enabled; every other
         // lookup (EntityLink etc.) only resolves active ones.
@@ -1463,7 +1498,9 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
           data.tenants = [{ code: tenantId }];
         }
         const uid = String(incoming[config.idField] || data.code || '');
-        const createTenant = STATE_LEVEL_SCHEMAS.has(config.schema!) ? stateRootTenant(tenantId) : tenantId;
+        const createTenant = STATE_LEVEL_SCHEMAS.has(config.schema!)
+          ? stateRootTenant(tenantId)
+          : mdmsTenantFor(client, config, tenantId);
         const record = await client.mdmsCreate(createTenant, config.schema!, uid, data);
         return { data: config.leafServiceDefAdapter
           ? (await mdmsGetList(client, config, tenantId)).find((r) => String(r.id) === uid)
@@ -1671,7 +1708,7 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
     async update(resource, params): Promise<UpdateResult> {
       const config = resolveConfig(resource);
       if (config.type === 'mdms') {
-        const records = await client.mdmsSearch(tenantId, config.schema!, { uniqueIdentifiers: [String(params.id)] });
+        const records = await client.mdmsSearch(mdmsTenantFor(client, config, tenantId), config.schema!, { uniqueIdentifiers: [String(params.id)] });
         // Fall back to a deactivated row for the master Edit screen
         // (meta.showInactive, re-enable via _isActive) and for the
         // Remove -> re-Add flow (meta.includeInactive), which resurrects the
@@ -1911,7 +1948,7 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
     async delete(resource, params): Promise<DeleteResult> {
       const config = resolveConfig(resource);
       if (config.type === 'mdms') {
-        const records = await client.mdmsSearch(tenantId, config.schema!, { uniqueIdentifiers: [String(params.id)] });
+        const records = await client.mdmsSearch(mdmsTenantFor(client, config, tenantId), config.schema!, { uniqueIdentifiers: [String(params.id)] });
         // Master screens list deactivated rows too, so their row Delete may hit
         // one; re-deactivating is harmless and also clears a stale data flag.
         const existing =

@@ -23,7 +23,7 @@ export const pgrEscalationDescriptor: SchemaDescriptor = {
       title: 'Default thresholds',
       fields: ['defaultSlaPercentageByLevel', 'defaultSlaByLevel', 'enabledByLevel'],
     },
-    { title: 'Complaint-type overrides', fields: ['overrides'] },
+    { title: 'Subcategory overrides', fields: ['overrides'] },
   ],
   fields: [
     {
@@ -53,14 +53,14 @@ export const pgrEscalationDescriptor: SchemaDescriptor = {
       path: 'defaultSlaPercentageByLevel',
       widget: 'json',
       label: 'Cumulative SLA percentages',
-      help: 'Preferred cumulative thresholds against the complaint type SLA, for example [80, 120, 200]. Values must strictly increase and cannot exceed 200.',
+      help: 'Preferred cumulative thresholds against the SLA of the complaint subcategory, for example [80, 120, 200]. Values must strictly increase and cannot exceed 200.',
     },
     {
       path: 'defaultSlaByLevel',
       widget: 'json',
       required: true,
       label: 'Absolute fallback thresholds (ms)',
-      help: 'Strictly increasing cumulative complaint-age thresholds in milliseconds. Used only when percentages or the complaint type SLA are unavailable.',
+      help: 'Strictly increasing cumulative complaint-age thresholds in milliseconds. Used only when percentages or the SLA of the complaint subcategory is unavailable.',
     },
     {
       path: 'enabledByLevel',
@@ -71,7 +71,7 @@ export const pgrEscalationDescriptor: SchemaDescriptor = {
     {
       path: 'overrides',
       widget: 'json',
-      label: 'Complaint-type overrides',
+      label: 'Subcategory overrides',
       help: 'JSON object keyed by the exact leaf serviceCode. Example: {"StreetLightNotWorking":{"slaPercentageByLevel":[50,100,150]}}.',
     },
   ],

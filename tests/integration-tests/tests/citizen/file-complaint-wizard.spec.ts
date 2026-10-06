@@ -1,3 +1,4 @@
+import { tenantSlug } from '../utils/identity-bff';
 /**
  * Citizen file-complaint wizard — happy path
  *
@@ -10,8 +11,9 @@
  *   - Step 1 (Complaint Details) requires Type + Subtype dropdowns.
  *   - Step 2 (Pin Complaint Location) is optional and starts with no marker.
  *   - Step 3 (Location Details) still requires the boundary cascade.
- *   - Step 4 (Complaint's Location) cascades County → Sub-County → Ward,
- *     gating each level (CCRS#477).
+ *   - Step 4 (Complaint's Location) cascades County → Sub-County → Ward;
+ *     every level shows from the start and a pick fills the levels above
+ *     it (CCRS#477).
  *   - Step 5 description is required.
  *   - Step 6 photo dropzone is optional; SUBMIT is the final button.
  */
@@ -424,7 +426,7 @@ Steps:
 3. Step 1 (Complaint Details): pick Type and Subtype from the dropdowns, click Next.
 4. Step 2 (Pin Location): assert there is no default marker and NEXT is enabled; select a pin, clear it while reverse geocoding is in flight, and assert it stays cleared.
 5. Step 3 (Location Details): complete the required administrative-boundary cascade and click Next.
-6. Step 4 (Complaint's Location): pick County → Sub-County → Ward (cascade gates each level — CCRS#477).
+6. Step 4 (Complaint's Location): pick County → Sub-County → Ward (a pick fills the levels above it — CCRS#477).
 7. Step 5 (Description): fill the required description, click Next.
 8. Step 6 (Photo): skip the optional dropzone, click SUBMIT.
 9. Assert the URL flips to /pgr/response and a complaint id matching ^<PGR_ID_PREFIX>-PGR-\\d{4}-\\d{2}-\\d{2}-\\d+$ is rendered.
@@ -440,7 +442,7 @@ Test timeout is 180s — six steps plus DOM settles plus the final POST regularl
     await citizenOtpLogin(page);
 
     await page.goto(
-      `${BASE_URL}/digit-ui/citizen/pgr/create-complaint/complaint-type`,
+      `${BASE_URL}/${tenantSlug()}/digit-ui/citizen/pgr/create-complaint/complaint-type`,
       { waitUntil: 'domcontentloaded', timeout: 30_000 },
     );
     await page.waitForTimeout(5000);
@@ -514,7 +516,7 @@ loading PGR_TEST_* localization rows would only hide that citizens are being ser
     await citizenOtpLogin(page);
 
     await page.goto(
-      `${BASE_URL}/digit-ui/citizen/pgr/create-complaint/complaint-type`,
+      `${BASE_URL}/${tenantSlug()}/digit-ui/citizen/pgr/create-complaint/complaint-type`,
       { waitUntil: 'domcontentloaded', timeout: 30_000 },
     );
     await page.waitForTimeout(5000);

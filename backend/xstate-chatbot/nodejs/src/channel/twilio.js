@@ -192,6 +192,8 @@ class TwilioWhatsAppProvider {
      * (+447700900123 under the ke rule became +254447700900123).
      */
     async toWhatsAppAddress(number, tenantId = null) {
+        // Already a full address (captured from the inbound From): use it untouched.
+        if (/^whatsapp:\+\d+$/.test(String(number))) return String(number);
         const mobileConfig = await mobileValidation.getConfig(tenantId || config.rootTenantId);
         const digits = mobileValidation.toAddressableDigits(number, mobileConfig);
         if (!digits) throw new Error(`Cannot build a WhatsApp address from '${number}'`);
@@ -291,8 +293,13 @@ class TwilioWhatsAppProvider {
             type: type
         };
 
+        const fromDigits = mobileValidation.digitsOnly(requestBody.From);
         reformattedMessage.user = {
-            mobileNumber: await this.extractPhoneNumber(requestBody.From, tenantId)
+            mobileNumber: await this.extractPhoneNumber(requestBody.From, tenantId),
+            // The exact address the citizen wrote from. The national number alone cannot say
+            // which country it belongs to when a state accepts several (ke: +254 and +91), so
+            // replies go back here rather than re-prefixing the tenant's default code.
+            whatsAppAddress: fromDigits ? `whatsapp:+${fromDigits}` : undefined
         };
 
         reformattedMessage.extraInfo = {
@@ -388,7 +395,7 @@ class TwilioWhatsAppProvider {
     }
 
     async sendMessageToUser(user, messages, extraInfo) {
-        let userMobile = user.mobileNumber;
+        let userMobile = user.whatsAppAddress || user.mobileNumber;
         // The citizen's tenant decides the country code; fall back to the deployment root.
         let tenantId = (extraInfo && extraInfo.tenantId) || config.rootTenantId;
 

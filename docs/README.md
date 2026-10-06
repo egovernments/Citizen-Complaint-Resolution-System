@@ -45,6 +45,7 @@ One folder per feature; design docs sit next to the feature they describe.
 
 - [2.12](releases/2.12/release-notes-v2.12.md) · [2.12-beta](releases/2.12-beta/release-notes-v2.12-beta.md) ·
   [2.11 upgrade](releases/2.11/migration-v2.10-to-v2.11.md)
+- [2.20 notifications](releases/2.20/notifications/README.md): setup, migration from 2.12, providers, developer guide and the published contract (unreleased; lands with the notifications PR #2097)
 - [Rapid release approach](releases/rapid-release-approach.md)
 
 ## reference/

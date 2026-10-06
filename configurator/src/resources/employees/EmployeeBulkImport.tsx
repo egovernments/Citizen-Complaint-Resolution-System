@@ -84,11 +84,11 @@ function buildTemplate(
     [''],
     ['Required columns: employeeCode, name, mobileNumber (per the tenant mobile rule),'],
     ['department (from Codes), designation (from Codes).'],
-    ['Optional: userName (auto-derives), emailId, gender, dob (YYYY-MM-DD),'],
+    ['Required: emailId. Optional: userName (auto-derives), gender, dob (YYYY-MM-DD),'],
     ['roles (comma-separated), jurisdictions (comma-separated boundary codes),'],
     ['dateOfAppointment (YYYY-MM-DD).'],
     [''],
-    ['Password defaults to eGov@123; employees rotate on first login.'],
+    ['Email is required. New employees receive a secure password setup email.'],
   ]);
   notes['!cols'] = [{ wch: 80 }];
   XLSX.utils.book_append_sheet(wb, notes, 'Instructions');
@@ -189,6 +189,7 @@ export function EmployeeBulkImport() {
       }
 
       const errors: string[] = [];
+      if (!row.emailId || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.emailId)) errors.push('A valid email is required to invite an employee.');
       if (row.department && !deptCodes.has(row.department)) errors.push(`Department "${row.department}" not found`);
       if (row.designation && !desigCodes.has(row.designation)) errors.push(`Designation "${row.designation}" not found`);
       if (row.roles) {
@@ -297,16 +298,16 @@ export function EmployeeBulkImport() {
     [],
   );
 
-  const handleDownloadCreds = useCallback(() => {
-    const rowsOut = [['Name', 'Employee Code', 'Mobile', 'Password']];
+  const handleDownloadInvitations = useCallback(() => {
+    const rowsOut = [['Name', 'Employee Code', 'Mobile', 'Email']];
     for (const emp of createdEmployees) {
-      rowsOut.push([emp.user.name, emp.user.userName, emp.user.mobileNumber, 'eGov@123']);
+      rowsOut.push([emp.user.name, emp.user.userName, emp.user.mobileNumber, emp.user.emailId || '']);
     }
     const csv = rowsOut
       .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','))
       .join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
-    triggerDownload(blob, `employee-credentials-${tenantId}.csv`);
+    triggerDownload(blob, `employee-invitations-${tenantId}.csv`);
   }, [createdEmployees, tenantId]);
 
   return (
@@ -332,9 +333,9 @@ export function EmployeeBulkImport() {
       entityLabel={{ singular: 'employee', plural: 'employees' }}
       completionExtras={(createdCount) =>
         createdCount > 0 ? (
-          <Button variant="outline" onClick={handleDownloadCreds} className="gap-2">
+          <Button variant="outline" onClick={handleDownloadInvitations} className="gap-2">
             <Download className="w-4 h-4" />
-            Download credentials CSV
+            Download invitations CSV
           </Button>
         ) : null
       }

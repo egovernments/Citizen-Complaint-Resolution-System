@@ -101,7 +101,7 @@ export function ComplaintHierarchyShow() {
               <FieldRow label="Hierarchy Type">{String(rec.hierarchyType ?? '')}</FieldRow>
               <FieldRow label="Levels">{String(ordered.length)}</FieldRow>
               <FieldRow label="Total nodes">{isLoading ? '…' : String(nodes.length)}</FieldRow>
-              <FieldRow label="Leaf complaint types">{isLoading ? '…' : String(leafCount)}</FieldRow>
+              <FieldRow label="Complaint subcategories">{isLoading ? '…' : String(leafCount)}</FieldRow>
             </FieldSection>
 
             {ordered.length > 0 && (

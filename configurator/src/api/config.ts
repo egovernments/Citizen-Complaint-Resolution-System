@@ -78,6 +78,7 @@ export const ENDPOINTS = {
   // Filestore
   FILESTORE_UPLOAD: '/filestore/v1/files',
   FILESTORE_URL: '/filestore/v1/files/url',
+  FILESTORE_FILE: '/filestore/v1/files/id',
 };
 
 // MDMS Schema codes
@@ -95,6 +96,9 @@ export const MDMS_SCHEMAS = {
   TENANT: 'tenant.tenants',
   MAP_CONFIG: 'RAINMAKER-PGR.MapConfig',
   DASHBOARD_CONFIG: 'dss.DashboardConfig',
+  // The tenant's operational boundary hierarchy (CMS row), read by digit-ui,
+  // the dashboard and PGR in place of the deployment-wide globalConfigs keys.
+  HIERARCHY_SCHEMA: 'CMS-BOUNDARY.HierarchySchema',
 };
 
 // OAuth credentials

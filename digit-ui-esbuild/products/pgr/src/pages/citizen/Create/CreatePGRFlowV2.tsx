@@ -19,6 +19,7 @@ import { complaintLabel } from "../../../utils/complaintLabel";
 import { isPostalCodeValid, getPostalCodeErrorMessage, isPostalCodeNumeric } from "../../../utils/postalCode";
 import { serializeGeoLocation } from "../../../utils/geoLocation";
 import { trackEvent } from "../../../utils/analytics";
+import useVoiceInputEnabled from "../../../hooks/pgr/useVoiceInputEnabled";
 import { useDispatch } from "react-redux";
 import { useHistory } from "react-router-dom";
 import { useQueryClient } from "react-query";
@@ -474,7 +475,7 @@ function CategoryFields({ data, patch, serviceDefs, hierarchyDef, nodes, t }: St
       ) : (
         <>
           <Field
-            label={t("CS_COMPLAINT_DETAILS_COMPLAINT_TYPE")}
+            label={tr(t, "CS_COMPLAINT_DETAILS_COMPLAINT_TYPE", "Complaint Category")}
             required
             htmlFor="complaint-type"
           >
@@ -487,7 +488,7 @@ function CategoryFields({ data, patch, serviceDefs, hierarchyDef, nodes, t }: St
                 const picked = types.find((tp) => tp.menuPath === value);
                 patch({ SelectComplaintType: picked, SelectSubComplaintType: null });
               }}
-              placeholder={tr(t, "CS_COMPLAINT_PICK_TYPE", "Select a complaint type")}
+              placeholder={tr(t, "CS_COMPLAINT_PICK_TYPE", "Select a complaint category")}
               options={types.map((tp) => ({
                 value: tp.menuPath,
                 label: tp.menuPathName ?? tp.menuPath,
@@ -496,7 +497,7 @@ function CategoryFields({ data, patch, serviceDefs, hierarchyDef, nodes, t }: St
           </Field>
           {subTypes.length > 1 ? (
             <Field
-              label={t("CS_COMPLAINT_DETAILS_COMPLAINT_SUBTYPE")}
+              label={tr(t, "CS_COMPLAINT_DETAILS_COMPLAINT_SUBTYPE", "Complaint Subcategory")}
               required
               htmlFor="complaint-subtype"
             >
@@ -509,7 +510,7 @@ function CategoryFields({ data, patch, serviceDefs, hierarchyDef, nodes, t }: St
                   const picked = subTypes.find((s) => s.serviceCode === value);
                   patch({ SelectSubComplaintType: picked });
                 }}
-                placeholder={tr(t, "CS_COMPLAINT_PICK_SUBTYPE", "Select a subtype")}
+                placeholder={tr(t, "CS_COMPLAINT_PICK_SUBTYPE", "Select a subcategory")}
                 options={subTypes.map((s) => ({
                   value: s.serviceCode,
                   label: complaintLabel(t, s.serviceCode, s.name),
@@ -835,9 +836,9 @@ function ReviewStep({ data, t, photos }: StepBodyProps & { photos: PickedPhoto[]
         <ReviewRows
           rows={[
             [say("CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS_DESCRIPTION", "Description"), data.description?.trim() ? truncate(data.description, 180) : notProvided],
-            [say("CS_FILE_CATEGORY_LABEL", "Category"), category || notSelected],
+            [say("CS_FILE_CATEGORY_LABEL", "Complaint Category"), category || notSelected],
             // A type with no sub-types has nothing to select here.
-            [say("CS_FILE_SUBCATEGORY_LABEL", "Sub-category"), subCategory || (category ? "—" : notSelected)],
+            [say("CS_FILE_SUBCATEGORY_LABEL", "Complaint Subcategory"), subCategory || (category ? "—" : notSelected)],
             [
               say("CS_FILE_PHOTOS", "Photos"),
               attached.length
@@ -853,7 +854,7 @@ function ReviewStep({ data, t, photos }: StepBodyProps & { photos: PickedPhoto[]
             [say("CS_FILE_ADDRESS", "Address"), addressLine(data, t) || notProvided],
             [say("CS_COMPLAINT_LANDMARK__DETAILS", "Landmark"), data.landmark?.trim() ? truncate(data.landmark, 60) : notProvided],
             [
-              say("CS_FILE_PIN_DROP", "Pin drop"),
+              say("CS_FILE_PIN_DROP", "Location"),
               pinned
                 ? point?.address || `${Number(point?.lat).toFixed(5)}, ${Number(point?.lng).toFixed(5)}`
                 : say("CS_FILE_NOT_CAPTURED", "Not captured"),
@@ -1016,7 +1017,11 @@ const CreatePGRFlowV2: React.FC = () => {
   // The location step mounts on its first visit and then stays, so the map
   // and the boundary cascade keep what the citizen picked when they go Back.
   const [locationVisited, setLocationVisited] = React.useState(false);
-  const canSpeak = React.useMemo(() => speechToTextSupported(), []);
+  // The browser has to support speech, and the tenant mustn't have turned
+  // voice off (RAINMAKER-PGR.UIConstants.VOICE_INPUT: false).
+  const browserCanSpeak = React.useMemo(() => speechToTextSupported(), []);
+  const voiceEnabled = useVoiceInputEnabled(tenantId);
+  const canSpeak = browserCanSpeak && voiceEnabled;
 
   const patch = React.useCallback((partial: Partial<FormData>) => {
     setFormData((prev) => ({ ...prev, ...partial }));
@@ -1088,7 +1093,7 @@ const CreatePGRFlowV2: React.FC = () => {
     if (stepIndex === 0) {
       if (!(formData.description ?? "").trim()) return tr(t, "CS_FILE_HINT_DESCRIBE", "Describe your complaint to continue.");
       if (!descriptionOk) return tr(t, "CS_FILE_HINT_LETTERS", "Use at least three letters to describe the complaint.");
-      if (!categoryOk) return tr(t, "CS_FILE_HINT_CATEGORY", "Select a category and sub-category to continue.");
+      if (!categoryOk) return tr(t, "CS_FILE_HINT_CATEGORY", "Select a complaint category and subcategory to continue.");
       if (uploading) return tr(t, "CS_FILE_HINT_UPLOADING", "Wait for your photos to finish uploading.");
       if (uploadFailed) return tr(t, "CS_FILE_HINT_UPLOAD_FAILED", "A photo didn't upload. Retry it or remove it.");
     }

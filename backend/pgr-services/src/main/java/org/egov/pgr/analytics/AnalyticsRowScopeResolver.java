@@ -68,11 +68,11 @@ public class AnalyticsRowScopeResolver {
     }
 
     /**
-     * Whether this scope is the engine's deny-all. Recognised by the sentinel it carries rather
-     * than by a flag, because that is how {@link PgrSearchScope#deniedAll} expresses it.
+     * Whether this scope is a deny-all: the explicit {@link PgrSearchScope#denyAll} flag, or the
+     * sentinel department the engine also uses for a required-but-unresolvable axis.
      */
     static boolean isDenied(PgrSearchScope scope) {
-        return scope.departmentCodes != null
+        return scope.denyAll || scope.departmentCodes != null
                 && scope.departmentCodes.contains(ScopePolicyEngine.UNRESOLVED_SENTINEL);
     }
 

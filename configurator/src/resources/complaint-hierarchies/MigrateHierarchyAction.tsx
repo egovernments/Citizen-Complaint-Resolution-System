@@ -139,7 +139,7 @@ function nodeLoc(code, name) {
     levels = existingDef.levels.slice().sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0));
     const ll = levels.find((l) => l.isLeafServiceCode) || levels[levels.length - 1]; leafLevelCode = String((ll && ll.levelCode) || LEAF); interior = Array.from(interiorByCode.values());
   } else {
-    levels = [{ levelCode: CATEGORY, order: 1, parentLevel: null, isFreeText: false, isLeafServiceCode: false, label: 'Category' }, { levelCode: LEAF, order: 2, parentLevel: CATEGORY, isFreeText: false, isLeafServiceCode: true, label: 'Sub-Type' }];
+    levels = [{ levelCode: CATEGORY, order: 1, parentLevel: null, isFreeText: false, isLeafServiceCode: false, label: 'Complaint Category' }, { levelCode: LEAF, order: 2, parentLevel: CATEGORY, isFreeText: false, isLeafServiceCode: true, label: 'Complaint Subcategory' }];
     leafLevelCode = LEAF; const cats = new Map();
     for (const d of defs) { const c = d.menuPath || 'Complaint'; if (!cats.has(c)) cats.set(c, d.menuPathName || c); }
     let i = 0; interior = Array.from(cats.entries()).map(([code, name]) => ({ levelCode: CATEGORY, code, parentCode: null, name, order: ++i, path: code }));
@@ -167,7 +167,7 @@ function nodeLoc(code, name) {
     if (d.keywords) data.keywords = d.keywords;
     for (const t of TARGETS) await create(t, HIER, d.serviceCode, data);
   }
-  console.log(PASS + ' ' + defs.length + ' leaf complaint type(s) written');
+  console.log(PASS + ' ' + defs.length + ' leaf complaint categor' + (defs.length === 1 ? 'y' : 'ies') + ' written');
   try {
     const raw = [];
     for (const n of interiorByCode.values()) raw.push.apply(raw, nodeLoc(n.code, n.name));
@@ -306,11 +306,11 @@ export function MigrateHierarchyAction() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <GitMerge className="w-5 h-5 text-primary" />
-              Migrate 2-level complaint types → hierarchy
+              Migrate 2-level complaint categories → hierarchy
             </DialogTitle>
             <DialogDescription className="text-xs sm:text-sm">
-              Folds your complaint types into the single <span className="font-medium">ComplaintHierarchy</span>{' '}
-              master — interior categories plus leaf sub-types (each leaf's code stays equal to its{' '}
+              Folds your complaint categories into the single <span className="font-medium">ComplaintHierarchy</span>{' '}
+              master — interior categories plus leaf subcategories (each leaf's code stays equal to its{' '}
               serviceCode). This is a <span className="font-medium">one-way</span> migration: afterwards you
               must deploy the updated backend &amp; frontends, then retire the old ServiceDefs master.
             </DialogDescription>
@@ -354,8 +354,8 @@ export function MigrateHierarchyAction() {
             <Alert variant="success">
               <Check className="w-4 h-4" />
               <AlertDescription className="text-sm">
-                Migrated <span className="font-medium">{result.leaves}</span> complaint type
-                {result.leaves === 1 ? '' : 's'} under <span className="font-medium">{result.categories}</span>{' '}
+                Migrated <span className="font-medium">{result.leaves}</span> complaint subcategor
+                {result.leaves === 1 ? 'y' : 'ies'} under <span className="font-medium">{result.categories}</span>{' '}
                 categor{result.categories === 1 ? 'y' : 'ies'} into ComplaintHierarchy. Next: deploy the
                 updated backend &amp; frontends for this tenant.
               </AlertDescription>

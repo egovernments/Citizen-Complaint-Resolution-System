@@ -31,6 +31,48 @@ describe('createDigitDataProvider', () => {
     assert.ok(dp.deleteMany);
   });
 
+  // The ['PGR'] default that used to sit in workflowBsGetList was a CEILING, not
+  // a default: it made every screen reading this resource — including the
+  // notification Configure tab's picker — blind to every other workflow the
+  // tenant had, whatever the masters said.
+  it('asks workflow for ALL business services when no filter narrows them', async () => {
+    const seen: Array<string[] | undefined> = [];
+    mock.method(client, 'workflowBusinessServiceSearch', async (_tenantId: string, codes?: string[]) => {
+      seen.push(codes);
+      return [{ businessService: 'PGR' }, { businessService: 'TL' }];
+    });
+    const dp = createDigitDataProvider(client, 'pg');
+    const result = await dp.getList('workflow-business-services', {
+      pagination: { page: 1, perPage: 50 }, sort: { field: 'businessService', order: 'ASC' }, filter: {},
+    });
+    assert.deepEqual(seen, [undefined], 'no filter must mean no businessServices param, i.e. everything');
+    assert.deepEqual(result.data.map((r) => (r as { businessService?: string }).businessService), ['PGR', 'TL']);
+  });
+
+  it('still narrows to exactly the business services a caller asks for', async () => {
+    const seen: Array<string[] | undefined> = [];
+    mock.method(client, 'workflowBusinessServiceSearch', async (_tenantId: string, codes?: string[]) => {
+      seen.push(codes);
+      return [{ businessService: 'PGR' }];
+    });
+    const dp = createDigitDataProvider(client, 'pg');
+    await dp.getList('workflow-business-services', {
+      pagination: { page: 1, perPage: 50 }, sort: { field: 'businessService', order: 'ASC' },
+      filter: { businessServices: ['PGR'] },
+    });
+    // A single string is accepted too — react-admin filter inputs produce one.
+    await dp.getList('workflow-business-services', {
+      pagination: { page: 1, perPage: 50 }, sort: { field: 'businessService', order: 'ASC' },
+      filter: { businessServices: 'TL' },
+    });
+    // An empty or blank filter is not a filter; it must not become a search for ''.
+    await dp.getList('workflow-business-services', {
+      pagination: { page: 1, perPage: 50 }, sort: { field: 'businessService', order: 'ASC' },
+      filter: { businessServices: ['  '] },
+    });
+    assert.deepEqual(seen, [['PGR'], ['TL'], undefined]);
+  });
+
   it('throws for unknown resource in getList', async () => {
     const dp = createDigitDataProvider(client, 'pg');
     await assert.rejects(

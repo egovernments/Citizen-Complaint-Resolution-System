@@ -40,6 +40,16 @@ import Utils from "./utils";
 import { subFormRegistry } from "./subFormRegistry";
 import AccessControlService from "./services/elements/Access";
 import { getAuthAdapter, initAuthAdapter, AuthAdapter } from "./services/auth/index";
+import { isIdentityBffAuth, privateRouteLogin } from "./services/auth/authSurface";
+import {
+  buildAuthorizeUrl as buildIdentityBffAuthorizeUrl,
+  establishIdentityBffSession,
+  restrictDestination as restrictIdentityBffDestination,
+  surfaceBase as identityBffSurfaceBase,
+  signOutIncomplete as identityBffSignOutIncomplete,
+  clearSignOutIncomplete as clearIdentityBffSignOutIncomplete,
+} from "./services/auth/identityBffLogin";
+import { fetchCitizenSigninMethods, fillMessage, sendCitizenOtp, verifyCitizenOtp } from "./services/auth/citizenOtp";
 
 const setupLibraries = (Library, props) => {
   window.Digit = window.Digit || {};
@@ -51,6 +61,8 @@ const initLibraries = () => {
   setupLibraries("SessionStorage", Storage);
   setupLibraries("PersistantStorage", PersistantStorage);
   setupLibraries("UserService", UserService);
+  // Read by the component packages' PrivateRoute, which cannot import this package.
+  setupLibraries("AuthSurface", { privateRouteLogin });
   setupLibraries("ULBService", ULBService);
 
   setupLibraries("Config", { mergeConfig });
@@ -93,4 +105,9 @@ const initLibraries = () => {
 
 export * from "./constants/mobileValidation";
 
-export { initLibraries, Enums, Hooks, subFormRegistry, Request, MdmsService, getAuthAdapter, initAuthAdapter, AuthAdapter };
+export { initLibraries, Enums, Hooks, subFormRegistry, Request, MdmsService, getAuthAdapter, initAuthAdapter, AuthAdapter, isIdentityBffAuth,
+  buildIdentityBffAuthorizeUrl, establishIdentityBffSession, restrictIdentityBffDestination, identityBffSurfaceBase,
+  identityBffSignOutIncomplete, clearIdentityBffSignOutIncomplete,
+  fetchCitizenSigninMethods, fillMessage, sendCitizenOtp, verifyCitizenOtp };
+
+export * as IdentityAccount from "./services/auth/identityAccount";

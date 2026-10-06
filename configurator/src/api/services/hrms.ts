@@ -1,6 +1,7 @@
+import { createAndLink, type MemberEmployee } from '@/identity/memberActions';
 // HRMS Service - Employee Management
 import { apiClient } from '../client';
-import { ENDPOINTS, DEFAULT_PASSWORD } from '../config';
+import { ENDPOINTS } from '../config';
 import type { Employee, EmployeeUser, Role } from '../types';
 
 export const hrmsService = {
@@ -12,6 +13,7 @@ export const hrmsService = {
     tenantId: string,
     options?: {
       codes?: string[];
+      uuids?: string[];
       departments?: string[];
       designations?: string[];
       roles?: string[];
@@ -25,6 +27,7 @@ export const hrmsService = {
     // the criteria must go in the URL; only RequestInfo belongs in the body.
     const params = new URLSearchParams({ tenantId });
     if (options?.codes?.length) params.append('codes', options.codes.join(','));
+    if (options?.uuids?.length) params.append('uuids', options.uuids.join(','));
     if (options?.departments?.length) params.append('departments', options.departments.join(','));
     if (options?.designations?.length) params.append('designations', options.designations.join(','));
     if (options?.roles?.length) params.append('roles', options.roles.join(','));
@@ -93,6 +96,13 @@ export const hrmsService = {
 
   // Create a single employee
   async createEmployee(employee: Employee): Promise<Employee> {
+    return createAndLink(employee as unknown as MemberEmployee,
+      () => this.searchEmployees(employee.tenantId, { codes: [employee.code] }) as unknown as Promise<MemberEmployee[]>,
+      async (safe) => this.createEmployeeRecord(safe as unknown as Employee) as unknown as Promise<MemberEmployee>,
+    ) as unknown as Promise<Employee>;
+  },
+
+  async createEmployeeRecord(employee: Employee): Promise<Employee> {
     const tenantId = employee.tenantId;
     const userName = employee.user?.userName;
     const mobileNumber = employee.user?.mobileNumber;
@@ -220,7 +230,6 @@ export const hrmsService = {
 
     const user: EmployeeUser = {
       userName: data.userName.toLowerCase(),
-      password: data.password || DEFAULT_PASSWORD,
       name: data.name,
       mobileNumber: data.mobileNumber,
       emailId: data.emailId,
@@ -369,7 +378,9 @@ export const hrmsService = {
       .toLowerCase()
       .replace(/[^a-z0-9]/g, '.')
       .replace(/\.+/g, '.')
-      .replace(/^\.|\.$/, '');
+      // Both ends: without the g flag only the first stray dot went, so a
+      // name with a leading and a trailing space kept "anita.wanjiru.".
+      .replace(/^\.|\.$/g, '');
   },
 
   // Delay helper for rate limiting

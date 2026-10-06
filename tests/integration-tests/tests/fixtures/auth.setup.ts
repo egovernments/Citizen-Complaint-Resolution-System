@@ -1,62 +1,45 @@
 import { test as setup, expect } from '@playwright/test';
 import path from 'node:path';
+import { BASE_URL } from '../utils/env';
+import { CONFIGURATOR_BASE, loginConfigurator } from '../utils/configurator-auth';
 
 const AUTH_FILE = path.resolve('auth.json');
 
-const ADMIN_USER = process.env.ADMIN_USER || 'ADMIN';
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'eGov@123';
-const TENANT_CODE = process.env.TENANT_CODE || 'ke';
-
-// UI login flow against the configurator. We intentionally walk the form
-// rather than injecting localStorage so the spec exercises the same login
-// surface a real admin uses (and catches regressions in the login form).
-setup('authenticate', async ({ page }) => {
-  // Not every target under test deploys the configurator (e.g. a local-setup
-  // stack that only runs digit-ui-esbuild for PGR). `chromium`'s project
-  // dependency on this fixture is purely for sequencing — employee/citizen
-  // specs authenticate independently via API token injection and override
-  // storageState themselves, so they never read auth.json's contents. Only
-  // admin/configurator specs actually need it. Skip (not fail) when the
-  // route 404s so a missing configurator doesn't block every other persona's
-  // specs (previously required a manual `--no-deps` workaround).
-  const response = await page.goto('/configurator/login');
-  if (!response || !response.ok()) {
-    setup.skip(
-      true,
-      `configurator not reachable on this target (GET /configurator/login -> ${response ? response.status() : 'no response'}) — admin/configurator specs will skip for lack of auth.json, but employee/citizen specs authenticate independently and are unaffected`,
-    );
-    return;
-  }
-
-  // The login page boots client-side — wait for the username field to mount.
-  const usernameInput = page.locator('#username');
-  await expect(usernameInput).toBeVisible();
-
-  await usernameInput.fill(ADMIN_USER);
-  await page.locator('#password').fill(ADMIN_PASSWORD);
-
-  const tenantInput = page.locator('#tenantCode');
-  await tenantInput.click();
-  await tenantInput.fill(TENANT_CODE);
-
-  // Choose Management mode so we land on /manage rather than /phase/1.
-  // The button has no role=button — it's a styled <button type="button">.
-  // Match by visible text. Onboarding is the default so this is required.
-  const managementButton = page.getByRole('button', { name: /^Management$/ });
-  await managementButton.click();
-
-  // Submit and wait for navigation away from the login screen.
-  await Promise.all([
-    page.waitForURL(/\/configurator\/(manage|phase\/1)/, { timeout: 30_000 }),
-    page.getByRole('button', { name: /Sign In/i }).click(),
-  ]);
-
-  // Sanity: localStorage should now hold the configurator session blob.
-  // We don't print the token — only assert presence.
-  const hasAuthState = await page.evaluate(
-    () => !!localStorage.getItem('crs-auth-state'),
+// Save both the hosted BFF session cookie and selected DIGIT context.
+setup('authenticate', async ({ page, baseURL }) => {
+  // One host for everything: the specs open relative /configurator/... on the
+  // project's baseURL, so the token (env BASE_URL) and the seeded session
+  // (CONFIGURATOR_BASE) must target that same host, or the specs run without one.
+  const origin = (u: string) => new URL(u).origin;
+  expect(origin(BASE_URL), `env BASE_URL (${BASE_URL}) must be Playwright's baseURL host (${baseURL}); set BASE_URL`).toBe(
+    origin(baseURL!),
   );
-  expect(hasAuthState).toBe(true);
+  expect(origin(CONFIGURATOR_BASE), `CONFIGURATOR_BASE_URL (${CONFIGURATOR_BASE}) must be on ${baseURL}`).toBe(
+    origin(baseURL!),
+  );
+
+  await loginConfigurator(page);
+
+  // Logged in, positively: the management layout rendered...
+  await expect(page).toHaveURL(/\/configurator\/manage/, { timeout: 30_000 });
+  await expect(page.locator('main#main-content')).toBeVisible({ timeout: 30_000 });
+  // ...the session survived the app's first data requests (a 401 there signs it out)...
+  await page.waitForLoadState('networkidle');
+  await expect(page).toHaveURL(/\/configurator\/manage/);
+  // ...and DIGIT accepts the stored token (401 for a dead one). Its value is never printed.
+  const session = await page.evaluate(
+    () =>
+      JSON.parse(localStorage.getItem('crs-auth-state') || '{}') as {
+        authToken?: string;
+        tenant?: string;
+        user?: { uuid?: string };
+      },
+  );
+  expect(session.authToken, 'crs-auth-state must hold a token').toBeTruthy();
+  const self = await page.request.post(`${BASE_URL}/user/_search`, {
+    data: { RequestInfo: { authToken: session.authToken }, uuid: [session.user?.uuid], tenantId: session.tenant },
+  });
+  expect(self.status(), 'DIGIT must accept the session token (POST /user/_search for the signed-in user)').toBe(200);
 
   await page.context().storageState({ path: AUTH_FILE });
 });
