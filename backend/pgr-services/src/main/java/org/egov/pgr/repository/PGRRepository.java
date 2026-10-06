@@ -78,6 +78,20 @@ public class PGRRepository {
     }
 
     /**
+     * Database fallback for scheduler tenant discovery. This keeps an unavailable
+     * tenant master from turning the scan into an all-status walk while still
+     * preserving each complaint tenant's own escalation policy.
+     */
+    public List<String> getComplaintTenantIds(String stateTenantId) {
+        String query = utils.replaceSchemaPlaceholder(
+                "SELECT DISTINCT tenantid FROM {schema}.eg_pgr_service_v2 "
+                        + "WHERE tenantid = ? OR tenantid LIKE ? ORDER BY tenantid",
+                stateTenantId);
+        return jdbcTemplate.queryForList(query, String.class,
+                stateTenantId, stateTenantId + ".%");
+    }
+
+    /**
      * searches services based on search criteria, restricted to the given (server-derived, never
      * client-controlled) RBAC scope. {@link PgrSearchScope#UNRESTRICTED} applies no additional
      * restriction — used by plainSearch (intentionally cross-tenant) and internal fetch-by-id

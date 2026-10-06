@@ -61,6 +61,11 @@ while [[ $# -gt 0 ]]; do
       echo "Options:"
       echo "  --client NAME   Target client: claude-code, cursor, windsurf, vscode"
       echo "  --mode MODE     Installation mode: remote (default) or local"
+      echo ""
+      echo "Environment:"
+      echo "  DIGIT_ACCESS_TOKEN  Bearer token for the hosted server (remote mode)."
+      echo "                      Required — /mcp authenticates every caller."
+      echo "                      May also be supplied via --env FILE."
       echo "  --dir PATH      Local install directory (default: ~/.digit-mcp)"
       echo "  --env FILE      Path to .env file with CRS_USERNAME, CRS_PASSWORD, etc."
       echo "  --yes, -y       Skip confirmation prompts"
@@ -194,6 +199,10 @@ select_mode() {
 }
 
 # ── Write JSON config (portable, no jq required) ────────────────────────────
+#
+# The hosted server authenticates every caller: it introspects the bearer token
+# against egov-user and runs the tools as that user. There is no anonymous
+# access, so the config has to carry a token.
 write_config_remote() {
   local config_path="$1"
   local client="$2"
@@ -201,15 +210,51 @@ write_config_remote() {
   dir="$(dirname "$config_path")"
   mkdir -p "$dir"
 
+  # --env applies here as well as in local mode: DIGIT_ACCESS_TOKEN is exactly
+  # the sort of value an operator keeps in an env file.
+  if [[ -n "$ENV_FILE" && -f "$ENV_FILE" ]]; then
+    # shellcheck disable=SC1090
+    source "$ENV_FILE"
+  fi
+
+  local token="${DIGIT_ACCESS_TOKEN:-}"
+  if [[ -z "$token" && "$SKIP_PROMPTS" != "true" ]]; then
+    echo ""
+    bold "DIGIT access token:"
+    echo -e "${DIM}The hosted server runs tools as you, so it needs your token.${NC}"
+    echo -e "${DIM}Get one from your DIGIT instance:${NC}"
+    echo -e "${DIM}  curl -u egov-user-client:egov-user-secret \\${NC}"
+    echo -e "${DIM}    -d 'grant_type=password&scope=read&userType=EMPLOYEE' \\${NC}"
+    echo -e "${DIM}    --data-urlencode username=... --data-urlencode password=... \\${NC}"
+    echo -e "${DIM}    --data-urlencode tenantId=pg <host>/user/oauth/token${NC}"
+    # </dev/tty: the documented install path is `curl … | bash`, where stdin is
+    # the script itself, so a bare `read` would consume script text.
+    read -rsp "Access token: " token </dev/tty || true
+    echo ""
+  fi
+
+  if [[ -z "$token" ]]; then
+    err "No access token supplied."
+    err "The hosted server authenticates every caller, so a config without one"
+    err "returns 401 on every call. Re-run with:"
+    err "  DIGIT_ACCESS_TOKEN=<token> $0 --mode remote"
+    err "See the README for how to mint a token."
+    exit 1
+  fi
+
   local server_entry
   server_entry=$(cat <<'ENTRY'
 {
       "type": "http",
-      "url": "MCP_URL_PLACEHOLDER"
+      "url": "MCP_URL_PLACEHOLDER",
+      "headers": {
+        "Authorization": "Bearer MCP_TOKEN_PLACEHOLDER"
+      }
     }
 ENTRY
 )
   server_entry="${server_entry/MCP_URL_PLACEHOLDER/$MCP_REMOTE_URL}"
+  server_entry="${server_entry/MCP_TOKEN_PLACEHOLDER/$token}"
 
   write_mcp_entry "$config_path" "$client" "$server_entry"
 }
@@ -304,17 +349,24 @@ with open(config_path, 'w') as f:
     json.dump(config, f, indent=2)
     f.write('\n')
 
+# The DIGIT-MCP entry embeds a bearer token, so keep the file owner-only. This
+# also tightens a pre-existing file that may still be 0644.
+os.chmod(config_path, 0o600)
+
 " "$config_path" "$server_entry" "$client"
   else
     # New file
     python3 -c "
-import json, sys
+import json, sys, os
 
 server_json = sys.argv[1]
 entry = json.loads(server_json)
 config = {'mcpServers': {'DIGIT-MCP': entry}}
 
-with open(sys.argv[2], 'w') as f:
+# Create owner-only (0600): the entry embeds a bearer token and a fresh file
+# would otherwise land world-readable at the process umask (typically 0644).
+fd = os.open(sys.argv[2], os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+with os.fdopen(fd, 'w') as f:
     json.dump(config, f, indent=2)
     f.write('\n')
 " "$server_entry" "$config_path"

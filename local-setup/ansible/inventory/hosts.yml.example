@@ -28,4 +28,7 @@ all:
         another-tenant:
       vars:
         ansible_user: root
-        ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+        # accept-new, not no: trust the key on first contact, then pin it so a
+        # later mismatch aborts instead of silently trusting a MITM that is
+        # about to receive root and every bootstrap secret.
+        ansible_ssh_common_args: '-o StrictHostKeyChecking=accept-new'

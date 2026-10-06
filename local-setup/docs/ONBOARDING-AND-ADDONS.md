@@ -671,7 +671,7 @@ fails the whole `docker compose up`, not just MCP. Either:
 - `build_mcp: true` — build from the vendored in-tree source (no registry
   needed); or
 - leave it off and take the playbook's default, which resolves to the public
-  `ghcr.io/subhashini-egov/digit-mcp:<pinned-tag>` (see "Resolve MCP image tag"
+  `egovio/digit-mcp:nightly-develop` (see "Resolve MCP image tag"
   in `playbook-deploy.yml`). `MCP_IMAGE` is passed through verbatim — no
   `docker_registry` prefix is applied.
 
@@ -844,7 +844,7 @@ against a *running* stack (neither redeploys anything). Both support `--list`,
   WhatsApp specifics: Content templates must be authored and approved at the
   provider **first**, then synced to Content-SIDs (configurator UI or headless
   CLI). Full walkthrough:
-  [`../../docs/notification-onboarding/RUNBOOK.md`](../../docs/notification-onboarding/RUNBOOK.md)
+  [`../../docs/2.12/notifications/README.md`](../../docs/2.12/notifications/README.md)
   (§5 covers templates → SIDs → test-send → drive a real complaint), with
   `TUTORIAL.md`, `install-fresh.md`, `install-upgrade.md` and the
   provider-onboarding runbook alongside it.
@@ -866,9 +866,10 @@ against a *running* stack (neither redeploys anything). Both support `--list`,
     ./local-setup/scripts/enable-dashboard.sh
   ```
 
-  The dashboard's nav gate reads `dss.DashboardConfig.allowedRoles` (falling
-  back to `SUPERVISOR`/`PGR_*`/`GRO`/`DGRO`/`SUPERUSER`), so at least one
-  onboarded employee must hold one of those roles to see it.
+  The employee dashboard asks `/pgr-services/v2/analytics/_access`; there is no
+  browser or DashboardConfig role fallback. `dashboard_allowed_roles` controls
+  which fresh-install roles receive navigation action 4557 and capabilities
+  2640–2644 together.
 
   "Today" tiles resolve the calendar day in EAT (`Africa/Nairobi`), fixed in the
   analytics service rather than read from tenant config.
@@ -913,7 +914,7 @@ against a *running* stack (neither redeploys anything). Both support `--list`,
   References:
   [`../../docs/migration/tenant-department-migration-guide.md`](../../docs/migration/tenant-department-migration-guide.md)
   (department preflight and back-fill) and
-  [`../../docs/dashboard-configuration/README.md`](../../docs/dashboard-configuration/README.md)
+  [`../../docs/2.12/dashboard/dashboard-configuration.md`](../../docs/2.12/dashboard/dashboard-configuration.md)
   (KPI catalog, packs & RBAC, operations).
 
 New state roots bootstrapped via `tenant_bootstrap` get the dashboard catalog

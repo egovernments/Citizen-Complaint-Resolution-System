@@ -11,7 +11,7 @@
 set -e
 
 EGOV_USER_HOST="${EGOV_USER_HOST:-http://egov-user:8107}"
-MAX_RETRIES=30
+MAX_RETRIES=120   # ~10min: a fresh deploy egov-user needs Flyway + JVM start + scheduling
 RETRY_INTERVAL=5
 
 # Tenants to seed ADMIN/GRO into. Override via env when adding new cities.
@@ -105,13 +105,25 @@ create_user() {
 #   REASSIGN, RESOLVE     → PGR_LME, PGR_VIEWER
 #   REOPEN                → CFC, CITIZEN, CSR, PGR_VIEWER
 #   RATE                  → CFC, CITIZEN
-#   RESOLVEBYSUPERVISOR   → SUPERVISOR
-#   FORWARD/AUTO          → AUTO_ESCALATE
-# Plus the generic ones (SUPERUSER, EMPLOYEE, DGRO) for completeness.
+#   ESCALATE              → PGR_LME, PGR_VIEWER (SYSTEM for the scheduler)
+# Plus generic/bootstrap roles for completeness. SUPERVISOR and AUTO_ESCALATE
+# remain for independent access-control and notification compatibility; neither
+# has special meaning in the active PGR escalation workflow.
+#
+# ACCOUNT_ADMIN: Kong gateway RBAC (ENFORCE_RBAC, since #1837) maps the
+# tenant-bootstrap write endpoints (ACCESSCONTROL-ROLEACTIONS/-ACTIONS-TEST
+# and dss.* creates) to this role ONLY. The MCP tenant bootstrap runs as
+# THIS seeded ADMIN, so without the role every fresh non-pg deploy dies at
+# the mcp-bootstrap gate with a wall of AccessDeniedException. The playbook's
+# post-bootstrap ensure-ADMIN task and MCP's own provisioning already grant
+# it — this seed was the one place left out.
 roles_admin() {
   local T=$1
   echo "[
     {\"code\": \"SUPERUSER\",    \"name\": \"Super User\",            \"tenantId\": \"$T\"},
+    {\"code\": \"ACCOUNT_ADMIN\",\"name\": \"Account Admin\",         \"tenantId\": \"$T\"},
+    {\"code\": \"LOC_ADMIN\",    \"name\": \"Localisation Admin\",    \"tenantId\": \"$T\"},
+    {\"code\": \"MDMS_ADMIN\",   \"name\": \"MDMS Admin\",            \"tenantId\": \"$T\"},
     {\"code\": \"EMPLOYEE\",     \"name\": \"Employee\",              \"tenantId\": \"$T\"},
     {\"code\": \"CITIZEN\",      \"name\": \"Citizen\",               \"tenantId\": \"$T\"},
     {\"code\": \"CSR\",          \"name\": \"Customer Service Rep\",  \"tenantId\": \"$T\"},

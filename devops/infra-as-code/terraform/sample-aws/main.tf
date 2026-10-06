@@ -1,11 +1,15 @@
 terraform {
+  # A backend block cannot read variables or terraform.tfvars, so these two
+  # values must be edited here by hand. Replace the placeholder with the bucket
+  # name you created with the ./remote-state helper (see terraform.tfvars.example
+  # and DEPLOYMENT.MD). The S3 bucket and the DynamoDB lock table share one name.
   backend "s3" {
-    bucket = <terraform_state_bucket_name>
+    bucket = "REPLACE_ME-tfstate-bucket"
     key    = "terraform-setup/terraform.tfstate"
     region = "ap-south-1"
-    # The below line is optional depending on whether you are using DynamoDB for state locking and consistency
-    dynamodb_table = <terraform_state_bucket_name>
-    # The below line is optional if your S3 bucket is encrypted
+    # Optional: state locking/consistency via DynamoDB (same name as the bucket).
+    dynamodb_table = "REPLACE_ME-tfstate-bucket"
+    # Optional: only if your S3 bucket is encrypted.
     encrypt = true
   }
   required_providers {
@@ -123,30 +127,12 @@ resource "aws_s3_bucket_public_access_block" "filestore_bucket_access" {
   restrict_public_buckets = true
 }
 
-resource "aws_s3_bucket_policy" "filestore_bucket_policy" {
-  depends_on = [aws_s3_bucket_public_access_block.filestore_bucket_access]
-  bucket = aws_s3_bucket.filestore_bucket.id
-  policy = data.aws_iam_policy_document.filestore_bucket_policy.json
-}
-
-data "aws_iam_policy_document" "filestore_bucket_policy" {
-  depends_on = [aws_s3_bucket_public_access_block.filestore_bucket_access]
-  statement {
-    sid           = "PublicReadGetObject"
-    principals {
-      type        = "*"
-      identifiers = ["*"]
-    }
-
-    actions = [
-      "s3:GetObject",
-    ]
-
-    resources = [
-      "${aws_s3_bucket.filestore_bucket.arn}/*",
-    ]
-  }
-}
+# No bucket policy on the filestore bucket: it is PRIVATE (all four public-access
+# blocks are on above). The egov-filestore service reads/writes it with the
+# filestore IAM user's credentials and proxies downloads, so public read is
+# neither needed nor wanted. A PublicReadGetObject policy here also conflicts with
+# block_public_policy=true and fails the apply with AccessDenied. (The assets
+# bucket is the public one — that keeps its policy.)
 
 resource "aws_iam_policy" "filestore_policy" {
   name        = "${var.cluster_name}-filestore_policy"  # Replace with your desired policy name
@@ -224,6 +210,15 @@ module "eks" {
   enable_cluster_creator_admin_permissions = true
   endpoint_public_access  = true
   endpoint_private_access = true
+  # No customer-managed CMK by default: the module's default cluster_encryption_config
+  # provisions a KMS key, which needs kms:DescribeKey/PutKeyPolicy/GetKeyPolicy/
+  # GetKeyRotationStatus/EnableKeyRotation/CreateGrant/ScheduleKeyDeletion — perms a
+  # least-privileged deploy user typically does NOT have, so the apply fails mid-way.
+  # etcd is still encrypted at rest with the EKS AWS-managed key. To use a customer
+  # CMK, drop these two lines and grant those KMS actions to the deploy identity
+  # (see README + deploy-iam-policy.json).
+  create_kms_key = false
+  encryption_config = null
   authentication_mode = "API_AND_CONFIG_MAP"
   create_cloudwatch_log_group = false
   subnet_ids      = concat(module.network.private_subnets, module.network.public_subnets)

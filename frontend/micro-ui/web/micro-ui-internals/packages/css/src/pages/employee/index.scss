@@ -129,24 +129,24 @@
 }
 
 .uploader-sub-heading {
-  @extend .typography.heading-xl;
+  @extend %typography-heading-xl;
   color: theme(digitv2.lightTheme.text-primary);
   margin-bottom: 0rem;
 }
 
 .summary-main-heading {
-  @extend .typography.heading-l;
+  @extend %typography-heading-l;
   color: theme(digitv2.lightTheme.text-primary);
   margin-bottom: 0rem;
 }
 
 .summary-sub-heading {
-  @extend .typography.heading-m;
+  @extend %typography-heading-m;
   color: theme(digitv2.lightTheme.primary-2) !important;
   margin-bottom: 0rem;
 
   &.subBoundary {
-    @extend .typography.heading-s;
+    @extend %typography-heading-s;
   }
 }
 
@@ -440,7 +440,7 @@ tbody {
 
 .view-composer-header-section {
   .employee-card-sub-header {
-    @extend .typography.text-heading-m;
+    @extend %typography-text-heading-m;
     margin-bottom: 1.5rem;
   }
 
@@ -697,7 +697,7 @@ tbody {
     margin: unset !important;
 
     .field-description {
-      @extend .typography.text-heading-m;
+      @extend %typography-text-heading-m;
       margin: unset;
       margin-bottom: 1rem;
       margin-top: 0rem !important;
@@ -777,7 +777,7 @@ tbody {
 }
 
 .boundary-header {
-  @extend .typography.heading-s;
+  @extend %typography-heading-s;
   color: theme(digitv2.lightTheme.header-sidenav);
   padding-bottom: 1rem;
 }
@@ -1021,7 +1021,7 @@ tbody {
 }
 
 .appConfigLabelField-label {
-  @extend .typography.heading-s;
+  @extend %typography-heading-s;
   width: 12rem !important;
   word-break: break-word;
   color: theme(digitv2.lightTheme.text-secondary);
@@ -1170,7 +1170,7 @@ tbody {
 
   .digit-switch-container {
     .digit-switch-label {
-      @extend .typography.body-s;
+      @extend %typography-body-s;
       color: theme(digitv2.lightTheme.text-color-secondary);
     }
   }
@@ -1181,7 +1181,7 @@ tbody {
     gap: 0.1rem;
 
     .digit-header-content.label {
-      @extend .typography.body-s;
+      @extend %typography-body-s;
       color: theme(digitv2.lightTheme.text-color-secondary);
       width: 100%;
     }
@@ -1193,7 +1193,7 @@ tbody {
 }
 
 .app-config-drawer-subheader {
-  @extend .typography.caption-s;
+  @extend %typography-caption-s;
   font-style: normal;
   color: theme(digitv2.lightTheme.primary-2);
   display: flex;

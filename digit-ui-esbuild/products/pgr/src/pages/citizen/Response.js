@@ -1,28 +1,20 @@
 /* eslint-disable react/prop-types */
-// Citizen complaint-submitted response — v2 (Tailwind + shadcn-style chrome).
+// Citizen complaint-submitted response, as in the #2038 design: a check, the
+// complaint number with Copy, what was filed, and View Complaint / home.
 //
-// Strangler-fig replacement for the legacy Response.js (which rendered a
-// <Banner> + <CardText> + <SubmitBar> via react-components). Same redux
-// data flow (`state.pgr.complaints.response`), same action-message
-// switch (CREATE / REOPEN / RATE / failure), same SessionStorage cleanup
-// — only the chrome is replaced with a big success card carrying a
-// brand-tinted icon, the complaint ID as a copyable chip, contextual
-// "what next" copy, and a primary CTA back to the citizen home plus a
-// quieter outline CTA to view the complaint detail when applicable.
-//
-// Failure path keeps the same shape with a destructive-toned icon and
-// a "Try again" CTA back to the create flow.
+// Same redux data flow (`state.pgr.complaints.response`), same action-message
+// switch (CREATE / REOPEN / RATE / failure) and same SessionStorage cleanup as
+// before. The filing summary (category, location, photos, time) arrives in the
+// route's state from the filing flow; the create response carries only codes.
 //
 // Note: filename is `Response.js` (matches the registry entry
-// `PGRResponseCitzen` / Module.js import) — kept JS so we can reuse
-// the same component without retooling the registry.
+// `PGRResponseCitzen` / Module.js import).
 
 import React from "react";
-import { Link, useHistory } from "react-router-dom";
+import { useHistory, useLocation } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { useTranslation } from "react-i18next";
-import { CheckCircle2, AlertCircle, Eye } from "lucide-react";
-import { Button, Card } from "@egovernments/digit-ui-components-v2";
+import { Button } from "@egovernments/digit-ui-components-v2";
 
 // PGR `_update` returns `ResponseInfo` (capital R); accept either casing.
 const hasUpdatePayload = (complaints) =>
@@ -42,59 +34,65 @@ function getActionMessageKey(action) {
   }
 }
 
-function StatusIcon({ tone }) {
-  const palette =
-    tone === "success"
-      ? {
-          bg: "var(--color-success-bg, #E8F3EE)",
-          fg: "var(--color-success, #00703C)",
-          Icon: CheckCircle2,
-        }
-      : {
-          bg: "var(--color-error-bg, #FAE5E2)",
-          fg: "var(--color-error, #d4351c)",
-          Icon: AlertCircle,
-        };
-  const Icon = palette.Icon;
-  return (
-    <span
-      aria-hidden
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        height: "4rem",
-        width: "4rem",
-        borderRadius: "9999px",
-        backgroundColor: palette.bg,
-        color: palette.fg,
-        flexShrink: 0,
-      }}
-    >
-      <Icon style={{ height: "2.25rem", width: "2.25rem" }} />
-    </span>
-  );
+const CheckGlyph = () => (
+  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+    <path d="M20 6 9 17l-5-5" />
+  </svg>
+);
+const AlertGlyph = () => (
+  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 8v5" />
+    <path d="M12 16h.01" />
+  </svg>
+);
+const EyeGlyph = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+    <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+);
+
+/** "Today, 10:42" for today, else the date and time. */
+function filedOn(ts, tr) {
+  const when = new Date(ts);
+  const time = when.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  if (when.toDateString() === new Date().toDateString()) {
+    return `${tr("CS_FILE_TODAY", "Today")}, ${time}`;
+  }
+  return `${when.toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" })}, ${time}`;
 }
 
-function ComplaintIdChip({ id }) {
-  if (!id) return null;
+function ComplaintNumber({ id, tr }) {
+  const [copied, setCopied] = React.useState(false);
+  React.useEffect(() => {
+    if (!copied) return undefined;
+    const timer = window.setTimeout(() => setCopied(false), 2000);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(id);
+      setCopied(true);
+    } catch {
+      // No clipboard permission: the number stays selectable.
+    }
+  };
   return (
-    <div
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: "10px",
-        padding: "8px 14px",
-        borderRadius: "9999px",
-        backgroundColor: "var(--color-primary-selected-bg, #FFF4D7)",
-        color: "var(--color-primary-1, var(--color-primary-main, #c84c0e))",
-        fontSize: "0.8125rem",
-        fontWeight: 600,
-        letterSpacing: "0.02em",
-      }}
-    >
-      <span style={{ color: "var(--color-text-secondary, #6B7280)", fontWeight: 500 }}>ID</span>
-      <span>{id}</span>
+    <div className="cms-receipt-number">
+      <div>
+        <div className="cms-receipt-number-label">{tr("CS_FILE_COMPLAINT_NUMBER", "Complaint number")}</div>
+        <div className="cms-receipt-number-value">{id}</div>
+      </div>
+      <button
+        type="button"
+        className="cms-link-button"
+        onClick={copy}
+        aria-live="polite"
+        data-analytics-event="pgr.complaint.response-copy-number"
+      >
+        {copied ? tr("CS_COMMON_COPIED", "Copied") : tr("CS_COMMON_COPY", "Copy")}
+      </button>
     </div>
   );
 }
@@ -102,8 +100,10 @@ function ComplaintIdChip({ id }) {
 const Response = () => {
   const { t } = useTranslation();
   const history = useHistory();
+  const location = useLocation();
   const appState = useSelector((state) => state)["pgr"] || {};
   const { complaints } = appState;
+  const summary = location.state?.filedSummary;
 
   React.useEffect(() => {
     if (appState.complaints?.response?.ServiceWrappers?.length > 0) {
@@ -120,10 +120,9 @@ const Response = () => {
   const wrapper = success ? complaints.response.ServiceWrappers[0] : null;
   const action = wrapper?.workflow?.action;
   const complaintId = wrapper?.service?.serviceRequestId;
+  const filed = success && action !== "REOPEN" && action !== "RATE";
 
-  const headlineKey = success
-    ? getActionMessageKey(action)
-    : "CS_COMMON_COMPLAINT_NOT_SUBMITTED";
+  const headlineKey = success ? getActionMessageKey(action) : "CS_COMMON_COMPLAINT_NOT_SUBMITTED";
   const headline = tr(
     headlineKey,
     success
@@ -131,7 +130,7 @@ const Response = () => {
         ? "Complaint reopened"
         : action === "RATE"
         ? "Thank you for the rating"
-        : "Complaint submitted"
+        : "Complaint Submitted"
       : "Complaint couldn't be submitted"
   );
   const supportingKey = success
@@ -144,101 +143,70 @@ const Response = () => {
     success
       ? action === "RATE"
         ? "Your rating has been submitted."
-        : "We've routed your complaint to the right team. You can track it from My Complaints."
+        : "The notification along with complaint number is sent to your registered mobile number. You can track the complaint status using mobile or web app."
       : "Something went wrong while submitting your complaint. Please try again."
   );
 
   const goHome = `/${window?.contextPath}/citizen/all-services`;
-  const goDetail = complaintId
-    ? `/${window?.contextPath}/citizen/pgr/complaints/${complaintId}`
-    : null;
+  const goDetail = complaintId ? `/${window?.contextPath}/citizen/pgr/complaints/${complaintId}` : null;
   const retryFlow = `/${window?.contextPath}/citizen/pgr/create-complaint`;
 
+  const rows =
+    filed && summary
+      ? [
+          [tr("CS_FILE_CATEGORY_LABEL", "Complaint Category"), summary.category || "—"],
+          [tr("CS_FILE_STEP_LOCATION", "Location"), summary.location || "—"],
+          [tr("CS_FILE_FILED_ON", "Filed on"), summary.filedAt ? filedOn(summary.filedAt, tr) : "—"],
+          [
+            tr("CS_FILE_ATTACHMENTS", "Attachments"),
+            summary.photos
+              ? tr(summary.photos === 1 ? "CS_FILE_ONE_PHOTO" : "CS_FILE_N_PHOTOS", summary.photos === 1 ? "1 photo" : "{count} photos").replace(
+                  "{count}",
+                  String(summary.photos)
+                )
+              : tr("CS_FILE_NONE", "None"),
+          ],
+        ]
+      : [];
+
   return (
-    <div
-      className="v2-scope"
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        flex: "1 1 auto",
-        minHeight: 0,
-        width: "100%",
-      }}
-    >
-      <div
-        style={{
-          flex: "1 1 auto",
-          minHeight: 0,
-          overflowY: "auto",
-          padding: "1.5rem",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <Card
-          style={{
-            width: "100%",
-            maxWidth: "560px",
-            padding: "40px 32px",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: "16px",
-            textAlign: "center",
-          }}
-        >
-          <StatusIcon tone={success ? "success" : "error"} />
-          <h1
-            style={{
-              margin: 0,
-              fontSize: "1.5rem",
-              fontWeight: 700,
-              color: "var(--color-text-heading, #363636)",
-              lineHeight: 1.25,
-            }}
-          >
-            {headline}
-          </h1>
-          {complaintId ? <ComplaintIdChip id={complaintId} /> : null}
-          <p
-            style={{
-              margin: 0,
-              fontSize: "0.9375rem",
-              color: "var(--color-text-secondary, #6B7280)",
-              maxWidth: "36rem",
-              lineHeight: 1.5,
-            }}
-          >
-            {supporting}
-          </p>
-          <div
-            style={{
-              marginTop: "8px",
-              display: "flex",
-              gap: "12px",
-              flexWrap: "wrap",
-              justifyContent: "center",
-            }}
-          >
-            {success && goDetail ? (
-              <Button
-                variant="outline"
-                onClick={() => history.push(goDetail)}
-                leading={<Eye className="h-4 w-4" />}
-              >
-                {tr("CS_COMMON_VIEW_COMPLAINT", "View Complaint")}
-              </Button>
-            ) : !success ? (
-              <Button variant="outline" onClick={() => history.push(retryFlow)}>
-                {tr("CS_COMMON_TRY_AGAIN", "Try Again")}
-              </Button>
-            ) : null}
-            <Link to={goHome} style={{ textDecoration: "none" }}>
-              <Button>{tr("CORE_COMMON_GO_TO_HOME", "Go to Home")}</Button>
-            </Link>
-          </div>
-        </Card>
+    <div className="v2-scope cms-receipt">
+      <div className="cms-receipt-strip">{headline}</div>
+      <div className="cms-receipt-card">
+        <div className={`cms-receipt-icon${success ? "" : " failed"}`}>{success ? <CheckGlyph /> : <AlertGlyph />}</div>
+        <h1 className="cms-receipt-head">{headline}</h1>
+        <p className="cms-receipt-text">{supporting}</p>
+        {complaintId ? <ComplaintNumber id={complaintId} tr={tr} /> : null}
+        {rows.length ? (
+          <dl className="cms-receipt-rows">
+            {rows.map(([label, value]) => (
+              <div key={label} className="cms-review-row">
+                <dt>{label}</dt>
+                <dd>{value}</dd>
+              </div>
+            ))}
+          </dl>
+        ) : null}
+        <div className="cms-receipt-actions">
+          {success && goDetail ? (
+            <Button
+              variant="outline"
+              leading={<EyeGlyph />}
+              onClick={() => history.push(goDetail)}
+              data-analytics-event="pgr.complaint.response-view"
+            >
+              {tr("CS_COMMON_VIEW_COMPLAINT", "View Complaint")}
+            </Button>
+          ) : !success ? (
+            <Button variant="outline" onClick={() => history.push(retryFlow)} data-analytics-event="pgr.complaint.response-try-again">
+              {tr("CS_COMMON_TRY_AGAIN", "Try Again")}
+            </Button>
+          ) : null}
+          {/* Same name the employee response page gives its home button. */}
+          <Button onClick={() => history.push(goHome)} data-analytics-event="pgr.complaint.response-go-home">
+            {tr("CORE_COMMON_GO_TO_HOME", "Go back to home page")}
+          </Button>
+        </div>
       </div>
     </div>
   );

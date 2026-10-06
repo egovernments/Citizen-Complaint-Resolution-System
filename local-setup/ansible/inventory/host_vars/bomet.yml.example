@@ -95,10 +95,12 @@ core_postal_configs:
   postalCodePattern: "^[0-9]{5}$"
 
 # ── Branding ──
-# Footer logos shown in citizen + employee UI. Use absolute URLs; copied to
-# /var/www/brand/ when nginx_features.brand_assets: true (off below).
-footer_logo_url: ""
-footer_bw_logo_url: ""
+# Rebrand the "Powered by DIGIT" footer. Commented out = the stock DIGIT
+# attribution committed under digit-ui-esbuild/public/brand/. Absolute URLs
+# work too; the playbook mirrors brand assets under /var/www/brand/ when
+# nginx_features.brand_assets is on. Note "" means NO footer, not default.
+# footer_logo_url: "https://cdn.example.org/my-footer.png"      # unset = stock DIGIT attribution
+# footer_bw_logo_url: "https://cdn.example.org/my-footer-bw.png"  # unset = stock DIGIT attribution
 
 # ── feature toggles (exact Bomet shape, except MCP — see header) ──
 asset_s3_bucket: pg-egov-assets
@@ -108,10 +110,12 @@ enable_mcp: true                   # kit: false — needed locally to bootstrap 
 build_mcp: true                    # kit: false — build digit-mcp:local like the mz bring-up did
 enable_novu: true                  # config-driven notifications target: Novu
 db_fast_path: true                 # REQUIRED — see kit NON-PERSISTED-STATE.md / DB section
-# New in _example.yml: scripts/preflight.py refuses db_fast_path: true without this
-# explicit ack (deploy.sh would fail preflight otherwise). Set only after confirming
-# this box has no anonymous-volume postgres data worth keeping.
-db_fast_path_ack_data_wipe: true
+# Ships as `false` on purpose (issue #2082). preflight.py refuses
+# db_fast_path without this ack, so every install is stopped once and must
+# confirm the wipe deliberately before it proceeds. Flip to true only after
+# confirming this box has NO postgres data in an anonymous volume. If it does,
+# migrate it first: docs/2.12/operations/postgres-volume-migration.md
+db_fast_path_ack_data_wipe: false
 build_otp_publisher: true          # not in kit: real Bomet box already has otp-publisher:local;
                                    # the notifications profile needs it, so build it here
 build_digit_ui: true
@@ -173,7 +177,11 @@ nginx_features:
   brand_assets: false
   configurator: true
   configurator_caching: false
-  status: true
+  status: true               # /status/ — Gatus health dashboard. Always behind
+                             # basic auth: the password is generated into
+                             # OpenBao unless you pin status_basic_auth_password
+                             # here. Read it back with:
+                             #   bao kv get -field=status_basic_auth_password <secrets_path>
   api_pgr: false
   mcp: true                        # kit: false — paired with enable_mcp above
   keycloak: true
@@ -200,14 +208,29 @@ keycloak_google_client_id: ''      # kit: CHANGE_ME — blank skips Google IdP w
 
 # ── secrets (LOCAL TEST VALUES — kit redacts these as CHANGE_ME) ──
 secrets_path: kv/digit/bomet
+# Secrets are NOT committed. This is a public repository, so anything that ships
+# here is equivalent to no secret at all — these previously carried the real
+# working values for this deployment.
+#
+# Fill them in locally (this file is a template; the live host_vars it is copied
+# to is gitignored), or better, put them straight into OpenBao with `bao kv put`.
+# They are seeded into OpenBao only on a tenant's FIRST deploy (cas=0); later
+# edits here are ignored.
+#
+# If this tenant already exists, these values must MATCH what is on the box
+# (the postgres role password in its volume, the MinIO root credentials, the
+# elasticsearch password its eg_enc_*_keys were encrypted under) or services
+# fail to authenticate at boot. Rotate on the box first, then set them here.
 bootstrap_secrets:
-  postgres_password: egov123       # matches the role password already on this box's volume
-  mcp_db_password: egov123
-  minio_root_user: minioadmin
-  minio_root_password: minioadmin  # matches the existing minio volume
-  elasticsearch_master_password: "asd@#$@$!132123"  # MUST be this literal with db_fast_path
-  egov_hrms_default_password: "eGov@123"            # Bomet uses eGov@123 (kit note)
-  keycloak_admin_password: "eGov@123"
-  keycloak_db_password: "eGov@123"
+  postgres_password: "CHANGE_ME"
+  mcp_db_password: "CHANGE_ME"
+  minio_root_user: "CHANGE_ME"
+  minio_root_password: "CHANGE_ME"
+  # Whatever this tenant's eg_enc_*_keys were encrypted under. A mismatch
+  # throws AEADBadTagException in egov-enc-service at boot.
+  elasticsearch_master_password: "CHANGE_ME"
+  egov_hrms_default_password: "CHANGE_ME"
+  keycloak_admin_password: "CHANGE_ME"
+  keycloak_db_password: "CHANGE_ME"
   keycloak_google_client_secret: ''
-  token_exchange_system_password: "eGov@123"        # Bomet uses eGov@123 (kit note)
+  token_exchange_system_password: "CHANGE_ME"

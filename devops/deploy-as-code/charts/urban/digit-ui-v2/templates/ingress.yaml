@@ -1,0 +1,27 @@
+{{- if and .Values.ingress.enabled .Values.distUrl }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: digit-ui-v2
+  namespace: {{ .Values.namespace | default "egov" }}
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+  labels:
+    app: digit-ui-v2
+spec:
+  rules:
+    - host: {{ .Values.global.domain }}
+      http:
+        paths:
+          - backend:
+              service:
+                name: digit-ui-v2
+                port:
+                  number: 80
+            path: {{ trimSuffix "/" .Values.basePath }}
+            pathType: Prefix
+  tls:
+    - hosts:
+        - {{ .Values.global.domain }}
+      secretName: {{ .Values.global.domain }}-tls-certs
+{{- end }}

@@ -124,8 +124,8 @@ A complaint that stays unresolved past its allowed time moves up automatically �
 
 | | |
 |---|---|
-| Enable/disable | On by default (`pgr.escalation.enabled=true`); per-deployment override `PGR_ESCALATION_ENABLED`. |
-| City data | `RAINMAKER-PGR.EscalationConfig` — how many levels (`maxDepth`), the time allowed per level, optional per-category overrides. Shipped default: 3 levels at 1 h / 4 h / 24 h; with no record at all, a 5-day fallback applies. |
+| Enable/disable | Off by default (`pgr.escalation.enabled=false`); enable per deployment with `PGR_ESCALATION_ENABLED` after rollout preflight. |
+| City data | `RAINMAKER-PGR.EscalationConfig` — cumulative percentage thresholds against `ComplaintHierarchy.slaHours`, optional exact-service-code overrides, and absolute fallback thresholds. Shipped default: 80% / 120% / 200%, with 1 h / 4 h / 24 h as fallback; without a record, the service expands its 5-day interval to cumulative 5 / 10 / 15-day thresholds. |
 | Service settings | `pgr.escalation.interval.ms`, `.batch.size`, `.default.sla.ms`, `.max.depth`, `.kafka.topic=pgr-escalation-events` — **this messaging topic must exist** while escalation is on. |
 | Prerequisite | `Workflow.BusinessServiceMasterConfig` must contain a `PGR` row (`active:true, isStatelevel:true`). |
 
@@ -282,8 +282,8 @@ These require action from the operations team on existing installations — full
 | [migration-guide-v2.11-to-v2.12-beta.md](migration-guide-v2.11-to-v2.12-beta.md) | Operator upgrade procedure v2.11 → v2.12-beta |
 | [local-setup/docs/ONBOARDING-AND-ADDONS.md](../../local-setup/docs/ONBOARDING-AND-ADDONS.md) | City onboarding + add-ons catalogue (every optional flag) |
 | [complaint-hierarchy-feature.md](../complaint-hierarchy-feature.md) | Multi-level complaint categories — design |
-| [docs/dashboard-configuration](../dashboard-configuration) | Supervisor Dashboard configuration reference |
-| [docs/notifications-guide](../notifications-guide) | Notifications setup guide |
+| [docs/2.12/dashboard](../2.12/dashboard/dashboard-configuration.md) | Supervisor Dashboard configuration reference |
+| [docs/2.12/notifications](../2.12/notifications) | Current Novu notifications setup guide |
 | [docs/observability](../observability) | Monitoring stack + dashboard telemetry |
 | [local-setup/ansible/runbooks/01-openbao.md](../../local-setup/ansible/runbooks/01-openbao.md) | Secrets store (OpenBao) operations runbook |
 | [Test Cases - CMS 2.12-beta.xlsx](Test%20Cases%20-%20CMS%202.12-beta.xlsx) | QA test case sheet for this release |

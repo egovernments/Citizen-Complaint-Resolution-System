@@ -364,29 +364,34 @@ async function matches(key: PersonaKey, p: ResolvedPersona, profile: DeploymentP
     case 'inbox-viewer': {
       // The PGR "assign" inbox lists PENDINGFORASSIGNMENT complaints inside the
       // employee's HRMS jurisdiction, so seeing a freshly-seeded complaint needs
-      // GRO plus a jurisdiction that covers the seed locality. A jurisdiction at
-      // the hierarchy ROOT covers the whole tree — the deployment-independent
-      // way to guarantee the seeded complaint is visible regardless of which
-      // leaf it lands on. getPersona('employee') only checks the role, which is
-      // why it picked BOMET_LME on bomet: no HRMS record at all, so an empty
-      // inbox (the [role=row] timeout).
-      const rootCode = profile.boundary?.root?.code;
+      // GRO plus a jurisdiction that covers the seed locality — see the
+      // exact-match note below. getPersona('employee') only checks the role,
+      // which is why it picked BOMET_LME on bomet: no HRMS record at all, so an
+      // empty inbox (the [role=row] timeout).
+      const seedWard = profile.pgr?.seedLocalityCode;
       const jurBoundaries = (hrms?.jurisdictions ?? []).map((j) => j.boundary);
       // Three things, because the inbox scopes on all three:
       //  - GRO: the assign-inbox is GRO's surface. A PGR_LME-only employee can
       //    log in but may not drive it.
-      //  - a jurisdiction at the hierarchy ROOT: covers the whole boundary tree,
-      //    so the seeded complaint is visible wherever it lands.
+      //  - jurisdiction that COVERS THE SEED LOCALITY. PGR's jurisdiction axis
+      //    is EXACT-match on the complaint's locality code (PGRQueryBuilder:
+      //    ads.locality IN (jurisdictionCodes)) — there is NO subtree
+      //    expansion, so the old "a jurisdiction at the hierarchy root covers
+      //    the whole tree" assumption silently selects a viewer who can see
+      //    nothing. Visibility needs the seed ward itself in the viewer's
+      //    jurisdiction list, or SUPERVISOR (the one role the authored ABAC
+      //    policy maps to jurisdiction=ALL).
       //  - a department that actually OWNS a complaint type: the inbox filters
       //    by the viewer's department too, so a viewer whose department owns no
       //    service can never see a seeded complaint. This is the same
       //    co-selection the ASSIGN triple does — callers must then seed a
       //    serviceCode from serviceDepartmentsOf(persona).
       const serviceDepts = new Set((profile.complaintTypes?.services ?? []).map((s) => s.department));
+      const seesSeedLocality =
+        p.roles.includes('SUPERVISOR') || (!!seedWard && jurBoundaries.includes(seedWard));
       return (
         p.roles.includes('GRO') &&
-        !!rootCode &&
-        jurBoundaries.includes(rootCode) &&
+        seesSeedLocality &&
         p.departments.some((d) => serviceDepts.has(d))
       );
     }
@@ -416,9 +421,10 @@ function whyUnresolved(key: PersonaKey, tried: ResolvedPersona[], profile?: Depl
     // wrong thing: it said "GRO (or PGR_LME)" when PGR_LME alone never
     // satisfies it, and omitted the department clause entirely.
     'inbox-viewer':
-      'the GRO role AND an HRMS jurisdiction at the boundary-hierarchy root (so the seeded complaint is in scope wherever ' +
-      "it lands) AND an HRMS department that owns at least one complaint type (the inbox filters on the viewer's " +
-      'department too, so a department owning no service can never show a seeded complaint)',
+      'the GRO role AND jurisdiction covering the seed locality — the seed WARD itself in the HRMS jurisdiction list, or ' +
+      'the SUPERVISOR role (jurisdiction=ALL); PGR matches jurisdiction EXACTLY against the complaint locality, a root-level ' +
+      "jurisdiction covers nothing — AND an HRMS department that owns at least one complaint type (the inbox filters on the " +
+      "viewer's department too, so a department owning no service can never show a seeded complaint)",
   };
   return (
     `No persona '${key}' on ${tenantsOf(profile).city}: needs ${need[key]}. Logged in and inspected: ${seen}. ` +

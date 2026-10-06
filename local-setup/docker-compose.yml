@@ -319,7 +319,7 @@ services:
       - egov-network
 
   egov-user:
-    image: egovio/egov-user:2.12-87e13fe
+    image: egovio/egov-user:2.12-68f707e
     container_name: egov-user
     depends_on:
       pgbouncer:
@@ -948,7 +948,7 @@ services:
       - egov-network
 
   pgr-services:
-    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:2.12-beta-96dcf10}
+    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:2.12-5137119}
     container_name: pgr-services
     depends_on:
       pgbouncer:
@@ -995,7 +995,6 @@ services:
       NOTIFICATION_ALLOWED_ON_STATUS: 'open,assigned,rejected,resolved'
       EGOV_USR_EVENTS_NOTIFICATION_ENABLED: 'true'
       EGOV_USR_EVENTS_CREATE_TOPIC: persist-user-events-async
-      PGR_STATELEVEL_TENANTID: pg
       STATE_LEVEL_TENANT_ID: pg
       EGOV_STATE_LEVEL_TENANT_ID: pg
       JAVA_OPTS: '-Xmx256m -Xms256m'
@@ -1019,7 +1018,7 @@ services:
       - egov-network
 
   digit-ui:
-    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:2.12-beta-96dcf10}
+    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:2.12-5137119}
     container_name: digit-ui
     restart: on-failure
     ports:

@@ -13,8 +13,8 @@ export async function run() {
     const desc = `E2E complaint ${Date.now()}`;
 
     await clickCreate(page);
-    // Complaint Type — pick the first available complaint type
-    await selectFirstOption(page, 'Complaint Type');
+    // Complaint Category — pick the first available complaint category
+    await selectFirstOption(page, 'Complaint Category');
     await fillField(page, 'Description', desc);
     // Locality — pick the first available boundary
     await selectFirstOption(page, 'Locality');

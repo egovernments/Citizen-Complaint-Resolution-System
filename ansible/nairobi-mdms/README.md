@@ -19,7 +19,8 @@ MDMS records for the **Nai Pepea** (Nairobi City County Complaints Management Sy
 |----------|-------|
 | Departments | 18 |
 | Designations | 29 |
-| Complaint types (ServiceDefs) | 37 |
+| Complaint categories | 19 |
+| Complaint types (ComplaintHierarchy leaves) | 37 |
 | Employees | 40 |
 | Sub-counties (pilot) | 2 (Makadara, Kibra) |
 | Wards (pilot) | 9 |
@@ -106,7 +107,10 @@ nairobi-mdms/
     ├── INBOX/
     │   └── InboxQueryConfiguration.json
     ├── RAINMAKER-PGR/
-    │   ├── ServiceDefs.json      # 37 complaint types
+    │   ├── ComplaintHierarchyDefinition.json # CATEGORY -> COMPLAINT_TYPE
+    │   ├── ComplaintHierarchy.json # 19 categories + 37 fileable leaves
+    │   ├── EscalationConfig.json # PGR self-loop escalation policy
+    │   ├── ServiceDefs.json      # Legacy migration/rollback input; not the SLA source
     │   └── UIConstants.json
     ├── tenant/
     │   ├── citymodule.json       # PGR, HRMS, Workbench modules
@@ -120,6 +124,10 @@ nairobi-mdms/
 ```
 
 ## Complaint Types by Category
+
+The live PGR SLA source is each exact leaf's `ComplaintHierarchy.slaHours`.
+`ServiceDefs.json` is retained only for controlled migration and rollback; do not
+load both masters as competing complaint-type sources after cutover.
 
 | Category | Sub-types | Department | SLA (hrs) |
 |----------|-----------|-----------|-----------|

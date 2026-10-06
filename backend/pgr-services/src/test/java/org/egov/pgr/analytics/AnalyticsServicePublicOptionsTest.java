@@ -21,7 +21,7 @@ public class AnalyticsServicePublicOptionsTest {
 
     private AnalyticsPlanner planner;
     private JdbcTemplate jdbc;
-    private PrincipalScopeResolver scopeResolver;
+    private AnalyticsRowScopeResolver scopeResolver;
     private KpiCatalogService kpiCatalogService;
     private AnalyticsService service;
 
@@ -29,13 +29,11 @@ public class AnalyticsServicePublicOptionsTest {
     public void setUp() {
         planner = mock(AnalyticsPlanner.class);
         jdbc = mock(JdbcTemplate.class);
-        scopeResolver = mock(PrincipalScopeResolver.class);
+        scopeResolver = mock(AnalyticsRowScopeResolver.class);
         kpiCatalogService = mock(KpiCatalogService.class);
         service = new AnalyticsService(planner, null, jdbc, kpiCatalogService, scopeResolver,
                 null, new AnalyticsMetrics(), null);
         when(kpiCatalogService.resolveTimeZone("ke")).thenReturn(ZoneId.of("Africa/Nairobi"));
-        when(scopeResolver.resolve(isNull(), eq("ke"), eq(1)))
-                .thenReturn(new AnalyticsScope("ke", true, null, null, null));
         when(planner.plan(any(JsonNode.class), any(), any())).thenAnswer(inv -> {
             JsonNode q = inv.getArgument(0);
             String dim = q.get("dimensions").get(0).asText();
@@ -62,8 +60,8 @@ public class AnalyticsServicePublicOptionsTest {
 
         Map<String,Object> out = service.publicFilterOptions("ke", 1, null);
 
-        // Anonymous principal: no RequestInfo ever reaches the resolver.
-        verify(scopeResolver).resolve(isNull(), eq("ke"), eq(1));
+        // The anonymous surface has a fixed aggregate scope and never consults employee policy.
+        verifyNoInteractions(scopeResolver);
 
         // The planned nodes are the server-owned constants, not anything caller-shaped.
         ArgumentCaptor<JsonNode> planned = ArgumentCaptor.forClass(JsonNode.class);

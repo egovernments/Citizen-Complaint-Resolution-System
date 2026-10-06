@@ -14,6 +14,8 @@ import { buildComplaintPath } from "../../utils/complaintHierarchyPath";
 import { selectServiceDefsFromComplaintHierarchy } from "../../utils";
 import useReopenWindow from "../../hooks/pgr/useReopenWindow";
 import { hasUsableGeoLocation } from "../../utils/geoLocation";
+import { trackEvent } from "../../utils/analytics";
+import { currentAssigneesInOccupancy, isCurrentAssignee } from "./escalationVisibility";
 
 // Action configurations used for handling different workflow actions like ASSIGN, REJECT, RESOLVE
 // TO DO: Move this to MDMS for handling Action Modal properties
@@ -30,8 +32,17 @@ const ACTION_CONFIGS = [
         {
           body: [
             {
+              // ASSIGN is the only action that hands the complaint to a named owner, and
+              // PENDINGATLME has no queue behind it. Submitting without one produced a
+              // complaint nobody held and escalation could never rescue (#2132).
+              //
+              // isMandatory only draws the required marker here — FormComposer does not
+              // enforce it for a custom component. It is also what ACTIONS_REQUIRING_ASSIGNEE
+              // is derived from, and the explicit check in the submit handler is what
+              // actually blocks the request. Do not remove either on the strength of this
+              // flag alone.
               type: "component",
-              isMandatory: false,
+              isMandatory: true,
               component: "PGRAssigneeComponent",
               key: "SelectedAssignee",
               label: "CS_COMMON_EMPLOYEE_NAME",
@@ -200,16 +211,9 @@ const ACTION_CONFIGS = [
     },
   },
   {
-    // ESCALATE was missing from this list, so getUpdatedConfig() returned null
-    // and PGRWorkflowModal short-circuited (`if (!config) return null`) — the
-    // "Escalate" action rendered an empty no-op modal (issue #521). The PGR
-    // BusinessService defines ESCALATE as a valid action at PENDINGFORASSIGNMENT
-    // (GRO/PGR_VIEWER) and PENDINGATLME (GRO/PGR_LME/PGR_VIEWER), so the backend
-    // already accepts the transition; only this front-end config was absent.
-    // Mirrors REASSIGN: pick a forward assignee + mandatory comments. The
-    // assignee role set is injected dynamically by computeAssigneeRoles()/
-    // getUpdatedConfig(), and handleActionSubmit() already maps
-    // SelectedAssignee.uuid -> workflow.assignes/hrmsAssignes.
+    // ESCALATE is not an arbitrary employee picker. The backend resolves the
+    // current assignee's HRMS reportingTo and performs the same self-loop for
+    // manual and automatic triggers. Lateral assignment remains REASSIGN.
     actionType: "ESCALATE",
     formConfig: {
       label: {
@@ -220,14 +224,6 @@ const ACTION_CONFIGS = [
       form: [
         {
           body: [
-            {
-              type: "component",
-              isMandatory: false,
-              component: "PGRAssigneeComponent",
-              key: "SelectedAssignee",
-              label: "CS_COMMON_EMPLOYEE_NAME",
-              populators: { name: "SelectedAssignee" },
-            },
             {
               type: "textarea",
               isMandatory: true,
@@ -246,6 +242,26 @@ const ACTION_CONFIGS = [
     },
   },
 ];
+
+/**
+ * Actions whose target state expects a concrete owner, derived from ACTION_CONFIGS so the
+ * rule and the form cannot drift apart: an action requires an assignee exactly when its
+ * own form marks the assignee field mandatory.
+ *
+ * Today that is ASSIGN alone. ASSIGN lands on PENDINGATLME, which no queue backs, so an
+ * assignee-less ASSIGN orphans the complaint (#2132). REASSIGN and ESCALATE are absent by
+ * the same rule rather than by a second list: REASSIGN returns the complaint to a queue
+ * the grievance officer owns, and ESCALATE resolves its target from HRMS server-side.
+ */
+const ACTIONS_REQUIRING_ASSIGNEE = new Set(
+  ACTION_CONFIGS.filter((config) =>
+    (config.formConfig?.form || []).some((section) =>
+      (section.body || []).some(
+        (field) => field.key === "SelectedAssignee" && field.isMandatory === true
+      )
+    )
+  ).map((config) => config.actionType)
+);
 
 const PGRDetails = () => {
   // Hooks for local state management
@@ -329,6 +345,10 @@ const PGRDetails = () => {
 
   // Fetch complaint details
   const { isLoading, isError, error, data: pgrData, revalidate: pgrSearchRevalidate } = Digit.Hooks.pgr.usePGRSearch({ serviceRequestId: id }, tenantId);
+  // Only used to decide whether Escalate can succeed: the service moves the complaint to
+  // the assignee's HRMS reportingTo, so an employee at the top of their chain has nowhere
+  // to escalate to. See canEscalate below for why this is not a hard gate.
+  const { data: workingContext } = Digit.Hooks.pgr.useEmployeeWorkingContext(tenantId);
 
   // Use the complaint's tenantId for workflow queries (complaints live at city level,
   // but getCurrentTenantId() may return root tenant for root-level ADMIN users)
@@ -383,7 +403,9 @@ const PGRDetails = () => {
   // Fetch workflow details
   const { isLoading: isWorkflowLoading, data: workflowData, revalidate: workFlowRevalidate } = Digit.Hooks.useCustomAPIHook({
     url: "/egov-workflow-v2/egov-wf/process/_search",
-    params: { tenantId: complaintTenantId, history: true, businessIds: id },
+    // The holder may be named several self-loop transitions ago. Match the backend's
+    // explicit bound instead of accepting workflow-v2's default 10-row truncation.
+    params: { tenantId: complaintTenantId, history: true, limit: 200, businessIds: id },
     config: { enabled: !!pgrData },
     changeQueryName: id,
   });
@@ -465,6 +487,14 @@ const PGRDetails = () => {
     // reflects WHERE it was routed — instead of the stale type department / "NA"
     // carried over from filing time. Only applied when an assignee with a
     // department is picked (REJECT/RESOLVE etc. leave additionalDetail untouched).
+    // isMandatory renders the required marker but does not stop a custom component's
+    // submit, so the rule is enforced here too. Without it the request went through with
+    // assignes: null and the complaint left the unassigned queue owned by nobody.
+    if (ACTIONS_REQUIRING_ASSIGNEE.has(selectedAction.action) && !_data?.SelectedAssignee?.uuid) {
+      setToast({ show: true, label: t("CS_PGR_ASSIGNEE_REQUIRED"), type: "error" });
+      return;
+    }
+
     const baseService = pgrData?.ServiceWrappers[0].service;
     const assigneeDept = _data?.SelectedAssignee?.department;
     const baseAdditionalDetail =
@@ -555,7 +585,7 @@ const PGRDetails = () => {
 
   // Compute the assignee role set for an action by looking at the *forward*
   // (non-self-looping) actions defined on the next state and unioning their
-  // roles. Self-loops like ESCALATE / SLA_ESCALATE / COMMENT add noise (e.g.
+  // roles. Self-loops like ESCALATE / COMMENT add noise (e.g.
   // GRO showing up in a PENDINGATLME assignment dropdown), so we exclude them.
   // System roles (CITIZEN, AUTO_ESCALATE, ANONYMOUS) are filtered out too.
   const computeAssigneeRoles = (nextStateUuid, businessServiceResponse) => {
@@ -568,14 +598,35 @@ const PGRDetails = () => {
     return [...set].filter((r) => !NON_ASSIGNEE_ROLES.has(r));
   };
 
+  // Escalate is offered only to the employee holding the complaint (#2129), and only while
+  // a rung above them exists. hasReportingTo comes from the same working-context call the
+  // employee shell already makes, so this costs no extra request.
+  //
+  // Deliberately fails OPEN on an unknown context: the flag is only trusted when it says
+  // false. An unavailable or still-loading context must not hide a legitimate action, and
+  // the service re-checks the chain anyway — a dead button is a worse bug than one that is
+  // briefly offered, but silently hiding the only way to escalate would be worse than both.
+  const canEscalate = (currentAssignees) =>
+    isCurrentAssignee(currentAssignees, userInfo?.info?.uuid)
+    && workingContext?.hasReportingTo !== false;
+
   // Get list of valid actions for current user and state
   const getNextActionOptions = (workflowData, businessServiceResponse) => {
     const currentState = workflowData?.ProcessInstances?.[0]?.state;
+    const currentAssignees = currentAssigneesInOccupancy(workflowData?.ProcessInstances);
     const matchingState = businessServiceResponse?.states?.find((state) => state.uuid === currentState?.uuid);
     if (!matchingState) return [];
     const userRoles = userInfo?.info?.roles?.map((role) => role.code) || [];
     return matchingState.actions
-      ? matchingState.actions.filter((action) => action.roles.some((role) => userRoles.includes(role)))
+      ? matchingState.actions
+        .filter((action) => action.roles.some((role) => userRoles.includes(role)))
+        // ESCALATE moves the work up the CURRENT assignee's own reportingTo chain, and
+        // the server picks the target — the caller never chooses it. The transition is
+        // role-gated, so without this every PGR_LME in the tenant was offered Escalate on
+        // every PENDINGATLME complaint, including ones that had already moved past them,
+        // and clicking it advanced somebody else's ladder (#2129). Offer it only to the
+        // person actually holding the complaint.
+        .filter((action) => action.action !== "ESCALATE" || canEscalate(currentAssignees))
         .map((action) => ({
           action: action.action,
           roles: action.roles,
@@ -791,6 +842,10 @@ const PGRDetails = () => {
           actionFields={[
             <Button
               className="custom-class"
+              // Analytics (CCRS#2007): opening the action menu. The action the
+              // operator then picks is emitted separately from onOptionSelect
+              // below, because a click listener cannot see inside the menu.
+              data-analytics-event="pgr.complaint.take-action"
               isSearchable
               onClick={function noRefCheck() { }}
               menuStyles={{
@@ -804,6 +859,9 @@ const PGRDetails = () => {
                 if (selected.action === "REOPEN") {
                   const lastModifiedTime = pgrData?.ServiceWrappers?.[0]?.service?.auditDetails?.lastModifiedTime;
                   if (reopenWindowMs && lastModifiedTime && Date.now() - lastModifiedTime > reopenWindowMs) {
+                    // A refusal is a drop-off worth seeing: it tells us the reopen
+                    // window is set too tight, which no click event would reveal.
+                    trackEvent("pgr.complaint.reopen-blocked", { category: "pgr" });
                     setToast({
                       show: true,
                       type: "error",
@@ -812,6 +870,10 @@ const PGRDetails = () => {
                     return;
                   }
                 }
+                // The chosen action arrives here, not on the click, so the
+                // declarative tag on the button cannot capture it. The code goes
+                // in `label` so the event name stays stable as actions are added.
+                trackEvent("pgr.complaint.action-selected", { category: "pgr", label: selected?.action });
                 setSelectedAction(selected);
                 setOpenModal(true);
               }}

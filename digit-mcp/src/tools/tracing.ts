@@ -15,6 +15,7 @@ export function registerTracingTools(registry: ToolRegistry): void {
     name: 'tracing_health',
     group: 'tracing',
     category: 'tracing',
+    access: 'admin',
     risk: 'read',
     description:
       'Check the health of the distributed tracing infrastructure: Grafana Tempo (trace storage), ' +
@@ -59,6 +60,7 @@ export function registerTracingTools(registry: ToolRegistry): void {
     name: 'trace_search',
     group: 'tracing',
     category: 'tracing',
+    access: 'admin',
     risk: 'read',
     description:
       'Search for distributed traces by service name, operation, and duration. ' +
@@ -166,6 +168,7 @@ export function registerTracingTools(registry: ToolRegistry): void {
     name: 'trace_get',
     group: 'tracing',
     category: 'tracing',
+    access: 'admin',
     risk: 'read',
     description:
       'Get the full trace by ID with a structured span breakdown. Returns all spans grouped by service, ' +
@@ -245,6 +248,7 @@ export function registerTracingTools(registry: ToolRegistry): void {
     name: 'trace_debug',
     group: 'tracing',
     category: 'tracing',
+    access: 'admin',
     risk: 'read',
     description:
       'One-call debugger: find the most recent trace for a service (optionally filtered by operation), ' +
@@ -361,6 +365,7 @@ export function registerTracingTools(registry: ToolRegistry): void {
     name: 'trace_slow',
     group: 'tracing',
     category: 'tracing',
+    access: 'admin',
     risk: 'read',
     description:
       'Find slow traces above a duration threshold. Returns traces sorted by duration, ' +

@@ -103,13 +103,13 @@
     },
     {
         "code": "ACCESSCONTROL_ROLES_ROLES_PGR_ADMIN",
-        "message": "CCRS Administrator",
+        "message": "CMS Administrator",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
     {
         "code": "ACCESSCONTROL_ROLES_ROLES_PGR_LME",
-        "message": "CCRS Last Mile Employee",
+        "message": "CMS Last Mile Employee",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
@@ -205,19 +205,19 @@
     },
     {
         "code": "ACTION_TEST_COMPLAINTS",
-        "message": "Citizen Complaint Resolution System",
+        "message": "Complaints Management System",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
     {
         "code": "ACTION_TEST_COMPLAINTS_TYPE",
-        "message": "Complaint Types",
+        "message": "Complaint Categories",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
     {
         "code": "ACTION_TEST_COMPLAINT_TYPES",
-        "message": "Complaint Types",
+        "message": "Complaint Categories",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
@@ -349,7 +349,7 @@
     },
     {
         "code": "ACTION_TEST_MANAGE_PGR_SERVICE_DEF_MASTER",
-        "message": "CCRS Service Def Master",
+        "message": "CMS Service Def Master",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
@@ -385,31 +385,31 @@
     },
     {
         "code": "ACTION_TEST_PGR",
-        "message": "Citizen Complaint Resolution System",
+        "message": "Complaints Management System",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
     {
         "code": "ACTION_TEST_PGRSERVICEDEFS",
-        "message": "Citizen Complaint Resolution System Services",
+        "message": "Complaint Management System Services",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
     {
         "code": "ACTION_TEST_PGR_DASHBOARD",
-        "message": "Citizen Complaint Resolution System Dashboard",
+        "message": "Complaint Management System Dashboard",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
     {
         "code": "ACTION_TEST_PGR_REPORTS",
-        "message": "Citizen Complaint Resolution System Reports",
+        "message": "Complaint Management System Reports",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
     {
         "code": "ACTION_TEST_PGR_ULB_DASHBOARD",
-        "message": "Citizen Complaint Resolution System ULB Dashboard",
+        "message": "Complaint Management System ULB Dashboard",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
@@ -583,7 +583,7 @@
     },
     {
         "code": "CATEGORIES_OF_COMPLAINT_TYPES_CAN_BE_SUBMITTED_ON_GRIEVANCE_PORTAL",
-        "message": "categories of complaint types can be submitted on grievance portal. ",
+        "message": "categories of complaints can be submitted on grievance portal. ",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
@@ -6493,7 +6493,7 @@
     },
     {
         "code": "CS_COMMON_HOME_COMPLAINTS",
-        "message": "Citizen Complaint Resolution System",
+        "message": "Complaints Management System",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
@@ -6655,7 +6655,7 @@
     },
     {
         "code": "CS_COMMON_INBOX_PGR",
-        "message": "Citizen Complaint Resolution System",
+        "message": "Complaints Management System",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
@@ -8113,7 +8113,7 @@
     },
     {
         "code": "PGR",
-        "message": "Citizen Complaint Resolution System",
+        "message": "Complaints Management System",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
@@ -9013,7 +9013,7 @@
     },
     {
         "code": "ES_PGR_HEADER_COMPLAINT",
-        "message": "Citizen Complaint Resolution System",
+        "message": "Complaints Management System",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
@@ -9133,13 +9133,13 @@
     },
     {
         "code": "ACTION_TEST_NATIONAL_PGR",
-        "message": "Citizen Complaint Resolution System",
+        "message": "Complaints Management System",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
     {
         "code": "MODULE_PGR",
-        "message": "Citizen Complaint Resolution System",
+        "message": "Complaints Management System",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
@@ -9776,6 +9776,90 @@
     {
         "code": "WF_COMMON_COMMENTS",
         "message": "Comments",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_WORKING_CONTEXT",
+        "message": "Working context",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_WORKING_CONTEXT_CITY",
+        "message": "City",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_WORKING_CONTEXT_DEPARTMENT",
+        "message": "Department",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_WORKING_CONTEXT_ROLE",
+        "message": "Role",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_WORKING_CONTEXT_JURISDICTION",
+        "message": "Jurisdiction",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_WORKING_CONTEXT_UNAVAILABLE",
+        "message": "Working context unavailable",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_WORKING_CONTEXT_SUBTITLE",
+        "message": "These are your assignments",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_WORKING_CONTEXT_DEPARTMENT_ONE",
+        "message": "department",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_WORKING_CONTEXT_DEPARTMENT_MANY",
+        "message": "departments",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_WORKING_CONTEXT_ROLE_ONE",
+        "message": "role",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_WORKING_CONTEXT_ROLE_MANY",
+        "message": "roles",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_ROLE_CONTEXT_RESOLVER",
+        "message": "Resolver",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_ROLE_CONTEXT_CITIZEN",
+        "message": "Citizen",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_ROLE_CONTEXT_ADMIN",
+        "message": "Administrator",
         "module": "rainmaker-common",
         "locale": "en_IN"
     }

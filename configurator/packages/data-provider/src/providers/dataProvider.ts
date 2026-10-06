@@ -105,6 +105,65 @@ function normalizeRecord(raw: Record<string, unknown>, config: ResourceConfig): 
   return { ...raw, id: extractId(raw, config) } as RaRecord;
 }
 
+/**
+ * Collapse records that share a react-admin `id`, keeping the first occurrence.
+ *
+ * react-admin's contract is one record per id: its query cache, Datagrid row
+ * keys and every `<SelectItem value={id}>` built from a list all key on it. Two
+ * records with the same id therefore render as N visually identical rows/options
+ * that ALL resolve to the same record — and in a Radix `Select`, N items sharing
+ * a `value` all show as checked while `<SelectValue>` concatenates every one of
+ * their labels ("ADMINADMINADMIN…"). That is CCRS #1923.
+ *
+ * Duplicates are not hypothetical: the aggregating fetchers below concatenate
+ * results across the state tenant and its city tenants, and DIGIT does NOT
+ * enforce uniqueness of a `hierarchyType` or a boundary `code` across tenants.
+ * On bomet (`ke`) that yields 7 hierarchies called ADMIN, 3 called KE-ADMIN, and
+ * `CITY_001`/`WARD_001` defined under two different city tenants.
+ *
+ * Keep-first is deliberate: every aggregating fetcher lists the SESSION tenant's
+ * records before the sub-tenants', so the survivor is the definition the
+ * operator is actually working in.
+ *
+ * Blank ids are a different failure and get a different remedy. A record whose
+ * `idField` was missing normalizes to `id: ''`, and N such records are exactly
+ * as broken as N sharing a real id. Dropping all but the first would hide rows
+ * that are genuinely distinct — they collide only because id extraction failed,
+ * not because they are the same record. So each repeat is given its own
+ * synthetic id instead, which satisfies react-admin's one-record-per-id
+ * contract without losing anything. This mirrors what the custom-rows fetcher
+ * already does when two Novu integrations synthesize the same id.
+ */
+function dedupeById(records: RaRecord[]): RaRecord[] {
+  const seen = new Set<string>();
+  const out: RaRecord[] = [];
+  // Every id in the input, checked up front so a synthetic id can never collide
+  // with a real one that appears LATER in the list — which would otherwise make
+  // that real record look like a duplicate and drop it.
+  const taken = new Set(records.map((record) => String(record.id ?? '')));
+  let blanks = 0;
+  for (const record of records) {
+    const id = String(record.id ?? '');
+    if (!seen.has(id)) {
+      seen.add(id);
+      out.push(record);
+      continue;
+    }
+    // A repeated real id is a genuine cross-tenant duplicate: keep the first.
+    if (id !== '') continue;
+    // A repeated blank id is a distinct record that lost its id — keep it, under
+    // an id nothing else is using.
+    let synthetic: string;
+    do {
+      blanks += 1;
+      synthetic = `#blank-${blanks}`;
+    } while (taken.has(synthetic) || seen.has(synthetic));
+    seen.add(synthetic);
+    out.push({ ...record, id: synthetic } as RaRecord);
+  }
+  return out;
+}
+
 function normalizeMdmsRecord(mdms: MdmsRecord, config: ResourceConfig): RaRecord {
   let data = mdms.data || {};
   // Legacy ThemeConfig records (v1 nested / v2 semantic shapes) don't carry the
@@ -128,6 +187,74 @@ function normalizeMdmsRecord(mdms: MdmsRecord, config: ResourceConfig): RaRecord
     _schemaCode: mdms.schemaCode,
     _mdmsId: mdms.id,
   } as RaRecord;
+}
+
+interface BoundaryTreeNode extends Record<string, unknown> {
+  code?: string;
+  boundaryType?: string;
+  parent?: string | null;
+  children?: BoundaryTreeNode[];
+}
+
+interface FoundBoundaryRelationship {
+  node: BoundaryTreeNode;
+  parentCode: string | null;
+}
+
+function findBoundaryRelationship(
+  trees: Record<string, unknown>[],
+  code: string,
+): FoundBoundaryRelationship | undefined {
+  const visit = (
+    nodes: BoundaryTreeNode[],
+    inheritedParent: string | null,
+  ): FoundBoundaryRelationship | undefined => {
+    for (const node of nodes) {
+      const parentCode =
+        typeof node.parent === 'string' && node.parent.trim()
+          ? node.parent.trim()
+          : inheritedParent;
+      if (node.code === code) return { node, parentCode };
+      const found = visit(Array.isArray(node.children) ? node.children : [], node.code ?? null);
+      if (found) return found;
+    }
+    return undefined;
+  };
+
+  for (const tree of trees) {
+    const raw = tree.boundary;
+    const roots = Array.isArray(raw) ? raw : raw && typeof raw === 'object' ? [raw] : [];
+    const found = visit(roots as BoundaryTreeNode[], null);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+function isDuplicateError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  const normalized = message.toLowerCase();
+  return normalized.includes('duplicate') || normalized.includes('already exists');
+}
+
+/** PGR owns its escalation policy in RAINMAKER-PGR.EscalationConfig.
+ *  Do not let the generic workflow masters create a second live PGR policy.
+ *  Existing legacy rows remain deletable so operators can complete migration. */
+function rejectLegacyPgrEscalationWrite(
+  config: ResourceConfig,
+  data: Record<string, unknown>,
+): void {
+  if (
+    config.schema !== 'Workflow.AutoEscalation' &&
+    config.schema !== 'Workflow.AutoEscalationStatesToIgnore'
+  ) return;
+
+  const businessService = String(data.businessService ?? '').trim().toUpperCase();
+  const module = String(data.module ?? '').trim().toUpperCase();
+  if (businessService === 'PGR' || module === 'PGR') {
+    throw new Error(
+      'PGR escalation is configured only through RAINMAKER-PGR.EscalationConfig',
+    );
+  }
 }
 
 // --- Complaint-hierarchy leaf adapter -------------------------------------
@@ -933,7 +1060,14 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
     return config;
   }
 
+  // Every list-shaped read funnels through here (getList's generic path,
+  // getMany, getManyReference), so this is the one place that can guarantee the
+  // "unique id per record" invariant react-admin depends on — see dedupeById.
   async function fetchAll(resource: string, filter?: Record<string, unknown>): Promise<RaRecord[]> {
+    return dedupeById(await fetchAllRaw(resource, filter));
+  }
+
+  async function fetchAllRaw(resource: string, filter?: Record<string, unknown>): Promise<RaRecord[]> {
     const config = resolveConfig(resource);
     switch (config.type) {
       case 'mdms': return mdmsGetList(client, config, tenantId, filter);
@@ -1086,7 +1220,14 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
           const all = await mdmsSearchAll(client, tenant, config.schema!, { isActive: true });
           // Defensive fallback for any MDMS build that ignores the isActive criterion —
           // degrades to filtering client-side, never worse than the pre-push-down behavior.
-          const active = all.filter((r) => r.isActive).map((r) => normalizeMdmsRecord(r, config));
+          // dedupeById mirrors what fetchAll does for the filtered path below, so
+          // both routes into an MDMS list obey the same one-record-per-id rule.
+          // A no-op for records carrying an MDMS uniqueIdentifier (always unique);
+          // it only bites on legacy rows that fall back to data[idField], which
+          // normalizeMdmsRecord already notes collapse onto one record anyway.
+          const active = dedupeById(
+            all.filter((r) => r.isActive).map((r) => normalizeMdmsRecord(r, config)),
+          );
           const sorted = clientSort(active, field, order);
           const data = clientPaginate(sorted, page, perPage);
           return { data, total: active.length };
@@ -1228,6 +1369,7 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
               await resolveNewLeafDefaults(client, tenantId),
             )
           : (params.data as Record<string, unknown>);
+        rejectLegacyPgrEscalationWrite(config, incoming);
         // Same metadata-strip the update path applies (PR #40). The
         // create path didn't have it, so any defaultRecord that included
         // `id` (some forms set id == code on create) or any normalised
@@ -1312,12 +1454,78 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
       }
       if (config.type === 'boundary') {
         const data = params.data as Record<string, unknown>;
-        const code = String(data.code);
-        const boundaryType = String(data.boundaryType || 'Locality');
-        const hierarchyType = String(data.hierarchyType || 'ADMIN');
-        const parent = data.parent ? String(data.parent) : null;
+        // Tenant ownership is deliberately taken only from the authenticated
+        // data-provider context. BoundaryCreate does not render a tenant field,
+        // and a caller-supplied data.tenantId must never retarget the write.
+        const code = String(data.code ?? '').trim();
+        const boundaryType = String(data.boundaryType ?? '').trim();
+        const hierarchyType = String(data.hierarchyType ?? '').trim();
+        const parent = typeof data.parent === 'string' && data.parent.trim()
+          ? data.parent.trim()
+          : null;
+
+        if (!code) throw new Error('Boundary code is required');
+        if (!hierarchyType) throw new Error('Boundary hierarchy is required');
+        if (!boundaryType) throw new Error('Boundary type is required');
+
+        // Resolve and validate the relationship before creating the entity.
+        // Without this preflight, a deterministic HIERARCHY_ERROR arrives only
+        // after boundary/_create has already published an orphan entity.
+        const hierarchyDefinitions = await client.boundaryHierarchySearch(tenantId, hierarchyType);
+        const hierarchy = hierarchyDefinitions.find(
+          (item) => String(item.hierarchyType ?? '') === hierarchyType,
+        );
+        if (!hierarchy) {
+          throw new Error(`Boundary hierarchy ${hierarchyType} is not defined for tenant ${tenantId}`);
+        }
+        const levels = Array.isArray(hierarchy.boundaryHierarchy)
+          ? (hierarchy.boundaryHierarchy as Record<string, unknown>[]).filter((level) => level.active !== false)
+          : [];
+        const selectedLevel = levels.find(
+          (level) => String(level.boundaryType ?? '') === boundaryType,
+        );
+        if (!selectedLevel) {
+          throw new Error(
+            `Boundary type ${boundaryType} is not part of hierarchy ${hierarchyType} for tenant ${tenantId}`,
+          );
+        }
+        const expectedParentType =
+          typeof selectedLevel.parentBoundaryType === 'string' && selectedLevel.parentBoundaryType.trim()
+            ? selectedLevel.parentBoundaryType.trim()
+            : null;
+
+        if (expectedParentType && !parent) {
+          throw new Error(`Parent boundary of type ${expectedParentType} is required for ${boundaryType}`);
+        }
+        if (!expectedParentType && parent) {
+          throw new Error(`Root boundary type ${boundaryType} must not define a parent`);
+        }
+
+        if (parent && expectedParentType) {
+          const trees = await client.boundaryRelationshipSearch(tenantId, hierarchyType);
+          const parentRelationship = findBoundaryRelationship(trees, parent);
+          if (!parentRelationship) {
+            throw new Error(
+              `Parent boundary ${parent} does not exist in hierarchy ${hierarchyType} for tenant ${tenantId}`,
+            );
+          }
+          if (String(parentRelationship.node.boundaryType ?? '') !== expectedParentType) {
+            throw new Error(
+              `Parent boundary ${parent} must have boundary type ${expectedParentType}`,
+            );
+          }
+        }
+
         // Create the boundary entity (publishes to Kafka for async persistence)
-        await client.boundaryCreate(tenantId, [{ code }]);
+        // and tolerate a verified pre-existing entity so a previous partial
+        // create can be resumed by attaching its missing relationship.
+        try {
+          await client.boundaryCreate(tenantId, [{ code }]);
+        } catch (error) {
+          if (!isDuplicateError(error)) throw error;
+          const existing = await client.boundarySearch(tenantId, [code]);
+          if (!existing.some((item) => String(item.code ?? '') === code)) throw error;
+        }
         // Retry relationship create — entity may not be persisted yet (Kafka async)
         let lastErr: Error | null = null;
         for (let attempt = 0; attempt < 5; attempt++) {
@@ -1327,7 +1535,16 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
             break;
           } catch (err) {
             lastErr = err as Error;
-            if (lastErr.message?.includes('does not exist') && attempt < 4) {
+            if (isDuplicateError(lastErr)) {
+              const trees = await client.boundaryRelationshipSearch(tenantId, hierarchyType);
+              const existing = findBoundaryRelationship(trees, code);
+              const existingType = String(existing?.node.boundaryType ?? '');
+              if (existing && existingType === boundaryType && existing.parentCode === parent) {
+                lastErr = null;
+                break;
+              }
+            }
+            if (lastErr.message?.toLowerCase().includes('does not exist') && attempt < 4) {
               await new Promise((r) => setTimeout(r, 500));
               continue;
             }
@@ -1399,6 +1616,10 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
           sanitized[key] = value;
         }
         existing.data = { ...existing.data, ...sanitized };
+        // React-admin may send only dirty fields. Validate the authoritative
+        // merged record so partial updates, updateMany, and reactivation cannot
+        // revive a competing PGR Workflow.AutoEscalation policy.
+        rejectLegacyPgrEscalationWrite(config, existing.data);
         const updated = await client.mdmsUpdate(existing, true);
         if (config.leafServiceDefAdapter) {
           const all = await mdmsGetList(client, config, tenantId);

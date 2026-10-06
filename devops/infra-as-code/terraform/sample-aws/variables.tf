@@ -4,8 +4,7 @@
 #
 
 variable "cluster_name" {
-  description = "Name of the Kubernetes cluster"
-  default = <cluster_name> #REPLACE
+  description = "Name of the Kubernetes cluster. Set it in terraform.tfvars (see terraform.tfvars.example)."
 }
 
 variable "vpc_cidr_block" {
@@ -26,17 +25,21 @@ variable "availability_zones" {
 
 variable "kubernetes_version" {
   description = "kubernetes version"
-  default = "1.33"
+  default = "1.35"  # currently-supported EKS version (1.33 exited standard support)
 }
 
 variable "db_version" {
   description = "DB version"
-  default = "15.12"
+  default = "15.18"  # 15.12 minor deprecated on RDS; use a current 15.x
 }
 
 variable "db_instance_class" {
   description = "DB instance class"
-  default = "db.t4g.medium"
+  # t3.medium (x86), not the cheaper t4g.medium (Graviton): db.t4g.medium hit
+  # InsufficientInstanceCapacity in ap-south-1a and 1b (2026-08-11), which fails
+  # the RDS create and aborts the whole apply. t3.medium is the x86 twin
+  # (+~$7/mo) and had capacity in all three AZs. Revisit t4g if capacity returns.
+  default = "db.t3.medium"
 }
 
 variable "architecture" {
@@ -66,29 +69,38 @@ variable "instance_types" {
   default     = []
 }
 
+# Node counts below are sized by MEMORY, not CPU. Every java-spring service sets
+# request == limit on memory and sets no CPU request at all (see
+# devops/deploy-as-code/charts/common/values.yaml), so the scheduler bin-packs
+# purely on summed memory requests -- runtime CPU headroom does not enter into
+# whether a pod can be placed. The shipped stack reserves ~16.6Gi across the
+# java-spring releases alone, plus elasticsearch/elasticsearch-data/kibana/
+# kafka-connect and the Kafka and Novu backbones on top. Against an m5a.xlarge
+# (16Gi, ~14.5Gi allocatable after the EKS reserve) 3 nodes does not schedule
+# the whole namespace -- the 2Gi elasticsearch-data and kibana pods have to land
+# on a single node each, so fragmentation bites before the aggregate fills. The
+# v2.12 load-test cluster ran 4 nodes for this reason.
 variable "min_worker_nodes" {
   description = "eGov recommended below worker node counts as default for min nodes"
-  default = "1" #REPLACE IF NEEDED
+  default = "4" #REPLACE IF NEEDED
 }
 
 variable "desired_worker_nodes" {
   description = "eGov recommended below worker node counts as default for desired nodes"
-  default = "3" #REPLACE IF NEEDED
+  default = "4" #REPLACE IF NEEDED
 }
 
 variable "max_worker_nodes" {
   description = "eGov recommended below worker node counts as default for max nodes"
-  default = "5" #REPLACE IF NEEDED
+  default = "6" #REPLACE IF NEEDED
 }
 
 variable "db_name" {
-  description = "RDS DB name. Make sure there are no hyphens or other special characters in the DB name. Else, DB creation will fail"
-  default = <db_name> #REPLACE
+  description = "RDS DB name. Make sure there are no hyphens or other special characters in the DB name. Else, DB creation will fail. Set it in terraform.tfvars."
 }
 
 variable "db_username" {
-  description = "RDS database user name"
-  default = <db_username> #REPLACE
+  description = "RDS database user name. Set it in terraform.tfvars."
 }
 
 variable "filestore_namespace" {
@@ -96,6 +108,7 @@ variable "filestore_namespace" {
   default = "egov" #REPLACE
 }
 
-#DO NOT fill in here. This will be asked at runtime
+# Set it in terraform.tfvars (which is gitignored), or leave it unset and
+# Terraform will prompt for it at runtime.
 variable "db_password" {}
 

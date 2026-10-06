@@ -46,7 +46,7 @@ a round-trip to MDMS before picking the home route.`,
     expect(page.url()).toContain('/citizen/all-services');
   });
 
-  test('/all-services renders CCRS title + File a Complaint + My Complaints links', {
+  test('/all-services renders CMS title + File a Complaint + My Complaints links', {
     annotation: {
       type: 'description',
       description: `Inventory check on the citizen home landing — every label a citizen needs to file/track complaints + the four sidebar items must render. Catches both shrinkage (a tile or sidebar entry disappearing) and crash regressions (the page fully erroring).
@@ -55,7 +55,7 @@ Steps:
 1. setTimeout 60s; OTP-login as a fresh citizen.
 2. Navigate to /digit-ui/citizen/all-services, wait 3s for hydration.
 3. Assert body does NOT contain "Something went wrong".
-4. Assert body contains "Citizen Complaint Resolution System", "File a Complaint", and "My Complaints".
+4. Assert body contains "Complaint Management System", "File a Complaint", and "My Complaints".
 5. For each sidebar item ['Home', 'Edit Profile', 'Logout', 'HELPLINE'], assert body contains it.
 
 Catalog test — if a label gets renamed legitimately, update this spec and Story 2.1 in the same PR.`,
@@ -75,7 +75,7 @@ Catalog test — if a label gets renamed legitimately, update this spec and Stor
 
     const body = page.locator('body');
     await expect(body).not.toContainText('Something went wrong');
-    await expect(body).toContainText('Citizen Complaint Resolution System');
+    await expect(body).toContainText('Complaint Management System');
     await expect(body).toContainText('File a Complaint');
     await expect(body).toContainText('My Complaints');
 
@@ -100,7 +100,7 @@ Steps:
 1. setTimeout 60s; OTP-login as a fresh citizen.
 2. Navigate to /digit-ui/citizen/pgr-home, wait 3s.
 3. Assert body does NOT contain "Something went wrong".
-4. Assert body contains "PGR", "Citizen Complaint Resolution System", "My Complaints", and "File a Complaint".
+4. Assert body contains "PGR", "Complaint Management System", "My Complaints", and "File a Complaint".
 
 If the brand assets ever land as real DOM text, extend this spec — leaving the hero out keeps it stable across CSS changes.`,
     },
@@ -124,7 +124,7 @@ If the brand assets ever land as real DOM text, extend this spec — leaving the
     // hero, not DOM text. The "PGR" badge is also absent on digit-ui v2
     // builds (Ethiopia) — asserting only on the actionable content which
     // is stable across both v1 and v2 layouts.
-    await expect(body).toContainText('Citizen Complaint Resolution System');
+    await expect(body).toContainText('Complaint Management System');
     await expect(body).toContainText('My Complaints');
     await expect(body).toContainText('File a Complaint');
   });

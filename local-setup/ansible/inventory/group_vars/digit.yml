@@ -36,6 +36,16 @@ state_tenant_id: ""
 # `pg`'s key (177813) instead of e.g. `ke`'s (74493). See PR description.
 state_root: ""
 
+# Employee roles that can discover and open the current dashboard immediately
+# after a 0→1 install. The bootstrap seeds DashboardConfig, action 4557, base
+# analytics capabilities 2640-2644, and matching grants create-if-absent; records are never
+# overwritten on redeploy. Override per tenant only when its role model differs.
+dashboard_allowed_roles:
+  - SUPERVISOR
+  - GRO
+  - DGRO
+  - SUPERUSER
+
 # digit-ui serving mode — `hmr` for live-reload dev (host-side esbuild
 # in tmux), `static` for the pre-built bundle served by host nginx.
 # Default is static; flip to hmr only on hosts where you actively want
@@ -47,6 +57,42 @@ digit_ui_mode: static
 # Bring up Elasticsearch + egov-indexer + inbox-v2 (heavy; ~2 GB RAM).
 # Off by default; tenants that use the inbox opt in via host_vars.
 enable_search_stack: false
+
+# Bring up self-hosted Matomo + its MariaDB + the report archiver
+# (~1 GB RAM; #1254). Off by default — analytics is opt-in, and on a
+# 16 GB box with no swap this is a real allocation.
+#
+# This is the SERVER half only: it stands the destination up. Pointing
+# the portal at it is a separate, MDMS-driven step (System → Analytics
+# Providers in the configurator) so that turning collection on or off
+# never needs a redeploy. Standing this up sends nothing anywhere.
+#
+# Lowering it back to false TEARS DOWN the containers, matching what
+# observability_level does (#1687). The two named volumes survive, so
+# the install and its data are still there when it is turned back on.
+#
+# Pair with nginx_features.matomo below: without that the tracking
+# endpoints are not reachable from the browser and the portal has
+# nothing same-origin to talk to. preflight.py refuses the combination.
+enable_matomo: false
+
+# Install Matomo headlessly during the deploy instead of leaving its 8-step
+# browser wizard for a human (#1254). Default ON, because "packaged" ought to
+# mean the deploy finishes with something that tracks.
+#
+# The superuser password is generated once and stored in OpenBao — never in
+# host_vars — and read back with:
+#   bao kv get -field=matomo_admin_password <secrets_path>
+# Better than a wizard-typed password on every axis: unique per tenant, never
+# on disk in the inventory, and recoverable.
+#
+# Set false to keep the manual wizard (tunnel to 127.0.0.1:18081 and click
+# through it). Nothing else changes; the rest of the packaging is identical.
+matomo_auto_install: true
+matomo_admin_user: admin
+# matomo_admin_email defaults to admin@<domain>, matomo_site_name to <domain>,
+# and the site URL to this deployment's own origin. Override in host_vars if
+# the reports should carry different labels.
 
 # ──────────────────────────────────────────────────────────────────────
 # How much observability to deploy (#1657)
@@ -81,9 +127,11 @@ enable_search_stack: false
 #
 # Footprints are approximate. The caps from #1612 have since landed as
 # `deploy.resources.limits.memory` in docker-compose.egov-digit.yaml:
-# prometheus 512M, loki 512M, tempo 384M, otel-collector 320M,
-# grafana 256M, promtail 128M, gatus 64M. So these are enforced ceilings
-# now, though the figures below are still budget rather than measurement.
+# prometheus 512M, loki 512M, otel-collector 320M, grafana 256M,
+# promtail 128M, gatus 64M, tempo 768M (raised from 384M by #1824 —
+# blocklist replay at startup, not retention, drove the footprint). So
+# these are enforced ceilings now, though the figures below are still
+# budget rather than measurement.
 #
 # This matters because the boxes are small: 29 services declare ~12.8 GB
 # of max heap on machines that are commonly 16 GB and have NO swap, so
@@ -121,15 +169,28 @@ boundary_type: ""
 #   India:  prefix=+91,  pattern=^[6-9][0-9]{9}$, length=10
 core_mobile_configs: {}
 
-# Footer logos. Empty by default; tenants ship branded URLs (typically
-# mirrored under /var/www/brand/ when nginx_features.brand_assets: true).
-footer_logo_url: ""
-footer_bw_logo_url: ""
+# "Powered by DIGIT" footer logos. These default to the copies committed at
+# digit-ui-esbuild/public/brand/, which the esbuild build copies into the
+# docroot — so the attribution renders on a stock install with no external
+# asset host and no per-tenant configuration. The paths are root-relative,
+# so they work on any domain.
+#
+# Leave these alone unless you are deliberately rebranding. Setting either to
+# "" does not fall back to the default — it renders no footer at all.
+footer_logo_url: "/digit-ui/brand/digit-footer.png"
+footer_bw_logo_url: "/digit-ui/brand/digit-footer-bw.png"
 
 # Tenant-restriction lists. Empty = no filtering. Tenants override
 # when they want to surface only their own city or hide modules.
 login_tenant_allowlist: []
 employee_module_denylist: []
+
+# Tenant switcher in the employee top bar and the mobile drawer.
+# null  - decided by the UI: shown only where the signed-in user holds roles
+#         in more than one tenant, which is the useful rule (CCRS#2038).
+# true  - always shown, even with a single tenant.
+# false - never shown, even where switching is possible.
+show_tenant_switcher: null
 
 # Client-side dashboard render-lag instrumentation (#1110): the supervisor
 # dashboard POSTs OTLP metrics/logs to the same-origin /otel Kong route.
@@ -137,6 +198,24 @@ employee_module_denylist: []
 # the deployed-box KILL SWITCH: set false in host_vars and re-render
 # globalConfigs.js (ansible/nightly) — no rebuild needed.
 dashboard_metrics_enabled: true
+
+# Analytics adapter registry (digit-ui-esbuild/public/analytics.js). Which
+# destinations run is DATA — one row per destination in the MDMS schema
+# common-masters.AnalyticsProvider, managed in the Configurator. With no rows
+# (the default everywhere) the SPA loads the shim and does nothing.
+#
+# These three are the ops-only knobs MDMS must not be able to set. Note the
+# polarity is the opposite of dashboard_metrics_enabled above: that one is
+# ON-by-default with an explicit off, this one is OFF-by-default because it can
+# load third-party scripts into citizen sessions.
+#   analytics_kill_switch  — true hard-disables everything, whatever MDMS says.
+#   analytics_script_hosts — extra hostnames a record's scriptUrl may use, on top
+#                            of the compile-time allowlist. MDMS cannot widen it.
+#   analytics_custom_enabled — true allows type:"CUSTOM" records (operator-named
+#                            script + data-only call templates) to initialise.
+analytics_kill_switch: false
+analytics_script_hosts: []
+analytics_custom_enabled: false
 
 # ──────────────────────────────────────────────────────────────────────
 # nginx vhost — feature flags + upstream ports
@@ -149,7 +228,13 @@ nginx_features:
   brand_assets: false       # /brand/ alias — requires /var/www/brand on host
   configurator: false       # /configurator + /configurator/assets
   configurator_caching: false  # /configurator/assets/ long-cache headers
-  status: false             # /status/ Gatus board (sub_filter rewrites)
+  status: true              # /status/ Gatus board (sub_filter rewrites). Default
+                            # on since the board is never served unauthenticated:
+                            # its nginx location always requires basic auth, and
+                            # the password is generated into OpenBao when the
+                            # operator does not pin status_basic_auth_password.
+                            # Read it with:
+                            #   bao kv get -field=status_basic_auth_password <secrets_path>
   grafana: true             # /grafana/ dashboards — the only public path to
                             # Grafana (#1604). Default on: it carries a real
                             # login since #1602. Set false to take Grafana off
@@ -157,6 +242,17 @@ nginx_features:
                             # tunnel to 127.0.0.1:13000 instead).
   api_pgr: false            # /api/pgr/ proxied to MCP for the dashboard
   mcp: false                # /mcp HTTP transport — see CLAUDE.md security note
+  mcp_readonly: false       # /mcp + /v1/ for the PUBLIC read-only MCP instance
+                            # (digit-mcp-readonly). Basic-auth gated; mutually
+                            # exclusive with `mcp`. Needs enable_mcp_readonly and
+                            # mcp_readonly_basic_auth_password set.
+  matomo: false             # /matomo/matomo.js + /matomo/matomo.php — the two
+                            # tracking endpoints ONLY, as exact matches. The
+                            # Matomo admin UI is deliberately NOT proxied: it
+                            # emits absolute asset URLs that 404 under a path
+                            # prefix, and it has no business being public.
+                            # Reach it over an SSH tunnel to
+                            # 127.0.0.1:18081 (upstream_matomo_port) instead.
   # Note: `/` routing is derived from `digit_ui_mode`:
   #   static → host nginx serves /digit-ui/* + Kong gets / for API calls
   #   hmr    → esbuild dev server on :18080 gets / (serves both UI + API proxy)
@@ -167,8 +263,16 @@ upstream_kong_port: 18000
 upstream_grafana_port: 13000
 upstream_gatus_port: 18889
 upstream_mcp_port: 13101
+upstream_mcp_readonly_port: 13102   # digit-mcp-readonly container (profile mcp-readonly)
 upstream_esbuild_port: 18080
 upstream_minio_port: 19000
+# Matomo's admin UI. Bound to 127.0.0.1 by the overlay, so this is the
+# tunnel target, not a public port. It is also the Host header the nginx
+# tracking blocks send, and the origin Matomo's installer records in
+# General.trusted_hosts — so changing it after the installer has run leaves
+# the two disagreeing. Worth keeping in step, though measured behaviour is
+# that the tracker itself does not enforce trusted_hosts (the UI and API do).
+upstream_matomo_port: 18081
 
 # ──────────────────────────────────────────────────────────────────────
 # Custom Docker registry (digit-mcp image, future custom builds)
@@ -181,13 +285,29 @@ upstream_minio_port: 19000
 # enable_mcp: false if they don't need digit-mcp at all.
 docker_registry: 10.0.0.4:5000
 
-# Hosts to add to Docker daemon.json `insecure-registries`. Defaults to
-# the docker_registry above (matches the historical Hetzner-VPC behaviour
-# of writing 10.0.0.4:5000 as insecure). Override to `[]` when using a
-# public TLS registry like ghcr.io — Docker rejects a path-bearing or
-# TLS hostname in `insecure-registries` and refuses to start, taking the
-# whole stack down. Each entry must be `host` or `host:port`, never with
-# a path component.
+# Hosts written into Docker daemon.json `insecure-registries` (pull over plain
+# HTTP, skip TLS verification for that host). Defaults to the docker_registry
+# above — the Hetzner VPC-internal registry (private 10.0.0.x, not reachable
+# from the public internet), which is the registry the on-box build+push and
+# every image pull actually use.
+#
+# Why this is the default rather than `[]`:
+#   * It is VPC-INTERNAL. The layers never leave the private network, so the
+#     plain-HTTP transport is not exposed to an off-VPC attacker.
+#   * Images are DIGEST-PINNED (name@sha256:… across the compose files), so
+#     content integrity is verified by the daemon regardless of transport — a
+#     swapped layer fails the digest check. That is the real supply-chain
+#     control; the audit's "insecure HTTP registry" risk is mitigated by the
+#     pin, not by refusing HTTP to a private host.
+#   * Setting `[]` here does NOT harden anything on these boxes — it just wipes
+#     10.0.0.4:5000 out of daemon.json (combine list_merge=replace), so every
+#     pull/push then fails "server gave HTTP response to HTTPS client" and the
+#     stack/build breaks (found on bomet by the integration suite). Docker also
+#     refuses to start if this holds a TLS/path-bearing host.
+#
+# A registry reachable OUTSIDE the private network must use TLS instead — set
+# this to `[]` and point docker_registry at the TLS host in that tenant's
+# host_vars. Each entry is `host` or `host:port`, never with a path component.
 insecure_registries:
   - "{{ docker_registry }}"
 
@@ -254,6 +374,11 @@ mcp_ref: main
 # fork's source on the box — and note it is only consulted by `hmr` mode, or by
 # `static` mode with digit_ui_bundle_image deliberately blanked out.
 digit_ui_esbuild_repo: ""
+# Pin to a tag or commit SHA, not a moving branch: whatever `main` points at
+# when the deploy runs gets built and served as the citizen SPA, so an upstream
+# push (or a compromised one) lands on the box with no review and no way to
+# reproduce what a given deploy shipped. Setting digit_ui_bundle_image to a
+# digest-pinned image avoids the on-host build entirely and is preferred.
 digit_ui_esbuild_branch: main
 
 # Prebuilt digit-ui bundle (static mode) — the DEFAULT, and the robust
@@ -263,12 +388,14 @@ digit_ui_esbuild_branch: main
 # skipping the git clone with it.
 #
 # This is the multi-arch egovio Docker Hub build of THIS repo's
-# digit-ui-esbuild/ tree, rebuilt every night from develop
-# (build/build-config.yml → image-name: digit-ui-esbuild). Pin a
-# develop-<sha> / v2.12-beta tag in host_vars for a reproducible deploy.
-# Set to "" in host_vars to force an on-host build instead, which then needs
-# digit_ui_esbuild_repo pointed at a source tree.
-digit_ui_bundle_image: "egovio/digit-ui-esbuild:nightly-develop"
+# digit-ui-esbuild/ tree (build/build-config.yml → image-name:
+# digit-ui-esbuild). Pinned to the 2.12 release build, so an Ansible deploy
+# serves the SAME bundle as local-setup/docker-compose.egov-digit.yaml — a
+# rolling `nightly-develop` here meant the two paths could diverge silently.
+# Set `nightly-develop` (or a develop-<sha>) in host_vars to track develop
+# instead. Set to "" in host_vars to force an on-host build instead, which then
+# needs digit_ui_esbuild_repo pointed at a source tree.
+digit_ui_bundle_image: "egovio/digit-ui-esbuild:2.12-5137119"
 
 # Slack webhook for Gatus outage alerts (#1609). Empty = alerting OFF, which is
 # the default for every tenant: gatus warns about the unusable provider and

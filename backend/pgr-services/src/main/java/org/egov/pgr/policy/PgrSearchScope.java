@@ -3,22 +3,22 @@ package org.egov.pgr.policy;
 import java.util.List;
 
 /**
- * Server-resolved RBAC scope for PGR complaint search — a pure value object ("ScopeSpec").
- * Deliberately separate from {@code org.egov.pgr.analytics.AnalyticsScope} (Dashboard/Analytics'
- * own scope object, which additionally carries a {@code boundaryPrefix} axis PGR search doesn't
- * use): coding PGR search's ABAC scoping into Dashboard's existing class would couple two
- * independently-evolving consumers through one shared type — see {@link PolicyDrivenScopeResolver}
- * and {@link PrincipalScopeResolver}'s Javadoc for why the two resolvers are kept apart the same
- * way. It is NEVER taken from the request body; it is produced by {@link PolicyDrivenScopeResolver}
- * from the authenticated userInfo + tenantId + the MDMS-authored {@link ScopePolicy}. Clients can
- * only narrow within this, never widen.
+ * Server-resolved ABAC scope for everything that reads complaints — a pure value object
+ * ("ScopeSpec"), shared since #1050 by PGR complaint search and the employee dashboard. It began as
+ * search's own type, kept apart from Dashboard's {@code AnalyticsScope} while the two engines
+ * evolved independently; they no longer do, and one type for one authored policy is what stops the
+ * two surfaces disagreeing about a caller. It is NEVER taken from the request body; it is produced
+ * by {@link PolicyDrivenScopeResolver} from the authenticated userInfo + tenantId + the
+ * MDMS-authored {@link ScopePolicy}. Clients can only narrow within this, never widen.
  *
  * Fields (all "null/empty = no restriction on this axis"):
  * - tenant scope:      always applied (LIKE prefix at state level, = at city level).
  * - citizenUuid:       a pure CITIZEN sees only their own complaints (account_id = their uuid).
  * - departmentCodes:   an employee is restricted to the union of their HRMS assignment departments.
  * - jurisdictionCodes: an employee is restricted to the union of their HRMS jurisdiction (boundary)
- *                      assignments, exact-matched against a complaint's address locality.
+ *                      assignments — exact-matched against a complaint's address locality on the
+ *                      search path, and matched as a segment of the '|'-joined boundary_path on the
+ *                      analytics grains, which is the same test against a different storage shape.
  */
 public final class PgrSearchScope {
     public final String tenantId;

@@ -29,7 +29,7 @@ if CI_MODE:
     pgr_image_exists = str(local('docker images -q pgr-services-dev:latest 2>/dev/null || echo "missing"', quiet=True)).strip()
     if pgr_image_exists == '' or 'missing' in pgr_image_exists:
         print('pgr-services-dev not found, pulling from Docker Hub...')
-        local('docker pull egovio/pgr-services:multiarch-d448cb7 && docker tag egovio/pgr-services:multiarch-d448cb7 pgr-services-dev:latest')
+        local('docker pull egovio/pgr-services:2.12-5137119 && docker tag egovio/pgr-services:2.12-5137119 pgr-services-dev:latest')
 else:
     # Local Dev Mode: Compile Java locally, then sync to container for fast hot reload
     # Requires: mvn installed locally

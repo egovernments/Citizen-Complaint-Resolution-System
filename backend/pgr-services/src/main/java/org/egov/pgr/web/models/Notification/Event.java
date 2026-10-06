@@ -4,7 +4,7 @@ import lombok.*;
 import org.egov.pgr.web.models.Status;
 import org.springframework.validation.annotation.Validated;
 
-import javax.validation.Valid;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 
 @Validated

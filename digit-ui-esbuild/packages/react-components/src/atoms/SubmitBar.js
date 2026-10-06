@@ -3,9 +3,19 @@ import PropTypes from "prop-types";
 
 const SubmitBar = forwardRef((props, ref) => {
   const fieldId = props?.id||Digit?.Utils?.getFieldIdName?.( props?.label || props?.className || "submitbutton")||"NA";
-  
+
+  // Forward data-* attributes to the DOM so a call site can tag a control for
+  // the analytics shim (CCRS#2007) without this atom knowing anything about
+  // analytics. Only data-*: spreading every prop would put component props like
+  // `submit`, `label` and `submitIcon` on the button as invalid DOM attributes.
+  const dataAttrs = {};
+  Object.keys(props || {}).forEach((k) => {
+    if (k.indexOf("data-") === 0) dataAttrs[k] = props[k];
+  });
+
   return (
     <button
+      {...dataAttrs}
       ref={ref}
       id={fieldId}
       disabled={props.disabled ? true : false}

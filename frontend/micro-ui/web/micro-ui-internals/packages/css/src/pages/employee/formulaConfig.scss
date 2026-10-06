@@ -18,7 +18,7 @@
   
   .formula-label-field > span {
     width: 27rem;
-    @extend .typography.heading-s;
+    @extend %typography-heading-s;
   }
 
   .icon-wrapper{

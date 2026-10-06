@@ -181,12 +181,12 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
   },
   {
     "code": "DASHBOARD_COL_SUBTYPE",
-    "message": "Subtype",
+    "message": "Subcategory",
     "module": "rainmaker-dashboard"
   },
   {
     "code": "DASHBOARD_COL_TYPE",
-    "message": "Type",
+    "message": "Category",
     "module": "rainmaker-dashboard"
   },
   {
@@ -247,6 +247,36 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
   {
     "code": "DASHBOARD_COMMON_UPDATED",
     "message": "Updated",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COMMON_UPDATED_JUST_NOW",
+    "message": "just now",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COMMON_UPDATED_MIN_AGO",
+    "message": "{{n}} min ago",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COMMON_UPDATED_HR_AGO",
+    "message": "{{n}} hr ago",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COMMON_UPDATED_HRS_AGO",
+    "message": "{{n}} hrs ago",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COMMON_UPDATED_DAY_AGO",
+    "message": "{{n}} day ago",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COMMON_UPDATED_DAYS_AGO",
+    "message": "{{n}} days ago",
     "module": "rainmaker-dashboard"
   },
   {
@@ -316,7 +346,7 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
   },
   {
     "code": "DASHBOARD_FILTERS_ALL_TYPES",
-    "message": "All types",
+    "message": "All categories",
     "module": "rainmaker-dashboard"
   },
   {
@@ -331,12 +361,12 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
   },
   {
     "code": "DASHBOARD_FILTERS_COMPLAINT_TYPE",
-    "message": "Complaint type",
+    "message": "Complaint category",
     "module": "rainmaker-dashboard"
   },
   {
     "code": "DASHBOARD_FILTERS_COMPLAINT_TYPE_FILTER",
-    "message": "Complaint type filter",
+    "message": "Complaint category filter",
     "module": "rainmaker-dashboard"
   },
   {
@@ -411,7 +441,7 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
   },
   {
     "code": "DASHBOARD_GROUPBY_LEVEL_SUB_TYPE",
-    "message": "Sub-type",
+    "message": "Subcategory",
     "module": "rainmaker-dashboard"
   },
   {
@@ -1236,7 +1266,7 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
   },
   {
     "code": "DASHBOARD_TYPE_FILTER_NOT_APPLIED",
-    "message": "Type filter not applied",
+    "message": "Category filter not applied",
     "module": "rainmaker-dashboard"
   },
   {
@@ -1316,12 +1346,12 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
   },
   {
     "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_COMPLAINTS_BY_TYPE",
-    "message": "Complaints by type",
+    "message": "Complaints by category",
     "module": "rainmaker-dashboard"
   },
   {
     "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_COMPLAINTS_BY_TYPE_SUBTITLE",
-    "message": "Complaints filed, by type",
+    "message": "Complaints filed, by category",
     "module": "rainmaker-dashboard"
   },
   {
@@ -1406,7 +1436,7 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
   },
   {
     "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OPEN_BY_TYPE_STAGE_SUBTITLE",
-    "message": "Subtypes with the most open complaints, each broken down by which workflow stage they're stuck in.",
+    "message": "Subcategories with the most open complaints, each broken down by which workflow stage they're stuck in.",
     "module": "rainmaker-dashboard"
   },
   {
@@ -1541,12 +1571,12 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
   },
   {
     "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_COMPLAINT_TYPE_DETAILS",
-    "message": "Complaint type details",
+    "message": "Complaint category details",
     "module": "rainmaker-dashboard"
   },
   {
     "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_COMPLAINT_TYPE_DETAILS_SUBTITLE",
-    "message": "Resolution, SLA and reopen metrics per complaint type - all complaints, narrowed by the date filter",
+    "message": "Resolution, SLA and reopen metrics per complaint category - all complaints, narrowed by the date filter",
     "module": "rainmaker-dashboard"
   },
   {
@@ -1561,12 +1591,12 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
   },
   {
     "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_RECURRING_WARD_SUBTYPE",
-    "message": "Recurring complaints by ward & sub-type",
+    "message": "Recurring complaints by ward & subcategory",
     "module": "rainmaker-dashboard"
   },
   {
     "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_RECURRING_WARD_SUBTYPE_SUBTITLE",
-    "message": "Ward × subtype pairs with ≥ 3 complaints in period",
+    "message": "Ward × subcategory pairs with ≥ 3 complaints in period",
     "module": "rainmaker-dashboard"
   },
   {
@@ -1581,12 +1611,12 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
   },
   {
     "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_SUBTYPE_PERFORMANCE",
-    "message": "Complaint sub-type performance",
+    "message": "Complaint subcategory performance",
     "module": "rainmaker-dashboard"
   },
   {
     "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_SUBTYPE_PERFORMANCE_SUBTITLE",
-    "message": "Share, resolution time and SLA by subtype",
+    "message": "Share, resolution time and SLA by subcategory",
     "module": "rainmaker-dashboard"
   },
   {
@@ -1871,6 +1901,36 @@ export const DASHBOARD_L10N_MESSAGES_PT_PT: { code: string; message: string; mod
   {
     "code": "DASHBOARD_COMMON_UPDATED",
     "message": "Atualizado",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COMMON_UPDATED_JUST_NOW",
+    "message": "agora mesmo",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COMMON_UPDATED_MIN_AGO",
+    "message": "há {{n}} min",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COMMON_UPDATED_HR_AGO",
+    "message": "há {{n}} h",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COMMON_UPDATED_HRS_AGO",
+    "message": "há {{n}} h",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COMMON_UPDATED_DAY_AGO",
+    "message": "há {{n}} dia",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COMMON_UPDATED_DAYS_AGO",
+    "message": "há {{n}} dias",
     "module": "rainmaker-dashboard"
   },
   {

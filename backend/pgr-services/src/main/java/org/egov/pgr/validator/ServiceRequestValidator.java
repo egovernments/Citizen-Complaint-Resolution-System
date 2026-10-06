@@ -16,6 +16,7 @@ import org.egov.tracer.model.CustomException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
+import org.springframework.util.StringUtils;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -73,13 +74,24 @@ public class ServiceRequestValidator {
      * @param request The request to update complaint
      * @param mdmsData The master data for pgr
      */
-    public void validateUpdate(ServiceRequest request, Object mdmsData){
+    public Service validateUpdate(ServiceRequest request, Object mdmsData){
 
         String id = request.getService().getId();
         String tenantId = request.getService().getTenantId();
         validateSource(request.getService().getSource());
         validateMDMS(request, mdmsData);
-        validateDepartment(request, mdmsData);
+        // Before validateDepartment: a malformed ASSIGN must be refused on its own terms
+        // rather than reaching HRMS and failing as INVALID_ASSIGNMENT for an empty
+        // department, which is what the caller would then have to debug.
+        validateAssignee(request);
+        // ESCALATE is server-targeted after validation. Validating an optional
+        // caller-supplied UUID here can reject the correct cross-department
+        // reportingTo, while omitting the UUID succeeds. EscalationService owns
+        // and validates that target; department validation remains for assignment.
+        if (request.getWorkflow() == null
+                || !ESCALATE.equalsIgnoreCase(request.getWorkflow().getAction())) {
+            validateDepartment(request, mdmsData);
+        }
         RequestSearchCriteria criteria = RequestSearchCriteria.builder().ids(Collections.singleton(id)).tenantId(tenantId).build();
         criteria.setIsPlainSearch(false);
         List<ServiceWrapper> serviceWrappers = repository.getServiceWrappers(criteria);
@@ -89,9 +101,17 @@ public class ServiceRequestValidator {
 
         // Re-open eligibility (authorization + deadline) must be checked against the
         // persisted record, so fetch it first and pass it in — never trust the request body.
-        validateReOpen(request, serviceWrappers.get(0).getService());
+        Service persistedService = serviceWrappers.get(0).getService();
+        if (!Objects.equals(persistedService.getServiceRequestId(),
+                request.getService().getServiceRequestId())) {
+            throw new CustomException("INVALID_SERVICE_REQUEST_ID",
+                    "serviceRequestId does not match the complaint id");
+        }
+        validateReOpen(request, persistedService);
 
         // TO DO
+
+        return persistedService;
 
     }
 
@@ -151,6 +171,27 @@ public class ServiceRequestValidator {
 
     }
 
+
+    /**
+     * ASSIGN is the only transition that hands a complaint to a named owner, and
+     * PENDINGATLME has no queue behind it. An ASSIGN carrying no assignee therefore
+     * produces a complaint that is nobody's: it leaves the unassigned queue, so no GRO
+     * sees it to assign, and automatic escalation skips it forever because there is no
+     * assignee whose reportingTo could be resolved (#2132). Bomet accumulated 160 such
+     * complaints before this was caught.
+     */
+    private void validateAssignee(ServiceRequest request) {
+        if (request.getWorkflow() == null
+                || !ASSIGN.equalsIgnoreCase(request.getWorkflow().getAction())) {
+            return;
+        }
+        List<String> assignes = request.getWorkflow().getAssignes();
+        if (CollectionUtils.isEmpty(assignes)
+                || assignes.stream().noneMatch(StringUtils::hasText)) {
+            throw new CustomException("ASSIGNEE_REQUIRED",
+                    "ASSIGN must name the employee the complaint is being assigned to");
+        }
+    }
 
     /**
      *

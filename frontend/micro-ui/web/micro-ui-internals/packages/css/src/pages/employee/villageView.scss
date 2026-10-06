@@ -3,7 +3,7 @@
 /* VillageView.css */
 
 .village-header {
-    @extend .typography.heading-xl;
+    @extend %typography-heading-xl;
     color: theme(digitv2.lightTheme.text-primary);
     margin-bottom: 1.5rem;
 }
@@ -16,7 +16,7 @@
 }
 
 .card-heading-title {
-    @extend .typography.heading-m;
+    @extend %typography-heading-m;
     color: theme(digitv2.lightTheme.primary-2);
     margin: 0rem;
 }
@@ -28,7 +28,7 @@
 }
 
 .label-heading {
-    @extend .typography.heading-s;
+    @extend %typography-heading-s;
     color: theme(digitv2.lightTheme.text-primary);
     width: 20%;
     text-align: left;
@@ -37,7 +37,7 @@
 }
 
 .label-text {
-    @extend .typography.body-l;
+    @extend %typography-body-l;
     color: theme(digitv2.lightTheme.text-primary);
     width: 100% !important;
 }
@@ -49,7 +49,7 @@
 }
 
 .edit-label {
-    @extend .typography.heading-s;
+    @extend %typography-heading-s;
     color: theme(digitv2.lightTheme.text-primary);
     width: 40%;
     text-align: left;
@@ -68,7 +68,7 @@
 
 .comment-label {
     margin-bottom: .25rem;
-    @extend .typography.label;
+    @extend %typography-label;
     color: theme(digitv2.lightTheme.text-primary);
 }
 
@@ -78,7 +78,7 @@
 
 .security-question-label {
     margin-bottom: 1.5rem;
-    @extend .typography.heading-m;
+    @extend %typography-heading-m;
     color: theme(digitv2.lightTheme.text-primary);
 }
 

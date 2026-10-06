@@ -1,0 +1,952 @@
+[
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "CATEGORY",
+      "code": "Administration",
+      "parentCode": null,
+      "name": "Administration",
+      "order": 1,
+      "active": true,
+      "path": "Administration"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "CATEGORY",
+      "code": "CustomerService",
+      "parentCode": null,
+      "name": "CustomerService",
+      "order": 2,
+      "active": true,
+      "path": "CustomerService"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "CATEGORY",
+      "code": "DisasterManagement",
+      "parentCode": null,
+      "name": "DisasterManagement",
+      "order": 3,
+      "active": true,
+      "path": "DisasterManagement"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "CATEGORY",
+      "code": "EcdAndVocationalTraining",
+      "parentCode": null,
+      "name": "EcdAndVocationalTraining",
+      "order": 4,
+      "active": true,
+      "path": "EcdAndVocationalTraining"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "CATEGORY",
+      "code": "Environment",
+      "parentCode": null,
+      "name": "Environment",
+      "order": 5,
+      "active": true,
+      "path": "Environment"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "CATEGORY",
+      "code": "FinanceAndRevenue",
+      "parentCode": null,
+      "name": "FinanceAndRevenue",
+      "order": 6,
+      "active": true,
+      "path": "FinanceAndRevenue"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "CATEGORY",
+      "code": "IctLab",
+      "parentCode": null,
+      "name": "IctLab",
+      "order": 7,
+      "active": true,
+      "path": "IctLab"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "CATEGORY",
+      "code": "InnovationAndDigitalEconomy",
+      "parentCode": null,
+      "name": "InnovationAndDigitalEconomy",
+      "order": 8,
+      "active": true,
+      "path": "InnovationAndDigitalEconomy"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "CATEGORY",
+      "code": "LandRates",
+      "parentCode": null,
+      "name": "LandRates",
+      "order": 9,
+      "active": true,
+      "path": "LandRates"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "CATEGORY",
+      "code": "Lands",
+      "parentCode": null,
+      "name": "Lands",
+      "order": 10,
+      "active": true,
+      "path": "Lands"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "CATEGORY",
+      "code": "Markets",
+      "parentCode": null,
+      "name": "Markets",
+      "order": 11,
+      "active": true,
+      "path": "Markets"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "CATEGORY",
+      "code": "MobilityAndWorks",
+      "parentCode": null,
+      "name": "MobilityAndWorks",
+      "order": 12,
+      "active": true,
+      "path": "MobilityAndWorks"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "CATEGORY",
+      "code": "OfficeOfTheCountyAttorney",
+      "parentCode": null,
+      "name": "OfficeOfTheCountyAttorney",
+      "order": 13,
+      "active": true,
+      "path": "OfficeOfTheCountyAttorney"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "CATEGORY",
+      "code": "Parking",
+      "parentCode": null,
+      "name": "Parking",
+      "order": 14,
+      "active": true,
+      "path": "Parking"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "CATEGORY",
+      "code": "PublicService",
+      "parentCode": null,
+      "name": "PublicService",
+      "order": 15,
+      "active": true,
+      "path": "PublicService"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "CATEGORY",
+      "code": "Security",
+      "parentCode": null,
+      "name": "Security",
+      "order": 16,
+      "active": true,
+      "path": "Security"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "CATEGORY",
+      "code": "UrbanDevelopment",
+      "parentCode": null,
+      "name": "UrbanDevelopment",
+      "order": 17,
+      "active": true,
+      "path": "UrbanDevelopment"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "CATEGORY",
+      "code": "WaterRelated",
+      "parentCode": null,
+      "name": "WaterRelated",
+      "order": 18,
+      "active": true,
+      "path": "WaterRelated"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "CATEGORY",
+      "code": "YouthTalentAndSports",
+      "parentCode": null,
+      "name": "YouthTalentAndSports",
+      "order": 19,
+      "active": true,
+      "path": "YouthTalentAndSports"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "SUB_TYPE",
+      "code": "NoWaterSupply",
+      "parentCode": "WaterRelated",
+      "name": "NO WATER SUPPLY",
+      "order": 1,
+      "active": true,
+      "path": "WaterRelated.NoWaterSupply",
+      "department": "DEPT_01",
+      "departments": [
+        "DEPT_01"
+      ],
+      "slaHours": 72,
+      "keywords": "water, no water supply"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "SUB_TYPE",
+      "code": "IncorrectBilling",
+      "parentCode": "FinanceAndRevenue",
+      "name": "INCORRECT BILLING",
+      "order": 2,
+      "active": true,
+      "path": "FinanceAndRevenue.IncorrectBilling",
+      "department": "DEPT_03",
+      "departments": [
+        "DEPT_03"
+      ],
+      "slaHours": 48,
+      "keywords": "billing, wrong bill, overcharge"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "SUB_TYPE",
+      "code": "PaymentNotReflected",
+      "parentCode": "FinanceAndRevenue",
+      "name": "PAYMENT NOT REFLECTED",
+      "order": 3,
+      "active": true,
+      "path": "FinanceAndRevenue.PaymentNotReflected",
+      "department": "DEPT_03",
+      "departments": [
+        "DEPT_03"
+      ],
+      "slaHours": 24,
+      "keywords": "payment, receipt, not updated"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "SUB_TYPE",
+      "code": "IllegalClamping",
+      "parentCode": "Parking",
+      "name": "ILLEGAL CLAMPING",
+      "order": 4,
+      "active": true,
+      "path": "Parking.IllegalClamping",
+      "department": "DEPT_03",
+      "departments": [
+        "DEPT_03"
+      ],
+      "slaHours": 4,
+      "keywords": "clamp, parking, towed"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "SUB_TYPE",
+      "code": "ParkingTicketDispute",
+      "parentCode": "Parking",
+      "name": "PARKING TICKET DISPUTE",
+      "order": 5,
+      "active": true,
+      "path": "Parking.ParkingTicketDispute",
+      "department": "DEPT_03",
+      "departments": [
+        "DEPT_03"
+      ],
+      "slaHours": 48,
+      "keywords": "ticket, parking fine, dispute"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "SUB_TYPE",
+      "code": "LandRatesDispute",
+      "parentCode": "LandRates",
+      "name": "LAND RATES DISPUTE",
+      "order": 6,
+      "active": true,
+      "path": "LandRates.LandRatesDispute",
+      "department": "DEPT_03",
+      "departments": [
+        "DEPT_03"
+      ],
+      "slaHours": 72,
+      "keywords": "land rates, valuation, rates bill"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "SUB_TYPE",
+      "code": "LandRatesClearance",
+      "parentCode": "LandRates",
+      "name": "LAND RATES CLEARANCE",
+      "order": 7,
+      "active": true,
+      "path": "LandRates.LandRatesClearance",
+      "department": "DEPT_03",
+      "departments": [
+        "DEPT_03"
+      ],
+      "slaHours": 48,
+      "keywords": "clearance, certificate, rates"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "SUB_TYPE",
+      "code": "MarketStallDispute",
+      "parentCode": "Markets",
+      "name": "MARKET STALL DISPUTE",
+      "order": 8,
+      "active": true,
+      "path": "Markets.MarketStallDispute",
+      "department": "DEPT_10",
+      "departments": [
+        "DEPT_10"
+      ],
+      "slaHours": 48,
+      "keywords": "market, stall, vendor"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "SUB_TYPE",
+      "code": "IllegalHawking",
+      "parentCode": "Markets",
+      "name": "ILLEGAL HAWKING",
+      "order": 9,
+      "active": true,
+      "path": "Markets.IllegalHawking",
+      "department": "DEPT_10",
+      "departments": [
+        "DEPT_10"
+      ],
+      "slaHours": 24,
+      "keywords": "hawker, hawking, illegal trading"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "SUB_TYPE",
+      "code": "DelayedService",
+      "parentCode": "CustomerService",
+      "name": "DELAYED SERVICE",
+      "order": 10,
+      "active": true,
+      "path": "CustomerService.DelayedService",
+      "department": "DEPT_04",
+      "departments": [
+        "DEPT_04"
+      ],
+      "slaHours": 24,
+      "keywords": "delay, slow service, waiting"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "SUB_TYPE",
+      "code": "RudeStaff",
+      "parentCode": "CustomerService",
+      "name": "RUDE STAFF",
+      "order": 11,
+      "active": true,
+      "path": "CustomerService.RudeStaff",
+      "department": "DEPT_04",
+      "departments": [
+        "DEPT_04"
+      ],
+      "slaHours": 8,
+      "keywords": "rude, staff, conduct"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "SUB_TYPE",
+      "code": "IllegalDumping",
+      "parentCode": "Environment",
+      "name": "ILLEGAL DUMPING",
+      "order": 12,
+      "active": true,
+      "path": "Environment.IllegalDumping",
+      "department": "DEPT_07",
+      "departments": [
+        "DEPT_07"
+      ],
+      "slaHours": 48,
+      "keywords": "dumping, garbage, littering"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "SUB_TYPE",
+      "code": "WaterContamination",
+      "parentCode": "Environment",
+      "name": "WATER CONTAMINATION",
+      "order": 13,
+      "active": true,
+      "path": "Environment.WaterContamination",
+      "department": "DEPT_07",
+      "departments": [
+        "DEPT_07"
+      ],
+      "slaHours": 24,
+      "keywords": "contamination, dirty water, water quality"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "SUB_TYPE",
+      "code": "IllegalConstruction",
+      "parentCode": "UrbanDevelopment",
+      "name": "ILLEGAL CONSTRUCTION",
+      "order": 14,
+      "active": true,
+      "path": "UrbanDevelopment.IllegalConstruction",
+      "department": "DEPT_06",
+      "departments": [
+        "DEPT_06"
+      ],
+      "slaHours": 72,
+      "keywords": "illegal building, construction, permit"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "SUB_TYPE",
+      "code": "PlanningPermitDelay",
+      "parentCode": "UrbanDevelopment",
+      "name": "PLANNING PERMIT DELAY",
+      "order": 15,
+      "active": true,
+      "path": "UrbanDevelopment.PlanningPermitDelay",
+      "department": "DEPT_06",
+      "departments": [
+        "DEPT_06"
+      ],
+      "slaHours": 48,
+      "keywords": "permit, approval, planning"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "SUB_TYPE",
+      "code": "HarassmentByCountyAskaris",
+      "parentCode": "Security",
+      "name": "HARASSMENT BY COUNTY ASKARIS",
+      "order": 16,
+      "active": true,
+      "path": "Security.HarassmentByCountyAskaris",
+      "department": "DEPT_09",
+      "departments": [
+        "DEPT_09"
+      ],
+      "slaHours": 8,
+      "keywords": "askari, harassment, enforcement"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "SUB_TYPE",
+      "code": "NoisePollution",
+      "parentCode": "Security",
+      "name": "NOISE POLLUTION",
+      "order": 17,
+      "active": true,
+      "path": "Security.NoisePollution",
+      "department": "DEPT_09",
+      "departments": [
+        "DEPT_09"
+      ],
+      "slaHours": 24,
+      "keywords": "noise, disturbance, nuisance"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "SUB_TYPE",
+      "code": "PotholeRoadDamage",
+      "parentCode": "MobilityAndWorks",
+      "name": "POTHOLE / ROAD DAMAGE",
+      "order": 18,
+      "active": true,
+      "path": "MobilityAndWorks.PotholeRoadDamage",
+      "department": "DEPT_16",
+      "departments": [
+        "DEPT_16"
+      ],
+      "slaHours": 72,
+      "keywords": "pothole, road, damage"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "SUB_TYPE",
+      "code": "StreetLightOutage",
+      "parentCode": "MobilityAndWorks",
+      "name": "STREET LIGHT OUTAGE",
+      "order": 19,
+      "active": true,
+      "path": "MobilityAndWorks.StreetLightOutage",
+      "department": "DEPT_16",
+      "departments": [
+        "DEPT_16"
+      ],
+      "slaHours": 48,
+      "keywords": "street light, darkness, outage"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "SUB_TYPE",
+      "code": "Flooding",
+      "parentCode": "DisasterManagement",
+      "name": "FLOODING",
+      "order": 20,
+      "active": true,
+      "path": "DisasterManagement.Flooding",
+      "department": "DEPT_17",
+      "departments": [
+        "DEPT_17"
+      ],
+      "slaHours": 12,
+      "keywords": "flood, flooding, water"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "SUB_TYPE",
+      "code": "FireIncident",
+      "parentCode": "DisasterManagement",
+      "name": "FIRE INCIDENT",
+      "order": 21,
+      "active": true,
+      "path": "DisasterManagement.FireIncident",
+      "department": "DEPT_17",
+      "departments": [
+        "DEPT_17"
+      ],
+      "slaHours": 4,
+      "keywords": "fire, burning, blaze"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "SUB_TYPE",
+      "code": "StaffMisconduct",
+      "parentCode": "PublicService",
+      "name": "STAFF MISCONDUCT",
+      "order": 22,
+      "active": true,
+      "path": "PublicService.StaffMisconduct",
+      "department": "DEPT_05",
+      "departments": [
+        "DEPT_05"
+      ],
+      "slaHours": 24,
+      "keywords": "misconduct, staff, borough officer"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "SUB_TYPE",
+      "code": "ServiceDeliveryFailure",
+      "parentCode": "PublicService",
+      "name": "SERVICE DELIVERY FAILURE",
+      "order": 23,
+      "active": true,
+      "path": "PublicService.ServiceDeliveryFailure",
+      "department": "DEPT_05",
+      "departments": [
+        "DEPT_05"
+      ],
+      "slaHours": 48,
+      "keywords": "service, delivery, failure, personnel"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "SUB_TYPE",
+      "code": "LandOwnershipDispute",
+      "parentCode": "Lands",
+      "name": "LAND OWNERSHIP DISPUTE",
+      "order": 24,
+      "active": true,
+      "path": "Lands.LandOwnershipDispute",
+      "department": "DEPT_08",
+      "departments": [
+        "DEPT_08"
+      ],
+      "slaHours": 72,
+      "keywords": "land, ownership, dispute, title"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "SUB_TYPE",
+      "code": "SurveyingDelay",
+      "parentCode": "Lands",
+      "name": "SURVEYING DELAY",
+      "order": 25,
+      "active": true,
+      "path": "Lands.SurveyingDelay",
+      "department": "DEPT_08",
+      "departments": [
+        "DEPT_08"
+      ],
+      "slaHours": 72,
+      "keywords": "survey, boundary, delay"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "SUB_TYPE",
+      "code": "EcdFacilityComplaint",
+      "parentCode": "EcdAndVocationalTraining",
+      "name": "ECD FACILITY COMPLAINT",
+      "order": 26,
+      "active": true,
+      "path": "EcdAndVocationalTraining.EcdFacilityComplaint",
+      "department": "DEPT_11",
+      "departments": [
+        "DEPT_11"
+      ],
+      "slaHours": 48,
+      "keywords": "ECD, nursery, pre-school, facility"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "SUB_TYPE",
+      "code": "TrainingQualityConcern",
+      "parentCode": "EcdAndVocationalTraining",
+      "name": "TRAINING QUALITY CONCERN",
+      "order": 27,
+      "active": true,
+      "path": "EcdAndVocationalTraining.TrainingQualityConcern",
+      "department": "DEPT_11",
+      "departments": [
+        "DEPT_11"
+      ],
+      "slaHours": 48,
+      "keywords": "vocational, training, quality, TVET"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "SUB_TYPE",
+      "code": "IctEquipmentFault",
+      "parentCode": "IctLab",
+      "name": "ICT EQUIPMENT FAULT",
+      "order": 28,
+      "active": true,
+      "path": "IctLab.IctEquipmentFault",
+      "department": "DEPT_12",
+      "departments": [
+        "DEPT_12"
+      ],
+      "slaHours": 24,
+      "keywords": "computer, ICT, equipment, lab"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "SUB_TYPE",
+      "code": "SystemAccessIssue",
+      "parentCode": "IctLab",
+      "name": "SYSTEM ACCESS ISSUE",
+      "order": 29,
+      "active": true,
+      "path": "IctLab.SystemAccessIssue",
+      "department": "DEPT_12",
+      "departments": [
+        "DEPT_12"
+      ],
+      "slaHours": 12,
+      "keywords": "system, login, access, portal"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "SUB_TYPE",
+      "code": "SportsFacilityDamage",
+      "parentCode": "YouthTalentAndSports",
+      "name": "SPORTS FACILITY DAMAGE",
+      "order": 30,
+      "active": true,
+      "path": "YouthTalentAndSports.SportsFacilityDamage",
+      "department": "DEPT_13",
+      "departments": [
+        "DEPT_13"
+      ],
+      "slaHours": 48,
+      "keywords": "sports, field, facility, damage"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "SUB_TYPE",
+      "code": "YouthProgrammeComplaint",
+      "parentCode": "YouthTalentAndSports",
+      "name": "YOUTH PROGRAMME COMPLAINT",
+      "order": 31,
+      "active": true,
+      "path": "YouthTalentAndSports.YouthProgrammeComplaint",
+      "department": "DEPT_13",
+      "departments": [
+        "DEPT_13"
+      ],
+      "slaHours": 48,
+      "keywords": "youth, programme, talent, training"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "SUB_TYPE",
+      "code": "LegalAdviceDelay",
+      "parentCode": "OfficeOfTheCountyAttorney",
+      "name": "LEGAL ADVICE DELAY",
+      "order": 32,
+      "active": true,
+      "path": "OfficeOfTheCountyAttorney.LegalAdviceDelay",
+      "department": "DEPT_14",
+      "departments": [
+        "DEPT_14"
+      ],
+      "slaHours": 72,
+      "keywords": "legal, attorney, advice, county"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "SUB_TYPE",
+      "code": "ContractDispute",
+      "parentCode": "OfficeOfTheCountyAttorney",
+      "name": "CONTRACT DISPUTE",
+      "order": 33,
+      "active": true,
+      "path": "OfficeOfTheCountyAttorney.ContractDispute",
+      "department": "DEPT_14",
+      "departments": [
+        "DEPT_14"
+      ],
+      "slaHours": 72,
+      "keywords": "contract, dispute, legal"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "SUB_TYPE",
+      "code": "DigitalServiceOutage",
+      "parentCode": "InnovationAndDigitalEconomy",
+      "name": "DIGITAL SERVICE OUTAGE",
+      "order": 34,
+      "active": true,
+      "path": "InnovationAndDigitalEconomy.DigitalServiceOutage",
+      "department": "DEPT_15",
+      "departments": [
+        "DEPT_15"
+      ],
+      "slaHours": 12,
+      "keywords": "digital, online, portal, outage"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "SUB_TYPE",
+      "code": "StartupSupportRequest",
+      "parentCode": "InnovationAndDigitalEconomy",
+      "name": "STARTUP SUPPORT REQUEST",
+      "order": 35,
+      "active": true,
+      "path": "InnovationAndDigitalEconomy.StartupSupportRequest",
+      "department": "DEPT_15",
+      "departments": [
+        "DEPT_15"
+      ],
+      "slaHours": 72,
+      "keywords": "startup, innovation, SMART, digital economy"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "SUB_TYPE",
+      "code": "OfficeServicesComplaint",
+      "parentCode": "Administration",
+      "name": "OFFICE SERVICES COMPLAINT",
+      "order": 36,
+      "active": true,
+      "path": "Administration.OfficeServicesComplaint",
+      "department": "DEPT_18",
+      "departments": [
+        "DEPT_18"
+      ],
+      "slaHours": 24,
+      "keywords": "administration, office, services"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "hierarchyType": "PGR",
+      "levelCode": "SUB_TYPE",
+      "code": "DocumentProcessingDelay",
+      "parentCode": "Administration",
+      "name": "DOCUMENT PROCESSING DELAY",
+      "order": 37,
+      "active": true,
+      "path": "Administration.DocumentProcessingDelay",
+      "department": "DEPT_18",
+      "departments": [
+        "DEPT_18"
+      ],
+      "slaHours": 48,
+      "keywords": "document, processing, delay, records"
+    }
+  }
+]

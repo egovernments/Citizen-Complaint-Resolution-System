@@ -207,7 +207,7 @@ Steps:
 1. Navigate to /configurator/manage/localization; wait for networkidle.
 2. Assert role=table is visible within 30s (cold load is ~7.3s).
 3. Assert getByRole('row') count > 10 (well under the 1760 rows we know live).
-4. For each label regex /code/i, /module/i, /en_IN/i, /hi_IN/i, /pt_BR/i, /fr_FR/i, assert at least one matching text element is visible.
+4. For each label regex /code/i, /module/i, /en_IN/i, assert at least one matching text element is visible. Locale columns are discovered per-deployment now, so only en_IN — the one locale every deployment carries — is pinned.
 
 Loose label-match tolerates minor copy tweaks. The 10-row threshold avoids brittleness around virtualization chunk sizes.`,
     },
@@ -227,10 +227,14 @@ Loose label-match tolerates minor copy tweaks. The 10-row threshold avoids britt
 
     // The page is the "pivoted" comparator — Code + Module + one column per
     // supported locale (en_IN / hi_IN / pt_BR / fr_FR, from AVAILABLE_LOCALES
-    // in i18nProvider). Match leniently (case + substring) so minor label
-    // tweaks don't break the test.
+    // Locale columns are DISCOVERED from the tenant's own message data now
+    // (useAvailableLocales) — the app's LocalizationList.test explicitly
+    // asserts that its UI-chrome locales (hi_IN/fr_FR/pt_BR) do NOT appear as
+    // columns unless the deployment carries them. en_IN is the one locale the
+    // suite may assume everywhere; beyond that, assert the pivot shape rather
+    // than a pinned locale list.
     const body = page.locator('body');
-    for (const label of [/code/i, /module/i, /en_IN/i, /hi_IN/i, /pt_BR/i, /fr_FR/i]) {
+    for (const label of [/code/i, /module/i, /en_IN/i]) {
       await expect(body.getByText(label).first()).toBeVisible();
     }
   });

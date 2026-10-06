@@ -1,0 +1,21 @@
+# user-bootstrap — provisions the ADMIN/GRO/INTERNAL_USER accounts on a fresh
+# deploy, via the egov-user API (so they are encrypted with THIS deployment's
+# enc-service key — the dump's users are encrypted with the compose key and are
+# unusable here). Runs as a post-install/post-upgrade Job; user-seed.sh waits
+# for egov-user to be healthy and skips users that already exist.
+#
+# ADMIN is granted ACCOUNT_ADMIN (+ LOC_ADMIN, MDMS_ADMIN) so tenant onboarding
+# through the gateway's RBAC passes — matching master's ansible bootstrap.
+image:
+  # egovio/curl provides sh + curl; the script does the rest.
+  repository: egovio/curl
+  tag: latest
+
+# The egov-user service (in-cluster).
+egovUserHost: "http://egov-user.egov:8080"
+
+# Tenants to seed ADMIN + GRO into. Override per environment.
+seedTenants: "pg pg.citya pg.cityb"
+
+# Ceiling on the whole Job including the script's health-wait retries.
+activeDeadlineSeconds: 900

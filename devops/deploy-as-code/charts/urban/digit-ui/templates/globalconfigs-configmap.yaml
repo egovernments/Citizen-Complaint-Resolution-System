@@ -1,0 +1,51 @@
+{{- $envOverrides := index .Values (tpl .Chart.Name .) -}}
+{{- $_ := set . "Values" (merge .Values $envOverrides) -}}
+{{- if .Values.globalConfigs -}}
+{{- if .Values.globalConfigs.enabled -}}
+# Serves globalConfigs.js from this chart, same-origin, instead of fetching it
+# from object storage at runtime.
+#
+# WHY: the SPA cannot render without globalConfigs — Digit.Utils.getConfig is
+# called during initLibraries, so a missing file is a blank page with a console
+# ReferenceError and an HTTP 200, which no health check or uptime probe sees.
+# Pointing the <script> at a bucket made that a hand-managed upload with no
+# deploy-time verification. Rendering it here ties the config to the release.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Chart.Name }}-config
+  namespace: {{ .Values.namespace | default "egov" }}
+data:
+  # Mirrors the image's own /etc/nginx/conf.d/default.conf, plus the
+  # globalConfigs location and the <head> injection that points at it.
+  default.conf: |
+    server
+    {
+      listen 80;
+      underscores_in_headers on;
+
+      sub_filter_once on;
+      sub_filter_types text/html;
+
+      location /{{ .Values.ingress.context }}
+      {
+        root /var/web;
+        index index.html index.htm;
+        try_files $uri $uri/ /{{ .Values.ingress.context }}/index.html;
+
+        sub_filter '</head>' '<script src="/{{ .Values.ingress.context }}/globalConfigs.js"></script></head>';
+      }
+
+      # Served from a directory mount rather than a file mount into /var/web:
+      # a ConfigMap update rewrites the underlying inode, which a single-file
+      # subPath mount would not pick up without a pod restart.
+      location = /{{ .Values.ingress.context }}/globalConfigs.js {
+        alias /host-nginx/globalConfigs.js;
+        default_type application/javascript;
+        add_header Cache-Control "no-cache, must-revalidate" always;
+      }
+    }
+  globalConfigs.js: |
+{{ tpl (.Files.Get "files/globalConfigs.js.tpl") . | indent 4 }}
+{{- end }}
+{{- end }}

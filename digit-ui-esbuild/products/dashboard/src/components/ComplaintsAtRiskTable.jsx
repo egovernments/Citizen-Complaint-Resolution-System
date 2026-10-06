@@ -16,8 +16,8 @@ import DashboardTableFrame, { SrOnlyTableHead } from "./DashboardTableFrame";
 // Built at render (never a module constant) so headers track the language.
 const buildColumns = (t) => [
   { id: "id", label: t("DASHBOARD_COL_ID", "ID"), align: "left", type: "text" },
-  { id: "typeLabel", label: t("DASHBOARD_COL_TYPE", "Type"), align: "left", type: "text" },
-  { id: "subtypeLabel", label: t("DASHBOARD_COL_SUBTYPE", "Subtype"), align: "left", type: "text" },
+  { id: "typeLabel", label: t("DASHBOARD_COL_TYPE", "Category"), align: "left", type: "text" },
+  { id: "subtypeLabel", label: t("DASHBOARD_COL_SUBTYPE", "Subcategory"), align: "left", type: "text" },
   { id: "locality", label: t("DASHBOARD_COL_LOCALITY", "Locality"), align: "left", type: "text" },
   { id: "ownerName", label: t("DASHBOARD_COL_OWNER", "Owner"), align: "left", type: "text" },
   { id: "ownerRole", label: t("DASHBOARD_COL_OWNER_ROLE", "Owner role"), align: "left", type: "text" },

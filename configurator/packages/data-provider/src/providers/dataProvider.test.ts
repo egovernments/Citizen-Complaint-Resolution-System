@@ -59,6 +59,208 @@ describe('createDigitDataProvider', () => {
     );
   });
 
+  it('rejects PGR writes through the competing generic workflow escalation masters', async () => {
+    mock.method(client, 'mdmsSearch', async () => [{
+      id: 'legacy-pgr', tenantId: 'pg', schemaCode: 'Workflow.AutoEscalationStatesToIgnore',
+      uniqueIdentifier: 'PGR', data: { businessService: 'PGR', module: 'PGR' },
+      isActive: true,
+      auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 },
+    }]);
+    const dp = createDigitDataProvider(client, 'pg');
+    await assert.rejects(
+      () => dp.create('auto-escalation', {
+        data: { businessService: 'PGR', module: 'PGR' },
+      }),
+      /configured only through RAINMAKER-PGR.EscalationConfig/,
+    );
+    await assert.rejects(
+      () => dp.update('auto-escalation-ignore', {
+        id: 'PGR',
+        // Partial dirty-field payload: the guard must use the merged server row.
+        data: { active: true },
+        previousData: { businessService: 'PGR', module: 'PGR' },
+      }),
+      /configured only through RAINMAKER-PGR.EscalationConfig/,
+    );
+  });
+
+  it('creates a non-root boundary relationship in the login tenant with its direct parent', async () => {
+    mock.method(client, 'boundaryHierarchySearch', async (tenantId: string, hierarchyType?: string) => {
+      assert.equal(tenantId, 'ke');
+      assert.equal(hierarchyType, 'CUSTOM');
+      return [{
+        tenantId,
+        hierarchyType,
+        boundaryHierarchy: [
+          { boundaryType: 'County', parentBoundaryType: null, active: true },
+          { boundaryType: 'Ward', parentBoundaryType: 'County', active: true },
+        ],
+      }];
+    });
+    mock.method(client, 'boundaryRelationshipSearch', async (tenantId: string, hierarchyType?: string) => {
+      assert.equal(tenantId, 'ke');
+      assert.equal(hierarchyType, 'CUSTOM');
+      return [{
+        tenantId,
+        hierarchyType,
+        boundary: [{ code: 'COUNTY_1', boundaryType: 'County', children: [] }],
+      }];
+    });
+    let entityTenant = '';
+    mock.method(client, 'boundaryCreate', async (tenantId: string) => {
+      entityTenant = tenantId;
+      return [];
+    });
+    let relationshipArgs: unknown[] = [];
+    mock.method(client, 'boundaryRelationshipCreate', async (...args: unknown[]) => {
+      relationshipArgs = args;
+      return {};
+    });
+
+    const dp = createDigitDataProvider(client, 'ke');
+    await dp.create('boundaries', {
+      data: {
+        code: 'WARD_1',
+        hierarchyType: 'CUSTOM',
+        boundaryType: 'Ward',
+        parent: 'COUNTY_1',
+        // Must never override the tenant captured from authentication.
+        tenantId: 'ke.wrong',
+      },
+    });
+
+    assert.equal(entityTenant, 'ke');
+    assert.deepEqual(relationshipArgs, ['ke', 'WARD_1', 'CUSTOM', 'Ward', 'COUNTY_1']);
+  });
+
+  it('rejects a non-root boundary without a parent before creating the entity', async () => {
+    mock.method(client, 'boundaryHierarchySearch', async () => [{
+      tenantId: 'ke',
+      hierarchyType: 'CUSTOM',
+      boundaryHierarchy: [
+        { boundaryType: 'County', parentBoundaryType: null, active: true },
+        { boundaryType: 'Ward', parentBoundaryType: 'County', active: true },
+      ],
+    }]);
+    let entityCreateCalls = 0;
+    mock.method(client, 'boundaryCreate', async () => {
+      entityCreateCalls += 1;
+      return [];
+    });
+
+    const dp = createDigitDataProvider(client, 'ke');
+    await assert.rejects(
+      () => dp.create('boundaries', {
+        data: { code: 'WARD_1', hierarchyType: 'CUSTOM', boundaryType: 'Ward' },
+      }),
+      /Parent boundary of type County is required/,
+    );
+    assert.equal(entityCreateCalls, 0);
+  });
+
+  it('rejects a missing hierarchy instead of silently defaulting to ADMIN', async () => {
+    let hierarchySearchCalls = 0;
+    let entityCreateCalls = 0;
+    mock.method(client, 'boundaryHierarchySearch', async () => {
+      hierarchySearchCalls += 1;
+      return [];
+    });
+    mock.method(client, 'boundaryCreate', async () => {
+      entityCreateCalls += 1;
+      return [];
+    });
+
+    const dp = createDigitDataProvider(client, 'ke');
+    await assert.rejects(
+      () => dp.create('boundaries', {
+        data: { code: 'WARD_1', boundaryType: 'Ward', parent: 'COUNTY_1' },
+      }),
+      /Boundary hierarchy is required/,
+    );
+    assert.equal(hierarchySearchCalls, 0);
+    assert.equal(entityCreateCalls, 0);
+  });
+
+  it('creates a root boundary without a parent', async () => {
+    mock.method(client, 'boundaryHierarchySearch', async () => [{
+      tenantId: 'ke',
+      hierarchyType: 'CUSTOM',
+      boundaryHierarchy: [{ boundaryType: 'County', parentBoundaryType: null, active: true }],
+    }]);
+    mock.method(client, 'boundaryCreate', async () => []);
+    let relationshipArgs: unknown[] = [];
+    mock.method(client, 'boundaryRelationshipCreate', async (...args: unknown[]) => {
+      relationshipArgs = args;
+      return {};
+    });
+
+    const dp = createDigitDataProvider(client, 'ke');
+    await dp.create('boundaries', {
+      data: { code: 'COUNTY_1', hierarchyType: 'CUSTOM', boundaryType: 'County' },
+    });
+
+    assert.deepEqual(relationshipArgs, ['ke', 'COUNTY_1', 'CUSTOM', 'County', null]);
+  });
+
+  it('rejects a parent from the wrong hierarchy level before creating the entity', async () => {
+    mock.method(client, 'boundaryHierarchySearch', async () => [{
+      tenantId: 'ke',
+      hierarchyType: 'CUSTOM',
+      boundaryHierarchy: [
+        { boundaryType: 'County', parentBoundaryType: null, active: true },
+        { boundaryType: 'Ward', parentBoundaryType: 'County', active: true },
+      ],
+    }]);
+    mock.method(client, 'boundaryRelationshipSearch', async () => [{
+      tenantId: 'ke',
+      hierarchyType: 'CUSTOM',
+      boundary: [{ code: 'NOT_A_COUNTY', boundaryType: 'Ward', children: [] }],
+    }]);
+    let entityCreateCalls = 0;
+    mock.method(client, 'boundaryCreate', async () => {
+      entityCreateCalls += 1;
+      return [];
+    });
+
+    const dp = createDigitDataProvider(client, 'ke');
+    await assert.rejects(
+      () => dp.create('boundaries', {
+        data: {
+          code: 'WARD_1',
+          hierarchyType: 'CUSTOM',
+          boundaryType: 'Ward',
+          parent: 'NOT_A_COUNTY',
+        },
+      }),
+      /must have boundary type County/,
+    );
+    assert.equal(entityCreateCalls, 0);
+  });
+
+  it('resumes relationship creation when the entity already exists from a partial attempt', async () => {
+    mock.method(client, 'boundaryHierarchySearch', async () => [{
+      tenantId: 'ke',
+      hierarchyType: 'CUSTOM',
+      boundaryHierarchy: [{ boundaryType: 'County', parentBoundaryType: null, active: true }],
+    }]);
+    mock.method(client, 'boundaryCreate', async () => {
+      throw new Error('DUPLICATE_RECORD: Boundary already exists');
+    });
+    mock.method(client, 'boundarySearch', async () => [{ tenantId: 'ke', code: 'COUNTY_1' }]);
+    let relationshipCreateCalls = 0;
+    mock.method(client, 'boundaryRelationshipCreate', async () => {
+      relationshipCreateCalls += 1;
+      return {};
+    });
+
+    const dp = createDigitDataProvider(client, 'ke');
+    await dp.create('boundaries', {
+      data: { code: 'COUNTY_1', hierarchyType: 'CUSTOM', boundaryType: 'County' },
+    });
+
+    assert.equal(relationshipCreateCalls, 1);
+  });
+
   it('strips id and underscore-prefixed metadata from MDMS create payload', async () => {
     // Same family as the update sanitize fix from PR #40 — a default-
     // record that includes `id` (some forms set id == code on create)
@@ -607,5 +809,182 @@ describe('createDigitDataProvider', () => {
     });
     assert.deepEqual(descPage2.data.map((r) => r.code), ['CHARLIE', 'BRAVO']);
     assert.equal(descPage2.total, 5);
+  });
+
+  // --- CCRS #1923: one record per react-admin id ---------------------------
+  //
+  // The state tenant's records are concatenated with every city tenant's, and
+  // DIGIT does not require a boundary `hierarchyType` or `code` to be unique
+  // across tenants. On bomet (`ke`) that yields SEVEN hierarchies called ADMIN
+  // and CITY_001/WARD_001 defined under two city tenants. Downstream, every
+  // dropdown built from these lists renders one <SelectItem value={id}> per
+  // record — and Radix treats items sharing a value as the same selection, so
+  // the operator saw seven ticked "ADMIN" rows and a trigger reading
+  // "ADMINADMINADMIN…".
+
+  it('getList(boundary-hierarchies) returns one record per hierarchyType across tenants', async () => {
+    mock.method(client, 'mdmsSearch', async (_t: string, schema: string) => {
+      if (schema !== 'tenant.tenants') return [];
+      return ['ke.india', 'ke.mycitynew'].map((code) => ({
+        id: code, tenantId: 'ke', schemaCode: schema, uniqueIdentifier: code,
+        data: { code }, isActive: true,
+      }));
+    });
+    // Every tenant defines its own "ADMIN"; only ke.india adds "KE-ADMIN".
+    mock.method(client, 'boundaryHierarchySearch', async (tenantId: string) => {
+      const types = tenantId === 'ke.india' ? ['ADMIN', 'KE-ADMIN'] : ['ADMIN'];
+      return types.map((hierarchyType) => ({
+        tenantId,
+        hierarchyType,
+        boundaryHierarchy: [{ boundaryType: 'County', parentBoundaryType: null, active: true }],
+      }));
+    });
+
+    const dp = createDigitDataProvider(client, 'ke');
+    const result = await dp.getList('boundary-hierarchies', {
+      pagination: { page: 1, perPage: 100 },
+      sort: { field: 'hierarchyType', order: 'ASC' },
+      filter: {},
+    });
+
+    assert.deepEqual(result.data.map((r) => r.id), ['ADMIN', 'KE-ADMIN']);
+    assert.equal(result.total, 2);
+    // Keep-FIRST: the survivor must be the session tenant's own definition,
+    // not whichever sub-tenant happened to be fetched last.
+    assert.equal(result.data.find((r) => r.id === 'ADMIN')?.tenantId, 'ke');
+  });
+
+  it('getList(boundaries) returns one record per code when two tenants seed the same code', async () => {
+    mock.method(client, 'mdmsSearch', async (_t: string, schema: string) => {
+      if (schema !== 'tenant.tenants') return [];
+      return ['ke.mycitynew', 'ke.hajbvfg'].map((code) => ({
+        id: code, tenantId: 'ke', schemaCode: schema, uniqueIdentifier: code,
+        data: { code }, isActive: true,
+      }));
+    });
+    mock.method(client, 'boundaryHierarchySearch', async () => [{
+      hierarchyType: 'ADMIN',
+      boundaryHierarchy: [{ boundaryType: 'County', parentBoundaryType: null, active: true }],
+    }]);
+    // ke owns BOMET; the two city tenants BOTH seed CITY_001.
+    mock.method(client, 'boundaryRelationshipSearch', async (tenantId: string) => {
+      const code = tenantId === 'ke' ? 'BOMET' : 'CITY_001';
+      return [{
+        tenantId,
+        hierarchyType: 'ADMIN',
+        boundary: [{ code, boundaryType: 'County', name: code, children: [] }],
+      }];
+    });
+
+    const dp = createDigitDataProvider(client, 'ke');
+    const result = await dp.getList('boundaries', {
+      pagination: { page: 1, perPage: 100 },
+      sort: { field: 'code', order: 'ASC' },
+      filter: {},
+    });
+
+    assert.deepEqual(result.data.map((r) => r.id), ['BOMET', 'CITY_001']);
+    assert.equal(result.total, 2);
+    assert.equal(result.data.find((r) => r.id === 'CITY_001')?.tenantId, 'ke.mycitynew');
+  });
+
+  it('getList(access-roles) returns one record per role code', async () => {
+    // egov-accesscontrol merges the tenant's roles with the state tenant's, so
+    // a role defined at both levels comes back twice.
+    mock.method(client, 'accessRolesSearch', async () => [
+      { code: 'HRMS_ADMIN', name: 'HRMS Admin', tenantId: 'ke' },
+      { code: 'HRMS_ADMIN', name: 'HRMS Admin', tenantId: 'ke.bomet' },
+      { code: 'LOC_ADMIN', name: 'Localisation admin', tenantId: 'ke' },
+      { code: 'LOC_ADMIN', name: 'Localisation admin', tenantId: 'ke.bomet' },
+      { code: 'MDMS_ADMIN', name: 'MDMS ADMIN', tenantId: 'ke' },
+    ]);
+
+    const dp = createDigitDataProvider(client, 'ke');
+    const result = await dp.getList('access-roles', {
+      pagination: { page: 1, perPage: 100 },
+      sort: { field: 'name', order: 'ASC' },
+      filter: {},
+    });
+
+    assert.deepEqual(result.data.map((r) => r.id), ['HRMS_ADMIN', 'LOC_ADMIN', 'MDMS_ADMIN']);
+    assert.equal(result.total, 3);
+  });
+
+  it('keeps records whose id extraction failed, under distinct synthetic ids', async () => {
+    // Two records missing the configured idField both normalize to id ''. They
+    // are as broken as a real duplicate — react-admin keys on id — but they are
+    // NOT the same record, so dropping the later one would hide a real row.
+    // Each repeat gets its own id instead.
+    mock.method(client, 'accessRolesSearch', async () => [
+      { name: 'No code at all', tenantId: 'ke' },
+      { name: 'Also no code', tenantId: 'ke' },
+      { code: 'MDMS_ADMIN', name: 'MDMS ADMIN', tenantId: 'ke' },
+    ]);
+
+    const dp = createDigitDataProvider(client, 'ke');
+    const result = await dp.getList('access-roles', {
+      pagination: { page: 1, perPage: 100 },
+      sort: { field: 'name', order: 'ASC' },
+      filter: {},
+    });
+
+    assert.equal(result.data.length, 3, 'no row may be dropped for lacking an id');
+    const ids = result.data.map((r) => String(r.id));
+    assert.equal(new Set(ids).size, 3, 'react-admin needs one id per record');
+    // The names survive intact — only the id was synthesized.
+    assert.deepEqual(
+      result.data.map((r) => r.name).sort(),
+      ['Also no code', 'MDMS ADMIN', 'No code at all'],
+    );
+  });
+
+  it('does not let a synthetic blank id swallow a real record that collides with it', async () => {
+    // A real record whose code happens to equal the synthetic id must survive,
+    // even though it is listed AFTER the blank-id records that generate one.
+    mock.method(client, 'accessRolesSearch', async () => [
+      { name: 'No code at all', tenantId: 'ke' },
+      { name: 'Also no code', tenantId: 'ke' },
+      { code: '#blank-1', name: 'Real role oddly named', tenantId: 'ke' },
+    ]);
+
+    const dp = createDigitDataProvider(client, 'ke');
+    const result = await dp.getList('access-roles', {
+      pagination: { page: 1, perPage: 100 },
+      sort: { field: 'name', order: 'ASC' },
+      filter: {},
+    });
+
+    assert.equal(result.data.length, 3);
+    assert.equal(new Set(result.data.map((r) => String(r.id))).size, 3);
+    assert.ok(
+      result.data.some((r) => r.name === 'Real role oddly named'),
+      'the real record must not be mistaken for a duplicate of a synthetic id',
+    );
+  });
+
+  it('does NOT collapse distinct records that merely share a display name', () => {
+    // The dedupe key is the id, never the label — two boundaries called
+    // "Central" in different counties are two real choices.
+    mock.method(client, 'boundaryHierarchySearch', async () => [{
+      hierarchyType: 'ADMIN',
+      boundaryHierarchy: [{ boundaryType: 'Ward', parentBoundaryType: null, active: true }],
+    }]);
+    mock.method(client, 'boundaryRelationshipSearch', async () => [{
+      tenantId: 'ke',
+      hierarchyType: 'ADMIN',
+      boundary: [
+        { code: 'BOMET_CENTRAL', boundaryType: 'Ward', name: 'Central', children: [] },
+        { code: 'NAIROBI_CENTRAL', boundaryType: 'Ward', name: 'Central', children: [] },
+      ],
+    }]);
+
+    const dp = createDigitDataProvider(client, 'ke.bomet');
+    return dp.getList('boundaries', {
+      pagination: { page: 1, perPage: 100 },
+      sort: { field: 'code', order: 'ASC' },
+      filter: {},
+    }).then((result) => {
+      assert.deepEqual(result.data.map((r) => r.id), ['BOMET_CENTRAL', 'NAIROBI_CENTRAL']);
+    });
   });
 });

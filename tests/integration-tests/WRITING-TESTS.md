@@ -109,11 +109,10 @@ those into real, portable assertions.
 
 **This extends to workflow *shape*, not just literals** — read a feature's actual
 configuration live rather than assuming one deployment's behaviour:
-- **ESCALATE model** — Kenya wires it as a **self-loop** on `PENDINGATLME` (status
-  unchanged, an escalation *level* increments); a supervisor-tier deployment (maputo)
-  wires it as a **forward transition** to `PENDINGATSUPERVISOR`. Read the ESCALATE
-  action's configured `nextState` from the businessservice; multi-level self-loop
-  assertions self-skip on the forward model.
+- **ESCALATE model** — the canonical workflow wires it as a **self-loop** on
+  `PENDINGATLME` and `PENDINGFORASSIGNMENT`: status stays unchanged while assignment
+  moves to `reportingTo` and the escalation level increments. Treat a forward transition
+  to `PENDINGATSUPERVISOR` as stale deployment configuration, not an alternate model.
 - **Inbox locality sort** — some deployments sort by the raw leaf boundary code, others
   by a coarser bairro/name key, so a spec cannot assume raw-leaf-code order.
 - **Postal / mobile formats, id prefixes, locales** — always from the profile.

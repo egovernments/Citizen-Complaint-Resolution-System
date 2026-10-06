@@ -5,7 +5,11 @@ metadata:
   labels:
     {{- include "digit-mcp.labels" . | nindent 4 }}
 data:
-  MCP_TRANSPORT: {{ .Values.env.MCP_TRANSPORT | quote }}
-  MCP_PORT: {{ .Values.env.MCP_PORT | quote }}
-  CRS_ENVIRONMENT: {{ .Values.env.CRS_ENVIRONMENT | quote }}
-  CRS_TENANT_ID: {{ .Values.env.CRS_TENANT_ID | quote }}
+  # Iterate `env` rather than enumerating keys. The previous hardcoded list
+  # silently dropped any value added to values.yaml — so a security-relevant
+  # setting (MCP_AUTH_MODE, TELEMETRY, MCP_READ_ONLY, …) would never reach the
+  # container even though it looked configured. Iterating also means CRS_API_URL /
+  # CRS_ENV_NAME (added on develop) are picked up without a template edit.
+  {{- range $key, $value := .Values.env }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}

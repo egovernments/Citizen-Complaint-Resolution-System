@@ -87,25 +87,25 @@ public class KpiCatalogService {
     }
 
     /**
-     * Returns all published KpiDefinitions that are visible to the given caller roles,
+     * Every published KpiDefinition the caller's resolved capabilities reach,
      * scoped to the state-root tenant derived from tenantId.
      * Returns an empty list (never throws) when the dss module does not exist in MDMS.
      */
-    public List<KpiDefinition> getVisibleDefs(String tenantId, Set<String> callerRoles) {
+    public List<KpiDefinition> getVisibleDefs(String tenantId, AnalyticsCapabilities capabilities) {
         String stateRoot = multiStateInstanceUtil.getStateLevelTenant(tenantId);
         List<KpiDefinition> all = fetchDefs(stateRoot);
         return all.stream()
                 .filter(KpiDefinition::isPublished)
-                .filter(d -> d.isVisibleTo(callerRoles))
+                .filter(capabilities::canSee)
                 .collect(Collectors.toList());
     }
 
     /**
-     * Returns the first DashboardPack whose roles overlap the caller's roles, searching
+     * The first DashboardPack the caller's capabilities select, searching
      * from MDMS for the state-root tenant. Returns Optional.empty() when none match or
      * when the dss module does not exist.
      */
-    public Optional<DashboardPack> getBestPack(String tenantId, Set<String> callerRoles,
+    public Optional<DashboardPack> getBestPack(String tenantId, AnalyticsCapabilities capabilities,
                                                List<KpiDefinition> visibleDefs) {
         String stateRoot = multiStateInstanceUtil.getStateLevelTenant(tenantId);
         Set<String> visibleIds = visibleDefs.stream()
@@ -113,7 +113,7 @@ public class KpiCatalogService {
                 .collect(Collectors.toSet());
 
         return fetchPacks(stateRoot).stream()
-                .filter(p -> p.matchesRoles(callerRoles))
+                .filter(capabilities::canSee)
                 // Filter pack tiles down to only what the caller can actually see
                 .peek(p -> {
                     if (p.getTiles() != null)

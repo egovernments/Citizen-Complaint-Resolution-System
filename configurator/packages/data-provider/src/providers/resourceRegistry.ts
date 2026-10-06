@@ -63,7 +63,7 @@ export const REGISTRY: Record<string, ResourceConfig> = {
   // keep reading `serviceCode`/`department`/`slaHours` unchanged. idField is
   // the leaf row's `code` (== the serviceCode stored verbatim on a complaint).
   'complaint-hierarchy': {
-    type: 'mdms', label: 'Complaint Types', schema: 'RAINMAKER-PGR.ComplaintHierarchy',
+    type: 'mdms', label: 'Complaint Categories', schema: 'RAINMAKER-PGR.ComplaintHierarchy',
     idField: 'code', nameField: 'name', descriptionField: 'levelCode',
     dedicated: true, leafServiceDefAdapter: true,
   },
@@ -130,6 +130,20 @@ export const REGISTRY: Record<string, ResourceConfig> = {
     type: 'mdms', label: 'Complaint Hierarchies', schema: 'RAINMAKER-PGR.ComplaintHierarchyDefinition',
     idField: 'hierarchyType', nameField: 'hierarchyType', dedicated: true,
   },
+  // Analytics destinations for the citizen/employee SPA (one row per destination).
+  //
+  // `dedicated: true` is load-bearing here, not cosmetic. The generic MDMS CRUD
+  // would be actively unsafe for this master: dataProvider's update and delete
+  // both re-resolve the record with a mdmsSearch that is NOT scoped to the
+  // session tenant, so a city admin editing a row INHERITED from the state
+  // tenant would rewrite the state row for every city that inherits it, and one
+  // delete click would deactivate analytics everywhere. The dedicated editor
+  // writes only rows the current tenant owns and never deletes — turning a
+  // destination off is `enabled: false` on a permanent record.
+  'analytics-providers': {
+    type: 'mdms', label: 'Analytics Providers', schema: 'common-masters.AnalyticsProvider',
+    idField: 'code', nameField: 'code', descriptionField: 'type', dedicated: true,
+  },
 
   // Generic MDMS Resources
   // (RAINMAKER-PGR.ClassificationNode is gone — interior nodes now live in the
@@ -140,7 +154,9 @@ export const REGISTRY: Record<string, ResourceConfig> = {
   'id-formats': { type: 'mdms', label: 'ID Formats', schema: 'common-masters.IdFormat', idField: 'idname', nameField: 'idname' },
   'workflow-services': { type: 'mdms', label: 'Business Services', schema: 'Workflow.BusinessService', idField: 'businessService', nameField: 'business' },
   'workflow-config': { type: 'mdms', label: 'Workflow Config', schema: 'Workflow.BusinessServiceConfig', idField: 'code', nameField: 'code' },
-  'auto-escalation': { type: 'mdms', label: 'Auto Escalation', schema: 'Workflow.AutoEscalation', idField: 'businessService', nameField: 'businessService' },
+  // Generic workflow escalation remains for non-PGR products such as IM/TL.
+  // PGR uses the dedicated self-loop policy below; operators must not add PGR here.
+  'auto-escalation': { type: 'mdms', label: 'Workflow Auto Escalation (non-PGR)', schema: 'Workflow.AutoEscalation', idField: 'businessService', nameField: 'businessService' },
   'sla-config': { type: 'mdms', label: 'SLA Config', schema: 'common-masters.wfSlaConfig', idField: 'slotPercentage', nameField: 'slotPercentage' },
   'role-actions': { type: 'mdms', label: 'Role Actions', schema: 'ACCESSCONTROL-ROLEACTIONS.roleactions', idField: 'id', nameField: 'rolecode', descriptionField: 'actionid' },
   roles: { type: 'mdms', label: 'Roles', schema: MDMS_SCHEMAS.ROLES, idField: 'code', nameField: 'name', descriptionField: 'description' },
@@ -166,9 +182,15 @@ export const REGISTRY: Record<string, ResourceConfig> = {
   'theme-config':           { type: 'mdms', label: 'Theme Config',             schema: 'common-masters.ThemeConfig',               idField: 'code',              nameField: 'name' },
   'mobile-number-validation': { type: 'mdms', label: 'Mobile Number Validation', schema: 'common-masters.MobileNumberValidation', idField: 'countryCode',       nameField: 'countryCode' },
   'tenant-boundary':        { type: 'mdms', label: 'Tenant Boundary (HRMS)',   schema: 'egov-location.TenantBoundary',             idField: 'hierarchyType.code', nameField: 'hierarchyType.code' },
-  'auto-escalation-ignore': { type: 'mdms', label: 'Auto-Escalation Ignored',  schema: 'Workflow.AutoEscalationStatesToIgnore',    idField: 'businessService',   nameField: 'businessService' },
+  'auto-escalation-ignore': { type: 'mdms', label: 'Workflow Escalation Ignore (non-PGR)', schema: 'Workflow.AutoEscalationStatesToIgnore', idField: 'businessService', nameField: 'businessService' },
   'workflow-bs-master':     { type: 'mdms', label: 'Workflow BS Master',       schema: 'Workflow.BusinessServiceMasterConfig',     idField: 'active',            nameField: 'businessService' },
-  'pgr-ui-constants':       { type: 'mdms', label: 'PGR UI Constants',         schema: 'RAINMAKER-PGR.UIConstants',                idField: 'REOPENSLA',         nameField: 'REOPENSLA' },
+  // Keyed on `code` (DEFAULT), NOT on REOPENSLA. mdms-v2 rejects any update that
+  // changes a record's x-unique fields (UNIQUE_KEY_UPDATE_ERR), so keying the
+  // record on its own only value made the reopen window permanently uneditable —
+  // Save always 400'd (#1252). nameField stays REOPENSLA so the list shows the
+  // configured window rather than the constant "DEFAULT".
+  'pgr-ui-constants':       { type: 'mdms', label: 'PGR UI Constants',         schema: 'RAINMAKER-PGR.UIConstants',                idField: 'code',              nameField: 'REOPENSLA' },
+  'pgr-escalation':         { type: 'mdms', label: 'PGR Escalation',           schema: 'RAINMAKER-PGR.EscalationConfig',           idField: 'code',              nameField: 'code' },
   'map-config':             { type: 'mdms', label: 'Map Configuration',        schema: 'RAINMAKER-PGR.MapConfig',                  idField: 'code',              nameField: 'code' },
   // Composite-key masters: react-admin id comes from the MDMS uniqueIdentifier
   // (see mapMdmsRecord), so idField/nameField here are display-only.

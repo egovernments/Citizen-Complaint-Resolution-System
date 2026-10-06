@@ -11,6 +11,7 @@ import {
   SelectItem,
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { uniqueBy } from '@/lib/uniqueBy';
 
 // One RAINMAKER-PGR.ComplaintHierarchy row (interior node OR leaf complaint type).
 interface HierNode {
@@ -119,10 +120,16 @@ export function ComplaintHierarchyCascade(props: InputProps & { label?: string }
     if (!lvl) return [];
     const parentCode = i === 0 ? null : selArr[i - 1];
     if (i > 0 && !parentCode) return [];
-    return rows
-      .filter((n) => n.levelCode === lvl.levelCode)
-      .filter((n) => (i === 0 ? !n.parentCode : n.parentCode === parentCode))
-      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    // Collapse on `code` — the value each SelectItem submits. Two hierarchy
+    // rows sharing a code at the same level would render as identical options
+    // that Radix treats as one selection, checking both (#1923).
+    return uniqueBy(
+      rows
+        .filter((n) => n.levelCode === lvl.levelCode)
+        .filter((n) => (i === 0 ? !n.parentCode : n.parentCode === parentCode))
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+      (n) => n.code,
+    );
   };
 
   const handleChange = (i: number, value: string) => {

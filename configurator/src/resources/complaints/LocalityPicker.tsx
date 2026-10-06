@@ -8,6 +8,7 @@ import {
   SelectItem,
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { uniqueBy } from '@/lib/uniqueBy';
 
 interface HierarchyLevel {
   boundaryType: string;
@@ -79,9 +80,15 @@ export function LocalityPicker({
     return (boundaries ?? []).find((b) => b.code === code);
   }, [field.value, boundaries]);
 
+  // One option per hierarchyType — see the same note in JurisdictionEditor.
+  // `boundary-hierarchies` merges the state tenant's definitions with every city
+  // tenant's and two tenants may both name theirs "ADMIN" (#1923).
   const hierarchyChoices = useMemo(() => {
     if (!hierarchies) return [] as { value: string; label: string }[];
-    return hierarchies.map((h) => ({ value: h.hierarchyType, label: h.hierarchyType }));
+    return uniqueBy(
+      hierarchies.map((h) => ({ value: h.hierarchyType, label: h.hierarchyType })),
+      (c) => c.value,
+    );
   }, [hierarchies]);
 
   // Only expose the LEAF boundary type(s) per hierarchy — types that
@@ -97,6 +104,10 @@ export function LocalityPicker({
     const map = new Map<string, string[]>();
     if (!hierarchies) return map;
     for (const h of hierarchies) {
+      // First definition wins — the same survivor hierarchyChoices keeps, so a
+      // sub-tenant's same-named hierarchy can't override the leaf types of the
+      // one the operator sees. See JurisdictionEditor for the long note.
+      if (map.has(h.hierarchyType)) continue;
       const levels = (h.boundaryHierarchy ?? []).filter(
         (lvl): lvl is HierarchyLevel => !!lvl && lvl.active !== false && !!lvl.boundaryType,
       );
@@ -161,11 +172,17 @@ export function LocalityPicker({
   const typesForHierarchy =
     boundaryTypesByHierarchy.get(activeHierarchy) ?? [];
 
+  // Collapse by code: boundary codes are unique per tenant, not globally, and
+  // the provider concatenates every tenant's tree — two tenants seeding
+  // CITY_001 would otherwise offer the same locality twice.
   const boundaryOptions = useMemo<BoundaryRecord[]>(() => {
     if (!activeType) return [];
     const inner = boundaryIndex.byHierarchy.get(activeHierarchy);
-    if (inner && inner.size > 0) return inner.get(activeType) ?? [];
-    return boundaryIndex.byTypeOnly.get(activeType) ?? [];
+    const forType =
+      inner && inner.size > 0
+        ? inner.get(activeType) ?? []
+        : boundaryIndex.byTypeOnly.get(activeType) ?? [];
+    return uniqueBy(forType, (b) => b.code);
   }, [boundaryIndex, activeHierarchy, activeType]);
 
   const hasError = fieldState.invalid && fieldState.isTouched;

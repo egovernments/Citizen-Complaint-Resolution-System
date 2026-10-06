@@ -3,10 +3,13 @@ import { Loader } from "@egovernments/digit-ui-components";
 import React, { useState, Fragment, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useHistory } from "react-router-dom";
-import ChangeCity from "../../ChangeCity";
+import ChangeCity, { showTenantSwitcher } from "../../ChangeCity";
+import { navigateToEmployeeUrl } from "./employeeNavItems";
 import { defaultImage, resolveProfilePhoto } from "../../utils";
 import StaticCitizenSideBar from "./StaticCitizenSideBar";
 import { Hamburger } from "@egovernments/digit-ui-components";
+import { DrawerFoot } from "./SidebarBrand";
+import { trackEvent } from "../../analytics";
 import { LogoutIcon } from "@egovernments/digit-ui-react-components";
 import ImageComponent from "../../ImageComponent";
 
@@ -82,6 +85,10 @@ export const CitizenSideBar = ({
   toggleSidebar,
   onLogout,
   isEmployee = false,
+  // The rows the desktop rail renders, for whichever app this is. Supplied by
+  // the Employee/Citizen mobile wrappers rather than fetched here, so the
+  // citizen drawer never mounts the employee access-control query.
+  navItems = [],
   linkData,
   islinkDataLoading,
   userProfile,
@@ -241,7 +248,6 @@ export const CitizenSideBar = ({
     menuItems = menuItems.filter((item) => item?.id !== "login-btn");
   }
 
-  let configEmployeeSideBar = {};
 
   if (!isEmployee) {
     Object.keys(linkData)
@@ -256,72 +262,12 @@ export const CitizenSideBar = ({
             link: linkData[key][0]?.sidebarURL,
           });
       });
-  } else {
-    data?.actions
-      .filter((e) => e.url === "url" && e.displayName !== "Home")
-      .forEach((item) => {
-        if (search == "" && item.path !== "") {
-          let index = item.path.split(".")[0];
-          if (index === "TradeLicense") index = "Trade License";
-          if (!configEmployeeSideBar[index]) {
-            configEmployeeSideBar[index] = [item];
-          } else {
-            configEmployeeSideBar[index].push(item);
-          }
-        } else if (item.path !== "" && item?.displayName?.toLowerCase().includes(search.toLowerCase())) {
-          let index = item.path.split(".")[0];
-          if (index === "TradeLicense") index = "Trade License";
-          if (!configEmployeeSideBar[index]) {
-            configEmployeeSideBar[index] = [item];
-          } else {
-            configEmployeeSideBar[index].push(item);
-          }
-        }
-      });
-    const keys = Object.keys(configEmployeeSideBar);
-    for (let i = 0; i < keys?.length; i++) {
-      const getSingleDisplayName = configEmployeeSideBar[keys[i]][0]?.displayName?.toUpperCase()?.replace(/[ -]/g, "_");
-      const getParentDisplayName = keys[i]?.toUpperCase()?.replace(/[ -]/g, "_");
-
-      if (configEmployeeSideBar[keys[i]][0].path.indexOf(".") === -1) {
-        menuItems.splice(1, 0, {
-          type: "link",
-          text: t(`ACTION_TEST_${getSingleDisplayName}`),
-          link: configEmployeeSideBar[keys[i]][0]?.navigationURL,
-          icon: configEmployeeSideBar[keys[i]][0]?.leftIcon,
-          populators: {
-            onClick: () => {
-              history.push(configEmployeeSideBar[keys[i]][0]?.navigationURL);
-              closeSidebar();
-            },
-          },
-        });
-      } else {
-        menuItems.splice(1, 0, {
-          type: "dynamic",
-          moduleName: t(`ACTION_TEST_${getParentDisplayName}`),
-          links: configEmployeeSideBar[keys[i]]?.map((ob) => {
-            return {
-              ...ob,
-              displayName: t(`ACTION_TEST_${ob?.displayName?.toUpperCase()?.replace(/[ -]/g, "_")}`),
-            };
-          }),
-          icon: configEmployeeSideBar[keys[i]][1]?.leftIcon,
-        });
-      }
-    }
-    const indx = menuItems.findIndex((a) => a.element === "HOME");
-    const home = menuItems.splice(indx, 1);
-    const comp = menuItems.findIndex((a) => a.element === "LANGUAGE");
-    const part = menuItems.splice(comp, menuItems?.length - comp);
-    menuItems.sort((a, b) => {
-      let c1 = a?.type === "dynamic" ? a?.moduleName : a?.text;
-      let c2 = b?.type === "dynamic" ? b?.moduleName : b?.text;
-      return c1.localeCompare(c2);
-    });
-    home?.[0] && menuItems.splice(0, 0, home[0]);
-    menuItems = part?.length > 0 ? menuItems.concat(part) : menuItems;
   }
+  // The employee branch that used to live here rebuilt the module rows from
+  // `data.actions` into `menuItems`. Those rows now come from
+  // the `navItems` prop, and `menuItems` is no
+  // longer rendered on the employee drawer at all, so the whole build was
+  // running on every render and having its output discarded.
 
   /*  URL with openlink wont have sidebar and actions    */
   if (history.location.pathname.includes("/openlink")) {
@@ -350,7 +296,16 @@ export const CitizenSideBar = ({
     }
   };
   const onItemSelect = ({ item, index, parentIndex }) => {
-    if (item?.navigationURL) {
+    if (item?.navigationUrl) {
+      // Employee nav rows carry `navigationUrl`; the citizen rows below use
+      // `navigationURL` / `link`. Routed through the same helper the desktop
+      // SideNav uses so external links and multi-root tenants behave alike.
+      navigateToEmployeeUrl(history, item?.navigationUrl, {
+        isMultiRootTenant: Digit.Utils.getMultiRootTenant(),
+        tenantId: Digit.ULBService.getStateId(),
+      });
+      toggleSidebar();
+    } else if (item?.navigationURL) {
       handleModuleClick(item?.navigationURL);
     } else if (item?.link) {
       handleModuleClick(item?.link);
@@ -366,6 +321,10 @@ export const CitizenSideBar = ({
       switch (item?.key) {
         case "home":
           goToHome();
+          toggleSidebar();
+          break;
+        case "login":
+          redirectToLoginPage();
           toggleSidebar();
           break;
         case "editProfile":
@@ -410,52 +369,88 @@ export const CitizenSideBar = ({
     key: "city",
   }));
 
-  const transformedLanguageData = languages?.map((language) => ({
-    ...language,
-    type: "custom",
-    key: "language",
-    icon: "Language",
-  }));
+  // On employee the access-control tree already supplies Home (and the
+  // module rows, and Dashboard) so the hardcoded HOME row would duplicate it.
+  // Before this, the drawer had neither: the employee branch built no module
+  // rows at all, so "Modules" opened onto "No Tenants Found" and there was no
+  // way to reach the dashboard from a phone (#2038 mobile review).
+  // The account rows under the navigation: the tenant switcher (when shown)
+  // and Edit Profile.
+  const accountRows = [
+    // Same rule as the top bar's ChangeCity, via the shared helper, so the two
+    // surfaces cannot disagree about whether the tenant switcher is shown.
+    ...(showTenantSwitcher(selectCityData?.length)
+      ? [
+          {
+            label: city,
+            value: city,
+            children: transformedSelectedCityData?.length > 0 ? transformedSelectedCityData : undefined,
+            type: "custom",
+            icon: "LocationCity",
+            key: "city",
+          },
+        ]
+      : []),
+    // Language is the pill in the phone bar now (#2038 design), so the drawer
+    // no longer repeats it.
+    ...(user && user.access_token
+      ? [
+          {
+            label: t("EDIT_PROFILE"),
+            type: "custom",
+            icon: "Edit",
+            key: "editProfile",
+          },
+        ]
+      : []),
+  ];
+
+  // The rail's own rows when the app supplies them (both apps do now), so
+  // the drawer and the desktop rail list the same destinations. The bare
+  // HOME row is only the fallback for a caller that passes none.
+  const navRows =
+    isEmployee || navItems.length
+      ? navItems
+      : [
+          {
+            label: "HOME",
+            value: "HOME",
+            icon: "Home",
+            type: "custom",
+            key: "home",
+          },
+        ];
+  // One faint line under the last grouped section, as the desktop rail draws
+  // it, and no other lines in the drawer (#2038 mobile review). Rows after the
+  // sections (Dashboard, configured links) go under the line with the account
+  // rows; without sections the line sits above the account rows.
+  const splitAt = navRows.map((item) => item?.type).lastIndexOf("section") + 1;
+  const treeRows = splitAt > 0 ? navRows.slice(0, splitAt) : navRows;
+  const belowRows = [...(splitAt > 0 ? navRows.slice(splitAt) : []), ...accountRows];
 
   const hamburgerItems = [
-    {
-      label: "HOME",
-      value: "HOME",
-      icon: "Home",
-      // children: transformedSelectedCityData?.length>0 ? transformedSelectedCityData : undefined,
-      type: "custom",
-      key: "home",
-    },
-    {
-      label: city,
-      value: city,
-      children: transformedSelectedCityData?.length > 0 ? transformedSelectedCityData : undefined,
-      type: "custom",
-      icon: "LocationCity",
-      key: "city",
-    },
-    {
-      label: t("Language"),
-      children: transformedLanguageData?.length > 0 ? transformedLanguageData : undefined,
-      type: "custom",
-      icon: "Language",
-      key: "language",
-    },
-    ...(user && user.access_token
-    ? [
-        {
-          label: t("EDIT_PROFILE"),
-          type: "custom",
-          icon: "Edit",
-          key: "editProfile",
-        },
-      ]
-    : []),
-    {
-      label: t("Modules"),
-      icon: "DriveFileMove",
-      children: transformedMenuItems,
-    },
+    // The employee drawer also renders logged out (SideBar/index.js falls to
+    // this branch when there is no access_token), and `login-btn` used to reach
+    // it inside the Modules group that employees no longer get. Without this
+    // there is no way to sign in from the drawer on a phone.
+    ...(isEmployee && !user?.access_token
+      ? [{ label: t("CORE_COMMON_LOGIN"), type: "custom", icon: "Login", key: "login" }]
+      : []),
+    ...treeRows,
+    ...(treeRows.length > 0 && belowRows.length > 0 ? [{ type: "divider", key: "tree-divider" }] : []),
+    ...belowRows,
+    // Only for a caller without rail rows: with them, the modules' sections,
+    // the MDMS-configured links and Login are already above, and this group
+    // would repeat them.
+    ...(isEmployee || navItems.length
+      ? []
+      : [
+          {
+            label: t("Modules"),
+            icon: "DriveFileMove",
+            children: transformedMenuItems,
+          },
+        ]),
   ];
   return isMobile ? (
     <Hamburger
@@ -474,7 +469,16 @@ export const CitizenSideBar = ({
       // bottom and the drawer top. CSS in overrides.css aligns the
       // drawer flush against the actual topbar height instead.
       styles={{ height: "93%" }}
-      onLogout={onLogout}
+      // The drawer's Logout is the shared component's own button, which takes
+      // no analytics tag, so its outcome is sent from here.
+      onLogout={
+        onLogout
+          ? () => {
+              trackEvent("shell.drawer.logout", { category: "shell" });
+              onLogout();
+            }
+          : undefined
+      }
       hideUserManuals={true}
       profile={profilePic ? profilePic : undefined}
       isSearchable={true}
@@ -484,6 +488,10 @@ export const CitizenSideBar = ({
       closeOnClickOutside={true}
       onOutsideClick={() => toggleSidebar(false)}
       onSelect={({ item, index, parentIndex }) => onItemSelect({ item, index, parentIndex })}
+      // On a phone the crest stays in the top bar right above the drawer, so
+      // the drawer takes just the eGov foot; a crest here too would show the
+      // same mark twice.
+      renderFooter={() => <DrawerFoot />}
     />
   ) : (
     <StaticCitizenSideBar logout={onLogout} />

@@ -11,7 +11,7 @@
     type="text/css" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#00bcd1" />
+  <meta name="theme-color" content="#0B1F3A" />
   <title>Public Dashboard</title>
 
   <!-- The standalone entry does not load DigitUI's global reset stylesheet. -->
@@ -27,6 +27,11 @@
 
     body {
       overflow-x: hidden;
+      /* The employee page inherits a body font from DigitUI's vendor CSS; this
+         page loads none of it, so anything portal-mounted to <body> (menus,
+         previews, tooltips) would fall back to the browser's default serif.
+         Keep in sync with --dashboard-font-family in the dashboard stylesheet. */
+      font-family: Inter, Roboto, ui-sans-serif, system-ui, sans-serif;
     }
   </style>
 

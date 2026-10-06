@@ -10,7 +10,9 @@ Decrypts one or more encrypted values that were previously encrypted by the DIGI
 
 Many DIGIT services store sensitive fields (mobile numbers, email addresses, personal identifiers) in encrypted form. When you need to inspect or verify this data, `decrypt_data` converts the opaque encrypted strings back to readable values.
 
-Decryption may fail if the encryption key is not configured for the specified tenant or if the encrypted values were produced by a different encryption service instance with different keys. The service does not require user authentication -- it manages its own key infrastructure.
+Decryption may fail if the encryption key is not configured for the specified tenant or if the encrypted values were produced by a different encryption service instance with different keys.
+
+**Authentication and authorization.** This tool requires an authenticated caller holding an admin role (see `MCP_ADMIN_ROLES`) — that admin-tier check is the functional gate. The egov-enc-service `/_decrypt` endpoint takes a bare ciphertext array (a wrapping envelope returns HTTP 500), so unlike the encrypt path the request cannot carry a body token, and the DIGIT gateway therefore denies a tokenless decrypt rather than serving it — it is not an anonymous oracle. (An earlier version relied on an `Authorization` header the gateway never reads.) Its output is also marked sensitive, so the plaintext is never written to the session store or the access log.
 
 ## Parameters
 

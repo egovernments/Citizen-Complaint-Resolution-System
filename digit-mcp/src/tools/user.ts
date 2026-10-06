@@ -1,6 +1,7 @@
 import type { ToolMetadata } from '../types/index.js';
 import type { ToolRegistry } from './registry.js';
 import { digitApi } from '../services/digit-api.js';
+import { defaultProvisioningPassword, ensureAuthenticated } from '../services/auth.js';
 import { autoPaginate, PAGINATION_SCHEMA_PROPERTIES } from '../utils/pagination.js';
 import type { PaginationOptions } from '../utils/pagination.js';
 import { validateTenantId, validateMobileNumber, rejectControlChars, validateStringLength } from '../utils/validation.js';
@@ -10,6 +11,10 @@ import { applyFieldMask } from '../utils/field-mask.js';
 export function registerUserTools(registry: ToolRegistry): void {
   registry.register({
     name: 'user_search',
+    // Admin, not the employee default: a read that returns citizen/employee PII
+    // or maps a tenant's access-control topology is reconnaissance for anyone
+    // below that tier, and its sibling WRITE tools in this same file are admin.
+    access: 'admin',
     group: 'admin',
     category: 'user',
     risk: 'read',
@@ -136,8 +141,15 @@ export function registerUserTools(registry: ToolRegistry): void {
 
   registry.register({
     name: 'user_create',
+    // Returns a plaintext provisioning password (loginCredentials /
+    // citizenLogin). The session store keeps a 200-char prefix of every result
+    // in Postgres and the JSONL log, so without this the credential is
+    // persisted — harmless while the default is the published eGov@123, a real
+    // leak the moment an operator sets a strong one.
+    sensitiveOutput: true,
     group: 'admin',
     category: 'user',
+    access: 'admin',
     risk: 'write',
     description:
       'Create a new user in the DIGIT platform. Creates users without OTP validation (admin operation). ' +
@@ -190,7 +202,7 @@ export function registerUserTools(registry: ToolRegistry): void {
         },
         password: {
           type: 'string',
-          description: 'Password for the user (default: "eGov@123")',
+          description: 'Password for the user. Defaults to the server\'s provisioning password (MCP_DEFAULT_PROVISIONING_PASSWORD).',
         },
       },
       required: ['tenant_id', 'name', 'mobile_number'],
@@ -226,7 +238,7 @@ export function registerUserTools(registry: ToolRegistry): void {
         name: args.name as string,
         mobileNumber,
         userName: (args.username as string) || mobileNumber,
-        password: (args.password as string) || 'eGov@123',
+        password: (args.password as string) || defaultProvisioningPassword(),
         type: userType,
         active: true,
         emailId: (args.email as string) || null,
@@ -279,6 +291,7 @@ export function registerUserTools(registry: ToolRegistry): void {
     name: 'user_role_add',
     group: 'admin',
     category: 'user',
+    access: 'admin',
     risk: 'write',
     description:
       'Add roles to an existing user for a specific tenant. CRITICAL for cross-tenant operations: ' +
@@ -381,13 +394,4 @@ export function registerUserTools(registry: ToolRegistry): void {
   } satisfies ToolMetadata);
 }
 
-async function ensureAuthenticated(): Promise<void> {
-  if (digitApi.isAuthenticated()) return;
-  const username = process.env.CRS_USERNAME;
-  const password = process.env.CRS_PASSWORD;
-  const tenantId = process.env.CRS_TENANT_ID || digitApi.getEnvironmentInfo().stateTenantId;
-  if (!username || !password) {
-    throw new Error('Not authenticated. Call the "configure" tool first, or set CRS_USERNAME/CRS_PASSWORD env vars.');
-  }
-  await digitApi.login(username, password, tenantId);
-}
+

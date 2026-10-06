@@ -429,7 +429,7 @@ tbody tr:last-child td:last-child .digit-dropdown-employee-select-wrap .digit-dr
 
 .microplan-deatils-view-card{
   .digit-view-card-header{
-    @extend .typography.heading-m;
+    @extend %typography-heading-m;
     font-family: theme(digitv2.fontFamily.sans);
     font-style: theme(digitv2.fontStyle.normal);
     font-weight: theme(digitv2.fontWeight.bold);

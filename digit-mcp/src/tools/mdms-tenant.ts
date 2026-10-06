@@ -1,7 +1,11 @@
+import { randomUUID } from 'node:crypto';
 import type { ToolMetadata, MdmsRecord } from '../types/index.js';
 import { MDMS_SCHEMAS } from '../types/index.js';
 import type { ToolRegistry } from './registry.js';
+import { isReadOnlyEffective } from './registry.js';
 import { digitApi } from '../services/digit-api.js';
+import { digitDb } from '../services/digit-db.js';
+import { ensureAuthenticated, checkBaseUrlAllowed, getAuthMode, defaultProvisioningPassword } from '../services/auth.js';
 import { emitProgress } from '../services/progress.js';
 import { ENVIRONMENTS } from '../config/environments.js';
 import { autoPaginate, PAGINATION_SCHEMA_PROPERTIES } from '../utils/pagination.js';
@@ -18,6 +22,13 @@ import {
   DASHBOARD_KPI_DEFINITIONS,
   DASHBOARD_PACKS,
 } from './dashboard-catalog-seed.js';
+import {
+  DASHBOARD_ACCESS_ACTIONS,
+  PGR_SEARCH_SCOPE_RESOURCE,
+  buildDashboardConfig,
+  buildDashboardRoleAction,
+  normalizeDashboardRoles,
+} from './dashboard-bootstrap-seed.js';
 
 /**
  * True for error messages that indicate a record already exists (duplicate / unique
@@ -442,7 +453,11 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
     name: 'configure',
     group: 'core',
     category: 'environment',
-    risk: 'read',
+    // 'write', not 'read': this tool authenticates AND can grant roles on the
+    // target tenant (see provision_roles). Labelling it read-risk meant clients
+    // that auto-approve read tools auto-approved a privilege grant.
+    access: 'admin',
+    risk: 'write',
     description:
       'Connect to a DIGIT environment by logging in with credentials. This must be called before any tool that queries the DIGIT API. Accepts environment key, username, password, and tenant ID. If credentials are provided via CRS_USERNAME/CRS_PASSWORD env vars, those are used as defaults.',
     inputSchema: {
@@ -481,11 +496,51 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
             'This overrides the environment default (e.g. switch from "pg" to "statea"). ' +
             'All MDMS queries, role assignments, and tenant lookups will use this as the root.',
         },
+        provision_roles: {
+          type: 'boolean',
+          description: 'Opt in to granting this user the standard role set (CITIZEN, EMPLOYEE, CSR, GRO, ' +
+            'PGR_LME, DGRO, SUPERUSER) on the target tenant when login had to fall back to a different one. ' +
+            'Default false. This WRITES to the user record and includes SUPERUSER — request it deliberately.',
+        },
       },
     },
     handler: async (args) => {
       const baseUrl = args.base_url as string | undefined;
       const envKey = (args.environment as string) || process.env.CRS_ENVIRONMENT || 'self-hosted';
+
+      // A read-only instance must not be steered to an arbitrary host at all:
+      // base_url flows to setAdHocEnvironment and, with the CRS_USERNAME/CRS_PASSWORD
+      // fallback below, would POST the admin credentials there and poison the
+      // process-wide client for every later read. Refuse it outright — stricter
+      // than the allow-list guards below. (configure stays a read tool because a
+      // read-only instance still needs it to connect to its own environment.)
+      if (isReadOnlyEffective() && baseUrl) {
+        return JSON.stringify({
+          success: false,
+          error: 'base_url is not allowed on a read-only MCP instance.',
+        }, null, 2);
+      }
+
+      // ── base_url guards ──
+      // Pointing the client at a caller-chosen host makes it send credentials
+      // there. Two independent checks: the host must be allow-listed, and the
+      // server's own stored credentials are never used for an ad-hoc target —
+      // the caller has to supply their own.
+      if (baseUrl) {
+        const baseUrlError = checkBaseUrlAllowed(baseUrl);
+        if (baseUrlError) {
+          return JSON.stringify({ success: false, error: baseUrlError, code: 'BASE_URL_NOT_ALLOWED' }, null, 2);
+        }
+        if (getAuthMode() === 'token' && !(args.username && args.password)) {
+          return JSON.stringify({
+            success: false,
+            error:
+              'username and password are required when base_url is supplied. The server will not send its ' +
+              'own stored credentials to a caller-specified host.',
+            code: 'EXPLICIT_CREDENTIALS_REQUIRED',
+          }, null, 2);
+        }
+      }
 
       // Switch environment: ad-hoc URL or named environment
       if (baseUrl) {
@@ -501,8 +556,13 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       }
 
       const env = digitApi.getEnvironmentInfo();
-      const username = (args.username as string) || process.env.CRS_USERNAME;
-      const password = (args.password as string) || process.env.CRS_PASSWORD;
+      // Env credentials are a convenience for the process owner (stdio), not a
+      // substitute identity for a network caller. In token mode the caller is
+      // already authenticated as themselves; falling back here would let an
+      // admin on one tenant silently adopt the container's ADMIN account.
+      const ambient = getAuthMode() === 'ambient';
+      const username = (args.username as string) || (ambient ? process.env.CRS_USERNAME : undefined);
+      const password = (args.password as string) || (ambient ? process.env.CRS_PASSWORD : undefined);
       const explicitTenantId = (args.tenant_id as string) || (args.state_tenant as string);
       const defaultLoginTenant = process.env.CRS_TENANT_ID || env.stateTenantId;
 
@@ -575,7 +635,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
             hint: `Login failed against tenants: ${triedTenants}. ` +
               `IMPORTANT: HRMS employee usernames are the EMPLOYEE CODE (e.g. "EMP-LIVE-000057"), NOT the mobile number. ` +
               `Check the employee_create response for the "code" field and use that as the username. ` +
-              `Default password is "eGov@123".`,
+              `Default password is the configured provisioning password (MCP_DEFAULT_PROVISIONING_PASSWORD).`,
           },
           null,
           2
@@ -594,10 +654,41 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
 
       // ── Cross-tenant role provisioning ──
       // If we fell back to a different tenant (e.g. logged in on "pg" but target is "tenant"),
-      // the user lacks roles for the target root. Auto-add them so that direct API login
-      // (e.g. from a frontend) also works for the target tenant.
+      // the user lacks roles for the target root. Adding them makes direct API login
+      // (e.g. from a frontend) work for the target tenant too.
+      //
+      // OPT-IN (M6). This used to run automatically on any tenant fallback and
+      // granted SUPERUSER among others — a privilege escalation performed as a
+      // side effect of a tool documented as "connect to an environment", and one
+      // that clients auto-approving read-risk tools would never be asked about.
+      // The caller now has to ask for it explicitly.
+      const provisionRoles = args.provision_roles === true;
+      const tenantFellBack =
+        !!explicitRoot && usedLoginTenant !== explicitRoot && usedLoginTenant !== explicitTenantId;
       let rolesProvisioned: string[] | null = null;
-      if (explicitRoot && usedLoginTenant !== explicitRoot && usedLoginTenant !== explicitTenantId) {
+      let rolesProvisionSkipped: Record<string, unknown> | null = null;
+      // The provisioning branch below calls userUpdate to self-grant SUPERUSER
+      // (and eight other roles) on the target root — a write to the DIGIT user
+      // store, which a read-only instance must never do. Surface a skip note
+      // instead of attempting it, even when provision_roles was requested.
+      if (tenantFellBack && provisionRoles && isReadOnlyEffective()) {
+        rolesProvisionSkipped = {
+          targetTenant: explicitRoot,
+          loggedInOn: usedLoginTenant,
+          note:
+            `Logged in on "${usedLoginTenant}" but you asked for "${explicitRoot}". Role provisioning grants ` +
+            `SUPERUSER and is disabled on a read-only MCP instance; assign roles out of band if needed.`,
+        };
+      } else if (tenantFellBack && !provisionRoles) {
+        rolesProvisionSkipped = {
+          targetTenant: explicitRoot,
+          loggedInOn: usedLoginTenant,
+          note:
+            `Logged in on "${usedLoginTenant}" but you asked for "${explicitRoot}". This user may lack roles ` +
+            `on the target tenant. Re-run configure with provision_roles: true to grant the standard role set ` +
+            `(includes SUPERUSER), or assign roles explicitly with user_role_add.`,
+        };
+      } else if (tenantFellBack && provisionRoles) {
         try {
           const auth = digitApi.getAuthInfo();
           const searchTenant = auth.user?.tenantId || usedLoginTenant;
@@ -665,6 +756,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
             services: probeReport.services,
             detectedEndpointOverrides: probeReport.detectedEndpointOverrides,
           } : {}),
+          ...(rolesProvisionSkipped ? { rolesNotProvisioned: rolesProvisionSkipped } : {}),
           ...(rolesProvisioned && {
             rolesProvisioned: {
               tenant: explicitRoot,
@@ -692,6 +784,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
     name: 'get_environment_info',
     group: 'core',
     category: 'environment',
+    access: 'public',
     risk: 'read',
     description:
       'Show the current DIGIT environment configuration (name, URL, state tenant ID). Also lists all available environments. ' +
@@ -1016,6 +1109,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
     name: 'mdms_schema_create',
     group: 'mdms',
     category: 'mdms',
+    access: 'admin',
     risk: 'write',
     description:
       'Register a new MDMS v2 schema definition for a tenant. Schemas must exist at the state-level root tenant before data records can be created. ' +
@@ -1110,11 +1204,13 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
     name: 'tenant_bootstrap',
     group: 'mdms',
     category: 'mdms',
+    access: 'admin',
     risk: 'write',
     description:
       'Bootstrap a new state-level tenant root by copying ALL schemas and essential MDMS data from an existing tenant (e.g. "pg"). ' +
       'This is REQUIRED before creating employees, PGR complaints, or any service under a new tenant root. ' +
       'Copies: all schema definitions, IdFormat records, Department records, Designation records, StateInfo, and InboxQueryConfiguration. ' +
+      'Seeds the current employee dashboard catalog and create-if-absent access floor for a small explicit role set. ' +
       'Also provisions an ADMIN user on the new tenant and copies workflow definitions (PGR, etc.) from source. ' +
       'After bootstrap, use city_setup to create city-level tenants. ' +
       'Call this ONCE when you create a new tenant root (e.g. "tenant", "ke") before doing anything else under it.',
@@ -1177,6 +1273,16 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
             'allowlist — every postal code is then serviceable. Never seed an empty array: mdms-v2 ' +
             'rejects pincode: [] on update; absence is the off state.',
         },
+        dashboard_roles: {
+          type: 'array',
+          minItems: 1,
+          uniqueItems: true,
+          items: { type: 'string' },
+          description:
+            'Employee roles that receive the dashboard navigation action and base API capabilities on a fresh ' +
+            'tenant. Defaults to SUPERVISOR, GRO, DGRO, and SUPERUSER. Existing tenant ' +
+            'DashboardConfig, actions, and role-action records are never overwritten.',
+        },
         user_validation: {
           type: 'array',
           description:
@@ -1209,6 +1315,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
 
       const target = args.target_tenant as string;
       const source = (args.source_tenant as string) || 'pg';
+      const dashboardRoles = normalizeDashboardRoles(args.dashboard_roles);
 
       // Register the target with egov-enc-service BEFORE anything below needs
       // to encrypt/decrypt for it (Step 4's ADMIN user creation, in particular).
@@ -1239,7 +1346,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
           // mint as that user 400'd "Invalid login credentials".
           const authInfo = digitApi.getAuthInfo();
           const currentUsername = authInfo.user?.userName || process.env.CRS_USERNAME || 'ADMIN';
-          const currentPassword = digitApi.getLoginPassword() || process.env.CRS_PASSWORD || 'eGov@123';
+          const currentPassword = digitApi.getLoginPassword() || process.env.CRS_PASSWORD || defaultProvisioningPassword();
           const mobileNumber = deriveValidMobile(
             mobileRegex,
             Number(args.mobile_length) || 10,
@@ -1255,6 +1362,11 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
             { code: 'SUPERUSER', name: 'Super User' },
             { code: 'MDMS_ADMIN', name: 'MDMS Admin' },
             { code: 'LOC_ADMIN', name: 'Localisation Admin' },
+            // ACCOUNT_ADMIN — needed for bootstrapping/tenant onboarding through the
+            // configurator; this re-provision path replaces the user's role list wholesale
+            // (see updateUser below), so omitting it here would silently strip it on every
+            // post-bootstrap re-provision.
+            { code: 'ACCOUNT_ADMIN', name: 'Account Admin' },
             { code: 'INTERNAL_MICROSERVICE_ROLE', name: 'Internal Microservice Role' },
           ].map((r) => ({ ...r, tenantId: target }));
           const newUser = {
@@ -1330,6 +1442,64 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       };
 
       emitProgress({ phase: 'bootstrap:start', message: `Bootstrapping ${target} from ${source}`, data: { source, target }, pct: 0 });
+
+      // Step 0: RBAC floor — seed ACCESSCONTROL-ROLEACTIONS.roleactions and
+      // ACCESSCONTROL-ACTIONS-TEST.actions-test directly into the target's
+      // mdms-v2 storage, bypassing the mdms-v2 write API.
+      //
+      // Every write below — including Step 1's own copy of these exact two
+      // schemas — goes through mdms-v2, which egov-accesscontrol authorizes
+      // by looking up the CALLING role's roleaction grants on the TARGET
+      // tenant (ActionService#isAuthorizedOnGivenTenantLevel). On a target
+      // with zero roleaction rows — any brand-new state_root, not just a
+      // fresh city under an established one — that check can never pass:
+      // the only way to grant a role write access is to write a roleaction
+      // record, which itself needs write access. Direct SQL is the one path
+      // around that circle. See CCRS#1928 for the failure this fixes (a
+      // from-scratch bootstrap died with AccessDeniedException on all 42
+      // schemas, `source`'s own roleactions included).
+      //
+      // Idempotent and additive only: skipped entirely once target already
+      // has roleaction rows (a re-run, or a target that inherited them some
+      // other way), and Step 1's normal per-record copy loop below no-ops on
+      // any uid this already created (create-if-absent).
+      try {
+        const already = await digitDb.query<{ count: string }>(
+          `SELECT count(*)::text AS count FROM eg_mdms_data WHERE tenantid = $1 AND schemacode = 'ACCESSCONTROL-ROLEACTIONS.roleactions'`,
+          [target],
+        );
+        if (Number(already[0]?.count || 0) === 0) {
+          const floorSchemas = ['ACCESSCONTROL-ROLEACTIONS.roleactions', 'ACCESSCONTROL-ACTIONS-TEST.actions-test'];
+          const sourceRows = await digitDb.query<{ uniqueidentifier: string; schemacode: string; data: Record<string, unknown>; isactive: boolean }>(
+            `SELECT uniqueidentifier, schemacode, data, isactive FROM eg_mdms_data WHERE tenantid = $1 AND schemacode = ANY($2)`,
+            [source, floorSchemas],
+          );
+          const now = Date.now();
+          for (const row of sourceRows) {
+            // roleactions.roleactions carries its own tenantId inside `data` —
+            // rewrite it to match; actions-test rows are tenant-agnostic (no
+            // `tenantId` field) and copy across untouched.
+            const data = row.schemacode === 'ACCESSCONTROL-ROLEACTIONS.roleactions'
+              ? { ...row.data, tenantId: target }
+              : row.data;
+            await digitDb.execute(
+              `INSERT INTO eg_mdms_data (id, tenantid, uniqueidentifier, schemacode, data, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime)
+               VALUES ($1, $2, $3, $4, $5::jsonb, $6, 'system-mdms-seed-rbac-floor', 'system-mdms-seed-rbac-floor', $7, $7)
+               ON CONFLICT (tenantid, schemacode, uniqueidentifier) DO NOTHING`,
+              [randomUUID(), target, row.uniqueidentifier, row.schemacode, JSON.stringify(data), row.isactive, now],
+            );
+          }
+          if (sourceRows.length > 0) {
+            results.warnings.push(`RBAC floor: seeded ${sourceRows.length} roleaction/action rows for "${target}" directly from "${source}" (target had none — see CCRS#1928)`);
+          }
+          emitProgress({ phase: 'bootstrap:rbac-floor', message: `Seeded ${sourceRows.length} RBAC floor rows for ${target}`, data: { target, source, seeded: sourceRows.length }, pct: 1 });
+        }
+      } catch (e) {
+        // Non-fatal by design: on failure, Step 1 below fails loudly on the
+        // SAME schemas with the SAME AccessDeniedException as before this
+        // fix existed — no worse off, and the real error still surfaces.
+        console.error(`[tenant_bootstrap] RBAC floor seed failed for "${target}": ${e instanceof Error ? e.message : String(e)}`);
+      }
 
       // Step 1: Copy ALL schemas from source to target
       //
@@ -1543,11 +1713,10 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         // (ServiceDefs/ComplaintHierarchy) stays operator-owned; these are not.
         'dss.KpiDefinition',
         'dss.DashboardPack',
-        // Per-tenant dashboard config: nav/route role gate (allowedRoles,
-        // #1258) + number display mask (numberFormat, #1213). Nothing else
-        // seeds this master on a new root — without it both features silently
-        // fall back to built-in behavior.
-        'dss.DashboardConfig',
+        // dss.DashboardConfig is deliberately not copied from the source: its
+        // role gate is tenant-owned, so inheriting pg's broad fallback set is
+        // not a safe 0→1 default. The create-if-absent floor below seeds the
+        // explicit install role set and preserves an existing target record.
         'ACCESSCONTROL-ROLEACTIONS.roleactions',
       ];
 
@@ -1579,6 +1748,35 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
               msg.includes('Values defined against unique fields cannot be empty');
             if (!isSchemaRace || attempt === maxAttempts - 1) throw err;
             await new Promise((res) => setTimeout(res, 500 * (1 << attempt))); // 500ms, 1s, 2s
+          }
+        }
+        throw lastErr;
+      }
+
+      // A newly-created action reaches the reference validator through Kafka.
+      // The immediately-following roleaction write can therefore see the
+      // action/role schemas but not their rows yet. Retry only reference errors;
+      // a genuinely missing role still fails loudly after the bounded wait.
+      async function mdmsCreateWithReferenceWait(
+        tenant: string,
+        schemaCode: string,
+        uniqueIdentifier: string,
+        data: Record<string, unknown>,
+      ): Promise<void> {
+        const maxAttempts = 5;
+        let lastErr: unknown;
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+          try {
+            await mdmsCreateWithSchemaWait(tenant, schemaCode, uniqueIdentifier, data);
+            return;
+          } catch (error) {
+            lastErr = error;
+            const msg = error instanceof Error ? error.message : String(error);
+            const isReferenceRace =
+              msg.includes('REFERENCE_VALIDATION_ERR') ||
+              msg.toLowerCase().includes('reference validation');
+            if (!isReferenceRace || attempt === maxAttempts - 1) throw error;
+            await new Promise((resolve) => setTimeout(resolve, 500 * (1 << attempt)));
           }
         }
         throw lastErr;
@@ -1896,8 +2094,8 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       // (#1394). These are tenant-invariant platform definitions with no tenant
       // identity, so seed them from the repo, create-if-absent — a live record
       // from the source copy (or a prior run) wins; a fresh/empty root gets the
-      // full canonical catalog. dss.DashboardConfig is intentionally NOT floored
-      // (its allowedRoles/scoping are tenant-specific, operator-owned).
+      // full canonical catalog. Tenant-specific DashboardConfig/access floors
+      // are handled immediately afterwards and remain create-if-absent.
       {
         const catalogFloor: Array<[string, Record<string, unknown>[]]> = [
           ['dss.KpiDefinition', DASHBOARD_KPI_DEFINITIONS],
@@ -1933,6 +2131,130 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
                 results.data.skipped.push(`${schemaCode}/${id ?? '?'} (catalog floor)`);
               } else {
                 results.data.failed.push(`${schemaCode}/${id ?? '?'} (catalog floor): ${msg}`);
+              }
+            }
+          }
+        }
+      }
+
+      // Step 2c: make the employee dashboard discoverable on a true 0→1 install.
+      //
+      // Catalog records alone only render a dashboard after navigation and route
+      // authorization have admitted the employee. Seed all three parts as a
+      // create-if-absent floor: tenant config, action 4557 plus base analytics
+      // capabilities 2640-2644, and the matching role→action grants.
+      // A target record always wins, so re-running bootstrap never broadens or
+      // narrows an operator-managed deployment.
+      {
+        const configSchema = 'dss.DashboardConfig';
+        const actionsSchema = 'ACCESSCONTROL-ACTIONS-TEST.actions-test';
+        const roleActionsSchema = 'ACCESSCONTROL-ROLEACTIONS.roleactions';
+
+        const [configs, actions, roleActions] = await Promise.all([
+          fetchAllMdmsV2Raw(target, configSchema).catch(() => []),
+          fetchAllMdmsV2Raw(target, actionsSchema).catch(() => []),
+          fetchAllMdmsV2Raw(target, roleActionsSchema).catch(() => []),
+        ]);
+        const exactTenant = (record: MdmsRecord) => record.tenantId === target && record.isActive;
+
+        // A fresh tenant copied from an older live source can inherit a bare action 2008. In
+        // compatibility mode that means unrestricted rows, so attach #1441's canonical scope
+        // only when the target has no authored scope of its own. Existing authored policy wins.
+        const searchAction = actions.find((record) =>
+          exactTenant(record) && Number((record.data as { id?: number })?.id) === 2008);
+        if (searchAction) {
+          const searchData = searchAction.data as Record<string, unknown>;
+          const complaint = (searchData.resource as { complaint?: { scope?: unknown } } | undefined)?.complaint;
+          if (complaint?.scope) {
+            results.data.skipped.push(`${actionsSchema}/2008 (ABAC scope already authored)`);
+          } else {
+            try {
+              await digitApi.mdmsV2UpdateData(searchAction, {
+                ...searchData,
+                method: 'POST',
+                resource: PGR_SEARCH_SCOPE_RESOURCE,
+              });
+              results.data.copied.push(`${actionsSchema}/2008 (ABAC scope floor)`);
+            } catch (error) {
+              const msg = error instanceof Error ? error.message : String(error);
+              results.data.failed.push(`${actionsSchema}/2008 (ABAC scope floor): ${msg}`);
+            }
+          }
+        } else {
+          results.data.failed.push(`${actionsSchema}/2008 (ABAC scope floor): action is missing`);
+        }
+
+        const haveConfig = configs.some((record) =>
+          exactTenant(record) && (record.data as { id?: string })?.id === 'default');
+        if (haveConfig) {
+          results.data.skipped.push(`${configSchema}/default (dashboard access floor)`);
+        } else {
+          try {
+            await mdmsCreateWithSchemaWait(
+              target,
+              configSchema,
+              'default',
+              buildDashboardConfig(),
+            );
+            results.data.copied.push(`${configSchema}/default (dashboard access floor)`);
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            if (isDuplicateError(msg)) {
+              results.data.skipped.push(`${configSchema}/default (dashboard access floor)`);
+            } else {
+              results.data.failed.push(`${configSchema}/default (dashboard access floor): ${msg}`);
+            }
+          }
+        }
+
+        for (const action of DASHBOARD_ACCESS_ACTIONS) {
+          const actionId = Number(action.id);
+          const haveAction = actions.some((record) =>
+            exactTenant(record) && Number((record.data as { id?: number })?.id) === actionId);
+          if (haveAction) {
+            results.data.skipped.push(`${actionsSchema}/${actionId} (dashboard access floor)`);
+            continue;
+          }
+          try {
+            await mdmsCreateWithSchemaWait(target, actionsSchema, String(actionId), { ...action });
+            results.data.copied.push(`${actionsSchema}/${actionId} (dashboard access floor)`);
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            if (isDuplicateError(msg)) {
+              results.data.skipped.push(`${actionsSchema}/${actionId} (dashboard access floor)`);
+            } else {
+              results.data.failed.push(`${actionsSchema}/${actionId} (dashboard access floor): ${msg}`);
+            }
+          }
+        }
+
+        for (const role of dashboardRoles) {
+          for (const action of DASHBOARD_ACCESS_ACTIONS) {
+            const actionId = Number(action.id);
+            const haveGrant = roleActions.some((record) => {
+              if (!exactTenant(record)) return false;
+              const data = record.data as { actionid?: number; rolecode?: string };
+              return Number(data?.actionid) === actionId && data?.rolecode === role;
+            });
+            const uid = `${actionId}.${role}`;
+            if (haveGrant) {
+              results.data.skipped.push(`${roleActionsSchema}/${uid} (dashboard access floor)`);
+              continue;
+            }
+            try {
+              await mdmsCreateWithReferenceWait(
+                target,
+                roleActionsSchema,
+                uid,
+                buildDashboardRoleAction(actionId, role, target),
+              );
+              results.data.copied.push(`${roleActionsSchema}/${uid} (dashboard access floor)`);
+            } catch (error) {
+              const msg = error instanceof Error ? error.message : String(error);
+              if (isDuplicateError(msg)) {
+                results.data.skipped.push(`${roleActionsSchema}/${uid} (dashboard access floor)`);
+              } else {
+                results.data.failed.push(`${roleActionsSchema}/${uid} (dashboard access floor): ${msg}`);
               }
             }
           }
@@ -2162,7 +2484,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         // The session's login password, so the provisioned admin carries the
         // operator's actual credentials (CRS_PASSWORD only as a fallback for
         // token-only auth, where the password is unknown).
-        const currentPassword = digitApi.getLoginPassword() || process.env.CRS_PASSWORD || 'eGov@123';
+        const currentPassword = digitApi.getLoginPassword() || process.env.CRS_PASSWORD || defaultProvisioningPassword();
 
         // Get full user details from source tenant
         const sourceTenantForSearch = auth.user?.tenantId || source;
@@ -2197,6 +2519,9 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
           // create/update on these roles specifically; without them ADMIN is stuck view-only).
           { code: 'MDMS_ADMIN', name: 'MDMS Admin' },
           { code: 'LOC_ADMIN', name: 'Localisation Admin' },
+          // ACCOUNT_ADMIN — needed for bootstrapping/tenant onboarding through the configurator
+          // and its other admin screens.
+          { code: 'ACCOUNT_ADMIN', name: 'Account Admin' },
           // INTERNAL_MICROSERVICE_ROLE — required by services that do inter-service user lookups
           // (e.g. inbox's ElasticSearchService.initializeSystemuser() searches for a user with this
           // role on the state tenant). Without it, inbox crashes: "Service returned null while fetching user".
@@ -2826,7 +3151,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
               if (adminRecord?.uuid) userPayload.uuid = adminRecord.uuid;
               if (adminRecord?.id) userPayload.id = adminRecord.id;
               if (!adminRecord?.uuid) {
-                userPayload.password = process.env.CRS_PASSWORD || 'eGov@123';
+                userPayload.password = process.env.CRS_PASSWORD || defaultProvisioningPassword();
               }
 
               // PGR's validateDepartment checks that the assignee's HRMS
@@ -2908,7 +3233,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
                   try {
                     const users = await digitApi.userSearch(target, { uuid: [u.uuid as string], limit: 1 });
                     if (users.length > 0) {
-                      await digitApi.userUpdate({ ...users[0], password: process.env.CRS_PASSWORD || 'eGov@123' });
+                      await digitApi.userUpdate({ ...users[0], password: process.env.CRS_PASSWORD || defaultProvisioningPassword() });
                     }
                   } catch { /* non-fatal */ }
                 }
@@ -3017,6 +3342,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
     name: 'city_setup',
     group: 'mdms',
     category: 'mdms',
+    access: 'admin',
     risk: 'write',
     description:
       'Set up a city-level tenant under an existing root with everything needed for PGR. ' +
@@ -3163,9 +3489,9 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       try {
         const auth = digitApi.getAuthInfo();
         const currentUsername = auth.user?.userName || process.env.CRS_USERNAME || 'ADMIN';
-        const currentPassword = digitApi.getLoginPassword() || process.env.CRS_PASSWORD || 'eGov@123';
+        const currentPassword = digitApi.getLoginPassword() || process.env.CRS_PASSWORD || defaultProvisioningPassword();
 
-        const standardRoles = ['EMPLOYEE', 'CITIZEN', 'CSR', 'GRO', 'PGR_LME', 'DGRO', 'SUPERUSER', 'MDMS_ADMIN', 'LOC_ADMIN', 'INTERNAL_MICROSERVICE_ROLE'];
+        const standardRoles = ['EMPLOYEE', 'CITIZEN', 'CSR', 'GRO', 'PGR_LME', 'DGRO', 'SUPERUSER', 'MDMS_ADMIN', 'LOC_ADMIN', 'ACCOUNT_ADMIN', 'INTERNAL_MICROSERVICE_ROLE'];
 
         // Build dual-scoped roles (both root and city)
         const dualRoles = standardRoles.flatMap(code => [
@@ -3481,7 +3807,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
             // Only set password on a fresh user — sending it for an existing
             // user is what trips DuplicateUserName on some HRMS builds.
             if (!cityAdminRecord?.uuid) {
-              userPayload.password = process.env.CRS_PASSWORD || 'eGov@123';
+              userPayload.password = process.env.CRS_PASSWORD || defaultProvisioningPassword();
             }
 
             const now = Date.now();
@@ -3523,7 +3849,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
                 try {
                   const users = await digitApi.userSearch(root, { uuid: [user.uuid as string], limit: 1 });
                   if (users.length > 0) {
-                    await digitApi.userUpdate({ ...users[0], password: process.env.CRS_PASSWORD || 'eGov@123' });
+                    await digitApi.userUpdate({ ...users[0], password: process.env.CRS_PASSWORD || defaultProvisioningPassword() });
                   }
                 } catch { /* non-fatal */ }
               }
@@ -3554,6 +3880,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
     name: 'tenant_cleanup',
     group: 'mdms',
     category: 'mdms',
+    access: 'admin',
     risk: 'write',
     description:
       'Clean up a tenant by soft-deleting MDMS records OWNED by that tenant (isActive=false) ' +
@@ -3561,7 +3888,9 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       'records whose own record.tenantId equals the passed tenant_id are deactivated. ' +
       'Follows the dataloader pattern: MDMS records are deactivated via the v2 _update API, not hard-deleted. ' +
       'Schema definitions are left in place (harmless without data). ' +
-      'Use this to tear down test tenants created by tenant_bootstrap or city_setup_from_xlsx.',
+      'Use this to tear down test tenants created by tenant_bootstrap or city_setup_from_xlsx. ' +
+      'SAFETY: runs read-only and returns a preview unless confirm=<tenant_id> is passed; ' +
+      'root/state tenants (no dot) additionally require allow_root_tenant=true.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -3583,11 +3912,35 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
           description: 'Recovery mode: instead of deactivating, set isActive=true on the matching records. ' +
             'Use this to undo a prior cleanup. Default: false (deactivate).',
         },
+        confirm: {
+          type: 'string',
+          description: 'REQUIRED to actually deactivate: must exactly equal tenant_id. ' +
+            'Without it the tool runs read-only and returns a preview of what would be deactivated.',
+        },
+        allow_root_tenant: {
+          type: 'boolean',
+          description: 'REQUIRED when tenant_id is a state/root tenant with no dot (e.g. "pg" rather than "pg.citya"). ' +
+            'A root-tenant sweep affects the whole hierarchy, so it must be opted into explicitly.',
+        },
       },
       required: ['tenant_id'],
     },
     handler: async (args) => {
       validateTenantId(args.tenant_id, 'tenant_id');
+
+      // ── Destructive-operation guards (H1) ──
+      // A root tenant ("pg") owns the records the whole hierarchy inherits, so
+      // sweeping one is a platform-wide event. Require an explicit opt-in
+      // before we authenticate or look up a single record.
+      if (!(args.tenant_id as string).includes('.') && args.allow_root_tenant !== true) {
+        return JSON.stringify({
+          success: false,
+          error:
+            `"${args.tenant_id}" is a state/root tenant. Deactivating its own records affects every ` +
+            'child tenant that inherits them. Pass allow_root_tenant: true if that is genuinely intended.',
+          code: 'ROOT_TENANT_REQUIRES_OPT_IN',
+        }, null, 2);
+      }
 
       await ensureAuthenticated();
 
@@ -3656,6 +4009,38 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       const filteredRecords = schemaFilter && schemaFilter.length > 1
         ? ownedRecords.filter((r) => schemaFilter.includes(r.schemaCode))
         : ownedRecords;
+
+      // ── Confirmation gate (H1) ──
+      // Everything above this point is read-only. Deactivation is irreversible
+      // in practice for a live tenant, so unless the caller echoes the tenant
+      // id back to us we stop here and report what WOULD happen. `reactivate`
+      // is exempt: restoring records is additive, not destructive.
+      if (!reactivate && args.confirm !== tenantId) {
+        const breakdown: Record<string, number> = {};
+        for (const r of filteredRecords) {
+          if (r.isActive) breakdown[r.schemaCode] = (breakdown[r.schemaCode] || 0) + 1;
+        }
+        const activeCount = filteredRecords.filter((r) => r.isActive).length;
+        return JSON.stringify({
+          // NOT `success: true`. Every other tool uses that to mean "the thing
+          // you asked for happened", and automation branches on it — reporting
+          // a no-op as success is how a cleanup silently stops running.
+          success: false,
+          dry_run: true,
+          code: 'CONFIRMATION_REQUIRED',
+          message: `Preview only — nothing was changed. ${activeCount} active MDMS record(s) would be deactivated on "${tenantId}".`,
+          tenantId,
+          wouldDeactivate: {
+            mdmsRecords: activeCount,
+            alreadyInactive: filteredRecords.length - activeCount,
+            bySchema: breakdown,
+            users: deactivateUsers ? 'all users on this tenant' : 'none (deactivate_users=false)',
+          },
+          inheritedRecordsSkipped: inheritedSkipped,
+          toProceed: { confirm: tenantId },
+          hint: `Re-run with confirm: "${tenantId}" to apply. This preview performed no writes.`,
+        }, null, 2);
+      }
 
       emitProgress({
         phase: `mdms:${verb}:start`,
@@ -3769,6 +4154,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
     name: 'mdms_create',
     group: 'mdms',
     category: 'mdms',
+    access: 'admin',
     risk: 'write',
     description:
       'Create a new MDMS v2 record. Requires tenant ID, schema code, unique identifier, and the data object. Use mdms_search first to verify the record does not already exist.',
@@ -3930,6 +4316,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
     name: 'mdms_update',
     group: 'mdms',
     category: 'mdms',
+    access: 'admin',
     risk: 'write',
     description:
       'Update an existing MDMS v2 record. Fetches the current record (for id + auditDetails), ' +
@@ -4028,6 +4415,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
     name: 'mdms_repair_identity',
     group: 'mdms',
     category: 'mdms',
+    access: 'admin',
     risk: 'write',
     description:
       'Bulk-rewrite an identity field across all records of a schema at one tenant. ' +
@@ -4305,6 +4693,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
     name: 'tenant_destroy',
     group: 'mdms',
     category: 'mdms',
+    access: 'admin',
     risk: 'write',
     description:
       'Tear down a city tenant that was created with city_setup_from_xlsx. ' +
@@ -4442,6 +4831,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
     name: 'city_setup_from_xlsx',
     group: 'mdms',
     category: 'mdms',
+    access: 'admin',
     risk: 'write',
     description:
       'Set up a city tenant from xlsx files in CCRS dataloader format. ' +
@@ -4550,18 +4940,3 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
 }
 
 // Auto-login helper using environment variables
-async function ensureAuthenticated(): Promise<void> {
-  if (digitApi.isAuthenticated()) return;
-
-  const username = process.env.CRS_USERNAME;
-  const password = process.env.CRS_PASSWORD;
-  const tenantId = process.env.CRS_TENANT_ID || digitApi.getEnvironmentInfo().stateTenantId;
-
-  if (!username || !password) {
-    throw new Error(
-      'Not authenticated. Call the "configure" tool first with your username and password, or set CRS_USERNAME/CRS_PASSWORD env vars.'
-    );
-  }
-
-  await digitApi.login(username, password, tenantId);
-}

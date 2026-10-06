@@ -95,21 +95,10 @@ ALLOW = {
 # mis-path and lists it here in the same breath makes that path `seen`, so
 # neither the new-path check nor the stale check fires.
 #
-# MERGE-ORDER NOTE, live right now: the five `prometheus.*` entries below are
-# exactly the five paths PR #1659 re-paths under prometheus.prometheusSpec.* (and
-# alertmanager to the top level). Both PRs target `monitoring-fix` and neither has
-# merged, so today they still reproduce and belong here. Whichever merges SECOND
-# must delete all five in the same change -- verified by running this guard
-# against #1659's env.yaml, which fails with precisely those five and nothing
-# else. That is the stale-baseline check doing its job, not a regression: it goes
-# red rather than letting a fixed baseline sit there re-opening the hole. Only
-# `ingress-nginx` (#1648) should survive that merge.
+# The five `prometheus.*` paths held here while #1659 was in flight were removed
+# after that fix landed; the stale-baseline check correctly requires this list to
+# shrink with the repaired env.yaml. Only `ingress-nginx` (#1648) remains.
 KNOWN_UNREAD = {
-    "prometheus.retention": "#1645 -- reads at prometheus.prometheusSpec.retention",
-    "prometheus.storageSpec": "#1645 -- reads at prometheus.prometheusSpec.storageSpec",
-    "prometheus.externalLabels": "#1645 -- reads at prometheus.prometheusSpec.externalLabels",
-    "prometheus.additionalScrapeConfigs": "#1645 -- reads at prometheus.prometheusSpec.additionalScrapeConfigs",
-    "prometheus.alertmanager": "#1645 -- chart reads alertmanager.enabled at top level",
     "ingress-nginx": "#1648 -- vendored chart reads .Values.controller.* at root; the helmfile now re-paths this block deliberately (PR #1679), so the env.yaml keys are read via templating rather than by the chart",
 }
 

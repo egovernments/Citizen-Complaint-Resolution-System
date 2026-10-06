@@ -18,7 +18,8 @@ export type WidgetKind =
   | 'regex'      // pattern field + live sample tester
   | 'chip-array' // string[] editor (add on Enter, remove on x)
   | 'duration-ms' // number input alongside d/h/m/s display
-  | 'locale-list'; // table editor for {label, value}[] arrays (e.g. StateInfo.languages)
+  | 'locale-list' // table editor for {label, value}[] arrays (e.g. StateInfo.languages)
+  | 'json';       // raw-JSON textarea for object/array fields (parse-validated; blocks save while invalid)
 
 /** A single field override. `path` is dot-notation into the record (e.g. "rules.pattern"). */
 export interface FieldSpec {
@@ -34,6 +35,11 @@ export interface FieldSpec {
   max?: number;
   /** For text/regex widgets — a static pattern to also enforce client-side. */
   pattern?: string;
+  /**
+   * For boolean widgets: what an unset value means to the app reading it. The
+   * box shows that, but nothing is written until the operator changes it.
+   */
+  whenUnset?: boolean;
 }
 
 /** A grouping of fields shown as a titled section in the form. */

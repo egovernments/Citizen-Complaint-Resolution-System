@@ -1,0 +1,17 @@
+{{- if .Values.distUrl }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: digit-ui-v2
+  namespace: {{ .Values.namespace | default "egov" }}
+data:
+  default.conf: |
+    server {
+      listen 80;
+      root /usr/share/nginx/html;
+      location = {{ trimSuffix "/" .Values.basePath }} { return 302 {{ .Values.basePath }}; }
+      location {{ .Values.basePath }} {
+        try_files $uri $uri/ {{ .Values.basePath }}index.html;
+      }
+    }
+{{- end }}

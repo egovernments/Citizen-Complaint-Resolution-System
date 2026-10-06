@@ -3,19 +3,17 @@
  * master (STATE ROOT tenant, same owning tenant as the dss.KpiDefinition /
  * dss.DashboardPack catalog), a single-record per-tenant dashboard config:
  *
- *   { "id": "default", "allowedRoles": [...],
+ *   { "id": "default",
  *     "numberFormat": { "en_IN": "#,##0.00", "pt_PT": "#.##0,00",
  *                       "default": "#,##0.00" } }
  *
  * (`numberFormat` is locale-keyed with an optional `default`; a plain string
  * is the legacy one-mask-for-every-locale form — see utils/numberFormat.js.)
  *
- * This is THE shared fetch for every dss.DashboardConfig consumer. PR #1258
- * (route/card role gate) reads `allowedRoles` from the same master with an
- * identical react-query key — same useCustomMDMS(stateId, "dss",
- * [{ name: "DashboardConfig" }]) call, staleTime/cacheTime Infinity — so
- * whichever lands first, the record costs ONE request per login and #1258's
- * useDashboardAccess (roles.js) consumes this hook — one fetch for gate + config.
+ * This is THE shared fetch for every dss.DashboardConfig consumer:
+ * numberFormat, timeZone, publicDashboardEnabled. The nav/route access gate
+ * (roles.js) no longer reads this master — since issue #1050 it resolves
+ * from egov-accesscontrol via POST /pgr-services/v2/analytics/_access.
  *
  * Fetched through the same MDMS v1-compat search the rest of the UI uses
  * (Digit.Hooks.useCustomMDMS -> /egov-mdms-service/v1/_search; the mdmsv2

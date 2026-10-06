@@ -189,12 +189,18 @@ export const UICustomizations = {
 
       // Build clean params from form state (InboxSearchComposer merges raw form
       // objects into params via the jsonPath config, so we rebuild from scratch)
+      // Sort comes from tableForm when something set it. The desktop table's
+      // column sort and the mobile Sort picker both dispatch there, and both
+      // were being dropped on the floor by the hardcoded pair below, so the
+      // mobile picker reordered nothing at all. The hardcoded values stay as
+      // the default for a form that has not been sorted yet.
+      const tableForm = clonedData?.state?.tableForm;
       const params = {
         tenantId: Digit.ULBService.getCurrentTenantId(),
-        limit: clonedData?.state?.tableForm?.limit || 10,
-        offset: clonedData?.state?.tableForm?.offset ?? 0,
-        sortBy: "applicationStatus",
-        sortOrder: "DESC",
+        limit: tableForm?.limit || 10,
+        offset: tableForm?.offset ?? 0,
+        sortBy: tableForm?.sortBy || "applicationStatus",
+        sortOrder: tableForm?.sortOrder || "DESC",
       };
 
       // Search form fields

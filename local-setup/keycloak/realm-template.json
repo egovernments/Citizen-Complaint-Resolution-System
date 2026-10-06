@@ -10,36 +10,101 @@
   "maxFailureWaitSeconds": 900,
   "failureFactor": 5,
   "passwordPolicy": "length(8)",
-  "sslRequired": "none",
+  "sslRequired": "external",
   "accessTokenLifespan": 900,
   "ssoSessionIdleTimeout": 1800,
   "ssoSessionMaxLifespan": 604800,
   "roles": {
     "realm": [
-      { "name": "CITIZEN", "description": "Default citizen role" },
-      { "name": "EMPLOYEE", "description": "Base employee role" },
-      { "name": "SUPERUSER", "description": "Full system access" },
-      { "name": "GRO", "description": "Grievance Routing Officer" },
-      { "name": "PGR_LME", "description": "PGR Last Mile Employee" },
-      { "name": "DGRO", "description": "Department GRO" },
-      { "name": "CSR", "description": "Customer Service Rep" },
-      { "name": "SUPERVISOR", "description": "Supervisor" },
-      { "name": "AUTO_ESCALATE", "description": "Auto escalation" },
-      { "name": "PGR_VIEWER", "description": "PGR read-only access" },
-      { "name": "TICKET_REPORT_VIEWER", "description": "Report viewer" },
-      { "name": "LOC_ADMIN", "description": "Localization admin" },
-      { "name": "MDMS_ADMIN", "description": "Master data admin" },
-      { "name": "HRMS_ADMIN", "description": "HR admin" },
-      { "name": "WORKFLOW_ADMIN", "description": "Workflow admin" },
-      { "name": "COMMON_EMPLOYEE", "description": "Common employee" },
-      { "name": "REINDEXING_ROLE", "description": "Elasticsearch reindexing" },
-      { "name": "QA_AUTOMATION", "description": "Automated testing" },
-      { "name": "SYSTEM", "description": "Internal system role" },
-      { "name": "ANONYMOUS", "description": "Unauthenticated access" },
-      { "name": "INTERNAL_MICROSERVICE_ROLE", "description": "Inter-service communication" }
+      {
+        "name": "CITIZEN",
+        "description": "Default citizen role"
+      },
+      {
+        "name": "EMPLOYEE",
+        "description": "Base employee role"
+      },
+      {
+        "name": "SUPERUSER",
+        "description": "Full system access"
+      },
+      {
+        "name": "GRO",
+        "description": "Grievance Routing Officer"
+      },
+      {
+        "name": "PGR_LME",
+        "description": "PGR Last Mile Employee"
+      },
+      {
+        "name": "DGRO",
+        "description": "Department GRO"
+      },
+      {
+        "name": "CSR",
+        "description": "Customer Service Rep"
+      },
+      {
+        "name": "SUPERVISOR",
+        "description": "Supervisor"
+      },
+      {
+        "name": "AUTO_ESCALATE",
+        "description": "Auto escalation"
+      },
+      {
+        "name": "PGR_VIEWER",
+        "description": "PGR read-only access"
+      },
+      {
+        "name": "TICKET_REPORT_VIEWER",
+        "description": "Report viewer"
+      },
+      {
+        "name": "LOC_ADMIN",
+        "description": "Localization admin"
+      },
+      {
+        "name": "MDMS_ADMIN",
+        "description": "Master data admin"
+      },
+      {
+        "name": "HRMS_ADMIN",
+        "description": "HR admin"
+      },
+      {
+        "name": "WORKFLOW_ADMIN",
+        "description": "Workflow admin"
+      },
+      {
+        "name": "COMMON_EMPLOYEE",
+        "description": "Common employee"
+      },
+      {
+        "name": "REINDEXING_ROLE",
+        "description": "Elasticsearch reindexing"
+      },
+      {
+        "name": "QA_AUTOMATION",
+        "description": "Automated testing"
+      },
+      {
+        "name": "SYSTEM",
+        "description": "Internal system role"
+      },
+      {
+        "name": "ANONYMOUS",
+        "description": "Unauthenticated access"
+      },
+      {
+        "name": "INTERNAL_MICROSERVICE_ROLE",
+        "description": "Inter-service communication"
+      }
     ]
   },
-  "defaultRoles": ["CITIZEN"],
+  "defaultRoles": [
+    "CITIZEN"
+  ],
   "clients": [
     {
       "clientId": "digit-ui",
@@ -52,13 +117,10 @@
       "rootUrl": "",
       "baseUrl": "/",
       "redirectUris": [
-        "http://localhost:*",
-        "https://*.egov.theflywheel.in/*"
+        "https://REPLACE_ME_TENANT_DOMAIN/*"
       ],
       "webOrigins": [
-        "http://localhost:3000",
-        "http://localhost:5173",
-        "https://*.egov.theflywheel.in"
+        "https://REPLACE_ME_TENANT_DOMAIN"
       ],
       "attributes": {
         "pkce.code.challenge.method": "S256"

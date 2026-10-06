@@ -193,7 +193,7 @@
     },
     {
         "code": "CS_COMPLAINT_DETAILS_SUB_COMPLAINT_TYPE",
-        "message": "Complaint Sub-Type",
+        "message": "Complaint Subcategory",
         "module": "rainmaker-hr",
         "locale": "default"
     },

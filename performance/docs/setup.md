@@ -32,8 +32,11 @@ git submodule update --init
 
 | Role | Instance Type | vCPUs | RAM | Disk | Purpose |
 |------|--------------|-------|-----|------|---------|
-| Dev | c5.2xlarge (or similar) | 8 | 16 GB | 100 GB gp3 | Smaller machine for baseline |
-| Prod | c5.4xlarge (or similar) | 16 | 32 GB | 100 GB gp3 | Larger machine for scale tests |
+| Target | c7g.4xlarge / c6i.4xlarge (or similar) | 16 | 32 GB | 100 GB gp3 | Minimum spec — the stack holds ~26.8 GB at rest |
+
+Provision **16 vCPU / 32 GiB or larger** for any machine that will run the DIGIT stack. The 8 vCPU / 16 GB "dev" instance used in the March 2026 tests no longer fits the stack and should not be provisioned; if a second machine is needed for comparison runs, give it the same spec.
+
+Do **not** enable swap as a way to run on less memory. A stack of JVM services that swaps thrashes rather than slows, because the garbage collector touches memory the operating system has paged to disk.
 
 ### Security Groups
 

@@ -1,0 +1,42 @@
+# A PLAIN Job (deliberately NOT a helm hook). An earlier version was a
+# post-install/post-upgrade hook, but helm BLOCKS on hook Jobs: on a fresh
+# deploy egov-user needs several minutes (Flyway + JVM start + scheduling), the
+# hook's wait timed out, the release was marked failed, and that ABORTED the
+# whole helmfile run. As a plain Job, helm creates it and moves on — the Job
+# waits for egov-user on its own and provisions the accounts asynchronously,
+# so a slow egov-user can never abort the deploy.
+#
+# Named per release revision so `helm upgrade` creates a fresh Job (Job specs are
+# immutable) and helm garbage-collects the previous revision's Job. TTL cleans it
+# up after it finishes.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: user-bootstrap-{{ .Release.Revision }}
+  namespace: {{ .Values.namespace | default "egov" }}
+spec:
+  backoffLimit: 10
+  ttlSecondsAfterFinished: 600
+  activeDeadlineSeconds: {{ .Values.activeDeadlineSeconds }}
+  template:
+    metadata:
+      annotations:
+        checksum/script: {{ .Files.Get "files/user-seed.sh" | sha256sum }}
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: user-bootstrap
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          command: ["sh", "/seed/user-seed.sh"]
+          env:
+            - name: EGOV_USER_HOST
+              value: {{ .Values.egovUserHost | quote }}
+            - name: SEED_TENANTS
+              value: {{ .Values.seedTenants | quote }}
+          volumeMounts:
+            - name: script
+              mountPath: /seed
+      volumes:
+        - name: script
+          configMap:
+            name: user-bootstrap-script

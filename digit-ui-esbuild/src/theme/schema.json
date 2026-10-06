@@ -19,6 +19,7 @@
         "text-heading":   { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
         "text-primary":   { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
         "text-secondary": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+        "text-muted":     { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
         "text-disabled":  { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
         "info":           { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
         "warning":        { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },

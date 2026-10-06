@@ -13,7 +13,9 @@
     "test:lifecycle": "playwright test tests/lifecycle",
     "test:smoke": "playwright test --project=smoke",
     "test:api": "playwright test --project=api",
-    "test:smoke-api": "playwright test --project=smoke --project=api"
+    "test:smoke-api": "playwright test --project=smoke --project=api",
+    "test:dashboard:functional": "playwright test --config playwright.dashboard.config.ts --project=dashboard-functional",
+    "test:dashboard:benchmark": "playwright test --config playwright.dashboard.config.ts --project=dashboard-benchmark"
   },
   "repository": {
     "type": "git",

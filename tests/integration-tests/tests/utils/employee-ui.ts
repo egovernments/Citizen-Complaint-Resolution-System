@@ -9,7 +9,7 @@
  * credentials — EMP001 on maputo authenticates at the CITY tenant
  * (mz.maputo), ADMIN at the ROOT tenant (mz).
  */
-import type { Page } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 import { getDigitToken, loginViaApi, type TokenResponse } from './auth';
 import { BASE_URL, TENANT, ROOT_TENANT } from './env';
 
@@ -148,6 +148,29 @@ export const INBOX_SEARCH_RE = /pgr-services\/v2\/request\/_search/;
  * which needs it just as much — did not.
  */
 export async function showAllInboxRows(page: Page): Promise<void> {
+  // inbox-v2 opens on the "My Complaints" tab — assigned-to-me only. Seeded
+  // fixtures are almost never assigned to the viewing persona, so every
+  // seeded-row assertion must first widen to "All Complaints"; on the MY tab
+  // an empty result is HONEST, not a filter bug.
+  const allTab = page.getByRole('tab', { name: /All Complaints|PGR_INBOX_TAB_ALL/i }).first();
+  if ((await allTab.count()) > 0) {
+    const selected = await allTab.getAttribute('aria-selected').catch(() => null);
+    if (selected !== 'true') {
+      await Promise.all([
+        page
+          .waitForResponse(
+            (r) => INBOX_SEARCH_RE.test(r.url()) && r.request().method() === 'POST',
+            { timeout: 20_000 },
+          )
+          .catch(() => null),
+        allTab.click(),
+      ]);
+      // State expectation, not a sleep: the switch is done when the tab reports
+      // itself selected. Row presence is NOT the condition — an empty result on
+      // the widened tab is a legitimate outcome the caller may be asserting.
+      await expect(allTab).toHaveAttribute('aria-selected', 'true', { timeout: 10_000 });
+    }
+  }
   const sel = page.locator('select').last();
   if ((await sel.count()) === 0) return;
   const values = await sel.locator('option').evaluateAll(

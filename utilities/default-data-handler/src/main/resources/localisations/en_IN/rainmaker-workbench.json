@@ -1465,7 +1465,7 @@
     },
     {
         "code": "P G R. Service Defs",
-        "message": "CCRS Service Defs",
+        "message": "CMS Service Defs",
         "module": "rainmaker-workbench",
         "locale": "en_IN"
     },
@@ -3391,7 +3391,7 @@
     },
     {
         "code": "WBH_MDMS_MASTER_RAINMAKER_PGR",
-        "message": "Citizen Complaint Resolution System",
+        "message": "Complaints Management System",
         "module": "rainmaker-workbench",
         "locale": "en_IN"
     },

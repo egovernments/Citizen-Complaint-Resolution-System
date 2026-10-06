@@ -11,6 +11,27 @@ export type DigitDataProvider = DataProvider & {
 
 // --- Helpers ---
 
+/** PGR owns escalation in RAINMAKER-PGR.EscalationConfig. Keep the generic
+ * Workflow masters available to other products, but never create a second PGR
+ * policy through this older admin surface. */
+function rejectLegacyPgrEscalationWrite(
+  config: ResourceConfig,
+  data: Record<string, unknown>,
+): void {
+  if (
+    config.schema !== 'Workflow.AutoEscalation' &&
+    config.schema !== 'Workflow.AutoEscalationStatesToIgnore'
+  ) return;
+
+  const businessService = String(data.businessService ?? '').trim().toUpperCase();
+  const module = String(data.module ?? '').trim().toUpperCase();
+  if (businessService === 'PGR' || module === 'PGR') {
+    throw new Error(
+      'PGR escalation is configured only through RAINMAKER-PGR.EscalationConfig',
+    );
+  }
+}
+
 function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
   let current: unknown = obj;
   for (const part of path.split('.')) {
@@ -530,6 +551,7 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
       const config = resolveConfig(resource);
       if (config.type === 'mdms') {
         const incoming = params.data as Record<string, unknown>;
+        rejectLegacyPgrEscalationWrite(config, incoming);
         // Same metadata-strip the update path applies (PR #40). The
         // create path didn't have it, so any defaultRecord that included
         // `id` (some forms set id == code on create) or any normalised
@@ -669,6 +691,7 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
           sanitized[key] = value;
         }
         existing.data = { ...existing.data, ...sanitized };
+        rejectLegacyPgrEscalationWrite(config, existing.data);
         const updated = await client.mdmsUpdate(existing, true);
         return { data: normalizeMdmsRecord(updated, config) };
       }

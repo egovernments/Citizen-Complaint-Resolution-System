@@ -33,15 +33,26 @@ export interface OnboardingIds {
 }
 
 /** Mint a unique tenant + master codes for one disposable onboarding run. */
+/**
+ * Digits -> letters (0->a .. 9->j). egov-user validates `user.tenantId`
+ * against `^[a-zA-Z. ]*$` (letters/dot/space, NO digits), and the
+ * configurator's upload parser mirrors that rule at Step 1.1 — so every
+ * generated tenant code, and anything embedded in one, must be letters-only
+ * while staying unique. Single source for the mapping; the fixture specs and
+ * freshOnboardingIds() below all reuse it.
+ */
+export const toLettersOnlySuffix = (n: number | string): string =>
+  String(n).replace(/[0-9]/g, (d) => String.fromCharCode(97 + Number(d)));
+
 export function freshOnboardingIds(): OnboardingIds {
   // egov-user validates `user.tenantId` against `^[a-zA-Z. ]*$` (letters/dot/space,
   // NO digits) on employee-create. The fresh tenant code below is used verbatim as
   // that tenantId in Phase 4, so a numeric suffix (e.g. `mz.pwt608494659`) makes
   // employee-create 400 while tenant/boundary/master creates accept it. Map the
   // digits → letters (0→a … 9→j) so the code stays unique but is letters-only.
-  const SUFFIX = `${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 1000)
-    .toString()
-    .padStart(3, '0')}`.replace(/[0-9]/g, (d) => String.fromCharCode(97 + Number(d)));
+  const SUFFIX = toLettersOnlySuffix(
+    `${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`,
+  );
   return {
     SUFFIX,
     TENANT_CODE: `${ROOT}.pwt${SUFFIX}`,

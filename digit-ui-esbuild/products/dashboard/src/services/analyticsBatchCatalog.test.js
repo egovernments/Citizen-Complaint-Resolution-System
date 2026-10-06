@@ -40,16 +40,23 @@ const CATALOG = path.resolve(
   "../../../../../ansible/nairobi-mdms/mdms/dss/KpiDefinition.json"
 );
 
-function visibleToPgrAdmin(def) {
+// The capabilities a PGR_ADMIN holds per the ACCESSCONTROL-ROLEACTIONS seed (#1050): the base
+// analytics grant plus officer identity, and deliberately NOT the report-viewer capabilities.
+// The catalog is gated by requiredActionUrl now, so this is the whole persona.
+const PGR_ADMIN_CAPABILITIES = new Set([
+  "/pgr-services/v2/analytics/_query",
+  "/pgr-services/v2/analytics/capabilities/officer",
+]);
+
+function reachableByPgrAdmin(def) {
   if (def.status !== "published" || def.viz?.internal === true) return false;
-  const ceiling = (def.rbac?.visibleTo || []).filter((role) => role !== "PUBLIC");
-  return ceiling.length === 0 || ceiling.includes("PGR_ADMIN");
+  return PGR_ADMIN_CAPABILITIES.has(def.requiredActionUrl);
 }
 
 test("the canonical PGR_ADMIN add-all plan is chunked without losing any companion ref", () => {
   const definitions = JSON.parse(fs.readFileSync(CATALOG, "utf8"))
     .map((record) => record.data || record)
-    .filter(visibleToPgrAdmin);
+    .filter(reachableByPgrAdmin);
   const kpis = Object.fromEntries(definitions.map((def) => [def.id, { ...def, kpiId: def.id }]));
   const tiles = definitions.map((def) => ({ kpiId: def.id }));
   const refs = buildRefs(tiles, kpis, {}, {});

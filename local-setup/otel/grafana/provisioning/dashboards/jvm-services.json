@@ -2,7 +2,7 @@
   "title": "DIGIT JVM Services",
   "uid": "digit-jvm",
   "schemaVersion": 39,
-  "version": 3,
+  "version": 100,
   "tags": ["digit", "jvm", "rightsizing"],
   "timezone": "browser",
   "time": { "from": "now-3h", "to": "now" },
@@ -55,7 +55,7 @@
       "id": 2,
       "type": "logs",
       "title": "Incidents — OOM / heap-space errors (last range)",
-      "description": "Loki search for OutOfMemoryError, heap space, or GC overhead events across all DIGIT containers.",
+      "description": "Loki search for OutOfMemoryError, heap space, or GC overhead events across known JVM application and migration services.",
       "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 8, "w": 16, "x": 0, "y": 12 },
       "options": { "showTime": true, "showLabels": false, "wrapLogMessage": true, "dedupStrategy": "exact", "enableLogDetails": false },
@@ -63,7 +63,7 @@
         {
           "refId": "A",
           "datasource": { "type": "loki", "uid": "loki" },
-          "expr": "{service_name=~\".+\"} |~ \"(?i)OutOfMemoryError|GC overhead limit|java heap space\"",
+          "expr": "{service_name=~\"^(audit-service|audit-service-migration|boundary-service|boundary-service-migration|db-migrations|digit-config-service|digit-config-service-migration|egov-accesscontrol|egov-accesscontrol-migration|egov-bndry-mgmnt-migration|egov-enc-service|egov-enc-service-migration|egov-filestore|egov-filestore-migration|egov-hrms|egov-hrms-migration|egov-idgen|egov-idgen-migration|egov-indexer|egov-indexer-migration|egov-localization|egov-localization-migration|egov-notification-sms|egov-otp|egov-otp-migration|egov-persister|egov-url-shortening|egov-url-shortening-migration|egov-user|egov-user-migration|egov-workflow-v2|egov-workflow-v2-migration|elasticsearch|inbox|keycloak|mdms-backend|mdms-backend-migration|novu-bridge|novu-bridge-migration|pgr-services|pgr-services-migration|user-otp)$\"} |~ \"(?i)OutOfMemoryError|GC overhead limit|java heap space\"",
           "queryType": "range"
         }
       ]
@@ -72,7 +72,7 @@
       "id": 3,
       "type": "stat",
       "title": "OOM events (current range)",
-      "description": "Count of OutOfMemoryError lines across all DIGIT services in the selected time range. >0 needs attention.",
+      "description": "Count of OutOfMemoryError lines across known JVM application and migration services in the selected time range. >0 needs attention.",
       "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 8, "w": 8, "x": 16, "y": 12 },
       "fieldConfig": {
@@ -83,7 +83,7 @@
         {
           "refId": "A",
           "datasource": { "type": "loki", "uid": "loki" },
-          "expr": "sum(count_over_time({service_name=~\".+\"} |~ \"(?i)OutOfMemoryError|GC overhead limit\" [$__range]))",
+          "expr": "sum(count_over_time({service_name=~\"^(audit-service|audit-service-migration|boundary-service|boundary-service-migration|db-migrations|digit-config-service|digit-config-service-migration|egov-accesscontrol|egov-accesscontrol-migration|egov-bndry-mgmnt-migration|egov-enc-service|egov-enc-service-migration|egov-filestore|egov-filestore-migration|egov-hrms|egov-hrms-migration|egov-idgen|egov-idgen-migration|egov-indexer|egov-indexer-migration|egov-localization|egov-localization-migration|egov-notification-sms|egov-otp|egov-otp-migration|egov-persister|egov-url-shortening|egov-url-shortening-migration|egov-user|egov-user-migration|egov-workflow-v2|egov-workflow-v2-migration|elasticsearch|inbox|keycloak|mdms-backend|mdms-backend-migration|novu-bridge|novu-bridge-migration|pgr-services|pgr-services-migration|user-otp)$\"} |~ \"(?i)OutOfMemoryError|GC overhead limit\" [$__range]))",
           "queryType": "instant"
         }
       ]

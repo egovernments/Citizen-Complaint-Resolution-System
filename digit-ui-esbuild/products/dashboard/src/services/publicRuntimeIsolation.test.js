@@ -190,8 +190,13 @@ test("public entry omits the employee navigation sidebar but keeps the filter ba
   // not be able to hide it again by mode alone.
   assert.match(source, /\{!readOnly\s*&&\s*\(\s*<DashboardFilters/);
   assert.doesNotMatch(source, /!publicMode\s*&&\s*\(?\s*<DashboardFilters/);
-  // The in-page language switcher mounts for every non-embedded shell.
-  assert.match(source, /showLanguageMenu=\{!embedded\}/);
+  // The in-page language switcher mounts for every non-embedded shell: in the
+  // header for the standalone employee page, in its own top bar for the
+  // public one.
+  assert.match(source, /showLanguageMenu=\{!embedded\s*&&\s*!publicMode\}/);
+  assert.match(source, /\{publicMode\s*&&\s*<PublicTopBar\s*\/>\}/);
+  const topBar = fs.readFileSync(path.join(path.dirname(DASHBOARD_LAYOUT), "PublicTopBar.jsx"), "utf8");
+  assert.match(topBar, /<LanguageMenu\s*\/>/);
 
   const admin = fs.readFileSync(ADMIN_DASHBOARD, "utf8");
   assert.match(admin, /readOnly=\{false\}/, "public renders Add KPI / Reset / filters like employee");
@@ -258,7 +263,7 @@ test("public grid reflows instead of squeezing desktop columns on small screens"
   assert.match(css, /\.dashboard-root\.dashboard-public \.dashboard-header-controls\s*\{[^}]*width:\s*auto;[^}]*flex-shrink:\s*0;/s);
 });
 
-test("public pack includes only aggregate PUBLIC KPIs and their configured layouts", () => {
+test("public pack includes only aggregate public KPIs and their configured layouts", () => {
   const packs = JSON.parse(fs.readFileSync(DASHBOARD_PACKS, "utf8"));
   const definitions = JSON.parse(fs.readFileSync(KPI_DEFINITIONS, "utf8"));
   const publicPack = packs.find(({ data }) => data?.id === "public-default")?.data;
@@ -287,7 +292,9 @@ test("public pack includes only aggregate PUBLIC KPIs and their configured layou
     const definition = definitionsById.get(kpiId);
     assert.ok(definition, `${kpiId} must exist in the KPI catalog`);
     assert.equal(definition.viz?.pii, false, `${kpiId} must remain aggregate-only`);
-    assert.ok(definition.rbac?.visibleTo?.includes("PUBLIC"), `${kpiId} must remain PUBLIC`);
+    // Since #1050 the anonymous audience is an explicit `public: true` marker on the definition,
+    // not a PUBLIC entry in a role list. It is additive: it never grants an employee anything.
+    assert.equal(definition.public, true, `${kpiId} must remain public`);
     if (expectedInsights.includes(kpiId)) {
       const windowParam = definition.params?.find(({ name }) => name === "window");
       assert.equal(definition.query?.window?.name, "last_30d", `${kpiId} query must cover 30 days`);

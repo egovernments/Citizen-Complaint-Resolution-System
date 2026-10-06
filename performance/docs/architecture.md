@@ -160,6 +160,8 @@ Two AWS EC2 instances provisioned for testing:
 
 Both run the identical DIGIT Docker Compose stack at `/opt/digit-ccrs/`.
 
+**Minimum deployment spec.** These are the machines used for testing, not a sizing recommendation. A DIGIT Complaints Management deployment requires a minimum of **16 vCPU / 32 GiB** — the stack holds roughly 26.8 GB of memory at rest and does not fit in anything smaller. See [Capacity Planning](./recommendations-transition-plan#the-hardware-floor-16-vcpu-32-gib).
+
 ### Network Access
 
 k6 runs from a control machine (not the test targets) and connects to Kong on port 18000. Two options:

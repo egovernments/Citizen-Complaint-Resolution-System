@@ -1,0 +1,51 @@
+# digit-ui-v2 — Vite/React citizen SPA served under /citizen/.
+#
+# WHY THIS CHART HAS NO IMAGE OF ITS OWN
+# Vite bakes the tenant into the bundle at BUILD time
+# (VITE_CITIZEN_STATE_TENANT / VITE_CITIZEN_TENANT), so there is no single
+# tenant-neutral image: the public egovio/digit-ui-v2 image is the neutral
+# reference build, which falls back to hardcoded 'ke' / 'ke.nairobi'. Ansible
+# handles this by building a per-tenant dist on the host (playbook-deploy.yml
+# "digit-ui-v2 — build (vite) with env contract") and serving the static files
+# via nginx — no image, no registry. This chart follows the same model: an
+# initContainer pulls a pre-built, tenant-baked dist tarball from object storage
+# and nginx serves it.
+#
+# BUILDING THE TARBALL (once per tenant / release):
+#   cd digit-ui-v2
+#   VITE_AUTH_PROVIDER="" \                 # "" = native DIGIT oauth (no Keycloak)
+#   VITE_CITIZEN_STATE_TENANT=<state> \     # e.g. pg
+#   VITE_CITIZEN_TENANT=<city> \            # e.g. pg.citya
+#     npx vite build --base=/citizen/       # tsc -b is skipped on purpose (see Dockerfile)
+#   tar czf digit-ui-v2-<state>.tgz -C dist .
+#   # upload to your assets bucket under deploy/ (public-read), then point distUrl at it.
+
+# URL of the pre-built tenant dist tarball. REQUIRED — set per environment
+# (e.g. in charts/environments/env.yaml under a digit-ui-v2 block, passed through
+# by the urban helmfile release). Empty renders no workload.
+distUrl: ""
+
+# SPA base path (must match the --base used at build time).
+basePath: /citizen/
+
+replicas: 1
+
+image:
+  # Stock nginx serves the static dist; a small curl image fetches the tarball.
+  nginx: nginx:1.27-alpine
+  fetch: curlimages/curl:8.10.1
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 24Mi
+  limits:
+    memory: 64Mi
+
+ingress:
+  enabled: true
+
+# global.domain is injected by the helmfile release (used for the ingress host
+# and the shared TLS secret <domain>-tls-certs).
+global:
+  domain: ""

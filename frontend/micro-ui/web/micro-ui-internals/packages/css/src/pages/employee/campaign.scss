@@ -3,7 +3,7 @@
 @import "./campaignCommon.scss";
 
 .summary-header {
-  @extend .typography.text-heading-l;
+  @extend %typography-text-heading-l;
   font-size: 2.25rem;
   margin-bottom: 1.5rem !important;
   color: theme(digitv2.lightTheme.primary-2);

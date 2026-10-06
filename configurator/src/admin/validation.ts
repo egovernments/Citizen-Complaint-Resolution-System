@@ -230,8 +230,9 @@ export const dateInPast = (value: unknown) => {
   return undefined;
 };
 
-/** Date of Birth — required and strictly before today. */
-export const dobRequired = composeValidators(required, dateInPast);
+// There is deliberately no `dobRequired`. Date of Birth is optional everywhere
+// it is captured (egovernments/CCRS#1949) — use the bare `dateInPast` validator,
+// which only rejects a *supplied* date that isn't strictly in the past.
 
 // Re-export composeValidators for custom combos
 export { composeValidators };
@@ -252,4 +253,3 @@ flagRequired(emailRequired);
 flagRequired(codeRequired);
 flagRequired(positiveInt);
 flagRequired(slaHours);
-flagRequired(dobRequired);

@@ -1,6 +1,7 @@
 import type { ToolMetadata } from '../types/index.js';
 import type { ToolRegistry } from './registry.js';
 import { digitApi } from '../services/digit-api.js';
+import { ensureAuthenticated } from '../services/auth.js';
 
 export function registerFilestoreAclTools(registry: ToolRegistry): void {
   // ──────────────────────────────────────────
@@ -9,6 +10,10 @@ export function registerFilestoreAclTools(registry: ToolRegistry): void {
 
   registry.register({
     name: 'filestore_get_urls',
+    // Admin, not the employee default: a read that returns citizen/employee PII
+    // or maps a tenant's access-control topology is reconnaissance for anyone
+    // below that tier, and its sibling WRITE tools in this same file are admin.
+    access: 'admin',
     group: 'admin',
     category: 'filestore',
     risk: 'read',
@@ -57,6 +62,7 @@ export function registerFilestoreAclTools(registry: ToolRegistry): void {
     name: 'filestore_upload',
     group: 'admin',
     category: 'filestore',
+    access: 'admin',
     risk: 'write',
     description:
       'Upload a file to DIGIT filestore. Accepts base64-encoded file content, a filename, and a module name. ' +
@@ -133,6 +139,10 @@ export function registerFilestoreAclTools(registry: ToolRegistry): void {
 
   registry.register({
     name: 'access_roles_search',
+    // Admin, not the employee default: a read that returns citizen/employee PII
+    // or maps a tenant's access-control topology is reconnaissance for anyone
+    // below that tier, and its sibling WRITE tools in this same file are admin.
+    access: 'admin',
     group: 'admin',
     category: 'access-control',
     risk: 'read',
@@ -172,6 +182,10 @@ export function registerFilestoreAclTools(registry: ToolRegistry): void {
 
   registry.register({
     name: 'access_actions_search',
+    // Admin, not the employee default: a read that returns citizen/employee PII
+    // or maps a tenant's access-control topology is reconnaissance for anyone
+    // below that tier, and its sibling WRITE tools in this same file are admin.
+    access: 'admin',
     group: 'admin',
     category: 'access-control',
     risk: 'read',
@@ -230,13 +244,3 @@ export function registerFilestoreAclTools(registry: ToolRegistry): void {
   } satisfies ToolMetadata);
 }
 
-async function ensureAuthenticated(): Promise<void> {
-  if (digitApi.isAuthenticated()) return;
-  const username = process.env.CRS_USERNAME;
-  const password = process.env.CRS_PASSWORD;
-  const tenantId = process.env.CRS_TENANT_ID || digitApi.getEnvironmentInfo().stateTenantId;
-  if (!username || !password) {
-    throw new Error('Not authenticated. Call the "configure" tool first, or set CRS_USERNAME/CRS_PASSWORD env vars.');
-  }
-  await digitApi.login(username, password, tenantId);
-}

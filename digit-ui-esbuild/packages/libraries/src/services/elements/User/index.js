@@ -68,7 +68,12 @@ export const UserService = {
       return adapter.logout();
     }
 
-    const userType = UserService.getType();
+    // The session's own user decides where logout lands. `userType` is one
+    // key shared by both apps, so a browser that had opened any employee
+    // page sent a citizen logging out to the employee language screen.
+    // It stays the fallback for a session that carries no user.
+    const sessionUserType = UserService.getUser()?.info?.type;
+    const userType = sessionUserType ? sessionUserType.toLowerCase() : UserService.getType();
     // Capture userType BEFORE we clear storage. The redirect URL has
     // to be the explicit `/citizen/login` (not `/citizen`) — landing
     // on the bare `/citizen` after a localStorage.clear leaves the

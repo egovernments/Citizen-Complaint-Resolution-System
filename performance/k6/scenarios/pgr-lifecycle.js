@@ -1,9 +1,10 @@
 import { sleep } from 'k6';
 import { Trend, Rate } from 'k6/metrics';
 import exec from 'k6/execution';
-import { login, makeRequestInfo } from '../helpers/auth.js';
-import { createComplaint, updateComplaint, searchComplaint, isAuthError } from '../helpers/pgr.js';
+import { login } from '../helpers/auth.js';
+import { createComplaint, updateComplaint, searchComplaint } from '../helpers/pgr.js';
 import { getEnv } from '../config/environments.js';
+import { getWorkloadConfig, requestContext } from '../config/workload.js';
 
 // Custom metrics
 export const transactionDuration = new Trend('transaction_duration', true);
@@ -12,11 +13,12 @@ export const transactionSuccess = new Rate('transaction_success');
 // Module-scope token cache (per VU)
 let employeeToken = null;
 let employeeUserInfo = null;
-let employeeUUID = null;
 
-// All 33 PGR leaf complaint codes (RAINMAKER-PGR.ComplaintHierarchy leaf rows) from
-// full-dump.sql — each is a serviceCode stored verbatim on a complaint. Each VU/iteration uses a different one
-const SERVICE_CODES = [
+const WORKLOAD = getWorkloadConfig();
+
+// All 33 PGR ServiceDefs from full-dump.sql — each VU/iteration uses a different one.
+// Override via env config `serviceCodes` for deployments with fewer ServiceDefs loaded.
+const ALL_SERVICE_CODES = [
   'StreetLightNotWorking',
   'NoStreetlight',
   'GarbageNeedsTobeCleared',
@@ -52,6 +54,20 @@ const SERVICE_CODES = [
   'Others',
 ];
 
+export const SERVICE_CODES = (() => {
+  const env = getEnv();
+  const svc = env.serviceCodes;
+  return (Array.isArray(svc) && svc.length > 0) ? svc : ALL_SERVICE_CODES;
+})();
+
+// Boundary codes to rotate across. Falls back to the stock seed locality only
+// if the env config doesn't supply real ones.
+export const LOCALITIES = (() => {
+  const env = getEnv();
+  const loc = env.localities;
+  return (Array.isArray(loc) && loc.length > 0) ? loc : ['JLC477'];
+})();
+
 // Per-VU iteration counter for rotating service codes
 let iterationCount = 0;
 
@@ -59,13 +75,16 @@ function thinkTime() {
   sleep(Math.random() * 2 + 1);
 }
 
+// `authTenant` exists because a deployment may authenticate at one tenant and
+// file complaints at another: on the k8s cluster ADMIN logs in at `pg` and
+// files at `pg.chandigarh`, and logging in at the city tenant is rejected.
+// Falls back to `tenant` for deployments where the two are the same.
 function ensureEmployeeAuth(env) {
   if (!employeeToken) {
-    const auth = login(env.baseUrl, env.username, env.password, env.tenant, 'EMPLOYEE');
+    const auth = login(env.baseUrl, env.username, env.password, env.authTenant || env.tenant, 'EMPLOYEE');
     if (!auth) return false;
     employeeToken = auth.token;
     employeeUserInfo = auth.userInfo;
-    employeeUUID = auth.userInfo.uuid;
   }
   return true;
 }
@@ -88,15 +107,21 @@ export function pgrLifecycle() {
     const vuId = exec.vu.idInTest;
     const serviceCode = SERVICE_CODES[(vuId + iterationCount++) % SERVICE_CODES.length];
 
-    // Citizen identity — vary by VU so different citizens file complaints
+    // Citizen identity. When the env supplies a pre-existing citizen, file
+    // everything as that user so the run creates no new user records.
     const citizenIndex = (vuId % 100) + 1;
-    const citizenPhone = `9900000${String(citizenIndex).padStart(3, '0')}`;
-    const citizenName = `LoadTestCitizen_${citizenIndex}`;
+    const citizenPhone = env.citizenPhone || `9900000${String(citizenIndex).padStart(3, '0')}`;
+    const citizenName = env.citizenName || `LoadTestCitizen_${citizenIndex}`;
+
+    // Rotate boundary per iteration so writes spread across wards
+    const locality = LOCALITIES[(vuId + iterationCount) % LOCALITIES.length];
+    const city = env.city || 'City A';
 
     // Step 2: Create complaint (with 401 retry)
     let service = createComplaint(
       env.baseUrl, employeeToken, employeeUserInfo,
-      env.tenant, serviceCode, citizenPhone, citizenName
+      env.tenant, serviceCode, citizenPhone, citizenName, locality, city,
+      requestContext(WORKLOAD, 'create')
     );
     if (!service) {
       // Could be 401 — clear auth and retry once
@@ -104,32 +129,72 @@ export function pgrLifecycle() {
       if (!ensureEmployeeAuth(env)) return;
       service = createComplaint(
         env.baseUrl, employeeToken, employeeUserInfo,
-        env.tenant, serviceCode, citizenPhone, citizenName
+        env.tenant, serviceCode, citizenPhone, citizenName, locality, city,
+        requestContext(WORKLOAD, 'create')
       );
       if (!service) return;
     }
+
+    if (!WORKLOAD.steps.includes('assign')) {
+      if (WORKLOAD.steps.includes('search')) {
+        const created = searchComplaint(
+          env.baseUrl, employeeToken, employeeUserInfo,
+          env.tenant, service.serviceRequestId,
+          requestContext(WORKLOAD, 'search')
+        );
+        success = Boolean(created);
+      } else {
+        success = true;
+      }
+      return;
+    }
+
     thinkTime();
 
     // Step 3: Assign (auto-route via empty assignees)
     const assigned = updateComplaint(
       env.baseUrl, employeeToken, employeeUserInfo,
-      service, 'ASSIGN', [], 'Load test assignment'
+      service, 'ASSIGN', [], 'Load test assignment', undefined,
+      requestContext(WORKLOAD, 'assign')
     );
     if (!assigned) return;
+
+    if (!WORKLOAD.steps.includes('resolve')) {
+      if (WORKLOAD.steps.includes('search')) {
+        const foundAssigned = searchComplaint(
+          env.baseUrl, employeeToken, employeeUserInfo,
+          env.tenant, service.serviceRequestId,
+          requestContext(WORKLOAD, 'search')
+        );
+        success = Boolean(foundAssigned);
+      } else {
+        success = true;
+      }
+      return;
+    }
+
     thinkTime();
 
     // Step 4: Resolve
     const resolved = updateComplaint(
       env.baseUrl, employeeToken, employeeUserInfo,
-      assigned, 'RESOLVE', [], 'Load test resolution'
+      assigned, 'RESOLVE', [], 'Load test resolution', undefined,
+      requestContext(WORKLOAD, 'resolve')
     );
     if (!resolved) return;
+
+    if (!WORKLOAD.steps.includes('search')) {
+      success = true;
+      return;
+    }
+
     thinkTime();
 
     // Step 5: Verify via search
     const found = searchComplaint(
       env.baseUrl, employeeToken, employeeUserInfo,
-      env.tenant, service.serviceRequestId
+      env.tenant, service.serviceRequestId,
+      requestContext(WORKLOAD, 'search')
     );
     if (!found) return;
 
@@ -153,5 +218,4 @@ export function pgrLifecycle() {
 function clearEmployeeAuth() {
   employeeToken = null;
   employeeUserInfo = null;
-  employeeUUID = null;
 }

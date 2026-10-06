@@ -5,8 +5,37 @@
 # `nginx_features` map — flip the flag rather than commenting locations
 # out by hand. SSL termination + http→https redirect are managed by
 # Certbot (the `# managed by Certbot` blocks below).
+{#
+   ==================== Security headers ====================
+   nginx's add_header does NOT inherit into a location that declares its own
+   add_header — several locations below set Cache-Control, and would silently
+   lose every security header if these were only set at server level. So they
+   live in a macro that is emitted at server level AND re-emitted in each
+   location that adds a header of its own. Change them here, once.
+
+   CSP ships in Report-Only mode by default and is NOT enforced: an untested
+   policy against these SPAs (digit-ui, configurator, Grafana, Gatus, Novu,
+   Matomo, all on one origin) breaks the UI rather than hardening it. Collect
+   reports, tune, then set `nginx_csp_enforce: true` in host_vars to enforce
+   the same policy. Override the policy itself with `nginx_csp_policy`.
+#}
+{% macro security_headers(indent='  ') %}
+{{ indent }}add_header X-Content-Type-Options nosniff always;
+{{ indent }}add_header X-Frame-Options SAMEORIGIN always;
+{{ indent }}add_header Referrer-Policy strict-origin-when-cross-origin always;
+{% if tls_enabled | default(true) %}
+{{ indent }}add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+{% endif %}
+{{ indent }}add_header {{ 'Content-Security-Policy' if (nginx_csp_enforce | default(false)) else 'Content-Security-Policy-Report-Only' }} "{{ nginx_csp_policy | default("default-src 'self'; img-src 'self' data: blob: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self' https:; frame-ancestors 'self'; base-uri 'self'; object-src 'none'") }}" always;
+{%- endmacro %}
 server {
   server_name {{ domain }};
+
+  # Don't advertise the exact nginx version in Server: / error pages — it
+  # hands an attacker a precise version to match CVEs against for free.
+  server_tokens off;
+
+{{ security_headers('  ') }}
 
 {% if nginx_features.brand_assets %}
   # Brand assets (logos, footers) served from /var/www/brand/. Requires
@@ -14,6 +43,7 @@ server {
   location /brand/ {
     alias /var/www/brand/;
     add_header Cache-Control "public, max-age=31536000, immutable" always;
+    {{ security_headers('    ') }}
     try_files $uri =404;
   }
 
@@ -32,6 +62,7 @@ server {
   location /configurator/assets/ {
     alias /var/www/configurator/assets/;
     add_header Cache-Control "public, max-age=31536000, immutable" always;
+    {{ security_headers('    ') }}
     try_files $uri =404;
   }
 
@@ -53,6 +84,7 @@ server {
     alias /var/www/configurator/;
     try_files $uri $uri/ /configurator/index.html;
     add_header Cache-Control "no-cache, must-revalidate" always;
+    {{ security_headers('    ') }}
   }
 {% else %}
   # Configurator SPA — host-built dist (build_configurator: true), no
@@ -101,12 +133,14 @@ server {
   location /citizen/assets/ {
     alias /var/www/citizen/assets/;
     add_header Cache-Control "public, max-age=31536000, immutable" always;
+    {{ security_headers('    ') }}
     try_files $uri =404;
   }
   location /citizen {
     alias /var/www/citizen/;
     try_files $uri $uri/ /citizen/index.html;
     add_header Cache-Control "no-cache, must-revalidate" always;
+    {{ security_headers('    ') }}
   }
 
 {% endif %}
@@ -124,6 +158,7 @@ server {
     auth_basic "DIGIT integration tests";
     auth_basic_user_file /etc/nginx/.htpasswd-tests;
     add_header Cache-Control "no-cache, must-revalidate" always;
+    {{ security_headers('    ') }}
     try_files $uri $uri/ $uri/index.html =404;
   }
   location /tests-v2/ {
@@ -131,6 +166,7 @@ server {
     auth_basic "DIGIT integration tests";
     auth_basic_user_file /etc/nginx/.htpasswd-tests;
     add_header Cache-Control "no-cache, must-revalidate" always;
+    {{ security_headers('    ') }}
     try_files $uri $uri/ /tests-v2/index.html =404;
   }
 {% if nginx_features.integration_tests_runner | default(false) %}
@@ -177,6 +213,22 @@ server {
   # from root. We sub_filter every layer so the browser routes everything
   # through this /status/ proxy (which strips the prefix back off).
   location /status/ {
+    # The board enumerates the whole internal service topology (every
+    # component, its endpoint and its live health), which is a free recon map
+    # of the deployment. Same basic-auth front as the integration-tests
+    # dashboards above.
+    #
+    # These two directives are INSIDE the `nginx_features.status` guard and are
+    # not themselves conditional, so there is no configuration in which the
+    # board is served unauthenticated — that is what lets the feature default to
+    # on. The playbook always resolves a password (host_vars, else OpenBao, else
+    # generated) and writes .htpasswd-status; if it somehow did not, nginx has
+    # no auth_basic_user_file to open and fails the request closed. Do NOT read
+    # this as "the deploy refuses to start with status: true and no password" —
+    # that assert existed before the feature shipped enabled and is gone.
+    auth_basic "DIGIT status";
+    auth_basic_user_file /etc/nginx/.htpasswd-status;
+
     proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_gatus_port }}/;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
@@ -219,10 +271,13 @@ server {
 {% if nginx_features.mcp %}
   # DIGIT MCP server (HTTP transport at /mcp; healthcheck at /mcp/healthz).
   # Streaming-friendly: long timeouts and buffering disabled for SSE.
-  # WARNING: /mcp exposes admin tools (mdms_create, user_create,
-  # employee_create, tenant_bootstrap, pgr_update, …) without auth —
-  # only safe for test deployments. The /v1/* REST shim below is
-  # authenticated (Authorization: Bearer <token> or body.auth = …).
+  # AUTH: /mcp is authenticated — an unauthenticated request gets 401 (the
+  # deploy asserts this: "validate — MCP HTTP transport is routed"). Admin tools
+  # (mdms_create, user_create, employee_create, tenant_bootstrap, pgr_update, …)
+  # require a token, gated by the MCP's own access tiers. The /v1/* REST shim
+  # below is likewise authenticated (Authorization: Bearer <token> or body.auth).
+  # (Updated per Vinoth review — this used to say "without auth / test only",
+  # which is no longer true and was misleading a security reader.)
   location /mcp {
     proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_mcp_port }};
     proxy_set_header Host $host;
@@ -237,8 +292,9 @@ server {
   }
 
   # REST shim — friendly tenant bootstrap / city-setup endpoints for the
-  # configurator + onboarding UI. Authentication is enforced inside the
-  # MCP server (bearer token or body.auth credentials).
+  # configurator + onboarding UI. In token mode (the http default) the MCP
+  # server requires a bearer token or body.auth credentials; this is the
+  # INTERNAL instance's vhost and is not published to the public.
   location /v1/ {
     proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_mcp_port }};
     proxy_set_header Host $host;
@@ -249,6 +305,99 @@ server {
     proxy_http_version 1.1;
     proxy_read_timeout 600s;
     proxy_send_timeout 600s;
+  }
+
+{% endif %}
+{% if nginx_features.mcp_readonly | default(false) and not nginx_features.mcp | default(false) %}
+  # DIGIT MCP — PUBLIC READ-ONLY instance (digit-mcp-readonly, MCP_READ_ONLY=1).
+  # Every write-risk tool is ABSENT, so /mcp is safe to expose here — but reads
+  # still return data, so both paths sit behind basic auth
+  # (/etc/nginx/.htpasswd-mcp-readonly, created by the playbook when
+  # mcp_readonly_basic_auth_password is set). Mutually exclusive with
+  # nginx_features.mcp — both define /mcp and /v1/, so enable ONE. Routes to the
+  # read-only container on upstream_mcp_readonly_port.
+  location /mcp {
+    auth_basic "DIGIT MCP (read-only)";
+    auth_basic_user_file /etc/nginx/.htpasswd-mcp-readonly;
+    proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_mcp_readonly_port }};
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+    proxy_buffering off;
+    proxy_read_timeout 24h;
+    proxy_send_timeout 24h;
+  }
+
+  location /v1/ {
+    auth_basic "DIGIT MCP (read-only)";
+    auth_basic_user_file /etc/nginx/.htpasswd-mcp-readonly;
+    proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_mcp_readonly_port }};
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_http_version 1.1;
+    proxy_read_timeout 600s;
+    proxy_send_timeout 600s;
+  }
+
+{% endif %}
+{# `| default(false)` is load-bearing here for the same reason as grafana
+   above: host_vars replace nginx_features as a whole dict, so every tenant
+   file written before this key existed has no `matomo` member. #}
+{% if nginx_features.matomo | default(false) %}
+  # Self-hosted Matomo — TRACKING ENDPOINTS ONLY (#1254).
+  #
+  # Two exact-match locations, and exact-match on purpose: `location /matomo/`
+  # would proxy the whole application, and the Matomo admin UI must not be
+  # public. It is bound to 127.0.0.1 by docker-compose.matomo.yml; reach it
+  # over an SSH tunnel to 127.0.0.1:{{ upstream_matomo_port }}.
+  #
+  # These two paths are what the portal's analytics shim is pointed at (Script
+  # URL /matomo/matomo.js, Endpoint URL /matomo/matomo.php in the configurator).
+  # Same-origin is the point: no TLS of its own, no entry in the ops host
+  # allowlist, and it works where the portal is served over plain http. A path
+  # under /digit-ui/ would NOT work — nginx answers anything there with the SPA
+  # shell, so the browser would try to execute HTML.
+  location = /matomo/matomo.js {
+    proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_matomo_port }}/matomo.js;
+    # Matomo's own origin, NOT $host — the origin its installer recorded in
+    # General.trusted_hosts, so Matomo's view of where it lives stays consistent
+    # with what it was installed as.
+    #
+    # MEASURED, because the widely-repeated version of this is wrong: on Matomo
+    # 5.13 the TRACKER does not enforce trusted_hosts. A hit sent through a
+    # `proxy_set_header Host $host;` block with Host: evil.example.org was
+    # recorded normally, with the correct visitor IP. The trusted-host check
+    # guards the UI and API — where a poisoned Host would end up in generated
+    # links and password-reset mails — not matomo.php. So this line is defence
+    # and consistency, not a fix for a live tracking failure; do not "simplify"
+    # it to $host, but do not expect breakage if someone already has.
+    #
+    # Nothing is lost by overriding it either way: the tracked page URL travels
+    # in the payload's `url=` parameter, not in this header.
+    proxy_set_header Host {{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_matomo_port }};
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_http_version 1.1;
+  }
+
+  location = /matomo/matomo.php {
+    proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_matomo_port }}/matomo.php;
+    proxy_set_header Host {{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_matomo_port }};
+    proxy_set_header X-Real-IP $remote_addr;
+    # Matomo reads REMOTE_ADDR by default, which behind this proxy is nginx
+    # itself — every visit would be attributed to one IP and geolocation would
+    # report a single city. The deploy sets General.proxy_client_headers to
+    # HTTP_X_FORWARDED_FOR so this header is what Matomo actually uses; see the
+    # "Matomo — apply proxy + trusted-host settings" task in playbook-deploy.yml.
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_http_version 1.1;
   }
 
 {% endif %}
@@ -509,6 +658,7 @@ server {
     alias {{ digit_dir }}/nginx/globalConfigs.js;
     default_type application/javascript;
     add_header Cache-Control "no-cache, must-revalidate" always;
+    {{ security_headers('    ') }}
   }
 
   # ----------------------------------------------------------------

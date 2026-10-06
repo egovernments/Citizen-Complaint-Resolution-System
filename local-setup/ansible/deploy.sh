@@ -46,7 +46,6 @@ run_static_validation() {
 
   if command -v ansible-lint >/dev/null 2>&1; then
     echo "──── ansible-lint ────────────────────────────────────────────────"
-    ansible-galaxy collection install -r requirements.yml -p ~/.ansible/collections --quiet 2>/dev/null || true
     if ! ansible-lint playbook-deploy.yml; then
       echo "ERROR: ansible-lint found violations. Fix them before deploying." >&2
       failed=1
@@ -72,6 +71,34 @@ run_static_validation() {
   fi
   echo "──── Static validation passed ────────────────────────────────────"
 }
+
+# Install the collections the playbook needs (community.general.ufw / htpasswd /
+# ini_file, ansible.posix, …) UNCONDITIONALLY — not only inside the ansible-lint
+# branch (Vinoth review). On an ansible-core-only controller, or any run with
+# SKIP_LINT=1, the old lint-gated install never ran and the playbook then died
+# at parse time with "couldn't resolve module/action 'community.general.ufw'".
+#
+# Notes learned the hard way:
+#   - no `--quiet`: it is not a valid `ansible-galaxy collection install` flag on
+#     several ansible-core versions ("unrecognized arguments: --quiet"). The old
+#     call carried it but hid the error behind `2>/dev/null || true`, so the
+#     install had in fact never run on those controllers.
+#   - fail only if the collection is genuinely MISSING afterwards. A controller
+#     with no galaxy reachability but the collections already present (e.g. from
+#     the pip ansible bundle) must still deploy — so a failed *download* is only
+#     fatal when community.general truly isn't installed.
+if command -v ansible-galaxy >/dev/null 2>&1; then
+  echo "──── ansible-galaxy: ensure required collections ─────────────────"
+  if ! ansible-galaxy collection install -r requirements.yml -p ~/.ansible/collections; then
+    if ansible-galaxy collection list 2>/dev/null | grep -qiE '^community\.general\b'; then
+      echo "WARN: galaxy install failed, but required collections are already present — continuing." >&2
+    else
+      echo "ERROR: community.general is not installed and the galaxy install failed." >&2
+      echo "  Install it: ansible-galaxy collection install -r requirements.yml" >&2
+      exit 1
+    fi
+  fi
+fi
 
 if [[ "${SKIP_LINT:-0}" != "1" ]]; then
   run_static_validation
@@ -114,6 +141,13 @@ fi
 # Regenerate inventory/hosts.yml from whatever host_vars exist on disk.
 # Every file (except _example.yml) becomes a host under `digit:`.
 # Group-wide vars are static here — matching hosts.yml.example.
+# Host-key verification is pinned in ansible.cfg, but Ansible's config
+# precedence puts these env vars ABOVE the ini file — an exported
+# ANSIBLE_HOST_KEY_CHECKING=False would silently reinstate
+# `-o StrictHostKeyChecking=no` and re-open the MITM window on a run that ships
+# root credentials and every bootstrap secret. Drop them for this process.
+unset ANSIBLE_HOST_KEY_CHECKING ANSIBLE_SSH_HOST_KEY_CHECKING
+
 TENANTS=$(ls inventory/host_vars/*.yml 2>/dev/null \
   | xargs -n1 basename \
   | sed 's/\.yml$//' \
@@ -130,8 +164,26 @@ TENANTS=$(ls inventory/host_vars/*.yml 2>/dev/null \
     echo "        ${t}:"
   done
   echo "      vars:"
-  echo "        ansible_user: root"
-  echo "        ansible_ssh_common_args: '-o StrictHostKeyChecking=no'"
+  # Group-level default only. host_vars/<tenant>.yml wins over group vars in
+  # Ansible, so a tenant that sets `ansible_user: digit-deploy` (plus
+  # ansible_become_password, or NOPASSWD sudo) deploys unprivileged with no
+  # change here — the play already runs under
+  # `become: {{ deploy_become | default(true) }}` and the synchronize tasks
+  # already opt out with become: false, so that path works today.
+  #
+  # The default stays root because a freshly provisioned cloud box has root or
+  # the image's default user and nothing else; pointing every tenant at an
+  # account that does not exist yet would fail to connect rather than harden
+  # anything. Override per tenant, or set DIGIT_ANSIBLE_USER for all of them.
+  echo "        ansible_user: ${DIGIT_ANSIBLE_USER:-root}"
+  # accept-new, NOT no. `no` accepts a changed key silently on every
+  # connection, so a MITM between the controller and the box is invisible and
+  # the deploy hands it root plus every bootstrap secret. accept-new trusts
+  # the key on FIRST contact (same convenience for a fresh box) but then
+  # pins it — a later mismatch aborts loudly, which is the property that
+  # matters. Pre-seed instead with `ssh-keyscan -H <host> >> ~/.ssh/known_hosts`
+  # if you want to verify the fingerprint out of band before the first run.
+  echo "        ansible_ssh_common_args: '-o StrictHostKeyChecking=accept-new'"
 } > inventory/hosts.yml
 
 host="${1:-}"

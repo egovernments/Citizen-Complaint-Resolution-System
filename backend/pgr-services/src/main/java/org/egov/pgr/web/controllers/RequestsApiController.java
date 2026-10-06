@@ -22,7 +22,7 @@ import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
-import javax.validation.Valid;
+import jakarta.validation.Valid;
 
 //@javax.annotation.Generated(value = "org.egov.codegen.SpringBootCodegen", date = "2020-07-15T11:35:33.568+05:30")
 
@@ -62,7 +62,8 @@ public class RequestsApiController{
     @InitBinder
     public void disallowInternalCriteriaFields(org.springframework.web.bind.WebDataBinder binder) {
         binder.setDisallowedFields("visibilityIds*", "visibilityUnassignedStates*",
-                "serviceRequestIds*", "userIds*", "isPlainSearch*");
+                "serviceRequestIds*", "userIds*", "isPlainSearch*",
+                "createdTimeBefore*", "serviceRequestIdBefore*");
     }
 
 

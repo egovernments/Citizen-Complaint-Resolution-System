@@ -13,7 +13,7 @@ The **KPI catalog data is deliberately not here.** It lives at
 `ansible/nairobi-mdms/mdms/dss/{KpiDefinition,DashboardPack,DashboardConfig}.json`
 and the script reads it from there. Two copies of the catalog in one repo is
 how "works on bomet, empty on the repro box" happens — see
-`docs/dashboard-configuration/60-operations.md` §4.
+`docs/2.12/dashboard/dashboard-configuration.md`.
 
 ## Quick start
 
@@ -47,7 +47,7 @@ script detects the shape in preflight and `--repair` deactivates it.
 
 ## l10n/
 
-`<locale>.json` — the `rainmaker-dashboard` message pack for that locale, 318
+`<locale>.json` — the `rainmaker-dashboard` message pack for that locale, 329
 codes each, 1:1 across locales. 65 codes carry the `CMS-DASHBOARD.` prefix and
 are referenced by the catalog's `titleKey`/`subtitleKey`/`labelKeys`; the rest
 are dashboard chrome. The prefix is part of the **code**, not a module name —
@@ -74,7 +74,7 @@ deployment offers in `common-masters.StateInfo.languages`.
 
 - **`enable-dashboard.sh --help`** — usage and flags. The full runbook (prerequisites, the seven
   steps, the role-remap decision, and a symptom→cause table for every known blocker) is the
-  enablement-PR comment that graduates into `docs/dashboard-configuration/` on merge
+  enablement-PR comment that graduates into `docs/2.12/dashboard/dashboard-configuration.md` on merge
 - Runbook (issue #631): the original, with the manual form of each step
-- `docs/dashboard-configuration/` — the reference docs this seeds against
+- `docs/2.12/dashboard/dashboard-configuration.md` — the reference doc this seeds against
 - `local-setup/db/notif-mdms-seed/` — the same pattern for notification masters

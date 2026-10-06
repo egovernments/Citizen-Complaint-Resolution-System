@@ -424,7 +424,7 @@ export interface EmployeeExcelRow {
   mobileNumber: string;
   emailId?: string;
   gender?: string;
-  dob: string;
+  dob?: string;
   department: string;
   designation: string;
   roles: string; // comma-separated

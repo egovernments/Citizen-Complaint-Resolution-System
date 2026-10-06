@@ -2,7 +2,16 @@
   {
     "tenantId": "ke",
     "data": {
+      "code": "DEFAULT",
       "maxDepth": 3,
+      "eligibleStatuses": [
+        "PENDINGATLME"
+      ],
+      "defaultSlaPercentageByLevel": [
+        80,
+        120,
+        200
+      ],
       "defaultSlaByLevel": [
         3600000,
         14400000,

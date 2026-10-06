@@ -12,7 +12,7 @@ is the `ToolRegistry` — a map of 60 `ToolMetadata` objects, each carrying a
 `name`, `group`, `inputSchema` (JSON Schema), and `handler` function.
 
 ```
-                    ToolRegistry (60 tools)
+                    ToolRegistry (70 tools)
                     ToolMetadata[] with inputSchema + handler
                            │
               ┌────────────┴────────────┐
@@ -38,7 +38,7 @@ When a user runs `digit pgr search --tenant-id pg.citya`:
 1. src/cli.ts loads
 2. applyCredentialsToEnv()        — load saved creds from ~/.config/digit-cli/
 3. new ToolRegistry()             — empty registry
-4. registerAllTools(registry)     — registers all 60 tools
+4. registerAllTools(registry)     — registers all 70 tools
 5. registry.enableGroups(ALL)     — enables everything (no progressive disclosure)
 6. buildProgram(registry)         — loops over tools, builds Commander tree
 7. program.parseAsync(argv)       — Commander parses args, invokes handler
@@ -87,7 +87,7 @@ digit
 ├── boundary/
 ├── employees/
 ├── tracing/
-└── ... (14 groups total)
+└── ... (15 groups total)
 ```
 
 ### 3.2 inputSchema → Commander options

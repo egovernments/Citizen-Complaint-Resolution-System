@@ -3,9 +3,9 @@ package org.egov.pgr.web.models.workflow;
 import java.util.ArrayList;
 import java.util.List;
 
-import javax.validation.Valid;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
-import javax.validation.constraints.Size;
+import jakarta.validation.constraints.Size;
 
 import org.egov.pgr.web.models.AuditDetails;
 import org.egov.pgr.web.models.Document;

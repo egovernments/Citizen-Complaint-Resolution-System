@@ -62,6 +62,9 @@ var globalConfigs = (function () {
   // the SPA falls back to its baked-in default.
   var mapTenant = {{ (city_tenant | default(ui_state_tenant_id | default(''))) | to_json }};
   var employeeModuleDenylist = {{ employee_module_denylist | to_json }};
+  // null leaves the rule to the UI (shown only where there is more than one
+  // tenant to switch to); true or false decides it for the deployment.
+  var showTenantSwitcher = {{ show_tenant_switcher | to_json }};
   var loginTenantAllowlist = {{ login_tenant_allowlist | to_json }};
   var coreMobileConfigs = {{ core_mobile_configs | to_json }};
   // `postalCodePattern` is the ONLY postal-code knob (CCRS#722): a regex
@@ -77,6 +80,20 @@ var globalConfigs = (function () {
   // re-render of this file (no rebuild). The emitter self-mutes when the
   // /otel Kong ingest route is absent.
   var dashboardMetricsEnabled = {{ dashboard_metrics_enabled | default(true) | to_json }};
+
+  // Analytics adapter registry (digit-ui-esbuild/public/analytics.js). The
+  // destinations themselves are MDMS rows in common-masters.AnalyticsProvider,
+  // edited in the Configurator — NOT config. These three are the ops-only knobs
+  // that MDMS deliberately cannot set, because they are the ones that decide
+  // whether a third-party script may run at all.
+  //
+  // Polarity is the OPPOSITE of dashboard_metrics_enabled above: analytics is
+  // OFF unless MDMS rows say otherwise, and the kill switch disables only on an
+  // explicit true. `| default(...)` keeps every existing inventory valid, so no
+  // host_vars edit is required to adopt this.
+  var analyticsKillSwitch = {{ analytics_kill_switch | default(false) | to_json }};
+  var analyticsScriptHosts = {{ analytics_script_hosts | default([]) | to_json }};
+  var analyticsCustomEnabled = {{ analytics_custom_enabled | default(false) | to_json }};
 
   // Keycloak SSO settings. Inert when authProvider !== 'keycloak'
   // (which is the default). The auth-adapter inside digit-ui reads
@@ -94,6 +111,7 @@ var globalConfigs = (function () {
 
   var getConfig = function (key) {
     if (key === "EMPLOYEE_MODULE_DENYLIST") return employeeModuleDenylist;
+    if (key === "SHOW_TENANT_SWITCHER") return showTenantSwitcher;
     if (key === "LOGIN_TENANT_ALLOWLIST") return loginTenantAllowlist;
     if (key === "STATE_LEVEL_TENANT_ID") {
       return stateTenantId;
@@ -165,6 +183,12 @@ var globalConfigs = (function () {
       return keycloakClientId;
     } else if (key === "TOKEN_EXCHANGE_URL") {
       return tokenExchangeUrl;
+    } else if (key === "ANALYTICS_KILL_SWITCH") {
+      return analyticsKillSwitch;
+    } else if (key === "ANALYTICS_SCRIPT_HOSTS") {
+      return analyticsScriptHosts;
+    } else if (key === "ANALYTICS_CUSTOM_ENABLED") {
+      return analyticsCustomEnabled;
     }
   };
 

@@ -17,9 +17,9 @@ const STATUS_CHOICES = [
   { id: 'PENDINGFORASSIGNMENT', name: 'Pending Assignment' },
   { id: 'PENDINGFORREASSIGNMENT', name: 'Pending Reassignment' },
   { id: 'PENDINGATLME', name: 'Pending at LME' },
-  { id: 'PENDINGATSUPERVISOR', name: 'Pending at Supervisor' },
+  { id: 'PENDINGATSUPERVISOR', name: 'Pending at Supervisor (legacy)' },
   { id: 'RESOLVED', name: 'Resolved' },
-  { id: 'RESOLVEDBYSUPERVISOR', name: 'Resolved by Supervisor' },
+  { id: 'RESOLVEDBYSUPERVISOR', name: 'Resolved by Supervisor (legacy)' },
   { id: 'REJECTED', name: 'Rejected' },
   { id: 'CLOSEDAFTERRESOLUTION', name: 'Closed (after resolution)' },
   { id: 'CLOSEDAFTERREJECTION', name: 'Closed (after rejection)' },
@@ -51,7 +51,7 @@ const columns: DigitColumn[] = [
   { source: 'serviceRequestId', label: 'app.fields.request_id' },
   {
     source: 'serviceCode',
-    label: 'app.fields.type',
+    label: 'app.fields.complaint_subcategory',
     render: (record) => {
       const code = String(record.serviceCode ?? '');
       return code ? (

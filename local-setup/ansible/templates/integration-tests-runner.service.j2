@@ -7,8 +7,37 @@ After=network.target
 
 [Service]
 Type=simple
+
+# Ran as root with no confinement: the unit declared no User=, so a daemon
+# that clones a branch and executes a Playwright suite (arbitrary code, by
+# design) did so as root on the box holding every tenant secret. It is reached
+# through nginx /tests/api/, so a flaw in the RUN button was host root.
+#
+# The account is created by the playbook alongside this unit.
+User={{ integration_tests_runner_user | default('digit-tests') }}
+Group={{ integration_tests_runner_user | default('digit-tests') }}
+
+# NoNewPrivileges also neuters any setuid binary the test suite might reach.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+# ProtectSystem=strict makes the whole filesystem read-only, so name the two
+# paths the runner legitimately writes: its checkout (clone/npm/test output)
+# and the webroot it publishes results into.
+ReadWritePaths=/var/www/integration-tests {{ integration_tests_dir }}
+
 WorkingDirectory={{ integration_tests_dir }}
 ExecStart=/usr/bin/env node {{ integration_tests_dir }}/runner/server.mjs
+# Where the Playwright browsers live. MUST match the PLAYWRIGHT_BROWSERS_PATH
+# the install task used: the browsers are installed as root, so without a shared
+# path they land in /root/.cache/ms-playwright, unreadable here under
+# ProtectHome=true, and every run fails "Executable doesn't exist".
+Environment=PLAYWRIGHT_BROWSERS_PATH={{ integration_tests_runner_browsers_path | default('/opt/ms-playwright') }}
 Environment=RUNNER_PORT={{ integration_tests_runner_port | default(8181) }}
 Environment=RUNNER_REPO_DIR={{ integration_tests_dir }}
 Environment=RUNNER_WEBROOT=/var/www/integration-tests
