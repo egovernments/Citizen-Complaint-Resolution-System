@@ -137,7 +137,8 @@ test('signup -> workspace DONE -> complaint lifecycle -> member removal on a fre
     await test.step('7. LME (ABAC scope) sees it and resolves it', async () => {
       await expect.poll(async () => (await complaint(lme.digit, id))?.applicationStatus, { message: 'assigned complaint visible to the LME', timeout: 60_000 })
         .toBe('PENDINGATLME');
-      expect(await inbox(lme.digit, 'MINE'), 'assigned complaint in the LME inbox').toContain(id);
+      // MINE reads the workflow assignee, which egov-workflow saves apart from the PGR row polled above.
+      await expect.poll(() => inbox(lme.digit, 'MINE'), { message: 'assigned complaint in the LME inbox', timeout: 60_000 }).toContain(id);
       expect(await act(lme.digit, (await complaint(lme.digit, id))!, { action: 'RESOLVE', comments: 'e2e resolved' })).toBe('RESOLVED');
     });
 
@@ -158,8 +159,9 @@ test('signup -> workspace DONE -> complaint lifecycle -> member removal on a fre
       expect(listed.members.map(m => m.digitUuid)).not.toContain(lme.member.uuid);
       await expect.poll(async () => (await lme.http.get(`${base}/identity/v1/session?surface=employee`)).status(),
         { message: 'LME BFF session ends', timeout: 30_000 }).toBe(401);
-      await expect.poll(() => allowing(lme.http, [403], async () => (await lme.digit.raw(`/pgr-services/v2/request/_search?tenantId=${tenantId}&limit=1`)).status()),
-        { message: 'LME DIGIT token rejected', timeout: 30_000 }).toBeGreaterThanOrEqual(400);
+      // Only an auth rejection proves revocation: a 400 business error would come from a still-valid token.
+      await expect.poll(() => allowing(lme.http, [403], async () => String((await lme.digit.raw(`/pgr-services/v2/request/_search?tenantId=${tenantId}&limit=1`)).status())),
+        { message: 'LME DIGIT token rejected (401/403)', timeout: 30_000 }).toMatch(/^40[13]$/);
       // The remaining staff are untouched.
       expect((await gro.http.get(`${base}/identity/v1/session?surface=employee`)).status()).toBe(200);
     });

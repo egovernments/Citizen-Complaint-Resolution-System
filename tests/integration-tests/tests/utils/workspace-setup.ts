@@ -54,18 +54,19 @@ const unexpected = (status: number) => status === 403 || status === 404 || statu
  * helpers make, fails on 403/404/5xx unless the call sits inside `allowing`.
  */
 export function strict(context: APIRequestContext, label: string): APIRequestContext {
-  for (const method of ['fetch', 'get', 'post', 'put', 'patch', 'delete', 'head'] as const) {
-    const original = (context[method] as (...args: unknown[]) => Promise<APIResponse>).bind(context);
-    (context as unknown as Record<string, unknown>)[method] = async (...args: unknown[]) => {
-      const response = await original(...args);
-      const status = response.status();
-      if (unexpected(status) && !allowances.get(context)?.has(status)) {
-        const target = typeof args[0] === 'string' ? args[0] : (args[0] as { url(): string }).url();
-        throw new Error(`${label}: ${method.toUpperCase()} ${new URL(target, 'http://x').pathname} -> HTTP ${status}${await errorCodes(response)}`);
-      }
-      return response;
-    };
-  }
+  // get/post/put/... all go through fetch in Playwright, so wrapping fetch covers every request once.
+  const original = context.fetch.bind(context);
+  context.fetch = async (...args: Parameters<APIRequestContext['fetch']>) => {
+    const response = await original(...args);
+    const status = response.status();
+    if (unexpected(status) && !allowances.get(context)?.has(status)) {
+      const [target, options] = args;
+      const url = typeof target === 'string' ? target : target.url();
+      const method = (options?.method ?? (typeof target === 'string' ? 'GET' : target.method())).toUpperCase();
+      throw new Error(`${label}: ${method} ${new URL(url, 'http://x').pathname} -> HTTP ${status}${await errorCodes(response)}`);
+    }
+    return response;
+  };
   return context;
 }
 
@@ -125,14 +126,16 @@ export const commandOtp: ReadOtp = async challenge => {
   const env = { ...process.env, OTP_PHONE: challenge.mobileNumber, OTP_TENANT_ID: challenge.tenantId,
     OTP_CHALLENGE_ID: challenge.challengeId, OTP_SINCE_MS: String(challenge.requestedAt) };
   const deadline = Date.now() + 30_000;
+  let lastError = '';
   while (Date.now() < deadline) {
-    const out = await new Promise<string>((resolve, reject) => execFile('/bin/sh', ['-c', process.env.ONBOARDING_E2E_OTP_COMMAND!],
-      { env, timeout: 20_000 }, (error, stdout) => error ? reject(new Error(`OTP command failed: ${error.message.split('\n')[0]}`)) : resolve(stdout)));
-    const code = out.match(/(\d{6})\s*$/)?.[1];
+    // A non-zero exit (grep/jq -e before the log line exists, a dropped SSH link) means "no code yet".
+    const out = await new Promise<string>(resolve => execFile('/bin/sh', ['-c', process.env.ONBOARDING_E2E_OTP_COMMAND!],
+      { env, timeout: 20_000 }, (error, stdout) => { if (error) lastError = error.message.split('\n')[0]; resolve(error ? '' : stdout); }));
+    const code = [...out.matchAll(/\b(\d{6})\b/g)].at(-1)?.[1];
     if (code) return code;
     await sleep(1_000);
   }
-  throw new Error('The OTP command printed no code within the test window');
+  throw new Error(`The OTP command printed no code within the test window${lastError ? ` (last failure: ${lastError})` : ''}`);
 };
 
 // ---------------------------------------------------------------------------
@@ -149,6 +152,8 @@ function loginAction(html: string) {
   return match ? unescapeHtml(match[1]) : undefined;
 }
 const LOGIN_PAGES = new Set(['login', 'login.ftl', 'login-username', 'login-password']);
+/** The error Keycloak rendered on the page, if any. */
+const keycloakError = (html: string) => unescapeHtml(html.match(/"summary"\s*:\s*"([^"]+)"/)?.[1] ?? 'no message');
 
 /** Follows an activation mail through Keycloak's required actions and sets the password. */
 export async function activateAccount(request: APIRequestContext, link: string, password: string): Promise<void> {
@@ -159,6 +164,8 @@ export async function activateAccount(request: APIRequestContext, link: string, 
     const id = pageId(html);
     if (!id) break;
     if (html.includes('password-new') || id.includes('update-password')) {
+      // The form coming back after a submit means Keycloak rejected the password (policy, history).
+      if (passwordSet) throw new Error(`Keycloak rejected the new password: ${keycloakError(html)}`);
       response = await request.post(loginAction(html)!, { form: { 'password-new': password, 'password-confirm': password } });
       passwordSet = true;
     } else if (id.startsWith('info')) {
@@ -179,12 +186,17 @@ export async function employeeSignIn(request: APIRequestContext, base: string, s
   const params = new URLSearchParams({ surface: 'employee', method: 'password', intent: 'signin', tenantSlug: slug,
     returnTo: `/${slug}/digit-ui/employee/user/login` });
   let response = await request.get(`${base}/identity/v1/authorize?${params}`);
-  for (let step = 0; step < 4; step++) {
+  let posted: string | undefined;
+  for (let step = 0; step < 3; step++) {
     const html = await response.text();
     const id = pageId(html);
     if (!id) break;
     if (!LOGIN_PAGES.has(id)) throw new Error(`Sign-in stopped on Keycloak page ${id}`);
+    // Identity-first login moves login-username -> login-password; the same page again means the
+    // credentials were rejected. Re-posting them would only feed brute-force detection.
+    if (id === posted) throw new Error(`Keycloak rejected the sign-in for ${username}: ${keycloakError(html)}`);
     response = await request.post(loginAction(html)!, { form: { username, password } });
+    posted = id;
   }
   const session = await identityJson<{ authenticated: boolean }>(await request.get(`${base}/identity/v1/session?surface=employee`));
   if (session.authenticated !== true) throw new Error('Employee sign-in did not establish a BFF session');
@@ -342,6 +354,15 @@ export const BOUNDARIES = [
   { code: 'E2E_WARD_B', name: 'Ward Beta', type: 'Ward', parent: 'E2E_COUNTY', lat: -1.32, lon: 36.83 },
 ];
 
+/** Codes in the tenant's ADMIN relationship tree, at any depth. */
+async function relationshipCodes(digit: Digit): Promise<Set<string>> {
+  const trees = (await digit.post(`/boundary-service/boundary-relationships/_search?tenantId=${digit.tenantId}&hierarchyType=${HIERARCHY}&includeChildren=true`)).TenantBoundary ?? [];
+  const codes = new Set<string>();
+  const walk = (nodes: any[] = []) => { for (const node of nodes) { codes.add(node.code); walk(node.children); } };
+  for (const tree of trees) walk(tree.boundary);
+  return codes;
+}
+
 export async function geographyStep(digit: Digit, locales: string[]) {
   const { tenantId } = digit;
   await digit.post('/boundary-service/boundary-hierarchy-definition/_create', { BoundaryHierarchy: { tenantId, hierarchyType: HIERARCHY,
@@ -353,10 +374,11 @@ export async function geographyStep(digit: Digit, locales: string[]) {
   await expect.poll(async () => ((await digit.post(`/boundary-service/boundary/_search?tenantId=${tenantId}&codes=${codes}&limit=10`)).Boundary ?? []).length,
     { message: 'boundary entities persisted', timeout: 60_000 }).toBe(BOUNDARIES.length);
   for (const b of BOUNDARIES) {
+    // A child's relationship is refused until its parent's is persisted (async persister).
+    if (b.parent) await expect.poll(async () => (await relationshipCodes(digit)).has(b.parent!),
+      { message: `relationship ${b.parent} persisted`, timeout: 60_000 }).toBe(true);
     await digit.post('/boundary-service/boundary-relationships/_create', { BoundaryRelationship: {
       tenantId, hierarchyType: HIERARCHY, code: b.code, boundaryType: b.type, ...(b.parent ? { parent: b.parent } : {}) } });
-    // A child's parent must be persisted before the child's relationship is accepted.
-    await sleep(1_000);
   }
   await expect.poll(async () => {
     const trees = (await digit.post(`/boundary-service/boundary-relationships/_search?tenantId=${tenantId}&hierarchyType=${HIERARCHY}&includeChildren=true`)).TenantBoundary ?? [];

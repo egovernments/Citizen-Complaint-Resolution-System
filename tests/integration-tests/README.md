@@ -188,7 +188,9 @@ against a real stack, at API level through the public origin:
 3. The configurator's step calls, in order: Branding (logo upload,
    ThemeConfig), Geography (2-level hierarchy), Departments (2 departments,
    1 designation), Employees (two GROs and an LME via HRMS `_create` then BFF
-   `_link`; each activation mail sets a password), Complaint types (2 leaves
+   `_link`; the water GRO and the LME follow their activation mail and set a
+   password; the roads GRO exists only so every routed department has a GRO,
+   and is never activated), Complaint types (2 leaves
    with department and SLA). Every step is marked DONE and the workspace ends
    `DONE` with every probe true. The labels the steps wrote resolve for `en_IN`.
 4. GRO and LME sign in through Keycloak; a citizen signs in by OTP at `/{slug}/`
@@ -226,7 +228,7 @@ export ONBOARDING_E2E_OTP_COMMAND='ssh <box> "sudo docker logs --since $((OTP_SI
 npm run test:onboarding-real
 ```
 
-A run takes about 6–8 minutes; most of it is tenant provisioning. Each run uses
+A run takes about 2–5 minutes; most of it is tenant provisioning (measured: 4.0 min, then 2.0 min once #2310 removed the provisioning retries). Each run uses
 one magic-link request, and the BFF allows 3 per client IP per 30 minutes by
 default (`IDENTITY_MAGIC_LINK_REQUEST_LIMIT`), so back-to-back runs from one
 machine can stall at "No mail with a sign-in link".
