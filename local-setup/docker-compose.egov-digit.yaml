@@ -980,14 +980,11 @@ services:
       OTEL_METRICS_EXPORTER: ${OTEL_METRICS_EXPORTER:-otlp}
       OTEL_LOGS_EXPORTER: none
       JAVA_TOOL_OPTIONS: -Xms128m -Xmx384m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
-      # The fixed dev OTP (123456) MUST be off wherever real OTP delivery is on,
-      # or every account is one guessable code away from takeover. The Ansible
-      # deploy renders this false whenever enable_otp_services is true (see
-      # digit.env.j2), so following the production OTP runbook actually disables
-      # it. Bare `docker compose up` (local dev, no real SMS) defaults to true
-      # for convenience. (Vinoth review.)
-      CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED: ${CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED:-true}
-      CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE: '123456'
+      # Fixed OTP is a development mode: off unless .env turns it on. Ansible
+      # sets it only for `identity_dev_fixed_otp: true` (never from the
+      # absence of enable_otp_services).
+      CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED: ${CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED:-false}
+      CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE: ${CITIZEN_OTP_FIXED_VALUE:-123456}
       EGOV_MOBILE_VALIDATION_DEFAULT_COUNTRY_CODE: '+91'
       EGOV_MOBILE_VALIDATION_DEFAULT_REGEX: '^[6-9][0-9]{9}$'
     healthcheck:
@@ -1818,11 +1815,13 @@ services:
       # pgr-services only EMITS a thin event per transition; routing, recipients, language and
       # rendering are novu-bridge's job now, so the locale / user-preference settings that used
       # to live here moved to the bridge (NOVU_BRIDGE_DEFAULT_LOCALE, NOVU_BRIDGE_PREFERENCE_HOST).
-      # Tenant-admin onboarding (#1999) authenticates through the identity BFF's
-      # session-introspection endpoint. Reuse the BFF's introspection-only
-      # credential by default; either value can still be overridden explicitly.
+      # Tenant-admin onboarding (#1999) authenticates to the identity BFF with
+      # the BFF's onboarding bearer (IDENTITY_ONBOARDING_TOKEN), which the BFF
+      # also accepts for session introspection. The introspection-only token
+      # remains the fallback for a .env written before the onboarding token
+      # existed; either value can still be overridden explicitly.
       PGR_ONBOARDING_IDENTITY_BFF_URL: ${PGR_ONBOARDING_IDENTITY_BFF_URL:-http://identity-bff:3000}
-      PGR_ONBOARDING_IDENTITY_BFF_TOKEN: ${PGR_ONBOARDING_IDENTITY_BFF_TOKEN:-${IDENTITY_SESSION_INTROSPECTION_TOKEN:-}}
+      PGR_ONBOARDING_IDENTITY_BFF_TOKEN: ${PGR_ONBOARDING_IDENTITY_BFF_TOKEN:-${IDENTITY_ONBOARDING_TOKEN:-${IDENTITY_SESSION_INTROSPECTION_TOKEN:-}}}
       # Provisioning-worker lease API credential (internal network only).
       PGR_ONBOARDING_WORKER_TOKEN: ${PGR_ONBOARDING_WORKER_TOKEN:-}
       NEW_COMPLAINT_ENABLED: 'true'
@@ -3108,7 +3107,7 @@ services:
     # Hardening: no capabilities, no privilege escalation (see file header).
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
-    # Built from backend/identity-bff/keycloak/Dockerfile.magic-link. It pins
+    # Built from keycloak/Dockerfile. It pins
     # Keycloak 26.7.3 and adds the email magic-link provider. Override with the
     # upstream image only when magic-link authentication is disabled.
     image: ${IDENTITY_KEYCLOAK_IMAGE:-egovio/identity-keycloak:nightly-develop}
@@ -3173,6 +3172,19 @@ services:
       KEYCLOAK_BFF_CLIENT_SECRET: ${KEYCLOAK_BFF_CLIENT_SECRET:-dev-only-change-me}
       KEYCLOAK_MAGIC_LINK_CLIENT_ID: digit-identity-bff-magic-link
       KEYCLOAK_MAGIC_LINK_CLIENT_SECRET: ${KEYCLOAK_MAGIC_LINK_CLIENT_SECRET:-}
+      # digit-ui employee/citizen surfaces (#2167); each fails closed while empty.
+      KEYCLOAK_EMPLOYEE_CLIENT_SECRET: ${KEYCLOAK_EMPLOYEE_CLIENT_SECRET:-}
+      KEYCLOAK_CITIZEN_CLIENT_SECRET: ${KEYCLOAK_CITIZEN_CLIENT_SECRET:-}
+      IDENTITY_SURFACES_JSON: ${IDENTITY_SURFACES_JSON:-}
+      IDENTITY_STAFF_CREDENTIAL_MODE: ${IDENTITY_STAFF_CREDENTIAL_MODE:-rotate}
+      IDENTITY_CREDENTIAL_KEYS: ${IDENTITY_CREDENTIAL_KEYS:-}
+      IDENTITY_CREDENTIAL_KEY_CURRENT: ${IDENTITY_CREDENTIAL_KEY_CURRENT:-0}
+      IDENTITY_CITIZEN_OTP_SECRET: ${IDENTITY_CITIZEN_OTP_SECRET:-}
+      IDENTITY_CITIZEN_OTP_SENDER: ${IDENTITY_CITIZEN_OTP_SENDER:-}
+      # Off unless .env turns it on (identity_dev_fixed_otp: true).
+      CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED: ${CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED:-false}
+      CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE: ${CITIZEN_OTP_FIXED_VALUE:-123456}
+      IDENTITY_POLLER_MAX_LAG_SECONDS: ${IDENTITY_POLLER_MAX_LAG_SECONDS:-60}
       KEYCLOAK_ADMIN_URL: http://keycloak:8180
       KEYCLOAK_ADMIN_REALM: ${KEYCLOAK_ORGANIZATION_REALM:-digit}
       KEYCLOAK_ADMIN_CLIENT_ID: digit-identity-admin
@@ -3190,11 +3202,13 @@ services:
       IDENTITY_COOKIE_SAME_SITE: ${IDENTITY_COOKIE_SAME_SITE:-Lax}
       IDENTITY_CONTROL_PLANE_TOKEN: ${IDENTITY_CONTROL_PLANE_TOKEN:-dev-only-change-me}
       IDENTITY_SESSION_INTROSPECTION_TOKEN: ${IDENTITY_SESSION_INTROSPECTION_TOKEN:-dev-only-change-me}
+      # Bearer for the internal onboarding primitives; pgr-services sends the same value.
+      IDENTITY_ONBOARDING_TOKEN: ${IDENTITY_ONBOARDING_TOKEN:-}
       IDENTITY_RECONCILE_ON_STARTUP: ${IDENTITY_RECONCILE_ON_STARTUP:-true}
       IDENTITY_RECONCILIATION_INTERVAL_SECONDS: ${IDENTITY_RECONCILIATION_INTERVAL_SECONDS:-900}
-      IDENTITY_ORGANIZATION_ADMIN_ROLES: TENANT_ADMIN
-      IDENTITY_ORGANIZATION_MEMBER_GROUP: employees
       DIGIT_USER_SERVICE_URL: http://kong:8000/user
+      # Citizen DIGIT-token mint. Internal only, never via Kong: the response carries the OTP.
+      DIGIT_OTP_CREATE_URL: ${DIGIT_OTP_CREATE_URL:-http://egov-otp:8089/otp/v1/_create}
       DIGIT_USER_LOGOUT_URL: http://egov-user-proxy:8107/user/_logout
       DIGIT_MDMS_SEARCH_URL: http://kong:8000/mdms-v2/v1/_search
       DIGIT_ADMIN_USERNAME: ${IDENTITY_DIGIT_ADMIN_USERNAME:-ADMIN}
@@ -3224,7 +3238,7 @@ services:
     ports:
       - "${BIND_IP:-127.0.0.1}:18400:3000"
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/healthz >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/livez >/dev/null 2>&1 || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5

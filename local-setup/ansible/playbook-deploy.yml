@@ -60,6 +60,22 @@
           no OTP can be sent. Set enable_novu: true (and enable SMS for the tenant under
           Configurator -> Notifications -> Channels), or leave enable_otp_services false.
 
+    # The fixed OTP (123456) and log delivery are opt-in only, so a Keycloak box
+    # with no SMS stack and neither opt-in has no way to deliver a citizen code.
+    # Warn, never fail: staff sign-in and citizen password sign-in still work.
+    - name: "preflight — warn when citizen phone sign-in has no OTP channel"
+      when:
+        - enable_keycloak | default(false) | bool
+        - not (enable_otp_services | default(false) | bool)
+        - not (identity_dev_fixed_otp | default(false) | bool)
+        - not (identity_citizen_otp_sender | default('', true) | length > 0)
+      ansible.builtin.debug:
+        msg: >-
+          WARNING: citizen phone sign-in is unavailable on this box. enable_otp_services
+          is false and neither identity_dev_fixed_otp: true (development only: accepts
+          123456) nor identity_citizen_otp_sender is set in host_vars. Set one of them to
+          offer phone sign-in.
+
     # pgr-services, pgr-services-db, novu-bridge and novu-bridge-db must come from ONE
     # build (see notification_stack_tag in host_vars/_example.yml). They all follow
     # notification_stack_tag unless a per-image override pins one of them, and a partial
@@ -1458,9 +1474,15 @@
 
     - name: Copy idempotent Identity Keycloak configurator
       copy:
-        src: ../../backend/identity-bff/deploy/digit-compose/configure-keycloak.sh
+        src: ../../keycloak/configure-keycloak.sh
         dest: "{{ digit_dir }}/configure-identity-keycloak.sh"
         mode: '0750'
+
+    - name: Copy the declared Identity Keycloak realm
+      copy:
+        src: ../../keycloak/realm.json
+        dest: "{{ digit_dir }}/identity-keycloak-realm.json"
+        mode: '0640'
 
     # Sourced by the "notification stack — remove the retired OTP senders" tasks: proves
     # novu-bridge has taken over the login-OTP topic before the old senders go (#2097).
@@ -3132,6 +3154,20 @@
           admin user's password in Keycloak to match).
       when: enable_keycloak | default(false)
 
+    - name: "Identity BFF — validate staff credential mode"
+      ansible.builtin.assert:
+        that:
+          - (identity_staff_credential_mode | default('rotate')) in ['rotate', 'derived']
+          - >-
+            (identity_staff_credential_mode | default('rotate')) != 'derived'
+            or ((bao_secrets_identity.json.data.data.identity_credential_keys | default('', true)) | length > 0
+                and (bao_secrets_identity.json.data.data.identity_credential_key_current | default(0) | int) > 0)
+        fail_msg: >-
+          identity_staff_credential_mode must be rotate or derived. Derived mode
+          also requires identity_credential_keys and identity_credential_key_current
+          in OpenBao; rotate mode requires neither.
+      when: enable_keycloak | default(false)
+
     # `or`, not `ternary`: Jinja evaluates every filter argument up front, so a
     # ternary would run the generator on every deploy and discard it whenever
     # OpenBao already holds a value. `or` short-circuits. See the longer note
@@ -3159,6 +3195,18 @@
           pgr_onboarding_worker_token: >-
             {{ _identity_stored.pgr_onboarding_worker_token | default('', true)
                or lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
+          keycloak_employee_client_secret: >-
+            {{ _identity_stored.keycloak_employee_client_secret | default('', true)
+               or lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
+          keycloak_citizen_client_secret: >-
+            {{ _identity_stored.keycloak_citizen_client_secret | default('', true)
+               or lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
+          identity_citizen_otp_secret: >-
+            {{ _identity_stored.identity_citizen_otp_secret | default('', true)
+               or lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
+          identity_onboarding_token: >-
+            {{ _identity_stored.identity_onboarding_token | default('', true)
+               or lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
       when: enable_keycloak | default(false)
       no_log: true
 
@@ -3180,7 +3228,7 @@
       when:
         - enable_keycloak | default(false)
         # Exactly "the merge would change something", i.e. at least one of the
-        # six was absent or empty and has just been generated.
+        # resolved identity secrets was absent or empty and has just been generated.
         - (bao_secrets_identity.json.data.data | combine(identity_secrets))
           != bao_secrets_identity.json.data.data
       no_log: true
@@ -3202,6 +3250,14 @@
           IDENTITY_CONTROL_PLANE_TOKEN={{ identity_secrets.identity_control_plane_token }}
           IDENTITY_SESSION_INTROSPECTION_TOKEN={{ identity_secrets.identity_session_introspection_token }}
           PGR_ONBOARDING_WORKER_TOKEN={{ identity_secrets.pgr_onboarding_worker_token }}
+          KEYCLOAK_EMPLOYEE_CLIENT_SECRET={{ identity_secrets.keycloak_employee_client_secret }}
+          KEYCLOAK_CITIZEN_CLIENT_SECRET={{ identity_secrets.keycloak_citizen_client_secret }}
+          IDENTITY_CITIZEN_OTP_SECRET={{ identity_secrets.identity_citizen_otp_secret }}
+          IDENTITY_ONBOARDING_TOKEN={{ identity_secrets.identity_onboarding_token }}
+          {% if (identity_staff_credential_mode | default('rotate')) == 'derived' %}
+          IDENTITY_CREDENTIAL_KEYS={{ bao_secrets_identity.json.data.data.identity_credential_keys }}
+          IDENTITY_CREDENTIAL_KEY_CURRENT={{ bao_secrets_identity.json.data.data.identity_credential_key_current }}
+          {% endif %}
           IDENTITY_DIGIT_ADMIN_PASSWORD={{ bao_secrets_identity.json.data.data.identity_digit_admin_password | default(bao_secrets_identity.json.data.data.token_exchange_system_password | default('eGov@123')) }}
           IDENTITY_DIGIT_PROVISIONER_PASSWORD={{ bao_secrets_identity.json.data.data.identity_digit_provisioner_password | default('') }}
         marker: "# {mark} KEYCLOAK SECRETS"
@@ -6342,6 +6398,8 @@
       ansible.builtin.command: "{{ digit_dir }}/configure-identity-keycloak.sh"
       environment:
         IDENTITY_ENV_DIR: "{{ digit_dir }}/identity"
+        KEYCLOAK_REALM_CONFIG: "{{ digit_dir }}/identity-keycloak-realm.json"
+        KEYCLOAK_EVENTS_EXPIRATION_SECONDS: "{{ identity_keycloak_events_expiration_seconds | default('') }}"
         KEYCLOAK_ORGANIZATION_REALM: "{{ keycloak_organization_realm | default('digit') }}"
         KEYCLOAK_SSL_REQUIRED: "{{ 'external' if (tls_enabled | default(true)) else 'none' }}"
         # The same resolved values that went into .env, so Keycloak's clients
@@ -6350,6 +6408,8 @@
         KEYCLOAK_MAGIC_LINK_ENABLED: "{{ identity_magic_link_enabled | default(false) | lower }}"
         KEYCLOAK_MAGIC_LINK_CLIENT_SECRET: "{{ identity_secrets.keycloak_magic_link_client_secret }}"
         KEYCLOAK_ADMIN_CLIENT_SECRET: "{{ identity_secrets.keycloak_admin_client_secret }}"
+        KEYCLOAK_EMPLOYEE_CLIENT_SECRET: "{{ identity_secrets.keycloak_employee_client_secret }}"
+        KEYCLOAK_CITIZEN_CLIENT_SECRET: "{{ identity_secrets.keycloak_citizen_client_secret }}"
         IDENTITY_REDIRECT_URI: "{{ ('https://' if (tls_enabled | default(true)) else 'http://') + domain + '/identity/v1/callback' }}"
         IDENTITY_POST_LOGIN_REDIRECT: "{{ identity_post_login_redirect | default(('https://' if (tls_enabled | default(true)) else 'http://') + domain + '/configurator/login', true) }}"
         IDENTITY_ALLOWED_ORIGINS: "{{ identity_allowed_origins | default(('https://' if (tls_enabled | default(true)) else 'http://') + domain, true) }}"

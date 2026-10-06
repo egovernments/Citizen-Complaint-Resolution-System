@@ -109,6 +109,10 @@ describe('ansible playbook-deploy.yml', () => {
       'identity_control_plane_token',
       'identity_session_introspection_token',
       'pgr_onboarding_worker_token',
+      'keycloak_employee_client_secret',
+      'keycloak_citizen_client_secret',
+      'identity_citizen_otp_secret',
+      'identity_onboarding_token',
     ];
 
     test('none of them is derived from another secret', () => {
@@ -131,6 +135,25 @@ describe('ansible playbook-deploy.yml', () => {
       expect(playbook).toContain(
         'bao_secrets_identity.json.data.data | combine(identity_secrets)'
       );
+    });
+
+    // 8c gate report 4, Part A: the digit-ui surface secrets, the phone-OTP
+    // HMAC secret and the onboarding bearer were documented but never
+    // generated or passed, so a converged box skipped the digit-ui clients
+    // and answered 503 on employee/citizen sign-in.
+    test('the digit-ui surface secrets reach the Keycloak configurator', () => {
+      const start = playbook.indexOf('identity-bootstrap — reconcile Organizations realm and BFF clients');
+      expect(start).toBeGreaterThan(-1);
+      const task = playbook.slice(start, start + 4000);
+      for (const [env, key] of [
+        ['KEYCLOAK_EMPLOYEE_CLIENT_SECRET', 'keycloak_employee_client_secret'],
+        ['KEYCLOAK_CITIZEN_CLIENT_SECRET', 'keycloak_citizen_client_secret'],
+      ]) {
+        expect(task).toContain(`${env}: "{{ identity_secrets.${key} }}"`);
+        expect(playbook).toContain(`${env}={{ identity_secrets.${key} }}`);
+      }
+      expect(playbook).toContain('IDENTITY_CITIZEN_OTP_SECRET={{ identity_secrets.identity_citizen_otp_secret }}');
+      expect(playbook).toContain('IDENTITY_ONBOARDING_TOKEN={{ identity_secrets.identity_onboarding_token }}');
     });
 
     test('an empty Keycloak admin password fails the deploy closed', () => {
@@ -1301,5 +1324,123 @@ describe('e2e notifications README code links', () => {
       if (!declared) problems.push(`${label}: ${parts[parts.length - 1]} is not declared in ${rel}`);
     }
     expect(problems).toEqual([]);
+  });
+});
+
+describe('standalone Identity BFF and Keycloak deployment contract', () => {
+  const service = (compose: string, name: string) => {
+    const start = compose.indexOf(`\n  ${name}:\n`);
+    expect(start).toBeGreaterThan(-1);
+    const rest = compose.slice(start + 1);
+    const end = rest.slice(1).search(/\n  [a-z0-9-]+:\n/);
+    return end < 0 ? rest : rest.slice(0, end + 1);
+  };
+
+  test('top-level Keycloak paths are used by build, CI, and Ansible', () => {
+    const build = read('build/build-config.yml');
+    expect(build).toContain('work-dir: "keycloak"');
+    expect(build).toContain('dockerfile: "keycloak/Dockerfile"');
+    const playbook = read('local-setup/ansible/playbook-deploy.yml');
+    expect(playbook).toContain('src: ../../keycloak/configure-keycloak.sh');
+    expect(playbook).toContain('src: ../../keycloak/realm.json');
+    expect(playbook).toContain('KEYCLOAK_REALM_CONFIG: "{{ digit_dir }}/identity-keycloak-realm.json"');
+    expect(read('.github/workflows/keycloak-ci.yml')).toContain('- "keycloak/**"');
+    expect(read('.github/workflows/identity-bff-ci.yml')).not.toContain('backend/identity-bff/keycloak');
+  });
+
+  test('new settings are optional and the old onboarding worker remains wired', () => {
+    const env = read('local-setup/ansible/templates/digit.env.j2');
+    expect(env).toContain("IDENTITY_STAFF_CREDENTIAL_MODE={{ identity_staff_credential_mode | default('rotate') }}");
+    expect(env).toContain("IDENTITY_SURFACES_JSON={{ identity_surfaces_json | default('') }}");
+    expect(env).toContain("{% set fixed_otp = identity_dev_fixed_otp | default(false) | bool %}");
+    expect(env).not.toContain('identity_dev_fixed_otp | default(not');
+    expect(env).toContain('CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED={{ fixed_otp | lower }}');
+    expect(env).toContain("IDENTITY_CITIZEN_OTP_SENDER={{ identity_citizen_otp_sender | default('log' if fixed_otp else '') }}");
+    expect(env).toContain('IDENTITY_ONBOARDING_WORKER_ENABLED={{ identity_onboarding_worker_enabled | default(false) | lower }}');
+    const bff = service(read('local-setup/docker-compose.egov-digit.yaml'), 'identity-bff');
+    for (const setting of ['IDENTITY_SURFACES_JSON', 'IDENTITY_STAFF_CREDENTIAL_MODE',
+      'IDENTITY_CREDENTIAL_KEYS', 'IDENTITY_CREDENTIAL_KEY_CURRENT', 'IDENTITY_CITIZEN_OTP_SENDER',
+      'IDENTITY_POLLER_MAX_LAG_SECONDS', 'ONBOARDING_WORKER_ENABLED', 'PGR_ONBOARDING_WORKER_URL',
+      'PGR_ONBOARDING_WORKER_TOKEN', 'DIGIT_PROVISIONER_USERNAME', 'DIGIT_MDMS_CREATE_URL']) {
+      expect(bff).toContain(`${setting}:`);
+    }
+    expect(read('local-setup/ansible/playbook-deploy.yml')).toContain("rotate mode requires neither");
+  });
+
+  test('fixed citizen OTP is off by default in every compose path', () => {
+    const variable = 'CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED: ${CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED:-false}';
+    const files = ['local-setup/docker-compose.yml', 'local-setup/docker-compose.registry.yml',
+      'local-setup/docker-compose.egov-digit.yaml', 'backend/identity-bff/deploy/digit-compose/docker-compose.identity.yml'];
+    for (const file of files) expect(read(file)).not.toMatch(/OTP_FIXED_ENABLED:-true/);
+    for (const file of ['local-setup/docker-compose.yml', 'local-setup/docker-compose.registry.yml']) {
+      expect(service(read(file), 'egov-user')).toContain(variable);
+    }
+    const full = read('local-setup/docker-compose.egov-digit.yaml');
+    expect(service(full, 'egov-user')).toContain(variable);
+    expect(service(full, 'identity-bff')).toContain(variable);
+    expect(service(full, 'identity-bff')).toContain('IDENTITY_CITIZEN_OTP_SENDER: ${IDENTITY_CITIZEN_OTP_SENDER:-}');
+    expect(read('backend/identity-bff/deploy/digit-compose/docker-compose.identity.yml')).toContain(variable);
+  });
+
+  test('the deploy warns, without failing, when citizen phone sign-in has no OTP channel', () => {
+    const playbook = read('local-setup/ansible/playbook-deploy.yml');
+    const start = playbook.indexOf('- name: "preflight — warn when citizen phone sign-in has no OTP channel"');
+    expect(start).toBeGreaterThan(-1);
+    const task = playbook.slice(start, playbook.indexOf('\n\n', start));
+    expect(task).toContain('ansible.builtin.debug:');
+    expect(task).not.toMatch(/assert:|fail:/);
+    for (const guard of ['enable_keycloak | default(false) | bool',
+      'not (enable_otp_services | default(false) | bool)',
+      'not (identity_dev_fixed_otp | default(false) | bool)',
+      "not (identity_citizen_otp_sender | default('', true) | length > 0)"]) {
+      expect(task).toContain(guard);
+    }
+    expect(task).toContain('citizen phone sign-in is unavailable');
+  });
+
+  test('no host_vars example claims the citizen OTP is always 123456', () => {
+    for (const file of ['_example.yml', 'quickstart.yml.example']) {
+      expect(read(`local-setup/ansible/inventory/host_vars/${file}`)).not.toMatch(/always 123456/);
+    }
+    expect(read('local-setup/ansible/inventory/host_vars/_example.yml')).toContain('# identity_dev_fixed_otp: false');
+  });
+});
+
+// 8c gate report 4, Part A: the BFF container must receive every setting the
+// deploy resolves for it, and pgr-services must send the BFF's onboarding bearer.
+describe('identity-bff compose wiring', () => {
+  const compose = read('local-setup/docker-compose.egov-digit.yaml');
+  const service = (name: string) => {
+    const start = compose.indexOf(`\n  ${name}:\n`);
+    expect(start).toBeGreaterThan(-1);
+    const next = compose.slice(start + 1).search(/\n  [a-z0-9-]+:\n/);
+    return compose.slice(start, next < 0 ? undefined : start + 1 + next);
+  };
+
+  test('passes the surface secrets, OTP secret, onboarding token and OTP mint URL', () => {
+    const bff = service('identity-bff');
+    for (const line of [
+      'KEYCLOAK_EMPLOYEE_CLIENT_SECRET: ${KEYCLOAK_EMPLOYEE_CLIENT_SECRET:-}',
+      'KEYCLOAK_CITIZEN_CLIENT_SECRET: ${KEYCLOAK_CITIZEN_CLIENT_SECRET:-}',
+      'IDENTITY_CITIZEN_OTP_SECRET: ${IDENTITY_CITIZEN_OTP_SECRET:-}',
+      'IDENTITY_ONBOARDING_TOKEN: ${IDENTITY_ONBOARDING_TOKEN:-}',
+      'DIGIT_OTP_CREATE_URL: ${DIGIT_OTP_CREATE_URL:-http://egov-otp:8089/otp/v1/_create}',
+    ]) {
+      expect(bff).toContain(line);
+    }
+    // the code no longer reads these
+    expect(bff).not.toContain('IDENTITY_ORGANIZATION_ADMIN_ROLES');
+    expect(bff).not.toContain('IDENTITY_ORGANIZATION_MEMBER_GROUP');
+  });
+
+  test('pgr-services sends the same onboarding bearer the BFF requires', () => {
+    expect(service('pgr-services')).toContain(
+      'PGR_ONBOARDING_IDENTITY_BFF_TOKEN: ${PGR_ONBOARDING_IDENTITY_BFF_TOKEN:-${IDENTITY_ONBOARDING_TOKEN:-${IDENTITY_SESSION_INTROSPECTION_TOKEN:-}}}'
+    );
+  });
+
+  test('Ansible can override the OTP mint URL without losing the compose default', () => {
+    const env = read('local-setup/ansible/templates/digit.env.j2');
+    expect(env).toContain("DIGIT_OTP_CREATE_URL={{ identity_digit_otp_create_url | default('') }}");
   });
 });

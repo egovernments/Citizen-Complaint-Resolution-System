@@ -314,12 +314,23 @@ enable_integration_tests_runner: false
 # send/validate). The OTP SMS itself goes out through novu-bridge like every
 # other SMS (it consumes DIGIT core's egov.core.notification.sms topic).
 # Default false — local-setup/kong/kong.yml mocks /user-otp/* with a canned
-# 200 response so login/register work via the fixed OTP (123456, see
-# CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE) without any SMS infra.
-# Set true for production. The deploy then strips the two Kong OTP mocks and
-# turns the fixed OTP off. REQUIRES enable_novu: true (preflight asserts it)
-# and SMS enabled for the tenant (Configurator -> Notifications -> Channels).
+# 200 response. Citizen OTP login then works ONLY on a box that opts into the
+# fixed development OTP below; otherwise no citizen code can be delivered.
+# Set true for production. The deploy then strips the two Kong OTP mocks.
+# REQUIRES enable_novu: true (preflight asserts it) and SMS enabled for the
+# tenant (Configurator -> Notifications -> Channels).
 enable_otp_services: false
+
+# Fixed citizen OTP (123456, CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE) for egov-user
+# and the identity BFF, plus the BFF's `log` sender. DEVELOPMENT ONLY: anyone can
+# sign in as any citizen number with it. Off by default, never derived from
+# enable_otp_services. With enable_keycloak and neither this nor real OTP nor
+# identity_citizen_otp_sender, citizen phone sign-in is unavailable (the deploy
+# warns).
+# identity_dev_fixed_otp: false
+# The BFF's citizen OTP sender (IDENTITY_CITIZEN_OTP_SENDER). Empty by default;
+# `log` only when identity_dev_fixed_otp is true.
+# identity_citizen_otp_sender: ""
 
 # Bring up Elasticsearch + egov-indexer + inbox-v2. Heavy (~3GB RAM
 # extra). Off by default; only enable if you actually use the inbox.
@@ -730,9 +741,11 @@ novu_bridge_smscountry_password: ""
 #
 # Secrets: `keycloak_admin_password` must be set in OpenBao (the deploy fails
 # closed without it — an empty value makes compose fall back to the literal
-# `admin`). The six identity secrets — keycloak_bff_client_secret,
+# `admin`). The identity secrets — keycloak_bff_client_secret,
 # keycloak_magic_link_client_secret, keycloak_admin_client_secret,
-# identity_control_plane_token, identity_session_introspection_token and
+# keycloak_employee_client_secret, keycloak_citizen_client_secret,
+# identity_control_plane_token, identity_session_introspection_token,
+# identity_onboarding_token, identity_citizen_otp_secret and
 # pgr_onboarding_worker_token — are generated independently on first deploy
 # and stored in OpenBao, so none of them is derivable from another. Read one
 # back with `bao kv get -field=<key> kv/digit/<tenant>`; rotate one with
@@ -758,6 +771,7 @@ identity_digit_admin_tenant_id: "pg"
 identity_digit_provisioner_username: "" # optional MDMS_ADMIN for tenant foundation
 identity_digit_provisioner_tenant_id: ""
 identity_foundation_source_tenant: "pg"
+identity_digit_otp_create_url: ""     # default: internal http://egov-otp:8089/otp/v1/_create (needs the otp profile)
 identity_smtp_host: ""
 identity_smtp_port: 587
 identity_smtp_from: ""

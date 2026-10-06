@@ -1,6 +1,11 @@
+import { parseStaffCredentialConfig } from "./staff-credential-config.js";
 const keycloakBffClientId =
   process.env.KEYCLOAK_BFF_CLIENT_ID || "digit-identity-bff";
 const digitMdmsCreateUrl = process.env.DIGIT_MDMS_CREATE_URL || "";
+const identityCookieName =
+  process.env.IDENTITY_COOKIE_NAME || "digit_identity_session";
+const digitGatewayHost =
+  (process.env.DIGIT_GATEWAY_HOST || "http://gateway:8080").replace(/\/$/, "");
 
 function csv(value: string): string[] {
   return [...new Set(value.split(",").map((item) => item.trim()).filter(Boolean))];
@@ -38,6 +43,7 @@ function keycloakIssuerRealm(): string {
 }
 
 export const config = {
+  ...parseStaffCredentialConfig(process.env),
   port: parseInt(process.env.PORT || "3000"),
 
   // Keycloak
@@ -56,8 +62,20 @@ export const config = {
     process.env.KEYCLOAK_MAGIC_LINK_CLIENT_ID || "digit-identity-bff-magic-link",
   keycloakMagicLinkClientSecret:
     process.env.KEYCLOAK_MAGIC_LINK_CLIENT_SECRET || "",
+  // digit-ui employee and citizen sign-in (#2167). Each surface has its own
+  // confidential client, flow and theme; an empty secret leaves the surface
+  // unconfigured (503) rather than silently falling back to another client.
+  keycloakEmployeeClientId:
+    process.env.KEYCLOAK_EMPLOYEE_CLIENT_ID || "digit-ui-employee",
+  keycloakEmployeeClientSecret:
+    process.env.KEYCLOAK_EMPLOYEE_CLIENT_SECRET || "",
+  keycloakCitizenClientId:
+    process.env.KEYCLOAK_CITIZEN_CLIENT_ID || "digit-ui-citizen",
+  keycloakCitizenClientSecret:
+    process.env.KEYCLOAK_CITIZEN_CLIENT_SECRET || "",
 
   // Identity BFF
+  identitySurfacesJson: process.env.IDENTITY_SURFACES_JSON || "",
   identityRedirectUri:
     process.env.IDENTITY_REDIRECT_URI ||
     "http://localhost:18201/identity/v1/callback",
@@ -70,8 +88,15 @@ export const config = {
   ),
   identityScope:
     process.env.IDENTITY_SCOPE || "openid profile email organization:*",
-  identityCookieName:
-    process.env.IDENTITY_COOKIE_NAME || "digit_identity_session",
+  identityEmployeeScope:
+    process.env.IDENTITY_EMPLOYEE_SCOPE || "openid profile email",
+  identityCitizenScope:
+    process.env.IDENTITY_CITIZEN_SCOPE || "openid profile phone",
+  identityCookieName,
+  identityEmployeeCookieName:
+    process.env.IDENTITY_EMPLOYEE_COOKIE_NAME || `${identityCookieName}_employee`,
+  identityCitizenCookieName:
+    process.env.IDENTITY_CITIZEN_COOKIE_NAME || `${identityCookieName}_citizen`,
   identityCookieSecure: process.env.IDENTITY_COOKIE_SECURE !== "false",
   identityCookieSameSite: cookieSameSite(
     process.env.IDENTITY_COOKIE_SAME_SITE || "Lax",
@@ -86,6 +111,36 @@ export const config = {
     process.env.IDENTITY_MAGIC_LINK_REQUEST_LIMIT || "3",
   ),
   identityTrustProxyHops: parseInt(process.env.IDENTITY_TRUST_PROXY_HOPS || "0"),
+  // Citizen phone OTP sign-in (#2189). The secret keys the code and phone
+  // hashes. `phone_otp` is offered only with the secret AND a way to prove a
+  // number: a configured sender, or a valid fixed code (development).
+  identityCitizenOtpSecret: process.env.IDENTITY_CITIZEN_OTP_SECRET || "",
+  identityCitizenOtpTtlSeconds: parseInt(process.env.IDENTITY_CITIZEN_OTP_TTL_SECONDS || "300"),
+  identityCitizenOtpMaxAttempts: parseInt(process.env.IDENTITY_CITIZEN_OTP_MAX_ATTEMPTS || "5"),
+  identityCitizenOtpResendSeconds: parseInt(process.env.IDENTITY_CITIZEN_OTP_RESEND_SECONDS || "30"),
+  identityCitizenOtpSendWindowSeconds: parseInt(
+    process.env.IDENTITY_CITIZEN_OTP_SEND_WINDOW_SECONDS || "3600",
+  ),
+  identityCitizenOtpPhoneSendLimit: parseInt(process.env.IDENTITY_CITIZEN_OTP_PHONE_SEND_LIMIT || "5"),
+  identityCitizenOtpIpSendLimit: parseInt(process.env.IDENTITY_CITIZEN_OTP_IP_SEND_LIMIT || "20"),
+  // Interim OTP channel: "log" writes codes to the BFF log (development only).
+  // Anything else = no channel, so a send answers OTP_CHANNEL_UNAVAILABLE.
+  identityCitizenOtpSender: process.env.IDENTITY_OTP_SENDER || process.env.IDENTITY_CITIZEN_OTP_SENDER || "",
+  identityOtpSenderUrl: process.env.IDENTITY_OTP_SENDER_URL || "",
+  identityOtpSenderTimeoutMs: parseInt(process.env.IDENTITY_OTP_SENDER_TIMEOUT_MS || "10000"),
+  // Same switch and value egov-user reads (citizen.login.password.otp.fixed.*):
+  // when on, the fixed code is accepted for any challenge. Development only.
+  citizenLoginPasswordOtpFixedEnabled: process.env.CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED === "true",
+  citizenLoginPasswordOtpFixedValue: process.env.CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE || "123456",
+  // Existing-tenant routes (#2167): when true, startup gives every active
+  // DIGIT ROOT tenant in IDENTITY_TENANT_ROUTE_BACKFILL_ROOTS that has no
+  // Organization one whose URL slug is the tenant id. Never renames a slug.
+  identityTenantRouteBackfill: process.env.IDENTITY_TENANT_ROUTE_BACKFILL === "true",
+  identityTenantRouteBackfillRoots: csv(
+    process.env.IDENTITY_TENANT_ROUTE_BACKFILL_ROOTS ||
+      (process.env.DIGIT_ADMIN_TENANT_ID || "").split(".")[0],
+  ),
+  identityAuditStreamMaxLength: parseInt(process.env.IDENTITY_AUDIT_STREAM_MAXLEN || "100000"),
   identityAuthResultTtlSeconds: parseInt(
     process.env.IDENTITY_AUTH_RESULT_TTL_SECONDS || "300",
   ),
@@ -100,6 +155,8 @@ export const config = {
   ),
   identityControlPlaneToken:
     process.env.IDENTITY_CONTROL_PLANE_TOKEN || "",
+  identityOnboardingToken:
+    process.env.IDENTITY_ONBOARDING_TOKEN || "",
   identitySessionIntrospectionToken:
     process.env.IDENTITY_SESSION_INTROSPECTION_TOKEN || "",
   identityReconcileOnStartup:
@@ -116,6 +173,16 @@ export const config = {
   // for those accounts' lifecycle, never for business calls.
   digitUserServiceUrl: process.env.DIGIT_USER_SERVICE_URL || "",
   digitMdmsSearchUrl: process.env.DIGIT_MDMS_SEARCH_URL || "",
+  // Internal egov-otp create endpoint used only by the default
+  // CitizenTokenMinter. Never route this through a public gateway: its
+  // response contains the OTP value. Empty = citizen tokens unavailable.
+  digitOtpCreateUrl: process.env.DIGIT_OTP_CREATE_URL || "",
+  // Which identity egov-user passes to egov-otp when a CITIZEN password grant
+  // is validated as an OTP: the mobile number (UserService.validateOtp), from
+  // the verified session phone. See docs/identity-bff.md#citizen-token-minting.
+  digitCitizenOtpIdentity:
+    process.env.DIGIT_CITIZEN_OTP_IDENTITY === "userName" ? "userName" as const : "mobileNumber" as const,
+  digitCitizenRoles: csv(process.env.DIGIT_CITIZEN_ROLES || "CITIZEN"),
   // egov-user reached directly (internal network) for token revocation only:
   // Kong's RBAC evaluates the principal's home tenant, which a BFF-managed
   // account may hold no roles in. Defaults to DIGIT_USER_SERVICE_URL.
@@ -134,13 +201,13 @@ export const config = {
   digitMdmsV2SearchUrl:
     process.env.DIGIT_MDMS_V2_SEARCH_URL ||
     digitMdmsCreateUrl.replace(/\/_create\/?$/, "/_search") ||
-    `${(process.env.DIGIT_GATEWAY_HOST || "http://gateway:8080").replace(/\/$/, "")}/mdms-v2/v2/_search`,
+    `${digitGatewayHost}/mdms-v2/v2/_search`,
   digitMdmsSchemaSearchUrl:
     process.env.DIGIT_MDMS_SCHEMA_SEARCH_URL ||
-    `${(process.env.DIGIT_GATEWAY_HOST || "http://gateway:8080").replace(/\/$/, "")}/mdms-v2/schema/v1/_search`,
+    `${digitGatewayHost}/mdms-v2/schema/v1/_search`,
   digitMdmsSchemaCreateUrl:
     process.env.DIGIT_MDMS_SCHEMA_CREATE_URL ||
-    `${(process.env.DIGIT_GATEWAY_HOST || "http://gateway:8080").replace(/\/$/, "")}/mdms-v2/schema/v1/_create`,
+    `${digitGatewayHost}/mdms-v2/schema/v1/_create`,
   digitFoundationSourceTenant:
     process.env.DIGIT_FOUNDATION_SOURCE_TENANT ||
     process.env.DIGIT_BOOTSTRAP_SOURCE_TENANT ||
@@ -159,11 +226,6 @@ export const config = {
     process.env.ONBOARDING_TENANT_ADMIN_ROLES ||
       "TENANT_ADMIN,GRO,ACCOUNT_ADMIN,MDMS_ADMIN,LOC_ADMIN,SUPERUSER",
   ),
-  identityOrganizationAdminRoles: csv(
-    process.env.IDENTITY_ORGANIZATION_ADMIN_ROLES || "TENANT_ADMIN",
-  ),
-  identityOrganizationMemberGroup:
-    process.env.IDENTITY_ORGANIZATION_MEMBER_GROUP || "employees",
   digitManagedBaseRoles: csv(process.env.DIGIT_MANAGED_BASE_ROLES || "EMPLOYEE"),
   digitManagedRoleAllowlist: csv(
     process.env.DIGIT_MANAGED_ROLE_ALLOWLIST ||
@@ -190,8 +252,8 @@ export const config = {
   keycloakAdminClientId: process.env.KEYCLOAK_ADMIN_CLIENT_ID || "admin-cli",
   keycloakAdminClientSecret:
     process.env.KEYCLOAK_ADMIN_CLIENT_SECRET || "",
-  keycloakAdminUsername: process.env.KEYCLOAK_ADMIN_USERNAME || "admin",
-  keycloakAdminPassword: process.env.KEYCLOAK_ADMIN_PASSWORD || "admin",
+  keycloakAdminUsername: process.env.KEYCLOAK_ADMIN_USERNAME || "",
+  keycloakAdminPassword: process.env.KEYCLOAK_ADMIN_PASSWORD || "",
   // Redis
   redisHost: process.env.REDIS_HOST || "localhost",
   redisPort: parseInt(process.env.REDIS_PORT || "6379"),

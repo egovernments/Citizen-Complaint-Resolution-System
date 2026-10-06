@@ -155,7 +155,8 @@ twilio_whatsapp_from: "whatsapp:+14155238886"
 
 # ── Optional services (opt-in via flags; all off, matching _example.yml) ──
 # Real OTP stack (egov-otp/user-otp; the SMS goes out via novu-bridge, so it
-# needs enable_novu). Off keeps the kong.yml mock (fixed OTP 123456) — fine here.
+# needs enable_novu). Off keeps the kong.yml mock; the fixed OTP 123456 then also
+# needs `identity_dev_fixed_otp: true` (off by default, development only).
 enable_otp_services: false
 # Turbopass (OSM location autocomplete) — standalone on-box container.
 enable_turbopass: false

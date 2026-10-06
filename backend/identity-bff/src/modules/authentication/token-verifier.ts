@@ -88,12 +88,17 @@ export async function validateJwt(
         (verified.preferred_username as string) || undefined,
       email_verified: verified.email_verified as boolean | undefined,
       phone_number: (verified.phone_number as string) || undefined,
+      phone_number_verified: typeof verified.phone_number_verified === "boolean"
+        ? verified.phone_number_verified
+        : undefined,
       realm_access: (verified.realm_access as { roles: string[] }) || undefined,
       groups: (verified.groups as string[]) || undefined,
       organization:
         (verified.organization as KeycloakClaims["organization"]) || undefined,
       nonce: (verified.nonce as string) || undefined,
       azp: (verified.azp as string) || undefined,
+      // Keycloak's session id: matches events to BFF sessions (§10) and keys the kc-session index.
+      sid: typeof verified.sid === "string" && verified.sid ? verified.sid : undefined,
       realm,
     };
   } catch (err) {

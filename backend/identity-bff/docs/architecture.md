@@ -1,86 +1,66 @@
 # Identity BFF architecture
 
-This page is the short architectural map for DIGIT browser identity. For API
-payloads and operational details, use the [BFF guide](identity-bff.md). For a
-deployment walkthrough, use the repository-level
-[setup guide](../../../docs/setup/deployment/identity-bff.md).
+This page is the short map of DIGIT browser identity. The frozen contract (routes, error codes, Keycloak state, the Redis keyspace, the derived credential and the onboarding rules) is [identity-bff.md](identity-bff.md). The design behind it is `IDENTITY-BFF-BOUNDARY-FREEZE.md` revision 7.1. For a deployment walkthrough, use the repository-level [setup guide](../../../docs/setup/deployment/identity-bff.md).
 
 ## Boundary
 
 ```text
 Browser ── OIDC redirect + opaque cookie ──> Identity BFF ──> Keycloak
                                                    │
-                                                   └───────> egov-user
+                                                   └───────> egov-user (admin reads, identifiers,
+                                                             derived staff credential, logout)
+PGR onboarding ── onboarding token ─────────> Identity BFF (onboarding primitives only)
 
 Browser ── DIGIT RequestInfo.authToken ───────────────────> DIGIT APIs
 ```
 
-- Keycloak owns credentials, authentication flows, external identity
-  providers, users, Organizations and membership.
-- The Identity BFF owns Authorization Code + PKCE, server-side Keycloak tokens,
-  the opaque browser session, tenant selection and projection into a
-  tenant-local DIGIT account.
-- DIGIT access control remains authoritative for business APIs. The BFF returns
-  the existing user-scoped DIGIT token shape and is not a business-API proxy.
-- The frontend never receives Keycloak tokens or submits a password to the BFF.
+The BFF is a credential-to-account broker. It does three things:
+1. It turns a Keycloak sign-in, or a verified citizen phone, into one DIGIT account and its token, for the tenant the URL names.
+2. It keeps that binding, and Keycloak's mirror of DIGIT roles, status and name, consistent.
+3. It enforces and revokes access.
+
+It never proxies DIGIT business calls, writes MDMS or HRMS, holds a role catalogue, accepts a person's password, or runs the onboarding steps (PGR does). The frontend never receives Keycloak tokens.
 
 ## Sources of truth
 
 | Concern | Source |
 |---|---|
-| OIDC endpoints, client secrets, callbacks | deployment secrets/environment |
-| Sign-in and signup method policy/order | `digit-identity-bff` Keycloak client attributes |
-| OAuth provider availability and display name | live Keycloak Identity Provider instances |
-| Password capability | enabled BFF OIDC client and standard browser flow |
-| Magic-link capability | enabled magic-link client plus the BFF client secret |
-| Tenant membership | Keycloak Organizations |
-| Business authorization | DIGIT roles/access-control data |
+| Credentials, identity providers, MFA, sign-in flows | Keycloak |
+| Organization membership | Keycloak Organizations |
+| Which DIGIT account a person uses at a tenant | `digit.bindings` on the Keycloak user (written by the BFF) |
+| Roles, employment status, descriptive profile, tenant name | DIGIT (egov-user, HRMS, MDMS), mirrored into Keycloak (`digit.accounts`, `firstName`, Organization `name`) |
+| Verified login identifiers (staff email, citizen phone) | Keycloak, written into DIGIT after verification |
+| Sign-in and sign-up methods per surface, and allowed account actions | Client attributes `digit.auth.signin.methods`, `digit.auth.signup.methods`, `digit.auth.account.actions` |
+| Onboarding steps, their order and retries | PGR (`restartNo` on the operation row) |
+| Business authorization | DIGIT roles and access control |
 
-The BFF exposes the composed result through
-`GET /identity/v1/auth-methods?intent=signin|signup`. Signup renders the
-available methods from this response. Sign-in uses it only to confirm that the
-hosted Keycloak entry is available, then hands method selection to Keycloak so
-password, Google and GitHub stay on one authentication screen. Neither UI keeps
-its own provider list. Keycloak client attributes are:
+**Access** to a tenant = DIGIT `active` AND the identity-side predicate:
+- staff: the Keycloak user is enabled, has an `active` binding, and is a member of the Organization;
+- citizen: the Keycloak user is enabled and holds a verified phone.
 
-```text
-digit.auth.signin.methods=password,google,github
-digit.auth.signup.methods=magic_link,google,github
-```
+## Sign-in sequence
 
-The order in each attribute is the display order. Unknown or disabled provider
-aliases are omitted. Missing policy or an unavailable Keycloak Admin API fails
-closed; the BFF does not fall back to an environment-owned method catalog.
+1. The browser loads the surface's methods from `GET /identity/v1/auth-methods`.
+2. `GET /identity/v1/authorize` starts Authorization Code + PKCE at Keycloak (an IdP adds `kc_idp_hint`). Citizens may sign in by phone OTP through the BFF instead.
+3. Keycloak returns to `/identity/v1/callback`. The BFF checks state, nonce and PKCE, stores the tokens in Redis, and sets an opaque HttpOnly cookie.
+4. The page calls `_select` for the tenant. Under the person lease, the BFF re-reads the session, checks the access predicate, and returns the DIGIT token: a cached one if egov-user still accepts it, else a new one minted with the derived staff credential or the citizen OTP grant.
 
-## Authentication sequence
+## Revocation
 
-1. The browser loads the journey's methods from the BFF.
-2. Password and OAuth methods start Keycloak Authorization Code + PKCE. OAuth
-   adds only the selected `kc_idp_hint`.
-3. Magic-link signup stores the submitted name/email as a short-lived draft and
-   asks the authenticated Keycloak extension to send a one-use link.
-4. Keycloak returns a code to the BFF callback. The BFF validates state, nonce
-   and PKCE, stores tokens in Redis and sets an opaque HttpOnly cookie.
-5. The browser loads eligible Organizations, selects one, and receives the
-   normal tenant-scoped DIGIT login response.
+Keycloak events (read by a poller), reconcile (HRMS deactivation, role change, Organization or tenant disabled, a missing DIGIT account) and logout all lead to the same step. The BFF logs out every inventoried DIGIT token of the person and ends their BFF sessions. Failed logouts are retried from a Redis set until the token expires.
 
 ## Deployment units
 
-- `identity-keycloak`: Keycloak 26, the magic-link extension, and the
-  `configurator-blue` Keycloakify login theme.
-- `identity-bff`: browser API, sessions, tenant context and projection.
-- Redis: login attempts, callback results and opaque sessions.
-- Existing Keycloak Postgres and DIGIT egov-user/MDMS services.
+- `identity-keycloak`: Keycloak 26.7.3, the magic-link extension and the login theme.
+- `identity-bff`: the browser API, sessions, bindings, sync and revocation.
+- Redis: sessions, leases, the token inventory, OTP challenges and the event checkpoint. Every family is re-derivable, restartable, or a documented limit.
+- Keycloak's Postgres and the DIGIT egov-user, HRMS and MDMS services.
 
-`configure-keycloak.sh` idempotently creates the realm clients, client
-attributes, providers, mappers, roles and theme selection. Only `/identity/v1`
-and the required `/auth/realms/...` and `/auth/resources/...` surfaces are
-public; the Admin API and `/internal/identity/v1` remain private.
+Only `/identity/v1` and the required `/auth/realms/...` and `/auth/resources/...` paths are public. The Keycloak Admin API and `/internal/identity/v1` stay private.
 
 ## Further reading
 
+- [Frozen contract](identity-bff.md)
 - [Identity BFF README](../README.md)
-- [Complete API and operations guide](identity-bff.md)
 - [Deployment and integration setup](../../../docs/setup/deployment/identity-bff.md)
 - [Environment reference](../deploy/digit-compose/identity-bff.env.example)
-- [Keycloak provisioning script](../deploy/digit-compose/configure-keycloak.sh)

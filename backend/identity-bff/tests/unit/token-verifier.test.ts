@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { initJwks, validateJwt } from "../../src/modules/authentication/token-verifier.js";
-import { signJwt } from "../helpers.js";
+import { getIssuer, signJwt } from "../helpers.js";
+
+const ISSUER = getIssuer();
 
 beforeAll(() => {
   initJwks(process.env.KEYCLOAK_JWKS_URI);
@@ -18,6 +20,11 @@ describe("validateJwt", () => {
     expect(claims!.sub).toBe("user-1");
     expect(claims!.email).toBe("a@b.com");
     expect(claims!.name).toBe("Alice");
+  });
+
+  it("passes Keycloak's session id (sid) through", async () => {
+    const token = await signJwt({ sub: "user-1", email: "a@b.com", sid: "kc-session-1", azp: "client" });
+    expect(await validateJwt(`Bearer ${token}`)).toMatchObject({ sid: "kc-session-1", azp: "client" });
   });
 
   it("returns null for missing auth header", async () => {
@@ -59,7 +66,7 @@ describe("validateJwt", () => {
     const token = await signJwt({ sub: "u1", email: "a@b.com" });
     const claims = await validateJwt(`Bearer ${token}`);
     expect(claims).not.toBeNull();
-    // The issuer in test is "http://localhost:9999/realms/digit-sandbox"
+    // The issuer in test is ".../realms/digit-sandbox"
     // so realm should be "digit-sandbox"
     expect(claims!.realm).toBe("digit-sandbox");
   });
@@ -71,7 +78,7 @@ describe("validateJwt", () => {
       aud: "digit-ui",
     });
     const claims = await validateJwt(`Bearer ${token}`, {
-      issuer: "http://localhost:9999/realms/digit-sandbox",
+      issuer: ISSUER,
       audience: "digit-ui",
     });
     expect(claims?.sub).toBe("user-1");
@@ -88,7 +95,7 @@ describe("validateJwt", () => {
       audience: "digit-ui",
     })).toBeNull();
     expect(await validateJwt(`Bearer ${token}`, {
-      issuer: "http://localhost:9999/realms/digit-sandbox",
+      issuer: ISSUER,
       audience: "other-client",
     })).toBeNull();
   });
