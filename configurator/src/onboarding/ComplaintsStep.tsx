@@ -101,7 +101,7 @@ export default function ComplaintsStep() {
           writeDraft(tenant, null);
           toast({
             title: 'Unsaved changes dropped',
-            description: 'The complaint types were changed somewhere else since, so you’re seeing the saved version.',
+            description: 'The complaint categories were changed somewhere else since, so you’re seeing the saved version.',
           });
         }
         setDraft(result.editable ? stored ?? result.draft : null);
@@ -147,11 +147,11 @@ export default function ComplaintsStep() {
         slaHours: draft.slaHours,
       });
       writeDraft(tenant, null);
-      toast({ title: `${filable} complaint ${filable === 1 ? 'type is' : 'types are'} ready` });
+      toast({ title: `${filable} complaint ${filable === 1 ? 'category is' : 'categories are'} ready` });
       finish();
     } catch (err) {
       reportStepError('complaints', 'save', err, tenant);
-      setSaveError(describeSaveError(err, 'Saving your complaint types failed. Try again.'));
+      setSaveError(describeSaveError(err, 'Saving your complaint categories failed. Try again.'));
     } finally {
       setSaving(false);
     }
@@ -169,7 +169,7 @@ export default function ComplaintsStep() {
         {header()}
         <Alert variant="destructive">
           <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
-            <span>Couldn’t load your complaint types. {loadError}</span>
+            <span>Couldn’t load your complaint categories. {loadError}</span>
             <Button variant="outline" size="sm" onClick={reload}>
               Try again
             </Button>
@@ -191,7 +191,7 @@ export default function ComplaintsStep() {
   if (bulk) {
     return (
       <div className="space-y-6">
-        {header('Upload complaint types', 'Define your levels, fill the template with your complaint types, and upload it.')}
+        {header('Upload complaint categories', 'Define your levels, fill the template with your complaint categories, and upload it.')}
         <DigitCard>
           <ComplaintHierarchySetup
             targetTenant={tenant}
@@ -204,7 +204,7 @@ export default function ComplaintsStep() {
               trackStepAction('complaints', 'entity_import', 'complaint_type', { tenant, source: 'bulk', count: defs });
               setBulk(false);
               writeDraft(tenant, null);
-              toast({ title: `${defs} complaint ${defs === 1 ? 'type' : 'types'} imported` });
+              toast({ title: `${defs} complaint ${defs === 1 ? 'subcategory' : 'subcategories'} imported` });
               reload();
             }}
           />
@@ -227,7 +227,7 @@ export default function ComplaintsStep() {
           </div>
           <div className="text-sm">
             <p className="font-medium text-foreground">
-              {loaded.leafCount} complaint {loaded.leafCount === 1 ? 'type' : 'types'} set up from a spreadsheet
+              {loaded.leafCount} complaint {loaded.leafCount === 1 ? 'subcategory' : 'subcategories'} set up from a spreadsheet
             </p>
             <p className="mt-1 text-muted-foreground">
               Levels: {loaded.levels.join(' → ')}. You can change them in management once setup is finished.
@@ -258,15 +258,15 @@ export default function ComplaintsStep() {
 
       {types.length === 0 ? (
         <div className="space-y-6">
-          <EmptyState icon={MessageSquareText} title="No complaint types yet">
-            A complaint type is the category someone picks when reporting: a pothole, a broken street light. Add the first
+          <EmptyState icon={MessageSquareText} title="No complaint categories yet">
+            A complaint category is what someone picks when reporting: a pothole, a broken street light. Add the first
             one to get going.
           </EmptyState>
           <section className="space-y-4">
-            <h3 className="text-lg font-semibold text-foreground">How do you want to add your complaint types?</h3>
+            <h3 className="text-lg font-semibold text-foreground">How do you want to add your complaint categories?</h3>
             <div className="grid max-w-xl grid-cols-1 gap-4 sm:grid-cols-2">
               <OptionCard icon={FileText} title="Start from scratch" action="Start adding" onClick={() => setEditing({ index: null })}>
-                Name each type and its subtypes yourself.
+                Name each category and its subcategories yourself.
               </OptionCard>
               <OptionCard icon={LayoutGrid} title="Bulk upload" action="Upload a file" onClick={() => setBulk(true)}>
                 Upload a list and we will bring them in.
@@ -278,8 +278,8 @@ export default function ComplaintsStep() {
         <>
           <div className="grid max-w-2xl grid-cols-2 gap-4">
             {[
-              { label: 'Complaint types', value: types.length },
-              { label: 'Complaint subtypes', value: subtypeCount(current) },
+              { label: 'Complaint categories', value: types.length },
+              { label: 'Complaint subcategories', value: subtypeCount(current) },
             ].map((stat) => (
               <div key={stat.label} className="rounded-lg border border-border bg-card p-4">
                 <p className="text-sm text-muted-foreground">{stat.label}</p>
@@ -290,11 +290,11 @@ export default function ComplaintsStep() {
 
           <section className="space-y-3">
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-lg font-semibold text-foreground">Complaint types</h3>
+              <h3 className="text-lg font-semibold text-foreground">Complaint categories</h3>
               <div className="ml-auto">
                 <Button size="sm" onClick={() => setEditing({ index: null })} className="h-9 gap-1.5">
                   <Plus className="w-4 h-4" />
-                  Add complaint type
+                  Add complaint category
                 </Button>
               </div>
             </div>
@@ -332,7 +332,7 @@ export default function ComplaintsStep() {
                       ))}
                     </ul>
                   ) : (
-                    <p className="mt-2 text-xs text-muted-foreground">No subtypes: people report this type as it is.</p>
+                    <p className="mt-2 text-xs text-muted-foreground">No subcategories: people report this category as it is.</p>
                   )}
                 </li>
               ))}
@@ -342,7 +342,7 @@ export default function ComplaintsStep() {
           <fieldset className="space-y-3">
             <legend className="text-lg font-semibold text-foreground">How much time should a complaint have to be resolved?</legend>
             <p className="text-sm text-muted-foreground">
-              This is your own target, not a legal SLA. Complaints past it show as overdue. It applies to every type.
+              This is your own target, not a legal SLA. Complaints past it show as overdue. It applies to every category.
             </p>
             <div className="flex flex-wrap items-center gap-2">
               {RESOLUTION_CHOICES.map((choice) => {
@@ -400,7 +400,7 @@ export default function ComplaintsStep() {
           continueLabel="Finish setup"
           busy={saving}
           disabled={types.length === 0}
-          hint={types.length === 0 ? 'Add at least one complaint type to finish.' : undefined}
+          hint={types.length === 0 ? 'Add at least one complaint category to finish.' : undefined}
         />
         {dirty && loaded.draft.types.length > 0 && (
           <Button

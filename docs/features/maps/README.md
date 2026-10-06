@@ -19,6 +19,9 @@ field is optional — a partial record only overrides what it sets.
 ```jsonc
 {
   "code": "DEFAULT",
+  // Map provider
+  "mapProvider": "leaflet",                  // leaflet (default) | google
+  "googleMapsApiKey": "",                    // Maps JavaScript API key, used when mapProvider is google
   // Basemap
   "baseMapTheme": "voyager",                 // voyager | light | dark | osm
   "tileUrl": "",                             // raw Leaflet template; overrides baseMapTheme
@@ -64,6 +67,7 @@ existed:
 | `baseMapTheme` | — | `voyager` |
 | `wardHighlightColor` | — | `#FFA74F` |
 | `geocodeCountryCodes` / `searchViewbox` | — | unset (worldwide, no box) |
+| `mapProvider` / `googleMapsApiKey` | — | `leaflet`; `google` without a key also draws with leaflet |
 
 MDMS read errors are swallowed — a missing schema or record never breaks the map.
 
@@ -77,6 +81,10 @@ MDMS read errors are swallowed — a missing schema or record never breaks the m
   centre/zoom, and the Nominatim country/viewbox scope.
 - `useTenantBoundaries.js` — `boundaryTenantId` selects whose ward polygons the
   map draws and resolves pins against.
+- Configurator — the Phase 2 boundary preview and the boundary pages (`BoundaryMap`)
+  draw on Google Maps when `mapProvider` is `google` and a key is set
+  (`useMapProviderConfig`). The citizen complaint maps (`useMapConfig.js`) don't read
+  the provider fields yet: they keep the Basemap tiles.
 
 > **Address search gotcha.** Nominatim honours `searchViewbox` only alongside
 > `bounded=1`, which *discards* every result outside the box. A box that is too
@@ -92,6 +100,13 @@ area *is* the correct centre, zoom and search extent. `deriveMapPosition`
 `mdmsService.upsertMapConfig` writes the record — the operator types nothing.
 The upsert only updates a record the tenant *owns*, otherwise it shadow-creates,
 so it never rewrites a parent record inherited down the tenant tree.
+
+**Google Maps key, at onboarding.** Phase 2's fetch-boundaries step has an optional
+*Map provider* panel. It checks the key with Google first (an offscreen map — Google
+reports a bad key only once a map tries to load), then upserts `mapProvider: "google"`
+and `googleMapsApiKey`. Boundaries still come from turbopass: Google's APIs don't expose
+administrative boundary polygons. The key is sent to every browser that draws a map, so
+restrict it to the deployment's domain (HTTP referrers) in Google Cloud Console.
 
 **By hand, in management.** The **Map Configuration** editor exposes every field
 as an override: a basemap dropdown, a colour picker, and a live map preview where
@@ -112,6 +127,9 @@ schema codes are immutable over the API (`DUPLICATE_SCHEMA_CODE`; `schema/v1/_up
 fixes it at the DB level: it re-keys the legacy record to `DEFAULT` (preserving
 the colour), rewrites the rogue schema in place to the correct code-keyed
 definition, and registers the schema for any tenant that has data but no schema.
+`V20260915000000__mapconfig_add_map_provider.sql` then adds `mapProvider` and
+`googleMapsApiKey` to any MapConfig schema that lacks them — without it an existing box
+rejects a record that sets them (the schema has `additionalProperties: false`).
 Idempotent and guarded (no-op on a correct/fresh box). See that directory's
 `README.md` for how to apply it, and keep its embedded definition in sync with
 the JSON schema file.

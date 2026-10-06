@@ -11,7 +11,7 @@ run-name: Build ${{ github.event.inputs.pipeline_name }}
 # produces the same image the nightly/release build does:
 #   - configurator / digit-ui-v2 use the repo root as context, so they can
 #     consume the shared `ui-shared` feature-flag module;
-#   - digit-ui-esbuild / digit-mcp / otp-publisher keep their app-local context.
+#   - digit-ui-esbuild / digit-mcp keep their app-local context.
 #
 # NOT for the maven services (pgr-services, novu-bridge, digit-config-service,
 # default-data-handler, ...): those build from build/maven/Dockerfile with the
@@ -34,7 +34,6 @@ on:
           - digit-ui-esbuild
           - digit-ui-v2
           - digit-mcp
-          - otp-publisher
           - identity-bff
           - identity-keycloak
 

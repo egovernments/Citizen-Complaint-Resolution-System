@@ -20,13 +20,12 @@ The policy is the singleton `code: DEFAULT` record in MDMS v2
 complete state record, then service defaults. `eligibleStatuses` controls which
 states automation scans; the shipped value is the assigned resolver state
 `PENDINGATLME`. Every configured state still requires a concrete workflow
-assignee and an `ESCALATE` self-loop that authorizes `SYSTEM`; listing a state
-in `eligibleStatuses` does not create that transition. Ladders are cumulative
-from complaint creation; percentage ladders use the exact leaf
-`ComplaintHierarchy.slaHours`. Manual escalation consumes a rung, so automation
-next evaluates the following cumulative threshold. `ASSIGN`, `REASSIGN` and
-`REOPEN` do not reset the clock or the escalation level; a reopened complaint
-keeps the rungs it has already consumed.
+assignee. Percentage ladders are cumulative from complaint creation and use the exact leaf
+`ComplaintHierarchy.slaHours`; finite absolute-millisecond ladders are the
+fallback. Manual escalation consumes a rung, so automation next evaluates the
+following cumulative threshold. `ASSIGN`, `REASSIGN` and `REOPEN` do not reset
+the clock or the escalation level; a reopened complaint keeps the rungs it has
+already consumed.
 
 ## Per-complaint-type overrides
 

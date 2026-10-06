@@ -12,6 +12,11 @@ import { toPascal } from '@/utils/excelParser';
 
 export const HIERARCHY_TYPE = 'PGR';
 export const LEVELS = ['COMPLAINT_TYPE', 'SUB_TYPE'] as const;
+/** Display labels stored on the definition's levels; the level codes stay as they are. */
+const LEVEL_LABELS: Record<(typeof LEVELS)[number], string> = {
+  COMPLAINT_TYPE: 'Complaint Category',
+  SUB_TYPE: 'Complaint Subcategory',
+};
 const DEFINITION_SCHEMA = 'RAINMAKER-PGR.ComplaintHierarchyDefinition';
 const HIERARCHY_SCHEMA = 'RAINMAKER-PGR.ComplaintHierarchy';
 export const DEFAULT_SLA_HOURS = 72;
@@ -218,7 +223,7 @@ async function sync(
         parentLevel: index === 0 ? null : LEVELS[index - 1],
         isFreeText: false,
         isLeafServiceCode: index === LEVELS.length - 1,
-        label: levelCode,
+        label: LEVEL_LABELS[levelCode],
       })),
     });
   }

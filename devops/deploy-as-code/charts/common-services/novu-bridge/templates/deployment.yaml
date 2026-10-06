@@ -1,2 +1,29 @@
+{{- /*
+  One build for the notification stack. global.notificationStackTag (charts/environments/
+  env.yaml) sets the image AND the db-migration image of pgr-services and novu-bridge
+  together, so the four cannot drift apart. An explicit per-chart override in env.yaml
+  (<chart>.image.tag / <chart>.initContainers.dbMigration.image.tag) still wins, because
+  common.name merges those over .Values after this runs.
+*/ -}}
+{{- $stackTag := (.Values.global | default dict).notificationStackTag -}}
+{{- if $stackTag }}
+{{- $_ := set .Values.image "tag" $stackTag }}
+{{- $_ := set .Values.initContainers.dbMigration.image "tag" $stackTag }}
+{{- end }}
+{{- /*
+  Pull policy follows the tag that will actually run. values.yaml says IfNotPresent, which
+  is right for an immutable tag (a release, develop-<sha8>) and wrong for a rolling one
+  (nightly-*, latest, develop, …): a node that already holds the image would keep running
+  whatever that tag pointed at when it was first pulled. So a rolling tag gets Always.
+  common.name merges the env.yaml per-chart overrides into .Values; run it first so the
+  decision sees an overriding tag too. An explicit pullPolicy override in env.yaml still
+  wins: common.name merges it again when the deployment renders.
+*/ -}}
+{{- $_ := include "common.name" . }}
+{{- range $img := list .Values.image .Values.initContainers.dbMigration.image }}
+{{- if regexMatch "^(latest|nightly-.*|develop|main|master)$" (toString $img.tag) }}
+{{- $_ := set $img "pullPolicy" "Always" }}
+{{- end }}
+{{- end }}
 # deployment.yaml
 {{- template "common.deployment" . -}}

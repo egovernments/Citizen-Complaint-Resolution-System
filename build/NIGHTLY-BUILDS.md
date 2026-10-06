@@ -113,7 +113,7 @@ Its pattern is `develop-` + **8 or more** hex chars, which deliberately:
 
 **In scope — everything in `build-config.yml`** (CCRS-owned): `pgr-services`,
 `novu-bridge`, `digit-config-service`, `digit-user-preferences-service`,
-`xstate-chatbot`, `default-data-handler`, `digit-mcp`, `otp-publisher`,
+`xstate-chatbot`, `default-data-handler`, `digit-mcp`,
 `identity-bff`, `identity-keycloak`, `digit-ui` (legacy micro-ui),
 `digit-ui-esbuild`, `configurator`, `digit-ui-v2`, and the `*-db` flyway images.
 
@@ -183,18 +183,34 @@ nightly — **both**, or the box silently keeps running something else:
 
    ```yaml
    # host_vars/<tenant>.yml
-   pgr_services_image:  "host:5000/egovio/pgr-services:nightly-develop"
    digit_ui_image:      "host:5000/egovio/digit-ui:nightly-develop"
-   otp_publisher_image: "host:5000/egovio/otp-publisher:nightly-develop"
    mcp_image:           "host:5000/egovio/digit-mcp:nightly-develop"
    identity_bff_image:  "host:5000/egovio/identity-bff:nightly-develop"
    identity_keycloak_image: "host:5000/egovio/identity-keycloak:nightly-develop"
    ddh_image:           "host:5000/egovio/default-data-handler:nightly-develop"
    ```
 
+   The notification stack is the exception: `pgr-services`, `pgr-services-db`,
+   `novu-bridge` and `novu-bridge-db` must come from **one build**, so they share
+   one tag, `notification_stack_tag` (compose `NOTIFICATION_STACK_TAG`, Helm
+   `global.notificationStackTag`). Its shipped default is, for now, Docker Hub's
+   rolling `nightly-develop` — see [Release step](#release-step-pin-the-notification-stack)
+   below for why and for when that changes. `nightly-develop` moves per image — two
+   overlapping runs can leave it on different commits for different images — so a
+   box you care about pins an immutable `develop-<sha8>` that exists for all four.
+   To pull them from the VPC registry instead, pin all four per-image vars
+   (`pgr_services_image`, `pgr_services_db_image`, `novu_bridge_image`,
+   `novu_bridge_db_image`) to the same build. The deploy warns — with or without
+   `enable_novu` — when the images it will run resolve to a rolling tag, and when
+   only some of the ones it runs are pinned (`pgr_services_image` +
+   `pgr_services_db_image` always; the bridge pair too when `enable_novu` is on).
+   Helm pulls these images `IfNotPresent`, switching to `Always` only while the
+   effective tag is a rolling one (`nightly-*`, `latest`, `develop`, `main`,
+   `master`).
+
 2. **Turn the matching `build_*` flag OFF.** ⚠️ This is the trap. When
-   `build_digit_ui` / `build_mcp` / `build_default_data_handler` /
-   `build_otp_publisher` is `true`, the deploy builds that service from source
+   `build_digit_ui` / `build_mcp` / `build_default_data_handler`
+   is `true`, the deploy builds that service from source
    on the box and tags it `:local`, **overriding the image pin** — so you get an
    on-box build, not the nightly. For a pull-the-nightly deploy these must be
    `false`. (pgr-services has no `build_*` flag; it always pulls its image var.)
@@ -202,11 +218,68 @@ nightly — **both**, or the box silently keeps running something else:
 Anything left unset keeps the prior compose default — pinning is opt-in, so this
 pipeline changes nothing until a deployment opts a service in.
 
+### Release step: pin the notification stack
+
+Until the change that introduced the thin-event notification stack (PR #2097 and the
+PRs it is stacked on) has merged to `develop` and been built, **no immutable tag
+containing it exists**: the only tag that will hold it is the rolling `nightly-develop`.
+So that is the shipped default for the four notification-stack images, as a stopgap —
+and every deploy says so (the Ansible preflight warns about the rolling tag; Helm pulls
+it `Always`). It must become an immutable tag in the **first release cut after the
+merge**. This is a release blocker, not a follow-up: the release PR is not merged while
+any of the values below still reads `nightly-develop`. Whoever cuts that release owns it:
+
+1. After the merge, let the develop nightly (or a `build.yml` dispatch on `develop`)
+   build the merge commit. Note its `develop-<sha8>` — the first 8 hex chars of the
+   commit it built (`git rev-parse --short=8 <merge-commit>`).
+2. Check that tag exists on Docker Hub for **all four** images — a failed leg leaves
+   one of them missing. A `HEAD` on the registry does not spend pull quota
+   (`docker manifest inspect` does):
+   ```bash
+   TAG=develop-<sha8>
+   for img in pgr-services pgr-services-db novu-bridge novu-bridge-db; do
+     tok=$(curl -fsS "https://auth.docker.io/token?service=registry.docker.io&scope=repository:egovio/$img:pull" | jq -r .token)
+     printf '%-16s ' "$img"; curl -s -o /dev/null -w '%{http_code}\n' -I \
+       -H "Authorization: Bearer $tok" \
+       -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json' \
+       "https://registry-1.docker.io/v2/egovio/$img/manifests/$TAG"
+   done   # all four must print 200
+   ```
+3. Replace `nightly-develop` with that tag in these **nine** values, in one commit:
+   - `local-setup/docker-compose.egov-digit.yaml` — `pgr-services` and `novu-bridge`
+     (`${NOTIFICATION_STACK_TAG:-…}`): 2;
+   - `local-setup/docker-compose.migrations.yml` — `pgr-services-migration` and
+     `novu-bridge-migration`: 2;
+   - `devops/deploy-as-code/charts/urban/pgr-services/values.yaml` and
+     `devops/deploy-as-code/charts/common-services/novu-bridge/values.yaml` —
+     `image.tag` and `initContainers.dbMigration.image.tag` in each (the lines marked
+     `RELEASE STEP`): 4;
+   - `local-setup/scripts/enable-notifications.sh` — the `NOTIFICATION_STACK_TAG`
+     default: 1.
+   The static test `all four images default to ONE tag, in compose and in both Helm
+   charts` (`local-setup/tests/static/deployment-contracts.test.ts`) fails if the
+   compose and chart values disagree. Then check none is left:
+   ```bash
+   grep -n 'nightly-develop' local-setup/docker-compose.egov-digit.yaml local-setup/docker-compose.migrations.yml \
+     devops/deploy-as-code/charts/urban/pgr-services/values.yaml \
+     devops/deploy-as-code/charts/common-services/novu-bridge/values.yaml \
+     local-setup/scripts/enable-notifications.sh | grep -E 'pgr-services|novu-bridge|NOTIFICATION_STACK_TAG=|tag: '
+   # expect no output (comments aside); other images (xstate-chatbot, identity-*) are not part of this step
+   ```
+4. Leave `global.notificationStackTag` in `charts/environments/env.yaml` empty — it
+   overrides the chart pins when set — and update the `Default` column of the tag
+   table in `docs/releases/2.20/notifications/migration.md` (and the `notification_stack_tag`
+   row in `docs/releases/2.20/notifications/setup-guide.md` §8.1) to the pinned tag.
+
+Later releases bump the same nine values to the new build's tag. Boxes that must track
+`develop` keep setting `notification_stack_tag: nightly-develop` (or Helm
+`global.notificationStackTag: nightly-develop`) themselves.
+
 ### Verify what's actually running
 
 ```bash
 docker ps --format '{{.Names}}\t{{.Image}}' \
-  | grep -E 'pgr-services|digit-ui|digit-mcp|otp-publisher|default-data-handler'
+  | grep -E 'pgr-services|novu-bridge|digit-ui|digit-mcp|default-data-handler'
 ```
 
 Every line should show your registry + `:nightly-develop` (or an immutable

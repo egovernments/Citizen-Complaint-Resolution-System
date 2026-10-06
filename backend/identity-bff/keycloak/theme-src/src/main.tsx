@@ -1,6 +1,10 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { KcPage } from "./kc.gen";
+import { followSavedTheme } from "./login/themeChoice";
+
+// Before the first paint, so the page never flashes the default palette.
+followSavedTheme();
 
 // The login theme is only ever rendered by Keycloak, which injects `kcContext`
 // before this bundle runs. In the Vite dev server there is no Keycloak, so

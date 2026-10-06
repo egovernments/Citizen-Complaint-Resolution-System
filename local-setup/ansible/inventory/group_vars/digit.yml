@@ -392,10 +392,94 @@ digit_ui_esbuild_branch: main
 # digit-ui-esbuild). Pinned to the 2.12 release build, so an Ansible deploy
 # serves the SAME bundle as local-setup/docker-compose.egov-digit.yaml — a
 # rolling `nightly-develop` here meant the two paths could diverge silently.
-# Set `nightly-develop` (or a develop-<sha>) in host_vars to track develop
-# instead. Set to "" in host_vars to force an on-host build instead, which then
-# needs digit_ui_esbuild_repo pointed at a source tree.
-digit_ui_bundle_image: "egovio/digit-ui-esbuild:2.12-5137119"
+# Follows `image_tag` (below) when that is set, so `--image-tag=develop-<sha>`
+# tracks develop without touching this. A full ref in host_vars pins it
+# regardless of image_tag. Set to "" in host_vars to force an on-host build
+# instead, which then needs digit_ui_esbuild_repo pointed at a source tree.
+digit_ui_bundle_image: >-
+  {{ (ccrs_tagged_images | default({})).get('digit-ui-esbuild')
+     or 'egovio/digit-ui-esbuild:2.12-5137119' }}
+
+# ──────────────────────────────────────────────────────────────────────
+# One-tag deploys (#1729)
+# ──────────────────────────────────────────────────────────────────────
+#
+# CI publishes every image this repository builds (build/build-config.yml)
+# under ONE tag per run: `develop-<sha8>` + `nightly-develop` from the nightly
+# and `<release-tag>` from a GitHub release (build-images.yml), and
+# `<branch>-<sha>` for one service from the dispatch pipelines (build.yml,
+# spa-build.yml). Set `image_tag` to that tag and every image in
+# ccrs_image_catalog below deploys as `<image_tag_namespace>/<image>:<image_tag>`
+# — no per-service edits.
+#
+# Usually passed per run rather than stored:
+#   ./deploy.sh <tenant> --image-tag=develop-1a2b3c4d
+#   ./deploy.sh <tenant> --image-tag=master-3f9e2a1 --image-tag-services=pgr-services
+# Set it in host_vars/<tenant>.yml instead to keep a tenant on a tag across
+# routine redeploys. Empty = every image keeps its compose-file default.
+#
+# Precedence, most specific first:
+#   1. a per-image pin in host_vars (`pgr_services_image:` …) or a local build
+#      (`build_mcp:`) — the tag is NOT applied to that
+#      image, and the deploy prints which ones it skipped. An unpinned `-db`
+#      image whose service is pinned off the tag stays on its compose-file
+#      default (with a warning) rather than run newer migrations under it;
+#   2. image_tag, when it covers the image (see image_tag_services);
+#   3. the compose-file default.
+image_tag: ""
+
+# Limit image_tag to some images, by build-config image-name. A service and
+# its `-db` migration image always move together, whichever of the two is
+# named, because the pipelines build the pair under one tag. Empty = every
+# image in ccrs_image_catalog.
+# Quote a numeric-looking tag ("2.10"): unquoted, YAML reads it as the number
+# 2.1 and the deploy refuses it.
+image_tag_services: []
+
+# Registry namespace the CI pipelines push to (PUSH_NAMESPACE in
+# build-images.yml).
+image_tag_namespace: egovio
+
+# Before touching the stack, confirm every tagged image exists in the registry
+# (files/check-image-tags.sh on the target) and fail listing the missing ones,
+# instead of `pull --ignore-pull-failures` skipping them and `up -d` dying
+# mid-deploy. An image it cannot check (rate limit, auth, network) is only a
+# warning, so this rarely needs turning off.
+image_tag_verify: true
+
+# The images image_tag moves. `image` is the build-config image-name (and the
+# registry repository), `env` the variable the compose files read, `var` the
+# host_vars pin that overrides it. `follows` ties a migration image to its
+# service: the pair moves together under image_tag_services, and when the
+# service is pinned off the tag the migration image stays on its compose
+# default (so a newer build's migrations never run under an older service).
+# `profiles` copies the compose profiles the service sits behind; the registry
+# check skips images whose profiles are all off, since they are never pulled.
+# Adding a CI-built image to the stack
+# means adding it here, parameterising its compose `image:` as
+# `${ENV:-egovio/<image>:<default>}` and writing ENV in templates/digit.env.j2
+# — tests/static/deployment-contracts.test.ts checks all three. Keep `image`,
+# `env` and `var` first and on the entry's first line: that test reads this
+# list with a line regex, not a YAML parser.
+ccrs_image_catalog:
+  - {image: pgr-services, env: PGR_SERVICES_IMAGE, var: pgr_services_image}
+  - {image: pgr-services-db, env: PGR_SERVICES_DB_IMAGE, var: pgr_services_db_image, follows: pgr-services}
+  - {image: novu-bridge, env: NOVU_BRIDGE_IMAGE, var: novu_bridge_image, profiles: [notifications]}
+  - {image: novu-bridge-db, env: NOVU_BRIDGE_DB_IMAGE, var: novu_bridge_db_image, follows: novu-bridge, profiles: [notifications]}
+  - {image: digit-config-service, env: DIGIT_CONFIG_SERVICE_IMAGE, var: digit_config_service_image, profiles: [notifications]}
+  - {image: digit-config-service-db, env: DIGIT_CONFIG_SERVICE_DB_IMAGE, var: digit_config_service_db_image,
+     follows: digit-config-service, profiles: [notifications]}
+  - {image: digit-user-preferences-service, env: DIGIT_USER_PREFERENCES_SERVICE_IMAGE, var: digit_user_preferences_service_image, profiles: [notifications]}
+  - {image: digit-user-preferences-service-db, env: DIGIT_USER_PREFERENCES_SERVICE_DB_IMAGE, var: digit_user_preferences_service_db_image,
+     follows: digit-user-preferences-service, profiles: [notifications]}
+  - {image: digit-ui-esbuild, env: DIGIT_UI_IMAGE, var: digit_ui_image}
+  - {image: configurator, env: CONFIGURATOR_IMAGE, var: configurator_image}
+  - {image: digit-mcp, env: MCP_IMAGE, var: mcp_image, profiles: [mcp, mcp-readonly]}
+  # Organization-aware identity tier; identity-keycloak is Keycloak plus the magic-link provider.
+  - {image: identity-bff, env: IDENTITY_BFF_IMAGE, var: identity_bff_image, profiles: [keycloak]}
+  - {image: identity-keycloak, env: IDENTITY_KEYCLOAK_IMAGE, var: identity_keycloak_image, profiles: [keycloak]}
+  - {image: xstate-chatbot, env: XSTATE_CHATBOT_IMAGE, var: chatbot_image, profiles: [chatbot]}
+  - {image: xstate-chatbot-db, env: XSTATE_CHATBOT_DB_IMAGE, var: chatbot_db_image, follows: xstate-chatbot, profiles: [chatbot]}
 
 # Slack webhook for Gatus outage alerts (#1609). Empty = alerting OFF, which is
 # the default for every tenant: gatus warns about the unusable provider and

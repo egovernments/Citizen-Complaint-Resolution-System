@@ -3,7 +3,6 @@ package org.egov.pgr.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
-import org.egov.common.contract.request.User;
 import org.egov.pgr.repository.ServiceRequestRepository;
 import org.egov.pgr.util.HRMSUtil;
 import org.egov.pgr.web.models.RequestInfoWrapper;
@@ -23,7 +22,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -43,7 +41,6 @@ public class EscalationService {
     public static final String ASSIGNMENT_CHANGED_AT = "assignmentChangedAt";
     public static final String ASSIGNMENT_CHANGE_SOURCE = "assignmentChangeSource";
     public static final String ESCALATION_LEVEL = "escalationLevel";
-    public static final String ESCALATION_WINDOW_STARTED_AT = "escalationWindowStartedAt";
     public static final String LAST_ESCALATED_AT = "lastEscalatedAt";
     public static final String ESCALATED_FROM = "escalatedFrom";
     public static final String ESCALATED_TO = "escalatedTo";
@@ -53,7 +50,6 @@ public class EscalationService {
             ASSIGNMENT_CHANGED_AT,
             ASSIGNMENT_CHANGE_SOURCE,
             ESCALATION_LEVEL,
-            ESCALATION_WINDOW_STARTED_AT,
             LAST_ESCALATED_AT,
             ESCALATED_FROM,
             ESCALATED_TO,
@@ -107,15 +103,6 @@ public class EscalationService {
         String action = request.getWorkflow().getAction();
         if (action != null && ESCALATE.equalsIgnoreCase(action)) {
             prepareEscalation(request, persistedService, incoming, automatic);
-        } else if ("REOPEN".equalsIgnoreCase(action)) {
-            // A reopened complaint starts a fresh cumulative escalation cycle. Using the
-            // original creation time would make an old complaint immediately consume rungs.
-            incoming.put(ESCALATION_LEVEL, 0);
-            incoming.put(ESCALATION_WINDOW_STARTED_AT, System.currentTimeMillis());
-            incoming.remove(LAST_ESCALATED_AT);
-            incoming.remove(ESCALATED_FROM);
-            incoming.remove(ESCALATED_TO);
-            incoming.remove(ESCALATION_TRIGGER);
         } else if (changesAssignment(action, request.getWorkflow())) {
             long now = System.currentTimeMillis();
             incoming.put(ASSIGNMENT_CHANGED_AT, now);
@@ -197,12 +184,11 @@ public class EscalationService {
         return event;
     }
 
-    /** Escalation thresholds are cumulative from creation, or from the latest reopen. */
+    /**
+     * Escalation thresholds are cumulative from creation. REOPEN does not restart the
+     * ladder, so a reopened complaint keeps the rungs it has already consumed.
+     */
     public long escalationWindowStartedAt(Service complaint) {
-        Object configuredStart = details(complaint).get(ESCALATION_WINDOW_STARTED_AT);
-        if (configuredStart instanceof Number number && number.longValue() > 0) {
-            return number.longValue();
-        }
         if (complaint.getAuditDetails() == null) {
             return 0L;
         }
@@ -278,45 +264,11 @@ public class EscalationService {
             if (response == null || CollectionUtils.isEmpty(response.getProcessInstances())) {
                 return Collections.emptyList();
             }
-            return assigneesInCurrentOccupancy(response.getProcessInstances());
+            return WorkflowService.currentHolders(response.getProcessInstances());
         } catch (Exception e) {
             log.error("Failed to read workflow assignees for complaint {}", serviceRequestId, e);
             return Collections.emptyList();
         }
-    }
-
-    /**
-     * Walks newest-first through one state occupancy and returns the first assignees found.
-     * The list is ordered newest-first by egov-workflow-v2.
-     */
-    private List<String> assigneesInCurrentOccupancy(List<ProcessInstance> instances) {
-        String currentState = stateOf(instances.get(0));
-        for (ProcessInstance instance : instances) {
-            if (!Objects.equals(currentState, stateOf(instance))) {
-                // Left the current state: anything older belongs to a previous occupancy.
-                return Collections.emptyList();
-            }
-            List<String> assignees = uuidsOf(instance);
-            if (!assignees.isEmpty()) {
-                return assignees;
-            }
-        }
-        return Collections.emptyList();
-    }
-
-    /** The state UUID an instance landed in, or null when workflow did not populate it. */
-    private String stateOf(ProcessInstance instance) {
-        return instance == null || instance.getState() == null ? null : instance.getState().getUuid();
-    }
-
-    private List<String> uuidsOf(ProcessInstance instance) {
-        if (instance == null || CollectionUtils.isEmpty(instance.getAssignes())) {
-            return Collections.emptyList();
-        }
-        return instance.getAssignes().stream()
-                .map(User::getUuid)
-                .filter(uuid -> uuid != null && !uuid.isBlank())
-                .collect(Collectors.toList());
     }
 
     /** Cheap scheduler preflight; the locked update repeats this authoritative check. */

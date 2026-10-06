@@ -9,6 +9,8 @@ import { toast } from '@/hooks/use-toast';
 import { StepHeader } from '../StepHeader';
 import { EmptyState, OptionCard, StepActions } from '../StepParts';
 import { adjacentSteps, stepById } from '../steps';
+import { useTurbopassSources } from '@/hooks/useTurbopassSources';
+import { TURBOPASS_UNAVAILABLE_MESSAGE } from '@/utils/turbopassSuggestions';
 import BoundaryImport, { type BoundarySource } from './BoundaryImport';
 
 const STEP = stepById('geography');
@@ -69,6 +71,8 @@ export default function GeographyStep() {
   const [hierarchies, setHierarchies] = useState<HierarchySummary[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  // Fetching boundaries needs the turbopass service; say so up front when it's missing.
+  const boundarySources = useTurbopassSources();
 
   useEffect(() => {
     let cancelled = false;
@@ -94,7 +98,7 @@ export default function GeographyStep() {
   if (source) {
     return (
       <div className="space-y-6">
-        <StepHeader eyebrow="Geography" title={source === 'osm' ? 'Import from OpenStreetMap' : 'Upload from Excel'} done={done}>
+        <StepHeader eyebrow="Geography" title={source === 'osm' ? 'Fetch boundaries' : 'Upload from Excel'} done={done}>
           {source === 'osm'
             ? 'Search for your area and pick which administrative levels become your boundary hierarchy.'
             : 'Define your levels, fill the template with your areas, and upload it.'}
@@ -102,6 +106,7 @@ export default function GeographyStep() {
         <BoundaryImport
           source={source}
           hasHierarchies={!!hierarchies?.length}
+          sourceChoices={boundarySources}
           onCancel={() => setSource(null)}
           onDone={() => {
             setSource(null);
@@ -127,8 +132,15 @@ export default function GeographyStep() {
           <OptionCard icon={LayoutGrid} title="Preconfigured" action={null}>
             Start from a boundary set we already hold for your country.
           </OptionCard>
-          <OptionCard icon={MapPin} title="OpenStreetMap" action="Search OSM" onClick={() => setSource('osm')}>
-            Pull administrative boundaries straight from OSM.
+          <OptionCard
+            icon={MapPin}
+            title="Fetch boundaries"
+            action="Search boundaries"
+            onClick={() => setSource('osm')}
+            disabledReason={boundarySources?.length === 0 ? TURBOPASS_UNAVAILABLE_MESSAGE : undefined}
+          >
+            Pull administrative boundaries, with map polygons, from the official sets (OCHA COD-AB, geoBoundaries)
+            or OpenStreetMap.
           </OptionCard>
           <OptionCard icon={Download} title="Upload from Excel" action="Upload a file" onClick={() => setSource('excel')}>
             Bring in your own levels and areas from a spreadsheet.

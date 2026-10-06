@@ -25,7 +25,7 @@ process.on("exit", () => {
     // Best effort; the temp file is process-scoped.
   }
 });
-const { insertModuleSections, isCitizenHome, mdmsLinkRows, withTenantSegment } = require(OUT);
+const { insertModuleSections, isCitizenHome, mdmsLinkRows, publicDashboardEnabled, withTenantSegment } = require(OUT);
 
 const HOME = { label: "Home", navigationUrl: "/digit-ui/employee", icon: { icon: "Home" } };
 const DASHBOARD = { label: "Dashboard", navigationUrl: "/digit-ui/employee/dashboard", icon: { icon: "Dashboard" } };
@@ -136,3 +136,18 @@ test("a route that already has the tenant, or is not an app route, is left alone
   assert.equal(withTenantSegment("/sandbox-ui/citizen/x", "sandbox-ui", undefined), "/sandbox-ui/citizen/x");
 });
 
+test("the citizen rail offers the public dashboard only once it is published", () => {
+  assert.equal(publicDashboardEnabled([{ id: "default", publicDashboardEnabled: true }]), true);
+  // Never published, switched off, or anything short of an explicit true.
+  assert.equal(publicDashboardEnabled([{ id: "default" }]), false);
+  assert.equal(publicDashboardEnabled([{ id: "default", publicDashboardEnabled: false }]), false);
+  assert.equal(publicDashboardEnabled([{ id: "default", publicDashboardEnabled: "true" }]), false);
+  assert.equal(publicDashboardEnabled([]), false);
+  assert.equal(publicDashboardEnabled(undefined), false);
+  // The "default" record decides, as it does for pgr-services, wherever it sits.
+  assert.equal(
+    publicDashboardEnabled([{ id: "other", publicDashboardEnabled: false }, { id: "default", publicDashboardEnabled: true }]),
+    true
+  );
+  assert.equal(publicDashboardEnabled([{ id: "other", publicDashboardEnabled: true }, null]), true);
+});

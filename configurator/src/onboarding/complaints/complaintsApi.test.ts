@@ -122,7 +122,18 @@ describe('saveComplaints', () => {
     const filable = await saveComplaints('acme', { editable: true, draft: saved, records: existing, hasDefinition: false }, saved);
 
     expect(filable).toBe(1);
-    expect(create).toHaveBeenCalledWith('acme', 'RAINMAKER-PGR.ComplaintHierarchyDefinition', 'PGR', expect.objectContaining({ hierarchyType: 'PGR' }));
+    expect(create).toHaveBeenCalledWith(
+      'acme',
+      'RAINMAKER-PGR.ComplaintHierarchyDefinition',
+      'PGR',
+      expect.objectContaining({
+        hierarchyType: 'PGR',
+        levels: [
+          expect.objectContaining({ levelCode: 'COMPLAINT_TYPE', label: 'Complaint Category' }),
+          expect.objectContaining({ levelCode: 'SUB_TYPE', label: 'Complaint Subcategory' }),
+        ],
+      }),
+    );
     expect(update).toHaveBeenCalledWith(existing[0], expect.objectContaining({ name: 'Street lights' }));
     expect(create).toHaveBeenCalledWith(
       'acme',

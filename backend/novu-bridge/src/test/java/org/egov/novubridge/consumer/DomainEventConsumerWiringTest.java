@@ -5,27 +5,32 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.egov.novubridge.config.NovuBridgeConfiguration;
 import org.egov.novubridge.producer.Producer;
 import org.egov.novubridge.service.DispatchPipelineService;
-import org.egov.novubridge.web.models.ComplaintsDomainEvent;
+import org.egov.novubridge.service.thin.ThinEventPipelineService;
+import org.egov.novubridge.web.models.NotificationEvent;
 import org.egov.tracer.model.CustomException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
  * NB-8: the Kafka glue in {@link DomainEventConsumer#listen}. Unit-tested without
- * embedded Kafka — the actual risk is the {@code Map -> ComplaintsDomainEvent}
+ * embedded Kafka — the actual risk is the {@code Map -> NotificationEvent}
  * deserialization and the DLQ-on-failure routing, both covered here directly.
  */
 class DomainEventConsumerWiringTest {
@@ -43,7 +48,7 @@ class DomainEventConsumerWiringTest {
         producer = mock(Producer.class);
         config = new NovuBridgeConfiguration();
         config.setDlqTopic("novu-bridge.dlq");
-        consumer = new DomainEventConsumer(mapper, pipeline, producer, config);
+        consumer = new DomainEventConsumer(mapper, pipeline, mock(ThinEventPipelineService.class), producer, config);
     }
 
     private HashMap<String, Object> payload() {
@@ -79,10 +84,10 @@ class DomainEventConsumerWiringTest {
     void mapPayload_deserializesToEvent_withAllFieldsSurviving() {
         consumer.listen(payload(), "complaints.domain.events");
 
-        ArgumentCaptor<ComplaintsDomainEvent> captor = ArgumentCaptor.forClass(ComplaintsDomainEvent.class);
+        ArgumentCaptor<NotificationEvent> captor = ArgumentCaptor.forClass(NotificationEvent.class);
         verify(pipeline).process(captor.capture(), eq(true), isNull());
 
-        ComplaintsDomainEvent event = captor.getValue();
+        NotificationEvent event = captor.getValue();
         assertEquals("evt-1", event.getEventId());
         assertEquals("COMPLAINTS_WORKFLOW_TRANSITIONED", event.getEventType());
         assertEquals("COMPLAINTS.WORKFLOW.ASSIGN", event.getEventName());
@@ -113,6 +118,55 @@ class DomainEventConsumerWiringTest {
         ArgumentCaptor<Map<String, Object>> dlq = captureDlq();
         assertEquals("NB_NOVU_TRIGGER_FAILED", dlq.getValue().get("errorCode"));
         assertEquals("boom", dlq.getValue().get("errorMessage"));
+        // Not a core SMS: the event goes as received, so it can be replayed.
+        assertTrue(dlq.getValue().get("event") instanceof NotificationEvent);
+        assertFalse(dlq.getValue().containsKey("redacted"));
+    }
+
+    @Test
+    void anEnvelopeThatOnlyClaimsCoreSms_takesTheOrdinaryPath() {
+        HashMap<String, Object> record = payload();
+        record.put("eventType", "CORE_SMS");
+        record.put("module", "CORE");
+        record.put("eventName", "CORE.SMS.OTP");
+
+        consumer.listen(record, "notifications.events");
+
+        verify(pipeline).process(any(), eq(true), isNull());
+        verify(pipeline, never()).processCoreSms(any());
+    }
+
+    @Test
+    void theCoreSmsPath_reachesProcessCoreSms() {
+        NotificationEvent event = mapper.convertValue(payload(), NotificationEvent.class);
+
+        consumer.handleCoreSms(event, "egov.core.notification.sms");
+
+        verify(pipeline).processCoreSms(event);
+        verify(pipeline, never()).process(any(), anyBoolean(), any());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void aCoreSmsThatFailsToDispatch_isDlqdWithoutItsText_andWithMaskedPhones() {
+        HashMap<String, Object> record = payload();
+        record.put("eventType", "CORE_SMS");
+        record.put("subscriberId", "ke.bomet:+254712345678");
+        record.put("renderedBody", "Your OTP is 481516");
+        when(pipeline.processCoreSms(any()))
+                .thenThrow(new CustomException("NB_NOVU_TRIGGER_FAILED", "Failed triggering Novu event: 503 for +254712345678"));
+
+        consumer.handleCoreSms(mapper.convertValue(record, NotificationEvent.class), "egov.core.notification.sms");
+
+        ArgumentCaptor<Map<String, Object>> dlq = captureDlq();
+        Map<String, Object> event = (Map<String, Object>) dlq.getValue().get("event");
+        assertFalse(event.containsKey("renderedBody"), "the body is the OTP");
+        assertEquals("ke.bomet:+***678", event.get("subscriberId"));
+        assertEquals("+***678", ((Map<String, Object>) event.get("contact")).get("phone"));
+        assertEquals("COMPLAINTS.WORKFLOW.ASSIGN", event.get("eventName"));
+        assertTrue(((List<String>) dlq.getValue().get("redacted")).contains("renderedBody"));
+        assertEquals("NB_NOVU_TRIGGER_FAILED", dlq.getValue().get("errorCode"));
+        assertFalse(String.valueOf(dlq.getValue()).contains("712345678"), String.valueOf(dlq.getValue()));
     }
 
     @Test

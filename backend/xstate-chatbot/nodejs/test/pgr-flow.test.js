@@ -466,3 +466,88 @@ test("track complaint handles no-records case", async () => {
   assert.match(String(outputs.at(-1)), /No complaint records were found/);
   assert.equal(service.state.done, true);
 });
+
+function capturingStub(overrides = {}) {
+  const captured = {};
+  const stub = createHappyPathServiceStub({
+    persistComplaint: async (user, slots) => {
+      Object.assign(captured, slots);
+      return { complaintNumber: "PGR-1", complaintLink: "https://example.test/complaints/PGR-1" };
+    },
+    ...overrides,
+  });
+  return { stub, captured };
+}
+
+test("REGRESSION (review): a locality picked from the list files as a boundary code, with its name", async () => {
+  const { stub, captured } = capturingStub();
+  const { service } = createHarness({ geoSearch: false, serviceStub: stub });
+  service.start();
+  await settle();
+  // menu, complaint type, no photo, no location, city 1, locality 1
+  for (const input of ["1", "1", "1", "1", "1", "1"]) {
+    service.send(textMessage(input));
+    await settle();
+  }
+  assert.equal(captured.locality, "loc-1");
+  assert.equal(captured.localityIsBoundaryCode, true);
+  // Carried from the list, so filing does not fetch the localisation module again.
+  assert.equal(captured.localityName, "LocalityA");
+});
+
+test("REGRESSION (review): an NLP fuzzy-search locality is marked as a bare code", async () => {
+  const { stub, captured } = capturingStub();
+  const { service } = createHarness({ serviceStub: stub });
+  service.start();
+  await settle();
+  for (const input of ["1", "1", "1", "1", "CityA", "LocalityA"]) {
+    service.send(textMessage(input));
+    await settle();
+  }
+  assert.equal(captured.locality, "loc-1");
+  assert.equal(captured.localityIsBoundaryCode, false);
+});
+
+test("a confirmed shared location files as a boundary code, with its name", async () => {
+  const { stub, captured } = capturingStub({
+    getCityAndLocalityForGeocode: async () => ({
+      city: "pg.citya",
+      locality: "loc-1",
+      localityIsBoundaryCode: true,
+      matchedCityMessageBundle: { en_IN: "CityA" },
+      matchedLocalityMessageBundle: { en_IN: "LocalityA" },
+    }),
+  });
+  const { service } = createHarness({ serviceStub: stub });
+  service.start();
+  await settle();
+  for (const input of ["1", "1", "1"]) {
+    service.send(textMessage(input));
+    await settle();
+  }
+  service.send(locationMessage("{12.34,56.78}"));
+  await settle();
+  service.send(textMessage("2"));
+  await settle();
+  assert.equal(captured.localityIsBoundaryCode, true);
+  assert.equal(captured.localityName, "LocalityA");
+});
+
+test("REGRESSION (review): a pick not in this version's name map is not a boundary code, and the map is not kept", async () => {
+  const { stub, captured } = capturingStub();
+  const { service } = createHarness({ geoSearch: false, serviceStub: stub });
+  service.start();
+  await settle();
+  for (const input of ["1", "1", "1", "1", "1"]) {
+    service.send(textMessage(input));
+    await settle();
+  }
+  // At the locality question. Simulate a list whose names were built for other codes,
+  // as after a rollback: the offered loc-1 is not among them.
+  service.state.context.localityNames = { ADMIN_SUN04: "Sun 04" };
+  service.send(textMessage("1"));
+  await settle();
+  assert.equal(captured.locality, "loc-1");
+  assert.equal(captured.localityIsBoundaryCode, false);
+  assert.equal(service.state.context.localityNames, undefined);
+});

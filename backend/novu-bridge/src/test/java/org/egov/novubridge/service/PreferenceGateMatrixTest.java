@@ -1,10 +1,17 @@
 package org.egov.novubridge.service;
 
+import org.egov.novubridge.service.policy.ChannelPolicyClient;
+import org.egov.novubridge.service.provider.ProviderAvailability;
+
+import org.egov.novubridge.service.delivery.DeliveryProviderRegistry;
+import org.egov.novubridge.service.delivery.NovuDeliveryProvider;
+
 import org.egov.novubridge.config.NovuBridgeConfiguration;
 import org.egov.novubridge.repository.DispatchLogRepository;
-import org.egov.novubridge.web.models.ComplaintsDomainEvent;
+import org.egov.novubridge.web.models.NotificationEvent;
 import org.egov.novubridge.web.models.Contact;
 import org.egov.novubridge.web.models.DispatchLogEntry;
+import org.egov.novubridge.web.models.DispatchResult;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -133,7 +140,16 @@ class PreferenceGateMatrixTest {
     }
 
     @Test
-    void gateOn_serviceUnreachable_failsClosed() {
+    void gateOn_serviceUnreachable_failsOpenByDefault() {
+        when(restTemplate.exchange(anyString(), any(HttpMethod.class), any(HttpEntity.class), eq(Map.class)))
+                .thenThrow(new ResourceAccessException("connection timed out"));
+        assertTrue(client.isChannelAllowed("ke.bomet", "uuid-1", "+254712345678", "SMS"),
+                "an outage of the consent service is not a citizen's refusal");
+    }
+
+    @Test
+    void gateOn_serviceUnreachable_failsClosedWhenConfigured() {
+        config.setPreferenceFailOpen(false);
         when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), eq(Map.class)))
                 .thenThrow(new ResourceAccessException("connection timed out"));
         assertFalse(client.isChannelAllowed("ke.bomet", "uuid-1", "+254712345678", "SMS"));
@@ -155,17 +171,18 @@ class PreferenceGateMatrixTest {
         NovuClient novuClient = mock(NovuClient.class);
         DispatchLogRepository dispatchLogRepository = mock(DispatchLogRepository.class);
         NovuBridgeConfiguration pipelineConfig = new NovuBridgeConfiguration();
-        pipelineConfig.setChannel("SMS");
         pipelineConfig.setDefaultLocale("en_IN");
         pipelineConfig.setChannelsEnabled(List.of("SMS", "EMAIL"));
 
         DispatchPipelineService service = new DispatchPipelineService(new EnvelopeValidator(), denying,
-                novuClient, null, dispatchLogRepository, pipelineConfig, mock(MdmsServiceClient.class));
+                new DeliveryProviderRegistry(pipelineConfig, new ChannelPolicyClient(null, pipelineConfig), new NovuDeliveryProvider(novuClient), null),
+                new ChannelPolicyClient(null, pipelineConfig), dispatchLogRepository, pipelineConfig,
+                new ProviderAvailability(novuClient, pipelineConfig));
 
         Contact contact = Contact.builder()
                 .userId("uuid-123").type("CITIZEN").name("Jane Doe")
                 .phone("+254712345678").email("jane@example.com").locale("en_IN").build();
-        ComplaintsDomainEvent event = ComplaintsDomainEvent.builder()
+        NotificationEvent event = NotificationEvent.builder()
                 .eventId("evt-1").eventType("COMPLAINTS_WORKFLOW_TRANSITIONED")
                 .eventName("COMPLAINTS.WORKFLOW.ASSIGN").module("Complaints")
                 .entityType("COMPLAINT").entityId("PGR-001").tenantId("ke.bomet")
@@ -180,5 +197,65 @@ class PreferenceGateMatrixTest {
         verify(dispatchLogRepository).upsert(captor.capture());
         assertEquals("SKIPPED", captor.getValue().getStatus());
         assertEquals("NB_PREFERENCE_DENIED", captor.getValue().getLastErrorCode());
+    }
+
+    // ---- the core-SMS consent exemption: an in-process fact, never an envelope field ----------
+
+    private PreferenceServiceClient denying;
+    private DispatchLogRepository ledger;
+
+    private DispatchPipelineService deniedPipeline() {
+        denying = mock(PreferenceServiceClient.class);
+        when(denying.isChannelAllowed(anyString(), any(), any(), anyString())).thenReturn(false);
+        ledger = mock(DispatchLogRepository.class);
+        NovuClient novuClient = mock(NovuClient.class);
+        NovuBridgeConfiguration pipelineConfig = new NovuBridgeConfiguration();
+        pipelineConfig.setDefaultLocale("en_IN");
+        pipelineConfig.setChannelsEnabled(List.of("SMS"));
+        return new DispatchPipelineService(new EnvelopeValidator(), denying,
+                new DeliveryProviderRegistry(pipelineConfig, new ChannelPolicyClient(null, pipelineConfig), new NovuDeliveryProvider(novuClient), null),
+                new ChannelPolicyClient(null, pipelineConfig), ledger, pipelineConfig,
+                new ProviderAvailability(novuClient, pipelineConfig));
+    }
+
+    /** What CoreSmsTranslator emits: no userId, which the consent check always denies. */
+    private static NotificationEvent coreSms(String category) {
+        return NotificationEvent.builder()
+                .eventId("e5b1a9d2").eventType("CORE_SMS").module("CORE").eventName("CORE.SMS." + category)
+                .entityType("SMS").entityId("e5b1a9d2").tenantId("ke").channel("SMS")
+                .subscriberId("ke:+254712345678")
+                .contact(Contact.builder().type("CITIZEN").phone("+254712345678").locale("en_IN").build())
+                .renderedBody("123456 is your OTP for login.").transactionId("CORE:ke:e5b1a9d2")
+                .build();
+    }
+
+    private String ledgerCode() {
+        ArgumentCaptor<DispatchLogEntry> captor = ArgumentCaptor.forClass(DispatchLogEntry.class);
+        verify(ledger).upsert(captor.capture());
+        return captor.getValue().getLastErrorCode();
+    }
+
+    @Test
+    void coreSmsPath_otpSkipsTheConsentGate() {
+        deniedPipeline().processCoreSms(coreSms("OTP"));
+
+        verify(denying, never()).isChannelAllowed(anyString(), any(), any(), anyString());
+        assertFalse("NB_PREFERENCE_DENIED".equals(ledgerCode()), "a login OTP must not be consent-gated");
+    }
+
+    @Test
+    void anEnvelopeThatOnlyClaimsCoreSms_isConsentGated() {
+        // The same fields from a shared topic or /dispatch/_dry-run buy nothing.
+        DispatchResult result = deniedPipeline().process(coreSms("OTP"), true, null);
+
+        assertEquals(false, result.getPreferenceAllowed());
+        assertEquals("NB_PREFERENCE_DENIED", ledgerCode());
+    }
+
+    @Test
+    void coreSmsPath_promotionStaysConsentGated() {
+        deniedPipeline().processCoreSms(coreSms("PROMOTION"));
+
+        assertEquals("NB_PREFERENCE_DENIED", ledgerCode());
     }
 }

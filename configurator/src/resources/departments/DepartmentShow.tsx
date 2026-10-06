@@ -26,7 +26,7 @@ export function DepartmentShow() {
               resource="complaint-hierarchy"
               target="department"
               id={String(rec.code ?? rec.id)}
-              label="Complaint Types"
+              label="Complaint Categories"
               displayField="name"
             />
             <div className="mt-4">

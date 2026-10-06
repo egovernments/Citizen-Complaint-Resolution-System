@@ -3,6 +3,7 @@ package org.egov.novubridge.service;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.novubridge.config.NovuBridgeConfiguration;
 import org.egov.novubridge.util.PiiMask;
+import org.egov.novubridge.util.ServiceUrl;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
@@ -51,16 +52,15 @@ public class PreferenceServiceClient {
                     "offset", 0
             ));
 
-            String url = config.getPreferenceHost() + config.getPreferenceCheckPath();
+            String url = ServiceUrl.join(config.getPreferenceHost(), config.getPreferenceCheckPath());
             log.info("Preference request: url={}, preferenceCode={}, userId={}, tenantId={}",
                     url, config.getPreferenceCode(), userId, tenantId);
 
             ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.POST, new HttpEntity<>(payload), Map.class);
-            log.info("Preference response: statusCode={}, body={}", response.getStatusCode(), response.getBody());
+            log.info("Preference response: statusCode={}", response.getStatusCode());
 
             if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
-                log.warn("Preference check denied: non-success response. statusCode={}", response.getStatusCode());
-                return false;
+                return onServiceFailure("non-success response statusCode=" + response.getStatusCode(), tenantId, userId, channelKey);
             }
             List<Map<String, Object>> preferences = (List<Map<String, Object>>) response.getBody().get("preferences");
             if (preferences == null || preferences.isEmpty()) {
@@ -94,25 +94,22 @@ public class PreferenceServiceClient {
                 log.warn("Preference check denied: status is not GRANTED. status={}", status);
                 return false;
             }
-//            if ("TENANT".equalsIgnoreCase(scope)) {
-//                return tenantId.equalsIgnoreCase(scopeTenant);
-//            }
             log.info("Preference check allowed for userId={}, tenantId={}, channel={}", userId, tenantId, channelKey);
             return true;
         } catch (Exception e) {
-            log.warn("Preference check failed. tenantId={} userId={} mobile={} channel={}", tenantId, userId, PiiMask.mask(mobile), channelKey, e);
-            return false;
+            return onServiceFailure(e.getClass().getSimpleName() + ": " + e.getMessage(), tenantId, userId, channelKey);
         }
     }
 
-    /**
-     * List the raw user notification preference records for a tenant (or all
-     * tenants when {@code tenantId} is blank), paged via {@code limit}/{@code offset}.
-     * Returns the raw {@code preferences} list from the preference service search
-     * response; the caller is responsible for allowlist-projecting each record
-     * before it leaves the service. Returns an empty list on any error or when no
-     * records are found, mirroring the defensive style of the other search calls.
-     */
+    /** An unreachable service is an infrastructure fault, not a citizen's decision: fail.open decides. */
+    private boolean onServiceFailure(String reason, String tenantId, String userId, String channelKey) {
+        boolean open = !Boolean.FALSE.equals(config.getPreferenceFailOpen());
+        log.warn("Preference check could not be performed ({}) for tenantId={} userId={} channel={} — {}",
+                reason, tenantId, userId, channelKey, open ? "failing OPEN (allowing)" : "failing CLOSED (denying)");
+        return open;
+    }
+
+    /** Raw preference records (blank tenant = all), empty on any error. Callers must allowlist-project them. */
     public List<Map<String, Object>> listPreferences(String tenantId, int limit, int offset) {
         log.info("Listing preferences: tenantId={}, limit={}, offset={}, preferenceEnabled={}",
                 tenantId, limit, offset, config.getPreferenceEnabled());
@@ -129,7 +126,7 @@ public class PreferenceServiceClient {
             payload.put("requestInfo", new HashMap<>());
             payload.put("criteria", criteria);
 
-            String url = config.getPreferenceHost() + config.getPreferenceSearchPath();
+            String url = ServiceUrl.join(config.getPreferenceHost(), config.getPreferenceSearchPath());
             log.info("Preference list request: url={}, preferenceCode={}, tenantId={}, limit={}, offset={}",
                     url, config.getPreferenceCode(), tenantId, limit, offset);
 

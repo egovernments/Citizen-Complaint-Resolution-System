@@ -48,7 +48,7 @@ export function TypeDialog({
     const trimmed = name.trim();
     const lines = subtypes.split('\n').map((line) => line.trim()).filter(Boolean);
     const next: typeof errors = {};
-    if (!trimmed) next.name = 'Give the complaint type a name.';
+    if (!trimmed) next.name = 'Give the complaint category a name.';
     else if (takenNames.some((taken) => taken.toLowerCase() === trimmed.toLowerCase())) next.name = `“${trimmed}” is already on the list.`;
     if (!department) next.department = 'Choose the department that handles it.';
     const seen = new Set<string>();
@@ -77,9 +77,9 @@ export function TypeDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{type ? 'Edit complaint type' : 'Add a complaint type'}</DialogTitle>
+          <DialogTitle>{type ? 'Edit complaint category' : 'Add a complaint category'}</DialogTitle>
           <DialogDescription>
-            A type is the broad category someone picks when reporting. Subtypes sit under it.
+            A category is the broad group someone picks when reporting. Subcategories sit under it.
           </DialogDescription>
         </DialogHeader>
         <form
@@ -112,7 +112,7 @@ export function TypeDialog({
           </div>
           <div className="space-y-1.5">
             <label htmlFor={`${id}-subtypes`} className="block text-sm font-medium text-foreground">
-              Subtypes <span className="font-normal text-muted-foreground">(optional)</span>
+              Subcategories <span className="font-normal text-muted-foreground">(optional)</span>
             </label>
             <textarea
               id={`${id}-subtypes`}
@@ -130,7 +130,7 @@ export function TypeDialog({
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit">{type ? 'Save changes' : 'Add type'}</Button>
+            <Button type="submit">{type ? 'Save changes' : 'Add category'}</Button>
           </DialogFooter>
         </form>
       </DialogContent>

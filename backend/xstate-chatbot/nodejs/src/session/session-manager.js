@@ -58,6 +58,12 @@ async function getAuthenticatedSandboxUser(mobileNumber, tenantId) {
 class SessionManager {
   async fromUser(reformattedMessage) {
     let mobileNumber = reformattedMessage.user.mobileNumber;
+    // Channel-supplied reply address; egov-user's record does not carry it, so it is
+    // re-attached once the user is resolved.
+    let whatsAppAddress = reformattedMessage.user.whatsAppAddress;
+    // Every reply sent before a session exists goes here, so none of them falls back to
+    // re-prefixing the national number with the tenant's default country code.
+    const replyTo = { mobileNumber: mobileNumber, whatsAppAddress: whatsAppAddress };
     let user;
     let userId;
     let messageInput = reformattedMessage.message.input?.toLowerCase();
@@ -110,7 +116,7 @@ class SessionManager {
             "Enter your registered email address";
 
           channelProvider.sendMessageToUser(
-            { mobileNumber: mobileNumber },
+            replyTo,
             [welcomeMessage],
             reformattedMessage.extraInfo
           );
@@ -129,7 +135,7 @@ class SessionManager {
             `${registrationUrl}`;
 
           channelProvider.sendMessageToUser(
-            { mobileNumber: mobileNumber },
+            replyTo,
             [errorMessage],
             reformattedMessage.extraInfo
           );
@@ -158,7 +164,7 @@ class SessionManager {
           orgListMessage += `\nEnter number (1-${result.tenants.length})`;
 
           channelProvider.sendMessageToUser(
-            { mobileNumber: mobileNumber },
+            replyTo,
             [orgListMessage],
             reformattedMessage.extraInfo
           );
@@ -200,7 +206,7 @@ class SessionManager {
           // User not registered in this organization - show registration URL
           const registrationUrl = emailTenantService.getSandboxRegistrationUrl(email);
           channelProvider.sendMessageToUser(
-            { mobileNumber: mobileNumber },
+            replyTo,
             [`Mobile ${mobileNumber} not registered with ${orgDetails.name}.\n\nComplete registration at:\n${registrationUrl}\n\nUse email: ${email}`],
             reformattedMessage.extraInfo
           );
@@ -214,7 +220,7 @@ class SessionManager {
         if (isNaN(selectionNum) || selectionNum < 1 || selectionNum > trackerEntry.tenantOptions.length) {
           // Invalid selection
           channelProvider.sendMessageToUser(
-            { mobileNumber: mobileNumber },
+            replyTo,
             [`Invalid selection. Enter a number between 1 and ${trackerEntry.tenantOptions.length}`],
             reformattedMessage.extraInfo
           );
@@ -256,7 +262,7 @@ class SessionManager {
 
           const registrationUrl = emailTenantService.getSandboxRegistrationUrl(email);
           channelProvider.sendMessageToUser(
-            { mobileNumber: mobileNumber },
+            replyTo,
             [`Mobile ${mobileNumber} not registered with ${selectedOrg.name}.\n\nComplete registration at:\n${registrationUrl}\n\nUse email: ${email}`],
             reformattedMessage.extraInfo
           );
@@ -282,7 +288,7 @@ class SessionManager {
             trackerEntry.userId = userId;
           } catch (error) {
             channelProvider.sendMessageToUser(
-              { mobileNumber: mobileNumber },
+              replyTo,
               ["Session expired or user not found. Please type 'Hi' to start again."],
               reformattedMessage.extraInfo
             );
@@ -291,7 +297,7 @@ class SessionManager {
         } else {
           // No tracker entry (cold start, restart, or expired) - ask to greet again.
           channelProvider.sendMessageToUser(
-            { mobileNumber: mobileNumber },
+            replyTo,
             ["Welcome! Please type 'Hi' to start."],
             reformattedMessage.extraInfo
           );
@@ -310,8 +316,8 @@ class SessionManager {
         reformattedMessage.extraInfo.tenantId = config.rootTenantId;
       } catch (error) {
         channelProvider.sendMessageToUser(
-          { mobileNumber: mobileNumber },
-          [`Sorry, there was an error processing your request. Please check your mobile number format (should be 10 digits) and try again. Error: ${error.message}`],
+          replyTo,
+          [`Sorry, there was an error processing your request. Please check your mobile number and try again. Error: ${error.message}`],
           reformattedMessage.extraInfo
         );
         return;
@@ -323,6 +329,7 @@ class SessionManager {
     if (!user || !userId) {
       return;
     }
+    if (whatsAppAddress) user.whatsAppAddress = whatsAppAddress;
 
     // Use user.userId (KeyCloak UUID) as the session storage key in both sandbox
     // and normal mode. This matches the legacy normal flow and keeps onTransition's
@@ -383,8 +390,11 @@ class SessionManager {
     let userId = state.context.user.userId;
     let locale = state.context.user.locale;
     let mobileNumber = state.context.user.mobileNumber;
+    // Kept so sends made outside a live message (reminders) still reach the citizen's
+    // real number; the national number alone cannot say which country it belongs to.
+    let whatsAppAddress = state.context.user.whatsAppAddress;
     state.context.user = undefined;
-    state.context.user = { locale: locale, userId: userId, mobileNumber: mobileNumber };
+    state.context.user = { locale: locale, userId: userId, mobileNumber: mobileNumber, whatsAppAddress: whatsAppAddress };
     state.event = {};
     state._event = {};
     if (state.history) state.history.context.user = {};
@@ -405,11 +415,17 @@ class SessionManager {
     context.chatInterface = this;
     let locale = context.user.locale;
     let savedMobileNumber = context.user.mobileNumber; // Preserve the saved mobileNumber
+    let savedWhatsAppAddress = context.user.whatsAppAddress;
     context.user = reformattedMessage.user;
     context.user.locale = locale;
     // Ensure mobileNumber is always present
     if (!context.user.mobileNumber && savedMobileNumber) {
       context.user.mobileNumber = savedMobileNumber;
+    }
+    // Same for the reply address: one message without a usable From must not wipe it,
+    // or later sends fall back to the tenant's default country code.
+    if (!context.user.whatsAppAddress && savedWhatsAppAddress) {
+      context.user.whatsAppAddress = savedWhatsAppAddress;
     }
     context.extraInfo = reformattedMessage.extraInfo;
 

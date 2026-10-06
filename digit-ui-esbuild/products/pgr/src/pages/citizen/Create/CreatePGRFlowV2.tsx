@@ -475,7 +475,7 @@ function CategoryFields({ data, patch, serviceDefs, hierarchyDef, nodes, t }: St
       ) : (
         <>
           <Field
-            label={t("CS_COMPLAINT_DETAILS_COMPLAINT_TYPE")}
+            label={tr(t, "CS_COMPLAINT_DETAILS_COMPLAINT_TYPE", "Complaint Category")}
             required
             htmlFor="complaint-type"
           >
@@ -488,7 +488,7 @@ function CategoryFields({ data, patch, serviceDefs, hierarchyDef, nodes, t }: St
                 const picked = types.find((tp) => tp.menuPath === value);
                 patch({ SelectComplaintType: picked, SelectSubComplaintType: null });
               }}
-              placeholder={tr(t, "CS_COMPLAINT_PICK_TYPE", "Select a complaint type")}
+              placeholder={tr(t, "CS_COMPLAINT_PICK_TYPE", "Select a complaint category")}
               options={types.map((tp) => ({
                 value: tp.menuPath,
                 label: tp.menuPathName ?? tp.menuPath,
@@ -497,7 +497,7 @@ function CategoryFields({ data, patch, serviceDefs, hierarchyDef, nodes, t }: St
           </Field>
           {subTypes.length > 1 ? (
             <Field
-              label={t("CS_COMPLAINT_DETAILS_COMPLAINT_SUBTYPE")}
+              label={tr(t, "CS_COMPLAINT_DETAILS_COMPLAINT_SUBTYPE", "Complaint Subcategory")}
               required
               htmlFor="complaint-subtype"
             >
@@ -510,7 +510,7 @@ function CategoryFields({ data, patch, serviceDefs, hierarchyDef, nodes, t }: St
                   const picked = subTypes.find((s) => s.serviceCode === value);
                   patch({ SelectSubComplaintType: picked });
                 }}
-                placeholder={tr(t, "CS_COMPLAINT_PICK_SUBTYPE", "Select a subtype")}
+                placeholder={tr(t, "CS_COMPLAINT_PICK_SUBTYPE", "Select a subcategory")}
                 options={subTypes.map((s) => ({
                   value: s.serviceCode,
                   label: complaintLabel(t, s.serviceCode, s.name),
@@ -836,9 +836,9 @@ function ReviewStep({ data, t, photos }: StepBodyProps & { photos: PickedPhoto[]
         <ReviewRows
           rows={[
             [say("CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS_DESCRIPTION", "Description"), data.description?.trim() ? truncate(data.description, 180) : notProvided],
-            [say("CS_FILE_CATEGORY_LABEL", "Category"), category || notSelected],
+            [say("CS_FILE_CATEGORY_LABEL", "Complaint Category"), category || notSelected],
             // A type with no sub-types has nothing to select here.
-            [say("CS_FILE_SUBCATEGORY_LABEL", "Sub-category"), subCategory || (category ? "—" : notSelected)],
+            [say("CS_FILE_SUBCATEGORY_LABEL", "Complaint Subcategory"), subCategory || (category ? "—" : notSelected)],
             [
               say("CS_FILE_PHOTOS", "Photos"),
               attached.length
@@ -1093,7 +1093,7 @@ const CreatePGRFlowV2: React.FC = () => {
     if (stepIndex === 0) {
       if (!(formData.description ?? "").trim()) return tr(t, "CS_FILE_HINT_DESCRIBE", "Describe your complaint to continue.");
       if (!descriptionOk) return tr(t, "CS_FILE_HINT_LETTERS", "Use at least three letters to describe the complaint.");
-      if (!categoryOk) return tr(t, "CS_FILE_HINT_CATEGORY", "Select a category and sub-category to continue.");
+      if (!categoryOk) return tr(t, "CS_FILE_HINT_CATEGORY", "Select a complaint category and subcategory to continue.");
       if (uploading) return tr(t, "CS_FILE_HINT_UPLOADING", "Wait for your photos to finish uploading.");
       if (uploadFailed) return tr(t, "CS_FILE_HINT_UPLOAD_FAILED", "A photo didn't upload. Retry it or remove it.");
     }

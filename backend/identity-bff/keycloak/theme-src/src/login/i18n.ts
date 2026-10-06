@@ -8,6 +8,15 @@ import type { ThemeName } from "../kc.gen";
  * here; everything else (field labels, Keycloak's own error text) comes from
  * Keycloak's message bundle so a realm override or a Keycloak upgrade keeps
  * working. French is carried because Bomet enables `fr_FR`.
+ *
+ * One Keycloak key is reworded: `expiredActionMessage`. Keycloak shows it for
+ * an email link that has expired or was already used, and for a login or
+ * required-action page resumed after its code expired (a stale tab, the back
+ * button). Its "Action expired. Please continue with login now." read as a
+ * failure to someone the first click had already signed in. keycloakify
+ * writes these translations into the theme's message bundles, so the
+ * server-rendered error page uses them. Languages without an entry here get
+ * the English one.
  */
 const { useI18n, ofTypeI18n } = i18nBuilder
     .withThemeName<ThemeName>()
@@ -42,7 +51,9 @@ const { useI18n, ofTypeI18n } = i18nBuilder
             digitVerification: "Verification",
             digitSessionEyebrow: "Session",
             digitNonEnumerating:
-                "If an eligible account exists, we will email a secure one-use link. We never reveal which sign-in methods an email uses."
+                "If an eligible account exists, we will email a secure one-use link. We never reveal which sign-in methods an email uses.",
+            expiredActionMessage:
+                "This link or page has expired or was already used. If you have already signed in, go back to the application to carry on. Otherwise, sign in again or ask for a new link."
         },
         fr: {
             digitErrorTitle: "Un problème est survenu",
@@ -74,7 +85,9 @@ const { useI18n, ofTypeI18n } = i18nBuilder
             digitVerification: "Vérification",
             digitSessionEyebrow: "Session",
             digitNonEnumerating:
-                "Si un compte éligible existe, nous enverrons un lien sécurisé à usage unique. Nous ne révélons jamais les méthodes de connexion associées à une adresse."
+                "Si un compte éligible existe, nous enverrons un lien sécurisé à usage unique. Nous ne révélons jamais les méthodes de connexion associées à une adresse.",
+            expiredActionMessage:
+                "Ce lien ou cette page a expiré ou a déjà servi. Si vous êtes déjà connecté, revenez à l’application pour continuer. Sinon, reconnectez-vous ou demandez un nouveau lien."
         }
     })
     .build();
