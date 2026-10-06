@@ -5,16 +5,16 @@ import { currentPersonLease, withPersonLease } from "../../src/modules/accounts/
 import { recordToken, readToken } from "../../src/modules/revocation/inventory.js";
 import * as digitClient from "../../src/modules/managed-accounts/digit-user-client.js";
 import * as credentials from "../../src/modules/accounts/credential-service.js";
-import { bindingsFor } from "../../src/modules/bindings/store.js";
+import { bindingsFor, indexBindingTenants } from "../../src/modules/bindings/store.js";
 import { runReconcile, startReconcile, getReconcileReadiness, requestReconcileNow, reconcileStatsKey, reconcileLeaseKey } from "../../src/modules/sync/reconcile.js";
 
 const mocks = vi.hoisted(() => ({ request: vi.fn(), read: vi.fn(), bindings: vi.fn(), organization: vi.fn(),
   organizations: vi.fn(), active: vi.fn(), name: vi.fn(), member: vi.fn(), revoke: vi.fn(), person: vi.fn(),
-  tenant: vi.fn(), identifiers: vi.fn() }));
+  tenant: vi.fn(), identifiers: vi.fn(), bindingUser: vi.fn() }));
 vi.mock("../../src/modules/organizations/organization-service.js", () => ({ request: mocks.request,
   isOrganizationMember: mocks.member, IdentityAdminError: class extends Error {} }));
 vi.mock("../../src/modules/sync/digit-reader.js", () => ({ readDigitAccount: mocks.read }));
-vi.mock("../../src/modules/bindings/store.js", () => ({ readBindings: mocks.bindings, bindingsFor: vi.fn() }));
+vi.mock("../../src/modules/bindings/store.js", () => ({ readBindings: mocks.bindings, readBindingUser: mocks.bindingUser, bindingsFor: vi.fn(), indexBindingTenants: vi.fn() }));
 vi.mock("../../src/modules/revocation/index.js", () => ({ revokeAccount: mocks.revoke,
   revokePerson: mocks.person, revokeTenantMembers: mocks.tenant }));
 vi.mock("../../src/modules/onboarding/organization-reader.js", () => ({ readOrganizationByTenant: mocks.organization,
@@ -61,6 +61,7 @@ beforeEach(async () => {
     return new Response(JSON.stringify(user));
   });
   mocks.bindings.mockImplementation(async () => JSON.parse(user.attributes["digit.bindings"][0]).bindings);
+  mocks.bindingUser.mockImplementation(async () => user);
   mocks.read.mockImplementation(async () => structuredClone(account));
   mocks.organization.mockImplementation(async () => organization);
   mocks.organizations.mockResolvedValue(["tenant"]);
@@ -288,6 +289,15 @@ describe("reconciliation", () => {
     expect((await runReconcile()).failures).toHaveLength(1);
     expect(await getRedis().hget(reconcileStatsKey(), "completedGeneration")).toBeNull();
     expect((await getReconcileReadiness()).status).toBe("down");
+  });
+  it("backfills the binding-tenant index before, and despite, a failed DIGIT read", async () => {
+    mocks.read.mockRejectedValue(new digitClient.DigitUnavailableError("DIGIT unavailable"));
+    vi.mocked(indexBindingTenants).mockImplementation(async () => expect(mocks.read).not.toHaveBeenCalled());
+    expect((await runReconcile()).failures).toEqual([{ subject: "person", code: "DIGIT_UNAVAILABLE" }]);
+    expect(indexBindingTenants).toHaveBeenCalledExactlyOnceWith("person", user);
+    // The same snapshot serves the binding read: one Keycloak GET, not one per step.
+    expect(mocks.bindingUser).toHaveBeenCalledOnce();
+    expect(mocks.bindings).toHaveBeenCalledWith("person", user);
   });
   it("returns not acquired instead of running a second sweep", async () => {
     await getRedis().set(reconcileLeaseKey(), "other", "PX", 10000);

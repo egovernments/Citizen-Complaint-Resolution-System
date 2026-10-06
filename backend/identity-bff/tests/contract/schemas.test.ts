@@ -7,7 +7,7 @@ const UUID2 = "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d";
 const staff = {
   kind: "staff", tenantId: "pg", uuid: UUID, boundAt: 1791100000000, active: true,
   roles: [{ code: "EMPLOYEE", tenantId: "pg" }, { code: "GRO", tenantId: "pg" }],
-  userName: "EMP-PG-0001", credential: { keyVersion: 2, setAt: 1791100000500 },
+  userName: "EMP-PG-0001", name: "Asha Kumari", credential: { keyVersion: 2, setAt: 1791100000500 },
 };
 const citizen = {
   kind: "citizen", tenantId: "pg", uuid: UUID2, boundAt: 1791000000000, active: true,
@@ -26,6 +26,8 @@ describe("digit.accounts v1", () => {
 
   it.each([
     ["a citizen credential", { v: 1, entries: [{ ...citizen, credential: { keyVersion: 1 } }] }],
+    ["a citizen name (the person-wide name is firstName)", { v: 1, entries: [{ ...citizen, name: "Asha" }] }],
+    ["an empty staff name", { v: 1, entries: [{ ...staff, name: "" }] }],
     ["an unknown kind", { v: 1, entries: [{ ...staff, kind: "managed" }] }],
     ["a sub-tenant entry (D16)", { v: 1, entries: [{ ...staff, tenantId: "pg.citya" }] }],
     ["a missing roles array", { v: 1, entries: [{ ...staff, roles: undefined }] }],
@@ -45,7 +47,7 @@ describe("digit.bindings v1", () => {
     createdBy: { kind: "workload", operationId: "op-1", restartNo: 0 }, boundAt: 1791100000000,
   };
   const pending = {
-    tenantId: "bomet", uuid: UUID2, state: "pending", invitationVersion: 2, createdAt: 1791100000000,
+    tenantId: "bomet", uuid: UUID2, email: "employee@example.test", state: "pending", invitationVersion: 2, createdAt: 1791100000000,
     createdBy: { kind: "browser", subject: "admin-sub", requestId: "6a437d4c295ef4c8f605fa17bc90a569208584985c6d85cf94c7c4684892368f" },
     expiresAt: 1792309600000,
   };
@@ -66,6 +68,7 @@ describe("digit.bindings v1", () => {
     ["invitation version 0", { ...active, invitationVersion: 0 }],
     ["a sub-tenant binding (D16)", { ...active, tenantId: "pg.citya" }],
     ["an unknown creator kind", { ...active, createdBy: { kind: "migration" } }],
+    ["an empty email", { ...pending, email: "" }],
     ["a short requestId", { ...pending, createdBy: { kind: "browser", requestId: "abc" } }],
   ])("rejects %s", (_name, binding) => {
     expect(schemaErrors("digit.bindings", JSON.parse(JSON.stringify({ v: 1, bindings: [binding] })))).not.toEqual([]);
@@ -79,6 +82,13 @@ describe("digit.boundUuids values", () => {
 
   it.each([`pg.citya|${UUID}`, UUID, `pg|not-a-uuid`, `EMPLOYEE|pg|${UUID}`])("rejects %s", (value) => {
     expect(schemaErrors("digit.boundUuids", value)).not.toEqual([]);
+  });
+});
+
+describe("digit.bindingTenants values", () => {
+  it("accepts a plain tenant id", () => expect(schemaErrors("digit.bindingTenants", "pg")).toEqual([]));
+  it.each(["pg.citya", `pg|${UUID}`, ""])("rejects %s", (value) => {
+    expect(schemaErrors("digit.bindingTenants", value)).not.toEqual([]);
   });
 });
 

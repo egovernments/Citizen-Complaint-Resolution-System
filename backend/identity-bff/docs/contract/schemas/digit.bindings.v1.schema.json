@@ -21,6 +21,7 @@
       "properties": {
         "tenantId": { "$ref": "#/$defs/tenantId", "description": "The workspace tenant (D16). Equal to the DIGIT account's tenant" },
         "uuid": { "$ref": "#/$defs/uuid", "description": "The DIGIT employee account (HRMS-created)" },
+        "email": { "type": "string", "minLength": 3, "maxLength": 254, "description": "_link only: the normalized (trimmed, lower-cased) address this invitationVersion was issued to. Absent for bindings/_ensure, the item-19 conversion and records written before it existed. Read by the tenant member list for pending and removed members" },
         "state": { "enum": ["pending", "active", "removed"] },
         "invitationVersion": { "type": "integer", "minimum": 1, "description": "Starts at 1. Raised only by an explicit re-invite. _accept must quote the current value" },
         "createdAt": { "type": "integer", "minimum": 0, "description": "Epoch ms this invitationVersion was issued" },

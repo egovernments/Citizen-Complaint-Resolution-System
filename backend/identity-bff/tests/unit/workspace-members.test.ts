@@ -1,8 +1,10 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { initCache, closeCache } from "../../src/infrastructure/redis.js";
+import { initCache, closeCache, getRedis } from "../../src/infrastructure/redis.js";
+import { withPersonLease } from "../../src/modules/accounts/person-lease.js";
+import { indexBindingTenants } from "../../src/modules/bindings/store.js";
 import { config } from "../../src/infrastructure/config.js";
 import type { UserRepresentation } from "../../src/modules/sync/keycloak-writer.js";
-const f = vi.hoisted(() => ({ users: new Map<string, UserRepresentation>(), members: new Set<string>(), crash: "", emails: 0, activations: 0, revoked: [] as string[], createCount: 0, conflict: false, targetRoles: [] as Array<{code: string; tenantId: string}>, callerRoles: [] as Array<{code: string; tenantId: string}> }));
+const f = vi.hoisted(() => ({ users: new Map<string, UserRepresentation>(), members: new Set<string>(), crash: "", emails: 0, activations: 0, revoked: [] as string[], createCount: 0, conflict: false, targetRoles: [] as Array<{code: string; tenantId: string}>, callerRoles: [] as Array<{code: string; tenantId: string}>, passwords: new Set<string>(), duringEmail: undefined as undefined | (() => Promise<void>) }));
 function bindingDoc(user: UserRepresentation) { return JSON.parse(user.attributes?.["digit.bindings"]?.[0] || '{"v":1,"bindings":[]}'); }
 vi.mock("../../src/modules/organizations/organization-service.js", () => {
   const fail = (step: string) => { if (f.crash === step) { f.crash = ""; throw new Error(`crash:${step}`); } };
@@ -18,11 +20,11 @@ vi.mock("../../src/modules/organizations/organization-service.js", () => {
         let users = [...f.users.values()];
         for (const field of ["email", "username"]) if (url.searchParams.has(field)) users = users.filter((u) => u[field] === url.searchParams.get(field));
         const q = url.searchParams.get("q");
-        if (q) users = users.filter((u) => u.attributes?.["digit.boundUuids"]?.includes(q.slice("digit.boundUuids:".length)));
+        if (q) users = users.filter((u) => u.attributes?.[q.slice(0, q.indexOf(":"))]?.includes(q.slice(q.indexOf(":") + 1)));
         const first = Number(url.searchParams.get("first") || 0);
-        return Response.json(users.slice(first, first + 100));
+        return Response.json(users.slice(first, first + Number(url.searchParams.get("max") || 100)));
       }
-      if (url.pathname.includes("/execute-actions-email")) { f.emails++; fail("email"); return new Response(null, { status: 204 }); }
+      if (url.pathname.includes("/execute-actions-email")) { f.emails++; await f.duringEmail?.(); fail("email"); return new Response(null, { status: 204 }); }
       if (url.pathname.startsWith("/organizations/") && init?.method === "DELETE") {
         const parts = url.pathname.split("/"); f.members.delete(`${parts[2]}:${parts[4]}`); fail("remove-membership"); return new Response(null, { status: 204 });
       }
@@ -43,6 +45,7 @@ vi.mock("../../src/modules/organizations/organization-service.js", () => {
     isOrganizationMember: vi.fn(async (org: string, subject: string) => f.members.has(`${org}:${subject}`)),
     ensureOrganizationMembership: vi.fn(async ({ organizationId, userId }: { organizationId: string; userId: string }) => { f.members.add(`${organizationId}:${userId}`); fail("membership"); }),
     sendPasswordSetupEmail: vi.fn(async () => { f.emails++; fail("email"); }),
+    inspectPasswordSetupAccountById: vi.fn(async (id: string) => ({ userId: id, hasPassword: f.passwords.has(id), federatedProviders: [], emailVerified: f.users.get(id)?.emailVerified === true })),
   };
 });
 vi.mock("../../src/modules/workspace-members/authority.js", async (importOriginal) => ({
@@ -71,7 +74,7 @@ vi.mock("../../src/modules/revocation/index.js", () => ({ revokeAccount: vi.fn(a
 vi.mock("../../src/modules/citizen-otp/audit.js", () => ({ audit: vi.fn(async () => {}) }));
 import { acceptWorkspaceInvitation, linkWorkspaceMember, listWorkspaceMembers, removeWorkspaceMember, updateWorkspaceMemberEmail } from "../../src/modules/workspace-members/service.js";
 import { readOnboardingOrganizations } from "../../src/modules/onboarding/organization-reader.js";
-import { isOrganizationMember } from "../../src/modules/organizations/organization-service.js";
+import { isOrganizationMember, request } from "../../src/modules/organizations/organization-service.js";
 import { readDigitAccount, requireWorkspace } from "../../src/modules/workspace-members/authority.js";
 import { BindingError } from "../../src/modules/bindings/types.js";
 import { activateStaffCredential, StaffLoginError } from "../../src/modules/accounts/credential-service.js";
@@ -79,7 +82,7 @@ const uuid = "00000000-0000-4000-8000-000000000001";
 const input = { actor: "admin", tenantId: "pg", digitUuid: uuid, email: "employee@example.test" };
 beforeAll(() => { Object.assign(config, { cachePrefix: `members-test-${process.pid}`, identityCredentialKeyCurrent: 1 }); initCache(); });
 afterAll(() => closeCache());
-beforeEach(() => { f.users.clear(); f.members.clear(); f.crash = ""; f.emails = 0; f.activations = 0; f.revoked = []; f.createCount = 0; f.conflict = false; f.targetRoles = [{ code: "EMPLOYEE", tenantId: "pg" }]; f.callerRoles = [{ code: "ACCOUNT_ADMIN", tenantId: "pg" }, ...f.targetRoles]; });
+beforeEach(async () => { await getRedis().del(`${config.cachePrefix}:identity:member-resend:pg:${uuid}`); f.passwords.clear(); f.users.clear(); f.members.clear(); f.crash = ""; f.duringEmail = undefined; f.emails = 0; f.activations = 0; f.revoked = []; f.createCount = 0; f.conflict = false; f.targetRoles = [{ code: "EMPLOYEE", tenantId: "pg" }]; f.callerRoles = [{ code: "ACCOUNT_ADMIN", tenantId: "pg" }, ...f.targetRoles]; });
 
 describe("resumable workspace membership", () => {
   it.each(["create", "membership", "binding", "activation", "email", "mirror", "clear"])("resumes after a crash at %s without creating another identity", async (step) => {
@@ -93,17 +96,16 @@ describe("resumable workspace membership", () => {
     expect(f.activations).toBe(1);
     expect(bindingDoc(f.users.get("new-1")!).bindings).toHaveLength(1);
   });
-  it("pages members before the per-member DIGIT lookups", async () => {
-    const bind = (id: string, state: string, extra: object = {}) => f.users.set(id, { id, email: `${id}@example.test`, attributes: {
+  it("pages members from the index without per-member DIGIT lookups", async () => {
+    const bind = (id: string, state: string, extra: object = {}) => f.users.set(id, { id, email: `${id}@example.test`, attributes: { "digit.bindingTenants": ["pg"],
       "digit.bindings": [JSON.stringify({ v: 1, bindings: [{ tenantId: "pg", uuid: `uuid-${id}`, state, invitationVersion: 1, createdAt: 1, createdBy: { kind: "conversion" }, ...extra }] })] } });
-    for (const id of ["m5", "m3", "m1", "m4", "m2"]) bind(id, "active", { boundAt: 2 });
+    for (const id of ["m1", "m2", "m3"]) bind(id, "active", { boundAt: 2 });
     bind("m0", "removed", { removedAt: 3 });
     bind("m15", "pending", { expiresAt: Date.now() - 1 });
     vi.mocked(readDigitAccount).mockClear();
-    const { members } = await listWorkspaceMembers("admin", "pg", 1, 2);
-    expect(members.map((m) => m.subject)).toEqual(["m2", "m3"]);
-    expect(members[0]).toEqual({ subject: "m2", email: "m2@example.test", name: "Employee", digitUuid: "uuid-m2", state: "active", invitationVersion: 1, boundAt: 2 });
-    expect(readDigitAccount).toHaveBeenCalledTimes(2);
+    const { members } = await listWorkspaceMembers("admin", "pg");
+    expect(members.map((m) => m.subject).sort()).toEqual(["m1", "m2", "m3"]);   // removed and expired invitations are left out
+    expect(readDigitAccount).not.toHaveBeenCalled();
   });
   it("uses the existing-user branch for another workspace's in-flight user", async () => {
     f.crash = "create"; await expect(linkWorkspaceMember(input)).rejects.toThrow();
@@ -240,6 +242,14 @@ describe("resumable workspace membership", () => {
     await linkWorkspaceMember(input); f.conflict = true;
     await expect(updateWorkspaceMemberEmail("admin", "pg", uuid, "new@example.test")).rejects.toMatchObject({ code: "IDENTITY_EMAIL_CHANGED" });
   });
+  it("records the new address on the binding, so a member removed afterwards is listed with it", async () => {
+    await linkWorkspaceMember(input);
+    await updateWorkspaceMemberEmail("admin", "pg", uuid, "new@example.test");
+    expect(bindingDoc(f.users.get("new-1")!).bindings[0]).toMatchObject({ state: "active", email: "new@example.test" });
+    await removeWorkspaceMember("admin", "pg", uuid);
+    const { members } = await listWorkspaceMembers("admin", "pg", 0, 100, "removed");
+    expect(members).toEqual([expect.objectContaining({ subject: "new-1", email: "new@example.test" })]);
+  });
   it("allows returning to the target's original username email", async () => {
     await linkWorkspaceMember(input);
     await updateWorkspaceMemberEmail("admin", "pg", uuid, "new@example.test");
@@ -269,5 +279,156 @@ describe("resumable workspace membership", () => {
     await expect(linkWorkspaceMember(input)).rejects.toMatchObject({ code: "DIGIT_UNAVAILABLE" });
     expect(f.users.get("new-1")?.attributes?.["digit.linkPending"]).toBeDefined();
     await expect(linkWorkspaceMember(input)).resolves.toMatchObject({ binding: { state: "active" } });
+  });
+});
+
+describe("admin resend of the activation email", () => {
+  const resend = { ...input, resend: true };
+  it("re-sends password setup to a new employee who has not set a password, then cools down", async () => {
+    await linkWorkspaceMember(input);
+    const before = structuredClone(f.users.get("new-1")); const emails = f.emails;
+    await expect(linkWorkspaceMember(resend)).resolves.toMatchObject({ activationEmailSent: true, activationEmail: "password_setup", binding: { state: "active" } });
+    expect(f.emails).toBe(emails + 1);
+    await expect(linkWorkspaceMember(resend)).rejects.toMatchObject({ code: "RESEND_TOO_SOON", status: 429, retryAfter: expect.any(Number) });
+    expect(f.emails).toBe(emails + 1);
+    expect(f.users.get("new-1")).toEqual(before);
+  });
+  it("sends the verify email to an unverified invitee who already has a password", async () => {
+    f.users.set("existing", { id: "existing", email: input.email, username: input.email, enabled: true, emailVerified: false, attributes: {} });
+    f.passwords.add("existing");
+    await linkWorkspaceMember(input);
+    await expect(linkWorkspaceMember(resend)).resolves.toMatchObject({ activationEmail: "verify_email", binding: { state: "pending" } });
+  });
+  it("refuses a member who is already set up, without sending or starting the cooldown", async () => {
+    f.users.set("existing", { id: "existing", email: input.email, username: input.email, enabled: true, emailVerified: true, attributes: {} });
+    f.passwords.add("existing");
+    await linkWorkspaceMember(input); const emails = f.emails;
+    await expect(linkWorkspaceMember(resend)).rejects.toMatchObject({ code: "ACTIVATION_NOT_NEEDED", status: 409 });
+    expect(f.emails).toBe(emails);
+    expect(await getRedis().exists(`${config.cachePrefix}:identity:member-resend:pg:${uuid}`)).toBe(0);
+  });
+  it("refuses a plain _link to a disabled person with IDENTITY_DISABLED, without binding or sending", async () => {
+    f.users.set("existing", { id: "existing", email: input.email, username: input.email, enabled: false, emailVerified: false, attributes: {} });
+    const emails = f.emails;
+    await expect(linkWorkspaceMember(input)).rejects.toMatchObject({ code: "IDENTITY_DISABLED", status: 403 });
+    expect(f.users.get("existing")!.attributes).toEqual({});
+    expect(f.emails).toBe(emails);
+  });
+  it("refuses removed and unknown members", async () => {
+    await expect(linkWorkspaceMember(resend)).rejects.toMatchObject({ code: "DIGIT_ACCOUNT_NOT_FOUND" });
+    await linkWorkspaceMember(input); await removeWorkspaceMember("admin", "pg", uuid);
+    await expect(linkWorkspaceMember(resend)).rejects.toMatchObject({ code: "BINDING_REMOVED" });
+  });
+  it("refuses an email that no longer matches the person, and a disabled person, without sending", async () => {
+    await linkWorkspaceMember(input); const emails = f.emails;
+    const user = f.users.get("new-1")!;
+    // Found by username = the old email, but the email has changed.
+    f.users.set("new-1", { ...user, email: "changed@example.test" });
+    await expect(linkWorkspaceMember(resend)).rejects.toMatchObject({ code: "IDENTITY_EMAIL_CHANGED" });
+    // A stale search hit whose fresh read under the lease no longer has the email.
+    vi.mocked(request).mockImplementationOnce(async () => Response.json([user]));
+    await expect(linkWorkspaceMember(resend)).rejects.toMatchObject({ code: "DIGIT_ACCOUNT_NOT_FOUND" });
+    f.users.set("new-1", { ...user, enabled: false });
+    await expect(linkWorkspaceMember(resend)).rejects.toMatchObject({ code: "IDENTITY_DISABLED", status: 403 });
+    expect(f.emails).toBe(emails);
+    expect(await getRedis().exists(`${config.cachePrefix}:identity:member-resend:pg:${uuid}`)).toBe(0);
+  });
+  it("a failed send does not release a window another request now owns", async () => {
+    const key = `${config.cachePrefix}:identity:member-resend:pg:${uuid}`;
+    f.users.set("existing", { id: "existing", email: input.email, username: input.email, enabled: true, emailVerified: false, attributes: {} });
+    f.passwords.add("existing");
+    await linkWorkspaceMember(input);
+    // Simulate this request's window expiring mid-send and another request taking it.
+    f.duringEmail = async () => { await getRedis().set(key, "other-request", "EX", 60); };
+    f.crash = "email";
+    await expect(linkWorkspaceMember(resend)).rejects.toThrow("crash:email");
+    expect(await getRedis().get(key)).toBe("other-request");
+  });
+  it("releases the cooldown when the send fails", async () => {
+    await linkWorkspaceMember(input);
+    f.crash = "email";
+    await expect(linkWorkspaceMember(resend)).rejects.toThrow("crash:email");
+    await expect(linkWorkspaceMember(resend)).resolves.toMatchObject({ activationEmail: "password_setup" });
+  });
+});
+
+describe("workspace member list", () => {
+  const bind = (id: string, binding: Record<string, unknown>, entries?: unknown[]) => f.users.set(id, { id, email: `${id}@example.test`, firstName: id, attributes: {
+    "digit.bindings": [JSON.stringify({ v: 1, bindings: [{ tenantId: "pg", invitationVersion: 1, createdAt: 1, createdBy: { kind: "conversion" }, ...binding }] })],
+    "digit.bindingTenants": ["pg"], ...(entries && { "digit.accounts": [JSON.stringify({ v: 1, entries })] }) } });
+  beforeEach(() => {
+    bind("a-active", { uuid: "u1", state: "active", boundAt: 5 }, [{ kind: "staff", tenantId: "pg", uuid: "u1", boundAt: 5, active: false, name: "PG Name", roles: [{ code: "GRO", tenantId: "pg" }] }]);
+    bind("b-pending", { uuid: "u2", state: "pending", expiresAt: Date.now() + 3600_000 });
+    bind("c-expired", { uuid: "u3", state: "pending", expiresAt: 10 });
+    bind("d-removed", { uuid: "u4", state: "removed", removedAt: 20 });
+  });
+  it("lists live members with mirrored DIGIT status and roles, by default", async () => {
+    const { members, nextFirst } = await listWorkspaceMembers("admin", "pg");
+    expect(members.map((m) => [m.subject, m.state])).toEqual([["a-active", "active"], ["b-pending", "pending"]]);
+    expect(members[0]).toMatchObject({ digitActive: false, roles: [{ code: "GRO", tenantId: "pg" }], name: "PG Name", email: "a-active@example.test" });
+    expect(members[1]).not.toHaveProperty("digitActive");
+    expect(members[1]).not.toHaveProperty("name");
+    expect(nextFirst).toBeUndefined();
+  });
+  it("filters removed members, reporting an expired invitation as removed without writing it", async () => {
+    const before = structuredClone(f.users.get("c-expired"));
+    const { members } = await listWorkspaceMembers("admin", "pg", 0, 100, "removed");
+    expect(members.map((m) => [m.subject, m.removedAt])).toEqual([["c-expired", 10], ["d-removed", 20]]);
+    expect(f.users.get("c-expired")).toEqual(before);
+  });
+  it("never shows another tenant's name, the person-wide firstName, or a non-member's current email", async () => {
+    const two = (id: string, pgBinding: Record<string, unknown>) => f.users.set(id, { id, email: `${id}-now@example.test`, firstName: "Name At Other", attributes: {
+      "digit.bindings": [JSON.stringify({ v: 1, bindings: [
+        { tenantId: "other", uuid: `o-${id}`, state: "active", boundAt: 1, invitationVersion: 1, createdAt: 1, createdBy: { kind: "conversion" } },
+        { tenantId: "pg", uuid: `p-${id}`, invitationVersion: 1, createdAt: 1, createdBy: { kind: "conversion" }, ...pgBinding }] })],
+      "digit.bindingTenants": ["other", "pg"],
+      "digit.accounts": [JSON.stringify({ v: 1, entries: [
+        { kind: "staff", tenantId: "other", uuid: `o-${id}`, boundAt: 1, active: true, name: "Name At Other", roles: [] },
+        ...(pgBinding.state === "active" ? [{ kind: "staff", tenantId: "pg", uuid: `p-${id}`, boundAt: 2, active: true, roles: [] }] : [])] })] } });
+    f.users.clear();
+    two("active-unnamed", { state: "active", boundAt: 2 });
+    two("invited", { state: "pending", expiresAt: Date.now() + 3600_000, email: "invited-then@example.test" });
+    two("legacy-invite", { state: "pending", expiresAt: Date.now() + 3600_000 });
+    two("left", { state: "removed", removedAt: 3, removedBy: { kind: "browser" }, email: "left-then@example.test" });
+    two("left-legacy", { state: "removed", removedAt: 3, removedBy: { kind: "browser" } });
+    const pg = [...(await listWorkspaceMembers("admin", "pg")).members, ...(await listWorkspaceMembers("admin", "pg", 0, 100, "removed")).members];
+    expect(pg.map(({ subject, email, name }) => ({ subject, email, name }))).toEqual([
+      { subject: "active-unnamed", email: "active-unnamed-now@example.test", name: undefined },
+      { subject: "invited", email: "invited-then@example.test", name: undefined },
+      { subject: "legacy-invite", email: undefined, name: undefined },
+      { subject: "left", email: "left-then@example.test", name: undefined },
+      { subject: "left-legacy", email: undefined, name: undefined },
+    ]);
+    expect(pg.filter((m) => "email" in m && m.email === undefined)).toEqual([]);
+    expect((await listWorkspaceMembers("admin", "other")).members.find((m) => m.subject === "invited")).toMatchObject({ name: "Name At Other", email: "invited-now@example.test" });
+  });
+  it("records the invited address on the binding, but keeps it out of _link responses", async () => {
+    f.users.set("existing", { id: "existing", email: input.email, username: input.email, enabled: true, emailVerified: true, attributes: {} });
+    const { binding } = await linkWorkspaceMember(input);
+    expect(binding).not.toHaveProperty("email");
+    expect(bindingDoc(f.users.get("existing")!).bindings[0]).toMatchObject({ state: "pending", email: input.email });
+    await linkWorkspaceMember({ ...input, digitUuid: "00000000-0000-4000-8000-000000000002", email: "new.person@example.test" });
+    expect(bindingDoc(f.users.get("new-1")!).bindings[0]).toMatchObject({ state: "active", email: "new.person@example.test" });
+  });
+  it("pages the indexed search and returns the next offset", async () => {
+    const page = await listWorkspaceMembers("admin", "pg", 0, 2, "active");
+    expect(page).toEqual({ members: [expect.objectContaining({ subject: "a-active" })], nextFirst: 2 });
+    expect((await listWorkspaceMembers("admin", "pg", 2, 2, "active")).members).toEqual([]);
+  });
+  it("indexes every binding tenant on write, and backfills older records", async () => {
+    await linkWorkspaceMember(input);
+    expect(f.users.get("new-1")?.attributes?.["digit.bindingTenants"]).toEqual(["pg"]);
+    delete f.users.get("a-active")!.attributes!["digit.bindingTenants"];
+    await withPersonLease("a-active", () => indexBindingTenants("a-active"));
+    expect(f.users.get("a-active")?.attributes?.["digit.bindingTenants"]).toEqual(["pg"]);
+  });
+  it("skips the Keycloak read for an already-indexed snapshot, and backfills a stale one", async () => {
+    const indexedUser = structuredClone(f.users.get("a-active")!);
+    vi.mocked(request).mockClear();
+    await withPersonLease("a-active", () => indexBindingTenants("a-active", indexedUser));
+    expect(request).not.toHaveBeenCalled();
+    delete f.users.get("a-active")!.attributes!["digit.bindingTenants"];
+    await withPersonLease("a-active", () => indexBindingTenants("a-active", structuredClone(f.users.get("a-active")!)));
+    expect(f.users.get("a-active")?.attributes?.["digit.bindingTenants"]).toEqual(["pg"]);
   });
 });

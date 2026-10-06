@@ -48,13 +48,29 @@ async function writeBinding(subject: string, binding: Binding): Promise<void> {
       "digit.bindings": [JSON.stringify({ v: 1, bindings: records })],
       "digit.boundUuids": records.filter((b) => effectiveBinding(b).state !== "removed")
         .map((b) => `${b.tenantId}|${b.uuid}`).sort(),
+      "digit.bindingTenants": bindingTenants(records),
     } };
   });
 }
 
-/** Expiry is a durable transition, serialized with acceptance and re-invite. */
-export async function readBindings(subject: string): Promise<Binding[]> {
-  const records = bindingsFromUser(await readBindingUser(subject));
+const bindingTenants = (records: Binding[]) => records.map((b) => b.tenantId).sort();
+
+const indexed = (user: BindingUser) =>
+  bindingTenants(bindingsFromUser(user)).join() === [...user.attributes?.["digit.bindingTenants"] ?? []].sort().join();
+
+/**
+ * Backfills the tenant index for records written before it existed. Caller holds the person lease.
+ * A snapshot that is already indexed skips the Keycloak read (the reconcile pass hands it one).
+ */
+export async function indexBindingTenants(subject: string, snapshot?: BindingUser): Promise<void> {
+  if (snapshot && indexed(snapshot)) return;
+  await updateKeycloakUser(subject, (user) => indexed(user) ? null
+    : { ...user, attributes: { ...user.attributes, "digit.bindingTenants": bindingTenants(bindingsFromUser(user)) } });
+}
+
+/** Expiry is a durable transition, serialized with acceptance and re-invite. A caller under the person lease may pass its snapshot. */
+export async function readBindings(subject: string, snapshot?: BindingUser): Promise<Binding[]> {
+  const records = bindingsFromUser(snapshot ?? await readBindingUser(subject));
   if (!records.some((b) => b.state === "pending" && b.expiresAt! <= Date.now())) return records;
   return withPersonLease(subject, async (lease) => {
     const fresh = bindingsFromUser(await readBindingUser(subject));
@@ -99,7 +115,7 @@ export async function bindingsFor(tenantId: string): Promise<Array<{ subject: st
   return result;
 }
 
-type BindingInput = { subject: string; tenantId: string; uuid: string; actor: BindingActor };
+type BindingInput = { subject: string; tenantId: string; uuid: string; actor: BindingActor; email?: string };
 
 async function create(input: BindingInput, pending?: { expiresAt: number; reinvite?: boolean }): Promise<{ binding: Binding; created: boolean }> {
   return withPersonLease(input.subject, async (lease) => withUuidLock(input.tenantId, input.uuid, async (lock) => {
@@ -122,7 +138,7 @@ async function create(input: BindingInput, pending?: { expiresAt: number; reinvi
     }
     const now = Date.now();
     const binding: Binding = {
-      tenantId: input.tenantId, uuid: input.uuid, state: pending ? "pending" : "active",
+      tenantId: input.tenantId, uuid: input.uuid, ...(input.email && { email: input.email }), state: pending ? "pending" : "active",
       invitationVersion: old ? old.invitationVersion + 1 : 1, createdAt: now,
       createdBy: input.actor.kind === "migration" ? { kind: "conversion" } : input.actor,
       ...(pending ? { expiresAt: pending.expiresAt } : { boundAt: now }),
@@ -168,6 +184,17 @@ export async function accept(input: { subject: string; tenantId: string; invitat
       return binding;
     });
   });
+}
+
+/** An admin `_updateEmail` moves the active binding's recorded address with the person's email. */
+export async function recordBindingEmail(input: { subject: string; tenantId: string; uuid: string; email: string }): Promise<void> {
+  await withPersonLease(input.subject, async (lease) => withUuidLock(input.tenantId, input.uuid, async (lock) => {
+    const current = bindingsFromUser(await readBindingUser(input.subject)).find((b) => b.tenantId === input.tenantId && b.uuid === input.uuid);
+    if (current?.state !== "active" || current.email === input.email) return;
+    await lease.assertHeld();
+    await lock.assertHeld();
+    await writeBinding(input.subject, { ...current, email: input.email });
+  }));
 }
 
 export async function remove(input: { subject: string; tenantId: string; uuid: string; removedBy: NonNullable<Binding["removedBy"]> }): Promise<{ removed: boolean; binding?: Binding }> {

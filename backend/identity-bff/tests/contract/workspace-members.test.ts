@@ -8,10 +8,10 @@ vi.mock("../../src/modules/sessions/current-session.js", () => ({ currentSession
   return f.signedIn ? { sessionId: "session", session: { claims: { sub: "person" } } } : null;
 }) }));
 vi.mock("../../src/modules/workspace-members/service.js", () => {
-  const check = () => { if (f.failure) throw Object.assign(new Error("Refused"), { code: f.failure }); };
+  const check = () => { if (f.failure) throw Object.assign(new Error("Refused"), { code: f.failure, ...(f.failure === "RESEND_TOO_SOON" && { retryAfter: 42 }) }); };
   return {
     linkWorkspaceMember: vi.fn(async (input: unknown) => { check(); f.calls.push(input); return { identityUserCreated: true, activationEmailSent: true, binding: { state: "active" } }; }),
-    listWorkspaceMembers: vi.fn(async () => { check(); return { members: [] }; }),
+    listWorkspaceMembers: vi.fn(async (...args: unknown[]) => { check(); f.calls.push(args); return { members: [] }; }),
     removeWorkspaceMember: vi.fn(async () => { check(); return { removed: true, state: "removed" }; }),
     acceptWorkspaceInvitation: vi.fn(async (...args: unknown[]) => { check(); f.calls.push(args); return { binding: { state: "active" } }; }),
     updateWorkspaceMemberEmail: vi.fn(async () => { check(); return { status: "verification_sent" }; }),
@@ -91,5 +91,28 @@ describe("workspace membership HTTP contract", () => {
   it("includes Retry-After for busy bindings", async () => {
     f.signedIn = true; f.failure = "BINDING_BUSY";
     await expectContractError(await post(routes.link.path, valid), routes.link, "BINDING_BUSY");
+  });
+  it("passes resend through _link and rejects it with reinvite", async () => {
+    f.signedIn = true;
+    expect((await post(routes.link.path, { ...valid, resend: true })).status).toBe(201);
+    expect(f.calls[0]).toMatchObject({ resend: true });
+    await expectContractError(await post(routes.link.path, { ...valid, resend: true, reinvite: true }), routes.link, "INVALID_REQUEST");
+    await expectContractError(await post(routes.remove.path, { ...valid, resend: true }), routes.remove, "INVALID_REQUEST");
+  });
+  it("returns the resend cooldown with Retry-After", async () => {
+    f.signedIn = true; f.failure = "RESEND_TOO_SOON";
+    const response = await post(routes.link.path, { ...valid, resend: true });
+    expect(response.headers.get("retry-after")).toBe("42");
+    await expectContractError(response, routes.link, "RESEND_TOO_SOON");
+  });
+  it.each(["ACTIVATION_NOT_NEEDED", "IDENTITY_DISABLED"])("refuses a resend with %s", async (code) => {
+    f.signedIn = true; f.failure = code;
+    await expectContractError(await post(routes.link.path, { ...valid, resend: true }), routes.link, code);
+  });
+  it("accepts a member state filter, including removed", async () => {
+    f.signedIn = true;
+    await expectContractError(await fetch(base + routes.list.path + "?tenantId=pg&state=gone"), routes.list, "INVALID_REQUEST");
+    expect((await fetch(base + routes.list.path + "?tenantId=pg&state=removed")).status).toBe(200);
+    expect(f.calls[0]).toEqual(["person", "pg", 0, 100, "removed"]);
   });
 });

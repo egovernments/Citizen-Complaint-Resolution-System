@@ -8,6 +8,8 @@ export interface AccountEntry {
   active: boolean;
   roles: Array<{ code: string; tenantId: string }>;
   userName?: string;
+  /** Staff only: this tenant's DIGIT name, as last mirrored. */
+  name?: string;
   missing?: true;
   credential?: { keyVersion: number; setAt?: number };
 }
@@ -31,6 +33,7 @@ export function accountEntries(user: UserRepresentation): AccountEntry[] {
     if (!entry || !["staff", "citizen"].includes(entry.kind) || typeof entry.tenantId !== "string" ||
         typeof entry.uuid !== "string" || !Number.isSafeInteger(entry.boundAt) || entry.boundAt < 0 ||
         typeof entry.active !== "boolean" || !Array.isArray(entry.roles) ||
+        (entry.name !== undefined && (entry.kind !== "staff" || typeof entry.name !== "string")) ||
         entry.roles.some((role: { code?: unknown; tenantId?: unknown }) =>
           !role || typeof role.code !== "string" || typeof role.tenantId !== "string")) {
       throw new Error("Invalid digit.accounts entry");
