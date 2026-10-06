@@ -153,7 +153,7 @@ test.describe('Citizen file-complaint wizard', () => {
     );
 
     const clickNext = async () => {
-      const btn = page.locator('button:visible').filter({ hasText: /^NEXT$/ }).first();
+      const btn = page.locator('button:visible').filter({ hasText: /^next$/i }).first();
       await btn.waitFor({ state: 'visible', timeout: 10_000 });
       await btn.scrollIntoViewIfNeeded();
       await btn.click();
@@ -256,7 +256,7 @@ test.describe('Citizen file-complaint wizard', () => {
 
     const map = page.locator('.leaflet-container').first();
     const marker = map.locator('.leaflet-marker-icon');
-    const mapNext = page.locator('button:visible').filter({ hasText: /^NEXT$/ }).first();
+    const mapNext = page.locator('button:visible').filter({ hasText: /^next$/i }).first();
     await expect(map, 'pin-location map must mount before its state is asserted').toBeVisible();
     await expect(
       marker,

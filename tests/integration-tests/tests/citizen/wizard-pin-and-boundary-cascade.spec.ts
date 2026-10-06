@@ -69,7 +69,7 @@ The dropdowns are scoped to the cascade's own .pgr-boundary-cascade container, s
     await page.waitForTimeout(6000);
 
     const clickNext = async () => {
-      const btn = page.locator('button:visible').filter({ hasText: /^NEXT$/ }).first();
+      const btn = page.locator('button:visible').filter({ hasText: /^next$/i }).first();
       await btn.waitFor({ state: 'visible', timeout: 10_000 });
       await btn.scrollIntoViewIfNeeded();
       await btn.click();
@@ -128,7 +128,7 @@ The dropdowns are scoped to the cascade's own .pgr-boundary-cascade container, s
     const map = page.locator('.leaflet-container').first();
     await expect(map).toBeVisible();
     await expect(map.locator('.leaflet-marker-icon')).toHaveCount(0);
-    await expect(page.locator('button:visible').filter({ hasText: /^NEXT$/ }).first()).toBeEnabled();
+    await expect(page.locator('button:visible').filter({ hasText: /^next$/i }).first()).toBeEnabled();
     await clickNext();
 
     // ── Assert no pincode toast appeared after pin step ──────────────

@@ -41,7 +41,7 @@ test.describe('Citizen v2 postal-code input — alnum/dash regression (PR #1315)
    */
   async function reachLocationDetailsStep(page: Page): Promise<void> {
     const clickNext = async () => {
-      const btn = page.locator('button:visible').filter({ hasText: /^NEXT$/ }).first();
+      const btn = page.locator('button:visible').filter({ hasText: /^next$/i }).first();
       await btn.waitFor({ state: 'visible', timeout: 10_000 });
       await btn.scrollIntoViewIfNeeded();
       await btn.click();
