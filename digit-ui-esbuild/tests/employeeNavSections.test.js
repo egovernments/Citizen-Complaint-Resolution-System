@@ -151,3 +151,15 @@ test("the citizen rail offers the public dashboard only once it is published", (
   );
   assert.equal(publicDashboardEnabled([{ id: "other", publicDashboardEnabled: true }, null]), true);
 });
+
+test("on a tenant route MDMS rows match the app id and move onto the tenant route", () => {
+  const rows = mdmsLinkRows(LINK_DATA, {
+    contextPath: "digit-ui",
+    rebaseUrl: (url) => url.replace(/^\/digit-ui\//, "/kd/digit-ui/"),
+  });
+  assert.deepEqual(rows.map((r) => r.navigationUrl), [
+    "/kd/digit-ui/citizen/ws-home",
+    "/kd/digit-ui/citizen/pgr-home",
+    "https://example.org/faq",
+  ]);
+});

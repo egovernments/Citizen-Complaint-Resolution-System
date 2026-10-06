@@ -1,3 +1,4 @@
+import { tenantSlug } from '../utils/identity-bff';
 import { test, expect } from '@playwright/test';
 import { citizenOtpLogin } from '../utils/citizen-login';
 import { BASE_URL } from '../utils/env';
@@ -57,7 +58,7 @@ Catches the class of regressions where a service code has missing fields and the
   await citizenOtpLogin(page);
 
   // Navigate to the complaint details page
-  await page.goto(`${BASE_URL}/digit-ui/citizen/pgr/complaints/${complaintId}`, {
+  await page.goto(`${BASE_URL}/${tenantSlug()}/digit-ui/citizen/pgr/complaints/${complaintId}`, {
     waitUntil: 'domcontentloaded',
   });
   await page.waitForTimeout(12000);
@@ -132,7 +133,7 @@ test('complaint location section is hidden when absent and supports valid zero-a
     page.getByText(/^(Complaint Location|CS_COMPLAINT_LOCATION)$/i, { exact: true });
   const locationMarker = () => page.locator('.leaflet-container .leaflet-marker-icon');
   const openComplaint = async (srid: string) => {
-    await page.goto(`${BASE_URL}/digit-ui/citizen/pgr/complaints/${srid}`, {
+    await page.goto(`${BASE_URL}/${tenantSlug()}/digit-ui/citizen/pgr/complaints/${srid}`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });

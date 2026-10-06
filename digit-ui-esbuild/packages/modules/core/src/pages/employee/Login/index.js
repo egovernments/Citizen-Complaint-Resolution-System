@@ -7,9 +7,10 @@ import LoginComponent from "./login";
 import { useHistory, useLocation } from "react-router-dom";
 import { useLoginConfig } from "../../../hooks/useLoginConfig";
 import { Loader } from "@egovernments/digit-ui-components";
+import { isIdentityBffAuth } from "@egovernments/digit-ui-libraries";
+import IdentityBffEmployeeLogin from "./IdentityBffEmployeeLogin";
 
-const EmployeeLogin = ({ stateCode, appTenants }) => {
-  const { t } = useTranslation();
+const LegacyEmployeeLogin = ({ stateCode, appTenants, t }) => {
   const { path } = useRouteMatch();
   const [loginConfig, setloginConfig] = useState(defaultLoginConfig);
   const [loginOtpConfig, setloginOtpConfig] = useState(defaultLoginOtpConfig);
@@ -91,6 +92,14 @@ const EmployeeLogin = ({ stateCode, appTenants }) => {
       </Route>
     </Switch>
   );
+};
+
+const EmployeeLogin = ({ stateCode, appTenants }) => {
+  const { t } = useTranslation();
+  if (isIdentityBffAuth()) {
+    return <IdentityBffEmployeeLogin t={t} />;
+  }
+  return <LegacyEmployeeLogin stateCode={stateCode} appTenants={appTenants} t={t} />;
 };
 
 export default EmployeeLogin;

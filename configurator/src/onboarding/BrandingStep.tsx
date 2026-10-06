@@ -143,7 +143,7 @@ export default function BrandingStep() {
       setBranding(saved);
       setLogo(null);
       announceOrganisation({ name: saved.name, logoUrl: saved.logoUrl });
-      completePhase(STEP.number);
+      if (!await completePhase(STEP.number)) return;
       navigate(NEXT.path);
     } catch (err) {
       if (err instanceof ThemeSaveError) reportStepError('branding', 'save_theme', err.cause, state.tenant);
@@ -239,6 +239,7 @@ export default function BrandingStep() {
             </label>
             <Input
               id={nameId}
+              readOnly
               value={name}
               maxLength={NAME_MAX + 20}
               onChange={(event) => {
@@ -250,7 +251,7 @@ export default function BrandingStep() {
               className="h-11 bg-card text-base"
             />
             <p id={`${nameId}-hint`} className={`text-xs ${nameError ? 'text-destructive' : 'text-muted-foreground'}`}>
-              {nameError ?? 'This is what citizens see. It can differ from your legal name.'}
+              {nameError ?? <>Change this name in <a className="underline" href="/configurator/workspace-settings">Workspace settings</a>.</>}
             </p>
           </div>
 
@@ -299,6 +300,11 @@ export default function BrandingStep() {
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
               Save and continue
             </Button>
+            <Button variant="ghost" disabled={saving} onClick={async () => {
+              setSaving(true);
+              try { if (await completePhase(STEP.number, true)) navigate(NEXT.path); }
+              finally { setSaving(false); }
+            }}>Skip branding</Button>
           </div>
         </div>
       )}

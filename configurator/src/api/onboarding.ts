@@ -50,7 +50,9 @@ function identityReturnTo(path: string): string {
 export interface AuthMethod {
   id: string;
   label: string;
+  labelKey?: string;
   type: string;
+  idpHint?: string;
   intents?: AuthIntent[];
 }
 
@@ -75,6 +77,17 @@ export interface Session {
   user?: SessionUser;
   context?: unknown | null;
   expiresAt?: number;
+  pendingInvitations?: Invitation[];
+  account?: { actions: string[]; credentials: { id: string; type: string; label: string }[]; providers: { alias: string }[] };
+  sessions?: { id: string; current: boolean; surface: string; createdAt: number; lastSeenAt: number }[];
+}
+
+export interface Invitation {
+  tenantId: string;
+  invitationVersion: number;
+  name: string;
+  invitedAt: number;
+  expiresAt: number;
 }
 
 export interface TenantOption {
@@ -82,56 +95,13 @@ export interface TenantOption {
   tenantId: string;
   name: string;
   roles: string[];
-  /**
-   * Tenant-scoped and member-readable, so it answers for the workspace rather
-   * than for whoever is asking. Optional because the backend does not send it
-   * yet (CCRS#2073 G9); absent is treated as not ready, never as ready.
-   */
-  readiness?: TenantReadiness;
+  code?: 'DIGIT_ACCOUNT_INACTIVE';
 }
 
 export interface TenantsResponse {
   tenants: TenantOption[];
   selectionRequired: boolean;
   onboardingRequired: boolean;
-}
-
-/**
- * How far a tenant has actually been built, which is not the same question as
- * whether you can sign in to it (CCRS#2073 G9).
- *
- *  - `IDENTITY_READY` — the organization and the tenant admin exist and a
- *    correctly scoped DIGIT token can be minted, but no platform configuration
- *    is installed. Management Studio would mount against a tenant with no
- *    role-actions and every call would come back `AccessDeniedException`.
- *  - `PROVISIONING` — a baseline configuration job is actually running.
- *  - `READY` — the workspace is usable.
- *  - `FAILED` — a baseline job ran and did not finish.
- */
-export type TenantReadiness = 'IDENTITY_READY' | 'PROVISIONING' | 'READY' | 'FAILED';
-
-/**
- * Readiness for one tenant, or `null` when the backend has not said.
- *
- * The FE does not infer this in either direction, and both directions have
- * already been wrong once.
- *
- * Deriving it from the caller's own signup answered a question about the
- * person, not the workspace, and returned ready for every tenant the caller
- * did not create. Defaulting the absent value to `IDENTITY_READY` was worse:
- * `/identity/v1/tenants` returns every organization membership, not just
- * self-service roots, so it gated Bomet and every other configured tenant out
- * of `selectContext` permanently.
- *
- * So unknown stays unknown, and the gate does not fire on it. The cost is
- * explicit: until the backend populates a tenant-authoritative value for all
- * options, a self-service root with no platform configuration will let you in
- * and Management Studio will refuse every call, which is the state this gate
- * exists to replace. That is the lesser harm against locking real tenants out,
- * and the gate is ready the day the field arrives (CCRS#2073 G9).
- */
-export function tenantReadiness(option: Pick<TenantOption, 'readiness'>): TenantReadiness | null {
-  return option.readiness ?? null;
 }
 
 /** Server-derived fields are readonly here so a caller cannot try to send them. */
@@ -313,7 +283,7 @@ export function __setFetchForTests(impl: typeof fetch | null): void {
   fetchImpl = impl ?? ((...args) => fetch(...args));
 }
 
-async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
+export async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
   let response: Response;
   try {
     response = await fetchImpl(path, {
@@ -376,8 +346,10 @@ export function newIdempotencyKey(): string {
  * is enabled. Social methods use `startSignIn`; signup magic link is initiated
  * with `requestMagicLinkSignup` after this client collects the identity draft.
  */
-export function authMethods(intent: AuthIntent): Promise<{ methods: AuthMethod[] }> {
-  return call(`${IDENTITY_BASE}/auth-methods?intent=${encodeURIComponent(intent)}`);
+export async function authMethods(intent: AuthIntent): Promise<{ methods: AuthMethod[] }> {
+  const result = await call<{ methods: (Omit<AuthMethod, 'label'> & { label?: string })[] }>(`${IDENTITY_BASE}/auth-methods?intent=${encodeURIComponent(intent)}`);
+  const labels: Record<string, string> = { password: 'Email and password', magic_link: 'Email me a sign-in link', hosted: 'Secure sign-in' };
+  return { methods: result.methods.map(method => ({ ...method, label: method.label || labels[method.type] || method.id })) };
 }
 
 /**
@@ -429,9 +401,9 @@ export function requestPasswordSetup(email?: string): Promise<{ message: string 
  * which screen to draw, and must not hang there if the identity BFF is slow
  * or absent.
  */
-export async function session(signal?: AbortSignal): Promise<Session> {
+export async function session(signal?: AbortSignal, includeAccount = false): Promise<Session> {
   try {
-    return await call<Session>(`${IDENTITY_BASE}/session`, { signal });
+    return await call<Session>(`${IDENTITY_BASE}/session${includeAccount ? "?include=account" : ""}`, { signal });
   } catch (error) {
     if (error instanceof OnboardingError && error.isUnauthenticated) {
       return { authenticated: false };
@@ -457,8 +429,8 @@ export function selectContext(tenantId: string): Promise<DigitContext> {
   });
 }
 
-export function logout(): Promise<void> {
-  return call(`${IDENTITY_BASE}/logout`, { method: 'POST' });
+export function logout(scope: 'current' | 'others' | 'all' = 'current'): Promise<void> {
+  return call(`${IDENTITY_BASE}/logout`, { method: 'POST', body: JSON.stringify({ scope }) });
 }
 
 /* -------------------------------------------------------------------------- */
@@ -593,10 +565,73 @@ export function slugifyAccountName(name: string): string {
     .slice(0, 63);
 }
 
-/** The server's own rule, mirrored so the field can say why before submit does. */
+/**
+ * Reserved URL slugs, copied from the identity-bff contract (docs/identity-bff.md
+ * §2.4.1), which the BFF, the SPA and pgr-services also enforce. The configurator
+ * builds on its own, so it cannot import that list; a test keeps this copy equal
+ * to the document.
+ */
+export const RESERVED_URL_SLUGS: ReadonlySet<string> = new Set([
+  'access',
+  'api',
+  'assets',
+  'auth',
+  'boundary-service',
+  'brand',
+  'citizen',
+  'common-persist',
+  'configurator',
+  'dashboard',
+  'digit-ui',
+  'egov-bndry-mgmnt',
+  'egov-enc-service',
+  'egov-hrms',
+  'egov-idgen',
+  'egov-indexer',
+  'egov-location',
+  'egov-mdms-service',
+  'egov-user-event',
+  'egov-workflow-v2',
+  'employee',
+  'env',
+  'file-store',
+  'filestore',
+  'gatus',
+  'grafana',
+  'health',
+  'identity',
+  'images',
+  'inbox',
+  'kc',
+  'keycloak',
+  'localization',
+  'matomo',
+  'mcp',
+  'mdms-v2',
+  'novu',
+  'novu-api',
+  'novu-bridge',
+  'novu-ws',
+  'otel',
+  'otp',
+  'pgr-services',
+  'static',
+  'status',
+  'tests',
+  'tests-v2',
+  'turbopass',
+  'user',
+  'user-otp',
+  'user-preference',
+  'v1',
+  'xstate-chatbot',
+]);
+
+/** The server's own rule (§2.4.1), mirrored so the field can say why before submit does. */
 export function isValidUrlSlug(slug: string): boolean {
-  if (!/^[a-z0-9-]{2,63}$/.test(slug)) return false;
-  return (slug.match(/[a-z]/g) || []).length >= 2;
+  return /^[a-z0-9][a-z0-9-]{1,62}$/.test(slug)
+    && (slug.match(/[a-z]/g) || []).length >= 2
+    && !RESERVED_URL_SLUGS.has(slug);
 }
 
 /** 2–32 of A-Z, 0-9 and hyphen. */

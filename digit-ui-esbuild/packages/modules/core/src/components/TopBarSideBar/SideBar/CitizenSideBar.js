@@ -253,13 +253,13 @@ export const CitizenSideBar = ({
     Object.keys(linkData)
       ?.sort((x, y) => y.localeCompare(x))
       ?.map((key) => {
-        if (linkData[key][0]?.sidebar === "digit-ui-links")
+        if (linkData[key][0]?.sidebar === `${Digit.Utils.mdmsAppId()}-links`)
           menuItems.splice(1, 0, {
-            type: linkData[key][0]?.sidebarURL?.includes(window?.contextPath) ? "link" : "external-link",
+            type: Digit.Utils.rebaseAppUrl(linkData[key][0]?.sidebarURL)?.includes(window?.contextPath) ? "link" : "external-link",
             text: t(`ACTION_TEST_${Digit.Utils.locale.getTransformedLocale(key)}`),
             links: linkData[key],
             icon: linkData[key][0]?.leftIcon,
-            link: linkData[key][0]?.sidebarURL,
+            link: Digit.Utils.rebaseAppUrl(linkData[key][0]?.sidebarURL),
           });
       });
   }

@@ -1,3 +1,4 @@
+import { tenantSlug } from '../utils/identity-bff';
 /**
  * Employee PGR inbox-v2 — column-header SORT actually changes the row order
  * (issue #922: clicking a sortable column header did nothing).
@@ -47,7 +48,7 @@ import {
 import { getProfile } from '../utils/profile';
 import { fetchBoundaryTree, type BoundaryNode } from '../utils/probes';
 
-const INBOX_URL = `${BASE_URL}/digit-ui/employee/pgr/inbox-v2`;
+const identityInboxUrl = () => `${BASE_URL}/${tenantSlug()}/digit-ui/employee/pgr/inbox-v2`;
 const SEARCH_RE = /pgr-services\/v2\/request\/_search/;
 
 let admin: Principal | null = null;
@@ -122,7 +123,7 @@ async function openInbox(page: Page): Promise<void> {
   test.skip(!ok, `employee ${EMPLOYEE_USER} login failed on this deployment`);
   await Promise.all([
     page.waitForResponse((r) => SEARCH_RE.test(r.url()) && r.request().method() === 'POST', { timeout: 30_000 }).catch(() => null),
-    page.goto(INBOX_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 }),
+    page.goto(identityInboxUrl(), { waitUntil: 'domcontentloaded', timeout: 30_000 }),
   ]);
   await page.locator('[role="row"]').first().waitFor({ state: 'visible', timeout: 20_000 });
   await page.waitForTimeout(1_500);

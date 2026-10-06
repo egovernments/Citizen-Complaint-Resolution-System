@@ -28,6 +28,9 @@ const LanguageSelection = () => {
   };
 
   function getContextPath(contextPath) {
+    // Canonical tenant routes mount at `{tenantSlug}/digit-ui`; keep the
+    // whole base so Continue does not drop `/digit-ui`.
+    if (window.__digitTenantContext?.appBasePath) return window.__digitTenantContext.appBasePath;
     if (!contextPath || typeof contextPath !== "string") return "";
     return contextPath.split("/")[0];
   }

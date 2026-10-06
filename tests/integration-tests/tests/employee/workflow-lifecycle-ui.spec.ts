@@ -1,3 +1,4 @@
+import { tenantSlug } from '../utils/identity-bff';
 /**
  * Employee PGR lifecycle DRIVEN THROUGH THE REAL TAKE-ACTION UI
  * (TEST-COVERAGE-GAPS #6 — "the lifecycle is asserted at render level but
@@ -84,7 +85,7 @@ async function openDetailsAs(browser: Browser, user: string, pass: string): Prom
   const page = await ctx.newPage();
   const ok = await loginEmployeeBrowser(page, user, pass);
   test.skip(!ok, `login failed for ${user}`);
-  await page.goto(`${BASE_URL}/digit-ui/employee/pgr/complaint-details/${srid}`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+  await page.goto(`${BASE_URL}/${tenantSlug()}/digit-ui/employee/pgr/complaint-details/${srid}`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
   await page.locator('.digit-viewcard-field-pair, .v2-pgr-details').first().waitFor({ state: 'visible', timeout: 30_000 });
   await page.waitForTimeout(3_000);
   return page;

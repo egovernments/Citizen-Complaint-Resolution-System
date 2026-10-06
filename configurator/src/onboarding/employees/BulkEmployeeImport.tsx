@@ -207,6 +207,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
 
     return rawEmployees.map((emp) => {
       const errors: string[] = [];
+      if (!emp.emailId || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emp.emailId)) errors.push('A valid email is required to invite an employee.');
 
       // Validate department(s) — comma-separated list supported; every code
       // must exist (each becomes an HRMS assignment in buildEmployee)
@@ -414,13 +415,12 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
     downloadEmployeeTemplate();
   };
 
-  const handleDownloadCredentials = () => {
+  const handleDownloadInvitations = () => {
     // Generate CSV content
-    const headers = ['Name', 'Username', 'Password', 'Mobile', 'Department', 'Designation'];
+    const headers = ['Name', 'Email', 'Mobile', 'Department', 'Designation'];
     const rows = createdEmployees.map((emp) => [
       emp.user.name,
-      emp.user.userName,
-      'eGov@123', // Default password
+      emp.user.emailId || '',
       emp.user.mobileNumber,
       emp.assignments?.[0]?.department || '',
       emp.assignments?.[0]?.designation || '',
@@ -433,7 +433,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `employee_credentials_${targetTenant}.csv`;
+    a.download = `employee_invitations_${targetTenant}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -499,7 +499,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
               <ul className="text-xs sm:text-sm space-y-1">
                 <li>• Generate a dynamic employee template</li>
                 <li>• Fill in employee details (name, mobile, department, role)</li>
-                <li>• Bulk create employee accounts with login credentials</li>
+                <li>• Bulk create employees and invite them by email</li>
               </ul>
             </AlertDescription>
           </Alert>
@@ -915,7 +915,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
                 <li>• HRMS employee record</li>
                 <li>• User account (username: employee code)</li>
                 <li>
-                  • Password: <code className="bg-muted px-1 rounded text-xs text-primary">eGov@123</code>
+                  • New employees receive a secure password setup email.
                 </li>
                 <li>• Role assignments</li>
                 <li>• Boundary jurisdiction</li>
@@ -928,11 +928,11 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
               variant="outline"
               size="sm"
               className="border-primary text-primary hover:bg-primary/10"
-              onClick={handleDownloadCredentials}
+              onClick={handleDownloadInvitations}
               disabled={createdEmployees.length === 0}
             >
               <Download className="w-4 h-4 mr-2" />
-              Download Credentials CSV
+              Download invitations CSV
             </Button>
             <SubmitBar
               label="Back to Employees"

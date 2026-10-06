@@ -250,6 +250,7 @@ export interface BoundarySearchResponse {
 // ============================================
 
 export interface Employee {
+  isActive?: boolean;
   id?: string;
   uuid?: string;
   code: string;

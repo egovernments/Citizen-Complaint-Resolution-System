@@ -50,7 +50,7 @@ const UnifiedLogin = ({ stateCode }) => {
     setLoading(true);
 
     try {
-      const loginTenant = tenantId || stateCode;
+      const loginTenant = tenantId || window.__digitTenantContext?.tenantId || stateCode;
       const result = await adapter.login({
         email,
         password,

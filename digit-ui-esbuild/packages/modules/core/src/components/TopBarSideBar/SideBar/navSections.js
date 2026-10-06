@@ -67,8 +67,10 @@ export const insertModuleSections = (items = [], sections = [], isHome = isEmplo
  * or an external page, in the sidebar, as the old citizen sidebar listed them.
  * A module that registers its own section is skipped: the section already
  * offers its pages, and its landing page would be a second way to them.
+ * `contextPath` is the MDMS app id (`digit-ui`), not a tenant route base;
+ * `rebaseUrl` moves an app URL onto the tenant route.
  */
-export const mdmsLinkRows = (linkData, { contextPath, labelFor, hasOwnSection = () => false } = {}) =>
+export const mdmsLinkRows = (linkData, { contextPath, labelFor, hasOwnSection = () => false, rebaseUrl = (url) => url } = {}) =>
   Object.keys(linkData || {})
     .sort((a, b) => b.localeCompare(a))
     .flatMap((code) => {
@@ -79,7 +81,7 @@ export const mdmsLinkRows = (linkData, { contextPath, labelFor, hasOwnSection = 
         {
           key: `mdms-${code}`,
           label: labelFor ? labelFor(code) : code,
-          navigationUrl: entry.sidebarURL,
+          navigationUrl: external ? entry.sidebarURL : rebaseUrl(entry.sidebarURL),
           icon: { icon: entry.leftIcon || (external ? "OpenInNew" : "Apps"), width: ICON_SIZE, height: ICON_SIZE },
         },
       ];

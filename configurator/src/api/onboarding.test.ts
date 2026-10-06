@@ -1,16 +1,19 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   OnboardingError,
   __setFetchForTests,
+  tenants,
   checkIdentifier,
   createSignup,
   deriveAccountCode,
   findSignup,
   isValidAccountCode,
   isValidUrlSlug,
+  RESERVED_URL_SLUGS,
   newIdempotencyKey,
   session,
-  tenantReadiness,
   slugifyAccountName,
   submitSignup,
 } from './onboarding';
@@ -147,6 +150,20 @@ describe('validation mirrors the server rules', () => {
     expect(isValidUrlSlug('Bomet')).toBe(false);
   });
 
+  it('rejects a leading hyphen and reserved words, like the server', () => {
+    expect(isValidUrlSlug('-bomet')).toBe(false);
+    expect(isValidUrlSlug('digit-ui')).toBe(false);
+    expect(isValidUrlSlug('configurator')).toBe(false);
+  });
+
+  it('keeps the reserved slugs equal to the identity-bff contract list (docs §2.4.1)', () => {
+    const doc = readFileSync(resolve(process.cwd(), '../backend/identity-bff/docs/identity-bff.md'), 'utf8');
+    const block = /<!-- reserved-url-slugs:begin -->([\s\S]*?)<!-- reserved-url-slugs:end -->/.exec(doc);
+    expect(block, 'identity-bff.md must keep the reserved-url-slugs block').toBeTruthy();
+    const documented = block![1].split('\n').map((line) => line.trim()).filter((line) => /^[a-z0-9-]+$/.test(line));
+    expect([...RESERVED_URL_SLUGS].sort()).toEqual(documented.sort());
+  });
+
   it('accepts an account code of A-Z, 0-9 and hyphens', () => {
     expect(isValidAccountCode('KE-BCG')).toBe(true);
   });
@@ -162,25 +179,18 @@ describe('slugifyAccountName', () => {
   });
 });
 
-describe('tenantReadiness', () => {
-  it('reads the tenant-scoped signal when the backend sends one', () => {
-    expect(tenantReadiness({ readiness: 'READY' })).toBe('READY');
-    expect(tenantReadiness({ readiness: 'PROVISIONING' })).toBe('PROVISIONING');
-    expect(tenantReadiness({ readiness: 'FAILED' })).toBe('FAILED');
+describe('workspace discovery contract', () => {
+  it('accepts tenant discovery without a readiness field', async () => {
+    __setFetchForTests(async () => new Response(JSON.stringify({ tenants: [{ tenantId: 'acme', name: 'Acme', roles: [], organizationAlias: 'acme' }], selectionRequired: false, onboardingRequired: false }), { status: 200 }));
+    const result = await tenants();
+    expect(result.tenants[0].tenantId).toBe('acme');
   });
-
-  it('says nothing when the backend has said nothing', () => {
-    // Neither direction is safe to guess. Defaulting to READY let an invited
-    // admin into a half-built tenant; defaulting to IDENTITY_READY locked every
-    // already-configured tenant out of its own workspace, because
-    // /identity/v1/tenants returns every membership and not just self-service
-    // roots. Unknown stays unknown and the gate does not fire on it.
-    expect(tenantReadiness({})).toBeNull();
+  it('preserves inactive account codes for the picker', async () => {
+    __setFetchForTests(async () => new Response(JSON.stringify({ tenants: [{ tenantId: 'acme', code: 'DIGIT_ACCOUNT_INACTIVE' }] }), { status: 200 }));
+    expect((await tenants()).tenants[0].code).toBe('DIGIT_ACCOUNT_INACTIVE');
   });
-
-  it('does not consult the caller, only the workspace', () => {
-    // Readiness is a property of the tenant. Two different people looking at
-    // the same option must get the same answer.
-    expect(tenantReadiness({ readiness: 'READY' })).toBe(tenantReadiness({ readiness: 'READY' }));
+  it('keeps empty membership discovery separate from invitations', async () => {
+    __setFetchForTests(async () => new Response(JSON.stringify({ tenants: [], onboardingRequired: true }), { status: 200 }));
+    expect((await tenants()).tenants).toEqual([]);
   });
 });
