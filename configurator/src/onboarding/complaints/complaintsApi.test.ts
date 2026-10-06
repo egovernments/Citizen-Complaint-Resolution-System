@@ -113,7 +113,7 @@ describe('saveComplaints', () => {
       row('StreetLighting', { levelCode: 'COMPLAINT_TYPE', name: 'Street lighting', parentCode: null, order: 1, active: true, path: 'StreetLighting' }),
       row('Potholes', { levelCode: 'COMPLAINT_TYPE', name: 'Potholes', department: 'ROADS', slaHours: 72 }),
     ];
-    search.mockResolvedValue(existing);
+    search.mockImplementation(async (_tenant, schema) => (schema === 'RAINMAKER-PGR.ComplaintHierarchyDefinition' ? [] : existing));
     const saved: ComplaintDraft = {
       slaHours: 72,
       types: [{ code: 'StreetLighting', name: 'Street lights', department: 'ROADS', subtypes: [{ name: 'Broken lamp' }] }],
@@ -143,6 +143,22 @@ describe('saveComplaints', () => {
       expect.objectContaining({ parentCode: 'StreetLighting', path: 'StreetLighting.StreetLightsBrokenLamp', department: 'ROADS', slaHours: 72 }),
     );
     expect(setActive).toHaveBeenCalledWith(existing[1], false);
+  });
+});
+
+describe('a retried save', () => {
+  it('does not create the definition again when an earlier save already did', async () => {
+    // The first Finish created the definition, then the step update was refused; the page still says hasDefinition: false.
+    const definition: MdmsRecord = {
+      id: 'def', tenantId: 'acme', schemaCode: 'RAINMAKER-PGR.ComplaintHierarchyDefinition', uniqueIdentifier: 'PGR', isActive: true,
+      data: { hierarchyType: 'PGR', levels: [] },
+    };
+    search.mockImplementation(async (_tenant, schema) => (schema === 'RAINMAKER-PGR.ComplaintHierarchyDefinition' ? [definition] : []));
+
+    await saveComplaints('acme', { editable: true, draft, records: [], hasDefinition: false }, draft);
+
+    expect(create).not.toHaveBeenCalledWith('acme', 'RAINMAKER-PGR.ComplaintHierarchyDefinition', expect.anything(), expect.anything());
+    expect(create).toHaveBeenCalledWith('acme', 'RAINMAKER-PGR.ComplaintHierarchy', expect.any(String), expect.anything());
   });
 });
 
