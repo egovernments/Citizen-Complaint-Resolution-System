@@ -1094,7 +1094,7 @@ const CreatePGRFlowV2: React.FC = () => {
   /** Why Next is held, in the words the design uses. */
   const hint = (() => {
     if (stepIndex === 0) {
-      if (!(formData.description ?? "").trim()) return tr(t, "CS_FILE_HINT_DESCRIBE", "Describe your complaint to continue.");
+      if (!(formData.description ?? "").trim()) return tr(t, "CS_FILE_HINT_DESCRIBE", "Tell us about the issue to continue.");
       if (!descriptionOk) return tr(t, "CS_FILE_HINT_LETTERS", "Use at least three letters to describe the complaint.");
       if (!categoryOk) return tr(t, "CS_FILE_HINT_CATEGORY", "Select a complaint category and subcategory to continue.");
       if (uploading) return tr(t, "CS_FILE_HINT_UPLOADING", "Wait for your photos to finish uploading.");
