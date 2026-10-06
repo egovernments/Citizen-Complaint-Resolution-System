@@ -196,6 +196,51 @@ export function confidenceHeadline(set: OfficialSet): string | null {
   return parts.join(' ');
 }
 
+export type Confidence = 'high' | 'medium' | 'low';
+
+export const CONFIDENCE_LABEL: Record<Confidence, string> = {
+  high: 'High confidence',
+  medium: 'Medium confidence',
+  low: 'Low confidence',
+};
+
+/** What each label rests on — the tag's tooltip. */
+export const CONFIDENCE_HINT: Record<Confidence, string> = {
+  high: 'Every level a second, independently drawn source has is confirmed by it.',
+  medium: 'Some levels only partly match a second source, or differ from an older one because the map has since changed.',
+  low: "No level could be checked against a second source, or a level differs from a source that isn't older.",
+};
+
+/**
+ * One label for the whole set, from the same per-level statuses the headline
+ * reads, so the two never disagree:
+ *   high   — every level a second source has is Confirmed. Levels only one
+ *            source has don't count against it (Kenya's wards, Rwanda's
+ *            villages exist in one source almost everywhere).
+ *   medium — a checked level only partly matches, or differs from a source
+ *            more than OLDER_SOURCE_YEARS older: the map changed, and this set
+ *            is the newer one (Ethiopia, Burundi).
+ *   low    — no level could be checked at all, or a level differs from a
+ *            source that isn't older.
+ * No age rule on its own: a fully confirmed set doesn't drop for being old.
+ * Null when this server measured no agreement.
+ */
+export function confidenceLevel(set: OfficialSet): Confidence | null {
+  if (!set.agreement_measured || set.levels.length === 0) return null;
+  const checked = set.levels
+    .map(levelStatus)
+    .filter((s) => s === 'confirmed' || s === 'partly' || s === 'differs');
+  if (checked.length === 0) return 'low';
+  if (checked.every((s) => s === 'confirmed')) return 'high';
+  if (checked.includes('differs')) {
+    const mine = newest(set.dataset_date);
+    const theirs = newest(set.other?.dataset_date);
+    const mapChanged = mine !== null && theirs !== null && mine - theirs > OLDER_SOURCE_YEARS;
+    if (!mapChanged) return 'low';
+  }
+  return 'medium';
+}
+
 /** The OptionCard / summary line naming the country: "Kenya". */
 export function countryName(code: string): string {
   try {

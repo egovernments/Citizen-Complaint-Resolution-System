@@ -68,8 +68,7 @@ type Step =
   | 'excel-landing' | 'create-hierarchy' | 'select-hierarchy' | 'template' | 'upload' | 'verify'
   // OSM path
   | 'osm-search' | 'map-levels' | 'osm-review' | 'creating'
-  // Preconfigured: the country's official set opens straight onto map-levels
-  | 'preconfigured-loading';
+;
 
 type BoundaryPath = 'osm' | 'excel' | null;
 
@@ -267,8 +266,9 @@ export default function BoundaryImport({
   /** Sources turbopass can answer, from Geography's /health read: null while
    *  asking, [] when it isn't deployed or holds no data. */
   sourceChoices: string[] | null;
-  /** Geography's "Preconfigured" choice: the country's official set, fetched
-   *  without a search. */
+  /** Geography's "Preconfigured" choice: the country's official set. The
+   *  search works as in Fetch, with the source fixed to that set and
+   *  suggestions limited to its country. */
   preconfigured?: OfficialSet | null;
   onDone: () => void;
   onCancel: () => void;
@@ -286,16 +286,11 @@ export default function BoundaryImport({
   const boundaryTenant = state.targetTenant || state.tenant;
 
   const [step, setStep] = useState<Step>(
-    preconfigured ? 'preconfigured-loading' : source === 'osm' ? 'osm-search' : hasHierarchies ? 'excel-landing' : 'create-hierarchy',
+    preconfigured || source === 'osm' ? 'osm-search' : hasHierarchies ? 'excel-landing' : 'create-hierarchy',
   );
   const [path] = useState<BoundaryPath>(source);
-  // A preconfigured set starts loading at once (see the effect below openPlace).
-  const [loading, setLoading] = useState(!!preconfigured?.root);
-  const [error, setError] = useState<string | null>(() =>
-    preconfigured && !preconfigured.root
-      ? `The official set for ${countryName(preconfigured.country)} has no country outline to start from. Fetch or upload boundaries instead.`
-      : null,
-  );
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Hierarchy state (Excel path)
   const [existingHierarchies, setExistingHierarchies] = useState<BoundaryHierarchy[]>([]);
@@ -336,8 +331,9 @@ export default function BoundaryImport({
   // with the other official source: handed in by Preconfigured, or looked up
   // when a search fetched from the Official source.
   const [officialSet, setOfficialSet] = useState<OfficialSet | null>(preconfigured);
+  // Preconfigured fixes the source to the country's official set.
   const [turbopassSource, setTurbopassSource] = useState(() =>
-    chooseTurbopassSource(CONFIGURED_TURBOPASS_SOURCE, null),
+    preconfigured ? 'official' : chooseTurbopassSource(CONFIGURED_TURBOPASS_SOURCE, null),
   );
   const sourceRef = useRef(turbopassSource);
 
@@ -357,9 +353,19 @@ export default function BoundaryImport({
   // Once Geography's /health read lands, start on the first source the server
   // can answer, unless the build pins one.
   useEffect(() => {
-    if (sourceChoices === null || (CONFIGURED_TURBOPASS_SOURCE ?? '').trim()) return;
+    if (preconfigured || sourceChoices === null || (CONFIGURED_TURBOPASS_SOURCE ?? '').trim()) return;
     changeSource(chooseTurbopassSource(undefined, sourceChoices));
-  }, [sourceChoices, changeSource]);
+  }, [preconfigured, sourceChoices, changeSource]);
+
+  // Preconfigured searches one country's official set: places elsewhere are
+  // left out of the suggestions and of what a typed name resolves to.
+  const inScope = useCallback(
+    <F extends SuggestionFeature>(features: F[]): F[] =>
+      preconfigured
+        ? features.filter((f) => String(f.properties?.country_code ?? '').toUpperCase() === preconfigured.country.toUpperCase())
+        : features,
+    [preconfigured],
+  );
 
   // Google Maps (optional, #1994): kept in this tenant's MapConfig, so every
   // map that honours MapConfig switches together.
@@ -444,7 +450,7 @@ export default function BoundaryImport({
         if (!res.ok) throw new Error(`Turbopass boundary search returned ${res.status}`);
         const data = await res.json();
         // An answer for a term or source the operator has since changed is dropped.
-        if (!stale) setSuggestions(tagWithSource(data.features, turbopassSource).slice(0, 5));
+        if (!stale) setSuggestions(inScope(tagWithSource(data.features, turbopassSource)).slice(0, 5));
       } catch (e) {
         console.debug('Turbopass boundary suggestions unavailable', e);
         if (!stale) setSuggestions([]);
@@ -455,7 +461,7 @@ export default function BoundaryImport({
       stale = true;
       clearTimeout(timeoutId);
     };
-  }, [searchTerm, showSuggestions, turbopassSource]);
+  }, [searchTerm, showSuggestions, turbopassSource, inScope]);
 
   // ============================================
   // Excel path handlers (develop's original flow)
@@ -762,30 +768,6 @@ export default function BoundaryImport({
     return true;
   };
 
-  // Preconfigured: open the country's official set straight away — no search.
-  const preconfiguredStarted = useRef(false);
-  useEffect(() => {
-    // Without a country outline there is nothing to fetch; the initial error says so.
-    if (!preconfigured?.root || preconfiguredStarted.current) return;
-    preconfiguredStarted.current = true;
-    const name = countryName(preconfigured.country);
-    openPlace({
-      id: preconfigured.root.id,
-      name: preconfigured.root.name || name,
-      label: name,
-      country: name,
-      countryCode: preconfigured.country,
-      source: 'official',
-      suggestion: null,
-    })
-      .catch((e) => {
-        console.error(e);
-        setError(turbopassErrorMessage({ kind: 'network', source: 'official' }));
-      })
-      .finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, for the set Geography handed in
-  }, []);
-
   const handleSearch = async () => {
     const term = searchTerm.trim();
     if (!term) {
@@ -810,7 +792,7 @@ export default function BoundaryImport({
           return;
         }
         const data = await res.json();
-        const result = pickSuggestion(tagWithSource(data.features, turbopassSource), term);
+        const result = pickSuggestion(inScope(tagWithSource(data.features, turbopassSource)), term);
         if (result.reason === 'no-results' && isOfflineSource(turbopassSource)) {
           // Nothing with areas inside it matched. If the name exists only as a
           // place with nothing inside it, say so — and where it lies.
@@ -1467,32 +1449,26 @@ export default function BoundaryImport({
       )}
 
       {/* OSM: search */}
-      {step === 'preconfigured-loading' && preconfigured && (
-        <section className="rounded-lg border border-border bg-card p-6" aria-busy={loading}>
-          {loading ? (
-            <div className="flex items-center gap-3 text-sm text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin text-primary" />
-              Loading the official boundaries for {countryName(preconfigured.country)}…
-            </div>
-          ) : (
-            <Button variant="ghost" size="sm" onClick={onCancel} className="gap-1.5 text-primary hover:text-primary">
-              <ArrowLeft className="w-4 h-4" />
-              Back to Geography
-            </Button>
-          )}
-        </section>
-      )}
-
       {step === 'osm-search' && (
         <DigitCard>
           <div className="border border-border rounded-xl p-8 bg-card text-center space-y-4">
             <Search className="h-12 w-12 mx-auto text-primary opacity-80" />
-            <h2 className="text-xl font-semibold">Fetch boundaries</h2>
+            <h2 className="text-xl font-semibold">
+              {preconfigured ? `Search ${countryName(preconfigured.country)}'s official boundaries` : 'Fetch boundaries'}
+            </h2>
             <p className="text-muted-foreground max-w-md mx-auto">
-              Enter the name of your city or region to fetch its administrative boundaries and their map polygons.
+              {preconfigured
+                ? 'Enter the name of your city or region. Its boundaries and map polygons come from the official set below.'
+                : 'Enter the name of your city or region to fetch its administrative boundaries and their map polygons.'}
             </p>
 
-            {sourceChoices && sourceChoices.length > 0 && (
+            {preconfigured && (
+              <div className="max-w-xl mx-auto text-left" data-testid="preconfigured-source">
+                <OfficialSetSummary set={preconfigured} />
+              </div>
+            )}
+
+            {!preconfigured && sourceChoices && sourceChoices.length > 0 && (
               <div className="max-w-sm mx-auto text-left space-y-1">
                 <label htmlFor="boundary-source" className="text-sm font-medium">Boundary source</label>
                 <Select value={turbopassSource} onValueChange={changeSource} disabled={loading}>
@@ -1511,7 +1487,7 @@ export default function BoundaryImport({
             <div className="relative max-w-sm mx-auto pt-4">
               <div className="flex space-x-2">
                 <Input
-                  placeholder="e.g., Maputo"
+                  placeholder={preconfigured ? `e.g., a city in ${countryName(preconfigured.country)}` : 'e.g., Maputo'}
                   value={searchTerm}
                   onChange={(e) => {
                     setSearchTerm(e.target.value);

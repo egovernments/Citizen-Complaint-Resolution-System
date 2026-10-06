@@ -114,7 +114,7 @@ export default function GeographyStep() {
           done={done}
         >
           {preconfiguredSet
-            ? `Official boundaries for ${countryName(preconfiguredSet.country)}. Pick which levels become your boundary hierarchy.`
+            ? `Official boundaries for ${countryName(preconfiguredSet.country)}. Search for your city or region, then pick which levels become your boundary hierarchy.`
             : source === 'osm'
               ? 'Search for your area and pick which administrative levels become your boundary hierarchy.'
               : 'Define your levels, fill the template with your areas, and upload it.'}

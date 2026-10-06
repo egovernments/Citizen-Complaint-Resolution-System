@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import sets from './__fixtures__/officialSets.json';
 import {
   confidenceHeadline,
+  confidenceLevel,
   fetchOfficialSet,
   formatDatasetDate,
   levelStatus,
@@ -104,5 +105,33 @@ describe('fetchOfficialSet', () => {
     expect(await fetchOfficialSet('/turbopass', 'KE')).toBe('unavailable');
     stub(async () => Promise.reject(new TypeError('network')));
     expect(await fetchOfficialSet('/turbopass', 'KE')).toBe('unavailable');
+  });
+});
+
+describe('confidenceLevel', () => {
+  it('labels the 12 priority countries from their per-level agreement', () => {
+    const labels = Object.fromEntries(Object.entries(SETS).map(([cc, set]) => [cc, confidenceLevel(set)]));
+    expect(labels).toEqual({
+      // every level a second source has is confirmed (one-source levels don't count against it)
+      ZA: 'high', LR: 'high', BR: 'high', KE: 'high', RW: 'high',
+      // partly confirmed somewhere, or differs from a much older source (the map changed)
+      MZ: 'medium', BJ: 'medium', GW: 'medium', ET: 'medium', BI: 'medium',
+      // nothing could be cross-checked
+      DJ: 'low', IN: 'low',
+    });
+  });
+
+  it('is low when a level differs from a source that is not older', () => {
+    const mz = SETS.MZ;
+    const set = {
+      ...mz,
+      other: mz.other ? { ...mz.other, dataset_date: mz.dataset_date } : mz.other,
+      levels: mz.levels.map((l, i) => (i === 1 ? { ...l, matched: 20 } : l)),
+    };
+    expect(confidenceLevel(set)).toBe('low');
+  });
+
+  it('is null when the server measured no agreement', () => {
+    expect(confidenceLevel({ ...SETS.KE, agreement_measured: false })).toBeNull();
   });
 });

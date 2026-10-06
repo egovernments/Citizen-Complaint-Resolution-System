@@ -1,7 +1,11 @@
 import { CheckCircle2, CircleDashed, CircleSlash, ShieldCheck } from 'lucide-react';
 import {
+  CONFIDENCE_HINT,
+  CONFIDENCE_LABEL,
   confidenceHeadline,
+  confidenceLevel,
   countryName,
+  type Confidence,
   levelStatus,
   sourceLine,
   STATUS_LABEL,
@@ -25,6 +29,27 @@ const STATUS_ICON: Record<LevelStatus, typeof CheckCircle2> = {
   single: CircleSlash,
   unmeasured: CircleSlash,
 };
+
+const CONFIDENCE_STYLE: Record<Confidence, string> = {
+  high: 'bg-success/10 text-success',
+  medium: 'bg-amber-50 text-amber-800',
+  low: 'bg-destructive/10 text-destructive',
+};
+
+/** "High confidence" / "Medium confidence" / "Low confidence" for the whole set. */
+export function ConfidenceTag({ set }: { set: OfficialSet }) {
+  const level = confidenceLevel(set);
+  if (!level) return null;
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${CONFIDENCE_STYLE[level]}`}
+      title={CONFIDENCE_HINT[level]}
+      data-testid="confidence-tag"
+    >
+      {CONFIDENCE_LABEL[level]}
+    </span>
+  );
+}
 
 /** "Confirmed" / "Partly confirmed · 83%" / "One source only" pill for one level. */
 export function LevelStatusBadge({ level }: { level: OfficialLevel }) {
@@ -56,9 +81,10 @@ export function OfficialSetSummary({ set }: { set: OfficialSet }) {
         <ShieldCheck className="w-5 h-5" />
       </div>
       <div className="min-w-0 space-y-1">
-        <p className="font-medium text-foreground">
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 font-medium text-foreground">
           Official boundaries for {countryName(set.country)}
-          <span className="ml-2 text-sm font-normal text-muted-foreground">{sourceLine(set)}</span>
+          <ConfidenceTag set={set} />
+          <span className="text-sm font-normal text-muted-foreground">{sourceLine(set)}</span>
         </p>
         {headline && (
           <p className="text-sm text-foreground" data-testid="confidence-headline">

@@ -3,10 +3,12 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { PreconfiguredState } from '@/hooks/usePreconfiguredBoundaries';
 import { confidenceHeadline, countryName, sourceLine } from '@/utils/officialBoundaries';
+import { ConfidenceTag } from './OfficialConfidence';
 
 /**
  * Geography's "Preconfigured" option: the official boundary set turbopass
- * holds for the tenant's country, with how confident we are in it. Same shell
+ * holds for the tenant's country, with how confident we are in it. Choosing
+ * it opens the Fetch search with the source fixed to that set. Same shell
  * as the other OptionCards, plus a country picker — the country comes from
  * the tenant record or its phone dial code, and the operator can correct it.
  */
@@ -53,7 +55,10 @@ export function PreconfiguredCard({
               .
             </p>
             {confidenceHeadline(state.set) && <p data-testid="preconfigured-headline">{confidenceHeadline(state.set)}</p>}
-            <p className="text-xs">{sourceLine(state.set)}</p>
+            <p className="flex flex-wrap items-center gap-2 text-xs">
+              <ConfidenceTag set={state.set} />
+              {sourceLine(state.set)}
+            </p>
           </>
         )}
       </div>
