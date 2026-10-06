@@ -240,7 +240,7 @@ env: |
   # the ingress strips. The BFF and the configure Job use the Service directly
   # (dynamic backchannel), as Compose does.
   - name: KC_HOSTNAME
-    value: {{ printf "%s%s" (include "keycloak.publicUrl" .) .Values.ingress.pathPrefix | quote }}
+    value: {{ printf "%s%s" (include "common.identity.publicUrl" .) .Values.ingress.pathPrefix | quote }}
   - name: KC_HOSTNAME_BACKCHANNEL_DYNAMIC
     value: "true"
   - name: KC_HEALTH_ENABLED

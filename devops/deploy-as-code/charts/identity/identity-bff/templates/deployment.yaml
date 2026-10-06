@@ -2,7 +2,7 @@
        environment and pull policy below see them. Rolling tags pull Always,
        as in common-services/novu-bridge. */ -}}
 {{- $_ := include "common.name" . }}
-{{- $_ := set .Values.image "pullPolicy" (include "identity-bff.pullPolicy" .) }}
+{{- $_ := set .Values.image "pullPolicy" (include "common.pullPolicy" .) }}
 {{- $_ := set .Values "env" (include "identity-bff.env" .) }}
 # deployment.yaml
 {{- template "common.deployment" . -}}

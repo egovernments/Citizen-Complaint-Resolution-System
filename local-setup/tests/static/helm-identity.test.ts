@@ -75,7 +75,7 @@ describe('keycloak chart: /auth ingress', () => {
   });
 
   test('Keycloak serves at / with the public /auth prefix in KC_HOSTNAME, as Compose does', () => {
-    expect(values).toContain('- name: KC_HOSTNAME\n    value: {{ printf "%s%s" (include "keycloak.publicUrl" .) .Values.ingress.pathPrefix | quote }}');
+    expect(values).toContain('- name: KC_HOSTNAME\n    value: {{ printf "%s%s" (include "common.identity.publicUrl" .) .Values.ingress.pathPrefix | quote }}');
     expect(values).toMatch(/- name: KC_PROXY_HEADERS\n {4}value: xforwarded/);
     expect(values).toMatch(/- name: KC_HOSTNAME_BACKCHANNEL_DYNAMIC\n {4}value: "true"/);
     expect(values).toMatch(/^httpPort: 8180$/m);
@@ -214,6 +214,31 @@ describe('keycloak chart: realm-configure Job', () => {
     // IDENTITY_ENV_DIR points the script at a Compose host's env file; the Job has none.
     const missing = keys.filter((k) => k !== 'IDENTITY_ENV_DIR' && !job.includes(`${k}`));
     expect(missing).toEqual([]);
+  });
+});
+
+// Keycloak's redirect URIs and the BFF's issuer and redirect URI must come
+// from one public-URL rule, and both Secrets refuse the same placeholders.
+describe('helpers the identity charts share live in charts/common', () => {
+  const common = [
+    read('devops/deploy-as-code/charts/common/templates/_helpers.tpl'),
+    read('devops/deploy-as-code/charts/common/templates/_identity.tpl'),
+  ].join('\n');
+  const kc = chartText(KC);
+  const bff = chartText(BFF);
+
+  test.each(['common.identity.publicUrl', 'common.pullPolicy', 'common.refuseSecretPlaceholders'])('%s', (helper) => {
+    expect(common).toContain(`define "${helper}"`);
+    expect(kc).toContain(`include "${helper}"`);
+    expect(bff).toContain(`include "${helper}"`);
+  });
+
+  test('no chart-local copies remain', () => {
+    for (const text of [kc, bff]) {
+      expect(text).not.toMatch(/define "(keycloak|identity-bff)\.(publicUrl|pullPolicy)"/);
+      expect(text).not.toContain('regexMatch "^<.*>$"');
+      expect(text).not.toContain('nightly-.*');
+    }
   });
 });
 

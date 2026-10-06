@@ -23,7 +23,7 @@ times (configure.loginAttempts) for a Service that has only just turned Ready.
 {{- $_ := include "common.name" . }}
 {{- if .Values.configure.enabled }}
 {{- $secret := include "keycloak.secretName" . }}
-{{- $public := include "keycloak.publicUrl" . }}
+{{- $public := include "common.identity.publicUrl" . }}
 {{- $identity := .Values.identity }}
 {{- $quickstart := eq (toString .Values.global.setup) "quickstart" }}
 {{- $smtp := .Values.configure.smtp }}
@@ -97,7 +97,7 @@ spec:
       containers:
         - name: realm-configure
           image: {{ template "common.image" (dict "Values" $.Values "repository" .Values.image.repository "tag" .Values.image.tag) }}
-          imagePullPolicy: {{ include "keycloak.pullPolicy" . }}
+          imagePullPolicy: {{ include "common.pullPolicy" . }}
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:

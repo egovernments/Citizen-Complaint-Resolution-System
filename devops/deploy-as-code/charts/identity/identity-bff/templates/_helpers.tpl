@@ -1,16 +1,3 @@
-{{- /* Public origin: identity.publicUrl, else https://<global.domain>
-       (http:// on a quickstart cluster). Same rule as the keycloak chart. */ -}}
-{{- define "identity-bff.publicUrl" -}}
-{{- $identity := .Values.identity | default dict -}}
-{{- if $identity.publicUrl -}}
-{{- trimSuffix "/" $identity.publicUrl -}}
-{{- else -}}
-{{- $global := .Values.global | default dict -}}
-{{- $scheme := ternary "http" "https" (eq (toString $global.setup) "quickstart") -}}
-{{- printf "%s://%s" $scheme (required "global.domain must be set" $global.domain) -}}
-{{- end -}}
-{{- end -}}
-
 {{- define "identity-bff.secretName" -}}
 {{- .Values.secret.existingSecret | default (printf "%s-secrets" .Release.Name) -}}
 {{- end -}}
@@ -47,7 +34,7 @@ identity-surfaces-json: IDENTITY_SURFACES_JSON
 {{- fail (printf "identity-bff: config.%s is derived from identity.* (the keycloak chart's realm-configure Job writes the same values onto Keycloak's clients); set those instead" $key) -}}
 {{- end -}}
 {{- end -}}
-{{- $public := include "identity-bff.publicUrl" . -}}
+{{- $public := include "common.identity.publicUrl" . -}}
 {{- $realm := required "identity.realm must be set" .Values.identity.realm -}}
 {{- $kc := include "common.identity.keycloakUrl" . -}}
 {{- $derived := dict
@@ -98,12 +85,4 @@ identity-surfaces-json: IDENTITY_SURFACES_JSON
       key: {{ $key }}
       optional: true
 {{- end }}
-{{- end -}}
-
-{{- define "identity-bff.pullPolicy" -}}
-{{- if regexMatch "^(latest|nightly-.*|develop|main|master)$" (toString .Values.image.tag) -}}
-Always
-{{- else -}}
-{{- .Values.image.pullPolicy -}}
-{{- end -}}
 {{- end -}}
