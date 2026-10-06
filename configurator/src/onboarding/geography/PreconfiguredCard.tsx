@@ -1,84 +1,117 @@
+import { useId, useState } from 'react';
 import { ArrowRight, LayoutGrid } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { PreconfiguredState } from '@/hooks/usePreconfiguredBoundaries';
-import { confidenceHeadline, countryName, sourceLine } from '@/utils/officialBoundaries';
+import {
+  CONFIDENCE_HINT,
+  confidenceHeadline,
+  confidenceLevel,
+  countryName,
+  sourceLine,
+  type OfficialSet,
+} from '@/utils/officialBoundaries';
 import { ConfidenceTag } from './OfficialConfidence';
 
-/**
- * Geography's "Preconfigured" option: the official boundary set turbopass
- * holds for the tenant's country, with how confident we are in it. Choosing
- * it opens the Fetch search with the source fixed to that set. Same shell
- * as the other OptionCards, plus a country picker — the country comes from
- * the tenant record or its phone dial code, and the operator can correct it.
- */
-export function PreconfiguredCard({
-  state,
-  onChooseCountry,
-  onUse,
-}: {
-  state: PreconfiguredState;
-  onChooseCountry: (code: string) => void;
-  onUse: () => void;
-}) {
-  const unusable = state.status !== 'ready';
-  const country = state.status === 'none' || state.status === 'ready' ? state.country.country : undefined;
-  const countries = 'countries' in state ? state.countries : [];
-
+/** "Confidence: Medium (i)" — the (i) opens what the label measures and why this set got it. */
+function Confidence({ set }: { set: OfficialSet }) {
+  const [open, setOpen] = useState(false);
+  const tipId = useId();
+  const level = confidenceLevel(set);
+  if (!level) return null;
+  const headline = confidenceHeadline(set);
   return (
-    <div className={`flex flex-col rounded-lg border border-border bg-card p-4 ${unusable ? 'opacity-90' : ''}`} data-testid="preconfigured-card">
+    <div className="relative flex items-center gap-2" data-testid="preconfigured-confidence">
+      <span className="text-[13px] text-muted-foreground">Confidence:</span>
+      <ConfidenceTag set={set} short />
+      <button
+        type="button"
+        aria-label="What confidence means"
+        aria-describedby={open ? tipId : undefined}
+        aria-expanded={open}
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        onClick={() => setOpen((o) => !o)}
+        className="flex h-[18px] w-[18px] flex-none items-center justify-center rounded-full border border-muted-foreground/70 text-[11px] font-bold italic text-muted-foreground"
+      >
+        i
+      </button>
+      {open && (
+        <div
+          id={tipId}
+          role="tooltip"
+          className="absolute bottom-[calc(100%+8px)] left-0 z-10 w-[310px] space-y-2 rounded-lg bg-foreground px-3 py-3 text-xs leading-[1.55] text-background shadow-lg"
+        >
+          <p>Confidence shows how far a second, independently drawn boundary set confirms these boundaries.</p>
+          <p>{CONFIDENCE_HINT[level]}</p>
+          {headline && <p data-testid="preconfigured-headline">{headline}</p>}
+          <p>
+            If you find that key boundaries are not present in the preconfigured set, kindly upload them using the
+            “Upload from Excel” option.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Geography's "Preconfigured boundaries" option, per the CMS design: the
+ * official boundary set turbopass holds for the country chosen at signup, and
+ * how confident we are in it. Choosing it opens the Fetch search with the
+ * source fixed to that set. The country is not editable here — it is the
+ * tenant's — so a tenant without one is told why the option is unavailable
+ * rather than asked to pick.
+ */
+export function PreconfiguredCard({ state, onUse }: { state: PreconfiguredState; onUse: () => void }) {
+  return (
+    <div className="flex flex-col rounded-lg border border-border bg-card p-4" data-testid="preconfigured-card">
       <div className="w-10 h-10 rounded-md bg-primary/10 text-primary flex items-center justify-center">
         <LayoutGrid className="w-5 h-5" />
       </div>
-      <h4 className="mt-3 text-base font-medium text-foreground">Preconfigured</h4>
-      <div className="mt-1 flex-1 space-y-2 text-sm leading-5 text-muted-foreground">
-        {state.status === 'loading' && <p aria-busy="true">Checking which boundaries we hold for your country…</p>}
-        {state.status === 'unavailable' && (
-          <p data-testid="option-unavailable">
-            Start from a boundary set we hold for your country. This needs the turbopass boundary service with official
-            sets loaded, which this deployment doesn't have.
+      <h4 className="mt-3 text-base font-medium text-foreground">Preconfigured boundaries</h4>
+
+      <div className="mt-3 flex flex-1 flex-col gap-3">
+        {state.status === 'loading' && (
+          <p className="text-sm leading-5 text-muted-foreground" aria-busy="true">
+            Checking which boundaries we hold for your country…
           </p>
         )}
-        {state.status === 'pick-country' && <p>Start from the official boundary set we hold for your country. Choose it first.</p>}
+        {state.status === 'unavailable' && (
+          <p className="text-xs leading-5 text-muted-foreground" data-testid="option-unavailable">
+            This needs the turbopass boundary service with official boundary sets loaded, which this deployment doesn't
+            have.
+          </p>
+        )}
+        {state.status === 'unknown-country' && (
+          <p className="text-xs leading-5 text-muted-foreground" data-testid="option-unavailable">
+            This tenant has no country recorded from signup, so we can't tell which boundaries to offer. Fetch or upload
+            them instead.
+          </p>
+        )}
         {state.status === 'none' && (
-          <p data-testid="option-unavailable">
-            We don't hold official boundaries for {countryName(state.country.country)} yet. Fetch or upload them instead.
+          <p className="text-xs leading-5 text-muted-foreground" data-testid="option-unavailable">
+            We don't hold preconfigured boundaries for {countryName(state.country.country)} yet. Fetch or upload them
+            instead.
           </p>
         )}
         {state.status === 'ready' && (
           <>
-            <p>
-              Official boundaries for <span className="font-medium text-foreground">{countryName(state.set.country)}</span>
-              {state.set.levels.length > 0 && (
-                <>: {state.set.levels.map((l) => l.name ?? l.level).join(' → ')}</>
-              )}
-              .
-            </p>
-            {confidenceHeadline(state.set) && <p data-testid="preconfigured-headline">{confidenceHeadline(state.set)}</p>}
-            <p className="flex flex-wrap items-center gap-2 text-xs">
-              <ConfidenceTag set={state.set} />
-              {sourceLine(state.set)}
-            </p>
+            <div className="rounded-md border border-border bg-muted/40 px-3.5 py-3">
+              <p className="mb-1.5 text-xs font-bold uppercase tracking-[0.04em] text-muted-foreground">Boundaries detected</p>
+              <p className="mb-1 text-sm font-bold text-foreground" data-testid="preconfigured-country">
+                {countryName(state.set.country)}
+              </p>
+              <p className="text-sm leading-normal text-foreground">
+                {state.set.levels.map((l) => l.name ?? l.level).join(' → ')}
+              </p>
+            </div>
+            <Confidence set={state.set} />
+            <p className="text-xs text-muted-foreground">Source: {sourceLine(state.set)}</p>
           </>
         )}
       </div>
-
-      {countries.length > 0 && (
-        <div className="mt-3">
-          <Select value={country} onValueChange={onChooseCountry}>
-            <SelectTrigger className="h-9" aria-label="Country">
-              <SelectValue placeholder="Choose your country" />
-            </SelectTrigger>
-            <SelectContent>
-              {countries.map((code) => (
-                <SelectItem key={code} value={code}>
-                  {countryName(code)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      )}
 
       {state.status === 'ready' && (
         <div className="mt-4">

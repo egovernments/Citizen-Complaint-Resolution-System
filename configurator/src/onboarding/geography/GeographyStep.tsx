@@ -145,13 +145,12 @@ export default function GeographyStep() {
 
       <section className="space-y-4">
         <h3 className="text-lg font-semibold text-foreground">How do you want to bring in your geography?</h3>
-        <div className="grid max-w-3xl grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 lg:gap-6">
           <PreconfiguredCard
-            state={preconfigured.state}
-            onChooseCountry={preconfigured.chooseCountry}
+            state={preconfigured}
             onUse={() => {
-              if (preconfigured.state.status !== 'ready') return;
-              setPreconfiguredSet(preconfigured.state.set);
+              if (preconfigured.status !== 'ready') return;
+              setPreconfiguredSet(preconfigured.set);
               setSource('osm');
             }}
           />

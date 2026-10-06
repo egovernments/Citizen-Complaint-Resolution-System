@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { TURBOPASS_BASE } from './useTurbopassSources';
 import { fetchOfficialSet, type OfficialSet } from '@/utils/officialBoundaries';
 import { resolveTenantCountry, type TenantCountry } from '@/utils/tenantCountry';
@@ -7,64 +7,55 @@ export type PreconfiguredState =
   | { status: 'loading' }
   /** turbopass isn't reachable or holds no official sets. */
   | { status: 'unavailable' }
-  /** The tenant's country isn't known: the operator picks from these. */
-  | { status: 'pick-country'; countries: string[] }
-  /** turbopass holds no official set for the country. */
-  | { status: 'none'; country: TenantCountry; countries: string[] }
-  | { status: 'ready'; country: TenantCountry; set: OfficialSet; countries: string[] };
+  /** The tenant has no country on record (signup predates it, or it was made by a deploy). */
+  | { status: 'unknown-country' }
+  /** turbopass holds no official set for the tenant's country. */
+  | { status: 'none'; country: TenantCountry }
+  | { status: 'ready'; country: TenantCountry; set: OfficialSet };
 
-/** Countries this turbopass holds official sets for, from /health. */
-async function officialCountries(base: string): Promise<string[] | null> {
+/** Whether this turbopass holds any official sets, from /health. */
+async function holdsOfficialSets(base: string): Promise<boolean> {
   try {
     const res = await fetch(`${base}/health`);
-    if (!res.ok) return null;
+    if (!res.ok) return false;
     const body = await res.json();
-    return body?.official && typeof body.official === 'object' ? Object.keys(body.official).sort() : null;
+    return !!body?.official && typeof body.official === 'object' && Object.keys(body.official).length > 0;
   } catch {
-    return null;
+    return false;
   }
 }
 
 /**
- * Geography's "Preconfigured" option: the tenant's country and the official
- * boundary set turbopass holds for it. `chooseCountry` overrides the country
- * (when it is unknown, or the dial-code guess is wrong).
+ * Geography's "Preconfigured boundaries" option: the official boundary set
+ * turbopass holds for the tenant's country. The country is the one chosen at
+ * signup (see resolveTenantCountry); it is not editable here.
  */
-export function usePreconfiguredBoundaries(tenant: string, base: string = TURBOPASS_BASE) {
+export function usePreconfiguredBoundaries(tenant: string, base: string = TURBOPASS_BASE): PreconfiguredState {
   const [state, setState] = useState<PreconfiguredState>({ status: 'loading' });
-  const [chosen, setChosen] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const countries = await officialCountries(base);
-      if (cancelled) return;
-      if (!countries?.length) {
-        setState({ status: 'unavailable' });
+      if (!(await holdsOfficialSets(base))) {
+        if (!cancelled) setState({ status: 'unavailable' });
         return;
       }
-      const country: TenantCountry | null = chosen
-        ? { country: chosen, from: 'tenant' }
-        : await resolveTenantCountry(tenant);
+      const country = await resolveTenantCountry(tenant);
       if (cancelled) return;
       if (!country) {
-        setState({ status: 'pick-country', countries });
+        setState({ status: 'unknown-country' });
         return;
       }
       const set = await fetchOfficialSet(base, country.country);
       if (cancelled) return;
       if (set === 'unavailable') setState({ status: 'unavailable' });
-      else if (set === null) setState({ status: 'none', country, countries });
-      else setState({ status: 'ready', country, set, countries });
+      else if (set === null) setState({ status: 'none', country });
+      else setState({ status: 'ready', country, set });
     })();
     return () => {
       cancelled = true;
     };
-  }, [tenant, base, chosen]);
+  }, [tenant, base]);
 
-  const chooseCountry = useCallback((code: string) => {
-    setState({ status: 'loading' });
-    setChosen(code);
-  }, []);
-  return { state, chooseCountry };
+  return state;
 }

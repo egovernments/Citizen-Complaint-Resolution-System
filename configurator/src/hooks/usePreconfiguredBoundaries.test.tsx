@@ -1,4 +1,4 @@
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import sets from '@/utils/__fixtures__/officialSets.json';
 
@@ -29,35 +29,31 @@ describe('usePreconfiguredBoundaries', () => {
   it('is unavailable when turbopass holds no official sets', async () => {
     turbopass(null);
     const { result } = renderHook(() => usePreconfiguredBoundaries('ke', '/tp'));
-    expect(result.current.state.status).toBe('loading');
-    await waitFor(() => expect(result.current.state.status).toBe('unavailable'));
+    expect(result.current.status).toBe('loading');
+    await waitFor(() => expect(result.current.status).toBe('unavailable'));
     expect(resolveTenantCountry).not.toHaveBeenCalled();
   });
 
-  it("offers the tenant's country set", async () => {
+  it("offers the set for the tenant's country", async () => {
     turbopass({ KE: {}, LR: {} });
     resolveTenantCountry.mockResolvedValue({ country: 'KE', from: 'tenant' });
     const { result } = renderHook(() => usePreconfiguredBoundaries('ke', '/tp'));
-    await waitFor(() => expect(result.current.state.status).toBe('ready'));
-    const state = result.current.state as Extract<typeof result.current.state, { status: 'ready' }>;
-    expect(state.set.country).toBe('KE');
-    expect(state.countries).toEqual(['KE', 'LR']);
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+    expect((result.current as { set: { country: string } }).set.country).toBe('KE');
+    expect(resolveTenantCountry).toHaveBeenCalledWith('ke');
   });
 
-  it('asks for the country when it is unknown, and loads the one picked', async () => {
+  it('says so when the tenant has no country on record', async () => {
     turbopass({ KE: {}, LR: {} });
     resolveTenantCountry.mockResolvedValue(null);
     const { result } = renderHook(() => usePreconfiguredBoundaries('acme', '/tp'));
-    await waitFor(() => expect(result.current.state.status).toBe('pick-country'));
-    act(() => result.current.chooseCountry('LR'));
-    await waitFor(() => expect(result.current.state.status).toBe('ready'));
-    expect((result.current.state as { set: { country: string } }).set.country).toBe('LR');
+    await waitFor(() => expect(result.current.status).toBe('unknown-country'));
   });
 
-  it('says when the country has no set here', async () => {
+  it("says so when the tenant's country has no set here", async () => {
     turbopass({ KE: {} });
     resolveTenantCountry.mockResolvedValue({ country: 'TZ', from: 'dial-code' });
     const { result } = renderHook(() => usePreconfiguredBoundaries('tz', '/tp'));
-    await waitFor(() => expect(result.current.state.status).toBe('none'));
+    await waitFor(() => expect(result.current.status).toBe('none'));
   });
 });

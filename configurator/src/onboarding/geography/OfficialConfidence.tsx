@@ -36,17 +36,23 @@ const CONFIDENCE_STYLE: Record<Confidence, string> = {
   low: 'bg-destructive/10 text-destructive',
 };
 
-/** "High confidence" / "Medium confidence" / "Low confidence" for the whole set. */
-export function ConfidenceTag({ set }: { set: OfficialSet }) {
+/** "High confidence" / "Medium confidence" / "Low confidence" for the whole set.
+ *  `short` drops the word "confidence" ("High") for a row already labelled
+ *  "Confidence:", in the Preconfigured card's design style. */
+export function ConfidenceTag({ set, short = false }: { set: OfficialSet; short?: boolean }) {
   const level = confidenceLevel(set);
   if (!level) return null;
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${CONFIDENCE_STYLE[level]}`}
-      title={CONFIDENCE_HINT[level]}
+      className={
+        short
+          ? `inline-flex items-center rounded-[5px] px-2 py-0.5 text-xs font-semibold ${CONFIDENCE_STYLE[level]}`
+          : `inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${CONFIDENCE_STYLE[level]}`
+      }
+      title={short ? undefined : CONFIDENCE_HINT[level]}
       data-testid="confidence-tag"
     >
-      {CONFIDENCE_LABEL[level]}
+      {short ? CONFIDENCE_LABEL[level].replace(/ confidence$/, '') : CONFIDENCE_LABEL[level]}
     </span>
   );
 }
