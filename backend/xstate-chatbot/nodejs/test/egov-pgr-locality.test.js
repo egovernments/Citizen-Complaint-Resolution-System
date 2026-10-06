@@ -6,6 +6,7 @@ const projectRoot = path.resolve(__dirname, "..");
 const envPath = path.join(projectRoot, "src/env-variables.js");
 const svcPath = path.join(projectRoot, "src/machine/service/egov-pgr.js");
 const locPath = path.join(projectRoot, "src/machine/util/localisation-service.js");
+const userServicePath = path.join(projectRoot, "src/session/user-service.js");
 const fetchPath = require.resolve("node-fetch", { paths: [projectRoot] });
 
 /**
@@ -21,6 +22,9 @@ function load(handler) {
       rootTenantId: "ke",
       boundaryHierarchyType: "ADMIN",
       supportedLocales: "en_IN",
+      referenceCacheTtlMs: 60000,
+      timeouts: { request: 20000 },
+      mobileValidation: { defaultCountryCode: "+254", defaultRegex: "^0?[17][0-9]{8}$", cacheTtlMs: 1000 },
       egovServices: {
         egovServicesHost: "http://localhost/",
         pgrCreateEndpoint: "pgr-services/v2/request/_create",
@@ -30,6 +34,11 @@ function load(handler) {
   require.cache[locPath] = {
     id: locPath, filename: locPath, loaded: true,
     exports: { getMessageBundleForCode: () => ({ en_IN: undefined }) },
+  };
+  // Complaints are filed as the service account, which would otherwise log in first.
+  require.cache[userServicePath] = {
+    id: userServicePath, filename: userServicePath, loaded: true,
+    exports: { getServiceAccount: async () => ({ authToken: "svc", userInfo: { uuid: "svc" } }) },
   };
   require.cache[fetchPath] = {
     id: fetchPath, filename: fetchPath, loaded: true,
@@ -57,6 +66,8 @@ function boundaryAndLocalisation(codes) {
     if (url.includes("localization/messages")) {
       return { body: { messages: [{ code: "W1_ADMIN_WARD", message: "Ward One" }] } };
     }
+    // A failed create now throws, so the create call succeeds here.
+    if (url.includes("request/_create")) return { body: { ServiceWrappers: [{ service: { serviceRequestId: "PGR-1" } }] } };
     return { status: 400, body: {} };
   };
 }
@@ -113,7 +124,7 @@ test("REGRESSION (review): the MDMS fallback offers the ADMIN_ form PGR validate
 });
 
 function filingHarness() {
-  const { svc, calls } = load((url) => (url.includes("request/_create") ? { status: 400, body: {} } : { body: { messages: [] } }));
+  const { svc, calls } = load((url) => (url.includes("request/_create") ? { body: { ServiceWrappers: [{ service: { serviceRequestId: "PGR-1" } }] } } : { body: { messages: [] } }));
   const file = async (slots) => {
     const before = calls.length;
     await svc.persistComplaint(
@@ -140,15 +151,10 @@ test("REGRESSION (review): a boundary code is sent unchanged", async () => {
   assert.equal(sent.service.address.locality.name, "Named");
 });
 
-test("REGRESSION (review): an unmarked code keeps the old ADMIN_ rule, with no lookup", async () => {
-  // A session saved before this change holds SUN04; NLP codes are bare too. Both file as
-  // ADMIN_SUN04 exactly as before, even while boundary-service is unreachable.
+test("a code is filed exactly as the walk picked it, with or without the flag", async () => {
+  // The class-based boundary walk only ever offers real boundary codes, so no ADMIN_
+  // prefix is added at filing time; that rule served the removed NLP and table paths.
   const { file } = filingHarness();
-  assert.equal((await file({ locality: "SUN04" })).sent.service.address.locality.code, "ADMIN_SUN04");
-  assert.equal(
-    (await file({ locality: "SUN04", localityIsBoundaryCode: false })).sent.service.address.locality.code,
-    "ADMIN_SUN04",
-  );
-  // Never prefixed twice.
+  assert.equal((await file({ locality: "SUN04" })).sent.service.address.locality.code, "SUN04");
   assert.equal((await file({ locality: "ADMIN_SUN05" })).sent.service.address.locality.code, "ADMIN_SUN05");
 });

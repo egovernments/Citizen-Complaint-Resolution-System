@@ -500,6 +500,19 @@ enable_chatbot: false
 # Boundary hierarchy complaints are filed against. Named per deployment; not always ADMIN.
 # chatbot_boundary_hierarchy_type: "ADMIN"
 
+# The employee account the bot creates citizens and files complaints as. Defaults to
+# bootstrap_user / bootstrap_password, which has full admin roles: fine for a demo box,
+# but use a dedicated account limited to citizen creation and PGR filing in production.
+# chatbot_service_account_username: "CHATBOT"
+# chatbot_service_account_password: ""
+
+# Number rule used when the tenant has no MDMS common-masters.MobileNumberValidation row,
+# or MDMS is unreachable. The chatbot refuses to start without them. The defaults match
+# the pg demo tenant (India); set your own country's, e.g. Mozambique:
+# chatbot_default_country_code: "+258"
+# chatbot_default_mobile_regex: "^8[0-9]{8}$"
+# chatbot_mobile_number_length: 9
+
 # Public origin Twilio was pointed at, used to verify the request signature. Defaults to
 # this tenant's own https://<domain>. Override only when TLS terminates on a different
 # hostname than `domain`.

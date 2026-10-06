@@ -9,6 +9,8 @@ const repoPath = src("session/repo/index.js");
 const sessionPath = src("session/session-manager.js");
 const remindersPath = src("machine/service/reminders-service.js");
 const emailTenantPath = src("machine/service/email-tenant-service.js");
+const userServicePath = src("session/user-service.js");
+const phoneNumbersPath = src("phone-numbers.js");
 
 // A +91 citizen on a ke deployment: the national number alone would be re-prefixed +254.
 const CITIZEN = { mobileNumber: "6307817430", whatsAppAddress: "whatsapp:+916307817430" };
@@ -23,49 +25,65 @@ function loadWithStubs(modulePath, repo = {}) {
   stub(channelPath, { sendMessageToUser: (user, messages) => sent.push({ user, messages }) });
   stub(repoPath, repo);
   stub(emailTenantPath, { findTenantByEmail: async () => null });
+  // Number conversion reads MDMS over the network; not what these tests are about.
+  stub(phoneNumbersPath, { toNationalNumber: async (v) => String(v ?? ""), toInternationalNumber: async (v) => String(v ?? "") });
   delete require.cache[modulePath];
   return { module: require(modulePath), sent };
 }
 
-test("REGRESSION (review): sandbox-mode replies go to the address the citizen wrote from", async (t) => {
-  // session-manager starts a cleanup interval at load; keep it off the real clock.
-  t.mock.timers.enable({ apis: ["setInterval"] });
-  const config = require(src("env-variables.js"));
-  const previous = config.enableSandboxMode;
-  config.enableSandboxMode = true;
-  t.after(() => { config.enableSandboxMode = previous; });
-  const { module: sessionManager, sent } = loadWithStubs(sessionPath);
-
-  // "hi" -> the email prompt; then an unknown email -> the registration hint.
-  await sessionManager.fromUser({ user: { ...CITIZEN }, message: { type: "text", input: "hi" }, extraInfo: {} });
-  await sessionManager.fromUser({ user: { ...CITIZEN }, message: { type: "text", input: "nobody@example.org" }, extraInfo: {} });
-
-  assert.equal(sent.length, 2);
-  for (const { user } of sent) assert.equal(user.whatsAppAddress, CITIZEN.whatsAppAddress);
-});
-
-test("REGRESSION (review): the saved session keeps the reply address", (t) => {
-  t.mock.timers.enable({ apis: ["setInterval"] });
-  const { module: sessionManager } = loadWithStubs(sessionPath);
-  const saved = sessionManager.removeUserDataFromState({
-    context: { user: { ...CITIZEN, userId: "u-1", locale: "en_IN", authToken: "secret" } },
+function loadLoginFlow(allowed) {
+  const sent = [];
+  stub(channelPath, { sendMessageToUser: async (user, messages) => sent.push({ user, messages }) });
+  stub(userServicePath, {
+    // egov-user's record: a national number, and no channel address.
+    getUserForMobileNumber: async () => ({ userId: "u-1", mobileNumber: CITIZEN.mobileNumber, locale: "en_IN", userInfo: {} }),
   });
-  assert.deepEqual(saved.context.user, { ...CITIZEN, userId: "u-1", locale: "en_IN" });
+  const config = require(src("env-variables.js"));
+  config.allowedMobileNumbers = allowed;
+  for (const p of ["session/standard-login-flow.js", "whitelist.js"]) delete require.cache[src(p)];
+  const StandardLoginFlow = require(src("session/standard-login-flow.js"));
+  const InboundRequestModel = require(src("machine/util/inbound-request-model.js"));
+  const model = new InboundRequestModel({ user: { ...CITIZEN }, message: { type: "text", input: "ola" }, extraInfo: {} });
+  return { flow: new StandardLoginFlow(model), model, sent };
+}
+
+test("the session user keeps the address the citizen wrote from", async (t) => {
+  const config = require(src("env-variables.js"));
+  const previous = config.allowedMobileNumbers;
+  t.after(() => { config.allowedMobileNumbers = previous; });
+
+  const { flow, model } = loadLoginFlow("");
+  await flow.resolveSession();
+  assert.equal(model.user.whatsAppAddress, CITIZEN.whatsAppAddress, "not lost when egov-user's record replaces the user");
 });
 
-test("REGRESSION (review): a message without a usable From keeps the saved reply address", (t) => {
-  t.mock.timers.enable({ apis: ["setInterval"] });
-  const { module: sessionManager } = loadWithStubs(sessionPath);
-  // A real saved state, as removeUserDataFromState leaves it.
-  const saved = JSON.parse(JSON.stringify(require(src("machine/seva.js")).initialState));
-  saved.context = { ...(saved.context || {}), user: { ...CITIZEN, userId: "u-1", locale: "en_IN" } };
-  const service = sessionManager.getChatServiceFor(saved, {
+test("the not-authorised reply goes to the address the citizen wrote from", async (t) => {
+  const config = require(src("env-variables.js"));
+  const previous = config.allowedMobileNumbers;
+  t.after(() => { config.allowedMobileNumbers = previous; });
+
+  const { flow, sent } = loadLoginFlow("840000000");
+  assert.equal(await flow.resolveSession(), null);
+  assert.equal(sent[0].user.whatsAppAddress, CITIZEN.whatsAppAddress);
+});
+
+test("REGRESSION (review): the saved session keeps the reply address", () => {
+  const ChatState = require(src("session/chat-state.js"));
+  const saved = ChatState.create({
+    context: { user: { ...CITIZEN, userId: "u-1", locale: "en_IN", authToken: "secret" } },
+  }).withoutUserData();
+  assert.deepEqual(saved.raw.context.user, { ...CITIZEN, userId: "u-1", locale: "en_IN" });
+});
+
+test("REGRESSION (review): a message without a usable From keeps the saved reply address", () => {
+  const ChatService = require(src("session/chat-service.js"));
+  const context = { user: { ...CITIZEN, userId: "u-1", locale: "en_IN" } };
+  const refreshed = ChatService.prototype.refreshContext.call({ sessionManager: {} }, context, {
     user: { userId: "u-1", mobileNumber: undefined, whatsAppAddress: undefined },
     extraInfo: {},
   });
-  assert.equal(service.state.context.user.whatsAppAddress, CITIZEN.whatsAppAddress);
-  assert.equal(service.state.context.user.mobileNumber, CITIZEN.mobileNumber);
-  service.stop();
+  assert.equal(refreshed.user.whatsAppAddress, CITIZEN.whatsAppAddress);
+  assert.equal(refreshed.user.mobileNumber, CITIZEN.mobileNumber);
 });
 
 function loadReminders(contact, savedAddress) {
