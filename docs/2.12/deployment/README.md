@@ -63,13 +63,13 @@ the box does hold a live database, see
 | `domain` | If needs to be deployed on a domain name vs localhost. Also, set `tls_enabled:true` in this case | | 
 | `bootstrap_user` | Admin Username (defaults to ADMIN) | | 
 | `bootstrap_password` | Admin Password (defaults to eGov@123) | |
-| `enable_overpass` | Runs a self-hosted Overpass service for fetching OSM boundary polygons. Leave off to use the public Overpass API. **Validated live:** deployed the flag, confirmed the `bomet-overpass` container, and checked both port `12346` and `/overpass/api/interpreter`. | `false` |
-| `pgr_notification_config_driven` | Makes PGR read notification routing and templates from MDMS instead of using the legacy hard-coded flow. Requires Novu and the notification MDMS masters. **Validated statically:** traced the Ansible value through `.env` and Compose to `PGR_NOTIFICATION_CONFIG_DRIVEN` in PGR. | `false` |
-| `novu_bridge_channel` | Selects the bridge's default dispatch channel. Supported values are `sms`, `whatsapp`, and `email`. **Validated statically:** traced the host variable through `.env` and Compose to the bridge's Spring `novu.bridge.channel` setting. | `sms` |
-| `novu_bridge_channels_enabled` | Comma-separated list of channels the Novu bridge is allowed to deliver. Only list channels whose providers are configured. **Validated statically:** checked the deployment contract and bridge channel-filtering path; full delivery still requires a working Novu provider. | `"SMS,EMAIL"` |
-| `novu_bridge_sms_provider` | Selects an optional non-Twilio provider for ordinary SMS: `ozeki` or `smscountry`. Leave blank to use Twilio SMS. **Validated statically:** traced provider selection into the bridge's SMS path; a real send still requires gateway credentials. | `""` |
-| `auth_provider` | Selects the shared authentication path: `keycloak` enables Keycloak SSO; blank keeps the default DIGIT OTP flow. **Validated live:** deployed both values, checked `globalConfigs.js`, and confirmed the citizen UI switched authentication paths. | `""` |
-| `citizen_auth_provider` | Overrides the authentication provider for the citizen portal only. Leave blank to inherit `auth_provider`, or use `digit` to keep citizen OTP login. **Validated statically:** confirmed citizen precedence over `auth_provider` while the employee UI continues to use DIGIT authentication. | `digit` |
+| `enable_overpass` | Runs our own map-boundary search service. If `false`, the system uses the public Overpass service. Tested by deploying it and checking both the container and `/overpass/api/interpreter`. | `false` |
+| `pgr_notification_config_driven` | Reads notification messages and routing rules from MDMS instead of using fixed rules in the code. Requires Novu and the notification MDMS data. Checked from Ansible through to the PGR container setting. | `false` |
+| `novu_bridge_channel` | Chooses the default notification channel: `sms`, `whatsapp`, or `email`. Checked from Ansible through to the Novu Bridge setting. | `sms` |
+| `novu_bridge_channels_enabled` | Lists the notification channels that Novu Bridge is allowed to use, such as `SMS,EMAIL`. Each listed channel must have a working provider. The configuration and channel-filtering code were checked. | `"SMS,EMAIL"` |
+| `novu_bridge_sms_provider` | Chooses which service sends normal SMS messages. Leave it blank for the default Twilio/Novu path, or use a supported provider such as `ozeki` or `smscountry`. The provider-selection code was checked; a real send still needs credentials. | `""` |
+| `auth_provider` | Chooses the citizen login method. Leave it blank for DIGIT OTP login, or use `keycloak` for SSO. Tested by deploying both values and checking that the citizen portal changed its login flow. | `""` |
+| `citizen_auth_provider` | Overrides the login method only for the citizen portal. Leave it blank to use `auth_provider`, or set `digit` to keep citizen OTP login. Checked in the generated UI configuration and login-selection code. | `digit` |
 
 
 ## Start Deployment
