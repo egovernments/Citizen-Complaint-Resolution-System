@@ -18,7 +18,7 @@ public class OnboardingStepsTest {
     private OnboardingFailure createFailure;
     private int lagReads; private final Map<String,Integer> lagging=new HashMap<>();
     @Before @SuppressWarnings("unchecked") public void setup() throws Exception {
-        client=mock(OnboardingProvisionerClient.class);steps=new OnboardingSteps(client,new PlatformBaseline(mapper),mapper);
+        client=mock(OnboardingProvisionerClient.class);when(client.mdmsSchemaSearchPath()).thenReturn("/egov-mdms-service/schema/v1/_search");when(client.mdmsSearchPath()).thenReturn("/egov-mdms-service/v2/_search");steps=new OnboardingSteps(client,new PlatformBaseline(mapper),mapper);
         signup=OnboardingSignup.builder().id(UUID.randomUUID()).requestedTenantId("newtown").accountName("New Town").accountCode("NEW-TOWN").urlSlug("newtown").countryCode("IN").timeZone("Asia/Kolkata").financialYearPolicy("APRIL_MARCH")
                 .languages(List.of("en","hi")).founderName("Founder").founderEmail("unverified@example.test").founderEmailVerified(false).createdAt(1L)
                 .tenantMetadata(Map.of("tenantAdmin",Map.of("mobileNumber","+91 98765-43210","countryCode","+91"))).build();

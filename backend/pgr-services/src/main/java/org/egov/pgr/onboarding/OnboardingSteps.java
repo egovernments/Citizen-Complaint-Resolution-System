@@ -319,19 +319,19 @@ public class OnboardingSteps {
     }
     private void ensureSchema(OnboardingProgress.WriteScope scope, String tenant, JsonNode schema) {
         String code = schema.path("code").asText();
-        JsonNode found = client.read("mdms", "/egov-mdms-service/schema/v1/_search", Map.of("SchemaDefCriteria", Map.of("tenantId", tenant, "codes", List.of(code)))).path("SchemaDefinitions");
+        JsonNode found = client.read("mdms", client.mdmsSchemaSearchPath(), Map.of("SchemaDefCriteria", Map.of("tenantId", tenant, "codes", List.of(code)))).path("SchemaDefinitions");
         if (!found.isArray()) throw new OnboardingFailure("MDMS_INVALID_RESPONSE", true);
         if (!found.isEmpty()) return;
         var body = asMap(schema); body.put("tenantId", tenant); body.put("description", code); body.put("isActive", true);
         createProjectedRecord(scope, "mdms", "/egov-mdms-service/schema/v1/_create", Map.of("SchemaDefinition", body));
-        found = awaitVisible(() -> client.read("mdms", "/egov-mdms-service/schema/v1/_search", Map.of("SchemaDefCriteria", Map.of("tenantId", tenant, "codes", List.of(code)))).path("SchemaDefinitions"),
+        found = awaitVisible(() -> client.read("mdms", client.mdmsSchemaSearchPath(), Map.of("SchemaDefCriteria", Map.of("tenantId", tenant, "codes", List.of(code)))).path("SchemaDefinitions"),
                 rows -> rows.isArray() && !rows.isEmpty());
         if (!found.isArray() || found.isEmpty()) throw new OnboardingFailure("MDMS_SCHEMA_NOT_VISIBLE", true);
     }
     public JsonNode records(String tenant, String schema, String id) {
         var criteria = new LinkedHashMap<String, Object>(); criteria.put("tenantId", tenant); criteria.put("schemaCode", schema); criteria.put("limit", 1000);
         if (id != null) criteria.put("uniqueIdentifiers", List.of(id));
-        JsonNode rows = client.read("mdms", "/egov-mdms-service/v2/_search", Map.of("MdmsCriteria", criteria)).path("mdms");
+        JsonNode rows = client.read("mdms", client.mdmsSearchPath(), Map.of("MdmsCriteria", criteria)).path("mdms");
         if (!rows.isArray()) throw new OnboardingFailure("MDMS_INVALID_RESPONSE", true);
         return rows;
     }
