@@ -134,6 +134,8 @@ An admin of any other root on the same box, such as an onboarded workspace, gets
 
 ## Adding a provider
 
+For a step-by-step walkthrough with a worked example (provider file, tests, catalog entry, migration mirror, chart copy and a local end-to-end test), see [adding-a-provider.md](./adding-a-provider.md). This section is the reference it follows.
+
 Every new gateway follows one rule: **one provider class in Novu, plus one catalog entry here.** novu-bridge never carries gateway-specific code.
 
 ```
@@ -158,8 +160,10 @@ The provider must decide success from **what the gateway says**, not the HTTP st
 
 1. In `ProviderCatalog`:
    - Add a type constant and put it in `TYPES_LONGEST_FIRST`, so that no type is a prefix-match for a longer one.
-   - For a DIGIT provider, also add a `NOVU_PROVIDER_*` constant and a `TYPE_BY_NOVU_SMS_PROVIDER` entry.
-2. Add the entry to `types()`. The field **keys must be the Novu provider's credential keys**, because `toNovuCredentials` copies exactly the declared keys:
+   - Add a `NOVU_PROVIDER_*` constant holding the Novu provider id (Novu's own id for an upstream provider, which can differ from the type id), and a `TYPE_BY_NOVU_SMS_PROVIDER` entry mapping it to the type. Every SMS type needs both, upstream ones included, as Twilio has. Without the entry, an integration with no type marker in its identifier (one created in Novu's dashboard, say) derives no type, and its credentials cannot be rotated.
+   - Add the type's channel to `CHANNEL_BY_TYPE`.
+   - For a DIGIT provider only, also put the `NOVU_PROVIDER_*` constant in `WORKER_NOVU_PROVIDERS`, so `NOVU_BRIDGE_DIGIT_WORKER_PROVIDERS=false` hides and refuses it. An upstream provider works on every worker and stays out of it.
+2. Add the entry to `allTypes()` (which `types()` filters). The field **keys must be the Novu provider's credential keys**, because `toNovuCredentials` copies exactly the declared keys:
    ```java
    types.add(ProviderType.builder()
            .type(ACME).label("ACME SMS").channel("SMS").transport("novu")
@@ -173,11 +177,17 @@ The provider must decide success from **what the gateway says**, not the HTTP st
            .build());
    ```
    Put what the operator must know about the gateway (costs, encodings, which API variant) in the fields' `help`. The Configurator shows it under the field.
+   The Configurator shows its own translation instead of the catalog `label` for keys it has one for (`user`, `password`, `from`, `token`, `host`, `port`, `accountSid`, `secure`), so a `user` field reads **SMTP User** whatever the catalog says. See [the label note](./adding-a-provider.md#6-add-the-catalog-entry).
 3. **`supportsVerify(true)`** turns on **Check status** (`POST /providers/verify`), which only checks that the integration exists and is active. **`supportsTestSend(true)`** turns on **Test** (`POST /providers/test-send`), the only real proof that the credentials work.
 4. Mirror the type in `local-setup/scripts/migrate-notifications.py`:
-   - `CATALOG_CHANNEL`, `CATALOG_LABEL`, `CATALOG_REQUIRED` and `TYPES_LONGEST_FIRST`
-   - `TYPE_BY_NOVU_SMS_PROVIDER` and `MOUNTED_PROVIDER_TYPES` for a DIGIT provider
-5. Extend `ProviderCatalogTest` with the new provider id and keys.
+   - `CATALOG_CHANNEL`, `CATALOG_LABEL`, `CATALOG_REQUIRED`, `TYPES_LONGEST_FIRST` and `TYPE_BY_NOVU_SMS_PROVIDER`
+   - `MOUNTED_PROVIDER_TYPES`, for a DIGIT provider only
+5. Update the tests that pin the catalog, or `mvn test`, `run-tests.sh` and jest fail. [adding-a-provider.md](./adding-a-provider.md) shows each change:
+   - `ProviderCatalogTest` (the new provider id and keys, and the type list) and `ProviderControllerGuardsTest` (the catalog size, which types the worker-provider switch hides, and which it refuses). A DIGIT provider and an upstream one change these differently ([step 7](./adding-a-provider.md#7-update-the-java-tests)).
+   - For a DIGIT provider: `test/register.test.js` (the registered ids) and the provider loop in `test/error-boundary.test.js` ([step 4](./adding-a-provider.md#4-add-it-to-the-error-boundary-test)).
+   - For a DIGIT provider: the sorted `runtimeFiles` list in `local-setup/tests/static/deployment-contracts.test.ts` ([step 5](./adding-a-provider.md#5-copy-the-runtime-files-to-the-helm-chart)).
+   - The Python mirror's tests in `local-setup/tests/test_notification_seed_decisions.py` ([step 8](./adding-a-provider.md#8-mirror-the-type-in-the-migration-script)).
+   - No test pins them, so they are easy to miss: the `type` enums of `ProviderType` and `ProviderCreateFromCatalog` in both `openapi.yaml` copies ([step 9](./adding-a-provider.md#9-update-the-contract-and-docs)).
 
 To verify:
 

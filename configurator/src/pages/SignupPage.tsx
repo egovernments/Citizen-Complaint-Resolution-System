@@ -302,8 +302,14 @@ function SignupFlow() {
     setFinancialYearPolicy(record.financialYearPolicy || '');
     setTenantAdminMobile(String(record.tenantMetadata?.tenantAdmin?.mobileNumber || ''));
     setAcceptedTerms(Boolean(record.acceptedTermsVersion));
-    if (record.accountCode) codeTouched.current = true;
-    if (record.urlSlug) slugTouched.current = true;
+    // Only a value the operator typed stops following the name. A saved value
+    // that is still what the saved name derives was never edited by hand, so
+    // it keeps updating when the name changes after a resume.
+    const savedName = record.accountName || '';
+    if (record.accountCode && record.accountCode !== deriveAccountCode(savedName, record.countryCode || '')) {
+      codeTouched.current = true;
+    }
+    if (record.urlSlug && record.urlSlug !== slugifyAccountName(savedName)) slugTouched.current = true;
     // A resumed draft's zone was already settled once; changing country
     // on the way back through should not quietly rewrite it.
     if (record.timeZone) timeZoneTouched.current = true;
