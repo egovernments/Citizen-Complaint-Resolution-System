@@ -463,6 +463,11 @@ plugins:
         -- returned above, so this reaches only DIGIT API routes.)
         if kong.request.get_method() ~= "POST" then
           if not is_protected then return end          -- auth-optional GETs (boundary, filestore dl, ...) pass
+          -- A CORS preflight never carries credentials, and this pre-function runs
+          -- before the global cors plugin, so a 401 here fails the browser's preflight
+          -- for every protected path. Let a real preflight through: the cors plugin
+          -- answers it itself (preflight_continue is off), so it never reaches the backend.
+          if kong.request.get_method() == "OPTIONS" and kong.request.get_header("Access-Control-Request-Method") then return end
           local hdr = kong.request.get_header("auth-token")
           local q = kong.request.get_query()
           local qtok = q and q["access_token"]
