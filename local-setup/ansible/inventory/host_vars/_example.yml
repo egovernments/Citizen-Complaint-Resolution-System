@@ -783,6 +783,10 @@ identity_magic_link_request_window_seconds: 1800
 identity_magic_link_request_limit: 3
 identity_signin_methods: [password, google, github]
 identity_signup_methods: [magic_link, google, github]
+# Citizen sign-in methods on the digit-ui citizen client (KEYCLOAK_CITIZEN_SIGNIN_METHODS).
+# Empty (the default) offers none. [phone_otp] needs an OTP channel: enable_otp_services,
+# identity_citizen_otp_sender or, on a development box only, identity_dev_fixed_otp.
+identity_citizen_signin_methods: []
 identity_magic_link_enabled: false
 identity_reconcile_on_startup: true
 identity_reconciliation_interval_seconds: 900

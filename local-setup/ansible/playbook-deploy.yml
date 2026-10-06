@@ -6696,6 +6696,8 @@
         KEYCLOAK_GITHUB_CLIENT_SECRET: "{{ bao_secrets.json.data.data.keycloak_github_client_secret | default('') }}"
         KEYCLOAK_BFF_SIGNIN_METHODS: "{{ identity_signin_methods | default(['password', 'google', 'github']) | join(',') }}"
         KEYCLOAK_BFF_SIGNUP_METHODS: "{{ identity_signup_methods | default(['magic_link', 'google', 'github']) | join(',') }}"
+        # digit-ui citizen client (#2189): empty = no citizen sign-in method, the script's default.
+        KEYCLOAK_CITIZEN_SIGNIN_METHODS: "{{ identity_citizen_signin_methods | default([]) | join(',') }}"
       when: enable_keycloak | default(false)
       no_log: true
       changed_when: true
