@@ -28,6 +28,7 @@ import static org.mockito.Mockito.when;
 public class OnboardingWorkerServiceTest {
 
     @Mock private OnboardingRepository repository;
+    @Mock private PlatformBaseline seed;
     private OnboardingWorkerService service;
     private final UUID operationId = UUID.randomUUID();
     private final UUID signupId = UUID.randomUUID();
@@ -35,7 +36,8 @@ public class OnboardingWorkerServiceTest {
 
     @Before
     public void setUp() {
-        service = new OnboardingWorkerService(repository, "TENANT_ADMIN_ACCOUNT_REJECTED");
+        when(seed.version()).thenReturn("1");
+        service = new OnboardingWorkerService(repository, seed, "TENANT_ADMIN_ACCOUNT_REJECTED");
     }
 
     @Test
@@ -71,7 +73,7 @@ public class OnboardingWorkerServiceTest {
 
         service.complete(operationId, leaseToken, Arrays.asList("TENANT_FOUNDATION", "ORGANIZATION"));
 
-        verify(repository).settleSignup(eq(signupId), eq("ACTIVE"), eq("CONSUMED"), anyLong());
+        verify(repository).settleSignup(eq(signupId), eq("ACTIVE"), eq("CONSUMED"), eq("1"), anyLong());
     }
 
     @Test
@@ -84,7 +86,7 @@ public class OnboardingWorkerServiceTest {
 
         service.fail(operationId, leaseToken, true, "KEYCLOAK_UNAVAILABLE", "down", "ORGANIZATION", null);
 
-        verify(repository, never()).settleSignup(any(), any(), any(), anyLong());
+        verify(repository, never()).settleSignup(any(), any(), any(), any(), anyLong());
     }
 
     @Test
@@ -96,7 +98,7 @@ public class OnboardingWorkerServiceTest {
 
         service.fail(operationId, leaseToken, false, "TENANT_ADMIN_MOBILE_REQUIRED", "mobile required", "DIGIT_ACCOUNT", null);
 
-        verify(repository).settleSignup(eq(signupId), eq("FAILED"), eq("RESERVED"), anyLong());
+        verify(repository).settleSignup(eq(signupId), eq("FAILED"), eq("RESERVED"), eq("1"), anyLong());
     }
 
     @Test
@@ -108,7 +110,7 @@ public class OnboardingWorkerServiceTest {
         CustomException error = assertThrows(CustomException.class,
                 () -> service.complete(operationId, leaseToken, Collections.emptyList()));
         assertEquals("ONBOARDING_LEASE_LOST", error.getCode());
-        verify(repository, never()).settleSignup(any(), any(), any(), anyLong());
+        verify(repository, never()).settleSignup(any(), any(), any(), any(), anyLong());
     }
 
     // --- review #2024: finding 2 ---------------------------------------------
@@ -126,7 +128,7 @@ public class OnboardingWorkerServiceTest {
                 Collections.singletonList("TENANT_FOUNDATION"));
 
         verify(repository).reopenSignup(eq(signupId), anyLong());
-        verify(repository, never()).settleSignup(any(), any(), any(), anyLong());
+        verify(repository, never()).settleSignup(any(), any(), any(), any(), anyLong());
     }
 
     @Test
@@ -140,7 +142,18 @@ public class OnboardingWorkerServiceTest {
         service.fail(operationId, leaseToken, false, "TENANT_FOUNDATION_CONFLICT",
                 "root tenant already exists", "TENANT_FOUNDATION", Collections.emptyList());
 
-        verify(repository).settleSignup(eq(signupId), eq("FAILED"), eq("RESERVED"), anyLong());
+        verify(repository).settleSignup(eq(signupId), eq("FAILED"), eq("RESERVED"), eq("1"), anyLong());
         verify(repository, never()).reopenSignup(any(), anyLong());
     }
+    @Test public void configuredDefaultMakesUnsupportedCountryCorrectable() throws Exception {
+        var properties=new java.util.Properties();
+        try(var input=new org.springframework.core.io.ClassPathResource("application.properties").getInputStream()) {properties.load(input);}
+        String codes=new org.springframework.mock.env.MockEnvironment().resolveRequiredPlaceholders(properties.getProperty("pgr.onboarding.user-correctable-error-codes"));
+        service=new OnboardingWorkerService(repository,seed,codes);
+        when(repository.findOperation(operationId)).thenReturn(Optional.of(OnboardingOperation.builder().id(operationId).signupId(signupId).status("RUNNING").build()));
+        when(repository.finishOperation(eq(operationId),eq(leaseToken),eq("TERMINAL_FAILED"),any(),any(),any(),any(),anyLong())).thenReturn(true);
+        service.fail(operationId,leaseToken,false,"COUNTRY_NOT_SUPPORTED","country","PLATFORM_BASELINE",Collections.emptyList());
+        verify(repository).reopenSignup(eq(signupId),anyLong());verify(repository,never()).settleSignup(any(),any(),any(),any(),anyLong());
+    }
+
 }

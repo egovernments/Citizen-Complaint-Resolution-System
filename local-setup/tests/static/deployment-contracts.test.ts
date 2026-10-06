@@ -108,7 +108,6 @@ describe('ansible playbook-deploy.yml', () => {
       'keycloak_admin_client_secret',
       'identity_control_plane_token',
       'identity_session_introspection_token',
-      'pgr_onboarding_worker_token',
       'keycloak_employee_client_secret',
       'keycloak_citizen_client_secret',
       'identity_citizen_otp_secret',
@@ -1348,7 +1347,7 @@ describe('standalone Identity BFF and Keycloak deployment contract', () => {
     expect(read('.github/workflows/identity-bff-ci.yml')).not.toContain('backend/identity-bff/keycloak');
   });
 
-  test('new settings are optional and the old onboarding worker remains wired', () => {
+  test('new settings are optional and onboarding runs only in PGR', () => {
     const env = read('local-setup/ansible/templates/digit.env.j2');
     expect(env).toContain("IDENTITY_STAFF_CREDENTIAL_MODE={{ identity_staff_credential_mode | default('rotate') }}");
     expect(env).toContain("IDENTITY_SURFACES_JSON={{ identity_surfaces_json | default('') }}");
@@ -1356,13 +1355,16 @@ describe('standalone Identity BFF and Keycloak deployment contract', () => {
     expect(env).not.toContain('identity_dev_fixed_otp | default(not');
     expect(env).toContain('CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED={{ fixed_otp | lower }}');
     expect(env).toContain("IDENTITY_CITIZEN_OTP_SENDER={{ identity_citizen_otp_sender | default('log' if fixed_otp else '') }}");
-    expect(env).toContain('IDENTITY_ONBOARDING_WORKER_ENABLED={{ identity_onboarding_worker_enabled | default(false) | lower }}');
+    expect(env).toContain('PGR_ONBOARDING_RUNNER_ENABLED={{ pgr_onboarding_runner_effective | bool | lower }}');
     const bff = service(read('local-setup/docker-compose.egov-digit.yaml'), 'identity-bff');
     for (const setting of ['IDENTITY_SURFACES_JSON', 'IDENTITY_STAFF_CREDENTIAL_MODE',
       'IDENTITY_CREDENTIAL_KEYS', 'IDENTITY_CREDENTIAL_KEY_CURRENT', 'IDENTITY_CITIZEN_OTP_SENDER',
-      'IDENTITY_POLLER_MAX_LAG_SECONDS', 'ONBOARDING_WORKER_ENABLED', 'PGR_ONBOARDING_WORKER_URL',
-      'PGR_ONBOARDING_WORKER_TOKEN', 'DIGIT_PROVISIONER_USERNAME', 'DIGIT_MDMS_CREATE_URL']) {
+      'IDENTITY_POLLER_MAX_LAG_SECONDS']) {
       expect(bff).toContain(`${setting}:`);
+    }
+    for (const removed of ['ONBOARDING_WORKER_ENABLED', 'PGR_ONBOARDING_WORKER_URL',
+      'PGR_ONBOARDING_WORKER_TOKEN', 'DIGIT_PROVISIONER_USERNAME', 'DIGIT_MDMS_CREATE_URL']) {
+      expect(bff).not.toContain(`${removed}:`);
     }
     expect(read('local-setup/ansible/playbook-deploy.yml')).toContain("rotate mode requires neither");
   });
@@ -1435,7 +1437,7 @@ describe('identity-bff compose wiring', () => {
 
   test('pgr-services sends the same onboarding bearer the BFF requires', () => {
     expect(service('pgr-services')).toContain(
-      'PGR_ONBOARDING_IDENTITY_BFF_TOKEN: ${PGR_ONBOARDING_IDENTITY_BFF_TOKEN:-${IDENTITY_ONBOARDING_TOKEN:-${IDENTITY_SESSION_INTROSPECTION_TOKEN:-}}}'
+      'PGR_ONBOARDING_IDENTITY_BFF_TOKEN: ${IDENTITY_ONBOARDING_TOKEN:-}'
     );
   });
 

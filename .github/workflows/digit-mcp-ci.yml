@@ -5,11 +5,13 @@ on:
     branches: [master, develop, main]
     paths:
       - 'digit-mcp/**'
+      - 'backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json'
       - '.github/workflows/digit-mcp-ci.yml'
   pull_request:
     branches: [master, develop, main]
     paths:
       - 'digit-mcp/**'
+      - 'backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json'
       - '.github/workflows/digit-mcp-ci.yml'
   workflow_dispatch:
 
@@ -36,6 +38,12 @@ jobs:
 
       - name: Typecheck (no emit) as a separate gate
         run: npx tsc --noEmit
+
+      - name: Platform seed and bootstrap contract
+        run: npm run test:platform-baseline
+
+      - name: Canonical seed in npm and standalone builds
+        run: npm run test:platform-packaging
 
       # Offline unit tests only — the test-*.ts suites that need a live DIGIT
       # environment (test-integration, test-e2e-new-tenant, …) stay out of CI.

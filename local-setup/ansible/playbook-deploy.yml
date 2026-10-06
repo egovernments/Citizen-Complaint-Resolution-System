@@ -2316,6 +2316,24 @@
     # /root/DIGIT-MCP on the controller:
     #
     #   ansible-playbook ... --tags mcp-publish
+    - name: "MCP publish — ensure generated data directory"
+      ansible.builtin.file:
+        path: /root/DIGIT-MCP/data
+        state: directory
+        mode: "0755"
+      delegate_to: localhost
+      become: false
+      tags: ['mcp-publish', 'never']
+
+    - name: "MCP publish — stage canonical PGR platform baseline"
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json"
+        dest: /root/DIGIT-MCP/data/platform-baseline-v1.json
+        mode: "0644"
+      delegate_to: localhost
+      become: false
+      tags: ['mcp-publish', 'never']
+
     - name: Build + push digit-mcp image to VPC registry
       shell: |
         set -e
@@ -2377,6 +2395,15 @@
         - enable_mcp | default(false)
         - build_mcp | default(false)
 
+    - name: "MCP build — copy canonical PGR platform baseline to target"
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json"
+        dest: "{{ digit_dir }}/.build/platform-baseline-v1.json"
+        mode: "0644"
+      when:
+        - enable_mcp | default(false)
+        - build_mcp | default(false)
+
     - name: "MCP build — sync vendored digit-mcp source to target"
       synchronize:
         src: "{{ playbook_dir }}/../../digit-mcp/"
@@ -2390,13 +2417,16 @@
         - (mcp_repo_url | default('-')) == '-'
 
     - name: "Build digit-mcp image locally (when build_mcp)"
-      ansible.builtin.command: >-
-        bash {{ digit_dir }}/.build/mcp-build.sh
-        "{{ mcp_repo }}"
-        "{{ mcp_repo_url | default('-') }}"
-        "{{ mcp_ref | default('') }}"
-        "{{ mcp_image }}"
-        "{{ docker_default_platform | default('') }}"
+      ansible.builtin.command:
+        argv:
+          - bash
+          - "{{ digit_dir }}/.build/mcp-build.sh"
+          - "{{ mcp_repo }}"
+          - "{{ mcp_repo_url | default('-') }}"
+          - "{{ mcp_ref | default('') }}"
+          - "{{ mcp_image }}"
+          - "{{ docker_default_platform | default('') }}"
+          - "{{ digit_dir }}/.build/platform-baseline-v1.json"
       register: mcp_build_run
       changed_when: true
       when:
@@ -3192,8 +3222,8 @@
           identity_session_introspection_token: >-
             {{ _identity_stored.identity_session_introspection_token | default('', true)
                or lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
-          pgr_onboarding_worker_token: >-
-            {{ _identity_stored.pgr_onboarding_worker_token | default('', true)
+          identity_onboarding_token: >-
+            {{ _identity_stored.identity_onboarding_token | default('', true)
                or lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
           keycloak_employee_client_secret: >-
             {{ _identity_stored.keycloak_employee_client_secret | default('', true)
@@ -3204,9 +3234,15 @@
           identity_citizen_otp_secret: >-
             {{ _identity_stored.identity_citizen_otp_secret | default('', true)
                or lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
-          identity_onboarding_token: >-
-            {{ _identity_stored.identity_onboarding_token | default('', true)
-               or lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
+          # PGR onboarding provisioner. A stored legacy BFF provisioner password
+          # wins over generating one, so a box that still uses that account keeps
+          # it. egov-user requires 8-15 characters with a digit, a lower- and an
+          # upper-case letter and one of @#$%; `@` (not `$`, which compose would
+          # interpolate in .env) satisfies the last rule.
+          pgr_digit_provisioner_password: >-
+            {{ _identity_stored.pgr_digit_provisioner_password | default('', true)
+               or _identity_stored.identity_digit_provisioner_password | default('', true)
+               or (lookup('password', '/dev/null length=11 chars=ascii_letters,digits') ~ 'Pq7@') }}
       when: enable_keycloak | default(false)
       no_log: true
 
@@ -3249,7 +3285,6 @@
           KEYCLOAK_ADMIN_CLIENT_SECRET={{ identity_secrets.keycloak_admin_client_secret }}
           IDENTITY_CONTROL_PLANE_TOKEN={{ identity_secrets.identity_control_plane_token }}
           IDENTITY_SESSION_INTROSPECTION_TOKEN={{ identity_secrets.identity_session_introspection_token }}
-          PGR_ONBOARDING_WORKER_TOKEN={{ identity_secrets.pgr_onboarding_worker_token }}
           KEYCLOAK_EMPLOYEE_CLIENT_SECRET={{ identity_secrets.keycloak_employee_client_secret }}
           KEYCLOAK_CITIZEN_CLIENT_SECRET={{ identity_secrets.keycloak_citizen_client_secret }}
           IDENTITY_CITIZEN_OTP_SECRET={{ identity_secrets.identity_citizen_otp_secret }}
@@ -3259,7 +3294,8 @@
           IDENTITY_CREDENTIAL_KEY_CURRENT={{ bao_secrets_identity.json.data.data.identity_credential_key_current }}
           {% endif %}
           IDENTITY_DIGIT_ADMIN_PASSWORD={{ bao_secrets_identity.json.data.data.identity_digit_admin_password | default(bao_secrets_identity.json.data.data.token_exchange_system_password | default('eGov@123')) }}
-          IDENTITY_DIGIT_PROVISIONER_PASSWORD={{ bao_secrets_identity.json.data.data.identity_digit_provisioner_password | default('') }}
+          PGR_DIGIT_PROVISIONER_PASSWORD={{ identity_secrets.pgr_digit_provisioner_password }}
+          PGR_DIGIT_OAUTH_CLIENT_SECRET={{ bao_secrets_identity.json.data.data.pgr_digit_oauth_client_secret | default('') }}
         marker: "# {mark} KEYCLOAK SECRETS"
         create: false
         mode: '0600'
@@ -5373,13 +5409,17 @@
           migration didn't run.
 
     # ────────────────────────────────────────────────────────────────
-    # MCP-driven tenant bootstrap. Once auth/pg works, ask MCP to clone
-    # everything from `pg` → `state_root` (e.g. `ke`) and `pg.citest` →
-    # `tenant_id` (e.g. `ke.kericho`). This seeds 30 schemas, ~1K data
-    # rows, ~8K localizations, the PGR workflow, an ADMIN eg_user, and
-    # an ADMIN HRMS Employee with all departments — enough for a full
-    # PGR lifecycle on day 1, and enough for the ui-tenant probe below
-    # to succeed so the SPA lands on the operator's tenant (not pg).
+    # MCP-driven tenant bootstrap. Once auth/pg works, ask MCP to seed
+    # `state_root` (e.g. `ke`) and `tenant_id` (e.g. `ke.kericho`) from the
+    # versioned platform baseline shared with PGR onboarding: its schemas and
+    # ~1K platform records (behind a role-action floor so Kong admits the
+    # writes), the PGR workflow, the localization packs of `source_tenant`
+    # (`pg` / `pg.citest`, plus the source's root), the city listed under the
+    # root as Tenant.<city>, an ADMIN eg_user (roles only ever added), and an
+    # ADMIN HRMS Employee rooted in the reserved WORKSPACE hierarchy. That is
+    # enough for the ui-tenant probe below to land the SPA on the operator's
+    # tenant (not pg); departments, complaint types and geography stay
+    # workspace-owned.
     #
     # Gating: skipped when state_tenant_id == 'pg' (nothing to bootstrap)
     # or when MCP isn't actually reachable at runtime. We don't gate on
@@ -5790,6 +5830,141 @@
       changed_when: "'CHANGED' in (admin_state_seed.stdout | default(''))"
       no_log: true
       when: state_root != 'pg'
+
+    # PGR onboarding provisioner (#2269 review item 7). With the runner on, PGR
+    # provisions every self-service signup as this account; without it the
+    # runner pauses and signups stay queued. Ensure it exists on the ROOT
+    # tenant with exactly the roles OnboardingProvisionerClient re-verifies
+    # (MDMS_ADMIN, ACCOUNT_ADMIN, LOC_ADMIN, HRMS_ADMIN at that root), the
+    # same create-if-absent way as INTERNAL_USER/ADMIN above: egov-user
+    # directly on the internal network, never _createnovalidate through Kong.
+    # Runs on pg too (the root is then `pg`). The password is the OpenBao
+    # value resolved with the identity secrets above.
+    - name: "onboarding provisioner — settings are usable"
+      ansible.builtin.assert:
+        that:
+          - pgr_provisioner_username | length > 0
+          - pgr_provisioner_tenant_id | length > 0
+          - "'.' not in pgr_provisioner_tenant_id"
+          - (identity_secrets.pgr_digit_provisioner_password | default('')) | length > 0
+        fail_msg: >-
+          The PGR onboarding runner is on but its provisioner is not usable:
+          pgr_digit_provisioner_username / pgr_digit_provisioner_tenant_id must be
+          set (the tenant must be a ROOT tenant, no dot) and OpenBao must hold
+          pgr_digit_provisioner_password. Or set pgr_onboarding_runner_enabled: false.
+      when: pgr_onboarding_runner_effective | bool
+
+    - name: "onboarding provisioner — ensure the account exists on {{ pgr_provisioner_tenant_id }}"
+      vars:
+        _provisioner_user:
+          RequestInfo: {apiId: digit, ver: "1.0"}
+          User:
+            userName: "{{ pgr_provisioner_username }}"
+            name: "PGR Onboarding Provisioner"
+            mobileNumber: "{{ core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$') | derive_valid_mobile(preferred='7777777777') }}"
+            gender: MALE
+            active: true
+            type: EMPLOYEE
+            tenantId: "{{ pgr_provisioner_tenant_id }}"
+            password: "{{ identity_secrets.pgr_digit_provisioner_password }}"
+            roles:
+              - {code: MDMS_ADMIN, name: MDMS Admin, tenantId: "{{ pgr_provisioner_tenant_id }}"}
+              - {code: ACCOUNT_ADMIN, name: Account Admin, tenantId: "{{ pgr_provisioner_tenant_id }}"}
+              - {code: LOC_ADMIN, name: Localisation Admin, tenantId: "{{ pgr_provisioner_tenant_id }}"}
+              - {code: HRMS_ADMIN, name: HRMS Admin, tenantId: "{{ pgr_provisioner_tenant_id }}"}
+              - {code: EMPLOYEE, name: Employee, tenantId: "{{ pgr_provisioner_tenant_id }}"}
+      ansible.builtin.shell: |
+        for i in $(seq 1 6); do
+          resp=$(docker run --rm --network "{{ digit_dir | basename }}_egov-network" egovio/curl:latest curl -s -w '\n%{http_code}' -X POST "http://egov-user-proxy:8107/user/users/_createnovalidate" -H 'Content-Type: application/json' -d "$PROVISIONER_BODY")
+          code=$(printf '%s' "$resp" | tail -n1)
+          content=$(printf '%s' "$resp" | sed '$d')
+          if [ "$code" = "200" ]; then echo "CHANGED provisioner created (attempt $i)"; exit 0; fi
+          if printf '%s' "$content" | grep -q DuplicateUserName; then echo "provisioner already present"; exit 0; fi
+          echo "attempt $i/6: http=$code"; sleep 8
+        done
+        echo "PGR onboarding provisioner create failed on {{ pgr_provisioner_tenant_id }}" >&2; exit 1
+      args:
+        chdir: "{{ digit_dir }}"
+      environment:
+        PROVISIONER_BODY: "{{ _provisioner_user | to_json }}"
+      register: pgr_provisioner_seed
+      changed_when: "'CHANGED' in (pgr_provisioner_seed.stdout | default(''))"
+      no_log: true
+      when: pgr_onboarding_runner_effective | bool
+
+    # An existing account is never rewritten (no password reset, no role
+    # change): prove it is the one PGR can use, or stop with the fix.
+    - name: "onboarding provisioner — log in and read its roles"
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ upstream_kong_port }}/user/oauth/token"
+        method: POST
+        headers:
+          Authorization: "Basic {{ ((pgr_digit_oauth_client_id | default('egov-user-client')) ~ ':' ~ (bao_secrets_identity.json.data.data.pgr_digit_oauth_client_secret | default(''))) | b64encode }}"
+        body_format: form-urlencoded
+        body:
+          grant_type: password
+          scope: read
+          username: "{{ pgr_provisioner_username }}"
+          password: "{{ identity_secrets.pgr_digit_provisioner_password }}"
+          tenantId: "{{ pgr_provisioner_tenant_id }}"
+          userType: EMPLOYEE
+        status_code: [200, 400, 401]
+        timeout: 15
+      register: pgr_provisioner_login
+      retries: 6
+      delay: 10
+      until: pgr_provisioner_login.status | default(0) in [200, 400, 401]
+      no_log: true
+      when: pgr_onboarding_runner_effective | bool
+
+    - name: "onboarding provisioner — can sign in with the onboarding admin roles"
+      vars:
+        _roles: >-
+          {{ (pgr_provisioner_login.json.UserRequest.roles | default([]))
+             | selectattr('tenantId', 'equalto', pgr_provisioner_tenant_id)
+             | map(attribute='code') | list }}
+      ansible.builtin.assert:
+        that:
+          - pgr_provisioner_login.status == 200
+          - (['MDMS_ADMIN', 'ACCOUNT_ADMIN', 'LOC_ADMIN', 'HRMS_ADMIN'] | difference(_roles)) | length == 0
+        fail_msg: >-
+          PGR onboarding provisioner '{{ pgr_provisioner_username }}' on
+          '{{ pgr_provisioner_tenant_id }}' is not usable (login HTTP
+          {{ pgr_provisioner_login.status }}
+          {{ (pgr_provisioner_login.json | default({})).error_description | default('') }}; missing roles:
+          {{ (['MDMS_ADMIN', 'ACCOUNT_ADMIN', 'LOC_ADMIN', 'HRMS_ADMIN'] | difference(_roles)) | join(', ') or 'none' }}).
+          The account already existed, so the playbook did not touch it. Either
+          set OpenBao pgr_digit_provisioner_password to its real password and give
+          it those roles at {{ pgr_provisioner_tenant_id }}, or point
+          pgr_digit_provisioner_username at a new account name, or set
+          pgr_onboarding_runner_enabled: false. Until then PGR pauses onboarding
+          and signups stay queued.
+          A login refused with the right password may be a LOCKOUT, not a wrong
+          password: egov-user locks an account after 5 failed logins in 30
+          minutes (for 60 minutes), and a pgr-services that ran with the old
+          password tried it before pausing. To unlock now, in the DIGIT database
+          (one transaction, by the account's eg_user id and uuid):
+          UPDATE eg_user SET accountlocked=false, accountlockeddate=NULL,
+          pwdexpirydate=now()+interval '90 days' WHERE id=<id> AND
+          tenantid='{{ pgr_provisioner_tenant_id }}'; UPDATE
+          eg_user_login_failed_attempts SET active=false WHERE
+          user_uuid='<uuid>' AND active; then restart pgr-services
+          (`docker compose restart pgr-services` in {{ digit_dir }}). Once its
+          provisioner has logged in, PGR retries a refused password only every
+          6 hours; before the first successful login, every 10 minutes.
+      when: pgr_onboarding_runner_effective | bool
+
+    # pgr-services was (re)created earlier in the play, before this account
+    # existed, so its runner may already have paused on a refused first login.
+    # A restart makes it re-check now instead of on its 10-minute schedule.
+    - name: "onboarding provisioner — restart pgr-services after creating its account"
+      ansible.builtin.shell: docker compose {{ compose_files }} restart pgr-services
+      args:
+        chdir: "{{ digit_dir }}"
+      changed_when: true
+      when:
+        - pgr_onboarding_runner_effective | bool
+        - pgr_provisioner_seed is changed
 
     - name: "post-bootstrap — recreate egov-hrms after egov-user is healthy"
       ansible.builtin.shell: >-
