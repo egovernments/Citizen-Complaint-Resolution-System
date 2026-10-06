@@ -105,7 +105,8 @@ describe('digit-ui-v2 is removed', () => {
         'import importlib.util, sys',
         "spec = importlib.util.spec_from_file_location('pf', 'local-setup/scripts/preflight.py')",
         'pf = importlib.util.module_from_spec(spec); spec.loader.exec_module(pf)',
-        "cfg = {'enable_digit_ui_v2': True, 'nginx_features': {'digit_ui_v2': True}}",
+        // A real leftover config: Keycloak on (D26 requires it), v2 keys still set.
+        "cfg = {'enable_keycloak': True, 'enable_digit_ui_v2': True, 'nginx_features': {'digit_ui_v2': True, 'keycloak': True}}",
         'print(sorted({(s, r) for s, r, *_ in pf.run_rules(cfg)}))',
       ].join('\n')],
       { cwd: REPO_ROOT, encoding: 'utf8' },
