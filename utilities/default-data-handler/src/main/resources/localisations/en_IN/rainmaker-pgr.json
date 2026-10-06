@@ -6709,7 +6709,7 @@
     },
     {
         "code": "CS_FILE_HINT_DESCRIBE",
-        "message": "Describe your complaint to continue.",
+        "message": "Tell us about the issue to continue.",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
