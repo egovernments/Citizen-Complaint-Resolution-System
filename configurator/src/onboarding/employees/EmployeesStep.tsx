@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowRight, FileText, LayoutGrid, Network, Plus, Users } from 'lucide-react';
 import { useApp } from '../../App';
 import type { Employee } from '@/api/types';
+import type { Member } from '@/identity/api';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { DeleteConfirmDialog } from '@/components/ui/delete-confirm-dialog';
@@ -15,6 +16,16 @@ import { describeSaveError } from '../errors';
 import { reportStepError, trackStepAction } from '../telemetry';
 import { EmployeeDialog } from './EmployeeDialog';
 import BulkEmployeeImport from './BulkEmployeeImport';
+import { InviteState } from './InviteState';
+import {
+  activationNotNeeded,
+  describeInviteError,
+  inviteStatus,
+  loadMembers,
+  resendInvite,
+  sendInvite,
+  type InviteStatus,
+} from './inviteStatus';
 import {
   addEmployee,
   currentAssignment,
@@ -24,11 +35,28 @@ import {
   updateEmployeeDetails,
   suggestEmployeeCode,
   type EmployeeOptions,
+  type EmailOutcome,
   type EmployeeChanges,
   type NewEmployee,
 } from './employeesApi';
 
 const STEP = stepById('employees');
+
+const EMAIL_OUTCOME: Record<EmailOutcome, string | undefined> = {
+  unchanged: undefined,
+  verification_sent: 'We sent a link to the new email. It takes effect once they confirm it.',
+  invited: 'Their invitation now goes to the new email.',
+  saved: undefined,
+};
+
+/** Under the edit dialog's title: what a new email does for someone in this state. */
+const EMAIL_NOTE: Record<InviteStatus['kind'], string | undefined> = {
+  active: 'A new email is confirmed by a link sent to it.',
+  invited: 'A new email replaces their invitation with one sent to it.',
+  expired: undefined,
+  removed: undefined,
+  none: undefined,
+};
 const DEPARTMENTS = stepById('departments');
 const { previous, next } = adjacentSteps('employees');
 
@@ -47,6 +75,12 @@ export default function EmployeesStep() {
   const [bulk, setBulk] = useState(false);
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<Employee | null>(null);
+  // Sign-in state by DIGIT uuid, from the identity BFF. It loads apart from HRMS, so a failure
+  // here only hides the states and the list still works.
+  const [memberIndex, setMemberIndex] = useState<Map<string, Member> | null>(null);
+  const [membersFailed, setMembersFailed] = useState(false);
+  const [membersKey, setMembersKey] = useState(0);
+  const [sending, setSending] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -66,7 +100,32 @@ export default function EmployeesStep() {
     };
   }, [tenant, reloadKey]);
 
+  useEffect(() => {
+    let cancelled = false;
+    loadMembers(tenant)
+      .then((index) => {
+        if (cancelled) return;
+        setMemberIndex(index);
+        setMembersFailed(false);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        reportStepError('employees', 'load_members', err, tenant);
+        setMembersFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tenant, reloadKey, membersKey]);
+
   const reload = () => setReloadKey((key) => key + 1);
+  const uuidOf = (employee: Employee) => employee.user?.uuid || employee.uuid;
+  const memberOf = (employee: Employee) => {
+    const uuid = uuidOf(employee);
+    return uuid ? memberIndex?.get(uuid) : undefined;
+  };
+  /** null while the member list is loading or failed to load. */
+  const statusOf = (employee: Employee): InviteStatus | null => (memberIndex ? inviteStatus(memberOf(employee)) : null);
 
   const names = useMemo(() => {
     const of = (list: { code: string; name: string }[] | undefined) => new Map((list ?? []).map((item) => [item.code, item.name]));
@@ -107,7 +166,7 @@ export default function EmployeesStep() {
 
   const update = async (employee: Employee, changes: EmployeeChanges) => {
     if (!options) return;
-    const { emailChanged } = await updateEmployeeDetails(employee, changes, options).catch((err: unknown) => {
+    const { email } = await updateEmployeeDetails(employee, changes, options, statusOf(employee)).catch((err: unknown) => {
       reportStepError('employees', 'update_employee', err, tenant);
       throw err;
     });
@@ -116,13 +175,51 @@ export default function EmployeesStep() {
       source: 'form',
       roles: changes.roles.length,
       jurisdictions: changes.jurisdictions.length,
-      emailChanged,
+      email,
     });
-    toast({
-      title: `${changes.name} updated`,
-      description: emailChanged ? 'We sent a link to the new email. It takes effect once they confirm it.' : undefined,
-    });
+    toast({ title: `${changes.name} updated`, description: EMAIL_OUTCOME[email] });
     reload();
+  };
+
+  // One email action per row: resend to an active or invited member, otherwise invite.
+  const emailAction = async (employee: Employee, status: InviteStatus) => {
+    const name = employee.user?.name ?? employee.code;
+    const member = memberOf(employee);
+    const resending = !!member && (status.kind === 'active' || status.kind === 'invited');
+    setSending(employee.code);
+    try {
+      if (resending) {
+        const { email, activationEmail } = await resendInvite(employee, member);
+        trackStepAction('employees', 'entity_update', 'employee', { tenant, invite: 'resend', activationEmail });
+        toast({
+          title: `Email sent to ${email}`,
+          description: activationEmail === 'password_setup' ? 'It has a link to set their password.' : 'It has a link to confirm their email address.',
+        });
+      } else {
+        const { email, invited } = await sendInvite(employee, status.kind !== 'none');
+        trackStepAction('employees', 'entity_update', 'employee', { tenant, invite: status.kind === 'none' ? 'send' : 'again' });
+        toast({
+          title: `Invitation sent to ${email}`,
+          description: invited
+            ? `${name} already has an account, so they’ll see the invitation when they next sign in.`
+            : 'It has a link to set their password.',
+        });
+        setMembersKey((key) => key + 1);
+      }
+    } catch (err) {
+      if (resending && activationNotNeeded(err)) {
+        toast(
+          status.kind === 'active'
+            ? { title: `${name} has already set up sign-in`, description: 'There’s nothing to resend.' }
+            : { title: `${name} already has an account`, description: 'They’ll see the invitation when they next sign in.' },
+        );
+      } else {
+        reportStepError('employees', resending ? 'resend_invite' : 'send_invite', err, tenant);
+        toast({ variant: 'destructive', title: 'The email wasn’t sent', description: describeInviteError(err) });
+      }
+    } finally {
+      setSending(null);
+    }
   };
 
   // The confirm dialog shows a thrown error and stays open, so the wording is set here.
@@ -278,6 +375,14 @@ export default function EmployeesStep() {
                           {self && <span className="ml-1.5 text-xs font-normal text-muted-foreground">(you)</span>}
                         </span>
                         <span className="block text-xs text-muted-foreground">{employee.user?.userName}</span>
+                        {!self && statusOf(employee) && (
+                          <InviteState
+                            status={statusOf(employee)!}
+                            name={employee.user?.name ?? employee.code}
+                            busy={sending === employee.code}
+                            onAction={() => void emailAction(employee, statusOf(employee)!)}
+                          />
+                        )}
                         <span className="block md:hidden text-xs text-muted-foreground">
                           {department}
                           {designation && ` · ${designation}`}
@@ -316,6 +421,14 @@ export default function EmployeesStep() {
               </tbody>
             </table>
           </div>
+          {membersFailed && (
+            <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              Couldn’t load invitation status.
+              <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setMembersKey((key) => key + 1)}>
+                Try again
+              </Button>
+            </p>
+          )}
         </section>
       )}
 
@@ -343,6 +456,7 @@ export default function EmployeesStep() {
         takenCodes={new Set(codes)}
         employee={editing ?? undefined}
         emailLocked={!!editing && isSelf(editing)}
+        emailNote={editing ? EMAIL_NOTE[statusOf(editing)?.kind ?? 'active'] : undefined}
         onOpenChange={(open) => {
           if (open) return;
           setAdding(false);
