@@ -112,6 +112,21 @@ public class OnboardingProvisionerClientTest {
         assertThrows(OnboardingFailure.class,()->client.write(scope("FOUNDER_HRMS"),"hrms","/egov-hrms/employees/_create",Map.of("Employees",List.of(Map.of("tenantId","newtown","code","other","user",Map.of("tenantId","newtown","userName","other"))))));
         assertEquals(0,writes);assertEquals(0,details);
     }
+    @Test public void seedUpgradeMayDeleteOnlyTheTenantNameKeyAndBustTheCacheButNeverWriteBoundaries(){
+        boolean[] lease={true};var upgrade=new OnboardingProgress.WriteScope(signup.getId(),"newtown",BaselineUpgrader.STEP,()->lease[0]);
+        Map<String,Object> nameKey=Map.of("code","TENANT_TENANTS_NEWTOWN","module","rainmaker-common","locale","en_KE");
+        client.write(upgrade,"localization","/localization/messages/v1/_delete",Map.of("tenantId","newtown","messages",List.of(nameKey)));
+        client.write(upgrade,"localization","/localization/messages/cache-bust",Map.of());assertEquals(2,writes);
+        for(var other:List.of(Map.of("code","CS_COMMON_SUBMIT","module","rainmaker-common","locale","en_IN"),Map.of("code","TENANT_TENANTS_NEWTOWN","module","rainmaker-pgr","locale","en_KE")))
+            assertThrows(OnboardingFailure.class,()->client.write(upgrade,"localization","/localization/messages/v1/_delete",Map.of("tenantId","newtown","messages",List.of(other))));
+        assertThrows(OnboardingFailure.class,()->client.write(upgrade,"localization","/localization/messages/v1/_delete",Map.of("tenantId","other","messages",List.of(nameKey))));
+        assertThrows(OnboardingFailure.class,()->client.write(scope("PLATFORM_BASELINE"),"localization","/localization/messages/v1/_delete",Map.of("tenantId","newtown","messages",List.of(nameKey))));
+        assertThrows(OnboardingFailure.class,()->client.write(scope("PLATFORM_BASELINE"),"localization","/localization/messages/cache-bust",Map.of()));
+        assertThrows(OnboardingFailure.class,()->client.write(upgrade,"boundary","/boundary-service/boundary/_create",Map.of("Boundary",List.of(Map.of("tenantId","newtown","code","newtown")))));
+        assertEquals(2,writes);
+        lease[0]=false;assertEquals("ONBOARDING_LEASE_LOST",assertThrows(OnboardingFailure.class,()->client.write(upgrade,"localization","/localization/messages/cache-bust",Map.of())).getCode());
+        assertEquals(2,writes);
+    }
     @Test public void expiredLeaseAndLeaseLostDuringAuthBothStopWrites(){
         when(repository.authorizesSignupWrite(any(),any(),anyInt(),any(),anyString(),anyString(),anyLong())).thenReturn(false);
         assertEquals("ONBOARDING_LEASE_LOST",assertThrows(OnboardingFailure.class,this::encrypt).getCode());assertEquals(0,details);

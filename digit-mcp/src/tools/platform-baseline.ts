@@ -20,7 +20,7 @@ export interface PlatformSeed {
 /** Both source and published builds receive the same generated resource at build time. */
 export function loadPlatformSeed(): PlatformSeed {
   const seed = JSON.parse(readFileSync(new URL('../data/platform-baseline-v1.json', import.meta.url), 'utf8')) as PlatformSeed;
-  if (seed.version !== '2' || !Array.isArray(seed.schemas) || !Array.isArray(seed.records)) {
+  if (!/^[1-9][0-9]*$/.test(String(seed.version)) || !Array.isArray(seed.schemas) || !Array.isArray(seed.records)) {
     throw new Error('Unsupported platform baseline seed');
   }
   return seed;

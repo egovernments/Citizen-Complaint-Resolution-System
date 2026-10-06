@@ -36,6 +36,7 @@ describe('PGR onboarding cutover deployment contract', () => {
     expect(bff).not.toMatch(/^      (?:ONBOARDING_WORKER|PGR_ONBOARDING_WORKER|ONBOARDING_TENANT_ADMIN|DIGIT_FOUNDATION_)/m);
     expect(bff).not.toMatch(/^      DIGIT_(?:MDMS_CREATE_URL|MDMS_SCHEMA_CREATE_URL|ENC_GENERATE_KEY_URL):/m);
     expect(setting(pgr, 'PGR_ONBOARDING_RUNNER_ENABLED')).toBe('${PGR_ONBOARDING_RUNNER_ENABLED:-true}');
+    expect(setting(pgr, 'PGR_ONBOARDING_BASELINE_UPGRADE_ENABLED')).toBe('${PGR_ONBOARDING_BASELINE_UPGRADE_ENABLED:-true}');
     // Compose files that do not set the flag get the jar default, which must agree.
     expect(read('backend/pgr-services/src/main/resources/application.properties'))
       .toContain('pgr.onboarding.runner.enabled=${PGR_ONBOARDING_RUNNER_ENABLED:true}');
@@ -87,6 +88,7 @@ describe('PGR onboarding cutover deployment contract', () => {
     const template = read('local-setup/ansible/templates/digit.env.j2');
     const playbook = read('local-setup/ansible/playbook-deploy.yml');
     expect(template).toContain('PGR_ONBOARDING_RUNNER_ENABLED={{ pgr_onboarding_runner_effective | bool | lower }}');
+    expect(template).toContain('PGR_ONBOARDING_BASELINE_UPGRADE_ENABLED={{ pgr_onboarding_baseline_upgrade_enabled | default(true) | bool | lower }}');
     expect(template).toContain('PGR_DIGIT_PROVISIONER_USERNAME={{ pgr_provisioner_username }}');
     expect(template).toContain('PGR_DIGIT_PROVISIONER_TENANT_ID={{ pgr_provisioner_tenant_id }}');
     expect(template).not.toMatch(/^IDENTITY_(?:DIGIT_PROVISIONER|ONBOARDING_WORKER|FOUNDATION_SOURCE)/m);

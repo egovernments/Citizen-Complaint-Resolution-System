@@ -99,6 +99,53 @@ public class WorkspaceRepository {
         jdbc.update("UPDATE eg_pgr_onboarding_workspace_rename SET attempts=attempts+1,next_attempt_at=?+LEAST(300000,1000*power(2,LEAST(attempts,8))),updated_at=?,last_error_code=? WHERE id=? AND status='PENDING'",
                 System.currentTimeMillis(),System.currentTimeMillis(),code,UUID.fromString(rename.get("id").toString()));
     }
+    // ---- platform seed upgrade (BaselineUpgrader) ----
+    /** Legacy rows (seed_version NULL) were not onboarded here and are never upgraded. */
+    private static final String OLDER_SEED = "(CASE WHEN seed_version ~ '^[0-9]+$' THEN seed_version::bigint END) < ?";
+    /** Leases one workspace on an older seed, skipping rows another worker holds or whose retry is not yet due. */
+    public Optional<Map<String,Object>> claimUpgrade(long current, UUID token, long leaseUntil, long now) {
+        return jdbc.query("UPDATE eg_pgr_onboarding_workspace SET upgrade_lease_token=?,upgrade_lease_expires_at=? WHERE tenant_id=(" +
+                        "SELECT tenant_id FROM eg_pgr_onboarding_workspace WHERE " + OLDER_SEED + " AND upgrade_stopped_at IS NULL AND (upgrade_lease_expires_at IS NULL OR upgrade_lease_expires_at<?) " +
+                        "AND (upgrade_next_attempt_at IS NULL OR upgrade_next_attempt_at<=?) ORDER BY upgrade_next_attempt_at NULLS FIRST,tenant_id LIMIT 1 FOR UPDATE SKIP LOCKED) " +
+                        "RETURNING tenant_id,seed_version,upgrade_progress",
+                (rs,n)->{
+                    Map<String,Object> row=new LinkedHashMap<>(); row.put("tenantId",rs.getString("tenant_id")); row.put("seedVersion",rs.getString("seed_version"));
+                    row.put("progress",read(rs.getString("upgrade_progress"))); return row;
+                },token,leaseUntil,current,now,now).stream().findFirst();
+    }
+    /** Persists step progress and extends the lease; false once the lease is lost. */
+    public boolean upgradeCheckpoint(String tenant, UUID token, Map<String,Object> progress, long leaseUntil, long now) {
+        return jdbc.update("UPDATE eg_pgr_onboarding_workspace SET upgrade_progress=?::jsonb,upgrade_lease_expires_at=? WHERE tenant_id=? AND upgrade_lease_token=? AND upgrade_lease_expires_at>?",
+                json(progress),leaseUntil,tenant,token,now)==1;
+    }
+    public boolean holdsUpgrade(String tenant, UUID token, long now) {
+        return jdbc.queryForObject("SELECT count(*) FROM eg_pgr_onboarding_workspace WHERE tenant_id=? AND upgrade_lease_token=? AND upgrade_lease_expires_at>?",
+                Integer.class,tenant,token,now)==1;
+    }
+    /** Records the new seed_version and a SEED_UPGRADED event in one statement, only while the lease is held. */
+    public boolean finishUpgrade(String tenant, UUID token, String seedVersion, Object details, long now) {
+        return jdbc.update("WITH done AS (UPDATE eg_pgr_onboarding_workspace SET seed_version=?,upgrade_progress='{}'::jsonb,upgrade_lease_token=NULL," +
+                        "upgrade_lease_expires_at=NULL,upgrade_attempts=0,upgrade_next_attempt_at=NULL,upgrade_error_code=NULL,upgrade_failed_step=NULL " +
+                        "WHERE tenant_id=? AND upgrade_lease_token=? AND upgrade_lease_expires_at>? RETURNING tenant_id,version) " +
+                        "INSERT INTO eg_pgr_onboarding_workspace_event(id,tenant_id,event_type,version,details,created_at,created_by) " +
+                        "SELECT ?,tenant_id,'SEED_UPGRADED',version,?::jsonb,?,'pgr-onboarding' FROM done",
+                seedVersion,tenant,token,now,UUID.randomUUID(),json(details),now)==1;
+    }
+    /**
+     * Releases the lease, keeping progress, and counts consecutive failures at the same point (`at`). Retryable failures
+     * back off up to an hour. A non-retryable failure, or the maxFailures-th in a row at one point, stops the workspace:
+     * it is not claimed again until an operator clears upgrade_stopped_at. Returns true when this call stopped it.
+     */
+    public boolean retryUpgrade(String tenant, UUID token, String code, boolean retryable, String at, int maxFailures, long now) {
+        String failures = "(CASE WHEN upgrade_failed_step IS NOT DISTINCT FROM ? THEN upgrade_attempts+1 ELSE 1 END)", point = truncate(at);
+        return Boolean.TRUE.equals(jdbc.query("UPDATE eg_pgr_onboarding_workspace SET upgrade_attempts=" + failures + ",upgrade_failed_step=?," +
+                        "upgrade_error_code=?,upgrade_lease_token=NULL,upgrade_lease_expires_at=NULL," +
+                        "upgrade_next_attempt_at=?+LEAST(3600000,1000*power(2,LEAST(" + failures + "-1,12)))::bigint," +
+                        "upgrade_stopped_at=CASE WHEN NOT ? OR " + failures + ">=? THEN ? END " +
+                        "WHERE tenant_id=? AND upgrade_lease_token=? RETURNING upgrade_stopped_at IS NOT NULL",
+                (rs,n)->rs.getBoolean(1), point,point,truncate(code),now,point,retryable,point,maxFailures,now,tenant,token).stream().findFirst().orElse(false));
+    }
+    private static String truncate(String value) { return value.length()>128?value.substring(0,128):value; }
     public String json(Object value) { try{return mapper.writeValueAsString(value);}catch(Exception e){throw new IllegalStateException(e);} }
     private Map<String,Object> read(String value){try{return mapper.readValue(value,new TypeReference<LinkedHashMap<String,Object>>(){});}catch(Exception e){throw new IllegalStateException(e);}}
     private List<String> readList(String value){try{return mapper.readValue(value,new TypeReference<ArrayList<String>>(){});}catch(Exception e){throw new IllegalStateException(e);}}
