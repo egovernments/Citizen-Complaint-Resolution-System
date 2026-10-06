@@ -325,12 +325,19 @@ public class OnboardingRepository {
                 now, operation.getId(), operation.getLifecycleRestartNo(), operation.getLifecycleDecision()) == 1;
     }
 
-    public void deferPublication(OnboardingOperation operation, long now) {
-        jdbcTemplate.update("UPDATE eg_pgr_onboarding_operation SET lifecycle_publish_attempts = lifecycle_publish_attempts + 1, " +
+    /** Counts a failed publication and schedules the next; empty when it was published meanwhile. */
+    public Optional<PublicationDeferral> deferPublication(OnboardingOperation operation, long now) {
+        return first(jdbcTemplate.query("UPDATE eg_pgr_onboarding_operation o SET lifecycle_publish_attempts = lifecycle_publish_attempts + 1, " +
                         "lifecycle_next_publish_at = ? + LEAST(300000, 1000 * power(2, LEAST(lifecycle_publish_attempts, 8))) " +
-                        "WHERE id = ? AND restart_no = ? AND lifecycle_published_at IS NULL",
-                now, operation.getId(), operation.getLifecycleRestartNo());
+                        "WHERE id = ? AND restart_no = ? AND lifecycle_published_at IS NULL " +
+                        "RETURNING o.lifecycle_publish_attempts, o.lifecycle_next_publish_at, " +
+                        "(SELECT s.requested_tenant_id FROM eg_pgr_onboarding_signup s WHERE s.id = o.signup_id) AS tenant_id",
+                (rs, rowNum) -> new PublicationDeferral(rs.getString("tenant_id"), rs.getInt("lifecycle_publish_attempts"),
+                        rs.getLong("lifecycle_next_publish_at")),
+                now, operation.getId(), operation.getLifecycleRestartNo()));
     }
+
+    public record PublicationDeferral(String tenantId, int attempts, long nextAttemptAt) {}
 
     private String decision(String status) {
         return "SUCCEEDED".equals(status) ? "ACTIVE" : "TERMINAL_FAILED".equals(status) ? "FAILED" : null;

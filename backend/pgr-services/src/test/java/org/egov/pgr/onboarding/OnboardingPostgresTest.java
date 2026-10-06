@@ -65,6 +65,19 @@ public class OnboardingPostgresTest {
         var next=claim();assertNotEquals(lease.getLeaseToken(),next.getLeaseToken());
         assertFalse(repository.checkpoint(op,lease.getLeaseToken(),System.currentTimeMillis()));
     }
+    @Test public void completionIsPublishedInTheSameTickAndFailedPublicationsReportTheirBackoff(){
+        var op=submit();var steps=mock(OnboardingSteps.class);
+        var worker=transactional(new OnboardingWorkerService(repository,seed,"INPUT_REJECTED"));
+        var runner=new OnboardingRunner(worker,repository,steps,transactional(new OnboardingLifecyclePublisher(repository,steps)));
+        runner.tick();
+        var done=repository.findOperation(op.getId()).orElseThrow();assertEquals("SUCCEEDED",done.getStatus());assertNotNull(done.getLifecyclePublishedAt());
+        jdbc.update("UPDATE eg_pgr_onboarding_operation SET lifecycle_published_at=NULL WHERE id=?",op.getId());
+        long now=System.currentTimeMillis();
+        var first=repository.deferPublication(done,now).orElseThrow();
+        assertEquals("example",first.tenantId());assertEquals(1,first.attempts());assertEquals(now+1000,first.nextAttemptAt());
+        assertEquals(now+2000,repository.deferPublication(done,now).orElseThrow().nextAttemptAt());
+        repository.acknowledgePublication(done,now);assertTrue(repository.deferPublication(done,now).isEmpty());
+    }
     @Test public void terminalBeforeAnyEnsureSettlesPublicationAndRestartKeepsFounder(){
         submit();var lease=claim();var op=lease.getOperation();op.setFounderDigitUuid("founder-uuid");repository.checkpoint(op,lease.getLeaseToken(),System.currentTimeMillis());
         var worker=transactional(new OnboardingWorkerService(repository,seed,"INPUT_REJECTED"));

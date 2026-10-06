@@ -100,6 +100,8 @@ public class OnboardingRunner implements SmartLifecycle {
             worker.fail(operation.getId(), token, failure.isRetryable(), failure.getCode(), failure.getCode(),
                     operation.getCurrentStep(), operation.getCompletedSteps());
         }
+        // complete/fail committed any lifecycle decision; publish it now, not a poll later (#2303).
+        publisher.publishPending();
         // Unexpected failures leave the lease to expire: restart resumes from the last checkpoint.
     }
 

@@ -223,7 +223,7 @@ public class OnboardingProvisionerClient {
             catch (Exception ignored) { /* Preserve status classification without storing remote PII. */ }
             int status = e.getStatusCode().value();
             if (status == 401) { synchronized (this) { login = null; } }
-            throw new OnboardingFailure(code, status >= 500 || status == 401 || status == 403 || status == 429);
+            throw new OnboardingFailure(code, status >= 500 || status == 401 || status == 403 || status == 429, status);
         } catch (RestClientException e) { throw new OnboardingFailure("PROVISIONING_UNAVAILABLE", true); }
     }
 }
