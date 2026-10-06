@@ -231,6 +231,20 @@ describe('identity helmfile wiring', () => {
     expect(timeout).toBeGreaterThan(deadline);
   });
 
+  // A Keycloak URL hard-coded in the BFF chart kept pointing at
+  // keycloak.egov:8180 when the port, name or namespace moved.
+  test('the BFF reaches Keycloak through the same shared values and helper as the keycloak chart', () => {
+    expect(helmfile).toMatch(/"httpPort" \(index \$kcOverrides "httpPort" \| default 8180\)/);
+    expect(helmfile).toContain('"keycloak" $keycloak }}');
+    expect(helmfile.match(/^ {4}namespace: \{\{ \$namespace \}\}$/gm)).toHaveLength(2);
+    expect(read(`${BFF}/templates/_helpers.tpl`)).toContain('{{- $kc := include "common.identity.keycloakUrl" . -}}');
+    expect(read(`${KC}/templates/_helpers.tpl`)).toContain('{{- include "common.identity.keycloakUrl" . -}}');
+    expect(read('devops/deploy-as-code/charts/common/templates/_identity.tpl')).toContain('define "common.identity.keycloakUrl"');
+    expect(read(`${BFF}/values.yaml`)).not.toMatch(/^keycloak:/m);
+    // The helmfile's default port is the keycloak chart's.
+    expect(read(`${KC}/values.yaml`)).toMatch(/^httpPort: 8180$/m);
+  });
+
   test('digit-helmfile.yaml includes it', () => {
     expect(read('devops/deploy-as-code/digit-helmfile.yaml')).toMatch(
       /^ {2}- path: \.\/charts\/identity\/identity-helmfile\.yaml$/m);

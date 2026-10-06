@@ -24,12 +24,16 @@ identity:
   postLoginRedirect: ""
   # Comma-separated origins. Empty = <publicUrl>.
   allowedOrigins: ""
-
-# In-cluster Keycloak (the keycloak release's Service). The BFF talks to it
-# directly for discovery, JWKS and the Admin API; browsers reach it at
-# <publicUrl>/auth.
-keycloak:
-  url: "http://keycloak.egov:8180"
+  # In-cluster Keycloak (the keycloak release's Service): name, namespace
+  # (empty = this release's) and port. The BFF talks to it directly for
+  # discovery, JWKS and the Admin API; browsers reach it at <publicUrl>/auth.
+  # The URL comes from common.identity.keycloakUrl in charts/common, the helper
+  # the keycloak chart's Job uses too; the helmfile passes both releases the
+  # same values and the keycloak chart refuses any that miss its Service.
+  keycloak:
+    service: "keycloak"
+    namespace: ""
+    httpPort: 8180
 
 # Ingress: /identity/v1 straight to this service (templates/ingress.yaml), as
 # Kong's identity-bff-route does under Compose. Not through the DIGIT gateway:
@@ -110,7 +114,7 @@ secret:
 # Derived in templates/deployment.yaml and refused here: KEYCLOAK_ISSUER,
 # KEYCLOAK_OIDC_BACKCHANNEL_URL, KEYCLOAK_JWKS_URI, KEYCLOAK_ADMIN_URL,
 # KEYCLOAK_ADMIN_REALM and KEYCLOAK_ORGANIZATION_REALM (from identity.realm
-# and keycloak.url), IDENTITY_REDIRECT_URI, IDENTITY_POST_LOGIN_REDIRECT and
+# and identity.keycloak), IDENTITY_REDIRECT_URI, IDENTITY_POST_LOGIN_REDIRECT and
 # IDENTITY_ALLOWED_ORIGINS (from identity.*). IDENTITY_COOKIE_SECURE and
 # DIGIT_ADMIN_TENANT_ID are derived only while empty here.
 config:

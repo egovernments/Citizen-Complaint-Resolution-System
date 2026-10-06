@@ -142,7 +142,13 @@ production.
 (`<publicUrl>/identity/v1/callback`), and the redirect URIs and web origins the
 Job writes onto Keycloak's clients. `postLoginRedirect` and `allowedOrigins`
 are shared the same way. The BFF chart refuses those settings under its own
-`config:` so they cannot drift.
+`config:` so they cannot drift. The BFF's in-cluster Keycloak address (issuer
+backchannel, JWKS, Admin API) is shared too: the helmfile builds
+`identity.keycloak` (Service name, namespace, `httpPort`) from the keycloak
+release's own overrides, both charts join it with the `common` chart's
+`common.identity.keycloakUrl`, and the keycloak chart fails the render if it
+does not describe its Service. Override the port as
+`identity.keycloak.httpPort` and both follow.
 
 Every other BFF setting is under `identity.identity-bff.config`, keyed by its
 environment variable; the chart's `values.yaml` lists them all with the

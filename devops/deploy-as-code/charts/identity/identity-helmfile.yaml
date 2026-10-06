@@ -33,11 +33,24 @@ environments:
 {{-   $id = .Values.identity }}
 {{- end }}
 {{- $enabled := index $id "enabled" | default false }}
+{{- $namespace := "egov" }}
+{{- /* Where identity-bff reaches Keycloak: the keycloak chart's Service name
+       (common.name: its `name` override, else the chart name), this
+       namespace and its httpPort, read from the same identity.keycloak
+       overrides the keycloak release gets. Both charts build the URL with
+       common.identity.keycloakUrl, and the keycloak chart fails the render if
+       these do not match its Service. The defaults are the chart's. */ -}}
+{{- $kcOverrides := index $id "keycloak" | default dict }}
+{{- $keycloak := dict
+      "service" (index $kcOverrides "name" | default "keycloak")
+      "namespace" $namespace
+      "httpPort" (index $kcOverrides "httpPort" | default 8180) }}
 {{- $shared := dict
       "realm" (index $id "realm" | default "digit")
       "publicUrl" (index $id "publicUrl" | default "")
       "postLoginRedirect" (index $id "postLoginRedirect" | default "")
-      "allowedOrigins" (index $id "allowedOrigins" | default "") }}
+      "allowedOrigins" (index $id "allowedOrigins" | default "")
+      "keycloak" $keycloak }}
 {{- /* secrets.identity in env-secrets.yaml: existingSecret (preferred) or
        values (escape hatch). Both charts get the same block, so Keycloak's
        clients and the BFF share one value per secret. */ -}}
@@ -52,7 +65,7 @@ releases:
   # keycloak release's post-install Job creates.
   - name: keycloak
     chart: ./keycloak
-    namespace: egov
+    namespace: {{ $namespace }}
     installed: {{ $enabled }}
     missingFileHandler: Warn
     wait: true
@@ -71,11 +84,11 @@ releases:
           {{- $shared | toYaml | nindent 10 }}
         secret:
           {{- $secret | toYaml | nindent 10 }}
-      - {{ index $id "keycloak" | default dict | toYaml | nindent 8 }}
+      - {{ $kcOverrides | toYaml | nindent 8 }}
 
   - name: identity-bff
     chart: ./identity-bff
-    namespace: egov
+    namespace: {{ $namespace }}
     installed: {{ $enabled }}
     missingFileHandler: Warn
     needs:

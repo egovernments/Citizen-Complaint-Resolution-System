@@ -21,6 +21,16 @@ identity:
   postLoginRedirect: ""
   # Comma-separated browser origins allowed to call the BFF. Empty = <publicUrl>.
   allowedOrigins: ""
+  # Where identity-bff (and the realm-configure Job) reach this Keycloak in the
+  # cluster: Service name, namespace (empty = the release's) and port, joined by
+  # common.identity.keycloakUrl in charts/common. The helmfile sets them from
+  # identity.keycloak.{name,httpPort} in env.yaml and the release namespace.
+  # They must describe this chart's Service (common.name, httpPort, the
+  # release namespace); the render fails otherwise.
+  keycloak:
+    service: "keycloak"
+    namespace: ""
+    httpPort: 8180
 
 # The common chart's ingress is not used: Keycloak is exposed only under the
 # public /auth prefix, on the realm and theme paths (templates/ingress.yaml).

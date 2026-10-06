@@ -44,12 +44,12 @@ identity-surfaces-json: IDENTITY_SURFACES_JSON
 {{- $config := .Values.config | default dict -}}
 {{- range $key := list "KEYCLOAK_ISSUER" "KEYCLOAK_OIDC_BACKCHANNEL_URL" "KEYCLOAK_JWKS_URI" "KEYCLOAK_ADMIN_URL" "KEYCLOAK_ADMIN_REALM" "KEYCLOAK_ORGANIZATION_REALM" "IDENTITY_REDIRECT_URI" "IDENTITY_POST_LOGIN_REDIRECT" "IDENTITY_ALLOWED_ORIGINS" "IDENTITY_ALLOWED_ORIGIN" -}}
 {{- if index $config $key -}}
-{{- fail (printf "identity-bff: config.%s is derived from identity.* and keycloak.url (the keycloak chart's realm-configure Job writes the same values onto Keycloak's clients); set those instead" $key) -}}
+{{- fail (printf "identity-bff: config.%s is derived from identity.* (the keycloak chart's realm-configure Job writes the same values onto Keycloak's clients); set those instead" $key) -}}
 {{- end -}}
 {{- end -}}
 {{- $public := include "identity-bff.publicUrl" . -}}
 {{- $realm := required "identity.realm must be set" .Values.identity.realm -}}
-{{- $kc := trimSuffix "/" (required "keycloak.url must be set" .Values.keycloak.url) -}}
+{{- $kc := include "common.identity.keycloakUrl" . -}}
 {{- $derived := dict
       "KEYCLOAK_ORGANIZATION_REALM" $realm
       "KEYCLOAK_ISSUER" (printf "%s/auth/realms/%s" $public $realm)
