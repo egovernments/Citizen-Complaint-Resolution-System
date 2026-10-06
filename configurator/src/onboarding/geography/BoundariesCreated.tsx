@@ -11,7 +11,7 @@ export function BoundariesCreated({
   counts,
   total,
   hierarchyType,
-  tenant,
+  workspace,
   sourceText,
   skipped = 0,
   failed = 0,
@@ -23,7 +23,8 @@ export function BoundariesCreated({
   counts: Record<string, number>;
   total: number;
   hierarchyType: string;
-  tenant: string;
+  /** The workspace's name, or its tenant code when the name isn't known. */
+  workspace: string;
   /** Where the areas came from, e.g. "the official boundaries for Kenya". */
   sourceText: string;
   /** Areas left out before create (unnamed, or in no area of the level above). */
@@ -53,12 +54,12 @@ export function BoundariesCreated({
             {outcome === 'failed' ? (
               <>
                 All {n(failed)} from {sourceText} were refused by the boundary service. Nothing was added to the{' '}
-                <span className="font-medium text-foreground">{hierarchyType}</span> hierarchy on {tenant.toUpperCase()}.
+                <span className="font-medium text-foreground">{hierarchyType}</span> hierarchy on {workspace}.
               </>
             ) : (
               <>
                 {n(total)} in the <span className="font-medium text-foreground">{hierarchyType}</span> hierarchy on{' '}
-                {tenant.toUpperCase()}, from {sourceText}.
+                {workspace}, from {sourceText}.
                 {outcome === 'partial' && ` ${n(failed)} could not be created.`}
               </>
             )}

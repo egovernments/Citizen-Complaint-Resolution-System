@@ -32,6 +32,8 @@ export interface OfficialSet {
   quality: string | null;
   url: string | null;
   agreement_measured: boolean;
+  /** The comparison crashed when the boundary DB was built (older servers omit this). */
+  agreement_failed?: boolean;
   levels: OfficialLevel[];
   other: { source: string; usable: boolean; dataset_date: string | null; quality: string | null; note: string | null } | null;
 }

@@ -106,7 +106,9 @@ export function OfficialSetSummary({ set, place = null }: { set: OfficialSet; pl
           {set.agreement_measured
             ? `Confirmed means ${set.other ? 'a second, independently drawn set' : 'another source'} has nearly the same areas. ` +
               "It doesn't mean your government has endorsed this exact file, and “one source only” means a level couldn't be checked, not that it is wrong."
-            : "This server's boundary data predates the agreement check, so it can't say how far the set is confirmed."}
+            : set.agreement_failed
+              ? 'The agreement check failed when this boundary data was built, so it can\'t say how far the set is confirmed. Rebuilding the boundary data may fix it.'
+              : "This server's boundary data predates the agreement check, so it can't say how far the set is confirmed."}
         </p>
       </div>
     </section>

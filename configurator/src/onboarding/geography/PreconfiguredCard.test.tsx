@@ -24,7 +24,8 @@ describe('PreconfiguredCard', () => {
   it('explains the confidence, and this set\'s, from the (i)', () => {
     render(<PreconfiguredCard state={{ status: 'ready', country: 'MZ', set: MZ }} onUse={vi.fn()} onRetry={vi.fn()} />);
     expect(screen.queryByRole('tooltip')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'What confidence means' }));
+    const info = screen.getByRole('button', { name: 'What confidence means' });
+    fireEvent.click(info);
     const tip = screen.getByRole('tooltip');
     expect(tip.textContent).toContain('independently drawn boundary set');
     expect(tip.textContent).toContain('Some levels only partly match a second source');
@@ -32,9 +33,29 @@ describe('PreconfiguredCard', () => {
     expect(tip.textContent).toContain('Upload from Excel');
   });
 
+  it('stays open through a tap (mouseenter, focus, click) and closes on Escape or leaving', () => {
+    render(<PreconfiguredCard state={{ status: 'ready', country: 'MZ', set: MZ }} onUse={vi.fn()} onRetry={vi.fn()} />);
+    const info = screen.getByRole('button', { name: 'What confidence means' });
+    fireEvent.mouseEnter(info);
+    fireEvent.focus(info);
+    fireEvent.click(info);
+    expect(screen.getByRole('tooltip')).toBeTruthy();
+    fireEvent.keyDown(info, { key: 'Escape' });
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    fireEvent.click(info);
+    fireEvent.blur(info);
+    expect(screen.queryByRole('tooltip')).toBeNull();
+  });
+
+  it('does not name the internal boundary service when it is missing', () => {
+    render(<PreconfiguredCard state={{ status: 'unavailable' }} onUse={vi.fn()} onRetry={vi.fn()} />);
+    const text = screen.getByTestId('option-unavailable').textContent ?? '';
+    expect(text).toBe("Preconfigured boundaries aren't available on this deployment. Fetch or upload them instead.");
+  });
+
   it('says why it is unavailable instead of offering a country picker', () => {
     const { rerender } = render(<PreconfiguredCard state={{ status: 'unknown-country' }} onUse={vi.fn()} onRetry={vi.fn()} />);
-    expect(screen.getByTestId('option-unavailable').textContent).toContain('no country recorded from signup');
+    expect(screen.getByTestId('option-unavailable').textContent).toContain('This workspace has no country recorded from signup');
     expect(screen.queryByRole('button')).toBeNull();
     rerender(<PreconfiguredCard state={{ status: 'none', country: 'TZ' }} onUse={vi.fn()} onRetry={vi.fn()} />);
     expect(screen.getByTestId('option-unavailable').textContent).toContain('Tanzania');

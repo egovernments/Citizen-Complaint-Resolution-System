@@ -5,7 +5,7 @@ import { BoundariesCreated } from './BoundariesCreated';
 const base = {
   levels: ['Country', 'County', 'District'],
   hierarchyType: 'ADMIN',
-  tenant: 'lr',
+  workspace: 'Monrovia City Corporation',
   sourceText: 'the official boundaries for Liberia (OCHA COD-AB)',
   onDone: vi.fn(),
 };
@@ -20,6 +20,8 @@ describe('BoundariesCreated', () => {
     const rows = screen.getAllByRole('row').map((r) => r.textContent);
     expect(rows).toEqual(['LevelAreas', '1Country1', '2County15', '3District136', 'Total152']);
     expect(screen.getByText('Boundary data: OCHA COD-AB')).toBeTruthy();
+    // The workspace by name, not its tenant code in capitals.
+    expect(screen.getByTestId('boundaries-created').textContent).toContain('hierarchy on Monrovia City Corporation, from');
   });
 
   it('does not call a total failure a success', () => {

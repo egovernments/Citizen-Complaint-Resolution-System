@@ -134,6 +134,7 @@ export default function GeographyStep() {
           hasHierarchies={!!hierarchies?.length}
           sourceChoices={boundarySources}
           preconfigured={preconfiguredSet}
+          workspaceName={preconfigured.workspaceName}
           onCancel={close}
           onDone={() => {
             close();
@@ -153,7 +154,9 @@ export default function GeographyStep() {
 
       <section className="space-y-4">
         <h3 className="text-lg font-semibold text-foreground">How do you want to bring in your geography?</h3>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 lg:gap-6">
+        {/* Three across only from lg: with the onboarding sidebar open on a tablet
+            (820px), three cards are ~156px and the Preconfigured button overflows. */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:gap-6">
           <PreconfiguredCard
             state={preconfigured.state}
             onRetry={preconfigured.retry}

@@ -42,8 +42,3 @@ export function useTurbopassHealth(base: string = TURBOPASS_BASE): TurbopassHeal
   }, [base]);
   return health;
 }
-
-/** The boundary sources this deployment's turbopass can answer: null while asking, [] when none. */
-export function useTurbopassSources(base: string = TURBOPASS_BASE): string[] | null {
-  return useTurbopassHealth(base)?.sources ?? null;
-}

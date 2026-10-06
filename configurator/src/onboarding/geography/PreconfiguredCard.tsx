@@ -28,11 +28,17 @@ function Confidence({ set }: { set: OfficialSet }) {
         aria-label="What confidence means"
         aria-describedby={open ? tipId : undefined}
         aria-expanded={open}
+        // A click or tap only ever opens it: a tap fires mouseenter, focus and
+        // click in turn, and a toggle on click closed it again every time.
+        // Pointer leaving, focus leaving (tapping elsewhere) or Escape close it.
         onMouseEnter={() => setOpen(true)}
         onMouseLeave={() => setOpen(false)}
         onFocus={() => setOpen(true)}
         onBlur={() => setOpen(false)}
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => setOpen(true)}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') setOpen(false);
+        }}
         className="flex h-[18px] w-[18px] flex-none items-center justify-center rounded-full border border-muted-foreground/70 text-[11px] font-bold italic text-muted-foreground"
       >
         i
@@ -41,7 +47,7 @@ function Confidence({ set }: { set: OfficialSet }) {
         <div
           id={tipId}
           role="tooltip"
-          className="absolute bottom-[calc(100%+8px)] left-0 z-10 w-[310px] space-y-2 rounded-lg bg-foreground px-3 py-3 text-xs leading-[1.55] text-background shadow-lg"
+          className="absolute bottom-[calc(100%+8px)] left-0 z-10 w-[min(310px,80vw)] space-y-2 rounded-lg bg-foreground px-3 py-3 text-xs leading-[1.55] text-background shadow-lg"
         >
           <p>Confidence shows how far a second, independently drawn boundary set confirms these boundaries.</p>
           <p>{CONFIDENCE_HINT[level]}</p>
@@ -61,7 +67,7 @@ function Confidence({ set }: { set: OfficialSet }) {
  * official boundary set turbopass holds for the country chosen at signup, and
  * how confident we are in it. Choosing it opens the Fetch search with the
  * source fixed to that set. The country is not editable here — it is the
- * tenant's — so a tenant without one is told why the option is unavailable
+ * workspace's — so a workspace without one is told why the option is unavailable
  * rather than asked to pick.
  */
 export function PreconfiguredCard({
@@ -88,13 +94,12 @@ export function PreconfiguredCard({
         )}
         {state.status === 'unavailable' && (
           <p className="text-xs leading-5 text-muted-foreground" data-testid="option-unavailable">
-            This needs the turbopass boundary service with official boundary sets loaded, which this deployment doesn't
-            have.
+            Preconfigured boundaries aren't available on this deployment. Fetch or upload them instead.
           </p>
         )}
         {state.status === 'unknown-country' && (
           <p className="text-xs leading-5 text-muted-foreground" data-testid="option-unavailable">
-            This tenant has no country recorded from signup, so we can't tell which boundaries to offer. Fetch or upload
+            This workspace has no country recorded from signup, so we can't tell which boundaries to offer. Fetch or upload
             them instead.
           </p>
         )}

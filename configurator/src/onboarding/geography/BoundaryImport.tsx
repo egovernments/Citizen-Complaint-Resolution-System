@@ -275,6 +275,7 @@ export default function BoundaryImport({
   hasHierarchies,
   sourceChoices,
   preconfigured = null,
+  workspaceName = null,
   onDone,
   onCancel,
 }: {
@@ -288,6 +289,8 @@ export default function BoundaryImport({
    *  search works as in Fetch, with the source fixed to that set and
    *  suggestions limited to its country. */
   preconfigured?: OfficialSet | null;
+  /** The workspace's name for the completion screen; the tenant code is shown without it. */
+  workspaceName?: string | null;
   onDone: () => void;
   onCancel: () => void;
 }) {
@@ -349,6 +352,8 @@ export default function BoundaryImport({
   // with the other official source: handed in by Preconfigured, or looked up
   // when a search fetched from the Official source.
   const [officialSet, setOfficialSet] = useState<OfficialSet | null>(preconfigured);
+  // The place whose levels are on screen; a late official-set answer for another is dropped.
+  const openedPlaceRef = useRef<string | null>(null);
   // Preconfigured fixes the source to the country's official set.
   const [turbopassSource, setTurbopassSource] = useState(() =>
     preconfigured ? 'official' : chooseTurbopassSource(CONFIGURED_TURBOPASS_SOURCE, null),
@@ -784,9 +789,15 @@ export default function BoundaryImport({
 
     setFetchedPlace({ id: place.id, name: place.name, label: place.label, country: place.country });
     setFetchedAttribution(attributionLine(geojson.features));
+    openedPlaceRef.current = place.id;
     if (!preconfigured) {
-      const set = officialLookup ? await officialLookup : null;
-      setOfficialSet(set && set !== 'unavailable' ? set : null);
+      setOfficialSet(null);
+      // Best effort and never in the way: the level screen opens now, and the
+      // summary appears when the lookup answers — unless another place has been
+      // opened since.
+      void officialLookup?.then((set) => {
+        if (openedPlaceRef.current === place.id) setOfficialSet(set && set !== 'unavailable' ? set : null);
+      });
     }
     setAdminLevels(extractedLevels);
     setStep('map-levels');
@@ -1809,7 +1820,7 @@ export default function BoundaryImport({
           counts={createdCounts}
           total={totalCreated}
           hierarchyType={selectedHierarchy.hierarchyType}
-          tenant={boundaryTenant}
+          workspace={workspaceName ?? boundaryTenant}
           sourceText="your Excel upload"
           failed={failedCount}
           onDone={onDone}
@@ -1823,7 +1834,7 @@ export default function BoundaryImport({
           counts={createdCounts}
           total={totalCreated}
           hierarchyType={OSM_HIERARCHY_TYPE}
-          tenant={boundaryTenant}
+          workspace={workspaceName ?? boundaryTenant}
           sourceText={createdSourceText}
           skipped={skippedFeatures.length}
           failed={failedCount}

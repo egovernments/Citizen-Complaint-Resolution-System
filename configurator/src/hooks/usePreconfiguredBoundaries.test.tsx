@@ -2,8 +2,8 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import sets from '@/utils/__fixtures__/officialSets.json';
 
-const resolveTenantCountry = vi.fn();
-vi.mock('@/utils/tenantCountry', () => ({ resolveTenantCountry }));
+const readTenantProfile = vi.fn();
+vi.mock('@/utils/tenantCountry', () => ({ readTenantProfile }));
 
 const { usePreconfiguredBoundaries } = await import('./usePreconfiguredBoundaries');
 
@@ -20,20 +20,25 @@ function officialEndpoint(status = 200) {
 }
 
 describe('usePreconfiguredBoundaries', () => {
-  beforeEach(() => resolveTenantCountry.mockReset());
+  beforeEach(() => {
+    readTenantProfile.mockReset();
+    readTenantProfile.mockResolvedValue({ country: null, name: null });
+  });
   afterEach(() => vi.unstubAllGlobals());
 
   it('waits for Geography\'s /health read, and makes no /health call of its own', async () => {
     const fetchMock = officialEndpoint();
+    readTenantProfile.mockResolvedValue({ country: 'KE', name: 'Test Council' });
     const { result, rerender } = renderHook(({ c }) => usePreconfiguredBoundaries('ke', c, '/tp'), {
       initialProps: { c: null as string[] | null },
     });
-    expect(result.current.state.status).toBe('loading');
-    expect(resolveTenantCountry).not.toHaveBeenCalled();
-    resolveTenantCountry.mockResolvedValue('KE');
+    await waitFor(() => expect(result.current.workspaceName).toBe('Test Council'));
+    expect(result.current.state.status).toBe('loading'); // still waiting for /health
+    expect(fetchMock).not.toHaveBeenCalled();
     rerender({ c: ['KE', 'LR'] });
     await waitFor(() => expect(result.current.state.status).toBe('ready'));
     expect(fetchMock.mock.calls.map(([u]) => u)).toEqual(['/tp/boundary/official?country=KE']);
+    expect(result.current.workspaceName).toBe('Test Council');
   });
 
   it('is unavailable when turbopass holds no official sets', async () => {
@@ -42,14 +47,14 @@ describe('usePreconfiguredBoundaries', () => {
   });
 
   it('says so when the tenant has no country on record', async () => {
-    resolveTenantCountry.mockResolvedValue(null);
+    readTenantProfile.mockResolvedValue({ country: null, name: 'Test Council' });
     const { result } = renderHook(() => usePreconfiguredBoundaries('acme', ['KE'], '/tp'));
     await waitFor(() => expect(result.current.state.status).toBe('unknown-country'));
   });
 
   it('answers "none" for a country /health does not list, without asking for it', async () => {
     const fetchMock = officialEndpoint();
-    resolveTenantCountry.mockResolvedValue('TZ');
+    readTenantProfile.mockResolvedValue({ country: 'TZ', name: 'Test Council' });
     const { result } = renderHook(() => usePreconfiguredBoundaries('tz', ['KE'], '/tp'));
     await waitFor(() => expect(result.current.state).toEqual({ status: 'none', country: 'TZ' }));
     expect(fetchMock).not.toHaveBeenCalled();
@@ -58,7 +63,7 @@ describe('usePreconfiguredBoundaries', () => {
   it('treats a failure for a listed country as an error to retry, not as "no set"', async () => {
     // 404 for a listed country: a turbopass that predates /boundary/official.
     officialEndpoint(404);
-    resolveTenantCountry.mockResolvedValue('KE');
+    readTenantProfile.mockResolvedValue({ country: 'KE', name: 'Test Council' });
     const { result } = renderHook(() => usePreconfiguredBoundaries('ke', ['KE'], '/tp'));
     await waitFor(() => expect(result.current.state).toEqual({ status: 'error', country: 'KE' }));
     officialEndpoint(200);
