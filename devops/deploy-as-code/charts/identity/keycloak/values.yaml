@@ -1,0 +1,258 @@
+# Keycloak for the DIGIT identity stack. See README.md beside this file and
+# docs/setup/deployment/helm-identity.md. Installed by
+# charts/identity/identity-helmfile.yaml only when identity.enabled is true.
+
+# Common Labels
+labels:
+  app: "keycloak"
+  group: "identity"
+
+# Values shared with the identity-bff chart. The helmfile passes the
+# environment's `identity:` block (charts/environments/env.yaml) into both
+# releases, so the realm, redirect URI and origins Keycloak's clients are
+# configured with are the ones the BFF uses.
+identity:
+  realm: "digit"
+  # Public origin of this deployment. Empty = https://<global.domain>
+  # (http:// when global.setup is "quickstart").
+  publicUrl: ""
+  # Where the BFF sends a browser after a Configurator sign-in. Empty =
+  # <publicUrl>/configurator/login.
+  postLoginRedirect: ""
+  # Comma-separated browser origins allowed to call the BFF. Empty = <publicUrl>.
+  allowedOrigins: ""
+  # Where identity-bff (and the realm-configure Job) reach this Keycloak in the
+  # cluster: Service name, namespace (empty = the release's) and port, joined by
+  # common.identity.keycloakUrl in charts/common. The helmfile sets them from
+  # identity.keycloak.{name,httpPort} in env.yaml and the release namespace.
+  # They must describe this chart's Service (common.name, httpPort, the
+  # release namespace); the render fails otherwise.
+  keycloak:
+    service: "keycloak"
+    namespace: ""
+    httpPort: 8180
+
+# The common chart's ingress is not used: Keycloak is exposed only under the
+# public /auth prefix, on the realm and theme paths (templates/ingress.yaml).
+ingress:
+  enabled: true
+  # Mirrors backend/identity-bff/deploy/digit-compose/nginx-identity.conf: only
+  # the identity realm's protocol endpoints and login theme resources. The
+  # admin console, the Admin REST API and the master realm (whose token
+  # endpoint mints admin tokens) are never routed; Compose answers those
+  # with 404 from Kong.
+  pathPrefix: "/auth"
+
+# Container Configs
+# Built from keycloak/Dockerfile: Keycloak 26.7.3 plus the magic-link provider,
+# the Keycloakify login themes, and jq, configure-keycloak.sh and realm.json
+# (which the realm-configure Job runs).
+# Same image and default tag as the Compose stack (IDENTITY_KEYCLOAK_IMAGE).
+image:
+  repository: "identity-keycloak"
+  tag: "nightly-develop"   # PRODUCTION: pin an immutable tag
+  pullPolicy: IfNotPresent # Always while the tag is rolling (templates/deployment.yaml)
+replicas: "1"
+httpPort: 8180
+# Keycloak's management interface: /health/* (KC_HEALTH_ENABLED) is served
+# here, not on the HTTP port.
+managementPort: 9000
+
+args: |
+  - start
+  - --optimized
+
+# Keycloak's database. Defaults to the platform Postgres (egov-config's
+# db-host) with a database and role of its own; create both before the first
+# install (see README.md). The password comes from the Secret, key
+# keycloak-db-password.
+db:
+  # Empty = egov-config's db-host.
+  host: ""
+  port: "5432"
+  database: "keycloak"
+  username: "keycloak"
+
+# Master-realm bootstrap admin, created on Keycloak's FIRST start only and
+# used by the realm-configure Job. Password: Secret key keycloak-admin-password.
+# Changing the Secret later does not rotate an admin that already exists.
+admin:
+  username: "admin"
+
+# Secret handling, same two paths as charts/backbone-services/novu:
+#   existingSecret -- PREFERRED. Name a Secret created out of band; nothing
+#                     credential-shaped enters values or the Helm release.
+#   values         -- escape hatch: the chart renders <release>-secrets from
+#                     these keys. Placeholders (<...>, change-me) are refused.
+# The helmfile fills this from secrets.identity in env-secrets.yaml. Keys this
+# chart reads (see README.md for the full list and which are required):
+#   keycloak-db-password, keycloak-admin-password,
+#   keycloak-bff-client-secret, keycloak-admin-client-secret,
+#   keycloak-employee-client-secret, keycloak-citizen-client-secret,
+#   keycloak-magic-link-client-secret, keycloak-smtp-password,
+#   keycloak-google-client-secret, keycloak-github-client-secret
+secret:
+  existingSecret: ""
+  values: {}
+
+# Extra Keycloak server environment (KC_* options), a map of NAME: value.
+extraServerEnv: {}
+
+# Realm reconcile: a Helm post-install/post-upgrade hook Job that runs
+# keycloak/configure-keycloak.sh with keycloak/realm.json, both from the
+# Keycloak image (/opt/identity/, keycloak/Dockerfile): the tag above must be a
+# build that carries them.
+# Idempotent. It runs on every Helm install and upgrade: on every
+# `helmfile sync`, but on `helmfile apply` only when the diff is non-empty.
+# With existingSecret, the Job carries a checksum of that Secret's data (read
+# with lookup) so a rotated secret is such a diff; see "Rotating a secret" in
+# docs/setup/deployment/helm-identity.md for the forced rerun.
+configure:
+  enabled: true
+  # kcadm login attempts, 5 s apart. Helm starts the hook only once the
+  # Deployment is Ready (wait: true), so this covers a Service that has just
+  # turned Ready, not Keycloak's first start.
+  loginAttempts: 12
+  backoffLimit: 3
+  # The whole Job, every retry included. Keep it BELOW the keycloak release's
+  # `timeout` in identity-helmfile.yaml (900 s): Helm waits on the hook for at
+  # most that long, and giving up first would mark the release failed (and skip
+  # identity-bff, which needs it) while the Job is still retrying. Below it,
+  # the Job ends on its own deadline and Helm reports the Job's failure.
+  activeDeadlineSeconds: 600
+  # Keycloak SSL requirement for the realm. Empty = "external", or "none"
+  # when global.setup is "quickstart" (plain-HTTP clusters).
+  sslRequired: ""
+  # Lengthen user/admin event retention past the realm.json default (7 days).
+  # The BFF revokes conservatively after an outage longer than this.
+  eventsExpirationSeconds: ""
+  magicLinkEnabled: false
+  # Journey policy written onto the digit-identity-bff client.
+  signinMethods: "password,google,github"
+  signupMethods: "magic_link,google,github"
+  # Sign-in methods declared on the digit-ui-citizen client. NOT empty here,
+  # unlike the script's default: Keycloak drops an empty client attribute, and
+  # the BFF then reports the citizen surface not ready (/readyz 503, so the pod
+  # never takes traffic) and refuses citizen OTP. Declaring phone_otp offers
+  # nothing by itself: the BFF still offers it only once identity-bff has the
+  # identity-citizen-otp-secret key and an OTP channel (IDENTITY_OTP_SENDER).
+  citizenSigninMethods: "phone_otp"
+  # Required by the script: password recovery, invitations and email
+  # verification send mail. `auth` defaults to false, as in
+  # configure-keycloak.sh (a relay that takes no login). With auth: true the
+  # render fails unless `user` is set and keycloak-smtp-password is present
+  # (checked in secret.values, or in existingSecret when the cluster can be
+  # read); the Job then also refuses to start without that key.
+  smtp:
+    host: ""
+    port: "587"
+    from: ""
+    fromDisplayName: "DIGIT Identity"
+    auth: false
+    user: ""
+    ssl: false
+    starttls: true
+  # Social identity providers; empty client id = provider not configured.
+  # Secrets: keycloak-google-client-secret / keycloak-github-client-secret.
+  googleClientId: ""
+  githubClientId: ""
+  # Any other variable configure-keycloak.sh reads, e.g.
+  # KEYCLOAK_EMPLOYEE_SIGNIN_METHODS,
+  # KEYCLOAK_EMPLOYEE_CLIENT_ID, KEYCLOAK_CITIZEN_CLIENT_ID,
+  # KEYCLOAK_MAGIC_LINK_CLIENT_ID, KEYCLOAK_LOGIN_THEME,
+  # KEYCLOAK_EMPLOYEE_LOGIN_THEME, IDENTITY_DIGIT_UI_BASE_URL.
+  # Client ids must match the identity-bff chart's config.
+  extraEnv: {}
+  resources: |
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+
+# Health Checks. Keycloak serves them on the management port. A first start
+# runs the database migrations, hence the long liveness delay.
+healthChecks:
+  enabled: true
+  readinessProbe: |
+    httpGet:
+      path: /health/ready
+      port: {{ .Values.managementPort }}
+    initialDelaySeconds: 30
+    timeoutSeconds: 5
+    periodSeconds: 10
+    failureThreshold: 6
+  livenessProbe: |
+    httpGet:
+      path: /health/live
+      port: {{ .Values.managementPort }}
+    initialDelaySeconds: 180
+    timeoutSeconds: 5
+    periodSeconds: 30
+    failureThreshold: 5
+
+memory_limits: "1536Mi"
+resources: |
+  requests:
+    cpu: 250m
+    memory: 768Mi
+  limits:
+    memory: {{ .Values.memory_limits | quote }}
+
+# Keycloak runs as uid 1000 in its image already; pinned here so the pod
+# spec says so.
+securityContext:
+  runAsUser: 1000
+
+env: |
+  - name: KC_DB
+    value: postgres
+  - name: KC_DB_URL_HOST
+  {{- if .Values.db.host }}
+    value: {{ .Values.db.host | quote }}
+  {{- else }}
+    valueFrom:
+      configMapKeyRef:
+        name: egov-config
+        key: db-host
+  {{- end }}
+  - name: KC_DB_URL_PORT
+    value: {{ .Values.db.port | quote }}
+  - name: KC_DB_URL_DATABASE
+    value: {{ .Values.db.database | quote }}
+  - name: KC_DB_USERNAME
+    value: {{ .Values.db.username | quote }}
+  - name: KC_DB_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: {{ include "keycloak.secretName" . }}
+        key: keycloak-db-password
+  - name: KC_HTTP_ENABLED
+    value: "true"
+  - name: KC_HTTP_PORT
+    value: {{ .Values.httpPort | quote }}
+  # ingress-nginx sets X-Forwarded-For to the peer address (it does not trust
+  # a client-supplied one unless use-forwarded-headers is on), which is what
+  # Keycloak's brute-force detection and events need.
+  - name: KC_PROXY_HEADERS
+    value: xforwarded
+  # Keycloak serves from / internally; the public URL carries the /auth prefix
+  # the ingress strips. The BFF and the configure Job use the Service directly
+  # (dynamic backchannel), as Compose does.
+  - name: KC_HOSTNAME
+    value: {{ printf "%s%s" (include "common.identity.publicUrl" .) .Values.ingress.pathPrefix | quote }}
+  - name: KC_HOSTNAME_BACKCHANNEL_DYNAMIC
+    value: "true"
+  - name: KC_HEALTH_ENABLED
+    value: "true"
+  - name: KC_BOOTSTRAP_ADMIN_USERNAME
+    value: {{ .Values.admin.username | quote }}
+  - name: KC_BOOTSTRAP_ADMIN_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: {{ include "keycloak.secretName" . }}
+        key: keycloak-admin-password
+  {{- range $name, $value := .Values.extraServerEnv }}
+  - name: {{ $name }}
+    value: {{ $value | toString | quote }}
+  {{- end }}

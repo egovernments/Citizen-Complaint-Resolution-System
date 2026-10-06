@@ -1,0 +1,237 @@
+# Identity BFF (backend/identity-bff). See README.md beside this file and
+# docs/setup/deployment/helm-identity.md. Installed by
+# charts/identity/identity-helmfile.yaml only when identity.enabled is true.
+#
+# With legacy identity removed (#2271) every digit-ui sign-in goes through
+# /identity/v1 on this service and Keycloak, so a deployment without this
+# chart and the keycloak chart has no working sign-in.
+
+# Common Labels
+labels:
+  app: "identity-bff"
+  group: "identity"
+
+# Values shared with the keycloak chart (the helmfile passes the environment's
+# `identity:` block to both). The redirect URI, post-login redirect and
+# allowed origins are derived from these here AND written onto Keycloak's
+# clients by the realm-configure Job, so set them here, never under `config`.
+identity:
+  realm: "digit"
+  # Public origin. Empty = https://<global.domain> (http:// when
+  # global.setup is "quickstart").
+  publicUrl: ""
+  # Empty = <publicUrl>/configurator/login.
+  postLoginRedirect: ""
+  # Comma-separated origins. Empty = <publicUrl>.
+  allowedOrigins: ""
+  # In-cluster Keycloak (the keycloak release's Service): name, namespace
+  # (empty = this release's) and port. The BFF talks to it directly for
+  # discovery, JWKS and the Admin API; browsers reach it at <publicUrl>/auth.
+  # The URL comes from common.identity.keycloakUrl in charts/common, the helper
+  # the keycloak chart's Job uses too; the helmfile passes both releases the
+  # same values and the keycloak chart refuses any that miss its Service.
+  keycloak:
+    service: "keycloak"
+    namespace: ""
+    httpPort: 8180
+
+# Ingress: /identity/v1 straight to this service (templates/ingress.yaml), as
+# Kong's identity-bff-route does under Compose. Not through the DIGIT gateway:
+# these routes authenticate with the BFF's own session cookie.
+ingress:
+  enabled: true
+  context: "identity/v1"
+
+# Container Configs
+# Same image and default tag as the Compose stack (IDENTITY_BFF_IMAGE).
+image:
+  repository: "identity-bff"
+  tag: "nightly-develop"   # PRODUCTION: pin an immutable tag
+  pullPolicy: IfNotPresent # Always while the tag is rolling (templates/deployment.yaml)
+replicas: "1"
+httpPort: 3000
+
+# /livez answers while the process is up. /readyz checks Redis, Keycloak
+# (JWKS and Admin API), DIGIT (egov-user and MDMS through the gateway), each
+# configured sign-in surface's method catalog and the background poller, each
+# bounded by DIGIT_TIMEOUT_MS (10 s), hence the 12 s probe timeout.
+healthChecks:
+  enabled: true
+  livenessProbe: |
+    httpGet:
+      path: /livez
+      port: {{ .Values.httpPort }}
+    initialDelaySeconds: 10
+    timeoutSeconds: 3
+    periodSeconds: 30
+    failureThreshold: 5
+  readinessProbe: |
+    httpGet:
+      path: /readyz
+      port: {{ .Values.httpPort }}
+    initialDelaySeconds: 10
+    timeoutSeconds: 12
+    periodSeconds: 15
+    failureThreshold: 3
+
+resources: |
+  requests:
+    cpu: 100m
+    memory: 192Mi
+  limits:
+    memory: 512Mi
+
+# The node image's unprivileged user.
+securityContext:
+  runAsUser: 1000
+
+# Secret handling, same two paths as charts/backbone-services/novu:
+#   existingSecret -- PREFERRED. Name a Secret created out of band.
+#   values         -- escape hatch: the chart renders <release>-secrets from
+#                     these keys. Placeholders (<...>, change-me) are refused.
+# The helmfile fills this from secrets.identity in env-secrets.yaml; the
+# keycloak chart reads the same keys, so its clients and this service share
+# one value per secret. Required keys (the pod does not start without them):
+#   keycloak-bff-client-secret, keycloak-admin-client-secret,
+#   keycloak-employee-client-secret, keycloak-citizen-client-secret,
+#   digit-admin-password
+# Optional (templates/deployment.yaml lists the variable each one feeds):
+#   keycloak-magic-link-client-secret, identity-control-plane-token,
+#   identity-session-introspection-token, identity-onboarding-token,
+#   pgr-onboarding-worker-token, identity-citizen-otp-secret,
+#   identity-credential-keys, identity-credential-key-current,
+#   digit-provisioner-password, identity-surfaces-json
+secret:
+  existingSecret: ""
+  values: {}
+
+# Every non-secret BFF setting (backend/identity-bff/src/infrastructure/
+# config.ts), by environment variable name. Defaults are the ones the Ansible/
+# Compose path sets (local-setup/docker-compose.egov-digit.yaml, identity-bff
+# service), adjusted to Kubernetes service names. An empty value is not
+# passed, so the BFF's own default applies.
+#
+# Derived in templates/deployment.yaml and refused here: KEYCLOAK_ISSUER,
+# KEYCLOAK_OIDC_BACKCHANNEL_URL, KEYCLOAK_JWKS_URI, KEYCLOAK_ADMIN_URL,
+# KEYCLOAK_ADMIN_REALM and KEYCLOAK_ORGANIZATION_REALM (from identity.realm
+# and identity.keycloak), IDENTITY_REDIRECT_URI, IDENTITY_POST_LOGIN_REDIRECT and
+# IDENTITY_ALLOWED_ORIGINS (from identity.*). IDENTITY_COOKIE_SECURE and
+# DIGIT_ADMIN_TENANT_ID are derived only while empty here.
+config:
+  PORT: "3000"
+
+  # Keycloak clients. Must match the ids configure-keycloak.sh creates (its
+  # defaults, or the keycloak chart's configure.extraEnv).
+  KEYCLOAK_BFF_CLIENT_ID: "digit-identity-bff"
+  KEYCLOAK_BFF_AUDIENCE: "digit-identity-bff"
+  KEYCLOAK_MAGIC_LINK_CLIENT_ID: "digit-identity-bff-magic-link"
+  KEYCLOAK_EMPLOYEE_CLIENT_ID: "digit-ui-employee"
+  KEYCLOAK_CITIZEN_CLIENT_ID: "digit-ui-citizen"
+  KEYCLOAK_ADMIN_CLIENT_ID: "digit-identity-admin"
+  KEYCLOAK_ALLOWED_ORG_ROLE_CLIENTS: "digit-ui"
+
+  # Browser session and sign-in flow.
+  IDENTITY_SCOPE: ""                      # BFF default: openid profile email organization:*
+  IDENTITY_EMPLOYEE_SCOPE: "openid profile email"
+  IDENTITY_CITIZEN_SCOPE: "openid profile phone"
+  IDENTITY_COOKIE_NAME: ""                # BFF default: digit_identity_session
+  IDENTITY_EMPLOYEE_COOKIE_NAME: ""       # default: <cookie name>_employee
+  IDENTITY_CITIZEN_COOKIE_NAME: ""        # default: <cookie name>_citizen
+  IDENTITY_COOKIE_SECURE: ""              # empty = true unless the public URL is http://
+  IDENTITY_COOKIE_SAME_SITE: "Lax"
+  # Proxies in front of the BFF that append to X-Forwarded-For: ingress-nginx
+  # only. Compose uses 2 (host nginx, then Kong). Add one per L7 load balancer
+  # in front of ingress-nginx that appends to the header.
+  IDENTITY_TRUST_PROXY_HOPS: "1"
+  IDENTITY_LOGIN_TTL_SECONDS: "1800"
+  IDENTITY_SESSION_TTL_SECONDS: ""        # BFF default: 604800
+  IDENTITY_AUTH_RESULT_TTL_SECONDS: "300"
+  IDENTITY_PASSWORD_SETUP_TTL_SECONDS: "900"
+  IDENTITY_PASSWORD_SETUP_LIMIT: "3"
+  IDENTITY_MAGIC_LINK_REQUEST_WINDOW_SECONDS: "1800"
+  IDENTITY_MAGIC_LINK_REQUEST_LIMIT: "3"
+  IDENTITY_AUDIT_STREAM_MAXLEN: "100000"
+
+  # Staff DIGIT credentials: rotate (default) or derived. Derived needs the
+  # identity-credential-keys and identity-credential-key-current Secret keys.
+  IDENTITY_STAFF_CREDENTIAL_MODE: "rotate"
+
+  # Citizen phone OTP (#2189). `log` writes codes to this service's log and is
+  # for development only; `http` POSTs to IDENTITY_OTP_SENDER_URL. Empty = no
+  # channel (sends answer OTP_CHANNEL_UNAVAILABLE). Needs the
+  # identity-citizen-otp-secret Secret key.
+  IDENTITY_OTP_SENDER: ""
+  IDENTITY_OTP_SENDER_URL: ""
+  IDENTITY_OTP_SENDER_TIMEOUT_MS: "10000"
+  IDENTITY_CITIZEN_OTP_TTL_SECONDS: "300"
+  IDENTITY_CITIZEN_OTP_MAX_ATTEMPTS: "5"
+  IDENTITY_CITIZEN_OTP_RESEND_SECONDS: "30"
+  IDENTITY_CITIZEN_OTP_SEND_WINDOW_SECONDS: "3600"
+  IDENTITY_CITIZEN_OTP_PHONE_SEND_LIMIT: "5"
+  IDENTITY_CITIZEN_OTP_IP_SEND_LIMIT: "20"
+  # The fixed-OTP switch egov-user also reads. When true the fixed code signs
+  # in ANY citizen number: development only.
+  CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED: "false"
+  CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE: "123456"
+
+  # Revocation poller and reconciliation.
+  IDENTITY_POLLER_MAX_LAG_SECONDS: "60"
+  IDENTITY_RECONCILE_ON_STARTUP: "true"
+  IDENTITY_RECONCILIATION_INTERVAL_SECONDS: "900"
+  IDENTITY_RECONCILIATION_LEASE_SECONDS: ""  # BFF default: 300
+  # Give each active ROOT tenant listed here (default: DIGIT_ADMIN_TENANT_ID's
+  # root) without an Organization one whose URL slug is the tenant id.
+  IDENTITY_TENANT_ROUTE_BACKFILL: "false"
+  IDENTITY_TENANT_ROUTE_BACKFILL_ROOTS: ""
+
+  # DIGIT. Business calls go through the gateway (DIGIT RBAC applies, as Kong
+  # does under Compose). OTP creation and token revocation go straight to the
+  # service and must never be routed through a public gateway: the OTP
+  # response carries the code.
+  DIGIT_GATEWAY_HOST: "http://gateway.egov:8080"
+  DIGIT_USER_SERVICE_URL: "http://gateway.egov:8080/user"
+  DIGIT_USER_LOGOUT_URL: "http://egov-user.egov:8080/user/_logout"
+  DIGIT_OTP_CREATE_URL: "http://egov-otp.egov:8080/otp/v1/_create"
+  DIGIT_MDMS_SEARCH_URL: "http://gateway.egov:8080/mdms-v2/v1/_search"
+  DIGIT_MDMS_CREATE_URL: "http://gateway.egov:8080/mdms-v2/v2/_create"
+  DIGIT_MDMS_V2_SEARCH_URL: "http://gateway.egov:8080/mdms-v2/v2/_search"
+  DIGIT_MDMS_SCHEMA_SEARCH_URL: "http://gateway.egov:8080/mdms-v2/schema/v1/_search"
+  DIGIT_MDMS_SCHEMA_CREATE_URL: "http://gateway.egov:8080/mdms-v2/schema/v1/_create"
+  DIGIT_ENC_GENERATE_KEY_URL: "http://egov-enc-service.egov:8080/egov-enc-service/crypto/v1/_generatekey"
+  DIGIT_OAUTH_CLIENT_AUTHORIZATION: ""    # BFF default: egov-user-client, no secret
+  # Dedicated DIGIT employee holding only ACCOUNT_ADMIN (password: Secret key
+  # digit-admin-password). Tenant empty = egov-config's state-level-tenant-id.
+  DIGIT_ADMIN_USERNAME: "ADMIN"
+  DIGIT_ADMIN_TENANT_ID: ""
+  DIGIT_ADMIN_USER_TYPE: "EMPLOYEE"
+  DIGIT_MANAGED_BASE_ROLES: "EMPLOYEE"
+  DIGIT_MANAGED_ROLE_ALLOWLIST: "EMPLOYEE,GRO,PGR_LME,DGRO,CSR,SUPERVISOR,AUTO_ESCALATE,PGR_VIEWER,TICKET_REPORT_VIEWER,ACCOUNT_ADMIN,MDMS_ADMIN,LOC_ADMIN,SUPERUSER"
+  DIGIT_ROLE_CLIENT_ID: "digit-ui"
+  DIGIT_CITIZEN_OTP_IDENTITY: "mobileNumber"
+  DIGIT_CITIZEN_ROLES: "CITIZEN"
+  DIGIT_FOUNDATION_SOURCE_TENANT: "pg"
+  DIGIT_TIMEOUT_MS: ""                    # BFF default: 10000
+  DIGIT_TOKEN_REFRESH_SKEW_SECONDS: ""    # BFF default: 60
+  DIGIT_USER_LEASE_SECONDS: ""            # BFF default: 30
+  DIGIT_USER_LEASE_WAIT_MS: ""            # BFF default: 15000
+  DIGIT_PASSWORD_LENGTH: ""               # BFF default: 15
+  # MDMS_ADMIN employee used only to create an identity-ready root tenant
+  # (password: Secret key digit-provisioner-password).
+  DIGIT_PROVISIONER_USERNAME: ""
+  DIGIT_PROVISIONER_TENANT_ID: ""
+
+  # Optional onboarding worker. PGR must share the worker token
+  # (pgr-onboarding-worker-token).
+  ONBOARDING_WORKER_ENABLED: "false"
+  PGR_ONBOARDING_WORKER_URL: "http://pgr-services.egov:8080/pgr-services"
+  ONBOARDING_WORKER_INTERVAL_SECONDS: ""  # BFF default: 15
+  ONBOARDING_WORKER_LEASE_SECONDS: ""     # BFF default: 120
+  ONBOARDING_TENANT_ADMIN_GROUP: "tenant-admins"
+  ONBOARDING_TENANT_ADMIN_ROLES: "TENANT_ADMIN,GRO,ACCOUNT_ADMIN,MDMS_ADMIN,LOC_ADMIN,SUPERUSER"
+
+  # Sessions, login attempts, leases and the audit stream live in Redis. The
+  # platform Redis (charts/backbone-services/redis) has no password; the BFF
+  # takes no Redis credential either.
+  REDIS_HOST: "redis.backbone"
+  REDIS_PORT: "6379"
+  CACHE_PREFIX: "digit-identity"
