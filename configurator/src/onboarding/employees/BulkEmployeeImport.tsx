@@ -37,6 +37,7 @@ import {
 import { parseExcelFile, parseEmployeeExcel } from '@/utils/excelParser';
 import { downloadEmployeeTemplate } from '@/utils/templateBuilder';
 import { reportStepError, trackStepAction } from '../telemetry';
+import { useOnboardingT } from '../i18n';
 import { allowedEmployeeRoles, pickerChoices } from '@/lib/systemRecords';
 import type {
   EmployeeExcelRow,
@@ -61,6 +62,7 @@ interface ParsedEmployee extends EmployeeExcelRow {
  */
 export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () => void; onCancel: () => void }) {
   const { addUndo, state } = useApp();
+  const t = useOnboardingT();
   const targetTenant = state.targetTenant || state.tenant;
 
   const [step, setStep] = useState<Step>('landing');
@@ -129,20 +131,25 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
         // rather than fail every row as "boundary not found".
         if (bounds.length === 0) {
           setRefsError(
-            `No boundaries found for tenant "${targetTenant}". Complete Phase 2 (boundaries) first, then retry.`
+            t('bulk_employees.no_boundaries', 'No boundaries found for tenant "%{tenant}". Complete Phase 2 (boundaries) first, then retry.', {
+              tenant: targetTenant,
+            }),
           );
         }
       } catch (err) {
         console.error('Failed to fetch reference data:', err);
         setRefsError(
-          'Could not load reference data (departments, designations, boundaries) from DIGIT. Employee validation cannot run without it.'
+          t(
+            'bulk_employees.refs_failed',
+            'Could not load reference data (departments, designations, boundaries) from DIGIT. Employee validation cannot run without it.',
+          ),
         );
       } finally {
         setLoadingRefs(false);
       }
     }
     fetchReferenceData();
-  }, [targetTenant, refsRetryKey]);
+  }, [targetTenant, refsRetryKey, t]);
 
   const handleGenerateTemplate = async () => {
     setLoading(true);
@@ -168,7 +175,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
       const result = parseEmployeeExcel(workbook);
 
       if (result.data.length === 0) {
-        setError('No employee data found in Excel file.');
+        setError(t('bulk_employees.no_rows', 'No employee data found in Excel file.'));
         return;
       }
 
@@ -179,7 +186,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
       setStep('preview');
     } catch (err) {
       console.error('Excel parse error:', err);
-      setError('Failed to parse Excel file. Please ensure it is a valid .xlsx file.');
+      setError(t('bulk_employees.unreadable', 'Failed to parse Excel file. Please ensure it is a valid .xlsx file.'));
     } finally {
       setLoading(false);
     }
@@ -210,21 +217,21 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
 
     return rawEmployees.map((emp) => {
       const errors: string[] = [];
-      if (!emp.emailId || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emp.emailId)) errors.push('A valid email is required to invite an employee.');
+      if (!emp.emailId || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emp.emailId)) errors.push(t('bulk_employees.email_required', 'A valid email is required to invite an employee.'));
 
       // Validate department(s) — comma-separated list supported; every code
       // must exist (each becomes an HRMS assignment in buildEmployee)
       if (emp.department) {
         for (const dept of emp.department.split(',').map((d) => d.trim()).filter(Boolean)) {
           if (!deptCodes.includes(dept)) {
-            errors.push(`Department "${dept}" not found`);
+            errors.push(t('bulk_employees.department_not_found', 'Department "%{code}" not found', { code: dept }));
           }
         }
       }
 
       // Validate designation
       if (emp.designation && !desigCodes.includes(emp.designation)) {
-        errors.push(`Designation "${emp.designation}" not found`);
+        errors.push(t('bulk_employees.designation_not_found', 'Designation "%{code}" not found', { code: emp.designation }));
       }
 
       // Validate roles
@@ -232,7 +239,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
         const empRoles = emp.roles.split(',').map((r) => r.trim());
         for (const role of empRoles) {
           if (!validRoles.includes(role)) {
-            errors.push(`Role "${role}" not valid`);
+            errors.push(t('bulk_employees.role_invalid', 'Role "%{code}" not valid', { code: role }));
           }
         }
       }
@@ -246,10 +253,12 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
           if (!resolved.match) {
             if (resolved.reason === 'ambiguous') {
               errors.push(
-                `Boundary name "${boundary}" matches multiple boundaries — use the boundary code instead`
+                t('bulk_employees.boundary_ambiguous', 'Boundary name "%{name}" matches multiple boundaries — use the boundary code instead', {
+                  name: boundary,
+                }),
               );
             } else {
-              errors.push(`Boundary "${boundary}" not found`);
+              errors.push(t('bulk_employees.boundary_not_found', 'Boundary "%{name}" not found', { name: boundary }));
             }
           }
         }
@@ -266,7 +275,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
             errors.push(mobileRules.errorMessage);
           }
         } else if (!/^\d{9,10}$/.test(emp.mobileNumber)) {
-          errors.push('Mobile number must be 9-10 digits');
+          errors.push(t('bulk_employees.mobile_digits', 'Mobile number must be 9-10 digits'));
         }
       }
 
@@ -274,7 +283,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
       // to be well-formed. The parser already normalizes every supported cell
       // shape to YYYY-MM-DD, so this stays a defensive double-check.
       if (emp.dob && !/^\d{4}-\d{2}-\d{2}$/.test(emp.dob)) {
-        errors.push('Date of birth malformed (expected YYYY-MM-DD)');
+        errors.push(t('bulk_employees.dob_format', 'Date of birth malformed (expected YYYY-MM-DD)'));
       }
 
       return {
@@ -302,7 +311,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
     try {
       for (let i = 0; i < validEmployees.length; i++) {
         const emp = validEmployees[i];
-        setProgressMessage(`Creating ${emp.name}...`);
+        setProgressMessage(t('bulk_employees.creating_named', 'Creating %{name}...', { name: emp.name }));
 
         try {
           // Parse roles (empRoles to avoid shadowing the `roles` state)
@@ -329,8 +338,10 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
                 if (!resolved.match) {
                   throw new Error(
                     resolved.reason === 'ambiguous'
-                      ? `Jurisdiction "${bTrimmed}" matches multiple boundaries — use the boundary code`
-                      : `Jurisdiction "${bTrimmed}" does not resolve to a known boundary`
+                      ? t('bulk_employees.jurisdiction_ambiguous', 'Jurisdiction "%{name}" matches multiple boundaries — use the boundary code', {
+                          name: bTrimmed,
+                        })
+                      : t('bulk_employees.jurisdiction_unknown', 'Jurisdiction "%{name}" does not resolve to a known boundary', { name: bTrimmed })
                   );
                 }
                 return {
@@ -406,7 +417,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
       } else if (err instanceof Error) {
         setError(err.message);
       } else {
-        setError('Failed to create employees. Please try again.');
+        setError(t('bulk_employees.create_failed', 'Failed to create employees. Please try again.'));
       }
       setStep('preview');
     } finally {
@@ -420,7 +431,13 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
 
   const handleDownloadInvitations = () => {
     // Generate CSV content
-    const headers = ['Name', 'Email', 'Mobile', 'Department', 'Designation'];
+    const headers = [
+      t('common.name', 'Name'),
+      t('employees.email', 'Email'),
+      t('bulk_employees.mobile', 'Mobile'),
+      t('departments.department', 'Department'),
+      t('departments.designation', 'Designation'),
+    ];
     const rows = createdEmployees.map((emp) => [
       emp.user.name,
       emp.user.emailId || '',
@@ -474,7 +491,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
               disabled={loadingRefs}
               className="flex-shrink-0"
             >
-              {loadingRefs ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Retry'}
+              {loadingRefs ? <Loader2 className="w-4 h-4 animate-spin" /> : t('bulk_employees.retry', 'Retry')}
             </Button>
           </AlertDescription>
         </Alert>
@@ -498,37 +515,37 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
         <DigitCard>
           <Alert variant="info" className="mb-4 sm:mb-6">
             <AlertDescription>
-              <strong className="block mb-2 text-sm sm:text-base">What You'll Do:</strong>
+              <strong className="block mb-2 text-sm sm:text-base">{t('bulk_employees.what_youll_do', 'What You’ll Do:')}</strong>
               <ul className="text-xs sm:text-sm space-y-1">
-                <li>• Generate a dynamic employee template</li>
-                <li>• Fill in employee details (name, mobile, department, role)</li>
-                <li>• Bulk create employees and invite them by email</li>
+                <li>• {t('bulk_employees.do_template', 'Generate a dynamic employee template')}</li>
+                <li>• {t('bulk_employees.do_fill', 'Fill in employee details (name, mobile, department, role)')}</li>
+                <li>• {t('bulk_employees.do_create', 'Bulk create employees and invite them by email')}</li>
               </ul>
             </AlertDescription>
           </Alert>
 
           <div className="bg-primary/5 border border-primary/20 rounded p-3 sm:p-4 mb-4 sm:mb-6">
             <p className="font-condensed font-medium text-foreground mb-2 text-sm sm:text-base">
-              Template: Employee_Master_Dynamic.xlsx
+              {t('bulk_employees.template_file', 'Template: %{file}', { file: 'Employee_Master_Dynamic.xlsx' })}
             </p>
             <p className="text-xs sm:text-sm text-muted-foreground">
-              {loadingRefs ? 'Loading reference data...' : 'Available data from DIGIT:'}
+              {loadingRefs ? t('bulk_employees.loading_refs', 'Loading reference data...') : t('bulk_employees.available', 'Available data from DIGIT:')}
             </p>
             <ul className="text-xs sm:text-sm text-muted-foreground mt-1 space-y-1">
-              <li>• Departments: {departments.length} loaded</li>
-              <li>• Designations: {designations.length} loaded</li>
-              <li>• Roles: {roles.length} available</li>
-              <li>• Boundaries: {boundaries.length} loaded</li>
+              <li>• {t('bulk_employees.departments_loaded', 'Departments: %{count} loaded', { count: departments.length })}</li>
+              <li>• {t('bulk_employees.designations_loaded', 'Designations: %{count} loaded', { count: designations.length })}</li>
+              <li>• {t('bulk_employees.roles_available', 'Roles: %{count} available', { count: roles.length })}</li>
+              <li>• {t('bulk_employees.boundaries_loaded', 'Boundaries: %{count} loaded', { count: boundaries.length })}</li>
             </ul>
           </div>
 
           <div className="flex items-center justify-between gap-3">
             <Button variant="ghost" size="sm" onClick={onCancel} className="gap-1.5 text-primary hover:text-primary">
               <ArrowLeft className="w-4 h-4" />
-              Back
+              {t('step.back', 'Back')}
             </Button>
             <SubmitBar
-              label={loading || loadingRefs ? 'Loading...' : 'Get the template'}
+              label={loading || loadingRefs ? t('bulk_employees.loading', 'Loading...') : t('bulk_employees.get_template', 'Get the template')}
               onSubmit={handleGenerateTemplate}
               disabled={loading || loadingRefs || !!refsError}
               icon={
@@ -546,56 +563,56 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
       {/* Generate Template */}
       {step === 'generate' && (
         <DigitCard>
-          <SubHeader>Step 4.1: Generate Employee Template</SubHeader>
+          <SubHeader>{t('bulk_employees.generate_title', 'Step 4.1: Generate Employee Template')}</SubHeader>
 
           <div className="p-4 bg-success/10 border border-success/20 rounded mb-4 sm:mb-6">
             <div className="flex items-center gap-2 text-success mb-2">
               <Check className="w-5 h-5" />
-              <strong className="text-sm font-condensed">Template Generated!</strong>
+              <strong className="text-sm font-condensed">{t('bulk_employees.generated', 'Template Generated!')}</strong>
             </div>
             <p className="text-xs sm:text-sm mb-2 text-foreground">
               Employee_Master_Dynamic_{targetTenant.toUpperCase()}.xlsx
             </p>
 
             <div className="grid grid-cols-2 gap-2 sm:gap-4 text-xs sm:text-sm mb-3 sm:mb-4">
-              <div className="text-success">✓ Departments: {departments.length} loaded</div>
-              <div className="text-success">✓ Designations: {designations.length} loaded</div>
-              <div className="text-success">✓ Roles: {roles.length} available</div>
-              <div className="text-success">✓ Boundaries: {boundaries.length} loaded</div>
+              <div className="text-success">✓ {t('bulk_employees.departments_loaded', 'Departments: %{count} loaded', { count: departments.length })}</div>
+              <div className="text-success">✓ {t('bulk_employees.designations_loaded', 'Designations: %{count} loaded', { count: designations.length })}</div>
+              <div className="text-success">✓ {t('bulk_employees.roles_available', 'Roles: %{count} available', { count: roles.length })}</div>
+              <div className="text-success">✓ {t('bulk_employees.boundaries_loaded', 'Boundaries: %{count} loaded', { count: boundaries.length })}</div>
             </div>
 
-            <p className="text-xs sm:text-sm mb-2 text-muted-foreground">Required columns:</p>
+            <p className="text-xs sm:text-sm mb-2 text-muted-foreground">{t('bulk_employees.required_columns', 'Required columns:')}</p>
             <ul className="text-xs sm:text-sm space-y-1 mb-3 sm:mb-4 text-muted-foreground">
               <li>
-                • <strong>name</strong> - Employee full name
+                • <strong>name</strong> - {t('bulk_employees.col_name', 'Employee full name')}
               </li>
               <li>
                 • <strong>mobileNumber</strong> -{' '}
                 {mobileRules
                   ? [
-                      'mobile number',
+                      t('bulk_employees.col_mobile', 'mobile number'),
                       mobileRules.countryCode ? `(${mobileRules.countryCode})` : null,
-                      `matching ${mobileRules.mobileNumberRegex}`,
+                      t('bulk_employees.col_mobile_matching', 'matching %{pattern}', { pattern: mobileRules.mobileNumberRegex }),
                     ]
                       .filter(Boolean)
                       .join(' ')
-                  : 'mobile number (validated against the tenant rule)'}
+                  : t('bulk_employees.col_mobile_rule', 'mobile number (validated against the tenant rule)')}
               </li>
               <li>
-                • <strong>department</strong> - Department code
+                • <strong>department</strong> - {t('bulk_employees.col_department', 'Department code')}
               </li>
               <li>
-                • <strong>designation</strong> - Designation code
+                • <strong>designation</strong> - {t('bulk_employees.col_designation', 'Designation code')}
               </li>
               <li>
-                • <strong>roles</strong> - Comma-separated role codes
+                • <strong>roles</strong> - {t('bulk_employees.col_roles', 'Comma-separated role codes')}
               </li>
               <li>
-                • <strong>jurisdictions</strong> - Comma-separated boundary codes
+                • <strong>jurisdictions</strong> - {t('bulk_employees.col_jurisdictions', 'Comma-separated boundary codes')}
               </li>
               <li>
-                • <strong>dob</strong> - Date of birth (YYYY-MM-DD),{' '}
-                <em>optional</em>
+                • <strong>dob</strong> - {t('bulk_employees.col_dob', 'Date of birth (YYYY-MM-DD)')},{' '}
+                <em>{t('bulk_employees.optional', 'optional')}</em>
               </li>
             </ul>
 
@@ -605,7 +622,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
               onClick={handleDownloadTemplate}
             >
               <Download className="w-4 h-4 mr-2" />
-              Download Template
+              {t('bulk_employees.download_template', 'Download Template')}
             </Button>
           </div>
 
@@ -617,16 +634,16 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
               <>
                 <Loader2 className="w-8 h-8 text-primary mx-auto mb-3 animate-spin" />
                 <p className="text-sm font-condensed font-medium text-foreground">
-                  Parsing Excel file...
+                  {t('bulk_employees.parsing', 'Parsing Excel file...')}
                 </p>
               </>
             ) : (
               <>
                 <Upload className="w-8 h-8 text-primary mx-auto mb-3" />
                 <p className="text-sm font-condensed font-medium text-foreground mb-2">
-                  Drop your filled employee template here
+                  {t('bulk_employees.drop_here', 'Drop your filled employee template here')}
                 </p>
-                <p className="text-xs text-muted-foreground">or click to browse</p>
+                <p className="text-xs text-muted-foreground">{t('bulk_employees.or_browse', 'or click to browse')}</p>
               </>
             )}
           </div>
@@ -639,7 +656,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
               className="gap-1.5 text-primary hover:text-primary"
             >
               <ArrowLeft className="w-4 h-4" />
-              Back
+              {t('step.back', 'Back')}
             </Button>
           </div>
         </DigitCard>
@@ -651,7 +668,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
           <div className="flex items-center gap-2 text-primary mb-3 sm:mb-4">
             <Check className="w-4 h-4 sm:w-5 sm:h-5" />
             <span className="font-medium text-sm sm:text-base truncate">
-              File: {uploadedFile?.name}
+              {t('bulk_employees.file', 'File: %{name}', { name: uploadedFile?.name ?? '' })}
             </span>
           </div>
 
@@ -660,13 +677,13 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/50">
-                    <TableHead className="text-xs sm:text-sm font-condensed">Status</TableHead>
-                    <TableHead className="text-xs sm:text-sm font-condensed">Name</TableHead>
-                    <TableHead className="text-xs sm:text-sm font-condensed">Mobile</TableHead>
-                    <TableHead className="text-xs sm:text-sm font-condensed">DOB</TableHead>
-                    <TableHead className="text-xs sm:text-sm font-condensed">Dept</TableHead>
-                    <TableHead className="text-xs sm:text-sm font-condensed">Designation</TableHead>
-                    <TableHead className="text-xs sm:text-sm font-condensed">Roles</TableHead>
+                    <TableHead className="text-xs sm:text-sm font-condensed">{t('bulk_employees.status', 'Status')}</TableHead>
+                    <TableHead className="text-xs sm:text-sm font-condensed">{t('common.name', 'Name')}</TableHead>
+                    <TableHead className="text-xs sm:text-sm font-condensed">{t('bulk_employees.mobile', 'Mobile')}</TableHead>
+                    <TableHead className="text-xs sm:text-sm font-condensed">{t('bulk_employees.dob', 'DOB')}</TableHead>
+                    <TableHead className="text-xs sm:text-sm font-condensed">{t('bulk_employees.dept', 'Dept')}</TableHead>
+                    <TableHead className="text-xs sm:text-sm font-condensed">{t('departments.designation', 'Designation')}</TableHead>
+                    <TableHead className="text-xs sm:text-sm font-condensed">{t('bulk_employees.roles', 'Roles')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -675,11 +692,11 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
                       <TableCell>
                         {emp.status === 'valid' ? (
                           <Badge className="gap-1 text-xs bg-success text-white">
-                            <Check className="w-3 h-3" /> Valid
+                            <Check className="w-3 h-3" /> {t('bulk_employees.valid', 'Valid')}
                           </Badge>
                         ) : (
                           <Badge variant="destructive" className="gap-1 text-xs">
-                            <AlertTriangle className="w-3 h-3" /> Error
+                            <AlertTriangle className="w-3 h-3" /> {t('bulk_employees.error', 'Error')}
                           </Badge>
                         )}
                       </TableCell>
@@ -699,23 +716,23 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
               </Table>
               {employees.length > 15 && (
                 <p className="text-xs text-muted-foreground text-center py-2">
-                  Showing first 15 of {employees.length} employees
+                  {t('bulk_employees.showing_first', 'Showing first %{shown} of %{total} employees', { shown: 15, total: employees.length })}
                 </p>
               )}
             </div>
           </div>
 
           <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-4">
-            Summary: {employees.length} total |{' '}
-            <span className="text-success">{validCount} valid</span> |{' '}
-            <span className="text-destructive">{errorCount} errors</span>
+            {t('bulk_employees.summary_total', 'Summary: %{count} total', { count: employees.length })} |{' '}
+            <span className="text-success">{t('bulk_employees.summary_valid', '%{count} valid', { count: validCount })}</span> |{' '}
+            <span className="text-destructive">{t('bulk_employees.summary_errors', '%{count} errors', { count: errorCount })}</span>
           </p>
 
           {errorCount > 0 && (
             <Alert variant="warning" className="mb-4 sm:mb-6">
               <AlertCircle className="w-4 h-4" />
               <AlertDescription className="text-xs sm:text-sm">
-                <p className="font-medium mb-1">Validation errors found:</p>
+                <p className="font-medium mb-1">{t('bulk_employees.errors_found', 'Validation errors found:')}</p>
                 <ul className="list-disc list-inside space-y-1">
                   {employees
                     .filter((e) => e.status === 'error')
@@ -725,7 +742,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
                         {e.name}: {e.error}
                       </li>
                     ))}
-                  {errorCount > 3 && <li>...and {errorCount - 3} more errors</li>}
+                  {errorCount > 3 && <li>{t('bulk_employees.more_errors', '...and %{count} more errors', { count: errorCount - 3 })}</li>}
                 </ul>
               </AlertDescription>
             </Alert>
@@ -739,7 +756,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
               className="gap-1.5 text-primary hover:text-primary"
             >
               <ArrowLeft className="w-4 h-4" />
-              Back
+              {t('step.back', 'Back')}
             </Button>
             <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
               {errorCount > 0 && (
@@ -749,11 +766,11 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
                   onClick={() => document.getElementById('employee-file-upload')?.click()}
                   className="border-primary text-primary hover:bg-primary/10"
                 >
-                  Re-upload Fixed File
+                  {t('bulk_employees.reupload', 'Re-upload Fixed File')}
                 </Button>
               )}
               <SubmitBar
-                label={`Create ${validCount} Employees`}
+                label={t('bulk_employees.create_count', 'Create %{count} Employees', { count: validCount })}
                 onSubmit={() => setShowConfirmDialog(true)}
                 disabled={validCount === 0}
                 icon={<ChevronRight className="w-4 h-4" />}
@@ -766,7 +783,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
       {/* Creating */}
       {step === 'creating' && (
         <DigitCard>
-          <SubHeader>Step 4.3: Creating Employees</SubHeader>
+          <SubHeader>{t('bulk_employees.creating_title', 'Step 4.3: Creating Employees')}</SubHeader>
 
           <div className="mb-4 sm:mb-6">
             <div className="flex items-center justify-between mb-2">
@@ -775,8 +792,10 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
             </div>
             <Progress value={progress} className="h-2" />
             <p className="text-xs sm:text-sm text-muted-foreground mt-2">
-              {createdCount} of {validCount} employees created
-              {failedCount > 0 && <span className="text-destructive"> ({failedCount} failed)</span>}
+              {t('bulk_employees.created_of', '%{created} of %{total} employees created', { created: createdCount, total: validCount })}
+              {failedCount > 0 && (
+                <span className="text-destructive"> {t('bulk_employees.failed_paren', '(%{count} failed)', { count: failedCount })}</span>
+              )}
             </p>
           </div>
 
@@ -786,10 +805,10 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
                 <TableHeader>
                   <TableRow className="bg-muted/50">
                     <TableHead className="text-xs sm:text-sm font-condensed">#</TableHead>
-                    <TableHead className="text-xs sm:text-sm font-condensed">Name</TableHead>
-                    <TableHead className="text-xs sm:text-sm font-condensed">Employee</TableHead>
-                    <TableHead className="text-xs sm:text-sm font-condensed">User Account</TableHead>
-                    <TableHead className="text-xs sm:text-sm font-condensed">Assignments</TableHead>
+                    <TableHead className="text-xs sm:text-sm font-condensed">{t('common.name', 'Name')}</TableHead>
+                    <TableHead className="text-xs sm:text-sm font-condensed">{t('bulk_employees.employee', 'Employee')}</TableHead>
+                    <TableHead className="text-xs sm:text-sm font-condensed">{t('bulk_employees.user_account', 'User Account')}</TableHead>
+                    <TableHead className="text-xs sm:text-sm font-condensed">{t('bulk_employees.assignments', 'Assignments')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -807,20 +826,20 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
                         <TableCell className="font-medium text-xs sm:text-sm">{emp.name}</TableCell>
                         <TableCell className="text-xs sm:text-sm">
                           {isSkipped ? (
-                            <span className="text-muted-foreground">⏭️ Skipped</span>
+                            <span className="text-muted-foreground">⏭️ {t('bulk_employees.skipped', 'Skipped')}</span>
                           ) : isCreated ? (
-                            <span className="text-success">✓ Created</span>
+                            <span className="text-success">✓ {t('bulk_employees.created', 'Created')}</span>
                           ) : isCreating ? (
                             <Loader2 className="w-4 h-4 text-primary animate-spin" />
                           ) : (
-                            <span className="text-muted-foreground">○ Pending</span>
+                            <span className="text-muted-foreground">○ {t('bulk_employees.pending', 'Pending')}</span>
                           )}
                         </TableCell>
                         <TableCell className="text-xs sm:text-sm">
-                          {isSkipped ? '-' : isCreated ? <span className="text-success">✓ Created</span> : '-'}
+                          {isSkipped ? '-' : isCreated ? <span className="text-success">✓ {t('bulk_employees.created', 'Created')}</span> : '-'}
                         </TableCell>
                         <TableCell className="text-xs sm:text-sm">
-                          {isSkipped ? '-' : isCreated ? <span className="text-success">✓ Done</span> : '-'}
+                          {isSkipped ? '-' : isCreated ? <span className="text-success">✓ {t('bulk_employees.done', 'Done')}</span> : '-'}
                         </TableCell>
                       </TableRow>
                     );
@@ -829,7 +848,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
               </Table>
               {employees.length > 10 && (
                 <p className="text-xs text-muted-foreground text-center py-2">
-                  Showing first 10 of {employees.length} employees
+                  {t('bulk_employees.showing_first', 'Showing first %{shown} of %{total} employees', { shown: 10, total: employees.length })}
                 </p>
               )}
             </div>
@@ -844,15 +863,18 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
             successful={createdCount > 0 && failedCount === 0}
             message={
               createdCount > 0 && failedCount === 0
-                ? 'Employees Created Successfully!'
+                ? t('bulk_employees.all_created', 'Employees Created Successfully!')
                 : createdCount > 0
-                ? `Created ${createdCount}, ${failedCount} failed`
-                : `No employees created — ${failedCount} failed`
+                ? t('bulk_employees.some_created', 'Created %{created}, %{failed} failed', { created: createdCount, failed: failedCount })
+                : t('bulk_employees.none_created', 'No employees created — %{failed} failed', { failed: failedCount })
             }
             info={
               failedCount > 0
-                ? `Tenant: ${targetTenant.toUpperCase()} • Check the failure list below and retry the failed rows.`
-                : `Tenant: ${targetTenant.toUpperCase()}`
+                ? `${t('bulk_employees.tenant', 'Tenant: %{tenant}', { tenant: targetTenant.toUpperCase() })} • ${t(
+                    'bulk_employees.check_failures',
+                    'Check the failure list below and retry the failed rows.',
+                  )}`
+                : t('bulk_employees.tenant', 'Tenant: %{tenant}', { tenant: targetTenant.toUpperCase() })
             }
           />
 
@@ -860,27 +882,27 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
             <Table>
               <TableBody>
                 <TableRow>
-                  <TableCell className="px-3 sm:px-4 py-2 text-xs sm:text-sm">✓ Created</TableCell>
+                  <TableCell className="px-3 sm:px-4 py-2 text-xs sm:text-sm">✓ {t('bulk_employees.created', 'Created')}</TableCell>
                   <TableCell className="px-3 sm:px-4 py-2 font-medium text-xs sm:text-sm text-success">
                     {createdCount}
                   </TableCell>
                 </TableRow>
                 {failedCount > 0 && (
                   <TableRow>
-                    <TableCell className="px-3 sm:px-4 py-2 text-xs sm:text-sm">✗ Failed</TableCell>
+                    <TableCell className="px-3 sm:px-4 py-2 text-xs sm:text-sm">✗ {t('bulk_employees.failed', 'Failed')}</TableCell>
                     <TableCell className="px-3 sm:px-4 py-2 font-medium text-xs sm:text-sm text-destructive">
                       {failedCount}
                     </TableCell>
                   </TableRow>
                 )}
                 <TableRow>
-                  <TableCell className="px-3 sm:px-4 py-2 text-xs sm:text-sm">⏭️ Skipped (errors)</TableCell>
+                  <TableCell className="px-3 sm:px-4 py-2 text-xs sm:text-sm">⏭️ {t('bulk_employees.skipped_errors', 'Skipped (errors)')}</TableCell>
                   <TableCell className="px-3 sm:px-4 py-2 font-medium text-xs sm:text-sm text-muted-foreground">
                     {errorCount}
                   </TableCell>
                 </TableRow>
                 <TableRow>
-                  <TableCell className="px-3 sm:px-4 py-2 text-xs sm:text-sm">Total</TableCell>
+                  <TableCell className="px-3 sm:px-4 py-2 text-xs sm:text-sm">{t('bulk_employees.total', 'Total')}</TableCell>
                   <TableCell className="px-3 sm:px-4 py-2 font-medium text-xs sm:text-sm text-primary">
                     {employees.length}
                   </TableCell>
@@ -896,7 +918,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription className="text-xs sm:text-sm">
                 <p className="mb-2">
-                  <strong>Failed rows:</strong>
+                  <strong>{t('bulk_employees.failed_rows', 'Failed rows:')}</strong>
                 </p>
                 <ul className="space-y-1">
                   {failures.map((f, idx) => (
@@ -912,16 +934,14 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
           <Alert variant="info" className="text-left mt-4 sm:mt-6 max-w-md mx-auto">
             <AlertDescription className="text-xs sm:text-sm">
               <p className="mb-2">
-                <strong>Each employee received:</strong>
+                <strong>{t('bulk_employees.each_received', 'Each employee received:')}</strong>
               </p>
               <ul className="space-y-1">
-                <li>• HRMS employee record</li>
-                <li>• User account (username: employee code)</li>
-                <li>
-                  • New employees receive a secure password setup email.
-                </li>
-                <li>• Role assignments</li>
-                <li>• Boundary jurisdiction</li>
+                <li>• {t('bulk_employees.got_record', 'HRMS employee record')}</li>
+                <li>• {t('bulk_employees.got_account', 'User account (username: employee code)')}</li>
+                <li>• {t('bulk_employees.got_email', 'New employees receive a secure password setup email.')}</li>
+                <li>• {t('bulk_employees.got_roles', 'Role assignments')}</li>
+                <li>• {t('bulk_employees.got_jurisdiction', 'Boundary jurisdiction')}</li>
               </ul>
             </AlertDescription>
           </Alert>
@@ -935,10 +955,10 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
               disabled={createdEmployees.length === 0}
             >
               <Download className="w-4 h-4 mr-2" />
-              Download invitations CSV
+              {t('bulk_employees.download_csv', 'Download invitations CSV')}
             </Button>
             <SubmitBar
-              label="Back to Employees"
+              label={t('bulk_employees.back_to_employees', 'Back to Employees')}
               onSubmit={onDone}
               icon={<ChevronRight className="w-4 h-4" />}
             />
@@ -954,15 +974,14 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
               <div className="w-8 h-8 sm:w-10 sm:h-10 bg-primary/10 border-2 border-primary rounded flex items-center justify-center flex-shrink-0">
                 <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
               </div>
-              Confirm Employee Creation
+              {t('bulk_employees.confirm_title', 'Confirm Employee Creation')}
             </DialogTitle>
             <DialogDescription className="text-xs sm:text-sm">
-              You're about to create <strong className="text-primary">{validCount} employees</strong>.
-              This will:
+              {t('bulk_employees.confirm_intro', 'You’re about to create %{count} employees. This will:', { count: validCount })}
               <ul className="mt-2 space-y-1">
-                <li>• Create {validCount} HRMS records</li>
-                <li>• Create {validCount} user accounts</li>
-                <li>• Assign roles and jurisdictions</li>
+                <li>• {t('bulk_employees.confirm_records', 'Create %{count} HRMS records', { count: validCount })}</li>
+                <li>• {t('bulk_employees.confirm_accounts', 'Create %{count} user accounts', { count: validCount })}</li>
+                <li>• {t('bulk_employees.confirm_roles', 'Assign roles and jurisdictions')}</li>
               </ul>
             </DialogDescription>
           </DialogHeader>
@@ -970,7 +989,8 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
           {errorCount > 0 && (
             <Alert variant="warning">
               <AlertDescription className="text-xs sm:text-sm">
-                <strong>Note:</strong> {errorCount} row(s) with errors will be skipped.
+                <strong>{t('bulk_employees.note', 'Note:')}</strong>{' '}
+                {t('bulk_employees.rows_skipped', '%{count} row(s) with errors will be skipped.', { count: errorCount })}
               </AlertDescription>
             </Alert>
           )}
@@ -982,9 +1002,9 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
               onClick={() => setShowConfirmDialog(false)}
               className="border-border"
             >
-              Cancel
+              {t('common.cancel', 'Cancel')}
             </Button>
-            <SubmitBar label={`Create ${validCount} Employees`} onSubmit={handleCreateEmployees} />
+            <SubmitBar label={t('bulk_employees.create_count', 'Create %{count} Employees', { count: validCount })} onSubmit={handleCreateEmployees} />
           </DialogFooter>
         </DialogContent>
       </Dialog>
