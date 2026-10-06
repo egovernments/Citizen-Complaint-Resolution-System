@@ -169,22 +169,21 @@ defaults the Ansible path uses. Notable ones:
 "identity-bootstrap — reconcile Organizations realm and BFF clients" runs on
 every deploy, and it is idempotent.
 
-- It runs in the Keycloak image (bash, `kcadm.sh` and jq). The script's
-  `docker exec` calls into the keycloak container become local calls through a
-  small shim (`files/docker`), and kcadm talks to the Service
-  (`KEYCLOAK_KCADM_SERVER`).
+- It runs in the Keycloak image (bash, `kcadm.sh` and jq), which carries the
+  script and `realm.json` at `/opt/identity/` (`keycloak/Dockerfile`), so the
+  reconcile always matches the image it runs in and the chart holds no copies.
+  With `KEYCLOAK_KCADM_SERVER` set the script runs kcadm in the pod, against
+  the Service, instead of through `docker exec` into a keycloak container.
+  The Keycloak tag must therefore be a build that carries `/opt/identity/`.
 - Helm starts it only after the Keycloak Deployment is Ready (the release is
   installed with `wait: true`), so it does not wait for Keycloak's first start.
   It retries its first kcadm login up to `configure.loginAttempts` times, 5 s
   apart, as the bootstrap admin from the Secret. With that admin given, the
   script creates no temporary admin.
-- The chart carries copies of the script and `realm.json` in `files/` (helm
-  reads only files inside a chart). `local-setup/tests/static/helm-identity.test.ts`
-  fails when they differ from `keycloak/`.
 - The hook runs on a Helm install or upgrade, not on every `helmfile apply`:
-  apply upgrades the release only when its diff is non-empty. Changing the
-  chart's copy of the script or `realm.json` changes the ConfigMap, which is
-  such a diff, and so is a rotated `existingSecret` (next section).
+  apply upgrades the release only when its diff is non-empty. A new Keycloak
+  image tag (which is how a changed script or `realm.json` arrives) is such a
+  diff, and so is a rotated `existingSecret` (next section).
   `helmfile sync` upgrades, and so reruns the Job, every time.
 - The `keycloak` release is installed with `wait: true` and `identity-bff`
   `needs` it, so the realm exists before the BFF starts.

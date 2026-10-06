@@ -45,7 +45,8 @@ ingress:
 
 # Container Configs
 # Built from keycloak/Dockerfile: Keycloak 26.7.3 plus the magic-link provider,
-# the Keycloakify login themes and jq (which the realm-configure Job needs).
+# the Keycloakify login themes, and jq, configure-keycloak.sh and realm.json
+# (which the realm-configure Job runs).
 # Same image and default tag as the Compose stack (IDENTITY_KEYCLOAK_IMAGE).
 image:
   repository: "identity-keycloak"
@@ -98,8 +99,9 @@ secret:
 extraServerEnv: {}
 
 # Realm reconcile: a Helm post-install/post-upgrade hook Job that runs
-# keycloak/configure-keycloak.sh (a copy in files/, kept identical by
-# local-setup/tests/static/helm-identity.test.ts) with keycloak/realm.json.
+# keycloak/configure-keycloak.sh with keycloak/realm.json, both from the
+# Keycloak image (/opt/identity/, keycloak/Dockerfile): the tag above must be a
+# build that carries them.
 # Idempotent. It runs on every Helm install and upgrade: on every
 # `helmfile sync`, but on `helmfile apply` only when the diff is non-empty.
 # With existingSecret, the Job carries a checksum of that Secret's data (read

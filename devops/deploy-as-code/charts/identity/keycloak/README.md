@@ -11,6 +11,7 @@ Installed by `../identity-helmfile.yaml` when `identity.enabled` is true.
 Setup, the Secret's keys, SMTP and the Job are documented in
 [docs/setup/deployment/helm-identity.md](../../../../../docs/setup/deployment/helm-identity.md).
 
-`files/configure-keycloak.sh` and `files/realm.json` are copies (helm reads
-only files inside a chart); edit `keycloak/` and copy them here.
-`local-setup/tests/static/helm-identity.test.ts` fails when they differ.
+The Job runs the script and `realm.json` baked into the Keycloak image at
+`/opt/identity/` (`keycloak/Dockerfile`), so the chart carries no copies: a
+change to either ships with the next image build, and the Job always matches
+the image it runs in.

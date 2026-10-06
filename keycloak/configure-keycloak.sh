@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Idempotently configures the shared Organizations realm used by the identity
-# BFF. Run on the Docker host after the keycloak container is healthy.
+# BFF. Run on the Docker host after the keycloak container is healthy, or,
+# with KEYCLOAK_KCADM_SERVER set, inside the Keycloak image itself (the Helm
+# realm-configure Job runs the copy baked into it at /opt/identity/).
 #
 # Admin access is ephemeral: unless KC_BOOTSTRAP_ADMIN_USERNAME/PASSWORD are
 # exported for this run, a random temporary master-realm admin is created with
@@ -24,6 +26,30 @@ readonly KEYCLOAK_CONTAINER=${KEYCLOAK_CONTAINER:-keycloak}
 # the Keycloak container under Compose. The Helm realm-configure Job runs kcadm
 # in its own pod and points this at the Keycloak Service instead.
 readonly KCADM_SERVER=${KEYCLOAK_KCADM_SERVER:-http://127.0.0.1:8180}
+
+# Runs a command where kcadm.sh lives. Under Compose that is the keycloak
+# container, through `docker exec`. With KEYCLOAK_KCADM_SERVER set the script
+# already runs in the Keycloak image and kcadm reaches the server over the
+# network, so the command runs here, with the same -e variables.
+# Usage: in_keycloak [-i] [-e NAME=VALUE]... COMMAND [ARG]...
+in_keycloak() {
+  local opts=() assignments=()
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -i) opts+=(-i); shift ;;
+      -e) opts+=(-e "$2"); assignments+=("$2"); shift 2 ;;
+      *) break ;;
+    esac
+  done
+  if [ -z "${KEYCLOAK_KCADM_SERVER:-}" ]; then
+    docker exec ${opts[@]+"${opts[@]}"} "$KEYCLOAK_CONTAINER" "$@"
+  else
+    (
+      for assignment in ${assignments[@]+"${assignments[@]}"}; do export "${assignment?}"; done
+      exec "$@"
+    )
+  fi
+}
 readonly KC_CONFIG=/tmp/identity-bff-kcadm.config
 readonly BFF_CLIENT=digit-identity-bff
 # Removed design: Standard Token Exchange to this audience is no longer used.
@@ -98,20 +124,25 @@ readonly ALLOWED_ORIGINS_JSON
 
 temporary_admin=false
 if [ -z "${KC_BOOTSTRAP_ADMIN_USERNAME:-}" ] || [ -z "${KC_BOOTSTRAP_ADMIN_PASSWORD:-}" ]; then
+  if [ -n "${KEYCLOAK_KCADM_SERVER:-}" ]; then
+    # kc.sh bootstrap-admin works only on the server's own database.
+    printf 'KEYCLOAK_KCADM_SERVER is set: give KC_BOOTSTRAP_ADMIN_USERNAME and KC_BOOTSTRAP_ADMIN_PASSWORD\n' >&2
+    exit 1
+  fi
   KC_BOOTSTRAP_ADMIN_USERNAME="bootstrap-$(openssl rand -hex 6)"
   KC_BOOTSTRAP_ADMIN_PASSWORD=$(openssl rand -base64 36 | tr -d '\n')
   temporary_admin=true
-  docker exec \
+  in_keycloak \
     -e KC_BOOTSTRAP_ADMIN_USERNAME="$KC_BOOTSTRAP_ADMIN_USERNAME" \
     -e KC_BOOTSTRAP_ADMIN_PASSWORD="$KC_BOOTSTRAP_ADMIN_PASSWORD" \
-    "$KEYCLOAK_CONTAINER" /opt/keycloak/bin/kc.sh bootstrap-admin user \
+    /opt/keycloak/bin/kc.sh bootstrap-admin user \
     --username:env KC_BOOTSTRAP_ADMIN_USERNAME \
     --password:env KC_BOOTSTRAP_ADMIN_PASSWORD \
     --http-management-port=9001 >/dev/null
 fi
 
 kc() {
-  docker exec "$KEYCLOAK_CONTAINER" /opt/keycloak/bin/kcadm.sh "$@" --config "$KC_CONFIG"
+  in_keycloak /opt/keycloak/bin/kcadm.sh "$@" --config "$KC_CONFIG"
 }
 
 cleanup() {
@@ -120,7 +151,7 @@ cleanup() {
       jq -r '.[0].id // empty' || true)
     if [ -n "$admin_id" ]; then kc delete "users/$admin_id" -r master >/dev/null 2>&1 || true; fi
   fi
-  docker exec "$KEYCLOAK_CONTAINER" rm -f "$KC_CONFIG" >/dev/null 2>&1 || true
+  in_keycloak rm -f "$KC_CONFIG" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 
@@ -133,11 +164,14 @@ case "$LOGIN_ATTEMPTS" in
     exit 1 ;;
 esac
 login_attempt=1
-until docker exec \
+# The inner sh expands the credentials from the -e variables, so they never
+# appear on a command line outside the kcadm process.
+# shellcheck disable=SC2016
+until in_keycloak \
   -e KCADM_USERNAME="$KC_BOOTSTRAP_ADMIN_USERNAME" \
   -e KCADM_PASSWORD="$KC_BOOTSTRAP_ADMIN_PASSWORD" \
   -e KCADM_SERVER="$KCADM_SERVER" \
-  "$KEYCLOAK_CONTAINER" sh -c \
+  sh -c \
   '/opt/keycloak/bin/kcadm.sh config credentials --config '"$KC_CONFIG"' --server "$KCADM_SERVER" --realm master --user "$KCADM_USERNAME" --password "$KCADM_PASSWORD" >/dev/null'; do
   if [ "$login_attempt" -ge "$LOGIN_ATTEMPTS" ]; then
     printf 'kcadm could not sign in to %s after %s attempt(s)\n' "$KCADM_SERVER" "$login_attempt" >&2
@@ -149,7 +183,7 @@ done
 
 # Writes the JSON on stdin to an Admin API path in the realm.
 kc_put() {
-  docker exec -i "$KEYCLOAK_CONTAINER" /opt/keycloak/bin/kcadm.sh \
+  in_keycloak -i /opt/keycloak/bin/kcadm.sh \
     update "$1" -r "$REALM" -f - --config "$KC_CONFIG" >/dev/null
 }
 
@@ -245,7 +279,7 @@ ensure_execution() {
   fi
   printf '%s' "$execution" | jq --arg requirement "$requirement" \
     '.requirement = $requirement' |
-    docker exec -i "$KEYCLOAK_CONTAINER" /opt/keycloak/bin/kcadm.sh \
+    in_keycloak -i /opt/keycloak/bin/kcadm.sh \
       update "authentication/flows/$flow/executions" -r "$REALM" -f - \
       --config "$KC_CONFIG" >/dev/null
 }
@@ -332,7 +366,7 @@ configure_digit_ui_client() {
          "digit.auth.account.actions": $actions,
          "standard.token.exchange.enabled": "false"
        })' |
-    docker exec -i "$KEYCLOAK_CONTAINER" /opt/keycloak/bin/kcadm.sh \
+    in_keycloak -i /opt/keycloak/bin/kcadm.sh \
       update "clients/$client_uuid_value" -r "$REALM" -f - --config "$KC_CONFIG" >/dev/null
   # Tokens are verified by the BFF against its own audience; azp stays the
   # surface client, which is how the BFF tells the surfaces apart.
@@ -476,7 +510,7 @@ configure_smtp() {
          fromDisplayName:$from_name, auth:$auth, ssl:$ssl, starttls:$starttls} |
        if $user != "" then .smtpServer.user = $user else . end |
        if $password != "" then .smtpServer.password = $password else . end' |
-    docker exec -i "$KEYCLOAK_CONTAINER" /opt/keycloak/bin/kcadm.sh \
+    in_keycloak -i /opt/keycloak/bin/kcadm.sh \
       update "realms/$REALM" -f - --config "$KC_CONFIG" >/dev/null
 }
 
@@ -534,7 +568,7 @@ realm_theme=$(kc get "realms/$REALM" | jq -r '.loginTheme // ""')
 for owned_theme in $OWNED_REALM_THEMES; do
   if [ "$realm_theme" = "$owned_theme" ]; then
     kc get "realms/$REALM" | jq '.loginTheme = ""' |
-      docker exec -i "$KEYCLOAK_CONTAINER" /opt/keycloak/bin/kcadm.sh \
+      in_keycloak -i /opt/keycloak/bin/kcadm.sh \
         update "realms/$REALM" -f - --config "$KC_CONFIG" >/dev/null
     break
   fi
@@ -641,7 +675,7 @@ kc get "clients/$management_uuid/roles" -r "$REALM" |
     [.[] | select(.name as $name | $wanted | index($name))] |
     if length == ($wanted | length) then .
     else error("realm-management is missing a role the BFF needs") end' |
-  docker exec -i "$KEYCLOAK_CONTAINER" /opt/keycloak/bin/kcadm.sh \
+  in_keycloak -i /opt/keycloak/bin/kcadm.sh \
     create "users/$service_user/role-mappings/clients/$management_uuid" \
     -r "$REALM" -f - --config "$KC_CONFIG" >/dev/null
 

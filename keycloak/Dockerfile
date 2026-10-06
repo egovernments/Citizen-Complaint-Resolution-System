@@ -38,3 +38,8 @@ RUN /opt/keycloak/bin/kc.sh build --db=postgres --health-enabled=true
 FROM quay.io/keycloak/keycloak:${KEYCLOAK_VERSION}
 COPY --from=builder /opt/keycloak/ /opt/keycloak/
 COPY --from=jq /jq /usr/bin/jq
+# The realm reconcile and the declared realm, which the Helm realm-configure
+# Job runs from this image (KEYCLOAK_KCADM_SERVER set: kcadm runs here and
+# reaches Keycloak over its Service), so the Job always matches the image it
+# runs in. Compose/Ansible run the repository copy on the host instead.
+COPY configure-keycloak.sh realm.json /opt/identity/

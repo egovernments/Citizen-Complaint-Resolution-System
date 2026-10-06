@@ -137,7 +137,17 @@ describe('keycloak chart: realm-configure Job', () => {
 
   test('is a post-install and post-upgrade hook', () => {
     expect(job).toContain('"helm.sh/hook": post-install,post-upgrade');
-    expect(job).toContain('command: ["/identity-config/configure-keycloak.sh"]');
+    expect(job).toContain('command: ["/bin/bash", "/opt/identity/configure-keycloak.sh"]');
+    expect(job).toMatch(/- name: KEYCLOAK_REALM_CONFIG\n\s+value: \/opt\/identity\/realm\.json/);
+  });
+
+  // The Job runs the script and realm baked into the image it runs in, so the
+  // chart carries no copies to keep in sync.
+  test('runs the script and realm.json from the Keycloak image, not chart copies', () => {
+    expect(read('keycloak/Dockerfile')).toMatch(/^COPY configure-keycloak\.sh realm\.json \/opt\/identity\/$/m);
+    expect(fs.existsSync(path.join(REPO_ROOT, KC, 'files'))).toBe(false);
+    expect(fs.existsSync(path.join(REPO_ROOT, KC, 'templates/configure-configmap.yaml'))).toBe(false);
+    expect(job).not.toMatch(/configMap:|volumeMounts:|\.Files\.Get/);
   });
 
   // Hook Jobs are recreated on every hook run (before-hook-creation), so a
@@ -152,11 +162,6 @@ describe('keycloak chart: realm-configure Job', () => {
     expect(read('keycloak/configure-keycloak.sh')).toContain('readonly LOGIN_ATTEMPTS=${KEYCLOAK_LOGIN_ATTEMPTS:-1}');
   });
 
-  // helm reads files only from inside a chart, so the chart carries copies.
-  test.each(['configure-keycloak.sh', 'realm.json'])('the chart copy of %s is identical to keycloak/', (file) => {
-    expect(read(`${KC}/files/${file}`)).toBe(read(`keycloak/${file}`));
-  });
-
   test('the Job image has the tools the script runs outside kcadm', () => {
     // bash, head and tr ship in the Keycloak base image; jq does not.
     expect(read('keycloak/Dockerfile')).toMatch(/^COPY --from=jq \/jq \/usr\/bin\/jq$/m);
@@ -164,8 +169,10 @@ describe('keycloak chart: realm-configure Job', () => {
     expect(read('keycloak/configure-keycloak.sh')).toContain(
       'readonly KCADM_SERVER=${KEYCLOAK_KCADM_SERVER:-http://127.0.0.1:8180}');
     expect(job).toMatch(/- name: KEYCLOAK_KCADM_SERVER\n\s+value: \{\{ include "keycloak.serviceUrl" \. \| quote \}\}/);
-    expect(job).toContain('path: bin/docker');
-    expect(job).toMatch(/- name: PATH\n\s+value: \/identity-config\/bin:/);
+    // ...and kcadm runs in the Job's own container, not through `docker exec`.
+    const script = read('keycloak/configure-keycloak.sh');
+    expect(script.match(/docker exec /g)).toHaveLength(1);
+    expect(script).toContain('if [ -z "${KEYCLOAK_KCADM_SERVER:-}" ]; then\n    docker exec ${opts[@]+"${opts[@]}"} "$KEYCLOAK_CONTAINER" "$@"');
   });
 
   // smtpServer.auth=true with no login makes every Keycloak mail fail at

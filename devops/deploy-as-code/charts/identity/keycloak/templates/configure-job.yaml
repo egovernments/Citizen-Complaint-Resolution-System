@@ -4,10 +4,12 @@ reconcile Organizations realm and BFF clients" (local-setup/ansible/
 playbook-deploy.yml). It runs keycloak/configure-keycloak.sh with
 keycloak/realm.json after every install and upgrade; the script is idempotent.
 
-It runs in the Keycloak image itself (bash, kcadm.sh and jq), with files/docker
-on PATH standing in for the script's `docker exec` into the keycloak container.
-kcadm reaches the server over the Service. The master admin is the bootstrap
-admin from the Secret, so the script never creates a temporary one.
+It runs in the Keycloak image itself (bash, kcadm.sh and jq), which carries
+the script and realm.json at /opt/identity/ (keycloak/Dockerfile), so the
+reconcile always matches the image. KEYCLOAK_KCADM_SERVER makes the script run
+kcadm locally, against the Service, instead of through `docker exec`. The
+master admin is the bootstrap admin from the Secret, so the script never
+creates a temporary one.
 
 The client secrets come from the same Secret (or the same env-secrets.yaml
 values) as the identity-bff chart's, so Keycloak's clients and the BFF cannot
@@ -92,18 +94,6 @@ spec:
       securityContext:
         runAsUser: 1000
         runAsNonRoot: true
-      volumes:
-        - name: realm-config
-          configMap:
-            name: {{ template "common.name" . }}-realm-config
-            defaultMode: 0555
-            items:
-              - key: configure-keycloak.sh
-                path: configure-keycloak.sh
-              - key: realm.json
-                path: realm.json
-              - key: docker
-                path: bin/docker
       containers:
         - name: realm-configure
           image: {{ template "common.image" (dict "Values" $.Values "repository" .Values.image.repository "tag" .Values.image.tag) }}
@@ -112,22 +102,14 @@ spec:
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]
-          command: ["/identity-config/configure-keycloak.sh"]
-          volumeMounts:
-            - name: realm-config
-              mountPath: /identity-config
-              readOnly: true
+          command: ["/bin/bash", "/opt/identity/configure-keycloak.sh"]
           env:
-            - name: PATH
-              value: /identity-config/bin:/opt/keycloak/bin:/usr/local/bin:/usr/bin:/bin
             - name: KEYCLOAK_KCADM_SERVER
               value: {{ include "keycloak.serviceUrl" . | quote }}
-            - name: KEYCLOAK_CONTAINER
-              value: {{ template "common.name" . }}
             - name: KEYCLOAK_LOGIN_ATTEMPTS
               value: {{ .Values.configure.loginAttempts | toString | quote }}
             - name: KEYCLOAK_REALM_CONFIG
-              value: /identity-config/realm.json
+              value: /opt/identity/realm.json
             - name: KEYCLOAK_ORGANIZATION_REALM
               value: {{ $identity.realm | quote }}
             - name: KEYCLOAK_SSL_REQUIRED
