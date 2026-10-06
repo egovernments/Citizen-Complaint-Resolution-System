@@ -6,7 +6,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { describeSaveError } from '../errors';
-import type { Choice, EmployeeOptions, NewEmployee } from './employeesApi';
+import type { Employee } from '@/api/types';
+import { currentAssignment, type Choice, type EmployeeChanges, type EmployeeOptions, type NewEmployee } from './employeesApi';
 
 /** A labelled list of checkboxes, with a filter once it gets long. */
 function CheckList({
@@ -85,21 +86,31 @@ type Errors = Partial<Record<'code' | 'name' | 'mobile' | 'email' | 'departments
  * Add one employee: who they are, how to reach them, the departments and
  * designation they hold, what they can do, and where they can act. Everything
  * they choose from comes from the earlier steps.
+ *
+ * Given `employee`, it edits that person instead: the code stays, and the
+ * department is the main one, since HRMS keeps earlier assignments as history.
  */
 export function EmployeeDialog({
   open,
   options,
   suggestedCode,
   takenCodes,
+  employee,
+  emailLocked = false,
   onOpenChange,
   onSave,
+  onUpdate,
 }: {
   open: boolean;
   options: EmployeeOptions;
   suggestedCode: string;
   takenCodes: Set<string>;
+  employee?: Employee;
+  /** The signed-in admin changes their own email from their account, not here. */
+  emailLocked?: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: (input: NewEmployee) => Promise<void>;
+  onUpdate?: (employee: Employee, changes: EmployeeChanges) => Promise<void>;
 }) {
   const id = useId();
   const [code, setCode] = useState('');
@@ -116,10 +127,28 @@ export function EmployeeDialog({
 
   // Each opening starts blank, with sensible defaults: the next free code, the
   // plain EMPLOYEE role, and the whole area when there is a single top boundary.
+  // An edit starts from the person as HRMS has them.
   const [wasOpen, setWasOpen] = useState(false);
   if (open !== wasOpen) {
     setWasOpen(open);
-    if (open) {
+    if (open && employee) {
+      const assignment = currentAssignment(employee);
+      const offered = new Set(options.roles.map((role) => role.code));
+      setCode(employee.code);
+      setName(employee.user?.name ?? '');
+      setMobile(employee.user?.mobileNumber ?? '');
+      setEmail(employee.user?.emailId ?? '');
+      setDepartments(assignment?.department ? [assignment.department] : []);
+      setDesignation(assignment?.designation ?? '');
+      setRoles(
+        (employee.user?.roles ?? [])
+          .filter((role) => offered.has(role.code) && (role.tenantId ?? employee.tenantId) === employee.tenantId)
+          .map((role) => role.code),
+      );
+      setJurisdictions((employee.jurisdictions ?? []).filter((item) => item.isActive !== false).map((item) => item.boundary));
+      setErrors({});
+      setSaveError(null);
+    } else if (open) {
       const tops = options.boundaries.filter((boundary) => boundary.depth === 0);
       setCode(suggestedCode);
       setName('');
@@ -134,6 +163,17 @@ export function EmployeeDialog({
     }
   }
 
+  const editing = !!employee;
+  // Departments from earlier assignments: kept on the record, shown, not edited here.
+  const pastDepartments = useMemo(() => {
+    if (!employee) return [];
+    const main = currentAssignment(employee)?.department;
+    const names = new Map(options.departments.map((choice) => [choice.code, choice.name]));
+    return Array.from(new Set((employee.assignments ?? []).map((assignment) => assignment.department)))
+      .filter((code) => code && code !== main)
+      .map((code) => names.get(code) ?? code);
+  }, [employee, options.departments]);
+
   const boundaryDetail = useMemo(() => {
     const byCode = new Map(options.boundaries.map((boundary) => [boundary.code, boundary.boundaryType]));
     return (choice: Choice) => byCode.get(choice.code) ?? '';
@@ -142,12 +182,12 @@ export function EmployeeDialog({
   const save = async () => {
     const next: Errors = {};
     if (!code.trim()) next.code = 'Enter an employee code.';
-    else if (takenCodes.has(code.trim())) next.code = 'Another employee already has this code.';
+    else if (!editing && takenCodes.has(code.trim())) next.code = 'Another employee already has this code.';
     if (!name.trim()) next.name = 'Enter their full name.';
     if (!mobile.trim()) next.mobile = 'Enter their mobile number.';
     else if (!options.mobilePattern.test(mobile.trim())) next.mobile = 'That number doesn’t match this workspace’s mobile format.';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) next.email = 'Enter a valid email to invite this employee.';
-    if (!departments.length) next.departments = 'Choose at least one department.';
+    if (!departments.length) next.departments = editing ? 'Choose a department.' : 'Choose at least one department.';
     if (!designation) next.designation = 'Choose a designation.';
     if (!jurisdictions.length) next.jurisdictions = 'Choose where they can act.';
     setErrors(next);
@@ -156,6 +196,19 @@ export function EmployeeDialog({
     setSaving(true);
     setSaveError(null);
     try {
+      if (employee && onUpdate) {
+        await onUpdate(employee, {
+          name: name.trim(),
+          mobileNumber: mobile.trim(),
+          emailId: email.trim(),
+          department: departments[0],
+          designation,
+          roles: roles.length ? roles : ['EMPLOYEE'],
+          jurisdictions,
+        });
+        onOpenChange(false);
+        return;
+      }
       await onSave({
         code: code.trim(),
         name: name.trim(),
@@ -168,7 +221,7 @@ export function EmployeeDialog({
       });
       onOpenChange(false);
     } catch (err) {
-      setSaveError(describeSaveError(err, 'Adding the employee failed. Try again.'));
+      setSaveError(describeSaveError(err, editing ? 'Saving the changes failed. Try again.' : 'Adding the employee failed. Try again.'));
     } finally {
       setSaving(false);
     }
@@ -189,8 +242,12 @@ export function EmployeeDialog({
     <Dialog open={open} onOpenChange={(next) => !saving && onOpenChange(next)}>
       <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Add an employee</DialogTitle>
-          <DialogDescription>They sign in to the employee app with the details you give here.</DialogDescription>
+          <DialogTitle>{editing ? `Edit ${employee?.user?.name ?? 'employee'}` : 'Add an employee'}</DialogTitle>
+          <DialogDescription>
+            {editing
+              ? 'Changes apply the next time they sign in. A new email is confirmed by a link sent to it.'
+              : 'They sign in to the employee app with the details you give here.'}
+          </DialogDescription>
         </DialogHeader>
 
         <form
@@ -204,7 +261,13 @@ export function EmployeeDialog({
             {field(
               'code',
               'Employee code',
-              <Input id={`${id}-code`} value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} className="font-mono" />,
+              <Input
+                id={`${id}-code`}
+                value={code}
+                readOnly={editing}
+                onChange={(event) => setCode(event.target.value.toUpperCase())}
+                className={`font-mono ${editing ? 'bg-muted text-muted-foreground' : ''}`}
+              />,
             )}
             {field(
               'name',
@@ -219,20 +282,52 @@ export function EmployeeDialog({
             {field(
               'email',
               'Email',
-              <Input id={`${id}-email`} type="email" value={email} placeholder="anita@example.org" onChange={(event) => setEmail(event.target.value)} />,
+              <Input
+                id={`${id}-email`}
+                type="email"
+                value={email}
+                readOnly={editing && emailLocked}
+                placeholder="anita@example.org"
+                onChange={(event) => setEmail(event.target.value)}
+                className={editing && emailLocked ? 'bg-muted text-muted-foreground' : undefined}
+              />,
               true,
             )}
           </div>
 
-          <CheckList
-            legend="Departments"
-            hint="Choose one or more. The first is their main one."
-            choices={options.departments}
-            picked={departments}
-            onChange={setDepartments}
-            error={errors.departments}
-            empty="Add departments first."
-          />
+          {editing ? (
+            field(
+              'departments',
+              'Department',
+              <>
+                <Select value={departments[0] ?? ''} onValueChange={(code) => setDepartments([code])}>
+                  <SelectTrigger id={`${id}-departments`} className="bg-card">
+                    <SelectValue placeholder="Choose a department" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {options.departments.map((choice) => (
+                      <SelectItem key={choice.code} value={choice.code}>
+                        {choice.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {pastDepartments.length > 0 && (
+                  <p className="text-xs text-muted-foreground">Also on their record from before: {pastDepartments.join(', ')}.</p>
+                )}
+              </>,
+            )
+          ) : (
+            <CheckList
+              legend="Departments"
+              hint="Choose one or more. The first is their main one."
+              choices={options.departments}
+              picked={departments}
+              onChange={setDepartments}
+              error={errors.departments}
+              empty="Add departments first."
+            />
+          )}
 
           {field(
             'designation',
@@ -283,7 +378,7 @@ export function EmployeeDialog({
             </Button>
             <Button type="submit" disabled={saving} className="gap-2">
               {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-              Add employee
+              {editing ? 'Save changes' : 'Add employee'}
             </Button>
           </DialogFooter>
         </form>

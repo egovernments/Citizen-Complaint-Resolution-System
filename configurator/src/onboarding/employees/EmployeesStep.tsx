@@ -21,8 +21,10 @@ import {
   listEmployees,
   loadEmployeeOptions,
   removeEmployee,
+  updateEmployeeDetails,
   suggestEmployeeCode,
   type EmployeeOptions,
+  type EmployeeChanges,
   type NewEmployee,
 } from './employeesApi';
 
@@ -44,6 +46,7 @@ export default function EmployeesStep() {
   const [reloadKey, setReloadKey] = useState(0);
   const [bulk, setBulk] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<Employee | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -99,6 +102,26 @@ export default function EmployeesStep() {
       email: !!input.emailId,
     });
     toast({ title: `${created.user.name} added`, description: `They sign in as ${created.user.userName}.` });
+    reload();
+  };
+
+  const update = async (employee: Employee, changes: EmployeeChanges) => {
+    if (!options) return;
+    const { emailChanged } = await updateEmployeeDetails(employee, changes, options).catch((err: unknown) => {
+      reportStepError('employees', 'update_employee', err, tenant);
+      throw err;
+    });
+    trackStepAction('employees', 'entity_update', 'employee', {
+      tenant,
+      source: 'form',
+      roles: changes.roles.length,
+      jurisdictions: changes.jurisdictions.length,
+      emailChanged,
+    });
+    toast({
+      title: `${changes.name} updated`,
+      description: emailChanged ? 'We sent a link to the new email. It takes effect once they confirm it.' : undefined,
+    });
     reload();
   };
 
@@ -271,6 +294,9 @@ export default function EmployeesStep() {
                       <td className="hidden xl:table-cell px-4 py-3 text-xs text-muted-foreground">{roles || '—'}</td>
                       <td className="hidden xl:table-cell px-4 py-3 text-xs text-muted-foreground">{areas || '—'}</td>
                       <td className="px-2 py-2 text-right whitespace-nowrap">
+                        <Button variant="ghost" size="sm" onClick={() => setEditing(employee)} aria-label={`Edit ${employee.user?.name}`}>
+                          Edit
+                        </Button>
                         {!self && (
                           <DeleteConfirmDialog
                             title={`Remove ${employee.user?.name}?`}
@@ -311,12 +337,19 @@ export default function EmployeesStep() {
       </div>
 
       <EmployeeDialog
-        open={adding}
+        open={adding || !!editing}
         options={options}
         suggestedCode={suggestEmployeeCode(codes)}
         takenCodes={new Set(codes)}
-        onOpenChange={setAdding}
+        employee={editing ?? undefined}
+        emailLocked={!!editing && isSelf(editing)}
+        onOpenChange={(open) => {
+          if (open) return;
+          setAdding(false);
+          setEditing(null);
+        }}
         onSave={add}
+        onUpdate={update}
       />
     </div>
   );
