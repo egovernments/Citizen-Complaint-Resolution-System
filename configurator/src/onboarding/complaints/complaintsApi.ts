@@ -213,7 +213,11 @@ async function sync(
   hasDefinition: boolean,
   { shared = false }: { shared?: boolean } = {},
 ): Promise<void> {
-  if (!hasDefinition) {
+  // Re-read before creating: a save whose step update then failed has already created the definition, and the page
+  // still holds the stale `hasDefinition` from when it loaded, so a blind create fails as a duplicate on the retry.
+  const defined = hasDefinition || (await mdmsService.searchRecords(tenantId, DEFINITION_SCHEMA).catch(() => [] as MdmsRecord[]))
+    .some((record) => record.tenantId === tenantId && text(dataOf(record).hierarchyType) === HIERARCHY_TYPE);
+  if (!defined) {
     await mdmsService.create(tenantId, DEFINITION_SCHEMA, HIERARCHY_TYPE, {
       hierarchyType: HIERARCHY_TYPE,
       active: true,
