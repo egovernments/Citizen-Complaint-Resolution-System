@@ -185,7 +185,8 @@ export async function passwordLogin(input: {
 export async function searchAccounts(
   authToken: string,
   criteria: {
-    tenantId: string;
+    /** egov-user matches it exactly; a uuid-only search may omit it (D16 child-tenant employees). */
+    tenantId?: string;
     userType?: string;
     active: boolean;
     userName?: string;

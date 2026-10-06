@@ -4,7 +4,7 @@ import { readBindings } from "../bindings/store.js";
 import { readUser } from "../../integrations/keycloak/admin-api.js";
 import { splitE164 } from "../citizens/citizen-registration.js";
 import { mobileValidationForRoute } from "../citizen-otp/mobile-validation.js";
-import { accountEntries } from "./state.js";
+import { accountEntries, accountRef } from "./state.js";
 
 export interface PropagationResult { written: number; unchanged: number; skipped: number }
 
@@ -21,9 +21,15 @@ export function propagateIdentifiers(subject: string): Promise<PropagationResult
     const phone = user.attributes?.phoneNumberVerified?.length === 1 &&
       user.attributes.phoneNumberVerified[0] === "true" && phoneValues?.length === 1 ? phoneValues[0] : undefined;
     const entries = accountEntries(user);
+    // A staff binding's DIGIT account may sit at a child of the binding tenant (D16, amended); the mirrored
+    // entry records it. The write goes to the account's own tenant.
+    const staffAccount = (binding: { tenantId: string; uuid: string }) => {
+      const entry = entries.find(item => item.kind === "staff" && item.tenantId === binding.tenantId && item.uuid === binding.uuid);
+      return entry ? accountRef(entry) : { tenantId: binding.tenantId, uuid: binding.uuid };
+    };
     const targets = [
-      ...bindings.filter(binding => binding.state === "active").map(binding => ({ ...binding, kind: "staff" as const })),
-      ...entries.filter(entry => entry.kind === "citizen"),
+      ...bindings.filter(binding => binding.state === "active").map(binding => ({ ...binding, kind: "staff" as const, account: staffAccount(binding) })),
+      ...entries.filter(entry => entry.kind === "citizen").map(entry => ({ ...entry, account: accountRef(entry) })),
     ];
     for (const target of targets) {
       if (entries.some(entry => entry.uuid === target.uuid && entry.tenantId === target.tenantId && entry.missing)) {
@@ -40,7 +46,7 @@ export function propagateIdentifiers(subject: string): Promise<PropagationResult
         patch = split;
       } else { result.skipped++; continue; }
       await lease.assertHeld();
-      const write = await writeDigitIdentifiers(target, patch);
+      const write = await writeDigitIdentifiers(target.account, patch);
       await lease.assertHeld();
       if (write.status === "written") result.written++;
       else if (write.status === "unchanged") result.unchanged++;

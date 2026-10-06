@@ -6,9 +6,10 @@ import { readUser } from "../../integrations/keycloak/admin-api.js";
 import { readBindings } from "../bindings/store.js";
 import type { DigitAccount } from "../managed-accounts/digit-user-client.js";
 import { updateKeycloakUser, type UserRepresentation } from "./keycloak-writer.js";
-import { accountEntries, canonical, type AccountEntry } from "./state.js";
+import { accountEntries, accountRef, canonical, type AccountEntry } from "./state.js";
 import { readDigitAccount } from "./digit-reader.js";
 
+/** `credential.tenantId` is the DIGIT account's own tenant (the derived credential's input), not the workspace. */
 export interface MirrorHint { credential?: { tenantId: string; keyVersion: number; setAt: number } }
 export interface MirrorSnapshot {
   user: UserRepresentation;
@@ -42,6 +43,9 @@ export async function readMirrorSnapshot(subject: string, hint: MirrorHint = {})
       entry.active = false;
     } else {
       delete entry.missing;
+      // D16 (amended): a workspace binding may name a child-tenant account; record its own tenant.
+      if (entry.kind === "staff" && account.tenantId !== entry.tenantId) entry.accountTenantId = account.tenantId;
+      else delete entry.accountTenantId;
       entry.active = account.active;
       entry.roles = [...new Map(account.roles.map(role => [
         `${role.code}|${role.tenantId}`, { code: role.code, tenantId: role.tenantId },
@@ -53,7 +57,7 @@ export async function readMirrorSnapshot(subject: string, hint: MirrorHint = {})
       if (entry.kind === "staff" && staffName && !masked(staffName)) entry.name = staffName.slice(0, 256);
       else delete entry.name;
     }
-    if (entry.kind === "staff" && hint.credential?.tenantId === entry.tenantId) {
+    if (entry.kind === "staff" && hint.credential?.tenantId === accountRef(entry).tenantId) {
       const { keyVersion, setAt } = hint.credential;
       entry.credential = { keyVersion, setAt };
     }

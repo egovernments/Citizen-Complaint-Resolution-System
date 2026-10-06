@@ -50,7 +50,8 @@ async function activate(binding: Binding, lease: PersonLease): Promise<void> {
   const account = await readDigitAccount(binding.tenantId, binding.uuid);
   if (!account?.active) throw new BindingError("DIGIT_UNAVAILABLE", "The employee is not available for activation");
   try {
-    await activateStaffCredential({ tenantId: binding.tenantId, uuid: binding.uuid, userName: account.userName }, lease);
+    // The account's own tenant, as `_select` signs in with (D16, amended: it may be a child of the workspace).
+    await activateStaffCredential({ tenantId: account.tenantId, uuid: binding.uuid, userName: account.userName }, lease);
   } catch (error) {
     // Workspace activation exposes dependency failure, not the sign-in route's
     // account-lock/PII codes. Retain the binding/marker so a retry can resume.

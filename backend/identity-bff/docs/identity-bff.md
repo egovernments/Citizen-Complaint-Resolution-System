@@ -80,6 +80,16 @@ Until item 14 removes it, staff resolution is **binding, else the managed `kcbff
 
 - **Person** = one Keycloak user (`sub`). One person may be both staff and a citizen (D25/C1).
 - **Tenant** = a plain DIGIT tenant id such as `pg` (D16). Every binding, membership, citizen account and role tenant uses the workspace's tenant id.
+- **Child-tenant employees** (D16, amended): a root workspace `ws` may bind EMPLOYEE accounts whose own DIGIT tenant is `ws` or a child `ws.<city>` (`ke.nairobi` under `ke`), never another root or a tenant that only shares the prefix (`kex` is not under `ke`). Kong authorizes a DIGIT token against its home tenant, so such an account keeps its own tenant and its token is minted there; re-homing the account to `ws` does not work. Which tenant each key uses:
+
+  | What | Tenant |
+  |---|---|
+  | `digit.bindings` key, `digit.boundUuids`, `digit.bindingTenants`, the uuid lock, membership, `requireAccountAdmin` (`ACCOUNT_ADMIN` at `ws` itself) | the workspace `ws` |
+  | session bound tenant, `_select` body `tenantId`, the selected context | the workspace `ws` |
+  | `digit.accounts` staff entry `tenantId` (one per workspace) | the workspace `ws`; the account's tenant is in `accountTenantId` when it differs (§5.1) |
+  | password grant, DIGIT token, `/_details` check, derived credential input (§8), DIGIT reads and identifier writes | the account's own tenant (`ke.nairobi`) |
+  | token inventory `{p}:identity:token:*`, `token-holders:*`, `person-tokens:*` (§7.4) | the account's own tenant |
+  | revocation jobs | scoped by `(ws, uuid)` or `ws`; they cover tokens of that uuid at `ws` or a child (§7.4) |
 - **Slug** = the Organization `alias` = `digit.urlSlug`, lower-case. Rules: §2.4.1.
 - Times are epoch **milliseconds** unless a field ends in `Seconds` or `expiresIn`.
 
@@ -442,7 +452,7 @@ Configurator surface.
 
 #### 3.3.4 `POST /identity/v1/contexts/_select` (items 6, 7, 8, 10, 12)
 
-Body `{surface: "configurator" | "employee", tenantId}`. An employee's `tenantId` must equal the session's bound tenant.
+Body `{surface: "configurator" | "employee", tenantId}`. An employee's `tenantId` must equal the session's bound tenant. A binding to a child-tenant account (§2.4) is selected at the workspace tenant; the token is minted at the account's own tenant, so `UserRequest.tenantId` is that child (`ke.nairobi` when selecting `ke`). Clients use it, not the route tenant, for business calls.
 
 ```
 200 {access_token, token_type: "bearer", expires_in, scope: "read", UserRequest: {...egov-user user...}}
@@ -484,7 +494,7 @@ Caller: a session with **live DIGIT `ACCOUNT_ADMIN`** at `tenantId` (D5), read l
 200 {binding, identityUserCreated: false, activationEmailSent: true, activationEmail: "password_setup" | "verify_email"}   (resend)
 ```
 
-- `tenantId` must be the workspace tenant of an `ACTIVE` Organization (`WORKSPACE_TENANT_REQUIRED`). `digitUuid` must be an active EMPLOYEE account there and not a `kcbff-` account. `email` is required (D18) and is normalized by trimming and lower-casing.
+- `tenantId` must be the workspace tenant of an `ACTIVE` Organization (`WORKSPACE_TENANT_REQUIRED`). `digitUuid` must be an active EMPLOYEE account there or at a child tenant (`ke.nairobi` under `ke`; D16, amended, §2.4), and not a `kcbff-` account. An account at another root, or at a tenant that only shares the prefix (`kex`, `kex.city`), → `DIGIT_ACCOUNT_NOT_FOUND`. egov-user filters `tenantId` exactly, so the BFF searches the account by uuid alone and checks the returned tenant itself. `email` is required (D18) and is normalized by trimming and lower-casing.
 - **Rules:**
   - binding yourself → `SELF_BINDING_FORBIDDEN`;
   - the account holds a checked role that the caller doesn't hold at that role's tenant or a tenant above it (a workspace role covers the workspace and its sub-tenants, never another root) → `ROLE_ESCALATION_FORBIDDEN`. Inside the workspace subtree only **administrative** roles are checked: the codes in `ADMINISTRATIVE_ROLES` (`src/contract/roles.ts`): `SUPERUSER`, `INTERNAL_MICROSERVICE_ROLE`, `SYSTEM`, `REINDEXING_ROLE`, `QA_AUTOMATION`; plus every other `*_ADMIN` code. Operational roles there (GRO, CSR, PGR_LME, SUPERVISOR, …) are not checked. Outside the subtree (another root, including a prefix-sharing one such as `pgx`) every role is checked, operational ones too, because the linked account's DIGIT token would carry it. A caller holding `SUPERUSER` at the tenant itself (the founder, D11) skips this check for target roles at the tenant or its sub-tenants, so may link an account with any role there; a target role outside the subtree is still checked. `_updateEmail` (§3.3.11) applies the same rule;
@@ -828,6 +838,7 @@ Every write follows the safe writer rule (design §4):
 
 **`digit.accounts` invariants** (enforced in code, not expressible in the schema):
 - `(tenantId, uuid)` is unique among entries.
+- A `staff` entry's `tenantId` is the binding (workspace) tenant. When the DIGIT account sits at a child of it (D16, amended), the mirror records the account's own tenant in `accountTenantId`, and drops it when the two are equal. A value that is not a child of `tenantId` (another root, or a prefix-sharing `kex` for `ke`), or one on a `citizen` entry, fails closed. The inventory, the derived credential and DIGIT reads and writes use `accountTenantId ?? tenantId`.
 - At most **one** `staff` entry per `tenantId`, and only for a binding in state `active`. When a binding leaves `active`, its entry is dropped.
 - At most one `citizen` entry per `tenantId`.
 - The **D12 primary entry** is the `staff` entry with the lowest `boundAt` among those with `active: true`. With no such staff entry, it is the citizen entry with the lowest `boundAt`. Staff entries always win (D25/C1).
@@ -971,6 +982,8 @@ The magic-link and password-setup IP limit keys switch from the raw IP to `ipRef
 | `{p}:identity:kc-logout-retry:{kcSessionId}` | HASH `{attempts}`; queued before the BFF session is deleted | the ended BFF session's expiry | S |
 | `{p}:identity:revoke-jobs` | ZSET `{sub}\|{reason}\|{eventId}` → due time | — | S |
 
+`{tenantId}` in the token, holder and person-token keys is the DIGIT account's own tenant, which for a child-tenant account (§2.4) is the child (`ke.nairobi:{uuid}`), not the binding tenant. Revocation jobs are scoped by the binding: an account job `(ws, uuid)` matches inventoried tokens of that uuid at `ws` or a child, and a tenant job `ws` matches every inventoried token at `ws` or a child; sessions are matched by their bound or selected tenant, `ws`. A prefix-sharing tenant (`kex`) is never in scope for `ke`.
+
 These replace `{p}:digit-user-token:*`, `{p}:digit-user-token-holders:*` and `{p}:digit-linked-identities:*` (item 10). Losing the inventory: grant-eligible staff are found again through the derived credential (design §6). Citizen tokens, inactive or locked staff tokens, and tokens of a Keycloak user deleted in the same window live until they expire (D25/C6).
 
 ### 7.5 Events, reconcile and audit
@@ -1000,6 +1013,8 @@ password = encode_v1(HMAC-SHA256(key[keyVersion], "v1\n" + uuid + "\n" + tenantI
 ```
 
 Reference implementation and unit tests: `src/modules/accounts/credential.ts`, `tests/unit/credential.test.ts`. Lane B uses it as is.
+
+`tenantId` is the DIGIT account's own tenant, the tenant of the password grant: for a child-tenant account (§2.4) it is the child (`ke.nairobi`), not the workspace.
 
 - **Input:** the fields are separated by newlines, so shifted fields can't collide. Empty or multi-line fields are rejected.
 - **Expansion:** HKDF-Expand (RFC 5869, SHA-256), with the 32-byte HMAC as the PRK and info `digit-identity-bff/encode_v1`. Bytes are read in order and never reused.

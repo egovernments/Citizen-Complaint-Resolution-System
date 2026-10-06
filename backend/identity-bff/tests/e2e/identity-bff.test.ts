@@ -5,7 +5,7 @@ import * as sessionStore from "../../src/modules/sessions/session-store.js";
 import { BindingError } from "../../src/modules/bindings/types.js";
 import { staffAccess } from "../../src/modules/bindings/predicate.js";
 import { withPersonLease } from "../../src/modules/accounts/person-lease.js";
-import { drainRevocationJobs, holdToken, recordToken } from "../../src/modules/revocation/index.js";
+import { drainRevocationJobs, holdToken, recordToken, revokeAccount } from "../../src/modules/revocation/index.js";
 import { applyKeycloakEvent } from "../../src/modules/revocation/event-effects.js";
 import { propagateIdentifiers } from "../../src/modules/sync/identifiers.js";
 import { tokenKey, tokenHoldersKey, personTokensKey, accountId } from "../../src/modules/revocation/inventory.js";
@@ -3005,6 +3005,60 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       await removeLegacyEmployeeFixture(account.uuid);
       expect((await (await employeeSelect(cookie)).json()).code).toBe("EMPLOYEE_ACCOUNT_NOT_LINKED");
       expect(digit.accounts.get(account.uuid)!.active).toBe(true);
+    });
+
+    it("D16 (amended): binds a child-tenant employee at the workspace and mints, mirrors and revokes at the account's own tenant", async () => {
+      // The workspace is ke.bomet; the employee's DIGIT account sits at its child tenant, as naipepea's
+      // EMP-KE_NAIROBI-* accounts sit at ke.nairobi under ke.
+      const account = legacy({ userName: "EMP-CHILD-1", tenantId: "ke.bomet.city", type: "EMPLOYEE", mobileNumber: "700000131", roles: ["EMPLOYEE", "GRO"] });
+      const outsider = legacy({ userName: "EMP-PREFIX-1", tenantId: "ke.bometx", type: "EMPLOYEE", mobileNumber: "700000132", roles: ["EMPLOYEE"] });
+      const subject = "identity-user-unlinked";
+      // A prefix-sharing tenant is not a child: the binding is refused.
+      await expect(ensureActive({ subject, tenantId: "ke.bomet", uuid: outsider.uuid, actor: { kind: "migration" } }))
+        .rejects.toMatchObject({ code: "DIGIT_ACCOUNT_NOT_FOUND" });
+      // Derived mode: the credential is keyed by the account's own tenant (§8), so its derivation is exercised too.
+      const previous = { identityStaffCredentialMode: config.identityStaffCredentialMode,
+        identityCredentialKeys: config.identityCredentialKeys, identityCredentialKeyCurrent: config.identityCredentialKeyCurrent };
+      Object.assign(config, { identityStaffCredentialMode: "derived", identityCredentialKeys: new Map([[1, Buffer.alloc(32, 7)]]), identityCredentialKeyCurrent: 1 });
+      try {
+        const cookie = await signIn("employee", "unlinked");
+        await bindLegacyEmployeeFixture(account.uuid);
+        const readUser = async () => (await fetch(`${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/${subject}`)).json();
+        const staffEntry = async () => JSON.parse((await readUser()).attributes["digit.accounts"][0]).entries
+          .find((entry: { kind: string; uuid: string }) => entry.kind === "staff" && entry.uuid === account.uuid);
+        // The binding key stays (subject, workspace); the mirror records the account's own tenant.
+        expect(JSON.parse((await readUser()).attributes["digit.bindings"][0]).bindings)
+          .toEqual(expect.arrayContaining([expect.objectContaining({ tenantId: "ke.bomet", uuid: account.uuid, state: "active" })]));
+        expect(await staffEntry()).toMatchObject({ tenantId: "ke.bomet", accountTenantId: "ke.bomet.city", active: true });
+
+        const selected = await employeeSelect(cookie);
+        expect(selected.status).toBe(200);
+        const token = await selected.json();
+        // Kong authorizes against the token's home tenant, so it is the account's own tenant, never the workspace.
+        expect(token.UserRequest).toMatchObject({ uuid: account.uuid, userName: "EMP-CHILD-1", tenantId: "ke.bomet.city" });
+        const ref = { tenantId: "ke.bomet.city", uuid: account.uuid };
+        expect(await getRedis().exists(tokenKey(ref))).toBe(1);
+        expect(await getRedis().smembers(personTokensKey(subject))).toContain(accountId(ref));
+        expect(await staffEntry()).toMatchObject({ accountTenantId: "ke.bomet.city", credential: { keyVersion: 1 } });
+        // The cached token is reused at the next _select.
+        expect((await (await employeeSelect(cookie)).json()).access_token).toBe(token.access_token);
+
+        // Deactivation in HRMS ends access and revokes the child-tenant token.
+        digit.accounts.get(account.uuid)!.active = false;
+        expect((await (await employeeSelect(cookie)).json()).code).toBe("DIGIT_ACCOUNT_INACTIVE");
+        expect(digit.tokens.has(token.access_token)).toBe(false);
+        digit.accounts.get(account.uuid)!.active = true;
+        const again = await (await employeeSelect(cookie)).json();
+        expect(again.UserRequest.tenantId).toBe("ke.bomet.city");
+
+        // A job scoped to the binding (workspace tenant, uuid) revokes the token minted at the child tenant.
+        await revokeAccount(subject, { tenantId: "ke.bomet", uuid: account.uuid }, "BINDING_REMOVED");
+        expect(digit.tokens.has(again.access_token)).toBe(false);
+        expect(await getRedis().exists(tokenKey(ref))).toBe(0);
+        await removeLegacyEmployeeFixture(account.uuid);
+      } finally {
+        Object.assign(config, previous);
+      }
     });
 
     it("answers ACCOUNT_LOCKED for a locked account, without touching its password (item 6)", async () => {

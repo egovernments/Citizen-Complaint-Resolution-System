@@ -185,17 +185,22 @@ export function createFakeDigitUser(options: { tenants: string[]; validateRoles?
 
   app.post("/user/_search", (req, res) => {
     if (!requireAdmin(req, res)) return;
-    const tenantId = citizenTenant(req.body.tenantId, req.body.userType);
-    // egov-user filters by whichever of userName, uuid and mobileNumber are given.
+    const tenantId = req.body.tenantId === undefined ? undefined : citizenTenant(req.body.tenantId, req.body.userType);
+    // egov-user filters by whichever of userName, uuid and mobileNumber are given. Like UserTypeQueryBuilder, the
+    // tenant filter is exact (`userdata.tenantid = ?`) and applies only when given; UserSearchCriteria requires a
+    // tenant with userName or mobileNumber, never with uuid alone.
     const { userName, uuid, mobileNumber } = req.body;
     if (userName === undefined && !Array.isArray(uuid) && mobileNumber === undefined) {
       return res.status(400).json({ error: "search criteria required" });
+    }
+    if (tenantId === undefined && (userName !== undefined || mobileNumber !== undefined)) {
+      return res.status(400).json({ error: "tenantId is required" });
     }
     const matches = [...accounts.values()].filter((account) =>
       (userName === undefined || account.userName === userName) &&
       (!Array.isArray(uuid) || uuid.includes(account.uuid)) &&
       (mobileNumber === undefined || account.mobileNumber === mobileNumber) &&
-      account.tenantId === tenantId &&
+      (tenantId === undefined || account.tenantId === tenantId) &&
       (req.body.userType === undefined || account.type === req.body.userType) && account.active === (req.body.active !== false));
     return res.json({ user: matches.map(publicAccount).map((user) => maskSearchMobileNumbers && user.mobileNumber
       ? { ...user, mobileNumber: `******${user.mobileNumber.slice(-4)}` }

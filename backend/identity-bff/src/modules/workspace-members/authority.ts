@@ -6,11 +6,21 @@ import { staffAccess } from "../bindings/predicate.js";
 import { readOrganizationByTenant } from "../onboarding/organization-reader.js";
 import { BindingError, type BindingActor } from "../bindings/types.js";
 import { isAdministrativeRole } from "../../contract/roles.js";
+import { withinWorkspace } from "../bindings/tenant-scope.js";
 
+/**
+ * The DIGIT account `uuid` as seen from workspace `tenantId`. An EMPLOYEE account may sit at the workspace or a
+ * child tenant (D16, amended): egov-user filters `tenantId` exactly (`userdata.tenantid = ?`), so a search at the
+ * workspace never returns a `ke.nairobi` employee for `ke`. Employees are therefore searched by uuid alone (egov-user
+ * needs no tenant for a uuid search) and the returned account's tenant is checked here: the workspace or a child,
+ * never another root or a prefix-sharing tenant. CITIZEN accounts keep the exact tenant (one per root).
+ */
 export async function readDigitAccount(tenantId: string, uuid: string, userType = "EMPLOYEE"): Promise<DigitAccount | null> {
+  const employee = userType === "EMPLOYEE";
   for (const active of [true, false]) {
-    const accounts = await withDigitAdmin((token) => searchAccounts(token, { tenantId, uuid: [uuid], userType, active }));
-    const account = accounts.find((a) => a.uuid === uuid && a.tenantId === tenantId && a.type === userType);
+    const accounts = await withDigitAdmin((token) => searchAccounts(token, { ...(!employee && { tenantId }), uuid: [uuid], userType, active }));
+    const account = accounts.find((a) => a.uuid === uuid && a.type === userType &&
+      (employee ? withinWorkspace(a.tenantId, tenantId) : a.tenantId === tenantId));
     if (account) return account;
   }
   return null;
@@ -43,7 +53,7 @@ export async function validateBinding(input: { subject: string; tenantId: string
   await requireWorkspace(input.tenantId, input.actor.kind === "workload");
   const target = await readDigitAccount(input.tenantId, input.uuid);
   if (!target || (!target.active && input.actor.kind !== "migration")) {
-    throw new BindingError("DIGIT_ACCOUNT_NOT_FOUND", "No eligible employee exists at the workspace");
+    throw new BindingError("DIGIT_ACCOUNT_NOT_FOUND", "No eligible employee exists at the workspace or its child tenants");
   }
   if (isBffManagedAccount(target)) throw new BindingError("DIGIT_ACCOUNT_MANAGED", "Managed accounts cannot be bound");
   if (input.actor.kind !== "browser") return;
@@ -64,7 +74,7 @@ export async function validateBinding(input: { subject: string; tenantId: string
  */
 export function mayManageRoles(callerRoles: DigitRole[], targetRoles: DigitRole[], tenantId: string): boolean {
   const founder = callerRoles.some((c) => c.code === "SUPERUSER" && c.tenantId === tenantId);
-  const inWorkspace = (roleTenant: string) => roleTenant === tenantId || roleTenant.startsWith(`${tenantId}.`);
+  const inWorkspace = (roleTenant: string) => withinWorkspace(roleTenant, tenantId);
   const covers = (callerTenant: string, roleTenant: string) =>
     callerTenant === roleTenant || roleTenant.startsWith(`${callerTenant}.`);
   const checked = (r: DigitRole) => inWorkspace(r.tenantId) ? isAdministrativeRole(r.code) && !founder : true;

@@ -92,6 +92,45 @@ describe("reconciliation", () => {
     if (condition === "nonmember") mocks.member.mockResolvedValue(false);
     if (condition === "FAILED") organization.lifecycle = "FAILED";
   }
+  describe("a workspace binding to a child-tenant account (D16, amended)", () => {
+    const ref = { tenantId: "tenant.city", uuid: "staff" };
+    const mirrored = () => JSON.parse(user.attributes["digit.accounts"][0]).entries;
+    beforeEach(() => {
+      const roles = [{ code: "GRO", tenantId: "tenant.city" }];
+      account = { ...account, tenantId: "tenant.city", roles };
+      user.attributes["digit.accounts"] = [JSON.stringify({ v: 1, entries: [{ kind: "staff", tenantId: "tenant", accountTenantId: "tenant.city",
+        uuid: "staff", boundAt: 1, active: true, userName: "employee", name: "Name", roles, credential: { keyVersion: 1 } }] })];
+    });
+    it("keeps the entry and its account tenant, and revokes nothing on a steady pass", async () => {
+      const { logout } = await useRealRevocation();
+      await withPersonLease("person", lease => recordToken(lease, ref,
+        { accessToken: "city-token", expiresAt: Date.now() + 3600000, user: {} }, "staff"));
+      expect((await runReconcile()).failures).toEqual([]);
+      expect(mocks.read).toHaveBeenCalledWith(expect.objectContaining({ kind: "staff", tenantId: "tenant", uuid: "staff" }));
+      expect(mirrored()).toEqual([expect.objectContaining({ tenantId: "tenant", accountTenantId: "tenant.city", active: true })]);
+      expect(mirrored()[0]).not.toHaveProperty("missing");
+      expect(mocks.revoke).not.toHaveBeenCalled(); expect(logout).not.toHaveBeenCalled();
+      expect(await readToken(ref)).not.toBeNull();
+    });
+    it("revokes the child-tenant token through a job scoped to the binding tenant", async () => {
+      const { recover, logout } = await useRealRevocation();
+      await withPersonLease("person", lease => recordToken(lease, ref,
+        { accessToken: "city-token", expiresAt: Date.now() + 3600000, user: {} }, "staff"));
+      account.active = false;
+      expect((await runReconcile()).failures).toEqual([]);
+      expect(mocks.revoke).toHaveBeenCalledWith("person", { tenantId: "tenant", uuid: "staff" }, "DIGIT_INACTIVE", { fallback: true });
+      expect(logout).toHaveBeenCalledWith("city-token");
+      expect(await readToken(ref)).toBeNull();
+      expect(recover).not.toHaveBeenCalled();
+    });
+    it("recovers a lost child-tenant token with a grant at the account's own tenant", async () => {
+      const { recover, logout } = await useRealRevocation();
+      account.active = false;
+      expect((await runReconcile()).failures).toEqual([]);
+      expect(recover).toHaveBeenCalledWith({ tenantId: "tenant.city", uuid: "staff", userName: "employee", keyVersion: 1 });
+      expect(logout).toHaveBeenCalledWith("recovered-token");
+    });
+  });
   it.each(["disabled", "inactive", "missing", "nonmember", "FAILED"])(
     "a second %s pass performs no password grant or token logout", async condition => {
       const { recover, logout } = await useRealRevocation();

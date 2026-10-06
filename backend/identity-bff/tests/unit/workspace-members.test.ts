@@ -97,6 +97,17 @@ describe("resumable workspace membership", () => {
     expect(f.activations).toBe(1);
     expect(bindingDoc(f.users.get("new-1")!).bindings).toHaveLength(1);
   });
+  it("links a child-tenant employee at the workspace and sets its credential at the account's own tenant (D16, amended)", async () => {
+    // activation is the only DIGIT read here (validateBinding is mocked).
+    vi.mocked(readDigitAccount).mockImplementationOnce(async (_tenantId: string, uuid: string) =>
+      ({ tenantId: "pg.citya", uuid, active: true, userName: "employee", name: "Employee", roles: f.targetRoles }) as never);
+    vi.mocked(activateStaffCredential).mockClear();
+    const result = await linkWorkspaceMember(input);
+    expect(result.binding).toMatchObject({ tenantId: "pg", digitUuid: uuid, state: "active" });
+    expect(bindingDoc(f.users.get("new-1")!).bindings).toEqual([expect.objectContaining({ tenantId: "pg", uuid })]);
+    expect(f.members.has("pg:new-1")).toBe(true);
+    expect(activateStaffCredential).toHaveBeenCalledWith({ tenantId: "pg.citya", uuid, userName: "employee" }, expect.anything());
+  });
   it("pages members from the index without per-member DIGIT lookups", async () => {
     const bind = (id: string, state: string, extra: object = {}) => f.users.set(id, { id, email: `${id}@example.test`, attributes: { "digit.bindingTenants": ["pg"],
       "digit.bindings": [JSON.stringify({ v: 1, bindings: [{ tenantId: "pg", uuid: `uuid-${id}`, state, invitationVersion: 1, createdAt: 1, createdBy: { kind: "conversion" }, ...extra }] })] } });

@@ -6,7 +6,8 @@ import { deleteIdentitySession, getIdentitySession, getSelectedIdentityContext, 
 import type { IdentitySession } from "../sessions/types.js";
 import { accountId, forgetToken, key, parseAccountId, personTokensKey, readToken, revokeInventoriedToken, tokenHoldersKey, type AccountRef, type TokenRecord } from "./inventory.js";
 import { getRevocationUser, listRevocationUsers, listOrganizationMembers, endKeycloakSession, keycloakSessionStarts } from "./keycloak.js";
-import { accountEntries, type AccountEntry } from "../sync/state.js";
+import { accountEntries, accountRef, type AccountEntry } from "../sync/state.js";
+import { withinWorkspace } from "../bindings/tenant-scope.js";
 import { bindingsFor } from "../bindings/store.js";
 import { findLiveStaffToken } from "../accounts/credential-service.js";
 import { readOrganizationByTenant } from "../onboarding/organization-reader.js";
@@ -205,7 +206,11 @@ async function perform(job: SubjectJob, report: RevocationReport): Promise<void>
       await deleteIdentitySession(sessionId);
       report.ended.push(sessionRef(sessionId));
     }
-    const matches = (ref: AccountRef) => (!account || accountId(account) === accountId(ref)) && (!scopedTenant || ref.tenantId === scopedTenant);
+    // Inventory keys name the DIGIT account's own tenant, which may be a child of the binding tenant a job is
+    // scoped by (D16, amended: a `ke` binding's token sits at `ke.nairobi:uuid`). A uuid names one DIGIT account,
+    // so a job's account matches by uuid, and its tenant scope covers the tenant and its children.
+    const matches = (ref: AccountRef) => (!account || ref.uuid === account.uuid) &&
+      (!scopedTenant || withinWorkspace(ref.tenantId, scopedTenant));
     const inventoried = new Set<string>();
     for (const id of await getRedis().smembers(personTokensKey(job.subject))) {
       const ref = parseAccountId(id);
@@ -217,8 +222,9 @@ async function perform(job: SubjectJob, report: RevocationReport): Promise<void>
     // An unavailable Keycloak lookup must not delay tokens already in Redis.
     const entries = job.reason === "KEYCLOAK_DELETED" ? [] : accountEntries(await getRevocationUser(job.subject) ?? {});
     for (const entry of entries) {
-      if (!matches(entry) || inventoried.has(accountId(entry))) continue;
-      const decision = await revokeOne(lease, entry, entry, job.reason, survivors, job.options.fallback);
+      const ref = accountRef(entry);
+      if (!matches(ref) || inventoried.has(accountId(ref))) continue;
+      const decision = await revokeOne(lease, ref, entry, job.reason, survivors, job.options.fallback);
       if (decision) report.tokens.push(decision);
     }
   });
@@ -245,6 +251,7 @@ export async function revokePerson(subject: string, reason: RevocationReason, op
   const id = await enqueueRevocation(subject, reason, options);
   await runJob(id);
 }
+/** `account` is (binding tenant, uuid); the job also covers that uuid's token at a child tenant (D16, amended). */
 export async function revokeAccount(subject: string, account: AccountRef, reason: RevocationReason, options: { fallback?: boolean } = {}): Promise<void> {
   const id = await enqueueRevocation(subject, reason, { ...options, account });
   await runJob(id);

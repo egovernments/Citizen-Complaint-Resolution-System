@@ -4,9 +4,11 @@ const f = vi.hoisted(() => ({ accounts: [] as DigitAccount[], access: true, org:
 vi.mock("../../src/modules/managed-accounts/digit-admin-session.js", () => ({
   withDigitAdmin: (fn: (token: string) => unknown) => fn("test-admin"),
 }));
+// Models egov-user: the tenant filter is exact and applies only when the search names one.
 vi.mock("../../src/modules/managed-accounts/digit-user-client.js", () => ({
-  searchAccounts: vi.fn(async (_token: string, query: { uuid: string[]; active: boolean }) =>
-    f.accounts.filter((account) => query.uuid.includes(account.uuid) && account.active === query.active)),
+  searchAccounts: vi.fn(async (_token: string, query: { tenantId?: string; uuid: string[]; active: boolean }) =>
+    f.accounts.filter((account) => query.uuid.includes(account.uuid) && account.active === query.active &&
+      (query.tenantId === undefined || account.tenantId === query.tenantId))),
 }));
 vi.mock("../../src/modules/bindings/predicate.js", () => ({
   staffAccess: vi.fn(async () => ({ allowed: f.access, binding: { uuid: "admin-uuid" } })),
@@ -14,7 +16,8 @@ vi.mock("../../src/modules/bindings/predicate.js", () => ({
 vi.mock("../../src/modules/onboarding/organization-reader.js", () => ({
   readOrganizationByTenant: vi.fn(async () => f.org ? { id: "org", enabled: true, lifecycle: "ACTIVE" } : null),
 }));
-import { validateBinding } from "../../src/modules/workspace-members/authority.js";
+import { readDigitAccount, validateBinding } from "../../src/modules/workspace-members/authority.js";
+import { searchAccounts } from "../../src/modules/managed-accounts/digit-user-client.js";
 const target = (): DigitAccount => ({ uuid: "employee-uuid", userName: "employee", name: "Employee", tenantId: "pg", type: "EMPLOYEE", active: false, roles: [{ code: "EMPLOYEE", tenantId: "pg" }] });
 const input = () => ({ subject: "employee", tenantId: "pg", uuid: "employee-uuid", actor: { kind: "migration" as const } });
 beforeEach(() => { f.accounts = [target()]; f.access = true; f.org = true; });
@@ -25,12 +28,38 @@ describe("binding actor validation", () => {
     f.accounts[0].active = true;
     await expect(validateBinding(input())).resolves.toBeUndefined();
   });
-  it.each(["missing", "wrong-type", "wrong-tenant", "managed"])("rejects %s targets even for migration", async (caseName) => {
+  it.each(["missing", "wrong-type", "another-root", "prefix-sharing-root", "prefix-sharing-child", "another-root-child", "managed"])("rejects %s targets even for migration", async (caseName) => {
     if (caseName === "missing") f.accounts = [];
     if (caseName === "wrong-type") f.accounts[0].type = "CITIZEN";
-    if (caseName === "wrong-tenant") f.accounts[0].tenantId = "elsewhere";
+    if (caseName === "another-root") f.accounts[0].tenantId = "elsewhere";
+    // D16 (amended) admits the workspace and its children only: `pgx` shares the prefix but is another root.
+    if (caseName === "prefix-sharing-root") f.accounts[0].tenantId = "pgx";
+    if (caseName === "prefix-sharing-child") f.accounts[0].tenantId = "pgx.citya";
+    if (caseName === "another-root-child") f.accounts[0].tenantId = "other.pg";
     if (caseName === "managed") f.accounts[0].userName = "kcbff-managed";
     await expect(validateBinding(input())).rejects.toMatchObject({ code: caseName === "managed" ? "DIGIT_ACCOUNT_MANAGED" : "DIGIT_ACCOUNT_NOT_FOUND" });
+  });
+  it.each(["pg.citya", "pg.citya.ward1"])("binds an EMPLOYEE account at the child tenant %s of the workspace (D16, amended)", async (tenantId) => {
+    f.accounts[0] = { ...target(), tenantId, active: true, roles: [{ code: "GRO", tenantId }] };
+    await expect(validateBinding(input())).resolves.toBeUndefined();
+    await expect(readDigitAccount("pg", "employee-uuid")).resolves.toMatchObject({ uuid: "employee-uuid", tenantId });
+    // egov-user filters tenantId exactly, so a workspace search would never return it: the uuid search names no tenant.
+    expect(vi.mocked(searchAccounts).mock.calls.at(-1)?.[1]).not.toHaveProperty("tenantId");
+  });
+  it("keeps the exact tenant for CITIZEN reads", async () => {
+    f.accounts[0] = { ...target(), type: "CITIZEN", tenantId: "pg.citya", active: true };
+    await expect(readDigitAccount("pg", "employee-uuid", "CITIZEN")).resolves.toBeNull();
+    expect(vi.mocked(searchAccounts).mock.calls.at(-1)?.[1]).toMatchObject({ tenantId: "pg" });
+  });
+  it("lets a workspace ACCOUNT_ADMIN bind a child-tenant employee through the browser", async () => {
+    f.accounts[0] = { ...target(), tenantId: "pg.citya", active: true, roles: [{ code: "EMPLOYEE", tenantId: "pg.citya" }, { code: "GRO", tenantId: "pg.citya" }] };
+    f.accounts.push({ ...target(), uuid: "admin-uuid", active: true, roles: [{ code: "ACCOUNT_ADMIN", tenantId: "pg" }] });
+    await expect(validateBinding({ ...input(), actor: { kind: "browser", subject: "admin", requestId: "request" } })).resolves.toBeUndefined();
+  });
+  it("requires ACCOUNT_ADMIN at the workspace itself, not at a child tenant", async () => {
+    f.accounts[0].active = true;
+    f.accounts.push({ ...target(), uuid: "admin-uuid", tenantId: "pg.citya", active: true, roles: [{ code: "ACCOUNT_ADMIN", tenantId: "pg.citya" }] });
+    await expect(validateBinding({ ...input(), actor: { kind: "browser", subject: "admin", requestId: "request" } })).rejects.toMatchObject({ code: "ADMIN_REQUIRED" });
   });
   it("still rejects an inactive employee for workload binding", async () => {
     await expect(validateBinding({ ...input(), actor: { kind: "workload", operationId: "op", restartNo: 0 } })).rejects.toMatchObject({ code: "DIGIT_ACCOUNT_NOT_FOUND" });

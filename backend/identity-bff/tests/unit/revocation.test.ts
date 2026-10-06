@@ -96,6 +96,46 @@ describe("token inventory and revocation", () => {
     expect(await getIdentitySession(sid)).toBeNull(); expect(await getIdentitySession(other)).not.toBeNull();
     expect(await readToken(second)).not.toBeNull();
   });
+  describe("a workspace binding to a child-tenant account (D16, amended)", () => {
+    // The binding (and every session) is at `ke`; the DIGIT account and its inventoried token are at `ke.nairobi`.
+    const city = { tenantId: "ke.nairobi", uuid: "uuid-city" };
+    const binding = { tenantId: "ke", uuid: city.uuid };
+    const selectAt = async (sessionId: string, tenantId: string) =>
+      saveSelectedIdentityContext(sessionId, { organizationId: "o", organizationAlias: "a", tenantId, name: "Tenant" });
+    it.each(["DIGIT_INACTIVE", "MEMBERSHIP_REMOVED", "BINDING_REMOVED"] as const)("%s at the binding tenant ends its sessions and the child-tenant token", async reason => {
+      const sid = await session(); await selectAt(sid, "ke");
+      await inventory(city, login(city, "city-token"), sid);
+      await revokeAccount(subject, binding, reason);
+      expect(await getIdentitySession(sid)).toBeNull();
+      expect(await readToken(city)).toBeNull();
+      expect(digit.revokeToken).toHaveBeenCalledWith("city-token");
+    });
+    it("a tenant-scoped job covers child tenants, never a prefix-sharing root or its child", async () => {
+      const outside = [{ tenantId: "kex", uuid: "uuid-kex" }, { tenantId: "kex.city", uuid: "uuid-kex-city" }];
+      await inventory(city, login(city, "city-token"));
+      for (const ref of outside) await inventory(ref, login(ref, `${ref.tenantId}-token`));
+      await enqueueRevocation(subject, "ORGANIZATION_DISABLED", { tenantId: "ke" });
+      await drainRevocationJobs();
+      expect(await readToken(city)).toBeNull();
+      for (const ref of outside) expect(await readToken(ref)).not.toBeNull();
+      expect(digit.revokeToken).toHaveBeenCalledExactlyOnceWith("city-token");
+    });
+    it("an account job at the binding tenant leaves another uuid's token at the same child tenant", async () => {
+      const neighbour = { tenantId: "ke.nairobi", uuid: "uuid-neighbour" };
+      await inventory(city, login(city, "city-token")); await inventory(neighbour, login(neighbour, "neighbour-token"));
+      await revokeAccount(subject, binding, "DIGIT_INACTIVE");
+      expect(await readToken(city)).toBeNull(); expect(await readToken(neighbour)).not.toBeNull();
+    });
+    it("recovers a lost child-tenant token with a grant at the account's own tenant", async () => {
+      vi.mocked(keycloak.getRevocationUser).mockResolvedValue({ id: subject, attributes: { "digit.accounts": [JSON.stringify({ v: 1, entries: [
+        { ...binding, accountTenantId: city.tenantId, kind: "staff", boundAt: 1, active: true, roles: [], userName: "city-staff", credential: { keyVersion: 1 } },
+      ] })] } });
+      vi.mocked(credentials.findLiveStaffToken).mockResolvedValue(login(city, "recovered-token"));
+      await revokeAccount(subject, binding, "DIGIT_INACTIVE");
+      expect(credentials.findLiveStaffToken).toHaveBeenCalledExactlyOnceWith({ ...city, userName: "city-staff", keyVersion: 1 });
+      expect(digit.revokeToken).toHaveBeenCalledWith("recovered-token");
+    });
+  });
   it("persists failed logout in retry set and drains after recovery", async () => {
     await inventory(); vi.mocked(digit.revokeToken).mockRejectedValue(new Error("unavailable"));
     await revokePerson(subject, "LOGOUT_ALL");

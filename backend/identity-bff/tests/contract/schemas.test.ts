@@ -19,6 +19,11 @@ describe("digit.accounts v1", () => {
     expect(schemaErrors("digit.accounts", { v: 1, mirroredAt: 1791100001000, entries: [staff, citizen] })).toEqual([]);
   });
 
+  it("accepts a workspace staff entry whose account sits at a child tenant (D16, amended)", () => {
+    const entry = { ...staff, tenantId: "ke", accountTenantId: "ke.nairobi", roles: [{ code: "GRO", tenantId: "ke.nairobi" }] };
+    expect(schemaErrors("digit.accounts", { v: 1, entries: [entry] })).toEqual([]);
+  });
+
   it("accepts a missing account and a legacy dotted role tenant", () => {
     const entry = { ...staff, missing: true, roles: [{ code: "EMPLOYEE", tenantId: "pg.citya" }] };
     expect(schemaErrors("digit.accounts", { v: 1, entries: [entry] })).toEqual([]);
@@ -30,6 +35,8 @@ describe("digit.accounts v1", () => {
     ["an empty staff name", { v: 1, entries: [{ ...staff, name: "" }] }],
     ["an unknown kind", { v: 1, entries: [{ ...staff, kind: "managed" }] }],
     ["a sub-tenant entry (D16)", { v: 1, entries: [{ ...staff, tenantId: "pg.citya" }] }],
+    ["a plain accountTenantId (it names a child tenant)", { v: 1, entries: [{ ...staff, accountTenantId: "pgx" }] }],
+    ["a citizen accountTenantId", { v: 1, entries: [{ ...citizen, accountTenantId: "pg.citya" }] }],
     ["a missing roles array", { v: 1, entries: [{ ...staff, roles: undefined }] }],
     ["a lower-case role code", { v: 1, entries: [{ ...staff, roles: [{ code: "gro", tenantId: "pg" }] }] }],
     ["key version 0", { v: 1, entries: [{ ...staff, credential: { keyVersion: 0 } }] }],

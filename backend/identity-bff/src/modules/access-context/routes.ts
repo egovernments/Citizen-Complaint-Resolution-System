@@ -202,7 +202,9 @@ export function registerAccessContextRoutes(app: express.Application): void {
           let token = await cachedToken(lease, account);
           if (!token) {
             const recorded = accountEntries(await readBindingUser(subject)).find((e) => e.kind === "staff" && e.tenantId === tenantId && e.uuid === account.uuid);
-            token = access.binding ? await staffLogin({ tenantId, uuid: account.uuid, userName: account.userName, keyVersion: recorded?.credential?.keyVersion }, lease)
+            // The grant, the derived credential and the inventory key use the account's own tenant: a `ke`
+            // workspace may bind a `ke.nairobi` employee, whose token Kong authorizes at `ke.nairobi` (D16, amended).
+            token = access.binding ? await staffLogin({ tenantId: account.tenantId, uuid: account.uuid, userName: account.userName, keyVersion: recorded?.credential?.keyVersion }, lease)
               : await managedUserLogin(identity, current.sessionId);
             minted = token;
             if (access.binding) await recordToken(lease, account, token, "staff");

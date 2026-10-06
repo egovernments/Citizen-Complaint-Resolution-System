@@ -12,7 +12,8 @@
     "entries": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/entry" } }
   },
   "$defs": {
-    "tenantId": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,50}$", "description": "A plain tenant id (D16: no sub-tenants)" },
+    "tenantId": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,50}$", "description": "A plain tenant id: the workspace (root) tenant (D16)" },
+    "childTenantId": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,50}(\\.[A-Za-z0-9_-]{1,50}){1,3}$", "description": "A dotted child tenant id such as ke.nairobi (D16, amended)" },
     "roleTenantId": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,50}(\\.[A-Za-z0-9_-]{1,50}){0,3}$", "description": "Copied from egov-user as is; legacy data may hold a dotted city tenant" },
     "uuid": { "type": "string", "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$" },
     "role": {
@@ -30,7 +31,8 @@
       "additionalProperties": false,
       "properties": {
         "kind": { "enum": ["staff", "citizen"] },
-        "tenantId": { "$ref": "#/$defs/tenantId", "description": "The DIGIT account's tenant (egov-user tenantId). For staff, the binding tenant" },
+        "tenantId": { "$ref": "#/$defs/tenantId", "description": "For staff, the binding (workspace) tenant. For citizens, the DIGIT account's tenant (egov-user tenantId)" },
+        "accountTenantId": { "$ref": "#/$defs/childTenantId", "description": "Staff only, present only when it differs from tenantId: the DIGIT account's own tenant, a child of the workspace tenant (D16, amended). The token inventory, the derived credential and DIGIT reads and writes use it; the code also checks it is a child of tenantId" },
         "uuid": { "$ref": "#/$defs/uuid" },
         "boundAt": { "type": "integer", "minimum": 0, "description": "Epoch ms the account was first bound or linked. Never rewritten. Orders entries for D12" },
         "active": { "type": "boolean", "description": "DIGIT active, as last mirrored" },
@@ -50,7 +52,7 @@
         }
       },
       "if": { "properties": { "kind": { "const": "citizen" } } },
-      "then": { "not": { "anyOf": [{ "required": ["credential"] }, { "required": ["name"] }] } }
+      "then": { "not": { "anyOf": [{ "required": ["credential"] }, { "required": ["name"] }, { "required": ["accountTenantId"] }] } }
     }
   }
 }

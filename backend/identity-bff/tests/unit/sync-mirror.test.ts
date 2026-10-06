@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import { config } from "../../src/infrastructure/config.js";
 import { initCache, closeCache, getRedis } from "../../src/infrastructure/redis.js";
 import { ensureCitizenEntry, mirrorPerson } from "../../src/modules/sync/mirror.js";
+import { accountEntries, accountRef } from "../../src/modules/sync/state.js";
 import { withPersonLease } from "../../src/modules/accounts/person-lease.js";
 import type { UserRepresentation } from "../../src/modules/sync/keycloak-writer.js";
 import type { DigitAccount } from "../../src/modules/managed-accounts/digit-user-client.js";
@@ -62,6 +63,24 @@ describe("DIGIT mirror", () => {
     expect(mirrorEntries()).toEqual([{ ...entry("staff"), userName: "employee-staff", name: "Staff Name" }]);
     expect(user.attributes!["digit.bindings"]).toEqual(before);
     expect(writes[0]).not.toHaveProperty("enabled");
+  });
+
+  it("records a child-tenant account's own tenant on the workspace entry, and its credential (D16, amended)", async () => {
+    accounts = { staff: { ...account("staff"), tenantId: "tenant.city", roles: [{ code: "GRO", tenantId: "tenant.city" }] } };
+    await mirrorPerson(subject, { credential: { tenantId: "tenant.city", keyVersion: 2, setAt: 5 } });
+    expect(mocks.read).toHaveBeenCalledWith(expect.objectContaining({ kind: "staff", tenantId: "tenant", uuid: "staff" }));
+    expect(mirrorEntries()).toEqual([{ ...entry("staff"), accountTenantId: "tenant.city", roles: [{ code: "GRO", tenantId: "tenant.city" }],
+      userName: "employee-staff", name: "Staff Name", credential: { keyVersion: 2, setAt: 5 } }]);
+    // A hint for the workspace tenant itself names another account: the child entry's credential is kept.
+    await mirrorPerson(subject, { credential: { tenantId: "tenant", keyVersion: 3, setAt: 6 } });
+    expect(mirrorEntries()[0]).toMatchObject({ accountTenantId: "tenant.city", credential: { keyVersion: 2, setAt: 5 } });
+    // The entry survives a pass that cannot read the account, and drops the child tenant once DIGIT moves it home.
+    accounts = {};
+    await mirrorPerson(subject);
+    expect(mirrorEntries()[0]).toMatchObject({ accountTenantId: "tenant.city", missing: true, active: false });
+    accounts = { staff: account("staff") };
+    await mirrorPerson(subject);
+    expect(mirrorEntries()[0]).not.toHaveProperty("accountTenantId");
   });
 
   it("does no second PUT for its own mirror event or an unchanged periodic pass", async () => {
@@ -211,5 +230,21 @@ describe("resolved citizen entry", () => {
     await ensureCitizenEntry(subject, { tenantId: "tenant", uuid: "citizen" });
     expect(mirrorEntries().filter((item: any) => item.kind === "citizen")).toHaveLength(1);
     expect(mirrorEntries()[0].active).toBe(true);
+  });
+});
+
+describe("digit.accounts accountTenantId (D16, amended)", () => {
+  const doc = (extra: object, kind = "staff") => ({ attributes: { "digit.accounts": [JSON.stringify({ v: 1, entries: [{ ...entry("staff", kind, "ke"), ...extra }] })] } });
+  it("reads a child-tenant account and keys it by the account's own tenant", () => {
+    const [read] = accountEntries(doc({ accountTenantId: "ke.nairobi" }));
+    expect(accountRef(read)).toEqual({ tenantId: "ke.nairobi", uuid: "staff" });
+    expect(accountRef(accountEntries(doc({}))[0])).toEqual({ tenantId: "ke", uuid: "staff" });
+  });
+  it.each([["a prefix-sharing root", "kex"], ["a prefix-sharing child", "kex.city"], ["another root's child", "pg.ke"],
+    ["the workspace itself (omit it instead)", "ke"]])("fails closed on %s", (_name, accountTenantId) => {
+    expect(() => accountEntries(doc({ accountTenantId }))).toThrow("Invalid digit.accounts entry");
+  });
+  it("fails closed on a citizen accountTenantId", () => {
+    expect(() => accountEntries(doc({ accountTenantId: "ke.nairobi" }, "citizen"))).toThrow("Invalid digit.accounts entry");
   });
 });

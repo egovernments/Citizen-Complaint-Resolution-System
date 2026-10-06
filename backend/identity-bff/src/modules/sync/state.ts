@@ -1,8 +1,15 @@
 import type { UserRepresentation } from "./keycloak-writer.js";
+import { withinWorkspace } from "../bindings/tenant-scope.js";
 
 export interface AccountEntry {
   kind: "staff" | "citizen";
+  /** The binding (workspace) tenant for staff; the DIGIT account's tenant for citizens. */
   tenantId: string;
+  /**
+   * Staff only, and only when it differs from `tenantId`: the DIGIT account's own tenant, a child of the
+   * workspace (D16, amended; `ke.nairobi` under `ke`). Tokens, the derived credential and DIGIT reads use it.
+   */
+  accountTenantId?: string;
   uuid: string;
   boundAt: number;
   active: boolean;
@@ -34,6 +41,8 @@ export function accountEntries(user: UserRepresentation): AccountEntry[] {
         typeof entry.uuid !== "string" || !Number.isSafeInteger(entry.boundAt) || entry.boundAt < 0 ||
         typeof entry.active !== "boolean" || !Array.isArray(entry.roles) ||
         (entry.name !== undefined && (entry.kind !== "staff" || typeof entry.name !== "string")) ||
+        (entry.accountTenantId !== undefined && (entry.kind !== "staff" || entry.accountTenantId === entry.tenantId ||
+          !withinWorkspace(entry.accountTenantId, entry.tenantId))) ||
         entry.roles.some((role: { code?: unknown; tenantId?: unknown }) =>
           !role || typeof role.code !== "string" || typeof role.tenantId !== "string")) {
       throw new Error("Invalid digit.accounts entry");
@@ -43,6 +52,11 @@ export function accountEntries(user: UserRepresentation): AccountEntry[] {
     seen.add(key);
   }
   return value.entries;
+}
+
+/** The DIGIT account an entry names: what the token inventory, the credential and DIGIT reads are keyed by. */
+export function accountRef(entry: Pick<AccountEntry, "tenantId" | "uuid" | "accountTenantId">): { tenantId: string; uuid: string } {
+  return { tenantId: entry.accountTenantId ?? entry.tenantId, uuid: entry.uuid };
 }
 
 export function canonical(value: unknown): string {

@@ -140,10 +140,12 @@ export async function runReconcile(): Promise<ReconcileResult> {
               // The store persists pending expiry under the established lock order.
               const bindings = await readBindings(subject, user);
               const snapshot = await readMirrorSnapshot(subject);
-              const revoke = async (account: { tenantId: string; uuid: string }, reason: Parameters<typeof revokeAccount>[2], fallback = false) => {
+              // Jobs are scoped by (binding tenant, uuid): revocation matches a token by uuid at that tenant or a
+              // child (D16, amended), so a `ke` binding's `ke.nairobi` token and `ke`-bound sessions are both covered.
+              const revoke = async (entry: { tenantId: string; uuid: string }, reason: Parameters<typeof revokeAccount>[2], fallback = false) => {
                 await assertHeld();
                 await lease.assertHeld();
-                await revokeAccount(subject, account, reason, { fallback });
+                await revokeAccount(subject, { tenantId: entry.tenantId, uuid: entry.uuid }, reason, { fallback });
                 result.revoked++;
               };
               if (snapshot.user.enabled === false) {
