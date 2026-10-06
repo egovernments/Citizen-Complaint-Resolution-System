@@ -8,17 +8,20 @@ import { useTranslate } from 'ra-core';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
-  credLabelKey,
+  credentialFieldLabel,
   type CatalogCredentialField,
   type CredentialValues,
 } from './providerCatalog';
 
 export function ProviderCredentialFields({
+  type,
   fields,
   values,
   onChange,
   disabled,
 }: {
+  /** Catalog type the fields belong to (`smtp`, `ozeki`, …): labels are looked up per type. */
+  type: string;
   fields: CatalogCredentialField[];
   values: CredentialValues;
   onChange: (key: string, value: string | boolean) => void;
@@ -37,7 +40,7 @@ export function ProviderCredentialFields({
   return (
     <div className="space-y-3">
       {fields.map((f) => {
-        const label = t(credLabelKey(f.key), { _: f.label });
+        const label = credentialFieldLabel(t, type, f);
         return (
           <div key={f.key} className="space-y-1.5">
             {f.type === 'checkbox' ? (

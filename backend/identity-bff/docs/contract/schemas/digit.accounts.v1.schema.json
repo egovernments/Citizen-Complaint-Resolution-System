@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:digit:identity:digit.accounts:v1",
+  "title": "digit.accounts v1: the DIGIT accounts a person holds, mirrored from DIGIT into Keycloak",
+  "description": "Single-valued Keycloak user attribute holding this JSON. Written only by the BFF sync module (DIGIT -> Keycloak mirror) and the credential writer (credential.keyVersion). It never authorizes anything on its own: the binding state lives in digit.bindings.",
+  "type": "object",
+  "required": ["v", "entries"],
+  "additionalProperties": false,
+  "properties": {
+    "v": { "const": 1 },
+    "mirroredAt": { "type": "integer", "minimum": 0, "description": "Epoch ms of the last successful mirror for this person" },
+    "entries": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/entry" } }
+  },
+  "$defs": {
+    "tenantId": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,50}$", "description": "A plain tenant id (D16: no sub-tenants)" },
+    "roleTenantId": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,50}(\\.[A-Za-z0-9_-]{1,50}){0,3}$", "description": "Copied from egov-user as is; legacy data may hold a dotted city tenant" },
+    "uuid": { "type": "string", "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$" },
+    "role": {
+      "type": "object",
+      "required": ["code", "tenantId"],
+      "additionalProperties": false,
+      "properties": {
+        "code": { "type": "string", "pattern": "^[A-Z0-9_]{1,64}$" },
+        "tenantId": { "$ref": "#/$defs/roleTenantId" }
+      }
+    },
+    "entry": {
+      "type": "object",
+      "required": ["kind", "tenantId", "uuid", "boundAt", "active", "roles"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "enum": ["staff", "citizen"] },
+        "tenantId": { "$ref": "#/$defs/tenantId", "description": "The DIGIT account's tenant (egov-user tenantId). For staff, the binding tenant" },
+        "uuid": { "$ref": "#/$defs/uuid" },
+        "boundAt": { "type": "integer", "minimum": 0, "description": "Epoch ms the account was first bound or linked. Never rewritten. Orders entries for D12" },
+        "active": { "type": "boolean", "description": "DIGIT active, as last mirrored" },
+        "roles": { "type": "array", "uniqueItems": true, "maxItems": 128, "items": { "$ref": "#/$defs/role" } },
+        "userName": { "type": "string", "minLength": 1, "maxLength": 180, "description": "DIGIT userName (immutable in egov-user). Lets revocation sign in without a search" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 256, "description": "Staff only: the whole DIGIT name of this tenant's account, as last mirrored (never a masked value). The tenant member list reads it instead of the person-wide firstName" },
+        "missing": { "const": true, "description": "Present only when the DIGIT account has disappeared (design 4). The entry stays; it is never silently dropped" },
+        "credential": {
+          "type": "object",
+          "required": ["keyVersion"],
+          "additionalProperties": false,
+          "description": "Staff only. Absent until the derived credential is first set (design 6)",
+          "properties": {
+            "keyVersion": { "type": "integer", "minimum": 1 },
+            "setAt": { "type": "integer", "minimum": 0, "description": "Epoch ms the derived password was last written to egov-user" }
+          }
+        }
+      },
+      "if": { "properties": { "kind": { "const": "citizen" } } },
+      "then": { "not": { "anyOf": [{ "required": ["credential"] }, { "required": ["name"] }] } }
+    }
+  }
+}

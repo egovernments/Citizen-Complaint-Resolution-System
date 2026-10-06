@@ -7,13 +7,11 @@ export default defineConfig({
     hookTimeout: 30000,
     globalSetup: "./tests/setup.ts",
     setupFiles: ["./tests/worker-setup.ts"],
+    // Globs, so a new test file can't be silently left out of the run.
     include: [
-      "tests/unit/keycloak-admin-session.test.ts",
-      "tests/unit/token-verifier.test.ts",
-      "tests/unit/managed-digit-users.test.ts",
-      "tests/unit/config.test.ts",
-      "tests/e2e/identity-bff.test.ts",
-      "tests/e2e/onboarding-worker.test.ts",
+      "tests/unit/**/*.test.ts",
+      "tests/contract/**/*.test.ts",
+      "tests/e2e/**/*.test.ts",
     ],
     pool: "forks",
     fileParallelism: false,

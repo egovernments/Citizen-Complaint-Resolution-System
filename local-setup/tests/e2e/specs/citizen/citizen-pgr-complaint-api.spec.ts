@@ -17,7 +17,7 @@
  */
 import { test, expect } from '@playwright/test';
 import { PgrInboxPage } from '../../pages/pgr-inbox.page';
-import { getDigitToken, loginViaApi } from '../../utils/auth';
+import { getDigitToken, loginViaApi, appBase } from '../../utils/auth';
 import { getMobileValidationRule, generateValidMobile } from '../../common/mdms-mobile';
 import { pickRandomLeafBoundary, type Boundary } from '../../common/mdms-boundary';
 import { pickRandomServiceCode, type ServiceDef } from '../../common/mdms-servicedef';
@@ -145,7 +145,7 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
     });
 
     // Navigate to citizen login
-    await page.goto(`${BASE_URL}/digit-ui/citizen/login`, {
+    await page.goto(`${BASE_URL}${appBase()}/citizen/login`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });
@@ -326,7 +326,7 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
 
     await loginViaApi(page, { baseURL: BASE_URL, tenant: TENANT, username: EMPLOYEE_USER, password: EMPLOYEE_PASS });
 
-    await page.goto(`/digit-ui/employee/pgr/complaint/details/${serviceRequestId}`, {
+    await page.goto(`${appBase()}/employee/pgr/complaint/details/${serviceRequestId}`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });
@@ -433,7 +433,7 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
 
     await loginViaApi(page, { baseURL: BASE_URL, tenant: TENANT, username: EMPLOYEE_USER, password: EMPLOYEE_PASS });
 
-    await page.goto(`/digit-ui/employee/pgr/complaint/details/${serviceRequestId}`, {
+    await page.goto(`${appBase()}/employee/pgr/complaint/details/${serviceRequestId}`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });
@@ -501,7 +501,7 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
 
     await loginViaApi(page, { baseURL: BASE_URL, tenant: TENANT, username: EMPLOYEE_USER, password: EMPLOYEE_PASS });
 
-    await page.goto(`/digit-ui/employee/pgr/complaint/details/${serviceRequestId}`, {
+    await page.goto(`${appBase()}/employee/pgr/complaint/details/${serviceRequestId}`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });

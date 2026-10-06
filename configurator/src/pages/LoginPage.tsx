@@ -1,3 +1,5 @@
+import { enterWorkspace } from '@/identity/entry';
+import { Invitations } from '@/identity/Invitations';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { AlertCircle, ArrowRight, CheckCircle2, Loader2, LogOut, Mail } from 'lucide-react';
@@ -6,22 +8,20 @@ import {
   type SessionUser,
   type TenantOption,
   authMethods,
-  logout,
   requestPasswordSetup,
-  selectContext,
   session,
+  type Invitation,
   startSignIn,
-  tenantReadiness,
   tenants,
 } from '@/api/onboarding';
 import { AuthShell } from '@/components/signup/AuthPanel';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { clearLocalSession, installDigitContext, SESSION_EXPIRED_KEY } from '@/lib/session';
+import { SESSION_EXPIRED_KEY, clearSignOutIncomplete, signOutIncomplete, signOutThisDevice } from '@/lib/session';
 import { useAuthResult } from '@/hooks/useAuthResult';
 
-type Phase = 'loading' | 'methods' | 'tenants' | 'noAccess' | 'setupRequired' | 'entering';
+type Phase = 'loading' | 'methods' | 'tenants' | 'noAccess' | 'invitations' | 'entering';
 
 function expiredSessionMessage(): string | null {
   try {
@@ -42,7 +42,7 @@ export default function LoginPage() {
   const [methods, setMethods] = useState<AuthMethod[]>([]);
   const [tenantOptions, setTenantOptions] = useState<TenantOption[]>([]);
   const [identityUser, setIdentityUser] = useState<SessionUser | null>(null);
-  const [gatedTenant, setGatedTenant] = useState<TenantOption | null>(null);
+  const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [error, setError] = useState<string | null>(expiredSessionMessage);
   const [notice, setNotice] = useState<string | null>(null);
   const [noticeTitle, setNoticeTitle] = useState('Check your email');
@@ -51,15 +51,23 @@ export default function LoginPage() {
   );
   const [email, setEmail] = useState('');
   const [sending, setSending] = useState(false);
+  const [incompleteSignOut, setIncompleteSignOut] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const current = await session();
-      if (current.authenticated && current.user) {
+      // The last sign-out in this tab could not end the identity session, so
+      // its cookie may still be live: never resume it without an explicit sign-in.
+      const incomplete = signOutIncomplete();
+      setIncompleteSignOut(incomplete);
+      const current = incomplete ? null : await session();
+      if (current?.authenticated && current.user) {
         setIdentityUser(current.user);
         const available = await tenants();
         setTenantOptions(available.tenants);
-        setPhase(available.tenants.length ? 'tenants' : 'noAccess');
+        setInvitations(current.pendingInvitations ?? []);
+        if (available.tenants.length) setPhase('tenants');
+        else if (current.pendingInvitations?.length) setPhase('invitations');
+        else window.location.assign('/configurator/signup');
         return;
       }
       const available = await authMethods('signin');
@@ -80,17 +88,9 @@ export default function LoginPage() {
 
   const enter = async (option: TenantOption) => {
     setError(null);
-    const readiness = tenantReadiness(option);
-    if (readiness && readiness !== 'READY') {
-      setGatedTenant(option);
-      setPhase('setupRequired');
-      return;
-    }
     setPhase('entering');
     try {
-      const context = await selectContext(option.tenantId);
-      installDigitContext(context, identityUser);
-      window.location.assign('/configurator/manage');
+      await enterWorkspace(option.tenantId, identityUser);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not open that workspace.');
       setPhase('tenants');
@@ -133,14 +133,14 @@ export default function LoginPage() {
     }
   };
 
+  const signIn = (methodId: string) => {
+    clearSignOutIncomplete();
+    startSignIn(methodId, 'signin');
+  };
+
   const signOut = async () => {
-    clearLocalSession();
-    await logout().catch(() => undefined);
-    setIdentityUser(null);
-    setError(null);
-    setNotice(null);
-    setShowPasswordSetup(false);
-    setPhase('loading');
+    await signOutThisDevice();
+    setIdentityUser(null); setError(null); setNotice(null); setShowPasswordSetup(false); setPhase('loading');
     await load();
   };
 
@@ -192,16 +192,18 @@ export default function LoginPage() {
                 key={option.tenantId}
                 variant="outline"
                 className="h-auto min-h-11 w-full justify-between px-4 py-3 text-left"
+                disabled={option.code === 'DIGIT_ACCOUNT_INACTIVE'}
                 onClick={() => void enter(option)}
               >
                 <span>
                   <span className="block font-semibold text-foreground">{option.name}</span>
-                  <span className="block text-xs font-normal text-muted-foreground">{option.tenantId}</span>
+                  <span className="block text-xs font-normal text-muted-foreground">{option.tenantId}{option.code ? ' — account inactive' : ''}</span>
                 </span>
                 <span aria-hidden="true">→</span>
               </Button>
             ))}
           </div>
+          {invitations.length > 0 && <Invitations invitations={invitations} onAccepted={load} />}
           <Button
             variant="link"
             className="h-auto w-full p-0"
@@ -219,31 +221,7 @@ export default function LoginPage() {
     );
   }
 
-  if (phase === 'setupRequired' && gatedTenant) {
-    return (
-      <AuthShell>
-        <section className="space-y-5">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-primary">Workspace</p>
-            <h1 className="mt-2 text-[28px] font-semibold leading-[1.15]">Workspace setup required</h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Your identity and membership are ready, but {gatedTenant.name} is not ready for management yet.
-            </p>
-          </div>
-          <div className="rounded-lg border bg-muted/40 px-4 py-3 text-sm">
-            <div className="font-semibold">{gatedTenant.name}</div>
-            <div className="text-xs text-muted-foreground">{gatedTenant.tenantId}</div>
-          </div>
-          <Button variant="outline" className="h-11 w-full" onClick={() => setPhase('tenants')}>
-            Choose another workspace
-          </Button>
-          <Button variant="tertiary" className="w-full" onClick={() => void signOut()}>
-            Sign out
-          </Button>
-        </section>
-      </AuthShell>
-    );
-  }
+  if (phase === 'invitations') return <AuthShell><Invitations invitations={invitations} onAccepted={load} /></AuthShell>;
 
   if (phase === 'noAccess') {
     return (
@@ -277,7 +255,7 @@ export default function LoginPage() {
     );
   }
 
-  const hostedSignIn = methods.find((method) => method.type === 'password');
+  const hostedSignIn = methods.find((method) => method.type === 'password' || method.type === 'hosted');
   return (
     <AuthShell>
       <section className="space-y-5">
@@ -289,10 +267,20 @@ export default function LoginPage() {
           </p>
         </div>
 
+        {incompleteSignOut && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Sign-out may be incomplete</AlertTitle>
+            <AlertDescription>
+              Close the browser or try again.
+              <Button variant="link" className="h-auto p-0" onClick={() => void signOut()}>Try signing out again</Button>
+            </AlertDescription>
+          </Alert>
+        )}
         {banner}
 
         {hostedSignIn ? (
-          <Button className="h-11 w-full" onClick={() => startSignIn(hostedSignIn.id, 'signin')}>
+          <Button className="h-11 w-full" onClick={() => signIn(hostedSignIn.id)}>
             Log in
             <ArrowRight data-icon="inline-end" />
           </Button>

@@ -7,6 +7,11 @@ labels:
 ingress:
   enabled: true
   context: "digit-ui"
+  # D26: canonical UI URLs are tenant-scoped. Keep the old /digit-ui ingress
+  # absent; tenant-ingress.yaml is the only public digit-ui route.
+  legacyPathEnabled: false
+  # Optional migration redirect: /digit-ui/... -> /<slug>/digit-ui/...
+  defaultTenantSlug: ""
 
 # Init Containers Configs
 initContainers: {}
@@ -54,9 +59,6 @@ globalConfigs:
   mdmsContext: "mdms-v2"
   hrmsContext: "egov-hrms"
   invalidEmployeeRoles: ["SYSTEM"]
-  authProvider: "digit"
-  citizenAuthProvider: "digit"
-  employeeAuthProvider: "digit"
   pgrBoundaryHighestLevel: "District"
   pgrBoundaryLowestLevel: "Ward"
   boundaryType: "Ward"
@@ -65,14 +67,9 @@ globalConfigs:
   mapCenter: {"lat": 20.5937, "lng": 78.9629}
   mapTenant: "pg"
   employeeModuleDenylist: ["IM"]
-  loginTenantAllowlist: []
   coreMobileConfigs: {"countryCode": "+91", "mobileNumberRegex": "^[6-9][0-9]{9}$"}
   corePostalConfigs: {}
   dashboardMetricsEnabled: false
-  keycloakUrl: ""
-  keycloakRealm: ""
-  keycloakClientId: ""
-  tokenExchangeUrl: ""
 
 extraVolumes: |
   - name: digit-ui-config

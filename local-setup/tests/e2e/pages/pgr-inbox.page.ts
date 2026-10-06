@@ -1,4 +1,5 @@
 import { type Page } from '@playwright/test';
+import { appBase } from '../utils/auth';
 
 export class PgrInboxPage {
   readonly page: Page;
@@ -8,7 +9,7 @@ export class PgrInboxPage {
   }
 
   async goto() {
-    await this.page.goto('/digit-ui/employee/pgr/inbox', { timeout: 30_000 });
+    await this.page.goto(`${appBase()}/employee/pgr/inbox`, { timeout: 30_000 });
     // Wait for the inbox to render (header or content area)
     // Don't use networkidle — PGR search may poll continuously.
     await this.page.waitForTimeout(8000);

@@ -1,6 +1,9 @@
+import { deactivateAndRemove, requiredEmail, type MemberEmployee } from '@/identity/memberActions';
+import { apiClient } from '@/api/client';
 import { boundaryService, hrmsService, localizationService, mdmsService } from '@/api';
 import type { Employee } from '@/api/types';
 import { listMasters, recordDepartments, recordName } from '../departments/mastersApi';
+import { readLocales } from '../labelLocales';
 
 /**
  * Employees for the Employees step: the choices the add dialog offers (from
@@ -56,13 +59,13 @@ export async function loadEmployeeOptions(tenantId: string): Promise<EmployeeOpt
     const levels = (hierarchy.boundaryHierarchy ?? []).map((level) => level.boundaryType);
     // Relationship search returns codes only; a boundary's name is its label in
     // rainmaker-boundary-<hierarchy>, keyed by the code, as Geography writes it.
-    const [found, labels] = await Promise.all([
+    // Active UI locale first, en_IN as the fallback.
+    const labelModule = `rainmaker-boundary-${hierarchy.hierarchyType.toLowerCase()}`;
+    const [found, ...labelSets] = await Promise.all([
       boundaryService.searchBoundaries(tenantId, { hierarchyType: hierarchy.hierarchyType }).catch(() => []),
-      localizationService
-        .searchMessages(tenantId, 'en_IN', `rainmaker-boundary-${hierarchy.hierarchyType.toLowerCase()}`)
-        .catch(() => []),
+      ...readLocales().map((locale) => localizationService.searchMessages(tenantId, locale, labelModule).catch(() => [])),
     ]);
-    const nameOf = new Map(labels.map((label) => [label.code, label.message]));
+    const nameOf = new Map(labelSets.reverse().flat().map((label) => [label.code, label.message]));
     for (const boundary of found) {
       boundaries.push({
         code: boundary.code,
@@ -141,7 +144,7 @@ export async function addEmployee(tenantId: string, input: NewEmployee, options:
     name: input.name.trim(),
     userName,
     mobileNumber: input.mobileNumber,
-    emailId: input.emailId?.trim() || undefined,
+    emailId: requiredEmail(input.emailId),
     // buildEmployee makes the first the current assignment and the rest history.
     department: input.departments.join(','),
     designation: input.designation,
@@ -160,12 +163,16 @@ export async function addEmployee(tenantId: string, input: NewEmployee, options:
 
 /** Deactivate, as management's delete does: HRMS keeps the record, marked inactive. */
 export async function removeEmployee(employee: Employee): Promise<void> {
-  const deactivated = {
-    ...employee,
-    isActive: false,
-    deactivationDetails: [{ reasonForDeactivation: 'OTHERS', effectiveFrom: Date.now() }],
-  } as Employee;
-  await hrmsService.updateEmployee(deactivated);
+  await deactivateAndRemove(
+    async () => {
+      const rows = await hrmsService.searchEmployees(employee.tenantId, { codes: [employee.code] });
+      const fresh = rows.find(row => row.uuid === employee.uuid || row.code === employee.code);
+      if (!fresh) throw new Error('Employee no longer exists in HRMS.');
+      return fresh as unknown as MemberEmployee;
+    },
+    row => hrmsService.updateEmployee(row as unknown as Employee),
+    apiClient.getAuth().user?.uuid,
+  );
 }
 
 export function currentAssignment(employee: Employee) {

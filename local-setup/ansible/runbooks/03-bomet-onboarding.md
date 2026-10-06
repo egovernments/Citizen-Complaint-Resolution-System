@@ -113,7 +113,7 @@ curl -s -X POST 'http://127.0.0.1/user/oauth/token' -H 'Host: localhost' \
 #   http://localhost/configurator/   (ADMIN / eGov@123 @ ke)
 #   http://localhost/digit-ui/       (employee)
 #   http://localhost/digit-ui/citizen  (citizen: any 7XXXXXXXX mobile, OTP 123456
-#                                       when CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED=true)
+#                                       when identity_dev_fixed_otp: true sets CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED=true)
 ```
 
 ---

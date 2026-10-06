@@ -22,7 +22,7 @@ E2E_EMP_USER=<employee> E2E_EMP_PASS=<pass> \
   ./run-notif-suite.sh --only=A,C              # a subset
 ```
 
-Env (full list in [`notif-harness.js`](./notif-harness.js)): `BASE`, `DIGIT_TENANT`, `SERVICE_CODE`, `SERVICE_NAME`, `LOCALITY`, `TEST_PHONE` (with `TEST_PHONE_COUNTRY_CODE`, default `91`, or `TEST_PHONE_NATIONAL`: the OTP case sends the number without its country code), `TEST_EMAIL`, `E2E_EMP_USER`, `E2E_EMP_PASS`, `NOVU_API_KEY` (auto-resolved from the `novu-bridge` container if unset), `PG_CONTAINER`.
+Env (full list in [`notif-harness.js`](./notif-harness.js)): `BASE`, `DIGIT_TENANT`, `E2E_TENANT_SLUG` (required: the shared complaint's citizen signs in through the Identity BFF's phone OTP, which needs the box's fixed dev OTP, `identity_dev_fixed_otp: true`, or `E2E_OTP`), `E2E_PUBLIC_ORIGIN` (when `BASE` is not the origin the BFF trusts), `SERVICE_CODE`, `SERVICE_NAME`, `LOCALITY`, `TEST_PHONE` (with `TEST_PHONE_COUNTRY_CODE`, default `91`, or `TEST_PHONE_NATIONAL`: the OTP case sends the number without its country code), `TEST_EMAIL`, `E2E_EMP_USER`, `E2E_EMP_PASS`, `NOVU_API_KEY` (auto-resolved from the `novu-bridge` container if unset), `PG_CONTAINER`.
 
 ## Legend
 

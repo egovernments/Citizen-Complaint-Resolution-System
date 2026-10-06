@@ -151,3 +151,84 @@ test("the citizen rail offers the public dashboard only once it is published", (
   );
   assert.equal(publicDashboardEnabled([{ id: "other", publicDashboardEnabled: true }, null]), true);
 });
+
+test("on a tenant route MDMS rows match the app id and move onto the tenant route", () => {
+  const rows = mdmsLinkRows(LINK_DATA, {
+    contextPath: "digit-ui",
+    rebaseUrl: (url) => url.replace(/^\/digit-ui\//, "/kd/digit-ui/"),
+  });
+  assert.deepEqual(rows.map((r) => r.navigationUrl), [
+    "/kd/digit-ui/citizen/ws-home",
+    "/kd/digit-ui/citizen/pgr-home",
+    "https://example.org/faq",
+  ]);
+});
+
+// useEmployeeNavItems builds the rows from MDMS actions that carry
+// `/digit-ui/employee/...`. On a tenant route they must stay on the route.
+const NAV_OUT = path.join(os.tmpdir(), `employeeNavItems.cjs.${process.pid}.js`);
+process.on("exit", () => {
+  try {
+    fs.unlinkSync(NAV_OUT);
+  } catch {
+    // Best effort; the temp file is process-scoped.
+  }
+});
+// Plugins need the async API, so this bundle is built inside its test.
+const loadEmployeeNav = async () => {
+  await esbuild.build({
+    stdin: {
+      contents: `
+        export { useEmployeeNavItems } from "./modules/core/src/components/TopBarSideBar/SideBar/employeeNavItems.js";
+        export { rebaseAppUrl } from "./libraries/src/services/tenant/tenantRoute.js";
+      `,
+      resolveDir: path.join(__dirname, "../packages"),
+      loader: "js",
+    },
+    bundle: true,
+    format: "cjs",
+    platform: "neutral",
+    outfile: NAV_OUT,
+    plugins: [{ name: "i18n-double", setup(build) {
+      build.onResolve({ filter: /^react-i18next$/ }, () => ({ path: "i18n", namespace: "double" }));
+      build.onLoad({ filter: /.*/, namespace: "double" }, () => ({ contents: "export const useTranslation = () => ({ t: (k) => k });" }));
+    } }],
+  });
+  return require(NAV_OUT);
+};
+
+test("on a tenant route the employee rows and section stay on the tenant route", async () => {
+  const nav = await loadEmployeeNav();
+  const action = (path, navigationURL, orderNumber) => ({ url: "url", path, displayName: path, navigationURL, orderNumber, leftIcon: "" });
+  global.window = { __digitTenantContext: { appBasePath: "kd/digit-ui" }, contextPath: "kd/digit-ui", globalConfigs: { getConfig: () => undefined } };
+  global.Digit = {
+    Hooks: {
+      useAccessControl: () => ({ isLoading: false, data: { actions: [
+        action("Home", "/digit-ui/employee/", 1),
+        action("Dashboard", "/digit-ui/employee/dashboard", 2),
+        // The PGR section offers this route too, so the row is dropped.
+        action("PGR.Search", "/digit-ui/employee/pgr/inbox-v2", 3),
+      ] } }),
+      useStore: { getInitData: () => ({ data: { modules: [{ code: "PGR" }] } }) },
+    },
+    ComponentRegistryService: { getComponent: (name) => (name === "PGRSidebarSection" ? () => ({
+      key: "pgr",
+      label: "Complaints",
+      items: [{ key: "search", label: "Search", navigationUrl: "/kd/digit-ui/employee/pgr/inbox-v2", icon: "Search" }],
+    }) : undefined) },
+    Utils: { rebaseAppUrl: nav.rebaseAppUrl },
+  };
+  try {
+    const { items } = nav.useEmployeeNavItems();
+    const urls = (list) => list.flatMap((i) => (i.children ? urls(i.children) : [i.navigationUrl]));
+    assert.deepEqual(items.map((i) => i.label), ["Home", "Complaints", "Dashboard"]);
+    assert.deepEqual(urls(items).sort(), [
+      "/kd/digit-ui/employee/",
+      "/kd/digit-ui/employee/dashboard",
+      "/kd/digit-ui/employee/pgr/inbox-v2",
+    ]);
+  } finally {
+    delete global.window;
+    delete global.Digit;
+  }
+});

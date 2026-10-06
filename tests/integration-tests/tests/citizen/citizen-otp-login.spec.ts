@@ -8,7 +8,8 @@
  *   4. Home page loads without crash
  */
 import { test, expect } from '@playwright/test';
-import { citizenOtpLogin } from '../utils/citizen-login';
+import { surfacePath } from '../utils/identity-bff';
+import { citizenOtpLoginViaUI } from '../utils/citizen-login';
 import { BASE_URL, generateCitizenPhone } from '../utils/env';
 
 const CITIZEN_PHONE = generateCitizenPhone();
@@ -27,7 +28,7 @@ Steps:
 If this fails, every other citizen test will fail downstream — pairs with the OTP-login test below.`,
     },
     tag: ['@area:auth', '@kind:regression', '@layer:ui', '@persona:citizen'] }, async ({ page }) => {
-    await page.goto(`${BASE_URL}/digit-ui/citizen/login`, {
+    await page.goto(`${BASE_URL}${surfacePath('citizen', 'login')}`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });
@@ -44,10 +45,10 @@ If this fails, every other citizen test will fail downstream — pairs with the 
   test('citizen can log in with OTP and reach home page', {
     annotation: {
       type: 'description',
-      description: `End-to-end OTP login walk for a brand-new citizen — exercises the auto-register-on-first-login path with the mock OTP. Asserts the citizen lands on a valid post-login URL with a Citizen.token in localStorage and no error fallback.
+      description: `End-to-end BFF OTP login walk for a brand-new citizen — exercises the challenge, verification and tenant context-selection path. Asserts the citizen lands on a valid post-login URL with a Citizen.token in localStorage and no error fallback.
 
 Steps:
-1. citizenOtpLogin(page, CITIZEN_PHONE) — drives the phone form, OTP form, language/city pickers.
+1. citizenOtpLoginViaUI(page, CITIZEN_PHONE) — drives the phone form, OTP form, language/city pickers.
 2. Read localStorage 'Citizen.token'; assert it's truthy.
 3. Read page.url(); assert it does NOT contain '/login' or '/select-language'.
 4. Read body innerText; assert it does NOT contain 'Something went wrong'.
@@ -55,7 +56,7 @@ Steps:
 Catches the broadest class of citizen-auth regressions — register flow broken, OTP not accepted, language picker stuck, etc.`,
     },
     tag: ['@area:auth', '@kind:regression', '@layer:ui', '@persona:citizen'] }, async ({ page }) => {
-    await citizenOtpLogin(page, CITIZEN_PHONE);
+    await citizenOtpLoginViaUI(page, CITIZEN_PHONE);
 
     const token = await page.evaluate(() => localStorage.getItem('Citizen.token'));
     expect(token).toBeTruthy();

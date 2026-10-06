@@ -5,7 +5,7 @@ import { importMasters, listMasters, removeMaster, saveMaster, suggestCode } fro
 
 vi.mock('@/api', () => ({
   MDMS_SCHEMAS: { DEPARTMENT: 'common-masters.Department', DESIGNATION: 'common-masters.Designation' },
-  mdmsService: { searchRecords: vi.fn(), create: vi.fn(), update: vi.fn(), setActive: vi.fn() },
+  mdmsService: { searchRecords: vi.fn(), create: vi.fn(), update: vi.fn(), setActive: vi.fn(), getStateInfoLocales: vi.fn(async () => []) },
   localizationService: {
     uploadDepartmentLocalizations: vi.fn(async () => ({ success: 1, failed: 0 })),
     uploadDesignationLocalizations: vi.fn(async () => ({ success: 1, failed: 0 })),
@@ -18,6 +18,7 @@ const create = vi.mocked(mdmsService.create);
 const update = vi.mocked(mdmsService.update);
 const setActive = vi.mocked(mdmsService.setActive);
 const departmentLabels = vi.mocked(localizationService.uploadDepartmentLocalizations);
+const stateInfoLocales = vi.mocked(mdmsService.getStateInfoLocales);
 
 const record = (over: Partial<MdmsRecord>): MdmsRecord => ({
   id: 'uuid',
@@ -71,6 +72,13 @@ describe('saveMaster', () => {
     await saveMaster('acme', 'department', { code: 'WATER', name: ' Water ' });
     expect(create).toHaveBeenCalledWith('acme', 'common-masters.Department', 'WATER', { code: 'WATER', name: 'Water', active: true });
     expect(departmentLabels).toHaveBeenCalledWith('acme', [{ code: 'WATER', name: 'Water' }], 'en_IN');
+  });
+
+  it('labels it under en_IN and every StateInfo locale', async () => {
+    search.mockResolvedValue([]);
+    stateInfoLocales.mockResolvedValueOnce(['en_KE', 'en_IN', 'sw_KE']);
+    await saveMaster('acme', 'department', { code: 'WATER', name: 'Water' });
+    expect(departmentLabels.mock.calls.map((call) => call[2])).toEqual(['en_IN', 'en_KE', 'sw_KE']);
   });
 
   it('restores a removed record that still holds the code, instead of creating', async () => {

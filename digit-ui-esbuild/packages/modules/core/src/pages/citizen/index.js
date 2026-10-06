@@ -1,3 +1,4 @@
+import IdentityAccount from "../../components/IdentityAccount";
 import { BackLink, CitizenHomeCard, CitizenInfoLabel } from "@egovernments/digit-ui-components";
 import React from "react";
 import { useTranslation } from "react-i18next";
@@ -15,7 +16,7 @@ import LanguageSelection from "./Home/LanguageSelection";
 import LocationSelection from "./Home/LocationSelection";
 import UserProfile from "./Home/UserProfile";
 import HowItWorks from "./HowItWorks/howItWorks";
-import Login from "./Login";
+import IdentityBffCitizenLogin from "./IdentityBffCitizenLogin";
 import Search from "./SearchApp";
 import StaticDynamicCard from "./StaticDynamicComponent/StaticDynamicCard";
 import ImageComponent from "../../components/ImageComponent";
@@ -96,7 +97,8 @@ const Home = ({
     [
       {
         name: "actions-test",
-        filter: `[?(@.url == '${Digit.Utils.getMultiRootTenant() ? window.globalPath : window.contextPath}-card')]`,
+        // MDMS keys actions by app id (`digit-ui-card`), not the tenant route base.
+        filter: `[?(@.url == '${Digit.Utils.getMultiRootTenant() ? window.globalPath : Digit.Utils.mdmsAppId()}-card')]`,
       },
     ],
     {
@@ -198,7 +200,7 @@ const Home = ({
           </Route>
 
           <Route exact path={`${path}/select-location`}>
-            <LocationSelection />
+            {window.__digitTenantContext ? <Redirect to={path} /> : <LocationSelection />}
           </Route>
           <Route path={`${path}/error`}>
             <ErrorComponent
@@ -218,12 +220,15 @@ const Home = ({
             />
           </Route>
 
+          {/* Canonical tenant routes sign citizens in through the Identity
+              BFF (Keycloak; citizen methods are open, #2189); registration
+              is the same flow. */}
           <Route path={`${path}/login`}>
-            <Login stateCode={stateCode} />
+            <IdentityBffCitizenLogin t={t} />
           </Route>
 
           <Route path={`${path}/register`}>
-            <Login stateCode={stateCode} isUserRegistered={false} />
+            <IdentityBffCitizenLogin t={t} />
           </Route>
 
           {/* /user/profile must require an active citizen session. The
@@ -235,6 +240,10 @@ const Home = ({
               redirect to /citizen/login with a `from` state so post-
               login the user lands back on the profile page they tried
               to open (CCRS#556 follow-up). */}
+          <Route path={`${path}/user/account`} render={({ location }) =>
+            Digit.UserService.getUser()?.access_token ? <IdentityAccount surface="citizen" /> :
+              <Redirect to={{ pathname: `${path}/login`, state: { from: location.pathname } }} />
+          } />
           <Route
             path={`${path}/user/profile`}
             render={({ location }) =>

@@ -107,6 +107,26 @@ reopen-complaint-enabled: "true"
 comment-by-employee-notif-enabled: "false"
 notification-allowed-status: "open,assigned,rejected,resolved"
 heap: "-Xmx192m -Xms192m"
+
+# Self-service tenant onboarding (#2269). DISABLED by default here: the runner
+# provisions every signup as a platform provisioner account, and this chart does
+# not create one. Before enabling, create an EMPLOYEE on a ROOT tenant (no dot)
+# holding MDMS_ADMIN, ACCOUNT_ADMIN, LOC_ADMIN and HRMS_ADMIN at that tenant, put
+# its password (and the identity BFF's onboarding token, IDENTITY_ONBOARDING_TOKEN)
+# in the Secret named below, and point identityBffUrl at the identity BFF. If the
+# provisioner cannot sign in with those roles the runner pauses (log line
+# "PGR onboarding runner PAUSED") and signups wait in the queue.
+# Known gap: the runner calls MDMS v2 at /egov-mdms-service/... (the docker-compose
+# layout); core-services/mdms-v2 here serves /mdms-v2, so provisioning would 404 on
+# this chart as it stands. Only the docker-compose/Ansible deploy is supported today.
+onboarding:
+  runnerEnabled: false
+  identityBffUrl: ""            # e.g. http://identity-bff.egov:3000
+  provisionerUsername: ""       # e.g. PGR_PROVISIONER
+  provisionerTenantId: ""       # the state root, e.g. pb
+  oauthClientId: "egov-user-client"
+  # Secret keys: provisioner-password, onboarding-token, oauth-client-secret (may be empty).
+  secretName: "pgr-onboarding"
 java-args: "-Dspring.profiles.active=monitoring"
 
 # Additional Container Envs
@@ -264,3 +284,36 @@ env: |
         key: state-level-tenant-id
   - name: EGOV_MDMS_SEARCH_ENDPOINT
     value: {{ index .Values "egov.mdms.search.endpoint" | quote }}
+  - name: PGR_ONBOARDING_RUNNER_ENABLED
+    value: {{ .Values.onboarding.runnerEnabled | quote }}
+  {{- if .Values.onboarding.runnerEnabled }}
+  - name: PGR_ONBOARDING_IDENTITY_BFF_URL
+    value: {{ required "onboarding.identityBffUrl is required when the runner is enabled" .Values.onboarding.identityBffUrl | quote }}
+  - name: PGR_ONBOARDING_IDENTITY_BFF_TOKEN
+    valueFrom:
+      secretKeyRef:
+        name: {{ .Values.onboarding.secretName }}
+        key: onboarding-token
+  - name: DIGIT_PROVISIONER_USERNAME
+    value: {{ required "onboarding.provisionerUsername is required when the runner is enabled" .Values.onboarding.provisionerUsername | quote }}
+  - name: DIGIT_PROVISIONER_TENANT_ID
+    value: {{ required "onboarding.provisionerTenantId is required when the runner is enabled" .Values.onboarding.provisionerTenantId | quote }}
+  - name: DIGIT_PROVISIONER_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: {{ .Values.onboarding.secretName }}
+        key: provisioner-password
+  - name: DIGIT_OAUTH_CLIENT_ID
+    value: {{ .Values.onboarding.oauthClientId | quote }}
+  - name: DIGIT_OAUTH_CLIENT_SECRET
+    valueFrom:
+      secretKeyRef:
+        name: {{ .Values.onboarding.secretName }}
+        key: oauth-client-secret
+        optional: true
+  - name: EGOV_ENC_HOST
+    valueFrom:
+      configMapKeyRef:
+        name: egov-service-host
+        key: egov-enc-service
+  {{- end }}

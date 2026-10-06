@@ -1,3 +1,4 @@
+import { tenantSlug } from '../utils/identity-bff';
 /**
  * PGR Lifecycle — UI-only
  *
@@ -195,7 +196,7 @@ Long timeout (180s) because of multiple boundary lookups and DOM settles. Catche
     page.on('pageerror', (err) => console.log(`[PAGE ERROR] ${err.message}`));
 
     // Navigate to complaint creation wizard
-    await page.goto(`${BASE_URL}/digit-ui/citizen/pgr/create-complaint`, {
+    await page.goto(`${BASE_URL}/${tenantSlug()}/digit-ui/citizen/pgr/create-complaint`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });
@@ -449,7 +450,7 @@ Doesn't assert the complaint appears in the inbox because legitimate boundary sc
       password: admin.password,
     });
 
-    await page.goto(`${BASE_URL}/digit-ui/employee/pgr/inbox`, {
+    await page.goto(`${BASE_URL}/${tenantSlug()}/digit-ui/employee/pgr/inbox`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });
@@ -503,7 +504,7 @@ Status verification is API-only because there's no good DOM signal that the assi
 
     // Navigate to complaint details
     console.log(`Navigating to complaint ${serviceRequestId}...`);
-    await page.goto(`${BASE_URL}/digit-ui/employee/pgr/complaint-details/${serviceRequestId}`, {
+    await page.goto(`${BASE_URL}/${tenantSlug()}/digit-ui/employee/pgr/complaint-details/${serviceRequestId}`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });
@@ -589,7 +590,7 @@ API-only verification of status follows the same pattern as step 4 — UI flow i
 
     // Navigate to complaint details
     console.log(`Navigating to complaint ${serviceRequestId} as ${resolver.username} (roles: ${resolver.roles.join('|')})...`);
-    await page.goto(`${BASE_URL}/digit-ui/employee/pgr/complaint-details/${serviceRequestId}`, {
+    await page.goto(`${BASE_URL}/${tenantSlug()}/digit-ui/employee/pgr/complaint-details/${serviceRequestId}`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });
@@ -662,7 +663,7 @@ Closes the citizen → admin → citizen loop. If this fails, the citizen can't 
 
     await citizenOtpLogin(page, CITIZEN_PHONE);
 
-    await page.goto(`${BASE_URL}/digit-ui/citizen/pgr/complaints`, {
+    await page.goto(`${BASE_URL}/${tenantSlug()}/digit-ui/citizen/pgr/complaints`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });

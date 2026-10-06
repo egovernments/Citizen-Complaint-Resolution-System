@@ -1,4 +1,5 @@
 import { DigitShow } from './DigitShow';
+import { MASTER_SCREEN_META } from './masterScreens';
 import { FieldSection, FieldRow, StatusChip, JsonViewer } from './fields';
 import { EntityLink } from '@/components/ui/EntityLink';
 import { ReverseReferenceList } from './fields/ReverseReferenceList';
@@ -17,7 +18,7 @@ export function MdmsResourceShow() {
   const resource = useResourceContext() ?? '';
   const config = getResourceConfig(resource);
   const label = useResourceLabel()(resource);
-  const { record } = useShowController();
+  const { record } = useShowController({ queryOptions: { meta: MASTER_SCREEN_META } });
   const { canEditResource } = useMastersCapability();
 
   // Fetch schema definition and reverse refs
@@ -36,6 +37,17 @@ export function MdmsResourceShow() {
       }}
       </DigitShow>
     </>
+  );
+}
+
+/** The MDMS envelope's root-level isActive — the record's enable/disable state. */
+function RecordStatus({ rec }: { rec: Record<string, unknown> }) {
+  return (
+    <FieldSection title="Status">
+      <FieldRow label="Status">
+        <StatusChip value={rec._isActive} labels={{ true: 'Active', false: 'Inactive' }} />
+      </FieldRow>
+    </FieldSection>
   );
 }
 
@@ -60,6 +72,8 @@ function SchemaShowContent({
 
   return (
     <div className="space-y-6">
+      <RecordStatus rec={rec} />
+
       {/* Key fields (x-unique) */}
       {groups.key.length > 0 && (
         <FieldSection title="Key">
@@ -220,6 +234,7 @@ function FallbackShowContent({ rec }: { rec: Record<string, unknown> }) {
 
   return (
     <div className="space-y-6">
+      <RecordStatus rec={rec} />
       <FieldSection title="Details">
         {keys.map((key) => {
           const value = rec[key];

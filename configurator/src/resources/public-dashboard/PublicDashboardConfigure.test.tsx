@@ -17,6 +17,7 @@ vi.mock('@/App', () => ({
   }),
 }));
 vi.mock('@/api', () => ({ getConfiguredRootTenant: () => 'ke' }));
+vi.mock('@/identity/workspaceSlug', () => ({ useWorkspaceSlug: () => 'bomet' }));
 vi.mock('@/api/services/mdms', () => ({
   mdmsService: {
     getDashboardConfig: (...args: unknown[]) => getConfig(...args),
@@ -52,11 +53,11 @@ const openAccessDialog = async () => {
 };
 
 describe('PublicDashboardConfigure', () => {
-  it('shows the canonical state-level public URL', async () => {
+  it('shows the workspace-scoped public URL', async () => {
     render(<PublicDashboardConfigure />);
 
     const url = await screen.findByLabelText('Public dashboard URL');
-    expect(url).toHaveValue('https://complaints.example/digit-ui/public-dashboard');
+    expect(url).toHaveValue('https://complaints.example/bomet/digit-ui/public-dashboard');
     expect(screen.getByText(/Control credential-free access/)).toHaveTextContent('ke');
   });
 

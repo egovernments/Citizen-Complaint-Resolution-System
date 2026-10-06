@@ -1,7 +1,7 @@
 import { ENDPOINTS } from '../client/endpoints.js';
 import { MDMS_SCHEMAS } from '../client/types.js';
 
-export type ResourceType = 'mdms' | 'hrms' | 'boundary' | 'pgr' | 'localization' | 'user' | 'workflow-bs' | 'workflow-process' | 'access-role' | 'access-action' | 'mdms-schema' | 'boundary-hierarchy'
+export type ResourceType = 'mdms' | 'hrms' | 'boundary' | 'pgr' | 'localization' | 'user' | 'workflow-bs' | 'workflow-process' | 'access-action' | 'mdms-schema' | 'boundary-hierarchy'
   // 'custom' resources are NOT MDMS-backed. They are read-only lists fetched
   // from an out-of-band DIGIT service (today: the novu-bridge read proxy) via
   // a plain GET to `endpoint.search`, using the same DIGIT auth token the rest
@@ -135,20 +135,23 @@ export const REGISTRY: Record<string, ResourceConfig> = {
     nameField: 'businessId', descriptionField: 'action', dedicated: true,
   },
   'access-roles': {
-    type: 'access-role', label: 'Access Roles', idField: 'code',
+    // Backed by the ACCESSCONTROL-ROLES.roles MDMS master itself (not the
+    // read-only accesscontrol role-search API, which only returns active
+    // roles), so roles can be added, edited and enabled/disabled via the
+    // root-level isActive like every other master. uniqueIdentifier == code,
+    // so ids and `reference="access-roles"` dropdowns are unchanged; those
+    // dropdowns still see active roles only (egovernments/CCRS#1846).
+    type: 'mdms', label: 'Access Roles', idField: 'code',
     nameField: 'name', descriptionField: 'description', dedicated: true,
-    // `schema` here is a masters-visibility policy key only (see
-    // docs/reference/architecture/access-control/masters-configurator-access-policy-design.md §3.2) — this
-    // resource still fetches via the accesscontrol role API (`type:
-    // 'access-role'`), not a raw MDMS schemaCode search; `config.type` gates
-    // every fetch branch in dataProvider.ts before `config.schema` is ever
-    // read, so adding it here does not change how this resource is fetched.
     schema: MDMS_SCHEMAS.ROLES,
   },
   'access-actions': {
     type: 'access-action', label: 'Access Actions', idField: 'id',
     nameField: 'displayName', descriptionField: 'url', dedicated: true,
-    // Policy key only — see the comment on 'access-roles' above.
+    // `schema` is a masters-visibility policy key only (see
+    // docs/reference/architecture/access-control/masters-configurator-access-policy-design.md §3.2)
+    // and the source of the unfiltered action list; role-filtered reads still
+    // go through the accesscontrol action API (`type: 'access-action'`).
     schema: 'ACCESSCONTROL-ACTIONS-TEST.actions-test',
   },
   'mdms-schemas': {
@@ -362,8 +365,9 @@ export function getResourceBySchema(schemaCode: string): string | undefined {
  * Non-'mdms' resource types that nonetheless have a real MDMS-v2 schema with genuine
  * `/mdms-v2/v2/_create|_update/<schema>` write actions in the ACCESSCONTROL-ACTIONS-TEST seed, and
  * so must still be checked against ACCESSCONTROL-ROLEACTIONS by {@link isAccessControlGated} —
- * `access-roles`/`access-actions` use a dedicated `type` for their read path (a different fetch
- * shape than the generic MDMS list), but their EDIT gating is identical to any other mdms master.
+ * `access-actions` uses a dedicated `type` for its read path (a different fetch shape than the
+ * generic MDMS list), but its EDIT gating is identical to any other mdms master. (`access-roles`
+ * used to be `type: 'access-role'`; it is now a plain mdms master and gated by construction.)
  * Narrowing the gate to `type === 'mdms'` silently opened these two — the screens that edit the
  * permission system itself — to every role (#1826 review). Add a type here ONLY when you've
  * confirmed it has a real mdms-v2 write action in the seed; do not widen this to "any resource
@@ -371,7 +375,7 @@ export function getResourceBySchema(schemaCode: string): string | undefined {
  * identifiers too but write through non-mdms-v2 endpoints (HRMS, boundary-service, PGR,
  * localization) and must stay unrestricted, matching pre-gating behavior.
  */
-const EXPLICITLY_GATED_TYPES: ReadonlySet<ResourceType> = new Set(['access-role', 'access-action']);
+const EXPLICITLY_GATED_TYPES: ReadonlySet<ResourceType> = new Set(['access-action']);
 
 /**
  * Whether `useMastersCapability.canViewResource`/`canEditResource` should check this resource

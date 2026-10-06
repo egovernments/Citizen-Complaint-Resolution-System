@@ -9,6 +9,7 @@ import { toast } from '@/hooks/use-toast';
 import { StepHeader } from '../StepHeader';
 import { EmptyState, OptionCard, StepActions } from '../StepParts';
 import { adjacentSteps, stepById } from '../steps';
+import { probeGate, useStepProbe } from '../stepProbe';
 import { useTurbopassSources } from '@/hooks/useTurbopassSources';
 import { usePreconfiguredBoundaries } from '@/hooks/usePreconfiguredBoundaries';
 import { countryName, type OfficialSet } from '@/utils/officialBoundaries';
@@ -101,6 +102,18 @@ export default function GeographyStep() {
     setReloadKey((key) => key + 1);
   };
 
+  const hasBoundaries = !!hierarchies?.some((hierarchy) => hierarchy.total > 0);
+  const { probe, recheck } = useStepProbe(
+    state.tenant,
+    'GEOGRAPHY',
+    (hierarchies ?? []).map((hierarchy) => `${hierarchy.hierarchyType}:${hierarchy.total}`).join(','),
+  );
+  const gate = probeGate(
+    'GEOGRAPHY',
+    { ready: hasBoundaries, hint: hierarchies && !hasBoundaries ? 'Bring in a boundary hierarchy to continue.' : undefined },
+    probe,
+  );
+
   if (source) {
     const close = () => {
       setSource(null);
@@ -134,8 +147,6 @@ export default function GeographyStep() {
       </div>
     );
   }
-
-  const hasBoundaries = !!hierarchies?.some((hierarchy) => hierarchy.total > 0);
 
   return (
     <div className="space-y-8">
@@ -210,15 +221,22 @@ export default function GeographyStep() {
         </section>
       )}
 
-      <StepActions
-        onBack={previous ? () => navigate(previous.path) : undefined}
-        onContinue={() => {
-          completePhase(STEP.number);
-          if (next) navigate(next.path);
-        }}
-        disabled={!hasBoundaries}
-        hint={hierarchies && !hasBoundaries ? 'Bring in a boundary hierarchy to continue.' : undefined}
-      />
+      <div className="flex flex-wrap items-center gap-3">
+        <StepActions
+          onBack={previous ? () => navigate(previous.path) : undefined}
+          onContinue={async () => {
+            if (!await completePhase(STEP.number)) return;
+            if (next) navigate(next.path);
+          }}
+          disabled={gate.disabled}
+          hint={gate.hint}
+        />
+        {gate.canRecheck && (
+          <Button variant="ghost" size="sm" onClick={recheck}>
+            Check again
+          </Button>
+        )}
+      </div>
     </div>
   );
 }

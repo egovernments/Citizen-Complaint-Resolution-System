@@ -1,6 +1,14 @@
 import type { MdmsRecord } from './types';
 
-export const PUBLIC_DASHBOARD_PATH = '/digit-ui/public-dashboard';
+/**
+ * The public dashboard is served on the workspace's tenant route,
+ * `/<slug>/digit-ui/public-dashboard`. The tenantless `/digit-ui/...` form
+ * 404s since the legacy identity paths were removed (or, with a deployment
+ * default slug, opens the default tenant's page), so it is never offered.
+ */
+export function publicDashboardPath(slug: string): string {
+  return `/${slug}/digit-ui/public-dashboard`;
+}
 
 export interface DashboardConfigData extends Record<string, unknown> {
   id: string;
@@ -43,8 +51,10 @@ export function selectOwnedDashboardConfig(
     ?? own[0];
 }
 
-export function buildPublicDashboardUrl(environment: string): string {
-  return `${environment.replace(/\/+$/, '')}${PUBLIC_DASHBOARD_PATH}`;
+/** Null until the workspace's slug is known: there is no tenantless URL to show. */
+export function buildPublicDashboardUrl(environment: string, slug: string | null | undefined): string | null {
+  if (!slug) return null;
+  return `${environment.replace(/\/+$/, '')}${publicDashboardPath(slug)}`;
 }
 
 /** "1 Aug 2026" — the date form the Last published tile uses. */

@@ -1,0 +1,84 @@
+name: Keycloak CI
+
+# The identity Keycloak: realm configuration (configure-keycloak.sh +
+# realm.json), the image (Dockerfile) and the login themes (theme-src).
+on:
+  pull_request:
+    paths:
+      - "keycloak/**"
+      # The login theme's palettes are generated from these presets; its tests fail on drift.
+      - "configurator/src/themes/**"
+      - ".github/workflows/keycloak-ci.yml"
+  push:
+    branches: [develop]
+    paths:
+      - "keycloak/**"
+      - "configurator/src/themes/**"
+      - ".github/workflows/keycloak-ci.yml"
+
+jobs:
+  realm:
+    timeout-minutes: 45
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: keycloak
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint the scripts
+        run: |
+          bash -n configure-keycloak.sh tests/run-live-check.sh
+          shellcheck configure-keycloak.sh tests/run-live-check.sh
+          jq -e . realm.json >/dev/null
+          python3 -m unittest discover -s tests -p 'test_*.py'
+      - name: Live realm check
+        run: |
+          set -o pipefail
+          tests/run-live-check.sh 2>&1 | tee realm-check.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: keycloak-realm-check
+          path: keycloak/realm-check.log
+
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build Keycloak 26.7.3 image
+        run: docker build -f keycloak/Dockerfile -t identity-keycloak:test keycloak
+      - name: Smoke-test the login theme on that Keycloak
+        working-directory: keycloak/theme-src
+        env:
+          IDENTITY_KEYCLOAK_IMAGE: identity-keycloak:test
+          SKIP_BUILD: "1"
+        run: scripts/keycloak-smoke.sh
+
+  login-theme:
+    runs-on: ubuntu-latest
+    container: mcr.microsoft.com/playwright:v1.63.0-noble
+    defaults:
+      run:
+        working-directory: keycloak/theme-src
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: keycloak/theme-src/package-lock.json
+      - run: npm ci
+      - name: Typecheck
+        run: npm run lint
+      - name: Unit tests (rendering and page coverage)
+        run: npm test
+      - name: Screenshot regression (desktop and mobile)
+        run: npx playwright test
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: login-theme-screenshot-diff
+          path: keycloak/theme-src/test-results/

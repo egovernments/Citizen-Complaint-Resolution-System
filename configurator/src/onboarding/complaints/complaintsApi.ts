@@ -1,6 +1,7 @@
 import { localizationService, mdmsService } from '@/api';
 import type { MdmsRecord } from '@/api/types';
 import { toPascal } from '@/utils/excelParser';
+import { labelLocales } from '../labelLocales';
 
 /**
  * Complaint types built from scratch: types, each handled by one department,
@@ -42,7 +43,7 @@ export interface ComplaintDraft {
 export type LoadedComplaints =
   | { editable: true; draft: ComplaintDraft; records: MdmsRecord[]; hasDefinition: boolean }
   /** Set up some other way (a spreadsheet with its own levels): shown, not edited, here. */
-  | { editable: false; leafCount: number; levels: string[] };
+  | { editable: false; leafCount: number; levels: string[]; departments: string[] };
 
 const stateRootOf = (tenantId: string) => tenantId.split('.')[0];
 const dataOf = (record: MdmsRecord) => record.data as Record<string, unknown>;
@@ -76,7 +77,13 @@ export async function loadComplaints(tenantId: string): Promise<LoadedComplaints
 
   if (definition && definedLevels.join('|') !== LEVELS.join('|')) {
     const leafCount = active.filter((record) => dataOf(record).department != null || dataOf(record).slaHours != null).length;
-    return { editable: false, leafCount, levels: definedLevels };
+    // A leaf is a row no other row names as its parent; complaints filed on it go to its department.
+    const parents = new Set(active.map((record) => text(dataOf(record).parentCode)));
+    const departments = active
+      .filter((record) => !parents.has(codeOf(record)))
+      .map((record) => text(dataOf(record).department))
+      .filter(Boolean);
+    return { editable: false, leafCount, levels: definedLevels, departments: Array.from(new Set(departments)) };
   }
 
   const byOrder = (a: MdmsRecord, b: MdmsRecord) => Number(dataOf(a).order ?? 0) - Number(dataOf(b).order ?? 0);
@@ -213,7 +220,11 @@ async function sync(
   hasDefinition: boolean,
   { shared = false }: { shared?: boolean } = {},
 ): Promise<void> {
-  if (!hasDefinition) {
+  // Re-read before creating: a save whose step update then failed has already created the definition, and the page
+  // still holds the stale `hasDefinition` from when it loaded, so a blind create fails as a duplicate on the retry.
+  const defined = hasDefinition || (await mdmsService.searchRecords(tenantId, DEFINITION_SCHEMA).catch(() => [] as MdmsRecord[]))
+    .some((record) => record.tenantId === tenantId && text(dataOf(record).hierarchyType) === HIERARCHY_TYPE);
+  if (!defined) {
     await mdmsService.create(tenantId, DEFINITION_SCHEMA, HIERARCHY_TYPE, {
       hierarchyType: HIERARCHY_TYPE,
       active: true,
@@ -270,13 +281,10 @@ export async function saveComplaints(
     ).catch(() => undefined);
   }
 
-  await localizationService
-    .uploadComplaintTypeLocalizations(
-      tenantId,
-      rows.map((row) => ({ serviceCode: row.code, name: text(row.data.name), department: text(row.data.department) || undefined })),
-      'en_IN',
-    )
-    .catch(() => undefined);
+  const labels = rows.map((row) => ({ serviceCode: row.code, name: text(row.data.name), department: text(row.data.department) || undefined }));
+  for (const locale of await labelLocales(tenantId)) {
+    await localizationService.uploadComplaintTypeLocalizations(tenantId, labels, locale).catch(() => undefined);
+  }
   await localizationService.cacheBust().catch(() => undefined);
 
   return rows.filter((row) => row.data.slaHours != null).length;

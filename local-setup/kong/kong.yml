@@ -149,8 +149,11 @@ plugins:
           -- 401s at Kong. Kong-only: the Spring gateway does not route the chatbot, so these
           -- are registered in KONG_ONLY_AUTH_OPTIONAL rather than env.yaml.
           ["/xstate-chatbot/message"]=true, ["/xstate-chatbot/status"]=true,
-          ["/user/oauth/token"]=true, ["/user-otp/v1/_send"]=true, ["/otp/v1/_validate"]=true,
-          ["/user/citizen/_create"]=true, ["/user/password/nologin/_update"]=true,
+          ["/user/oauth/token"]=true,
+          ["/user-otp/v1/_send"]=true, -- identity-legacy-user-endpoint
+          ["/otp/v1/_validate"]=true, -- identity-legacy-user-endpoint
+          ["/user/citizen/_create"]=true, -- identity-legacy-user-endpoint
+          ["/user/password/nologin/_update"]=true, -- identity-legacy-user-endpoint
           ["/localization/messages"]=true, ["/localization/messages/v1/_search"]=true,
           ["/localization/messages/cache-bust"]=true,
           ["/tenant/v1/tenant/_search"]=true,
@@ -279,6 +282,19 @@ plugins:
           ["/novu-bridge/novu-adapter/v1/dispatch/_resolve"]=true,
         }
         local uri = kong.request.get_path()
+        -- egov-user's internal self-call goes directly to localhost:8107. Never
+        -- let an internet caller smuggle its password-bypass switch through Kong.
+        if uri == "/user/oauth/token" then
+          local query = kong.request.get_query()
+          local ok_body, body_args = pcall(kong.request.get_body)
+          if (query and query["isInternal"] ~= nil)
+              or (ok_body and type(body_args) == "table" and body_args["isInternal"] ~= nil) then
+            return kong.response.exit(400, cjson.encode({
+              error = "invalid_request",
+              error_description = "isInternal is not accepted at the public gateway",
+            }), { ["Content-Type"] = "application/json" })
+          end
+        end
         local is_protected = not AUTH_OPTIONAL[uri]
         local function deny_unauth()
           if ENFORCE_UNAUTH then
@@ -566,6 +582,25 @@ plugins:
         -- documented follow-up.)
         return enforce_rbac(resolved, token)
 services:
+- name: identity-legacy-user-endpoints-denied # identity-legacy-user-deny-start
+  url: http://egov-user-proxy:8107
+  tags:
+  - core
+  - auth
+  routes:
+  - name: identity-legacy-user-endpoints-denied-route
+    paths:
+    - /user/password/nologin/_update
+    - /user/citizen/_create
+    - /user-otp/v1/_send
+    strip_path: false
+  plugins:
+  - name: request-termination
+    config:
+      status_code: 404
+      content_type: application/json
+      body: '{"code":"IDENTITY_LEGACY_ENDPOINT_REMOVED","error":"This legacy identity endpoint is not available"}'
+# identity-legacy-user-deny-end
 - name: mdms-service
   url: http://egov-mdms-service:8094
   tags:
@@ -1300,6 +1335,7 @@ services:
 # the `plugins:` line below) and starts egov-otp, so /otp reaches it for real validation
 # (an incorrect OTP is rejected instead of rubber-stamped). Hand-deploys: delete the
 # `plugins:` block. The upstream was previously a dead localhost:9999 — now fixed.
+# identity-legacy-otp-mock-start
 - name: otp-validate-mock
   url: http://egov-otp:8089
   tags:
@@ -1317,6 +1353,7 @@ services:
       status_code: 200
       content_type: application/json
       body: '{"ResponseInfo":{"apiId":"Rainmaker","ver":".01","ts":"","resMsgId":"uief87324","msgId":"","status":"successful"},"otp":{"otp":"","UUID":"","isValidationSuccessful":true}}'
+# identity-legacy-otp-mock-end
 # User event mock — returns empty events (service not deployed)
 - name: user-event-mock
   url: http://localhost:9999

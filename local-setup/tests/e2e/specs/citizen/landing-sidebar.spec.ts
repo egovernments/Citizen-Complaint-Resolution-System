@@ -21,6 +21,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { citizenOtpLogin } from '../../utils/citizen-auth';
 import * as fs from 'fs';
 import * as path from 'path';
+import { appBase } from '../../utils/auth';
 
 const RAW_KEY_RE = /\b[A-Z][A-Z0-9]*(?:[._][A-Z0-9]+)+\b/g;
 const rawKeysIn = (text: string) =>
@@ -82,7 +83,7 @@ test.describe('Citizen landing page sidebar + profile edit', () => {
     captureLoc(page, locFetches);
 
     await citizenOtpLogin(page);
-    await page.goto('/digit-ui/citizen');
+    await page.goto(`${appBase()}/citizen`);
 
     await openSidebar(page);
     const sb = sidebar(page);
@@ -145,7 +146,7 @@ test.describe('Citizen landing page sidebar + profile edit', () => {
     page,
   }) => {
     await citizenOtpLogin(page);
-    await page.goto('/digit-ui/citizen');
+    await page.goto(`${appBase()}/citizen`);
 
     await openSidebar(page);
     const editProfile = page

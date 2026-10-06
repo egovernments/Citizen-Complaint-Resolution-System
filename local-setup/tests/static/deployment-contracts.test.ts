@@ -108,7 +108,10 @@ describe('ansible playbook-deploy.yml', () => {
       'keycloak_admin_client_secret',
       'identity_control_plane_token',
       'identity_session_introspection_token',
-      'pgr_onboarding_worker_token',
+      'keycloak_employee_client_secret',
+      'keycloak_citizen_client_secret',
+      'identity_citizen_otp_secret',
+      'identity_onboarding_token',
     ];
 
     test('none of them is derived from another secret', () => {
@@ -133,6 +136,25 @@ describe('ansible playbook-deploy.yml', () => {
       );
     });
 
+    // 8c gate report 4, Part A: the digit-ui surface secrets, the phone-OTP
+    // HMAC secret and the onboarding bearer were documented but never
+    // generated or passed, so a converged box skipped the digit-ui clients
+    // and answered 503 on employee/citizen sign-in.
+    test('the digit-ui surface secrets reach the Keycloak configurator', () => {
+      const start = playbook.indexOf('identity-bootstrap — reconcile Organizations realm and BFF clients');
+      expect(start).toBeGreaterThan(-1);
+      const task = playbook.slice(start, start + 4000);
+      for (const [env, key] of [
+        ['KEYCLOAK_EMPLOYEE_CLIENT_SECRET', 'keycloak_employee_client_secret'],
+        ['KEYCLOAK_CITIZEN_CLIENT_SECRET', 'keycloak_citizen_client_secret'],
+      ]) {
+        expect(task).toContain(`${env}: "{{ identity_secrets.${key} }}"`);
+        expect(playbook).toContain(`${env}={{ identity_secrets.${key} }}`);
+      }
+      expect(playbook).toContain('IDENTITY_CITIZEN_OTP_SECRET={{ identity_secrets.identity_citizen_otp_secret }}');
+      expect(playbook).toContain('IDENTITY_ONBOARDING_TOKEN={{ identity_secrets.identity_onboarding_token }}');
+    });
+
     test('an empty Keycloak admin password fails the deploy closed', () => {
       // Empty here is not neutral: compose falls back to the literal `admin`.
       expect(playbook).toContain(
@@ -146,8 +168,8 @@ describe('ansible playbook-deploy.yml', () => {
   });
 
   // #2088, Dhruv review finding 6. The `/kc` route, the per-tenant realm and
-  // its `digit-ui` client are gone, so `auth_provider: keycloak` is a 404 at
-  // login until the frontend cutover onto /identity/v1 lands.
+  // its `digit-ui` client are gone, and D26 removed the frontend code that read
+  // `auth_provider`, so a host_vars still saying `keycloak` is refused.
   test('refuses to deploy a frontend still pointed at the removed Keycloak login', () => {
     const start = playbook.indexOf('_keycloak_login_surfaces:');
     expect(start).toBeGreaterThan(-1);
@@ -282,6 +304,60 @@ describe('host_vars templates — db_fast_path ack (#2082)', () => {
     const fails = out.split('\n').filter((l) => l.startsWith('[FAIL]'));
     expect(fails).toHaveLength(1);
     expect(fails[0]).toContain('fastpath-data-wipe-ack');
+  });
+});
+
+// Dhruv, #2271 review 3, item 1: three example host_vars still set
+// `enable_digit_ui_v2: true`, which the playbook has refused since D26, and the
+// static tests stayed green because preflight.py mirrored neither D26 refusal.
+// Every tracked example now goes through preflight.py. The fast-path rules are
+// the only ones allowed to fire: every example ships db_fast_path with the
+// data-wipe ack off on purpose (#2082), and the non-dump examples carry a
+// placeholder master password. Anything else is a copy-and-deploy trap.
+describe('example host_vars pass preflight.py (#2271)', () => {
+  const HOST_VARS = 'local-setup/ansible/inventory/host_vars';
+  const BY_DESIGN = new Set(['fastpath-data-wipe-ack', 'fastpath-master-password']);
+  const templates = fs
+    .readdirSync(path.join(REPO_ROOT, HOST_VARS))
+    .filter((f) => f.endsWith('.yml.example') || f === '_example.yml')
+    .sort();
+
+  const preflight = (file: string) => {
+    try {
+      return execFileSync('python3', ['local-setup/scripts/preflight.py', `${HOST_VARS}/${file}`],
+        { cwd: REPO_ROOT, encoding: 'utf8' });
+    } catch (e: any) {
+      return e.stdout ?? '';
+    }
+  };
+
+  test('covers every tracked example', () => {
+    expect(templates).toEqual(expect.arrayContaining([
+      '_example.yml', 'bomet.yml.example', 'localhost-full.yml.example',
+      'localhost-slim.yml.example', 'maputo.yml.example', 'quickstart.yml.example',
+    ]));
+  });
+
+  test.each(templates)('%s trips no rule beyond the fast-path ack', (file) => {
+    const out = preflight(file);
+    expect(out).toContain(`── preflight: ${HOST_VARS}/${file}`);
+    const unexpected = out.split('\n')
+      .filter((l: string) => l.startsWith('[FAIL]'))
+      .filter((l: string) => !BY_DESIGN.has(l.slice('[FAIL] '.length).split(':')[0]));
+    expect(unexpected).toEqual([]);
+  });
+
+  test('preflight.py mirrors both D26 refusals in the playbook', () => {
+    const script = read('local-setup/scripts/preflight.py');
+    const playbook = read('local-setup/ansible/playbook-deploy.yml');
+    expect(playbook).toContain('- name: "preflight — identity requires enable_keycloak: true"');
+    expect(playbook).toContain('- name: "preflight — refuse retired digit-ui-v2 citizen identity"');
+    expect(script).toMatch(/"identity-needs-keycloak"/);
+    expect(script).toMatch(/"digit-ui-v2-retired"/);
+    const selfTest = execFileSync('python3', ['local-setup/scripts/preflight.py', '--self-test'],
+      { cwd: REPO_ROOT, encoding: 'utf8' });
+    expect(selfTest).toContain('[self-test ok ] enable_keycloak false fires');
+    expect(selfTest).toContain('[self-test ok ] enable_digit_ui_v2 true fires');
   });
 });
 
@@ -490,6 +566,190 @@ describe('docker-compose.egov-digit.yaml', () => {
     expect(compose).toContain('KONG_REAL_IP_HEADER: X-Forwarded-For');
     expect(compose).toContain('KONG_REAL_IP_RECURSIVE: "on"');
     expect(composeEnv).toContain('KONG_TRUSTED_IPS={{ kong_trusted_ips | default(');
+  });
+});
+
+describe('tenant-scoped digit-ui routing', () => {
+  const nginx = read('local-setup/ansible/templates/nginx-site.conf.j2');
+  const helmTenantIngress = read(
+    'devops/deploy-as-code/charts/urban/digit-ui/templates/tenant-ingress.yaml'
+  );
+  const imageNginx = read('digit-ui-esbuild/docker/nginx.conf');
+
+  // nginx `$1` → JS replacement for a match.
+  const substitute = (target: string, match: RegExpExecArray) =>
+    target.replace(/\$(\d)/g, (_, n) => match[Number(n)] ?? '');
+
+  // Compose: the two regex locations, in config order (nginx takes the first
+  // matching regex). Case-sensitive, as `location ~`.
+  const composeRoutes = [...nginx.matchAll(
+    /location ~ "(\^\/[^"]*digit-ui[^"]*)" \{\s*(?:return 302 (\S+);|rewrite "[^"]+" (\S+) last;)/g
+  )].map((m) => ({ re: new RegExp(m[1]), redirect: m[2], internal: m[3] }));
+  // Helm: ingress-nginx renders each path as `location ~* "^<path>"`
+  // (case-insensitive) and orders longer paths first.
+  const helmRoutes = [...helmTenantIngress.matchAll(/"path" "([^"]+)" "rewrite" "([^"]+)"/g)]
+    .map((m) => ({ path: m[1], re: new RegExp(`^${m[1]}`, 'i'), internal: m[2] }))
+    .sort((a, b) => b.path.length - a.path.length);
+  // The digit-ui image's nginx answers the internal tenant-root path.
+  const imageRedirects = [...imageNginx.matchAll(/location ~ "([^"]+)" \{[^}]*?return 302 (\S+);/g)]
+    .map((m) => ({ re: new RegExp(m[1]), redirect: m[2] }));
+
+  const compose = (uri: string) => {
+    for (const route of composeRoutes) {
+      const m = route.re.exec(uri);
+      if (m) return route.redirect ? { redirect: substitute(route.redirect, m) } : { internal: substitute(route.internal!, m) };
+    }
+    return null;
+  };
+  const helm = (uri: string) => {
+    for (const route of helmRoutes) {
+      const m = route.re.exec(uri);
+      if (!m) continue;
+      const internal = substitute(route.internal, m);
+      for (const image of imageRedirects) {
+        const r = image.re.exec(internal);
+        if (r) return { redirect: substitute(image.redirect, r) };
+      }
+      return { internal };
+    }
+    return null;
+  };
+
+  test('the configs parse into the expected routes', () => {
+    expect(composeRoutes).toHaveLength(2);
+    expect(helmRoutes).toHaveLength(2);
+    expect(imageRedirects).toHaveLength(1);
+    // Quoted: an unquoted `{2,63}` makes nginx read the `{` as a block opener (#2127).
+    expect(nginx).toContain('location ~ "^/[a-z0-9-]{2,63}/digit-ui/(.*)$" {');
+    // Without absolute_redirect off the image would send the ingress's http://pod-host.
+    expect(imageNginx).toMatch(/absolute_redirect off;\s*return 302/);
+  });
+
+  test.each([
+    ['/bomet-county/digit-ui', { redirect: '/bomet-county/digit-ui/' }],
+    ['/bomet-county/digit-ui/', { internal: '/digit-ui/' }],
+    ['/bomet-county/digit-ui/employee/pgr/inbox', { internal: '/digit-ui/employee/pgr/inbox' }],
+    ['/ke/digit-ui/citizen/login', { internal: '/digit-ui/citizen/login' }],
+    ['/digit-ui/employee', null],
+    ['/x/digit-ui/', null],
+    ['/bomet-county/digit-uix', null],
+  ])('Compose nginx and Kubernetes ingress agree on %s', (uri, expected) => {
+    expect(compose(uri)).toEqual(expected);
+    expect(helm(uri)).toEqual(expected);
+  });
+
+  test('case sensitivity differs and is documented in the chart', () => {
+    // ingress-nginx always matches regex paths with `~*`; Compose uses `~`.
+    // Both end on a not-found page because the SPA only accepts lower-case slugs.
+    expect(compose('/Bomet-County/digit-ui/')).toBeNull();
+    expect(helm('/Bomet-County/digit-ui/')).toEqual({ internal: '/digit-ui/' });
+    expect(helmTenantIngress).toMatch(/case-INsensitively/);
+  });
+
+  test('Kubernetes ingress keeps the chart annotations on both tenant ingresses', () => {
+    expect(helmTenantIngress).toContain('$root.Values.ingress.annotations');
+    expect(helmTenantIngress).toContain('$root.Values.ingress.waf.annotations');
+    expect(helmTenantIngress).toContain('$root.Values.ingress.additionalAnnotations');
+  });
+});
+
+describe('Keycloak realm proxy client address', () => {
+  // Deliberately NOT $proxy_add_x_forwarded_for: Keycloak takes the leftmost
+  // X-Forwarded-For entry, so appending would let a caller choose the IP that
+  // brute-force detection records. Behind an LB, use nginx realip instead.
+  const nginx = read('local-setup/ansible/templates/nginx-site.conf.j2');
+  const loop = /\{% for keycloak_path in \[([^\]]+)\] %\}\n  location \^~ \{\{ keycloak_path \}\} \{([\s\S]*?)\n  \}\n\{% endfor %\}/.exec(nginx);
+
+  test('/auth/realms/ and /auth/resources/ set X-Forwarded-For to the peer address', () => {
+    expect(loop).not.toBeNull();
+    expect(loop![1]).toBe("'/auth/realms/', '/auth/resources/'");
+    expect(loop![2]).toContain('proxy_set_header X-Forwarded-For $remote_addr;');
+    expect(loop![2]).not.toContain('$proxy_add_x_forwarded_for');
+    expect(nginx).toMatch(/set_real_ip_from[\s\S]{0,200}\{% for keycloak_path in/);
+  });
+
+  // #2271 review 3, item 3: the stock Novu dashboard claims `location /auth/`,
+  // which caught Keycloak's theme assets at /auth/resources/ and broke the
+  // login page on any box that ran both. The Keycloak locations are longer
+  // `^~` prefixes, so nginx picks them over /auth/ (verified by rendering the
+  // template into nginx:alpine with stock Novu + Keycloak).
+  test('Keycloak public paths win over the stock Novu dashboard /auth/ catch-all', () => {
+    const stock = nginx.slice(nginx.indexOf('# Novu dashboard (SPA) — STOCK image.'));
+    expect(stock).toMatch(/\n  location \/auth\/ \{\n    proxy_pass http:\/\/127\.0\.0\.1:14000;/);
+    expect(nginx.indexOf('{% if enable_keycloak | default(false) %}\n  # Keycloak\'s public surface'))
+      .toBeGreaterThan(-1);
+    expect(nginx).not.toContain('unsafe to combine with Keycloak');
+    const playbook = read('local-setup/ansible/playbook-deploy.yml');
+    expect(playbook).toContain("nginx routes Keycloak's /auth/realms/ and\n          /auth/resources/ ahead of the stock dashboard's /auth/ paths");
+    expect(playbook).not.toContain('until the frontend cutover');
+  });
+});
+
+describe('reserved tenant URL slugs (identity-bff docs §2.4.1)', () => {
+  const doc = read('backend/identity-bff/docs/identity-bff.md');
+  const block = /<!-- reserved-url-slugs:begin -->([\s\S]*?)<!-- reserved-url-slugs:end -->/.exec(doc);
+  const reserved = new Set(
+    (block?.[1] ?? '').split('\n').map((line) => line.trim()).filter((line) => /^[a-z0-9-]+$/.test(line))
+  );
+  const slugShaped = (segment: string) => /^[a-z0-9-]{2,63}$/.test(segment);
+
+  test('the contract doc carries the list', () => {
+    expect(block).not.toBeNull();
+    expect(reserved.size).toBeGreaterThan(10);
+  });
+
+  test('every top-level nginx location prefix is reserved', () => {
+    const nginx = read('local-setup/ansible/templates/nginx-site.conf.j2');
+    const prefixes = [...nginx.matchAll(/^\s*location\s+(?:=|\^~)?\s*\/([A-Za-z0-9_.-]+)/gm)]
+      .map((m) => m[1]).filter(slugShaped);
+    expect(prefixes.length).toBeGreaterThan(10);
+    expect(prefixes.filter((p) => !reserved.has(p))).toEqual([]);
+  });
+
+  test('every top-level Kong route prefix is reserved', () => {
+    const kong = read('local-setup/kong/kong.yml');
+    const prefixes = [...kong.matchAll(/^\s*paths:\s*\n((?:\s*-\s*\S+\s*\n)+)/gm)]
+      .flatMap((m) => [...m[1].matchAll(/-\s*~?\^?\/([A-Za-z0-9_.-]+)/g)].map((p) => p[1]))
+      .filter(slugShaped);
+    expect(prefixes.length).toBeGreaterThan(10);
+    expect([...new Set(prefixes)].filter((p) => !reserved.has(p))).toEqual([]);
+  });
+
+  test('the SPA reserves exactly the documented list', () => {
+    const spa = read('digit-ui-esbuild/packages/libraries/src/services/tenant/tenantRoute.js');
+    const list = /RESERVED_TENANT_SLUGS = Object\.freeze\(\[([\s\S]*?)\]\)/.exec(spa);
+    expect(list).not.toBeNull();
+    const spaSlugs = [...list![1].matchAll(/"([^"]+)"/g)].map((m) => m[1]).sort();
+    expect(spaSlugs).toEqual([...reserved].sort());
+  });
+
+  const globalConfig = read('local-setup/ansible/templates/globalConfigs.js.j2');
+  const helmGlobalConfig = read(
+    'devops/deploy-as-code/charts/urban/digit-ui/files/globalConfigs.js.tpl'
+  );
+
+  test('tenant selection is no longer deployment global configuration', () => {
+    expect(globalConfig).not.toContain('SHOW_TENANT_SWITCHER');
+    expect(globalConfig).not.toContain('LOGIN_TENANT_ALLOWLIST');
+    expect(helmGlobalConfig).not.toContain('LOGIN_TENANT_ALLOWLIST');
+  });
+
+  test('globalConfigs contain no browser auth-provider or direct-Keycloak keys', () => {
+    const removed = ['AUTH_PROVIDER', 'KEYCLOAK_URL', 'KEYCLOAK_REALM',
+      'KEYCLOAK_CLIENT_ID', 'TOKEN_EXCHANGE_URL', 'authProvider',
+      'keycloakUrl', 'keycloakRealm', 'keycloakClientId', 'tokenExchangeUrl'];
+    const sources = {
+      'globalConfigs.js.j2': globalConfig,
+      'helm globalConfigs.js.tpl': helmGlobalConfig,
+      'helm values.yaml': read('devops/deploy-as-code/charts/urban/digit-ui/values.yaml'),
+      'digit-ui-esbuild dev stub': read('digit-ui-esbuild/public/globalConfigs.js'),
+      'local-setup nginx stub': read('local-setup/nginx/globalConfigs.js'),
+    };
+    for (const [name, body] of Object.entries(sources)) {
+      for (const key of removed) {
+        expect({ name, key, found: body.includes(key) }).toEqual({ name, key, found: false });
+      }
+    }
   });
 });
 
@@ -1301,5 +1561,419 @@ describe('e2e notifications README code links', () => {
       if (!declared) problems.push(`${label}: ${parts[parts.length - 1]} is not declared in ${rel}`);
     }
     expect(problems).toEqual([]);
+  });
+});
+
+describe('standalone Identity BFF and Keycloak deployment contract', () => {
+  const service = (compose: string, name: string) => {
+    const start = compose.indexOf(`\n  ${name}:\n`);
+    expect(start).toBeGreaterThan(-1);
+    const rest = compose.slice(start + 1);
+    const end = rest.slice(1).search(/\n  [a-z0-9-]+:\n/);
+    return end < 0 ? rest : rest.slice(0, end + 1);
+  };
+
+  test('top-level Keycloak paths are used by build, CI, and Ansible', () => {
+    const build = read('build/build-config.yml');
+    expect(build).toContain('work-dir: "keycloak"');
+    expect(build).toContain('dockerfile: "keycloak/Dockerfile"');
+    const playbook = read('local-setup/ansible/playbook-deploy.yml');
+    expect(playbook).toContain('src: ../../keycloak/configure-keycloak.sh');
+    expect(playbook).toContain('src: ../../keycloak/realm.json');
+    expect(playbook).toContain('KEYCLOAK_REALM_CONFIG: "{{ digit_dir }}/identity-keycloak-realm.json"');
+    expect(read('.github/workflows/keycloak-ci.yml')).toContain('- "keycloak/**"');
+    expect(read('.github/workflows/identity-bff-ci.yml')).not.toContain('backend/identity-bff/keycloak');
+  });
+
+  test('new settings are optional and onboarding runs only in PGR', () => {
+    const env = read('local-setup/ansible/templates/digit.env.j2');
+    expect(env).toContain("IDENTITY_STAFF_CREDENTIAL_MODE={{ identity_staff_credential_mode | default('rotate') }}");
+    expect(env).toContain("IDENTITY_SURFACES_JSON={{ identity_surfaces_json | default('') }}");
+    expect(env).toContain("{% set fixed_otp = identity_dev_fixed_otp | default(false) | bool %}");
+    expect(env).not.toContain('identity_dev_fixed_otp | default(not');
+    expect(env).toContain('CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED={{ fixed_otp | lower }}');
+    expect(env).toContain("IDENTITY_CITIZEN_OTP_SENDER={{ identity_citizen_otp_sender | default('log' if fixed_otp else '') }}");
+    expect(env).toContain('PGR_ONBOARDING_RUNNER_ENABLED={{ pgr_onboarding_runner_effective | bool | lower }}');
+    const bff = service(read('local-setup/docker-compose.egov-digit.yaml'), 'identity-bff');
+    for (const setting of ['IDENTITY_SURFACES_JSON', 'IDENTITY_STAFF_CREDENTIAL_MODE',
+      'IDENTITY_CREDENTIAL_KEYS', 'IDENTITY_CREDENTIAL_KEY_CURRENT', 'IDENTITY_CITIZEN_OTP_SENDER',
+      'IDENTITY_POLLER_MAX_LAG_SECONDS']) {
+      expect(bff).toContain(`${setting}:`);
+    }
+    expect(bff).not.toMatch(/^ +(?:PGR_)?ONBOARDING_WORKER_\w*:/m);
+    for (const removed of ['DIGIT_PROVISIONER_USERNAME', 'DIGIT_MDMS_CREATE_URL']) {
+      expect(bff).not.toContain(`${removed}:`);
+    }
+    expect(read('local-setup/ansible/playbook-deploy.yml')).toContain("rotate mode requires neither");
+  });
+
+  test('fixed citizen OTP is off by default in every compose path', () => {
+    const variable = 'CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED: ${CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED:-false}';
+    const files = ['local-setup/docker-compose.yml', 'local-setup/docker-compose.registry.yml',
+      'local-setup/docker-compose.egov-digit.yaml', 'backend/identity-bff/deploy/digit-compose/docker-compose.identity.yml'];
+    for (const file of files) expect(read(file)).not.toMatch(/OTP_FIXED_ENABLED:-true/);
+    for (const file of ['local-setup/docker-compose.yml', 'local-setup/docker-compose.registry.yml']) {
+      expect(service(read(file), 'egov-user')).toContain(variable);
+    }
+    const full = read('local-setup/docker-compose.egov-digit.yaml');
+    expect(service(full, 'egov-user')).toContain(variable);
+    expect(service(full, 'identity-bff')).toContain(variable);
+    expect(service(full, 'identity-bff')).toContain('IDENTITY_CITIZEN_OTP_SENDER: ${IDENTITY_CITIZEN_OTP_SENDER:-}');
+    expect(read('backend/identity-bff/deploy/digit-compose/docker-compose.identity.yml')).toContain(variable);
+  });
+
+  test('the deploy warns, without failing, when citizen phone sign-in has no OTP channel', () => {
+    const playbook = read('local-setup/ansible/playbook-deploy.yml');
+    const start = playbook.indexOf('- name: "preflight — warn when citizen phone sign-in has no OTP channel"');
+    expect(start).toBeGreaterThan(-1);
+    const task = playbook.slice(start, playbook.indexOf('\n\n', start));
+    expect(task).toContain('ansible.builtin.debug:');
+    expect(task).not.toMatch(/assert:|fail:/);
+    for (const guard of ['enable_keycloak | default(false) | bool',
+      'not (enable_otp_services | default(false) | bool)',
+      'not (identity_dev_fixed_otp | default(false) | bool)',
+      "not (identity_citizen_otp_sender | default('', true) | length > 0)"]) {
+      expect(task).toContain(guard);
+    }
+    expect(task).toContain('citizen phone sign-in is unavailable');
+  });
+
+  test('no host_vars example claims the citizen OTP is always 123456', () => {
+    for (const file of ['_example.yml', 'quickstart.yml.example']) {
+      expect(read(`local-setup/ansible/inventory/host_vars/${file}`)).not.toMatch(/always 123456/);
+    }
+    expect(read('local-setup/ansible/inventory/host_vars/_example.yml')).toContain('# identity_dev_fixed_otp: false');
+  });
+});
+
+// 8c gate report 4, Part A: the BFF container must receive every setting the
+// deploy resolves for it, and pgr-services must send the BFF's onboarding bearer.
+describe('identity-bff compose wiring', () => {
+  const compose = read('local-setup/docker-compose.egov-digit.yaml');
+  const service = (name: string) => {
+    const start = compose.indexOf(`\n  ${name}:\n`);
+    expect(start).toBeGreaterThan(-1);
+    const next = compose.slice(start + 1).search(/\n  [a-z0-9-]+:\n/);
+    return compose.slice(start, next < 0 ? undefined : start + 1 + next);
+  };
+
+  test('passes the surface secrets, OTP secret, onboarding token and OTP mint URL', () => {
+    const bff = service('identity-bff');
+    for (const line of [
+      'KEYCLOAK_EMPLOYEE_CLIENT_SECRET: ${KEYCLOAK_EMPLOYEE_CLIENT_SECRET:-}',
+      'KEYCLOAK_CITIZEN_CLIENT_SECRET: ${KEYCLOAK_CITIZEN_CLIENT_SECRET:-}',
+      'IDENTITY_CITIZEN_OTP_SECRET: ${IDENTITY_CITIZEN_OTP_SECRET:-}',
+      'IDENTITY_ONBOARDING_TOKEN: ${IDENTITY_ONBOARDING_TOKEN:-}',
+      'DIGIT_OTP_CREATE_URL: ${DIGIT_OTP_CREATE_URL:-http://egov-otp:8089/otp/v1/_create}',
+    ]) {
+      expect(bff).toContain(line);
+    }
+    // the code no longer reads these
+    expect(bff).not.toContain('IDENTITY_ORGANIZATION_ADMIN_ROLES');
+    expect(bff).not.toContain('IDENTITY_ORGANIZATION_MEMBER_GROUP');
+  });
+
+  test('pgr-services sends the same onboarding bearer the BFF requires', () => {
+    expect(service('pgr-services')).toContain(
+      'PGR_ONBOARDING_IDENTITY_BFF_TOKEN: ${IDENTITY_ONBOARDING_TOKEN:-}'
+    );
+  });
+
+  test('Ansible can override the OTP mint URL without losing the compose default', () => {
+    const env = read('local-setup/ansible/templates/digit.env.j2');
+    expect(env).toContain("DIGIT_OTP_CREATE_URL={{ identity_digit_otp_create_url | default('') }}");
+  });
+});
+
+describe('D26 legacy identity paths are retired', () => {
+  const playbook = read('local-setup/ansible/playbook-deploy.yml');
+  const nginx = read('local-setup/ansible/templates/nginx-site.conf.j2');
+  const kong = read('local-setup/kong/kong.yml');
+
+  test('tenantless digit-ui paths redirect only through an explicit default slug', () => {
+    expect(nginx).toContain('return 302 /{{ digit_ui_default_tenant_slug }}/digit-ui/;');
+    expect(nginx).toContain('return 302 /{{ digit_ui_default_tenant_slug }}$request_uri;');
+    expect(nginx).toContain('return 302 /{{ digit_ui_default_tenant_slug }}/digit-ui/citizen/login;');
+    // static/container/HMR app locations plus the public-dashboard alias.
+    expect(nginx.match(/\{\{ tenantless_digit_ui_guard\('    '\) \}\}/g)).toHaveLength(4);
+    expect(playbook).toContain('digit_ui_default_tenant_slug is match');
+  });
+
+  // Blocker (Dhruv, #2271 review 2): esbuild's PUBLIC_PATH is the absolute
+  // "/digit-ui/", so a tenant page loads its JS/CSS from the tenantless prefix.
+  // The tenantless guard must let every such asset through while still
+  // refusing tenantless HTML/app routes.
+  describe('tenantless guard exempts the bundle assets tenant pages load', () => {
+    const guardSource = nginx.match(/\{% set html_route = '([^']+)' %\}/);
+    const guard = new RegExp(guardSource ? guardSource[1] : '^$');
+    const helmAssets = read('devops/deploy-as-code/charts/urban/digit-ui/templates/static-assets-ingress.yaml');
+    const helmPath = helmAssets.match(/- path: \/\{\{ \.Values\.ingress\.context \}\}(\S+)/);
+    // ingress-nginx anchors the path with `^` and matches it case-insensitively.
+    const helmAsset = new RegExp(`^/digit-ui${helmPath ? helmPath[1] : '$^'}`, 'i');
+    const esbuild = read('digit-ui-esbuild/esbuild.build.js');
+    const shells = ['index.html', 'public-dashboard.html'].map((f) => read(`digit-ui-esbuild/public/${f}`));
+    const shellAssets = shells.flatMap((html) =>
+      [...html.matchAll(/(?:src|href)="(\/digit-ui\/[^"]+)"/g)].map((m) => m[1]));
+    const loadedAssets = [
+      ...shellAssets,
+      // generateHTML() injects these; analytics.js is fetched by index.html.
+      '/digit-ui/index.js', '/digit-ui/index.css',
+      '/digit-ui/public-dashboard.js', '/digit-ui/public-dashboard.css',
+      '/digit-ui/analytics.js', '/digit-ui/analytics.js?v=2',
+      '/digit-ui/brand/digit-footer.png', '/digit-ui/logo-AB12CD.svg', '/digit-ui/font-AB12CD.woff2',
+    ];
+
+    test('the bundle really is built against the absolute /digit-ui/ prefix', () => {
+      expect(guardSource).not.toBeNull();
+      expect(helmPath).not.toBeNull();
+      expect(esbuild).toContain('const PUBLIC_PATH = "/digit-ui/";');
+      expect(shellAssets).toEqual(expect.arrayContaining([
+        '/digit-ui/globalConfigs.js', '/digit-ui/vendor/digit-ui-css.css',
+      ]));
+    });
+
+    test.each(loadedAssets)('nginx and Helm serve %s on a tenant page', (asset) => {
+      expect(guard.test(asset)).toBe(false);
+      expect(helmAsset.test(asset.split('?')[0])).toBe(true);
+    });
+
+    test.each([
+      '/digit-ui/', '/digit-ui/citizen/login', '/digit-ui/employee/user/login',
+      '/digit-ui/index.html', '/digit-ui/public-dashboard', '/digit-ui/public-dashboard.html',
+      '/digit-ui/citizen/login?from=/x.js', '/digit-ui/employee/report.jsp',
+    ])('tenantless app route %s stays behind the guard', (route) => {
+      expect(guard.test(route)).toBe(true);
+      expect(helmAsset.test(route.split('?')[0])).toBe(false);
+    });
+
+    test('the tenant-scoped public dashboard is served in place, not redirected away', () => {
+      const location = nginx.slice(
+        nginx.indexOf('location = /digit-ui/public-dashboard {'),
+        nginx.indexOf('location = /dashboard {'),
+      );
+      expect(location).toContain('rewrite ^ /digit-ui/public-dashboard.html last;');
+      expect(location).not.toMatch(/^\s*return /m);
+      expect(read('devops/deploy-as-code/charts/urban/digit-ui/templates/globalconfigs-configmap.yaml'))
+        .toContain('rewrite ^ /{{ .Values.ingress.context }}/public-dashboard.html last;');
+    });
+
+    // Low (Dhruv, #2271 review 3): a URL with an asset extension that matched
+    // no file (/digit-ui/citizen.js, login;.js) got index.html with a 200. Each
+    // nginx that serves the bundle now answers those with a 404, using the
+    // guard's extension list (verified in nginx:alpine for all four configs).
+    test.each([
+      'local-setup/ansible/templates/nginx-site.conf.j2',
+      'local-setup/nginx/digit-ui.conf',
+      // The config Ansible actually deploys in container mode (Dhruv, #2271 round 4).
+      'local-setup/ansible/playbook-deploy.yml',
+      'digit-ui-esbuild/docker/nginx.conf',
+      'devops/deploy-as-code/charts/urban/digit-ui/templates/globalconfigs-configmap.yaml',
+    ])('%s 404s a missing asset instead of serving the SPA shell', (file) => {
+      const conf = read(file);
+      const extensions = guardSource![1].match(/\[\.\]\(\?:([^)]+)\)/)![1];
+      const nested = new RegExp(
+        `try_files \\$uri \\$uri/ /[^;]+/index\\.html;[\\s\\S]*?\\n(\\s+)location ~ "\\[\\.\\]\\(\\?:${extensions.replace(/[|?]/g, '\\$&')}\\)\\$" \\{\\n\\s+try_files \\$uri =404;\\n\\1\\}`,
+      );
+      expect(conf).toMatch(nested);
+    });
+
+    test('Helm routes the assets whenever the legacy ingress is off', () => {
+      expect(helmAssets).toContain('if and .Values.ingress.enabled (not .Values.ingress.legacyPathEnabled)');
+      expect(helmAssets).toContain('nginx.ingress.kubernetes.io/use-regex');
+    });
+  });
+
+  // High 2 (Dhruv, #2271 review 2): the post-deploy gate and the Helm blackbox
+  // probe both GET a URL that D26 turned into a 404 when no default slug is set.
+  test('deploy validation and the blackbox probe check URLs that exist without a default slug', () => {
+    const gate = playbook.slice(
+      playbook.indexOf('- name: "validate — public UI serves the tenant route and its bundle"'),
+      playbook.indexOf('- name: "validate — configurator returns 200 (when enabled)"'),
+    );
+    expect(gate).toContain('{path: "/{{ digit_ui_default_tenant_slug | default(\'\', true) or \'deploy-check\' }}/digit-ui/", type: "text/html"}');
+    expect(gate).toContain('{path: "/digit-ui/index.js", type: "javascript"}');
+    expect(gate).toContain('is search(item.type)');
+    expect(playbook).not.toContain('- name: "validate — public UI returns 200"');
+    const probe = read('devops/deploy-as-code/charts/monitoring/monitoring-helmfile.yaml');
+    expect(probe).not.toContain('- https://{{ .Values.global.domain }}/digit-ui/\n');
+  });
+
+  // Low (Dhruv, #2271 review 3): the blackbox probe fetched the 8.4 MB index.js
+  // every 30 s under a 5 s timeout. It now fetches globalConfigs.js and, since
+  // the pod answers a missing file with index.html and a 200, requires a
+  // JavaScript Content-Type.
+  test('the blackbox probe fetches the small globalConfigs.js and checks it is JavaScript', () => {
+    const probe = read('devops/deploy-as-code/charts/monitoring/monitoring-helmfile.yaml');
+    const job = probe.slice(probe.indexOf('- job_name: blackbox\n'), probe.indexOf('- job_name: blackbox_exporter'));
+    expect(job).toContain('module: [http_2xx_javascript]');
+    expect(job).toContain('- https://{{ .Values.global.domain }}/digit-ui/globalConfigs.js');
+    expect(job).not.toMatch(/^\s+- https:\/\/\S+\/digit-ui\/index\.js/m);
+    const blackbox = read('devops/deploy-as-code/charts/monitoring/values/blackbox-exporter.yaml');
+    const module = blackbox.slice(blackbox.indexOf('    http_2xx_javascript:'), blackbox.indexOf('    http_post_2xx:'));
+    expect(module).toMatch(/fail_if_header_not_matches:\n\s+- header: Content-Type\n\s+regexp: "javascript"/);
+    // The chart serves it with that type.
+    expect(read('devops/deploy-as-code/charts/urban/digit-ui/templates/globalconfigs-configmap.yaml'))
+      .toMatch(/location = \/\{\{ \.Values\.ingress\.context \}\}\/globalConfigs\.js \{[^}]*default_type application\/javascript;/);
+  });
+
+  test('Helm publishes only tenant-scoped digit-ui routes by default', () => {
+    expect(read('devops/deploy-as-code/charts/urban/digit-ui/values.yaml')).toContain('legacyPathEnabled: false');
+    expect(read('devops/deploy-as-code/charts/urban/digit-ui/templates/ingress.yaml'))
+      .toContain('if .Values.ingress.legacyPathEnabled');
+    // ingress-nginx only accepts an absolute http(s) redirect target.
+    expect(read('devops/deploy-as-code/charts/urban/digit-ui/templates/tenantless-redirect-ingress.yaml'))
+      .toContain('temporal-redirect: {{ printf "%s://%s/%s$request_uri" $scheme $host .Values.ingress.defaultTenantSlug | quote }}');
+    expect(read('devops/deploy-as-code/charts/core-services/configmaps/values.yaml'))
+      .toContain('defaultTenantSlug: ""');
+  });
+
+  test('Kong denies legacy native endpoints but preserves oauth token', () => {
+    const nativePaths = [
+      '- /user/password/nologin/_update',
+      '- /user/citizen/_create',
+      '- /user-otp/v1/_send',
+    ];
+    const denyBlock = kong.slice(
+      kong.indexOf('identity-legacy-user-deny-start'),
+      kong.indexOf('identity-legacy-user-deny-end'),
+    );
+    for (const path of nativePaths) expect(denyBlock).toContain(path);
+    expect(denyBlock).not.toContain('- /otp');
+    expect(kong).toContain('# identity-legacy-otp-mock-start');
+    expect(playbook).toContain('identity-legacy-otp-mock-start');
+    expect(kong).toContain('["/user/oauth/token"]=true');
+    expect(kong).toContain('isInternal is not accepted at the public gateway');
+    expect(playbook).toContain('identity_legacy_user_endpoints');
+    expect(playbook).toContain('default(not (enable_keycloak | default(false)))');
+
+    // Mirror the two Ansible replacements for the Keycloak/default-false
+    // configuration: the three native calls leave AUTH_OPTIONAL, the mock
+    // service disappears, and oauth remains available for refresh/internal use.
+    const keycloakConfig = kong
+      .replace(/^.*-- identity-legacy-user-endpoint\n/gm, '')
+      .replace(/^# identity-legacy-otp-mock-start\n[\s\S]*?^# identity-legacy-otp-mock-end\n/m, '');
+    const authOptional = keycloakConfig.slice(0, keycloakConfig.indexOf('services:'));
+    const legacyAuthPaths = [...nativePaths.map((path) => path.slice(2)), '/otp/v1/_validate'];
+    for (const path of legacyAuthPaths) {
+      expect(authOptional).not.toContain(`["${path}"]=true`);
+    }
+    expect(authOptional).toContain('["/user/oauth/token"]=true');
+    expect(keycloakConfig).not.toContain('name: otp-validate-mock');
+    expect(keycloakConfig).toContain('name: identity-legacy-user-endpoints-denied');
+  });
+
+  // High 3 (Dhruv, #2271 review 2): with Keycloak off there is no Identity
+  // BFF, so no tenant route resolves and nobody can sign in.
+  test('the deploy refuses enable_keycloak: false and every shipped example turns it on', () => {
+    const preflight = playbook.slice(playbook.indexOf('- name: "preflight — identity requires enable_keycloak: true"'));
+    expect(preflight).toMatch(/^- name: "preflight — identity requires enable_keycloak: true"\n\s+ansible\.builtin\.fail:/);
+    expect(preflight.slice(0, 1500)).toContain("when: not (enable_keycloak | default(false) | bool)");
+    const dir = 'local-setup/ansible/inventory/host_vars';
+    const examples = fs.readdirSync(path.join(REPO_ROOT, dir))
+      .filter((f) => f.endsWith('.example') || f === '_example.yml');
+    expect(examples.length).toBeGreaterThanOrEqual(6);
+    for (const example of examples) {
+      const text = read(`${dir}/${example}`);
+      expect([example, text.match(/^enable_keycloak: (\S+)/m)?.[1]]).toEqual([example, 'true']);
+      expect([example, /^\s+keycloak: true\b/m.test(text)]).toEqual([example, true]);
+      expect([example, /OTP login works without|inert while enable_keycloak is false|DIGIT keeps working on OTP login/.test(text)])
+        .toEqual([example, false]);
+    }
+    expect(read('local-setup/README.md')).not.toContain("DIGIT's own OTP login works without it");
+  });
+
+  // Low (Dhruv, #2271 review 2): the Helm Spring gateway must close the same
+  // native identity endpoints Kong drops from AUTH_OPTIONAL.
+  test('the Spring gateway whitelists do not open the retired identity endpoints', () => {
+    const retired = ['/user-otp/v1/_send', '/otp/v1/_validate', '/user/citizen/_create', '/user/password/nologin/_update'];
+    for (const file of [
+      'devops/deploy-as-code/charts/environments/env.yaml',
+      'devops/deploy-as-code/charts/core-services/gateway/values.yaml',
+    ]) {
+      const whitelists = read(file).split('\n')
+        .filter((line) => /egov-(open|mixed-mode)-endpoints-whitelist:/.test(line))
+        .flatMap((line) => line.split(':').slice(1).join(':').replace(/"/g, '').split(',').map((p) => p.trim()));
+      expect(whitelists.length).toBeGreaterThan(10);
+      for (const path of retired) expect([file, whitelists.includes(path)]).toEqual([file, false]);
+    }
+    for (const path of retired) expect(kong).toContain(`["${path}"]=true, -- identity-legacy-user-endpoint`);
+    const parity = read('.github/scripts/check-gateway-whitelist-parity.py');
+    expect(parity).toContain('LEGACY_IDENTITY_TAG = "-- identity-legacy-user-endpoint"');
+  });
+
+  // Low (Dhruv, #2271 review 2): host_vars keys that no longer do anything
+  // must not be documented as if they did.
+  test('the example host_vars do not document retired no-op keys', () => {
+    const dir = 'local-setup/ansible/inventory/host_vars';
+    for (const example of fs.readdirSync(path.join(REPO_ROOT, dir)).filter((f) => f.endsWith('.example') || f === '_example.yml')) {
+      expect([example, /^login_tenant_allowlist:/m.test(read(`${dir}/${example}`))]).toEqual([example, false]);
+    }
+    // Every example, not just _example.yml (#2271 review 3: bomet and the
+    // localhost examples still set auth_provider and keycloak_client_id).
+    for (const example of fs.readdirSync(path.join(REPO_ROOT, dir)).filter((f) => f.endsWith('.example') || f === '_example.yml')) {
+      const body = read(`${dir}/${example}`);
+      for (const key of ['auth_provider', 'citizen_auth_provider', 'employee_auth_provider', 'keycloak_client_id']) {
+        expect([example, key, new RegExp(`^\\s*#? ?${key}:`, 'm').test(body)]).toEqual([example, key, false]);
+      }
+    }
+    const reference = read(`${dir}/_example.yml`);
+    expect(reference).toContain('# Retired (D26): auth_provider, citizen_auth_provider, employee_auth_provider');
+    // Nothing renders the allowlist into the UI config any more.
+    expect(read('local-setup/ansible/templates/globalConfigs.js.j2')).not.toContain('login_tenant_allowlist');
+  });
+
+  // Low (Dhruv, #2271 review 3): ~38 Playwright navigations across the spec
+  // and page files still opened tenantless /digit-ui/<route> URLs, which D26
+  // turns into a 404 or a redirect to the deployment default. They go through
+  // appBase() (/<E2E_TENANT_SLUG>/digit-ui) now. The one tenantless URL left
+  // is the static globalConfigs.js that loginViaApi uses to set the origin.
+  test('Playwright specs navigate only to tenant-scoped digit-ui routes', () => {
+    const e2eDir = path.join(REPO_ROOT, 'local-setup/tests/e2e');
+    const files = (fs.readdirSync(e2eDir, { recursive: true }) as string[])
+      .filter((f) => f.endsWith('.ts') && !f.includes('node_modules'));
+    const tenantless: string[] = [];
+    let scoped = 0;
+    for (const file of files) {
+      const body = fs.readFileSync(path.join(e2eDir, file), 'utf8');
+      for (const m of body.matchAll(/goto\(\s*([`'"])([^`'"]*)/g)) {
+        if (m[2].includes('${appBase()}')) scoped += 1;
+        if (/^(?:\$\{[A-Za-z_.]+\})?\/digit-ui\//.test(m[2]) && !m[2].endsWith('/digit-ui/globalConfigs.js')) {
+          tenantless.push(`${file}: ${m[2]}`);
+        }
+      }
+      expect([file, /^const \w+ = '\/digit-ui\//m.test(body)]).toEqual([file, false]);
+    }
+    expect(tenantless).toEqual([]);
+    expect(scoped).toBeGreaterThanOrEqual(38);
+  });
+
+  test('digit-ui-v2 cannot be deployed after its citizen identity removal', () => {
+    expect(playbook).toContain('enable_digit_ui_v2 is no longer supported');
+    expect(playbook).toContain('D26 retired its fixed-OTP');
+  });
+
+  test('legacy UI implementations are absent and BFF-flow specs remain', () => {
+    for (const removed of [
+      'digit-ui-esbuild/packages/modules/core/src/pages/citizen/Login/index.js',
+      'digit-ui-esbuild/packages/modules/core/src/pages/citizen/Login/SelectName.js',
+      'digit-ui-esbuild/packages/modules/core/src/pages/employee/Login/login.js',
+      'digit-ui-esbuild/packages/modules/core/src/pages/employee/Otp/index.js',
+      'digit-ui-esbuild/packages/modules/core/src/pages/employee/ForgotPassword/index.js',
+      'digit-ui-esbuild/packages/modules/core/src/pages/employee/ChangePassword/index.js',
+      'digit-ui-v2/src/pages/CitizenLoginPage.tsx',
+      'digit-ui-v2/src/pages/CitizenProfilePage.tsx',
+      // Only navigated to the removed /user/login and /user/sign-up pages.
+      'digit-ui-esbuild/packages/modules/core/src/components/LoginSignupSelector.js',
+    ]) expect(fs.existsSync(path.join(REPO_ROOT, removed))).toBe(false);
+    // No navigation to the removed tenantless wrapper's pages.
+    expect(read('digit-ui-esbuild/packages/libraries/src/services/molecules/Store/service.js'))
+      .not.toMatch(/location\.href = .*\/user\/invalid-url/);
+    expect(read('digit-ui-esbuild/packages/modules/core/src/Module.js')).not.toContain('LoginSignupSelector');
+    expect(read('tests/integration-tests/tests/utils/citizen-login.ts'))
+      .toContain("/identity/v1/citizen/otp/_send");
+    expect(read('tests/integration-tests/tests/employee/login.spec.ts'))
+      .toContain("staffContext(page");
+    expect(read('tests/integration-tests/tests/keycloak/new-citizen-provisioning.spec.ts'))
+      .toContain("selectContext(page.request, BASE_URL, 'citizen'");
   });
 });
