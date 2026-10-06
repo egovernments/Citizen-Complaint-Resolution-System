@@ -240,7 +240,7 @@ export function PhotoPicker({ photos, onChange, tenantId, tr }: PhotoPickerProps
         onClick={() => setSheetOpen(true)}
         data-analytics-event="pgr.file-complaint.photo.open"
       >
-        {tr("CS_ADDCOMPLAINT_UPLOAD_PHOTO", "Upload photo")}
+        {tr("CS_PHOTO_ADD", "Add a photo")}
       </Button>
 
       {/* Desktop: click or drop. */}
@@ -276,7 +276,7 @@ export function PhotoPicker({ photos, onChange, tenantId, tr }: PhotoPickerProps
         </span>
         <span className="cms-drop-label">{tr("CS_PHOTO_DROP", "Click to upload or drag and drop a photo")}</span>
         <span className="cms-drop-hint">
-          {tr("CS_PHOTO_RULES", "JPG or PNG, up to 5 MB each")}
+          {tr("CS_PHOTO_RULES", "A photo helps us understand your concern better. You can upload a JPG or PNG up to 5 MB")}
         </span>
       </div>
 
@@ -329,7 +329,7 @@ export function PhotoPicker({ photos, onChange, tenantId, tr }: PhotoPickerProps
         <div className="cms-sheet-overlay" onMouseDown={(event) => event.target === event.currentTarget && setSheetOpen(false)}>
           <div ref={sheetRef} tabIndex={-1} className="cms-sheet cms-photo-sheet" role="dialog" aria-modal="true" aria-labelledby="cms-photo-title">
             <h2 id="cms-photo-title" className="cms-sheet-head">
-              {tr("CS_PHOTO_SHEET_TITLE", "Upload a photo")}
+              {tr("CS_PHOTO_SHEET_TITLE", "Add a photo")}
             </h2>
             <div className="cms-sheet-options">
               <button
