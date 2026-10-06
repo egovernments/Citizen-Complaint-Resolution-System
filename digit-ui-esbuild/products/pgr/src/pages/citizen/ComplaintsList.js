@@ -242,8 +242,8 @@ export const ComplaintsList = () => {
                 onBlur={() => {
                   if (searching) trackEvent("pgr.my-complaints.search", { category: "pgr", value: matches.length });
                 }}
-                placeholder={tr("CS_MY_COMPLAINTS_SEARCH", "Search by complaint no. or text")}
-                aria-label={tr("CS_MY_COMPLAINTS_SEARCH", "Search by complaint no. or text")}
+                placeholder={tr("CS_MY_COMPLAINTS_SEARCH", "Search for a complaint")}
+                aria-label={tr("CS_MY_COMPLAINTS_SEARCH", "Search for a complaint")}
                 className="cms-complaints-search-field"
               />
             </div>
