@@ -37,17 +37,20 @@ export function memberUuid(employee: Employee): string {
   return employeeUuid(employee as unknown as MemberEmployee);
 }
 
-/** Resend to an active or invited member: the password setup email, or the one to confirm their address. */
-export async function resendInvite(employee: Employee, member: Member) {
+/**
+ * Resend to an active or invited member: the password setup email, or the one to confirm their address.
+ * `workspaceTenantId` is the binding's tenant; an employee may sit at a child of it (D16, amended).
+ */
+export async function resendInvite(employee: Employee, member: Member, workspaceTenantId = employee.tenantId) {
   const email = member.email ?? requiredEmail(employee.user.emailId);
-  const { activationEmail } = await resendActivation(employee.tenantId, member.digitUuid, email);
+  const { activationEmail } = await resendActivation(workspaceTenantId, member.digitUuid, email);
   return { email, activationEmail };
 }
 
 /** A first invitation, or a new one after an expiry or removal, to the email on the HRMS record. */
-export async function sendInvite(employee: Employee, again: boolean) {
+export async function sendInvite(employee: Employee, again: boolean, workspaceTenantId = employee.tenantId) {
   const email = requiredEmail(employee.user.emailId);
-  const { binding } = await linkMember(employee.tenantId, memberUuid(employee), email, again);
+  const { binding } = await linkMember(workspaceTenantId, memberUuid(employee), email, again);
   return { email, invited: binding.state === 'pending' };
 }
 

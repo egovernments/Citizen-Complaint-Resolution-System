@@ -60,6 +60,16 @@ describe('email actions', () => {
     expect(linkMember).toHaveBeenLastCalledWith('acme', 'u-1', 'asha@example.org', true);
   });
 
+  it('binds a child-tenant employee at the workspace, not at their own tenant (D16, amended)', async () => {
+    const cityEmployee = { ...employee, tenantId: 'acme.city' } as typeof employee;
+    vi.mocked(linkMember).mockResolvedValue({ binding: { state: 'active' } });
+    await sendInvite(cityEmployee, false, 'acme');
+    expect(linkMember).toHaveBeenLastCalledWith('acme', 'u-1', 'asha@example.org', false);
+    vi.mocked(resendActivation).mockResolvedValue({ activationEmail: 'password_setup' });
+    await resendInvite(cityEmployee, member({ email: 'listed@example.org' }), 'acme');
+    expect(resendActivation).toHaveBeenLastCalledWith('acme', 'u-1', 'listed@example.org');
+  });
+
   it('words the BFF’s refusals and keeps other messages', () => {
     expect(describeInviteError(new OnboardingError(429, 'RESEND_TOO_SOON', 'x'))).toMatch(/less than a minute ago/);
     expect(describeInviteError(new OnboardingError(403, 'IDENTITY_DISABLED', 'x'))).toMatch(/disabled/);

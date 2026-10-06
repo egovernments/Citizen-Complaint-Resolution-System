@@ -189,14 +189,14 @@ export default function EmployeesStep() {
     setSending(employee.code);
     try {
       if (resending) {
-        const { email, activationEmail } = await resendInvite(employee, member);
+        const { email, activationEmail } = await resendInvite(employee, member, tenant);
         trackStepAction('employees', 'entity_update', 'employee', { tenant, invite: 'resend', activationEmail });
         toast({
           title: `Email sent to ${email}`,
           description: activationEmail === 'password_setup' ? 'It has a link to set their password.' : 'It has a link to confirm their email address.',
         });
       } else {
-        const { email, invited } = await sendInvite(employee, status.kind !== 'none');
+        const { email, invited } = await sendInvite(employee, status.kind !== 'none', tenant);
         trackStepAction('employees', 'entity_update', 'employee', { tenant, invite: status.kind === 'none' ? 'send' : 'again' });
         toast({
           title: `Invitation sent to ${email}`,
