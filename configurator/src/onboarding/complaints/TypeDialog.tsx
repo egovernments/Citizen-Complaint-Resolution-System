@@ -3,18 +3,20 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import type { DraftType } from './complaintsApi';
+import { hasMixedHours, type DraftType } from './complaintsApi';
+import { chosenHours, formatHours, initialChoice, RESOLUTION_CHOICES, type HoursChoice } from './resolution';
 
 /**
  * Add or edit one complaint type: its name, the department that handles it,
- * and its subtypes, one per line. Editing keeps each existing subtype's code
- * by matching it on its name.
+ * its subtypes, one per line, and its resolution time. Editing keeps each
+ * existing subtype's code by matching it on its name.
  */
 export function TypeDialog({
   open,
   type,
   departments,
   takenNames,
+  defaultHours,
   onOpenChange,
   onSave,
 }: {
@@ -23,6 +25,8 @@ export function TypeDialog({
   departments: { code: string; name: string }[];
   /** Other types' names, compared ignoring case. */
   takenNames: string[];
+  /** The workspace's default resolution time, for a type without its own. */
+  defaultHours: number;
   onOpenChange: (open: boolean) => void;
   onSave: (type: DraftType) => void;
 }) {
@@ -30,7 +34,9 @@ export function TypeDialog({
   const [name, setName] = useState('');
   const [department, setDepartment] = useState('');
   const [subtypes, setSubtypes] = useState('');
-  const [errors, setErrors] = useState<{ name?: string; department?: string; subtypes?: string }>({});
+  const [hoursChoice, setHoursChoice] = useState<HoursChoice>('default');
+  const [customHours, setCustomHours] = useState('');
+  const [errors, setErrors] = useState<{ name?: string; department?: string; subtypes?: string; hours?: string }>({});
 
   const [openedFor, setOpenedFor] = useState<string | null>(null);
   const openKey = open ? type?.code ?? type?.name ?? '(new)' : null;
@@ -40,6 +46,9 @@ export function TypeDialog({
       setName(type?.name ?? '');
       setDepartment(type?.department ?? (departments.length === 1 ? departments[0].code : ''));
       setSubtypes((type?.subtypes ?? []).map((sub) => sub.name).join('\n'));
+      const initial = initialChoice(type);
+      setHoursChoice(initial.choice);
+      setCustomHours(initial.custom);
       setErrors({});
     }
   }
@@ -60,15 +69,22 @@ export function TypeDialog({
       }
       seen.add(key);
     }
+    const hours = chosenHours(hoursChoice, customHours, type);
+    if ('error' in hours) next.hours = hours.error;
     setErrors(next);
-    if (Object.keys(next).length) return;
+    if ('error' in hours || Object.keys(next).length) return;
 
-    const previous = new Map((type?.subtypes ?? []).map((sub) => [sub.name.toLowerCase(), sub.code]));
+    const { slaHours, keepOwn } = hours;
+    const previous = new Map((type?.subtypes ?? []).map((sub) => [sub.name.toLowerCase(), sub]));
     onSave({
       code: type?.code,
       name: trimmed,
       department,
-      subtypes: lines.map((line) => ({ code: previous.get(line.toLowerCase()), name: line })),
+      subtypes: lines.map((line) => {
+        const before = previous.get(line.toLowerCase());
+        return { code: before?.code, name: line, ...(keepOwn && before?.slaHours !== undefined && { slaHours: before.slaHours }) };
+      }),
+      ...(slaHours !== undefined && { slaHours }),
     });
     onOpenChange(false);
   };
@@ -84,6 +100,7 @@ export function TypeDialog({
         </DialogHeader>
         <form
           className="space-y-4"
+          noValidate
           onSubmit={(event) => {
             event.preventDefault();
             save();
@@ -124,6 +141,41 @@ export function TypeDialog({
             />
             <p className={`text-xs ${errors.subtypes ? 'text-destructive' : 'text-muted-foreground'}`}>
               {errors.subtypes ?? 'One per line. You can add more later.'}
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <label htmlFor={`${id}-hours`} className="block text-sm font-medium text-foreground">Resolution time</label>
+            <div className="flex flex-wrap items-center gap-2">
+              <Select value={hoursChoice} onValueChange={(value) => setHoursChoice(value as HoursChoice)}>
+                <SelectTrigger id={`${id}-hours`} className="w-auto min-w-[12rem] bg-card">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="default">Default ({formatHours(defaultHours)})</SelectItem>
+                  {RESOLUTION_CHOICES.map((choice) => (
+                    <SelectItem key={choice.hours} value={`${choice.hours}`}>
+                      {choice.label}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="custom">Other, in hours</SelectItem>
+                  {type && hasMixedHours(type) && <SelectItem value="mixed">Keep each subcategory’s own time</SelectItem>}
+                </SelectContent>
+              </Select>
+              {hoursChoice === 'custom' && (
+                <Input
+                  type="number"
+                  min={1}
+                  inputMode="numeric"
+                  aria-label="Resolution time in hours"
+                  placeholder="Hours"
+                  value={customHours}
+                  onChange={(event) => setCustomHours(event.target.value)}
+                  className="h-9 w-24 bg-card"
+                />
+              )}
+            </div>
+            <p className={`text-xs ${errors.hours ? 'text-destructive' : 'text-muted-foreground'}`}>
+              {errors.hours ?? 'How long complaints in this category have before they show as overdue.'}
             </p>
           </div>
           <DialogFooter className="gap-2 sm:gap-0">
