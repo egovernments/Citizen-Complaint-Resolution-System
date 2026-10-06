@@ -98,6 +98,7 @@ export function EmployeeDialog({
   takenCodes,
   employee,
   emailLocked = false,
+  emailNote,
   onOpenChange,
   onSave,
   onUpdate,
@@ -109,6 +110,8 @@ export function EmployeeDialog({
   employee?: Employee;
   /** The signed-in admin changes their own email from their account, not here. */
   emailLocked?: boolean;
+  /** What a new email does for this person, which depends on whether they have joined. */
+  emailNote?: string;
   onOpenChange: (open: boolean) => void;
   onSave: (input: NewEmployee) => Promise<void>;
   onUpdate?: (employee: Employee, changes: EmployeeChanges) => Promise<void>;
@@ -253,7 +256,7 @@ export function EmployeeDialog({
           <DialogTitle>{editing ? `Edit ${employee?.user?.name ?? 'employee'}` : 'Add an employee'}</DialogTitle>
           <DialogDescription>
             {editing
-              ? 'Changes apply the next time they sign in. A new email is confirmed by a link sent to it.'
+              ? ['Changes apply the next time they sign in.', !emailLocked && emailNote].filter(Boolean).join(' ')
               : 'They sign in to the employee app with the details you give here.'}
           </DialogDescription>
         </DialogHeader>

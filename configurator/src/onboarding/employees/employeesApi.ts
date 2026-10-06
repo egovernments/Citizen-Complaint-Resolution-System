@@ -1,11 +1,12 @@
 import { deactivateAndRemove, employeeUuid, requiredEmail, type MemberEmployee } from '@/identity/memberActions';
-import { updateMemberEmail } from '@/identity/api';
+import { linkMember, removeMember, updateMemberEmail } from '@/identity/api';
 import { apiClient } from '@/api/client';
 import { boundaryService, hrmsService, localizationService, mdmsService } from '@/api';
 import type { Employee, EmployeeJurisdiction } from '@/api/types';
 import { listMasters, recordDepartments, recordName } from '../departments/mastersApi';
 import { readLocales } from '../labelLocales';
 import { allowedEmployeeRoles } from '@/lib/systemRecords';
+import type { InviteStatus } from './inviteStatus';
 
 /**
  * Employees for the Employees step: the choices the add dialog offers (from
@@ -178,10 +179,11 @@ export interface EmployeeChanges {
  * Apply an edit to the freshly read HRMS record, keeping what the step doesn't
  * show: roles not offered here, earlier assignments, and the record ids HRMS
  * needs. The main department and designation change on the current
- * assignment. A dropped jurisdiction is switched off (HRMS keeps it), and a new
- * email goes through workspace-members/_updateEmail, which verifies it first.
+ * assignment. A dropped jurisdiction is switched off (HRMS keeps it). The email
+ * is written only with `writeEmail`: a joined member's new email reaches HRMS
+ * from the BFF once they confirm it.
  */
-export function applyEmployeeChanges(fresh: Employee, changes: EmployeeChanges, options: EmployeeOptions): Employee {
+export function applyEmployeeChanges(fresh: Employee, changes: EmployeeChanges, options: EmployeeOptions, writeEmail = false): Employee {
   const tenantId = fresh.tenantId;
   const offered = new Set(options.roles.map((role) => role.code));
   const roleName = new Map(options.roles.map((role) => [role.code, role.name]));
@@ -209,22 +211,57 @@ export function applyEmployeeChanges(fresh: Employee, changes: EmployeeChanges, 
     jurisdictions.push({ boundary: code, boundaryType: boundary?.boundaryType ?? '', hierarchyType, hierarchy: hierarchyType, isActive: true } as EmployeeJurisdiction);
   }
 
-  const user = { ...fresh.user, name: changes.name.trim(), mobileNumber: changes.mobileNumber.trim(), roles };
+  const user = {
+    ...fresh.user,
+    name: changes.name.trim(),
+    mobileNumber: changes.mobileNumber.trim(),
+    roles,
+    ...(writeEmail && { emailId: requiredEmail(changes.emailId) }),
+  };
   delete (user as { password?: string }).password;
   const reActivateEmployee = (fresh as Employee & { reActivateEmployee?: boolean }).reActivateEmployee ?? false;
   return { ...fresh, user, assignments, jurisdictions, reActivateEmployee } as Employee;
 }
 
-/** Save an edit; resolves whether a verification email went to a new address. */
-export async function updateEmployeeDetails(employee: Employee, changes: EmployeeChanges, options: EmployeeOptions): Promise<{ emailChanged: boolean }> {
+/** What happened to a new email: confirmed by a link, a new invitation, or saved for the next one. */
+export type EmailOutcome = 'unchanged' | 'verification_sent' | 'invited' | 'saved';
+
+/**
+ * Save an edit. A new email goes the way the member's sign-in state allows
+ * (identity-bff §3.6): a joined member confirms it by a link
+ * (_updateEmail), a pending invitation is withdrawn and sent again to the new
+ * address, and anyone not invited just has it saved for their next invitation.
+ * An unknown state (`null`, the member list didn't load) is treated as joined.
+ */
+export async function updateEmployeeDetails(
+  employee: Employee,
+  changes: EmployeeChanges,
+  options: EmployeeOptions,
+  status: InviteStatus | null = null,
+): Promise<{ email: EmailOutcome }> {
   const rows = await hrmsService.searchEmployees(employee.tenantId, { codes: [employee.code] });
   const fresh = rows.find((row) => row.code === employee.code);
   if (!fresh) throw new Error('This employee no longer exists. Reload and try again.');
-  await hrmsService.updateEmployee(applyEmployeeChanges(fresh, changes, options));
   const email = requiredEmail(changes.emailId);
-  if (email === (fresh.user.emailId ?? '').trim().toLowerCase()) return { emailChanged: false };
-  await updateMemberEmail(employee.tenantId, employeeUuid(fresh as unknown as MemberEmployee), email);
-  return { emailChanged: true };
+  // An invitation still at an older address (a move that stopped halfway) counts as a change.
+  const current = status?.kind === 'invited' && status.email ? status.email : fresh.user.emailId;
+  const changed = email !== (current ?? '').trim().toLowerCase();
+  const joined = !status || status.kind === 'active';
+  await hrmsService.updateEmployee(applyEmployeeChanges(fresh, changes, options, changed && !joined));
+  if (!changed) return { email: 'unchanged' };
+  const uuid = employeeUuid(fresh as unknown as MemberEmployee);
+  if (joined) {
+    await updateMemberEmail(employee.tenantId, uuid, email);
+    return { email: 'verification_sent' };
+  }
+  if (status.kind !== 'invited') return { email: 'saved' };
+  await removeMember(employee.tenantId, uuid);
+  try {
+    await linkMember(employee.tenantId, uuid, email, true);
+  } catch (error) {
+    throw new Error(`The old invitation was withdrawn, but the new one didn’t go out. Use Invite again to send it. ${error instanceof Error ? error.message : ''}`.trim());
+  }
+  return { email: 'invited' };
 }
 
 /** Deactivate, as management's delete does: HRMS keeps the record, marked inactive. */

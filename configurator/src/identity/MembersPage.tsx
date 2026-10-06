@@ -62,7 +62,7 @@ export default function MembersPage() {
         <h2 className="font-semibold">{row.name || row.email}</h2><p>{row.email} — {row.state}{row.missing ? ' (employee record missing)' : ''}</p>
         {row.expiresAt && <p>Invitation expires {new Date(row.expiresAt).toLocaleString()}</p>}
         <div className="flex gap-2">
-          {row.state === 'pending' && <Button variant="outline" disabled={busy} onClick={() => void run(() => linkMember(state.tenant, row.digitUuid, row.email, true))}>Reinvite</Button>}
+          {row.state === 'pending' && row.email && <Button variant="outline" disabled={busy} onClick={() => void run(() => linkMember(state.tenant, row.digitUuid, row.email!, true))}>Reinvite</Button>}
           <Button variant="outline" disabled={busy || row.digitUuid === state.user?.uuid} onClick={() => setConfirm(row)}>Remove member</Button>
           {row.state === 'active' && <Button variant="outline" disabled={busy} onClick={() => { setEmailMember(row); setEmail(''); }}>Change email</Button>}
         </div>

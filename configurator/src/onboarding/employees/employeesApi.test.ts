@@ -1,8 +1,12 @@
-vi.mock('@/identity/api', () => ({ removeMember: vi.fn(async () => ({})), updateMemberEmail: vi.fn(async () => ({ status: 'verification_sent' })) }));
+vi.mock('@/identity/api', () => ({
+  removeMember: vi.fn(async () => ({})),
+  linkMember: vi.fn(async () => ({ binding: { state: 'pending' } })),
+  updateMemberEmail: vi.fn(async () => ({ status: 'verification_sent' })),
+}));
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { hrmsService } from '@/api';
 import type { Employee } from '@/api/types';
-import { updateMemberEmail } from '@/identity/api';
+import { linkMember, removeMember, updateMemberEmail } from '@/identity/api';
 import {
   addEmployee,
   applyEmployeeChanges,
@@ -207,13 +211,55 @@ describe('editing an employee', () => {
     expect(updated.reActivateEmployee).toBe(false);
   });
 
-  it('confirms a new email through the workspace members API, and not an unchanged one', async () => {
+  const sentEmail = () => (hrms.updateEmployee.mock.lastCall![0] as Employee).user.emailId;
+  const newEmail = { ...changes, emailId: 'New@Example.org' };
+
+  it('confirms a joined member’s new email by a link and leaves HRMS on the old one', async () => {
     hrms.searchEmployees.mockResolvedValue([fresh()]);
-    expect(await updateEmployeeDetails(fresh(), changes, options)).toEqual({ emailChanged: false });
+    expect(await updateEmployeeDetails(fresh(), changes, options, { kind: 'active' })).toEqual({ email: 'unchanged' });
     expect(updateMemberEmail).not.toHaveBeenCalled();
 
-    expect(await updateEmployeeDetails(fresh(), { ...changes, emailId: 'New@Example.org' }, options)).toEqual({ emailChanged: true });
+    expect(await updateEmployeeDetails(fresh(), newEmail, options, { kind: 'active' })).toEqual({ email: 'verification_sent' });
     expect(updateMemberEmail).toHaveBeenCalledWith('acme', 'u-2', 'new@example.org');
+    expect(sentEmail()).toBe('anita@example.org');
     expect(hrms.updateEmployee).toHaveBeenCalledTimes(2);
+  });
+
+  it('treats an unknown sign-in state as joined', async () => {
+    hrms.searchEmployees.mockResolvedValue([fresh()]);
+    expect(await updateEmployeeDetails(fresh(), newEmail, options, null)).toEqual({ email: 'verification_sent' });
+    expect(updateMemberEmail).toHaveBeenCalledWith('acme', 'u-2', 'new@example.org');
+  });
+
+  it('moves a pending invitation to the new email: HRMS first, then withdraw and invite again', async () => {
+    hrms.searchEmployees.mockResolvedValue([fresh()]);
+    expect(await updateEmployeeDetails(fresh(), newEmail, options, { kind: 'invited' })).toEqual({ email: 'invited' });
+    expect(sentEmail()).toBe('new@example.org');
+    expect(removeMember).toHaveBeenCalledWith('acme', 'u-2');
+    expect(linkMember).toHaveBeenCalledWith('acme', 'u-2', 'new@example.org', true);
+    expect(hrms.updateEmployee.mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(removeMember).mock.invocationCallOrder[0]);
+    expect(vi.mocked(removeMember).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(linkMember).mock.invocationCallOrder[0]);
+    expect(updateMemberEmail).not.toHaveBeenCalled();
+  });
+
+  it('still moves an invitation left at the old address when HRMS already has the new one', async () => {
+    hrms.searchEmployees.mockResolvedValue([fresh()]);
+    expect(await updateEmployeeDetails(fresh(), changes, options, { kind: 'invited', email: 'old@example.org' })).toEqual({ email: 'invited' });
+    expect(linkMember).toHaveBeenCalledWith('acme', 'u-2', 'anita@example.org', true);
+  });
+
+  it('says what to do when the new invitation fails after the old one was withdrawn', async () => {
+    hrms.searchEmployees.mockResolvedValue([fresh()]);
+    vi.mocked(linkMember).mockRejectedValueOnce(new Error('Keycloak down'));
+    await expect(updateEmployeeDetails(fresh(), newEmail, options, { kind: 'invited' })).rejects.toThrow(/Use Invite again.*Keycloak down/);
+  });
+
+  it.each(['none', 'expired', 'removed'] as const)('only saves the email on the record when the state is %s', async (kind) => {
+    hrms.searchEmployees.mockResolvedValue([fresh()]);
+    expect(await updateEmployeeDetails(fresh(), newEmail, options, { kind })).toEqual({ email: 'saved' });
+    expect(sentEmail()).toBe('new@example.org');
+    expect(updateMemberEmail).not.toHaveBeenCalled();
+    expect(removeMember).not.toHaveBeenCalled();
+    expect(linkMember).not.toHaveBeenCalled();
   });
 });
