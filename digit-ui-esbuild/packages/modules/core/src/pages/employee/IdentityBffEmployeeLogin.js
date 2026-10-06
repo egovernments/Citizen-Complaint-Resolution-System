@@ -16,7 +16,9 @@ const IdentityBffEmployeeLogin = ({ t }) => {
     t,
     onAuthenticated: (user, tenant) => {
       const { info, ...tokens } = user;
-      Digit.SessionStorage.set("Employee.tenantId", tenant.tenantId);
+      // The token's tenant, which the session exchange checked is the route
+      // tenant or a child of it (D16, amended: `ke.nairobi` on `ke`).
+      Digit.SessionStorage.set("Employee.tenantId", info?.tenantId || tenant.tenantId);
       Digit.SessionStorage.set("citizen.userRequestObject", user);
       Digit.UserService.setType("employee");
       Digit.UserService.setUser(user);

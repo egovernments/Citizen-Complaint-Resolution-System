@@ -1,5 +1,6 @@
 import { StoreService } from "../Store/service";
 import { UserService } from "../../elements/User";
+import { employeeTenantForRoute } from "../../tenant/sessionTenant";
 
 /**
  * Custom service which can be used to
@@ -29,7 +30,10 @@ export const ULBService = {
    */
   getCurrentTenantId: () => {
     const routeTenant = window.__digitTenantContext?.tenantId;
-    if (routeTenant) return routeTenant;
+    // On a tenant route, an employee whose account sits at a child of the
+    // route tenant (`ke.nairobi` on `ke`, D16 amended) works at its own tenant:
+    // its token is issued and authorized there.
+    if (routeTenant) return employeeTenantForRoute(UserService.getUser()?.info, routeTenant);
     // TODO: change when setter is done.
 
     const user = UserService.getUser();

@@ -1,4 +1,5 @@
 import { identityMessage } from "./identityMessages";
+import { isTenantWithin } from "../tenant/sessionTenant";
 
 /**
  * Identity BFF login helpers shared by the employee and citizen adapters on
@@ -189,13 +190,15 @@ export async function establishIdentityBffSession({ surface, tenant, authResultI
   }
 
   const { UserRequest: info, tenant: selectedTenant, ...tokens } = selected.body || {};
-  // Employees get a token at the route tenant itself. A citizen token is
-  // issued at the route tenant's root (one DIGIT citizen account per root),
-  // and the BFF echoes the bound route tenant, which must be this route.
+  // Employees get a token at their account's own tenant: the route tenant, or
+  // a child of it (D16, amended: `ke.nairobi` on `ke`), never a sibling or a
+  // prefix-sharing tenant. A citizen token is issued at the route tenant's
+  // root (one DIGIT citizen account per root), and the BFF echoes the bound
+  // route tenant, which must be this route.
   const tokenTenantOk = surface === "citizen"
     ? info?.tenantId === citizenAccountTenantId(tenant.tenantId) &&
       selectedTenant?.tenantId === tenant.tenantId && selectedTenant?.urlSlug === tenant.urlSlug
-    : info?.tenantId === tenant.tenantId;
+    : isTenantWithin(info?.tenantId, tenant.tenantId);
   if (!info || info.type !== config.userType || !tokenTenantOk || !tokens.access_token) {
     return {
       status: "error",
@@ -203,10 +206,12 @@ export async function establishIdentityBffSession({ surface, tenant, authResultI
       message: `The signed-in account did not produce a valid ${surface} session for this tenant.`,
     };
   }
-  // Employee roles apply at the route tenant and its ancestors (a state-level
-  // role at `ke` also holds at `ke.bomet`); a sibling tenant's roles do not.
+  // Employee roles apply at the employee's own tenant (the route tenant, or
+  // the child its token is at) and its ancestors (a state-level role at `ke`
+  // also holds at `ke.bomet`); a sibling tenant's roles do not.
+  const homeTenant = surface === "employee" ? info.tenantId : tenant.tenantId;
   const appliesHere = (roleTenant) =>
-    roleTenant === tenant.tenantId || tenant.tenantId.startsWith(`${roleTenant}.`);
+    roleTenant === homeTenant || homeTenant.startsWith(`${roleTenant}.`);
   const scopedInfo = surface === "employee"
     ? { ...info, roles: (info.roles || []).filter((role) => appliesHere(role.tenantId)) }
     : info;

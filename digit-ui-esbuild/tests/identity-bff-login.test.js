@@ -211,6 +211,41 @@ test("employee session rejects a token for a different tenant", async () => {
   assert.equal(result.messageKey, "CORE_IDENTITY_INVALID_SESSION");
 });
 
+test("a root route accepts an employee token at a child tenant and scopes roles to that tenant (D16, amended)", async () => {
+  const ROOT = Object.freeze({ ...TENANT, tenantId: "ke", name: "Kenya" });
+  const { calls, fetchImpl } = stubBff({
+    "GET /identity/v1/session?surface=employee": json(200, { ...SESSION, tenant: { urlSlug: ROOT.urlSlug, tenantId: "ke", name: ROOT.name } }),
+    "POST /identity/v1/contexts/_select": json(200, employeeUser("ke.bomet")),
+  });
+  const result = await establishIdentityBffSession({ surface: "employee", tenant: ROOT, fetchImpl });
+  assert.equal(result.status, "authenticated");
+  // The selection names the route (workspace) tenant; the token is the account's own.
+  assert.deepEqual(calls[1].body, { surface: "employee", tenantId: "ke" });
+  assert.equal(result.user.info.tenantId, "ke.bomet");
+  assert.deepEqual(result.user.info.roles.map((r) => r.tenantId), ["ke.bomet", "ke"]);
+});
+
+test("a root route rejects an employee token at a prefix-sharing tenant", async () => {
+  const ROOT = Object.freeze({ ...TENANT, tenantId: "ke", name: "Kenya" });
+  for (const tenantId of ["kex", "kex.bomet"]) {
+    const { fetchImpl } = stubBff({
+      "GET /identity/v1/session?surface=employee": json(200, { ...SESSION, tenant: { urlSlug: ROOT.urlSlug, tenantId: "ke", name: ROOT.name } }),
+      "POST /identity/v1/contexts/_select": json(200, employeeUser(tenantId)),
+    });
+    const result = await establishIdentityBffSession({ surface: "employee", tenant: ROOT, fetchImpl });
+    assert.equal(result.messageKey, "CORE_IDENTITY_INVALID_SESSION", tenantId);
+  }
+});
+
+test("a city route still rejects an employee token at its parent", async () => {
+  const { fetchImpl } = stubBff({
+    "GET /identity/v1/session?surface=employee": json(200, SESSION),
+    "POST /identity/v1/contexts/_select": json(200, employeeUser("ke")),
+  });
+  const result = await establishIdentityBffSession({ surface: "employee", tenant: TENANT, fetchImpl });
+  assert.equal(result.messageKey, "CORE_IDENTITY_INVALID_SESSION");
+});
+
 test("employee 403 from _select is surfaced as forbidden", async () => {
   const { fetchImpl } = stubBff({
     "GET /identity/v1/session?surface=employee": json(200, SESSION),

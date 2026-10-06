@@ -2,6 +2,11 @@ import React from 'react';
 import ReactDOM from 'react-dom';
 import { initLibraries } from "@egovernments/digit-ui-libraries";
 import { resolveTenantRoute } from "../packages/libraries/src/services/tenant/tenantRoute";
+import {
+  employeeTenantForRoute,
+  isTenantWithin,
+  sessionBelongsToRoute,
+} from "../packages/libraries/src/services/tenant/sessionTenant";
 import "./index.css";
 import App from './App';
 import { applyTheme } from "./theme/applyTheme";
@@ -40,17 +45,10 @@ const getFromInfo = (info) => {
   return info?.tenantId || info?.tenantid || info?.userInfo?.tenantId || null;
 };
 
-const citizenAccountTenant = (routeTenant) => routeTenant.rootTenantId || routeTenant.tenantId.split(".")[0];
-
-// A stored session belongs to this route: the route tenant itself, or, for a
-// citizen, the route tenant's root, where egov-user keeps the citizen account.
-const belongsToRoute = (info, routeTenant) => {
-  const parsed = typeof info === "string" ? parseValue(info) : info;
-  const tenantId = getFromInfo(parsed);
-  if (!tenantId || tenantId === routeTenant.tenantId) return true;
-  const type = parsed?.type || parsed?.userInfo?.type;
-  return type === "CITIZEN" && tenantId === citizenAccountTenant(routeTenant);
-};
+// A stored session belongs to this route: the route tenant itself, an
+// employee at a child of it (D16, amended: `ke.nairobi` on `ke`), or a citizen
+// at the route tenant's root, where egov-user keeps the citizen account.
+const belongsToRoute = sessionBelongsToRoute;
 
 const clearAuthFromAnotherTenant = (routeTenant) => {
   if (!routeTenant) return;
@@ -93,8 +91,12 @@ const installCrossTabTenantGuard = (routeTenant) => {
 
   window.addEventListener("storage", (event) => {
     if (!event.key || !TENANT_AUTH_KEYS.has(event.key) || !event.newValue) return;
+    // An employee's tenant id may be a child of the route tenant (D16,
+    // amended); a citizen's is the route tenant itself.
     const sameTenant = event.key.endsWith("tenant-id")
-      ? parseValue(event.newValue) === expected
+      ? (event.key === "Citizen.tenant-id"
+        ? parseValue(event.newValue) === expected
+        : isTenantWithin(parseValue(event.newValue), expected))
       : belongsToRoute(event.newValue, routeTenant);
     if (sameTenant) return;
 
@@ -160,7 +162,10 @@ async function bootstrap() {
   normalizeLocale();
   const stateCode = window.__digitTenantContext?.tenantId || window?.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID");
   if (window.__digitTenantContext) {
-    window.Digit.SessionStorage.set("Employee.tenantId", stateCode);
+    // An employee whose account sits at a child of the route tenant keeps
+    // its own tenant for PGR calls; Kong authorizes the token there.
+    window.Digit.SessionStorage.set("Employee.tenantId",
+      employeeTenantForRoute(window.Digit.SessionStorage.get("User")?.info, stateCode));
     window.Digit.SessionStorage.set("Citizen.tenantId", stateCode);
     // Several enabled PGR screens still read this legacy compatibility
     // record directly instead of going through ULBService. Keep it pinned to
