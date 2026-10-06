@@ -92,6 +92,7 @@ interface OfficialLevelReport {
   other_areas?: number;
   matched?: number | null;
   unmatched?: string[];
+  agreement_failed?: boolean;
 }
 
 export interface OfficialLevel {
@@ -119,8 +120,10 @@ export interface OfficialSet {
   url: string | null;
   /** The country area to fetch the set from (fetch?id=<root.id>&source=official). */
   root: { id: string; name: string | null } | null;
-  /** False on a DB built before official.py compared the two sources. */
+  /** False on a DB built before official.py compared the two sources, or when the comparison failed. */
   agreement_measured: boolean;
+  /** The comparison ran and crashed (official.py logged why); rebuilding may fix it. */
+  agreement_failed: boolean;
   levels: OfficialLevel[];
   /** The other official source for this country, which the agreement is measured against. */
   other: {
@@ -351,6 +354,7 @@ export class BoundaryService {
       report = [];
     }
     const kept = report.filter((l) => l.kept);
+    const agreementFailed = kept.some((l) => l.agreement_failed === true);
     const root = db
       .prepare(
         'SELECT id, name FROM boundaries WHERE country = ? AND source = ? AND official = 1 AND admin_level = 0 LIMIT 1',
@@ -367,7 +371,9 @@ export class BoundaryService {
       quality: chosen.quality || null,
       url: chosen.url || null,
       root: root ?? null,
-      agreement_measured: kept.some((l) => l.other_areas !== undefined),
+      agreement_measured:
+        !agreementFailed && kept.some((l) => l.other_areas !== undefined),
+      agreement_failed: agreementFailed,
       levels: kept
         .filter((l) => l.level !== 'ADM0')
         .map((l) => ({

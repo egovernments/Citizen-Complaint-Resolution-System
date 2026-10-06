@@ -171,10 +171,21 @@ class Dataset:
     url: str = ''
     usable: bool = True
     note: str = ''
+    # The source genuinely has nothing usable for this country (no dataset,
+    # or a GADM licence): agreement reads "one source only", not "not measured".
+    absent: bool = False
+    # Levels from this ADM number down were never loaded (MAX_LEVEL_FEATURES).
+    unloaded_from: int | None = None
 
 
 def _first(cols, *candidates):
     return next((c for c in candidates if c in cols), None)
+
+
+def _holds_names(values):
+    """Whether a column holds names rather than ids: most values contain a letter."""
+    text = [str(v) for v in values if v is not None and not pd.isna(v) and str(v).strip()]
+    return bool(text) and sum(any(ch.isalpha() for ch in t) for t in text) / len(text) >= 0.5
 
 
 def cod_frame(gdf, n):
@@ -189,7 +200,12 @@ def cod_frame(gdf, n):
         # With several (ADM1_AR + ADM1_FR), prefer a Latin-script language: the
         # configurator skips names it can't romanize, so Arabic would leave the
         # level unusable again.
-        langs = sorted(c for c in cols if re.fullmatch(rf'adm{n}_[a-z]{{2}}', c))
+        # A candidate must be an ISO 639-1 code AND hold names: ADM1_ID is
+        # usually a numeric id, though "id" is also Indonesian's code.
+        langs = sorted(c for c in cols
+                       if re.fullmatch(rf'adm{n}_[a-z]{{2}}', c)
+                       and pycountry.languages.get(alpha_2=c[-2:]) is not None
+                       and _holds_names(gdf[c]))
         latin = [f'adm{n}_{lang}' for lang in LATIN_NAME_LANGUAGES if f'adm{n}_{lang}' in langs]
         name = (latin or langs or [None])[0]
     code = _first(cols, f'adm{n}_pcode', f'admin{n}pcode')
@@ -224,7 +240,7 @@ def load_cod(iso3, workdir, allow_gadm):
     ds = Dataset('cod', iso3)
     pkg = get_json(HDX_PACKAGE.format(iso3=iso3.lower()))
     if not pkg or not pkg.get('success'):
-        ds.usable, ds.note = False, 'no COD-AB dataset on HDX'
+        ds.usable, ds.absent, ds.note = False, True, 'no COD-AB dataset on HDX'
         return ds
     r = pkg['result']
     ds.licence = r.get('license_title') or ''
@@ -234,7 +250,7 @@ def load_cod(iso3, workdir, allow_gadm):
     if 'gadm' in (r.get('dataset_source') or '').lower() or any('gadm' in (x.get('name') or '').lower() for x in r['resources']):
         ds.note = 'geometry is GADM (licence forbids commercial use)'
         if not allow_gadm:
-            ds.usable = False
+            ds.usable, ds.absent = False, True
             return ds
     order = {'geojson': 0, 'shp': 1, 'geodatabase': 2}
     zips = [x for x in r['resources'] if (x.get('format') or '').lower() in order and (x.get('url') or '').lower().endswith('.zip')]
@@ -267,6 +283,7 @@ def load_geoboundaries(iso3, workdir, max_features):
         count = int(meta.get('admUnitCount') or 0)
         if max_features and count > max_features:
             skipped.append(f'ADM{n} not downloaded ({count:,} areas > MAX_LEVEL_FEATURES)')
+            ds.unloaded_from = n
             break
         g = read_downloaded(meta['gjDownloadURL'], os.path.join(workdir, f'gb-adm{n}.geojson'))
         if g.crs is None:
@@ -283,7 +300,7 @@ def load_geoboundaries(iso3, workdir, max_features):
     ds.date = '/'.join(sorted({y for y in years if y}))
     ds.note = '; '.join(skipped)
     if not ds.levels:
-        ds.usable, ds.note = False, 'no geoBoundaries release for this country'
+        ds.usable, ds.absent, ds.note = False, True, 'no geoBoundaries release for this country'
     return ds
 
 
@@ -436,27 +453,43 @@ NOT_MEASURED = {'other_areas': None, 'matched': None, 'unmatched': []}
 def add_agreement(best, datasets, reports):
     """Write the chosen set's per-level agreement with the other source into its report.
 
-    other_areas = 0 ("one source only") is kept for a real absence: no other
-    dataset, one ruled out on its own terms (a GADM-derived licence), or one
-    that stops above this level. When the comparison could not run — the other
-    source failed to load (an outage), or its level failed the nesting check —
-    the level is left unmeasured (None) instead: saying "the other source has
-    no areas here" would be a claim the check never made.
+    other_areas = 0 ("one source only") only for a real absence: there is no
+    other dataset, it is ruled out on its own terms (absent: no release, a
+    GADM licence), or it is usable and simply publishes nothing this deep.
+    Every other gap is unmeasured (None), because the comparison never ran:
+    the other source failed to load, loaded but was unusable (no country
+    outline, no polygon layers), its level failed the nesting check, or the
+    level was never downloaded (MAX_LEVEL_FEATURES). Saying "the other source
+    has no areas here" would be a claim the check never made.
     """
     others = [d for d in datasets if d is not best]
     other = next((d for d in others if d.usable), None)
-    failed = other is None and any(d.note.startswith('failed') for d in others)
+    unmeasurable = other is None and any(not d.absent for d in others)
     other_kept = {lv.n: lv for lv in other.levels} if other else {}
     other_dropped = {r['level'] for r in reports.get(other.source, []) if not r['kept']} if other else set()
+    unloaded_from = other.unloaded_from if other else None
     by_level = {r['level']: r for r in reports[best.source]}
     for lv in best.levels[1:]:
         key = f'ADM{lv.n}'
         if lv.n in other_kept:
             by_level[key].update(agreement(lv, other_kept[lv.n]))
-        elif failed or key in other_dropped:
+        elif unmeasurable or key in other_dropped or (unloaded_from is not None and lv.n >= unloaded_from):
             by_level[key].update(NOT_MEASURED)
         else:
             by_level[key].update(agreement(lv, None))
+
+
+def record_agreement(best, datasets, reports, alpha2=''):
+    """add_agreement, but a failure costs only the comparison, never the country's
+    set: every compared level is then marked agreement_failed, so the
+    configurator says the check failed instead of "this data predates it"."""
+    try:
+        add_agreement(best, datasets, reports)
+    except Exception as e:
+        print(f'  {alpha2}: agreement check failed ({type(e).__name__}: {e})')
+        for r in reports[best.source]:
+            if r['kept'] and r['level'] != 'ADM0':
+                r.update({**NOT_MEASURED, 'agreement_failed': True})
 
 
 # ---------------------------------------------------------------- writing
@@ -574,10 +607,7 @@ def main():
             datasets.append(ds)
         best = choose(datasets)
         if best is not None:
-            try:
-                add_agreement(best, datasets, reports)
-            except Exception as e:  # the comparison is informative; it must not cost the country its set
-                print(f'  {alpha2}: agreement check failed ({type(e).__name__}: {e})')
+            record_agreement(best, datasets, reports, alpha2)
         cur.execute(f'DELETE FROM boundaries WHERE country = ? AND source IN ({placeholders})', (alpha2, *sources))
         cur.execute(f'DELETE FROM official_datasets WHERE country = ? AND source IN ({placeholders})', (alpha2, *sources))
         for ds in datasets:

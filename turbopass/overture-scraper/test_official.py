@@ -185,7 +185,7 @@ class Agreement(unittest.TestCase):
 
     def test_no_usable_second_source(self):
         best, report = self.checked(nested_country('cod'))
-        gadm = official.Dataset('geoboundaries', 'TST', usable=False)
+        gadm = official.Dataset('geoboundaries', 'TST', usable=False, absent=True)  # e.g. GADM licence
         official.add_agreement(best, [best, gadm], {'cod': report})
         self.assertEqual({(r['other_areas'], r['matched']) for r in report[1:]}, {(0, None)})
 
@@ -195,6 +195,35 @@ class Agreement(unittest.TestCase):
         down = official.Dataset('geoboundaries', 'TST', usable=False, note='failed: URLError: timed out')
         official.add_agreement(best, [best, down], {'cod': report})
         self.assertEqual({(r['other_areas'], r['matched']) for r in report[1:]}, {(None, None)})
+
+    def test_a_crash_in_the_comparison_is_recorded_not_hidden(self):
+        best, report = self.checked(nested_country('cod'))
+        other, _ = self.checked(nested_country('geoboundaries'))
+        real = official.agreement
+        official.agreement = lambda *a: (_ for _ in ()).throw(ValueError('GEOS'))
+        try:
+            official.record_agreement(best, [best, other], {'cod': report}, 'TST')
+        finally:
+            official.agreement = real
+        self.assertEqual({(r['other_areas'], r.get('agreement_failed')) for r in report[1:]}, {(None, True)})
+        self.assertNotIn('agreement_failed', report[0])
+
+    def test_a_source_that_loaded_but_is_unusable_is_not_measured(self):
+        best, report = self.checked(nested_country('cod'))
+        no_outline = official.Dataset('geoboundaries', 'TST', usable=False, note='no country outline (ADM0)')
+        official.add_agreement(best, [best, no_outline], {'cod': report})
+        self.assertEqual({(r['other_areas'], r['matched']) for r in report[1:]}, {(None, None)})
+
+    def test_levels_never_downloaded_are_not_measured(self):
+        # geoBoundaries stops downloading at ADM2 (> MAX_LEVEL_FEATURES): ADM1 compares, ADM2 is unknown.
+        best, report = self.checked(nested_country('cod'))
+        other = nested_country('geoboundaries')
+        other.levels = other.levels[:2]
+        other.unloaded_from = 2
+        other, other_report = self.checked(other)
+        official.add_agreement(best, [best, other], {'cod': report, 'geoboundaries': other_report})
+        self.assertEqual(report[1]['matched'], 100.0)
+        self.assertEqual((report[2]['other_areas'], report[2]['matched']), (None, None))
 
     def test_a_level_the_other_source_dropped_is_not_measured(self):
         best, report = self.checked(nested_country('cod'))
@@ -228,6 +257,15 @@ class CodFiles(unittest.TestCase):
         cols = {'ADM2_PT': ['Acrelândia'], 'ADM2_REF': ['r'], 'ADM2_PCODE': ['BR1200013'], 'ADM1_PCODE': ['BR12']}
         f = official.cod_frame(gpd.GeoDataFrame(cols, geometry=[box(0, 0, 1, 1)], crs='EPSG:4326'), 2)
         self.assertEqual(f.iloc[0]['name'], 'Acrelândia')
+
+    def test_an_id_column_is_never_taken_for_names(self):
+        # ADM1_ID is numeric; "id" is also Indonesian's ISO code, so the values decide.
+        cols = {'ADM1_ID': ['12'], 'ADM1_AR': ['جيبوتي'], 'ADM1_PCODE': ['DJ01']}
+        f = official.cod_frame(gpd.GeoDataFrame(cols, geometry=[box(0, 0, 1, 1)], crs='EPSG:4326'), 1)
+        self.assertEqual(f.iloc[0]['name'], 'جيبوتي')
+        cols = {'ADM1_ID': ['12'], 'ADM1_REF': ['x'], 'ADM1_PCODE': ['DJ01']}
+        f = official.cod_frame(gpd.GeoDataFrame(cols, geometry=[box(0, 0, 1, 1)], crs='EPSG:4326'), 1)
+        self.assertTrue(pd.isna(f.iloc[0]['name']))
 
     def test_a_latin_script_language_wins_over_alphabetical_order(self):
         cols = {'ADM1_AR': ['جيبوتي'], 'ADM1_FR': ['Djibouti'], 'ADM1_PCODE': ['DJ01'], 'ADM0_PCODE': ['DJ']}

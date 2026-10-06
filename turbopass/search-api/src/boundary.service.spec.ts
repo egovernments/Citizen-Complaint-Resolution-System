@@ -426,6 +426,7 @@ describe('BoundaryService official sources', () => {
       url: 'https://data.humdata.org/dataset/cod-ab-ken',
       root: { id: 'cod:KEN:KE', name: 'Kenya' },
       agreement_measured: true,
+      agreement_failed: false,
       levels: [
         {
           level: 'ADM1',
@@ -486,6 +487,39 @@ describe('BoundaryService official sources', () => {
         matched: null,
         unmatched: [],
       },
+    ]);
+  });
+
+  it('reports a comparison that crashed as failed, not as old data', () => {
+    const crashed = path.join(dir, 'agreement-crashed.sqlite');
+    fs.copyFileSync(file, crashed);
+    const db = new Database(crashed);
+    db.prepare(
+      "UPDATE official_datasets SET levels = ? WHERE country = 'KE' AND chosen = 1",
+    ).run(
+      JSON.stringify([
+        { level: 'ADM0', areas: 1, kept: true },
+        {
+          level: 'ADM1',
+          areas: 47,
+          kept: true,
+          other_areas: null,
+          matched: null,
+          unmatched: [],
+          agreement_failed: true,
+        },
+      ]),
+    );
+    db.close();
+    process.env.OVERTURE_DB_PATH = crashed;
+    const svc2 = new BoundaryService(
+      {} as any,
+      { get: () => undefined } as any,
+    );
+    const set = svc2.officialSet('KE');
+    expect([set.agreement_measured, set.agreement_failed]).toEqual([
+      false,
+      true,
     ]);
   });
 
