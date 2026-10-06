@@ -17,6 +17,7 @@ import {
   deriveAccountCode,
   findOperation,
   findSignup,
+  isOperationReady,
   isOperationSettled,
   isValidAccountCode,
   isValidUrlSlug,
@@ -116,6 +117,14 @@ const selectClass =
 
 /** Poll cadence the contract asks for: every 2-5 seconds. */
 const POLL_MS = 3000;
+
+/**
+ * A SUCCEEDED run is published to the identity side on a later worker tick,
+ * retrying at 1, 2, 4, 8... seconds. Two minutes covers the first seven
+ * retries; past that the founder is told it is nearly there and polling slows.
+ */
+const PUBLISH_WAIT_MS = 120_000;
+const SLOW_POLL_MS = 15_000;
 
 function SignupMethodIcon({ method }: { method: AuthMethod }) {
   if (method.id.toLowerCase() !== 'github') return null;
@@ -259,6 +268,7 @@ function SignupFlow() {
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [signup, setSignup] = useState<Signup | null>(null);
   const [operation, setOperation] = useState<Operation | null>(null);
+  const [publishSlow, setPublishSlow] = useState(false);
   const [step, setStep] = useState<string>('account');
   const [saving, setSaving] = useState(false);
 
@@ -555,10 +565,21 @@ function SignupFlow() {
     }
   };
 
+  // SUCCEEDED, but the tenant is not listed until the outcome is published.
+  const awaitingPublication = phase === 'provisioning' &&
+    operation?.status === 'SUCCEEDED' && !operation.lifecyclePublishedAt;
+  const ready = phase === 'provisioning' && !!operation && isOperationReady(operation);
+
+  useEffect(() => {
+    if (!awaitingPublication) return;
+    const timer = setTimeout(() => setPublishSlow(true), PUBLISH_WAIT_MS);
+    return () => clearTimeout(timer);
+  }, [awaitingPublication]);
+
   // Poll while the worker runs. Stops as soon as the operation settles, so a
   // terminal failure does not sit here hammering the endpoint.
   useEffect(() => {
-    if (phase !== 'provisioning' || !operation || isOperationSettled(operation.status)) return;
+    if (phase !== 'provisioning' || !operation || isOperationSettled(operation)) return;
     const timer = setTimeout(async () => {
       try {
         const latest = await findOperation(operation.id);
@@ -566,9 +587,9 @@ function SignupFlow() {
       } catch (caught) {
         await handleFailure(caught);
       }
-    }, POLL_MS);
+    }, awaitingPublication && publishSlow ? SLOW_POLL_MS : POLL_MS);
     return () => clearTimeout(timer);
-  }, [phase, operation, handleFailure]);
+  }, [phase, operation, handleFailure, awaitingPublication, publishSlow]);
 
   // Resumed into a run that was already going. Only the signup is addressable
   // here, so this polls that rather than the operation, and resolves the same
@@ -596,9 +617,10 @@ function SignupFlow() {
     };
   }, [phase, seedFrom, restart]);
 
-  // Provisioning done: the new tenant appears without another sign-in.
+  // Provisioning done and published: the new tenant appears without another
+  // sign-in. Acting on SUCCEEDED alone reads an empty tenant list (CCRS#2303).
   useEffect(() => {
-    if (phase !== 'provisioning' || operation?.status !== 'SUCCEEDED') return;
+    if (!ready) return;
     let live = true;
     (async () => {
       try {
@@ -613,7 +635,7 @@ function SignupFlow() {
     return () => {
       live = false;
     };
-  }, [phase, operation?.status]);
+  }, [ready]);
 
   const enter = async (option: TenantOption) => {
     setSaving(true);
@@ -829,7 +851,7 @@ function SignupFlow() {
     );
   }
 
-  if (phase === 'invitations') return <Invitations invitations={invitations} onAccepted={bootstrap} />;
+  if (phase === 'invitations') return <Invitations invitations={invitations} onChanged={bootstrap} />;
 
   if (phase === 'entering') {
     return (
@@ -899,6 +921,21 @@ function SignupFlow() {
           <p className="mt-4 text-sm text-muted-foreground">
             This signup cannot be retried. Please contact support to continue.
           </p>
+        )}
+        {awaitingPublication && !publishSlow && (
+          <div className="mt-6 flex items-center text-sm text-muted-foreground">
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Finishing setup…
+          </div>
+        )}
+        {awaitingPublication && publishSlow && (
+          <Alert className="mt-6">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <AlertTitle>Your workspace is almost ready</AlertTitle>
+            <AlertDescription>
+              We're finishing setup. This page will continue automatically, or you can come back
+              and sign in again shortly.
+            </AlertDescription>
+          </Alert>
         )}
       </div>
     );

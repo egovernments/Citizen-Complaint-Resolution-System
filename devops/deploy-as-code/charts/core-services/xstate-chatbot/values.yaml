@@ -26,8 +26,21 @@ initContainers:
 image:
   repository: "xstate-chatbot"
   tag: "2.12-5137119"
+# Must stay 1. Conversation state is a read-modify-write on one row per
+# citizen, serialised only within a process (session/persist-queue.js) and
+# written last-writer-wins (session/repo/postgres-repo.js updateState).
+# A second replica can interleave and drop a transition, so the bot forgets
+# a step mid-complaint. Scaling out needs optimistic locking first.
 replicas: "1"
 tracing-enabled: true
+
+# Fallback number rule, used when the tenant has no MDMS
+# common-masters.MobileNumberValidation row or MDMS is unreachable. The chatbot
+# refuses to start without them. Defaults match the pg demo tenant (India);
+# override per environment, e.g. Mozambique: "+258", "^8[0-9]{8}$", "9".
+default-country-code: "+91"
+default-mobile-regex: "^[6-9][0-9]{9}$"
+mobile-number-length: "10"
 
 # Additional Container Envs
 env: |  
@@ -120,11 +133,24 @@ env: |
     value: "/xstate-chatbot"
   - name: SERVICE_PORT
     value: "8080"
-  - name: USER_SERVICE_HARDCODED_PASSWORD
+  # The employee account the bot creates citizens and files complaints as. Use a
+  # dedicated account limited to citizen creation and PGR filing.
+  - name: USER_SERVICE_ACCOUNT_USERNAME
     valueFrom:
       secretKeyRef:
-        name: egov-user-chatbot
-        key: citizen-login-password-otp-fixed-value
+        name: chatbot
+        key: service-account-username
+  - name: USER_SERVICE_ACCOUNT_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: chatbot
+        key: service-account-password
+  - name: DEFAULT_COUNTRY_CODE
+    value: {{ index .Values "default-country-code" | quote }}
+  - name: DEFAULT_MOBILE_REGEX
+    value: {{ index .Values "default-mobile-regex" | quote }}
+  - name: MOBILE_NUMBER_LENGTH
+    value: {{ index .Values "mobile-number-length" | quote }}
   - name: VALUEFIRST_USERNAME
     valueFrom:
       secretKeyRef:

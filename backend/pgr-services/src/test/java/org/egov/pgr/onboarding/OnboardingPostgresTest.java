@@ -289,7 +289,7 @@ public class OnboardingPostgresTest {
         for(int i=0;i<15;i++) records.add(mapper.valueToTree(Map.of("schemaCode","test.Record","uniqueIdentifier","record"+i,"data",Map.of("code","record"+i))));
         doReturn(records).when(baseline).records();
         doReturn(mapper.valueToTree(List.of(Map.of("code","tenant.tenants"),Map.of("code","test.Record")))).when(baseline).schemas();
-        var client=mock(OnboardingProvisionerClient.class);Map<String,Object> stored=new HashMap<>();Set<String> hidden=new HashSet<>();
+        var client=mock(OnboardingProvisionerClient.class);when(client.mdmsSchemaSearchPath()).thenReturn("/egov-mdms-service/schema/v1/_search");when(client.mdmsSearchPath()).thenReturn("/egov-mdms-service/v2/_search");Map<String,Object> stored=new HashMap<>();Set<String> hidden=new HashSet<>();
         org.mockito.stubbing.Answer<com.fasterxml.jackson.databind.JsonNode> api=call->{
             int offset=call.getMethod().getName().equals("write")?1:0;
             String service=call.getArgument(offset),path=call.getArgument(offset+1);Map<String,Object> body=call.getArgument(offset+2);

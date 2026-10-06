@@ -5638,5 +5638,2585 @@
     "message": "The notification configuration is still loading, so this change cannot be checked yet — wait a moment and save again.",
     "module": "configurator-ui",
     "locale": "en_IN"
+  },
+  {
+    "code": "app.nav.open_complaint_desk",
+    "message": "Open complaint desk",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.nav.open_digit_docs",
+    "message": "Open DIGIT Docs",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.branding.eyebrow",
+    "message": "Organisation setup",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.branding.intro",
+    "message": "Your logo, name and colour appear across your workspace and on the services citizens and employees experience.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.branding.load_failed",
+    "message": "Couldn’t load your workspace’s branding.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.branding.loading",
+    "message": "Loading branding",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.branding.logo",
+    "message": "Organisation logo",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.branding.logo_rules",
+    "message": "PNG or JPG, at least %{min}px square.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.branding.logo_too_big",
+    "message": "That image is over 2 MB. Use a smaller file.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.branding.logo_too_small",
+    "message": "That image is %{width}×%{height}px. Use one at least %{min}px on each side.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.branding.logo_type",
+    "message": "Use a PNG or JPG image.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.branding.logo_uploaded",
+    "message": "Logo uploaded.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.branding.name",
+    "message": "Organisation name",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.branding.name_hint",
+    "message": "Change this name in %{link}.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.branding.name_required",
+    "message": "Enter your organisation’s name.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.branding.name_too_long",
+    "message": "Keep the name under %{max} characters.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.branding.no_tenant_record",
+    "message": "The workspace %{tenant} has no tenant record to brand.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.branding.rename_in_settings",
+    "message": "Change the workspace name in Workspace settings.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.branding.replace",
+    "message": "Replace",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.branding.save_failed",
+    "message": "Saving your branding failed. Try again.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.branding.skip",
+    "message": "Skip branding",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.branding.theme",
+    "message": "Brand Theme",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.branding.theme_hint",
+    "message": "Applied across the services citizens and employees use.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.branding.theme_not_saved",
+    "message": "Your name and logo are saved, but the theme isn’t.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.branding.themes.cms-blue",
+    "message": "CMS Blue",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.branding.themes.digit-orange",
+    "message": "DIGIT Orange",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.branding.themes.green-gold",
+    "message": "Green and Gold",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.branding.upload_logo",
+    "message": "Upload logo",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.branding.workspace_settings",
+    "message": "Workspace settings",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.all_created",
+    "message": "Employees Created Successfully!",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.assignments",
+    "message": "Assignments",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.available",
+    "message": "Available data from DIGIT:",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.back_to_employees",
+    "message": "Back to Employees",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.boundaries_loaded",
+    "message": "Boundaries: %{smart_count} loaded",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.boundary_ambiguous",
+    "message": "Boundary name \"%{name}\" matches multiple boundaries — use the boundary code instead",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.boundary_not_found",
+    "message": "Boundary \"%{name}\" not found",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.check_failures",
+    "message": "Check the failure list below and retry the failed rows.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.col_department",
+    "message": "Department code",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.col_designation",
+    "message": "Designation code",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.col_dob",
+    "message": "Date of birth (YYYY-MM-DD), optional",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.col_jurisdictions",
+    "message": "Comma-separated boundary codes",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.col_mobile_code",
+    "message": "mobile number (%{code}) matching %{pattern}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.col_mobile_pattern",
+    "message": "mobile number matching %{pattern}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.col_mobile_rule",
+    "message": "mobile number (validated against the tenant rule)",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.col_name",
+    "message": "Employee full name",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.col_roles",
+    "message": "Comma-separated role codes",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.confirm_accounts",
+    "message": "Create %{smart_count} user accounts",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.confirm_intro",
+    "message": "You’re about to create %{smart_count} employees. This will:",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.confirm_records",
+    "message": "Create %{smart_count} HRMS records",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.confirm_roles",
+    "message": "Assign roles and jurisdictions",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.confirm_title",
+    "message": "Confirm Employee Creation",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.create_count",
+    "message": "Create %{smart_count} Employees",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.create_failed",
+    "message": "Failed to create employees. Please try again.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.created",
+    "message": "Created",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.created_of",
+    "message": "%{created} of %{total} employees created",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.creating_named",
+    "message": "Creating %{name}...",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.creating_title",
+    "message": "Step 4.3: Creating Employees",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.department_not_found",
+    "message": "Department \"%{code}\" not found",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.departments_loaded",
+    "message": "Departments: %{smart_count} loaded",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.dept",
+    "message": "Dept",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.designation_not_found",
+    "message": "Designation \"%{code}\" not found",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.designations_loaded",
+    "message": "Designations: %{smart_count} loaded",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.do_create",
+    "message": "Bulk create employees and invite them by email",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.do_fill",
+    "message": "Fill in employee details (name, mobile, department, role)",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.do_template",
+    "message": "Generate a dynamic employee template",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.dob",
+    "message": "DOB",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.dob_format",
+    "message": "Date of birth malformed (expected YYYY-MM-DD)",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.done",
+    "message": "Done",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.download_csv",
+    "message": "Download invitations CSV",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.download_template",
+    "message": "Download Template",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.drop_here",
+    "message": "Drop your filled employee template here",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.each_received",
+    "message": "Each employee received:",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.email_required",
+    "message": "A valid email is required to invite an employee.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.employee",
+    "message": "Employee",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.error",
+    "message": "Error",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.errors_found",
+    "message": "Validation errors found:",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.failed",
+    "message": "Failed",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.failed_paren",
+    "message": "(%{smart_count} failed)",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.failed_rows",
+    "message": "Failed rows:",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.file",
+    "message": "File: %{name}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.generate_title",
+    "message": "Step 4.1: Generate Employee Template",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.generated",
+    "message": "Template Generated!",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.get_template",
+    "message": "Get the template",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.got_account",
+    "message": "User account (username: employee code)",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.got_email",
+    "message": "New employees receive a secure password setup email.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.got_jurisdiction",
+    "message": "Boundary jurisdiction",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.got_record",
+    "message": "HRMS employee record",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.got_roles",
+    "message": "Role assignments",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.jurisdiction_ambiguous",
+    "message": "Jurisdiction \"%{name}\" matches multiple boundaries — use the boundary code",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.jurisdiction_unknown",
+    "message": "Jurisdiction \"%{name}\" does not resolve to a known boundary",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.loading",
+    "message": "Loading...",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.loading_refs",
+    "message": "Loading reference data...",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.mobile",
+    "message": "Mobile",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.mobile_digits",
+    "message": "Mobile number must be 9-10 digits",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.mobile_format",
+    "message": "Mobile number does not match the configured format",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.more_errors",
+    "message": "...and %{smart_count} more errors",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.no_boundaries",
+    "message": "No boundaries found for tenant \"%{tenant}\". Complete Phase 2 (boundaries) first, then retry.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.no_rows",
+    "message": "No employee data found in Excel file.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.none_created",
+    "message": "No employees created — %{failed} failed",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.note",
+    "message": "Note:",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.or_browse",
+    "message": "or click to browse",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.parsing",
+    "message": "Parsing Excel file...",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.pending",
+    "message": "Pending",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.refs_failed",
+    "message": "Could not load reference data (departments, designations, boundaries) from DIGIT. Employee validation cannot run without it.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.required_columns",
+    "message": "Required columns:",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.retry",
+    "message": "Retry",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.reupload",
+    "message": "Re-upload Fixed File",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.role_invalid",
+    "message": "Role \"%{code}\" not valid",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.roles",
+    "message": "Roles",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.roles_available",
+    "message": "Roles: %{smart_count} available",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.rows_skipped",
+    "message": "%{smart_count} row(s) with errors will be skipped.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.showing_first",
+    "message": "Showing first %{shown} of %{total} employees",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.skipped",
+    "message": "Skipped",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.skipped_errors",
+    "message": "Skipped (errors)",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.some_created",
+    "message": "Created %{created}, %{failed} failed",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.status",
+    "message": "Status",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.summary_errors",
+    "message": "%{smart_count} errors",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.summary_total",
+    "message": "Summary: %{smart_count} total",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.summary_valid",
+    "message": "%{smart_count} valid",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.template_file",
+    "message": "Template: %{file}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.tenant",
+    "message": "Tenant: %{tenant}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.total",
+    "message": "Total",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.unreadable",
+    "message": "Failed to parse Excel file. Please ensure it is a valid .xlsx file.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.user_account",
+    "message": "User Account",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.valid",
+    "message": "Valid",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.what_youll_do",
+    "message": "What You’ll Do:",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.common.actions",
+    "message": "Actions",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.common.added_named",
+    "message": "%{name} added",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.common.bring_them_in",
+    "message": "Bring them in",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.common.bulk_upload",
+    "message": "Bulk upload",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.common.cancel",
+    "message": "Cancel",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.common.choose_another_file",
+    "message": "Choose another file",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.common.choose_department",
+    "message": "Choose a department",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.common.choose_file",
+    "message": "Choose a file",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.common.code",
+    "message": "Code",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.common.create_manually",
+    "message": "Create manually",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.common.download_template",
+    "message": "Download template",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.common.edit",
+    "message": "Edit",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.common.edit_named",
+    "message": "Edit %{name}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.common.import_failed",
+    "message": "Importing failed. Try again.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.common.name",
+    "message": "Name",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.common.nothing_matches",
+    "message": "Nothing matches “%{query}”.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.common.optional",
+    "message": "(optional)",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.common.remove",
+    "message": "Remove",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.common.remove_confirm",
+    "message": "Remove %{name}?",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.common.remove_failed",
+    "message": "Removing failed. Try again.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.common.remove_named",
+    "message": "Remove %{name}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.common.removed_named",
+    "message": "%{name} removed",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.common.row_problem",
+    "message": "Row %{row}: %{problem}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.common.save_changes",
+    "message": "Save changes",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.common.start_adding",
+    "message": "Start adding",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.common.template_hint",
+    "message": "Not sure of the columns? Start from ours.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.common.try_again",
+    "message": "Try again",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.common.try_again_sentence",
+    "message": "Try again.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.common.updated_named",
+    "message": "%{name} updated",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.common.upload_file",
+    "message": "Upload a file",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.add_category",
+    "message": "Add category",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.add_category_button",
+    "message": "Add complaint category",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.add_gro",
+    "message": "Add a GRO in Employees",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.add_title",
+    "message": "Add a complaint category",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.bulk_body",
+    "message": "Upload a list and we will bring them in.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.bulk_intro",
+    "message": "Define your levels, fill the template with your complaint categories, and upload it.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.bulk_title",
+    "message": "Upload complaint categories",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.categories",
+    "message": "Complaint categories",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.custom_hours",
+    "message": "Custom resolution time in hours",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.default_time",
+    "message": "Default resolution time",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.default_time_body",
+    "message": "This is your own target, not a legal SLA. Complaints past it show as overdue. It’s the default for every category; to give one category its own time, edit it.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.department_required",
+    "message": "Choose the department that handles it.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.dialog_intro",
+    "message": "A category is the broad group someone picks when reporting. Subcategories sit under it.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.discard",
+    "message": "Discard changes",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.draft_dropped",
+    "message": "Unsaved changes dropped",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.draft_dropped_body",
+    "message": "The complaint categories were changed somewhere else since, so you’re seeing the saved version.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.edit_title",
+    "message": "Edit complaint category",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.empty_body",
+    "message": "A complaint category is what someone picks when reporting: a pothole, a broken street light. Add the first one to get going.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.empty_title",
+    "message": "No complaint categories yet",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.finish",
+    "message": "Finish setup",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.finish_hint",
+    "message": "Add at least one complaint category to finish.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.from_scratch",
+    "message": "Start from scratch",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.from_scratch_body",
+    "message": "Name each category and its subcategories yourself.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.from_sheet_levels",
+    "message": "Levels: %{levels}. You can change them in management once setup is finished.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.from_sheet_one",
+    "message": "%{count} complaint subcategory set up from a spreadsheet",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.from_sheet_other",
+    "message": "%{count} complaint subcategories set up from a spreadsheet",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.gro_hint",
+    "message": "Each department needs a GRO before you can finish.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.handled_by",
+    "message": "Handled by %{department}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.handled_by_label",
+    "message": "Handled by",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.hours_default",
+    "message": "Default (%{time})",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.hours_hint",
+    "message": "How long complaints in this category have before they show as overdue.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.hours_input",
+    "message": "Resolution time in hours",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.hours_invalid",
+    "message": "Enter the hours as a whole number above 0.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.hours_keep_own",
+    "message": "Keep each subcategory’s own time",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.hours_other",
+    "message": "Other, in hours",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.hours_placeholder",
+    "message": "Hours",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.hours_unit",
+    "message": "hours",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.how_to_add",
+    "message": "How do you want to add your complaint categories?",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.imported_one",
+    "message": "%{count} complaint subcategory imported",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.imported_other",
+    "message": "%{count} complaint subcategories imported",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.intro",
+    "message": "Set up the kinds of complaints people can raise, which department handles each, and how long they should take to resolve.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.load_failed",
+    "message": "Couldn’t load your complaint categories.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.name_example",
+    "message": "Street lighting",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.name_required",
+    "message": "Give the complaint category a name.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.name_taken",
+    "message": "“%{name}” is already on the list.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.no_gro",
+    "message": "No one can assign complaints for %{departments}.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.no_gro_why",
+    "message": "Every department a complaint category goes to needs at least one employee with the GRO role. A DGRO doesn’t count.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.no_subcategories",
+    "message": "No subcategories: people report this category as it is.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.or",
+    "message": "or",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.ready_one",
+    "message": "%{count} complaint category is ready",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.ready_other",
+    "message": "%{count} complaint categories are ready",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.resolution_time",
+    "message": "Resolution time",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.resolve_within",
+    "message": "Resolve within %{time}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.resolve_within_default",
+    "message": "Resolve within %{time} (default)",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.save_failed",
+    "message": "Saving your complaint categories failed. Try again.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.some_own_time",
+    "message": "; some subcategories have their own time",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.subcategories",
+    "message": "Subcategories",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.subcategories_stat",
+    "message": "Complaint subcategories",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.subtype_twice",
+    "message": "“%{name}” is listed twice.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.subtypes_example",
+    "message": "One per line\nBroken lamp\nFlickering lamp",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.subtypes_hint",
+    "message": "One per line. You can add more later.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.unsaved",
+    "message": "Unsaved",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.add_department",
+    "message": "Add department",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.add_designation",
+    "message": "Add designation",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.bulk_body",
+    "message": "Upload a list and we will bring them in.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.bulk.found",
+    "message": "%{file} has %{departments} and %{designations}.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.bulk.intro",
+    "message": "Choose the filled-in spreadsheet. It has one sheet for departments and one for designations.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.bulk.none_found",
+    "message": "No departments or designations found. Use the template’s Department and Designation sheets.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.bulk.title",
+    "message": "Upload your departments and designations",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.bulk.unreadable",
+    "message": "That file couldn’t be read. Upload the filled-in .xlsx template.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.code_locked",
+    "message": "A code can’t change once it’s saved.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.code_pattern",
+    "message": "Use capital letters, digits and underscores only.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.code_suggested",
+    "message": "Suggested from the name. You can change it.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.continue_hint",
+    "message": "Add at least one department and one designation to continue.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.count_department_one",
+    "message": "%{count} department",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.count_department_other",
+    "message": "%{count} departments",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.count_designation_one",
+    "message": "%{count} designation",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.count_designation_other",
+    "message": "%{count} designations",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.department",
+    "message": "Department",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.department_add",
+    "message": "Add department",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.department_add_title",
+    "message": "Add a department",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.department_code_label",
+    "message": "Department code",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.department_code_required",
+    "message": "Enter a department code.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.department_code_taken",
+    "message": "Another department already uses this code.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.department_dialog_intro",
+    "message": "Complaints are routed to departments, and every employee belongs to one.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.department_name_example",
+    "message": "Roads and Infrastructure",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.department_name_label",
+    "message": "Department name",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.department_name_required",
+    "message": "Enter the department’s name.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.department_save_failed",
+    "message": "Saving the department failed. Try again.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.departments",
+    "message": "Departments",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.designation",
+    "message": "Designation",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.designation_add",
+    "message": "Add designation",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.designation_add_title",
+    "message": "Add a designation",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.designation_code_label",
+    "message": "Designation code",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.designation_code_required",
+    "message": "Enter a designation code.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.designation_code_taken",
+    "message": "Another designation already uses this code.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.designation_dialog_intro",
+    "message": "The role an employee holds, like Ward Officer or Engineer.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.designation_name_example",
+    "message": "Ward Officer",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.designation_name_label",
+    "message": "Designation name",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.designation_name_required",
+    "message": "Enter the designation’s name.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.designation_save_failed",
+    "message": "Saving the designation failed. Try again.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.designations",
+    "message": "Designations",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.empty_body",
+    "message": "Departments are what complaints get routed to, and every employee belongs to one. Add them one at a time, or upload a list.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.empty_title",
+    "message": "No departments yet",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.how_to_add",
+    "message": "How do you want to add your departments?",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.import_added",
+    "message": "Added %{what}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.import_added_both",
+    "message": "Added %{first} and %{second}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.import_failed_count",
+    "message": "%{count} couldn’t be added.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.import_nothing",
+    "message": "Nothing new to add",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.intro",
+    "message": "The departments complaints get routed to, and the designations your employees hold.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.load_failed",
+    "message": "Couldn’t load your departments.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.manual_body",
+    "message": "Name them one at a time.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.name_too_long",
+    "message": "Keep the name under %{max} characters.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.no_departments",
+    "message": "No departments yet. Complaints are routed to them, so add at least one.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.no_designations",
+    "message": "No designations yet. Every employee holds one, so add at least one.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.remove_department_effect",
+    "message": "Complaints and employees won’t be able to use %{name} after this.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.remove_designation_effect",
+    "message": "Employees won’t be able to hold %{name} after this.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.search_departments",
+    "message": "Search departments",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.search_designations",
+    "message": "Search designations",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.add_departments",
+    "message": "Add departments",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.add_employee",
+    "message": "Add employee",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.add_failed",
+    "message": "Adding the employee failed. Try again.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.add_intro",
+    "message": "They sign in to the employee app with the details you give here.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.add_title",
+    "message": "Add an employee",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.already_has_account",
+    "message": "%{name} already has an account",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.already_set_up",
+    "message": "%{name} has already set up sign-in",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.bulk_body",
+    "message": "Upload a staff list and we will bring everyone in.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.bulk_intro",
+    "message": "Get a template with your departments, designations, roles and areas built in, fill it, and upload it.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.bulk_title",
+    "message": "Upload your staff list",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.choose_designation",
+    "message": "Choose a designation",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.code",
+    "message": "Employee code",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.code_required",
+    "message": "Enter an employee code.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.code_taken",
+    "message": "Another employee already has this code.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.contact",
+    "message": "Contact",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.continue_hint",
+    "message": "Add at least one employee to continue.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.department_required",
+    "message": "Choose a department.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.departments_empty",
+    "message": "Add departments first.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.departments_hint",
+    "message": "Choose one or more. The first is their main one.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.departments_required",
+    "message": "Choose at least one department.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.designation_required",
+    "message": "Choose a designation.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.edit_intro",
+    "message": "Changes apply the next time they sign in.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.email",
+    "message": "Email",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.email_example",
+    "message": "anita@example.org",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.email_failed",
+    "message": "The email couldn’t be sent. Try again.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.email_not_sent",
+    "message": "The email wasn’t sent",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.email_note_active",
+    "message": "A new email is confirmed by a link sent to it.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.email_note_invited",
+    "message": "A new email replaces their invitation with one sent to it.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.email_reinvited",
+    "message": "Their invitation now goes to the new email.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.email_required",
+    "message": "Enter a valid email to invite this employee.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.email_sent",
+    "message": "Email sent to %{email}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.email_verification_sent",
+    "message": "We sent a link to the new email. It takes effect once they confirm it.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.empty_body",
+    "message": "These are the people who will handle complaints. Add them one at a time, or upload your staff list.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.empty_title",
+    "message": "No employees yet",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.filter",
+    "message": "Filter",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.filter_named",
+    "message": "Filter %{list}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.full_name",
+    "message": "Full name",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.gone",
+    "message": "This employee no longer exists. Reload and try again.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.gone_from_hrms",
+    "message": "Employee no longer exists in HRMS.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.has_account_sees_invite",
+    "message": "%{name} already has an account, so they’ll see the invitation when they next sign in.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.how_to_add",
+    "message": "How do you want to add your employees?",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.intro",
+    "message": "The people who will use your complaint system.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.invitation_sent",
+    "message": "Invitation sent to %{email}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.invite_move_failed",
+    "message": "The old invitation was withdrawn, but the new one didn’t go out. Use Invite again to send it.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.invite_move_failed_reason",
+    "message": "The old invitation was withdrawn, but the new one didn’t go out. Use Invite again to send it. %{reason}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.invites_load_failed",
+    "message": "Couldn’t load invitation status.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.jurisdictions",
+    "message": "Jurisdictions",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.jurisdictions_empty",
+    "message": "Set up your geography first.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.jurisdictions_hint",
+    "message": "Where this person can act.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.jurisdictions_required",
+    "message": "Choose where they can act.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.link_confirm_email",
+    "message": "It has a link to confirm their email address.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.link_set_password",
+    "message": "It has a link to set their password.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.load_failed",
+    "message": "Couldn’t load your employees.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.manual_body",
+    "message": "Type in people one at a time.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.mobile",
+    "message": "Mobile number",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.mobile_format",
+    "message": "That number doesn’t match this workspace’s mobile format.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.mobile_required",
+    "message": "Enter their mobile number.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.name_example",
+    "message": "Anita Wanjiru",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.name_required",
+    "message": "Enter their full name.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.needs_department_body",
+    "message": "Everyone you add belongs to a department, so there needs to be at least one before you can start adding employees.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.needs_department_title",
+    "message": "You will have to create a department first",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.nothing_matches",
+    "message": "Nothing matches.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.nothing_to_resend",
+    "message": "There’s nothing to resend.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.past_departments",
+    "message": "Also on their record from before: %{departments}.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.remove_effect",
+    "message": "%{name} won’t be able to sign in or handle complaints after this.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.roles_empty",
+    "message": "No roles are set up for this workspace.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.roles_hint",
+    "message": "What they can do. Employee is enough to sign in; complaint roles like GRO let them handle complaints.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.sees_invite_next_sign_in",
+    "message": "They’ll see the invitation when they next sign in.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.signs_in_as",
+    "message": "They sign in as %{username}.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.system_roles",
+    "message": "System roles",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.update_failed",
+    "message": "Saving the changes failed. Try again.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.you",
+    "message": "(you)",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.errors.reload_retry",
+    "message": "Reload and retry.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.errors.save_denied",
+    "message": "Your account doesn’t have permission to change this workspace yet, so nothing was saved.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.errors.schema_missing",
+    "message": "This workspace isn’t fully set up on the server yet, so this couldn’t be saved.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.errors.step_incomplete",
+    "message": "This step isn’t complete yet.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.errors.step_not_completed",
+    "message": "Could not complete setup step",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.errors.WORKSPACE_ADMIN_REQUIRED",
+    "message": "Only an admin of this workspace can change its setup.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.errors.WORKSPACE_AUTH_REQUIRED",
+    "message": "Your session has ended. Sign in again to carry on.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.errors.WORKSPACE_DEPENDENCY_UNAVAILABLE",
+    "message": "A service this needs isn’t responding right now. Try again in a minute.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.errors.WORKSPACE_INVALID_DEPENDENCY_RESPONSE",
+    "message": "A service this needs sent back something unexpected. Try again in a minute.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.errors.WORKSPACE_INVALID_NAME",
+    "message": "That name can’t be used. Try a different one.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.errors.WORKSPACE_INVALID_REQUEST",
+    "message": "That request wasn’t valid. Reload the page and try again.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.errors.WORKSPACE_INVALID_STATE",
+    "message": "That change isn’t allowed for this step.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.errors.WORKSPACE_INVALID_TENANT",
+    "message": "That request wasn’t valid. Reload the page and try again.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.errors.WORKSPACE_NAME_TAKEN",
+    "message": "Another workspace already uses this name. Pick a different one.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.errors.WORKSPACE_RENAME_PENDING",
+    "message": "A name change is still being applied. Wait for it to finish, then try again.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.errors.WORKSPACE_TENANT_NOT_FOUND",
+    "message": "This workspace couldn’t be found. If it was just created, wait a minute and reload.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.errors.WORKSPACE_VERSION_CONFLICT",
+    "message": "This workspace was just changed somewhere else. Reload the page and try again.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.groups.account",
+    "message": "Account",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.groups.complaints",
+    "message": "Complaints",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.groups.organisation",
+    "message": "Organisation",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.hours.day_one",
+    "message": "%{count} day",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.hours.day_other",
+    "message": "%{count} days",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.hours.hour_one",
+    "message": "%{count} hour",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.hours.hour_other",
+    "message": "%{count} hours",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.hours.week_one",
+    "message": "%{count} week",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.hours.week_other",
+    "message": "%{count} weeks",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.invite_errors.ADMIN_REQUIRED",
+    "message": "Only an admin of this workspace can send invitations.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.invite_errors.BINDING_BUSY",
+    "message": "Their account is being changed right now. Try again in a moment.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.invite_errors.BINDING_CONFLICT",
+    "message": "This email already belongs to a different employee in this workspace.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.invite_errors.DIGIT_ACCOUNT_NOT_FOUND",
+    "message": "Their sign-in account no longer matches this employee. Reload the page and try again.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.invite_errors.IDENTITY_BUSY",
+    "message": "Their account is being changed right now. Try again in a moment.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.invite_errors.IDENTITY_DISABLED",
+    "message": "Their sign-in account is disabled, so no email can be sent.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.invite_errors.IDENTITY_EMAIL_CHANGED",
+    "message": "The account with this email now uses a different address. Edit the employee’s email and try again.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.invite_errors.RESEND_TOO_SOON",
+    "message": "An email went to them less than a minute ago. Wait a minute before sending another.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.invite_errors.ROLE_ESCALATION_FORBIDDEN",
+    "message": "This employee has an admin role you don’t have, so you can’t invite them.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.invite.action_for",
+    "message": "%{action} for %{name}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.invite.active",
+    "message": "Active",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.invite.again",
+    "message": "Invite again",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.invite.expired",
+    "message": "Invite expired",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.invite.invited",
+    "message": "Invited",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.invite.no_access",
+    "message": "No access",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.invite.not_invited",
+    "message": "Not invited",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.invite.resend",
+    "message": "Resend email",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.invite.send",
+    "message": "Send invite",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.invite.sending",
+    "message": "Sending…",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.invite.until",
+    "message": "until %{date}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.layout.completed_count",
+    "message": "%{done} of %{total} completed",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.layout.go_to_management",
+    "message": "Go to Management",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.layout.setup_progress",
+    "message": "Setup progress",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.layout.setup_steps",
+    "message": "Setup steps",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.layout.setup_title",
+    "message": "Let’s set up your organisation",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.layout.sign_out_failed",
+    "message": "Sign-out failed. Please retry.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.layout.status.done",
+    "message": "done",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.layout.status.locked",
+    "message": "locked",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.layout.status.to_do",
+    "message": "to do",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.layout.title",
+    "message": "Onboarding",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.layout.title_prefix",
+    "message": "Complaint Management System",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.layout.view_only",
+    "message": "Your role has view-only access to %{step}. You can review this step, but creating or editing records here is restricted to roles with write access (e.g. MDMS_ADMIN).",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.members.code_taken",
+    "message": "This employee code already belongs to a different or inactive employee.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.members.email_required",
+    "message": "A valid email is required to invite an employee.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.members.invite_unfinished",
+    "message": "Employee %{code} exists in HRMS; invitation is unfinished. Retry with the same code and email. %{reason}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.members.no_account_id",
+    "message": "HRMS did not return the employee account identifier. Reload and retry.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.members.removal_unfinished",
+    "message": "Employee is inactive in HRMS; membership removal is unfinished. Retry removal. %{reason}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.members.self_removal",
+    "message": "You cannot remove your own membership.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.probe.check_again",
+    "message": "Check again",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.probe.check_failed",
+    "message": "Couldn’t check this step just now.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.probe.checking",
+    "message": "Checking this step…",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.probe.not_complete",
+    "message": "Not complete yet.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.requirements.branding",
+    "message": "Add a logo to finish branding, or skip the step.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.requirements.complaint_types",
+    "message": "Every department a complaint category goes to needs an employee with the GRO role (a DGRO doesn’t count), and at least one category needs a department and a resolution time.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.requirements.departments",
+    "message": "Add at least one department and one designation.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.requirements.employees",
+    "message": "Add at least one employee who can sign in.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.requirements.geography",
+    "message": "Add at least two levels of places, for example counties and the wards inside them.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.step.back",
+    "message": "Back",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.step.coming_soon",
+    "message": "Coming soon",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.step.completed",
+    "message": "Completed",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.step.save_continue",
+    "message": "Save and continue",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.step.your_organisation",
+    "message": "Your organisation",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.steps.branding",
+    "message": "Branding",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.steps.complaints",
+    "message": "Complaints Template",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.steps.departments",
+    "message": "Departments",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.steps.employees",
+    "message": "Employees",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.steps.geography",
+    "message": "Geography",
+    "module": "configurator-ui",
+    "locale": "en_IN"
   }
 ]

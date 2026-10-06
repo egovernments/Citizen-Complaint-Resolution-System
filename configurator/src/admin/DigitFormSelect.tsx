@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { uniqueBy } from '@/lib/uniqueBy';
+import { pickerChoices } from '@/lib/systemRecords';
 
 /** Resolve a dot-separated path like 'user.name' from a record */
 function getNestedValue(record: RaRecord, path: string): unknown {
@@ -81,8 +82,9 @@ export function DigitFormSelect({
         value: String(getNestedValue(item, optionValue) ?? item.id),
         label: String(getNestedValue(item, optionText) ?? getNestedValue(item, optionValue) ?? item.id),
       }));
-    return uniqueBy(built, (c) => c.value);
-  }, [staticChoices, data, optionValue, optionText]);
+    // The founder's provisioned records (lib/systemRecords) aren't offered, unless one is the value already.
+    return pickerChoices(uniqueBy(built, (c) => c.value), (c) => c.value, [field.value]);
+  }, [staticChoices, data, optionValue, optionText, field.value]);
 
   const hasError = fieldState.invalid && fieldState.isTouched;
   const errorMessage = fieldState.error?.message;

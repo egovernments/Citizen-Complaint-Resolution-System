@@ -86,6 +86,7 @@ const customEnglishMessages: TranslationMessages = {
       expand_sidebar: 'Expand sidebar',
       open_menu: 'Open menu',
       close_menu: 'Close menu',
+      open_complaint_desk: 'Open complaint desk',
     },
     header: {
       management_mode: 'Management Mode',

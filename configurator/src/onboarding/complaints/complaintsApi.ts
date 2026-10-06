@@ -5,7 +5,8 @@ import { labelLocales } from '../labelLocales';
 
 /**
  * Complaint types built from scratch: types, each handled by one department,
- * with optional subtypes, and one resolution time for all of them. Saved as
+ * with optional subtypes, and a resolution time: the workspace default, or the
+ * type's own (a subtype follows its type unless it was saved with its own). Saved as
  * the same RAINMAKER-PGR.ComplaintHierarchy the spreadsheet route writes: a
  * two-level PGR hierarchy whose rows people file against (every subtype, or a
  * type that has none) carry the department and slaHours.
@@ -26,6 +27,8 @@ export interface DraftSubtype {
   /** Set once saved; a rename keeps it. */
   code?: string;
   name: string;
+  /** Its own resolution time, kept when it was saved with one that differs from its type's. Unset: the type's. */
+  slaHours?: number;
 }
 
 export interface DraftType {
@@ -33,11 +36,33 @@ export interface DraftType {
   name: string;
   department: string;
   subtypes: DraftSubtype[];
+  /** The type's own resolution time. Unset: the workspace default. */
+  slaHours?: number;
 }
 
 export interface ComplaintDraft {
   types: DraftType[];
+  /** The default resolution time, for every type without its own. */
   slaHours: number;
+}
+
+/** The hours a row people file against gets: the subtype's own, else its type's, else the default. */
+export function resolutionHours(draft: ComplaintDraft, type: DraftType, subtype?: DraftSubtype): number {
+  return subtype?.slaHours ?? type.slaHours ?? draft.slaHours;
+}
+
+/** Whether some of the type's subtypes keep their own resolution time. */
+export function hasMixedHours(type: DraftType): boolean {
+  return type.subtypes.some((subtype) => subtype.slaHours !== undefined);
+}
+
+/** The most common value, the earliest on a tie. */
+function mostCommon(values: number[]): number | undefined {
+  const counts = new Map<number, number>();
+  for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
+  let best: number | undefined;
+  for (const [value, count] of counts) if (best === undefined || count > counts.get(best)!) best = value;
+  return best;
 }
 
 export type LoadedComplaints =
@@ -89,22 +114,44 @@ export async function loadComplaints(tenantId: string): Promise<LoadedComplaints
   const byOrder = (a: MdmsRecord, b: MdmsRecord) => Number(dataOf(a).order ?? 0) - Number(dataOf(b).order ?? 0);
   const typeRows = active.filter((record) => dataOf(record).levelCode === LEVELS[0]).sort(byOrder);
   const subtypeRows = active.filter((record) => dataOf(record).levelCode === LEVELS[1]).sort(byOrder);
-  const leafHours = active.map((record) => Number(dataOf(record).slaHours)).filter((hours) => hours > 0);
+  const hoursOf = (record: MdmsRecord) => {
+    const hours = Number(dataOf(record).slaHours);
+    return hours > 0 ? hours : undefined;
+  };
+  const defined = (values: (number | undefined)[]) => values.filter((hours): hours is number => hours !== undefined);
+  const subtypesOf = (row: MdmsRecord) => subtypeRows.filter((sub) => dataOf(sub).parentCode === codeOf(row));
+  // Hours live on the rows people file against. A type's are its subtypes' most common (or its own as
+  // a leaf); the types' most common becomes the default. A type or subtype that differs keeps its own,
+  // so a save writes back what it loaded.
+  const hoursByType = new Map(
+    typeRows.map((row) => {
+      const subtypes = subtypesOf(row);
+      return [row, mostCommon(defined(subtypes.length ? subtypes.map(hoursOf) : [hoursOf(row)]))] as const;
+    }),
+  );
+  const defaultHours = mostCommon(defined([...hoursByType.values()])) ?? DEFAULT_SLA_HOURS;
 
   const types: DraftType[] = typeRows.map((row) => {
-    const subtypes = subtypeRows.filter((sub) => dataOf(sub).parentCode === codeOf(row));
+    const subtypes = subtypesOf(row);
     const department = text(dataOf(row).department) || text(subtypes.map((sub) => dataOf(sub).department).find(Boolean));
+    const typeHours = hoursByType.get(row);
+    const own = typeHours !== undefined && typeHours !== defaultHours ? typeHours : undefined;
+    const effective = own ?? defaultHours;
     return {
       code: codeOf(row),
       name: text(dataOf(row).name) || codeOf(row),
       department,
-      subtypes: subtypes.map((sub) => ({ code: codeOf(sub), name: text(dataOf(sub).name) || codeOf(sub) })),
+      subtypes: subtypes.map((sub) => {
+        const hours = hoursOf(sub);
+        return { code: codeOf(sub), name: text(dataOf(sub).name) || codeOf(sub), ...(hours !== undefined && hours !== effective && { slaHours: hours }) };
+      }),
+      ...(own !== undefined && { slaHours: own }),
     };
   });
 
   return {
     editable: true,
-    draft: { types, slaHours: leafHours[0] ?? DEFAULT_SLA_HOURS },
+    draft: { types, slaHours: defaultHours },
     records,
     hasDefinition: !!definition,
   };
@@ -148,7 +195,7 @@ export function rowsFor(draft: ComplaintDraft, existingCodes: Iterable<string>):
         active: true,
         path: typeCode,
         // A type with no subtypes is filed against directly, so it carries the leaf fields.
-        ...(leaf ? { department: type.department, slaHours: draft.slaHours, keywords: '' } : {}),
+        ...(leaf ? { department: type.department, slaHours: resolutionHours(draft, type), keywords: '' } : {}),
       },
     });
     for (const sub of type.subtypes) {
@@ -166,7 +213,7 @@ export function rowsFor(draft: ComplaintDraft, existingCodes: Iterable<string>):
           active: true,
           path: `${typeCode}.${subCode}`,
           department: type.department,
-          slaHours: draft.slaHours,
+          slaHours: resolutionHours(draft, type, sub),
           keywords: '',
         },
       });

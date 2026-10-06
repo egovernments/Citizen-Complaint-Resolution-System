@@ -1,4 +1,5 @@
 import { apiClient, ENDPOINTS, mdmsService, MDMS_SCHEMAS } from '@/api';
+import { MessageError } from './i18n';
 import type { MdmsRecord } from '@/api/types';
 import { BRAND_THEMES, type BrandTheme } from './brandThemes';
 
@@ -79,7 +80,7 @@ export async function loadBranding(tenantId: string): Promise<Branding> {
   ]);
   const tenantRecord = tenants.find((record) => record.uniqueIdentifier === tenantId && record.isActive !== false);
   if (!tenantRecord) {
-    throw new Error(`The workspace ${tenantId} has no tenant record to brand.`);
+    throw new MessageError('branding.no_tenant_record', 'The workspace %{tenant} has no tenant record to brand.', { tenant: tenantId });
   }
   // Only a record owned by the state root is ours to rewrite; an inherited one
   // belongs to a parent, and the apps take the first record they get.
@@ -114,7 +115,7 @@ export async function saveBranding(
   const { tenantId, tenantRecord } = current;
   const stateRoot = stateRootOf(tenantId);
   const name = changes.name.trim();
-  if (name !== current.name) throw new Error('Change the workspace name in Workspace settings.');
+  if (name !== current.name) throw new MessageError('branding.rename_in_settings', 'Change the workspace name in Workspace settings.');
   // A rename may have completed while this form was open. Keep the current name.
   const fresh = await loadBranding(tenantId);
   const data: Record<string, unknown> = { ...fresh.tenantRecord.data };

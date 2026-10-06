@@ -5,6 +5,7 @@ import { ChevronDown, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { uniqueBy } from '@/lib/uniqueBy';
+import { pickerChoices } from '@/lib/systemRecords';
 
 export interface DepartmentChipInputProps {
   source?: string;
@@ -64,7 +65,7 @@ export function DepartmentChipInput({
     // One entry per department code — the chips this writes are codes, so a
     // repeated code renders an option that does nothing on the second click
     // (it is already selected) and reads as duplicated master data (#1923).
-    return uniqueBy(data, (d) => d.code ?? String(d.id))
+    return pickerChoices(uniqueBy(data, (d) => d.code ?? String(d.id)), (d) => d.code)
       .filter((d) => {
         const code = d.code ?? String(d.id);
         return !selectedSet.has(code);

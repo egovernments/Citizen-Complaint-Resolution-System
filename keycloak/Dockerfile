@@ -25,6 +25,11 @@ COPY theme-src/ ./
 RUN npm run build-keycloak-theme \
     && test -f dist_keycloak/configurator-blue-login-theme.jar
 
+# A static jq, so this image can also run configure-keycloak.sh as the Helm
+# realm-configure Job (devops/deploy-as-code/charts/identity/keycloak). The
+# Keycloak base image has bash and kcadm.sh but no jq. Pinned by index digest.
+FROM ghcr.io/jqlang/jq:1.8.1@sha256:4f34c6d23f4b1372ac789752cc955dc67c2ae177eb1b5860b75cdc5091ce6f91 AS jq
+
 FROM quay.io/keycloak/keycloak:${KEYCLOAK_VERSION} AS builder
 COPY --from=extension --chown=keycloak:keycloak /keycloak-magic-link.jar /opt/keycloak/providers/keycloak-magic-link.jar
 COPY --from=theme --chown=keycloak:keycloak /theme/dist_keycloak/configurator-blue-login-theme.jar /opt/keycloak/providers/configurator-blue-login-theme.jar
@@ -32,3 +37,9 @@ RUN /opt/keycloak/bin/kc.sh build --db=postgres --health-enabled=true
 
 FROM quay.io/keycloak/keycloak:${KEYCLOAK_VERSION}
 COPY --from=builder /opt/keycloak/ /opt/keycloak/
+COPY --from=jq /jq /usr/bin/jq
+# The realm reconcile and the declared realm, which the Helm realm-configure
+# Job runs from this image (KEYCLOAK_KCADM_SERVER set: kcadm runs here and
+# reaches Keycloak over its Service), so the Job always matches the image it
+# runs in. Compose/Ansible run the repository copy on the host instead.
+COPY configure-keycloak.sh realm.json /opt/identity/

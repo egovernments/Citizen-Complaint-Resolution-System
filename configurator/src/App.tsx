@@ -3,10 +3,13 @@ import MembersPage from '@/identity/MembersPage';
 import WorkspacePage from '@/identity/WorkspacePage';
 import { completedSteps, searchWorkspace, updateWorkspace, WORKSPACE_STEPS } from '@/identity/workspace';
 import { describeWorkspaceError } from '@/onboarding/errors';
+import { translatorFrom } from '@/onboarding/i18n';
 import { toast } from '@/hooks/use-toast';
 import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { useState, createContext, useContext, useEffect, useCallback } from 'react';
 import OnboardingLayout from './onboarding/OnboardingLayout';
+import { OnboardingI18n } from './onboarding/OnboardingI18n';
+import { appStore } from './providers/appStore';
 import ComplaintsStep from './onboarding/ComplaintsStep';
 import BrandingStep from './onboarding/BrandingStep';
 import GeographyStep from './onboarding/geography/GeographyStep';
@@ -136,6 +139,7 @@ function ManagementAdminResources() {
       dataProvider={getDataProvider(state.tenant)}
       authProvider={getAuthProvider()}
       i18nProvider={i18nProvider}
+      store={appStore}
       queryClient={queryClient}
       basename="/manage"
     >
@@ -449,7 +453,13 @@ function App() {
       if (finishesOnboarding(phase, state.completedPhases)) trackEvent('onboarding_complete', { tenant: state.tenant });
       return true;
     } catch (error) {
-      toast({ variant: 'destructive', title: 'Could not complete setup step', description: describeWorkspaceError(error, WORKSPACE_STEPS[phase - 1]) });
+      // App sits above the onboarding pages' translator, so it reads the provider directly.
+      const t = translatorFrom(i18nProvider.translate);
+      toast({
+        variant: 'destructive',
+        title: t('errors.step_not_completed', 'Could not complete setup step'),
+        description: describeWorkspaceError(error, WORKSPACE_STEPS[phase - 1], t),
+      });
       return false;
     }
   };
@@ -551,7 +561,7 @@ function App() {
               step is done; with it off, the mode switch decides as before. */}
           <Route path="/" element={
             state.isAuthenticated
-              ? inOnboarding ? <MastersCapabilityProvider><OnboardingLayout /></MastersCapabilityProvider> : <Navigate to="/manage" />
+              ? inOnboarding ? <OnboardingI18n><MastersCapabilityProvider><OnboardingLayout /></MastersCapabilityProvider></OnboardingI18n> : <Navigate to="/manage" />
               : <RootLanding />
           }>
             <Route index element={<Navigate to={onboardingResume} replace />} />

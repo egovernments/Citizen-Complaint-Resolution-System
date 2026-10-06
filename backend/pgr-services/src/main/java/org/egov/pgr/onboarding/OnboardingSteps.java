@@ -31,6 +31,27 @@ public class OnboardingSteps {
         this.client = client; this.seed = seed; this.mapper = mapper; this.identifiers = identifiers;
     }
 
+    /**
+     * mdms-v2 persists writes asynchronously, so a record read straight after its create is often not
+     * yet visible. Instead of failing the whole step (and waiting out the runner's retry backoff, which
+     * made a signup take minutes), re-read a few times with these pauses first. Empty (the default for
+     * directly constructed instances, e.g. tests) means a single read, as before.
+     */
+    private long[] visibilityWaitsMs = new long[0];
+    @org.springframework.beans.factory.annotation.Value("${pgr.onboarding.mdms-visibility-waits-ms:150,300,600,1200}")
+    void setVisibilityWaitsMs(long[] waits) { this.visibilityWaitsMs = waits == null ? new long[0] : waits.clone(); }
+
+    /** Reads until {@code visible} holds or the configured pauses run out; returns the last read. */
+    private JsonNode awaitVisible(java.util.function.Supplier<JsonNode> read, java.util.function.Predicate<JsonNode> visible) {
+        JsonNode result = read.get();
+        for (long wait : visibilityWaitsMs) {
+            if (visible.test(result)) return result;
+            try { Thread.sleep(wait); } catch (InterruptedException e) { Thread.currentThread().interrupt(); return result; }
+            result = read.get();
+        }
+        return result;
+    }
+
     public void perform(String step, OnboardingSignup signup, OnboardingOperation operation, OnboardingProgress progress) {
         // Submit refuses a reserved tenant id, but a signup queued before that check existed may
         // still carry `default` or a state root. Refuse it terminally before any write, at every
@@ -111,39 +132,17 @@ public class OnboardingSteps {
             String code = row.path("schemaCode").asText(), id = row.path("uniqueIdentifier").asText();
             progress.record("mdms:" + code + ":" + id, () -> ensureRecord(scope, tenant, code, id, substitute(row.path("data"), tenant)));
         }
-        progress.record("id-format", () -> {
-            // Complaint IDs carry the workspace's own code; SEQ_EG_PGR_ID stays one shared sequence.
-            // idgen only interprets [..] tokens, so the literal prefix is kept to A-Z, 0-9 and '-'.
-            String prefix = Objects.toString(signup.getAccountCode(), "").toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9-]", "");
-            if (prefix.isEmpty()) throw new OnboardingFailure("ACCOUNT_CODE_INVALID", false);
-            ensureRecord(scope, tenant, "common-masters.IdFormat", "pgr.servicerequestid", Map.of("idname", "pgr.servicerequestid",
-                    "format", prefix + "-PGR-[cy:yyyy-MM-dd]-[SEQ_EG_PGR_ID]"));
-        });
+        progress.record("id-format", () -> ensureIdFormat(scope, signup));
         for (JsonNode workflow : seed.workflows()) {
-            String code = workflow.path("businessService").asText();
-            progress.record("workflow:" + code, () -> {
-                JsonNode found = client.read("workflow", "/egov-workflow-v2/egov-wf/businessservice/_search?tenantId=" + tenant + "&businessServices=" + code, Map.of()).path("BusinessServices");
-                if (!found.isArray()) throw new OnboardingFailure("WORKFLOW_INVALID_RESPONSE", true);
-                // workflow-v2 caches searches in-JVM: re-searching before its persister lands would pin an
-                // empty result, so an accepted create is the checkpoint and a replay searches again.
-                if (found.isEmpty()) createProjectedRecord(scope, "workflow", "/egov-workflow-v2/egov-wf/businessservice/_create",
-                        Map.of("BusinessServices", List.of(substitute(workflow, tenant))));
-            });
+            progress.record("workflow:" + workflow.path("businessService").asText(), () -> ensureWorkflow(scope, tenant, workflow));
         }
-        progress.record("mobile", () -> {
-            // The seed is the only source: onboarding never reads a country rule from another tenant.
-            JsonNode rule = seed.countryMobileRule(signup.getCountryCode());
-            if (rule.isMissingNode()) throw new OnboardingFailure("COUNTRY_NOT_SUPPORTED", false);
-            validateMobileRule(rule);
-            ensureRecord(scope, tenant, "common-masters.MobileNumberValidation", rule.path("countryCode").asText(), asMap(rule));
-        });
+        progress.record("mobile", () -> ensureMobileRule(scope, signup));
         var locales = locales(signup);
         progress.record("state-info", () -> {
             var data = new LinkedHashMap<String, Object>(); data.put("code", tenant); data.put("name", signup.getAccountName());
             for (String k : List.of("qrCodeURL", "bannerUrl", "logoUrl", "logoUrlWhite", "statelogo")) data.put(k, "");
             data.put("hasLocalisation", true); data.put("defaultUrl", Map.of("citizen", "", "employee", ""));
-            // digit-ui defaults to the first entry, so en_IN (the one locale with full packs) leads.
-            data.put("languages", locales.entrySet().stream().map(e -> Map.of("label", e.getValue(), "value", e.getKey())).toList());
+            data.put("languages", stateInfoLanguages(signup));
             data.put("localizationModules", List.of(Map.of("label", "common", "value", "rainmaker-common")));
             ensureRecord(scope, tenant, "common-masters.StateInfo", tenant, data, true);
         });
@@ -165,10 +164,39 @@ public class OnboardingSteps {
                 "/localization/messages/v1/_upsert", Map.of("tenantId", tenant, "messages", List.of(Map.of(
                         "code", "TENANT_TENANTS_" + tenant.toUpperCase(Locale.ROOT), "message", signup.getAccountName(),
                         "module", TENANT_NAME_MODULE, "locale", language.getKey())))));
-        // The dashboard (digit-ui and KpiCatalogService) reads its zone from the tenant's own "default" record.
-        progress.record("dashboard-config", () -> ensureRecord(scope, tenant, "dss.DashboardConfig", "default",
-                Map.of("id", "default", "timeZone", signup.getTimeZone())));
+        progress.record("dashboard-config", () -> ensureDashboardConfig(scope, signup));
         rootBoundary(scope, tenant, progress);
+    }
+
+    // Create-if-absent baseline records shared with BaselineUpgrader.
+    void ensureIdFormat(OnboardingProgress.WriteScope scope, OnboardingSignup signup) {
+        // Complaint IDs carry the workspace's own code; SEQ_EG_PGR_ID stays one shared sequence.
+        // idgen only interprets [..] tokens, so the literal prefix is kept to A-Z, 0-9 and '-'.
+        String prefix = Objects.toString(signup.getAccountCode(), "").toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9-]", "");
+        if (prefix.isEmpty()) throw new OnboardingFailure("ACCOUNT_CODE_INVALID", false);
+        ensureRecord(scope, signup.getRequestedTenantId(), "common-masters.IdFormat", "pgr.servicerequestid", Map.of("idname", "pgr.servicerequestid",
+                "format", prefix + "-PGR-[cy:yyyy-MM-dd]-[SEQ_EG_PGR_ID]"));
+    }
+    void ensureWorkflow(OnboardingProgress.WriteScope scope, String tenant, JsonNode workflow) {
+        String code = workflow.path("businessService").asText();
+        JsonNode found = client.read("workflow", "/egov-workflow-v2/egov-wf/businessservice/_search?tenantId=" + tenant + "&businessServices=" + code, Map.of()).path("BusinessServices");
+        if (!found.isArray()) throw new OnboardingFailure("WORKFLOW_INVALID_RESPONSE", true);
+        // workflow-v2 caches searches in-JVM: re-searching before its persister lands would pin an
+        // empty result, so an accepted create is the checkpoint and a replay searches again.
+        if (found.isEmpty()) createProjectedRecord(scope, "workflow", "/egov-workflow-v2/egov-wf/businessservice/_create",
+                Map.of("BusinessServices", List.of(substitute(workflow, tenant))));
+    }
+    void ensureMobileRule(OnboardingProgress.WriteScope scope, OnboardingSignup signup) {
+        // The seed is the only source: onboarding never reads a country rule from another tenant.
+        JsonNode rule = seed.countryMobileRule(signup.getCountryCode());
+        if (rule.isMissingNode()) throw new OnboardingFailure("COUNTRY_NOT_SUPPORTED", false);
+        validateMobileRule(rule);
+        ensureRecord(scope, signup.getRequestedTenantId(), "common-masters.MobileNumberValidation", rule.path("countryCode").asText(), asMap(rule));
+    }
+    void ensureDashboardConfig(OnboardingProgress.WriteScope scope, OnboardingSignup signup) {
+        // The dashboard (digit-ui and KpiCatalogService) reads its zone from the tenant's own "default" record.
+        ensureRecord(scope, signup.getRequestedTenantId(), "dss.DashboardConfig", "default",
+                Map.of("id", "default", "timeZone", signup.getTimeZone()));
     }
 
     private void rootBoundary(OnboardingProgress.WriteScope scope, String tenant, OnboardingProgress progress) {
@@ -299,24 +327,25 @@ public class OnboardingSteps {
         for (JsonNode s : seed.schemas()) if (code.equals(s.path("code").asText())) return s;
         throw new IllegalArgumentException(code);
     }
-    private void ensureSchema(OnboardingProgress.WriteScope scope, String tenant, JsonNode schema) {
+    void ensureSchema(OnboardingProgress.WriteScope scope, String tenant, JsonNode schema) {
         String code = schema.path("code").asText();
-        JsonNode found = client.read("mdms", "/egov-mdms-service/schema/v1/_search", Map.of("SchemaDefCriteria", Map.of("tenantId", tenant, "codes", List.of(code)))).path("SchemaDefinitions");
+        JsonNode found = client.read("mdms", client.mdmsSchemaSearchPath(), Map.of("SchemaDefCriteria", Map.of("tenantId", tenant, "codes", List.of(code)))).path("SchemaDefinitions");
         if (!found.isArray()) throw new OnboardingFailure("MDMS_INVALID_RESPONSE", true);
         if (!found.isEmpty()) return;
         var body = asMap(schema); body.put("tenantId", tenant); body.put("description", code); body.put("isActive", true);
         createProjectedRecord(scope, "mdms", "/egov-mdms-service/schema/v1/_create", Map.of("SchemaDefinition", body));
-        found = client.read("mdms", "/egov-mdms-service/schema/v1/_search", Map.of("SchemaDefCriteria", Map.of("tenantId", tenant, "codes", List.of(code)))).path("SchemaDefinitions");
+        found = awaitVisible(() -> client.read("mdms", client.mdmsSchemaSearchPath(), Map.of("SchemaDefCriteria", Map.of("tenantId", tenant, "codes", List.of(code)))).path("SchemaDefinitions"),
+                rows -> rows.isArray() && !rows.isEmpty());
         if (!found.isArray() || found.isEmpty()) throw new OnboardingFailure("MDMS_SCHEMA_NOT_VISIBLE", true);
     }
     public JsonNode records(String tenant, String schema, String id) {
         var criteria = new LinkedHashMap<String, Object>(); criteria.put("tenantId", tenant); criteria.put("schemaCode", schema); criteria.put("limit", 1000);
         if (id != null) criteria.put("uniqueIdentifiers", List.of(id));
-        JsonNode rows = client.read("mdms", "/egov-mdms-service/v2/_search", Map.of("MdmsCriteria", criteria)).path("mdms");
+        JsonNode rows = client.read("mdms", client.mdmsSearchPath(), Map.of("MdmsCriteria", criteria)).path("mdms");
         if (!rows.isArray()) throw new OnboardingFailure("MDMS_INVALID_RESPONSE", true);
         return rows;
     }
-    private void ensureRecord(OnboardingProgress.WriteScope scope, String tenant, String schema, String id, Map<String,Object> data) {
+    void ensureRecord(OnboardingProgress.WriteScope scope, String tenant, String schema, String id, Map<String,Object> data) {
         ensureRecord(scope, tenant, schema, id, data, false);
     }
     private void ensureRecord(OnboardingProgress.WriteScope scope, String tenant, String schema, String id, Map<String,Object> data, boolean refresh) {
@@ -324,7 +353,7 @@ public class OnboardingSteps {
         if (rows.isEmpty()) {
             createProjectedRecord(scope, "mdms", "/egov-mdms-service/v2/_create/" + schema, Map.of("Mdms", Map.of(
                     "tenantId", tenant, "schemaCode", schema, "uniqueIdentifier", id, "isActive", true, "data", data)));
-            rows = records(tenant, schema, id);
+            rows = awaitVisible(() -> records(tenant, schema, id), r -> !r.isEmpty());
         }
         if (rows.isEmpty()) throw new OnboardingFailure("MDMS_RECORD_NOT_VISIBLE", true);
         if (!rows.get(0).path("isActive").asBoolean(true)) throw new OnboardingFailure("BASELINE_RECORD_INACTIVE", false);
@@ -332,8 +361,9 @@ public class OnboardingSteps {
             var record = asMap(rows.get(0));
             var merged = asMap(rows.get(0).path("data")); merged.putAll(data); record.put("data", merged);
             client.write(scope, "mdms", "/egov-mdms-service/v2/_update/" + schema, Map.of("Mdms", record));
-            JsonNode visible = records(tenant, schema, id).path(0).path("data");
-            for (var field : data.entrySet()) if (!Objects.equals(visible.get(field.getKey()), mapper.valueToTree(field.getValue())))
+            java.util.function.Predicate<JsonNode> applied = r -> data.entrySet().stream()
+                    .allMatch(f -> Objects.equals(r.path(0).path("data").get(f.getKey()), mapper.valueToTree(f.getValue())));
+            if (!applied.test(awaitVisible(() -> records(tenant, schema, id), applied)))
                 throw new OnboardingFailure("MDMS_RECORD_NOT_VISIBLE", true);
         }
     }
@@ -346,16 +376,21 @@ public class OnboardingSteps {
             throw failure;
         }
     }
-    private Map<String,Object> substitute(JsonNode node, String tenant) {
+    Map<String,Object> substitute(JsonNode node, String tenant) {
         try { return asMap(mapper.readTree(mapper.writeValueAsString(node).replace("{tenantid}", tenant))); }
         catch (Exception e) { throw new IllegalStateException("Invalid baseline", e); }
     }
-    private Map<String,Object> asMap(JsonNode node) { return mapper.convertValue(node, new TypeReference<LinkedHashMap<String,Object>>() {}); }
+    Map<String,Object> asMap(JsonNode node) { return mapper.convertValue(node, new TypeReference<LinkedHashMap<String,Object>>() {}); }
 
     /** Module holding TENANT_TENANTS_&lt;T&gt;. */
     static final String TENANT_NAME_MODULE = "rainmaker-common";
     /** True when the baseline seeds the whole tenant-name module in this locale, so T may hold its name key there. */
     public boolean seedsTenantNameModule(String locale) { return seed.localizationPacks(locale).containsKey(TENANT_NAME_MODULE); }
+
+    /** StateInfo.languages: digit-ui defaults to the first entry, so en_IN (the one locale with full packs) leads. */
+    List<Map<String, String>> stateInfoLanguages(OnboardingSignup signup) {
+        return locales(signup).entrySet().stream().map(e -> Map.of("label", e.getValue(), "value", e.getKey())).toList();
+    }
 
     /** StateInfo locales, in order, mapped to their label (the signup language): en_IN first, then each signup language. */
     LinkedHashMap<String, String> locales(OnboardingSignup signup) {

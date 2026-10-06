@@ -47,6 +47,21 @@ public class OnboardingProvisionerClientTest {
     private OnboardingProgress.WriteScope scope(String step) {return new OnboardingProgress(repository,operation,UUID.randomUUID()).writeScope(signup,step);}
     private void encrypt(){client.write(scope("TENANT_FOUNDATION"),"enc","/egov-enc-service/crypto/v1/_generatekey",Map.of("tenantId","newtown"));}
     @After public void stop(){if(server!=null)server.stop(0);}
+    /** #2310 review: the MDMS search paths come from application.properties, and only the configured path is readable. */
+    @Test public void mdmsSearchPathsComeFromConfiguration(){
+        assertEquals("/egov-mdms-service/schema/v1/_search",client.mdmsSchemaSearchPath());
+        assertEquals("/egov-mdms-service/v2/_search",client.mdmsSearchPath());
+        String base="http://127.0.0.1:"+server.getAddress().getPort();
+        var env=new MockEnvironment().withProperty("egov.mdms.host",base).withProperty("egov.user.host",base)
+                .withProperty("pgr.onboarding.provisioner.username","fixture").withProperty("pgr.onboarding.provisioner.password","fixture-only")
+                .withProperty("pgr.onboarding.provisioner.tenant-id","pg").withProperty("egov.mdms.v2.search.endpoint","/mdms-v2/v2/_search");
+        var configured=new OnboardingProvisionerClient(new RestTemplate(),mapper,env);
+        assertEquals("/mdms-v2/v2/_search",configured.mdmsSearchPath());
+        configured.read("mdms","/mdms-v2/v2/_search",Map.of("MdmsCriteria",Map.of("tenantId","newtown")));
+        assertEquals(1,writes);
+        assertThrows(OnboardingFailure.class,()->configured.read("mdms","/egov-mdms-service/v2/_search",Map.of()));
+        assertEquals(1,writes);
+    }
     /** #2269 round-3 review item 2: a refused login is not "unavailable"; the runner must stop retrying it. */
     @Test public void aRefusedLoginIsReportedAsRejectedCredentialsNotAnOutage(){
         for(int status:List.of(400,401)){loginStatus=status;
@@ -96,6 +111,21 @@ public class OnboardingProvisionerClientTest {
         assertThrows(OnboardingFailure.class,()->client.write(scope("FOUNDER_HRMS"),"hrms","/egov-hrms/employees/_create",Map.of("Employees",List.of(employee))));
         assertThrows(OnboardingFailure.class,()->client.write(scope("FOUNDER_HRMS"),"hrms","/egov-hrms/employees/_create",Map.of("Employees",List.of(Map.of("tenantId","newtown","code","other","user",Map.of("tenantId","newtown","userName","other"))))));
         assertEquals(0,writes);assertEquals(0,details);
+    }
+    @Test public void seedUpgradeMayDeleteOnlyTheTenantNameKeyAndBustTheCacheButNeverWriteBoundaries(){
+        boolean[] lease={true};var upgrade=new OnboardingProgress.WriteScope(signup.getId(),"newtown",BaselineUpgrader.STEP,()->lease[0]);
+        Map<String,Object> nameKey=Map.of("code","TENANT_TENANTS_NEWTOWN","module","rainmaker-common","locale","en_KE");
+        client.write(upgrade,"localization","/localization/messages/v1/_delete",Map.of("tenantId","newtown","messages",List.of(nameKey)));
+        client.write(upgrade,"localization","/localization/messages/cache-bust",Map.of());assertEquals(2,writes);
+        for(var other:List.of(Map.of("code","CS_COMMON_SUBMIT","module","rainmaker-common","locale","en_IN"),Map.of("code","TENANT_TENANTS_NEWTOWN","module","rainmaker-pgr","locale","en_KE")))
+            assertThrows(OnboardingFailure.class,()->client.write(upgrade,"localization","/localization/messages/v1/_delete",Map.of("tenantId","newtown","messages",List.of(other))));
+        assertThrows(OnboardingFailure.class,()->client.write(upgrade,"localization","/localization/messages/v1/_delete",Map.of("tenantId","other","messages",List.of(nameKey))));
+        assertThrows(OnboardingFailure.class,()->client.write(scope("PLATFORM_BASELINE"),"localization","/localization/messages/v1/_delete",Map.of("tenantId","newtown","messages",List.of(nameKey))));
+        assertThrows(OnboardingFailure.class,()->client.write(scope("PLATFORM_BASELINE"),"localization","/localization/messages/cache-bust",Map.of()));
+        assertThrows(OnboardingFailure.class,()->client.write(upgrade,"boundary","/boundary-service/boundary/_create",Map.of("Boundary",List.of(Map.of("tenantId","newtown","code","newtown")))));
+        assertEquals(2,writes);
+        lease[0]=false;assertEquals("ONBOARDING_LEASE_LOST",assertThrows(OnboardingFailure.class,()->client.write(upgrade,"localization","/localization/messages/cache-bust",Map.of())).getCode());
+        assertEquals(2,writes);
     }
     @Test public void expiredLeaseAndLeaseLostDuringAuthBothStopWrites(){
         when(repository.authorizesSignupWrite(any(),any(),anyInt(),any(),anyString(),anyString(),anyLong())).thenReturn(false);

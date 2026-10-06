@@ -45,13 +45,21 @@ export function availableProviders(methods, account) {
 
 // Surface query selector agreed on bridge thread identity-surface-requests;
 // bodies remain the frozen invitation/provider shapes.
-export function acceptIdentityInvitation({ tenant, invitation, fetchImpl }) {
+function invitationRequest(step, { tenant, invitation, fetchImpl }) {
   if (invitation?.tenantId !== tenant.tenantId || !Number.isInteger(invitation.invitationVersion)) {
     throw new Error("No invitation for this workspace");
   }
-  return accountRequest(fetchImpl, "/identity/v1/workspace-invitations/_accept?surface=employee", {
+  return accountRequest(fetchImpl, `/identity/v1/workspace-invitations/${step}?surface=employee`, {
     tenantId: invitation.tenantId, invitationVersion: invitation.invitationVersion,
   });
+}
+
+export function acceptIdentityInvitation(options) {
+  return invitationRequest("_accept", options);
+}
+
+export function declineIdentityInvitation(options) {
+  return invitationRequest("_decline", options);
 }
 
 export function unlinkIdentityProvider({ surface, alias, fetchImpl }) {

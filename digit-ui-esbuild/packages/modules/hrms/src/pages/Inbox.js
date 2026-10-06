@@ -76,7 +76,8 @@ const Inbox = ({ parentRoute, businessService = "HRMS", initialStates = {}, filt
   };
 
   // Fetch mobile validation config from MDMS
-  const stateId = window?.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID");
+  // On a tenant route the URL tenant owns the rule (#2072).
+  const stateId = window.__digitTenantContext?.tenantId || window?.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID");
   const moduleName = Digit?.Utils?.getConfigModuleName?.() || "commonUiConfig";
   const { data: validationConfig } = Digit.Hooks.useCustomMDMS(
     stateId,

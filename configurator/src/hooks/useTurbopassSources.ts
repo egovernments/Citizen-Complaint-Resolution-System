@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
 import { availableSources } from '@/utils/turbopassSuggestions';
+import { resolveConfig } from '@/api/runtimeConfig';
 
-/** Same-origin '/turbopass' by default (nginx proxies it); VITE_TURBOPASS_URL overrides. */
-export const TURBOPASS_BASE: string = import.meta.env.VITE_TURBOPASS_URL || '/turbopass';
+/** Same-origin '/turbopass' by default (nginx proxies it to the search-api);
+ *  TURBOPASS_URL in config.js (or the build-time VITE_TURBOPASS_URL) overrides. */
+export const TURBOPASS_BASE: string =
+  resolveConfig('TURBOPASS_URL', import.meta.env.VITE_TURBOPASS_URL) || '/turbopass';
 
 export interface TurbopassHealth {
   /** The boundary sources it can answer, in SOURCE_ORDER. */

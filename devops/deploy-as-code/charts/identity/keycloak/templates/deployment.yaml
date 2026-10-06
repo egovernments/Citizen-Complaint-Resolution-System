@@ -1,0 +1,9 @@
+{{- /* common.name merges env overrides into .Values; run it first so the
+       pull-policy decision sees an overriding tag. */ -}}
+{{- $_ := include "common.name" . }}
+{{- /* Fails the render if the shared identity.keycloak values, which
+       identity-bff builds its Keycloak URL from, do not match this Service. */ -}}
+{{- $_ := include "keycloak.serviceUrl" . }}
+{{- $_ := set .Values.image "pullPolicy" (include "common.pullPolicy" .) }}
+# deployment.yaml
+{{- template "common.deployment" . -}}

@@ -3613,7 +3613,7 @@
     },
     {
         "code": "CS_MY_COMPLAINTS_SEARCH",
-        "message": "Search by complaint no. or text",
+        "message": "Search for a complaint",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
@@ -6631,7 +6631,7 @@
     },
     {
         "code": "CS_FILE_CATEGORY",
-        "message": "Complaint category",
+        "message": "Nature of your issue",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
@@ -6667,7 +6667,7 @@
     },
     {
         "code": "CS_FILE_DESCRIBE_PLACEHOLDER",
-        "message": "Type your complaint here…",
+        "message": "Please share as much as you can about the issue. The more you can tell us, the sooner we can help.",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
@@ -6685,7 +6685,7 @@
     },
     {
         "code": "CS_FILE_HINT_DESCRIBE",
-        "message": "Describe your complaint to continue.",
+        "message": "Tell us about the issue to continue.",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
@@ -6757,7 +6757,7 @@
     },
     {
         "code": "CS_FILE_PHOTO",
-        "message": "Upload a photo",
+        "message": "Add a photo",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
@@ -6859,13 +6859,13 @@
     },
     {
         "code": "CS_PHOTO_RULES",
-        "message": "JPG or PNG, up to 5 MB each",
+        "message": "A photo helps us understand your concern better. You can upload a JPG or PNG up to 5 MB",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
     {
         "code": "CS_PHOTO_SHEET_TITLE",
-        "message": "Upload a photo",
+        "message": "Add a photo",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
@@ -6998,6 +6998,24 @@
     {
         "code": "CS_COMMON_SEARCH",
         "message": "Search",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_FILE_DESCRIBE_TITLE",
+        "message": "Tell us how we can help",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_FILE_LOCATION_TITLE",
+        "message": "Tell us where this happened",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_PHOTO_ADD",
+        "message": "Add a photo",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     }
