@@ -95,7 +95,6 @@ describe('identity-bff chart exposes every BFF setting', () => {
   const NOT_EXPOSED: Record<string, string> = {
     IDENTITY_ALLOWED_ORIGIN: 'older alias of IDENTITY_ALLOWED_ORIGINS, which the chart derives',
     IDENTITY_CITIZEN_OTP_SENDER: 'older alias of IDENTITY_OTP_SENDER, which the chart sets',
-    DIGIT_BOOTSTRAP_SOURCE_TENANT: 'older alias of DIGIT_FOUNDATION_SOURCE_TENANT',
     DIGIT_IDENTITY_CLIENT_ID: 'older alias of DIGIT_ROLE_CLIENT_ID',
     KEYCLOAK_ADMIN_USERNAME: 'master-admin password grant; the BFF uses the digit-identity-admin client',
     KEYCLOAK_ADMIN_PASSWORD: 'master-admin password grant; the BFF uses the digit-identity-admin client',
