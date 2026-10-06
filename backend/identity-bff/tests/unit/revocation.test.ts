@@ -11,6 +11,7 @@ import * as credentials from "../../src/modules/accounts/credential-service.js";
 import * as bindings from "../../src/modules/bindings/store.js";
 import * as organizations from "../../src/modules/onboarding/organization-reader.js";
 import * as digit from "../../src/modules/managed-accounts/digit-user-client.js";
+import { applyKeycloakEvent } from "../../src/modules/revocation/event-effects.js";
 
 const prefix = `revocation-test-${process.pid}`;
 const account = { tenantId: "tenant-a", uuid: "uuid-a" };
@@ -271,5 +272,90 @@ describe("token inventory and revocation", () => {
   it("_select rejects its session after revocation wins the lease", async () => {
     const sid = await session(); await revokePerson(subject, "LOGOUT_ALL");
     await expect(withPersonLease(subject, lease => requireCurrentSession(lease, sid))).rejects.toMatchObject({ code: "SESSION_REVOKED" });
+  });
+});
+
+describe("revocation log (#2285)", () => {
+  const sync = { propagateVerifiedIdentifiers: vi.fn(async () => {}), requestReconcileNow: vi.fn(async () => {}) };
+  const time = Date.UTC(2026, 9, 5, 10, 0, 0);
+  const lines = (spy: { mock: { calls: unknown[][] } }, event: string) => spy.mock.calls
+    .filter(call => typeof call[0] === "string" && call[0].includes(`"${event}"`)).map(call => JSON.parse(call[0] as string));
+  const tokenRef = expect.stringMatching(/^[0-9a-f]{12}$/);
+  function expectNoSecrets(spy: { mock: { calls: unknown[][] } }, secrets: string[]) {
+    const written = spy.mock.calls.map(call => call.join(" ")).join("\n");
+    for (const secret of secrets) expect(written).not.toContain(secret);
+  }
+
+  it("credential change: logs the kept B3 initiator and the shared token it revoked", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    const keep = await session("kc-keep"); const other = await session("kc-other");
+    await inventory(account, login(account, "shared-digit-token"), keep);
+    await withPersonLease(subject, lease => holdToken(lease, account, other));
+    await inventory(second, login(second, "initiator-only-token"), keep);
+    await applyKeycloakEvent("user", { id: "evt-cred", time, type: "UPDATE_CREDENTIAL", userId: subject, clientId: "client-a",
+      details: { credential_type: "password", code_id: "kc-keep" } }, sync);
+    await drainRevocationJobs();
+    const [line] = lines(info, "identity.revocation.job");
+    expect(line).toEqual({
+      event: "identity.revocation.job", outcome: "ok", reason: "CREDENTIAL_CHANGED", subject,
+      trigger: { eventId: `${time}:evt-cred`, eventType: "UPDATE_CREDENTIAL", eventTime: "2026-10-05T10:00:00.000Z" },
+      sessionsEnded: 1, sessionsKept: 1, tokensRevoked: 1, tokensKept: 1,
+      sessions: { ended: [privateRef("session", other)], kept: [{ ref: privateRef("session", keep), reason: "B3_INITIATOR" }] },
+      tokens: expect.arrayContaining([
+        { account: "tenant-a:uuid-a", tokenRef, outcome: "revoked", why: "SHARED_WITH_ENDED_SESSION" },
+        { account: "tenant-b:uuid-b", tokenRef, outcome: "kept", why: "KEPT_SESSIONS_ONLY_HOLDERS" },
+      ]),
+      durationMs: expect.any(Number),
+    });
+    expect(lines(info, "identity.revocation.job")).toHaveLength(1);
+    expectNoSecrets(info, ["shared-digit-token", "initiator-only-token", "keycloak-token", keep, other]);
+  });
+  it("account disabled: logs every session ended and every token revoked in scope", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    const sid = await session(); await inventory(account, login(), sid);
+    await applyKeycloakEvent("admin", { id: "evt-disable", time, operationType: "UPDATE", resourceType: "USER",
+      resourcePath: `users/${subject}`, representation: JSON.stringify({ enabled: false }) }, sync);
+    await drainRevocationJobs();
+    expect(lines(info, "identity.revocation.job")).toEqual([expect.objectContaining({
+      outcome: "ok", reason: "KEYCLOAK_DISABLED", subject,
+      trigger: { eventId: `${time}:evt-disable`, eventType: "UPDATE USER", eventTime: "2026-10-05T10:00:00.000Z" },
+      sessionsEnded: 1, sessionsKept: 0, tokensRevoked: 1, tokensKept: 0,
+      sessions: { ended: [privateRef("session", sid)], kept: [] },
+      tokens: [{ account: "tenant-a:uuid-a", tokenRef, outcome: "revoked", why: "IN_SCOPE" }],
+    })]);
+    expectNoSecrets(info, ["digit-token", sid]);
+  });
+  it("membership removed: logs sessions at other tenants as kept, with the tenant", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    const sid = await session(); const other = await session("other");
+    for (const [sessionId, ref] of [[sid, account], [other, second]] as const)
+      await saveSelectedIdentityContext(sessionId, { organizationId: "o", organizationAlias: "a", tenantId: ref.tenantId, name: "Tenant" });
+    await revokeAccount(subject, account, "MEMBERSHIP_REMOVED");
+    expect(lines(info, "identity.revocation.job")[0]).toMatchObject({ reason: "MEMBERSHIP_REMOVED", tenantId: "tenant-a", account: "tenant-a:uuid-a",
+      sessions: { ended: [privateRef("session", sid)], kept: [{ ref: privateRef("session", other), reason: "OTHER_TENANT" }] } });
+  });
+  it("a failed job logs one retry line with what it did so far", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const sid = await session(); await inventory(account, login(), sid);
+    vi.mocked(keycloak.getRevocationUser).mockRejectedValue(new Error("Keycloak unavailable"));
+    await expect(revokePerson(subject, "LOGOUT_ALL")).rejects.toThrow("unavailable");
+    expect(lines(warn, "identity.revocation.job")).toEqual([expect.objectContaining({
+      outcome: "retry", reason: "LOGOUT_ALL", error: "Keycloak unavailable", sessionsEnded: 1, tokensRevoked: 1 })]);
+    expectNoSecrets(warn, ["digit-token", sid]);
+  });
+  it("logout: logs the initiator kept and a shared token still held", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    const first = await session(); const other = await session("other");
+    await inventory(account, login(), first); await withPersonLease(subject, lease => holdToken(lease, account, other));
+    await logoutSessions(subject, "current", first);
+    expect(lines(info, "identity.revocation.logout")).toEqual([expect.objectContaining({
+      outcome: "ok", reason: "LOGOUT", scope: "current", subject, trigger: {},
+      sessions: { ended: [privateRef("session", first)], kept: [{ ref: privateRef("session", other), reason: "NOT_TARGETED" }] },
+      tokens: [{ account: "tenant-a:uuid-a", tokenRef, outcome: "kept", why: "STILL_HELD" }],
+    })]);
+    await logoutSessions(subject, "all", other);
+    expect(lines(info, "identity.revocation.logout")[1]).toMatchObject({ scope: "all", sessionsEnded: 1, sessionsKept: 0,
+      tokens: [{ outcome: "revoked", why: "NO_LIVE_HOLDER" }] });
+    expectNoSecrets(info, ["digit-token", first, other]);
   });
 });

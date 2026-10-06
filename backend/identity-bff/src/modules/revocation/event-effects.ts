@@ -25,6 +25,9 @@ function representation(event: KeycloakEvent): Record<string, any> {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 const eventId = (event: KeycloakEvent) => `${event.time}:${event.id}`;
+/** For the revocation log (§12): the user event's type, or the admin event's operation and resource. */
+const eventType = (event: KeycloakEvent) => event.type ?? `${event.operationType} ${event.resourceType}`;
+const trigger = (event: KeycloakEvent) => ({ eventId: eventId(event), eventType: eventType(event) });
 
 /** Resolve only explicit event tenant metadata. Missing mappings force reconcile. */
 function eventTenant(rep: Record<string, any>): string | undefined {
@@ -47,13 +50,13 @@ export async function applyKeycloakEvent(stream: EventStream, event: KeycloakEve
       // The Keycloak session that made the change proved the new credential (or the action
       // token) and survives whatever its client (§10). 26.7.3 puts it in code_id, not sessionId.
       const changeKcSessionId = event.sessionId ?? event.details?.code_id;
-      await enqueueRevocation(sub, "CREDENTIAL_CHANGED", { eventId: eventId(event), keepSessionId, changedAt: event.time,
+      await enqueueRevocation(sub, "CREDENTIAL_CHANGED", { ...trigger(event), keepSessionId, changedAt: event.time,
         ...(changeKcSessionId && { changeKcSessionId }) });
     } else if (event.type === "LOGOUT" && event.sessionId) {
-      await endKeycloakSessions(event.sessionId, event.clientId, sub);
+      await endKeycloakSessions(event.sessionId, event.clientId, sub, trigger(event));
     } else if (event.type === "DELETE_ACCOUNT") {
       await auditDeletion(sub, event);
-      await enqueueRevocation(sub, "KEYCLOAK_DELETED", { eventId: eventId(event) });
+      await enqueueRevocation(sub, "KEYCLOAK_DELETED", trigger(event));
     } else if (event.type === "VERIFY_EMAIL" || event.type === "UPDATE_EMAIL") {
       await sync.propagateVerifiedIdentifiers(sub);
     }
@@ -66,13 +69,13 @@ export async function applyKeycloakEvent(stream: EventStream, event: KeycloakEve
     const sub = user[1]; const action = user[2];
     if (event.operationType === "DELETE" && !action) {
       await auditDeletion(sub, event);
-      await enqueueRevocation(sub, "KEYCLOAK_DELETED", { eventId: eventId(event) });
+      await enqueueRevocation(sub, "KEYCLOAK_DELETED", trigger(event));
     } else if (event.operationType === "ACTION" && ["logout", "reset-password"].includes(action)) {
       await enqueueRevocation(sub, action === "logout" ? "LOGOUT_ALL" : "CREDENTIAL_CHANGED",
-        { eventId: eventId(event), ...(action === "reset-password" && { changedAt: event.time }) });
+        { ...trigger(event), ...(action === "reset-password" && { changedAt: event.time }) });
     } else if (event.operationType === "UPDATE" && !action) {
       if (representation(event).enabled === false)
-        await enqueueRevocation(sub, "KEYCLOAK_DISABLED", { eventId: eventId(event) });
+        await enqueueRevocation(sub, "KEYCLOAK_DISABLED", trigger(event));
       // Even our own mirror PUT must not suppress security or verified-identifier checks.
       await sync.propagateVerifiedIdentifiers(sub);
     }
@@ -84,12 +87,12 @@ export async function applyKeycloakEvent(stream: EventStream, event: KeycloakEve
     // only a session with neither falls back to the realm scan.
     const rep = representation(event);
     const subject = await subjectForKcSession(session[1]) ?? (typeof rep.userId === "string" && rep.userId ? rep.userId : undefined);
-    await endKeycloakSessions(session[1], undefined, subject); return;
+    await endKeycloakSessions(session[1], undefined, subject, trigger(event)); return;
   }
   const membership = /^organizations\/([^/]+)\/members\/([^/]+)$/.exec(path);
   if (event.resourceType === "ORGANIZATION_MEMBERSHIP" && event.operationType === "DELETE" && membership) {
     const tenantId = eventTenant(representation(event));
-    if (tenantId) await enqueueRevocation(membership[2], "MEMBERSHIP_REMOVED", { tenantId, eventId: eventId(event) });
+    if (tenantId) await enqueueRevocation(membership[2], "MEMBERSHIP_REMOVED", { tenantId, ...trigger(event) });
     else await sync.requestReconcileNow("membership-removed");
     return;
   }
