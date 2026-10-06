@@ -48,7 +48,8 @@ vi.mock("../../src/modules/organizations/organization-service.js", () => {
     inspectPasswordSetupAccountById: vi.fn(async (id: string) => ({ userId: id, hasPassword: f.passwords.has(id), federatedProviders: [], emailVerified: f.users.get(id)?.emailVerified === true })),
   };
 });
-vi.mock("../../src/modules/workspace-members/authority.js", () => ({
+vi.mock("../../src/modules/workspace-members/authority.js", async (importOriginal) => ({
+  mayManageRoles: (await importOriginal<typeof import("../../src/modules/workspace-members/authority.js")>()).mayManageRoles,
   validateBinding: vi.fn(async () => {}), requireAccountAdmin: vi.fn(async () => ({ roles: f.callerRoles })),
   requireWorkspace: vi.fn(async (tenantId: string) => ({ id: tenantId, alias: tenantId, name: tenantId, lifecycle: "ACTIVE", enabled: true })),
   readDigitAccount: vi.fn(async (tenantId: string, uuid: string) => ({ tenantId, uuid, active: true, userName: "employee", name: "Employee", roles: f.targetRoles })),
@@ -152,11 +153,29 @@ describe("resumable workspace membership", () => {
     expect(f.users.get("new-1")).toMatchObject({ email: "new@example.test", emailVerified: false, username: input.email });
     expect(f.activations).toBe(before);
   });
-  it.each(["self", "higher role", "same role in another tenant", "other binding", "other membership"])("denies admin email recovery for %s without changing the identity or sending email", async (reason) => {
+  it.each(["self", "higher role", "admin role at a sub-tenant", "same role in another tenant", "founder, role at another root", "operational role at another root", "other binding", "other membership", "citizen account", "verified phone", "legacy citizen account link", "citizen registration"])("denies admin email recovery for %s without changing the identity or sending email", async (reason) => {
     await linkWorkspaceMember(input);
     if (reason === "higher role") f.targetRoles.push({ code: "SUPERUSER", tenantId: "pg" });
-    if (reason === "same role in another tenant") f.callerRoles = [{ code: "ACCOUNT_ADMIN", tenantId: "pg" }, { code: "EMPLOYEE", tenantId: "other" }];
+    if (reason === "admin role at a sub-tenant") f.targetRoles.push({ code: "HRMS_ADMIN", tenantId: "pg.citya" });
+    if (reason === "same role in another tenant") {
+      f.targetRoles.push({ code: "HRMS_ADMIN", tenantId: "pg" });
+      f.callerRoles.push({ code: "HRMS_ADMIN", tenantId: "other.city" });
+    }
+    if (reason === "founder, role at another root") {
+      f.targetRoles.push({ code: "HRMS_ADMIN", tenantId: "other" });
+      f.callerRoles.push({ code: "SUPERUSER", tenantId: "pg" });
+    }
+    if (reason === "operational role at another root") f.targetRoles.push({ code: "GRO", tenantId: "other" });
     if (reason === "other membership") f.members.add("other:new-1");
+    if (reason === "verified phone") Object.assign(f.users.get("new-1")!.attributes!, { phoneNumber: ["+254712345678"], phoneNumberVerified: ["true"] });
+    if (reason === "legacy citizen account link") Object.assign(f.users.get("new-1")!.attributes!, { "digit.accountLinks": ["CITIZEN|pg|citizen-uuid"] });
+    if (reason === "citizen registration") Object.assign(f.users.get("new-1")!.attributes!, { "digit.citizenRegistrations": ["pg"] });
+    if (reason === "citizen account") {
+      const user = f.users.get("new-1")!;
+      const entries = JSON.parse(user.attributes!["digit.accounts"]![0]).entries;
+      entries.push({ kind: "citizen", tenantId: "pg", uuid: "citizen-uuid", boundAt: 1, active: true, roles: [] });
+      user.attributes!["digit.accounts"] = [JSON.stringify({ v: 1, entries })];
+    }
     if (reason === "other binding") {
       const user = f.users.get("new-1")!;
       const doc = bindingDoc(user);
@@ -169,6 +188,18 @@ describe("resumable workspace membership", () => {
       .rejects.toMatchObject({ code: "ADMIN_EMAIL_CHANGE_NOT_ALLOWED", status: 403 });
     expect(f.users.get("new-1")).toEqual(before);
     expect(f.emails).toBe(emails);
+  });
+  // Same rule as _link: operational roles inside the workspace are not guarded, and the founder may act on any role within the workspace.
+  it.each([
+    ["an operational role the caller lacks", [{ code: "GRO", tenantId: "pg" }, { code: "PGR_LME", tenantId: "pg.citya" }], []],
+    ["an administrative role the caller holds", [{ code: "HRMS_ADMIN", tenantId: "pg.citya" }], [{ code: "HRMS_ADMIN", tenantId: "pg" }]],
+    ["an operational role at another root the caller holds", [{ code: "GRO", tenantId: "other.city" }], [{ code: "GRO", tenantId: "other" }]],
+    ["any role, for the founder", [{ code: "HRMS_ADMIN", tenantId: "pg.citya" }, { code: "INTERNAL_MICROSERVICE_ROLE", tenantId: "pg" }], [{ code: "SUPERUSER", tenantId: "pg" }]],
+  ])("allows admin email recovery for %s", async (_reason, targetRoles, callerRoles) => {
+    await linkWorkspaceMember(input);
+    f.targetRoles.push(...targetRoles);
+    f.callerRoles.push(...callerRoles);
+    await expect(updateWorkspaceMemberEmail("admin", "pg", uuid, "new@example.test")).resolves.toEqual({ status: "verification_sent" });
   });
   it.each(["inventory", "membership"])("fails closed if the other-workspace %s check is unavailable", async (reason) => {
     await linkWorkspaceMember(input);
@@ -202,6 +233,11 @@ describe("resumable workspace membership", () => {
       withOtherBinding(state as string, expiresAt as number);
       await expect(updateWorkspaceMemberEmail("admin", "pg", uuid, "new@example.test")).resolves.toEqual({ status: "verification_sent" });
     });
+  it("allows recovery with an unverified Keycloak phone", async () => {
+    await linkWorkspaceMember(input);
+    Object.assign(f.users.get("new-1")!.attributes!, { phoneNumber: ["+254712345678"], phoneNumberVerified: ["false"] });
+    await expect(updateWorkspaceMemberEmail("admin", "pg", uuid, "new@example.test")).resolves.toEqual({ status: "verification_sent" });
+  });
   it("maps a concurrent Keycloak email conflict to IDENTITY_EMAIL_CHANGED", async () => {
     await linkWorkspaceMember(input); f.conflict = true;
     await expect(updateWorkspaceMemberEmail("admin", "pg", uuid, "new@example.test")).rejects.toMatchObject({ code: "IDENTITY_EMAIL_CHANGED" });

@@ -58,6 +58,22 @@ describe('sign-in gate', () => {
     expect(screen.queryByRole('button', { name: /google/i })).not.toBeInTheDocument();
   });
 
+  it('does not resume a session an unconfirmed sign-out may have left, until the user chooses a method', async () => {
+    localStorage.setItem('crs-sign-out-incomplete', '1');
+    vi.mocked(api.session).mockResolvedValue(signedIn);
+    vi.mocked(api.authMethods).mockResolvedValue({
+      methods: [{ id: 'google', label: 'Continue with Google', type: 'oidc' }],
+    });
+
+    render(<SignupPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /continue with google/i }));
+    expect(api.session).not.toHaveBeenCalled();
+    expect(api.tenants).not.toHaveBeenCalled();
+    expect(localStorage.getItem('crs-sign-out-incomplete')).toBeNull();
+    expect(api.startSignIn).toHaveBeenCalledWith('google', 'signup');
+  });
+
   it('shows the GitHub mark on the GitHub signup action', async () => {
     vi.mocked(api.session).mockResolvedValue({ authenticated: false });
     vi.mocked(api.authMethods).mockResolvedValue({
@@ -478,65 +494,41 @@ describe('workspace readiness gate', () => {
     fireEvent.click(await screen.findByRole('button', { name: /kisumu county/i }));
   };
 
-  it('holds a workspace the backend has called identity-ready', async () => {
-    withTenant('IDENTITY_READY');
-
+  it('routes an invitation before creating or searching a signup', async () => {
+    vi.mocked(api.session).mockResolvedValue({ ...signedIn, pendingInvitations: [{ tenantId: 'invited', invitationVersion: 2, name: 'Invited workspace', invitedAt: 1, expiresAt: Date.now() + 60000 }] });
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [], selectionRequired: false, onboardingRequired: true });
     render(<SignupPage />);
-    await pickWorkspace();
-
-    expect(await screen.findByText(/workspace setup required/i)).toBeInTheDocument();
-    // No token is minted and nothing is mounted, so the calls that come back
-    // AccessDeniedException are never fired.
-    expect(api.selectContext).not.toHaveBeenCalled();
-  });
-
-  it('holds it without consulting the caller\'s own signup record', async () => {
-    // Readiness answers for the workspace. An invited admin has no signup at
-    // all and must still be held out of a half-built tenant.
-    withTenant('IDENTITY_READY');
-    vi.mocked(api.findSignup).mockResolvedValue(null);
-
-    render(<SignupPage />);
-    await pickWorkspace();
-
-    await screen.findByText(/workspace setup required/i);
+    expect(await screen.findByRole('button', { name: /accept invitation/i })).toBeInTheDocument();
     expect(api.findSignup).not.toHaveBeenCalled();
   });
 
-  it('offers no way to continue setup while there is no setup to continue', async () => {
-    withTenant('IDENTITY_READY');
-
+  it('shows memberships before pending invitations even when onboardingRequired is true', async () => {
+    vi.mocked(api.session).mockResolvedValue({ ...signedIn, pendingInvitations: [{ tenantId: 'invited', invitationVersion: 2, name: 'Invited workspace', invitedAt: 1, expiresAt: Date.now() + 60000 }] });
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [option()], selectionRequired: true, onboardingRequired: true });
     render(<SignupPage />);
-    await pickWorkspace();
-    await screen.findByText(/workspace setup required/i);
-
-    expect(screen.queryByRole('button', { name: /continue setup/i })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /sign out/i })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /kisumu county/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /accept invitation/i })).not.toBeInTheDocument();
+    expect(api.findSignup).not.toHaveBeenCalled();
   });
 
-  it('does not say setup is running when nothing is running', async () => {
-    withTenant('IDENTITY_READY');
-
+  it('does not allow accepting an expired invitation', async () => {
+    vi.mocked(api.session).mockResolvedValue({ ...signedIn, pendingInvitations: [{ tenantId: 'invited', invitationVersion: 2, name: 'Invited workspace', invitedAt: 1, expiresAt: 2 }] });
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [], selectionRequired: false, onboardingRequired: true });
     render(<SignupPage />);
-    await pickWorkspace();
-    await screen.findByText(/workspace setup required/i);
-
-    expect(screen.queryByText(/still being set up/i)).not.toBeInTheDocument();
-    expect(screen.getByText(/has not been installed yet/i)).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /accept invitation/i })).toBeDisabled();
   });
 
-  it('clears the DIGIT half of the session on sign out, not just the identity half', async () => {
-    withTenant('IDENTITY_READY');
-    window.localStorage.setItem('crs-auth-state', JSON.stringify({ authToken: 'stale' }));
+  it('does not consult the founder signup when entering an existing membership', async () => {
+    withTenant(); render(<SignupPage />);
+    await screen.findByRole('button', { name: /kisumu county/i });
+    expect(api.findSignup).not.toHaveBeenCalled();
+  });
 
-    render(<SignupPage />);
-    await pickWorkspace();
-    await screen.findByText(/workspace setup required/i);
-    fireEvent.click(screen.getByRole('button', { name: /sign out/i }));
-
-    await waitFor(() => expect(api.logout).toHaveBeenCalled());
-    // A surviving token would restore on a walk back to / or /manage.
-    await waitFor(() => expect(window.localStorage.getItem('crs-auth-state')).toBeNull());
+  it('shows selection errors without claiming setup is running', async () => {
+    withTenant(); vi.mocked(api.selectContext).mockRejectedValueOnce(new Error('Account locked'));
+    render(<SignupPage />); await pickWorkspace();
+    expect(await screen.findByText('Account locked')).toBeInTheDocument();
+    expect(screen.queryByText(/workspace setup is running/i)).not.toBeInTheDocument();
   });
 
   it('lets a tenant through when the backend has stated no readiness at all', async () => {

@@ -5,6 +5,7 @@ import { AppModules } from "../../components/AppModules";
 import ErrorBoundary from "../../components/ErrorBoundaries";
 import TopBarSideBar from "../../components/TopBarSideBar";
 import ChangePassword from "./ChangePassword";
+import IdentityAccount from "../../components/IdentityAccount";
 import ForgotPassword from "./ForgotPassword";
 import LanguageSelection from "./LanguageSelection";
 import EmployeeLogin from "./Login";
@@ -13,7 +14,7 @@ import UserProfile from "../citizen/Home/UserProfile";
 import ErrorComponent from "../../components/ErrorComponent";
 import { PrivateRoute } from "@egovernments/digit-ui-components";
 import ImageComponent from "../../components/ImageComponent";
-const userScreensExempted = ["user/landing", "user/profile", "user/error", "user/productPage"];
+const userScreensExempted = ["user/account", "user/landing", "user/profile", "user/error", "user/productPage"];
 
 const EmployeeApp = ({
   stateInfo,
@@ -98,14 +99,21 @@ const EmployeeApp = ({
                 </Route>
               )}
               <Route exact path={`${path}/user/login/otp`}>
-                <Otp isLogin={true} />
+                {window.__digitTenantContext
+                  ? <Redirect to={`${path}/user/login`} />
+                  : <Otp isLogin={true} />}
               </Route>
               <Route path={`${path}/user/forgot-password`}>
-                <ForgotPassword stateCode={stateCode}/>
+                {window.__digitTenantContext
+                  ? <Redirect to={`${path}/user/login`} />
+                  : <ForgotPassword stateCode={stateCode}/>}
               </Route>
               <Route path={`${path}/user/change-password`}>
-                <ChangePassword />
+                {window.__digitTenantContext
+                  ? <Redirect to={`${path}/user/login`} />
+                  : <ChangePassword />}
               </Route>
+              <PrivateRoute path={`${path}/user/account`} component={() => <IdentityAccount surface="employee" />} />
               <PrivateRoute path={`${path}/user/profile`} component={()=><UserProfile stateCode={stateCode} userType={"employee"} cityDetails={cityDetails} />}/>
               <Route path={`${path}/user/error`}>
                 <ErrorComponent

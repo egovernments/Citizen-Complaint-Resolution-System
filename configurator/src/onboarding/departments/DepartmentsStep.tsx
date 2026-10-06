@@ -329,8 +329,8 @@ export default function DepartmentsStep() {
       {!bulk && (
         <StepActions
           onBack={previous ? () => navigate(previous.path) : undefined}
-          onContinue={() => {
-            completePhase(STEP.number);
+          onContinue={async () => {
+            if (!await completePhase(STEP.number)) return;
             if (next) navigate(next.path);
           }}
           disabled={!ready}

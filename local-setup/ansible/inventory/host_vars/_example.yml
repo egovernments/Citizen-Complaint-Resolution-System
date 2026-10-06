@@ -745,8 +745,7 @@ novu_bridge_smscountry_password: ""
 # keycloak_magic_link_client_secret, keycloak_admin_client_secret,
 # keycloak_employee_client_secret, keycloak_citizen_client_secret,
 # identity_control_plane_token, identity_session_introspection_token,
-# identity_onboarding_token, identity_citizen_otp_secret and
-# pgr_onboarding_worker_token — are generated independently on first deploy
+# identity_onboarding_token and identity_citizen_otp_secret — are generated independently on first deploy
 # and stored in OpenBao, so none of them is derivable from another. Read one
 # back with `bao kv get -field=<key> kv/digit/<tenant>`; rotate one with
 # `bao kv put`, and the next deploy pushes it into Keycloak.
@@ -765,12 +764,21 @@ identity_signup_methods: [magic_link, google, github]
 identity_magic_link_enabled: false
 identity_reconcile_on_startup: true
 identity_reconciliation_interval_seconds: 900
-identity_onboarding_worker_enabled: false # requires the PGR workload routes
+# PGR is the only onboarding runner (the BFF worker is gone). Rendered on only
+# with enable_keycloak: signups arrive through the identity BFF.
+pgr_onboarding_runner_enabled: true
 identity_digit_admin_username: "ADMIN"  # use a dedicated ACCOUNT_ADMIN in production
 identity_digit_admin_tenant_id: "pg"
-identity_digit_provisioner_username: "" # optional MDMS_ADMIN for tenant foundation
-identity_digit_provisioner_tenant_id: ""
-identity_foundation_source_tenant: "pg"
+# Platform provisioner the runner signs in as (PGR only, internal APIs). It must
+# be an EMPLOYEE of a ROOT tenant (no dot) holding MDMS_ADMIN, ACCOUNT_ADMIN,
+# LOC_ADMIN and HRMS_ADMIN there. With the runner on, the playbook creates it if
+# absent, with a generated password kept in OpenBao (pgr_digit_provisioner_password),
+# and fails the deploy if an existing account of this name cannot sign in with
+# those roles. Empty = PGR_PROVISIONER on state_root (or a legacy
+# identity_digit_provisioner_username / _tenant_id when set).
+pgr_digit_provisioner_username: ""
+pgr_digit_provisioner_tenant_id: ""
+pgr_digit_oauth_client_id: "egov-user-client"
 identity_digit_otp_create_url: ""     # default: internal http://egov-otp:8089/otp/v1/_create (needs the otp profile)
 identity_smtp_host: ""
 identity_smtp_port: 587
@@ -1315,5 +1323,8 @@ bootstrap_secrets:
   # BFF account-management credential. The legacy key remains a migration
   # fallback; new environments should set identity_digit_admin_password.
   identity_digit_admin_password: "CHANGE_ME"
-  identity_digit_provisioner_password: ""
+  # Empty = generated on first deploy (an existing identity_digit_provisioner_password
+  # wins over generating). Set it only to adopt an existing provisioner account.
+  pgr_digit_provisioner_password: ""
+  pgr_digit_oauth_client_secret: ""
   identity_smtp_password: ""

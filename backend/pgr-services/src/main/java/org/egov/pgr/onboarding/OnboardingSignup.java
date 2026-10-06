@@ -19,6 +19,9 @@ public class OnboardingSignup {
     private UUID id;
     private String ownerIssuer;
     private String ownerSubject;
+    private String founderName;
+    private String founderEmail;
+    private boolean founderEmailVerified;
     private String status;
     private String accountName;
     private String accountCode;

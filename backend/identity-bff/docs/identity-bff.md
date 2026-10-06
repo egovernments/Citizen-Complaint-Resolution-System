@@ -9,6 +9,7 @@
 |---|---|
 | Error codes | `src/contract/error-codes.ts` |
 | Routes, auth and codes per route | `src/contract/routes.ts` |
+| Administrative roles (role-escalation rule, §3.3.6) | `src/contract/roles.ts` |
 | Keycloak attribute schemas | `docs/contract/schemas/*.schema.json` |
 | `encode_v1` reference implementation | `src/modules/accounts/credential.ts` |
 | Payload hash reference implementation | `src/modules/control-plane/operation-hash.ts` |
@@ -155,6 +156,8 @@ v1
 xstate-chatbot
 ```
 <!-- reserved-url-slugs:end -->
+
+A valid slug can still be unavailable for signup. Its tenant id (the slug with every non-letter removed, so `de-fault` is `default`) must not be a platform tenant: `default`, the tenant egov-localization falls back to, and the deployment's state roots. pgr-services owns that list (`OnboardingIdentifierService.reservedTenantId`, from `STATE_LEVEL_TENANT_ID`, `EGOV_STATE_LEVEL_TENANT_ID`, `DIGIT_PROVISIONER_TENANT_ID` and `PGR_ONBOARDING_RESERVED_TENANT_IDS`, default `pg`). Its identifier check answers `available: false` with `conflictingType: TENANT_ID`, and submit refuses with `ONBOARDING_IDENTIFIER_TAKEN`.
 
 ### 2.5 Locks and the person lease
 
@@ -484,7 +487,7 @@ Caller: a session with **live DIGIT `ACCOUNT_ADMIN`** at `tenantId` (D5), read l
 - `tenantId` must be the workspace tenant of an `ACTIVE` Organization (`WORKSPACE_TENANT_REQUIRED`). `digitUuid` must be an active EMPLOYEE account there and not a `kcbff-` account. `email` is required (D18) and is normalized by trimming and lower-casing.
 - **Rules:**
   - binding yourself → `SELF_BINDING_FORBIDDEN`;
-  - the account holds a role, at any tenant, that the caller doesn't hold at that tenant or a tenant above it (a workspace role covers the workspace and its sub-tenants, never another root) → `ROLE_ESCALATION_FORBIDDEN`;
+  - the account holds a checked role that the caller doesn't hold at that role's tenant or a tenant above it (a workspace role covers the workspace and its sub-tenants, never another root) → `ROLE_ESCALATION_FORBIDDEN`. Inside the workspace subtree only **administrative** roles are checked: the codes in `ADMINISTRATIVE_ROLES` (`src/contract/roles.ts`): `SUPERUSER`, `INTERNAL_MICROSERVICE_ROLE`, `SYSTEM`, `REINDEXING_ROLE`, `QA_AUTOMATION`; plus every other `*_ADMIN` code. Operational roles there (GRO, CSR, PGR_LME, SUPERVISOR, …) are not checked. Outside the subtree (another root, including a prefix-sharing one such as `pgx`) every role is checked, operational ones too, because the linked account's DIGIT token would carry it. A caller holding `SUPERUSER` at the tenant itself (the founder, D11) skips this check for target roles at the tenant or its sub-tenants, so may link an account with any role there; a target role outside the subtree is still checked. `_updateEmail` (§3.3.11) applies the same rule;
   - the uuid is bound to another person → `DIGIT_ACCOUNT_LINKED_ELSEWHERE`;
   - this person already has a different uuid at the tenant → `BINDING_CONFLICT`;
   - the person found by email is disabled in Keycloak → 403 `IDENTITY_DISABLED` (nothing is created or sent).
@@ -749,7 +752,7 @@ The console calls HRMS first, then the BFF. The BFF never writes HRMS (§1), and
 | `ADMIN_EMAIL_CHANGE_NOT_ALLOWED` | 403 | no | Tenant admin cannot change this global identity email; use UPDATE_EMAIL or operator global recovery |
 | `ADMIN_REQUIRED` | 403 | no | The caller lacks live DIGIT ACCOUNT_ADMIN at the tenant (D5) |
 | `SELF_BINDING_FORBIDDEN` | 403 | no | A browser caller tried to bind themselves |
-| `ROLE_ESCALATION_FORBIDDEN` | 403 | no | The target account holds a role the caller lacks |
+| `ROLE_ESCALATION_FORBIDDEN` | 403 | no | The target account holds an administrative role the caller lacks |
 | `SELF_REMOVAL_FORBIDDEN` | 409 | no | An admin tried to remove their own binding |
 | `BINDING_REMOVED` | 409 | after-change | The binding is removed; send reinvite:true to invite again |
 | `BINDING_CONFLICT` | 409 | no | This person already has a different DIGIT account at the tenant |

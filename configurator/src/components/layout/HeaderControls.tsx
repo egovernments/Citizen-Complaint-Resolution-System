@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { useLocaleState, useLocales } from 'ra-core';
 import { ExternalLink, Globe, HelpCircle, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -9,6 +10,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuGroup,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
@@ -141,6 +143,11 @@ export function AccountMenu({
           <p className="text-xs text-muted-foreground truncate">{tenant}</p>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          <DropdownMenuItem asChild><Link to="/account">Your account</Link></DropdownMenuItem>
+          <DropdownMenuItem asChild><Link to="/members">Members</Link></DropdownMenuItem>
+          <DropdownMenuItem asChild><Link to="/workspace-settings">Workspace settings</Link></DropdownMenuItem>
+        </DropdownMenuGroup>
         <DropdownMenuItem asChild>
           <a
             href="https://docs.digit.org"

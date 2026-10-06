@@ -1,10 +1,11 @@
 import { config } from "../../infrastructure/config.js";
 import { withDigitAdmin } from "../managed-accounts/digit-admin-session.js";
-import { searchAccounts, type DigitAccount } from "../managed-accounts/digit-user-client.js";
+import { searchAccounts, type DigitAccount, type DigitRole } from "../managed-accounts/digit-user-client.js";
 import { findManagedAccount, isBffManagedAccount, managedIdentity } from "../managed-accounts/managed-account-service.js";
 import { staffAccess } from "../bindings/predicate.js";
 import { readOrganizationByTenant } from "../onboarding/organization-reader.js";
 import { BindingError, type BindingActor } from "../bindings/types.js";
+import { isAdministrativeRole } from "../../contract/roles.js";
 
 export async function readDigitAccount(tenantId: string, uuid: string, userType = "EMPLOYEE"): Promise<DigitAccount | null> {
   for (const active of [true, false]) {
@@ -48,12 +49,24 @@ export async function validateBinding(input: { subject: string; tenantId: string
   if (input.actor.kind !== "browser") return;
   if (input.actor.subject === input.subject) throw new BindingError("SELF_BINDING_FORBIDDEN", "You cannot bind your own account");
   const caller = await requireAccountAdmin(input.actor.subject, input.tenantId);
-  // Every target role counts, at any tenant: the caller must hold the same code at the role's
-  // tenant or at a tenant above it (pg covers pg and pg.citya, never pgx or another root). A role
-  // outside the workspace subtree is therefore only linkable by someone who already holds it there.
+  if (!mayManageRoles(caller.roles, target.roles, input.tenantId)) {
+    throw new BindingError("ROLE_ESCALATION_FORBIDDEN", "The employee holds an administrative role you do not hold");
+  }
+}
+
+/**
+ * The role rule shared by `_link` and `_updateEmail`. A target role is checked when it is administrative
+ * (ADMINISTRATIVE_ROLES or `*_ADMIN`, including HRMS roles at sub-tenants such as pg.citya under pg) or when it sits
+ * outside the workspace subtree (any role at pgx or another root, since the caller's DIGIT token would carry it). The
+ * caller must hold the same code at the role's tenant or a tenant above it (pg covers pg and pg.citya, never pgx or
+ * another root). A SUPERUSER at the workspace (the founder) skips that check for target roles inside the workspace
+ * subtree, so may grant any role there; roles outside it still need it.
+ */
+export function mayManageRoles(callerRoles: DigitRole[], targetRoles: DigitRole[], tenantId: string): boolean {
+  const founder = callerRoles.some((c) => c.code === "SUPERUSER" && c.tenantId === tenantId);
+  const inWorkspace = (roleTenant: string) => roleTenant === tenantId || roleTenant.startsWith(`${tenantId}.`);
   const covers = (callerTenant: string, roleTenant: string) =>
     callerTenant === roleTenant || roleTenant.startsWith(`${callerTenant}.`);
-  if (target.roles.some((r) => !caller.roles.some((c) => c.code === r.code && covers(c.tenantId, r.tenantId)))) {
-    throw new BindingError("ROLE_ESCALATION_FORBIDDEN", "The employee holds a role you do not hold");
-  }
+  const checked = (r: DigitRole) => inWorkspace(r.tenantId) ? isAdministrativeRole(r.code) && !founder : true;
+  return !targetRoles.some((r) => checked(r) && !callerRoles.some((c) => c.code === r.code && covers(c.tenantId, r.tenantId)));
 }

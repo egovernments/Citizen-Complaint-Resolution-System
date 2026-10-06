@@ -70,24 +70,30 @@ public class UserService {
 
 
     /**
-     * Creates or updates the user based on if the user exists. The user existance is searched based on userName = mobileNumber
-     * If the there is already a user with that mobileNumber, the existing user is updated
+     * Resolves the citizen an employee files a complaint for, by userName = mobileNumber,
+     * creating that citizen when absent.
+     *
+     * Only the userName = mobileNumber account is ever used. A citizen found merely by
+     * mobile number is never attached: identity-bff citizens may carry a phone they
+     * never proved (#2167), so attaching by mobile would hand the complaint to whoever
+     * registered the number first. The userName = mobileNumber account is the one the
+     * identity BFF links to a citizen only after a verified phone, so a complaint filed
+     * here reaches the real owner of the number when they sign in.
+     *
+     * An existing account is never modified: the name typed by the employee is not
+     * evidence of who owns the account, so it must not rename it.
      * @param request
      */
     private void upsertUser(ServiceRequest request){
 
         User user = request.getService().getCitizen();
         String tenantId = request.getService().getTenantId();
-        User userServiceResponse = null;
+        User userServiceResponse;
 
         // Search on mobile number as user name
         UserDetailResponse userDetailResponse = searchUser(userUtils.getStateLevelTenant(tenantId),null, user.getMobileNumber(),request.getRequestInfo());
         if (!userDetailResponse.getUser().isEmpty()) {
-            User userFromSearch = userDetailResponse.getUser().get(0);
-            if(!user.getName().equalsIgnoreCase(userFromSearch.getName())){
-                userServiceResponse = updateUser(request.getRequestInfo(),user,userFromSearch);
-            }
-            else userServiceResponse = userDetailResponse.getUser().get(0);
+            userServiceResponse = userDetailResponse.getUser().get(0);
         }
         else {
             userServiceResponse = createUser(request.getRequestInfo(),tenantId,user);
@@ -133,29 +139,6 @@ public class UserService {
 
 
         UserDetailResponse userDetailResponse = userUtils.userCall(new CreateUserRequest(requestInfo, userInfo), uri);
-
-        return userDetailResponse.getUser().get(0);
-
-    }
-
-    /**
-     * Updates the given user by calling user service
-     * @param requestInfo
-     * @param user
-     * @param userFromSearch
-     * @return
-     */
-    private User updateUser(RequestInfo requestInfo,User user,User userFromSearch) {
-
-        userFromSearch.setName(user.getName());
-        userFromSearch.setActive(true);
-
-        StringBuilder uri = new StringBuilder(config.getUserHost())
-                .append(config.getUserContextPath())
-                .append(config.getUserUpdateEndpoint());
-
-
-        UserDetailResponse userDetailResponse = userUtils.userCall(new CreateUserRequest(requestInfo, userFromSearch), uri);
 
         return userDetailResponse.getUser().get(0);
 

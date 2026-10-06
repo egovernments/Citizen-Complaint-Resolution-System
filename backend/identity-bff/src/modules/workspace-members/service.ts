@@ -15,7 +15,7 @@ import { accountEntries } from "../sync/state.js";
 import { mirrorPerson } from "../sync/mirror.js";
 import { sendPasswordSetup } from "../authentication/password-setup.js";
 import { audit } from "../citizen-otp/audit.js";
-import { readDigitAccount, requireAccountAdmin, requireWorkspace, validateBinding } from "./authority.js";
+import { mayManageRoles, readDigitAccount, requireAccountAdmin, requireWorkspace, validateBinding } from "./authority.js";
 import { revokeAccount } from "../revocation/index.js";
 
 export function publicBinding(subject: string, binding: Binding) {
@@ -260,12 +260,20 @@ export async function updateWorkspaceMemberEmail(actor: string, tenantId: string
     const liveElsewhere = (b: (typeof bindings)[number]) => b.tenantId !== tenantId && (b.state === "active"
       || (b.state === "pending" && (!b.expiresAt || Number(b.expiresAt) > Date.now())));
     if (actor === subject || bindings.some(liveElsewhere)) throw denied();
+    // The email also recovers the person's citizen access, which no tenant admin owns: a citizen
+    // account, a BFF-verified Keycloak phone (staff phones are never synced to Keycloak, §4), which
+    // alone opens the citizen surface, a legacy citizen account link, or a citizen registration.
+    // Any "true" fails closed, wider than citizenAccess.
+    const person = await readBindingUser(subject);
+    const attrs = person.attributes || {};
+    if (accountEntries(person).some((e) => e.kind === "citizen") || attrs.phoneNumberVerified?.includes("true")
+      || (attrs["digit.accountLinks"] || []).some((v) => v.startsWith("CITIZEN|"))
+      || (attrs["digit.citizenRegistrations"] || []).length > 0) throw denied();
     // Re-read live authority under the lease: email is a global recovery identifier.
     const caller = await requireAccountAdmin(actor, tenantId);
     const target = await readDigitAccount(tenantId, digitUuid);
     if (!target) throw new BindingError("DIGIT_ACCOUNT_NOT_FOUND", "The employee is no longer available");
-    const roles = new Set(caller.roles.filter((r) => r.tenantId === tenantId).map((r) => r.code));
-    if (target.roles.some((r) => r.tenantId === tenantId && !roles.has(r.code))) throw denied();
+    if (!mayManageRoles(caller.roles, target.roles, tenantId)) throw denied();
     // Membership can exist without a binding (including managed founder accounts).
     // Disabled workspaces are included: their membership can later be reactivated.
     for (const org of await readOnboardingOrganizations()) {

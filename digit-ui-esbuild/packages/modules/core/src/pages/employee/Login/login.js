@@ -35,7 +35,7 @@ import Header from "../../../components/Header";
 import Carousel from "./Carousel/Carousel";
 import ImageComponent from "../../../components/ImageComponent";
 
-const setEmployeeDetail = (userObject, token) => {
+export const setEmployeeDetail = (userObject, token) => {
   if (Digit.Utils.getMultiRootTenant() && process.env.NODE_ENV !== "development") return;
   let locale = JSON.parse(sessionStorage.getItem("Digit.locale"))?.value || Digit.Utils.getDefaultLanguage();
   localStorage.setItem("Employee.tenant-id", userObject?.tenantId);
@@ -260,7 +260,7 @@ const Login = ({ config: propsConfig, t, isDisabled, loginOTPBased, appTenants }
     }));
   }, [cities]);
 
-  const defaultTenant = Digit.ULBService.getStateId();
+  const defaultTenant = window.__digitTenantContext?.tenantId || Digit.ULBService.getStateId();
   const defaultCityCode = useMemo(() => {
     if (!cityField) return undefined;
     if (cityOptions.length === 1) return cityOptions[0].value;

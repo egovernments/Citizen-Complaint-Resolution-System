@@ -51,6 +51,85 @@ function makeStorage(seed = {}) {
 /** Values land in localStorage JSON-encoded — mirror that when seeding. */
 const enc = (v) => JSON.stringify(v);
 
+const BFF_TENANT = { tenantId: "ke.bomet", urlSlug: "bomet", appBasePath: "bomet/digit-ui" };
+
+const bffEmployee = () => ({ access_token: "employee-new", UserRequest: {
+  uuid: "employee", type: "EMPLOYEE", tenantId: "ke.bomet", roles: [],
+} });
+
+const bffBrowser = () => {
+  const state = load({ local: {
+    "Employee.token": enc("employee-old"), token: enc("employee-old"),
+    "Employee.user-info": enc({ uuid: "employee", type: "EMPLOYEE", tenantId: "ke.bomet" }),
+  }, user: { access_token: "employee-old", info: { uuid: "employee", type: "EMPLOYEE", tenantId: "ke.bomet" } } });
+  window.location = { pathname: "/bomet/digit-ui/employee/dashboard" };
+  window.__digitTenantContext = BFF_TENANT;
+  return state;
+};
+
+test("expired BFF token re-selects with the surface cookie and retries without native refresh", async () => {
+  const { mod, localStorage } = bffBrowser();
+  const original = global.fetch;
+  const calls = [];
+  global.fetch = async (url, init) => {
+    calls.push(url);
+    if (url.includes("/session")) return { ok: true, status: 200, json: async () => ({ authenticated: true, tenant: BFF_TENANT }) };
+    if (url.includes("_select")) {
+      assert.equal(init.credentials, "include");
+      assert.deepEqual(JSON.parse(init.body), { surface: "employee", tenantId: "ke.bomet" });
+      return { ok: true, status: 200, json: async () => bffEmployee() };
+    }
+    return { status: JSON.parse(init.body).token === "employee-old" ? 401 : 200 };
+  };
+  try {
+    assert.equal((await mod.authFetch("/analytics", { buildBody: () => ({ token: mod.getEmployeeToken() }) })).status, 200);
+    assert.deepEqual(calls, ["/analytics", "/identity/v1/session?surface=employee", "/identity/v1/contexts/_select", "/analytics"]);
+    assert.equal(JSON.parse(localStorage._dump()["Employee.token"]), "employee-new");
+  } finally { global.fetch = original; }
+});
+
+test("signed-in BFF dashboard makes no identity request until token rejection", async () => {
+  const { mod } = bffBrowser();
+  const original = global.fetch;
+  const calls = [];
+  global.fetch = async (url) => { calls.push(url); return { status: 200 }; };
+  try {
+    await mod.authFetch("/analytics");
+    assert.deepEqual(calls, ["/analytics"]);
+  } finally { global.fetch = original; }
+});
+
+test("BFF re-select outage retains the current token", async () => {
+  const { mod, localStorage } = bffBrowser();
+  const original = global.fetch;
+  global.fetch = async (url) => url.includes("/session") ? { ok: false, status: 503, json: async () => ({}) } : { status: 401 };
+  try {
+    await assert.rejects(mod.authFetch("/analytics"), (error) => error.refreshUnavailable === true);
+    assert.equal(JSON.parse(localStorage._dump()["Employee.token"]), "employee-old");
+  } finally { global.fetch = original; }
+});
+
+test("BFF re-select cannot resurrect logout or adopt a different person", async () => {
+  for (const race of ["logout", "account-switch"]) {
+    const { mod, localStorage } = bffBrowser();
+    const original = global.fetch;
+    global.fetch = async (url) => {
+      if (url.includes("/session")) return { ok: true, status: 200, json: async () => ({ authenticated: true, tenant: BFF_TENANT }) };
+      if (url.includes("_select")) {
+        const body = bffEmployee();
+        if (race === "logout") mod.clearSession({ force: true });
+        else body.UserRequest.uuid = "another-person";
+        return { ok: true, status: 200, json: async () => body };
+      }
+      return { status: 401 };
+    };
+    try {
+      await assert.rejects(mod.authFetch("/analytics"));
+      assert.notEqual(localStorage._dump()["Employee.token"], enc("employee-new"));
+    } finally { global.fetch = original; }
+  }
+});
+
 function load({ local = {}, user = undefined } = {}) {
   const localStorage = makeStorage(local);
   let userSlot = user;

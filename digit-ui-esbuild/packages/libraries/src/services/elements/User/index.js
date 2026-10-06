@@ -2,10 +2,17 @@ import Urls from "../../atoms/urls";
 import { Request, ServiceRequest } from "../../atoms/Utils/Request";
 import { Storage } from "../../atoms/Utils/Storage";
 import { getAuthAdapter } from "../../auth/index";
-import { isKeycloakAuth } from "../../auth/authSurface";
+import { getAuthSurface, isIdentityBffAuth, isKeycloakAuth } from "../../auth/authSurface";
+import { identityBffLogout, identityBffLogoutRedirect, markSignOutIncomplete } from "../../auth/identityBffLogin";
+import { currentAppBasePath, tenantContext } from "../../tenant/tenantRoute";
+
+/** Set by the Configurator (same origin) when its own sign-out could not be confirmed. */
+const CONFIGURATOR_SIGN_OUT_INCOMPLETE_KEY = "crs-sign-out-incomplete";
 
 export const UserService = {
   authenticate: async (details) => {
+    // Legacy opt-in Keycloak (*_AUTH_PROVIDER=keycloak on /digit-ui). Removed
+    // together with KeycloakAuthAdapter in the legacy-removal PR.
     if (isKeycloakAuth()) {
       const adapter = getAuthAdapter();
       const result = await adapter.login({
@@ -62,7 +69,47 @@ export const UserService = {
   getUser: () => {
     return Digit.SessionStorage.get("User");
   },
-  logout: async () => {
+  logout: async (scope = "current") => {
+    // Some buttons pass the click event directly.
+    if (typeof scope !== "string") scope = "current";
+    if (isIdentityBffAuth()) {
+      // Sign out of the BFF session for this surface only, then land on the
+      // same tenant's login page for that surface.
+      const surface = tenantContext()?.surface || getAuthSurface();
+      const appBasePath = tenantContext()?.appBasePath || window.contextPath || currentAppBasePath();
+      const fetchImpl = window.fetch.bind(window);
+      // "others" keeps this session, so a failure is reported and nothing local changes.
+      if (scope === "others") {
+        await identityBffLogout({ surface, scope, fetchImpl });
+        return;
+      }
+      // Fail open: the DIGIT token lives in localStorage, so a BFF outage or an
+      // UNTRUSTED_ORIGIN 403 must not leave a shared device signed in. Clear local
+      // state first, then revoke the BFF session best-effort.
+      // The Configurator shares this origin; keep its unconfirmed-sign-out flag.
+      const configuratorSignOut = window.localStorage.getItem(CONFIGURATOR_SIGN_OUT_INCOMPLETE_KEY);
+      window.localStorage.clear();
+      if (configuratorSignOut !== null) window.localStorage.setItem(CONFIGURATOR_SIGN_OUT_INCOMPLETE_KEY, configuratorSignOut);
+      window.sessionStorage.clear();
+      let failure = null;
+      try {
+        await identityBffLogout({ surface, scope, fetchImpl });
+      } catch (e) {
+        // The BFF session cookie outlives this; the local DIGIT session is gone.
+        // The login page must not use that cookie to sign this tab back in.
+        markSignOutIncomplete();
+        failure = e;
+      }
+      // "Sign out everywhere" must not look like it worked: other devices may
+      // still be signed in, so the caller reports it instead of navigating.
+      if (failure && scope === "all") throw failure;
+      window.location.replace(
+        `${window.location.origin}${identityBffLogoutRedirect(appBasePath, surface)}`,
+      );
+      return;
+    }
+    // Legacy opt-in Keycloak: end the Keycloak session too, or check-sso signs
+    // the user straight back in. Removed with KeycloakAuthAdapter.
     if (isKeycloakAuth()) {
       const adapter = getAuthAdapter();
       return adapter.logout();

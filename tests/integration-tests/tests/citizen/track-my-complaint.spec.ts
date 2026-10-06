@@ -1,3 +1,4 @@
+import { tenantSlug } from '../utils/identity-bff';
 /**
  * Citizen track-complaint flow — Stories 4.1, 5.1, 5.2.
  *
@@ -49,7 +50,7 @@ beforeAll is API-only — files a complaint as the suite-wide provisioned citize
     tag: ['@area:pgr', '@kind:regression', '@layer:ui', '@persona:citizen'] }, async ({ page }) => {
     test.setTimeout(120_000);
     await citizenOtpLogin(page);
-    await page.goto(`${BASE_URL}/digit-ui/citizen/pgr/complaints`, {
+    await page.goto(`${BASE_URL}/${tenantSlug()}/digit-ui/citizen/pgr/complaints`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });
@@ -80,7 +81,7 @@ The Map widget + "Open in Maps" only render when geoLocation has non-zero coords
     test.setTimeout(120_000);
     await citizenOtpLogin(page);
     await page.goto(
-      `${BASE_URL}/digit-ui/citizen/pgr/complaints/${serviceRequestId}`,
+      `${BASE_URL}/${tenantSlug()}/digit-ui/citizen/pgr/complaints/${serviceRequestId}`,
       { waitUntil: 'domcontentloaded', timeout: 30_000 },
     );
     await page.waitForTimeout(5000);
@@ -120,7 +121,7 @@ If the SPA ever redirects plural → singular (or 404s), this test catches the c
     tag: ['@area:pgr', '@kind:regression', '@layer:ui', '@persona:citizen'] }, async ({ page }) => {
     test.setTimeout(120_000);
     await citizenOtpLogin(page);
-    await page.goto(`${BASE_URL}/digit-ui/citizen/pgr/complaints`, {
+    await page.goto(`${BASE_URL}/${tenantSlug()}/digit-ui/citizen/pgr/complaints`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });
@@ -134,7 +135,7 @@ If the SPA ever redirects plural → singular (or 404s), this test catches the c
     // singular form does NOT serve the page — is captured by
     // verifying the page didn't redirect to /complaint/details/.
     await page.goto(
-      `${BASE_URL}/digit-ui/citizen/pgr/complaints/${serviceRequestId}`,
+      `${BASE_URL}/${tenantSlug()}/digit-ui/citizen/pgr/complaints/${serviceRequestId}`,
       { waitUntil: 'domcontentloaded', timeout: 30_000 },
     );
     await page.waitForTimeout(4000);

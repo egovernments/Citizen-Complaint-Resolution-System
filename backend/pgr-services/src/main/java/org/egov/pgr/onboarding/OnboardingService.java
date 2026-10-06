@@ -4,10 +4,14 @@ import com.google.i18n.phonenumbers.NumberParseException;
 import com.google.i18n.phonenumbers.PhoneNumberUtil;
 import com.google.i18n.phonenumbers.PhoneNumberUtil.PhoneNumberType;
 import com.google.i18n.phonenumbers.Phonenumber.PhoneNumber;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.egov.tracer.model.CustomException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -34,10 +38,30 @@ public class OnboardingService {
 
     private final OnboardingRepository repository;
     private final OnboardingIdentifierService identifiers;
+    // Countries the platform baseline carries a mobile rule for. The worker cannot provision
+    // any other country (COUNTRY_NOT_SUPPORTED), and by then the reopened draft has locked
+    // the country, so an unsupported one is refused here, before anything runs.
+    private final Set<String> supportedCountries;
 
-    public OnboardingService(OnboardingRepository repository, OnboardingIdentifierService identifiers) {
+    @Autowired
+    public OnboardingService(OnboardingRepository repository, OnboardingIdentifierService identifiers,
+                             PlatformBaseline baseline) {
         this.repository = repository;
         this.identifiers = identifiers;
+        this.supportedCountries = baseline.supportedCountries();
+    }
+
+    /** Uses the committed platform baseline. */
+    OnboardingService(OnboardingRepository repository, OnboardingIdentifierService identifiers) {
+        this(repository, identifiers, committedBaseline());
+    }
+
+    private static PlatformBaseline committedBaseline() {
+        try {
+            return new PlatformBaseline(new ObjectMapper());
+        } catch (IOException exception) {
+            throw new UncheckedIOException(exception);
+        }
     }
 
     @Transactional
@@ -68,7 +92,10 @@ public class OnboardingService {
         if (!"DRAFT".equals(signup.getStatus())) {
             throw new CustomException("ONBOARDING_DRAFT_LOCKED", "Only a draft signup can be edited");
         }
-        if (repository.findOperationBySignup(id).isPresent()) {
+        Optional<OnboardingOperation> prior = repository.findOperationBySignup(id);
+        if (prior.isPresent()) {
+            if (prior.get().getLifecycleDecision() != null && prior.get().getLifecyclePublishedAt() == null)
+                throw new CustomException("ONBOARDING_PUBLICATION_PENDING", "The previous attempt is still settling");
             // A reopened draft (see OnboardingWorkerService) already has a tenant and
             // organization materialized under these names. Only the field the worker
             // rejected may change; anything else would orphan that provisioned state.
@@ -103,7 +130,7 @@ public class OnboardingService {
         if (candidates.size() > 1) result.put("derivedTenantId", candidates.get(1).value());
         result.put("available", true);
         for (OnboardingIdentifierService.Identifier candidate : candidates) {
-            if (!repository.identifierAvailable(candidate.type(), candidate.value(), signupId)) {
+            if (reserved(candidate) || !repository.identifierAvailable(candidate.type(), candidate.value(), signupId)) {
                 result.put("available", false);
                 result.put("conflictingType", candidate.type());
                 break;
@@ -129,13 +156,24 @@ public class OnboardingService {
             throw new CustomException("ONBOARDING_DRAFT_LOCKED", "Signup cannot be submitted in its current state");
         }
         validateComplete(signup);
+        repository.snapshotFounder(signup.getId(), principal);
         long now = System.currentTimeMillis();
+        for (OnboardingIdentifierService.Identifier identifier : identifiers.forSignup(signup)) {
+            if (reserved(identifier)) {
+                throw new CustomException("ONBOARDING_IDENTIFIER_TAKEN", identifier.type() + " is already in use");
+            }
+        }
         for (OnboardingIdentifierService.Identifier identifier : identifiers.forSignup(signup)) {
             repository.reserveIdentifier(identifier.type(), identifier.value(), signup.getId(), now);
         }
         return existing == null
                 ? repository.submit(signup, idempotencyKey.trim(), now)
                 : repository.resubmit(existing, idempotencyKey.trim(), now);
+    }
+
+    /** A platform tenant id (default, a state root): never available, though no workspace holds it. */
+    private boolean reserved(OnboardingIdentifierService.Identifier identifier) {
+        return "TENANT_ID".equals(identifier.type()) && identifiers.reservedTenantId(identifier.value());
     }
 
     /**
@@ -154,6 +192,10 @@ public class OnboardingService {
         return "DRAFT".equals(signup.getStatus()) && "TERMINAL_FAILED".equals(operation.getStatus());
     }
 
+    public boolean hasPriorAttempt(UUID signupId) {
+        return repository.findOperationBySignup(signupId).isPresent();
+    }
+
     public List<OnboardingOperation> searchOperations(OnboardingPrincipal principal, Map<String, Object> values) {
         UUID id = requiredUuid(values.get("id"), "Operation.id");
         return repository.findOwnedOperation(id, principal.getIssuer(), principal.getSubject())
@@ -166,7 +208,13 @@ public class OnboardingService {
         OnboardingOperation operation = repository.findOwnedOperation(
                         id, principal.getIssuer(), principal.getSubject())
                 .orElseThrow(() -> new CustomException("ONBOARDING_OPERATION_NOT_FOUND", "Operation was not found"));
-        return repository.retry(operation, System.currentTimeMillis());
+        // Same lock order as submit: signup, then operation. A worker claim that won
+        // first makes retry fail without changing the snapshot used by that worker.
+        repository.findOwnedSignupForUpdate(operation.getSignupId(), principal.getIssuer(), principal.getSubject())
+                .orElseThrow(() -> new CustomException("ONBOARDING_SIGNUP_NOT_FOUND", "Signup was not found"));
+        OnboardingOperation retried = repository.retry(operation, System.currentTimeMillis());
+        repository.snapshotFounder(operation.getSignupId(), principal);
+        return retried;
     }
 
     private OnboardingSignup ownedSignup(UUID id, OnboardingPrincipal principal) {
@@ -190,6 +238,7 @@ public class OnboardingService {
         if (values.containsKey("countryCode")) {
             String country = requiredString(values.get("countryCode"), "Signup.countryCode").toUpperCase(Locale.ROOT);
             if (!country.matches("^[A-Z]{2}$")) invalid("Signup.countryCode");
+            requireSupportedCountry(country);
             signup.setCountryCode(country);
         }
         if (values.containsKey("languages")) {
@@ -234,14 +283,13 @@ public class OnboardingService {
     }
 
     private void applyKeepingProvisionedIdentifiers(OnboardingSignup signup, Map<String, Object> values) {
-        String accountName = signup.getAccountName();
+        String tenantId = signup.getRequestedTenantId();
         String accountCode = signup.getAccountCode();
-        String urlSlug = signup.getUrlSlug();
+
         String countryCode = signup.getCountryCode();
         apply(signup, values);
-        if (!Objects.equals(accountName, signup.getAccountName())
-                || !Objects.equals(accountCode, signup.getAccountCode())
-                || !Objects.equals(urlSlug, signup.getUrlSlug())
+        signup.setRequestedTenantId(tenantId);
+        if (!Objects.equals(accountCode, signup.getAccountCode())
                 || !Objects.equals(countryCode, signup.getCountryCode())) {
             throw new CustomException("ONBOARDING_PROVISIONED_FIELD_LOCKED",
                     "Provisioned identifiers cannot change after a failed submission");
@@ -254,7 +302,7 @@ public class OnboardingService {
         requiredString(signup.getUrlSlug(), "Signup.urlSlug");
         requiredString(signup.getOrganizationAlias(), "Signup.organizationAlias");
         requiredString(signup.getRequestedTenantId(), "Signup.requestedTenantId");
-        requiredString(signup.getCountryCode(), "Signup.countryCode");
+        requireSupportedCountry(requiredString(signup.getCountryCode(), "Signup.countryCode"));
         requiredString(signup.getTimeZone(), "Signup.timeZone");
         requiredString(signup.getFinancialYearPolicy(), "Signup.financialYearPolicy");
         requiredString(signup.getAcceptedTermsVersion(), "Signup.acceptedTermsVersion");
@@ -319,6 +367,12 @@ public class OnboardingService {
         } catch (NumberParseException exception) {
             invalid("Signup.tenantMetadata.tenantAdmin.mobileNumber");
             return Collections.emptyMap(); // unreachable: invalid always throws
+        }
+    }
+
+    private void requireSupportedCountry(String country) {
+        if (!supportedCountries.contains(country.toUpperCase(Locale.ROOT))) {
+            throw new CustomException("ONBOARDING_VALIDATION_ERROR", "Signup.countryCode is not supported");
         }
     }
 
