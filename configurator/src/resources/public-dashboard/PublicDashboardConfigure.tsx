@@ -87,7 +87,9 @@ function PreviewTileCard({ tile }: { tile: PreviewTile }) {
 
 export default function PublicDashboardConfigure() {
   const { state } = useApp();
-  const tenantId = getConfiguredRootTenant() || state.tenant.split('.')[0];
+  // The signed-in tenant's root owns the record; the build-time root is only a
+  // fallback before a tenant is known (#2072).
+  const tenantId = state.tenant.split('.')[0] || getConfiguredRootTenant();
   const slug = useWorkspaceSlug(state.tenant);
   const dashboardUrl = useMemo(
     () => buildPublicDashboardUrl(state.environment, slug),
