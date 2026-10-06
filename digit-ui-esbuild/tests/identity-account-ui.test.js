@@ -323,13 +323,37 @@ test("after an unconfirmed sign-out the login page warns instead of re-establish
 for (const surface of ["employee", "citizen"]) {
   test(`${surface} profile keeps identity fields read-only and offers account settings without BFF reads`, async () => {
     browser(surface, () => assert.fail("profile page must not depend on the BFF"));
+    const mdmsTenants = [];
+    Digit.Hooks.useCustomMDMS = (tenantId) => { mdmsTenants.push(tenantId); return {}; };
+    const writes = [];
+    Digit.UserService.updateUser = async (details) => { writes.push(details); return { responseInfo: { status: "200" } }; };
     const view = await render(ui.Profile, { userType: surface, stateCode: "ke", cityDetails: { name: "Bomet" } });
-    const email = view.root.findAllByType("input").find((node) => node.props.id === "profile-email");
+    // MDMS rules (phone number, preferences) come from the route's tenant.
+    assert.deepEqual([...new Set(mdmsTenants)], ["ke.bomet"]);
+    const input = (id) => view.root.findAllByType("input").find((node) => node.props.id === id);
+    const email = input("profile-email");
     assert.equal(email.props.readOnly, true);
-    const phone = view.root.findAllByType("input").find((node) => node.props.id === "profile-mobile");
-    if (surface === "employee") assert.equal(phone.props.readOnly, true);
+    const phone = input("profile-mobile");
+    if (surface === "employee") {
+      assert.equal(phone.props.readOnly, true);
+      assert.equal(phone.props.onChange, undefined);
+    } else {
+      assert.equal(phone, undefined);
+    }
     assert.ok(button(view, "Account and security"));
     assert.equal(button(view, "Change password"), undefined);
+
+    // Even a forced edit of the read-only email field is not written: the
+    // name is saved, the identifiers go back unchanged.
+    await ui.act(async () => {
+      input("profile-name").props.onChange({ target: { value: "Ada Lovelace" } });
+      email.props.onChange({ target: { value: "new@example.test" } });
+    });
+    await click(button(view, "Save"));
+    assert.equal(writes.length, 1);
+    assert.equal(writes[0].name, "Ada Lovelace");
+    assert.equal(writes[0].emailId, "old@example.test");
+    assert.equal(writes[0].mobileNumber, "711111111");
     view.unmount();
   });
 }
