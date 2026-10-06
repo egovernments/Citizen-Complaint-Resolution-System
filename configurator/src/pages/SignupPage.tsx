@@ -851,7 +851,7 @@ function SignupFlow() {
     );
   }
 
-  if (phase === 'invitations') return <Invitations invitations={invitations} onAccepted={bootstrap} />;
+  if (phase === 'invitations') return <Invitations invitations={invitations} onChanged={bootstrap} />;
 
   if (phase === 'entering') {
     return (

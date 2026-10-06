@@ -43,6 +43,12 @@ export function acceptInvitation(invitation: Pick<Invitation, 'tenantId' | 'invi
   });
 }
 
+export function declineInvitation(invitation: Pick<Invitation, 'tenantId' | 'invitationVersion'>) {
+  return call(`${base}/workspace-invitations/_decline`, {
+    method: 'POST', body: JSON.stringify({ tenantId: invitation.tenantId, invitationVersion: invitation.invitationVersion }),
+  });
+}
+
 export function unlinkProvider(alias: string) {
   return call(`${base}/account/providers/_unlink`, { method: 'POST', body: JSON.stringify({ alias }) });
 }
