@@ -1,4 +1,5 @@
 import { isPublicDashboardRuntime } from "../services/dashboardRuntime";
+import { employeeTenantForRoute } from "../../../../packages/libraries/src/services/tenant/sessionTenant";
 
 /**
  * Default brand palette — override per tenant via globalConfigs (see keys below).
@@ -15,14 +16,27 @@ export const DEFAULT_BRAND_THEME = {
 export const DASHBOARD_FONT_FAMILY =
   "Inter, Roboto, ui-sans-serif, system-ui, sans-serif";
 
+function storedEmployeeInfo() {
+  try {
+    return window.localStorage?.getItem("Employee.user-info") ?? null;
+  } catch (e) {
+    return null;
+  }
+}
+
 /**
- * On a tenant route (/{slug}/digit-ui/...) the tenant comes only from the URL,
- * as resolved by tenantRoute.js. Elsewhere (legacy routes, the public bundle)
- * it is the deployment's configured state tenant.
+ * On a tenant route (/{slug}/digit-ui/...) the tenant comes from the URL, as
+ * resolved by tenantRoute.js, except that a signed-in employee whose token sits
+ * at a child of it (`ke.nairobi` on `ke`, D16 amended) works at the token's
+ * tenant, as ULBService.getCurrentTenantId does. The public page always uses
+ * the route tenant. Elsewhere (legacy routes) it is the configured state tenant.
  */
 export function getTenantId() {
+  const routeTenant = window.__digitTenantContext?.tenantId;
+  if (routeTenant) {
+    return isPublicDashboardRuntime() ? routeTenant : employeeTenantForRoute(storedEmployeeInfo(), routeTenant);
+  }
   return (
-    window.__digitTenantContext?.tenantId ||
     window.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID") ||
     process.env.REACT_APP_STATE_LEVEL_TENANT_ID ||
     "default"

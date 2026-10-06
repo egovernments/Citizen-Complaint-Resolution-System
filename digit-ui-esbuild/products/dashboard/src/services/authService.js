@@ -1,5 +1,6 @@
 import { establishIdentityBffSession } from "../../../../packages/libraries/src/services/auth/identityBffLogin";
 import { isIdentityBffAuth } from "../../../../packages/libraries/src/services/auth/authSurface";
+import { employeeTenantForRoute } from "../../../../packages/libraries/src/services/tenant/sessionTenant";
 
 import { getTenantId } from "../config/dashboardConfig";
 import { isPublicDashboardRuntime } from "./dashboardRuntime";
@@ -539,7 +540,9 @@ async function requestIdentityReselect() {
     if (getEmployeeToken() !== previousToken || getEmployeeInfo()?.uuid !== previousUuid || result.user.info.uuid !== previousUuid) {
       return REFRESH_UNAVAILABLE;
     }
-    persistSession({ accessToken: result.user.access_token, userInfo: result.user.info, tenantId: tenant.tenantId });
+    // The token's tenant, which may be a child of the route tenant (D16, amended).
+    persistSession({ accessToken: result.user.access_token, userInfo: result.user.info,
+      tenantId: employeeTenantForRoute(result.user.info, tenant.tenantId) });
     tokenGeneration += 1;
     return REFRESH_REFRESHED;
   } catch (_) { return REFRESH_UNAVAILABLE; }

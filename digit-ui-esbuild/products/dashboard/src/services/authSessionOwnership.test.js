@@ -88,6 +88,32 @@ test("expired BFF token re-selects with the surface cookie and retries without n
   } finally { global.fetch = original; }
 });
 
+test("BFF re-select on a root route keeps a child-tenant employee's own tenant (D16 amended)", async () => {
+  const ROOT = { tenantId: "ke", rootTenantId: "ke", urlSlug: "ke", appBasePath: "ke/digit-ui" };
+  const info = { uuid: "sup", type: "EMPLOYEE", tenantId: "ke.nairobi" };
+  const { mod, localStorage } = load({ local: {
+    "Employee.token": enc("sup-old"), token: enc("sup-old"),
+    "Employee.user-info": enc(info), "Employee.tenant-id": enc("ke.nairobi"),
+  }, user: { access_token: "sup-old", info } });
+  window.location = { pathname: "/ke/digit-ui/employee/dashboard" };
+  window.__digitTenantContext = ROOT;
+  const original = global.fetch;
+  const scoped = [];
+  global.fetch = async (url, init) => {
+    if (url.includes("/session")) return { ok: true, status: 200, json: async () => ({ authenticated: true, tenant: ROOT }) };
+    if (url.includes("_select")) return { ok: true, status: 200, json: async () => ({ access_token: "sup-new", UserRequest: { ...info, roles: [] } }) };
+    const body = JSON.parse(init.body);
+    scoped.push(body.tenantId);
+    return { status: body.token === "sup-old" ? 401 : 200 };
+  };
+  try {
+    const buildBody = () => ({ token: mod.getEmployeeToken(), tenantId: mod.getTenantId() });
+    assert.equal((await mod.authFetch("/analytics", { buildBody })).status, 200);
+    assert.deepEqual(scoped, ["ke.nairobi", "ke.nairobi"]);
+    assert.equal(JSON.parse(localStorage._dump()["Employee.tenant-id"]), "ke.nairobi");
+  } finally { global.fetch = original; }
+});
+
 test("signed-in BFF dashboard makes no identity request until token rejection", async () => {
   const { mod } = bffBrowser();
   const original = global.fetch;

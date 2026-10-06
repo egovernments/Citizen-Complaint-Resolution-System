@@ -52,3 +52,30 @@ test("getTenantId keeps the configured state tenant without a route tenant", () 
   global.window = {};
   assert.equal(getTenantId(), "default");
 });
+
+const storageWith = (info) => ({
+  getItem: (key) => (key === "Employee.user-info" && info ? JSON.stringify(info) : null),
+});
+const ROOT_ROUTE = { tenantId: "ke", rootTenantId: "ke" };
+
+test("getTenantId scopes an employee at a child of the route tenant to the token's tenant (D16 amended)", () => {
+  global.window = {
+    globalConfigs: configured,
+    __digitTenantContext: ROOT_ROUTE,
+    localStorage: storageWith({ uuid: "sup", type: "EMPLOYEE", tenantId: "ke.nairobi" }),
+  };
+  assert.equal(getTenantId(), "ke.nairobi");
+  assert.match(getLayoutStorageKey(), /^ke\.nairobi-/);
+});
+
+test("getTenantId keeps the route tenant for same-tenant, citizen, outside or absent sessions", () => {
+  for (const info of [
+    { type: "EMPLOYEE", tenantId: "ke" },
+    { type: "CITIZEN", tenantId: "ke" },
+    { type: "EMPLOYEE", tenantId: "kex.nairobi" },
+    null,
+  ]) {
+    global.window = { globalConfigs: configured, __digitTenantContext: ROOT_ROUTE, localStorage: storageWith(info) };
+    assert.equal(getTenantId(), "ke");
+  }
+});
