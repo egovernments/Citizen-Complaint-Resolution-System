@@ -116,6 +116,26 @@ async function legacyMembershipFixture(organizationId: string, userId: string, m
   return { tenantId: mapping!.tenantId, digitUserUuid: outcome?.account?.uuid ?? null, created: outcome?.created ?? false };
 }
 
+/** A per-user `<groupName>--<userId>` role group, the shape the deleted
+ * role-assignments/_ensure route (D1) left on existing boxes, projected to DIGIT
+ * by the same legacy sync. Returns the subject's DIGIT uuid at the Organization's tenant. */
+async function legacyRoleFixture(organizationId: string, userId: string, groupName: string, roles: string[]) {
+  const group = await kcAdmin(`/organizations/${organizationId}/groups`, { name: `${groupName}--${userId}` });
+  expect(group.status).toBe(201);
+  const groupId = group.headers.get("location")!.split("/").pop()!;
+  expect((await fetch(
+    `${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}` +
+    `/organizations/${organizationId}/groups/${groupId}/members/${userId}`,
+    { method: "PUT" },
+  )).status).toBe(204);
+  expect((await kcAdmin(
+    `/organizations/${organizationId}/groups/${groupId}/role-mappings/clients/digit-ui-uuid`,
+    roles.map((role) => ({ id: `${role.toLowerCase()}-id`, name: role })),
+  )).status).toBe(204);
+  const mapping = await readOrganizationMapping(organizationId);
+  return (await syncSubject(userId)).get(mapping!.tenantId)?.account?.uuid ?? null;
+}
+
 beforeAll(async () => {
   const digitBase = await digit.start();
   digit.addAccount({
@@ -218,26 +238,23 @@ describe("identity BFF", () => {
   });
 
   it("resolves and selects an explicitly mapped Organization-group subtenant", async () => {
-    const ensured = await fetch(
-      `http://localhost:${getAppPort()}/internal/identity/v1/tenant-groups/_ensure`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: "Bearer test-control-plane",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          organizationId: "org-bomet-id",
-          tenantId: "ke.bomet.ulb1",
-          parentTenantId: "ke.bomet",
-          fallbackTenantIds: ["ke.bomet"],
-          urlSlug: "bomet-ulb-one",
-          name: "Bomet ULB One",
-        }),
+    // tenant-groups/_ensure is deleted (D15); boxes keep the groups it wrote, so
+    // the fixture writes the same group record straight to Keycloak.
+    const ensured = await kcAdmin("/organizations/org-bomet-id/groups", {
+      name: "digit-tenant--ke.bomet.ulb1",
+      attributes: {
+        "digit.organizationId": ["org-bomet-id"],
+        "digit.tenantId": ["ke.bomet.ulb1"],
+        "digit.rootTenantId": ["ke.bomet"],
+        "digit.parentTenantId": ["ke.bomet"],
+        "digit.urlSlug": ["bomet-ulb-one"],
+        "digit.displayName": ["Bomet ULB One"],
+        "digit.fallbackTenantIds": ["ke.bomet"],
       },
-    );
-    expect(ensured.status).toBe(200);
-    const groupId = (await ensured.json()).tenant.groupId as string;
+    });
+    expect(ensured.status).toBe(201);
+    clearTenantMappingCache();
+    const groupId = ensured.headers.get("location")!.split("/").pop()!;
 
     expect((await fetch(
       `${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}` +
@@ -359,13 +376,7 @@ describe("identity BFF", () => {
       tenantId: "ke.nakuru", digitUserUuid: firstBody.digitUserUuid, created: false,
     });
 
-    const roles = await post("/role-assignments/_ensure", {
-      organizationId: nakuru, userId: memberId, groupName: "officers", clientId: "digit-ui", roles: ["GRO"],
-    });
-    expect(roles.status).toBe(200);
-    expect(await roles.json()).toMatchObject({
-      assignment: { roles: ["GRO"] }, digitUserUuid: firstBody.digitUserUuid,
-    });
+    expect(await legacyRoleFixture(nakuru, memberId, "officers", ["GRO"])).toBe(firstBody.digitUserUuid);
 
     const nyeri = await ensureOrganization("ke.nyeri", "nyeri");
     const secondBody = await legacyMembershipFixture(nyeri, memberId);
@@ -843,11 +854,7 @@ describe("identity BFF", () => {
       ["org-kisumu-id", "kisumu-viewers", "PGR_VIEWER"],
     ]) {
       await legacyMembershipFixture(organizationId, "identity-user-1", "0712345678");
-      const assignment = await ensure("/role-assignments/_ensure", {
-        organizationId, userId: "identity-user-1", groupName,
-        clientId: "digit-ui", roles: [role],
-      });
-      expect(assignment.status).toBe(200);
+      await legacyRoleFixture(organizationId, "identity-user-1", groupName, [role]);
     }
 
     const authorize = await fetch(
@@ -1081,13 +1088,7 @@ describe("identity BFF", () => {
       { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify("identity-user-1") },
     );
     await legacyMembershipFixture(nakuruOrganizationId, "identity-user-1", "0712345678");
-    expect((await ensure("/role-assignments/_ensure", {
-      organizationId: nakuruOrganizationId,
-      userId: "identity-user-1",
-      groupName: "nakuru-officers",
-      clientId: "digit-ui",
-      roles: ["GRO"],
-    })).status).toBe(200);
+    await legacyRoleFixture(nakuruOrganizationId, "identity-user-1", "nakuru-officers", ["GRO"]);
     const lateMembership = await fetch(
       `http://localhost:${getAppPort()}/identity/v1/tenants`,
       { headers: { Cookie: cookie } },
@@ -1145,17 +1146,6 @@ describe("identity BFF", () => {
   });
 
   it("selects a tenant without reading other Organizations or other members", async () => {
-    const control = (path: string, body: unknown) => fetch(
-      `http://localhost:${getAppPort()}/internal/identity/v1${path}`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: "Bearer test-control-plane",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(body),
-      },
-    );
     // A crowd in the same Organization: each member carries its own assignment
     // group, which is what used to make one login cost admin calls in
     // proportion to the realm's size. (Dhruv review, #2088.)
@@ -1168,10 +1158,7 @@ describe("identity BFF", () => {
       const userId = created.headers.get("location")!.split("/").pop()!;
       crowd.push(userId);
       await legacyMembershipFixture("org-bomet-id", userId, "0712345678");
-      expect((await control("/role-assignments/_ensure", {
-        organizationId: "org-bomet-id", userId, groupName: "bomet-officers",
-        clientId: "digit-ui", roles: ["GRO"],
-      })).status).toBe(200);
+      await legacyRoleFixture("org-bomet-id", userId, "bomet-officers", ["GRO"]);
     }
 
     const { sessionId } = await createIdentitySession({

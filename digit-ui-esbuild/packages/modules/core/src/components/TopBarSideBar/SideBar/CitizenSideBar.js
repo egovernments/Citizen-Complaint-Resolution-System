@@ -3,7 +3,6 @@ import { Loader } from "@egovernments/digit-ui-components";
 import React, { useState, Fragment, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useHistory } from "react-router-dom";
-import ChangeCity, { showTenantSwitcher } from "../../ChangeCity";
 import { navigateToEmployeeUrl } from "./employeeNavItems";
 import { defaultImage, resolveProfilePhoto } from "../../utils";
 import StaticCitizenSideBar from "./StaticCitizenSideBar";
@@ -42,8 +41,6 @@ const Profile = ({ info, stateName, t }) => {
     };
   }, [info?.uuid, info?.photo]);
 
-  const CustomEmployeeTopBar = Digit.ComponentRegistryService?.getComponent("CustomEmployeeTopBar");
-
   return (
     <div className="profile-section">
       <div className="imageloader imageloader-loaded">
@@ -68,10 +65,6 @@ const Profile = ({ info, stateName, t }) => {
         </div>
       )}
       <div className="profile-divider"></div>
-      {window.location.href.includes("/employee") &&
-        !window.location.href.includes("/employee/user/login") &&
-        !window.location.href.includes("employee/user/language-selection") &&
-        !CustomEmployeeTopBar && <ChangeCity t={t} mobileView={true} />}
     </div>
   );
 };
@@ -100,39 +93,11 @@ export const CitizenSideBar = ({
   const { languages, stateInfo } = storeData || {};
   const user = Digit.UserService.getUser();
   const [search, setSearch] = useState("");
-  const [dropDownData, setDropDownData] = useState(null);
-  const [selectCityData, setSelectCityData] = useState([]);
-  const [selectedCity, setSelectedCity] = useState([]); //selectedCities?.[0]?.value
   const [selected, setselected] = useState(selectedLanguage);
-  let selectedCities = [];
   const { isLoading, data } = Digit.Hooks.useAccessControl();
   const tenantId = Digit.ULBService.getCurrentTenantId();
   const { t } = useTranslation();
   const history = useHistory();
-
-  const stringReplaceAll = (str = "", searcher = "", replaceWith = "") => {
-    if (searcher == "") return str;
-    while (str?.includes(searcher)) {
-      str = str?.replace(searcher, replaceWith);
-    }
-    return str;
-  };
-
-  useEffect(() => {
-    const userloggedValues = Digit.SessionStorage.get("citizen.userRequestObject");
-    let teantsArray = [],
-      filteredArray = [];
-    userloggedValues?.info?.roles?.forEach((role) => teantsArray.push(role.tenantId));
-    let unique = teantsArray.filter((item, i, ar) => ar.indexOf(item) === i);
-    unique?.forEach((uniCode) => {
-      filteredArray.push({
-        label: t(`TENANT_TENANTS_${stringReplaceAll(uniCode, ".", "_")?.toUpperCase()}`),
-        value: uniCode,
-      });
-    });
-    selectedCities = filteredArray?.filter((select) => select.value == Digit.SessionStorage.get("Employee.tenantId"));
-    setSelectCityData(filteredArray);
-  }, [dropDownData]);
 
   const closeSidebar = () => {
     Digit.clikOusideFired = true;
@@ -166,23 +131,6 @@ export const CitizenSideBar = ({
       fetchUserProfile();
     }
   }, [profilePic]);
-
-  const handleChangeCity = (city) => {
-    const loggedInData = Digit.SessionStorage.get("citizen.userRequestObject");
-    const filteredRoles = Digit.SessionStorage.get("citizen.userRequestObject")?.info?.roles?.filter((role) => role.tenantId === city.value);
-    if (filteredRoles?.length > 0) {
-      loggedInData.info.roles = filteredRoles;
-      loggedInData.info.tenantId = city?.value;
-    }
-    Digit.SessionStorage.set("Employee.tenantId", city?.value);
-    Digit.UserService.setUser(loggedInData);
-    setDropDownData(city);
-    if (window.location.href.includes(`/${window?.contextPath}/employee/`)) {
-      const redirectPath = location.state?.from || `/${window?.contextPath}/employee`;
-      history.replace(redirectPath);
-    }
-    window.location.reload();
-  };
 
   const handleChangeLanguage = (language) => {
     setselected(language.value);
@@ -281,13 +229,6 @@ export const CitizenSideBar = ({
     icon: item?.icon ? item?.icon : undefined,
   }));
 
-  let city = "";
-  if (Digit.Utils.getMultiRootTenant()) {
-    city = t(`TENANT_TENANTS_${tenantId}`);
-  } else {
-    city = t(`TENANT_TENANTS_${stringReplaceAll(Digit.ULBService.getCurrentTenantId(), ".", "_")?.toUpperCase()}`);
-    // city = "TEST";
-  }
   const goToHome = () => {
     if (isEmployee) {
       history.push(`/${window?.contextPath}/employee`);
@@ -335,10 +276,6 @@ export const CitizenSideBar = ({
           handleChangeLanguage(item);
           toggleSidebar();
           break;
-        case "city":
-          handleChangeCity(item);
-          toggleSidebar();
-          break;
       }
     } else if (typeof item?.populators?.onClick === "function") {
       // Generic fallback — any future menu items that follow the
@@ -363,34 +300,14 @@ export const CitizenSideBar = ({
     }
   });
 
-  const transformedSelectedCityData = selectCityData?.map((city) => ({
-    ...city,
-    type: "custom",
-    key: "city",
-  }));
-
   // On employee the access-control tree already supplies Home (and the
   // module rows, and Dashboard) so the hardcoded HOME row would duplicate it.
   // Before this, the drawer had neither: the employee branch built no module
   // rows at all, so "Modules" opened onto "No Tenants Found" and there was no
   // way to reach the dashboard from a phone (#2038 mobile review).
-  // The account rows under the navigation: the tenant switcher (when shown)
-  // and Edit Profile.
+  // The account rows under the navigation: Edit Profile. The tenant comes
+  // from the URL (#2167), so there is no tenant switcher.
   const accountRows = [
-    // Same rule as the top bar's ChangeCity, via the shared helper, so the two
-    // surfaces cannot disagree about whether the tenant switcher is shown.
-    ...(showTenantSwitcher(selectCityData?.length)
-      ? [
-          {
-            label: city,
-            value: city,
-            children: transformedSelectedCityData?.length > 0 ? transformedSelectedCityData : undefined,
-            type: "custom",
-            icon: "LocationCity",
-            key: "city",
-          },
-        ]
-      : []),
     // Language is the pill in the phone bar now (#2038 design), so the drawer
     // no longer repeats it.
     ...(user && user.access_token

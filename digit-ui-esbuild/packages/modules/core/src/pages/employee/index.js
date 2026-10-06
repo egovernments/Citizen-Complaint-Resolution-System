@@ -4,12 +4,9 @@ import { Redirect, Route, Switch, useLocation, useRouteMatch, useHistory } from 
 import { AppModules } from "../../components/AppModules";
 import ErrorBoundary from "../../components/ErrorBoundaries";
 import TopBarSideBar from "../../components/TopBarSideBar";
-import ChangePassword from "./ChangePassword";
 import IdentityAccount from "../../components/IdentityAccount";
-import ForgotPassword from "./ForgotPassword";
 import LanguageSelection from "./LanguageSelection";
-import EmployeeLogin from "./Login";
-import Otp from "./Otp";
+import IdentityBffEmployeeLogin from "./IdentityBffEmployeeLogin";
 import UserProfile from "../citizen/Home/UserProfile";
 import ErrorComponent from "../../components/ErrorComponent";
 import { PrivateRoute } from "@egovernments/digit-ui-components";
@@ -93,25 +90,8 @@ const EmployeeApp = ({
             }
           >
             <Switch>
-              {!Digit.Utils.getMultiRootTenant() && (
-                <Route exact path={`${path}/user/login`}>
-                  <EmployeeLogin stateCode={stateCode} appTenants={appTenants} />
-                </Route>
-              )}
-              <Route exact path={`${path}/user/login/otp`}>
-                {window.__digitTenantContext
-                  ? <Redirect to={`${path}/user/login`} />
-                  : <Otp isLogin={true} />}
-              </Route>
-              <Route path={`${path}/user/forgot-password`}>
-                {window.__digitTenantContext
-                  ? <Redirect to={`${path}/user/login`} />
-                  : <ForgotPassword stateCode={stateCode}/>}
-              </Route>
-              <Route path={`${path}/user/change-password`}>
-                {window.__digitTenantContext
-                  ? <Redirect to={`${path}/user/login`} />
-                  : <ChangePassword />}
+              <Route exact path={`${path}/user/login`}>
+                <IdentityBffEmployeeLogin t={t} />
               </Route>
               <PrivateRoute path={`${path}/user/account`} component={() => <IdentityAccount surface="employee" />} />
               <PrivateRoute path={`${path}/user/profile`} component={()=><UserProfile stateCode={stateCode} userType={"employee"} cityDetails={cityDetails} />}/>

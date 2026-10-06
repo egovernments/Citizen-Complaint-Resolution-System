@@ -553,15 +553,13 @@
     # The legacy Keycloak UI login path is GONE as of #2088: the `/kc` Kong
     # route in front of token-exchange-svc, the per-tenant realm template and
     # its `digit-ui` public client were all removed in favour of the Identity
-    # BFF at `/identity/v1`. Both frontends still resolve `auth_provider:
-    # keycloak` to that old path — digit-ui-esbuild through
-    # globalConfigs.tokenExchangeUrl (`/kc`) and digit-ui-v2 through its
-    # baked VITE_TOKEN_EXCHANGE_URL (`/token-exchange`) plus a realm named
-    # after state_tenant_id — so a tenant that sets it now gets 404s at login
-    # instead of SSO. The frontend cutover is a separate change; until it
-    # lands, refuse the combination rather than ship a login that cannot work.
-    # (Dhruv review, #2088.)
-    - name: "preflight — Keycloak UI login is unavailable until the frontend cutover"
+    # BFF at `/identity/v1`. `auth_provider: keycloak` selected that old
+    # browser-adapter path, and D26 removed the frontend code that read it, so
+    # the key is retired: every sign-in goes through the Identity BFF whatever
+    # it says. A host_vars that still sets `keycloak` was written for the old
+    # path, so refuse it rather than let the operator think it does something.
+    # (Dhruv review, #2088; wording updated for #2271 review 3.)
+    - name: "preflight — refuse the retired auth_provider: keycloak"
       vars:
         _keycloak_login_surfaces: >-
           {{ {'auth_provider': auth_provider | default(''),
@@ -574,18 +572,58 @@
           host_vars for {{ inventory_hostname }} selects Keycloak login on:
           {{ _keycloak_login_surfaces | join(', ') }}
 
-          That path no longer exists. #2088 replaced it with the Identity BFF
-          (`/identity/v1`) and removed what the old auth-adapter called:
-            - the `/kc` Kong route in front of token-exchange-svc,
-            - the per-tenant Keycloak realm named after state_tenant_id,
-            - the `digit-ui` public client in that realm.
-          Deploying this would give every user a 404 at login.
+          That browser-adapter path no longer exists. #2088 replaced it with
+          the Identity BFF (`/identity/v1`) and removed what it called (the
+          `/kc` Kong route, the per-tenant realm named after state_tenant_id
+          and its `digit-ui` client); D26 removed the frontend code that read
+          these keys.
 
-          Leave these keys unset (or 'digit') until the frontend cutover lands.
-          `enable_keycloak: true` on its own is fine and is what stands up
-          Keycloak, the Identity BFF and `/identity/v1` — it does not require
-          flipping auth_provider.
+          Delete these keys (or set them to 'digit'). Every employee and
+          citizen sign-in already goes through Keycloak and the Identity BFF;
+          `enable_keycloak: true` is what stands them up.
       when: _keycloak_login_surfaces | length > 0
+
+    # D26 removed every sign-in path that did not go through the Identity BFF:
+    # the tenantless /digit-ui/user/* pages, the legacy citizen OTP and
+    # employee password pages, and (with Keycloak on) the native create/reset/
+    # OTP endpoints at Kong. Tenant routes resolve through
+    # /identity/v1/tenant-contexts/<slug>, which only exists in the `keycloak`
+    # compose profile. identity_legacy_user_endpoints reopens Kong endpoints,
+    # not the UI pages, so it is no way around this. (Dhruv, #2271 review 2.)
+    - name: "preflight — identity requires enable_keycloak: true"
+      ansible.builtin.fail:
+        msg: >-
+          enable_keycloak is false on {{ inventory_hostname }}, but since D26
+          every DIGIT UI sign-in (employee and citizen) goes through the
+          Identity BFF, which only runs with Keycloak. Without it the
+          /<tenant-slug>/digit-ui/ routes cannot resolve their tenant and
+          nobody can sign in; the old DIGIT OTP/password login pages are gone.
+          Set `enable_keycloak: true` (and `nginx_features.keycloak: true`)
+          in host_vars/{{ inventory_hostname }}.yml, with keycloak_admin_password,
+          keycloak_db_password and identity_digit_admin_password in
+          bootstrap_secrets (or OpenBao). See the Keycloak section of
+          host_vars/_example.yml. With enable_novu, either Novu dashboard
+          works alongside it: nginx routes Keycloak's /auth/realms/ and
+          /auth/resources/ ahead of the stock dashboard's /auth/ paths, though
+          `build_novu_dashboard: true` remains the cleaner setup.
+      when: not (enable_keycloak | default(false) | bool)
+
+    - name: "preflight — refuse retired digit-ui-v2 citizen identity"
+      ansible.builtin.fail:
+        msg: >-
+          enable_digit_ui_v2 is no longer supported. D26 retired its fixed-OTP
+          citizen login, direct egov-user account creation and profile writes.
+          Publish the canonical /<tenant-slug>/digit-ui/citizen route instead.
+      when: enable_digit_ui_v2 | default(false)
+
+    - name: "preflight — validate digit_ui_default_tenant_slug"
+      ansible.builtin.assert:
+        that:
+          - digit_ui_default_tenant_slug is match('^[a-z0-9][a-z0-9-]{1,62}$')
+        fail_msg: >-
+          digit_ui_default_tenant_slug must be a 2-63 character lowercase
+          tenant route slug containing only letters, digits and hyphens.
+      when: digit_ui_default_tenant_slug | default('') | length > 0
 
     # ==================== WSL2 resource config (.wslconfig) ====================
     # WSL2 defaults to ~50% of host RAM for the VM; the JVM stack then
@@ -1731,6 +1769,36 @@
       register: kong_otp_unmock
       when: enable_otp_services | default(false)
 
+    # D26: with Keycloak enabled, legacy native identity endpoints default
+    # closed. An explicit identity_legacy_user_endpoints:true is the rollback
+    # switch for a non-complete deployment.
+    - name: "Kong — remove legacy identity endpoints from AUTH_OPTIONAL"
+      ansible.builtin.replace:
+        path: "{{ digit_dir }}/kong/.kong.yml.pinned"
+        regexp: '(?m)^.*-- identity-legacy-user-endpoint\n'
+        replace: ''
+      when: >-
+        not (identity_legacy_user_endpoints
+             | default(not (enable_keycloak | default(false))))
+
+    - name: "Kong — remove the legacy OTP validation mock route"
+      ansible.builtin.replace:
+        path: "{{ digit_dir }}/kong/.kong.yml.pinned"
+        regexp: '(?ms)^# identity-legacy-otp-mock-start\n.*?^# identity-legacy-otp-mock-end\n'
+        replace: ''
+      when: >-
+        not (identity_legacy_user_endpoints
+             | default(not (enable_keycloak | default(false))))
+
+    - name: "Kong — reopen legacy identity endpoints only when explicitly enabled"
+      ansible.builtin.replace:
+        path: "{{ digit_dir }}/kong/.kong.yml.pinned"
+        regexp: '(?ms)^- name: identity-legacy-user-endpoints-denied # identity-legacy-user-deny-start\n.*?^# identity-legacy-user-deny-end\n'
+        replace: ''
+      when: >-
+        identity_legacy_user_endpoints
+        | default(not (enable_keycloak | default(false)))
+
     - name: "Kong — write the pinned config back IN PLACE (preserves the inode)"
       ansible.builtin.shell: |
         set -euo pipefail
@@ -2205,6 +2273,11 @@
               root /var/web;
               index index.html index.htm;
               try_files $uri $uri/ /digit-ui/index.html;
+
+              # A missing asset is a 404, not the SPA shell with a 200 (#2271 review 3).
+              location ~ "[.](?:js|css|map|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|otf|eot)$" {
+                try_files $uri =404;
+              }
 
               sub_filter '</head>' '<script src="/digit-ui/globalConfigs.js"></script></head>';
             }
@@ -5296,13 +5369,31 @@
     # When tls_enabled=false (sandbox), hit the box on plain HTTP and pass
     # `Host: {{ domain }}` so nginx routes to the right server-name block.
     # The hostname itself doesn't have to be DNS-resolvable.
-    - name: "validate — public UI returns 200"
+    #
+    # D26: the UI is canonical only under /<tenant-slug>/digit-ui/; the
+    # tenantless /digit-ui/ answers 404 unless digit_ui_default_tenant_slug is
+    # set, so it cannot be the gate. nginx does not resolve the slug (the SPA
+    # asks the Identity BFF), so any well-formed slug proves the route; the
+    # default one is used when configured. The bundle is checked on its own:
+    # tenant pages load it from the absolute /digit-ui/ prefix (esbuild
+    # PUBLIC_PATH), and a missing file there falls back to the SPA shell with
+    # 200 text/html, so the content type is what proves it is served.
+    - name: "validate — public UI serves the tenant route and its bundle"
       ansible.builtin.uri:
-        url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/digit-ui/"
+        url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}{{ item.path }}"
         status_code: [200]
         timeout: 10
         validate_certs: "{{ tls_enabled | default(true) }}"
         headers: "{{ {} if (tls_enabled | default(true)) else {'Host': domain} }}"
+      loop:
+        - {path: "/{{ digit_ui_default_tenant_slug | default('', true) or 'deploy-check' }}/digit-ui/", type: "text/html"}
+        - {path: "/digit-ui/index.js", type: "javascript"}
+      loop_control:
+        label: "{{ item.path }}"
+      register: public_ui_check
+      until: >-
+        public_ui_check.status | default(0) == 200
+        and (public_ui_check.content_type | default('')) is search(item.type)
       retries: 3
       delay: 5
 
@@ -8465,19 +8556,37 @@
       timeout: 600
 
       when: run_ci_tests | default(false) and (run_playwright_tests | default(false))
+    # D26: the UI is served only on tenant routes (/<slug>/digit-ui/), which the host
+    # nginx answers, not the :18080 container. The specs need the tenant's URL slug.
+    - name: Skip Playwright E2E without a tenant URL slug
+      ansible.builtin.debug:
+        msg: >-
+          Playwright E2E skipped: set e2e_tenant_slug (or digit_ui_default_tenant_slug)
+          to the seeded tenant's URL slug; every spec opens /<slug>/digit-ui/.
+      when:
+        - run_ci_tests | default(false) and (run_playwright_tests | default(false))
+        - (e2e_tenant_slug | default(digit_ui_default_tenant_slug | default(''), true)) | length == 0
+
     - name: Wait for DIGIT UI to serve pages (up to 10 min)
-      shell: curl -sf http://127.0.0.1:18080/digit-ui/ -o /dev/null
+      shell: >-
+        curl -sf {{ _e2e_base_url }}/{{ _e2e_tenant_slug }}/digit-ui/ -o /dev/null
+      vars:
+        _e2e_base_url: "{{ ('https://' if (tls_enabled | default(true)) else 'http://') + domain }}"
+        _e2e_tenant_slug: "{{ e2e_tenant_slug | default(digit_ui_default_tenant_slug | default(''), true) }}"
       register: ui_health
       retries: 60
       delay: 10
       until: ui_health.rc == 0
       changed_when: false
 
-      when: run_ci_tests | default(false) and (run_playwright_tests | default(false))
+      when:
+        - run_ci_tests | default(false) and (run_playwright_tests | default(false))
+        - (e2e_tenant_slug | default(digit_ui_default_tenant_slug | default(''), true)) | length > 0
     - name: Run Playwright E2E tests (Bomet tenant)
       shell: |
         cd {{ digit_dir }}/e2e-tests
-        BASE_URL=http://127.0.0.1:18080 \
+        BASE_URL={{ ('https://' if (tls_enabled | default(true)) else 'http://') + domain }} \
+        E2E_TENANT_SLUG={{ e2e_tenant_slug | default(digit_ui_default_tenant_slug | default(''), true) }} \
         DIGIT_TENANT={{ boot_tenant | mandatory }} \
         DIGIT_USERNAME=BOMET_ADMIN \
         DIGIT_PASSWORD=eGov@123 \
@@ -8498,7 +8607,9 @@
       timeout: 900
       ignore_errors: yes
 
-      when: run_ci_tests | default(false) and (run_playwright_tests | default(false))
+      when:
+        - run_ci_tests | default(false) and (run_playwright_tests | default(false))
+        - (e2e_tenant_slug | default(digit_ui_default_tenant_slug | default(''), true)) | length > 0
     - name: Show Playwright test results
       debug:
         var: playwright_result.stdout_lines | default(['(no output - possibly timed out)'])

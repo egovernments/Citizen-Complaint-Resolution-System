@@ -28,6 +28,11 @@ export function citizenAccountTenantId(tenantId) {
 }
 
 export function surfaceBase(tenant, surface) {
+  if (!tenant?.appBasePath) {
+    // Sign-in is always bound to a /{slug}/digit-ui/ route tenant; a caller
+    // without one must show "use your organisation's link" instead.
+    throw new Error("Identity sign-in needs a tenant route (/{slug}/digit-ui/...).");
+  }
   return `/${tenant.appBasePath}/${surface}`;
 }
 

@@ -1,4 +1,5 @@
 import { type Page, type Locator } from '@playwright/test';
+import { appBase } from '../utils/auth';
 
 export type CitizenLanding = 'language-selection' | 'home' | 'login' | 'unknown';
 
@@ -34,7 +35,7 @@ export class CitizenLandingPage {
   }
 
   async goto() {
-    await this.page.goto('/digit-ui/citizen', { waitUntil: 'domcontentloaded' });
+    await this.page.goto(`${appBase()}/citizen`, { waitUntil: 'domcontentloaded' });
   }
 
   async detectLanding(timeout = 15_000): Promise<CitizenLanding> {

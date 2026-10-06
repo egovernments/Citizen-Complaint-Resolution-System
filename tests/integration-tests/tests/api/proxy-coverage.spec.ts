@@ -388,7 +388,7 @@ test.describe('Domain Configuration', () => {
     // Verify the authorization endpoint is accessible and accepts our redirect_uri
     const authUrl = new URL(discovery.authorization_endpoint);
     authUrl.searchParams.set('client_id', KC_CLIENT_ID);
-    authUrl.searchParams.set('redirect_uri', `${deploymentDomain}/digit-ui/user/login`);
+    authUrl.searchParams.set('redirect_uri', `${deploymentDomain}/${tenantSlug()}/digit-ui/citizen/login`);
     authUrl.searchParams.set('response_type', 'code');
     authUrl.searchParams.set('scope', 'openid');
 

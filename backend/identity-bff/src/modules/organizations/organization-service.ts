@@ -1183,124 +1183,6 @@ export async function ensureOrganizationMembership(input: {
   );
 }
 
-async function ensureOrganizationGroup(
-  organizationId: string,
-  name: string,
-): Promise<GroupRepresentation> {
-  const base = `/organizations/${encodeURIComponent(organizationId)}/groups`;
-  const query = new URLSearchParams({ search: name, exact: "true", max: "20" });
-  let response = await request(`${base}?${query}`);
-  let groups = await response.json() as GroupRepresentation[];
-  let group = groups.find((candidate) => candidate.name === name);
-  if (group) return group;
-
-  response = await request(base, {
-    method: "POST",
-    body: JSON.stringify({ name }),
-  }, [201, 204, 409]);
-  const id = createdId(response);
-  if (id) return { id, name };
-  response = await request(`${base}?${query}`);
-  groups = await response.json() as GroupRepresentation[];
-  group = groups.find((candidate) => candidate.name === name);
-  if (!group) throw new IdentityAdminError("Keycloak did not create the Organization group");
-  return group;
-}
-
-export async function ensureOrganizationTenantGroup(input: {
-  organizationId: string;
-  tenantId: string;
-  urlSlug: string;
-  name: string;
-  parentTenantId: string;
-  fallbackTenantIds: string[];
-}): Promise<OrganizationGroupMapping> {
-  const organization = await readOrganizationMapping(input.organizationId);
-  if (!organization) {
-    throw new IdentityAdminError("Organization is not mapped to a DIGIT root tenant", 404);
-  }
-  if (input.tenantId === organization.tenantId || input.tenantId === input.parentTenantId) {
-    throw new IdentityAdminError("Subtenant mapping must name a distinct tenant and parent", 400);
-  }
-  const [tenantCollision, slugCollision] = await Promise.all([
-    readTenantMappingForTenant(input.tenantId),
-    readTenantMappingForUrlSlug(input.urlSlug),
-  ]);
-  const sameMapping = (mapping: TenantMapping | null) =>
-    mapping?.mappingType === "organization-group" &&
-    mapping.organizationId === input.organizationId &&
-    mapping.tenantId === input.tenantId;
-  if ((tenantCollision && !sameMapping(tenantCollision)) ||
-      (slugCollision && !sameMapping(slugCollision))) {
-    throw new IdentityAdminError("Subtenant tenantId or URL slug is already mapped", 409);
-  }
-  const organizations = await paged<OrganizationRepresentation>(
-    "/organizations?briefRepresentation=false",
-  );
-  const [tenantGroups, slugGroups] = await Promise.all([
-    organizationGroupCandidatesForAttribute(organizations, "digit.tenantId", input.tenantId),
-    organizationGroupCandidatesForAttribute(organizations, "digit.urlSlug", input.urlSlug),
-  ]);
-  const existingGroupId = tenantCollision?.mappingType === "organization-group"
-    ? tenantCollision.groupId
-    : slugCollision?.mappingType === "organization-group"
-      ? slugCollision.groupId
-      : null;
-  if ([...tenantGroups, ...slugGroups].some(({ group }) => group.id !== existingGroupId)) {
-    throw new IdentityAdminError(
-      "Subtenant tenantId or URL slug is already present on another group",
-      409,
-    );
-  }
-
-  const groupName = `digit-tenant--${input.tenantId}`;
-  const base = `/organizations/${encodeURIComponent(input.organizationId)}/groups`;
-  const query = new URLSearchParams({
-    search: groupName,
-    exact: "true",
-    briefRepresentation: "false",
-    max: "20",
-  });
-  let response = await request(`${base}?${query}`);
-  const matches = await response.json() as GroupRepresentation[];
-  if (matches.length > 1) {
-    throw new IdentityAdminError("Multiple Organization groups use the subtenant record name", 409);
-  }
-  let group = matches[0];
-  if (group && !sameMapping(asGroupMapping(group, organization))) {
-    throw new IdentityAdminError("The subtenant Organization group name is already in use", 409);
-  }
-
-  const attributes = {
-    "digit.organizationId": [input.organizationId],
-    "digit.tenantId": [input.tenantId],
-    "digit.rootTenantId": [organization.tenantId],
-    "digit.parentTenantId": [input.parentTenantId],
-    "digit.urlSlug": [input.urlSlug],
-    "digit.displayName": [input.name],
-    "digit.fallbackTenantIds": [...new Set(input.fallbackTenantIds)],
-  };
-  if (!group) {
-    response = await request(base, {
-      method: "POST",
-      body: JSON.stringify({ name: groupName, attributes }),
-    }, [201]);
-    const id = createdId(response);
-    if (!id) throw new IdentityAdminError("Keycloak did not return the subtenant group id");
-    group = { id, name: groupName, attributes };
-  } else {
-    await request(`${base}/${encodeURIComponent(group.id)}`, {
-      method: "PUT",
-      body: JSON.stringify({ ...group, name: groupName, attributes }),
-    });
-    group = { ...group, name: groupName, attributes };
-  }
-  const mapping = asGroupMapping(group, organization);
-  if (!mapping) throw new IdentityAdminError("Keycloak did not persist the subtenant mapping");
-  clearTenantMappingCache();
-  return mapping;
-}
-
 async function clientUuid(clientId: string): Promise<string> {
   const query = new URLSearchParams({ clientId });
   const response = await request(`/clients?${query}`);
@@ -1310,76 +1192,15 @@ async function clientUuid(clientId: string): Promise<string> {
   return client.id;
 }
 
-async function clientRole(
-  clientId: string,
-  roleName: string,
-): Promise<RoleRepresentation> {
-  const response = await request(
-    `/clients/${encodeURIComponent(clientId)}/roles/${encodeURIComponent(roleName)}`,
-  );
-  const role = await response.json() as RoleRepresentation;
-  if (!role.id || role.name !== roleName) {
-    throw new IdentityAdminError(`Keycloak client role was not found: ${roleName}`, 404);
-  }
-  return role;
-}
-
-export async function ensureOrganizationRoleAssignment(input: {
-  organizationId: string;
-  userId: string;
-  groupName: string;
-  clientId: string;
-  roles: string[];
-}): Promise<{ groupId: string; roles: string[] }> {
-  if (!config.keycloakAllowedOrganizationRoleClients.includes(input.clientId)) {
-    throw new IdentityAdminError("Keycloak client is not allowed for Organization roles", 400);
-  }
-  // This endpoint is per-user. Give the assignment its own Organization group
-  // so changing one user's requested roles never rewrites a shared group's
-  // role mappings for every other member.
-  const assignmentGroup = `${input.groupName.slice(0, 180)}--${input.userId}`;
-  const group = await ensureOrganizationGroup(input.organizationId, assignmentGroup);
-  await request(
-    `/organizations/${encodeURIComponent(input.organizationId)}` +
-      `/groups/${encodeURIComponent(group.id)}/members/${encodeURIComponent(input.userId)}`,
-    { method: "PUT" },
-    [204, 409],
-  );
-
-  const uuid = await clientUuid(input.clientId);
-  const desired = await Promise.all(input.roles.map((role) => clientRole(uuid, role)));
-  const mappingPath =
-    `/organizations/${encodeURIComponent(input.organizationId)}` +
-    `/groups/${encodeURIComponent(group.id)}/role-mappings/clients/${encodeURIComponent(uuid)}`;
-  const currentResponse = await request(mappingPath);
-  const current = await currentResponse.json() as RoleRepresentation[];
-  const desiredNames = new Set(desired.map((role) => role.name));
-  const currentNames = new Set(current.map((role) => role.name));
-  const add = desired.filter((role) => !currentNames.has(role.name));
-  const remove = current.filter((role) => !desiredNames.has(role.name));
-  if (add.length) {
-    await request(mappingPath, {
-      method: "POST",
-      body: JSON.stringify(add),
-    });
-  }
-  if (remove.length) {
-    await request(mappingPath, {
-      method: "DELETE",
-      body: JSON.stringify(remove),
-    });
-  }
-  return { groupId: group.id, roles: desired.map((role) => role.name).sort() };
-}
-
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * The subject an assignment group belongs to, or null for a shared group.
- * `ensureOrganizationRoleAssignment` names every group it creates
- * `<groupName>--<userId>`, so a group whose name ends in a UUID other than the
- * subject we are reading cannot contribute roles to that subject and its role
- * mappings and member list never need to be fetched. Groups an operator made
+ * The deleted `role-assignments/_ensure` route (D1) named every group it
+ * created `<groupName>--<userId>`, and existing boxes still hold them, so a
+ * group whose name ends in a UUID other than the subject we are reading cannot
+ * contribute roles to that subject and its role mappings and member list never
+ * need to be fetched. Groups an operator made
  * by hand carry no such suffix and keep the full membership check.
  */
 function assignmentOwner(groupName: string): string | null {

@@ -16,9 +16,15 @@ const record = (
 });
 
 describe('public dashboard configuration', () => {
-  it('builds the canonical URL without duplicate slashes', () => {
-    expect(buildPublicDashboardUrl('https://example.test/'))
-      .toBe('https://example.test/digit-ui/public-dashboard');
+  it('builds the tenant-scoped URL without duplicate slashes', () => {
+    expect(buildPublicDashboardUrl('https://example.test/', 'acme'))
+      .toBe('https://example.test/acme/digit-ui/public-dashboard');
+  });
+
+  it('offers no URL until the workspace slug is known', () => {
+    // The tenantless /digit-ui/public-dashboard 404s since D26.
+    expect(buildPublicDashboardUrl('https://example.test', null)).toBeNull();
+    expect(buildPublicDashboardUrl('https://example.test', undefined)).toBeNull();
   });
 
   it('selects the active owned default record and never an inherited record', () => {

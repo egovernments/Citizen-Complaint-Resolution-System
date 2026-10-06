@@ -82,13 +82,3 @@ for (const [name, PrivateRoute] of [["digit-ui-components", ComponentsPrivateRou
     assert.equal(visit(PrivateRoute, "/digit-ui/citizen/pgr/complaints", token("EMPLOYEE")).redirect, "/digit-ui/citizen/login");
   });
 }
-
-test("privateRouteLogin keeps the legacy Keycloak login target", () => {
-  global.window = { globalConfigs: { getConfig: (key) => (key === "CITIZEN_AUTH_PROVIDER" ? "keycloak" : undefined) } };
-  try {
-    assert.deepEqual(privateRouteLogin("/digit-ui/citizen/home", "digit-ui"), { surface: "citizen", loginPath: "/digit-ui/user/login" });
-    assert.deepEqual(privateRouteLogin("/bomet/digit-ui/citizen/home", "bomet/digit-ui"), { surface: "citizen", loginPath: "/bomet/digit-ui/citizen/login" });
-  } finally {
-    delete global.window;
-  }
-});

@@ -32,14 +32,13 @@ describe("routes in src/contract/routes.ts match the Express app", () => {
 });
 
 // Each frozen route needs a contract test that names it with
-// contractRoute("METHOD", "path"). Routes without one show up as todo, and
-// deleted-later routes don't need one.
+// contractRoute("METHOD", "path"). Routes without one show up as todo.
 describe("contract test per frozen route", () => {
   const sources = readdirSync(import.meta.dirname)
     .filter((file) => file.endsWith(".test.ts"))
     .map((file) => readFileSync(join(import.meta.dirname, file), "utf8"))
     .join("\n");
-  for (const route of ROUTES.filter((contract) => contract.state !== "deleted-later")) {
+  for (const route of ROUTES) {
     const covered = sources.includes(`contractRoute("${route.method}", "${route.path}")`);
     const title = `${route.method} ${route.path} (items ${route.items.join(", ") || "none"})`;
     if (covered) it(title, () => expect(covered).toBe(true));

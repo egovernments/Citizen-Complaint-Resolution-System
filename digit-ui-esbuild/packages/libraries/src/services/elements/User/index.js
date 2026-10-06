@@ -1,8 +1,7 @@
 import Urls from "../../atoms/urls";
 import { Request, ServiceRequest } from "../../atoms/Utils/Request";
 import { Storage } from "../../atoms/Utils/Storage";
-import { getAuthAdapter } from "../../auth/index";
-import { getAuthSurface, isIdentityBffAuth, isKeycloakAuth } from "../../auth/authSurface";
+import { getAuthSurface, isIdentityBffAuth } from "../../auth/authSurface";
 import { identityBffLogout, identityBffLogoutRedirect, markSignOutIncomplete } from "../../auth/identityBffLogin";
 import { currentAppBasePath, tenantContext } from "../../tenant/tenantRoute";
 
@@ -11,28 +10,12 @@ const CONFIGURATOR_SIGN_OUT_INCOMPLETE_KEY = "crs-sign-out-incomplete";
 
 export const UserService = {
   authenticate: async (details) => {
-    // Legacy opt-in Keycloak (*_AUTH_PROVIDER=keycloak on /digit-ui). Removed
-    // together with KeycloakAuthAdapter in the legacy-removal PR.
-    if (isKeycloakAuth()) {
-      const adapter = getAuthAdapter();
-      const result = await adapter.login({
-        email: details.username,
-        password: details.password,
-        tenantId: details.tenantId,
-      });
-      return {
-        UserRequest: result.user,
-        access_token: result.token,
-        token_type: "bearer",
-      };
-    }
-
     const data = new URLSearchParams();
     Object.entries(details).forEach(([key, value]) => data.append(key, value));
     data.append("scope", "read");
     data.append("grant_type", "password");
 
-    let authResponse = await ServiceRequest({
+    const authResponse = await ServiceRequest({
       serviceName: "authenticate",
       url: Urls.Authenticate,
       data,
@@ -42,7 +25,7 @@ export const UserService = {
       },
     });
     const invalidRoles = window?.globalConfigs?.getConfig("INVALIDROLES") || [];
-    if (invalidRoles && invalidRoles.length > 0 && authResponse && authResponse?.UserRequest?.roles?.some((role) => invalidRoles.includes(role.code))) {
+    if (invalidRoles.length > 0 && authResponse?.UserRequest?.roles?.some((role) => invalidRoles.includes(role.code))) {
       throw new Error("ES_ERROR_USER_NOT_PERMITTED");
     }
     return authResponse;
@@ -108,12 +91,6 @@ export const UserService = {
       );
       return;
     }
-    // Legacy opt-in Keycloak: end the Keycloak session too, or check-sso signs
-    // the user straight back in. Removed with KeycloakAuthAdapter.
-    if (isKeycloakAuth()) {
-      const adapter = getAuthAdapter();
-      return adapter.logout();
-    }
 
     // The session's own user decides where logout lands. `userType` is one
     // key shared by both apps, so a browser that had opened any employee
@@ -138,14 +115,6 @@ export const UserService = {
       window.location.replace(`${window.location.origin}${logoutRedirectURL}`);
     }
   },
-  sendOtp: (details, stateCode) =>
-    ServiceRequest({
-      serviceName: "sendOtp",
-      url: Urls.OTP_Send,
-      data: details,
-      auth: false,
-      params: { tenantId: stateCode },
-    }),
   setUser: (data) => {
     return Digit.SessionStorage.set("User", data);
   },
@@ -156,15 +125,6 @@ export const UserService = {
   getExtraRoleDetails: () => {
     return Digit.SessionStorage.get("User")?.extraRoleInfo;
   },
-  registerUser: (details, stateCode) =>
-    ServiceRequest({
-      serviceName: "registerUser",
-      url: Urls.RegisterUser,
-      data: {
-        User: details,
-      },
-      params: { tenantId: stateCode },
-    }),
   updateUser: async (details, stateCode) =>
     ServiceRequest({
       serviceName: "updateUser",
@@ -181,17 +141,6 @@ export const UserService = {
     const { roles } = user.info;
     return roles && Array.isArray(roles) && roles.filter((role) => accessTo.includes(role.code)).length;
   },
-
-  changePassword: (details, stateCode) =>
-    ServiceRequest({
-      serviceName: "changePassword",
-      url: Digit.SessionStorage.get("User")?.info ? Urls.ChangePassword1 : Urls.ChangePassword,
-      data: {
-        ...details,
-      },
-      auth: true,
-      params: { tenantId: stateCode },
-    }),
 
   employeeSearch: (tenantId, filters) => {
     return Request({

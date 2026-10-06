@@ -20,7 +20,7 @@
  * How to run: see local-setup/tests/README.md.
  */
 import { test, expect, type Page } from '@playwright/test';
-import { loginViaApi, getDigitToken } from '../utils/auth';
+import { loginViaApi, getDigitToken, appBase } from '../utils/auth';
 
 const BASE_URL  = process.env.BASE_URL   || 'http://localhost:18080';
 const TENANT    = process.env.DIGIT_TENANT   || 'pg.citya';
@@ -57,7 +57,7 @@ async function goToInbox(page: Page) {
   // The employee inbox route is inbox-v2 (PGRSearchInbox component) — plain
   // /inbox isn't a registered route in digit-ui-esbuild/products/pgr, so
   // navigating there renders a blank Switch with no match.
-  await page.goto('/digit-ui/employee/pgr/inbox-v2', { waitUntil: 'domcontentloaded', timeout: 30_000 });
+  await page.goto(`${appBase()}/employee/pgr/inbox-v2`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
   // Wait for the table to appear — the inbox fetches async so networkidle is unreliable
   await page.waitForSelector('table, [class*="digit-results-table"], [class*="inbox"]', { timeout: 40_000 });
   await page.waitForTimeout(3_000);

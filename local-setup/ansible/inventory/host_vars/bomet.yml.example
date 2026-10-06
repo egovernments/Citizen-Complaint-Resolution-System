@@ -60,7 +60,6 @@ boot_tenant: ke.bomet
 tenant_id: ke
 ui_state_tenant_id: ke.bomet
 nginx_preserve_vhost: false        # kit: true — local box has no hand-managed vhost to preserve
-login_tenant_allowlist: []
 
 # Hide these modules in the employee UI. IM (inbox-v2) needs the search
 # stack, which is off on this box (enable_search_stack: false below).
@@ -136,9 +135,10 @@ pgr_notification_config_driven: true
 novu_bridge_channel: "sms"         # SMS-first; add WHATSAPP/EMAIL as config-only routing edits
 
 # Build a subpath-rebased Novu dashboard image so the SPA serves cleanly
-# under /novu. Not required here (enable_keycloak is false below, so no
-# domain-sharing conflict yet) — matches _example.yml's off-by-default.
-build_novu_dashboard: false
+# under /novu. Recommended: the stock dashboard's nginx workaround claims
+# root paths (/assets/, /auth/ ...) on the domain Keycloak also uses; nginx
+# keeps Keycloak's /auth/realms/ and /auth/resources/ ahead of it either way.
+build_novu_dashboard: true
 
 # Custom image pins (built+pushed to the VPC registry by CI). Replace <sha>
 # with the actual CI tags once the Phase 1/2 images are built. Until then the
@@ -184,17 +184,16 @@ nginx_features:
   api_pgr: false
   mcp: true                        # kit: false — paired with enable_mcp above
   keycloak: true
-  digit_ui_v2: true
+  digit_ui_v2: false               # /citizen/ — retired with enable_digit_ui_v2 (D26)
   integration_tests: false         # pair with enable_integration_tests above
   integration_tests_runner: false  # pair with enable_integration_tests_runner above
 
 # ── auth (Keycloak) ──
-enable_keycloak: false
-# Must stay '' while enable_keycloak is false. The organization-aware frontend
-# uses /identity/v1, which has no upstream when the Keycloak profile is off.
-auth_provider: ""
-keycloak_client_id: digit-ui
-enable_digit_ui_v2: true
+# REQUIRED: every sign-in goes through Keycloak and the Identity BFF since
+# D26, and the deploy refuses `false`.
+enable_keycloak: true
+# auth_provider and keycloak_client_id are retired (D26): leave them unset.
+enable_digit_ui_v2: false          # retired by D26; the deploy refuses true
 digit_ui_esbuild_branch: feat/keycloak-auth-adapter
 # Left unset on purpose: the citizen SPA builds from the vendored in-tree
 # digit-ui-v2/ source, so this box ships the revision it is deployed from

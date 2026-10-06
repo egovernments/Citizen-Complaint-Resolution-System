@@ -8,7 +8,7 @@
 
 import React, { Fragment, useEffect, useRef, useState } from "react";
 import { Button as V2Button } from "@egovernments/digit-ui-components-v2";
-import useInterval from "../../../hooks/useInterval";
+import useInterval from "../../hooks/useInterval";
 import { SignInCard, V2LoginShell, stepText } from "./SelectMobileNumber";
 
 const OTP_LENGTH = 6;

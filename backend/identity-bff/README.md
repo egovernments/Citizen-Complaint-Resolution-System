@@ -79,10 +79,9 @@ require a workload bearer token:
 
 ```http
 POST /internal/identity/v1/organizations/_ensure
-POST /internal/identity/v1/tenant-groups/_ensure
 POST /internal/identity/v1/memberships/_ensure
-POST /internal/identity/v1/role-assignments/_ensure
 POST /internal/identity/v1/reconciliation/_run
+POST /internal/identity/v1/tenant-routes/_backfill
 POST /internal/identity/v1/sessions/_introspect
 POST /internal/identity/v1/identifiers/_check
 ```

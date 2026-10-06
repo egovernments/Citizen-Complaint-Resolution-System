@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { loginViaApi } from '../../utils/auth';
+import { loginViaApi, appBase } from '../../utils/auth';
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:18080';
 const TENANT = process.env.DIGIT_TENANT || 'uitest.citya';
@@ -25,7 +25,7 @@ test.describe('Employee Logout', () => {
     });
 
     // Navigate to employee login page
-    await page.goto(`${BASE_URL}/digit-ui/employee/user/login`, {
+    await page.goto(`${BASE_URL}${appBase()}/employee/user/login`, {
       waitUntil: 'domcontentloaded',
       timeout: 15_000,
     });
