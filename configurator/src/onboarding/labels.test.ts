@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { ONBOARDING_STEPS } from './steps';
 import { BRAND_THEMES } from './brandThemes';
 import { STEP_REQUIREMENT, WORKSPACE_ERRORS } from './errors';
+import { INVITE_ERRORS } from './employees/inviteStatus';
 
 /**
  * Onboarding's English lives in the code, as each t(key, english) call's fallback. The two
@@ -61,6 +62,7 @@ function dynamicKeys(): Map<string, string> {
   for (const theme of BRAND_THEMES) keys.set(`branding.themes.${theme.id}`, theme.label);
   for (const [step, english] of Object.entries(STEP_REQUIREMENT)) keys.set(`requirements.${step.toLowerCase()}`, english);
   for (const [code, english] of Object.entries(WORKSPACE_ERRORS)) keys.set(`errors.${code}`, english);
+  for (const [code, english] of Object.entries(INVITE_ERRORS)) keys.set(`invite_errors.${code}`, english);
   return keys;
 }
 

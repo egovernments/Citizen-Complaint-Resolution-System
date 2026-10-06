@@ -6,6 +6,7 @@ import type { Employee, EmployeeJurisdiction } from '@/api/types';
 import { listMasters, recordDepartments, recordName } from '../departments/mastersApi';
 import { readLocales } from '../labelLocales';
 import { allowedEmployeeRoles } from '@/lib/systemRecords';
+import { MessageError } from '../i18n';
 import type { InviteStatus } from './inviteStatus';
 
 /**
@@ -241,7 +242,7 @@ export async function updateEmployeeDetails(
 ): Promise<{ email: EmailOutcome }> {
   const rows = await hrmsService.searchEmployees(employee.tenantId, { codes: [employee.code] });
   const fresh = rows.find((row) => row.code === employee.code);
-  if (!fresh) throw new Error('This employee no longer exists. Reload and try again.');
+  if (!fresh) throw new MessageError('employees.gone', 'This employee no longer exists. Reload and try again.');
   const email = requiredEmail(changes.emailId);
   // An invitation still at an older address (a move that stopped halfway) counts as a change.
   const current = status?.kind === 'invited' && status.email ? status.email : fresh.user.emailId;
@@ -259,7 +260,11 @@ export async function updateEmployeeDetails(
   try {
     await linkMember(employee.tenantId, uuid, email, true);
   } catch (error) {
-    throw new Error(`The old invitation was withdrawn, but the new one didn’t go out. Use Invite again to send it. ${error instanceof Error ? error.message : ''}`.trim());
+    throw new MessageError(
+      'employees.invite_move_failed',
+      'The old invitation was withdrawn, but the new one didn’t go out. Use Invite again to send it. %{reason}',
+      { reason: error instanceof Error ? error.message : '' },
+    );
   }
   return { email: 'invited' };
 }
@@ -270,7 +275,7 @@ export async function removeEmployee(employee: Employee): Promise<void> {
     async () => {
       const rows = await hrmsService.searchEmployees(employee.tenantId, { codes: [employee.code] });
       const fresh = rows.find(row => row.uuid === employee.uuid || row.code === employee.code);
-      if (!fresh) throw new Error('Employee no longer exists in HRMS.');
+      if (!fresh) throw new MessageError('employees.gone_from_hrms', 'Employee no longer exists in HRMS.');
       return fresh as unknown as MemberEmployee;
     },
     row => hrmsService.updateEmployee(row as unknown as Employee),

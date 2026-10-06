@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { describeSaveError } from '../errors';
+import { useOnboardingT } from '../i18n';
 import type { Employee } from '@/api/types';
 import { pickerChoices } from '@/lib/systemRecords';
 import { currentAssignment, type Choice, type EmployeeChanges, type EmployeeOptions, type NewEmployee } from './employeesApi';
@@ -30,6 +31,7 @@ function CheckList({
   empty: string;
   detail?: (choice: Choice) => string;
 }) {
+  const t = useOnboardingT();
   const [query, setQuery] = useState('');
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -50,8 +52,8 @@ function CheckList({
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Filter"
-                aria-label={`Filter ${legend.toLowerCase()}`}
+                placeholder={t('employees.filter', 'Filter')}
+                aria-label={t('employees.filter_named', 'Filter %{list}', { list: legend })}
                 className="h-9 w-full bg-transparent pl-8 pr-3 text-sm focus:outline-none"
               />
             </div>
@@ -72,7 +74,7 @@ function CheckList({
                 </label>
               );
             })}
-            {shown.length === 0 && <p className="px-1.5 py-1 text-sm text-muted-foreground">Nothing matches.</p>}
+            {shown.length === 0 && <p className="px-1.5 py-1 text-sm text-muted-foreground">{t('employees.nothing_matches', 'Nothing matches.')}</p>}
           </div>
         </div>
       )}
@@ -117,6 +119,7 @@ export function EmployeeDialog({
   onUpdate?: (employee: Employee, changes: EmployeeChanges) => Promise<void>;
 }) {
   const id = useId();
+  const t = useOnboardingT();
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const [mobile, setMobile] = useState('');
@@ -192,15 +195,19 @@ export function EmployeeDialog({
 
   const save = async () => {
     const next: Errors = {};
-    if (!code.trim()) next.code = 'Enter an employee code.';
-    else if (!editing && takenCodes.has(code.trim())) next.code = 'Another employee already has this code.';
-    if (!name.trim()) next.name = 'Enter their full name.';
-    if (!mobile.trim()) next.mobile = 'Enter their mobile number.';
-    else if (!options.mobilePattern.test(mobile.trim())) next.mobile = 'That number doesn’t match this workspace’s mobile format.';
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) next.email = 'Enter a valid email to invite this employee.';
-    if (!departments.length) next.departments = editing ? 'Choose a department.' : 'Choose at least one department.';
-    if (!designation) next.designation = 'Choose a designation.';
-    if (!jurisdictions.length) next.jurisdictions = 'Choose where they can act.';
+    if (!code.trim()) next.code = t('employees.code_required', 'Enter an employee code.');
+    else if (!editing && takenCodes.has(code.trim())) next.code = t('employees.code_taken', 'Another employee already has this code.');
+    if (!name.trim()) next.name = t('employees.name_required', 'Enter their full name.');
+    if (!mobile.trim()) next.mobile = t('employees.mobile_required', 'Enter their mobile number.');
+    else if (!options.mobilePattern.test(mobile.trim())) next.mobile = t('employees.mobile_format', 'That number doesn’t match this workspace’s mobile format.');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) next.email = t('employees.email_required', 'Enter a valid email to invite this employee.');
+    if (!departments.length) {
+      next.departments = editing
+        ? t('employees.department_required', 'Choose a department.')
+        : t('employees.departments_required', 'Choose at least one department.');
+    }
+    if (!designation) next.designation = t('employees.designation_required', 'Choose a designation.');
+    if (!jurisdictions.length) next.jurisdictions = t('employees.jurisdictions_required', 'Choose where they can act.');
     setErrors(next);
     if (Object.keys(next).length) return;
 
@@ -232,17 +239,19 @@ export function EmployeeDialog({
       });
       onOpenChange(false);
     } catch (err) {
-      setSaveError(describeSaveError(err, editing ? 'Saving the changes failed. Try again.' : 'Adding the employee failed. Try again.'));
+      const fallback = editing
+        ? t('employees.update_failed', 'Saving the changes failed. Try again.')
+        : t('employees.add_failed', 'Adding the employee failed. Try again.');
+      setSaveError(describeSaveError(err, fallback, t));
     } finally {
       setSaving(false);
     }
   };
 
-  const field = (key: keyof Errors, label: string, input: ReactNode, optional = false) => (
+  const field = (key: keyof Errors, label: string, input: ReactNode) => (
     <div className="space-y-1.5">
       <label htmlFor={`${id}-${key}`} className="block text-sm font-medium text-foreground">
         {label}
-        {optional && <span className="font-normal text-muted-foreground"> (optional)</span>}
       </label>
       {input}
       {errors[key] && <p className="text-xs text-destructive">{errors[key]}</p>}
@@ -253,11 +262,15 @@ export function EmployeeDialog({
     <Dialog open={open} onOpenChange={(next) => !saving && onOpenChange(next)}>
       <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{editing ? `Edit ${employee?.user?.name ?? 'employee'}` : 'Add an employee'}</DialogTitle>
+          <DialogTitle>
+            {editing
+              ? t('common.edit_named', 'Edit %{name}', { name: employee?.user?.name ?? employee?.code ?? '' })
+              : t('employees.add_title', 'Add an employee')}
+          </DialogTitle>
           <DialogDescription>
             {editing
-              ? ['Changes apply the next time they sign in.', !emailLocked && emailNote].filter(Boolean).join(' ')
-              : 'They sign in to the employee app with the details you give here.'}
+              ? [t('employees.edit_intro', 'Changes apply the next time they sign in.'), !emailLocked && emailNote].filter(Boolean).join(' ')
+              : t('employees.add_intro', 'They sign in to the employee app with the details you give here.')}
           </DialogDescription>
         </DialogHeader>
 
@@ -271,7 +284,7 @@ export function EmployeeDialog({
           <div className="grid gap-4 sm:grid-cols-2">
             {field(
               'code',
-              'Employee code',
+              t('employees.code', 'Employee code'),
               <Input
                 id={`${id}-code`}
                 value={code}
@@ -282,38 +295,43 @@ export function EmployeeDialog({
             )}
             {field(
               'name',
-              'Full name',
-              <Input id={`${id}-name`} value={name} autoFocus placeholder="Anita Wanjiru" onChange={(event) => setName(event.target.value)} />,
+              t('employees.full_name', 'Full name'),
+              <Input
+                id={`${id}-name`}
+                value={name}
+                autoFocus
+                placeholder={t('employees.name_example', 'Anita Wanjiru')}
+                onChange={(event) => setName(event.target.value)}
+              />,
             )}
             {field(
               'mobile',
-              'Mobile number',
+              t('employees.mobile', 'Mobile number'),
               <Input id={`${id}-mobile`} type="tel" inputMode="numeric" value={mobile} onChange={(event) => setMobile(event.target.value.replace(/\s+/g, ''))} />,
             )}
             {field(
               'email',
-              'Email',
+              t('employees.email', 'Email'),
               <Input
                 id={`${id}-email`}
                 type="email"
                 value={email}
                 readOnly={editing && emailLocked}
-                placeholder="anita@example.org"
+                placeholder={t('employees.email_example', 'anita@example.org')}
                 onChange={(event) => setEmail(event.target.value)}
                 className={editing && emailLocked ? 'bg-muted text-muted-foreground' : undefined}
               />,
-              true,
             )}
           </div>
 
           {editing ? (
             field(
               'departments',
-              'Department',
+              t('departments.department', 'Department'),
               <>
                 <Select value={departments[0] ?? ''} onValueChange={(code) => setDepartments([code])}>
                   <SelectTrigger id={`${id}-departments`} className="bg-card">
-                    <SelectValue placeholder="Choose a department" />
+                    <SelectValue placeholder={t('complaints.choose_department', 'Choose a department')} />
                   </SelectTrigger>
                   <SelectContent>
                     {departmentChoices.map((choice) => (
@@ -324,28 +342,30 @@ export function EmployeeDialog({
                   </SelectContent>
                 </Select>
                 {pastDepartments.length > 0 && (
-                  <p className="text-xs text-muted-foreground">Also on their record from before: {pastDepartments.join(', ')}.</p>
+                  <p className="text-xs text-muted-foreground">
+                    {t('employees.past_departments', 'Also on their record from before: %{departments}.', { departments: pastDepartments.join(', ') })}
+                  </p>
                 )}
               </>,
             )
           ) : (
             <CheckList
-              legend="Departments"
-              hint="Choose one or more. The first is their main one."
+              legend={t('departments.departments', 'Departments')}
+              hint={t('employees.departments_hint', 'Choose one or more. The first is their main one.')}
               choices={departmentChoices}
               picked={departments}
               onChange={setDepartments}
               error={errors.departments}
-              empty="Add departments first."
+              empty={t('employees.departments_empty', 'Add departments first.')}
             />
           )}
 
           {field(
             'designation',
-            'Designation',
+            t('departments.designation', 'Designation'),
             <Select value={designation} onValueChange={setDesignation}>
               <SelectTrigger id={`${id}-designation`} className="bg-card">
-                <SelectValue placeholder="Choose a designation" />
+                <SelectValue placeholder={t('employees.choose_designation', 'Choose a designation')} />
               </SelectTrigger>
               <SelectContent>
                 {designationChoices.map((choice) => (
@@ -358,22 +378,22 @@ export function EmployeeDialog({
           )}
 
           <CheckList
-            legend="System roles"
-            hint="What they can do. Employee is enough to sign in; complaint roles like GRO let them handle complaints."
+            legend={t('employees.system_roles', 'System roles')}
+            hint={t('employees.roles_hint', 'What they can do. Employee is enough to sign in; complaint roles like GRO let them handle complaints.')}
             choices={options.roles}
             picked={roles}
             onChange={setRoles}
-            empty="No roles are set up for this workspace."
+            empty={t('employees.roles_empty', 'No roles are set up for this workspace.')}
           />
 
           <CheckList
-            legend="Jurisdictions"
-            hint="Where this person can act."
+            legend={t('employees.jurisdictions', 'Jurisdictions')}
+            hint={t('employees.jurisdictions_hint', 'Where this person can act.')}
             choices={options.boundaries}
             picked={jurisdictions}
             onChange={setJurisdictions}
             error={errors.jurisdictions}
-            empty="Set up your geography first."
+            empty={t('employees.jurisdictions_empty', 'Set up your geography first.')}
             detail={boundaryDetail}
           />
 
@@ -385,11 +405,11 @@ export function EmployeeDialog({
 
           <DialogFooter className="gap-2 sm:gap-0">
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={saving}>
-              Cancel
+              {t('common.cancel', 'Cancel')}
             </Button>
             <Button type="submit" disabled={saving} className="gap-2">
               {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-              {editing ? 'Save changes' : 'Add employee'}
+              {editing ? t('common.save_changes', 'Save changes') : t('employees.add_employee', 'Add employee')}
             </Button>
           </DialogFooter>
         </form>
