@@ -99,6 +99,8 @@ export async function validateJwt(
       azp: (verified.azp as string) || undefined,
       // Keycloak's session id: matches events to BFF sessions (§10) and keys the kc-session index.
       sid: typeof verified.sid === "string" && verified.sid ? verified.sid : undefined,
+      // Keycloak's authentication time (s): which sessions a credential change spares (§10).
+      auth_time: typeof verified.auth_time === "number" && Number.isFinite(verified.auth_time) ? verified.auth_time : undefined,
       realm,
     };
   } catch (err) {

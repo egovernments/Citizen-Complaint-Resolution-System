@@ -27,6 +27,11 @@ describe("validateJwt", () => {
     expect(await validateJwt(`Bearer ${token}`)).toMatchObject({ sid: "kc-session-1", azp: "client" });
   });
 
+  it("passes Keycloak's auth_time through", async () => {
+    const token = await signJwt({ sub: "user-1", email: "a@b.com", auth_time: 1791184848 });
+    expect(await validateJwt(`Bearer ${token}`)).toMatchObject({ auth_time: 1791184848 });
+  });
+
   it("returns null for missing auth header", async () => {
     expect(await validateJwt(undefined)).toBeNull();
   });

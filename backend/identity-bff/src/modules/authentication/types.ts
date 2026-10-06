@@ -15,6 +15,8 @@ export interface KeycloakClaims {
   azp?: string;
   /** Keycloak session id; stored as the session record's `kcSessionId` (§6, §10). */
   sid?: string;
+  /** Keycloak's authentication time (epoch seconds); the `basic` client scope maps it into the access token. */
+  auth_time?: number;
   realm?: string;
 }
 

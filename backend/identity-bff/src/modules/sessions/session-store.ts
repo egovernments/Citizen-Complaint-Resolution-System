@@ -257,6 +257,11 @@ export async function createIdentitySession(
   return { sessionId, maxAge };
 }
 
+/** A token's `auth_time` (s) as ms; a refresh without the claim keeps the stored value. */
+function authTimeOf(claims: KeycloakClaims, previous: IdentitySession | null): number | undefined {
+  return typeof claims.auth_time === "number" && Number.isFinite(claims.auth_time) ? claims.auth_time * 1000 : previous?.authTime;
+}
+
 /** Refresh is update-only: only createIdentitySession/createPhoneOtpSession pass `create`. */
 export async function saveIdentitySession(
   sessionId: string,
@@ -280,6 +285,7 @@ export async function saveIdentitySession(
       revocationGeneration: previous?.revocationGeneration ?? Number(await getRedis().get(revocationGenerationKey(claims.sub)) || 0),
       createdAt: previous?.createdAt ?? now,
       lastSeenAt: now,
+      ...(authTimeOf(claims, previous) !== undefined && { authTime: authTimeOf(claims, previous) }),
       kcSessionId: claims.sid ?? previous?.kcSessionId,
       ...(claims.phone_number && { phoneRef: privateRef("phone", claims.phone_number) }),
       ...(oidcClientId && { oidcClientId }),

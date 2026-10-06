@@ -44,7 +44,11 @@ export async function applyKeycloakEvent(stream: EventStream, event: KeycloakEve
         // Ambiguous matches are not enough evidence to exempt a session.
         if (matches.length === 1) keepSessionId = matches[0].sessionId;
       }
-      await enqueueRevocation(sub, "CREDENTIAL_CHANGED", { eventId: eventId(event), keepSessionId });
+      // The Keycloak session that made the change proved the new credential (or the action
+      // token) and survives whatever its client (§10). 26.7.3 puts it in code_id, not sessionId.
+      const changeKcSessionId = event.sessionId ?? event.details?.code_id;
+      await enqueueRevocation(sub, "CREDENTIAL_CHANGED", { eventId: eventId(event), keepSessionId, changedAt: event.time,
+        ...(changeKcSessionId && { changeKcSessionId }) });
     } else if (event.type === "LOGOUT" && event.sessionId) {
       await endKeycloakSessions(event.sessionId, event.clientId, sub);
     } else if (event.type === "DELETE_ACCOUNT") {
@@ -64,7 +68,8 @@ export async function applyKeycloakEvent(stream: EventStream, event: KeycloakEve
       await auditDeletion(sub, event);
       await enqueueRevocation(sub, "KEYCLOAK_DELETED", { eventId: eventId(event) });
     } else if (event.operationType === "ACTION" && ["logout", "reset-password"].includes(action)) {
-      await enqueueRevocation(sub, action === "logout" ? "LOGOUT_ALL" : "CREDENTIAL_CHANGED", { eventId: eventId(event) });
+      await enqueueRevocation(sub, action === "logout" ? "LOGOUT_ALL" : "CREDENTIAL_CHANGED",
+        { eventId: eventId(event), ...(action === "reset-password" && { changedAt: event.time }) });
     } else if (event.operationType === "UPDATE" && !action) {
       if (representation(event).enabled === false)
         await enqueueRevocation(sub, "KEYCLOAK_DISABLED", { eventId: eventId(event) });
