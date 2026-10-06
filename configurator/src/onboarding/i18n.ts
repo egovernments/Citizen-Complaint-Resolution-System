@@ -28,7 +28,8 @@ export class MessageError extends Error {
   readonly english: string;
   readonly params?: Params;
   constructor(key: string, english: string, params?: Params) {
-    super(fill(english, params));
+    // Trimmed, so an empty trailing %{reason} leaves no space behind.
+    super(fill(english, params).trim());
     this.name = 'MessageError';
     this.key = key;
     this.english = english;

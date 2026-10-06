@@ -3,7 +3,7 @@ import { englishT, MessageError, type OnboardingT } from './i18n';
 
 /** A failed save, in words someone setting up their workspace can act on. */
 export function describeSaveError(err: unknown, fallback: string, t: OnboardingT = englishT): string {
-  if (err instanceof MessageError) return t(err.key, err.english, err.params);
+  if (err instanceof MessageError) return t(err.key, err.english, err.params).trim();
   const message = err instanceof Error ? err.message : '';
   const denied =
     (err instanceof ApiClientError && err.statusCode === 403) || /AccessDenied|not authori[sz]ed|forbidden/i.test(message);

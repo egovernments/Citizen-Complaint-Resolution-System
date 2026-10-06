@@ -8070,6 +8070,42 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.members.code_taken",
+    "message": "This employee code already belongs to a different or inactive employee.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.members.email_required",
+    "message": "A valid email is required to invite an employee.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.members.invite_unfinished",
+    "message": "Employee %{code} exists in HRMS; invitation is unfinished. Retry with the same code and email. %{reason}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.members.no_account_id",
+    "message": "HRMS did not return the employee account identifier. Reload and retry.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.members.removal_unfinished",
+    "message": "Employee is inactive in HRMS; membership removal is unfinished. Retry removal. %{reason}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.members.self_removal",
+    "message": "You cannot remove your own membership.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.probe.check_again",
     "message": "Check again",
     "module": "configurator-ui",

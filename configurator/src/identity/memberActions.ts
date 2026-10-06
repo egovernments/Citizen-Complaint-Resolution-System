@@ -1,4 +1,5 @@
 import { linkMember, removeMember } from './api';
+import { MessageError } from '@/onboarding/i18n';
 
 export interface MemberEmployee {
   tenantId: string;
@@ -10,12 +11,12 @@ export interface MemberEmployee {
 }
 export function requiredEmail(value: unknown): string {
   const email = typeof value === 'string' ? value.trim().toLowerCase() : '';
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('A valid email is required to invite an employee.');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new MessageError('members.email_required', 'A valid email is required to invite an employee.');
   return email;
 }
 export function employeeUuid(employee: MemberEmployee): string {
   const uuid = employee.user.uuid || employee.uuid;
-  if (!uuid) throw new Error('HRMS did not return the employee account identifier. Reload and retry.');
+  if (!uuid) throw new MessageError('members.no_account_id', 'HRMS did not return the employee account identifier. Reload and retry.');
   return uuid;
 }
 
@@ -24,7 +25,7 @@ export async function createAndLink<T extends MemberEmployee>(input: T, search: 
   const email = requiredEmail(input.user.emailId);
   const existing = (await search()).find(row => row.code === input.code && row.tenantId === input.tenantId);
   if (existing && (existing.isActive === false || requiredEmail(existing.user.emailId) !== email)) {
-    throw new Error('This employee code already belongs to a different or inactive employee.');
+    throw new MessageError('members.code_taken', 'This employee code already belongs to a different or inactive employee.');
   }
   const user: MemberEmployee['user'] = { ...input.user, emailId: email };
   delete user.password;
@@ -32,7 +33,11 @@ export async function createAndLink<T extends MemberEmployee>(input: T, search: 
   try {
     await linkMember(input.tenantId, employeeUuid(employee), email);
   } catch (error) {
-    throw new Error(`Employee ${input.code} exists in HRMS; invitation is unfinished. Retry with the same code and email. ${error instanceof Error ? error.message : ''}`);
+    throw new MessageError(
+      'members.invite_unfinished',
+      'Employee %{code} exists in HRMS; invitation is unfinished. Retry with the same code and email. %{reason}',
+      { code: input.code, reason: error instanceof Error ? error.message : '' },
+    );
   }
   return employee;
 }
@@ -41,7 +46,7 @@ export async function createAndLink<T extends MemberEmployee>(input: T, search: 
 export async function deactivateAndRemove<T extends MemberEmployee>(read: () => Promise<T>, update: (employee: T) => Promise<unknown>, actorUuid?: string): Promise<T> {
   const employee = await read();
   const uuid = employeeUuid(employee);
-  if (actorUuid === uuid) throw new Error('You cannot remove your own membership.');
+  if (actorUuid === uuid) throw new MessageError('members.self_removal', 'You cannot remove your own membership.');
   if (employee.isActive !== false) {
     const user = { ...employee.user };
     delete user.password;
@@ -56,7 +61,11 @@ export async function deactivateAndRemove<T extends MemberEmployee>(read: () => 
   try {
     await removeMember(employee.tenantId, uuid);
   } catch (error) {
-    throw new Error(`Employee is inactive in HRMS; membership removal is unfinished. Retry removal. ${error instanceof Error ? error.message : ''}`);
+    throw new MessageError(
+      'members.removal_unfinished',
+      'Employee is inactive in HRMS; membership removal is unfinished. Retry removal. %{reason}',
+      { reason: error instanceof Error ? error.message : '' },
+    );
   }
   return employee;
 }
