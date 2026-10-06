@@ -27,7 +27,10 @@ export type ProviderTransport = 'novu' | 'novu-generic-sms' | 'bridge-adapter';
 /** One credential input the operator must fill for a provider type. */
 export interface CatalogCredentialField {
   key: string;
-  /** English label as the bridge supplies it; used as the i18n default. */
+  /**
+   * English label as the bridge supplies it for this provider type; empty when it sent none.
+   * Display it through credentialFieldLabel(), never through a per-key translation alone.
+   */
   label: string;
   type: 'text' | 'password' | 'checkbox';
   required: boolean;
@@ -188,7 +191,8 @@ export function normalizeCatalog(raw: unknown): ProviderType[] {
       if (!key) continue;
       credentialFields.push({
         key,
-        label: str(field.label) || key,
+        // Left empty when absent so credentialFieldLabel() can tell "no label" apart.
+        label: str(field.label),
         type: asFieldType(field.type),
         required: field.required === true,
         placeholder: str(field.placeholder) || undefined,
@@ -351,13 +355,53 @@ export function providerChoicesForChannel(
 
 export type CredentialValues = Record<string, string | boolean>;
 
-/** i18n key for a credential label: `accountSid` -> `app.providers.cred.account_sid`. */
-export function credLabelKey(key: string): string {
-  const snake = key
+function i18nSegment(value: string): string {
+  return value
     .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
     .replace(/[^A-Za-z0-9]+/g, '_')
     .toLowerCase();
-  return `app.providers.cred.${snake}`;
+}
+
+/**
+ * GENERIC i18n key for a credential label: `accountSid` -> `app.providers.cred.account_sid`.
+ * Only the last fallback of {@link credentialFieldLabel}: the same key means different things
+ * to different providers (`user` is an SMTP login for one, a panel account for another).
+ */
+export function credLabelKey(key: string): string {
+  return `app.providers.cred.${i18nSegment(key)}`;
+}
+
+/**
+ * i18n key for one provider TYPE's credential label:
+ * (`twilio-sms`, `accountSid`) -> `app.providers.cred.twilio_sms.account_sid`.
+ */
+export function credTypeLabelKey(type: string, key: string): string {
+  return `app.providers.cred.${i18nSegment(type)}.${i18nSegment(key)}`;
+}
+
+/** The slice of react-admin's `translate` the label lookup needs. */
+export type CredLabelTranslate = (key: string, options?: { _?: string }) => string;
+
+/**
+ * The label shown for one credential field of one provider type. Lookup order:
+ *   1. `app.providers.cred.<type>.<key>`: a translation written for THIS provider type;
+ *   2. the catalog's own label (`field.label`), which the bridge writes per type;
+ *   3. `app.providers.cred.<key>`: the generic per-key translation, only when the
+ *      catalog sent no label;
+ *   4. the raw key.
+ * A generic per-key translation must never outrank the catalog: SMSCountry, Ozeki and
+ * Jasmin share the keys `user` / `password` / `from` with SMTP and were labelled
+ * "SMTP User" / "SMTP Password" when it did.
+ */
+export function credentialFieldLabel(
+  t: CredLabelTranslate,
+  type: string | null | undefined,
+  field: Pick<CatalogCredentialField, 'key' | 'label'>,
+): string {
+  const catalogLabel = field.label?.trim();
+  const fallback = catalogLabel || t(credLabelKey(field.key), { _: field.key });
+  const providerType = type?.trim();
+  return providerType ? t(credTypeLabelKey(providerType, field.key), { _: fallback }) : fallback;
 }
 
 /** i18n key for a provider-type label: `twilio-sms` -> `app.providers.type.twilio_sms`. */
