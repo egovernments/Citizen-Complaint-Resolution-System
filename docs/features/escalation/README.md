@@ -27,6 +27,50 @@ following cumulative threshold. `ASSIGN`, `REASSIGN` and `REOPEN` do not reset
 the clock or the escalation level; a reopened complaint keeps the rungs it has
 already consumed.
 
+## Per-complaint-type overrides
+
+`overrides` is keyed by the exact leaf `ComplaintHierarchy.code` (the
+complaint's `serviceCode`). Only these keys can be set per complaint type:
+
+| Key | Per type | Meaning |
+|---|---|---|
+| `slaPercentageByLevel` | yes | Cumulative percentages of the type's `slaHours`. Strictly increasing, at most 200. |
+| `slaByLevel` | yes | Cumulative milliseconds from creation. Strictly increasing. |
+| `enabledByLevel` | yes | Turns individual levels on or off. |
+| `maxDepth` | no | Global only. A type escalates at most `min(maxDepth, length of its ladder)` times. |
+| `eligibleStatuses` | no | Global only. |
+| `defaultSlaPercentageByLevel`, `defaultSlaByLevel` | no | The global ladders. Use `slaPercentageByLevel` / `slaByLevel` inside an override. |
+
+A bare list (`"TYPE": [60000, 120000]`) is shorthand for `slaByLevel`. The MDMS
+schema rejects any other key inside an override object.
+
+The ladder for a complaint type is chosen in this order. The type's override
+beats the global default, and at each level percentages beat milliseconds.
+Percentage ladders apply only when the type has `slaHours`.
+
+1. type `slaPercentageByLevel`
+2. type `slaByLevel`
+3. global `defaultSlaPercentageByLevel`
+4. global `defaultSlaByLevel`
+
+```json
+{
+  "code": "DEFAULT",
+  "maxDepth": 3,
+  "eligibleStatuses": ["PENDINGATLME"],
+  "defaultSlaPercentageByLevel": [80, 120, 200],
+  "defaultSlaByLevel": [3600000, 14400000, 86400000],
+  "overrides": {
+    "WATER_LEAK": { "slaPercentageByLevel": [50, 100], "enabledByLevel": [true, true] },
+    "STREETLIGHT": { "slaByLevel": [1800000, 3600000] }
+  }
+}
+```
+
+With `slaHours: 4`, `WATER_LEAK` escalates 2 h and 4 h after creation and then
+stops (two-entry ladder). `STREETLIGHT` escalates at 30 min and 60 min whatever
+its `slaHours`. Every other type uses 80/120/200% of its own `slaHours`.
+
 Runtime fallbacks and scheduling are configured with `PGR_ESCALATION_*`; the
 state root used for tenant discovery is `STATE_LEVEL_TENANT_ID`. For configuration
 locations, migration prerequisites, and validation steps, see
