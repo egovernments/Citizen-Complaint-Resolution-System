@@ -21,7 +21,8 @@ export async function syncSubject(
   mobileNumber?: string,
   countryCode?: string,
 ): Promise<Map<string, EnsureResult>> {
-  const desired = (await desiredRolesBySubject()).bySubject.get(userId) || new Map<string, string[]>();
+  const directory = await desiredRolesBySubject();
+  const desired = directory.bySubject.get(userId) || new Map<string, string[]>();
   const managedTenants = await managedTenantsOf(config.keycloakIssuer, userId);
   let contact = mobileNumber?.trim() || "";
   let dialCode = countryCode?.trim() || "";
@@ -43,6 +44,8 @@ export async function syncSubject(
   const tenants = new Set([...desired.keys(), ...managedTenants]);
   const results = new Map<string, EnsureResult>();
   for (const tenantId of tenants) {
+    // Unknown desired state (colliding mapping): never deactivate on it.
+    if (directory.collidedTenantIds.has(tenantId.toLowerCase())) continue;
     results.set(tenantId, await ensureManagedAccount(
       managedIdentity(config.keycloakIssuer, userId, tenantId),
       desired.get(tenantId) ?? null,

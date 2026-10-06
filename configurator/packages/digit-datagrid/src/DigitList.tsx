@@ -50,6 +50,8 @@ export interface DigitListProps {
   preferenceKey?: string;
   /** Filter input elements (react-admin style) */
   filters?: FilterElement[];
+  /** Extra `meta` forwarded to the data provider's getList */
+  meta?: Record<string, unknown>;
   /**
    * Drop records this screen must never show, e.g. a notification integration
    * on a channel we cannot deliver on. Unlike `filter` (a query the fetcher
@@ -77,6 +79,7 @@ export function DigitList({
   alwaysVisibleSources,
   preferenceKey,
   filters,
+  meta,
   recordFilter,
 }: DigitListProps) {
   const [searchValue, setSearchValue] = useState('');
@@ -90,6 +93,7 @@ export function DigitList({
     perPage,
     filter,
     disableSyncWithLocation: true,
+    ...(meta ? { queryOptions: { meta } } : {}),
   };
 
   const rawContext = useListController(controllerProps);

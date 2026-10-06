@@ -1,4 +1,4 @@
-import { apiClient, ENDPOINTS, localizationService, mdmsService, MDMS_SCHEMAS } from '@/api';
+import { apiClient, ENDPOINTS, mdmsService, MDMS_SCHEMAS } from '@/api';
 import type { MdmsRecord } from '@/api/types';
 import { BRAND_THEMES, type BrandTheme } from './brandThemes';
 
@@ -114,7 +114,10 @@ export async function saveBranding(
   const { tenantId, tenantRecord } = current;
   const stateRoot = stateRootOf(tenantId);
   const name = changes.name.trim();
-  const data: Record<string, unknown> = { ...tenantRecord.data, name };
+  if (name !== current.name) throw new Error('Change the workspace name in Workspace settings.');
+  // A rename may have completed while this form was open. Keep the current name.
+  const fresh = await loadBranding(tenantId);
+  const data: Record<string, unknown> = { ...fresh.tenantRecord.data };
   let logoUrl = current.logoUrl;
 
   if (changes.logo?.kind === 'upload') {
@@ -130,20 +133,7 @@ export async function saveBranding(
   }
 
   let tenantRecordAfter = tenantRecord;
-  const nameChanged = name !== current.name;
-  if (nameChanged || changes.logo) {
-    tenantRecordAfter = await mdmsService.update(tenantRecord, data);
-  }
-  if (nameChanged) {
-    await localizationService.upsertMessages(
-      stateRoot,
-      'en_IN',
-      localizationService.buildTenantLocalizations(tenantId, name, 'en_IN'),
-    );
-    await localizationService.cacheBust().catch(() => {
-      // Labels refresh on the cache's own schedule instead.
-    });
-  }
+  if (changes.logo) tenantRecordAfter = await mdmsService.update(fresh.tenantRecord, data);
 
   const savedSoFar: Branding = { ...current, tenantRecord: tenantRecordAfter, name, logoUrl };
   let themeRecord = current.themeRecord;

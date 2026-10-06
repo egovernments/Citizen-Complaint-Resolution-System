@@ -22,7 +22,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { PgrInboxPage } from '../pages/pgr-inbox.page';
 import { HrmsCreatePage } from '../pages/hrms-create.page';
-import { getDigitToken, loginViaApi } from '../utils/auth';
+import { getDigitToken, loginViaApi, appBase } from '../utils/auth';
 import { getMobileValidationRule, generateValidMobile } from '../common/mdms-mobile';
 
 import * as path from 'path';
@@ -88,7 +88,7 @@ async function citizenOtpLogin(page: Page, phone: string): Promise<void> {
   page.on('response', (response) => {
     if (response.status() >= 400) console.log(`[HTTP ${response.status()}] ${response.url()}`);
   });
-  await page.goto(`${BASE_URL}/digit-ui/citizen/login`, {
+  await page.goto(`${BASE_URL}${appBase()}/citizen/login`, {
     waitUntil: 'domcontentloaded',
     timeout: 30_000,
   });
@@ -329,7 +329,7 @@ test.describe.serial('Full PGR lifecycle — citizen, admin, employee', () => {
     page.on('pageerror', (err) => consoleErrors.push(`PAGE ERROR: ${err.message}`));
 
     // ── Navigate to the complaint creation wizard ─────────────────────
-    await page.goto(`${BASE_URL}/digit-ui/citizen/pgr/create-complaint`, {
+    await page.goto(`${BASE_URL}${appBase()}/citizen/pgr/create-complaint`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });
@@ -676,7 +676,7 @@ test.describe.serial('Full PGR lifecycle — citizen, admin, employee', () => {
     await loginViaApi(page, { baseURL: BASE_URL, tenant: TENANT, username: ADMIN_USER, password: ADMIN_PASS });
 
     // Navigate to complaint details page
-    await page.goto(`/digit-ui/employee/pgr/complaint/details/${serviceRequestId}`, {
+    await page.goto(`${appBase()}/employee/pgr/complaint/details/${serviceRequestId}`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });
@@ -764,7 +764,7 @@ test.describe.serial('Full PGR lifecycle — citizen, admin, employee', () => {
     expect(page.url()).toContain('/employee');
 
     // Navigate to complaint details
-    await page.goto(`/digit-ui/employee/pgr/complaint/details/${serviceRequestId}`, {
+    await page.goto(`${appBase()}/employee/pgr/complaint/details/${serviceRequestId}`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });
@@ -786,7 +786,7 @@ test.describe.serial('Full PGR lifecycle — citizen, admin, employee', () => {
     await loginViaApi(page, { baseURL: BASE_URL, tenant: TENANT, username: employeeCode, password: DEFAULT_PASSWORD });
 
     // Navigate to complaint details page
-    await page.goto(`/digit-ui/employee/pgr/complaint/details/${serviceRequestId}`, {
+    await page.goto(`${appBase()}/employee/pgr/complaint/details/${serviceRequestId}`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });
@@ -840,7 +840,7 @@ test.describe.serial('Full PGR lifecycle — citizen, admin, employee', () => {
 
     await loginViaApi(page, { baseURL: BASE_URL, tenant: TENANT, username: employeeCode, password: DEFAULT_PASSWORD });
 
-    await page.goto(`/digit-ui/employee/pgr/complaint/details/${serviceRequestId}`, {
+    await page.goto(`${appBase()}/employee/pgr/complaint/details/${serviceRequestId}`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });
@@ -864,7 +864,7 @@ test.describe.serial('Full PGR lifecycle — citizen, admin, employee', () => {
     expect(token).toBeTruthy();
 
     // Navigate to citizen complaint details
-    await page.goto(`${BASE_URL}/digit-ui/citizen/pgr/complaints/${serviceRequestId}`, {
+    await page.goto(`${BASE_URL}${appBase()}/citizen/pgr/complaints/${serviceRequestId}`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });
@@ -885,7 +885,7 @@ test.describe.serial('Full PGR lifecycle — citizen, admin, employee', () => {
     await citizenOtpLogin(page, CITIZEN_PHONE);
 
     // Navigate to the rating page for this complaint
-    await page.goto(`${BASE_URL}/digit-ui/citizen/pgr/rate/${serviceRequestId}`, {
+    await page.goto(`${BASE_URL}${appBase()}/citizen/pgr/rate/${serviceRequestId}`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });
@@ -929,7 +929,7 @@ test.describe.serial('Full PGR lifecycle — citizen, admin, employee', () => {
 
     await loginViaApi(page, { baseURL: BASE_URL, tenant: TENANT, username: employeeCode, password: DEFAULT_PASSWORD });
 
-    await page.goto(`/digit-ui/employee/pgr/complaint/details/${serviceRequestId}`, {
+    await page.goto(`${appBase()}/employee/pgr/complaint/details/${serviceRequestId}`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });

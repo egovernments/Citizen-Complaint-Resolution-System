@@ -1,3 +1,4 @@
+import { tenantSlug } from '../utils/identity-bff';
 /**
  * Citizen complaint — image attachment lifecycle (CCRS #555).
  *
@@ -182,7 +183,7 @@ test.describe('citizen complaint — attachment lifecycle #555', () => {
     // route; under /citizen it matches nothing, so the page renders an empty
     // shell (BackButton only) and the Attachments <img> can never appear.
     await page.goto(
-      `${BASE_URL}/digit-ui/citizen/pgr/complaints/${complaintNumber}?cb=${Date.now()}`,
+      `${BASE_URL}/${tenantSlug()}/digit-ui/citizen/pgr/complaints/${complaintNumber}?cb=${Date.now()}`,
     );
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(5_000);

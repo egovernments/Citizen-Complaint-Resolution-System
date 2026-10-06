@@ -1,3 +1,4 @@
+import { tenantSlug } from '../utils/identity-bff';
 /**
  * API Proxy Coverage Test
  *
@@ -93,7 +94,7 @@ test.describe('API Proxy Coverage', () => {
     await page.waitForTimeout(2000);
 
     // 3. PGR Inbox — triggers PGR search, workflow, boundary calls
-    await page.goto(`${BASE_URL}/digit-ui/employee/pgr/inbox-v2`, {
+    await page.goto(`${BASE_URL}/${tenantSlug()}/digit-ui/employee/pgr/inbox-v2`, {
       waitUntil: 'networkidle',
       timeout: 30_000,
     });
@@ -164,7 +165,7 @@ test.describe('API Proxy Coverage', () => {
     await page.waitForTimeout(3000);
 
     // Navigate through pages
-    await page.goto(`${BASE_URL}/digit-ui/employee/pgr/inbox-v2`, {
+    await page.goto(`${BASE_URL}/${tenantSlug()}/digit-ui/employee/pgr/inbox-v2`, {
       waitUntil: 'networkidle',
       timeout: 30_000,
     });
@@ -188,7 +189,7 @@ test.describe('API Proxy Coverage', () => {
     tag: ['@area:proxy', '@kind:regression', '@layer:api', '@persona:cross'],
   }, async ({ page }) => {
     // Navigate to the domain first so fetch calls are same-origin
-    await page.goto(`${BASE_URL}/digit-ui/employee/user/login`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+    await page.goto(`${BASE_URL}/${tenantSlug()}/digit-ui/employee/user/login`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
 
     // Acquire a token. The KC BFF (/auth/login) only exists when the Keycloak
     // overlay is deployed; on a classic (authProvider=digit) stack it 503s
@@ -314,7 +315,7 @@ test.describe('API Proxy Coverage', () => {
     tag: ['@area:proxy', '@kind:regression', '@layer:api', '@persona:cross'],
   }, async ({ page }) => {
     test.skip(!(await kcReachable()), `Keycloak realm ${KC_REALM} discovery not reachable — KC overlay not deployed here.`);
-    await page.goto(`${BASE_URL}/digit-ui/citizen`, { waitUntil: 'domcontentloaded', timeout: 15_000 });
+    await page.goto(`${BASE_URL}/${tenantSlug()}/digit-ui/citizen`, { waitUntil: 'domcontentloaded', timeout: 15_000 });
 
     // These endpoints go directly to Keycloak (not through proxy)
     const kcEndpoints = [
@@ -336,7 +337,7 @@ test.describe('API Proxy Coverage', () => {
     tag: ['@area:proxy', '@kind:regression', '@layer:api', '@persona:cross'],
   }, async ({ page }) => {
     // Citizen language/login page should load MDMS and localization without JWT
-    await page.goto(`${BASE_URL}/digit-ui/citizen`, {
+    await page.goto(`${BASE_URL}/${tenantSlug()}/digit-ui/citizen`, {
       waitUntil: 'networkidle',
       timeout: 30_000,
     });
@@ -387,7 +388,7 @@ test.describe('Domain Configuration', () => {
     // Verify the authorization endpoint is accessible and accepts our redirect_uri
     const authUrl = new URL(discovery.authorization_endpoint);
     authUrl.searchParams.set('client_id', KC_CLIENT_ID);
-    authUrl.searchParams.set('redirect_uri', `${deploymentDomain}/digit-ui/user/login`);
+    authUrl.searchParams.set('redirect_uri', `${deploymentDomain}/${tenantSlug()}/digit-ui/citizen/login`);
     authUrl.searchParams.set('response_type', 'code');
     authUrl.searchParams.set('scope', 'openid');
 
@@ -407,7 +408,7 @@ test.describe('Domain Configuration', () => {
     tag: ['@area:keycloak', '@layer:api', '@persona:cross'],
   }, async ({ page }) => {
     test.skip(!(await kcReachable()), `Keycloak realm ${KC_REALM} discovery not reachable — KC overlay not deployed here.`);
-    await page.goto(`${BASE_URL}/digit-ui/citizen`, {
+    await page.goto(`${BASE_URL}/${tenantSlug()}/digit-ui/citizen`, {
       waitUntil: 'domcontentloaded',
       timeout: 15_000,
     });

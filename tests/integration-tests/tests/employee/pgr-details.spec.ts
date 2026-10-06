@@ -1,3 +1,4 @@
+import { tenantSlug } from '../utils/identity-bff';
 /**
  * Employee PGR Complaint Details — Flow 5 render slice (operational scope).
  *
@@ -125,7 +126,7 @@ async function openDetails(page: Page, srid: string, skipReason: string): Promis
   });
 
   await page.goto(
-    `${BASE_URL}/digit-ui/employee/pgr/complaint-details/${srid}`,
+    `${BASE_URL}/${tenantSlug()}/digit-ui/employee/pgr/complaint-details/${srid}`,
     { waitUntil: 'domcontentloaded', timeout: 30_000 },
   );
 

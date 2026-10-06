@@ -1,3 +1,4 @@
+import { tenantSlug } from '../utils/identity-bff';
 /**
  * Citizen rate-complaint UI — Story 6.1.
  *
@@ -68,7 +69,7 @@ beforeAll is API-only (file complaint as the provisioned citizen, assign, resolv
     tag: ['@area:pgr', '@kind:regression', '@layer:api', '@persona:citizen'] }, async ({ page }) => {
     test.setTimeout(120_000);
     await citizenOtpLogin(page);
-    await page.goto(`${BASE_URL}/digit-ui/citizen/pgr/rate/${serviceRequestId}`, {
+    await page.goto(`${BASE_URL}/${tenantSlug()}/digit-ui/citizen/pgr/rate/${serviceRequestId}`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });

@@ -111,10 +111,6 @@ map_center:
   lat: 30.7333
   lng: 76.7794
 
-# Restrict which tenants may log in. Values: list of tenant ids, or `[]` (here)
-# to allow all. Most production deployments list exactly one city.
-login_tenant_allowlist: []
-
 # Employee-UI modules to hide. Values: list of module codes — commonly `["IM"]`
 # to hide inbox-v2 when enable_search_stack is false. Empty: hide nothing.
 employee_module_denylist: []
@@ -183,11 +179,10 @@ asset_s3_bucket: "pg-egov-assets"
 #         `hmr`       — esbuild dev server in tmux, live-reload on save.
 digit_ui_mode: container
 
-# Build and serve the Vite/React-19 citizen SPA at /citizen/, separate from the
-# legacy /digit-ui/ bundle. Pair with nginx_features.digit_ui_v2 — building it
-# without the nginx flag leaves the bundle on disk and unreachable.
-# Values: true | false.
-enable_digit_ui_v2: true
+# The Vite/React-19 citizen SPA at /citizen/. Keep false: D26 retired its
+# citizen sign-in and the deploy refuses `true`. Citizens use
+# /<tenant-slug>/digit-ui/citizen instead.
+enable_digit_ui_v2: false
 
 # Unset by default, so deploy builds the reviewed vendored `digit-ui-v2/` and
 # sibling `ui-shared/` sources from this checkout. To test an external source,
@@ -217,8 +212,11 @@ enable_integration_tests_runner: false
 # Real OTP delivery: egov-otp + user-otp generate/validate; novu-bridge sends the SMS
 # (requires enable_novu: true and SMS enabled for the tenant). Values: true | false.
 # False (here) means Kong mocks /user-otp/* with a canned 200, so citizen login works
-# with the fixed OTP 123456 and no SMS infra. The deploy strips the mocks when true.
+# with the fixed OTP 123456 and no SMS infra — but only because this local
+# dev box opts in with identity_dev_fixed_otp below (off by default). The deploy strips the mocks when true.
 enable_otp_services: false
+# Development only: accept the fixed citizen OTP 123456 (never on a public box).
+identity_dev_fixed_otp: true
 
 # Elasticsearch + egov-indexer + inbox-v2. Values: true | false.
 # Off saves ~2-3 GB. The trade: the inbox and search screens stop working —
@@ -272,9 +270,10 @@ enable_novu: true
 notifications_adopt_defaults: true
 
 # Build a subpath-rebased Novu dashboard so the SPA serves cleanly under /novu.
-# Values: true | false. REQUIRED true when Keycloak shares the domain, because
-# the stock image's nginx workaround hijacks the whole /auth/ prefix.
-build_novu_dashboard: false
+# Values: true | false. Recommended true: the stock image's nginx workaround
+# claims root paths (/assets/, /auth/ ...); nginx keeps Keycloak's
+# /auth/realms/ and /auth/resources/ ahead of it either way.
+build_novu_dashboard: true
 
 # Novu API key, copied from the dashboard after first sign-up. Empty (here)
 # skips the bootstrap step — Novu still comes up and can be configured by hand.
@@ -299,18 +298,12 @@ novu_bridge_channel: "sms"
 
 # ────────── Keycloak SSO ──────────
 
-# Adds Keycloak + Identity BFF and the /auth/ + /identity/v1/ routes
-# blocks. Inert in the rest of the stack — DIGIT keeps working on OTP login
-# until auth_provider is flipped. Values: true | false.
-enable_keycloak: false
+# Adds Keycloak + Identity BFF and the /auth/ + /identity/v1/ routes.
+# REQUIRED: every employee and citizen sign-in goes through them, the old
+# DIGIT OTP/password login pages are gone, and the deploy refuses `false`.
+enable_keycloak: true
 
-# Which auth path the SPA uses. Values: `keycloak` for OIDC PKCE, `""` (here)
-# for OTP login. Do not flip until the realm is imported and a test login works.
-auth_provider: ""
-
-# OIDC public client id inside the per-tenant realm. The shipped realm template
-# defines `digit-ui`; change only if you forked the template.
-keycloak_client_id: "digit-ui"
+# auth_provider and keycloak_client_id are retired (D26): leave them unset.
 
 # Google federated login. Empty skips Google IdP wiring entirely.
 keycloak_google_client_id: ""
@@ -378,8 +371,7 @@ nginx_features:
   api_pgr: false           # /api/pgr/ — proxied to MCP for the dashboard
   mcp: true                # /mcp + /v1/* — needs enable_mcp: true
   keycloak: true           # /auth/ + /identity/v1/ — needs enable_keycloak: true
-                           # (true here but inert while enable_keycloak is false)
-  digit_ui_v2: true        # /citizen/ — needs enable_digit_ui_v2: true
+  digit_ui_v2: false       # /citizen/ — retired with enable_digit_ui_v2 (D26)
   integration_tests: false      # /tests/ + /tests-v2/
   integration_tests_runner: false  # /tests/api/
 

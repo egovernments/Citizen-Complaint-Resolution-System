@@ -1,0 +1,84 @@
+# Workspace setup and tenant rename
+
+Workspace setup is separate from identity provisioning. The BFF carries no workspace state. These PGR routes use a normal DIGIT token in RequestInfo.authToken; PGR resolves the token through egov-user and requires live ACCOUNT_ADMIN at the requested tenant. Kong role-action grants provide the gateway check as well. `_update` only changes local workspace/audit rows and retains the live tenant ACCOUNT_ADMIN check. Workspace dependency reads use the provisioner client’s read-only allowlist; downstream writes never use provisioner credentials.
+
+## Agreed workspace routes
+
+`POST /pgr-services/v2/onboarding/workspaces/_search`
+
+```json
+{"RequestInfo":{"authToken":"<token>"},"tenantId":"example"}
+```
+
+`POST /pgr-services/v2/onboarding/workspaces/_update`
+
+```json
+{"RequestInfo":{"authToken":"<token>"},"tenantId":"example","step":"BRANDING","state":"SKIPPED","version":1}
+```
+
+Both return `Workspace` and `Probes`. Search additionally returns `Rename`, containing the latest rename operation or null. Workspace has tenantId, status, steps, version, seedVersion, updatedAt, updatedBy, optional lastErrorCode, and legacy. Each of BRANDING, GEOGRAPHY, DEPARTMENTS, EMPLOYEES and COMPLAINT_TYPES has `{state, updatedAt, updatedBy, lastErrorCode?}`. On search, existing rows return five advisory probes under Probes; a probe whose dependency (MDMS, boundary or HRMS) fails reads null, never true, and the search still succeeds. Update returns only the probe it ran: `{<step>: true}` for an accepted DONE, null for any other state. Probes: BRANDING, the tenant record has an imageId; GEOGRAPHY, the ADMIN `boundary-relationships` tree under the tenant's root boundary has at least one child; DEPARTMENTS, an owned active Department other than ONBOARDING_ADMIN and an owned active Designation other than ONBOARDING_FOUNDER; EMPLOYEES, an active non-founder employee with an active user; COMPLAINT_TYPES, an owned active ComplaintHierarchy leaf (no row names it as parentCode) whose department is one of those Departments and whose slaHours is above 0, and every department named by an owned active leaf has at least one active HRMS employee with an active user, a current assignment (`isCurrentAssignment`) in that department and the GRO role at the tenant. GRO visibility is department OWN, so a routed department without a GRO would leave its complaints in PENDINGFORASSIGNMENT. Within one search, EMPLOYEES and COMPLAINT_TYPES share a single HRMS employee read; an HRMS failure makes both null.
+
+Fresh rows start NOT_STARTED, version 1, seedVersion set to the platform seed version the tenant was onboarded with, legacy false. Updates compare the supplied version atomically and increment it once. Step states are NOT_STARTED, IN_PROGRESS, DONE or SKIPPED; only BRANDING may be SKIPPED. DONE runs that step's probe alone and requires it to pass; a dependency failure there returns 503. NOT_STARTED, IN_PROGRESS and SKIPPED writes run no probe. Overall DONE requires every step DONE or SKIPPED. Updates append audit events.
+
+An absent legacy row is synthesized as DONE with all steps DONE, version 0, seedVersion null, legacy true, and null updatedAt/updatedBy at both workspace and step level. The entire Probes block is null. Search performs no writes or dependency probes for that legacy case.
+
+## Platform seed upgrades
+
+The platform seed (`src/main/resources/onboarding/platform-baseline-v1.json`) carries its own `version`; that field is the only place it is set. Bump it whenever the seed's content changes; `PlatformBaselineSeedTest.contentChangesComeWithAVersionBump` pins the file's SHA-256 to its version and fails until you do. The baseline only creates what is missing, so a workspace onboarded on an older version does not get new content by itself. v2 changed in place while it was unreleased; from the merge of #2269 onward every seed change bumps the version.
+
+`BaselineUpgrader` closes that gap. When the onboarding runner is on and has no signup waiting, each runner tick upgrades at most one workspace whose `seedVersion` is a number below the current version. Legacy rows (seedVersion null) are never upgraded. The worker leases the row with `FOR UPDATE SKIP LOCKED`, so several PGR instances never upgrade the same workspace at once. It uses the provisioner account on the internal service hosts, as the onboarding steps do. Each step is saved on the row as it finishes, so after a crash the next lease continues from the last finished step. A failed upgrade is retried with backoff of up to an hour. The error code is kept in `upgrade_error_code`, and the point where it failed (a step, schema or record such as `records:common-masters.StateInfo:<T>`) in `upgrade_failed_step`.
+
+The upgrade of a workspace stops for good after 30 failures in a row at the same point (about 19 hours with backoff; ordinary MDMS lag clears within about 14), or at once on a non-retryable error. PGR logs one WARN, `Platform seed upgrade of <T> from v<n> STOPPED at <point> (<code>)`, sets `upgrade_stopped_at`, and does not claim that workspace again. Other workspaces keep upgrading. After fixing the cause, clear the stop with:
+
+```sql
+UPDATE eg_pgr_onboarding_workspace SET upgrade_stopped_at=NULL, upgrade_attempts=0, upgrade_failed_step=NULL, upgrade_next_attempt_at=NULL WHERE tenant_id='<tenant>';
+```
+
+The next idle runner tick resumes it from its last finished step. To list stopped workspaces: `SELECT tenant_id, upgrade_failed_step, upgrade_error_code FROM eg_pgr_onboarding_workspace WHERE upgrade_stopped_at IS NOT NULL;`
+
+Steps, all safe to repeat:
+
+1. Create any missing schemas first, then any missing seed records (actions and role-actions included), the PGR workflow, IdFormat, MobileNumberValidation and DashboardConfig. Records that exist are not rewritten; a record the founder deactivated stays inactive.
+2. For each current StateInfo locale that has seeded packs, add the pack messages the tenant lacks and the `TENANT_TENANTS_<T>` key where the locale has the rainmaker-common pack. Existing messages are not rewritten. If the tenant has no messages of its own there (`default` answers), it is left alone.
+3. From seed v1 only: rewrite `StateInfo.languages` with the current rule (en_IN first) if it still holds exactly what v1 wrote. StateInfo belongs to the workspace, so a tenant without one (provisioned before the baseline) does not get one; this is reported as `state-info:absent`.
+4. From seed v1 only: delete `TENANT_TENANTS_<T>` from locales with no seeded rainmaker-common pack, if its text is still the workspace name. That one key hides every `default` message for the locale (#2257).
+5. Bust the localization cache if steps 2 or 4 changed anything.
+6. Set `seedVersion` to the current version and record a `SEED_UPGRADED` workspace event. Its details list `from`, `to` and `kept`: what was left alone because the founder changed it.
+
+Turn it off with `PGR_ONBOARDING_BASELINE_UPGRADE_ENABLED=false` (Ansible: `pgr_onboarding_baseline_upgrade_enabled: false`). It is on by default and only runs while `PGR_ONBOARDING_RUNNER_ENABLED` is true. Each upgraded workspace logs `Workspace <T> upgraded from platform seed v<from> to v<to>`.
+
+## Agreed errors and rename replay contract
+
+Error envelope follows existing PGR controllers: `{"Errors":[{"code":"WORKSPACE_VERSION_CONFLICT","message":"Reload workspace state and retry"}]}`. Codes/statuses: WORKSPACE_AUTH_REQUIRED (401), WORKSPACE_ADMIN_REQUIRED (403), WORKSPACE_VERSION_CONFLICT (409), WORKSPACE_PROBE_INCOMPLETE (409), WORKSPACE_INVALID_STATE (400), WORKSPACE_DEPENDENCY_UNAVAILABLE (503).
+
+`POST /pgr-services/v2/onboarding/workspaces/_rename`
+
+```json
+{"RequestInfo":{"authToken":"<token>"},"tenantId":"example","name":"Example Council","version":3}
+```
+
+Successful publication response: HTTP 202 `{"Rename":{"id":"<uuid>","tenantId":"example","name":"Example Council","version":4,"status":"DONE","updatedAt":1791126000000}}`. Before publication, a separate acceptance transaction reserves the new normalized name, records a durable rename operation with requestVersion 3, and increments workspace version to 4. A conflicting name returns WORKSPACE_NAME_TAKEN (409). Replaying the same tenant/requestVersion/normalized-name returns the same operation in its current state, including DONE after publication; a different name at that version conflicts. A second rename while publication is pending returns WORKSPACE_RENAME_PENDING (409).
+
+Only an authenticated `_rename` request publishes MDMS tenant.tenants.name, tenant-name localisation in every configured tenant language, cache invalidation, and final reservation retirement. There is no scheduled publisher. The old reservation remains held until publication succeeds. A downstream 401/403 or dependency 503 returns the existing Errors envelope after committing PENDING, acknowledged progress, reservations and a sanitized diagnostic; it does not undo acceptance. Publication uses a separate transaction with `noRollbackFor=ResponseStatusException.class`, so the Spring interceptor commits checkpoints before the controller handles those errors. Unexpected database failure rolls back that publication transaction; the independently committed intent remains replayable. An explicit authenticated replay resumes durable progress; remote calls remain idempotent if a response or checkpoint is lost. A legacy rename materializes a DONE legacy-compatible workspace row without gating setup. Row creation and rename acceptance serialize concurrent first renames by tenant; an insert conflict must re-read and apply the expected-version check, never overwrite the winner. No cross-service transaction or synchronous all-or-nothing outcome is claimed. Core sync subsequently mirrors the authoritative MDMS name into Keycloak; PGR does not write Keycloak on rename.
+
+### Observing completion
+
+Search returns `Rename: null` when no rename exists. Otherwise its latest operation has `{id, tenantId, name, version, status, updatedAt, lastErrorCode?}`. `version` is the workspace version assigned when the rename was accepted; subsequent setup updates may make Workspace.version newer. `status` is PENDING or DONE. Transient publication failures retain PENDING and expose a diagnostic lastErrorCode; DONE is recorded only after MDMS, all tenant-language localisation writes, cache invalidation and old reservation retirement succeed. The UI may poll search to observe state; `_search` is read-only and never resumes publication. Successful rename/replay returns HTTP 202 with DONE. Failed publication requires the administrator to select Retry name change with a current sign-in. Neither backend nor UI promises background completion.
+
+The UI retains only `{tenantId, name, version}` in sessionStorage for an uncertain request, including 401/403 responses after partial publication. Each explicit retry obtains the current session token separately. On reload without a saved request, a pending operation reconstructs that body from `Rename.tenantId`, `Rename.name`, and `Rename.version - 1`; using a newer `Workspace.version` would create a different request and is forbidden. A saved uncertain request takes precedence over an older DONE result. New name changes use the current Workspace.version. Tokens and caller userInfo are never persisted with rename intent, checkpoints, audit, reservations, or UI replay data.
+
+### Downstream authorization
+
+Configure `egov.gateway.host` (`EGOV_GATEWAY_HOST`) to the Kong origin. A missing or malformed origin fails closed with 503. Workspace publication uses only these fixed routes:
+
+- `/mdms-v2/v2/_update/tenant.tenants`
+- `/localization/messages/v1/_upsert`
+- `/localization/messages/cache-bust`
+
+Before every write, PGR resolves the current request token again and requires live ACCOUNT_ADMIN at the target tenant, including cache-bust whose Kong action is auth-optional. Each downstream RequestInfo is rebuilt with only apiId, timestamp and the current caller authToken; caller-supplied userInfo is discarded. Kong authorizes MDMS/localisation actions with that token. A 401/403 never falls back to internal service hosts or a provisioner token. Existing role grants remain authoritative: ACCOUNT_ADMIN alone may pass the local check but receive Kong 403 on MDMS update action2601, which requires MDMS_ADMIN. The provisioned founder has the needed action roles; this change does not widen grants.
+
+### Name normalization and concurrent updates
+
+Use the existing `OnboardingIdentifierService.normalizeOrganizationName` for both reservation keys and replay comparison: normalize to NFC, trim/collapse ECMAScript whitespace (including NBSP and FEFF), lowercase using Locale.ROOT, and normalize to NFC again. This shared signup/rename comparison matches the BFF organization-name check. The stored display name retains case after trimming and whitespace collapse. A replay with equivalent normalized text returns the original operation/display spelling rather than introducing a second write.
+
+Workspace setup updates and new rename acceptance use the same workspace row/version and one transaction with a row lock or conditional expected-version update. If both arrive with version 3, exactly one may advance it to 4; the loser receives WORKSPACE_VERSION_CONFLICT and no reservation or remote-write intent is committed. Check an exact existing rename replay before rejecting its older requestVersion, so retries remain idempotent even after unrelated workspace updates. A pending rename prevents another rename, while setup updates may proceed with the current version; publication does not reset or decrement that version. Completion conditionally retires only that operation's reservations and never writes over a newer rename.

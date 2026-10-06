@@ -1,3 +1,4 @@
+import { tenantSlug } from '../utils/identity-bff';
 /**
  * Citizen home + landing surfaces — Stories 2.1, 2.2, 2.3.
  *
@@ -34,7 +35,7 @@ a round-trip to MDMS before picking the home route.`,
     const phone = generateCitizenPhone();
     await citizenOtpLogin(page, phone);
 
-    await page.goto(`${BASE_URL}/digit-ui/citizen`, {
+    await page.goto(`${BASE_URL}/${tenantSlug()}/digit-ui/citizen`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });
@@ -67,7 +68,7 @@ Catalog test — if a label gets renamed legitimately, update this spec and Stor
     const phone = generateCitizenPhone();
     await citizenOtpLogin(page, phone);
 
-    await page.goto(`${BASE_URL}/digit-ui/citizen/all-services`, {
+    await page.goto(`${BASE_URL}/${tenantSlug()}/digit-ui/citizen/all-services`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });
@@ -111,7 +112,7 @@ If the brand assets ever land as real DOM text, extend this spec — leaving the
     // Ethiopia ^[17][0-9]{8}$) and matches the pattern used in pgr-fixes.spec.ts.
     await citizenOtpLogin(page);
 
-    await page.goto(`${BASE_URL}/digit-ui/citizen/pgr-home`, {
+    await page.goto(`${BASE_URL}/${tenantSlug()}/digit-ui/citizen/pgr-home`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });

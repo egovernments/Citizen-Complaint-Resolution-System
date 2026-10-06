@@ -224,16 +224,40 @@ const customEnglishMessages: TranslationMessages = {
       col_primary: 'Primary',
       col_type: 'Type',
       col_selected: 'In use',
-      // Credential field labels.
+      // Credential field labels, looked up by credentialFieldLabel() in this order:
+      // cred.<type>.<key> (per provider type), then the bridge catalog's own label,
+      // then cred.<key> (generic), then the raw key. The generic keys therefore only
+      // label a field the catalog sent without a label, and must stay provider-neutral:
+      // `user` / `password` / `from` are shared by SMTP, SMSCountry, Ozeki and Jasmin,
+      // and a generic "SMTP User" once labelled all of them. Types without an entry
+      // here (smscountry, ozeki, jasmin, any new one) show the catalog's labels.
       cred: {
         account_sid: 'Account SID',
         token: 'Auth Token',
         from: 'From',
-        host: 'SMTP Host',
-        port: 'SMTP Port',
-        user: 'SMTP User',
-        password: 'SMTP Password',
+        host: 'Host',
+        port: 'Port',
+        user: 'Username',
+        password: 'Password',
         secure: 'Use TLS (secure)',
+        twilio_sms: {
+          account_sid: 'Account SID',
+          token: 'Auth Token',
+          from: 'From',
+        },
+        twilio_whatsapp: {
+          account_sid: 'Account SID',
+          token: 'Auth Token',
+          from: 'From',
+        },
+        smtp: {
+          host: 'SMTP Host',
+          port: 'SMTP Port',
+          user: 'SMTP User',
+          password: 'SMTP Password',
+          from: 'From',
+          secure: 'Use TLS (secure)',
+        },
       },
       // Row actions.
       verify: 'Check status',

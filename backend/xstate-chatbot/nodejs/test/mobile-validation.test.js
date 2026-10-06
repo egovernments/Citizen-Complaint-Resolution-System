@@ -22,6 +22,7 @@ function loadService({ fetchImpl, defaultCountryCode = "+91", defaultRegex = "^[
     exports: {
       rootTenantId: "pg",
       mobileValidation: { defaultCountryCode, defaultRegex, cacheTtlMs: 300000 },
+      timeouts: { request: 20000, mediaProcessing: 13000, dispatchSettle: 30000 },
       egovServices: {
         egovServicesHost: "http://localhost/",
         mdmsV2SearchPath: "mdms-v2/v2/_search",
@@ -411,4 +412,26 @@ test("REGRESSION (review): a bare national number is not read through an alterna
   assert.equal(s.toAddressableDigits("7912345678", cfg), "917912345678");
   // Written in international form, the +7 row does apply.
   assert.equal(s.resolveNational("+7912345678", cfg).rule.countryCode, "+7");
+});
+
+const MOZAMBIQUE = { countryCode: "+258", mobileNumberRegex: "^8[0-9]{8}$" };
+
+test("the 00 international prefix is read as +", () => {
+  const s = loadService();
+  assert.equal(s.toNational("00258841234567", MOZAMBIQUE), "841234567");
+  assert.equal(s.toNational("00 258 84 123 4567", MOZAMBIQUE), "841234567", "separators are ignored");
+  assert.equal(s.toNational("00919876543210", INDIA), "9876543210");
+});
+
+test("a 00-prefixed number replies to the right address, not with the 00 kept", () => {
+  const s = loadService();
+  assert.equal(s.toAddressableDigits("00258841234567", MOZAMBIQUE), "258841234567");
+});
+
+test("00 is only stripped before the tenant's own code", () => {
+  // A trunk-0 national number is untouched, and another country's 00-form is not
+  // reconciled to this tenant.
+  const s = loadService();
+  assert.equal(s.toNational("0712345678", KENYA), "0712345678");
+  assert.equal(s.toNational("00447700900123", MOZAMBIQUE), null);
 });

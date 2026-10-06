@@ -14,7 +14,6 @@ var globalConfigs = (function () {
   var mdmsContext = "mdms-v2";
   var hrmsContext = "egov-hrms";
   var invalidEmployeeRoles = ["SYSTEM"];
-  var authProvider = "digit";
   var pgrBoundaryHighestLevel = "County";
   var pgrBoundaryLowestLevel = "Ward";
   var mapCenter = { lat: -1.0, lng: 37.0 };
@@ -99,8 +98,6 @@ var globalConfigs = (function () {
       return mdmsContext;
     } else if (key === "HRMS_CONTEXT_PATH") {
       return hrmsContext;
-    } else if (key === "AUTH_PROVIDER") {
-      return authProvider;
     } else if (key === "INVALIDROLES") {
       return invalidEmployeeRoles;
     } else if (key === "PGR_BOUNDARY_HIGHEST_LEVEL") {

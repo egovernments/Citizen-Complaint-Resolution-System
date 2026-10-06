@@ -149,7 +149,8 @@ export const useEmployeeNavItems = () => {
         return {
           label: t(value.item.displayName),
           icon: { icon: value.item.leftIcon, width: "1.5rem", height: "1.5rem" },
-          navigationUrl: value.item.navigationURL,
+          // MDMS seeds `/digit-ui/employee/...`; keep it on the tenant route.
+          navigationUrl: Digit.Utils.rebaseAppUrl(value.item.navigationURL),
           orderNumber:value.item.orderNumber,
         };
       }

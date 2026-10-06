@@ -41,6 +41,9 @@
  *   E2E_TENANT            city tenant                    default ke.bomet
  *   E2E_STATE_TENANT      state/root tenant for MDMS     default = first label of E2E_TENANT (ke)
  *   E2E_KONG             Kong base URL                   default http://localhost:18000
+ *   E2E_TENANT_SLUG      tenant route slug for the BFF citizen OTP sign-in   [required]
+ *   E2E_PUBLIC_ORIGIN    Origin the BFF trusts           default = origin of E2E_KONG
+ *   E2E_OTP              the box's fixed dev OTP         default 123456 (needs identity_dev_fixed_otp)
  *   E2E_BUSINESS_SERVICE workflow businessService        default PGR
  *   SERVICE_CODE         complaint serviceCode           default AmbulanceDelay
  *   LOCALITY             boundary locality code          default BOMET_BOMET_CENTRAL_CHESOEN
@@ -92,7 +95,7 @@ const TENANT = process.env.E2E_TENANT || 'ke.bomet';
 const STATE_TENANT = process.env.E2E_STATE_TENANT || TENANT.split('.')[0];
 const ROOT = STATE_TENANT; // citizen registration happens at the state/root tenant
 const BUSINESS_SERVICE = (process.env.E2E_BUSINESS_SERVICE || 'PGR').toUpperCase();
-const OTP = '123456'; // mock OTP (Kong request-termination returns 200 for /user-otp)
+const OTP = process.env.E2E_OTP || '123456'; // the box's fixed dev OTP (identity_dev_fixed_otp)
 const SERVICE_CODE = process.env.SERVICE_CODE || 'AmbulanceDelay';
 const LOCALITY = process.env.LOCALITY || 'BOMET_BOMET_CENTRAL_CHESOEN';
 const NAME = 'E2E Role Test Citizen';
@@ -121,6 +124,10 @@ const LIVE = process.env.LIVE_DELIVERY === '1';
 const LIVE_CITIZEN_PHONE = process.env.LIVE_CITIZEN_PHONE || '+919415787824';
 const LIVE_CITIZEN_CC = process.env.LIVE_CITIZEN_CC || '+91';
 const LIVE_CITIZEN_EMAIL = process.env.LIVE_CITIZEN_EMAIL || 'contact@theflywheel.in';
+
+// Identity BFF citizen sign-in (see bffCitizenSignIn).
+const TENANT_SLUG = process.env.E2E_TENANT_SLUG || process.env.IDENTITY_TEST_TENANT_SLUG || '';
+const PUBLIC_ORIGIN = process.env.E2E_PUBLIC_ORIGIN || new URL(KONG).origin;
 const LME_PHONE = process.env.LME_PHONE; // no default — owner supplies
 const LME_EMAIL = process.env.LME_EMAIL; // no default — owner supplies
 const GRO_PHONE = process.env.GRO_PHONE; // no default — owner supplies
@@ -461,15 +468,44 @@ async function verifyNovu(rows) {
 // ============================================================================
 // PGR flow primitives
 // ============================================================================
+// Citizen sign-in goes through the Identity BFF (#2189). D26 closes the native
+// /user-otp/v1/_send + /user/citizen/_create pair at Kong on Keycloak boxes, so
+// the citizen is created (on first sign-in) and signed in by the BFF's phone
+// OTP: _send -> _verify (sets the HttpOnly citizen session cookie) -> citizen
+// _select, which returns the DIGIT token in the /user/oauth/token shape. The
+// code is the box's fixed dev OTP (identity_dev_fixed_otp) unless overridden.
+async function bffCitizenSignIn(base, mobileNumber, code) {
+  if (!TENANT_SLUG) {
+    throw new Error('citizen sign-in goes through the Identity BFF since D26: set E2E_TENANT_SLUG to the '
+      + 'tenant route slug (and E2E_PUBLIC_ORIGIN when the base URL is not the origin the BFF trusts)');
+  }
+  const headers = { 'Content-Type': 'application/json', Origin: PUBLIC_ORIGIN };
+  const send = async (path, body, extra) => {
+    const r = await fetch(base + path, { method: 'POST', headers: { ...headers, ...(extra || {}) }, body: JSON.stringify(body) });
+    const t = await r.text();
+    let j; try { j = JSON.parse(t); } catch { j = null; }
+    return { status: r.status, text: t, json: j, cookies: r.headers.getSetCookie ? r.headers.getSetCookie() : [] };
+  };
+  const sent = await send('/identity/v1/citizen/otp/_send',
+    { tenantSlug: TENANT_SLUG, mobileNumber, purpose: 'signin', locale: 'en_IN' });
+  if (sent.status !== 202 || !sent.json || !sent.json.challengeId) {
+    throw new Error(`BFF citizen OTP send failed ${sent.status}: ${sent.text.slice(0, 200)}`);
+  }
+  const verified = await send('/identity/v1/citizen/otp/_verify',
+    { tenantSlug: TENANT_SLUG, challengeId: sent.json.challengeId, code, purpose: 'signin' });
+  if (verified.status !== 200 || !verified.json || verified.json.authenticated !== true) {
+    throw new Error(`BFF citizen OTP verify failed ${verified.status}: ${verified.text.slice(0, 200)}`);
+  }
+  const cookie = verified.cookies.map((c) => c.split(';')[0]).join('; ');
+  const selected = await send('/identity/v1/contexts/citizen/_select', { surface: 'citizen' }, { Cookie: cookie });
+  if (selected.status !== 200 || !selected.json || !selected.json.access_token || !selected.json.UserRequest) {
+    throw new Error(`BFF citizen context select failed ${selected.status}: ${selected.text.slice(0, 200)}`);
+  }
+  return selected.json;
+}
+
 async function citizenLogin(regPhone) {
-  await call(`/user-otp/v1/_send?tenantId=${ROOT}`,
-    { otp: { mobileNumber: regPhone, tenantId: ROOT, userType: 'citizen', type: 'register' } },
-    { 'Content-Type': 'application/json' });
-  await call(`/user/citizen/_create?tenantId=${ROOT}`,
-    { RequestInfo: RI(), User: { name: NAME, username: regPhone, mobileNumber: regPhone,
-        emailId: LIVE ? LIVE_CITIZEN_EMAIL : 'contact@theflywheel.in', otpReference: OTP, tenantId: ROOT, type: 'CITIZEN' } },
-    { 'Content-Type': 'application/json' });
-  return token(regPhone, OTP, 'citizen', ROOT);
+  return bffCitizenSignIn(KONG, regPhone, OTP);
 }
 
 async function createComplaint(tok, ui, citizenContact) {
@@ -656,7 +692,7 @@ async function negativeViaDeactivation(citizen) {
   const legacyLegs = ['REJECT', 'REOPEN', 'RATE'].filter((a) => actions.includes(a));
   console.log(`Seed mode: ${legacyLegs.length ? 'routing present for ' + legacyLegs.join('/') + ' (legacy-style)' : 'splitter-style (only APPLY/ASSIGN/RESOLVE authored) — REJECT/REOPEN/RATE are E2E-4 negatives'}`);
 
-  // Citizen registration (Kenya-valid local number for /user/citizen/_create).
+  // Citizen sign-in through the Identity BFF (creates the account on first use).
   const regPhone = '7' + String(Date.now()).slice(-8);
   const citizen = await citizenLogin(regPhone);
   const cUi = citizen.UserRequest, cTok = citizen.access_token, citizenUuid = cUi.uuid;

@@ -220,9 +220,9 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
     setCollapsedGroups((prev) => ({ ...prev, [labelKey]: !prev[labelKey] }));
   };
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
+  const handleLogout = async () => {
+    try { await logout(); navigate('/login'); }
+    catch (error) { window.alert(error instanceof Error ? error.message : 'Sign-out failed. Please retry.'); }
   };
 
   const handleSwitchToOnboarding = () => {

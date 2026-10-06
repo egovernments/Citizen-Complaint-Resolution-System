@@ -7,7 +7,6 @@ import {
   type Operation,
   type ProvisioningStep,
   type Signup,
-  type TenantReadiness,
   type SignupDraftInput,
   type TenantOption,
   OnboardingError,
@@ -18,15 +17,13 @@ import {
   deriveAccountCode,
   findOperation,
   findSignup,
+  isOperationReady,
   isOperationSettled,
   isValidAccountCode,
   isValidUrlSlug,
-  logout,
   newIdempotencyKey,
   retryOperation,
   requestMagicLinkSignup,
-  selectContext,
-  tenantReadiness,
   session,
   slugifyAccountName,
   startSignIn,
@@ -34,13 +31,16 @@ import {
   tenants,
   updateSignup,
 } from '@/api/onboarding';
-import { clearLocalSession, installDigitContext } from '@/lib/session';
+import { enterWorkspace } from '@/identity/entry';
+import { Invitations } from '@/identity/Invitations';
+import type { Invitation } from '@/api/onboarding';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Stepper } from '@/components/ui/stepper';
 import { AuthShell } from '@/components/signup/AuthPanel';
 import { useAuthResult } from '@/hooks/useAuthResult';
+import { clearSignOutIncomplete, signOutIncomplete } from '@/lib/session';
 
 const STEPS = [
   { id: 'account', label: 'Account' },
@@ -118,6 +118,14 @@ const selectClass =
 /** Poll cadence the contract asks for: every 2-5 seconds. */
 const POLL_MS = 3000;
 
+/**
+ * A SUCCEEDED run is published to the identity side on a later worker tick,
+ * retrying at 1, 2, 4, 8... seconds. Two minutes covers the first seven
+ * retries; past that the founder is told it is nearly there and polling slows.
+ */
+const PUBLISH_WAIT_MS = 120_000;
+const SLOW_POLL_MS = 15_000;
+
 function SignupMethodIcon({ method }: { method: AuthMethod }) {
   if (method.id.toLowerCase() !== 'github') return null;
   return (
@@ -157,7 +165,7 @@ type Phase =
   | 'provisioning'
   | 'entering'
   | 'resuming'
-  | 'setupRequired'
+  | 'invitations'
   | 'stuck'
   | 'failed';
 
@@ -257,9 +265,10 @@ function SignupFlow() {
   const [tenantOptions, setTenantOptions] = useState<TenantOption[]>([]);
   // The tenant the operator picked and how far it has actually been built. Set
   // only when the pick is refused, so the gate can name what it is holding.
-  const [gated, setGated] = useState<{ option: TenantOption; readiness: TenantReadiness } | null>(null);
+  const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [signup, setSignup] = useState<Signup | null>(null);
   const [operation, setOperation] = useState<Operation | null>(null);
+  const [publishSlow, setPublishSlow] = useState(false);
   const [step, setStep] = useState<string>('account');
   const [saving, setSaving] = useState(false);
 
@@ -321,19 +330,24 @@ function SignupFlow() {
   // the spinner back, so they ask for it through `restart`.
   const bootstrap = useCallback(async () => {
     try {
-      const current = await session();
-      if (current.user) setSessionUser({ email: current.user.email, name: current.user.name });
-      if (!current.authenticated) {
+      // The last sign-out here could not end the identity session, so its cookie
+      // may still be live: never resume it without an explicit sign-up/sign-in.
+      const current = signOutIncomplete() ? null : await session();
+      if (current?.user) setSessionUser({ email: current.user.email, name: current.user.name });
+      if (!current?.authenticated) {
         const { methods: available } = await authMethods('signup');
         setMethods(available);
         setPhase('signedOut');
         return;
       }
       const view = await tenants();
-      if (!view.onboardingRequired && view.tenants.length) {
+      if (view.tenants.length) {
         setTenantOptions(view.tenants);
         setPhase('chooseTenant');
         return;
+      }
+      if (current.pendingInvitations?.length) {
+        setInvitations(current.pendingInvitations); setPhase('invitations'); return;
       }
       // One signup per founder: search first so a closed tab resumes rather
       // than starting a second.
@@ -537,6 +551,7 @@ function SignupFlow() {
     setSaving(true);
     setError(null);
     try {
+      clearSignOutIncomplete();
       await requestMagicLinkSignup({
         firstName: signupFirstName.trim(),
         lastName: signupLastName.trim(),
@@ -550,10 +565,21 @@ function SignupFlow() {
     }
   };
 
+  // SUCCEEDED, but the tenant is not listed until the outcome is published.
+  const awaitingPublication = phase === 'provisioning' &&
+    operation?.status === 'SUCCEEDED' && !operation.lifecyclePublishedAt;
+  const ready = phase === 'provisioning' && !!operation && isOperationReady(operation);
+
+  useEffect(() => {
+    if (!awaitingPublication) return;
+    const timer = setTimeout(() => setPublishSlow(true), PUBLISH_WAIT_MS);
+    return () => clearTimeout(timer);
+  }, [awaitingPublication]);
+
   // Poll while the worker runs. Stops as soon as the operation settles, so a
   // terminal failure does not sit here hammering the endpoint.
   useEffect(() => {
-    if (phase !== 'provisioning' || !operation || isOperationSettled(operation.status)) return;
+    if (phase !== 'provisioning' || !operation || isOperationSettled(operation)) return;
     const timer = setTimeout(async () => {
       try {
         const latest = await findOperation(operation.id);
@@ -561,9 +587,9 @@ function SignupFlow() {
       } catch (caught) {
         await handleFailure(caught);
       }
-    }, POLL_MS);
+    }, awaitingPublication && publishSlow ? SLOW_POLL_MS : POLL_MS);
     return () => clearTimeout(timer);
-  }, [phase, operation, handleFailure]);
+  }, [phase, operation, handleFailure, awaitingPublication, publishSlow]);
 
   // Resumed into a run that was already going. Only the signup is addressable
   // here, so this polls that rather than the operation, and resolves the same
@@ -591,9 +617,10 @@ function SignupFlow() {
     };
   }, [phase, seedFrom, restart]);
 
-  // Provisioning done: the new tenant appears without another sign-in.
+  // Provisioning done and published: the new tenant appears without another
+  // sign-in. Acting on SUCCEEDED alone reads an empty tenant list (CCRS#2303).
   useEffect(() => {
-    if (phase !== 'provisioning' || operation?.status !== 'SUCCEEDED') return;
+    if (!ready) return;
     let live = true;
     (async () => {
       try {
@@ -608,33 +635,13 @@ function SignupFlow() {
     return () => {
       live = false;
     };
-  }, [phase, operation?.status]);
+  }, [ready]);
 
   const enter = async (option: TenantOption) => {
     setSaving(true);
     setError(null);
     try {
-      // Readiness is checked BEFORE anything is minted or mounted. A tenant
-      // with no platform configuration can still hand out a correctly scoped
-      // DIGIT token, so getting one proves nothing and entering on the strength
-      // of it drops the operator into a console where every call is refused.
-      // Only gate on a readiness the backend actually stated. An unknown value
-      // must not hold a configured tenant out of its own workspace.
-      const readiness = tenantReadiness(option);
-      if (readiness && readiness !== 'READY') {
-        setGated({ option, readiness });
-        setPhase('setupRequired');
-        setSaving(false);
-        return;
-      }
-      const context = await selectContext(option.tenantId);
-      // Hand the DIGIT token to the session the app actually restores from.
-      // App.tsx reads one blob under `crs-auth-state`; writing digit-ui's
-      // `Employee.*` keys instead left the operator looking at whichever
-      // session was already there.
-      installDigitContext(context, sessionUser);
-      setPhase('entering');
-      window.location.assign('/configurator/');
+      await enterWorkspace(option.tenantId, sessionUser);
     } catch (caught) {
       setError(errorText(caught));
       setSaving(false);
@@ -750,7 +757,7 @@ function SignupFlow() {
                     key={method.id}
                     variant="outline"
                     className="w-full"
-                    onClick={() => startSignIn(method.id, 'signup')}
+                    onClick={() => { clearSignOutIncomplete(); startSignIn(method.id, 'signup'); }}
                   >
                     <SignupMethodIcon method={method} />
                     {method.label}
@@ -844,74 +851,7 @@ function SignupFlow() {
     );
   }
 
-  if (phase === 'setupRequired' && gated) {
-    // Deliberately an honest gate, not a loading screen: nothing is running in
-    // the background, so a spinner or "still being set up" would be a promise
-    // the backend is not keeping (CCRS#2073 G9). Management modules are never
-    // mounted from here, so none of the calls that return AccessDeniedException
-    // are fired at all.
-    // READY never reaches this screen, so it is excluded rather than carried
-    // here as an empty entry nobody can read.
-    const copy: Record<Exclude<TenantReadiness, 'READY'>, { title: string; body: string }> = {
-      IDENTITY_READY: {
-        title: 'Tenant created — workspace setup required',
-        body: 'Your organisation and administrator account are ready. Workspace configuration has not been installed yet.',
-      },
-      PROVISIONING: {
-        title: 'Workspace setup is running',
-        body: 'Your organisation and administrator account are ready. The workspace configuration is still being installed.',
-      },
-      FAILED: {
-        title: 'Workspace setup did not finish',
-        body: 'Your organisation and administrator account are ready, but the workspace configuration could not be installed.',
-      },
-    };
-    const { title, body } = copy[gated.readiness as Exclude<TenantReadiness, 'READY'>];
-    return (
-      <div>
-        <h1 className="text-[28px] font-semibold leading-[1.15]">{title}</h1>
-        <p className="mt-2 text-sm text-muted-foreground">{body}</p>
-        <div className="mt-6 rounded border px-4 py-3 text-sm">
-          <div className="font-medium">{gated.option.name}</div>
-          <div className="text-xs text-muted-foreground">{gated.option.tenantId}</div>
-        </div>
-        {banner}
-        <div className="mt-6 flex flex-wrap gap-2">
-          {tenantOptions.length > 1 && (
-            <Button
-              variant="outline"
-              onClick={() => {
-                setGated(null);
-                setPhase('chooseTenant');
-              }}
-            >
-              Choose a different workspace
-            </Button>
-          )}
-          <Button
-            variant="outline"
-            disabled={saving}
-            onClick={async () => {
-              setSaving(true);
-              try {
-                await logout();
-              } catch {
-                // The local half below is what strands the operator if it is
-                // skipped, so a failed remote revoke must not stop it.
-              }
-              // Both halves, then a full-page navigation so App re-initialises
-              // from the emptied storage instead of keeping the session it
-              // restored at load.
-              clearLocalSession();
-              window.location.assign('/configurator/signup');
-            }}
-          >
-            Sign out
-          </Button>
-        </div>
-      </div>
-    );
-  }
+  if (phase === 'invitations') return <Invitations invitations={invitations} onChanged={bootstrap} />;
 
   if (phase === 'entering') {
     return (
@@ -981,6 +921,21 @@ function SignupFlow() {
           <p className="mt-4 text-sm text-muted-foreground">
             This signup cannot be retried. Please contact support to continue.
           </p>
+        )}
+        {awaitingPublication && !publishSlow && (
+          <div className="mt-6 flex items-center text-sm text-muted-foreground">
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Finishing setup…
+          </div>
+        )}
+        {awaitingPublication && publishSlow && (
+          <Alert className="mt-6">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <AlertTitle>Your workspace is almost ready</AlertTitle>
+            <AlertDescription>
+              We're finishing setup. This page will continue automatically, or you can come back
+              and sign in again shortly.
+            </AlertDescription>
+          </Alert>
         )}
       </div>
     );
@@ -1205,7 +1160,7 @@ function SignupFlow() {
                 checking={slugChecking}
                 invalidReason={
                   urlSlug && !slugValid
-                    ? '2 to 63 characters, lowercase letters, digits and hyphens, with at least two letters.'
+                    ? '2 to 63 characters, lowercase letters, digits and hyphens, starting with a letter or digit, with at least two letters, and not a reserved word.'
                     : undefined
                 }
               />

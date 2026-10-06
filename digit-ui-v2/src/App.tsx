@@ -1,7 +1,8 @@
 /**
  * Citizen UI entry — forked from digit-configurator, stripped to:
- *   /login            CitizenLoginPage      mobile + OTP (fixed 123456)
- *   /dashboard        CitizenDashboardPage  retained legacy dashboard (flagged off)
+ * The citizen identity surface was retired by D26. Deployments fail preflight
+ * when this application is enabled; the remaining routes are retained only for
+ * historical/admin build compatibility.
  *
  * basename=/citizen — served from /var/www/citizen on naipepea.
  *
@@ -12,13 +13,10 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useState, createContext, useContext, useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { CoreAdminContext } from 'ra-core';
-import CitizenLoginPage from './pages/CitizenLoginPage';
-import CitizenKcCallback from './pages/CitizenKcCallback';
 import CitizenDashboardPage from './pages/CitizenDashboardPage';
 import CitizenComplaintsListPage from './pages/CitizenComplaintsListPage';
 import CitizenComplaintShowPage from './pages/CitizenComplaintShowPage';
 import CitizenComplaintCreatePage from './pages/CitizenComplaintCreatePage';
-import CitizenProfilePage from './pages/CitizenProfilePage';
 import CitizenDashboardV2Page from './pages/CitizenDashboardV2Page';
 import CitizenLayout from './components/layout/CitizenLayout';
 import AdminLoginPage from './pages/AdminLoginPage';
@@ -175,10 +173,7 @@ function App() {
           >
             <ThemeProvider>
               <Routes>
-                <Route path="/login" element={<CitizenLoginPage />} />
-                {/* KC callback is intentionally unguarded — the user is
-                   mid-auth at this point and not yet logged in. */}
-                <Route path="/auth/callback" element={<CitizenKcCallback />} />
+                <Route path="/login" element={<RetiredCitizenEntry />} />
                 {/* Platform-admin surface — separate auth state from
                     citizen (KC master realm, different localStorage key,
                     different role model). Each page gates itself. */}
@@ -188,7 +183,7 @@ function App() {
                 <Route path="/admin" element={<Navigate to="/admin/login" replace />} />
                 <Route
                   path="/"
-                  element={state.isAuthenticated ? <CitizenLayout /> : <Navigate to="/login" replace />}
+                  element={state.isAuthenticated ? <CitizenLayout /> : <RetiredCitizenEntry />}
                 >
                   <Route index element={<Navigate to={CITIZEN_HOME_PATH} replace />} />
                   <Route
@@ -200,7 +195,6 @@ function App() {
                   <Route path="complaints" element={<CitizenComplaintsListPage />} />
                   <Route path="complaints/create" element={<CitizenComplaintCreatePage />} />
                   <Route path="complaints/:id/show" element={<CitizenComplaintShowPage />} />
-                  <Route path="profile" element={<CitizenProfilePage />} />
                   <Route path="dashboard-v2" element={<CitizenDashboardV2Page />} />
                 </Route>
                 <Route path="*" element={<Navigate to="/" replace />} />
@@ -211,6 +205,13 @@ function App() {
       </QueryClientProvider>
     </AppContext.Provider>
   );
+}
+
+function RetiredCitizenEntry() {
+  useEffect(() => {
+    window.location.replace('/');
+  }, []);
+  return null;
 }
 
 export default App;

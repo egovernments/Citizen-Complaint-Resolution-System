@@ -8,6 +8,7 @@
  * fixed OTP in non-prod).
  */
 import { expect, type Page } from '@playwright/test';
+import { appBase } from './auth';
 
 export const CITIZEN_MOBILE = process.env.CITIZEN_MOBILE || '777777777';
 export const CITIZEN_OTP = process.env.CITIZEN_OTP || '123456';
@@ -18,7 +19,7 @@ export async function citizenOtpLogin(
 ) {
   const mobile = opts.mobile ?? CITIZEN_MOBILE;
   const otp = opts.otp ?? CITIZEN_OTP;
-  await page.goto('/digit-ui/citizen');
+  await page.goto(`${appBase()}/citizen`);
 
   // Language selection screen (first visit only) — continue past it.
   const continueBtn = page
@@ -30,7 +31,7 @@ export async function citizenOtpLogin(
 
   // The citizen home renders without auth; go straight to the login
   // route (the nav's Login button doesn't navigate reliably headless).
-  await page.goto('/digit-ui/citizen/login');
+  await page.goto(`${appBase()}/citizen/login`);
 
   // Mobile number screen: single tel input.
   const mobileInput = page.locator('input[type="tel"]').first();
@@ -43,10 +44,10 @@ export async function citizenOtpLogin(
     .first()
     .click();
 
-  // OTP screen: 6 single-char boxes with auto-advance; typing into the
-  // first box and letting auto-advance route the rest is how a citizen
-  // does it, so do the same.
-  const otpBoxes = page.locator('input[maxlength="1"]');
+  // OTP screen: 6 boxes with auto-advance (the first also accepts the whole
+  // code); typing into the first box and letting auto-advance route the rest
+  // is how a citizen does it, so do the same.
+  const otpBoxes = page.locator('input.v2-otp-box');
   await otpBoxes.first().waitFor({ state: 'visible', timeout: 30_000 }).catch(async () => {
     throw new Error(
       `OTP boxes never appeared after submitting mobile. URL=${page.url()} BODY=${(

@@ -1,4 +1,4 @@
-import { fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import SignupPage from './SignupPage';
@@ -56,6 +56,22 @@ describe('sign-in gate', () => {
     expect(await screen.findByRole('button', { name: /email and password/i })).toBeInTheDocument();
     // Nothing is hardcoded, so a provider that is off simply does not appear.
     expect(screen.queryByRole('button', { name: /google/i })).not.toBeInTheDocument();
+  });
+
+  it('does not resume a session an unconfirmed sign-out may have left, until the user chooses a method', async () => {
+    localStorage.setItem('crs-sign-out-incomplete', '1');
+    vi.mocked(api.session).mockResolvedValue(signedIn);
+    vi.mocked(api.authMethods).mockResolvedValue({
+      methods: [{ id: 'google', label: 'Continue with Google', type: 'oidc' }],
+    });
+
+    render(<SignupPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /continue with google/i }));
+    expect(api.session).not.toHaveBeenCalled();
+    expect(api.tenants).not.toHaveBeenCalled();
+    expect(localStorage.getItem('crs-sign-out-incomplete')).toBeNull();
+    expect(api.startSignIn).toHaveBeenCalledWith('google', 'signup');
   });
 
   it('shows the GitHub mark on the GitHub signup action', async () => {
@@ -478,65 +494,41 @@ describe('workspace readiness gate', () => {
     fireEvent.click(await screen.findByRole('button', { name: /kisumu county/i }));
   };
 
-  it('holds a workspace the backend has called identity-ready', async () => {
-    withTenant('IDENTITY_READY');
-
+  it('routes an invitation before creating or searching a signup', async () => {
+    vi.mocked(api.session).mockResolvedValue({ ...signedIn, pendingInvitations: [{ tenantId: 'invited', invitationVersion: 2, name: 'Invited workspace', invitedAt: 1, expiresAt: Date.now() + 60000 }] });
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [], selectionRequired: false, onboardingRequired: true });
     render(<SignupPage />);
-    await pickWorkspace();
-
-    expect(await screen.findByText(/workspace setup required/i)).toBeInTheDocument();
-    // No token is minted and nothing is mounted, so the calls that come back
-    // AccessDeniedException are never fired.
-    expect(api.selectContext).not.toHaveBeenCalled();
-  });
-
-  it('holds it without consulting the caller\'s own signup record', async () => {
-    // Readiness answers for the workspace. An invited admin has no signup at
-    // all and must still be held out of a half-built tenant.
-    withTenant('IDENTITY_READY');
-    vi.mocked(api.findSignup).mockResolvedValue(null);
-
-    render(<SignupPage />);
-    await pickWorkspace();
-
-    await screen.findByText(/workspace setup required/i);
+    expect(await screen.findByRole('button', { name: /accept invitation/i })).toBeInTheDocument();
     expect(api.findSignup).not.toHaveBeenCalled();
   });
 
-  it('offers no way to continue setup while there is no setup to continue', async () => {
-    withTenant('IDENTITY_READY');
-
+  it('shows memberships before pending invitations even when onboardingRequired is true', async () => {
+    vi.mocked(api.session).mockResolvedValue({ ...signedIn, pendingInvitations: [{ tenantId: 'invited', invitationVersion: 2, name: 'Invited workspace', invitedAt: 1, expiresAt: Date.now() + 60000 }] });
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [option()], selectionRequired: true, onboardingRequired: true });
     render(<SignupPage />);
-    await pickWorkspace();
-    await screen.findByText(/workspace setup required/i);
-
-    expect(screen.queryByRole('button', { name: /continue setup/i })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /sign out/i })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /kisumu county/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /accept invitation/i })).not.toBeInTheDocument();
+    expect(api.findSignup).not.toHaveBeenCalled();
   });
 
-  it('does not say setup is running when nothing is running', async () => {
-    withTenant('IDENTITY_READY');
-
+  it('does not allow accepting an expired invitation', async () => {
+    vi.mocked(api.session).mockResolvedValue({ ...signedIn, pendingInvitations: [{ tenantId: 'invited', invitationVersion: 2, name: 'Invited workspace', invitedAt: 1, expiresAt: 2 }] });
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [], selectionRequired: false, onboardingRequired: true });
     render(<SignupPage />);
-    await pickWorkspace();
-    await screen.findByText(/workspace setup required/i);
-
-    expect(screen.queryByText(/still being set up/i)).not.toBeInTheDocument();
-    expect(screen.getByText(/has not been installed yet/i)).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /accept invitation/i })).toBeDisabled();
   });
 
-  it('clears the DIGIT half of the session on sign out, not just the identity half', async () => {
-    withTenant('IDENTITY_READY');
-    window.localStorage.setItem('crs-auth-state', JSON.stringify({ authToken: 'stale' }));
+  it('does not consult the founder signup when entering an existing membership', async () => {
+    withTenant(); render(<SignupPage />);
+    await screen.findByRole('button', { name: /kisumu county/i });
+    expect(api.findSignup).not.toHaveBeenCalled();
+  });
 
-    render(<SignupPage />);
-    await pickWorkspace();
-    await screen.findByText(/workspace setup required/i);
-    fireEvent.click(screen.getByRole('button', { name: /sign out/i }));
-
-    await waitFor(() => expect(api.logout).toHaveBeenCalled());
-    // A surviving token would restore on a walk back to / or /manage.
-    await waitFor(() => expect(window.localStorage.getItem('crs-auth-state')).toBeNull());
+  it('shows selection errors without claiming setup is running', async () => {
+    withTenant(); vi.mocked(api.selectContext).mockRejectedValueOnce(new Error('Account locked'));
+    render(<SignupPage />); await pickWorkspace();
+    expect(await screen.findByText('Account locked')).toBeInTheDocument();
+    expect(screen.queryByText(/workspace setup is running/i)).not.toBeInTheDocument();
   });
 
   it('lets a tenant through when the backend has stated no readiness at all', async () => {
@@ -700,5 +692,91 @@ describe('resuming a run that was already going', () => {
 
     expect(await screen.findByText(/opening your workspace/i)).toBeInTheDocument();
     expect(screen.queryByLabelText(/account name/i)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * PGR marks the run SUCCEEDED, then publishes the outcome to the identity side
+ * on a later tick. Until then the tenant list is empty and selecting the tenant
+ * is refused, so success waits for `lifecyclePublishedAt` (CCRS#2303).
+ */
+describe('a success that is not yet published', () => {
+  const provisioning = {
+    id: 's1',
+    status: 'PROVISIONING' as const,
+    accountName: 'Kisumu County',
+    urlSlug: 'kisumu-county',
+    countryCode: 'KE',
+    languages: ['en'],
+    version: 4,
+    createdAt: 0,
+    updatedAt: 0,
+  };
+  const succeeded = {
+    id: 'op1',
+    signupId: 's1',
+    status: 'SUCCEEDED' as const,
+    currentStep: null,
+    completedSteps: ['TENANT_FOUNDATION', 'ORGANIZATION', 'TENANT_ADMIN_MEMBERSHIP', 'TENANT_ADMIN_ROLES', 'DIGIT_ACCOUNT'],
+    errorCode: null,
+    errorMessage: null,
+    attempt: 1,
+    lifecyclePublishedAt: null,
+    createdAt: 0,
+    updatedAt: 0,
+  };
+  const kisumu = { organizationAlias: 'kisumu-county', tenantId: 'kisumucounty', name: 'Kisumu County', roles: [] };
+
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.mocked(api.session).mockResolvedValue(signedIn);
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [], selectionRequired: false, onboardingRequired: true });
+    vi.mocked(api.findSignup).mockResolvedValue(provisioning as never);
+    vi.mocked(api.submitSignup).mockResolvedValue(succeeded as never);
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const tick = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+
+  it('keeps polling instead of reading a tenant list that is not there yet', async () => {
+    // A fresh object per read, as the network gives; the poll re-arms on change.
+    vi.mocked(api.findOperation).mockImplementation(async () => ({ ...succeeded }) as never);
+
+    render(<SignupPage />);
+    expect(await screen.findByText(/finishing setup/i)).toBeInTheDocument();
+    await tick(3000);
+    await tick(3000);
+
+    expect(api.findOperation).toHaveBeenCalledTimes(2);
+    // Only bootstrap's own read; nothing treated SUCCEEDED as ready.
+    expect(api.tenants).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(/choose a workspace/i)).not.toBeInTheDocument();
+  });
+
+  it('opens the workspace once the outcome is published', async () => {
+    vi.mocked(api.findOperation).mockResolvedValue({ ...succeeded, lifecyclePublishedAt: 1 } as never);
+
+    render(<SignupPage />);
+    await screen.findByText(/finishing setup/i);
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [kisumu], selectionRequired: true, onboardingRequired: false });
+    await tick(3000);
+
+    expect(await screen.findByText(/choose a workspace/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /kisumu county/i })).toBeInTheDocument();
+  });
+
+  it('says it is almost ready after a long wait, and slows down without giving up', async () => {
+    // A fresh object per read, as the network gives; the poll re-arms on change.
+    vi.mocked(api.findOperation).mockImplementation(async () => ({ ...succeeded }) as never);
+
+    render(<SignupPage />);
+    await screen.findByText(/finishing setup/i);
+    await tick(120_000);
+
+    expect(await screen.findByText(/almost ready/i)).toBeInTheDocument();
+    const calls = vi.mocked(api.findOperation).mock.calls.length;
+    await tick(15_000);
+    expect(api.findOperation).toHaveBeenCalledTimes(calls + 1);
+    expect(screen.queryByText(/choose a workspace/i)).not.toBeInTheDocument();
   });
 });

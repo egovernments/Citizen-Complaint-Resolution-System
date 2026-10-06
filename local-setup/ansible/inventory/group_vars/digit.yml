@@ -152,7 +152,6 @@ locale_default: "en"
 mdms_context: "mdms-v2"
 hrms_context: "egov-hrms"
 invalid_employee_roles: ["SYSTEM"]
-auth_provider: "digit"
 
 # Empty defaults — tenants set actual values in host_vars/_example.yml.
 asset_s3_bucket: ""           # filestore S3 fallback bucket
@@ -180,17 +179,8 @@ core_mobile_configs: {}
 footer_logo_url: "/digit-ui/brand/digit-footer.png"
 footer_bw_logo_url: "/digit-ui/brand/digit-footer-bw.png"
 
-# Tenant-restriction lists. Empty = no filtering. Tenants override
-# when they want to surface only their own city or hide modules.
-login_tenant_allowlist: []
+# Modules hidden from the employee UI for this deployment.
 employee_module_denylist: []
-
-# Tenant switcher in the employee top bar and the mobile drawer.
-# null  - decided by the UI: shown only where the signed-in user holds roles
-#         in more than one tenant, which is the useful rule (CCRS#2038).
-# true  - always shown, even with a single tenant.
-# false - never shown, even where switching is possible.
-show_tenant_switcher: null
 
 # Client-side dashboard render-lag instrumentation (#1110): the supervisor
 # dashboard POSTs OTLP metrics/logs to the same-origin /otel Kong route.
@@ -489,3 +479,19 @@ ccrs_image_catalog:
 # anyone holding the URL can post into the channel -- so prefer pulling it from
 # OpenBao via secrets_path rather than committing it here.
 gatus_slack_webhook_url: ""
+
+# PGR tenant onboarding (#2269). The runner provisions self-service signups
+# and needs a platform provisioner: an EMPLOYEE at a ROOT tenant holding
+# MDMS_ADMIN, ACCOUNT_ADMIN, LOC_ADMIN and HRMS_ADMIN there
+# (OnboardingProvisionerClient). Signups only arrive through the identity
+# BFF, so the runner is rendered on only with enable_keycloak. When it is
+# on, playbook-deploy.yml ensures this account exists (create-if-absent,
+# then a token mint that checks its roles) and keeps its password in OpenBao
+# as `pgr_digit_provisioner_password` (generated when absent).
+#
+# Empty host_vars values fall back, so an inventory copied from an older
+# _example.yml (which shipped "") still gets a working account; a box that
+# already has the legacy identity_digit_provisioner_* account keeps it.
+pgr_onboarding_runner_effective: "{{ (pgr_onboarding_runner_enabled | default(true) | bool) and (enable_keycloak | default(false) | bool) }}"
+pgr_provisioner_username: "{{ pgr_digit_provisioner_username | default('', true) or identity_digit_provisioner_username | default('', true) or 'PGR_PROVISIONER' }}"
+pgr_provisioner_tenant_id: "{{ pgr_digit_provisioner_tenant_id | default('', true) or identity_digit_provisioner_tenant_id | default('', true) or state_root | default('', true) or 'pg' }}"

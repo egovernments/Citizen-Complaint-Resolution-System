@@ -1,5 +1,5 @@
 import type { GlobalSetupContext } from "vitest/node";
-import { initKeys, createJwksApp, cleanupKeys } from "../mocks/jwks-server.js";
+import { initKeys, createJwksApp, cleanupKeys, ISSUER, JWKS_PORT } from "../mocks/jwks-server.js";
 import { createEgovUserMock } from "../mocks/egov-user.js";
 import { createKcAdminMock } from "../mocks/kc-admin.js";
 import type { AddressInfo } from "node:net";
@@ -10,9 +10,9 @@ export async function setup(_ctx: GlobalSetupContext) {
   cleanupKeys();
   await initKeys();
 
-  // 1. JWKS server on :9999
+  // 1. JWKS server on JWKS_PORT (9999 for the default Redis port)
   const jwksApp = createJwksApp();
-  const jwksSrv = jwksApp.listen(9999);
+  const jwksSrv = jwksApp.listen(JWKS_PORT);
   servers.push(jwksSrv);
 
   // 2. Mock egov-user on random port
@@ -28,9 +28,8 @@ export async function setup(_ctx: GlobalSetupContext) {
   const kcAdminPort = (kcAdminSrv.address() as AddressInfo).port;
 
   // Set env vars for workers
-  process.env.KEYCLOAK_JWKS_URI =
-    "http://localhost:9999/realms/digit-sandbox/protocol/openid-connect/certs";
-  process.env.KEYCLOAK_ISSUER = "http://localhost:9999/realms/digit-sandbox";
+  process.env.KEYCLOAK_JWKS_URI = `${ISSUER}/protocol/openid-connect/certs`;
+  process.env.KEYCLOAK_ISSUER = ISSUER;
   process.env.DIGIT_USER_SERVICE_URL = `http://localhost:${egovPort}/user`;
   process.env.REDIS_HOST ||= "localhost";
   process.env.REDIS_PORT ||= "16379";

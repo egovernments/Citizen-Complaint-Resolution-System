@@ -97,6 +97,9 @@ export const MDMS_SCHEMAS = {
   MAP_CONFIG: 'RAINMAKER-PGR.MapConfig',
   DASHBOARD_CONFIG: 'dss.DashboardConfig',
   ESCALATION_CONFIG: 'RAINMAKER-PGR.EscalationConfig',
+  // The tenant's operational boundary hierarchy (CMS row), read by digit-ui,
+  // the dashboard and PGR in place of the deployment-wide globalConfigs keys.
+  HIERARCHY_SCHEMA: 'CMS-BOUNDARY.HierarchySchema',
 };
 
 // OAuth credentials

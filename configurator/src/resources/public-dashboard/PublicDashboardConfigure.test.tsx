@@ -1,22 +1,24 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { getConfig, upsertConfig, refreshConfig } = vi.hoisted(() => ({
+const { getConfig, upsertConfig, refreshConfig, appState } = vi.hoisted(() => ({
   getConfig: vi.fn(),
   upsertConfig: vi.fn(),
   refreshConfig: vi.fn(),
+  appState: { tenant: 'ke.bomet' },
 }));
 
 vi.mock('@/App', () => ({
   useApp: () => ({
     state: {
-      tenant: 'ke.bomet',
+      tenant: appState.tenant,
       environment: 'https://complaints.example/',
       user: { name: 'Vikram Mehta', email: 'vikram@example.org' },
     },
   }),
 }));
 vi.mock('@/api', () => ({ getConfiguredRootTenant: () => 'ke' }));
+vi.mock('@/identity/workspaceSlug', () => ({ useWorkspaceSlug: () => 'bomet' }));
 vi.mock('@/api/services/mdms', () => ({
   mdmsService: {
     getDashboardConfig: (...args: unknown[]) => getConfig(...args),
@@ -44,6 +46,7 @@ beforeEach(() => {
   getConfig.mockReset().mockResolvedValue(null);
   upsertConfig.mockReset().mockResolvedValue({});
   refreshConfig.mockReset().mockResolvedValue(true);
+  appState.tenant = 'ke.bomet';
 });
 
 const openAccessDialog = async () => {
@@ -52,12 +55,20 @@ const openAccessDialog = async () => {
 };
 
 describe('PublicDashboardConfigure', () => {
-  it('shows the canonical state-level public URL', async () => {
+  it('shows the workspace-scoped public URL', async () => {
     render(<PublicDashboardConfigure />);
 
     const url = await screen.findByLabelText('Public dashboard URL');
-    expect(url).toHaveValue('https://complaints.example/digit-ui/public-dashboard');
+    expect(url).toHaveValue('https://complaints.example/bomet/digit-ui/public-dashboard');
     expect(screen.getByText(/Control credential-free access/)).toHaveTextContent('ke');
+  });
+
+  it('targets the signed-in tenant root, not the build-time root (#2072)', async () => {
+    appState.tenant = 'kisumu';
+    render(<PublicDashboardConfigure />);
+
+    await waitFor(() => expect(getConfig).toHaveBeenCalledWith('kisumu'));
+    expect(getConfig).not.toHaveBeenCalledWith('ke');
   });
 
   it('enables in one click and stamps the published time', async () => {

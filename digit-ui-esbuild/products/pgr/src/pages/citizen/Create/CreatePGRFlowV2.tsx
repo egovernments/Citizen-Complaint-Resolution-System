@@ -692,7 +692,7 @@ function DetailsStep(props: DetailsStepProps) {
     <div className="cms-step-body">
       <Section className="cms-section-describe">
         <label className="cms-label" htmlFor="complaint-description">
-          {say("CS_FILE_DESCRIBE", "Describe your complaint")} <span className="cms-required">*</span>
+          {say("CS_FILE_DESCRIBE_TITLE", "Tell us how we can help")} <span className="cms-required">*</span>
         </label>
         <div className={`cms-textarea-wrap${canSpeak ? " with-mic" : ""}`}>
           <Textarea
@@ -700,7 +700,10 @@ function DetailsStep(props: DetailsStepProps) {
             className="cms-textarea"
             rows={6}
             maxLength={DESCRIPTION_MAX}
-            placeholder={say("CS_FILE_DESCRIBE_PLACEHOLDER", "Type your complaint here…")}
+            placeholder={say(
+              "CS_FILE_DESCRIBE_PLACEHOLDER",
+              "Please share as much as you can about the issue. The more you can tell us, the sooner we can help.",
+            )}
             value={data.description ?? ""}
             onChange={(e) => patch({ description: e.target.value })}
           />
@@ -710,10 +713,10 @@ function DetailsStep(props: DetailsStepProps) {
           {(data.description ?? "").length} / {DESCRIPTION_MAX}
         </div>
       </Section>
-      <Section title={say("CS_FILE_PHOTO", "Upload a photo")} className="cms-section-photos">
+      <Section title={say("CS_FILE_PHOTO", "Add a photo")} className="cms-section-photos">
         <PhotoPicker photos={photos} onChange={setPhotos} tenantId={tenantId || ""} tr={say} />
       </Section>
-      <Section title={say("CS_FILE_CATEGORY", "Complaint category")} className="cms-section-category">
+      <Section title={say("CS_FILE_CATEGORY", "Nature of your issue")} className="cms-section-category">
         <CategoryFields {...props} />
       </Section>
     </div>
@@ -727,7 +730,7 @@ function LocationStep(props: StepBodyProps) {
   const coords = pinned ? `${Number(point?.lat).toFixed(5)}, ${Number(point?.lng).toFixed(5)}` : "";
   return (
     <div className="cms-step-body cms-location-body">
-      <Section title={tr(t, "CS_FILE_STEP_LOCATION", "Location")} className="cms-section-map">
+      <Section title={tr(t, "CS_FILE_LOCATION_TITLE", "Tell us where this happened")} className="cms-section-map">
         <p className="cms-section-hint">
           {tr(t, "CS_PIN_LOCATION_HINT", "Drop a pin on the exact spot — we'll use it to route your complaint to the right ward.")}
         </p>
@@ -1091,7 +1094,7 @@ const CreatePGRFlowV2: React.FC = () => {
   /** Why Next is held, in the words the design uses. */
   const hint = (() => {
     if (stepIndex === 0) {
-      if (!(formData.description ?? "").trim()) return tr(t, "CS_FILE_HINT_DESCRIBE", "Describe your complaint to continue.");
+      if (!(formData.description ?? "").trim()) return tr(t, "CS_FILE_HINT_DESCRIBE", "Tell us about the issue to continue.");
       if (!descriptionOk) return tr(t, "CS_FILE_HINT_LETTERS", "Use at least three letters to describe the complaint.");
       if (!categoryOk) return tr(t, "CS_FILE_HINT_CATEGORY", "Select a complaint category and subcategory to continue.");
       if (uploading) return tr(t, "CS_FILE_HINT_UPLOADING", "Wait for your photos to finish uploading.");
@@ -1175,14 +1178,14 @@ const CreatePGRFlowV2: React.FC = () => {
           trackEvent("pgr.file-complaint.submit-failed", { category: "pgr" });
           dispatch({ type: "CREATE_COMPLAINT", payload: { responseInfo: { status: "failed" } } });
           setSubmitting(false);
-          history.push(`/digit-ui/citizen/pgr/response`);
+          history.push(`/${window?.contextPath}/citizen/pgr/response`);
         },
         onSuccess: async (responseData: any) => {
           trackEvent("pgr.file-complaint.submitted", { category: "pgr" });
           dispatch({ type: "CREATE_COMPLAINT", payload: responseData });
           await client.refetchQueries(["complaintsList"]);
           setSubmitting(false);
-          history.push(`/digit-ui/citizen/pgr/response`, { filedSummary });
+          history.push(`/${window?.contextPath}/citizen/pgr/response`, { filedSummary });
         },
       });
       return;

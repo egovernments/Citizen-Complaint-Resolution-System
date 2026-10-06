@@ -1,3 +1,4 @@
+import { tenantSlug } from '../utils/identity-bff';
 /**
  * Citizen file-complaint wizard — happy path
  *
@@ -441,7 +442,7 @@ Test timeout is 180s — six steps plus DOM settles plus the final POST regularl
     await citizenOtpLogin(page);
 
     await page.goto(
-      `${BASE_URL}/digit-ui/citizen/pgr/create-complaint/complaint-type`,
+      `${BASE_URL}/${tenantSlug()}/digit-ui/citizen/pgr/create-complaint/complaint-type`,
       { waitUntil: 'domcontentloaded', timeout: 30_000 },
     );
     await page.waitForTimeout(5000);
@@ -515,7 +516,7 @@ loading PGR_TEST_* localization rows would only hide that citizens are being ser
     await citizenOtpLogin(page);
 
     await page.goto(
-      `${BASE_URL}/digit-ui/citizen/pgr/create-complaint/complaint-type`,
+      `${BASE_URL}/${tenantSlug()}/digit-ui/citizen/pgr/create-complaint/complaint-type`,
       { waitUntil: 'domcontentloaded', timeout: 30_000 },
     );
     await page.waitForTimeout(5000);

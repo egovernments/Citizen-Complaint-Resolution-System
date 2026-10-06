@@ -7,6 +7,8 @@ COPY tsconfig.json ./
 COPY packages/data-provider/tsconfig.json packages/data-provider/tsconfig.json
 COPY packages/data-provider/src/ packages/data-provider/src/
 COPY src/ src/
+COPY data/platform-baseline-v1.json data/platform-baseline-v1.json
+COPY scripts/stage-platform-baseline.mjs scripts/stage-platform-baseline.mjs
 RUN npm run build
 
 FROM node:22-alpine

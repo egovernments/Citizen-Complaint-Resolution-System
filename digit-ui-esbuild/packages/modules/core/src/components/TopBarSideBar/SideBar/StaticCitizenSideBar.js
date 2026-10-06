@@ -24,7 +24,6 @@ import SideBarMenu from "../../../config/sidebar-menu";
 import { useTranslation } from "react-i18next";
 import { useHistory } from "react-router-dom";
 import LogoutDialog from "../../Dialog/LogoutDialog";
-import ChangeCity from "../../ChangeCity";
 import { defaultImage, resolveProfilePhoto } from "../../utils";
 import ImageComponent from "../../ImageComponent";
 
@@ -58,9 +57,6 @@ const Profile = ({ info, stateName, t, photo }) => (
       </div>
     )}
     <div className="profile-divider"></div>
-    {window.location.href.includes("/employee") &&
-      !window.location.href.includes("/employee/user/login") &&
-      !window.location.href.includes("employee/user/language-selection") && <ChangeCity t={t} mobileView={true} />}
   </div>
 );
 const IconsObject = {
@@ -126,8 +122,8 @@ const StaticCitizenSideBar = ({ linkData, islinkDataLoading }) => {
     toggleSidebar(false);
     setShowDialog(true);
   };
-  const handleOnSubmit = () => {
-    Digit.UserService.logout();
+  const handleOnSubmit = async () => {
+    await Digit.UserService.logout();
     setShowDialog(false);
     window.location.href = `/${window?.contextPath}/citizen/login`;
   };
@@ -244,13 +240,13 @@ const StaticCitizenSideBar = ({ linkData, islinkDataLoading }) => {
   Object.keys(linkData || {})
     ?.sort((x, y) => y.localeCompare(x))
     ?.map((key) => {
-      if (linkData[key][0]?.sidebar === `${window.contextPath}-links`) {
+      if (linkData[key][0]?.sidebar === `${Digit.Utils.mdmsAppId()}-links`) {
         menuItems.splice(1, 0, {
-          type: linkData[key][0]?.sidebarURL?.includes(window?.contextPath) ? "link" : "external-link",
+          type: Digit.Utils.rebaseAppUrl(linkData[key][0]?.sidebarURL)?.includes(window?.contextPath) ? "link" : "external-link",
           text: t(`ACTION_TEST_${Digit.Utils.locale.getTransformedLocale(key)}`),
           links: linkData[key],
           icon: linkData[key][0]?.leftIcon,
-          link: linkData[key][0]?.sidebarURL,
+          link: Digit.Utils.rebaseAppUrl(linkData[key][0]?.sidebarURL),
         });
       }
     });

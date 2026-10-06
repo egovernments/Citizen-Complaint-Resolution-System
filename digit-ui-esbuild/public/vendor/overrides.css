@@ -10215,6 +10215,43 @@ html[data-sidebar-pinned] .citizen .main.center-container.citizen-home-container
     flex: 1;
   }
 
+  /* Back / Next sit on "Powered by DIGIT" at the foot of the screen on every
+   * step. A short step (Complaint Details) left the bar under its last field
+   * with a grey band below it; a long one pinned the bar to the very bottom,
+   * over the page footer, which then showed only at the end of the page.
+   * The card now fills the page so the bar starts at its foot, and the page
+   * footer sticks too, with the bar stacked on top of it. */
+  .citizen .pgr-citizen-wrapper:has(> .cms-file) {
+    display: flex;
+    flex-direction: column;
+  }
+  .pgr-citizen-wrapper > .cms-file,
+  .cms-file > .cms-file-card {
+    flex: 1 0 auto;
+  }
+  .cms-file > .cms-file-card {
+    display: flex;
+    flex-direction: column;
+  }
+  .cms-file-card > .cms-footer {
+    margin-top: auto;
+    bottom: calc(var(--v2-page-footer-height, 40px) + env(safe-area-inset-bottom, 0px));
+    padding-bottom: 12px;
+  }
+  /* !important beats the phone rule that un-fixes this footer everywhere
+   * (`position: static !important`); sticky never covers content, since the
+   * footer still takes its own place at the end of the page. The page column
+   * beside it is a flex item at z-index 100, so the card painted over the
+   * pinned footer until it was raised above that. */
+  .citizen:has(.cms-file) > .citizen-home-footer {
+    position: sticky !important;
+    bottom: 0;
+    z-index: 101;
+    box-sizing: border-box;
+    height: calc(var(--v2-page-footer-height, 40px) + env(safe-area-inset-bottom, 0px));
+    padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+  }
+
   .cms-sheet-overlay {
     place-items: end stretch;
     padding: 16px;

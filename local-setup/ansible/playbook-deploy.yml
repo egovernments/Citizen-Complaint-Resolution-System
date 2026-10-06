@@ -60,6 +60,22 @@
           no OTP can be sent. Set enable_novu: true (and enable SMS for the tenant under
           Configurator -> Notifications -> Channels), or leave enable_otp_services false.
 
+    # The fixed OTP (123456) and log delivery are opt-in only, so a Keycloak box
+    # with no SMS stack and neither opt-in has no way to deliver a citizen code.
+    # Warn, never fail: staff sign-in and citizen password sign-in still work.
+    - name: "preflight — warn when citizen phone sign-in has no OTP channel"
+      when:
+        - enable_keycloak | default(false) | bool
+        - not (enable_otp_services | default(false) | bool)
+        - not (identity_dev_fixed_otp | default(false) | bool)
+        - not (identity_citizen_otp_sender | default('', true) | length > 0)
+      ansible.builtin.debug:
+        msg: >-
+          WARNING: citizen phone sign-in is unavailable on this box. enable_otp_services
+          is false and neither identity_dev_fixed_otp: true (development only: accepts
+          123456) nor identity_citizen_otp_sender is set in host_vars. Set one of them to
+          offer phone sign-in.
+
     # pgr-services, pgr-services-db, novu-bridge and novu-bridge-db must come from ONE
     # build (see notification_stack_tag in host_vars/_example.yml). They all follow
     # notification_stack_tag unless a per-image override pins one of them, and a partial
@@ -537,15 +553,13 @@
     # The legacy Keycloak UI login path is GONE as of #2088: the `/kc` Kong
     # route in front of token-exchange-svc, the per-tenant realm template and
     # its `digit-ui` public client were all removed in favour of the Identity
-    # BFF at `/identity/v1`. Both frontends still resolve `auth_provider:
-    # keycloak` to that old path — digit-ui-esbuild through
-    # globalConfigs.tokenExchangeUrl (`/kc`) and digit-ui-v2 through its
-    # baked VITE_TOKEN_EXCHANGE_URL (`/token-exchange`) plus a realm named
-    # after state_tenant_id — so a tenant that sets it now gets 404s at login
-    # instead of SSO. The frontend cutover is a separate change; until it
-    # lands, refuse the combination rather than ship a login that cannot work.
-    # (Dhruv review, #2088.)
-    - name: "preflight — Keycloak UI login is unavailable until the frontend cutover"
+    # BFF at `/identity/v1`. `auth_provider: keycloak` selected that old
+    # browser-adapter path, and D26 removed the frontend code that read it, so
+    # the key is retired: every sign-in goes through the Identity BFF whatever
+    # it says. A host_vars that still sets `keycloak` was written for the old
+    # path, so refuse it rather than let the operator think it does something.
+    # (Dhruv review, #2088; wording updated for #2271 review 3.)
+    - name: "preflight — refuse the retired auth_provider: keycloak"
       vars:
         _keycloak_login_surfaces: >-
           {{ {'auth_provider': auth_provider | default(''),
@@ -558,18 +572,58 @@
           host_vars for {{ inventory_hostname }} selects Keycloak login on:
           {{ _keycloak_login_surfaces | join(', ') }}
 
-          That path no longer exists. #2088 replaced it with the Identity BFF
-          (`/identity/v1`) and removed what the old auth-adapter called:
-            - the `/kc` Kong route in front of token-exchange-svc,
-            - the per-tenant Keycloak realm named after state_tenant_id,
-            - the `digit-ui` public client in that realm.
-          Deploying this would give every user a 404 at login.
+          That browser-adapter path no longer exists. #2088 replaced it with
+          the Identity BFF (`/identity/v1`) and removed what it called (the
+          `/kc` Kong route, the per-tenant realm named after state_tenant_id
+          and its `digit-ui` client); D26 removed the frontend code that read
+          these keys.
 
-          Leave these keys unset (or 'digit') until the frontend cutover lands.
-          `enable_keycloak: true` on its own is fine and is what stands up
-          Keycloak, the Identity BFF and `/identity/v1` — it does not require
-          flipping auth_provider.
+          Delete these keys (or set them to 'digit'). Every employee and
+          citizen sign-in already goes through Keycloak and the Identity BFF;
+          `enable_keycloak: true` is what stands them up.
       when: _keycloak_login_surfaces | length > 0
+
+    # D26 removed every sign-in path that did not go through the Identity BFF:
+    # the tenantless /digit-ui/user/* pages, the legacy citizen OTP and
+    # employee password pages, and (with Keycloak on) the native create/reset/
+    # OTP endpoints at Kong. Tenant routes resolve through
+    # /identity/v1/tenant-contexts/<slug>, which only exists in the `keycloak`
+    # compose profile. identity_legacy_user_endpoints reopens Kong endpoints,
+    # not the UI pages, so it is no way around this. (Dhruv, #2271 review 2.)
+    - name: "preflight — identity requires enable_keycloak: true"
+      ansible.builtin.fail:
+        msg: >-
+          enable_keycloak is false on {{ inventory_hostname }}, but since D26
+          every DIGIT UI sign-in (employee and citizen) goes through the
+          Identity BFF, which only runs with Keycloak. Without it the
+          /<tenant-slug>/digit-ui/ routes cannot resolve their tenant and
+          nobody can sign in; the old DIGIT OTP/password login pages are gone.
+          Set `enable_keycloak: true` (and `nginx_features.keycloak: true`)
+          in host_vars/{{ inventory_hostname }}.yml, with keycloak_admin_password,
+          keycloak_db_password and identity_digit_admin_password in
+          bootstrap_secrets (or OpenBao). See the Keycloak section of
+          host_vars/_example.yml. With enable_novu, either Novu dashboard
+          works alongside it: nginx routes Keycloak's /auth/realms/ and
+          /auth/resources/ ahead of the stock dashboard's /auth/ paths, though
+          `build_novu_dashboard: true` remains the cleaner setup.
+      when: not (enable_keycloak | default(false) | bool)
+
+    - name: "preflight — refuse retired digit-ui-v2 citizen identity"
+      ansible.builtin.fail:
+        msg: >-
+          enable_digit_ui_v2 is no longer supported. D26 retired its fixed-OTP
+          citizen login, direct egov-user account creation and profile writes.
+          Publish the canonical /<tenant-slug>/digit-ui/citizen route instead.
+      when: enable_digit_ui_v2 | default(false)
+
+    - name: "preflight — validate digit_ui_default_tenant_slug"
+      ansible.builtin.assert:
+        that:
+          - digit_ui_default_tenant_slug is match('^[a-z0-9][a-z0-9-]{1,62}$')
+        fail_msg: >-
+          digit_ui_default_tenant_slug must be a 2-63 character lowercase
+          tenant route slug containing only letters, digits and hyphens.
+      when: digit_ui_default_tenant_slug | default('') | length > 0
 
     # ==================== WSL2 resource config (.wslconfig) ====================
     # WSL2 defaults to ~50% of host RAM for the VM; the JVM stack then
@@ -1458,9 +1512,15 @@
 
     - name: Copy idempotent Identity Keycloak configurator
       copy:
-        src: ../../backend/identity-bff/deploy/digit-compose/configure-keycloak.sh
+        src: ../../keycloak/configure-keycloak.sh
         dest: "{{ digit_dir }}/configure-identity-keycloak.sh"
         mode: '0750'
+
+    - name: Copy the declared Identity Keycloak realm
+      copy:
+        src: ../../keycloak/realm.json
+        dest: "{{ digit_dir }}/identity-keycloak-realm.json"
+        mode: '0640'
 
     # Sourced by the "notification stack — remove the retired OTP senders" tasks: proves
     # novu-bridge has taken over the login-OTP topic before the old senders go (#2097).
@@ -1708,6 +1768,36 @@
         replace: ""
       register: kong_otp_unmock
       when: enable_otp_services | default(false)
+
+    # D26: with Keycloak enabled, legacy native identity endpoints default
+    # closed. An explicit identity_legacy_user_endpoints:true is the rollback
+    # switch for a non-complete deployment.
+    - name: "Kong — remove legacy identity endpoints from AUTH_OPTIONAL"
+      ansible.builtin.replace:
+        path: "{{ digit_dir }}/kong/.kong.yml.pinned"
+        regexp: '(?m)^.*-- identity-legacy-user-endpoint\n'
+        replace: ''
+      when: >-
+        not (identity_legacy_user_endpoints
+             | default(not (enable_keycloak | default(false))))
+
+    - name: "Kong — remove the legacy OTP validation mock route"
+      ansible.builtin.replace:
+        path: "{{ digit_dir }}/kong/.kong.yml.pinned"
+        regexp: '(?ms)^# identity-legacy-otp-mock-start\n.*?^# identity-legacy-otp-mock-end\n'
+        replace: ''
+      when: >-
+        not (identity_legacy_user_endpoints
+             | default(not (enable_keycloak | default(false))))
+
+    - name: "Kong — reopen legacy identity endpoints only when explicitly enabled"
+      ansible.builtin.replace:
+        path: "{{ digit_dir }}/kong/.kong.yml.pinned"
+        regexp: '(?ms)^- name: identity-legacy-user-endpoints-denied # identity-legacy-user-deny-start\n.*?^# identity-legacy-user-deny-end\n'
+        replace: ''
+      when: >-
+        identity_legacy_user_endpoints
+        | default(not (enable_keycloak | default(false)))
 
     - name: "Kong — write the pinned config back IN PLACE (preserves the inode)"
       ansible.builtin.shell: |
@@ -2184,6 +2274,11 @@
               index index.html index.htm;
               try_files $uri $uri/ /digit-ui/index.html;
 
+              # A missing asset is a 404, not the SPA shell with a 200 (#2271 review 3).
+              location ~ "[.](?:js|css|map|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|otf|eot)$" {
+                try_files $uri =404;
+              }
+
               sub_filter '</head>' '<script src="/digit-ui/globalConfigs.js"></script></head>';
             }
 
@@ -2294,6 +2389,24 @@
     # /root/DIGIT-MCP on the controller:
     #
     #   ansible-playbook ... --tags mcp-publish
+    - name: "MCP publish — ensure generated data directory"
+      ansible.builtin.file:
+        path: /root/DIGIT-MCP/data
+        state: directory
+        mode: "0755"
+      delegate_to: localhost
+      become: false
+      tags: ['mcp-publish', 'never']
+
+    - name: "MCP publish — stage canonical PGR platform baseline"
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json"
+        dest: /root/DIGIT-MCP/data/platform-baseline-v1.json
+        mode: "0644"
+      delegate_to: localhost
+      become: false
+      tags: ['mcp-publish', 'never']
+
     - name: Build + push digit-mcp image to VPC registry
       shell: |
         set -e
@@ -2355,6 +2468,15 @@
         - enable_mcp | default(false)
         - build_mcp | default(false)
 
+    - name: "MCP build — copy canonical PGR platform baseline to target"
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json"
+        dest: "{{ digit_dir }}/.build/platform-baseline-v1.json"
+        mode: "0644"
+      when:
+        - enable_mcp | default(false)
+        - build_mcp | default(false)
+
     - name: "MCP build — sync vendored digit-mcp source to target"
       synchronize:
         src: "{{ playbook_dir }}/../../digit-mcp/"
@@ -2368,13 +2490,16 @@
         - (mcp_repo_url | default('-')) == '-'
 
     - name: "Build digit-mcp image locally (when build_mcp)"
-      ansible.builtin.command: >-
-        bash {{ digit_dir }}/.build/mcp-build.sh
-        "{{ mcp_repo }}"
-        "{{ mcp_repo_url | default('-') }}"
-        "{{ mcp_ref | default('') }}"
-        "{{ mcp_image }}"
-        "{{ docker_default_platform | default('') }}"
+      ansible.builtin.command:
+        argv:
+          - bash
+          - "{{ digit_dir }}/.build/mcp-build.sh"
+          - "{{ mcp_repo }}"
+          - "{{ mcp_repo_url | default('-') }}"
+          - "{{ mcp_ref | default('') }}"
+          - "{{ mcp_image }}"
+          - "{{ docker_default_platform | default('') }}"
+          - "{{ digit_dir }}/.build/platform-baseline-v1.json"
       register: mcp_build_run
       changed_when: true
       when:
@@ -3132,6 +3257,20 @@
           admin user's password in Keycloak to match).
       when: enable_keycloak | default(false)
 
+    - name: "Identity BFF — validate staff credential mode"
+      ansible.builtin.assert:
+        that:
+          - (identity_staff_credential_mode | default('rotate')) in ['rotate', 'derived']
+          - >-
+            (identity_staff_credential_mode | default('rotate')) != 'derived'
+            or ((bao_secrets_identity.json.data.data.identity_credential_keys | default('', true)) | length > 0
+                and (bao_secrets_identity.json.data.data.identity_credential_key_current | default(0) | int) > 0)
+        fail_msg: >-
+          identity_staff_credential_mode must be rotate or derived. Derived mode
+          also requires identity_credential_keys and identity_credential_key_current
+          in OpenBao; rotate mode requires neither.
+      when: enable_keycloak | default(false)
+
     # `or`, not `ternary`: Jinja evaluates every filter argument up front, so a
     # ternary would run the generator on every deploy and discard it whenever
     # OpenBao already holds a value. `or` short-circuits. See the longer note
@@ -3156,9 +3295,27 @@
           identity_session_introspection_token: >-
             {{ _identity_stored.identity_session_introspection_token | default('', true)
                or lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
-          pgr_onboarding_worker_token: >-
-            {{ _identity_stored.pgr_onboarding_worker_token | default('', true)
+          identity_onboarding_token: >-
+            {{ _identity_stored.identity_onboarding_token | default('', true)
                or lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
+          keycloak_employee_client_secret: >-
+            {{ _identity_stored.keycloak_employee_client_secret | default('', true)
+               or lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
+          keycloak_citizen_client_secret: >-
+            {{ _identity_stored.keycloak_citizen_client_secret | default('', true)
+               or lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
+          identity_citizen_otp_secret: >-
+            {{ _identity_stored.identity_citizen_otp_secret | default('', true)
+               or lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
+          # PGR onboarding provisioner. A stored legacy BFF provisioner password
+          # wins over generating one, so a box that still uses that account keeps
+          # it. egov-user requires 8-15 characters with a digit, a lower- and an
+          # upper-case letter and one of @#$%; `@` (not `$`, which compose would
+          # interpolate in .env) satisfies the last rule.
+          pgr_digit_provisioner_password: >-
+            {{ _identity_stored.pgr_digit_provisioner_password | default('', true)
+               or _identity_stored.identity_digit_provisioner_password | default('', true)
+               or (lookup('password', '/dev/null length=11 chars=ascii_letters,digits') ~ 'Pq7@') }}
       when: enable_keycloak | default(false)
       no_log: true
 
@@ -3180,7 +3337,7 @@
       when:
         - enable_keycloak | default(false)
         # Exactly "the merge would change something", i.e. at least one of the
-        # six was absent or empty and has just been generated.
+        # resolved identity secrets was absent or empty and has just been generated.
         - (bao_secrets_identity.json.data.data | combine(identity_secrets))
           != bao_secrets_identity.json.data.data
       no_log: true
@@ -3201,9 +3358,17 @@
           KEYCLOAK_ADMIN_CLIENT_SECRET={{ identity_secrets.keycloak_admin_client_secret }}
           IDENTITY_CONTROL_PLANE_TOKEN={{ identity_secrets.identity_control_plane_token }}
           IDENTITY_SESSION_INTROSPECTION_TOKEN={{ identity_secrets.identity_session_introspection_token }}
-          PGR_ONBOARDING_WORKER_TOKEN={{ identity_secrets.pgr_onboarding_worker_token }}
+          KEYCLOAK_EMPLOYEE_CLIENT_SECRET={{ identity_secrets.keycloak_employee_client_secret }}
+          KEYCLOAK_CITIZEN_CLIENT_SECRET={{ identity_secrets.keycloak_citizen_client_secret }}
+          IDENTITY_CITIZEN_OTP_SECRET={{ identity_secrets.identity_citizen_otp_secret }}
+          IDENTITY_ONBOARDING_TOKEN={{ identity_secrets.identity_onboarding_token }}
+          {% if (identity_staff_credential_mode | default('rotate')) == 'derived' %}
+          IDENTITY_CREDENTIAL_KEYS={{ bao_secrets_identity.json.data.data.identity_credential_keys }}
+          IDENTITY_CREDENTIAL_KEY_CURRENT={{ bao_secrets_identity.json.data.data.identity_credential_key_current }}
+          {% endif %}
           IDENTITY_DIGIT_ADMIN_PASSWORD={{ bao_secrets_identity.json.data.data.identity_digit_admin_password | default(bao_secrets_identity.json.data.data.token_exchange_system_password | default('eGov@123')) }}
-          IDENTITY_DIGIT_PROVISIONER_PASSWORD={{ bao_secrets_identity.json.data.data.identity_digit_provisioner_password | default('') }}
+          PGR_DIGIT_PROVISIONER_PASSWORD={{ identity_secrets.pgr_digit_provisioner_password }}
+          PGR_DIGIT_OAUTH_CLIENT_SECRET={{ bao_secrets_identity.json.data.data.pgr_digit_oauth_client_secret | default('') }}
         marker: "# {mark} KEYCLOAK SECRETS"
         create: false
         mode: '0600'
@@ -5204,13 +5369,31 @@
     # When tls_enabled=false (sandbox), hit the box on plain HTTP and pass
     # `Host: {{ domain }}` so nginx routes to the right server-name block.
     # The hostname itself doesn't have to be DNS-resolvable.
-    - name: "validate — public UI returns 200"
+    #
+    # D26: the UI is canonical only under /<tenant-slug>/digit-ui/; the
+    # tenantless /digit-ui/ answers 404 unless digit_ui_default_tenant_slug is
+    # set, so it cannot be the gate. nginx does not resolve the slug (the SPA
+    # asks the Identity BFF), so any well-formed slug proves the route; the
+    # default one is used when configured. The bundle is checked on its own:
+    # tenant pages load it from the absolute /digit-ui/ prefix (esbuild
+    # PUBLIC_PATH), and a missing file there falls back to the SPA shell with
+    # 200 text/html, so the content type is what proves it is served.
+    - name: "validate — public UI serves the tenant route and its bundle"
       ansible.builtin.uri:
-        url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/digit-ui/"
+        url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}{{ item.path }}"
         status_code: [200]
         timeout: 10
         validate_certs: "{{ tls_enabled | default(true) }}"
         headers: "{{ {} if (tls_enabled | default(true)) else {'Host': domain} }}"
+      loop:
+        - {path: "/{{ digit_ui_default_tenant_slug | default('', true) or 'deploy-check' }}/digit-ui/", type: "text/html"}
+        - {path: "/digit-ui/index.js", type: "javascript"}
+      loop_control:
+        label: "{{ item.path }}"
+      register: public_ui_check
+      until: >-
+        public_ui_check.status | default(0) == 200
+        and (public_ui_check.content_type | default('')) is search(item.type)
       retries: 3
       delay: 5
 
@@ -5317,13 +5500,17 @@
           migration didn't run.
 
     # ────────────────────────────────────────────────────────────────
-    # MCP-driven tenant bootstrap. Once auth/pg works, ask MCP to clone
-    # everything from `pg` → `state_root` (e.g. `ke`) and `pg.citest` →
-    # `tenant_id` (e.g. `ke.kericho`). This seeds 30 schemas, ~1K data
-    # rows, ~8K localizations, the PGR workflow, an ADMIN eg_user, and
-    # an ADMIN HRMS Employee with all departments — enough for a full
-    # PGR lifecycle on day 1, and enough for the ui-tenant probe below
-    # to succeed so the SPA lands on the operator's tenant (not pg).
+    # MCP-driven tenant bootstrap. Once auth/pg works, ask MCP to seed
+    # `state_root` (e.g. `ke`) and `tenant_id` (e.g. `ke.kericho`) from the
+    # versioned platform baseline shared with PGR onboarding: its schemas and
+    # ~1K platform records (behind a role-action floor so Kong admits the
+    # writes), the PGR workflow, the localization packs of `source_tenant`
+    # (`pg` / `pg.citest`, plus the source's root), the city listed under the
+    # root as Tenant.<city>, an ADMIN eg_user (roles only ever added), and an
+    # ADMIN HRMS Employee rooted in the reserved WORKSPACE hierarchy. That is
+    # enough for the ui-tenant probe below to land the SPA on the operator's
+    # tenant (not pg); departments, complaint types and geography stay
+    # workspace-owned.
     #
     # Gating: skipped when state_tenant_id == 'pg' (nothing to bootstrap)
     # or when MCP isn't actually reachable at runtime. We don't gate on
@@ -5734,6 +5921,141 @@
       changed_when: "'CHANGED' in (admin_state_seed.stdout | default(''))"
       no_log: true
       when: state_root != 'pg'
+
+    # PGR onboarding provisioner (#2269 review item 7). With the runner on, PGR
+    # provisions every self-service signup as this account; without it the
+    # runner pauses and signups stay queued. Ensure it exists on the ROOT
+    # tenant with exactly the roles OnboardingProvisionerClient re-verifies
+    # (MDMS_ADMIN, ACCOUNT_ADMIN, LOC_ADMIN, HRMS_ADMIN at that root), the
+    # same create-if-absent way as INTERNAL_USER/ADMIN above: egov-user
+    # directly on the internal network, never _createnovalidate through Kong.
+    # Runs on pg too (the root is then `pg`). The password is the OpenBao
+    # value resolved with the identity secrets above.
+    - name: "onboarding provisioner — settings are usable"
+      ansible.builtin.assert:
+        that:
+          - pgr_provisioner_username | length > 0
+          - pgr_provisioner_tenant_id | length > 0
+          - "'.' not in pgr_provisioner_tenant_id"
+          - (identity_secrets.pgr_digit_provisioner_password | default('')) | length > 0
+        fail_msg: >-
+          The PGR onboarding runner is on but its provisioner is not usable:
+          pgr_digit_provisioner_username / pgr_digit_provisioner_tenant_id must be
+          set (the tenant must be a ROOT tenant, no dot) and OpenBao must hold
+          pgr_digit_provisioner_password. Or set pgr_onboarding_runner_enabled: false.
+      when: pgr_onboarding_runner_effective | bool
+
+    - name: "onboarding provisioner — ensure the account exists on {{ pgr_provisioner_tenant_id }}"
+      vars:
+        _provisioner_user:
+          RequestInfo: {apiId: digit, ver: "1.0"}
+          User:
+            userName: "{{ pgr_provisioner_username }}"
+            name: "PGR Onboarding Provisioner"
+            mobileNumber: "{{ core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$') | derive_valid_mobile(preferred='7777777777') }}"
+            gender: MALE
+            active: true
+            type: EMPLOYEE
+            tenantId: "{{ pgr_provisioner_tenant_id }}"
+            password: "{{ identity_secrets.pgr_digit_provisioner_password }}"
+            roles:
+              - {code: MDMS_ADMIN, name: MDMS Admin, tenantId: "{{ pgr_provisioner_tenant_id }}"}
+              - {code: ACCOUNT_ADMIN, name: Account Admin, tenantId: "{{ pgr_provisioner_tenant_id }}"}
+              - {code: LOC_ADMIN, name: Localisation Admin, tenantId: "{{ pgr_provisioner_tenant_id }}"}
+              - {code: HRMS_ADMIN, name: HRMS Admin, tenantId: "{{ pgr_provisioner_tenant_id }}"}
+              - {code: EMPLOYEE, name: Employee, tenantId: "{{ pgr_provisioner_tenant_id }}"}
+      ansible.builtin.shell: |
+        for i in $(seq 1 6); do
+          resp=$(docker run --rm --network "{{ digit_dir | basename }}_egov-network" egovio/curl:latest curl -s -w '\n%{http_code}' -X POST "http://egov-user-proxy:8107/user/users/_createnovalidate" -H 'Content-Type: application/json' -d "$PROVISIONER_BODY")
+          code=$(printf '%s' "$resp" | tail -n1)
+          content=$(printf '%s' "$resp" | sed '$d')
+          if [ "$code" = "200" ]; then echo "CHANGED provisioner created (attempt $i)"; exit 0; fi
+          if printf '%s' "$content" | grep -q DuplicateUserName; then echo "provisioner already present"; exit 0; fi
+          echo "attempt $i/6: http=$code"; sleep 8
+        done
+        echo "PGR onboarding provisioner create failed on {{ pgr_provisioner_tenant_id }}" >&2; exit 1
+      args:
+        chdir: "{{ digit_dir }}"
+      environment:
+        PROVISIONER_BODY: "{{ _provisioner_user | to_json }}"
+      register: pgr_provisioner_seed
+      changed_when: "'CHANGED' in (pgr_provisioner_seed.stdout | default(''))"
+      no_log: true
+      when: pgr_onboarding_runner_effective | bool
+
+    # An existing account is never rewritten (no password reset, no role
+    # change): prove it is the one PGR can use, or stop with the fix.
+    - name: "onboarding provisioner — log in and read its roles"
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ upstream_kong_port }}/user/oauth/token"
+        method: POST
+        headers:
+          Authorization: "Basic {{ ((pgr_digit_oauth_client_id | default('egov-user-client')) ~ ':' ~ (bao_secrets_identity.json.data.data.pgr_digit_oauth_client_secret | default(''))) | b64encode }}"
+        body_format: form-urlencoded
+        body:
+          grant_type: password
+          scope: read
+          username: "{{ pgr_provisioner_username }}"
+          password: "{{ identity_secrets.pgr_digit_provisioner_password }}"
+          tenantId: "{{ pgr_provisioner_tenant_id }}"
+          userType: EMPLOYEE
+        status_code: [200, 400, 401]
+        timeout: 15
+      register: pgr_provisioner_login
+      retries: 6
+      delay: 10
+      until: pgr_provisioner_login.status | default(0) in [200, 400, 401]
+      no_log: true
+      when: pgr_onboarding_runner_effective | bool
+
+    - name: "onboarding provisioner — can sign in with the onboarding admin roles"
+      vars:
+        _roles: >-
+          {{ (pgr_provisioner_login.json.UserRequest.roles | default([]))
+             | selectattr('tenantId', 'equalto', pgr_provisioner_tenant_id)
+             | map(attribute='code') | list }}
+      ansible.builtin.assert:
+        that:
+          - pgr_provisioner_login.status == 200
+          - (['MDMS_ADMIN', 'ACCOUNT_ADMIN', 'LOC_ADMIN', 'HRMS_ADMIN'] | difference(_roles)) | length == 0
+        fail_msg: >-
+          PGR onboarding provisioner '{{ pgr_provisioner_username }}' on
+          '{{ pgr_provisioner_tenant_id }}' is not usable (login HTTP
+          {{ pgr_provisioner_login.status }}
+          {{ (pgr_provisioner_login.json | default({})).error_description | default('') }}; missing roles:
+          {{ (['MDMS_ADMIN', 'ACCOUNT_ADMIN', 'LOC_ADMIN', 'HRMS_ADMIN'] | difference(_roles)) | join(', ') or 'none' }}).
+          The account already existed, so the playbook did not touch it. Either
+          set OpenBao pgr_digit_provisioner_password to its real password and give
+          it those roles at {{ pgr_provisioner_tenant_id }}, or point
+          pgr_digit_provisioner_username at a new account name, or set
+          pgr_onboarding_runner_enabled: false. Until then PGR pauses onboarding
+          and signups stay queued.
+          A login refused with the right password may be a LOCKOUT, not a wrong
+          password: egov-user locks an account after 5 failed logins in 30
+          minutes (for 60 minutes), and a pgr-services that ran with the old
+          password tried it before pausing. To unlock now, in the DIGIT database
+          (one transaction, by the account's eg_user id and uuid):
+          UPDATE eg_user SET accountlocked=false, accountlockeddate=NULL,
+          pwdexpirydate=now()+interval '90 days' WHERE id=<id> AND
+          tenantid='{{ pgr_provisioner_tenant_id }}'; UPDATE
+          eg_user_login_failed_attempts SET active=false WHERE
+          user_uuid='<uuid>' AND active; then restart pgr-services
+          (`docker compose restart pgr-services` in {{ digit_dir }}). Once its
+          provisioner has logged in, PGR retries a refused password only every
+          6 hours; before the first successful login, every 10 minutes.
+      when: pgr_onboarding_runner_effective | bool
+
+    # pgr-services was (re)created earlier in the play, before this account
+    # existed, so its runner may already have paused on a refused first login.
+    # A restart makes it re-check now instead of on its 10-minute schedule.
+    - name: "onboarding provisioner — restart pgr-services after creating its account"
+      ansible.builtin.shell: docker compose {{ compose_files }} restart pgr-services
+      args:
+        chdir: "{{ digit_dir }}"
+      changed_when: true
+      when:
+        - pgr_onboarding_runner_effective | bool
+        - pgr_provisioner_seed is changed
 
     - name: "post-bootstrap — recreate egov-hrms after egov-user is healthy"
       ansible.builtin.shell: >-
@@ -6342,6 +6664,8 @@
       ansible.builtin.command: "{{ digit_dir }}/configure-identity-keycloak.sh"
       environment:
         IDENTITY_ENV_DIR: "{{ digit_dir }}/identity"
+        KEYCLOAK_REALM_CONFIG: "{{ digit_dir }}/identity-keycloak-realm.json"
+        KEYCLOAK_EVENTS_EXPIRATION_SECONDS: "{{ identity_keycloak_events_expiration_seconds | default('') }}"
         KEYCLOAK_ORGANIZATION_REALM: "{{ keycloak_organization_realm | default('digit') }}"
         KEYCLOAK_SSL_REQUIRED: "{{ 'external' if (tls_enabled | default(true)) else 'none' }}"
         # The same resolved values that went into .env, so Keycloak's clients
@@ -6350,6 +6674,8 @@
         KEYCLOAK_MAGIC_LINK_ENABLED: "{{ identity_magic_link_enabled | default(false) | lower }}"
         KEYCLOAK_MAGIC_LINK_CLIENT_SECRET: "{{ identity_secrets.keycloak_magic_link_client_secret }}"
         KEYCLOAK_ADMIN_CLIENT_SECRET: "{{ identity_secrets.keycloak_admin_client_secret }}"
+        KEYCLOAK_EMPLOYEE_CLIENT_SECRET: "{{ identity_secrets.keycloak_employee_client_secret }}"
+        KEYCLOAK_CITIZEN_CLIENT_SECRET: "{{ identity_secrets.keycloak_citizen_client_secret }}"
         IDENTITY_REDIRECT_URI: "{{ ('https://' if (tls_enabled | default(true)) else 'http://') + domain + '/identity/v1/callback' }}"
         IDENTITY_POST_LOGIN_REDIRECT: "{{ identity_post_login_redirect | default(('https://' if (tls_enabled | default(true)) else 'http://') + domain + '/configurator/login', true) }}"
         IDENTITY_ALLOWED_ORIGINS: "{{ identity_allowed_origins | default(('https://' if (tls_enabled | default(true)) else 'http://') + domain, true) }}"
@@ -8230,19 +8556,37 @@
       timeout: 600
 
       when: run_ci_tests | default(false) and (run_playwright_tests | default(false))
+    # D26: the UI is served only on tenant routes (/<slug>/digit-ui/), which the host
+    # nginx answers, not the :18080 container. The specs need the tenant's URL slug.
+    - name: Skip Playwright E2E without a tenant URL slug
+      ansible.builtin.debug:
+        msg: >-
+          Playwright E2E skipped: set e2e_tenant_slug (or digit_ui_default_tenant_slug)
+          to the seeded tenant's URL slug; every spec opens /<slug>/digit-ui/.
+      when:
+        - run_ci_tests | default(false) and (run_playwright_tests | default(false))
+        - (e2e_tenant_slug | default(digit_ui_default_tenant_slug | default(''), true)) | length == 0
+
     - name: Wait for DIGIT UI to serve pages (up to 10 min)
-      shell: curl -sf http://127.0.0.1:18080/digit-ui/ -o /dev/null
+      shell: >-
+        curl -sf {{ _e2e_base_url }}/{{ _e2e_tenant_slug }}/digit-ui/ -o /dev/null
+      vars:
+        _e2e_base_url: "{{ ('https://' if (tls_enabled | default(true)) else 'http://') + domain }}"
+        _e2e_tenant_slug: "{{ e2e_tenant_slug | default(digit_ui_default_tenant_slug | default(''), true) }}"
       register: ui_health
       retries: 60
       delay: 10
       until: ui_health.rc == 0
       changed_when: false
 
-      when: run_ci_tests | default(false) and (run_playwright_tests | default(false))
+      when:
+        - run_ci_tests | default(false) and (run_playwright_tests | default(false))
+        - (e2e_tenant_slug | default(digit_ui_default_tenant_slug | default(''), true)) | length > 0
     - name: Run Playwright E2E tests (Bomet tenant)
       shell: |
         cd {{ digit_dir }}/e2e-tests
-        BASE_URL=http://127.0.0.1:18080 \
+        BASE_URL={{ ('https://' if (tls_enabled | default(true)) else 'http://') + domain }} \
+        E2E_TENANT_SLUG={{ e2e_tenant_slug | default(digit_ui_default_tenant_slug | default(''), true) }} \
         DIGIT_TENANT={{ boot_tenant | mandatory }} \
         DIGIT_USERNAME=BOMET_ADMIN \
         DIGIT_PASSWORD=eGov@123 \
@@ -8263,7 +8607,9 @@
       timeout: 900
       ignore_errors: yes
 
-      when: run_ci_tests | default(false) and (run_playwright_tests | default(false))
+      when:
+        - run_ci_tests | default(false) and (run_playwright_tests | default(false))
+        - (e2e_tenant_slug | default(digit_ui_default_tenant_slug | default(''), true)) | length > 0
     - name: Show Playwright test results
       debug:
         var: playwright_result.stdout_lines | default(['(no output - possibly timed out)'])

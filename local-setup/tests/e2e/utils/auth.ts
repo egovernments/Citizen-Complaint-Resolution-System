@@ -14,6 +14,25 @@ interface TokenResponse {
   };
 }
 
+/**
+ * The tenant route the UI specs run on. Since D26 the app is served only
+ * under /<tenant-slug>/digit-ui/; the tenantless /digit-ui/... app routes 404
+ * (or redirect to a deployment default). The slug must belong to the tenant
+ * the spec signs in to.
+ */
+export function tenantSlug(): string {
+  const slug = process.env.E2E_TENANT_SLUG || process.env.IDENTITY_TEST_TENANT_SLUG || '';
+  if (!/^[a-z0-9][a-z0-9-]{1,62}$/.test(slug)) {
+    throw new Error('Set E2E_TENANT_SLUG to the seeded tenant route slug (/<slug>/digit-ui/)');
+  }
+  return slug;
+}
+
+/** `/<slug>/digit-ui`, the app base every UI navigation goes through. */
+export function appBase(slug = tenantSlug()): string {
+  return `/${slug}/digit-ui`;
+}
+
 export interface AuthConfig {
   baseURL: string;
   tenant: string;
@@ -65,8 +84,9 @@ export async function loginViaApi(
 ): Promise<TokenResponse> {
   const tokenResponse = await getDigitToken(config);
 
-  // Navigate to set the origin (localStorage is origin-scoped)
-  await page.goto(`${config.baseURL}/digit-ui/employee/user/login`, {
+  // Set the origin (localStorage is origin-scoped) on a static file, so no
+  // login page starts an Identity BFF sign-in before the session is injected.
+  await page.goto(`${config.baseURL}/digit-ui/globalConfigs.js`, {
     waitUntil: 'domcontentloaded',
     timeout: 30_000,
   });
@@ -90,7 +110,7 @@ export async function loginViaApi(
   );
 
   // Navigate to the employee home page
-  await page.goto(`${config.baseURL}/digit-ui/employee`, {
+  await page.goto(`${config.baseURL}${appBase()}/employee`, {
     waitUntil: 'domcontentloaded',
     timeout: 30_000,
   });

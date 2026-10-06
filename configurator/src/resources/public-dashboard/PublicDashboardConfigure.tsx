@@ -19,6 +19,7 @@ import {
 } from './kpiCatalog';
 import { listTimeZones } from '@/lib/timezones';
 import { SearchableSelect } from '@/components/ui/SearchableSelect';
+import { useWorkspaceSlug } from '@/identity/workspaceSlug';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -86,10 +87,13 @@ function PreviewTileCard({ tile }: { tile: PreviewTile }) {
 
 export default function PublicDashboardConfigure() {
   const { state } = useApp();
-  const tenantId = getConfiguredRootTenant() || state.tenant.split('.')[0];
+  // The signed-in tenant's root owns the record; the build-time root is only a
+  // fallback before a tenant is known (#2072).
+  const tenantId = state.tenant.split('.')[0] || getConfiguredRootTenant();
+  const slug = useWorkspaceSlug(state.tenant);
   const dashboardUrl = useMemo(
-    () => buildPublicDashboardUrl(state.environment),
-    [state.environment],
+    () => buildPublicDashboardUrl(state.environment, slug),
+    [state.environment, slug],
   );
 
   // The whole record, not just the switch: the Last published tile and the
@@ -205,6 +209,7 @@ export default function PublicDashboardConfigure() {
   }, [state.user?.name, state.user?.email, tenantId]);
 
   const copyUrl = async () => {
+    if (!dashboardUrl) return;
     try {
       await navigator.clipboard.writeText(dashboardUrl);
       setCopied(true);
@@ -244,14 +249,19 @@ export default function PublicDashboardConfigure() {
             Public URL
           </p>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <Input value={dashboardUrl} readOnly aria-label="Public dashboard URL" />
-            <Button variant="outline" onClick={copyUrl} className="shrink-0">
+            <Input
+              value={dashboardUrl ?? ''}
+              placeholder={slug === undefined ? 'Resolving your workspace link…' : 'Workspace link unavailable. Sign in again to show it.'}
+              readOnly
+              aria-label="Public dashboard URL"
+            />
+            <Button variant="outline" onClick={copyUrl} disabled={!dashboardUrl} className="shrink-0">
               {copied ? <Check /> : <Copy />} {copied ? 'Copied' : 'Copy link'}
             </Button>
             <Button
               variant="outline"
-              disabled={!enabled}
-              onClick={() => window.open(dashboardUrl, '_blank', 'noopener,noreferrer')}
+              disabled={!enabled || !dashboardUrl}
+              onClick={() => dashboardUrl && window.open(dashboardUrl, '_blank', 'noopener,noreferrer')}
               className="shrink-0"
             >
               <ExternalLink /> Open public dashboard

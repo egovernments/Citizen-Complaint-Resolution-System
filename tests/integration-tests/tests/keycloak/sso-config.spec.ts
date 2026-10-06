@@ -11,39 +11,29 @@
  * available in a local stack (LOCAL_STACK=1). They are excluded from chromium
  * runs on deployed environments via grepInvert: EXCLUDE_LOCAL_ONLY.
  */
-import { test, expect } from '@playwright/test';
-import { KC_REALM, KC_CLIENT_ID, BASE_URL } from '../utils/env';
+import { test, expect, type APIRequestContext } from '@playwright/test';
+import { KC_REALM, KC_BASE, BASE_URL } from '../utils/env';
 
-// Helper: get KC admin token
-async function getAdminToken(): Promise<string> {
-  // Use internal KC URL (not public domain) to avoid proxy
-  const resp = await fetch('http://localhost:18180/realms/master/protocol/openid-connect/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: 'grant_type=password&client_id=admin-cli&username=admin&password=admin',
-  });
-  const data = await resp.json();
-  return data.access_token;
+import { keycloakAdmin } from '../utils/keycloak-admin';
+import { authorizeUrl } from '../utils/identity-bff';
+const KC_CLIENT_ID = process.env.IDENTITY_TEST_CITIZEN_CLIENT_ID || 'digit-ui-citizen';
+
+// Operator credentials are supplied only by the isolated fixture.
+async function getAdminToken(): Promise<string> { return keycloakAdmin().token; }
+async function brokerRedirect(request: APIRequestContext) {
+  const bff = await request.get(authorizeUrl(BASE_URL, 'citizen', 'google'), { maxRedirects: 0 });
+  expect(bff.status()).toBe(302);
+  return request.get(bff.headers().location, { maxRedirects: 0 });
 }
 
 test.describe('Google SSO Configuration', () => {
-  // These tests require Keycloak admin port (18180) — skip when unavailable
-  test.beforeEach(async () => {
-    let kcAvailable = false;
-    try {
-      const r = await fetch('http://localhost:18180/realms/master', { signal: AbortSignal.timeout(2000) });
-      kcAvailable = r.ok;
-    } catch { /* not reachable */ }
-    test.skip(!kcAvailable, 'Keycloak admin port (18180) not available');
-  });
-
   test('KC issuer uses the deployment domain (not an old hostname)', {
     tag: ['@local-only', '@area:keycloak', '@layer:api', '@persona:system'],
   }, async () => {
     const deploymentDomain = new URL(BASE_URL).origin;
 
     const resp = await fetch(
-      `${BASE_URL}/realms/${KC_REALM}/.well-known/openid-configuration`,
+      `${KC_BASE}/realms/${KC_REALM}/.well-known/openid-configuration`,
     );
     const discovery = await resp.json();
 
@@ -66,7 +56,7 @@ test.describe('Google SSO Configuration', () => {
     const adminToken = await getAdminToken();
 
     const resp = await fetch(
-      `http://localhost:18180/admin/realms/${KC_REALM}/clients`,
+      `${keycloakAdmin().base}/admin/realms/${KC_REALM}/clients`,
       { headers: { Authorization: `Bearer ${adminToken}` } },
     );
     const clients = await resp.json();
@@ -76,7 +66,7 @@ test.describe('Google SSO Configuration', () => {
 
     const redirectUris: string[] = client.redirectUris || [];
     const hasDeploymentDomain = redirectUris.some(
-      (uri) => uri.includes(deploymentDomain) || uri === '*',
+      (uri) => uri === `${deploymentDomain}/identity/v1/callback`,
     );
 
     expect(
@@ -94,7 +84,7 @@ test.describe('Google SSO Configuration', () => {
     const adminToken = await getAdminToken();
 
     const resp = await fetch(
-      `http://localhost:18180/admin/realms/${KC_REALM}/clients`,
+      `${keycloakAdmin().base}/admin/realms/${KC_REALM}/clients`,
       { headers: { Authorization: `Bearer ${adminToken}` } },
     );
     const clients = await resp.json();
@@ -122,7 +112,7 @@ test.describe('Google SSO Configuration', () => {
     const adminToken = await getAdminToken();
 
     const resp = await fetch(
-      `http://localhost:18180/admin/realms/${KC_REALM}/identity-provider/instances/google`,
+      `${keycloakAdmin().base}/admin/realms/${KC_REALM}/identity-provider/instances/google`,
       { headers: { Authorization: `Bearer ${adminToken}` } },
     );
 
@@ -145,20 +135,7 @@ test.describe('Google SSO Configuration', () => {
   }, async ({ request }) => {
     const deploymentDomain = new URL(BASE_URL).origin;
 
-    // Build the KC authorize URL with Google IdP hint
-    const authUrl =
-      `${BASE_URL}/realms/${KC_REALM}/protocol/openid-connect/auth` +
-      `?client_id=${KC_CLIENT_ID}` +
-      `&redirect_uri=${encodeURIComponent(deploymentDomain + '/digit-ui/user/login')}` +
-      `&response_type=code` +
-      `&scope=openid` +
-      `&kc_idp_hint=google` +
-      `&code_challenge=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` +
-      `&code_challenge_method=S256`;
-
-    // Use Playwright's API request context (Node.js level, no CORS issues)
-    // maxRedirects: 0 gives us the raw redirect response
-    const resp = await request.get(authUrl, { maxRedirects: 0 });
+    const resp = await brokerRedirect(request);
     const status = resp.status();
     const headers = resp.headers();
     const location = headers['location'] || '';
@@ -192,25 +169,11 @@ test.describe('Google SSO Configuration', () => {
   }, async ({ request }) => {
     const deploymentDomain = new URL(BASE_URL).origin;
 
-    // Step 1: Hit KC authorize with google hint
-    const authUrl =
-      `${BASE_URL}/realms/${KC_REALM}/protocol/openid-connect/auth` +
-      `?client_id=${KC_CLIENT_ID}` +
-      `&redirect_uri=${encodeURIComponent(deploymentDomain + '/digit-ui/user/login')}` +
-      `&response_type=code` +
-      `&scope=openid` +
-      `&kc_idp_hint=google` +
-      `&code_challenge=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` +
-      `&code_challenge_method=S256`;
-
-    const step1Resp = await request.get(authUrl, { maxRedirects: 0 });
+    const step1Resp = await brokerRedirect(request);
     const step1Status = step1Resp.status();
     const step1Location = step1Resp.headers()['location'] || '';
 
-    if (step1Status < 300 || step1Status >= 400) {
-      test.skip(true, `KC authorize returned ${step1Status} — cannot test Google redirect`);
-      return;
-    }
+    expect([302, 303, 307]).toContain(step1Status);
 
     // Step 2: Follow the broker redirect — should go to Google
     const step2Resp = await request.get(step1Location, { maxRedirects: 0 });
@@ -240,7 +203,7 @@ test.describe('Google SSO Configuration', () => {
 
     // Get the Google IdP config
     const resp = await fetch(
-      `http://localhost:18180/admin/realms/${KC_REALM}/identity-provider/instances/google`,
+      `${keycloakAdmin().base}/admin/realms/${KC_REALM}/identity-provider/instances/google`,
       { headers: { Authorization: `Bearer ${adminToken}` } },
     );
     const idp = await resp.json();
@@ -297,7 +260,7 @@ test.describe('Google SSO Configuration', () => {
         code: 'dummy_invalid_code',
         client_id: clientId,
         client_secret: clientSecret,
-        redirect_uri: `${BASE_URL}/realms/${KC_REALM}/broker/google/endpoint`,
+        redirect_uri: `${KC_BASE}/realms/${KC_REALM}/broker/google/endpoint`,
         grant_type: 'authorization_code',
       }).toString(),
     });

@@ -152,7 +152,9 @@ root-ingress:
   name: root-ingress
   namespace: egov
   cert-issuer: "letsencrypt-staging"
-  appRoot: digit-ui
+  # Set to a tenant route slug to redirect `/` to `/<slug>/digit-ui`.
+  # Empty leaves `/` without a tenantless digit-ui login.
+  defaultTenantSlug: ""
   serviceName: digit-ui
   servicePort: 80
 secrets:

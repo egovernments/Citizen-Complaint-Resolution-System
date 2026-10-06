@@ -1,3 +1,4 @@
+import { tenantSlug } from '../utils/identity-bff';
 import { test, expect, Page } from "@playwright/test";
 import { citizenOtpLogin } from "../utils/citizen-login";
 import { BASE_URL, TENANT } from "../utils/env";
@@ -160,7 +161,7 @@ async function stubResolvedComplaint(page: Page, resolvedAgoMs: number) {
 
 async function openComplaint(page: Page) {
   await citizenOtpLogin(page);
-  await page.goto(`${BASE_URL}/digit-ui/citizen/pgr/complaints/${COMPLAINT_ID}`, {
+  await page.goto(`${BASE_URL}/${tenantSlug()}/digit-ui/citizen/pgr/complaints/${COMPLAINT_ID}`, {
     waitUntil: "domcontentloaded",
     timeout: 30_000,
   });
