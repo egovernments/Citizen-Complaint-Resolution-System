@@ -6,6 +6,7 @@ import { parseDepartmentExcel, parseDesignationExcel, parseExcelFile } from '@/u
 import { downloadCommonMastersTemplate } from '@/utils/templateBuilder';
 import { describeSaveError } from '../errors';
 import { reportStepError } from '../telemetry';
+import { useOnboardingT } from '../i18n';
 import { importMasters, type ImportResult, type MasterInput } from './mastersApi';
 
 interface Parsed {
@@ -38,6 +39,7 @@ export function BulkMastersUpload({
   onDone: (summary: BulkImportSummary) => void;
   onCancel: () => void;
 }) {
+  const t = useOnboardingT();
   const fileInput = useRef<HTMLInputElement>(null);
   const [parsed, setParsed] = useState<Parsed | null>(null);
   const [reading, setReading] = useState(false);
@@ -54,7 +56,7 @@ export function BulkMastersUpload({
       const departments = parseDepartmentExcel(workbook);
       const designations = parseDesignationExcel(workbook);
       if (!departments.data.length && !designations.data.length) {
-        setError('No departments or designations found. Use the template’s Department and Designation sheets.');
+        setError(t('departments.bulk.none_found', 'No departments or designations found. Use the template’s Department and Designation sheets.'));
         setParsed(null);
         return;
       }
@@ -65,11 +67,11 @@ export function BulkMastersUpload({
           .filter((row) => row.active !== false)
           .map(({ code, name, department }) => ({ code, name, departments: department ?? [] })),
         problems: [...departments.validation.errors, ...designations.validation.errors].map((problem) =>
-          problem.row ? `Row ${problem.row}: ${problem.message}` : problem.message,
+          problem.row ? t('common.row_problem', 'Row %{row}: %{problem}', { row: problem.row, problem: problem.message }) : problem.message,
         ),
       });
     } catch {
-      setError('That file couldn’t be read. Upload the filled-in .xlsx template.');
+      setError(t('departments.bulk.unreadable', 'That file couldn’t be read. Upload the filled-in .xlsx template.'));
     } finally {
       setReading(false);
     }
@@ -85,7 +87,7 @@ export function BulkMastersUpload({
       onDone({ departments, designations });
     } catch (err) {
       reportStepError('departments', 'import_bulk', err, tenantId);
-      setError(describeSaveError(err, 'Importing failed. Try again.'));
+      setError(describeSaveError(err, t('common.import_failed', 'Importing failed. Try again.'), t));
     } finally {
       setImporting(false);
     }
@@ -96,29 +98,37 @@ export function BulkMastersUpload({
       <div className="mx-auto w-12 h-12 rounded-md bg-primary/10 text-primary flex items-center justify-center">
         <FileSpreadsheet className="w-6 h-6" />
       </div>
-      <h3 className="mt-4 text-lg font-semibold text-foreground">Upload your departments and designations</h3>
+      <h3 className="mt-4 text-lg font-semibold text-foreground">{t('departments.bulk.title', 'Upload your departments and designations')}</h3>
 
       {!parsed ? (
         <>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            Choose the filled-in spreadsheet. It has one sheet for departments and one for designations.
+            {t('departments.bulk.intro', 'Choose the filled-in spreadsheet. It has one sheet for departments and one for designations.')}
           </p>
           <Button className="mt-4 gap-2" onClick={() => fileInput.current?.click()} disabled={reading}>
             {reading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
-            Choose a file
+            {t('common.choose_file', 'Choose a file')}
           </Button>
-          <p className="mt-4 text-xs text-muted-foreground">Not sure of the columns? Start from ours.</p>
+          <p className="mt-4 text-xs text-muted-foreground">{t('common.template_hint', 'Not sure of the columns? Start from ours.')}</p>
           <Button variant="ghost" size="sm" className="mt-1 gap-1.5 text-primary" onClick={downloadCommonMastersTemplate}>
             <Download className="w-4 h-4" />
-            Download template
+            {t('common.download_template', 'Download template')}
           </Button>
         </>
       ) : (
         <>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            {parsed.fileName} has {parsed.departments.length}{' '}
-            {parsed.departments.length === 1 ? 'department' : 'departments'} and {parsed.designations.length}{' '}
-            {parsed.designations.length === 1 ? 'designation' : 'designations'}.
+            {t('departments.bulk.found', '%{file} has %{departments} and %{designations}.', {
+              file: parsed.fileName,
+              departments:
+                parsed.departments.length === 1
+                  ? t('departments.count_department_one', '%{count} department', { count: 1 })
+                  : t('departments.count_department_other', '%{count} departments', { count: parsed.departments.length }),
+              designations:
+                parsed.designations.length === 1
+                  ? t('departments.count_designation_one', '%{count} designation', { count: 1 })
+                  : t('departments.count_designation_other', '%{count} designations', { count: parsed.designations.length }),
+            })}
           </p>
           {parsed.problems.length > 0 && (
             <ul className="mt-3 max-h-32 overflow-y-auto rounded-md bg-muted/60 p-3 text-left text-xs text-muted-foreground space-y-1">
@@ -129,11 +139,11 @@ export function BulkMastersUpload({
           )}
           <div className="mt-4 flex flex-wrap justify-center gap-2">
             <Button variant="ghost" onClick={() => setParsed(null)} disabled={importing}>
-              Choose another file
+              {t('common.choose_another_file', 'Choose another file')}
             </Button>
             <Button onClick={bringIn} disabled={importing} className="gap-2">
               {importing && <Loader2 className="w-4 h-4 animate-spin" />}
-              Bring them in
+              {t('common.bring_them_in', 'Bring them in')}
             </Button>
           </div>
         </>
@@ -154,7 +164,7 @@ export function BulkMastersUpload({
       />
       <div className="mt-4 border-t border-border pt-3">
         <Button variant="ghost" size="sm" onClick={onCancel} disabled={importing}>
-          Cancel
+          {t('common.cancel', 'Cancel')}
         </Button>
       </div>
     </div>

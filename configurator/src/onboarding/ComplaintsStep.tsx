@@ -14,6 +14,7 @@ import { EmptyState, OptionCard, StepActions } from './StepParts';
 import { adjacentSteps, stepById } from './steps';
 import { describeSaveError } from './errors';
 import { reportStepError, trackStepAction } from './telemetry';
+import { useOnboardingT } from './i18n';
 import { listMasters, recordName } from './departments/mastersApi';
 import { TypeDialog } from './complaints/TypeDialog';
 import { formatHours, RESOLUTION_CHOICES } from './complaints/resolution';
@@ -71,6 +72,7 @@ function writeDraft(tenant: string, stored: StoredDraft | null) {
  */
 export default function ComplaintsStep() {
   const { state, completePhase, setMode } = useApp();
+  const t = useOnboardingT();
   const navigate = useNavigate();
   const tenant = state.targetTenant || state.tenant;
   const done = state.completedPhases.includes(STEP.number);
@@ -107,8 +109,11 @@ export default function ComplaintsStep() {
         if (saved && !stored) {
           writeDraft(tenant, null);
           toast({
-            title: 'Unsaved changes dropped',
-            description: 'The complaint categories were changed somewhere else since, so you’re seeing the saved version.',
+            title: t('complaints.draft_dropped', 'Unsaved changes dropped'),
+            description: t(
+              'complaints.draft_dropped_body',
+              'The complaint categories were changed somewhere else since, so you’re seeing the saved version.',
+            ),
           });
         }
         setDraft(result.editable ? stored ?? result.draft : null);
@@ -121,7 +126,7 @@ export default function ComplaintsStep() {
     return () => {
       cancelled = true;
     };
-  }, [tenant, reloadKey]);
+  }, [tenant, reloadKey, t]);
 
   const reload = () => setReloadKey((key) => key + 1);
 
@@ -135,18 +140,22 @@ export default function ComplaintsStep() {
 
   const routedDepartments = !loaded ? [] : loaded.editable ? (draft?.types ?? []).map((type) => type.department) : loaded.departments;
   const withoutGro = employees ? departmentsWithoutGro(routedDepartments, employees, tenant) : [];
-  const groHint = withoutGro.length > 0 ? 'Each department needs a GRO before you can finish.' : undefined;
+  const groHint = withoutGro.length > 0 ? t('complaints.gro_hint', 'Each department needs a GRO before you can finish.') : undefined;
   const groNotice = withoutGro.length > 0 && (
     <Alert>
       <UserRoundX className="h-4 w-4" />
       <AlertDescription className="space-y-3">
         <p>
-          No one can assign complaints for{' '}
-          <span className="font-medium text-foreground">{withoutGro.map((code) => departmentName.get(code) ?? code).join(', ')}</span>.
-          Every department a complaint category goes to needs at least one employee with the GRO role. A DGRO doesn’t count.
+          {t('complaints.no_gro', 'No one can assign complaints for %{departments}.', {
+            departments: withoutGro.map((code) => departmentName.get(code) ?? code).join(', '),
+          })}{' '}
+          {t(
+            'complaints.no_gro_why',
+            'Every department a complaint category goes to needs at least one employee with the GRO role. A DGRO doesn’t count.',
+          )}
         </p>
         <Button variant="outline" size="sm" onClick={() => navigate(EMPLOYEES_STEP.path)}>
-          Add a GRO in Employees
+          {t('complaints.add_gro', 'Add a GRO in Employees')}
         </Button>
       </AlertDescription>
     </Alert>
@@ -173,18 +182,29 @@ export default function ComplaintsStep() {
         slaHours: draft.slaHours,
       });
       writeDraft(tenant, null);
-      toast({ title: `${filable} complaint ${filable === 1 ? 'category is' : 'categories are'} ready` });
+      toast({
+        title:
+          filable === 1
+            ? t('complaints.ready_one', '%{count} complaint category is ready', { count: filable })
+            : t('complaints.ready_other', '%{count} complaint categories are ready', { count: filable }),
+      });
       await finish();
     } catch (err) {
       reportStepError('complaints', 'save', err, tenant);
-      setSaveError(describeSaveError(err, 'Saving your complaint categories failed. Try again.'));
+      setSaveError(describeSaveError(err, t('complaints.save_failed', 'Saving your complaint categories failed. Try again.'), t));
     } finally {
       setSaving(false);
     }
   };
 
-  const header = (title = 'Complaints Template', text = 'Set up the kinds of complaints people can raise, which department handles each, and how long they should take to resolve.') => (
-    <StepHeader eyebrow="Complaints" title={title} done={done}>
+  const header = (
+    title = t('steps.complaints', 'Complaints Template'),
+    text = t(
+      'complaints.intro',
+      'Set up the kinds of complaints people can raise, which department handles each, and how long they should take to resolve.',
+    ),
+  ) => (
+    <StepHeader eyebrow={t('groups.complaints', 'Complaints')} title={title} done={done}>
       {text}
     </StepHeader>
   );
@@ -195,9 +215,9 @@ export default function ComplaintsStep() {
         {header()}
         <Alert variant="destructive">
           <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
-            <span>Couldn’t load your complaint categories. {loadError}</span>
+            <span>{t('complaints.load_failed', 'Couldn’t load your complaint categories.')} {loadError}</span>
             <Button variant="outline" size="sm" onClick={reload}>
-              Try again
+              {t('common.try_again', 'Try again')}
             </Button>
           </AlertDescription>
         </Alert>
@@ -217,7 +237,10 @@ export default function ComplaintsStep() {
   if (bulk) {
     return (
       <div className="space-y-6">
-        {header('Upload complaint categories', 'Define your levels, fill the template with your complaint categories, and upload it.')}
+        {header(
+          t('complaints.bulk_title', 'Upload complaint categories'),
+          t('complaints.bulk_intro', 'Define your levels, fill the template with your complaint categories, and upload it.'),
+        )}
         <DigitCard>
           <ComplaintHierarchySetup
             targetTenant={tenant}
@@ -230,13 +253,18 @@ export default function ComplaintsStep() {
               trackStepAction('complaints', 'entity_import', 'complaint_type', { tenant, source: 'bulk', count: defs });
               setBulk(false);
               writeDraft(tenant, null);
-              toast({ title: `${defs} complaint ${defs === 1 ? 'subcategory' : 'subcategories'} imported` });
+              toast({
+                title:
+                  defs === 1
+                    ? t('complaints.imported_one', '%{count} complaint subcategory imported', { count: defs })
+                    : t('complaints.imported_other', '%{count} complaint subcategories imported', { count: defs }),
+              });
               reload();
             }}
           />
         </DigitCard>
         <Button variant="ghost" onClick={() => setBulk(false)}>
-          Cancel
+          {t('common.cancel', 'Cancel')}
         </Button>
       </div>
     );
@@ -253,10 +281,14 @@ export default function ComplaintsStep() {
           </div>
           <div className="text-sm">
             <p className="font-medium text-foreground">
-              {loaded.leafCount} complaint {loaded.leafCount === 1 ? 'subcategory' : 'subcategories'} set up from a spreadsheet
+              {loaded.leafCount === 1
+                ? t('complaints.from_sheet_one', '%{count} complaint subcategory set up from a spreadsheet', { count: 1 })
+                : t('complaints.from_sheet_other', '%{count} complaint subcategories set up from a spreadsheet', { count: loaded.leafCount })}
             </p>
             <p className="mt-1 text-muted-foreground">
-              Levels: {loaded.levels.join(' → ')}. You can change them in management once setup is finished.
+              {t('complaints.from_sheet_levels', 'Levels: %{levels}. You can change them in management once setup is finished.', {
+                levels: loaded.levels.join(' → '),
+              })}
             </p>
           </div>
         </div>
@@ -264,7 +296,7 @@ export default function ComplaintsStep() {
         <StepActions
           onBack={previous ? () => navigate(previous.path) : undefined}
           onContinue={finish}
-          continueLabel="Finish setup"
+          continueLabel={t('complaints.finish', 'Finish setup')}
           disabled={loaded.leafCount === 0 || withoutGro.length > 0}
           hint={groHint}
         />
@@ -281,23 +313,36 @@ export default function ComplaintsStep() {
     <div className="space-y-8">
       <div className="flex flex-wrap items-start justify-between gap-3">
         {header()}
-        {dirty && <span className="rounded-full border border-border px-2 py-0.5 text-xs font-medium text-muted-foreground">Unsaved</span>}
+        {dirty && (
+          <span className="rounded-full border border-border px-2 py-0.5 text-xs font-medium text-muted-foreground">
+            {t('complaints.unsaved', 'Unsaved')}
+          </span>
+        )}
       </div>
 
       {types.length === 0 ? (
         <div className="space-y-6">
-          <EmptyState icon={MessageSquareText} title="No complaint categories yet">
-            A complaint category is what someone picks when reporting: a pothole, a broken street light. Add the first
-            one to get going.
+          <EmptyState icon={MessageSquareText} title={t('complaints.empty_title', 'No complaint categories yet')}>
+            {t(
+              'complaints.empty_body',
+              'A complaint category is what someone picks when reporting: a pothole, a broken street light. Add the first one to get going.',
+            )}
           </EmptyState>
           <section className="space-y-4">
-            <h3 className="text-lg font-semibold text-foreground">How do you want to add your complaint categories?</h3>
+            <h3 className="text-lg font-semibold text-foreground">
+              {t('complaints.how_to_add', 'How do you want to add your complaint categories?')}
+            </h3>
             <div className="grid max-w-xl grid-cols-1 gap-4 sm:grid-cols-2">
-              <OptionCard icon={FileText} title="Start from scratch" action="Start adding" onClick={() => setEditing({ index: null })}>
-                Name each category and its subcategories yourself.
+              <OptionCard
+                icon={FileText}
+                title={t('complaints.from_scratch', 'Start from scratch')}
+                action={t('common.start_adding', 'Start adding')}
+                onClick={() => setEditing({ index: null })}
+              >
+                {t('complaints.from_scratch_body', 'Name each category and its subcategories yourself.')}
               </OptionCard>
-              <OptionCard icon={LayoutGrid} title="Bulk upload" action="Upload a file" onClick={() => setBulk(true)}>
-                Upload a list and we will bring them in.
+              <OptionCard icon={LayoutGrid} title={t('common.bulk_upload', 'Bulk upload')} action={t('common.upload_file', 'Upload a file')} onClick={() => setBulk(true)}>
+                {t('complaints.bulk_body', 'Upload a list and we will bring them in.')}
               </OptionCard>
             </div>
           </section>
@@ -306,8 +351,8 @@ export default function ComplaintsStep() {
         <>
           <div className="grid max-w-2xl grid-cols-2 gap-4">
             {[
-              { label: 'Complaint categories', value: types.length },
-              { label: 'Complaint subcategories', value: subtypeCount(current) },
+              { label: t('complaints.categories', 'Complaint categories'), value: types.length },
+              { label: t('complaints.subcategories_stat', 'Complaint subcategories'), value: subtypeCount(current) },
             ].map((stat) => (
               <div key={stat.label} className="rounded-lg border border-border bg-card p-4">
                 <p className="text-sm text-muted-foreground">{stat.label}</p>
@@ -318,11 +363,11 @@ export default function ComplaintsStep() {
 
           <section className="space-y-3">
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-lg font-semibold text-foreground">Complaint categories</h3>
+              <h3 className="text-lg font-semibold text-foreground">{t('complaints.categories', 'Complaint categories')}</h3>
               <div className="ml-auto">
                 <Button size="sm" onClick={() => setEditing({ index: null })} className="h-9 gap-1.5">
                   <Plus className="w-4 h-4" />
-                  Add complaint category
+                  {t('complaints.add_category_button', 'Add complaint category')}
                 </Button>
               </div>
             </div>
@@ -333,26 +378,27 @@ export default function ComplaintsStep() {
                     <div className="min-w-0 flex-1">
                       <p className="font-medium text-foreground">{type.name}</p>
                       <p className="text-sm text-muted-foreground">
-                        Handled by {departmentName.get(type.department) ?? type.department}
+                        {t('complaints.handled_by', 'Handled by %{department}', { department: departmentName.get(type.department) ?? type.department })}
                       </p>
                       <p className="text-sm text-muted-foreground">
-                        Resolve within {formatHours(type.slaHours ?? slaHours)}
-                        {type.slaHours === undefined && ' (default)'}
-                        {hasMixedHours(type) && '; some subcategories have their own time'}
+                        {type.slaHours === undefined
+                          ? t('complaints.resolve_within_default', 'Resolve within %{time} (default)', { time: formatHours(slaHours, t) })
+                          : t('complaints.resolve_within', 'Resolve within %{time}', { time: formatHours(type.slaHours, t) })}
+                        {hasMixedHours(type) && t('complaints.some_own_time', '; some subcategories have their own time')}
                       </p>
                     </div>
                     <div className="flex gap-1">
-                      <Button variant="ghost" size="sm" onClick={() => setEditing({ index })} aria-label={`Edit ${type.name}`}>
-                        Edit
+                      <Button variant="ghost" size="sm" onClick={() => setEditing({ index })} aria-label={t('common.edit_named', 'Edit %{name}', { name: type.name })}>
+                        {t('common.edit', 'Edit')}
                       </Button>
                       <Button
                         variant="ghost"
                         size="sm"
                         className="text-destructive hover:text-destructive"
-                        aria-label={`Remove ${type.name}`}
+                        aria-label={t('common.remove_named', 'Remove %{name}', { name: type.name })}
                         onClick={() => change({ ...current, types: types.filter((_, i) => i !== index) })}
                       >
-                        Remove
+                        {t('common.remove', 'Remove')}
                       </Button>
                     </div>
                   </div>
@@ -361,12 +407,14 @@ export default function ComplaintsStep() {
                       {type.subtypes.map((sub) => (
                         <li key={sub.code ?? sub.name} className="rounded-full bg-muted px-2.5 py-1 text-xs text-foreground">
                           {sub.name}
-                          {sub.slaHours !== undefined && <span className="text-muted-foreground"> · {formatHours(sub.slaHours)}</span>}
+                          {sub.slaHours !== undefined && <span className="text-muted-foreground"> · {formatHours(sub.slaHours, t)}</span>}
                         </li>
                       ))}
                     </ul>
                   ) : (
-                    <p className="mt-2 text-xs text-muted-foreground">No subcategories: people report this category as it is.</p>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {t('complaints.no_subcategories', 'No subcategories: people report this category as it is.')}
+                    </p>
                   )}
                 </li>
               ))}
@@ -374,10 +422,12 @@ export default function ComplaintsStep() {
           </section>
 
           <fieldset className="space-y-3">
-            <legend className="text-lg font-semibold text-foreground">Default resolution time</legend>
+            <legend className="text-lg font-semibold text-foreground">{t('complaints.default_time', 'Default resolution time')}</legend>
             <p className="text-sm text-muted-foreground">
-              This is your own target, not a legal SLA. Complaints past it show as overdue. It’s the default for every
-              category; to give one category its own time, edit it.
+              {t(
+                'complaints.default_time_body',
+                'This is your own target, not a legal SLA. Complaints past it show as overdue. It’s the default for every category; to give one category its own time, edit it.',
+              )}
             </p>
             <div className="flex flex-wrap items-center gap-2">
               {RESOLUTION_CHOICES.map((choice) => {
@@ -395,18 +445,18 @@ export default function ComplaintsStep() {
                       selected ? 'border-primary bg-primary/10 text-primary font-medium' : 'border-border bg-card text-foreground hover:border-primary/50'
                     }`}
                   >
-                    {choice.label}
+                    {formatHours(choice.hours, t)}
                   </button>
                 );
               })}
               <label className="flex items-center gap-2 text-sm text-muted-foreground">
-                or
+                {t('complaints.or', 'or')}
                 <Input
                   type="number"
                   min={1}
                   inputMode="numeric"
-                  aria-label="Custom resolution time in hours"
-                  placeholder="Hours"
+                  aria-label={t('complaints.custom_hours', 'Custom resolution time in hours')}
+                  placeholder={t('complaints.hours_placeholder', 'Hours')}
                   value={presetHours ? customHours : customHours || String(slaHours)}
                   onChange={(event) => {
                     setCustomHours(event.target.value);
@@ -415,7 +465,7 @@ export default function ComplaintsStep() {
                   }}
                   className={`h-9 w-24 bg-card ${presetHours ? '' : 'border-primary'}`}
                 />
-                hours
+                {t('complaints.hours_unit', 'hours')}
               </label>
             </div>
           </fieldset>
@@ -434,10 +484,10 @@ export default function ComplaintsStep() {
         <StepActions
           onBack={previous ? () => navigate(previous.path) : undefined}
           onContinue={save}
-          continueLabel="Finish setup"
+          continueLabel={t('complaints.finish', 'Finish setup')}
           busy={saving}
           disabled={types.length === 0 || withoutGro.length > 0}
-          hint={types.length === 0 ? 'Add at least one complaint category to finish.' : groHint}
+          hint={types.length === 0 ? t('complaints.finish_hint', 'Add at least one complaint category to finish.') : groHint}
         />
         {dirty && loaded.draft.types.length > 0 && (
           <Button
@@ -449,7 +499,7 @@ export default function ComplaintsStep() {
               setDirty(false);
             }}
           >
-            Discard changes
+            {t('complaints.discard', 'Discard changes')}
           </Button>
         )}
       </div>

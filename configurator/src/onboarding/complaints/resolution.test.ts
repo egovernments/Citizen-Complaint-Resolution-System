@@ -6,7 +6,7 @@ const type = (over: Partial<DraftType> = {}): DraftType => ({ name: 'Water', dep
 
 describe('formatHours', () => {
   it('says weeks, days or hours', () => {
-    expect([24, 72, 168, 336, 120, 36, 1].map(formatHours)).toEqual(['1 day', '3 days', '1 week', '2 weeks', '5 days', '36 hours', '1 hour']);
+    expect([24, 72, 168, 336, 120, 36, 1].map((hours) => formatHours(hours))).toEqual(['1 day', '3 days', '1 week', '2 weeks', '5 days', '36 hours', '1 hour']);
   });
 });
 
