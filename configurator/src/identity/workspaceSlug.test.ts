@@ -1,7 +1,7 @@
 import { renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { session } from '@/api/onboarding';
-import { analyticsShimPath, useWorkspaceSlug } from './workspaceSlug';
+import { analyticsShimPath, complaintDeskUrl, useWorkspaceSlug } from './workspaceSlug';
 
 vi.mock('@/api/onboarding', () => ({ session: vi.fn() }));
 beforeEach(() => { vi.mocked(session).mockReset(); });
@@ -33,4 +33,10 @@ it('is null when the identity BFF is unavailable', async () => {
 it('probes the analytics shim where a tenant page loads it', () => {
   expect(analyticsShimPath('acme')).toBe('/acme/digit-ui/analytics.js');
   expect(analyticsShimPath(null)).toBe('/digit-ui/analytics.js');
+});
+
+it('links the complaint desk to the tenant-scoped employee app once the slug is known', () => {
+  expect(complaintDeskUrl('https://naipepea.digit.org/', 'acme')).toBe('https://naipepea.digit.org/acme/digit-ui/employee');
+  expect(complaintDeskUrl('https://naipepea.digit.org', null)).toBeNull();
+  expect(complaintDeskUrl('https://naipepea.digit.org', undefined)).toBeNull();
 });

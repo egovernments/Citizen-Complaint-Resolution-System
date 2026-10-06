@@ -37,16 +37,18 @@ import {
   Map,
   Globe2,
   CalendarClock,
+  Inbox,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { getGenericMdmsResources, getResourceLabel } from '@/providers/bridge';
 import { useMastersCapability } from '@/hooks/useMastersCapability';
 import { LEGACY_PGR_DASHBOARD_ENABLED, ONBOARDING_GATE_ENABLED } from '@/config/featureFlags';
-import { NavRow, SectionLabel, ActiveBar, RailBackdrop, RailCloseButton, RailMenuButton, RailPoweredBy } from '@/components/layout/rail';
+import { NavRow, NavExternalRow, SectionLabel, ActiveBar, RailBackdrop, RailCloseButton, RailMenuButton, RailPoweredBy } from '@/components/layout/rail';
 import { railClasses, rowTone } from '@/components/layout/railStyles';
 import { useRailDrawer } from '@/components/layout/useRailDrawer';
 import { AccountMenu, HelpButton, LocaleSwitcher, ThemeSwitcher } from '@/components/layout/HeaderControls';
-import { resumePath } from '@/onboarding/progress';
+import { isOnboardingComplete, resumePath } from '@/onboarding/progress';
+import { complaintDeskUrl, useWorkspaceSlug } from '@/identity/workspaceSlug';
 
 /** Sidebar navigation groups — names are i18n keys resolved at render time */
 const navGroups = [
@@ -223,6 +225,10 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
     try { await logout(); navigate('/login'); }
     catch (error) { window.alert(error instanceof Error ? error.message : 'Sign-out failed. Please retry.'); }
   };
+
+  // Once setup is done, the way to where the workspace's staff handle complaints.
+  const slug = useWorkspaceSlug(state.tenant);
+  const deskUrl = isOnboardingComplete(state.completedPhases) ? complaintDeskUrl(state.environment, slug) : null;
 
   const handleSwitchToOnboarding = () => {
     setMode('onboarding');
@@ -425,18 +431,28 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
           )}
         </nav>
 
-        {/* Sidebar footer: the way back to onboarding while switching is
-            allowed (with onboarding compulsory there is nothing to go back to),
-            then "Powered by DIGIT" */}
-        {!ONBOARDING_GATE_ENABLED && (
+        {/* Sidebar footer: the complaint desk once setup is done, the way back
+            to onboarding while switching is allowed (with onboarding compulsory
+            there is nothing to go back to), then "Powered by DIGIT" */}
+        {(deskUrl || !ONBOARDING_GATE_ENABLED) && (
           <div className="border-t border-border py-2">
-            <NavRow
-              icon={Settings}
-              label={translate('app.nav.switch_to_onboarding')}
-              active={false}
-              collapsed={sidebarCollapsed}
-              onClick={handleSwitchToOnboarding}
-            />
+            {deskUrl && (
+              <NavExternalRow
+                icon={Inbox}
+                label={translate('app.nav.open_complaint_desk', { _: 'Open complaint desk' })}
+                href={deskUrl}
+                collapsed={sidebarCollapsed}
+              />
+            )}
+            {!ONBOARDING_GATE_ENABLED && (
+              <NavRow
+                icon={Settings}
+                label={translate('app.nav.switch_to_onboarding')}
+                active={false}
+                collapsed={sidebarCollapsed}
+                onClick={handleSwitchToOnboarding}
+              />
+            )}
           </div>
         )}
         <RailPoweredBy collapsed={sidebarCollapsed} />
