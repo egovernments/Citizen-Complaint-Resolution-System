@@ -10,7 +10,7 @@
 // explicit submit and are never persisted anywhere on the client.
 import { digitClient } from '@/providers/bridge';
 import {
-  credLabelKey,
+  credTypeLabelKey,
   FALLBACK_CATALOG,
   normalizeCatalog,
   type Channel,
@@ -46,6 +46,8 @@ export {
   findSelectedIntegration,
   matchesProviderSelection,
   credLabelKey,
+  credTypeLabelKey,
+  credentialFieldLabel,
   providerTypeLabelKey,
   missingRequiredFields,
   buildCredentials,
@@ -348,7 +350,8 @@ export function credFields(channel: Channel, providerId: string): CredField[] {
     FALLBACK_CATALOG[0];
   return entry.credentialFields.map((f) => ({
     key: f.key,
-    labelKey: credLabelKey(f.key),
+    // Per-type key: a generic `app.providers.cred.<key>` would outrank the label.
+    labelKey: credTypeLabelKey(entry.type, f.key),
     labelDefault: f.label,
     type: f.type,
     placeholder: f.placeholder,

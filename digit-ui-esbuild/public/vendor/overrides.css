@@ -8501,6 +8501,69 @@ html .header-dropdown-option:focus-visible {
   padding: 0 !important;
 }
 
+/* Side by side, the filter column (County/Sub County/Ward and ~10 statuses,
+ * ~1310px) outgrew a 10-row table (~840px) and the stretched table card was
+ * left with a tall blank band under its pagination.
+ *
+ * The table now sets the row height: `contain: size` takes the filter's
+ * content out of the row's sizing, and its fields scroll inside the card
+ * with Apply / Clear All kept in view below them. The floor of about one
+ * screen keeps a one- or two-row table from squeezing the filter into a
+ * sliver; the table card then stretches to it with the pagination at its
+ * foot. */
+@media (min-width: 48rem) {
+  .v2-pgr-inbox .digit-sections-parent.inbox > .digit-section.filter {
+    contain: size;
+    /* Vendor's `height: fit-content` would keep it out of the row stretch. */
+    height: auto !important;
+    min-height: max(24rem, calc(100vh - 8rem));
+    display: flex;
+    flex-direction: column;
+  }
+  .v2-pgr-inbox .digit-section.filter > .digit-tab-main,
+  .v2-pgr-inbox .digit-section.filter .filter-card {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .v2-pgr-inbox .digit-section.filter .filter-card > .content-container {
+    flex: 0 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    /* Room for the fields' focus rings at the scroll edges. */
+    padding: 0 4px !important;
+    margin: 0 -4px;
+  }
+  /* The section already insets the card by 24px; vendor pads the buttons by
+   * another 24px all round. */
+  .v2-pgr-inbox .digit-section.filter .filter-card > .button-container {
+    flex: none;
+    padding: 16px 0 0 !important;
+  }
+  /* Vendor marks the header and buttons `with-shadow` while the fields
+   * overflow. Its 1px shadow hugged the unpadded header like a box; a
+   * hairline under the header and over the buttons marks the scroll edges. */
+  .v2-pgr-inbox .digit-section.filter .filter-card > .filter-header.with-shadow {
+    box-shadow: none !important;
+    padding-bottom: 12px !important;
+    margin-bottom: 0 !important;
+    border-bottom: 1px solid var(--color-border, #d6d5d4);
+  }
+  .v2-pgr-inbox .digit-section.filter .filter-card > .filter-header.with-shadow + .content-container {
+    padding-top: 12px !important;
+  }
+  .v2-pgr-inbox .digit-section.filter .filter-card > .button-container.with-shadow {
+    box-shadow: none !important;
+    border-top: 1px solid var(--color-border, #d6d5d4);
+  }
+  .v2-pgr-inbox .digit-table-card > div:last-child:has(> .rdt_Pagination) {
+    margin-top: auto;
+  }
+}
+
 /* The module icon belongs to the title's first line. Centred on the whole
  * block, it floated between the lines once the title wrapped, and lower
  * still because the title carries a bottom margin. 1px centres the 20px
@@ -10150,6 +10213,43 @@ html[data-sidebar-pinned] .citizen .main.center-container.citizen-home-container
   }
   .cms-footer .cms-next {
     flex: 1;
+  }
+
+  /* Back / Next sit on "Powered by DIGIT" at the foot of the screen on every
+   * step. A short step (Complaint Details) left the bar under its last field
+   * with a grey band below it; a long one pinned the bar to the very bottom,
+   * over the page footer, which then showed only at the end of the page.
+   * The card now fills the page so the bar starts at its foot, and the page
+   * footer sticks too, with the bar stacked on top of it. */
+  .citizen .pgr-citizen-wrapper:has(> .cms-file) {
+    display: flex;
+    flex-direction: column;
+  }
+  .pgr-citizen-wrapper > .cms-file,
+  .cms-file > .cms-file-card {
+    flex: 1 0 auto;
+  }
+  .cms-file > .cms-file-card {
+    display: flex;
+    flex-direction: column;
+  }
+  .cms-file-card > .cms-footer {
+    margin-top: auto;
+    bottom: calc(var(--v2-page-footer-height, 40px) + env(safe-area-inset-bottom, 0px));
+    padding-bottom: 12px;
+  }
+  /* !important beats the phone rule that un-fixes this footer everywhere
+   * (`position: static !important`); sticky never covers content, since the
+   * footer still takes its own place at the end of the page. The page column
+   * beside it is a flex item at z-index 100, so the card painted over the
+   * pinned footer until it was raised above that. */
+  .citizen:has(.cms-file) > .citizen-home-footer {
+    position: sticky !important;
+    bottom: 0;
+    z-index: 101;
+    box-sizing: border-box;
+    height: calc(var(--v2-page-footer-height, 40px) + env(safe-area-inset-bottom, 0px));
+    padding-bottom: env(safe-area-inset-bottom, 0px) !important;
   }
 
   .cms-sheet-overlay {

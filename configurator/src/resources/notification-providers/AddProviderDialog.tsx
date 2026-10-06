@@ -248,7 +248,7 @@ export function AddProviderDialog({ catalogState }: { catalogState: ProviderCata
                 <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                   {t('app.providers.credentials', { _: 'Credentials' })}
                 </p>
-                <ProviderCredentialFields fields={fields} values={creds} onChange={(k, v) => setCreds((p) => ({ ...p, [k]: v }))} />
+                <ProviderCredentialFields type={selected.type} fields={fields} values={creds} onChange={(k, v) => setCreds((p) => ({ ...p, [k]: v }))} />
               </div>
             )}
           </div>

@@ -307,6 +307,23 @@ class PolicyDrivenScopeResolverTest {
     }
 
     @Test
+    void crossTenantDenyIsExplicitAndOwnAssignedComplaintsCannotLoosenIt() {
+        // #2281 review: a tenant outside the caller's subtree is a deny-all decision. Being assigned
+        // a complaint there must not reopen it via the own-assigned exception.
+        ScopePolicy policy = ScopePolicy.of(List.of("department", "jurisdiction"),
+                Map.of("department", ScopeLevel.OWN, "jurisdiction", ScopeLevel.OWN));
+
+        PgrSearchScope scope = resolver.resolve(
+                requestInfo("emp1", "EMPLOYEE", "PGR_LME", "pg.cityA"), "pg.cityB", 2, policy);
+        PgrSearchScope widened = scope.withOwnAssigned(java.util.Set.of("PGR-IN-CITY-B"));
+
+        assertTrue(scope.denyAll);
+        assertTrue(widened.denyAll);
+        assertNull(widened.ownAssignedServiceRequestIds);
+        assertFalse(widened.isOwnAssigned("PGR-IN-CITY-B"));
+    }
+
+    @Test
     void crossTenantRequestDeniesEvenForATenantWideRole() {
         // The exact vulnerability this check closes: a hard-coded tenant-wide role (SUPERUSER)
         // must NOT be able to widen into a tenant it has no home affiliation with just by naming
