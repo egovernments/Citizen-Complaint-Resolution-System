@@ -208,6 +208,12 @@ export interface Operation {
   errorCode: string | null;
   errorMessage: string | null;
   attempt: number;
+  /**
+   * When PGR's publisher got the identity side to accept the run's outcome.
+   * SUCCEEDED is written first and published on a later tick, and until then
+   * the identity side does not list the new tenant.
+   */
+  lifecyclePublishedAt?: number | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -542,8 +548,18 @@ export async function retryOperation(id: string): Promise<Operation> {
   return operation;
 }
 
-export function isOperationSettled(status: OperationStatus): boolean {
-  return status === 'SUCCEEDED' || status === 'RETRYABLE_FAILED' || status === 'TERMINAL_FAILED';
+/**
+ * A SUCCEEDED run is only usable once its outcome is published: before that the
+ * tenant list comes back empty and selecting the tenant is refused (CCRS#2303).
+ */
+export function isOperationReady(operation: Pick<Operation, 'status' | 'lifecyclePublishedAt'>): boolean {
+  return operation.status === 'SUCCEEDED' && Boolean(operation.lifecyclePublishedAt);
+}
+
+/** Settled means nothing more will change, so a success still being published is not. */
+export function isOperationSettled(operation: Pick<Operation, 'status' | 'lifecyclePublishedAt'>): boolean {
+  return isOperationReady(operation) ||
+    operation.status === 'RETRYABLE_FAILED' || operation.status === 'TERMINAL_FAILED';
 }
 
 /* -------------------------------------------------------------------------- */

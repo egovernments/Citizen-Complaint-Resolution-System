@@ -1,4 +1,4 @@
-import { fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import SignupPage from './SignupPage';
@@ -692,5 +692,91 @@ describe('resuming a run that was already going', () => {
 
     expect(await screen.findByText(/opening your workspace/i)).toBeInTheDocument();
     expect(screen.queryByLabelText(/account name/i)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * PGR marks the run SUCCEEDED, then publishes the outcome to the identity side
+ * on a later tick. Until then the tenant list is empty and selecting the tenant
+ * is refused, so success waits for `lifecyclePublishedAt` (CCRS#2303).
+ */
+describe('a success that is not yet published', () => {
+  const provisioning = {
+    id: 's1',
+    status: 'PROVISIONING' as const,
+    accountName: 'Kisumu County',
+    urlSlug: 'kisumu-county',
+    countryCode: 'KE',
+    languages: ['en'],
+    version: 4,
+    createdAt: 0,
+    updatedAt: 0,
+  };
+  const succeeded = {
+    id: 'op1',
+    signupId: 's1',
+    status: 'SUCCEEDED' as const,
+    currentStep: null,
+    completedSteps: ['TENANT_FOUNDATION', 'ORGANIZATION', 'TENANT_ADMIN_MEMBERSHIP', 'TENANT_ADMIN_ROLES', 'DIGIT_ACCOUNT'],
+    errorCode: null,
+    errorMessage: null,
+    attempt: 1,
+    lifecyclePublishedAt: null,
+    createdAt: 0,
+    updatedAt: 0,
+  };
+  const kisumu = { organizationAlias: 'kisumu-county', tenantId: 'kisumucounty', name: 'Kisumu County', roles: [] };
+
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.mocked(api.session).mockResolvedValue(signedIn);
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [], selectionRequired: false, onboardingRequired: true });
+    vi.mocked(api.findSignup).mockResolvedValue(provisioning as never);
+    vi.mocked(api.submitSignup).mockResolvedValue(succeeded as never);
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const tick = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+
+  it('keeps polling instead of reading a tenant list that is not there yet', async () => {
+    // A fresh object per read, as the network gives; the poll re-arms on change.
+    vi.mocked(api.findOperation).mockImplementation(async () => ({ ...succeeded }) as never);
+
+    render(<SignupPage />);
+    expect(await screen.findByText(/finishing setup/i)).toBeInTheDocument();
+    await tick(3000);
+    await tick(3000);
+
+    expect(api.findOperation).toHaveBeenCalledTimes(2);
+    // Only bootstrap's own read; nothing treated SUCCEEDED as ready.
+    expect(api.tenants).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(/choose a workspace/i)).not.toBeInTheDocument();
+  });
+
+  it('opens the workspace once the outcome is published', async () => {
+    vi.mocked(api.findOperation).mockResolvedValue({ ...succeeded, lifecyclePublishedAt: 1 } as never);
+
+    render(<SignupPage />);
+    await screen.findByText(/finishing setup/i);
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [kisumu], selectionRequired: true, onboardingRequired: false });
+    await tick(3000);
+
+    expect(await screen.findByText(/choose a workspace/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /kisumu county/i })).toBeInTheDocument();
+  });
+
+  it('says it is almost ready after a long wait, and slows down without giving up', async () => {
+    // A fresh object per read, as the network gives; the poll re-arms on change.
+    vi.mocked(api.findOperation).mockImplementation(async () => ({ ...succeeded }) as never);
+
+    render(<SignupPage />);
+    await screen.findByText(/finishing setup/i);
+    await tick(120_000);
+
+    expect(await screen.findByText(/almost ready/i)).toBeInTheDocument();
+    const calls = vi.mocked(api.findOperation).mock.calls.length;
+    await tick(15_000);
+    expect(api.findOperation).toHaveBeenCalledTimes(calls + 1);
+    expect(screen.queryByText(/choose a workspace/i)).not.toBeInTheDocument();
   });
 });
