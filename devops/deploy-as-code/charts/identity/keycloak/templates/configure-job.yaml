@@ -46,6 +46,26 @@ times (configure.loginAttempts) for a Service that has only just turned Ready.
 {{-     fail $noPassword }}
 {{-   end }}
 {{- end }}
+{{- /* Secret rotation. The hook runs only when the release is upgraded, and
+       with existingSecret a rotated client secret changes nothing in the
+       chart, so Keycloak would keep the old value while the BFF, on its next
+       restart, presents the new one. The checksum of the Secret's data, read
+       with lookup, makes a rotation a change to this (hook) manifest and so a
+       release diff. lookup returns nothing without a cluster (helm template,
+       client-side dry runs and diffs): the value is then "unavailable", which
+       renders fine and differs from the stored checksum, so such a diff always
+       shows this annotation and an apply always upgrades and reruns the
+       idempotent Job. docs/setup/deployment/helm-identity.md, "Rotating a
+       secret", has the forced rerun. With secret.values the chart renders the
+       Secret itself, and a changed value is a diff without this. */ -}}
+{{- $secretChecksum := "" }}
+{{- if .Values.secret.existingSecret }}
+{{-   $existing := lookup "v1" "Secret" .Release.Namespace .Values.secret.existingSecret }}
+{{-   $secretChecksum = "unavailable" }}
+{{-   if $existing }}
+{{-     $secretChecksum = $existing.data | default dict | toJson | sha256sum }}
+{{-   end }}
+{{- end }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -57,6 +77,9 @@ metadata:
     "helm.sh/hook-weight": "0"
     # Keep a failed run for `kubectl logs`; replace it on the next upgrade.
     "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+    {{- if $secretChecksum }}
+    checksum/existing-secret: {{ $secretChecksum | quote }}
+    {{- end }}
 spec:
   backoffLimit: {{ .Values.configure.backoffLimit }}
   activeDeadlineSeconds: {{ .Values.configure.activeDeadlineSeconds }}

@@ -178,7 +178,8 @@ every deploy, and it is idempotent.
 - The hook runs on a Helm install or upgrade, not on every `helmfile apply`:
   apply upgrades the release only when its diff is non-empty. Changing the
   chart's copy of the script or `realm.json` changes the ConfigMap, which is
-  such a diff. `helmfile sync` upgrades, and so reruns the Job, every time.
+  such a diff, and so is a rotated `existingSecret` (next section).
+  `helmfile sync` upgrades, and so reruns the Job, every time.
 - The `keycloak` release is installed with `wait: true` and `identity-bff`
   `needs` it, so the realm exists before the BFF starts.
 - The Job's `configure.activeDeadlineSeconds` (600 s, every retry included)
@@ -191,6 +192,37 @@ every deploy, and it is idempotent.
 Other script inputs (sign-in methods, events retention, social providers,
 magic link) are under `identity.keycloak.configure`; anything else the script
 reads goes in `configure.extraEnv`.
+
+### Rotating a secret
+
+Keycloak learns a client secret only when the Job writes it, and the BFF only
+when its pod starts. With `existingSecret`, changing a key in
+`identity-secrets` changes nothing in the charts by itself, so:
+
+- The Job carries a `checksum/existing-secret` annotation, a checksum of the
+  Secret's data read with `lookup` when the release is rendered. A rotation
+  therefore changes the hook manifest, a release diff, when the diff can read
+  the cluster (helm-diff's `--dry-run=server`, helm-diff 3.9 and later).
+- A diff that cannot read the cluster (helm-diff's default, `helm template`)
+  gets nothing from `lookup`: the annotation renders as `unavailable`, which
+  differs from the checksum the last upgrade stored. `helmfile diff` then
+  always lists that annotation, and `helmfile apply` always upgrades the
+  `keycloak` release and reruns the idempotent Job.
+
+Either way the next `apply` reaches Keycloak, but a rotation should not depend
+on how the diff happens to run. After changing the key in `identity-secrets`,
+rerun the Job explicitly, then restart the BFF so it reads the new value:
+
+```bash
+cd devops/deploy-as-code
+helmfile -f charts/identity/identity-helmfile.yaml -e env -l name=keycloak sync
+kubectl -n egov rollout restart deploy/identity-bff
+```
+
+`sync` upgrades the release even with an empty diff, so the hook runs. Between
+the Job and the restart the BFF still presents the old client secret, so its
+sign-ins fail for that short window. `keycloak-admin-password` is not rotated
+this way: it creates the bootstrap admin on Keycloak's first start only.
 
 ## Ingress
 

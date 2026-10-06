@@ -90,8 +90,11 @@ extraServerEnv: {}
 # Realm reconcile: a Helm post-install/post-upgrade hook Job that runs
 # keycloak/configure-keycloak.sh (a copy in files/, kept identical by
 # local-setup/tests/static/helm-identity.test.ts) with keycloak/realm.json.
-# Idempotent; it runs again on every upgrade, as the Ansible play does on
-# every deploy.
+# Idempotent. It runs on every Helm install and upgrade: on every
+# `helmfile sync`, but on `helmfile apply` only when the diff is non-empty.
+# With existingSecret, the Job carries a checksum of that Secret's data (read
+# with lookup) so a rotated secret is such a diff; see "Rotating a secret" in
+# docs/setup/deployment/helm-identity.md for the forced rerun.
 configure:
   enabled: true
   # kcadm login attempts, 5 s apart. Helm starts the hook only once the

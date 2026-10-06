@@ -178,6 +178,17 @@ describe('keycloak chart: realm-configure Job', () => {
     expect(job).toMatch(/key: keycloak-smtp-password\n\s+optional: \{\{ not \$smtpAuth \}\}/);
   });
 
+  // With existingSecret a rotated client secret changes nothing in the chart,
+  // so without this the hook (and Keycloak's copy of the secret) never updates.
+  test("reruns on a rotated existingSecret: its data's checksum is on the hook Job", () => {
+    expect(job).toContain('lookup "v1" "Secret" .Release.Namespace .Values.secret.existingSecret');
+    expect(job).toContain('$existing.data | default dict | toJson | sha256sum');
+    // No cluster (helm template, client-side diff): render, do not fail.
+    expect(job).toContain('$secretChecksum = "unavailable"');
+    const meta = job.slice(job.indexOf('kind: Job'), job.indexOf('\nspec:'));
+    expect(meta).toContain('checksum/existing-secret: {{ $secretChecksum | quote }}');
+  });
+
   // Keycloak drops an empty client attribute, and the BFF reads a missing
   // digit.auth.signin.methods on the citizen client as misconfigured: /readyz
   // stays 503 and the pod never takes traffic.
