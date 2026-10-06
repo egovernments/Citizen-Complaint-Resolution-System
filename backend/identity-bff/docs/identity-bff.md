@@ -9,6 +9,7 @@
 |---|---|
 | Error codes | `src/contract/error-codes.ts` |
 | Routes, auth and codes per route | `src/contract/routes.ts` |
+| Administrative roles (role-escalation rule, §3.3.6) | `src/contract/roles.ts` |
 | Keycloak attribute schemas | `docs/contract/schemas/*.schema.json` |
 | `encode_v1` reference implementation | `src/modules/accounts/credential.ts` |
 | Payload hash reference implementation | `src/modules/control-plane/operation-hash.ts` |
@@ -485,7 +486,7 @@ Caller: a session with **live DIGIT `ACCOUNT_ADMIN`** at `tenantId` (D5), read l
 - `tenantId` must be the workspace tenant of an `ACTIVE` Organization (`WORKSPACE_TENANT_REQUIRED`). `digitUuid` must be an active EMPLOYEE account there and not a `kcbff-` account. `email` is required (D18) and is normalized by trimming and lower-casing.
 - **Rules:**
   - binding yourself → `SELF_BINDING_FORBIDDEN`;
-  - the account holds a role, at any tenant, that the caller doesn't hold at that tenant or a tenant above it (a workspace role covers the workspace and its sub-tenants, never another root) → `ROLE_ESCALATION_FORBIDDEN`;
+  - the account holds a checked role that the caller doesn't hold at that role's tenant or a tenant above it (a workspace role covers the workspace and its sub-tenants, never another root) → `ROLE_ESCALATION_FORBIDDEN`. Inside the workspace subtree only **administrative** roles are checked: the codes in `ADMINISTRATIVE_ROLES` (`src/contract/roles.ts`): `SUPERUSER`, `INTERNAL_MICROSERVICE_ROLE`, `SYSTEM`, `REINDEXING_ROLE`, `QA_AUTOMATION`; plus every other `*_ADMIN` code. Operational roles there (GRO, CSR, PGR_LME, SUPERVISOR, …) are not checked. Outside the subtree (another root, including a prefix-sharing one such as `pgx`) every role is checked, operational ones too, because the linked account's DIGIT token would carry it. A caller holding `SUPERUSER` at the tenant itself (the founder, D11) skips this check for target roles at the tenant or its sub-tenants, so may link an account with any role there; a target role outside the subtree is still checked. `_updateEmail` (§3.3.11) applies the same rule;
   - the uuid is bound to another person → `DIGIT_ACCOUNT_LINKED_ELSEWHERE`;
   - this person already has a different uuid at the tenant → `BINDING_CONFLICT`.
 - **Find the person** by email, then by username = email. A username match with a different email → `IDENTITY_EMAIL_CHANGED`.
@@ -570,7 +571,7 @@ Caller: live `ACCOUNT_ADMIN` at `tenantId`. For the case where an employee has l
 ```
 
 - The target must have an `active` binding at `tenantId`; otherwise → 404 `DIGIT_ACCOUNT_NOT_FOUND`.
-- The target must not be the caller; every target role at this tenant must be held by the caller; and the target must have no active binding or Organization membership in another workspace (including disabled workspaces). These checks use fresh reads under the target's person lease. A failed check → 403 `ADMIN_EMAIL_CHANGE_NOT_ALLOWED`. The person uses self-service `UPDATE_EMAIL`, or an operator performs global recovery.
+- The target must not be the caller; the caller must pass the `_link` role rule (§3.3.6: administrative roles inside the workspace subtree and every role outside it; the founder may act on any role within the workspace); the target must have no active binding, unexpired pending invitation or Organization membership in another workspace (including disabled workspaces); and the target must have no citizen access: no citizen account entry (`kind: "citizen"` in `digit.accounts`, at any tenant) no verified Keycloak phone (`phoneNumberVerified` containing `"true"`, set only by the BFF phone flows, §4; staff phones are never synced to Keycloak, so a verified phone alone opens the citizen surface), no legacy citizen account link (a `digit.accountLinks` value starting `CITIZEN|`) and no citizen registration (a non-empty `digit.citizenRegistrations`; both retired attributes, §5.1, until item 19 converts them). The email recovers the whole Keycloak person, including that citizen access, which no tenant admin owns. These checks use fresh reads under the target's person lease. A failed check → 403 `ADMIN_EMAIL_CHANGE_NOT_ALLOWED`. The person uses self-service `UPDATE_EMAIL`, or an operator performs global recovery.
 - Under the target's person lease, the Keycloak email is set to the new address with `emailVerified=false`, and Keycloak's `VERIFY_EMAIL` action email is sent. Username and `enabled` are untouched.
 - DIGIT gets the new email only after the person verifies it (D18): the `VERIFY_EMAIL` event drives the write-through.
 - An address another Keycloak user already holds → 409 `IDENTITY_EMAIL_CHANGED`.
@@ -727,7 +728,7 @@ Organization membership **only**, and idempotent. The role projection and the ma
 | `ADMIN_EMAIL_CHANGE_NOT_ALLOWED` | 403 | no | Tenant admin cannot change this global identity email; use UPDATE_EMAIL or operator global recovery |
 | `ADMIN_REQUIRED` | 403 | no | The caller lacks live DIGIT ACCOUNT_ADMIN at the tenant (D5) |
 | `SELF_BINDING_FORBIDDEN` | 403 | no | A browser caller tried to bind themselves |
-| `ROLE_ESCALATION_FORBIDDEN` | 403 | no | The target account holds a role the caller lacks |
+| `ROLE_ESCALATION_FORBIDDEN` | 403 | no | The target account holds an administrative role the caller lacks |
 | `SELF_REMOVAL_FORBIDDEN` | 409 | no | An admin tried to remove their own binding |
 | `BINDING_REMOVED` | 409 | after-change | The binding is removed; send reinvite:true to invite again |
 | `BINDING_CONFLICT` | 409 | no | This person already has a different DIGIT account at the tenant |

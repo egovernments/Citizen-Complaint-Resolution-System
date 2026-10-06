@@ -106,7 +106,7 @@ export const ERROR_CODES = {
   ADMIN_EMAIL_CHANGE_NOT_ALLOWED: { status: 403, retry: "no", meaning: "Tenant admin cannot change this global identity email; use UPDATE_EMAIL or operator global recovery" },
   ADMIN_REQUIRED: { status: 403, retry: "no", meaning: "The caller lacks live DIGIT ACCOUNT_ADMIN at the tenant (D5)" },
   SELF_BINDING_FORBIDDEN: { status: 403, retry: "no", meaning: "A browser caller tried to bind themselves" },
-  ROLE_ESCALATION_FORBIDDEN: { status: 403, retry: "no", meaning: "The target account holds a role the caller lacks" },
+  ROLE_ESCALATION_FORBIDDEN: { status: 403, retry: "no", meaning: "The target account holds an administrative role the caller lacks" },
   SELF_REMOVAL_FORBIDDEN: { status: 409, retry: "no", meaning: "An admin tried to remove their own binding" },
   BINDING_REMOVED: { status: 409, retry: "after-change", meaning: "The binding is removed; send reinvite:true to invite again" },
   BINDING_CONFLICT: { status: 409, retry: "no", meaning: "This person already has a different DIGIT account at the tenant" },
