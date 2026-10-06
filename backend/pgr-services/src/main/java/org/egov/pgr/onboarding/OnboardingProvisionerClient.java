@@ -84,9 +84,15 @@ public class OnboardingProvisionerClient {
         return value.replaceAll("/$", "");
     }
 
+    /** MDMS schema search path, from {@code egov.mdms.schema.search.endpoint}. */
+    public String mdmsSchemaSearchPath() { return env.getProperty("egov.mdms.schema.search.endpoint", "/egov-mdms-service/schema/v1/_search"); }
+
+    /** MDMS v2 data search path, from {@code egov.mdms.v2.search.endpoint}. */
+    public String mdmsSearchPath() { return env.getProperty("egov.mdms.v2.search.endpoint", "/egov-mdms-service/v2/_search"); }
+
     public JsonNode read(String service, String path, Map<String, Object> body) {
         String endpoint = path == null ? "" : path.split("\\?", 2)[0];
-        Set<String> reads = Set.of("mdms:/egov-mdms-service/schema/v1/_search", "mdms:/egov-mdms-service/v2/_search",
+        Set<String> reads = Set.of("mdms:" + mdmsSchemaSearchPath(), "mdms:" + mdmsSearchPath(),
                 "hrms:/egov-hrms/employees/_search", "boundary:/boundary-service/boundary/_search",
                 "boundary:/boundary-service/boundary-hierarchy-definition/_search", "boundary:/boundary-service/boundary-relationships/_search",
                 "workflow:/egov-workflow-v2/egov-wf/businessservice/_search");
