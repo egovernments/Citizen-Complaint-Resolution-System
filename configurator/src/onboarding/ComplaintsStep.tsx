@@ -16,6 +16,7 @@ import { describeSaveError } from './errors';
 import { reportStepError, trackStepAction } from './telemetry';
 import { listMasters, recordName } from './departments/mastersApi';
 import { TypeDialog } from './complaints/TypeDialog';
+import { formatHours, RESOLUTION_CHOICES } from './complaints/resolution';
 import { departmentsWithoutGro } from './complaints/groCoverage';
 import { listEmployees } from './employees/employeesApi';
 import { pickerChoices } from '@/lib/systemRecords';
@@ -24,6 +25,7 @@ import {
   rowsFingerprint,
   saveComplaints,
   subtypeCount,
+  hasMixedHours,
   DEFAULT_SLA_HOURS,
   type ComplaintDraft,
   type DraftType,
@@ -33,13 +35,6 @@ import {
 const STEP = stepById('complaints');
 const EMPLOYEES_STEP = stepById('employees');
 const { previous } = adjacentSteps('complaints');
-
-const RESOLUTION_CHOICES = [
-  { hours: 24, label: '1 day' },
-  { hours: 72, label: '3 days' },
-  { hours: 168, label: '1 week' },
-  { hours: 336, label: '2 weeks' },
-];
 
 /**
  * Unsaved work survives a reload, per workspace, until it is saved or
@@ -340,6 +335,11 @@ export default function ComplaintsStep() {
                       <p className="text-sm text-muted-foreground">
                         Handled by {departmentName.get(type.department) ?? type.department}
                       </p>
+                      <p className="text-sm text-muted-foreground">
+                        Resolve within {formatHours(type.slaHours ?? slaHours)}
+                        {type.slaHours === undefined && ' (default)'}
+                        {hasMixedHours(type) && '; some subcategories have their own time'}
+                      </p>
                     </div>
                     <div className="flex gap-1">
                       <Button variant="ghost" size="sm" onClick={() => setEditing({ index })} aria-label={`Edit ${type.name}`}>
@@ -361,6 +361,7 @@ export default function ComplaintsStep() {
                       {type.subtypes.map((sub) => (
                         <li key={sub.code ?? sub.name} className="rounded-full bg-muted px-2.5 py-1 text-xs text-foreground">
                           {sub.name}
+                          {sub.slaHours !== undefined && <span className="text-muted-foreground"> · {formatHours(sub.slaHours)}</span>}
                         </li>
                       ))}
                     </ul>
@@ -373,9 +374,10 @@ export default function ComplaintsStep() {
           </section>
 
           <fieldset className="space-y-3">
-            <legend className="text-lg font-semibold text-foreground">How much time should a complaint have to be resolved?</legend>
+            <legend className="text-lg font-semibold text-foreground">Default resolution time</legend>
             <p className="text-sm text-muted-foreground">
-              This is your own target, not a legal SLA. Complaints past it show as overdue. It applies to every category.
+              This is your own target, not a legal SLA. Complaints past it show as overdue. It’s the default for every
+              category; to give one category its own time, edit it.
             </p>
             <div className="flex flex-wrap items-center gap-2">
               {RESOLUTION_CHOICES.map((choice) => {
@@ -457,6 +459,7 @@ export default function ComplaintsStep() {
         type={editingType}
         departments={pickerChoices(departments, (choice) => choice.code, editingType ? [editingType.department] : [])}
         takenNames={types.filter((_, i) => i !== editing?.index).map((type) => type.name)}
+        defaultHours={slaHours}
         onOpenChange={(open) => !open && setEditing(null)}
         onSave={(type: DraftType) => {
           const next = editing?.index != null ? types.map((existing, i) => (i === editing.index ? type : existing)) : [...types, type];
