@@ -32,3 +32,21 @@ it('refuses direct tenant renames through the generic editor', async () => {
   await expect(provider().update('tenants', { id: 'acme', data: { name: 'New' }, previousData: { id: 'acme', name: 'Old' } })).rejects.toThrow('Workspace settings');
   expect(base.update).not.toHaveBeenCalled();
 });
+// D16 (amended): employees at a child of the workspace tenant belong to it and keep their own tenant.
+it('edits a child-tenant employee without moving it to the workspace tenant', async () => {
+  const city = { ...row, tenantId: 'acme.city', user: { ...row.user, tenantId: 'acme.city' } };
+  base.getOne.mockResolvedValue({ data: city });
+  await provider().update('employees', { id: 'u', data: { user: { name: 'Renamed' } }, previousData: city });
+  expect(base.update.mock.calls[0][1].data.tenantId).toBe('acme.city');
+});
+it('removes a child-tenant employee: HRMS at its tenant, the BFF at the workspace', async () => {
+  base.getOne.mockResolvedValue({ data: { ...row, tenantId: 'acme.city' } });
+  await provider().delete('employees', { id: 'u' });
+  expect(base.update.mock.calls[0][1].data).toMatchObject({ tenantId: 'acme.city', isActive: false });
+  expect(removeMember).toHaveBeenCalledWith('acme', 'u');
+});
+it.each(['acmex', 'acmex.city', 'other.acme'])('refuses an employee at %s, outside the workspace', async (tenantId) => {
+  base.getOne.mockResolvedValue({ data: { ...row, tenantId } });
+  await expect(provider().delete('employees', { id: 'u' })).rejects.toThrow('this workspace');
+  expect(removeMember).not.toHaveBeenCalled();
+});

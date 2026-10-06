@@ -264,8 +264,11 @@ export async function updateEmployeeDetails(
   return { email: 'invited' };
 }
 
-/** Deactivate, as management's delete does: HRMS keeps the record, marked inactive. */
-export async function removeEmployee(employee: Employee): Promise<void> {
+/**
+ * Deactivate, as management's delete does: HRMS keeps the record, marked inactive.
+ * `workspaceTenantId` is the membership's tenant when the employee sits at a child of it (D16, amended).
+ */
+export async function removeEmployee(employee: Employee, workspaceTenantId = employee.tenantId): Promise<void> {
   await deactivateAndRemove(
     async () => {
       const rows = await hrmsService.searchEmployees(employee.tenantId, { codes: [employee.code] });
@@ -275,6 +278,7 @@ export async function removeEmployee(employee: Employee): Promise<void> {
     },
     row => hrmsService.updateEmployee(row as unknown as Employee),
     apiClient.getAuth().user?.uuid,
+    workspaceTenantId,
   );
 }
 

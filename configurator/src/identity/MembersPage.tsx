@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useApp } from '@/App';
 import { members, linkMember, updateMemberEmail, type Member } from './api';
 import { requiredEmail } from './memberActions';
-import { hrmsService } from '@/api/services/hrms';
+import { searchWorkspaceEmployees } from './workspaceEmployees';
 import type { Employee } from '@/api/types';
 import { removeEmployee } from '@/onboarding/employees/employeesApi';
 import { Button } from '@/components/ui/button';
@@ -26,7 +26,8 @@ export default function MembersPage() {
   const admin = state.user?.roles.includes('ACCOUNT_ADMIN');
   const load = useCallback(async () => {
     if (!admin) return;
-    const [bindings, staff] = await Promise.all([members(state.tenant), hrmsService.searchEmployees(state.tenant, { limit: 500 })]);
+    // The workspace's own employees and those at its child tenants (D16, amended).
+    const [bindings, staff] = await Promise.all([members(state.tenant), searchWorkspaceEmployees(state.tenant, { limit: 500 })]);
     setRows(bindings); setEmployees(staff);
   }, [state.tenant, admin]);
   useEffect(() => { void load().catch(e => setError(e.message)); }, [load]);
@@ -83,10 +84,10 @@ export default function MembersPage() {
       {confirm && <Alert><AlertDescription>
         <p>Deactivate {confirm.name || confirm.email} and remove their workspace access?</p>
         <div className="mt-3 flex gap-2"><Button variant="destructive" disabled={busy} onClick={() => void run(async () => {
-          const employees = await hrmsService.searchEmployees(state.tenant, { uuids: [confirm.digitUuid] });
+          const employees = await searchWorkspaceEmployees(state.tenant, { uuids: [confirm.digitUuid] });
           const employee = employees.find(e => (e.user.uuid || e.uuid) === confirm.digitUuid);
           if (!employee) throw new Error('Employee record not found. An administrator must resolve the missing HRMS record.');
-          await removeEmployee(employee);
+          await removeEmployee(employee, state.tenant);
         })}>Confirm removal</Button><Button variant="outline" disabled={busy} onClick={() => setConfirm(null)}>Cancel</Button></div>
       </AlertDescription></Alert>}
     </>}

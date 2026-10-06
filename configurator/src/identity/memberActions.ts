@@ -37,8 +37,11 @@ export async function createAndLink<T extends MemberEmployee>(input: T, search: 
   return employee;
 }
 
-/** Always re-read before deactivation; retrying a failed removal skips the completed HRMS write. */
-export async function deactivateAndRemove<T extends MemberEmployee>(read: () => Promise<T>, update: (employee: T) => Promise<unknown>, actorUuid?: string): Promise<T> {
+/**
+ * Always re-read before deactivation; retrying a failed removal skips the completed HRMS write.
+ * `workspaceTenantId` is the binding's tenant; the employee may sit at a child of it (D16, amended).
+ */
+export async function deactivateAndRemove<T extends MemberEmployee>(read: () => Promise<T>, update: (employee: T) => Promise<unknown>, actorUuid?: string, workspaceTenantId?: string): Promise<T> {
   const employee = await read();
   const uuid = employeeUuid(employee);
   if (actorUuid === uuid) throw new Error('You cannot remove your own membership.');
@@ -54,7 +57,7 @@ export async function deactivateAndRemove<T extends MemberEmployee>(read: () => 
     });
   }
   try {
-    await removeMember(employee.tenantId, uuid);
+    await removeMember(workspaceTenantId ?? employee.tenantId, uuid);
   } catch (error) {
     throw new Error(`Employee is inactive in HRMS; membership removal is unfinished. Retry removal. ${error instanceof Error ? error.message : ''}`);
   }

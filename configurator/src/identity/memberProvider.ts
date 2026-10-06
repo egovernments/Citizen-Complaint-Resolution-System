@@ -2,6 +2,7 @@ import type { DataProvider, RaRecord, Identifier, CreateParams, DeleteParams } f
 import { apiClient } from '@/api/client';
 import { hrmsService } from '@/api/services/hrms';
 import { createAndLink, deactivateAndRemove, type MemberEmployee } from './memberActions';
+import { withinWorkspace } from './workspaceEmployees';
 
 /** App-only orchestration; the shared DIGIT provider remains a business API client. */
 export function withIdentityMembers(base: DataProvider, tenantId: string): DataProvider {
@@ -28,30 +29,33 @@ export function withIdentityMembers(base: DataProvider, tenantId: string): DataP
       // Preserve fresh identifiers for all employees. Identity actions own changes,
       // and a stale form must not overwrite email after verification elsewhere.
       const current = (await base.getOne(resource, { id: params.id })).data;
-      if (current.tenantId !== tenantId) throw new Error('Employee must belong to this workspace.');
+      // The workspace or a child tenant (D16, amended); the employee keeps its own tenant.
+      if (!withinWorkspace(current.tenantId, tenantId)) throw new Error('Employee must belong to this workspace.');
       const user = { ...params.data.user };
       for (const key of ['emailId', 'userName', 'uuid', 'id', 'tenantId']) user[key] = current.user?.[key];
       delete user.password;
       if (params.data.isActive === false) {
         await deactivateAndRemove(
-          async () => ({ ...current, tenantId }) as unknown as MemberEmployee,
+          async () => current as unknown as MemberEmployee,
           employee => base.update(resource, { ...params, data: { ...params.data, ...employee, user } }),
           apiClient.getAuth().user?.uuid,
+          tenantId,
         );
         return { data: { ...current, ...params.data, user } };
       }
-      return base.update(resource, { ...params, data: { ...params.data, tenantId, user } });
+      return base.update(resource, { ...params, data: { ...params.data, tenantId: current.tenantId, user } });
     },
     async delete<RecordType extends RaRecord = RaRecord>(resource: string, params: DeleteParams<RecordType>) {
       if (resource !== 'employees') return base.delete(resource, params);
       const row = await deactivateAndRemove(
         async () => {
           const employee = (await base.getOne(resource, { id: params.id })).data as unknown as MemberEmployee;
-          if (employee.tenantId !== tenantId) throw new Error('Employee must belong to this workspace.');
+          if (!withinWorkspace(employee.tenantId, tenantId)) throw new Error('Employee must belong to this workspace.');
           return employee;
         },
         employee => base.update(resource, { id: params.id, data: employee, previousData: params.previousData }),
         apiClient.getAuth().user?.uuid,
+        tenantId,
       );
       return { data: { ...row, id: params.id } } as unknown as { data: RecordType };
     },
