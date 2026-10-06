@@ -37,6 +37,7 @@ import {
 import { parseExcelFile, parseEmployeeExcel } from '@/utils/excelParser';
 import { downloadEmployeeTemplate } from '@/utils/templateBuilder';
 import { reportStepError, trackStepAction } from '../telemetry';
+import { allowedEmployeeRoles, pickerChoices } from '@/lib/systemRecords';
 import type {
   EmployeeExcelRow,
   Employee,
@@ -118,10 +119,10 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
           mdmsService.getRoles(targetTenant).catch(() => [] as typeof roles),
           mdmsService.getMobileValidation(targetTenant).catch(() => null),
         ]);
-        setDepartments(depts);
-        setDesignations(desigs);
+        setDepartments(pickerChoices(depts, (dept) => dept.code));
+        setDesignations(pickerChoices(desigs, (desig) => desig.code));
         setBoundaries(bounds);
-        setRoles(fetchedRoles);
+        setRoles(allowedEmployeeRoles(fetchedRoles));
         setMobileRules(fetchedMobileRules);
         // Phase 2 is a prerequisite, so an empty boundary tree means the
         // reference data isn't usable for jurisdiction validation — block

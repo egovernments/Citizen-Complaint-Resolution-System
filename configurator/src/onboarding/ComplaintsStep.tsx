@@ -18,6 +18,7 @@ import { listMasters, recordName } from './departments/mastersApi';
 import { TypeDialog } from './complaints/TypeDialog';
 import { departmentsWithoutGro } from './complaints/groCoverage';
 import { listEmployees } from './employees/employeesApi';
+import { pickerChoices } from '@/lib/systemRecords';
 import {
   loadComplaints,
   rowsFingerprint,
@@ -454,7 +455,7 @@ export default function ComplaintsStep() {
       <TypeDialog
         open={!!editing}
         type={editingType}
-        departments={departments}
+        departments={pickerChoices(departments, (choice) => choice.code, editingType ? [editingType.department] : [])}
         takenNames={types.filter((_, i) => i !== editing?.index).map((type) => type.name)}
         onOpenChange={(open) => !open && setEditing(null)}
         onSave={(type: DraftType) => {

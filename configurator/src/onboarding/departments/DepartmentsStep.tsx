@@ -15,6 +15,7 @@ import { probeGate, useStepProbe } from '../stepProbe';
 import { describeSaveError } from '../errors';
 import { reportStepError, trackStepAction } from '../telemetry';
 import { MasterDialog } from './MasterDialog';
+import { isSystemRecordCode } from '@/lib/systemRecords';
 import { BulkMastersUpload, type BulkImportSummary } from './BulkMastersUpload';
 import {
   listMasters,
@@ -191,8 +192,10 @@ export default function DepartmentsStep() {
     Promise.all([listMasters(tenant, 'department', { ownOnly: true }), listMasters(tenant, 'designation', { ownOnly: true })])
       .then(([loadedDepartments, loadedDesignations]) => {
         if (cancelled) return;
-        setDepartments(loadedDepartments);
-        setDesignations(loadedDesignations);
+        // The founder's Administration department and designation are provisioned, not the
+        // workspace's own: the step check doesn't count them, so neither does the step.
+        setDepartments(loadedDepartments.filter((record) => !isSystemRecordCode(record.uniqueIdentifier)));
+        setDesignations(loadedDesignations.filter((record) => !isSystemRecordCode(record.uniqueIdentifier)));
         setLoadError(null);
       })
       .catch((err) => {
