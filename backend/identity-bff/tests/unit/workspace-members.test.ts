@@ -72,11 +72,12 @@ vi.mock("../../src/modules/accounts/credential-service.js", () => ({
 vi.mock("../../src/modules/sync/mirror.js", () => ({ mirrorPerson: vi.fn(async () => { if (f.crash === "mirror") { f.crash = ""; throw new Error("crash:mirror"); } }) }));
 vi.mock("../../src/modules/revocation/index.js", () => ({ revokeAccount: vi.fn(async (subject: string) => { f.revoked.push(subject); }) }));
 vi.mock("../../src/modules/citizen-otp/audit.js", () => ({ audit: vi.fn(async () => {}) }));
-import { acceptWorkspaceInvitation, linkWorkspaceMember, listWorkspaceMembers, removeWorkspaceMember, updateWorkspaceMemberEmail } from "../../src/modules/workspace-members/service.js";
+import { acceptWorkspaceInvitation, declineWorkspaceInvitation, linkWorkspaceMember, listWorkspaceMembers, removeWorkspaceMember, updateWorkspaceMemberEmail } from "../../src/modules/workspace-members/service.js";
 import { readOnboardingOrganizations } from "../../src/modules/onboarding/organization-reader.js";
 import { isOrganizationMember, request } from "../../src/modules/organizations/organization-service.js";
 import { readDigitAccount, requireWorkspace } from "../../src/modules/workspace-members/authority.js";
 import { BindingError } from "../../src/modules/bindings/types.js";
+import { audit } from "../../src/modules/citizen-otp/audit.js";
 import { activateStaffCredential, StaffLoginError } from "../../src/modules/accounts/credential-service.js";
 const uuid = "00000000-0000-4000-8000-000000000001";
 const input = { actor: "admin", tenantId: "pg", digitUuid: uuid, email: "employee@example.test" };
@@ -125,6 +126,41 @@ describe("resumable workspace membership", () => {
     await acceptWorkspaceInvitation("existing", "pg", invite.binding.invitationVersion);
     await acceptWorkspaceInvitation("existing", "pg", invite.binding.invitationVersion);
     expect(f.members.has("pg:existing")).toBe(true); expect(f.activations).toBe(1);
+  });
+  const existing = (id = "existing", email = input.email) => f.users.set(id, { id, email, username: email, enabled: true, emailVerified: true, attributes: {} });
+  it("lets the invitee decline their own pending invitation, audited, and re-invite works after", async () => {
+    existing();
+    const invite = await linkWorkspaceMember(input);
+    vi.mocked(audit).mockClear();
+    expect(await declineWorkspaceInvitation("existing", "pg", invite.binding.invitationVersion)).toEqual({ declined: true });
+    const stored = bindingDoc(f.users.get("existing")!).bindings[0];
+    expect(stored).toMatchObject({ state: "removed", removedBy: { kind: "browser", subject: "existing" } });
+    expect(f.users.get("existing")?.attributes?.["digit.boundUuids"]).toEqual([]);
+    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ event: "ACCOUNT_LINK_REVOKE", subject: "existing", actor: "existing", tenantId: "pg", detail: "INVITATION_DECLINED" }));
+    expect(f.members.size).toBe(0); expect(f.revoked).toEqual([]);
+    // A repeat is idempotent; accepting the declined version is not possible.
+    expect(await declineWorkspaceInvitation("existing", "pg", invite.binding.invitationVersion)).toEqual({ declined: true });
+    await expect(acceptWorkspaceInvitation("existing", "pg", invite.binding.invitationVersion)).rejects.toMatchObject({ code: "INVITATION_STALE" });
+    expect((await linkWorkspaceMember({ ...input, reinvite: true })).binding).toMatchObject({ state: "pending", invitationVersion: 2 });
+  });
+  it("refuses to decline an active binding, a stale version, or another person's invitation", async () => {
+    existing();
+    const invite = await linkWorkspaceMember(input);
+    existing("other", "other@example.test");
+    await expect(declineWorkspaceInvitation("other", "pg", invite.binding.invitationVersion)).rejects.toMatchObject({ code: "INVITATION_STALE", status: 409 });
+    await expect(declineWorkspaceInvitation("existing", "pg", invite.binding.invitationVersion + 1)).rejects.toMatchObject({ code: "INVITATION_STALE" });
+    await expect(declineWorkspaceInvitation("existing", "other", invite.binding.invitationVersion)).rejects.toMatchObject({ code: "INVITATION_STALE" });
+    expect(bindingDoc(f.users.get("existing")!).bindings[0].state).toBe("pending");
+    await acceptWorkspaceInvitation("existing", "pg", invite.binding.invitationVersion);
+    await expect(declineWorkspaceInvitation("existing", "pg", invite.binding.invitationVersion)).rejects.toMatchObject({ code: "INVITATION_STALE" });
+    expect(bindingDoc(f.users.get("existing")!).bindings[0].state).toBe("active");
+    expect(f.members.has("pg:existing")).toBe(true);
+  });
+  it("does not report an admin removal as the invitee's decline", async () => {
+    existing();
+    const invite = await linkWorkspaceMember(input);
+    await removeWorkspaceMember("admin", "pg", uuid);
+    await expect(declineWorkspaceInvitation("existing", "pg", invite.binding.invitationVersion)).rejects.toMatchObject({ code: "INVITATION_STALE" });
   });
   it("refuses acceptance by an account whose email is not verified", async () => {
     f.users.set("existing", { id: "existing", email: input.email, username: input.email, enabled: true, emailVerified: false, attributes: {} });

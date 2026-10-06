@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:digit:identity:digit.bindings:v1",
   "title": "digit.bindings v1: a person's staff bindings and their states",
-  "description": "Single-valued Keycloak user attribute holding this JSON. Written only by the BFF binding service (workspace-members/_link, workspace-invitations/_accept, workspace-members/_remove, bindings/_ensure, the item-19 conversion job, and the expiry sweep). The key is (person, tenantId): at most one record per tenantId. A removed record is the tombstone.",
+  "description": "Single-valued Keycloak user attribute holding this JSON. Written only by the BFF binding service (workspace-members/_link, workspace-invitations/_accept, workspace-invitations/_decline, workspace-members/_remove, bindings/_ensure, the item-19 conversion job, and the expiry sweep). The key is (person, tenantId): at most one record per tenantId. A removed record is the tombstone.",
   "type": "object",
   "required": ["v", "bindings"],
   "additionalProperties": false,

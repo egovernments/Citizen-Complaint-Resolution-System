@@ -14,6 +14,7 @@ vi.mock("../../src/modules/workspace-members/service.js", () => {
     listWorkspaceMembers: vi.fn(async (...args: unknown[]) => { check(); f.calls.push(args); return { members: [] }; }),
     removeWorkspaceMember: vi.fn(async () => { check(); return { removed: true, state: "removed" }; }),
     acceptWorkspaceInvitation: vi.fn(async (...args: unknown[]) => { check(); f.calls.push(args); return { binding: { state: "active" } }; }),
+    declineWorkspaceInvitation: vi.fn(async (...args: unknown[]) => { check(); f.calls.push(["decline", ...args]); return { declined: true }; }),
     updateWorkspaceMemberEmail: vi.fn(async () => { check(); return { status: "verification_sent" }; }),
   };
 });
@@ -24,6 +25,7 @@ const routes = {
   list: contractRoute("GET", "/identity/v1/workspace-members"),
   remove: contractRoute("POST", "/identity/v1/workspace-members/_remove"),
   accept: contractRoute("POST", "/identity/v1/workspace-invitations/_accept"),
+  decline: contractRoute("POST", "/identity/v1/workspace-invitations/_decline"),
   email: contractRoute("POST", "/identity/v1/workspace-members/_updateEmail"),
 };
 const valid = { tenantId: "pg", digitUuid: "00000000-0000-4000-8000-000000000001", email: "employee@example.test" };
@@ -57,6 +59,18 @@ describe("workspace membership HTTP contract", () => {
   it.each(["configurator", "employee"])("accepts through the %s surface's session", async (surface) => {
     f.signedIn = true; const response = await post(`${routes.accept.path}?surface=${surface}`, { tenantId: "pg", invitationVersion: 2 });
     expect(response.status).toBe(200); expect(f.surface).toBe(surface); expect(f.calls[0]).toEqual(["person", "pg", 2]);
+  });
+  it.each(["configurator", "employee"])("declines the caller's own invitation through the %s surface's session", async (surface) => {
+    f.signedIn = true; const response = await post(`${routes.decline.path}?surface=${surface}`, { tenantId: "pg", invitationVersion: 2 });
+    expect(response.status).toBe(200); expect(await response.json()).toEqual({ declined: true });
+    expect(f.surface).toBe(surface); expect(f.calls[0]).toEqual(["decline", "person", "pg", 2]);
+  });
+  it("rejects a decline through a citizen surface, without a version, or for a stale invitation", async () => {
+    f.signedIn = true;
+    await expectContractError(await post(`${routes.decline.path}?surface=citizen`, { tenantId: "pg", invitationVersion: 1 }), routes.decline, "UNSUPPORTED_SURFACE");
+    await expectContractError(await post(routes.decline.path, { tenantId: "pg" }), routes.decline, "INVALID_REQUEST");
+    f.failure = "INVITATION_STALE";
+    await expectContractError(await post(routes.decline.path, { tenantId: "pg", invitationVersion: 1 }), routes.decline, "INVITATION_STALE");
   });
   it("rejects invitation acceptance through a citizen surface", async () => {
     f.signedIn = true;

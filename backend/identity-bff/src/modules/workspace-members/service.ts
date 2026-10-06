@@ -187,6 +187,25 @@ export async function acceptWorkspaceInvitation(subject: string, tenantId: strin
   });
 }
 
+/**
+ * The invitee turns down their own pending invitation. Only the caller's binding is touched:
+ * it becomes `removed` (releasing the uuid) and the admin can re-invite. A pending binding
+ * grants no membership or token, so there is nothing to revoke.
+ */
+export async function declineWorkspaceInvitation(subject: string, tenantId: string, invitationVersion: number) {
+  return withPersonLease(subject, async () => {
+    const binding = (await readBindings(subject)).find((b) => b.tenantId === tenantId);
+    if (binding?.invitationVersion === invitationVersion && binding.state === "removed" &&
+        binding.removedBy?.kind === "browser" && binding.removedBy.subject === subject) return { declined: true as const };
+    if (binding?.state !== "pending" || binding.invitationVersion !== invitationVersion) throw new BindingError("INVITATION_STALE", "The invitation is no longer current");
+    await remove({ subject, tenantId, uuid: binding.uuid, removedBy: { kind: "browser", subject } });
+    await mirrorPerson(subject);
+    console.info(JSON.stringify({ audit: "identity.account_link", event: "ACCOUNT_LINK_REVOKE", subject, tenantId, digitUserUuid: binding.uuid, actor: subject, detail: "INVITATION_DECLINED" }));
+    await audit({ event: "ACCOUNT_LINK_REVOKE", outcome: "SUCCESS", subject, tenantId, digitUserUuid: binding.uuid, actor: subject, userType: "EMPLOYEE", detail: "INVITATION_DECLINED" });
+    return { declined: true as const };
+  });
+}
+
 /** Includes tombstones so retries finish removal side effects after a crash. */
 async function membersAt(tenantId: string) {
   const result: Array<{ user: BindingUser; binding: Binding }> = [];

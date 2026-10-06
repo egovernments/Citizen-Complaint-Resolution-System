@@ -3313,6 +3313,26 @@ describe("binding workspace public routes", () => {
     ]) });
   });
 
+  it("lets an existing person decline their invitation, which the admin no longer sees and can re-invite", async () => {
+    const subject = "binding-decline";
+    await kcAdmin("/users", { id: subject, username: subject, email: `${subject}@example.test`, emailVerified: true, enabled: true });
+    const account = employee("BINDING-DECLINE");
+    const invite = await (await post("/workspace-members/_link", adminCookie, { tenantId: "ug", digitUuid: account.uuid, email: `${subject}@example.test` })).json();
+    const cookie = await cookieFor(subject, "employee");
+    const body = { tenantId: "ug", invitationVersion: invite.binding.invitationVersion };
+    // The admin's own session holds no invitation, so it cannot decline this one.
+    expect(await (await post("/workspace-invitations/_decline", adminCookie, body)).json()).toMatchObject({ code: "INVITATION_STALE" });
+    const declined = await post("/workspace-invitations/_decline?surface=employee", cookie, body);
+    expect(declined.status).toBe(200); expect(await declined.json()).toEqual({ declined: true });
+    expect(await (await read("/session?surface=employee", cookie)).json()).toMatchObject({ pendingInvitations: [] });
+    expect((await post("/workspace-invitations/_accept?surface=employee", cookie, body)).status).toBe(409);
+    expect((await kcUser(subject)).attributes["digit.boundUuids"] || []).not.toContain(`ug|${account.uuid}`);
+    const members = (await (await read("/workspace-members?tenantId=ug", adminCookie)).json()).members;
+    expect(members.some((m: { subject: string }) => m.subject === subject)).toBe(false);
+    const reinvite = await post("/workspace-members/_link", adminCookie, { tenantId: "ug", digitUuid: account.uuid, email: `${subject}@example.test`, reinvite: true });
+    expect(await reinvite.json()).toMatchObject({ binding: { state: "pending", invitationVersion: invite.binding.invitationVersion + 1 } });
+  });
+
   it("rejects a removed or cross-tenant ACCOUNT_ADMIN role during the same session", async () => {
     const account = employee("BINDING-DENIED");
     const roles = [...adminAccount.roles];
