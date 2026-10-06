@@ -8,7 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { useToast } from "@/hooks/use-toast"
+import { useToast } from "@/hooks/use-toast";
+import { useMastersCapability } from '@/hooks/useMastersCapability';
 
 import {
   Sliders,
@@ -51,10 +52,14 @@ const DEFAULT_POLICY: EscalationConfigData = {
 export function EscalationPolicyEditor() {
   const { state } = useApp();
   const { toast } = useToast();
+  const { canEditResource } = useMastersCapability();
 
   const tenantId = state.tenant || 'ke';
   const rootTenant = tenantId.split('.')[0] || 'ke';
   const isStatePolicy = tenantId === rootTenant;
+
+  // B4: derive edit access from capability check instead of hardcoding true
+  const isStateAdmin = canEditResource('pgr-escalation');
 
   const [record, setRecord] = useState<MdmsRecord | null>(null);
   const [draft, setDraft] = useState<EscalationConfigData>(DEFAULT_POLICY);
@@ -67,12 +72,15 @@ export function EscalationPolicyEditor() {
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // B3: flag when the loaded hierarchy may have been truncated at 5000 records
+  const [hierarchyTruncated, setHierarchyTruncated] = useState(false);
 
   const [inheritedCount, setInheritedCount] = useState<number>(0);
   const [editingItem, setEditingItem] = useState<CatalogueItem | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [copiedJson, setCopiedJson] = useState(false);
   const [statusInput, setStatusInput] = useState('');
+
 
   // Initial load
   const loadPolicy = useCallback(async () => {
@@ -123,11 +131,14 @@ export function EscalationPolicyEditor() {
       setInitialDraft(JSON.parse(JSON.stringify(policyData)));
 
       // 2. Fetch ComplaintHierarchy records using standard searchRecords
+      const HIERARCHY_LIMIT = 5000;
       let hierarchy = await mdmsService.searchRecords(
         tenantId,
         MDMS_SCHEMAS.COMPLAINT_HIERARCHY,
-        { limit: 5000 }
+        { limit: HIERARCHY_LIMIT }
       );
+      // B3: detect if the raw response hit the limit (possible truncation)
+      const rawHierarchyCount = hierarchy.length;
       hierarchy = hierarchy.filter((r) => r.tenantId === tenantId);
 
       // If city tenant has no hierarchy rows, fall back to state hierarchy
@@ -135,9 +146,13 @@ export function EscalationPolicyEditor() {
         const rootHierarchy = await mdmsService.searchRecords(
           rootTenant,
           MDMS_SCHEMAS.COMPLAINT_HIERARCHY,
-          { limit: 5000 }
+          { limit: HIERARCHY_LIMIT }
         );
+        // B3: also check root hierarchy for truncation
+        setHierarchyTruncated(rootHierarchy.length >= HIERARCHY_LIMIT);
         hierarchy = rootHierarchy.filter((r) => r.tenantId === rootTenant);
+      } else {
+        setHierarchyTruncated(rawHierarchyCount >= HIERARCHY_LIMIT);
       }
       setRawHierarchyRecords(hierarchy);
 
@@ -428,7 +443,6 @@ export function EscalationPolicyEditor() {
     toast({ title: 'Copied', description: 'Canonical policy JSON copied to clipboard.' });
   };
 
-  const isStateAdmin = true;
 
   const canAddMoreLevels =
     draft.maxDepth < 5 &&
@@ -520,6 +534,19 @@ export function EscalationPolicyEditor() {
           </AlertDescription>
         </Alert>
       )}
+
+      {/* B3: warn when the complaint hierarchy may have been truncated at the API limit */}
+      {hierarchyTruncated && (
+        <Alert className="border-amber-500/40 bg-amber-50 dark:bg-amber-950/20 text-amber-900 dark:text-amber-200">
+          <AlertTriangle className="w-4 h-4 text-amber-600" />
+          <AlertDescription className="text-xs ml-2">
+            The complaint-type hierarchy returned the maximum 5,000 records. Some types may be
+            missing from the catalogue — their overrides will appear as "orphaned" until the limit
+            is resolved. Please contact your MDMS administrator.
+          </AlertDescription>
+        </Alert>
+      )}
+
 
       {loading ? (
         <div className="flex items-center justify-center p-12 text-muted-foreground gap-2">

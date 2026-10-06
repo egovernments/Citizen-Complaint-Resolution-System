@@ -52,7 +52,12 @@ export function OverrideEditDialog({
     if (!item) return [];
     if (item.override?.slaPercentageByLevel && item.override.slaPercentageByLevel.length > 0) {
       const p = [...item.override.slaPercentageByLevel];
-      while (p.length < maxDepth) p.push(defaultPcts[p.length] ?? 100);
+      // A2: pad by continuing upward from the last value (not from defaultPcts[i])
+      // to avoid producing invalid ladders like [150, 120, 200] which fail validation.
+      while (p.length < maxDepth) {
+        const last = p[p.length - 1] ?? 0;
+        p.push(Math.min(200, last + 40));
+      }
       return p.slice(0, maxDepth);
     }
     return defaultPcts.slice(0, maxDepth);
@@ -83,12 +88,23 @@ export function OverrideEditDialog({
   });
 
   const [errors, setErrors] = useState<string[]>([]);
+  // A1: track whether the operator actually edited fallback fields in percentage mode.
+  // We only include slaByLevel in the saved override when it was intentionally changed;
+  // if the user just applied percentages without touching fallbacks, we don't freeze the
+  // current defaults into the override (which would stop future state-policy propagation).
+  const [fallbacksEdited, setFallbacksEdited] = useState<boolean>(() => {
+    // Pre-mark as edited if the override already has an explicit slaByLevel that differs
+    // from the defaults (i.e. the operator previously set them).
+    if (!item?.override?.slaByLevel || item.override.slaByLevel.length === 0) return false;
+    const existing = item.override.slaByLevel;
+    return existing.some((v, i) => v !== (defaultFallbacks[i] ?? 0));
+  });
 
   if (!item) return null;
 
   const handleApply = () => {
     if (overrideMode === 'percentage') {
-      const res = validateLadder(pcts, fallbacks);
+      const res = validateLadder(pcts, fallbacksEdited ? fallbacks : []);
       const errMessages = [
         ...res.pctErrors.filter((e): e is string => e !== null),
         ...res.fallbackErrors.filter((e): e is string => e !== null),
@@ -99,10 +115,11 @@ export function OverrideEditDialog({
         return;
       }
 
+      // A1: only persist slaByLevel when the user deliberately changed the fallback values
       const override: EscalationLevelOverride = {
         slaPercentageByLevel: pcts,
         enabledByLevel,
-        slaByLevel: fallbacks,
+        ...(fallbacksEdited ? { slaByLevel: fallbacks } : {}),
       };
 
       onApply(item.code, override);
@@ -129,6 +146,7 @@ export function OverrideEditDialog({
       onClose();
     }
   };
+
 
   const handleRemoveOverride = () => {
     onApply(item.code, null);
@@ -334,6 +352,8 @@ export function OverrideEditDialog({
                         const next = [...fallbacks];
                         next[idx] = e.target.value === '' ? 0 : Number(e.target.value);
                         setFallbacks(next);
+                        // A1: mark that the operator deliberately edited fallbacks
+                        setFallbacksEdited(true);
                       }}
                       className="font-mono h-8 text-xs max-w-xs"
                     />

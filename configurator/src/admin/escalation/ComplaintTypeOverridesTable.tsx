@@ -597,7 +597,10 @@ export function ComplaintTypeOverridesTable({
                       {item.code}
                     </TableCell>
                     <TableCell className="font-mono text-xs">
-                      {(item.override?.slaPercentageByLevel || []).map((p) => `${p}%`).join(' · ')}
+                      {/* B1: fall back to formatted ms ladder for millisecond-only orphaned overrides */}
+                      {item.override?.slaPercentageByLevel?.length
+                        ? item.override.slaPercentageByLevel.map((p) => `${p}%`).join(' · ')
+                        : (item.override?.slaByLevel || []).map(formatDurationMs).join(' · ')}
                     </TableCell>
                     <TableCell className="text-right">
                       {!readOnly && (

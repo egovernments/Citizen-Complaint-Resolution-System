@@ -71,7 +71,10 @@ export function EscalationLevelTable({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {percentages.map((pct, idx) => {
+            {/* B2: use the deeper of the two arrays so a pure-ms config still shows rows */}
+            {Array.from({ length: Math.max(percentages.length, fallbacks.length) }, (_, idx) => {
+              const hasPct = idx < percentages.length;
+              const pct = percentages[idx];
               const enabled = enabledByLevel[idx] ?? (enabledByLevel[enabledByLevel.length - 1] ?? true);
               const fallback = fallbacks[idx] ?? 0;
               const pctError = pctErrors[idx];
@@ -103,33 +106,39 @@ export function EscalationLevelTable({
                     </div>
                   </TableCell>
                   <TableCell>
-                    <div className="space-y-1">
-                      <div className="relative">
-                        <Input
-                          type="number"
-                          min={1}
-                          max={200}
-                          step={1}
-                          value={pct ?? ''}
-                          disabled={readOnly}
-                          onChange={(e) => {
-                            const val = e.target.value === '' ? 0 : Number(e.target.value);
-                            updateLevel(idx, { pct: val });
-                          }}
-                          className={`w-28 font-mono pr-7 ${pctError ? 'border-destructive focus-visible:ring-destructive' : ''}`}
-                        />
-                        <span className="absolute right-2.5 top-2.5 text-xs text-muted-foreground font-mono">
-                          %
-                        </span>
+                    {hasPct ? (
+                      <div className="space-y-1">
+                        <div className="relative">
+                          <Input
+                            type="number"
+                            min={1}
+                            max={200}
+                            step={1}
+                            value={pct ?? ''}
+                            disabled={readOnly}
+                            onChange={(e) => {
+                              const val = e.target.value === '' ? 0 : Number(e.target.value);
+                              updateLevel(idx, { pct: val });
+                            }}
+                            className={`w-28 font-mono pr-7 ${pctError ? 'border-destructive focus-visible:ring-destructive' : ''}`}
+                          />
+                          <span className="absolute right-2.5 top-2.5 text-xs text-muted-foreground font-mono">
+                            %
+                          </span>
+                        </div>
+                        {pctError && (
+                          <p className="text-xs text-destructive">{pctError}</p>
+                        )}
                       </div>
-                      {pctError && (
-                        <p className="text-xs text-destructive">{pctError}</p>
-                      )}
-                    </div>
+                    ) : (
+                      <span className="text-xs text-muted-foreground font-mono">—</span>
+                    )}
                   </TableCell>
                   <TableCell>
                     <span className="text-sm font-medium text-foreground">
-                      {enabled ? computeTriggerPreview(exampleComplaintHours, pct) : 'Manual escalation only (Auto off)'}
+                      {hasPct
+                        ? (enabled ? computeTriggerPreview(exampleComplaintHours, pct) : 'Manual escalation only (Auto off)')
+                        : (enabled ? `${formatDurationMs(fallback)} after creation` : 'Manual escalation only (Auto off)')}
                     </span>
                   </TableCell>
                   <TableCell>
@@ -159,6 +168,7 @@ export function EscalationLevelTable({
                 </TableRow>
               );
             })}
+
           </TableBody>
         </Table>
       </div>
