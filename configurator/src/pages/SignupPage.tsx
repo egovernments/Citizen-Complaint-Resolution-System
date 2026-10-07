@@ -853,9 +853,11 @@ function SignupFlow() {
   if (phase === 'provisioning' && operation) {
     const done = new Set(operation.completedSteps);
     const failed = operation.status === 'RETRYABLE_FAILED' || operation.status === 'TERMINAL_FAILED';
-    // A step code this list does not know (or none yet) still shows progress, on the first step not done.
-    const current = PROVISIONING_STEPS.find((name) => name === operation.currentStep)
-      ?? PROVISIONING_STEPS.find((name) => !done.has(name));
+    // PGR runs the steps in order, so while the run is live the step in progress is the first one not
+    // done. That holds for a step code this list does not know, and after a resubmit, which clears
+    // completedSteps but leaves currentStep where the last attempt stopped. A settled run spins nothing.
+    const live = operation.status === 'PENDING' || operation.status === 'RUNNING';
+    const current = live ? PROVISIONING_STEPS.find((name) => !done.has(name)) : undefined;
     // This page sits outside react-admin's context, so it reads the provider directly.
     const t = translatorFrom(i18nProvider.translate);
     return (

@@ -426,6 +426,27 @@ describe('provisioning', () => {
     expect(screen.getByText('Connecting your sign-in')).toBeInTheDocument();
   });
 
+  it('spins on the first step not done after a resubmit, not on the stale currentStep', async () => {
+    // OnboardingRepository.resubmit clears completed_steps and leaves current_step alone.
+    await submitWith({ status: 'PENDING', currentStep: 'ORGANIZATION', completedSteps: [] });
+
+    expect(await screen.findByText('Creating your workspace')).toBeInTheDocument();
+    expect(spinning(/creating your workspace/i)).toBe(true);
+    expect(spinning(/setting up your organisation/i)).toBe(false);
+  });
+
+  it('spins nothing once the run has succeeded, even on a step code it does not know', async () => {
+    await submitWith({
+      status: 'SUCCEEDED',
+      currentStep: null,
+      completedSteps: ['TENANT_FOUNDATION', 'PLATFORM_BASELINE', 'FOUNDER_EMPLOYEE', 'ORGANIZATION', 'MEMBERSHIP', 'BINDING'],
+      lifecyclePublishedAt: null,
+    });
+
+    expect(await screen.findByText('Creating your employee record')).toBeInTheDocument();
+    expect(document.querySelector('li .animate-spin')).toBeNull();
+  });
+
   it('still shows progress on a step code it does not know', async () => {
     await submitWith({ status: 'RUNNING', currentStep: 'SOME_NEW_STEP', completedSteps: ['TENANT_FOUNDATION', 'PLATFORM_BASELINE'] });
 
