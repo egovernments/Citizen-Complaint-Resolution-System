@@ -64,7 +64,7 @@ the box does hold a live database, see
 | `bootstrap_user` | Admin Username (defaults to ADMIN) | | 
 | `bootstrap_password` | Admin Password (defaults to eGov@123) | |
 | `enable_overpass` | Runs our own map-boundary search service. If `false`, the system uses the public Overpass service. Tested by deploying it and checking both the container and `/overpass/api/interpreter`. | `false` |
-| `pgr_notification_config_driven` | Reads notification messages and routing rules from MDMS instead of using fixed rules in the code. Requires Novu and the notification MDMS data. Checked from Ansible through to the PGR container setting. | `false` |
+| `pgr_notification_config_driven` | Reads notification messages and routing rules from MDMS instead of using fixed rules in the code. Requires enable_novu: true, a working Novu API key, and notification MDMS data. On the first Novu setup only, novu_disable_user_registration may need to be temporarily set to false. Set it back to true afterward.  | `false` |
 | `novu_bridge_channel` | Chooses the default notification channel: `sms`, `whatsapp`, or `email`. Checked from Ansible through to the Novu Bridge setting. | `sms` |
 | `novu_bridge_channels_enabled` | Lists the notification channels that Novu Bridge is allowed to use, such as `SMS,EMAIL`. Each listed channel must have a working provider. The configuration and channel-filtering code were checked. | `"SMS,EMAIL"` |
 | `novu_bridge_sms_provider` | Chooses which service sends normal SMS messages. Leave it blank for the default Twilio/Novu path, or use a supported provider such as `ozeki` or `smscountry`. The provider-selection code was checked; a real send still needs credentials. | `""` |
