@@ -181,8 +181,11 @@ public class TenantAccountService {
         requireEnabled();
         String root = rootOf(tenantId);
         Optional<TenantAccountRepository.Row> before = repository.find(root);
+        // Nothing to do: provisioned, current workflow set, and the key stored under the CURRENT
+        // encryption key (one written by the previous key, mid-rotation, is stored again).
         if (before.isPresent() && before.get().provisioned() && before.get().workflowsVersion() >= TenantWorkflows.VERSION
-                && StringUtils.hasText(before.get().apiKeyCiphertext())) {
+                && StringUtils.hasText(before.get().apiKeyCiphertext())
+                && !cipher().writtenByPreviousKey(before.get().apiKeyCiphertext())) {
             return new ProvisionResult(view(before.get()), false, List.of());
         }
         long now = clock.getAsLong();

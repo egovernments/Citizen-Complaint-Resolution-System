@@ -198,6 +198,27 @@ class TenantAccountServiceTest {
     }
 
     @Test
+    void duringAnEncryptionKeyRotation_aReProvisionStoresTheKeyUnderTheNewKey() {
+        service.provision("acme");
+        String writtenBefore = repository.rows.get("acme").apiKeyCiphertext();
+        accounts.setPreviousEncryptionKey(SECRET);
+        accounts.setEncryptionKey("fedcba9876543210fedcba9876543210-rotated-key");
+        TenantAccountService rotated = new TenantAccountService(accounts, repository, platform, novuClient,
+                new TenantWorkflows(novuClient, bridgeConfig(), accounts), mock(ProviderAvailabilities.class));
+        assertEquals("key-dev-org-acme", rotated.accountFor("acme").apiKey(), "the previous key still reads it");
+
+        rotated.provision("acme");
+
+        String writtenAfter = repository.rows.get("acme").apiKeyCiphertext();
+        assertFalse(writtenAfter.equals(writtenBefore));
+        assertEquals("key-dev-org-acme", new ApiKeyCipher(accounts.getEncryptionKey(), null).decrypt(writtenAfter, "acme"));
+        verify(platform, times(1)).createOrganization(anyString(), anyString());
+        // Once stored under the new key, a provision is a no-op again.
+        rotated.provision("acme");
+        verify(platform, times(2)).login();
+    }
+
+    @Test
     void routing_aProvisionedRootAnswersItsOwnAccount_forEveryTenantUnderIt() {
         service.provision("acme");
 
