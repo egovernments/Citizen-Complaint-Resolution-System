@@ -2175,6 +2175,16 @@
         - ccrs_prev_image_tag != (ccrs_image_tag or '(none)')
           or ccrs_prev_services != (ccrs_image_tag_services | join(','))
 
+    # Per-tenant Novu accounts (#2203). One switch for every task below and for the .env
+    # line: on by default wherever self-serve signup and Novu both run, because that is
+    # where workspaces need their own provider credentials; host_vars `novu_tenant_accounts`
+    # overrides either way. Meaningless (forced off) without Novu.
+    - name: "novu tenant accounts — resolve the switch"
+      ansible.builtin.set_fact:
+        novu_tenant_accounts_on: >-
+          {{ (enable_novu | default(false) | bool)
+             and (novu_tenant_accounts | default(enable_keycloak | default(false)) | bool) }}
+
     - name: Write per-tenant compose .env
       template:
         src: templates/digit.env.j2
@@ -2271,6 +2281,7 @@
       loop:
         - TENANT SECRETS
         - KEYCLOAK SECRETS
+        - NOVU TENANT ACCOUNT SECRETS
       when:
         - prev_env.content is defined
         - ('# BEGIN ' + item) in (prev_env.content | b64decode)
@@ -3470,6 +3481,123 @@
       when:
         - enable_novu | default(false)
         - (novu_api_key | default('')) | length > 0
+
+    # ── Per-tenant Novu accounts (#2203): secrets ──────────────────────────────
+    # Four secrets, generated on first use and kept in OpenBao like the identity ones (same
+    # `or`-short-circuit and one cas-guarded merge write; see the Grafana note above):
+    #   novu_bridge_tenant_key_encryption_key  AES key material for the stored tenant API keys
+    #   novu_bridge_internal_admin_token       /novu-adapter/v1/tenants/** (pgr-services, operators)
+    #   novu_bridge_internal_send_token        POST /messages/_send (the Identity BFF)
+    #   novu_admin_password                    the Novu platform admin the bridge signs in as
+    # The admin password is the account the deploy mints NOVU_API_KEY with. While tenant
+    # accounts are off it stays `novu_admin_password` from host_vars or the published default
+    # (unchanged behaviour); with them on, a published default would hand every tenant's
+    # provider credentials to anyone who can reach /novu-api/, so it comes from OpenBao (or an
+    # explicit host_vars value) and the task "move the Novu admin off the legacy password"
+    # below changes it on a box that still has the old one. Read it back with
+    #   bao kv get -field=novu_admin_password {{ secrets_path }}
+    - name: "novu tenant accounts — re-read tenant secrets"
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:18200/v1/{{ secrets_path | regex_replace('^kv/', 'kv/data/') }}"
+        headers:
+          X-Vault-Token: "{{ bao_root_token }}"
+        status_code: [200]
+      register: bao_secrets_novu_accounts
+      when: novu_tenant_accounts_on | bool
+      no_log: true
+
+    - name: "novu tenant accounts — resolve secrets (generate any that are absent)"
+      vars:
+        _stored: "{{ bao_secrets_novu_accounts.json.data.data }}"
+      ansible.builtin.set_fact:
+        novu_accounts_secrets:
+          novu_bridge_tenant_key_encryption_key: >-
+            {{ _stored.novu_bridge_tenant_key_encryption_key | default('', true)
+               or lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
+          novu_bridge_internal_admin_token: >-
+            {{ _stored.novu_bridge_internal_admin_token | default('', true)
+               or lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
+          novu_bridge_internal_send_token: >-
+            {{ _stored.novu_bridge_internal_send_token | default('', true)
+               or lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
+          # Novu's password policy: 8-64 chars with upper, lower, digit and one of #?!@$%^&*()-
+          # ('-' because '$' would be interpolated by compose and '#' starts a .env comment).
+          novu_admin_password: >-
+            {{ _stored.novu_admin_password | default('', true)
+               or (lookup('password', '/dev/null length=24 chars=ascii_letters,digits') ~ 'Aa1-') }}
+      when: novu_tenant_accounts_on | bool
+      no_log: true
+
+    # An explicit host_vars novu_admin_password is the operator's to manage (like the status
+    # board's): it wins and is not copied into OpenBao.
+    - name: "novu tenant accounts — effective Novu admin login"
+      ansible.builtin.set_fact:
+        novu_admin_email_effective: "{{ novu_admin_email | default('admin@digit.local') }}"
+        novu_admin_password_effective: >-
+          {{ (novu_admin_password | default('', true))
+             or (novu_accounts_secrets.novu_admin_password
+                 if (novu_tenant_accounts_on | bool) else 'Digit@12345') }}
+      no_log: true
+
+    - name: "novu tenant accounts — refuse the published default admin password"
+      ansible.builtin.assert:
+        that:
+          - novu_admin_password_effective != 'Digit@12345'
+        fail_msg: >-
+          Per-tenant Novu accounts are on, but novu_admin_password in host_vars is the published
+          default `Digit@12345`. novu-bridge signs in as that Novu admin to manage every tenant's
+          organization, and /novu-api/ is public: remove novu_admin_password from host_vars (the
+          deploy then generates one in OpenBao and changes the Novu admin's password to it) or
+          set a unique value.
+      when: novu_tenant_accounts_on | bool
+
+    - name: "novu tenant accounts — persist any generated secrets"
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:18200/v1/{{ secrets_path | regex_replace('^kv/', 'kv/data/') }}"
+        method: POST
+        headers:
+          X-Vault-Token: "{{ bao_root_token }}"
+        body_format: json
+        body: >-
+          {{ {'options': {'cas': bao_secrets_novu_accounts.json.data.metadata.version | int},
+              'data': bao_secrets_novu_accounts.json.data.data | combine(_novu_accounts_to_store)} }}
+        status_code: [200]
+      vars:
+        _novu_accounts_to_store: >-
+          {{ novu_accounts_secrets
+             | dict2items
+             | rejectattr('key', 'equalto', 'novu_admin_password' if (novu_admin_password | default('', true)) else '')
+             | items2dict }}
+      when:
+        - novu_tenant_accounts_on | bool
+        - (bao_secrets_novu_accounts.json.data.data | combine(_novu_accounts_to_store))
+          != bao_secrets_novu_accounts.json.data.data
+      no_log: true
+
+    - name: "novu tenant accounts — write secrets into compose .env"
+      ansible.builtin.blockinfile:
+        path: "{{ digit_dir }}/.env"
+        marker: "# {mark} NOVU TENANT ACCOUNT SECRETS"
+        block: |
+          NOVU_BRIDGE_NOVU_ADMIN_EMAIL={{ novu_admin_email_effective }}
+          NOVU_BRIDGE_NOVU_ADMIN_PASSWORD={{ novu_admin_password_effective }}
+          NOVU_BRIDGE_TENANT_KEY_ENCRYPTION_KEY={{ novu_accounts_secrets.novu_bridge_tenant_key_encryption_key }}
+          NOVU_BRIDGE_INTERNAL_ADMIN_TOKEN={{ novu_accounts_secrets.novu_bridge_internal_admin_token }}
+          NOVU_BRIDGE_INTERNAL_SEND_TOKEN={{ novu_accounts_secrets.novu_bridge_internal_send_token }}
+        create: false
+        mode: '0600'
+      when: novu_tenant_accounts_on | bool
+      no_log: true
+
+    # Switched off: the block goes, so no stale token keeps the internal APIs open and the
+    # bridge (NOVU_BRIDGE_TENANT_ACCOUNTS_ENABLED=false) sends every tenant through the shared
+    # account. Tenant organizations and their rows are kept; switching back on resumes them.
+    - name: "novu tenant accounts — remove the secrets block when switched off"
+      ansible.builtin.blockinfile:
+        path: "{{ digit_dir }}/.env"
+        marker: "# {mark} NOVU TENANT ACCOUNT SECRETS"
+        state: absent
+      when: not (novu_tenant_accounts_on | bool)
 
     # The next two steps are the deploy's long, silent stretch — the image
     # pull (tens of GB on a first run) and the ~40-container up (~10 min on
@@ -6472,11 +6600,56 @@
     # bootstrapped the admin user exists, so the script's login fallback returns
     # the key and we never touch DISABLE_USER_REGISTRATION at all. That keeps the
     # steady state of every existing deployment byte-identical to before.
+    # Per-tenant accounts (#2203): the Novu admin moves off the legacy password (host_vars
+    # `novu_admin_password_legacy`, else the published default) to the OpenBao one BEFORE
+    # anything signs in with it. Runs whether or not a key is pinned: novu-bridge signs in as
+    # this user. NOCHANGE when the new password already works, NOUSER on an empty Novu (the
+    # mint below registers the first user with the new password), ROTATED when it changed it.
+    - name: "novu tenant accounts — move the Novu admin off the legacy password"
+      ansible.builtin.command: python3 -
+      args:
+        stdin: |
+          import json, os, sys, urllib.request, urllib.error
+          api = "http://127.0.0.1:14002"
+          def call(path, body, token=None):
+              req = urllib.request.Request(api + path, data=json.dumps(body).encode(), method="POST",
+                                           headers={"Content-Type": "application/json"})
+              if token:
+                  req.add_header("Authorization", "Bearer " + token)
+              try:
+                  with urllib.request.urlopen(req, timeout=20) as r:
+                      raw = r.read()
+                      return r.status, (json.loads(raw) if raw else {})
+              except urllib.error.HTTPError as e:
+                  return e.code, {}
+          email, new, old = os.environ["NB_EMAIL"], os.environ["NB_NEW"], os.environ["NB_OLD"]
+          status, _ = call("/v1/auth/login", {"email": email, "password": new})
+          if status in (200, 201):
+              print("NOCHANGE"); sys.exit(0)
+          status, body = call("/v1/auth/login", {"email": email, "password": old})
+          if status not in (200, 201):
+              print("NOUSER"); sys.exit(0)
+          token = (body.get("data") or {}).get("token")
+          status, _ = call("/v1/auth/update-password",
+                           {"currentPassword": old, "newPassword": new, "confirmPassword": new}, token)
+          if status not in (200, 204):
+              print("FAILED %s" % status); sys.exit(1)
+          print("ROTATED")
+      environment:
+        NB_EMAIL: "{{ novu_admin_email_effective }}"
+        NB_NEW: "{{ novu_admin_password_effective }}"
+        NB_OLD: "{{ novu_admin_password_legacy | default('Digit@12345') }}"
+      register: novu_admin_rotation
+      changed_when: "'ROTATED' in novu_admin_rotation.stdout"
+      when:
+        - enable_novu | default(false)
+        - novu_tenant_accounts_on | bool
+
     - name: "novu-bootstrap — mint Development API key (attempt 1: existing account)"
       ansible.builtin.shell: |
         NOVU_API_URL=http://127.0.0.1:14002 \
-        NOVU_ADMIN_EMAIL='{{ novu_admin_email | default("admin@digit.local") }}' \
-        NOVU_ADMIN_PASSWORD='{{ novu_admin_password | default("Digit@12345") }}' \
+        NOVU_ADMIN_EMAIL='{{ novu_admin_email_effective }}' \
+        NOVU_ADMIN_PASSWORD='{{ novu_admin_password_effective }}' \
         NOVU_ORG_NAME='{{ novu_org_name | default("DIGIT") }}' \
         bash {{ digit_dir }}/novu-mint-key.sh
       args:
@@ -6540,8 +6713,8 @@
         - name: "novu-bootstrap — mint Development API key (attempt 2: fresh signup)"
           ansible.builtin.shell: |
             NOVU_API_URL=http://127.0.0.1:14002 \
-            NOVU_ADMIN_EMAIL='{{ novu_admin_email | default("admin@digit.local") }}' \
-            NOVU_ADMIN_PASSWORD='{{ novu_admin_password | default("Digit@12345") }}' \
+            NOVU_ADMIN_EMAIL='{{ novu_admin_email_effective }}' \
+            NOVU_ADMIN_PASSWORD='{{ novu_admin_password_effective }}' \
             NOVU_ORG_NAME='{{ novu_org_name | default("DIGIT") }}' \
             bash {{ digit_dir }}/novu-mint-key.sh
           args:
@@ -6725,6 +6898,41 @@
           local-setup/docker-compose.egov-digit.yaml still has the literal line
           `NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT: pg` that task rewrites, then re-run the deploy.
 
+
+    # Per-tenant accounts (#2203): give the tenants listed in `novu_tenant_accounts_backfill`
+    # their own Novu organization (idempotent: provisioned ones are no-ops). New signup
+    # workspaces need no listing: tenant creation provisions them, and pgr-services retries
+    # the ones a Novu outage deferred. This is for tenants that predate the feature, which an
+    # operator moves deliberately: their messages then go through their own (initially empty)
+    # organization, so add their providers right after. Non-fatal, like the rest of this block.
+    - name: "novu tenant accounts — provision the tenants listed in novu_tenant_accounts_backfill"
+      ansible.builtin.shell: |
+        set -o pipefail
+        for i in $(seq 1 30); do
+          docker exec novu-bridge wget -qO- http://127.0.0.1:8080/novu-bridge/health >/dev/null 2>&1 && break
+          sleep 5
+        done
+        docker exec -e NB_TOKEN -e NB_BODY novu-bridge sh -c \
+          'wget -qO- --header="Content-Type: application/json" --header="X-Novu-Bridge-Token: $NB_TOKEN" \
+             --post-data="$NB_BODY" http://127.0.0.1:8080/novu-bridge/novu-adapter/v1/tenants/_backfill'
+      args:
+        executable: /bin/bash
+      environment:
+        NB_TOKEN: "{{ novu_accounts_secrets.novu_bridge_internal_admin_token }}"
+        NB_BODY: "{{ {'tenantIds': novu_tenant_accounts_backfill} | to_json }}"
+      register: novu_accounts_backfill
+      changed_when: "'organizationCreated\":true' in (novu_accounts_backfill.stdout | default(''))"
+      failed_when: false
+      when:
+        - novu_tenant_accounts_on | bool
+        - (novu_tenant_accounts_backfill | default([])) | length > 0
+
+    - name: "novu tenant accounts — backfill result"
+      ansible.builtin.debug:
+        msg: "{{ novu_accounts_backfill.stdout | default('') | from_json if (novu_accounts_backfill.rc | default(1)) == 0 else ('backfill call failed (rc=' ~ (novu_accounts_backfill.rc | default('n/a')) ~ '): ' ~ (novu_accounts_backfill.stderr | default(''))) }}"
+      when:
+        - novu_accounts_backfill is defined
+        - novu_accounts_backfill is not skipped
 
     - name: "novu-bootstrap — provider setup hint (Novu key auto-minted; no provider yet)"
       ansible.builtin.debug:

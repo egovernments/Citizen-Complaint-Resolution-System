@@ -1829,6 +1829,12 @@ services:
       DIGIT_PROVISIONER_TENANT_ID: ${PGR_DIGIT_PROVISIONER_TENANT_ID:-}
       DIGIT_OAUTH_CLIENT_ID: ${PGR_DIGIT_OAUTH_CLIENT_ID:-egov-user-client}
       DIGIT_OAUTH_CLIENT_SECRET: ${PGR_DIGIT_OAUTH_CLIENT_SECRET:-}
+      # #2203: tenant creation gives each new workspace its own Novu organization through
+      # novu-bridge's INTERNAL admin API (compose network only; Kong answers 404 for it). The
+      # token is the bridge's NOVU_BRIDGE_INTERNAL_ADMIN_TOKEN; blank (per-tenant accounts off)
+      # makes the NOTIFICATION_ACCOUNT step a no-op. Never fails a signup.
+      PGR_ONBOARDING_NOTIFICATION_ACCOUNT_URL: ${PGR_ONBOARDING_NOTIFICATION_ACCOUNT_URL:-http://novu-bridge:8080/novu-bridge}
+      PGR_ONBOARDING_NOTIFICATION_ACCOUNT_TOKEN: ${NOVU_BRIDGE_INTERNAL_ADMIN_TOKEN:-}
       NEW_COMPLAINT_ENABLED: 'true'
       REASSIGN_COMPLAINT_ENABLED: 'true'
       REOPEN_COMPLAINT_ENABLED: 'true'
@@ -3072,6 +3078,21 @@ services:
       # to the compose .env).
       NOVU_BASE_URL: ${NOVU_BASE_URL:-http://novu-api:3000}
       NOVU_API_KEY: ${NOVU_API_KEY:-changeme}
+      # Per-tenant Novu accounts (#2203): one Novu ORGANIZATION per root tenant, created by the
+      # bridge signed in as the Novu platform admin (the account the deploy mints NOVU_API_KEY
+      # with). Off = every tenant uses NOVU_API_KEY above, as before. The secrets come from
+      # OpenBao through .env (the playbook generates them); none has a default here, and the
+      # bridge refuses to start with the feature on and the encryption key or login missing.
+      NOVU_BRIDGE_TENANT_ACCOUNTS_ENABLED: ${NOVU_BRIDGE_TENANT_ACCOUNTS_ENABLED:-false}
+      NOVU_BRIDGE_NOVU_ADMIN_EMAIL: ${NOVU_BRIDGE_NOVU_ADMIN_EMAIL:-}
+      NOVU_BRIDGE_NOVU_ADMIN_PASSWORD: ${NOVU_BRIDGE_NOVU_ADMIN_PASSWORD:-}
+      NOVU_BRIDGE_TENANT_KEY_ENCRYPTION_KEY: ${NOVU_BRIDGE_TENANT_KEY_ENCRYPTION_KEY:-}
+      NOVU_BRIDGE_TENANT_KEY_ENCRYPTION_KEY_PREVIOUS: ${NOVU_BRIDGE_TENANT_KEY_ENCRYPTION_KEY_PREVIOUS:-}
+      # Internal machine APIs, header X-Novu-Bridge-Token; Kong never routes them. Blank = off.
+      #   admin: /novu-adapter/v1/tenants/**   (pgr-services onboarding, operators)
+      #   send:  POST /novu-adapter/v1/messages/_send   (the Identity BFF's OTP sender)
+      NOVU_BRIDGE_INTERNAL_ADMIN_TOKEN: ${NOVU_BRIDGE_INTERNAL_ADMIN_TOKEN:-}
+      NOVU_BRIDGE_INTERNAL_SEND_TOKEN: ${NOVU_BRIDGE_INTERNAL_SEND_TOKEN:-}
       OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-otlp}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
