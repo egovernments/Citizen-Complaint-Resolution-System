@@ -380,6 +380,7 @@ bridge).
 | `NB_NO_TEMPLATE` | No template in the recipient's language or `en_IN` | Add it |
 | `NB_NO_RECIPIENTS` | Every audience named nobody | Check the role has holders in this tenant |
 | `NB_CONTACT_MISSING` | Recipient has no phone / email | Fix the record or route another channel |
+| `NB_CONTACT_INVALID` | A phone without a country code, at a tenant with no mobile rule and no deployment fallback | [§7 Phone numbers](#phone-numbers) |
 | `NB_TEMPLATE_NOT_APPROVED` | WhatsApp without an approved template | [§5.5](#55-whatsapp-provider-templates) |
 | `NB_PREFERENCE_DENIED` | Recipient has not consented to the channel | Nothing — consent working |
 | `NB_UNKNOWN_AUDIENCE_SCHEME` | Audience prefix unknown | Fix the routing row |

@@ -237,6 +237,14 @@ conversion the bridge already applies to them (`notifications_convert.py` mirror
 `LegacyMasterAdapter`), so what it sends today is what it sends after. Inactive rows stay
 inactive. Default rows it never had are not added.
 
+The shipped default **wording** changed in 2.20: no `EGOVS` / `ई-गव फाउंडेशन` signature, no
+`DIGIT:` subject prefix, the assignee addressed as "Dear {emp_name}" instead of "Shri …", and no
+`{ao_designation} - {ulb}` line (it shipped as literal `{ulb}` on a tenant without districts). A
+2.12 tenant still on the 2.12 default wording therefore plans as `customised`, its only
+differences being `body` / `subject` against the new defaults. That is expected: `apply` copies
+the tenant's own rows, old wording included — nothing is rewritten. Edit the templates on
+**Configure** afterwards if you want the new wording.
+
 ### Apply
 
 - `apply` needs `--yes`; without it, it prints the plan and exits `4`.
