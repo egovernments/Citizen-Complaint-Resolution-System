@@ -34,8 +34,11 @@ export interface CatalogTest {
   tags: string[];
   description: string | null;
   source: string;
+  /** Last KNOWN outcome — may come from an older run; see ranInLatestRun. */
   lastStatus: TestStatus | null;
   lastDurationMs: number | null;
+  /** False when the test produced no verdict in the latest run (absent in older catalogs). */
+  ranInLatestRun?: boolean;
   history: HistoryEntry[];
   latestRun: LatestRun | null;
   parseError: string | null;
@@ -49,6 +52,10 @@ export interface RunSummary {
   failed: number;
   skipped: number;
   timedOut: number;
+  /** In `total` but no verdict in this run (absent in older catalogs). */
+  notRun?: number;
+  /** Playwright's message when the run stopped early (e.g. global timeout). */
+  cutShort?: string | null;
   total: number;
   sha: string;
   branch: string;

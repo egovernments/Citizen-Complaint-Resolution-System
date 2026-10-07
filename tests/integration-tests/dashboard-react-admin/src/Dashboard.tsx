@@ -6,6 +6,7 @@
  */
 import { useGetList } from 'react-admin';
 import {
+  Alert,
   Box,
   Card,
   CardContent,
@@ -75,7 +76,7 @@ function GroupedPassRate({
   groups,
 }: {
   title: string;
-  groups: Array<{ key: string; passed: number; failed: number; skipped: number; total: number }>;
+  groups: Array<{ key: string; passed: number; failed: number; skipped: number; notRun: number; total: number }>;
 }) {
   return (
     <Card sx={{ height: '100%' }}>
@@ -95,8 +96,10 @@ function GroupedPassRate({
                   <Typography variant="body2" sx={{ fontWeight: 500 }}>{g.key}</Typography>
                   <Typography variant="caption" color="text.secondary" sx={{ fontVariantNumeric: 'tabular-nums' }}>
                     {g.passed}/{g.total} pass · {g.failed} fail · {g.skipped} skip
+                    {g.notRun > 0 && ` · ${g.notRun} not run`}
                   </Typography>
                 </Stack>
+                {/* Not-run is the unfilled remainder of the track. */}
                 <Box sx={{ display: 'flex', height: 8, borderRadius: 4, overflow: 'hidden', bgcolor: 'action.hover' }}>
                   <Box sx={{ width: `${passPct}%`, bgcolor: STATUS_COLOR.passed }} />
                   <Box sx={{ width: `${g.total > 0 ? (g.failed / g.total) * 100 : 0}%`, bgcolor: STATUS_COLOR.failed }} />
@@ -137,9 +140,13 @@ function RunTrend({ runs }: { runs: RunSummary[] }) {
             const passH = (r.passed / total) * 130;
             const failH = (r.failed / total) * 130;
             const skipH = (r.skipped / total) * 130;
+            // The unfilled top of the bar is "not run"; say so in the tooltip.
+            const barTitle = r.notRun
+              ? `${r.notRun} of ${r.total} not run${r.cutShort ? ` — cut short: ${r.cutShort}` : ''}`
+              : undefined;
             return (
               <Box key={r.id} sx={{ flex: 1, textAlign: 'center', minWidth: 60 }}>
-                <Box sx={{ height: 130, display: 'flex', flexDirection: 'column-reverse', borderRadius: 1, overflow: 'hidden', bgcolor: 'action.hover' }}>
+                <Box title={barTitle} sx={{ height: 130, display: 'flex', flexDirection: 'column-reverse', borderRadius: 1, overflow: 'hidden', bgcolor: 'action.hover' }}>
                   <Box sx={{ height: passH, bgcolor: STATUS_COLOR.passed }} title={`${r.passed} passed`} />
                   <Box sx={{ height: failH, bgcolor: STATUS_COLOR.failed }} title={`${r.failed} failed`} />
                   <Box sx={{ height: skipH, bgcolor: STATUS_COLOR.skipped }} title={`${r.skipped} skipped`} />
@@ -150,6 +157,11 @@ function RunTrend({ runs }: { runs: RunSummary[] }) {
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: 10 }}>
                   {r.passed}/{r.total}
                 </Typography>
+                {!!r.notRun && (
+                  <Typography variant="caption" sx={{ display: 'block', fontSize: 10, color: r.cutShort ? STATUS_COLOR.failed : 'text.secondary' }}>
+                    {r.notRun} not run{r.cutShort ? ' ⚠' : ''}
+                  </Typography>
+                )}
               </Box>
             );
           })}
@@ -161,12 +173,14 @@ function RunTrend({ runs }: { runs: RunSummary[] }) {
 
 /**
  * Per-tag-facet aggregator: for the latest run, group tests by their
- * facet-value tags and count pass/fail/skip per group.
+ * facet-value tags and count pass/fail/skip per group. A test that did not run
+ * in the latest run counts as not run, never as its older carried-over result.
  */
 function aggregateByFacet(tests: CatalogTest[], facet: string) {
-  const groups = new Map<string, { passed: number; failed: number; skipped: number; total: number }>();
+  const groups = new Map<string, { passed: number; failed: number; skipped: number; notRun: number; total: number }>();
   for (const t of tests) {
-    if (!t.lastStatus) continue;
+    if (!t.lastStatus && !t.history.length) continue; // never ran anywhere (e.g. config-excluded)
+    const ran = t.ranInLatestRun ?? !!t.lastStatus; // older catalogs lack the flag
     const values = new Set<string>();
     for (const tag of t.tags) {
       const m = tag.match(/^@([a-z]+):(.+)$/i);
@@ -174,9 +188,10 @@ function aggregateByFacet(tests: CatalogTest[], facet: string) {
     }
     if (values.size === 0) values.add('—');
     for (const v of values) {
-      const g = groups.get(v) ?? { passed: 0, failed: 0, skipped: 0, total: 0 };
+      const g = groups.get(v) ?? { passed: 0, failed: 0, skipped: 0, notRun: 0, total: 0 };
       g.total++;
-      if (t.lastStatus === 'passed') g.passed++;
+      if (!ran) g.notRun++;
+      else if (t.lastStatus === 'passed') g.passed++;
       else if (t.lastStatus === 'skipped') g.skipped++;
       else g.failed++;
       groups.set(v, g);
@@ -226,13 +241,24 @@ export default function Dashboard() {
 
   return (
     <Box sx={{ p: { xs: 1, sm: 2 }, maxWidth: 1400, mx: 'auto' }}>
+      {/* A run that skipped part of the suite must say so up front: the pass
+          rate below counts those tests as not passed, and nothing else on the
+          page would explain the gap. */}
+      {latest && (latest.cutShort || (latest.notRun ?? 0) > 0) && (
+        <Alert severity={latest.cutShort ? 'error' : 'warning'} sx={{ mb: 2 }}>
+          {latest.cutShort ? `Latest run was cut short (${latest.cutShort}). ` : ''}
+          {latest.notRun ?? 0} of {latest.total} tests did not run, so they count as not passed.
+        </Alert>
+      )}
       {/* Hero stats */}
       <Grid container spacing={2} sx={{ mb: 2 }}>
         <Grid size={{ xs: 6, md: 3 }}>
           <StatTile
             label="Latest run"
             value={`${passRate}%`}
-            sub={latest ? `${latest.passed} passed of ${latest.total} · ${relTime(latest.startedAt)}` : 'no runs yet'}
+            sub={latest
+              ? `${latest.passed} passed of ${latest.total}${latest.notRun ? ` · ${latest.notRun} not run` : ''} · ${relTime(latest.startedAt)}`
+              : 'no runs yet'}
             color={passRate > 80 ? STATUS_COLOR.passed : passRate > 50 ? STATUS_COLOR.skipped : STATUS_COLOR.failed}
           />
         </Grid>

@@ -14,7 +14,7 @@ import { Suspense, lazy, useMemo } from 'react';
 import { Box, Card, CardContent, Chip, Divider, Grid, Link as MuiLink, Stack, Typography } from '@mui/material';
 
 const MonacoEditor = lazy(() => import('@monaco-editor/react'));
-import type { CatalogTest, TestStatus } from '../types';
+import type { CatalogTest, HistoryEntry, RunSummary, TestStatus } from '../types';
 
 // ---------------------------------------------------------------------------
 // Filters: every facet always-on alongside search; no "Add filter" dropdown.
@@ -84,6 +84,22 @@ const STATUS_COLORS: Record<TestStatus | 'never', 'success' | 'error' | 'warning
 function StatusBadge() {
   const r = useRecordContext<CatalogTest>();
   const status = (r?.lastStatus ?? 'never') as TestStatus | 'never';
+  // lastStatus is the last KNOWN result; when the latest run never reached the
+  // test, show that instead of an old green/red that looks current.
+  // Its carried-over result may already have aged out (lastStatus null) while
+  // history still proves it ran before — that is "not run", not "never".
+  if (r && r.ranInLatestRun === false && (r.lastStatus || r.history.length)) {
+    const last = r.lastStatus ?? r.history[0]?.status;
+    const from = r.latestRun?.runId ?? r.history[0]?.runId;
+    return (
+      <Chip
+        size="small"
+        label="not run"
+        variant="outlined"
+        title={`Not run in the latest run · last: ${last}${from ? ` in ${from}` : ''}`}
+      />
+    );
+  }
   return (
     <Chip
       size="small"
@@ -172,11 +188,34 @@ const HISTORY_COLOR: Record<string, string> = {
 };
 function HistoryDots() {
   const r = useRecordContext<CatalogTest>();
+  // One slot per run in the window (newest first), so a dot means the same run
+  // on every row; a run this test produced no result in renders as a hollow
+  // "not run" ring instead of older results sliding left into its slot.
+  const { data: runs } = useGetList<RunSummary>('runs', {
+    pagination: { page: 1, perPage: HISTORY_SLOTS },
+    sort: { field: 'startedAt', order: 'DESC' },
+  });
   if (!r) return null;
-  const slots = Array.from({ length: HISTORY_SLOTS }, (_, i) => r.history[i] ?? null);
+  const slots: Array<HistoryEntry | { notRun: string } | null> = runs?.length
+    ? Array.from({ length: HISTORY_SLOTS }, (_, i) =>
+        runs[i] ? (r.history.find(h => h.runId === runs[i].id) ?? { notRun: runs[i].id }) : null)
+    : Array.from({ length: HISTORY_SLOTS }, (_, i) => r.history[i] ?? null);
   return (
     <Stack direction="row" spacing={0.5} alignItems="center">
       {slots.map((h, i) => {
+        if (h && 'notRun' in h) {
+          return (
+            <Box
+              key={i}
+              title={`${h.notRun} · not run`}
+              sx={{
+                width: 8, height: 8, borderRadius: '50%',
+                border: '1px solid', borderColor: 'text.secondary',
+                cursor: 'help',
+              }}
+            />
+          );
+        }
         if (!h) {
           return (
             <Box
@@ -209,7 +248,8 @@ function HistoryDots() {
 function DurationCell() {
   const r = useRecordContext<CatalogTest>();
   if (!r) return null;
-  if (r.lastDurationMs == null) return <Typography variant="caption" color="text.secondary">—</Typography>;
+  // A carried-over duration belongs to an older run; don't show it as this run's.
+  if (r.lastDurationMs == null || r.ranInLatestRun === false) return <Typography variant="caption" color="text.secondary">—</Typography>;
   const ms = r.lastDurationMs;
   const text = ms < 1000 ? `${Math.round(ms)}ms` : ms < 60_000 ? `${(ms/1000).toFixed(1)}s` : `${Math.floor(ms/60_000)}m ${Math.round((ms%60_000)/1000)}s`;
   return <Typography variant="caption" sx={{ fontVariantNumeric: 'tabular-nums' }}>{text}</Typography>;
