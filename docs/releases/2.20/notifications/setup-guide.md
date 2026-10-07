@@ -159,7 +159,7 @@ Status card messages:
 | "… is on and delivering through *Name*" | Nothing. |
 | "No channel policy row for …" | Switch the channel on so the choice is explicit. |
 | "… is off. Every event on this channel is recorded SKIPPED / NB_NO_PROVIDER …" | Switch on once its provider exists. |
-| "… is on but no provider is configured for it." | [Add a provider](#3-add-a-provider). |
+| "… is on but no provider is configured for it." | [Add a provider](#3-add-a-provider). Until Novu holds an active integration for the channel, every message on it is `SKIPPED / NB_PROVIDER_UNAVAILABLE` (never a false `SENT`). |
 | "… is on but no provider is selected." | Select one. |
 | "… selected provider *Name* no longer exists / is disabled / does not serve …" | Re-enable it or select another. Meanwhile every message is `SKIPPED / NB_PROVIDER_UNAVAILABLE` (never a false `SENT`). The same happens to an SMSCountry / Ozeki / Jasmin provider while `NOVU_BRIDGE_DIGIT_WORKER_PROVIDERS=false` (the Novu worker does not load DIGIT's providers — [providers.md](./providers.md#digits-worker-providers)). |
 | "… the Novu workflow complaints-… is missing" | Deployment job: re-run `./deploy.sh`. |
@@ -367,7 +367,7 @@ bridge).
 | Code | Cause | Fix |
 |---|---|---|
 | `NB_NO_PROVIDER` | Channel off for this tenant (expected on a new city) | [§4](#4-switch-the-channel-on) |
-| `NB_PROVIDER_UNAVAILABLE` | Selected provider missing, disabled or wrong channel — or SMSCountry / Ozeki / Jasmin with `NOVU_BRIDGE_DIGIT_WORKER_PROVIDERS=false` | [§4](#4-switch-the-channel-on); for the last, select a Novu-native provider or turn the worker providers on |
+| `NB_PROVIDER_UNAVAILABLE` | Selected provider missing, disabled or wrong channel — or no provider selected and Novu has no active integration for the channel — or SMSCountry / Ozeki / Jasmin with `NOVU_BRIDGE_DIGIT_WORKER_PROVIDERS=false` | [§3](#3-add-a-provider) / [§4](#4-switch-the-channel-on); for the last, select a Novu-native provider or turn the worker providers on |
 | `NB_NO_ROUTING` | No routing row for the event | Add one ([§5.2](#52-routing-and-audiences)) |
 | `NB_NO_TEMPLATE` | No template in the recipient's language or `en_IN` | Add it |
 | `NB_NO_RECIPIENTS` | Every audience named nobody | Check the role has holders in this tenant |
