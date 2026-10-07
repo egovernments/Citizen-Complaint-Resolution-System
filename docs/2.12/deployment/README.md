@@ -65,12 +65,9 @@ the box does hold a live database, see
 | `bootstrap_password` | Admin Password (defaults to eGov@123) | |
 | `enable_overpass` | Runs our own map-boundary search service. If `false`, the system uses the public Overpass service. Tested by deploying it and checking both the container and `/overpass/api/interpreter`. | `false` |
 | `pgr_notification_config_driven` | Reads notification messages and routing rules from MDMS instead of using fixed rules in the code. Requires enable_novu: true, a working Novu API key, and notification MDMS data. On the first Novu setup only, novu_disable_user_registration may need to be temporarily set to false. Set it back to true afterward.  | `false` |
-| `novu_bridge_channel` | Chooses the default notification channel: `sms`, `whatsapp`, or `email`. Checked from Ansible through to the Novu Bridge setting. | `sms` |
-| `novu_bridge_channels_enabled` | Lists the notification channels that Novu Bridge is allowed to use, such as `SMS,EMAIL`. Each listed channel must have a working provider. The configuration and channel-filtering code were checked. | `"SMS,EMAIL"` |
-| `novu_bridge_sms_provider` | Chooses which service sends normal SMS messages. Leave it blank for the default Twilio/Novu path, or use a supported provider such as `ozeki` or `smscountry`. The provider-selection code was checked; a real send still needs credentials. | `""` |
-| `auth_provider` | Chooses the citizen login method. Leave it blank for DIGIT OTP login, or use `keycloak` for SSO. Tested by deploying both values and checking that the citizen portal changed its login flow. | `""` |
-| `citizen_auth_provider` | Overrides the login method only for the citizen portal. Leave it blank to use `auth_provider`, or set `digit` to keep citizen OTP login. Checked in the generated UI configuration and login-selection code. | `digit` |
-
+| `novu_bridge_channel` | Chooses the default notification channel: `sms`, `whatsapp`, or `email`. The same values should be present in novu_bridge_channels_enabled. If not, notifications are skipped | `sms` |
+| `novu_bridge_channels_enabled` | Lists the notification channels that Novu Bridge is allowed to use, such as `SMS,EMAIL`. Each listed channel must have a working provider. | `""` |
+| `novu_bridge_sms_provider` | Chooses how regular SMS messages are sent. Leave it blank to use the primary SMS provider configured in Novu, such as `Twilio`. Set it to `ozeki` or `smscountry` to use that gateway instead; the selected provider’s credentials must also be configured. This does not affect WhatsApp. SMS must be present in novu_bridge_channels_enabled | `""` |
 
 ## Start Deployment
 
