@@ -63,12 +63,15 @@ the box does hold a live database, see
 | `domain` | If needs to be deployed on a domain name vs localhost. Also, set `tls_enabled:true` in this case | | 
 | `bootstrap_user` | Admin Username (defaults to ADMIN) | | 
 | `bootstrap_password` | Admin Password (defaults to eGov@123) | |
-| `enable_turbopass` | City-name suggestions in the setup wizard. Off, there is no suggestion box and location search returns 404. [Watch where this shows up](turbopass-phase2-suggestions.webm). | `false` |
+| `enable_turbopass` | City-name suggestions in the setup wizard. Off, there is no suggestion box and location search returns 404. The player under this table shows where. | `false` |
 | `enable_search_stack` | Search, and a Dashboard card on the employee home page. Off, the card is hidden and the search services stop. | `false` |
 | `hierarchy_type` | Name of the location list on the complaint form. It must already exist for the city, or the location box stays empty. A city from the setup sheets uses the city name plus `_ADMIN`. | `NAIROBI_ADMIN` |
 | `enable_digit_ui_v2` | The newer citizen website at `/citizen/`. Set `nginx_features.digit_ui_v2` to the same value. One without the other leaves the page missing, and the nginx switch alone stops the deploy. | `false` |
 | `digit_ui_mode` | How the employee website is served. `container` uses the digit-ui container. `static` serves built files. `hmr` is live reload and needs a source folder, or the deploy stops. | `container` |
 
+`enable_turbopass` on the setup wizard. Phase 2, Fetch from OpenStreetMap, then type a city name:
+
+<video src="https://github.com/user-attachments/assets/5722f470-b595-4b86-9b25-80e4143a9c0e" controls width="720"></video>
 
 ## Start Deployment
 
