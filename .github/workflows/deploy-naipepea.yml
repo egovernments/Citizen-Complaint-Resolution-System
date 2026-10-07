@@ -68,7 +68,10 @@ jobs:
     name: Build develop images
     needs: resolve
     if: needs.resolve.outputs.kind == 'develop'
-    uses: ./.github/workflows/build-images.yml
+    # develop-channel build logic follows develop: a local ./ path would resolve to the DEFAULT
+    # branch's (master's) copy, which drifts behind develop's build pipeline. Same repo, so
+    # secrets: inherit and the repo's vars still apply. release-build.yml stays on its own ref.
+    uses: egovernments/Citizen-Complaint-Resolution-System/.github/workflows/build-images.yml@develop
     with:
       ref: ${{ needs.resolve.outputs.ref }}
       staging_prefix: deploy-naipepea
