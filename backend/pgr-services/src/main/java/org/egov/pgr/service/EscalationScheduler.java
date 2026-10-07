@@ -19,6 +19,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -37,6 +38,7 @@ public class EscalationScheduler {
     private final EscalationConfigurationService configurationService;
     private final PGRService pgrService;
     private final WorkspaceRepository workspaces;
+    private final EscalationWorkflowReconciler workflowReconciler;
 
     @Value("${state.level.tenant.id:${egov.state.level.tenant.id:ke}}")
     private String stateLevelTenantId;
@@ -47,13 +49,15 @@ public class EscalationScheduler {
                                EscalationService escalationService,
                                EscalationConfigurationService configurationService,
                                PGRService pgrService,
-                               WorkspaceRepository workspaces) {
+                               WorkspaceRepository workspaces,
+                               EscalationWorkflowReconciler workflowReconciler) {
         this.config = config;
         this.repository = repository;
         this.escalationService = escalationService;
         this.configurationService = configurationService;
         this.pgrService = pgrService;
         this.workspaces = workspaces;
+        this.workflowReconciler = workflowReconciler;
     }
 
     @Scheduled(fixedDelayString = "${pgr.escalation.interval.ms}")
@@ -77,18 +81,38 @@ public class EscalationScheduler {
 
         log.info("Escalation scan started for tenants {}", scanTenants);
         Map<String, EscalationConfigurationService.ResolvedEscalationConfig> policyCache = new HashMap<>();
+        Map<String, Set<String>> statusesByWorkflowTenant = new LinkedHashMap<>();
+        for (String scanTenant : scanTenants) {
+            try {
+                EscalationConfigurationService.ResolvedEscalationConfig policy =
+                        policyFor(scanTenant, buildSystemRequestInfo(scanTenant), policyCache);
+                statusesByWorkflowTenant
+                        .computeIfAbsent(workflowReconciler.workflowTenant(scanTenant), key -> new LinkedHashSet<>())
+                        .addAll(policy.getEligibleStatuses());
+            } catch (Exception e) {
+                log.error("Could not resolve escalation policy for tenant {}; skipping it", scanTenant, e);
+            }
+        }
+        // MDMS eligibleStatuses is the only escalation setting: give each listed state the
+        // workflow ESCALATE action the transition needs before scanning it (#2132).
+        statusesByWorkflowTenant.forEach((workflowTenant, statuses) -> {
+            try {
+                workflowReconciler.reconcile(workflowTenant, statuses, buildSystemRequestInfo(workflowTenant));
+            } catch (Exception e) {
+                log.error("Could not enable escalation in tenant {}'s PGR workflow for {}", workflowTenant, statuses, e);
+            }
+        });
+
         ScanResult total = new ScanResult();
         for (String scanTenant : scanTenants) {
             // workflow-v2 only honours a role whose tenantId matches (or prefixes) the complaint's tenant.
             RequestInfo systemRequestInfo = buildSystemRequestInfo(scanTenant);
-            try {
-                EscalationConfigurationService.ResolvedEscalationConfig policy =
-                        policyFor(scanTenant, systemRequestInfo, policyCache);
-                for (String status : policy.getEligibleStatuses()) {
-                    total.add(scan(scanTenant, status, systemRequestInfo, policyCache));
-                }
-            } catch (Exception e) {
-                log.error("Could not resolve escalation policy for tenant {}; skipping it", scanTenant, e);
+            EscalationConfigurationService.ResolvedEscalationConfig policy = policyCache.get(scanTenant);
+            if (policy == null) {
+                continue;
+            }
+            for (String status : policy.getEligibleStatuses()) {
+                total.add(scan(scanTenant, status, systemRequestInfo, policyCache));
             }
         }
 

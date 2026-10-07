@@ -34,7 +34,7 @@ public class EscalationSchedulerTenantDiscoveryTest {
                 1, List.of(), List.of(), List.of(), List.of("PENDINGATLME"), Map.of(), Map.of()));
         workspaces = mock(WorkspaceRepository.class);
         scheduler = new EscalationScheduler(config, repository, mock(EscalationService.class), configurationService,
-                mock(PGRService.class), workspaces);
+                mock(PGRService.class), workspaces, mock(EscalationWorkflowReconciler.class));
         ReflectionTestUtils.setField(scheduler, "stateLevelTenantId", "ke");
     }
 
