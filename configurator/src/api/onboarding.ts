@@ -541,12 +541,13 @@ export async function submitSignup(
   return operation;
 }
 
-export async function findOperation(id: string): Promise<Operation | null> {
+export async function findOperation(id: string, signal?: AbortSignal): Promise<Operation | null> {
   const { Operations } = await call<{ Operations: Operation[] }>(
     `${ONBOARDING_BASE}/operations/_search`,
     {
       method: 'POST',
       body: JSON.stringify({ Operation: { id } }),
+      signal,
     }
   );
   return Operations?.[0] ?? null;

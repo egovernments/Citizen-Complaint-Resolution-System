@@ -118,6 +118,10 @@ const selectClass =
 
 /** Poll cadence the contract asks for: every 2-5 seconds. */
 const POLL_MS = 3000;
+/** One status check that hasn't answered by now is abandoned; the next tick asks again. */
+const POLL_TIMEOUT_MS = 10_000;
+/** A blip is not a failure: the founder sees an error only after this many checks in a row fail. */
+const POLL_FAILURES_BEFORE_ERROR = 3;
 
 /**
  * A SUCCEEDED run is published to the identity side on a later worker tick,
@@ -565,20 +569,61 @@ function SignupFlow() {
     return () => clearTimeout(timer);
   }, [awaitingPublication]);
 
-  // Poll while the worker runs. Stops as soon as the operation settles, so a
-  // terminal failure does not sit here hammering the endpoint.
+  // Poll while the worker runs, on a fixed cadence keyed to the operation, not
+  // its contents: an answer that changes nothing, an empty answer or a check
+  // that never returns must not stop the loop (a stalled checklist once read
+  // as a stalled setup). Stops as soon as the operation settles, so a terminal
+  // failure does not sit here hammering the endpoint.
+  const operationId = operation?.id ?? null;
+  const settled = !!operation && isOperationSettled(operation);
+  const pollDelay = useRef(POLL_MS);
   useEffect(() => {
-    if (phase !== 'provisioning' || !operation || isOperationSettled(operation)) return;
-    const timer = setTimeout(async () => {
+    pollDelay.current = awaitingPublication && publishSlow ? SLOW_POLL_MS : POLL_MS;
+  }, [awaitingPublication, publishSlow]);
+  useEffect(() => {
+    if (phase !== 'provisioning' || !operationId || settled) return;
+    let live = true;
+    let failures = 0;
+    let shownError = false;
+    let timer: number | undefined;
+    let inFlight: AbortController | null = null;
+    const check = async () => {
+      const controller = new AbortController();
+      inFlight = controller;
+      const timeout = window.setTimeout(() => controller.abort(), POLL_TIMEOUT_MS);
       try {
-        const latest = await findOperation(operation.id);
+        const latest = await findOperation(operationId, controller.signal);
+        if (!live) return;
+        failures = 0;
+        if (shownError) {
+          shownError = false;
+          setError(null);
+        }
         if (latest) setOperation(latest);
       } catch (caught) {
-        await handleFailure(caught);
+        if (!live) return;
+        failures += 1;
+        // An expired sign-in can't recover on its own, so it is reported at once; anything else may be a blip.
+        if (isExpiredSession(caught)) {
+          await handleFailure(caught);
+          return;
+        }
+        if (failures >= POLL_FAILURES_BEFORE_ERROR) {
+          shownError = true;
+          await handleFailure(caught);
+        }
+      } finally {
+        window.clearTimeout(timeout);
       }
-    }, awaitingPublication && publishSlow ? SLOW_POLL_MS : POLL_MS);
-    return () => clearTimeout(timer);
-  }, [phase, operation, handleFailure, awaitingPublication, publishSlow]);
+      if (live) timer = window.setTimeout(check, pollDelay.current);
+    };
+    timer = window.setTimeout(check, pollDelay.current);
+    return () => {
+      live = false;
+      window.clearTimeout(timer);
+      inFlight?.abort();
+    };
+  }, [phase, operationId, settled, handleFailure]);
 
   // Resumed into a run that was already going. Only the signup is addressable
   // here, so this polls that rather than the operation, and resolves the same
