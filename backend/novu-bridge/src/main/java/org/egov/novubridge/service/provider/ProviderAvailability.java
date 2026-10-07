@@ -3,7 +3,9 @@ package org.egov.novubridge.service.provider;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.novubridge.config.NovuBridgeConfiguration;
 import org.egov.novubridge.service.NovuClient;
+import org.egov.novubridge.service.account.NovuAccount;
 import org.egov.novubridge.util.Values;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -56,14 +58,26 @@ public class ProviderAvailability {
 
     private final NovuClient novuClient;
     private final NovuBridgeConfiguration config;
+    /** Whose integrations this instance answers for; null = the shared account (the Spring bean). */
+    private final NovuAccount account;
 
     private volatile Snapshot snapshot;
     /** Epoch millis of the last failed list call; 0 = none since the last success/invalidate. */
     private volatile long lastFailureAt;
 
+    @Autowired
     public ProviderAvailability(NovuClient novuClient, NovuBridgeConfiguration config) {
+        this(novuClient, config, null);
+    }
+
+    /**
+     * The same checks over one tenant's own Novu account (#2203): {@link ProviderAvailabilities}
+     * keeps one instance per provisioned tenant, so each has its own snapshot and TTL.
+     */
+    public ProviderAvailability(NovuClient novuClient, NovuBridgeConfiguration config, NovuAccount account) {
         this.novuClient = novuClient;
         this.config = config;
+        this.account = account;
     }
 
     /**
@@ -220,7 +234,8 @@ public class ProviderAvailability {
     }
 
     private Map<String, Integration> fetch(List<Integration> all) {
-        NovuClient.NovuResponse response = novuClient.listIntegrations();
+        NovuClient.NovuResponse response = account == null
+                ? novuClient.listIntegrations() : novuClient.listIntegrations(account);
         Map<String, Object> body = response == null ? null : response.getResponse();
         List<Object> data = Values.asList(body == null ? null : body.get("data"));
         if (data == null) {

@@ -20,7 +20,10 @@ info:
     | Operator (read) | `/config/source`, `/logs`, `/integrations`, `/preferences`, `/providers/catalog`, `/providers/templates`, `/providers/twilio-templates`, `/providers/verify`, `POST /dispatch/_validate` | DIGIT bearer token, `type == EMPLOYEE`, a role from `novu.bridge.proxy.allowed.roles` (or from the admin list, which is a superset by intent). `/logs` and `/config/source` answer only for the caller's own tenants: see below |
     | Admin, providers (credentials, sends) | `POST /providers`, `POST /providers/_update`, `POST /providers/_delete`, `POST /providers/test-send` | the above **and** a role from `novu.bridge.proxy.admin.roles` held at a STATE tenant (`ke`, not `ke.bomet`); otherwise `403 NB_ADMIN_ROLE_REQUIRED`. That state must own the deployment's providers: the core-SMS default tenant's state (`NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT`, which the deploy sets to its state root) or one listed in `NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS`; otherwise `403 NB_TENANT_NOT_ALLOWED` |
     | Admin, one tenant's events | `POST /dispatch/_resolve`, `POST /dispatch/_dry-run` | the above **and** a role from `novu.bridge.proxy.admin.roles` held at a STATE tenant (else `403 NB_ADMIN_ROLE_REQUIRED`), at the state root of the event's `tenantId` or at a state that owns the providers; otherwise `403 NB_TENANT_NOT_ALLOWED`. `_dry-run` with `send: true` is a real send through the shared providers and, like test-send, needs a state that owns them |
+    | Workspace admin, its OWN account (#2203) | the provider calls above with `?tenantId=<workspace>`, when that workspace has its own Novu organization | the broad gate **and** a role from `novu.bridge.proxy.admin.roles` held at THAT workspace's root tenant. No `NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS` listing is needed, and nobody else may act on it, an owning state's admin included (`403 NB_TENANT_NOT_ALLOWED`). Reads with the selector need the workspace among the caller's tenants |
     | Machine callback | `/receipts/{provider}` | shared secret `novu.bridge.receipts.secret`, header `X-Receipt-Secret` or query `secret`. `403` while the secret is blank |
+    | Internal: tenant account admin (#2203) | `/tenants/**` | header `X-Novu-Bridge-Token` = `novu.bridge.internal.admin.token` (pgr-services onboarding, operators). Never a DIGIT token. Not routed by Kong (it answers 404). `403 NB_INTERNAL_API_DISABLED` while the token is blank |
+    | Internal: send (#2203) | `POST /messages/_send`, and `GET /tenants/{tenantId}` | header `X-Novu-Bridge-Token` = `novu.bridge.internal.send.token` (the Identity BFF). Not routed by Kong. `403 NB_INTERNAL_API_DISABLED` while the token is blank |
     | Unauthenticated | `/contract/envelope`, `/contract/thin-event`, `/contract/openapi` | anyone who can reach the service |
 
     **Tenant scope.** egov-user returns every role with its own `tenantId`. The caller's
@@ -35,9 +38,20 @@ info:
     `migrate-notifications.py` does when it previews a root.
 
     `ProxyAuthFilter` is registered on `/novu-adapter/v1/*` but gates only the namespaces
-    `config`, `logs`, `integrations`, `preferences`, `providers` and `dispatch`. Anything else — the
-    contract documents, the machine callbacks, the actuator endpoints — passes through
-    unauthenticated by design.
+    `config`, `logs`, `integrations`, `preferences`, `providers` and `dispatch`. `InternalAuthFilter`
+    gates `tenants` and `messages` with the internal tokens. Anything else — the contract
+    documents, the machine callbacks, the actuator endpoints — passes through unauthenticated by
+    design.
+
+    ## Per-tenant Novu accounts (#2203)
+
+    With `novu.bridge.tenant.accounts.enabled`, a ROOT tenant can have its own Novu
+    organization: created by the bridge with the Novu platform admin's login (per-tenant Novu
+    *environments* are a paid feature, `402` on self-hosted), its API key stored encrypted. Every
+    message of a tenant whose root has one (complaint notifications, core SMS, test-send,
+    `_dry-run` sends, `messages/_send`) goes through it; every other tenant through the shared
+    account exactly as before. The Configurator's provider calls act on a workspace's own
+    organization when they carry `?tenantId=<workspace>` and that workspace has one.
 
     ## Auth, honestly
 
@@ -73,6 +87,10 @@ tags:
     description: Diagnostics. Not routed publicly.
   - name: receipts
     description: Provider delivery reports.
+  - name: tenant-accounts
+    description: Internal. Per-tenant Novu organizations (#2203). Never routed by Kong.
+  - name: messages
+    description: Internal. Synchronous sends through the tenant's own account (#2203). Never routed by Kong.
 
 security:
   - digitBearer: []
@@ -196,6 +214,11 @@ paths:
         `active`, `primary`, `environmentId` are copied out, plus a derived `type`. No
         `credentials` key in any shape ever leaves this service. There is deliberately no
         endpoint that returns a provider secret or the Novu API key.
+
+        With `?tenantId=<workspace>` and a workspace that has its own Novu organization (#2203),
+        that organization's integrations; otherwise the shared account's. `account` says which.
+      parameters:
+        - $ref: "#/components/parameters/AccountSelector"
       responses:
         "200":
           description: The projected integration list
@@ -208,6 +231,7 @@ paths:
                     type: array
                     items: { $ref: "#/components/schemas/Integration" }
                   total: { type: integer, format: int64 }
+                  account: { $ref: "#/components/schemas/AccountView" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "502":
@@ -340,6 +364,12 @@ paths:
 
         Credentials POST straight through to Novu over TLS. They are never persisted here,
         never logged (only key NAMES are) and never echoed back.
+
+        `?tenantId=<workspace>` on a workspace with its own Novu organization (#2203) creates the
+        provider THERE, for an admin of that workspace (see Tiers). The same selector applies to
+        `_update`, `_delete`, `verify`, `test-send`, `templates` and `twilio-templates`.
+      parameters:
+        - $ref: "#/components/parameters/AccountSelector"
       requestBody:
         required: true
         content:
@@ -802,6 +832,318 @@ paths:
                 type: object
                 properties: { error: { type: string } }
 
+  # ─────────────────────────── Per-tenant Novu accounts (#2203). INTERNAL. ───────────────────────────
+
+  /novu-bridge/novu-adapter/v1/tenants/{tenantId}/_provision:
+    post:
+      tags: [tenant-accounts]
+      summary: Give a root tenant its own Novu organization (idempotent)
+      security: [{ internalAdminToken: [] }]
+      description: |
+        Creates the tenant's Novu organization (or adopts the one Novu already has under its
+        name, after a crash), reads its environment's API key, stores it encrypted, and creates
+        every workflow the bridge triggers, OTP included. Calling it again for a provisioned
+        tenant changes nothing and returns the current state; a tenant never gets a second
+        organization. A sub-tenant id (`acme.city`) provisions its root (`acme`).
+        pgr-services calls it as the last, non-fatal step of tenant creation.
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+      responses:
+        "200":
+          description: The tenant's account state
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/TenantAccount"
+                      - type: object
+                        properties:
+                          organizationCreated: { type: boolean, description: "True only when this call created the Novu organization." }
+                          workflowsCreated: { type: array, items: { type: string } }
+        "400": { $ref: "#/components/responses/InternalError", description: "`NB_INVALID_TENANT`" }
+        "401": { $ref: "#/components/responses/InternalUnauthorized" }
+        "403": { $ref: "#/components/responses/InternalDisabled" }
+        "409": { $ref: "#/components/responses/InternalError", description: "`NB_PROVISIONING_IN_PROGRESS` (retry shortly), `NB_TENANT_ACCOUNTS_DISABLED`" }
+        "502": { $ref: "#/components/responses/InternalError", description: "`NB_NOVU_PLATFORM_LOGIN_FAILED`, `NB_NOVU_PLATFORM_FAILED`, `NB_NOVU_WORKFLOW_CREATE_FAILED`" }
+        "503": { $ref: "#/components/responses/InternalError", description: "`NB_NOVU_UNAVAILABLE`, `NB_TENANT_ACCOUNTS_MISCONFIGURED`" }
+
+  /novu-bridge/novu-adapter/v1/tenants/{tenantId}:
+    get:
+      tags: [tenant-accounts]
+      summary: Is the tenant provisioned, and which channels have a working provider
+      security: [{ internalAdminToken: [] }, { internalSendToken: [] }]
+      description: |
+        The capability lookup a sender needs (the SEND token may call it). `channels` is present
+        for a provisioned tenant: per channel, whether a usable provider carries it and which one
+        a send would be pinned to. Never a key or a credential.
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+      responses:
+        "200":
+          description: Status (NOT_PROVISIONED for an unknown tenant, never 404)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      tenantId: { type: string }
+                      tenantAccountsEnabled: { type: boolean }
+                      provisioned: { type: boolean }
+                      status: { type: string, enum: [NOT_PROVISIONED, PROVISIONING, PROVISIONED, FAILED, DEPROVISIONED] }
+                      account: { $ref: "#/components/schemas/TenantAccount" }
+                      channels:
+                        type: object
+                        additionalProperties: { $ref: "#/components/schemas/ChannelReadiness" }
+        "401": { $ref: "#/components/responses/InternalUnauthorized" }
+        "403": { $ref: "#/components/responses/InternalDisabled" }
+
+  /novu-bridge/novu-adapter/v1/tenants/{tenantId}/_deprovision:
+    post:
+      tags: [tenant-accounts]
+      summary: Remove the tenant's Novu setup
+      security: [{ internalAdminToken: [] }]
+      description: |
+        Self-hosted Novu 2.3.0 cannot delete an organization (its organization API has no
+        delete), so: every integration of the organization is deleted (and with it every
+        provider credential), the environment's API key is regenerated and the new one is not
+        kept, the stored key is erased and the row is marked DEPROVISIONED. The tenant then uses
+        the shared account again. A later `_provision` reuses the same organization.
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+      responses:
+        "200":
+          description: The tenant's account state, now DEPROVISIONED
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/TenantAccount" }
+        "401": { $ref: "#/components/responses/InternalUnauthorized" }
+        "403": { $ref: "#/components/responses/InternalDisabled" }
+        "404": { $ref: "#/components/responses/InternalError", description: "`NB_TENANT_NOT_PROVISIONED`: no row" }
+        "409": { $ref: "#/components/responses/InternalError", description: "`NB_PROVISIONING_IN_PROGRESS`, `NB_TENANT_ACCOUNTS_DISABLED`" }
+        "502": { $ref: "#/components/responses/InternalError", description: "`NB_DEPROVISIONING_FAILED`, `NB_NOVU_PLATFORM_*`" }
+
+  /novu-bridge/novu-adapter/v1/tenants/{tenantId}/providers:
+    get:
+      tags: [tenant-accounts]
+      summary: The tenant's providers (no credentials)
+      security: [{ internalAdminToken: [] }]
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+      responses:
+        "200":
+          description: Allowlist-projected integrations of the tenant's own organization
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/Integration" } }
+                  total: { type: integer }
+        "409": { $ref: "#/components/responses/InternalError", description: "`NB_TENANT_NOT_PROVISIONED`" }
+    post:
+      tags: [tenant-accounts]
+      summary: Add a provider (credentials) to the tenant's own organization
+      security: [{ internalAdminToken: [] }]
+      description: |
+        The catalog form of `POST /providers`, in the tenant's organization: different tenants
+        hold different credentials for the same provider type (two Twilio accounts, two Jasmin
+        gateways). Validated, never persisted by the bridge, never echoed.
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProviderCreateFromCatalog" }
+      responses:
+        "200":
+          description: The created integration, allowlist-projected
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/Integration" }
+        "400": { $ref: "#/components/responses/InternalError", description: "`NB_UNKNOWN_PROVIDER_TYPE`, `NB_PROVIDER_TYPE_UNAVAILABLE`, `NB_INVALID_PROVIDER`" }
+        "409": { $ref: "#/components/responses/InternalError", description: "`NB_TENANT_NOT_PROVISIONED`" }
+
+  /novu-bridge/novu-adapter/v1/tenants/{tenantId}/providers/_update:
+    post:
+      tags: [tenant-accounts]
+      summary: Rename, rotate (full credential set) or enable/disable one of the tenant's providers
+      security: [{ internalAdminToken: [] }]
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: string }
+                name: { type: string }
+                credentials: { type: object, additionalProperties: true }
+                active: { type: boolean }
+      responses:
+        "200":
+          description: The integration, allowlist-projected
+        "409": { $ref: "#/components/responses/InternalError", description: "`NB_PROVIDER_IN_USE` (deactivating the provider a channel of this tenant sends through), `NB_TENANT_NOT_PROVISIONED`" }
+
+  /novu-bridge/novu-adapter/v1/tenants/{tenantId}/providers/_delete:
+    post:
+      tags: [tenant-accounts]
+      summary: Delete one of the tenant's providers and its credentials
+      security: [{ internalAdminToken: [] }]
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: string }
+      responses:
+        "200":
+          description: "`{data: {id, deleted: true}}`"
+        "409": { $ref: "#/components/responses/InternalError", description: "`NB_PROVIDER_IN_USE`, `NB_TENANT_NOT_PROVISIONED`" }
+
+  /novu-bridge/novu-adapter/v1/tenants:
+    get:
+      tags: [tenant-accounts]
+      summary: Every tenant account and its state
+      security: [{ internalAdminToken: [] }]
+      responses:
+        "200":
+          description: All rows of `nb_tenant_account` (never a key)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/TenantAccount" } }
+                  total: { type: integer }
+
+  /novu-bridge/novu-adapter/v1/tenants/_backfill:
+    post:
+      tags: [tenant-accounts]
+      summary: Provision many tenants (existing ones, or ones created while Novu was down)
+      security: [{ internalAdminToken: [] }]
+      description: |
+        Provisions each tenant in turn (idempotent: provisioned ones are no-ops) and reports
+        each outcome; one failure does not stop the rest. At most 500 per call. pgr-services'
+        reconciler calls it for workspaces whose provisioning was deferred; operators call it for
+        tenants created before #2203 (`local-setup/scripts/novu-tenant-accounts.py backfill`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tenantIds]
+              properties:
+                tenantIds: { type: array, maxItems: 500, items: { type: string } }
+      responses:
+        "200":
+          description: One row per tenant
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        tenantId: { type: string }
+                        status: { type: string, description: "The account status, or ERROR" }
+                        organizationCreated: { type: boolean }
+                        organizationId: { type: string }
+                        code: { type: string, description: "NB_* code when status is ERROR" }
+                        message: { type: string }
+                  total: { type: integer }
+                  failed: { type: integer }
+
+  /novu-bridge/novu-adapter/v1/messages/_send:
+    post:
+      tags: [messages]
+      summary: Send an OTP now, through the tenant's own Novu account
+      security: [{ internalSendToken: [] }]
+      description: |
+        For the Identity BFF's citizen OTP (#2189). Sent immediately (no Kafka) through the
+        tenant's OWN Novu organization, never the shared account, pinned to the provider the
+        tenant's channel row selects, else its primary active provider for the channel. The text
+        is the bridge's OTP workflow: the code and its expiry, nothing else.
+
+        The call then waits up to `novu.bridge.messages.confirm.timeout.ms` (5 s) for Novu's
+        job: `200 SENT` when the provider accepted the message, `502 NB_PROVIDER_FAILED` when it
+        refused it, `202 QUEUED` when it had not answered yet (the message may still go out).
+
+        **Errors, distinct by design** (the BFF maps the first two to `OTP_CHANNEL_UNAVAILABLE`):
+
+        | Status | Code | Meaning |
+        |---|---|---|
+        | 409 | `NB_TENANT_NOT_PROVISIONED` | The tenant's root has no Novu account of its own (or the feature is off) |
+        | 422 | `NB_NO_PROVIDER_FOR_CHANNEL` | It has one, but no usable provider carries the channel |
+        | 502 | `NB_PROVIDER_FAILED` | Novu ran the send and the provider refused it |
+        | 502 | `NB_NOVU_TRIGGER_FAILED` | Novu refused the trigger itself |
+        | 503 | `NB_NOVU_UNAVAILABLE` | Novu could not be reached |
+        | 503 | `NB_TENANT_ACCOUNT_UNAVAILABLE` | The tenant's account could not be read (fails closed, never the shared account) |
+        | 400 | `NB_INVALID_REQUEST`, `NB_UNKNOWN_TEMPLATE`, `NB_INVALID_TENANT` | The request is malformed |
+
+        The code is never logged, never written to the ledger and never echoed in an error. Each
+        send writes one `nb_dispatch_log` row (module `identity`, event `OTP_SEND`, recipient as
+        a hashed subscriber id), visible on the Logs screen. Rate limiting is the caller's.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SendRequest" }
+            example:
+              tenantId: acme
+              channel: SMS
+              recipient: "+254712345678"
+              templateKey: OTP
+              payload: { code: "482913", expiresInSeconds: 300 }
+      responses:
+        "200":
+          description: The provider accepted the message
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/SendResponse" }
+        "202":
+          description: Novu accepted it; the provider had not answered within the confirm timeout
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/SendResponse" }
+        "400": { $ref: "#/components/responses/InternalError" }
+        "401": { $ref: "#/components/responses/InternalUnauthorized" }
+        "403": { $ref: "#/components/responses/InternalDisabled" }
+        "409": { $ref: "#/components/responses/InternalError", description: "`NB_TENANT_NOT_PROVISIONED`" }
+        "422": { $ref: "#/components/responses/InternalError", description: "`NB_NO_PROVIDER_FOR_CHANNEL`" }
+        "502": { $ref: "#/components/responses/InternalError", description: "`NB_PROVIDER_FAILED`, `NB_NOVU_TRIGGER_FAILED`" }
+        "503": { $ref: "#/components/responses/InternalError", description: "`NB_NOVU_UNAVAILABLE`, `NB_TENANT_ACCOUNT_UNAVAILABLE`" }
+
 components:
 
   securitySchemes:
@@ -818,8 +1160,50 @@ components:
       in: header
       name: X-Receipt-Secret
       description: "`novu.bridge.receipts.secret`. May also be sent as the `secret` query parameter."
+    internalAdminToken:
+      type: apiKey
+      in: header
+      name: X-Novu-Bridge-Token
+      description: "`novu.bridge.internal.admin.token` (NOVU_BRIDGE_INTERNAL_ADMIN_TOKEN). Internal callers only; Kong never routes these paths."
+    internalSendToken:
+      type: apiKey
+      in: header
+      name: X-Novu-Bridge-Token
+      description: "`novu.bridge.internal.send.token` (NOVU_BRIDGE_INTERNAL_SEND_TOKEN). The Identity BFF."
+
+  parameters:
+    TenantId:
+      name: tenantId
+      in: path
+      required: true
+      description: "A root tenant code (`acme`) or a tenant under it (`acme.city`, which means its root): lower-case letters, digits, `-`, `_`."
+      schema: { type: string, example: acme }
+    AccountSelector:
+      name: tenantId
+      in: query
+      required: false
+      description: |
+        #2203: the workspace whose notification account to act on. When it has its own Novu
+        organization, the call acts there (admins of that workspace only); otherwise, and when
+        absent, on the deployment's shared account under the rules in Tiers.
+      schema: { type: string, example: acme }
 
   responses:
+    InternalUnauthorized:
+      description: "`NB_INTERNAL_TOKEN_REQUIRED` (no `X-Novu-Bridge-Token`) or `NB_INTERNAL_TOKEN_INVALID`"
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    InternalDisabled:
+      description: "`NB_INTERNAL_API_DISABLED`: the token for this API is not configured, so the API is off"
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    InternalError:
+      description: An `Errors` envelope with the `NB_*` code
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
     Unauthorized:
       description: No bearer token, or the token does not introspect
       content:
@@ -887,6 +1271,74 @@ components:
               note: { type: string, description: "Why nothing matched, when nothing did." }
 
   schemas:
+
+    TenantAccount:
+      type: object
+      description: A tenant's Novu account as the bridge records it. Never the API key.
+      properties:
+        tenantId: { type: string, example: acme }
+        status: { type: string, enum: [PROVISIONING, PROVISIONED, FAILED, DEPROVISIONED] }
+        provisioned: { type: boolean }
+        organizationId: { type: string }
+        organizationName: { type: string, example: DIGIT tenant acme }
+        environmentId: { type: string }
+        environmentName: { type: string, example: Development }
+        apiKeyStored: { type: boolean }
+        apiKeyEncryptionKeyId: { type: string, description: "Which encryption key wrote the stored key (rotation)." }
+        workflowsVersion: { type: integer }
+        currentWorkflowsVersion: { type: integer }
+        lastErrorCode: { type: string }
+        lastErrorMessage: { type: string }
+        provisionedTime: { type: integer, format: int64, nullable: true }
+        deprovisionedTime: { type: integer, format: int64, nullable: true }
+        lastModifiedTime: { type: integer, format: int64 }
+
+    ChannelReadiness:
+      type: object
+      properties:
+        ready: { type: boolean }
+        pinned: { type: boolean, description: "The tenant's channel row selects the provider." }
+        provider: { type: string, description: "Integration identifier a send is pinned to." }
+        providerId: { type: string }
+        type: { type: string, nullable: true }
+        reason: { type: string, description: "Why not ready." }
+
+    AccountView:
+      type: object
+      description: "#2203: whose notification account a provider list shows, and whether the caller may change it."
+      properties:
+        tenantAccountsEnabled: { type: boolean }
+        mode: { type: string, enum: [TENANT, SHARED] }
+        tenantId: { type: string, nullable: true }
+        status: { type: string, enum: [PROVISIONED, NOT_PROVISIONED, PROVISIONING, FAILED, DEPROVISIONED, DISABLED, UNKNOWN] }
+        manageable: { type: boolean }
+
+    SendRequest:
+      type: object
+      required: [tenantId, channel, recipient, templateKey, payload]
+      properties:
+        tenantId: { type: string, description: "The tenant (its root's account sends)." }
+        channel: { type: string, enum: [SMS, EMAIL] }
+        recipient: { type: string, description: "SMS: E.164 (`+` and 7 to 15 digits). EMAIL: an address." }
+        templateKey: { type: string, enum: [OTP] }
+        payload:
+          type: object
+          required: [code]
+          description: "`expiresInSeconds` (1 to 86400) or `expiresAt` (ISO-8601 instant) is required."
+          properties:
+            code: { type: string, pattern: "^[0-9A-Za-z]{4,12}$" }
+            expiresInSeconds: { type: integer, minimum: 1, maximum: 86400 }
+            expiresAt: { type: string, format: date-time }
+
+    SendResponse:
+      type: object
+      properties:
+        status: { type: string, enum: [SENT, QUEUED] }
+        transactionId: { type: string, description: "Novu's transaction id (`otp-<uuid>`)." }
+        tenantId: { type: string }
+        channel: { type: string }
+        provider: { type: string, description: "The integration identifier the send was pinned to." }
+        account: { type: string, example: "tenant:acme" }
 
     Error:
       type: object
