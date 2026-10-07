@@ -148,7 +148,10 @@ flowchart LR
 
 - **pgr-services** is the primary check and gives clear errors. It needs four new facts for its rules: caller roles, assignees, attempted action and ladder ranks.
 - **The workflow service must stay internal-only.** Its system endpoint (`/workflow/v3/system/transition`) skips role and ownership checks.
-- **The per-city switch** goes `OFF` → `REPORT_ONLY` → `ENFORCE`, and `assigneeCheck` is turned on at `ENFORCE`.
+- **`ENFORCE` is the target for every city, and new cities start there.** A per-city switch (`OFF` → `REPORT_ONLY` → `ENFORCE`) exists only for live cities migrating from 2.x, so the platform change and the permission change don't land on the same day:
+  - `OFF`: today's behaviour, until the city's ladder and rules are configured.
+  - `REPORT_ONLY`: rules are evaluated and would-be denials are logged, but nothing is blocked.
+  - `ENFORCE`: rules apply, and `assigneeCheck` is turned on.
 - **New workflow actions** are added by a one-time script for existing cities. New cities get them from the default workflow, and the 2.x rebuild adds them for migrated cities. After that, saving a ladder keeps the roles in sync.
 
 ## 7. Rollout
@@ -159,7 +162,7 @@ flowchart LR
   P2 --> P3["3 · Actions<br/>TAKE_OVER · TRANSFER · narrowed ESCALATE · report-only → enforce"]
 ```
 
-**(proposed)** Per city: configure the ladder before switching it on, so escalation never pauses. Tell staff that escalations now go to the next role in their area and department.
+**(proposed)** Per city: configure the ladder as part of city setup, before escalation is switched on. For a live city, tell staff that escalations now go to the next role in their area and department.
 
 ## 8. Scope, open questions and asks
 
@@ -179,7 +182,10 @@ flowchart LR
 
 **Asks for the migration team**
 
-1. **The Bomet cutover** expects about 25 boss-based escalations on the first run. Plan the switch to the ladder.
+1. **Production cities still on 2.x (e.g. Mozambique)** aren't affected until they migrate. Each one needs an impact check before `ENFORCE`:
+   - whether automatic escalation and the Team inbox are in use
+   - who resolves complaints in practice (GROs or viewers resolving others' complaints will be blocked)
+   - whether employees have areas and departments filled in
 2. **#613** (GRO resolves any complaint) is superseded by §5.
 3. **`ESCALATE` is open to every role on DIGIT 3,** including citizens. §6 narrows it to ladder roles.
 4. **Supervisor table admin rights** include supervisor roles. Restrict them, and check that employees exist in the tenant.
