@@ -114,6 +114,7 @@ public class OnboardingStepsTest {
         assertEquals("Asia/Kolkata",rows.get("newtown|dss.DashboardConfig|default").path("data").path("timeZone").asText());
         JsonNode tenantRecord=rows.get("newtown|tenant.tenants|newtown").path("data");
         assertEquals("Asia/Kolkata",tenantRecord.path("timeZone").asText());assertEquals("APRIL_MARCH",tenantRecord.path("financialYearPolicy").asText());
+        assertEquals("IN",tenantRecord.path("country").asText());
         assertEquals("NEW-TOWN-PGR-[cy:yyyy-MM-dd]-[SEQ_EG_PGR_ID]",rows.get("newtown|common-masters.IdFormat|pgr.servicerequestid").path("data").path("format").asText());
         assertTrue(rows.keySet().stream().allMatch(key->key.startsWith("newtown|")));
     }

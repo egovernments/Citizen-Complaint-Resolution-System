@@ -70,3 +70,23 @@ describe('computeContainingParents', () => {
     expect(parents.get(child)).toEqual([small, big]);
   });
 });
+
+describe('buildOsmBoundaries stored geometry', () => {
+  const holed = (x: number, y: number, s: number, hx: number, hy: number, hs: number) => ({
+    type: 'Polygon',
+    coordinates: [square(x, y, s).coordinates[0], square(hx, hy, hs).coordinates[0]],
+  });
+  const ringsOf = (code: string, levels: OsmAdminLevel[]) =>
+    (buildOsmBoundaries(levels, 'mz', 'ADMIN').boundaries.find((b) => b.code === code)!.geometry!.coordinates as number[][][]);
+
+  it('keeps a hole as a keyhole only when an area being created lies in it', () => {
+    // A rural district around a town district: the town's complaints must not land in the rural one.
+    const rural = area('Rural', 'd-r', holed(0, 0, 10, 4, 4, 2));
+    const town = area('Town', 'd-t', square(4, 4, 2));
+    const withTown = ringsOf('RURAL', [level(1, 'District', [rural, town])]);
+    expect(withTown).toHaveLength(1);
+    expect(withTown[0].length).toBeGreaterThan(5); // outer + cut + hole
+    // The same district on its own: the hole is a lake, and is dropped.
+    expect(ringsOf('RURAL', [level(1, 'District', [rural])])).toEqual([square(0, 0, 10).coordinates[0]]);
+  });
+});

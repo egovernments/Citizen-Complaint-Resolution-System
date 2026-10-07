@@ -12,7 +12,7 @@
 //   - features whose representative point lands in NO immediate-parent
 //     polygon are dropped: attaching them to an arbitrary parent (the old
 //     fallback was parentLvl.features[0]) silently corrupts the hierarchy.
-import { coerceForBoundaryService } from './boundaryGeoJson';
+import { coerceForBoundaryService, largestPart } from './boundaryGeoJson';
 import type { Boundary } from '@/api/types';
 
 export interface OsmAdminLevel {
@@ -26,6 +26,9 @@ export interface OsmAdminLevel {
   /** The level's local name from the boundary source ("Ward"), used to
    *  pre-fill mappedName; absent when the source doesn't know it. */
   suggestedName?: string;
+  /** The source's own number for this level (ADM2 → 2) when every area at it
+   *  agrees; how an official set's per-level agreement is matched to it. */
+  adminLevel?: number;
   /**
    * Whether this level is included in the hierarchy. The operator picks a
    * CONTIGUOUS subset of the discovered levels (trim the top/bottom, never a
@@ -146,8 +149,10 @@ function scanlineMidpoint(rings: number[][][], y: number): number[] | null {
 
 /**
  * Representative point of a feature, computed from the LARGEST MultiPolygon
- * member — the same member coerceForBoundaryService persists — so parent
- * assignment can never disagree with the stored geometry.
+ * member (largestPart) — the same member coerceForBoundaryService persists —
+ * so parent assignment can never disagree with the stored geometry. It reads
+ * that member's original rings, never the stored ring: a kept hole is stored
+ * joined to the outline by a cut, which would skew a centroid.
  *
  * Strategy, in order:
  *  1. shoelace area-weighted centroid of that member's outer ring, if it
@@ -158,11 +163,9 @@ function scanlineMidpoint(rings: number[][][], y: number): number[] | null {
  */
 export function getCentroid(feature: any): number[] {
   const geom = feature?.geometry;
-  const coerced = geom ? coerceForBoundaryService(geom) : undefined;
-  if (coerced?.type === 'Point') return coerced.coordinates as number[];
+  if (geom?.type === 'Point') return geom.coordinates as number[];
 
-  const rings: number[][][] =
-    coerced?.type === 'Polygon' ? (coerced.coordinates as number[][][]) : [];
+  const rings: number[][][] = largestPart(geom) ?? [];
   const outer = rings[0] ?? [];
 
   const centroid = ringCentroid(outer);
@@ -287,6 +290,9 @@ export function buildOsmBoundaries(
   const boundaries: Boundary[] = [];
   const skipped: SkippedOsmFeature[] = [];
   const usedCodes = new Set<string>();
+  // A hole is stored only when one of the areas being created lies in it (an
+  // enclave); lakes, slivers and neighbouring countries are dropped.
+  const enclavePoints = sortedLevels.flatMap((l) => l.features.filter((f) => f?.geometry).map(getCentroid));
   // Included features of the previous (parent) level, with their assigned
   // codes and outer-ring areas (for smallest-containing-parent selection)
   let parentIncluded: { feature: any; code: string; area: number }[] = [];
@@ -360,8 +366,8 @@ export function buildOsmBoundaries(
         boundaryType: bType,
         hierarchyType,
         parent: parentCode,
-        // boundary-service rejects MultiPolygon → collapse to largest Polygon
-        geometry: feature.geometry ? coerceForBoundaryService(feature.geometry) : undefined,
+        // boundary-service takes one ring: largest part, enclave holes only
+        geometry: feature.geometry ? coerceForBoundaryService(feature.geometry, enclavePoints) : undefined,
       });
       included.push({ feature, code, area: featureOuterArea(feature) });
     }
@@ -403,12 +409,15 @@ export function groupFetchedLevels(features: any[] | null | undefined): OsmAdmin
       const names = [...new Set(levelFeatures.map((f) => f.properties?.name).filter(Boolean))];
       const levelNames = [...new Set(levelFeatures.map((f) => f.properties?.level_name).filter(Boolean))];
       const suggestedName = levelNames.length === 1 ? String(levelNames[0]) : undefined;
+      const adminLevels = [...new Set(levelFeatures.map((f) => f.properties?.admin_level))];
+      const adminLevel = adminLevels.length === 1 && Number.isInteger(adminLevels[0]) ? (adminLevels[0] as number) : undefined;
       return {
         level: i + 1,
         features: levelFeatures,
         examples: names.slice(0, 3),
         mappedName: suggestedName ?? '',
         suggestedName,
+        ...(adminLevel !== undefined && { adminLevel }),
         // Default all selected (a contiguous, valid starting point); the
         // operator trims the range and names what they keep.
         selected: true,

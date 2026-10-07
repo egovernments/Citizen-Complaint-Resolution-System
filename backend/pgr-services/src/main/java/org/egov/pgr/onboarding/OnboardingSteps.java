@@ -112,6 +112,9 @@ public class OnboardingSteps {
             data.put("emailId", ""); data.put("address", ""); data.put("contactNumber", "");
             // Signup choices are materialized on the authoritative tenant record (its schema allows extra fields).
             data.put("timeZone", signup.getTimeZone()); data.put("financialYearPolicy", signup.getFinancialYearPolicy());
+            // The signup country (ISO 3166-1 alpha-2): the configurator offers that country's official boundaries.
+            String country = signup.getCountryCode() == null ? "" : signup.getCountryCode().trim().toUpperCase(Locale.ROOT);
+            if (country.matches("[A-Z]{2}")) data.put("country", country);
             data.put("OfficeTimings", Map.of("Mon - Fri", ""));
             data.put("city", Map.of("code", tenant, "name", signup.getAccountName(), "districtName", "",
                     "districtTenantCode", tenant, "ulbGrade", ""));

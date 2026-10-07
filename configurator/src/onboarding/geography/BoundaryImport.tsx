@@ -26,7 +26,6 @@ import { DigitCard } from '@/components/digit/DigitCard';
 import { Header, SubHeader } from '@/components/digit/Header';
 import { LabelFieldPair, CardLabel, Field } from '@/components/digit/LabelFieldPair';
 import { SubmitBar } from '@/components/digit/SubmitBar';
-import { Banner } from '@/components/digit/Banner';
 import { apiClient, boundaryService, localizationService, mdmsService, ApiClientError } from '@/api';
 import { WORKSPACE_HIERARCHY_TYPE } from '@/api/services/boundary';
 import { reportStepError, trackStepAction } from '../telemetry';
@@ -51,6 +50,7 @@ import {
   tooFewLevelsMessage,
   turbopassErrorMessage,
   turbopassSearchUrl,
+  type SuggestionFeature,
 } from '@/utils/turbopassSuggestions';
 import { summarizeBoundaryQuality } from '@/utils/boundaryQuality';
 import { validateGoogleMapsKey, type GoogleKeyCheck } from '@/utils/googleMaps';
@@ -58,6 +58,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useMapProviderConfig } from '@/hooks/useMapProviderConfig';
 import { BoundaryMap } from '@/components/ui/BoundaryMap';
 import { deriveMapPosition } from '@/utils/mapConfigFromBoundaries';
+import { countryName, datasetName, fetchOfficialSet, statusDetail, type OfficialSet } from '@/utils/officialBoundaries';
+import { BoundariesCreated } from './BoundariesCreated';
+import { LevelStatusBadge, OfficialSetSummary } from './OfficialConfidence';
 import type { BoundaryHierarchy, Boundary, BoundaryExcelRow } from '@/api/types';
 
 type Step =
@@ -271,6 +274,8 @@ export default function BoundaryImport({
   source,
   hasHierarchies,
   sourceChoices,
+  preconfigured = null,
+  workspaceName = null,
   onDone,
   onCancel,
 }: {
@@ -280,6 +285,12 @@ export default function BoundaryImport({
   /** Sources turbopass can answer, from Geography's /health read: null while
    *  asking, [] when it isn't deployed or holds no data. */
   sourceChoices: string[] | null;
+  /** Geography's "Preconfigured" choice: the country's official set. The
+   *  search works as in Fetch, with the source fixed to that set and
+   *  suggestions limited to its country. */
+  preconfigured?: OfficialSet | null;
+  /** The workspace's name for the completion screen; the tenant code is shown without it. */
+  workspaceName?: string | null;
   onDone: () => void;
   onCancel: () => void;
 }) {
@@ -295,7 +306,9 @@ export default function BoundaryImport({
   // tenant if Phase 1 was skipped (URL-direct).
   const boundaryTenant = state.targetTenant || state.tenant;
 
-  const [step, setStep] = useState<Step>(source === 'osm' ? 'osm-search' : hasHierarchies ? 'excel-landing' : 'create-hierarchy');
+  const [step, setStep] = useState<Step>(
+    preconfigured || source === 'osm' ? 'osm-search' : hasHierarchies ? 'excel-landing' : 'create-hierarchy',
+  );
   const [path] = useState<BoundaryPath>(source);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -332,11 +345,18 @@ export default function BoundaryImport({
   const [skippedFeatures, setSkippedFeatures] = useState<SkippedOsmFeature[]>([]);
   const [pendingBoundaries, setPendingBoundaries] = useState<Boundary[]>([]);
   // The place whose boundaries were fetched — named on the level screen.
-  const [fetchedPlace, setFetchedPlace] = useState<{ id: string; label: string; country: string | null } | null>(null);
+  const [fetchedPlace, setFetchedPlace] = useState<{ id: string; name: string; label: string; country: string | null } | null>(null);
   // Credit line for the fetched data — the official sets' licences require it.
   const [fetchedAttribution, setFetchedAttribution] = useState<string | null>(null);
+  // The official set behind the fetched levels, with its per-level agreement
+  // with the other official source: handed in by Preconfigured, or looked up
+  // when a search fetched from the Official source.
+  const [officialSet, setOfficialSet] = useState<OfficialSet | null>(preconfigured);
+  // The place whose levels are on screen; a late official-set answer for another is dropped.
+  const openedPlaceRef = useRef<string | null>(null);
+  // Preconfigured fixes the source to the country's official set.
   const [turbopassSource, setTurbopassSource] = useState(() =>
-    chooseTurbopassSource(CONFIGURED_TURBOPASS_SOURCE, null),
+    preconfigured ? 'official' : chooseTurbopassSource(CONFIGURED_TURBOPASS_SOURCE, null),
   );
   const sourceRef = useRef(turbopassSource);
 
@@ -356,9 +376,21 @@ export default function BoundaryImport({
   // Once Geography's /health read lands, start on the first source the server
   // can answer, unless the build pins one.
   useEffect(() => {
-    if (sourceChoices === null || (CONFIGURED_TURBOPASS_SOURCE ?? '').trim()) return;
+    if (preconfigured || sourceChoices === null || (CONFIGURED_TURBOPASS_SOURCE ?? '').trim()) return;
     changeSource(chooseTurbopassSource(undefined, sourceChoices));
-  }, [sourceChoices, changeSource]);
+  }, [preconfigured, sourceChoices, changeSource]);
+
+  // Preconfigured searches one country's official set: places elsewhere are
+  // left out of the suggestions and of what a typed name resolves to. The
+  // server filters first (`country`, before its result limit); this keeps a
+  // turbopass that predates that parameter correct too.
+  const inScope = useCallback(
+    <F extends SuggestionFeature>(features: F[]): F[] =>
+      preconfigured
+        ? features.filter((f) => String(f.properties?.country_code ?? '').toUpperCase() === preconfigured.country.toUpperCase())
+        : features,
+    [preconfigured],
+  );
 
   // Google Maps (optional, #1994): kept in this tenant's MapConfig, so every
   // map that honours MapConfig switches together.
@@ -391,9 +423,15 @@ export default function BoundaryImport({
     [levelSelectionKey],
   );
 
+  // "the official boundaries for Kenya (OCHA COD-AB)" — named on the complete screen.
+  const createdSourceText = officialSet
+    ? `the official boundaries for ${countryName(officialSet.country)} (${datasetName(officialSet.source)})`
+    : `${sourceLabel(turbopassSource)}${fetchedPlace ? ` for ${fetchedPlace.label}` : ''}`;
+
   // Created boundaries tracking (both paths)
   const [createdCounts, setCreatedCounts] = useState<Record<string, number>>({});
   const [totalCreated, setTotalCreated] = useState(0);
+  const [failedCount, setFailedCount] = useState(0);
 
   // Fetch existing hierarchies on mount
   useEffect(() => {
@@ -433,11 +471,11 @@ export default function BoundaryImport({
     const timeoutId = setTimeout(async () => {
       try {
         // Only places with areas inside them: anything else can't form a hierarchy.
-        const res = await fetch(turbopassSearchUrl(TURBOPASS_BASE, searchTerm, turbopassSource, TURBOPASS_MATCH, true));
+        const res = await fetch(turbopassSearchUrl(TURBOPASS_BASE, searchTerm, turbopassSource, TURBOPASS_MATCH, true, preconfigured?.country));
         if (!res.ok) throw new Error(`Turbopass boundary search returned ${res.status}`);
         const data = await res.json();
         // An answer for a term or source the operator has since changed is dropped.
-        if (!stale) setSuggestions(tagWithSource(data.features, turbopassSource).slice(0, 5));
+        if (!stale) setSuggestions(inScope(tagWithSource(data.features, turbopassSource)).slice(0, 5));
       } catch (e) {
         console.debug('Turbopass boundary suggestions unavailable', e);
         if (!stale) setSuggestions([]);
@@ -448,7 +486,7 @@ export default function BoundaryImport({
       stale = true;
       clearTimeout(timeoutId);
     };
-  }, [searchTerm, showSuggestions, turbopassSource]);
+  }, [searchTerm, showSuggestions, turbopassSource, inScope, preconfigured?.country]);
 
   // ============================================
   // Excel path handlers (develop's original flow)
@@ -649,6 +687,7 @@ export default function BoundaryImport({
 
       setCreatedCounts(counts);
       setTotalCreated(result.success.length);
+      setFailedCount(result.failed.length);
 
       // Localizations + cache-bust + boundary-path repair (shared with OSM path)
       const schemaError = await runPostCreatePipeline(
@@ -704,6 +743,67 @@ export default function BoundaryImport({
   // OSM path handlers
   // ============================================
 
+  // Fetch a place's boundaries and open the level screen. `suggestion` is the
+  // search result it came from.
+  const openPlace = async (place: {
+    id: string;
+    name: string;
+    label: string;
+    country: string | null;
+    countryCode: string | null;
+    source: string;
+    suggestion: SuggestionFeature;
+  }): Promise<boolean> => {
+    const { source } = place;
+    // An official set carries its agreement with the other official source.
+    // The country is known up front, so look it up alongside the fetch (best
+    // effort: the level screen works without it; fetchOfficialSet never throws).
+    const officialLookup =
+      !preconfigured && source === 'official' && place.countryCode ? fetchOfficialSet(TURBOPASS_BASE, place.countryCode) : null;
+    const res = await fetch(`${TURBOPASS_BASE}/boundary/fetch?id=${encodeURIComponent(place.id)}&source=${encodeURIComponent(source)}`);
+    if (!res.ok) {
+      setError(turbopassErrorMessage({
+        kind: 'fetch', source, status: res.status, serverMessage: await serverMessage(res), place: place.name,
+      }));
+      return false;
+    }
+    const geojson = await res.json();
+
+    // The fetch returns the picked place and what lies inside it — never
+    // anything above it — so every polygon with an admin level belongs. The
+    // old target-level detection name-matched the search term against the
+    // features and could latch onto the wrong one (#1016 point 1).
+    const extractedLevels = groupFetchedLevels(geojson.features);
+
+    if (extractedLevels.length === 0) {
+      setError(`No administrative boundaries came back for "${place.name}". Try a different place.`);
+      return false;
+    }
+    // A hierarchy needs two levels. Stop here with the reason rather than
+    // open a level screen that can't be completed (#1016 point 3) — this is
+    // the check that covers Geoapify, which can't say so up front.
+    if (extractedLevels.length < 2) {
+      setError(tooFewLevelsMessage(place.suggestion, (geojson.features ?? []).length));
+      return false;
+    }
+
+    setFetchedPlace({ id: place.id, name: place.name, label: place.label, country: place.country });
+    setFetchedAttribution(attributionLine(geojson.features));
+    openedPlaceRef.current = place.id;
+    if (!preconfigured) {
+      setOfficialSet(null);
+      // Best effort and never in the way: the level screen opens now, and the
+      // summary appears when the lookup answers — unless another place has been
+      // opened since.
+      void officialLookup?.then((set) => {
+        if (openedPlaceRef.current === place.id) setOfficialSet(set && set !== 'unavailable' ? set : null);
+      });
+    }
+    setAdminLevels(extractedLevels);
+    setStep('map-levels');
+    return true;
+  };
+
   const handleSearch = async () => {
     const term = searchTerm.trim();
     if (!term) {
@@ -720,7 +820,7 @@ export default function BoundaryImport({
         // otherwise show the ranked, disambiguated candidates and let the
         // operator choose, rather than taking whatever came back first (#1016:
         // "Delhi" used to resolve to "Delhi Govt Flats").
-        const res = await fetch(turbopassSearchUrl(TURBOPASS_BASE, term, turbopassSource, TURBOPASS_MATCH, true));
+        const res = await fetch(turbopassSearchUrl(TURBOPASS_BASE, term, turbopassSource, TURBOPASS_MATCH, true, preconfigured?.country));
         if (!res.ok) {
           setError(turbopassErrorMessage({
             kind: 'search', source: turbopassSource, status: res.status, serverMessage: await serverMessage(res),
@@ -728,14 +828,15 @@ export default function BoundaryImport({
           return;
         }
         const data = await res.json();
-        const result = pickSuggestion(tagWithSource(data.features, turbopassSource), term);
+        const result = pickSuggestion(inScope(tagWithSource(data.features, turbopassSource)), term);
         if (result.reason === 'no-results' && isOfflineSource(turbopassSource)) {
           // Nothing with areas inside it matched. If the name exists only as a
           // place with nothing inside it, say so — and where it lies.
-          const all = await fetch(turbopassSearchUrl(TURBOPASS_BASE, term, turbopassSource, TURBOPASS_MATCH, false))
+          const all = await fetch(turbopassSearchUrl(TURBOPASS_BASE, term, turbopassSource, TURBOPASS_MATCH, false, preconfigured?.country))
             .then((r) => (r.ok ? r.json() : null))
             .catch(() => null);
-          const leaf = all?.features?.[0];
+          // Same country scope as the search above (a server that predates `country` ignores it).
+          const leaf = inScope((all?.features ?? []) as SuggestionFeature[])[0];
           setError(leaf ? deadEndMessage(leaf) : pickPromptMessage(result, term));
           return;
         }
@@ -762,42 +863,15 @@ export default function BoundaryImport({
       }
 
       // Fetch from the source that found the place, whatever the dropdown says now.
-      const source = fetchSourceFor(suggestion, turbopassSource);
-      const res = await fetch(`${TURBOPASS_BASE}/boundary/fetch?id=${encodeURIComponent(placeId)}&source=${encodeURIComponent(source)}`);
-      if (!res.ok) {
-        setError(turbopassErrorMessage({
-          kind: 'fetch', source, status: res.status, serverMessage: await serverMessage(res), place: placeName,
-        }));
-        return;
-      }
-      const geojson = await res.json();
-
-      // The fetch returns the picked place and what lies inside it — never
-      // anything above it — so every polygon with an admin level belongs. The
-      // old target-level detection name-matched the search term against the
-      // features and could latch onto the wrong one (#1016 point 1).
-      const extractedLevels = groupFetchedLevels(geojson.features);
-
-      if (extractedLevels.length === 0) {
-        setError(`No administrative boundaries came back for "${placeName}". Try a different place.`);
-        return;
-      }
-      // A hierarchy needs two levels. Stop here with the reason rather than
-      // open a level screen that can't be completed (#1016 point 3) — this is
-      // the check that covers Geoapify, which can't say so up front.
-      if (extractedLevels.length < 2) {
-        setError(tooFewLevelsMessage(suggestion, (geojson.features ?? []).length));
-        return;
-      }
-
-      setFetchedPlace({
+      await openPlace({
         id: placeId,
+        name: placeName,
         label: suggestion.properties.formatted || placeName,
         country: suggestion.properties.country_name || null,
+        countryCode: suggestion.properties.country_code || null,
+        source: fetchSourceFor(suggestion, turbopassSource),
+        suggestion,
       });
-      setFetchedAttribution(attributionLine(geojson.features));
-      setAdminLevels(extractedLevels);
-      setStep('map-levels');
     } catch (e) {
       console.error(e);
       setError(turbopassErrorMessage({ kind: 'network', source: turbopassSource }));
@@ -948,9 +1022,10 @@ export default function BoundaryImport({
 
       setCreatedCounts(counts);
       setTotalCreated(result.success.length);
+      setFailedCount(result.failed.length);
 
       if (result.success.length > 0) {
-        addUndo('create_boundaries', `Created ${result.success.length} boundaries from OSM data`);
+        addUndo('create_boundaries', `Created ${result.success.length} boundaries from ${createdSourceText}`);
       }
 
       // Localizations + cache-bust + boundary-path repair (shared with Excel path)
@@ -1422,12 +1497,22 @@ export default function BoundaryImport({
         <DigitCard>
           <div className="border border-border rounded-xl p-8 bg-card text-center space-y-4">
             <Search className="h-12 w-12 mx-auto text-primary opacity-80" />
-            <h2 className="text-xl font-semibold">Fetch boundaries</h2>
+            <h2 className="text-xl font-semibold">
+              {preconfigured ? `Search ${countryName(preconfigured.country)}'s official boundaries` : 'Fetch boundaries'}
+            </h2>
             <p className="text-muted-foreground max-w-md mx-auto">
-              Enter the name of your city or region to fetch its administrative boundaries and their map polygons.
+              {preconfigured
+                ? 'Enter the name of your city or region. Its boundaries and map polygons come from the official set below.'
+                : 'Enter the name of your city or region to fetch its administrative boundaries and their map polygons.'}
             </p>
 
-            {sourceChoices && sourceChoices.length > 0 && (
+            {preconfigured && (
+              <div className="max-w-xl mx-auto text-left" data-testid="preconfigured-source">
+                <OfficialSetSummary set={preconfigured} />
+              </div>
+            )}
+
+            {!preconfigured && sourceChoices && sourceChoices.length > 0 && (
               <div className="max-w-sm mx-auto text-left space-y-1">
                 <label htmlFor="boundary-source" className="text-sm font-medium">Boundary source</label>
                 <Select value={turbopassSource} onValueChange={changeSource} disabled={loading}>
@@ -1446,7 +1531,7 @@ export default function BoundaryImport({
             <div className="relative max-w-sm mx-auto pt-4">
               <div className="flex space-x-2">
                 <Input
-                  placeholder="e.g., Maputo"
+                  placeholder={preconfigured ? `e.g., a city in ${countryName(preconfigured.country)}` : 'e.g., Maputo'}
                   value={searchTerm}
                   onChange={(e) => {
                     setSearchTerm(e.target.value);
@@ -1537,6 +1622,10 @@ export default function BoundaryImport({
       {/* OSM: map admin levels to hierarchy names */}
       {step === 'map-levels' && (() => {
         const levelSel = validateLevelSelection(adminLevels);
+        // The official set's figures are country-wide; when the fetched place is
+        // smaller than the country (its top level isn't ADM0), say so beside them.
+        const top = adminLevels[0]?.adminLevel;
+        const fetchedSubPlace = officialSet && top !== undefined && top > 0 ? fetchedPlace?.name ?? null : null;
         return (
         <DigitCard>
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -1549,6 +1638,8 @@ export default function BoundaryImport({
             {fetchedAttribution && (
               <p className="text-xs text-muted-foreground" data-testid="boundary-attribution">{fetchedAttribution}</p>
             )}
+
+            {officialSet && <OfficialSetSummary set={officialSet} place={fetchedSubPlace} />}
 
             {boundaryQuality && (
               <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm space-y-2">
@@ -1579,7 +1670,10 @@ export default function BoundaryImport({
             <BoundaryMap data={selectedFeatures} height="320px" google={mapProvider.google} />
 
             <div className="space-y-4 pt-4">
-              {adminLevels.map((lvl, index) => (
+              {adminLevels.map((lvl, index) => {
+                // The official set's figures for this level, matched by the source's own number (ADM2 → 2).
+                const officialLevel = officialSet?.levels.find((l) => l.admin_level === lvl.adminLevel) ?? null;
+                return (
                 <div
                   key={lvl.level}
                   className={`border p-6 rounded-lg space-y-4 transition-colors ${lvl.selected ? 'bg-card/50' : 'bg-muted/30 opacity-60'}`}
@@ -1598,15 +1692,21 @@ export default function BoundaryImport({
                         }}
                       />
                       <span>
-                        <h3 className="font-medium text-lg flex items-center">
+                        <h3 className="font-medium text-lg flex flex-wrap items-center gap-2">
                           Level {lvl.level}
-                          <Badge variant="outline" className="ml-2 bg-background">
+                          <Badge variant="outline" className="bg-background">
                             {lvl.features.length} regions
                           </Badge>
+                          {officialLevel && <LevelStatusBadge level={officialLevel} />}
                         </h3>
                         <p className="text-sm text-muted-foreground mt-1">
                           Examples: {lvl.examples.join(', ')}{lvl.examples.length < lvl.features.length ? ', etc.' : ''}
                         </p>
+                        {officialLevel && officialSet?.agreement_measured && (
+                          <p className="text-xs text-muted-foreground mt-1" data-testid="level-status-detail">
+                            {statusDetail(officialLevel, officialSet, fetchedSubPlace)}
+                          </p>
+                        )}
                       </span>
                     </label>
                   </div>
@@ -1632,7 +1732,8 @@ export default function BoundaryImport({
                     </div>
                   )}
                 </div>
-              ))}
+                );
+              })}
             </div>
 
             {!levelSel.valid && levelSel.error && (
@@ -1714,82 +1815,32 @@ export default function BoundaryImport({
 
       {/* Complete: Excel path */}
       {step === 'complete' && path === 'excel' && selectedHierarchy && (
-        <DigitCard>
-          <Banner
-            successful={true}
-            message="Boundaries created"
-            info={`Hierarchy: ${selectedHierarchy.hierarchyType} • Tenant: ${boundaryTenant.toUpperCase()}`}
-          />
-
-          <div className="mt-6 p-4 bg-muted rounded overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-xs sm:text-sm font-condensed">Level</TableHead>
-                  <TableHead className="text-xs sm:text-sm font-condensed">Count</TableHead>
-                  <TableHead className="text-xs sm:text-sm font-condensed">Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {getHierarchyLevels(selectedHierarchy).map((level) => (
-                  <TableRow key={level}>
-                    <TableCell className="text-xs sm:text-sm">{level}</TableCell>
-                    <TableCell className="text-xs sm:text-sm">{createdCounts[level] || 0}</TableCell>
-                    <TableCell className="text-success text-xs sm:text-sm">✓ Created</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-
-          <p className="text-sm sm:text-base text-muted-foreground mt-4 text-center">
-            Total: <span className="text-primary font-medium">{totalCreated} boundaries</span> created
-          </p>
-
-          <div className="mt-6 flex justify-center">
-            <SubmitBar
-              label="Back to Geography"
-              onSubmit={onDone}
-              icon={<ChevronRight className="w-4 h-4" />}
-            />
-          </div>
-        </DigitCard>
+        <BoundariesCreated
+          levels={getHierarchyLevels(selectedHierarchy)}
+          counts={createdCounts}
+          total={totalCreated}
+          hierarchyType={selectedHierarchy.hierarchyType}
+          workspace={workspaceName ?? boundaryTenant}
+          sourceText="your Excel upload"
+          failed={failedCount}
+          onDone={onDone}
+        />
       )}
 
-      {/* Complete: OSM path */}
+      {/* Complete: fetched / preconfigured path */}
       {step === 'complete' && path === 'osm' && (
-        <DigitCard>
-          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <Banner
-              successful={true}
-              message="Boundaries created"
-              info={`Successfully generated ${totalCreated} boundaries from OSM data.`}
-            />
-
-            <div className="max-w-lg mx-auto mt-6">
-              <h3 className="text-lg font-semibold mb-4">Summary</h3>
-              <div className="space-y-3">
-                {Object.entries(createdCounts).map(([type, count]) => (
-                  <div key={type} className="flex justify-between items-center p-3 bg-secondary/50 rounded-lg">
-                    <span className="font-medium">{type}</span>
-                    <Badge variant="secondary">{count} items</Badge>
-                  </div>
-                ))}
-              </div>
-              {skippedFeatures.length > 0 && (
-                <p className="text-xs text-muted-foreground mt-4">
-                  {skippedFeatures.length} feature(s) were skipped (unnamed, name not romanizable, or no parent found) — see the review step report.
-                </p>
-              )}
-            </div>
-
-            <SubmitBar
-              label="Back to Geography"
-              onSubmit={onDone}
-              icon={<ChevronRight className="w-4 h-4" />}
-            />
-          </div>
-        </DigitCard>
+        <BoundariesCreated
+          levels={getSelectedLevels(adminLevels).map((l) => l.mappedName.trim())}
+          counts={createdCounts}
+          total={totalCreated}
+          hierarchyType={OSM_HIERARCHY_TYPE}
+          workspace={workspaceName ?? boundaryTenant}
+          sourceText={createdSourceText}
+          skipped={skippedFeatures.length}
+          failed={failedCount}
+          attribution={fetchedAttribution}
+          onDone={onDone}
+        />
       )}
     </div>
   );

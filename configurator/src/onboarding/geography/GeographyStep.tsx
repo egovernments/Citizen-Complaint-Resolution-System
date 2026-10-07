@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Download, LayoutGrid, MapPin } from 'lucide-react';
+import { Download, MapPin } from 'lucide-react';
 import { useApp } from '../../App';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -10,9 +10,13 @@ import { StepHeader } from '../StepHeader';
 import { EmptyState, OptionCard, StepActions } from '../StepParts';
 import { adjacentSteps, stepById } from '../steps';
 import { probeGate, useStepProbe } from '../stepProbe';
-import { useTurbopassSources } from '@/hooks/useTurbopassSources';
+import { useTurbopassHealth } from '@/hooks/useTurbopassSources';
+import { usePreconfiguredBoundaries } from '@/hooks/usePreconfiguredBoundaries';
+import { countryName, type OfficialSet } from '@/utils/officialBoundaries';
 import { TURBOPASS_UNAVAILABLE_MESSAGE } from '@/utils/turbopassSuggestions';
 import BoundaryImport, { type BoundarySource } from './BoundaryImport';
+import { plural } from '@/utils/plural';
+import { PreconfiguredCard } from './PreconfiguredCard';
 
 const STEP = stepById('geography');
 const { previous, next } = adjacentSteps('geography');
@@ -43,12 +47,6 @@ async function loadHierarchies(tenant: string): Promise<HierarchySummary[]> {
   );
 }
 
-function plural(word: string): string {
-  if (/[^aeiou]y$/.test(word)) return word.slice(0, -1) + 'ies';
-  if (/(s|x|ch|sh)$/.test(word)) return word + 'es';
-  return word + 's';
-}
-
 /** "3 districts · 12 wards", in level order. */
 function summaryLine(hierarchy: HierarchySummary): string {
   const parts = hierarchy.levels
@@ -73,7 +71,12 @@ export default function GeographyStep() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   // Fetching boundaries needs the turbopass service; say so up front when it's missing.
-  const boundarySources = useTurbopassSources();
+  // One /health read serves both the Fetch sources and Preconfigured.
+  const health = useTurbopassHealth();
+  const boundarySources = health?.sources ?? null;
+  // "Preconfigured": the official set turbopass holds for the tenant's country.
+  const preconfigured = usePreconfiguredBoundaries(tenant, health?.officialCountries ?? null);
+  const [preconfiguredSet, setPreconfiguredSet] = useState<OfficialSet | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -109,20 +112,32 @@ export default function GeographyStep() {
   );
 
   if (source) {
+    const close = () => {
+      setSource(null);
+      setPreconfiguredSet(null);
+    };
     return (
       <div className="space-y-6">
-        <StepHeader eyebrow="Geography" title={source === 'osm' ? 'Fetch boundaries' : 'Upload from Excel'} done={done}>
-          {source === 'osm'
-            ? 'Search for your area and pick which administrative levels become your boundary hierarchy.'
-            : 'Define your levels, fill the template with your areas, and upload it.'}
+        <StepHeader
+          eyebrow="Geography"
+          title={preconfiguredSet ? 'Preconfigured boundaries' : source === 'osm' ? 'Fetch boundaries' : 'Upload from Excel'}
+          done={done}
+        >
+          {preconfiguredSet
+            ? `Official boundaries for ${countryName(preconfiguredSet.country)}. Search for your city or region, then pick which levels become your boundary hierarchy.`
+            : source === 'osm'
+              ? 'Search for your area and pick which administrative levels become your boundary hierarchy.'
+              : 'Define your levels, fill the template with your areas, and upload it.'}
         </StepHeader>
         <BoundaryImport
           source={source}
           hasHierarchies={!!hierarchies?.length}
           sourceChoices={boundarySources}
-          onCancel={() => setSource(null)}
+          preconfigured={preconfiguredSet}
+          workspaceName={preconfigured.workspaceName}
+          onCancel={close}
           onDone={() => {
-            setSource(null);
+            close();
             reload();
             toast({ title: 'Boundaries imported' });
           }}
@@ -139,10 +154,18 @@ export default function GeographyStep() {
 
       <section className="space-y-4">
         <h3 className="text-lg font-semibold text-foreground">How do you want to bring in your geography?</h3>
-        <div className="grid max-w-3xl grid-cols-1 gap-4 sm:grid-cols-3">
-          <OptionCard icon={LayoutGrid} title="Preconfigured" action={null}>
-            Start from a boundary set we already hold for your country.
-          </OptionCard>
+        {/* Three across only from lg: with the onboarding sidebar open on a tablet
+            (820px), three cards are ~156px and the Preconfigured button overflows. */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:gap-6">
+          <PreconfiguredCard
+            state={preconfigured.state}
+            onRetry={preconfigured.retry}
+            onUse={() => {
+              if (preconfigured.state.status !== 'ready') return;
+              setPreconfiguredSet(preconfigured.state.set);
+              setSource('osm');
+            }}
+          />
           <OptionCard
             icon={MapPin}
             title="Fetch boundaries"

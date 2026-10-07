@@ -81,6 +81,60 @@ interface OfficialDatasetRow {
   note: string | null;
 }
 
+/** One level of an official set as official.py reported it. */
+interface OfficialLevelReport {
+  level: string;
+  areas: number;
+  areas_kept?: number;
+  kept: boolean;
+  coverage?: number;
+  orphans?: number;
+  other_areas?: number;
+  matched?: number | null;
+  unmatched?: string[];
+  agreement_failed?: boolean;
+}
+
+export interface OfficialLevel {
+  level: string;
+  admin_level: number;
+  /** What the country calls this level ("Ward"), or null when unknown. */
+  name: string | null;
+  areas: number;
+  /** % of the level above that this level's areas cover. */
+  coverage: number | null;
+  /** Areas the other source has at this level; 0 = it has none, null = not measured (DB built before the check). */
+  other_areas: number | null;
+  /** % of this level's areas that closely match an area in the other source; null when there is nothing to compare. */
+  matched: number | null;
+  /** The few areas that don't match, by name (empty when none, or too many to name). */
+  unmatched: string[];
+}
+
+export interface OfficialSet {
+  country: string;
+  source: string;
+  licence: string | null;
+  dataset_date: string | null;
+  quality: string | null;
+  url: string | null;
+  /** The country area to fetch the set from (fetch?id=<root.id>&source=official). */
+  root: { id: string; name: string | null } | null;
+  /** False on a DB built before official.py compared the two sources, or when the comparison failed. */
+  agreement_measured: boolean;
+  /** The comparison ran and crashed (official.py logged why); rebuilding may fix it. */
+  agreement_failed: boolean;
+  levels: OfficialLevel[];
+  /** The other official source for this country, which the agreement is measured against. */
+  other: {
+    source: string;
+    usable: boolean;
+    dataset_date: string | null;
+    quality: string | null;
+    note: string | null;
+  } | null;
+}
+
 interface TableColumn {
   name: string;
 }
@@ -263,6 +317,91 @@ export class BoundaryService {
     return out;
   }
 
+  /**
+   * The official set chosen for one country, with the evidence behind it:
+   * per level, how many areas it has and how closely the other official
+   * source agrees. 400 for a malformed code, 404 when the country has no
+   * official set here, 503 when the DB has no official sets at all.
+   */
+  officialSet(country: string): OfficialSet {
+    const code = (country || '').trim().toUpperCase();
+    if (!/^[A-Z]{2}$/.test(code)) {
+      throw new HttpException(
+        `country must be an ISO 3166-1 alpha-2 code, got '${country ?? ''}'`,
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    if (!this.db || !this.hasTable('official_datasets')) {
+      this.offlineIndex('official'); // throws the 503 that says what is missing
+    }
+    const db = this.db as Database.Database;
+    const rows = db
+      .prepare(
+        'SELECT * FROM official_datasets WHERE country = ? ORDER BY chosen DESC, source',
+      )
+      .all(code) as OfficialDatasetRow[];
+    const chosen = rows.find((r) => r.chosen === 1);
+    if (!chosen) {
+      throw new HttpException(
+        `No official boundary set for ${code} on this server.`,
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    let report: OfficialLevelReport[] = [];
+    try {
+      report = JSON.parse(chosen.levels || '[]') as OfficialLevelReport[];
+    } catch {
+      report = [];
+    }
+    const kept = report.filter((l) => l.kept);
+    const agreementFailed = kept.some((l) => l.agreement_failed === true);
+    const root = db
+      .prepare(
+        'SELECT id, name FROM boundaries WHERE country = ? AND source = ? AND official = 1 AND admin_level = 0 LIMIT 1',
+      )
+      .get(code, chosen.source) as
+      | { id: string; name: string | null }
+      | undefined;
+    const other = rows.find((r) => r !== chosen);
+    return {
+      country: code,
+      source: chosen.source,
+      licence: chosen.licence,
+      dataset_date: chosen.dataset_date,
+      quality: chosen.quality || null,
+      url: chosen.url || null,
+      root: root ?? null,
+      agreement_measured:
+        !agreementFailed && kept.some((l) => l.other_areas !== undefined),
+      agreement_failed: agreementFailed,
+      levels: kept
+        .filter((l) => l.level !== 'ADM0')
+        .map((l) => ({
+          level: l.level,
+          admin_level: Number(l.level.replace(/^ADM/, '')),
+          name: levelNameFor({
+            country: code,
+            source: chosen.source,
+            admin_level: Number(l.level.replace(/^ADM/, '')),
+          }),
+          areas: l.areas_kept ?? l.areas,
+          coverage: l.coverage ?? null,
+          other_areas: l.other_areas ?? null,
+          matched: l.matched ?? null,
+          unmatched: l.unmatched ?? [],
+        })),
+      other: other
+        ? {
+            source: other.source,
+            usable: other.usable === 1,
+            dataset_date: other.dataset_date || null,
+            quality: other.quality || null,
+            note: other.note || null,
+          }
+        : null,
+    };
+  }
+
   private hasTable(name: string): boolean {
     return !!(this.db as Database.Database)
       .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?")
@@ -320,6 +459,7 @@ export class BoundaryService {
     match: MatchMode = 'substring',
     limit = 10,
     minDescendants = 0,
+    country?: string,
   ): Promise<any> {
     if (source === 'geoapify') {
       const apiKey = this.configService.get<string>('GEOAPIFY_API_KEY');
@@ -350,7 +490,7 @@ export class BoundaryService {
     } else if (isOfflineSource(source)) {
       const index = this.offlineIndex(source);
       try {
-        const hits = index.search(query, match, limit, minDescendants);
+        const hits = index.search(query, match, limit, minDescendants, country);
         if (hits.length === 0) {
           return { type: 'FeatureCollection', features: [] };
         }
