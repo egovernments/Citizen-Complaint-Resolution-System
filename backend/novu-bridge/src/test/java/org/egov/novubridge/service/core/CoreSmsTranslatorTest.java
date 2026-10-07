@@ -133,8 +133,8 @@ class CoreSmsTranslatorTest {
     void e164Rules() {
         assertEquals("+254712345678", CoreSmsTranslator.toE164("0712345678", "+254"));
         assertEquals("+254712345678", CoreSmsTranslator.toE164("+254 712 345 678", "+91"));
-        // No code configured: the digits as they are, still behind a '+' (startup warns).
-        assertEquals("+712345678", CoreSmsTranslator.toE164("712-345-678", ""));
+        // No code configured: NOT "+712345678", which is no one's number (field finding).
+        assertNull(CoreSmsTranslator.toE164("712-345-678", ""));
         // A code without '+' is the same code; 00 is the international prefix, not two trunk zeros.
         assertEquals("+254712345678", CoreSmsTranslator.toE164("0712345678", "254"));
         assertEquals("+254712345678", CoreSmsTranslator.toE164("00254712345678", "+254"));
@@ -143,5 +143,44 @@ class CoreSmsTranslatorTest {
         assertEquals("+254712345678", CoreSmsTranslator.toE164("254712345678", "+254"));
         assertEquals("+919415787824", CoreSmsTranslator.toE164("919415787824", "+91"));
         assertEquals("+919123456789", CoreSmsTranslator.toE164("9123456789", "+91"));
+    }
+    // Field finding (dev deployment, 2026-10-07): with NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE blank a
+    // login OTP went out to "+762061507"; and one deployment-wide code is wrong for a deployment
+    // whose workspaces are in several countries. The tenant's own rule decides.
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void theOtpTenantsOwnCountryCodeWins_overTheDeploymentCode() {
+        org.springframework.web.client.RestTemplate mdms = org.mockito.Mockito.mock(org.springframework.web.client.RestTemplate.class);
+        org.mockito.Mockito.when(mdms.exchange(org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.eq(org.springframework.http.HttpMethod.POST),
+                org.mockito.ArgumentMatchers.any(org.springframework.http.HttpEntity.class),
+                org.mockito.ArgumentMatchers.eq(Map.class))).thenAnswer(inv -> {
+            Map<String, Object> body = (Map<String, Object>) ((org.springframework.http.HttpEntity) inv.getArgument(2)).getBody();
+            String tenant = (String) ((Map<String, Object>) body.get("MdmsCriteria")).get("tenantId");
+            List<Object> rows = "iworkspace".equals(tenant)
+                    ? List.of(Map.of("isActive", true, "data", Map.of("countryCode", "+91", "default", true)))
+                    : List.of();
+            return new org.springframework.http.ResponseEntity(Map.of("mdms", rows), org.springframework.http.HttpStatus.OK);
+        });
+        config.setMdmsHost("http://mdms");
+        config.setMdmsSearchPath("/mdms-v2/v2/_search");
+        CoreSmsTranslator tenantAware = new CoreSmsTranslator(config,
+                new org.egov.novubridge.service.TenantPhoneNumbers(mdms, config));
+
+        NotificationEvent india = tenantAware.translate(Map.of("mobileNumber", "9415787824", "message", "x",
+                "tenantId", "iworkspace"), KEY);
+        assertEquals("+919415787824", india.getContact().getPhone());
+        assertEquals("iworkspace:+919415787824", india.getSubscriberId());
+        // A tenant without a rule still gets the deployment's code (+254 here).
+        assertEquals("+254712345678", tenantAware.translate(Map.of("mobileNumber", "0712345678", "message", "x",
+                "tenantId", "kworkspace"), KEY).getContact().getPhone());
+    }
+
+    @Test
+    void noCountryCodeAnywhere_leavesTheNumberNational_neverPlusNational() {
+        config.setCoreSmsCountryCode("");
+        NotificationEvent e = translator.translate(Map.of("mobileNumber", "762061507", "message", "x"), KEY);
+        assertEquals("762061507", e.getContact().getPhone(), "the pipeline then skips it as NB_CONTACT_INVALID");
+        assertFalse(e.getContact().getPhone().startsWith("+"));
     }
 }

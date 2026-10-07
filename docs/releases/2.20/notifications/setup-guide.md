@@ -197,6 +197,12 @@ rated), 42 templates (24 `en_IN` + 18 `hi_IN`), 14 WhatsApp provider templates (
 yours**), 3 channel rows (off, unless `novu_bridge_channels_enabled` listed the channel when the
 tenant was seeded).
 
+The default wording is deliberately neutral, so it reads right in any country and on a
+single-level workspace: no sender signature, no honorific, and only tokens every complaint can
+fill (the assignee is addressed as "Dear {emp_name}", with no office or district line). Add your
+own signature, office name or helpline in the templates. Changing the defaults never rewrites a
+tenant's existing rows: a tenant seeded before keeps its wording until you edit it.
+
 ### 5.1 Events
 
 Events are declared by the producing module (PGR's are generated from its workflow), named
@@ -411,11 +417,30 @@ Checklist:
 | Banner "not been migrated yet" | Tenant still on its 2.12 configuration | `migrate-notifications.py plan --tenant mycity`, review, then `apply` ([migration.md](./migration.md#3-copy-each-tenants-configuration)) |
 | Banner "No notification configuration on this tenant" | Defaults never installed | Fresh install: `./deploy.sh mycity --tags notifications`. A tenant with complaints (the deploy printed `notif-seed — ACTION: this tenant has no notification configuration`): `migrate-notifications.py plan --tenant mycity --adopt-defaults`, then `apply --tenant mycity --adopt-defaults --yes` ([migration.md](./migration.md#3-copy-each-tenants-configuration)) |
 | OTP login stopped | SMS off or its provider broke | [§4](#4-switch-the-channel-on); look for `CORE.SMS.OTP` rows |
+| The deploy prints `notif-seed — ACTION: a self-serve workspace has no notification configuration` | A workspace provisioned before pgr-services seeded notification defaults at signup, or whose step failed | Seed it once with its admin's access token ([§8.6](#86-new-workspaces)) |
 | `{emp_name}` in a message | Placeholder has no value for that event | Use tokens the Events screen lists for it |
 | `SKIPPED / NB_NO_ROUTING` for a complaint in `pg.citya` | The complaint's state root (`pg`) has no configuration — the deploy reported it `none` (`notif-seed — result per state root`), or could not log in there (`WARNING: could not log in at a complaint root`) | Install its defaults (`migrate-notifications.py plan/apply --tenant pg --adopt-defaults`), or seed it by hand ([§8.2](#82-whatsapp-server-side)); then configure it logged in at `pg` |
 
 Not supported: provider failover, retries, per-city providers within a state, resending
 skipped messages. The Novu dashboard (`/novu`) is for debugging only.
+
+### Phone numbers
+
+DIGIT stores a mobile number nationally (`0712345678`); every SMS and WhatsApp message goes out
+in E.164 (`+254712345678`). The bridge completes a number that has no `+` / `00` with, in order:
+
+1. the user's own `countryCode` (egov-user), when the record carries one;
+2. the **tenant's** `common-masters.MobileNumberValidation` rule — the `default: true` one, read
+   at the tenant and then its state root. Workspace signup writes it from the signup country,
+   so a deployment with workspaces in Kenya, India, Ethiopia and Mozambique sends each its own
+   code;
+3. `novu_bridge_core_sms_country_code` (`NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE`), the
+   deployment-wide last resort.
+
+None of them: the message is recorded `SKIPPED / NB_CONTACT_INVALID` and not sent — never as
+`+` followed by the national number, which is someone else's number or nobody's. Fix it by
+adding the tenant's mobile rule (Configurator → Mobile Number Validation) or setting the
+deployment fallback. The same rule applies to login OTPs (`CORE.SMS.*` rows).
 
 ## 8. Deployment reference
 
@@ -440,7 +465,7 @@ Ansible `host_vars/<tenant>.yml` (re-run `./deploy.sh` after changing):
 | `novu_bridge_channels_enabled` | **Fallback only**, for a tenant with no channel rows, e.g. `"SMS"`. The seed turns it into rows for such a tenant | unset = nothing sent |
 | `novu_bridge_receipts_secret` | Enables delivery receipts ([§8.3](#83-delivery-receipts)); a secret | blank = off |
 | `novu_bridge_preference_enabled` / `novu_bridge_preference_fail_open` | Consent gate; allow delivery when the preference service is down | `false` / `true` |
-| `novu_bridge_core_sms_country_code` | Country code for OTP numbers sent without one, e.g. `+254` (`254` works too); a leading trunk `0` is dropped. Blank: numbers go out as given, which gateways will not route, and the bridge warns at startup | blank |
+| `novu_bridge_core_sms_country_code` | Deployment-wide **last resort** country code for a phone number that arrives without one (login OTPs and complaint notifications alike), e.g. `+254` (`254` works too); a leading trunk `0` is dropped. The user's own `countryCode` and then the tenant's `common-masters.MobileNumberValidation` rule come first, so workspaces in different countries each get their own code ([§7](#phone-numbers)). Blank, at a tenant with no rule: the message is not sent (`SKIPPED / NB_CONTACT_INVALID`), and the bridge warns at startup | blank |
 | `twilio_account_sid` / `twilio_auth_token` / `twilio_whatsapp_from` | Bootstrap the `twilio-whatsapp` Novu integration at deploy | — |
 | `novu_bridge_workflow_id_sms` / `_whatsapp` / `_email` | Novu workflow ids | `complaints-*` |
 | `novu_bridge_integration_id_whatsapp` | Only if a second Twilio integration exists | blank |
@@ -517,9 +542,12 @@ SCHEMA_FILE=RAINMAKER-PGR.json NOTIF_SCHEMA_FILE=NOTIFICATIONS.json DATA_DIR=. \
 unset DIGIT_PASSWORD NOTIF_CHANNELS_ALLOWLIST
 ```
 
-Exit 3 means a write was refused with 403: restart `egov-accesscontrol` and run the data phase
-again. Exit 4 (`NOTIF-LOGIN-REFUSED`) means the login itself was refused: that user does
-not exist at `DIGIT_LOGIN_TENANT`, or the password differs; nothing was read or written. Without `NOTIF_CHANNELS_ALLOWLIST` a tenant with no channel rows gets none (it keeps
+No admin with a DIGIT password at that root (a Keycloak-only admin)? Replace `DIGIT_USERNAME` /
+`DIGIT_PASSWORD` / `DIGIT_LOGIN_TENANT` with `DIGIT_ACCESS_TOKEN=<that admin's DIGIT access token>`
+([§8.6](#86-new-workspaces) says where to find it). Exit 3 means a write was refused with 403:
+restart `egov-accesscontrol` and run the data phase again. Exit 4 (`NOTIF-LOGIN-REFUSED`) means
+the login itself was refused: that user does not exist at `DIGIT_LOGIN_TENANT`, the password
+differs, or the access token has expired; nothing was read or written. Without `NOTIF_CHANNELS_ALLOWLIST` a tenant with no channel rows gets none (it keeps
 following the env allowlist). Omitting `NOTIF_SCHEMA_FILE` seeds only the legacy masters.
 Without `NOTIF_TENANT_COMPLAINTS=0` a root with no configuration is left `none` (the seed cannot
 tell it from a live 2.12 tenant): install its defaults after a review with
@@ -567,3 +595,42 @@ curl -sS -X POST https://api.nodemailer.com/user -H 'Content-Type: application/j
 
 Put the returned `host`, `port`, `user`, `pass` into an Email (SMTP) provider, trigger a
 transition, read the mail at ethereal.email. It proves wiring, not deliverability (SPF/DKIM).
+
+### 8.6 New workspaces
+
+A self-serve workspace (signup → provisioning) gets its notification configuration from
+pgr-services, at signup: onboarding step `NOTIFICATION_DEFAULTS`, right after the platform
+baseline. It writes what the deploy writes for a fresh tenant — the notification schemas, the
+access-control rows the **Notifications** screens need, the event catalogue, the default
+templates, WhatsApp provider templates and routing — from the same files
+(`backend/pgr-services/docs/onboarding-workspace-contract.md`). It writes **no channel rows**: the
+workspace follows `novu_bridge_channels_enabled` until its admin switches channels on (§4), and it
+has no provider until one is added (§3).
+
+The deploy does **not** seed workspaces: their root has no `ADMIN`, and the founder signs in
+through Keycloak only, so has no DIGIT password. It lists them instead (`notif-seed — roots`:
+*Self-serve workspaces, NOT seeded by the deploy*, with each one's `NOTIFICATIONS.Routing` row
+count) and prints `notif-seed — ACTION: a self-serve workspace has no notification configuration`
+for one without routing: provisioned before the step existed, or its step failed (pgr-services
+logs `Workspace <T>: notification defaults were NOT fully seeded (<code>)`; the signup still
+completes). Seed such a workspace once with the **DIGIT access token** of one of its admins —
+the founder's: in a signed-in Configurator session it is the `authToken` of any `/mdms-v2`
+request in the browser's network tab. It expires; take a fresh one.
+
+```bash
+cd /opt/digit/notification-seed
+export DIGIT_URL='http://127.0.0.1:18000' NOTIF_TENANT=<workspace>
+read -rs DIGIT_ACCESS_TOKEN && export DIGIT_ACCESS_TOKEN     # paste the token; it is never printed
+NOTIF_SEED_PHASE=access python3 seed-notifications.py
+# printed ACL-CHANGED? then: sudo docker restart egov-accesscontrol, and wait for
+# curl -sf http://127.0.0.1:18000/access/health before the next command
+export NOTIF_CHANNELS_ALLOWLIST="$(sudo docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' novu-bridge | sed -n 's/^NOVU_BRIDGE_CHANNELS_ENABLED=//p')"
+SCHEMA_FILE=RAINMAKER-PGR.json NOTIF_SCHEMA_FILE=NOTIFICATIONS.json DATA_DIR=. NOTIF_ADOPT_DEFAULTS=1 \
+  NOTIF_SEED_PHASE=data python3 seed-notifications.py
+unset DIGIT_ACCESS_TOKEN NOTIF_CHANNELS_ALLOWLIST
+```
+
+`NOTIF_ADOPT_DEFAULTS=1` is right for a workspace even when it has complaints: a workspace never ran
+2.12's hard-coded notifications, so there is no wording of its own to preserve. A refused token is
+exit 4 (`NOTIF-LOGIN-REFUSED`: expired, or not a DIGIT token of a user at that workspace) and
+nothing is read or written. `migrate-notifications.py` takes the same `DIGIT_ACCESS_TOKEN`.

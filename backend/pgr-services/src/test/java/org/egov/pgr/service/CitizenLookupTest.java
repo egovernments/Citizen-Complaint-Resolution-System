@@ -100,4 +100,25 @@ public class CitizenLookupTest {
         assertTrue(calls.stream().noneMatch(call -> call instanceof CreateUserRequest));
         verify(utils, never()).addUserDefaultFields(any(), any(), any());
     }
+    // Field finding (dev deployment, 2026-10-07): the citizen a complaint APPLY was filed for reached
+    // the notification as 762061507, and from ASSIGN on (enriched from egov-user) as +254762061507.
+    @Test
+    public void theAccountsCountryCodeIsCarriedOnTheComplaintsCitizen() {
+        byUserName = List.of(User.builder().uuid("existing").userName(MOBILE).mobileNumber(MOBILE)
+                .countryCode("+254").name("Citizen").build());
+        ServiceRequest request = fileFor("Citizen");
+        assertEquals("+254", request.getService().getCitizen().getCountryCode());
+        assertEquals("the number itself is not rewritten", MOBILE, request.getService().getCitizen().getMobileNumber());
+    }
+
+    @Test
+    public void aCountryCodeTheEmployeeGaveIsKept() {
+        byUserName = List.of(User.builder().uuid("existing").userName(MOBILE).mobileNumber(MOBILE)
+                .countryCode("+254").name("Citizen").build());
+        ServiceRequest request = ServiceRequest.builder().requestInfo(info).service(Service.builder()
+                .tenantId("test").citizen(User.builder().mobileNumber(MOBILE).countryCode("+91").name("C").build())
+                .build()).build();
+        new UserService(utils, config).callUserService(request);
+        assertEquals("+91", request.getService().getCitizen().getCountryCode());
+    }
 }

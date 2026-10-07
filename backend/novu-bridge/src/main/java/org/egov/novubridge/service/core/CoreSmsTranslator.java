@@ -1,10 +1,13 @@
 package org.egov.novubridge.service.core;
 
 import org.egov.novubridge.config.NovuBridgeConfiguration;
+import org.egov.novubridge.service.TenantPhoneNumbers;
+import org.egov.novubridge.util.PhoneNumbers;
 import org.egov.novubridge.util.PiiMask;
 import org.egov.novubridge.web.models.NotificationEvent;
 import org.egov.novubridge.web.models.Contact;
 import org.egov.tracer.model.CustomException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -36,13 +39,18 @@ public class CoreSmsTranslator {
     /** What a DLQ copy masks: phone numbers and the ids that can embed one. */
     private static final Set<String> DLQ_MASKED_KEYS = Set.of("mobileNumber", "mobile", "phone", "to", "email",
             "subscriberId", "transactionId");
-    /** Shortest national mobile number read as "already carries the country code" (KE/MZ 9, IN 10). */
-    private static final int MIN_NATIONAL_DIGITS = 9;
-
     private final NovuBridgeConfiguration config;
+    private final TenantPhoneNumbers phoneNumbers;
 
+    /** Numbers are completed with the deployment's NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE only. */
     public CoreSmsTranslator(NovuBridgeConfiguration config) {
+        this(config, new TenantPhoneNumbers(config));
+    }
+
+    @Autowired
+    public CoreSmsTranslator(NovuBridgeConfiguration config, TenantPhoneNumbers phoneNumbers) {
         this.config = config;
+        this.phoneNumbers = phoneNumbers;
     }
 
     /**
@@ -116,7 +124,11 @@ public class CoreSmsTranslator {
                     "SMSRequest carries no tenantId and novu.bridge.core.sms.default.tenant is blank");
         }
         String category = first(sms, List.of("category"));
-        String phone = toE164(mobile, config.getCoreSmsCountryCode());
+        // user-otp sends the national number: complete it with THIS tenant's country code (its
+        // MobileNumberValidation rule, else the deployment's). Unknown: keep it as given, without a
+        // '+', and the pipeline records SKIPPED / NB_CONTACT_INVALID instead of sending it.
+        String e164 = phoneNumbers.toE164(mobile, tenant.trim());
+        String phone = e164 != null ? e164 : mobile.trim();
         String id = UUID.nameUUIDFromBytes((EVENT_TYPE + ":" + recordKey).getBytes(StandardCharsets.UTF_8)).toString();
         Map<String, Object> data = new LinkedHashMap<>();
         if (StringUtils.hasText(category)) data.put("category", category);
@@ -181,23 +193,11 @@ public class CoreSmsTranslator {
     }
 
     /**
-     * Always {@code +<digits>}. {@code +…} and {@code 00…} (the international prefix) are already
-     * international. Otherwise the configured code ({@code +254}, {@code 254} and {@code 00254}
-     * all mean 254) is prepended, replacing ONE national trunk {@code 0}, unless the digits already
-     * start with it and leave at least {@link #MIN_NATIONAL_DIGITS} after it: user-otp sends
-     * national numbers, and India's {@code 9123456789} is national although it starts with 91.
-     * With no code configured the digits go out as they are, behind a {@code +} (startup warns).
+     * {@link PhoneNumbers#toE164}: {@code +<digits>}, or null for a national number when no country
+     * code is given. Never a bare {@code +} in front of a national number.
      */
     static String toE164(String mobile, String countryCode) {
-        String m = mobile.trim();
-        String digits = m.replaceAll("\\D", "");
-        if (m.startsWith("+")) return "+" + digits;
-        if (digits.startsWith("00")) return "+" + digits.substring(2);
-        String cc = countryCode == null ? "" : countryCode.replaceAll("\\D", "").replaceFirst("^0+", "");
-        if (cc.isEmpty()) return "+" + digits;
-        if (digits.startsWith("0")) return "+" + cc + digits.substring(1);
-        if (digits.startsWith(cc) && digits.length() - cc.length() >= MIN_NATIONAL_DIGITS) return "+" + digits;
-        return "+" + cc + digits;
+        return PhoneNumbers.toE164(mobile, countryCode);
     }
 
     private static String first(Map<String, Object> m, List<String> keys) {

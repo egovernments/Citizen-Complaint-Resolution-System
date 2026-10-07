@@ -2980,6 +2980,8 @@ services:
       # variable in .env: it resolved to `pg` on every box, so those OTPs were checked
       # against a tenant with no SMS policy and dropped as SKIPPED / NB_NO_PROVIDER.
       NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT: pg
+      # Last-resort country code for a phone with none; the user's own code and the tenant's
+      # common-masters.MobileNumberValidation rule come first (one deployment, several countries).
       NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE: ${NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE:-}
       NOVU_BRIDGE_KAFKA_DLQ_TOPIC: novu-bridge.dlq
       NOVU_BRIDGE_DEFAULT_LOCALE: en_IN

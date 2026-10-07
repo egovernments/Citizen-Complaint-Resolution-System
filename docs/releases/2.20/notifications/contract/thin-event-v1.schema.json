@@ -186,7 +186,7 @@
         "phone": {
           "type": ["string", "null"],
           "x-pii": true,
-          "description": "E.164 with country code. Required in practice for SMS and WHATSAPP when there is no account to hydrate it from.",
+          "description": "E.164 with country code. Required in practice for SMS and WHATSAPP when there is no account to hydrate it from. A national number (no + or 00) is completed with the tenant's country code (common-masters.MobileNumberValidation, else NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE); with neither the message is SKIPPED / NB_CONTACT_INVALID.",
           "examples": ["+254712345678"]
         },
         "email": {
