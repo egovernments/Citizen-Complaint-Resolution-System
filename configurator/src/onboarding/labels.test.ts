@@ -40,8 +40,9 @@ function sources(dir: string): string[] {
 function staticCalls(): Map<string, string> {
   const found = new Map<string, string>();
   const call = /\b(?:t|MessageError)\(\s*'([^']+)'\s*,\s*'((?:[^'\\]|\\.)*)'/g;
-  // memberActions sits under identity but throws what the Employees step shows.
-  const extra = ['src/App.tsx', 'src/identity/memberActions.ts'].map((file) => path.join(CONFIGURATOR, file));
+  // memberActions sits under identity but throws what the Employees step shows; SignupPage is the founder's
+  // provisioning screen.
+  const extra = ['src/App.tsx', 'src/identity/memberActions.ts', 'src/pages/SignupPage.tsx'].map((file) => path.join(CONFIGURATOR, file));
   for (const file of [...sources(path.join(CONFIGURATOR, 'src/onboarding')), ...extra]) {
     for (const [, key, raw] of readFileSync(file, 'utf8').matchAll(call)) {
       const english = raw.replace(/\\n/g, '\n').replace(/\\'/g, "'");

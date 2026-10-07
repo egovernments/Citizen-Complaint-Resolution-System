@@ -555,7 +555,7 @@ function App() {
           <Route path="/login" element={<LoginPage />} />
           {/* Self-serve onboarding (CCRS#1999). Public: the whole point is that
               nobody has an account yet, so it sits outside the auth gate. */}
-          <Route path="/signup" element={<SignupPage />} />
+          <Route path="/signup" element={<OnboardingI18n><SignupPage /></OnboardingI18n>} />
 
           {/* Onboarding. With the gate on, an account stays here until every
               step is done; with it off, the mode switch decides as before. */}
