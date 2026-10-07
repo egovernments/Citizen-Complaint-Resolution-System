@@ -153,6 +153,15 @@ paths:
         `transactionId`, any phone or email quoted in `lastErrorMessage`, and the whole
         `providerResponse` tree. Stored rows are untouched.
 
+        One masking rule, the same for every field: an **id stays an id** (a canonical
+        `8-4-4-4-12` hex UUID is never masked, alone or embedded, whatever digits it holds);
+        an **email** keeps the first character and the domain (`c***@example.org`); a
+        **phone** is every run of 7+ digits outside a UUID, cut to `***` and its last three
+        digits (`+254712345678` → `+***678`, `ke:+254712345678` → `ke:+***678`). So a
+        recipient addressed by user uuid shows the uuid, and one addressed by phone (no
+        account, or a login OTP) shows the masked phone. The Configurator's Logs screen
+        applies the same rule again (for older bridges).
+
         Statuses and their transitions are described in `outputs.md`.
       parameters:
         - { name: tenantId, in: query, required: true, schema: { type: string },
@@ -935,7 +944,7 @@ components:
         tenantId: { type: string }
         channel: { type: string, description: "`SMS` | `WHATSAPP` | `EMAIL`, or `NONE` for a decision taken before a channel existed." }
         sourcePath: { $ref: "#/components/schemas/DispatchSourcePath" }
-        recipientValue: { type: string, description: "Masked. `none` on a channel-less row." }
+        recipientValue: { type: string, description: "The subscriber: a user uuid (shown as it is: an id, not PII), or a phone / `tenant:phone` / email, masked (see the masking rule on `GET /logs`). `none` on a channel-less row." }
         templateKey: { type: string, nullable: true }
         templateVersion: { type: string, nullable: true }
         status: { $ref: "#/components/schemas/DispatchStatus" }

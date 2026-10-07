@@ -74,7 +74,7 @@ sent again, and no phone number is in it.
 | `tenant_id` | varchar(256) NOT NULL | |
 | `channel` | varchar(64) NOT NULL | `UNKNOWN` on an envelope rejection without one; `NONE` on channel-less rows |
 | `source_path` | varchar(32) NOT NULL, default `PRERENDERED` | `PRERENDERED` \| `RESOLVED`; filter `sourcePath` |
-| `recipient_value` | varchar(256) NOT NULL | `subscriberId` or `none`; stored raw, masked on read; unique key part |
+| `recipient_value` | varchar(256) NOT NULL | `subscriberId` or `none`; stored raw, masked on read (a user uuid is an id and is shown as it is; a phone becomes `***` + its last 3 digits, an email `c***@domain` — the rule on `GET /logs` in [openapi.yaml](./openapi.yaml)); unique key part |
 | `template_key` | varchar(256) | `templateKey`, else `<audience>.<action>.<toState>.<channel>.<locale>`, else `eventName` |
 | `template_version` | varchar(64) | reserved |
 | `status` | varchar(32) NOT NULL | see above |

@@ -353,7 +353,9 @@ flagged as a test and hidden unless the **Test sends** filter is *Show test send
 the provider and credentials only — not routing, templates or the channel switch.
 
 **Logs** filters: **Complaint #**, **Channel**, **Status**, **Produced by**, **Test sends**.
-Recipients are masked server-side. There are no retries: a failed or skipped message is one
+Recipients are masked server-side, with one rule: a user uuid is an id and is shown as it is;
+a phone keeps its last three digits (`+***678`), an email its first character and domain
+(`c***@example.org`). There are no retries: a failed or skipped message is one
 row, and re-enabling a channel does not resend what was skipped.
 
 | Status | Meaning |
@@ -451,7 +453,7 @@ Ansible `host_vars/<tenant>.yml` (re-run `./deploy.sh` after changing):
 | Setting | Meaning | Default |
 |---|---|---|
 | `enable_novu` | Starts the notification stack | `false` |
-| `seed_notifications` | Create the notification schemas and access-control rows, channel rows for a tenant with none, and the shipped defaults on a fresh install (no configuration, no complaint ever filed). Never copies legacy rows — that is [migrate-notifications.py](./migration.md#3-copy-each-tenants-configuration) | `enable_novu` |
+| `seed_notifications` | Create the notification schemas and access-control rows, channel rows for a tenant with none, and the shipped defaults on a fresh install (no configuration, no complaint ever filed), at `state_root` and every state root with complaints — except self-serve workspaces, which pgr-services seeds at signup ([§8.6](#86-new-workspaces)). Never copies legacy rows — that is [migrate-notifications.py](./migration.md#3-copy-each-tenants-configuration) | `enable_novu` |
 | `notifications_adopt_defaults` | Also seed the shipped defaults into a state root with no configuration that already has complaints. Only for roots whose complaints are demo data (a restored dump); otherwise use `migrate-notifications.py plan/apply --adopt-defaults`. `true` = every root the deploy seeds; a list (`[pg]`) = those roots only. Never touches a root that has configuration | `false` |
 | `notifications_seed_exclude` | Regex of state roots the seed skips (and lists) even though they have complaints. The seed covers `state_root` and **every state root with complaints** — novu-bridge reads a complaint's configuration at its own root (#1943) | `(?i)^(PW_\|pwt)` (test-suite junk) |
 | `notif_seed_user` / `notif_seed_pass` | The admin the seed logs in as, **at each root** it seeds. At a root other than `state_root`, any failure — the user does not exist there, a write refused with 403, MDMS unreadable — is a warning with the command that finishes it; only `state_root` fails the deploy | `ADMIN` / `eGov@123` |
@@ -481,7 +483,7 @@ set them in host_vars, not in `.env`); on Helm set them in
 |---|---|---|
 | `NOVU_BRIDGE_RECEIPTS_SECRET` | Enables delivery receipts ([§8.3](#83-delivery-receipts)) | blank = off |
 | `NOVU_BRIDGE_PREFERENCE_ENABLED` / `NOVU_BRIDGE_PREFERENCE_FAIL_OPEN` | Consent gate; allow delivery when the preference service is down | Compose `false` / `true` |
-| `NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE` | Country code for OTP numbers sent without one (see `novu_bridge_core_sms_country_code`) | blank |
+| `NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE` | Last-resort country code for numbers sent without one, after the user's and the tenant's (see `novu_bridge_core_sms_country_code`) | blank |
 | `NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT` | Tenant of a login OTP that carries none, **and** the state that owns the providers. Compose: the deploy rewrites `pg` to `state_root` and fails if the running bridge has anything else. Helm: egov-config `state-level-tenant-id` | `state_root` |
 | `NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS` | Extra states whose admins may manage providers (from `novu_bridge_provider_admin_tenants`; Helm `provider-admin-tenants`) | blank |
 | `NOVU_BRIDGE_DIGIT_WORKER_PROVIDERS` | Whether novu-worker loads DIGIT's SMSCountry / Ozeki / Jasmin providers; `false` hides and refuses them. Compose always mounts them, so it is fixed at `true` there. Helm: `global.novuWorkerDigitProviders` in `env.yaml` sets it **and** the worker mount (`worker.digitProviders.enabled`) together | `true` |
