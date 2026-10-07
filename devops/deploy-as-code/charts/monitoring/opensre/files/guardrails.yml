@@ -13,6 +13,8 @@
 #     would export working credentials.
 #   - DIGIT request and response bodies carry citizen mobile numbers, usernames
 #     (usually the mobile number) and email addresses.
+#   - Deploy and service logs can carry OpenBao tokens, Novu API keys,
+#     credentials inside database URLs, and OTP codes.
 #
 # Not covered, because no pattern can match them: names and free-text complaint
 # descriptions. The sweep prompt keeps the agent on infrastructure, but a log
@@ -34,16 +36,32 @@ rules:
       - '(?:access|refresh|auth|id)[_-]?token["'']?\s*[=:]\s*["'']?[^&"''\s,}]+'
 
   - name: authorization_header
-    description: Bearer and Basic credentials
+    description: Bearer, Basic, ApiKey (Novu) and Token credentials
     action: redact
     patterns:
-      - 'authorization["'']?\s*[:=]\s*["'']?(?:bearer|basic)\s+[A-Za-z0-9._~+/=-]+'
+      - 'authorization["'']?\s*[:=]\s*["'']?(?:bearer|basic|apikey|token|digest)\s+[A-Za-z0-9._~+/=-]+'
 
   - name: secret_fields
     description: password, secret and API-key fields
     action: redact
     patterns:
-      - '(?:password|passwd|secret|api[_-]?key|apikey|client_secret)["'']?\s*[=:]\s*["'']?[^&"''\s,}]+'
+      # A quoted value is masked whole, so a password with a space or comma in
+      # it does not leak its tail.
+      - '(?:password|passwd|secret|api[_-]?key|apikey|client_secret)["'']?\s*[=:]\s*(?:"[^"]*"|''[^'']*''|[^&"''\s,}]+)'
+
+  - name: vault_token
+    description: OpenBao/Vault tokens, in the X-Vault-Token header or bare
+    action: redact
+    patterns:
+      - 'x-vault-token["'']?\s*[:=]\s*["'']?[^&"''\s,}]+'
+      - '\bhv[sbr]\.[A-Za-z0-9_-]{20,}'
+      - '\b[sbr]\.[A-Za-z0-9]{24}\b'
+
+  - name: url_credentials
+    description: user:password@ in connection strings and URLs (postgresql://, redis://, amqp://)
+    action: redact
+    patterns:
+      - '\b[a-z][a-z0-9+.-]*://[^/\s:@]+:[^/\s@]+@'
 
   - name: provider_keys
     description: Anthropic and other sk- style API keys
@@ -55,7 +73,8 @@ rules:
     description: DIGIT fields that hold a citizen's phone, username or email
     action: redact
     patterns:
-      - '(?:mobile(?:_?number|no)?|phone(?:_?number)?|recipient(?:_value)?|username|emailid)["'']?\s*[=:]\s*["'']?[^&"''\s,}]+'
+      # A quoted value is masked whole: "+258 84 123 4567" has spaces in it.
+      - '(?:mobile(?:_?number|no)?|phone(?:_?number)?|recipient(?:_value)?|username|emailid)["'']?\s*[=:]\s*(?:"[^"]*"|''[^'']*''|[^&"''\s,}]+)'
 
   - name: email
     description: email addresses
@@ -64,8 +83,24 @@ rules:
       - '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'
 
   - name: phone_number
-    description: Kenyan, Mozambican and Indian numbers with country code, and Kenyan local format
+    description: Kenyan, Mozambican and Indian mobile numbers, with or without country code
+    action: redact
+    # Local formats: Kenya 07xx/01xx (10 digits), Mozambique 82-87 (9 digits,
+    # how maputo logs them), India 6-9 (10 digits). Spaces or dashes may sit
+    # between digit groups after a +code. A 9- or 10-digit counter that happens
+    # to look like a mobile number (a Kafka offset, a byte count) is masked too;
+    # that costs the agent the value, never a citizen their number.
+    patterns:
+      - '\+(?:254|258)(?:[ -]?\d){9}\b'
+      - '\+91(?:[ -]?\d){10}\b'
+      - '(?<!\+)\b(?:254|258)\d{9}\b'
+      - '(?<!\+)\b91\d{10}\b'
+      - '\b0[17]\d{8}\b'
+      - '\b8[2-7]\d{7}\b'
+      - '\b[6-9]\d{9}\b'
+
+  - name: otp_code
+    description: one-time passwords in notification and OTP-service logs
     action: redact
     patterns:
-      - '\+?(?:254|258|91)[ -]?\d{9}\b'
-      - '\b0[17]\d{8}\b'
+      - '\botp\D{0,20}?\d{4,8}\b'

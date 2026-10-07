@@ -123,11 +123,14 @@ including log lines and metric values. Before every model call, OpenSRE applies
 
 - JWTs, and `access_token` / `authToken` / `Authorization` values. Kong's auth call puts the live
   session token in a query string that the proxy's access log carries into Loki.
-- Password, secret and API-key fields, and `sk-` style keys.
-- Citizen contact details: mobile/phone/username/email fields, email addresses, and Kenyan,
-  Mozambican and Indian phone numbers.
+- Password, secret and API-key fields, `sk-` style keys, Novu `ApiKey` headers, OpenBao/Vault
+  tokens, and the `user:password@` part of database and other URLs.
+- Citizen contact details: mobile/phone/username/email fields, email addresses, OTP codes, and
+  Kenyan, Mozambican and Indian mobile numbers, with or without the country code.
 
 **Not masked:** names and free-text complaint descriptions, which no pattern can reliably match.
+The phone rules also mask counters that look like a local mobile number (for example a 9-digit
+offset starting 82–87), so the agent can lose the odd metric value.
 Check a new rule inside the container before relying on it:
 
 ```bash

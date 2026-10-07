@@ -73,8 +73,17 @@ note() { # note <kind> <message>
 
 # Gatus endpoints failing now AND on at least 2 of their last 3 checks, so one
 # dropped probe or a rolling restart does not start an investigation.
+#
+# curl runs on its own, not piped into jq: this is /bin/sh (no pipefail), so a
+# pipeline's status is jq's, and jq exits 0 on empty input. Piped, an
+# unreachable Gatus looked like a sweep with no checks at all, and every sweep
+# then started a model call with an empty list of failing checks. The empty
+# check is explicit too: Debian's jq 1.6 exits 0 on empty input even with -e.
 failing_checks() {
-  curl -fsS --max-time 20 "$GATUS_URL/api/v1/endpoints/statuses" | jq -c '
+  statuses=$(curl -fsS --max-time 20 "$GATUS_URL/api/v1/endpoints/statuses") || return 1
+  [ -n "$statuses" ] || return 1
+  printf '%s' "$statuses" | jq -ce '
+    if type != "array" then error("not a Gatus status list") else . end |
     [ .[]
       | (.results // []) as $r
       | select(($r | length) > 0
@@ -88,8 +97,8 @@ failing_checks() {
 
 sweep() {
   write_incluster_kubeconfig
-  if ! failing=$(failing_checks); then
-    note error "Gatus is unreachable at $GATUS_URL; skipping this sweep"
+  if ! failing=$(failing_checks) || [ -z "$failing" ]; then
+    note error "Gatus is unreachable at $GATUS_URL or returned no status list; skipping this sweep"
     return
   fi
   if [ "$(printf '%s' "$failing" | jq length)" -eq 0 ]; then
