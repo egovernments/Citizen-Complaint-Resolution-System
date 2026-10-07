@@ -19,11 +19,15 @@ The policy is the singleton `code: DEFAULT` record in MDMS v2
 `RAINMAKER-PGR.EscalationConfig`. Resolution is complete city record, then
 complete state record, then service defaults. `eligibleStatuses` controls which
 states automation scans; the shipped value is the assigned resolver state
-`PENDINGATLME`. Every configured state still requires a concrete workflow
-assignee. Percentage ladders are cumulative from complaint creation and use the exact leaf
-`ComplaintHierarchy.slaHours`; finite absolute-millisecond ladders are the
-fallback. Manual escalation consumes a rung, so automation next evaluates the
-following cumulative threshold. `ASSIGN`, `REASSIGN` and `REOPEN` do not reset
+`PENDINGATLME`. It is the only setting needed to make a state escalate: on each
+scan pgr-services gives every listed state of the tenant's PGR workflow an
+`ESCALATE` action authorizing `SYSTEM` (a self-loop carrying the roles that
+already act on that state, so its holder can also escalate by hand), adding it
+when missing and never removing one. A listed state still needs a concrete
+workflow assignee, so an unassigned `PENDINGFORASSIGNMENT` complaint cannot
+escalate. Ladders are cumulative from complaint creation; percentage ladders use
+the exact leaf `ComplaintHierarchy.slaHours`. Manual escalation consumes a rung,
+so automation next evaluates the following cumulative threshold. `ASSIGN`, `REASSIGN` and `REOPEN` do not reset
 the clock or the escalation level; a reopened complaint keeps the rungs it has
 already consumed.
 
