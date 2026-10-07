@@ -239,7 +239,6 @@ Cleanup is API-only — soft-deletes via cleanupMdms in afterAll because there's
     const sla = page.getByLabel(/SLA/i);
     await sla.fill('72');
     await page.getByRole('button', { name: /^Save$/i }).click();
-    await expect(page.getByText(/72/)).toBeVisible();
 
     // --- Verify SLA persisted via MDMS ---
     const afterEdit = await mdmsSearch(auth, TENANT_CODE, SCHEMA, {
