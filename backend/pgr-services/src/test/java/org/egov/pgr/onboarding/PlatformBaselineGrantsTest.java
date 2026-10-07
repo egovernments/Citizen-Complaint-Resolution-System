@@ -78,8 +78,10 @@ public class PlatformBaselineGrantsTest {
     private static final Pattern PATH = Pattern.compile("['\"`](/(?:user|mdms-v2|egov-[a-z-]+|boundary-service|localization|filestore|pgr-services|access|inbox)(?:/[A-Za-z0-9_.-]+)+)['\"`]");
 
     @Test public void everyConfiguratorCallIsOpenAtKongOrGrantedToAFounderRole() throws Exception {
-        Path repo = Paths.get("").toAbsolutePath().getParent().getParent();
-        org.junit.Assume.assumeTrue("configurator sources not present", Files.isDirectory(repo.resolve("configurator/src")));
+        // In the image build (build/maven/Dockerfile) the module sits at /app, which has no grandparent.
+        Path module = Paths.get("").toAbsolutePath();
+        Path repo = module.getParent() == null ? null : module.getParent().getParent();
+        org.junit.Assume.assumeTrue("configurator sources not present", repo != null && Files.isDirectory(repo.resolve("configurator/src")));
         String kong = Files.readString(repo.resolve("local-setup/kong/kong.yml"));
         Set<String> open = new HashSet<>(); Matcher m = Pattern.compile("\\[\"(/[^\"]+)\"\\]=true").matcher(kong); while (m.find()) open.add(m.group(1));
         Matcher ex = Pattern.compile("p == \"(/[^\"]+)\"").matcher(kong.substring(kong.indexOf("local RBAC_EXEMPT"), kong.indexOf("local RBAC_EXEMPT") + 4000)); while (ex.find()) open.add(ex.group(1));
