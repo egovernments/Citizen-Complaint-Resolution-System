@@ -41,6 +41,11 @@ public class OnboardingSteps {
     @org.springframework.beans.factory.annotation.Value("${pgr.onboarding.mdms-visibility-waits-ms:150,300,600,1200}")
     void setVisibilityWaitsMs(long[] waits) { this.visibilityWaitsMs = waits == null ? new long[0] : waits.clone(); }
 
+    /** Null only for directly constructed instances (tests): the step is then a no-op. */
+    private NotificationDefaultsStep notificationDefaults;
+    @Autowired(required = false)
+    void setNotificationDefaults(NotificationDefaultsStep step) { this.notificationDefaults = step; }
+
     /** Reads until {@code visible} holds or the configured pauses run out; returns the last read. */
     private JsonNode awaitVisible(java.util.function.Supplier<JsonNode> read, java.util.function.Predicate<JsonNode> visible) {
         JsonNode result = read.get();
@@ -62,6 +67,7 @@ public class OnboardingSteps {
         switch (step) {
             case "TENANT_FOUNDATION" -> foundation(signup, operation, progress, scope);
             case "PLATFORM_BASELINE" -> baseline(signup, progress, scope);
+            case NotificationDefaultsStep.STEP -> { if (notificationDefaults != null) notificationDefaults.run(this, signup, progress, scope); }
             case "FOUNDER_HRMS" -> founder(signup, operation, progress, scope);
             case "ORGANIZATION" -> {
                 operation.setOrganizationEnsureStarted(true);

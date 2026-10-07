@@ -15,7 +15,7 @@ Upgrading a 2.12 deployment? Read [migration.md](./migration.md) first.
 | [5](#5-configure-what-is-sent) | Review events, routing, templates; validate | Configure |
 | [6](#6-send-a-test-and-read-the-logs) | Send a test, read the result | Providers, Logs |
 | [7](#7-going-live-and-troubleshooting) | Checklist and troubleshooting | — |
-| [8](#8-deployment-reference) | Deployment settings, receipts, per-channel server steps | Server |
+| [8](#8-deployment-reference) | Deployment settings, receipts, per-channel server steps, new workspaces | Server |
 
 ## 1. Before you start
 

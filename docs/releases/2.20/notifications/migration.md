@@ -183,6 +183,14 @@ python3 migrate-notifications.py apply --tenant mycity --yes --report apply-myci
 
 ### Who logs in
 
+An admin with no DIGIT password — a self-serve workspace's founder signs in through Keycloak
+only — authenticates with a token instead: `export DIGIT_ACCESS_TOKEN=<that admin's DIGIT access
+token>` (where to find it: [setup-guide §8.6](./setup-guide.md#86-new-workspaces)), and
+`DIGIT_USERNAME` / `DIGIT_PASSWORD` are then ignored. The token is checked with one read before
+anything else (`REFUSED: the supplied DIGIT_ACCESS_TOKEN was refused (HTTP 401)` when it has
+expired) and never printed. Keep `DIGIT_LOGIN_TENANT` (or `--login-tenant`) at that admin's root:
+it still decides who may create a provider, below.
+
 Log in **at the root you migrate** (`DIGIT_LOGIN_TENANT=<root>`, default: the first root): its
 MDMS rows are written with that admin's roles, and novu-bridge previews a tenant's events
 (`_resolve`, `_dry-run` without `send`) for an admin of the event tenant's own state root. That is
