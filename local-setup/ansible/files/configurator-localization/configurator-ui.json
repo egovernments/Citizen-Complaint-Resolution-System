@@ -5610,6 +5610,36 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.providers.account_own",
+    "message": "This workspace has its own notification account. The providers below are yours alone: add your own SMS, WhatsApp and email accounts here.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.providers.account_own_readonly",
+    "message": "This workspace has its own notification account. Managing its providers needs an admin role in this workspace.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.providers.account_provisioning",
+    "message": "This workspace's notification account is being set up. Reload in a minute.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.providers.account_missing",
+    "message": "This workspace does not have its own notification account yet, so it cannot add providers. Ask the platform operator to set one up.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.providers.admin_only_workspace",
+    "message": "Read-only: adding, changing or testing a provider needs the SUPERUSER, MDMS_ADMIN or ACCOUNT_ADMIN role in this workspace.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.notification_validate.loading",
     "message": "Loading the notification configuration…",
     "module": "configurator-ui",
