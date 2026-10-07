@@ -103,6 +103,11 @@ that file by hand, apply it with `sudo docker exec kong-gateway kong reload`.
 **Notifications → Providers → Add Provider**: pick the type, give a name, fill the
 credential fields, **Create Provider**.
 
+A workspace with its own notification account ([tenant-accounts.md](./tenant-accounts.md); a
+banner on the page says so) adds providers to that account, and its own admins manage them.
+Everywhere else the providers are the deployment's shared ones, managed by the admins of the
+state that owns them.
+
 | Type | Channel | Fields |
 |---|---|---|
 | Twilio SMS | SMS | Account SID (`AC…`), Auth token, From number (E.164, e.g. `+14155238886`) |
@@ -129,7 +134,7 @@ Row actions on the Providers list:
 | Action | What it does |
 |---|---|
 | **Check status** | Confirms the integration exists and is enabled. Proves **no** credential for any type. |
-| **Test** | Sends one real message (see [§6](#6-send-a-test-and-read-the-logs)). The only credential proof. Admin role at the state tenant. |
+| **Test** | Sends one real message (see [§6](#6-send-a-test-and-read-the-logs)). The only credential proof. Admin role at the state tenant, or at the workspace when it has its own account. |
 | **Rotate credentials** | Asks for every field again — the store overwrites, it does not merge. |
 | **Rename** | Display name only. |
 | **Disable** / **Enable** | Switches the Novu integration off/on. **Disable** is guarded like **Delete**. With `NOVU_BRIDGE_DIGIT_WORKER_PROVIDERS=false`, an SMSCountry / Ozeki / Jasmin provider cannot be re-enabled, rotated or tested (`400 NB_PROVIDER_TYPE_UNAVAILABLE`); disabling, renaming and deleting still work. |
@@ -433,7 +438,10 @@ Ansible `host_vars/<tenant>.yml` (re-run `./deploy.sh` after changing):
 | `novu_bridge_provider_admin_tenants` | Extra state tenants whose admins may manage providers, besides `state_root` (#1999 multi-root boxes) | blank |
 | `enable_otp_services` | Real OTP login; requires `enable_novu` | `false` |
 | `novu_bridge_proxy_allowed_roles` / `novu_bridge_proxy_admin_roles` | The two role tiers ([§1](#1-before-you-start)) | see §1 |
-| `novu_admin_email` / `novu_admin_password` | Novu's first account | — |
+| `novu_admin_email` / `novu_admin_password` | Novu's first account, which novu-bridge also signs in as to manage tenant organizations. With `novu_tenant_accounts` on, leave the password unset: the deploy keeps one in OpenBao and refuses the published default | — |
+| `novu_tenant_accounts` | Each signup workspace gets its own Novu organization and manages its own providers ([tenant-accounts.md](./tenant-accounts.md)) | `enable_novu and enable_keycloak` |
+| `novu_admin_password_legacy` | The Novu admin's password before tenant accounts were turned on; the deploy changes it to the OpenBao one | `Digit@12345` |
+| `novu_tenant_accounts_backfill` | Existing tenants to move onto their own organization on this deploy | `[]` |
 | `novu_api_key` | Leave unset; the deploy mints it | — |
 | `notification_stack_tag` | Image tag of pgr-services, pgr-services-db, novu-bridge and novu-bridge-db — one build ([migration.md](./migration.md#1-take-all-four-images-from-one-build)). Pin a `develop-<sha8>` or release tag; the deploy warns while it is rolling | `nightly-develop` (rolling; a stopgap until the release pins one) |
 | `verify_tenant_masters` / `repair_tenant_masters` | Non-`pg` state roots: compare the tenant's access-control rows with `pg`'s and report the gap / also copy the missing rows. Copying is opt-in: a gap can be deliberate, and a copied grant cannot be removed | `true` / `false` |
@@ -459,6 +467,8 @@ set them in host_vars, not in `.env`); on Helm set them in
 | `NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE` | Country code for OTP numbers sent without one (see `novu_bridge_core_sms_country_code`) | blank |
 | `NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT` | Tenant of a login OTP that carries none, **and** the state that owns the providers. Compose: the deploy rewrites `pg` to `state_root` and fails if the running bridge has anything else. Helm: egov-config `state-level-tenant-id` | `state_root` |
 | `NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS` | Extra states whose admins may manage providers (from `novu_bridge_provider_admin_tenants`; Helm `provider-admin-tenants`) | blank |
+| `NOVU_BRIDGE_TENANT_ACCOUNTS_ENABLED` | Per-tenant Novu organizations ([tenant-accounts.md](./tenant-accounts.md)); from `novu_tenant_accounts` (Helm `tenant-accounts.enabled`) | `false` |
+| `NOVU_BRIDGE_NOVU_ADMIN_EMAIL` / `_PASSWORD`, `NOVU_BRIDGE_TENANT_KEY_ENCRYPTION_KEY` (`_PREVIOUS`), `NOVU_BRIDGE_INTERNAL_ADMIN_TOKEN`, `NOVU_BRIDGE_INTERNAL_SEND_TOKEN` | Its secrets: from OpenBao on Compose, from the `novu-bridge-tenant-accounts` Secret on Helm. Never in host_vars | blank |
 | `NOVU_BRIDGE_DIGIT_WORKER_PROVIDERS` | Whether novu-worker loads DIGIT's SMSCountry / Ozeki / Jasmin providers; `false` hides and refuses them. Compose always mounts them, so it is fixed at `true` there. Helm: `global.novuWorkerDigitProviders` in `env.yaml` sets it **and** the worker mount (`worker.digitProviders.enabled`) together | `true` |
 
 Any other property in `backend/novu-bridge/src/main/resources/application.properties` must be

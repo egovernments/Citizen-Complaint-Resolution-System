@@ -7,6 +7,7 @@ text, from the `NOTIFICATIONS.*` MDMS masters that operators edit in the Configu
 | You want to | Read |
 |---|---|
 | Set notifications up and run them (operators, deployers) | [setup-guide.md](./setup-guide.md) |
+| Give each workspace its own Novu account and provider credentials, send citizen sign-in codes | [tenant-accounts.md](./tenant-accounts.md) |
 | Upgrade a 2.12 deployment | [migration.md](./migration.md) |
 | Connect a module, swap the DIGIT seams (developers) | [developer-guide.md](./developer-guide.md) |
 | Understand the providers, DIGIT's worker providers, or add a provider | [providers.md](./providers.md) — [How providers work](./providers.md#how-providers-work), [DIGIT's worker providers](./providers.md#digits-worker-providers), [Adding a provider](./providers.md#adding-a-provider) |

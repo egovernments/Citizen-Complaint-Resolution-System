@@ -4,7 +4,7 @@ This page covers how novu-bridge reaches SMS, WhatsApp and email gateways, the D
 
 ## How providers work
 
-Every provider an operator adds is a **Novu integration**, and novu-bridge never stores credentials. `POST /novu-adapter/v1/providers` validates the credentials against the catalog, copies them into Novu's credential keys (`ProviderCatalog.toNovuCredentials`) and creates the integration. On dispatch, the bridge triggers the channel's Novu workflow (`complaints-sms`, `complaints-whatsapp` or `complaints-email`). Novu's **worker** then calls the gateway through the provider class named by the integration's `providerId`.
+Every provider an operator adds is a **Novu integration**, and novu-bridge never stores credentials. A workspace with its own Novu organization ([tenant-accounts.md](./tenant-accounts.md)) holds its providers there; everything on this page applies to each organization alike. `POST /novu-adapter/v1/providers` validates the credentials against the catalog, copies them into Novu's credential keys (`ProviderCatalog.toNovuCredentials`) and creates the integration. On dispatch, the bridge triggers the channel's Novu workflow (`complaints-sms`, `complaints-whatsapp` or `complaints-email`). Novu's **worker** then calls the gateway through the provider class named by the integration's `providerId`.
 
 `service/provider/ProviderCatalog.types()` defines six types. Each type is a Novu provider (`transport: novu`), and the catalog fields are exactly the credential keys of that provider:
 
@@ -107,13 +107,13 @@ No 2.12 deployment has such an integration: 2.12 had no provider catalog.
 
 ### Provider selection at dispatch
 
-On every dispatch, the bridge reads the tenant's `NOTIFICATIONS.Channel` row at the state tenant (60 s cache). The row's `provider` field is the Novu integration identifier. The bridge checks the selection against Novu's integration list (`NOVU_BRIDGE_PROVIDER_AVAILABILITY_CACHE_TTL_MS`, 60 s). A missing, disabled or wrong-channel provider is recorded as `SKIPPED / NB_PROVIDER_UNAVAILABLE` instead of triggering. If Novu cannot be reached for the check, the bridge delivers as it otherwise would. With no provider selected, the row's `gateway` and the env fallbacks apply.
+On every dispatch, the bridge reads the tenant's `NOTIFICATIONS.Channel` row at the state tenant (60 s cache). The row's `provider` field is the Novu integration identifier, looked up in the tenant's own Novu organization when it has one, else in the shared account. The bridge checks the selection against Novu's integration list (`NOVU_BRIDGE_PROVIDER_AVAILABILITY_CACHE_TTL_MS`, 60 s). A missing, disabled or wrong-channel provider is recorded as `SKIPPED / NB_PROVIDER_UNAVAILABLE` instead of triggering. If Novu cannot be reached for the check, the bridge delivers as it otherwise would. With no provider selected, the row's `gateway` and the env fallbacks apply.
 
 The check cannot see whether the worker loads DIGIT's providers. It relies on `NOVU_BRIDGE_DIGIT_WORKER_PROVIDERS`: with the flag off, a selected SMSCountry, Ozeki or Jasmin provider is `SKIPPED / NB_PROVIDER_UNAVAILABLE`. See [DIGIT's worker providers](#digits-worker-providers).
 
 ### Removing a provider
 
-Integrations are deployment-wide, so `POST /providers/_delete`, and `_update` with `active: false`, refuse with `409 NB_PROVIDER_IN_USE` while a tenant still sends through the provider:
+Shared-account integrations are deployment-wide, so `POST /providers/_delete`, and `_update` with `active: false`, refuse with `409 NB_PROVIDER_IN_USE` while a tenant still sends through the provider (in a workspace's own organization only that workspace's channel rows are checked, and the env pins below do not apply there):
 
 - a channel row selects it, by identifier or Novu `_id`;
 - it is the integration `NOVU_BRIDGE_INTEGRATION_ID_WHATSAPP` names (by identifier or Novu `_id`), and some enabled WhatsApp channel has no provider selected: every such trigger names it;
@@ -123,14 +123,16 @@ The channel rows are read from MDMS at the time of the call, once per state for 
 
 ### Who may manage providers
 
-Creating, updating, deleting and test-sending a provider need a role from `NOVU_BRIDGE_PROXY_ADMIN_ROLES`. That role must be held at a state tenant that owns the deployment's providers:
+**A workspace with its own Novu organization** ([tenant-accounts.md](./tenant-accounts.md)): the Configurator sends `?tenantId=<workspace>` on every provider call, and the bridge acts on that workspace's organization for a caller holding a role from `NOVU_BRIDGE_PROXY_ADMIN_ROLES` at the workspace's root tenant. No `NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS` listing is needed. Anyone else gets `403 NB_TENANT_NOT_ALLOWED`, including an admin of a state that owns the shared providers: one workspace's credentials are not another's to manage. Reads with the selector need the workspace among the caller's tenants. The internal admin API (`/tenants/{tenant}/providers`) manages the same organization for machine callers.
+
+**Every other tenant, and calls without a selector**, act on the deployment's shared account. Creating, updating, deleting and test-sending a provider there need a role from `NOVU_BRIDGE_PROXY_ADMIN_ROLES`. That role must be held at a state tenant that owns the deployment's providers:
 
 - the state of `NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT`, which the deploy sets to its state root;
 - any state listed in `NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS` (comma-separated, default empty).
 
-An admin of any other root on the same box, such as an onboarded workspace, gets `403 NB_TENANT_NOT_ALLOWED`. If neither setting names a state, every one of these calls is refused, and the bridge logs a warning at start-up. `migrate-notifications.py --create-provider` creates providers through `POST /providers`, so for that step log in at an owning state.
+An admin of any other root on the same box, such as an onboarded workspace without its own organization, gets `403 NB_TENANT_NOT_ALLOWED`. If neither setting names a state, every one of these calls is refused, and the bridge logs a warning at start-up. `migrate-notifications.py --create-provider` creates providers through `POST /providers`, so for that step log in at an owning state.
 
-`/dispatch/_resolve` and `/dispatch/_dry-run` need the same role, held at a state tenant, but they act on one tenant's events: the admin of the event `tenantId`'s state root may run them, as may an owning state's admin for any tenant. `migrate-notifications.py plan` previews each root through `_resolve` while logged in at that root. `_dry-run` with `"send": true` is a real send of the caller's text through the shared providers, so like test-send it needs an owning state.
+`/dispatch/_resolve` and `/dispatch/_dry-run` need the same role, held at a state tenant, but they act on one tenant's events: the admin of the event `tenantId`'s state root may run them, as may an owning state's admin for any tenant. `migrate-notifications.py plan` previews each root through `_resolve` while logged in at that root. `_dry-run` with `"send": true` is a real send of the caller's text through the shared providers, so like test-send it needs an owning state, unless the event's tenant has its own organization and the caller is an admin of it: then the send goes through that organization.
 
 ## Adding a provider
 

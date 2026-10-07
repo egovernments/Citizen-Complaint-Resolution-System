@@ -462,6 +462,17 @@ Changed defaults worth checking: `NOVU_BRIDGE_CHANNEL_POLICY_SCHEMA` is `NOTIFIC
 `notifications.events`; `NOVU_BRIDGE_PROXY_ALLOWED_ROLES` adds `MDMS_ADMIN`; the new
 `NOVU_BRIDGE_PROXY_ADMIN_ROLES` gates provider create/rotate/delete.
 
+## Per-tenant notification accounts
+
+New in this release ([tenant-accounts.md](./tenant-accounts.md)): each signup workspace gets its
+own Novu organization at tenant creation. On a box with `enable_novu` and `enable_keycloak` it is
+on by default; the upgrade deploy then generates its secrets into OpenBao and moves the Novu
+admin off its old password (dashboard login included: read the new one with
+`bao kv get -field=novu_admin_password <secrets_path>`). Nothing moves by itself: every existing
+tenant, migrated or not, keeps the shared account until you list it in
+`novu_tenant_accounts_backfill` (then add its providers in its own organization). To stay exactly
+as before, set `novu_tenant_accounts: false`.
+
 ## After the upgrade
 
 - [ ] `docker ps` (or `kubectl get pods -o wide`) shows pgr-services and novu-bridge on the tag

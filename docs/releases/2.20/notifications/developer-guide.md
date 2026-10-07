@@ -1,7 +1,8 @@
 # Developer guide
 
 For developers connecting a module to notifications or changing novu-bridge. Related:
-[kafka-events.md](./kafka-events.md) (topics, publishing, verifying),
+[tenant-accounts.md](./tenant-accounts.md) (each workspace's own Novu organization, and
+`POST /messages/_send` for sign-in codes), [kafka-events.md](./kafka-events.md) (topics, publishing, verifying),
 [providers.md](./providers.md) (adapters, adding a provider), [contract/](./contract/README.md)
 (schemas, OpenAPI, error codes, outputs).
 
