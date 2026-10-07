@@ -191,8 +191,9 @@ Cleanup is API-only — soft-deletes via cleanupMdms in afterAll because there's
     createdCodes.add(storedId(code));
 
     await page.goto(`${LIST_PATH}/create`);
-    // The complaint-type name field was renamed "Name" → "Complaint Sub-Type".
-    await page.getByLabel(/^Complaint Sub-Type/i).fill(name);
+    // The complaint-type name field was renamed "Name" → "Complaint Sub-Type"
+    // → "Complaint Subcategory" (#2243). Accept both so older builds still match.
+    await page.getByLabel(/^Complaint (Sub-Type|Subcategory)/i).fill(name);
 
     const codeInput = page.getByLabel(/Service Code/i);
     await codeInput.fill('');

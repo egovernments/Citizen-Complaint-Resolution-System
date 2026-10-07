@@ -469,9 +469,10 @@ Doesn't assert what's INSIDE the related lists — that depends on tenant conten
     // department with no employees assigned to it; it was unreachable rather
     // than wrong about the feature. Accept either rendering, which is what
     // "the section structure renders even when empty" actually means.
+    // #2243 renamed the label "Complaint Types" → "Complaint Categories"; accept both.
     await expect(page.getByText(/^Related$/i).first()).toBeVisible();
     await expect(
-      page.getByText(/^(Complaint Types|No complaint types found)$/i).first(),
+      page.getByText(/^(Complaint (Types|Categories)|No complaint (types|categories) found)$/i).first(),
     ).toBeVisible();
     await expect(
       page.getByText(/^(Employees|No employees found)$/i).first(),
