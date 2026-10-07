@@ -8130,6 +8130,42 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.provisioning.binding",
+    "message": "Connecting your sign-in",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.provisioning.founder_hrms",
+    "message": "Creating your employee record",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.provisioning.membership",
+    "message": "Adding you to your organisation",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.provisioning.organization",
+    "message": "Setting up your organisation",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.provisioning.platform_baseline",
+    "message": "Setting up the basics",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.provisioning.tenant_foundation",
+    "message": "Creating your workspace",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.requirements.branding",
     "message": "Add a logo to finish branding, or skip the step.",
     "module": "configurator-ui",

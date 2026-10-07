@@ -188,23 +188,39 @@ export type OperationStatus =
   | 'RETRYABLE_FAILED'
   | 'TERMINAL_FAILED';
 
-/** The worker's fixed step order, for the progress screen's checklist. */
+/** PGR's step order (OnboardingRunner.STEPS), for the progress screen's checklist. */
 export const PROVISIONING_STEPS = [
   'TENANT_FOUNDATION',
+  'PLATFORM_BASELINE',
+  'FOUNDER_HRMS',
   'ORGANIZATION',
-  'TENANT_ADMIN_MEMBERSHIP',
-  'TENANT_ADMIN_ROLES',
-  'DIGIT_ACCOUNT',
+  'MEMBERSHIP',
+  'BINDING',
 ] as const;
 
 export type ProvisioningStep = (typeof PROVISIONING_STEPS)[number];
+
+/**
+ * Founder-facing names for the step codes, the English for `app.onboarding.provisioning.<code>`.
+ * Lower-casing the codes themselves read as internal machinery on the one screen where somebody
+ * is watching every line.
+ */
+export const PROVISIONING_STEP_LABELS: Record<ProvisioningStep, string> = {
+  TENANT_FOUNDATION: 'Creating your workspace',
+  PLATFORM_BASELINE: 'Setting up the basics',
+  FOUNDER_HRMS: 'Creating your employee record',
+  ORGANIZATION: 'Setting up your organisation',
+  MEMBERSHIP: 'Adding you to your organisation',
+  BINDING: 'Connecting your sign-in',
+};
 
 export interface Operation {
   id: string;
   signupId: string;
   status: OperationStatus;
-  currentStep: ProvisioningStep | null;
-  completedSteps: ProvisioningStep[];
+  /** A step code; one this client does not know is still a step in progress. */
+  currentStep: string | null;
+  completedSteps: string[];
   errorCode: string | null;
   errorMessage: string | null;
   attempt: number;

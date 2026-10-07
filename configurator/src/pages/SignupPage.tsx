@@ -5,12 +5,12 @@ import {
   type AuthMethod,
   type AvailabilityResult,
   type Operation,
-  type ProvisioningStep,
   type Signup,
   type SignupDraftInput,
   type TenantOption,
   OnboardingError,
   PROVISIONING_STEPS,
+  PROVISIONING_STEP_LABELS,
   authMethods,
   checkIdentifier,
   createSignup,
@@ -41,6 +41,8 @@ import { Stepper } from '@/components/ui/stepper';
 import { AuthShell } from '@/components/signup/AuthPanel';
 import { useAuthResult } from '@/hooks/useAuthResult';
 import { clearSignOutIncomplete, signOutIncomplete } from '@/lib/session';
+import { translatorFrom } from '@/onboarding/i18n';
+import { i18nProvider } from '@/providers/bridge';
 
 const STEPS = [
   { id: 'account', label: 'Account' },
@@ -142,19 +144,6 @@ function SignupMethodIcon({ method }: { method: AuthMethod }) {
     </svg>
   );
 }
-
-/**
- * Founder-facing names for the backend's step codes. Lower-casing the codes
- * themselves read as internal machinery on the one screen where somebody is
- * watching every line, and turned the product name into "digit account".
- */
-const STEP_LABELS: Record<ProvisioningStep, string> = {
-  TENANT_FOUNDATION: 'Creating your account',
-  ORGANIZATION: 'Setting up your organisation',
-  TENANT_ADMIN_MEMBERSHIP: 'Adding you to your organisation',
-  TENANT_ADMIN_ROLES: 'Granting your permissions',
-  DIGIT_ACCOUNT: 'Creating your DIGIT login',
-};
 
 type Phase =
   | 'loading'
@@ -864,6 +853,11 @@ function SignupFlow() {
   if (phase === 'provisioning' && operation) {
     const done = new Set(operation.completedSteps);
     const failed = operation.status === 'RETRYABLE_FAILED' || operation.status === 'TERMINAL_FAILED';
+    // A step code this list does not know (or none yet) still shows progress, on the first step not done.
+    const current = PROVISIONING_STEPS.find((name) => name === operation.currentStep)
+      ?? PROVISIONING_STEPS.find((name) => !done.has(name));
+    // This page sits outside react-admin's context, so it reads the provider directly.
+    const t = translatorFrom(i18nProvider.translate);
     return (
       <div>
         <h1 className="text-2xl font-semibold">Setting up {accountName}</h1>
@@ -872,7 +866,7 @@ function SignupFlow() {
         <ol className="mt-6 space-y-3">
           {PROVISIONING_STEPS.map((name) => {
             const isDone = done.has(name);
-            const isCurrent = operation.currentStep === name && !isDone;
+            const isCurrent = current === name && !isDone;
             return (
               <li key={name} className="flex items-center gap-3 text-sm">
                 {isDone ? (
@@ -883,7 +877,7 @@ function SignupFlow() {
                   <span className="h-4 w-4 rounded-full border border-muted-foreground/40" />
                 )}
                 <span className={isDone ? 'text-foreground' : 'text-muted-foreground'}>
-                  {STEP_LABELS[name]}
+                  {t(`provisioning.${name.toLowerCase()}`, PROVISIONING_STEP_LABELS[name])}
                 </span>
               </li>
             );
