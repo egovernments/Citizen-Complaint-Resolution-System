@@ -63,70 +63,12 @@ the box does hold a live database, see
 | `domain` | If needs to be deployed on a domain name vs localhost. Also, set `tls_enabled:true` in this case | | 
 | `bootstrap_user` | Admin Username (defaults to ADMIN) | | 
 | `bootstrap_password` | Admin Password (defaults to eGov@123) | |
-| `enable_turbopass` | Suggests city names in the setup wizard as you type. [How to turn it on](#city-name-suggestions). | `false` |
-| `enable_search_stack` | Starts search and adds a Dashboard card on the employee home page. [How to turn it on](#search-and-the-dashboard-card). | `false` |
-| `hierarchy_type` | Name of the location list on the complaint form. [How to set the name](#location-list-name). | `ADMIN` |
-| `enable_digit_ui_v2` | Builds the newer citizen website at `/citizen/`. [How to open that page](#newer-citizen-website). | `false` |
-| `digit_ui_mode` | How the employee website is served: `container`, `static`, or `hmr`. [Which one to pick](#how-the-employee-site-is-served). | `container` |
+| `enable_turbopass` | City-name suggestions in the setup wizard. Off, there is no suggestion box and location search returns 404. | `false` |
+| `enable_search_stack` | Search, and a Dashboard card on the employee home page. Off, the card is hidden and the search services stop. | `false` |
+| `hierarchy_type` | Name of the location list on the complaint form. It must already exist for the city, or the location box stays empty. A city from the setup sheets uses the city name plus `_ADMIN`. | `NAIROBI_ADMIN` |
+| `enable_digit_ui_v2` | The newer citizen website at `/citizen/`. Set `nginx_features.digit_ui_v2` to the same value. One without the other leaves the page missing, and the nginx switch alone stops the deploy. | `false` |
+| `digit_ui_mode` | How the employee website is served. `container` uses the digit-ui container. `static` serves built files. `hmr` is live reload and needs a source folder, or the deploy stops. | `container` |
 
-### City name suggestions
-
-`enable_turbopass` suggests city names in the setup wizard while you type. The wizard asks `/turbopass/search`.
-
-Set it to `true` and deploy, then type a city name in the wizard. Set it to `false` and deploy to turn the suggestions off. That address then returns 404. The place list is already in the repo under `turbopass/data`. The deploy copies it.
-
-See [how place search is wired into the map setup](../../openstreetmap/40-cms-implementation.md#deploy-flags) and the [Turbopass service](../../../turbopass/README.md).
-
-### Search and the Dashboard card
-
-`enable_search_stack` starts search and adds a Dashboard card on the employee home page.
-
-Set it to `true` and deploy, then open the card. Set it to `false` and deploy. The card goes away and the search services stop. One old migration container can stay behind, stopped. The Inbox button stays hidden while `IM` is on `employee_module_denylist`.
-
-The services this starts are in the [Ansible profile table](../../../local-setup/ansible/README.md#profile-gated-opt-in).
-
-### Location list name
-
-`hierarchy_type` is the name of the location list the complaint form asks for. The name has to exist for the city, or the location box stays empty.
-
-A city loaded from the setup sheets gets a list named `<CITY>_ADMIN`. Nairobi is `NAIROBI_ADMIN`. Put that name here.
-
-On a fresh quickstart box there is no list yet. From the repo root, create the `ADMIN` list and leave this value as `ADMIN`:
-
-```bash
-DIGIT_URL=http://127.0.0.1 SEED_TENANT=kenya SEED_CITY_TENANT=kenya.nairobi python3 local-setup/scripts/seed-tenant-city-data.py
-```
-
-Use your own state and city. The form then shows City and Ward.
-
-The same rule is written beside the setting in the [example variables file](../../../local-setup/ansible/inventory/host_vars/_example.yml).
-
-### Newer citizen website
-
-`enable_digit_ui_v2` builds the newer citizen website. People only see it at `/citizen/` when `nginx_features.digit_ui_v2` is set to the same value.
-
-| This switch | `nginx_features.digit_ui_v2` | What you get |
-|---|---|---|
-| `false` | `false` | `/citizen/` is missing |
-| `false` | `true` | The deploy stops before it starts |
-| `true` | `false` | The pages are built, and `/citizen/` is still missing |
-| `true` | `true` | `/citizen/` loads |
-
-The employee site is a different website and stays as it was.
-
-Both switches are explained in the [example variables file](../../../local-setup/ansible/inventory/host_vars/_example.yml).
-
-### How the employee site is served
-
-`digit_ui_mode` chooses how the employee website is served.
-
-- `container` uses the digit-ui container. Nothing else to set. Open `/digit-ui/employee` after deploy.
-- `static` serves files from disk. Leave `digit_ui_bundle_image` pointed at the published bundle. If that line is empty, set `digit_ui_esbuild_repo` to a source folder, or the deploy stops.
-- `hmr` reloads the site while you edit. It always needs `digit_ui_esbuild_repo` set to a source folder.
-
-`/digit-ui/employee` and `/digit-ui/citizen` should both load after a `container` or `static` deploy.
-
-The three modes are described in the [example variables file](../../../local-setup/ansible/inventory/host_vars/_example.yml). The published bundle image is in the [playbook defaults](../../../local-setup/ansible/inventory/group_vars/digit.yml).
 
 ## Start Deployment
 
