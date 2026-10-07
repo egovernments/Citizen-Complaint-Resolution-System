@@ -138,6 +138,21 @@ class EscalationWorkflowReconcilerTest {
     }
 
     @Test
+    void neverAddsASecondEscalateBesideALegacyTransition() {
+        String supervisor = "44444444-4444-4444-4444-444444444444";
+        searchReturns(workflow(List.of(action("ESCALATE", supervisor, "PGR_LME", "SYSTEM"))));
+        reconciler.reconcile("ke", List.of("PENDINGATLME"), requestInfo);
+        verify(repository, never()).fetchResult(argThat(url -> url != null && url.toString().contains(UPDATE)), any());
+
+        searchReturns(workflow(List.of(action("ESCALATE", supervisor, "PGR_LME"))));
+        reconciler.reconcile("ke", List.of("PENDINGATLME"), requestInfo);
+        List<JsonNode> escalate = escalateActions(updates().get(0), "PENDINGATLME");
+        assertEquals(1, escalate.size());
+        assertEquals(supervisor, escalate.get(0).path("nextState").asText());
+        assertEquals(List.of("PGR_LME", "SYSTEM"), mapper.convertValue(escalate.get(0).path("roles"), List.class));
+    }
+
+    @Test
     void aStaleSearchAfterAWriteRefreshesInsteadOfAddingADuplicate() {
         searchReturns(workflow(LME_WITH_ESCALATE));
         List<String> statuses = List.of("PENDINGFORREASSIGNMENT");

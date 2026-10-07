@@ -27,9 +27,10 @@ import static org.egov.pgr.util.PGRConstants.PGR_BUSINESSSERVICE;
  *
  * <p>The scheduler escalates by submitting a workflow {@code ESCALATE} transition, which
  * egov-workflow-v2 rejects unless the complaint's current state has that action. Listing a
- * status in MDMS therefore did nothing on its own (#2132). Each scan, this adds the missing
- * {@code ESCALATE} self-loop to every eligible state, authorizing {@code SYSTEM} plus the roles
- * that already act on that state, so its holder can also escalate by hand. It only ever adds:
+ * status in MDMS therefore did nothing on its own (#2132). Each scan, this gives every eligible
+ * state an {@code ESCALATE} action that authorizes {@code SYSTEM}: a new self-loop carrying the
+ * roles that already act on that state, so its holder can also escalate by hand, or SYSTEM added
+ * to the state's existing {@code ESCALATE}. It only ever adds:
  * removing a status from MDMS stops automatic escalation but leaves manual escalation alone.</p>
  *
  * <p>workflow-v2 persists asynchronously and caches searches in-JVM, so a search right after a
@@ -115,17 +116,23 @@ public class EscalationWorkflowReconciler {
         }
     }
 
-    /** Adds SYSTEM to an existing ESCALATE self-loop, or adds the self-loop with the state's holder roles. */
+    /**
+     * Authorizes SYSTEM on the state's existing ESCALATE action, or adds an ESCALATE self-loop
+     * carrying the state's holder roles. A state never gets a second ESCALATE: a deployment whose
+     * ESCALATE still targets a legacy state keeps that transition (see the self-loop migration).
+     */
     void ensureEscalation(ObjectNode state) {
         String stateUuid = state.path("uuid").asText();
         ArrayNode actions = state.has("actions") && state.get("actions").isArray()
                 ? (ArrayNode) state.get("actions") : state.putArray("actions");
 
         for (JsonNode action : actions) {
-            if (isEscalateSelfLoop(action, stateUuid)) {
+            if (ESCALATE.equalsIgnoreCase(action.path("action").asText())) {
                 ArrayNode roles = action.has("roles") && action.get("roles").isArray()
                         ? (ArrayNode) action.get("roles") : ((ObjectNode) action).putArray("roles");
-                roles.add(SYSTEM_ROLE);
+                if (!containsSystem(roles)) {
+                    roles.add(SYSTEM_ROLE);
+                }
                 ((ObjectNode) action).put("active", true);
                 return;
             }
@@ -149,22 +156,23 @@ public class EscalationWorkflowReconciler {
     }
 
     static boolean hasSystemEscalation(JsonNode state) {
-        String stateUuid = state.path("uuid").asText();
         for (JsonNode action : state.path("actions")) {
-            if (isEscalateSelfLoop(action, stateUuid) && !action.path("active").asText("true").equals("false")) {
-                for (JsonNode role : action.path("roles")) {
-                    if (SYSTEM_ROLE.equals(role.asText())) {
-                        return true;
-                    }
-                }
+            if (ESCALATE.equalsIgnoreCase(action.path("action").asText())
+                    && !"false".equals(action.path("active").asText("true"))
+                    && containsSystem(action.path("roles"))) {
+                return true;
             }
         }
         return false;
     }
 
-    private static boolean isEscalateSelfLoop(JsonNode action, String stateUuid) {
-        return ESCALATE.equalsIgnoreCase(action.path("action").asText())
-                && stateUuid.equals(action.path("nextState").asText());
+    private static boolean containsSystem(JsonNode roles) {
+        for (JsonNode role : roles) {
+            if (SYSTEM_ROLE.equals(role.asText())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static ObjectNode findState(JsonNode businessService, String status) {
