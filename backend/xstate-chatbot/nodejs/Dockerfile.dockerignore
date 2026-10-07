@@ -1,0 +1,11 @@
+# Read for this Dockerfile whatever the build context is: CI builds from the
+# repository root with WORK_DIR=backend/xstate-chatbot/nodejs, a local build
+# usually from this folder. Hence the **/ prefixes.
+#
+# Without it, COPY ${WORK_DIR} . copied a developer's .env, credentials
+# included, into the image.
+**/.env
+**/.env.test
+**/node_modules
+**/certs
+**/*.log

@@ -23,6 +23,14 @@ public class OnboardingOperation {
     private String errorCode;
     private String errorMessage;
     private int attempt;
+    private int restartNo;
+    private boolean organizationEnsureStarted;
+    @Builder.Default
+    private java.util.Map<String, Object> recordProgress = new java.util.LinkedHashMap<>();
+    private String founderDigitUuid;
+    private String lifecycleDecision;
+    private Integer lifecycleRestartNo;
+    private Long lifecyclePublishedAt;
     private long createdAt;
     private long updatedAt;
 }

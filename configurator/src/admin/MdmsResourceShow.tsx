@@ -1,4 +1,5 @@
 import { DigitShow } from './DigitShow';
+import { MASTER_SCREEN_META } from './masterScreens';
 import { FieldSection, FieldRow, StatusChip, JsonViewer } from './fields';
 import { EntityLink } from '@/components/ui/EntityLink';
 import { ReverseReferenceList } from './fields/ReverseReferenceList';
@@ -11,12 +12,13 @@ import { groupShowFields, getRefMap, formatFieldLabel } from './schemaUtils';
 import type { SchemaDefinition, RefMapEntry } from './schemaUtils';
 import type { ReverseRef } from '@/hooks/useReverseRefs';
 import { useMastersCapability } from '@/hooks/useMastersCapability';
+import { ReadOnlyResourceNotice } from './ReadOnlyResourceNotice';
 
 export function MdmsResourceShow() {
   const resource = useResourceContext() ?? '';
   const config = getResourceConfig(resource);
   const label = useResourceLabel()(resource);
-  const { record } = useShowController();
+  const { record } = useShowController({ queryOptions: { meta: MASTER_SCREEN_META } });
   const { canEditResource } = useMastersCapability();
 
   // Fetch schema definition and reverse refs
@@ -24,14 +26,28 @@ export function MdmsResourceShow() {
   const { refs: reverseRefs } = useReverseRefs(config?.schema);
 
   return (
-    <DigitShow title={record ? `${label}: ${record[config?.idField ?? 'id'] ?? record.id}` : label} hasEdit={canEditResource(resource)}>
+    <>
+      <ReadOnlyResourceNotice resource={resource} />
+      <DigitShow title={record ? `${label}: ${record[config?.idField ?? 'id'] ?? record.id}` : label} hasEdit={canEditResource(resource)}>
       {(rec: Record<string, unknown>) => {
         if (definition) {
           return <SchemaShowContent rec={rec} definition={definition} reverseRefs={reverseRefs} />;
         }
         return <FallbackShowContent rec={rec} />;
       }}
-    </DigitShow>
+      </DigitShow>
+    </>
+  );
+}
+
+/** The MDMS envelope's root-level isActive — the record's enable/disable state. */
+function RecordStatus({ rec }: { rec: Record<string, unknown> }) {
+  return (
+    <FieldSection title="Status">
+      <FieldRow label="Status">
+        <StatusChip value={rec._isActive} labels={{ true: 'Active', false: 'Inactive' }} />
+      </FieldRow>
+    </FieldSection>
   );
 }
 
@@ -56,6 +72,8 @@ function SchemaShowContent({
 
   return (
     <div className="space-y-6">
+      <RecordStatus rec={rec} />
+
       {/* Key fields (x-unique) */}
       {groups.key.length > 0 && (
         <FieldSection title="Key">
@@ -187,6 +205,21 @@ function SchemaFieldRow({
     );
   }
 
+  // Array / object → the same expandable viewer the "Nested Data" section uses.
+  // groupShowFields only calls a property complex when its `type` is exactly
+  // "array" or "object", so a nullable one (`type: ["array","null"]`, which is
+  // how NOTIFICATIONS.EventCatalogue declares actors / placeholders / channels)
+  // lands here instead — and `String(value)` printed it as "[object Object]".
+  // This is the detail view the compact list cell defers to, so it has to show
+  // the whole thing.
+  if (value != null && typeof value === 'object') {
+    return (
+      <FieldRow label={label}>
+        <JsonViewer data={value} initialExpanded={false} />
+      </FieldRow>
+    );
+  }
+
   // Default: plain text
   return (
     <FieldRow label={label}>
@@ -201,6 +234,7 @@ function FallbackShowContent({ rec }: { rec: Record<string, unknown> }) {
 
   return (
     <div className="space-y-6">
+      <RecordStatus rec={rec} />
       <FieldSection title="Details">
         {keys.map((key) => {
           const value = rec[key];

@@ -1,4 +1,4 @@
-import { DigitEdit, DigitFormInput, v } from '@/admin';
+import { DigitEdit, DigitFormInput, v, MASTER_SCREEN_META } from '@/admin';
 import { BooleanInput } from '@/admin/widgets';
 import { DeactivationGuard } from '@/admin/DeactivationGuard';
 import { useShowController } from 'ra-core';
@@ -15,18 +15,19 @@ export function DesignationEdit() {
         label="Departments"
         help="This designation can belong to multiple departments."
       />
-      <BooleanInput source="active" label="Active" />
+      <BooleanInput source="_isActive" label="Active" />
       <DeactivationGuardForDesignation />
     </DigitEdit>
   );
 }
 
 function DeactivationGuardForDesignation() {
-  const { record } = useShowController();
+  const { record } = useShowController({ queryOptions: { meta: MASTER_SCREEN_META } });
   const code = String(record?.code ?? record?.id ?? '');
   if (!code) return null;
   return (
     <DeactivationGuard
+      source="_isActive"
       probes={[
         {
           label: 'employees currently holding this designation',

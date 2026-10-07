@@ -1,4 +1,5 @@
-import { apiClient, ENDPOINTS, localizationService, mdmsService, MDMS_SCHEMAS } from '@/api';
+import { apiClient, ENDPOINTS, mdmsService, MDMS_SCHEMAS } from '@/api';
+import { MessageError } from './i18n';
 import type { MdmsRecord } from '@/api/types';
 import { BRAND_THEMES, type BrandTheme } from './brandThemes';
 
@@ -79,7 +80,7 @@ export async function loadBranding(tenantId: string): Promise<Branding> {
   ]);
   const tenantRecord = tenants.find((record) => record.uniqueIdentifier === tenantId && record.isActive !== false);
   if (!tenantRecord) {
-    throw new Error(`The workspace ${tenantId} has no tenant record to brand.`);
+    throw new MessageError('branding.no_tenant_record', 'The workspace %{tenant} has no tenant record to brand.', { tenant: tenantId });
   }
   // Only a record owned by the state root is ours to rewrite; an inherited one
   // belongs to a parent, and the apps take the first record they get.
@@ -114,7 +115,10 @@ export async function saveBranding(
   const { tenantId, tenantRecord } = current;
   const stateRoot = stateRootOf(tenantId);
   const name = changes.name.trim();
-  const data: Record<string, unknown> = { ...tenantRecord.data, name };
+  if (name !== current.name) throw new MessageError('branding.rename_in_settings', 'Change the workspace name in Workspace settings.');
+  // A rename may have completed while this form was open. Keep the current name.
+  const fresh = await loadBranding(tenantId);
+  const data: Record<string, unknown> = { ...fresh.tenantRecord.data };
   let logoUrl = current.logoUrl;
 
   if (changes.logo?.kind === 'upload') {
@@ -130,20 +134,7 @@ export async function saveBranding(
   }
 
   let tenantRecordAfter = tenantRecord;
-  const nameChanged = name !== current.name;
-  if (nameChanged || changes.logo) {
-    tenantRecordAfter = await mdmsService.update(tenantRecord, data);
-  }
-  if (nameChanged) {
-    await localizationService.upsertMessages(
-      stateRoot,
-      'en_IN',
-      localizationService.buildTenantLocalizations(tenantId, name, 'en_IN'),
-    );
-    await localizationService.cacheBust().catch(() => {
-      // Labels refresh on the cache's own schedule instead.
-    });
-  }
+  if (changes.logo) tenantRecordAfter = await mdmsService.update(fresh.tenantRecord, data);
 
   const savedSoFar: Branding = { ...current, tenantRecord: tenantRecordAfter, name, logoUrl };
   let themeRecord = current.themeRecord;

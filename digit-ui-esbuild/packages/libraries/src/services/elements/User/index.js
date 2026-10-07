@@ -1,31 +1,21 @@
 import Urls from "../../atoms/urls";
 import { Request, ServiceRequest } from "../../atoms/Utils/Request";
 import { Storage } from "../../atoms/Utils/Storage";
-import { getAuthAdapter } from "../../auth/index";
-import { isKeycloakAuth } from "../../auth/authSurface";
+import { getAuthSurface, isIdentityBffAuth } from "../../auth/authSurface";
+import { identityBffLogout, identityBffLogoutRedirect, markSignOutIncomplete } from "../../auth/identityBffLogin";
+import { currentAppBasePath, tenantContext } from "../../tenant/tenantRoute";
+
+/** Set by the Configurator (same origin) when its own sign-out could not be confirmed. */
+const CONFIGURATOR_SIGN_OUT_INCOMPLETE_KEY = "crs-sign-out-incomplete";
 
 export const UserService = {
   authenticate: async (details) => {
-    if (isKeycloakAuth()) {
-      const adapter = getAuthAdapter();
-      const result = await adapter.login({
-        email: details.username,
-        password: details.password,
-        tenantId: details.tenantId,
-      });
-      return {
-        UserRequest: result.user,
-        access_token: result.token,
-        token_type: "bearer",
-      };
-    }
-
     const data = new URLSearchParams();
     Object.entries(details).forEach(([key, value]) => data.append(key, value));
     data.append("scope", "read");
     data.append("grant_type", "password");
 
-    let authResponse = await ServiceRequest({
+    const authResponse = await ServiceRequest({
       serviceName: "authenticate",
       url: Urls.Authenticate,
       data,
@@ -35,7 +25,7 @@ export const UserService = {
       },
     });
     const invalidRoles = window?.globalConfigs?.getConfig("INVALIDROLES") || [];
-    if (invalidRoles && invalidRoles.length > 0 && authResponse && authResponse?.UserRequest?.roles?.some((role) => invalidRoles.includes(role.code))) {
+    if (invalidRoles.length > 0 && authResponse?.UserRequest?.roles?.some((role) => invalidRoles.includes(role.code))) {
       throw new Error("ES_ERROR_USER_NOT_PERMITTED");
     }
     return authResponse;
@@ -62,10 +52,44 @@ export const UserService = {
   getUser: () => {
     return Digit.SessionStorage.get("User");
   },
-  logout: async () => {
-    if (isKeycloakAuth()) {
-      const adapter = getAuthAdapter();
-      return adapter.logout();
+  logout: async (scope = "current") => {
+    // Some buttons pass the click event directly.
+    if (typeof scope !== "string") scope = "current";
+    if (isIdentityBffAuth()) {
+      // Sign out of the BFF session for this surface only, then land on the
+      // same tenant's login page for that surface.
+      const surface = tenantContext()?.surface || getAuthSurface();
+      const appBasePath = tenantContext()?.appBasePath || window.contextPath || currentAppBasePath();
+      const fetchImpl = window.fetch.bind(window);
+      // "others" keeps this session, so a failure is reported and nothing local changes.
+      if (scope === "others") {
+        await identityBffLogout({ surface, scope, fetchImpl });
+        return;
+      }
+      // Fail open: the DIGIT token lives in localStorage, so a BFF outage or an
+      // UNTRUSTED_ORIGIN 403 must not leave a shared device signed in. Clear local
+      // state first, then revoke the BFF session best-effort.
+      // The Configurator shares this origin; keep its unconfirmed-sign-out flag.
+      const configuratorSignOut = window.localStorage.getItem(CONFIGURATOR_SIGN_OUT_INCOMPLETE_KEY);
+      window.localStorage.clear();
+      if (configuratorSignOut !== null) window.localStorage.setItem(CONFIGURATOR_SIGN_OUT_INCOMPLETE_KEY, configuratorSignOut);
+      window.sessionStorage.clear();
+      let failure = null;
+      try {
+        await identityBffLogout({ surface, scope, fetchImpl });
+      } catch (e) {
+        // The BFF session cookie outlives this; the local DIGIT session is gone.
+        // The login page must not use that cookie to sign this tab back in.
+        markSignOutIncomplete();
+        failure = e;
+      }
+      // "Sign out everywhere" must not look like it worked: other devices may
+      // still be signed in, so the caller reports it instead of navigating.
+      if (failure && scope === "all") throw failure;
+      window.location.replace(
+        `${window.location.origin}${identityBffLogoutRedirect(appBasePath, surface)}`,
+      );
+      return;
     }
 
     // The session's own user decides where logout lands. `userType` is one
@@ -91,14 +115,6 @@ export const UserService = {
       window.location.replace(`${window.location.origin}${logoutRedirectURL}`);
     }
   },
-  sendOtp: (details, stateCode) =>
-    ServiceRequest({
-      serviceName: "sendOtp",
-      url: Urls.OTP_Send,
-      data: details,
-      auth: false,
-      params: { tenantId: stateCode },
-    }),
   setUser: (data) => {
     return Digit.SessionStorage.set("User", data);
   },
@@ -109,15 +125,6 @@ export const UserService = {
   getExtraRoleDetails: () => {
     return Digit.SessionStorage.get("User")?.extraRoleInfo;
   },
-  registerUser: (details, stateCode) =>
-    ServiceRequest({
-      serviceName: "registerUser",
-      url: Urls.RegisterUser,
-      data: {
-        User: details,
-      },
-      params: { tenantId: stateCode },
-    }),
   updateUser: async (details, stateCode) =>
     ServiceRequest({
       serviceName: "updateUser",
@@ -134,17 +141,6 @@ export const UserService = {
     const { roles } = user.info;
     return roles && Array.isArray(roles) && roles.filter((role) => accessTo.includes(role.code)).length;
   },
-
-  changePassword: (details, stateCode) =>
-    ServiceRequest({
-      serviceName: "changePassword",
-      url: Digit.SessionStorage.get("User")?.info ? Urls.ChangePassword1 : Urls.ChangePassword,
-      data: {
-        ...details,
-      },
-      auth: true,
-      params: { tenantId: stateCode },
-    }),
 
   employeeSearch: (tenantId, filters) => {
     return Request({

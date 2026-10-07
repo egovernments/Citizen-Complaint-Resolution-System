@@ -6,7 +6,9 @@ import {
   type DigitColumn,
 } from '@digit-ui/datagrid';
 import { EntityLink } from '@/components/ui/EntityLink';
-import { StatusChip } from '@/admin/fields';
+import { StatusChip, ListWidgetCell } from '@/admin/fields';
+import { DUPLICATE_ACTIVE_KEYS } from '@/providers/bridge';
+import type { ListWidgetKind, SchemaDescriptor } from './schemaDescriptors';
 
 // Re-export types and pure functions from the package
 export {
@@ -37,36 +39,36 @@ export type {
  * couldn't tell which rows were enabled without opening each one
  * (egovernments/CCRS#483 follow-up — Gurjeet flagged it on the
  * Gender Types list specifically). Replacing the inline toggle with
- * a `StatusChip` ("Active"/"Inactive" or "Yes"/"No") makes the state
- * legible. Inline-editing is dropped on the list page for boolean
+ * a "Yes"/"No" `StatusChip` makes the state legible. (A boolean
+ * `active`/`isActive` is dropped instead: it duplicates the root isActive
+ * that the master DigitDatagrid shows as Active/Inactive.) Inline-editing is dropped on the list page for boolean
  * cells; users edit through the row's dedicated Edit form, which
  * Chakshu's #46 fix already wired up correctly.
  */
 function withStatusChipForBooleans(columns: DigitColumn[]): DigitColumn[] {
-  return columns.map((col) => {
-    const isBoolean =
-      typeof col.editable === 'object' && col.editable?.type === 'boolean';
-    if (!isBoolean || col.render) return col;
-    // Pick a tighter label for the canonical "active" / "isActive" flag;
-    // fall back to Yes/No for any other boolean field so the chip stays
-    // readable for non-status flags.
-    const isActiveField =
-      col.source === 'active' || col.source === 'isActive';
-    const labels = isActiveField
-      ? { true: 'Active', false: 'Inactive' }
-      : { true: 'Yes', false: 'No' };
-    return {
-      ...col,
-      // Drop inline-editable so the chip is shown instead of the bare
-      // toggle. The Edit page remains the canonical way to flip the flag.
-      editable: undefined,
-      render: (record) =>
-        React.createElement(StatusChip, {
-          value: (record as Record<string, unknown>)[col.source],
-          labels,
-        }),
-    };
-  });
+  const isBooleanColumn = (col: DigitColumn): boolean =>
+    typeof col.editable === 'object' && col.editable?.type === 'boolean';
+  return (
+    columns
+      // A boolean `active`/`isActive` duplicates the record's root isActive,
+      // which the master DigitDatagrid already shows as the Status column. A
+      // second status column could disagree with it, so drop it.
+      .filter((col) => !(isBooleanColumn(col) && DUPLICATE_ACTIVE_KEYS.includes(col.source)))
+      .map((col) => {
+        if (!isBooleanColumn(col) || col.render) return col;
+        return {
+          ...col,
+          // Drop inline-editable so the chip is shown instead of the bare
+          // toggle. The Edit page remains the canonical way to flip the flag.
+          editable: undefined,
+          render: (record) =>
+            React.createElement(StatusChip, {
+              value: (record as Record<string, unknown>)[col.source],
+              labels: { true: 'Yes', false: 'No' },
+            }),
+        };
+      })
+  );
 }
 
 export function generateColumns(
@@ -77,4 +79,43 @@ export function generateColumns(
     React.createElement(EntityLink, { resource, id })
   );
   return withStatusChipForBooleans(base);
+}
+
+/**
+ * Apply a schema descriptor's `listWidget` choices to generated list columns.
+ *
+ * Two things happen per matched column, and the second matters as much as the
+ * first: the cell gets the descriptor's renderer, AND `editable` is cleared.
+ * The package's column builder makes every non-key field inline-editable, which
+ * turns an `enum` column into a live <select> in every row — that is how the
+ * Channels list came to offer the SMS-only `smscountry` gateway on the EMAIL and
+ * WHATSAPP rows. Editing belongs in the row's own form, where the save guard
+ * runs.
+ *
+ * Columns the descriptor says nothing about are returned untouched, so a
+ * resource with no `listWidget` anywhere keeps exactly the list it has today.
+ */
+export function applyDescriptorListWidgets(
+  columns: DigitColumn[],
+  descriptor: SchemaDescriptor | undefined
+): DigitColumn[] {
+  if (!descriptor) return columns;
+  const byPath = new Map<string, ListWidgetKind>();
+  for (const field of descriptor.fields) {
+    if (field.listWidget) byPath.set(field.path, field.listWidget);
+  }
+  if (byPath.size === 0) return columns;
+  return columns.map((col) => {
+    const kind = byPath.get(col.source);
+    if (!kind) return col;
+    return {
+      ...col,
+      editable: undefined,
+      render: (record) =>
+        React.createElement(ListWidgetCell, {
+          kind,
+          value: (record as Record<string, unknown>)[col.source],
+        }),
+    };
+  });
 }

@@ -1,4 +1,5 @@
 import { type Page } from '@playwright/test';
+import { appBase } from '../utils/auth';
 
 export class HrmsInboxPage {
   readonly page: Page;
@@ -8,7 +9,7 @@ export class HrmsInboxPage {
   }
 
   async goto() {
-    await this.page.goto('/digit-ui/employee/hrms/inbox', {
+    await this.page.goto(`${appBase()}/employee/hrms/inbox`, {
       timeout: 30_000,
     });
     // HRMS inbox loads employee list async

@@ -28,6 +28,35 @@
 {% endif %}
 {{ indent }}add_header {{ 'Content-Security-Policy' if (nginx_csp_enforce | default(false)) else 'Content-Security-Policy-Report-Only' }} "{{ nginx_csp_policy | default("default-src 'self'; img-src 'self' data: blob: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self' https:; frame-ancestors 'self'; base-uri 'self'; object-src 'none'") }}" always;
 {%- endmacro %}
+{#
+   ==================== Tenantless /digit-ui/ guard ====================
+   D26: the app's HTML routes are canonical only under /<tenant-slug>/digit-ui/.
+   A tenantless /digit-ui/<route> gets a 302 to digit_ui_default_tenant_slug when
+   one is configured, else 404.
+
+   Static assets are exempt. esbuild's PUBLIC_PATH is the absolute "/digit-ui/",
+   so every tenant page (index.html and public-dashboard.html alike) loads
+   /digit-ui/index.js, /digit-ui/vendor/*.css, /digit-ui/analytics.js, hashed
+   images and fonts from the tenantless prefix. 404ing those (or redirecting
+   each one) blanks the page. The exemption keys on the file extension, so
+   index.html and public-dashboard.html themselves stay behind the guard.
+
+   $request_uri is the ORIGINAL request line: a tenant route that the
+   /<slug>/digit-ui/ rewrite below sent here internally never matches.
+
+   This guard is routing hygiene, NOT a security boundary. `//digit-ui/...` and
+   percent-encoded spellings (`/%64igit-ui/...`) normalise to the same location
+   but do not match $request_uri, and the SPA, its assets and every API behind
+   it are public anyway. Authorization lives in Kong and the Identity BFF.
+#}
+{% macro tenantless_digit_ui_guard(indent='    ') %}
+{% set html_route = '^/digit-ui/(?![^?]*[.](?:js|css|map|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|otf|eot)(?:[?]|$))' %}
+{% if digit_ui_default_tenant_slug | default('') | length > 0 %}
+{{ indent }}if ($request_uri ~ "{{ html_route }}") { return 302 /{{ digit_ui_default_tenant_slug }}$request_uri; }
+{% else %}
+{{ indent }}if ($request_uri ~ "{{ html_route }}") { return 404; }
+{% endif %}
+{%- endmacro %}
 server {
   server_name {{ domain }};
 
@@ -66,6 +95,20 @@ server {
     try_files $uri =404;
   }
 
+  # Runtime config must NEVER be cached. config.js is what makes one dist serve
+  # a given tenant, so a stale copy silently points the SPA at the wrong tenant
+  # and endpoints — no error, just wrong data. The container path gets this from
+  # the image's own nginx (configurator/Dockerfile); the host-built path serves
+  # from disk and never sees that rule, so it has to be stated here.
+  #
+  # Exact match, so it wins over the /configurator/ prefix location regardless of
+  # order. Without it the no-caching variant below sends NO Cache-Control at all
+  # and browsers apply heuristic freshness off Last-Modified.
+  location = /configurator/config.js {
+    alias /var/www/configurator/config.js;
+    add_header Cache-Control "no-store, must-revalidate" always;
+  }
+
   location /configurator/ {
     alias /var/www/configurator/;
     try_files $uri $uri/ /configurator/index.html;
@@ -75,6 +118,20 @@ server {
 {% else %}
   # Configurator SPA — host-built dist (build_configurator: true), no
   # asset-level caching.
+  # Runtime config must NEVER be cached. config.js is what makes one dist serve
+  # a given tenant, so a stale copy silently points the SPA at the wrong tenant
+  # and endpoints — no error, just wrong data. The container path gets this from
+  # the image's own nginx (configurator/Dockerfile); the host-built path serves
+  # from disk and never sees that rule, so it has to be stated here.
+  #
+  # Exact match, so it wins over the /configurator/ prefix location regardless of
+  # order. Without it the no-caching variant below sends NO Cache-Control at all
+  # and browsers apply heuristic freshness off Last-Modified.
+  location = /configurator/config.js {
+    alias /var/www/configurator/config.js;
+    add_header Cache-Control "no-store, must-revalidate" always;
+  }
+
   location /configurator/ {
     alias /var/www/configurator/;
     try_files $uri $uri/ /configurator/index.html;
@@ -421,8 +478,11 @@ server {
   #
   # ⚠ WORKAROUND. Proper fix: set `build_novu_dashboard: true` to build the
   # subpath-rebased image (build/novu-dashboard/Dockerfile); then this branch is
-  # replaced by the tidy one above. The stock branch ALSO hijacks the entire
-  # `/auth/` prefix, so it is unsafe to combine with Keycloak on the same domain.
+  # replaced by the tidy one above. The stock branch ALSO claims the `/auth/`
+  # prefix. With enable_keycloak, Keycloak's public paths (/auth/realms/ and
+  # /auth/resources/) are carved back out by `^~` locations further down, so
+  # the two coexist on one domain; everything else under /auth/ is the
+  # dashboard's (Kong denies the rest of Keycloak's surface anyway).
   location = /novu { return 302 /novu/; }
   location /novu/ {
     proxy_pass http://127.0.0.1:14000/novu/;
@@ -467,9 +527,10 @@ server {
   # route from Kong (e.g. the keycloak-route in kong.yml). Without
   # this proxy, hard-refreshes at /auth/* fall through to Kong's
   # /auth → keycloak upstream and 500 with a DNS resolve failure
-  # when keycloak isn't deployed. ⚠ This shadows ALL of /auth/, so do
-  # not enable the stock branch on a domain that also runs Keycloak —
-  # use build_novu_dashboard: true (rebased branch) there instead.
+  # when keycloak isn't deployed. With enable_keycloak, the `^~`
+  # /auth/realms/ and /auth/resources/ locations below are longer
+  # prefixes and win, so Keycloak's login pages, forms and theme assets
+  # never reach the dashboard (#2271 review 3).
   location /auth/ {
     proxy_pass http://127.0.0.1:14000;
     proxy_set_header Host $host;
@@ -553,13 +614,11 @@ server {
 
 {% endif %}
 {% if enable_turbopass | default(false) %}
-  # Turbopass search-api — OSM place-name autocomplete for the
-  # configurator's Phase 2 boundary step
-  # (GET /turbopass/search?q=<term>&limit=<n>). Proxies to the on-box
-  # turbopass-search container (loopback only; started by the playbook's
-  # "Turbopass" tasks behind the same enable_turbopass gate). The trailing
-  # slash on proxy_pass strips the /turbopass prefix so the app sees
-  # /search.
+  # Turbopass search-api — boundary search + fetch for the configurator's
+  # Phase 2 step (GET /turbopass/boundary/search, /turbopass/boundary/fetch).
+  # Proxies to the on-box turbopass-search container (loopback only; started
+  # by the playbook's "Turbopass" tasks behind the same enable_turbopass
+  # gate). The trailing slash on proxy_pass strips the /turbopass prefix.
   location /turbopass/ {
     proxy_pass http://127.0.0.1:{{ turbopass_port | default(13301) }}/;
     proxy_set_header Host $host;
@@ -570,52 +629,99 @@ server {
   }
 
 {% endif %}
-{% if enable_overpass | default(false) %}
-  # Self-hosted Overpass — boundary-polygon fetch for the configurator's
-  # Phase 2 OSM step (POST /overpass/api/interpreter). Proxies to the on-box
-  # bomet-overpass container (loopback only; started by the playbook's
-  # "Overpass" tasks behind the same enable_overpass gate). Trailing slash
-  # strips the /overpass prefix so the app sees /api/interpreter.
-  location /overpass/ {
-    proxy_pass http://127.0.0.1:{{ overpass_port | default(12346) }}/;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_read_timeout 120s;
-  }
-
-{% endif %}
   # Friendly URL for the PUBLIC (unauthenticated) dashboard. The page itself is
   # a second esbuild entry living in the same /digit-ui/ docroot as the employee
   # app (so hashed assets resolve against one publicPath), which means this only
-  # needs to be a redirect and works in BOTH digit_ui_mode branches below.
+  # needs to be an internal rewrite and works in every digit_ui_mode below.
   #
   # Its analytics read paths are explicitly auth-optional on Kong, so the page
   # keeps working when ENFORCE_UNAUTH is flipped on. The Spring mixed-mode
   # gateway is deliberately not opened because it does not normalize spoofed
   # anonymous userInfo. The real data boundary remains server-side.
+  #
+  # The canonical URL is /<slug>/digit-ui/public-dashboard: the tenant rewrite
+  # below lands it here internally and it is served the page in place. Only a
+  # tenantless request is redirected to the default slug (or 404s).
   location = /digit-ui/public-dashboard {
-    return 302 /digit-ui/public-dashboard.html;
+{{ tenantless_digit_ui_guard('    ') }}
+    rewrite ^ /digit-ui/public-dashboard.html last;
   }
 
   # Backwards-compatible alias for the first public-dashboard preview. The
   # explicit digit-ui path is canonical and is what the configurator exposes.
   location = /dashboard {
-    return 302 /digit-ui/public-dashboard;
+{% if digit_ui_default_tenant_slug | default('') | length > 0 %}
+    return 302 /{{ digit_ui_default_tenant_slug }}/digit-ui/public-dashboard;
+{% else %}
+    return 404;
+{% endif %}
   }
 
+  # Canonical tenant-scoped DIGIT UI. The public slug remains in the browser
+  # URL so the SPA can resolve it to an immutable tenant id through the
+  # Identity BFF; only the internal asset/document lookup is rewritten to the
+  # existing /digit-ui mount. This works in static, container and HMR modes and
+  # deliberately does not treat the slug itself as authorization.
+  location ~ "^/([a-z0-9-]{2,63})/digit-ui$" {
+    return 302 /$1/digit-ui/;
+  }
+  location ~ "^/[a-z0-9-]{2,63}/digit-ui/(.*)$" {
+    rewrite "^/[a-z0-9-]{2,63}/digit-ui/(.*)$" /digit-ui/$1 last;
+  }
+
+{% if enable_keycloak | default(false) %}
+  # Keycloak's public surface (via Kong's /auth route): /auth/realms/ is the
+  # OIDC endpoints, login/registration forms and account console;
+  # /auth/resources/ is the login theme's CSS, JS and images. Kong denies the
+  # rest (keycloak-admin-denied). Both are `^~` so they also beat the stock
+  # Novu dashboard's `location /auth/` above, which would otherwise serve the
+  # login page without its stylesheets and scripts.
+  #
+  # X-Forwarded-For is SET to the peer address, never appended: Keycloak
+  # (KC_PROXY_HEADERS=xforwarded) takes the LEFTMOST entry as the client IP, and Kong always
+  # appends its own peer, so an appended client-supplied header would let a
+  # caller pick the client IP Keycloak records (brute-force detection, events).
+  # Behind a load balancer, give this server `set_real_ip_from <LB range>;` and
+  # `real_ip_header X-Forwarded-For;` so $remote_addr is the client, not the LB.
+{% for keycloak_path in ['/auth/realms/', '/auth/resources/'] %}
+  location ^~ {{ keycloak_path }} {
+    proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_kong_port }};
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_read_timeout 120s;
+    proxy_buffering off;
+    # Keycloak's login responses carry several large Set-Cookie headers; the
+    # default header buffer 502s them ("upstream sent too big header"). Same
+    # sizes as nginx-identity.conf.
+    proxy_buffer_size 64k;
+    proxy_buffers 8 64k;
+  }
+{% endfor %}
+
+{% endif %}
 {% if digit_ui_mode == "static" %}
   # digit-ui in static mode: host nginx serves the build artifact from
   # /opt/digit-ui-esbuild/build/ directly. Built by the playbook
   # (`node esbuild.build.js`) — no inner Docker container, no esbuild
   # dev server. Faster, fewer moving parts, smaller blast radius.
   location = /digit-ui {
-    return 302 /digit-ui/;
+{% if digit_ui_default_tenant_slug | default('') | length > 0 %}
+    return 302 /{{ digit_ui_default_tenant_slug }}/digit-ui/;
+{% else %}
+    return 404;
+{% endif %}
   }
   location /digit-ui/ {
+{{ tenantless_digit_ui_guard('    ') }}
     alias /opt/digit-ui-esbuild/build/;
     try_files $uri $uri/ /digit-ui/index.html;
+    # A missing asset is a 404, not the SPA shell with a 200 (#2271 review 3).
+    # Same extension list as tenantless_digit_ui_guard above.
+    location ~ "[.](?:js|css|map|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|otf|eot)$" {
+      try_files $uri =404;
+    }
     sub_filter_once on;
     sub_filter_types text/html;
     # Inject globalConfigs.js + (optional) tenant theme tokens into <head>. Theme
@@ -676,10 +782,13 @@ server {
   }
 
 {% if nginx_features.root_to_digit_ui | default(false) %}
-  # Bare domain -> citizen app login. Lands users in the digit-ui SPA
-  # instead of Kong's default response. Exact match (=), so the catch-all
-  # below still proxies everything else to Kong.
-  location = / { return 302 /digit-ui/citizen/login; }
+  # Bare domain enters the canonical tenant route. Without a configured
+  # default, fail closed instead of resurrecting tenantless legacy login.
+{% if digit_ui_default_tenant_slug | default('') | length > 0 %}
+  location = / { return 302 /{{ digit_ui_default_tenant_slug }}/digit-ui/citizen/login; }
+{% else %}
+  location = / { return 404; }
+{% endif %}
 {% endif %}
 
   # API calls go to Kong directly.
@@ -700,9 +809,14 @@ server {
   # into the HMR `else` and sent /user/oauth/token to
   # :{{ upstream_esbuild_port }} (no API there) → 504 on every login.
   location = /digit-ui {
-    return 302 /digit-ui/;
+{% if digit_ui_default_tenant_slug | default('') | length > 0 %}
+    return 302 /{{ digit_ui_default_tenant_slug }}/digit-ui/;
+{% else %}
+    return 404;
+{% endif %}
   }
   location /digit-ui/ {
+{{ tenantless_digit_ui_guard('    ') }}
     proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_esbuild_port }};
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
@@ -757,6 +871,23 @@ server {
   # digit-ui in HMR mode: esbuild dev server (tmux session) on :18080.
   # Serves both /digit-ui/* (the SPA) and proxies API calls to Kong.
   # Live reloads on file save in /opt/digit-ui-esbuild.
+  location = /digit-ui {
+{% if digit_ui_default_tenant_slug | default('') | length > 0 %}
+    return 302 /{{ digit_ui_default_tenant_slug }}/digit-ui/;
+{% else %}
+    return 404;
+{% endif %}
+  }
+  location /digit-ui/ {
+{{ tenantless_digit_ui_guard('    ') }}
+    proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_esbuild_port }};
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_read_timeout 120s;
+    proxy_buffering off;
+  }
   location / {
     proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_esbuild_port }};
     proxy_set_header Host $host;

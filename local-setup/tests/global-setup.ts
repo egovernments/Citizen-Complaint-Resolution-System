@@ -16,7 +16,10 @@ export default async function globalSetup() {
   let esbuildReady = false;
   for (let i = 1; i <= maxRetries; i++) {
     try {
-      const resp = await fetch(`${baseURL}/digit-ui/employee/user/login`, { signal: AbortSignal.timeout(5000) });
+      // D26: the UI answers only on tenant routes; without a slug, probe the tenantless bundle config.
+      const slug = process.env.E2E_TENANT_SLUG || process.env.IDENTITY_TEST_TENANT_SLUG || '';
+      const probe = slug ? `${baseURL}/${slug}/digit-ui/` : `${baseURL}/digit-ui/globalConfigs.js`;
+      const resp = await fetch(probe, { signal: AbortSignal.timeout(5000) });
       if (resp.ok) {
         console.log(`[Global Setup] esbuild dev server ready (HTTP ${resp.status})`);
         esbuildReady = true;

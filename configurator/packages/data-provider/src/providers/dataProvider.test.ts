@@ -31,6 +31,48 @@ describe('createDigitDataProvider', () => {
     assert.ok(dp.deleteMany);
   });
 
+  // The ['PGR'] default that used to sit in workflowBsGetList was a CEILING, not
+  // a default: it made every screen reading this resource — including the
+  // notification Configure tab's picker — blind to every other workflow the
+  // tenant had, whatever the masters said.
+  it('asks workflow for ALL business services when no filter narrows them', async () => {
+    const seen: Array<string[] | undefined> = [];
+    mock.method(client, 'workflowBusinessServiceSearch', async (_tenantId: string, codes?: string[]) => {
+      seen.push(codes);
+      return [{ businessService: 'PGR' }, { businessService: 'TL' }];
+    });
+    const dp = createDigitDataProvider(client, 'pg');
+    const result = await dp.getList('workflow-business-services', {
+      pagination: { page: 1, perPage: 50 }, sort: { field: 'businessService', order: 'ASC' }, filter: {},
+    });
+    assert.deepEqual(seen, [undefined], 'no filter must mean no businessServices param, i.e. everything');
+    assert.deepEqual(result.data.map((r) => (r as { businessService?: string }).businessService), ['PGR', 'TL']);
+  });
+
+  it('still narrows to exactly the business services a caller asks for', async () => {
+    const seen: Array<string[] | undefined> = [];
+    mock.method(client, 'workflowBusinessServiceSearch', async (_tenantId: string, codes?: string[]) => {
+      seen.push(codes);
+      return [{ businessService: 'PGR' }];
+    });
+    const dp = createDigitDataProvider(client, 'pg');
+    await dp.getList('workflow-business-services', {
+      pagination: { page: 1, perPage: 50 }, sort: { field: 'businessService', order: 'ASC' },
+      filter: { businessServices: ['PGR'] },
+    });
+    // A single string is accepted too — react-admin filter inputs produce one.
+    await dp.getList('workflow-business-services', {
+      pagination: { page: 1, perPage: 50 }, sort: { field: 'businessService', order: 'ASC' },
+      filter: { businessServices: 'TL' },
+    });
+    // An empty or blank filter is not a filter; it must not become a search for ''.
+    await dp.getList('workflow-business-services', {
+      pagination: { page: 1, perPage: 50 }, sort: { field: 'businessService', order: 'ASC' },
+      filter: { businessServices: ['  '] },
+    });
+    assert.deepEqual(seen, [['PGR'], ['TL'], undefined]);
+  });
+
   it('throws for unknown resource in getList', async () => {
     const dp = createDigitDataProvider(client, 'pg');
     await assert.rejects(
@@ -407,8 +449,10 @@ describe('createDigitDataProvider', () => {
       },
     ]);
     let captured: Record<string, unknown> | null = null;
-    mock.method(client, 'mdmsUpdate', async (rec: { data: Record<string, unknown> }) => {
+    let capturedIsActive: boolean | undefined;
+    mock.method(client, 'mdmsUpdate', async (rec: { data: Record<string, unknown> }, isActive: boolean) => {
       captured = rec.data;
+      capturedIsActive = isActive;
       return rec;
     });
 
@@ -420,8 +464,8 @@ describe('createDigitDataProvider', () => {
         id: 'DEPT_1',
         code: 'DEPT_1',
         name: 'New Name',
-        active: false,
-        _isActive: true,
+        active: true,
+        _isActive: false,
         _uniqueIdentifier: 'DEPT_1',
         _auditDetails: { createdBy: 'x' },
         _schemaCode: 'common-masters.Department',
@@ -433,7 +477,187 @@ describe('createDigitDataProvider', () => {
     assert.ok(captured, 'mdmsUpdate should have been called');
     assert.deepEqual(Object.keys(captured!).sort(), ['active', 'code', 'name']);
     assert.equal((captured as { name: string }).name, 'New Name');
+    // The root-level isActive (`_isActive`) is the single enable/disable flag:
+    // it is what gets saved, and the duplicate in-`data` `active` follows it
+    // (egovernments/CCRS#1846).
+    assert.equal(capturedIsActive, false);
     assert.equal((captured as { active: boolean }).active, false);
+  });
+
+  describe('MDMS enable/disable via root isActive (egovernments/CCRS#1846)', () => {
+    const dept = (isActive: boolean, active?: boolean) => ({
+      id: 'abc-id',
+      tenantId: 'pg',
+      schemaCode: 'common-masters.Department',
+      uniqueIdentifier: 'DEPT_1',
+      data: { code: 'DEPT_1', name: 'Old Name', ...(active === undefined ? {} : { active }) },
+      isActive,
+      auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 },
+    });
+    const captureUpdate = () => {
+      const calls: { data: Record<string, unknown>; isActive: boolean }[] = [];
+      mock.method(client, 'mdmsUpdate', async (rec: { data: Record<string, unknown> }, isActive: boolean) => {
+        calls.push({ data: { ...rec.data }, isActive });
+        return rec;
+      });
+      return calls;
+    };
+
+    it('keeps a legacy root-true/data-false record disabled on an edit that does not touch status', async () => {
+      // develop's Department checkbox wrote data.active=false while forcing root
+      // isActive=true; such records must read as disabled and stay so on save.
+      mock.method(client, 'mdmsSearch', async () => [dept(true, false)]);
+      const calls = captureUpdate();
+      const dp = createDigitDataProvider(client, 'pg');
+
+      const { data: shown } = await dp.getOne('departments', { id: 'DEPT_1', meta: { showInactive: true } });
+      assert.equal(shown._isActive, false);
+
+      // Inline name edit: the full row echoes both flags as loaded.
+      await dp.update('departments', {
+        id: 'DEPT_1',
+        data: { ...shown, name: 'New Name' },
+        previousData: shown,
+        meta: { showInactive: true },
+      });
+      // Dirty-fields-only payload: no status at all.
+      await dp.update('departments', { id: 'DEPT_1', data: { name: 'New Name' }, previousData: {} as never });
+
+      for (const call of calls) {
+        assert.equal(call.isActive, false);
+        assert.equal(call.data.active, false);
+      }
+    });
+
+    it('honours a status change made through a data flag even when _isActive echoes the old value', async () => {
+      // ComplaintTypeEdit binds `active`; its payload still carries the loaded `_isActive`.
+      mock.method(client, 'mdmsSearch', async () => [dept(true, true)]);
+      const calls = captureUpdate();
+      const dp = createDigitDataProvider(client, 'pg');
+      await dp.update('departments', {
+        id: 'DEPT_1',
+        data: { code: 'DEPT_1', name: 'Old Name', active: false, _isActive: true },
+        previousData: {} as never,
+      });
+      assert.equal(calls[0].isActive, false);
+      assert.equal(calls[0].data.active, false);
+    });
+
+    it('re-enables a disabled record through either flag', async () => {
+      mock.method(client, 'mdmsSearch', async () => [dept(false, false)]);
+      const calls = captureUpdate();
+      const dp = createDigitDataProvider(client, 'pg');
+      const meta = { showInactive: true };
+      await dp.update('departments', { id: 'DEPT_1', data: { active: false, _isActive: true }, previousData: {} as never, meta });
+      await dp.update('departments', { id: 'DEPT_1', data: { active: true, _isActive: false }, previousData: {} as never, meta });
+      assert.deepEqual(calls.map((c) => [c.isActive, c.data.active]), [[true, true], [true, true]]);
+    });
+
+    it('saves an explicit data active=false under includeInactive (Twilio template sync)', async () => {
+      mock.method(client, 'mdmsSearch', async () => [dept(true, true)]);
+      const calls = captureUpdate();
+      const dp = createDigitDataProvider(client, 'pg');
+      await dp.update('departments', {
+        id: 'DEPT_1',
+        data: { code: 'DEPT_1', name: 'Old Name', active: false },
+        previousData: {} as never,
+        meta: { includeInactive: true },
+      });
+      assert.equal(calls[0].isActive, false);
+    });
+
+    it('still reactivates on the Remove -> re-Add flow when the payload carries no status', async () => {
+      mock.method(client, 'mdmsSearch', async () => [dept(false, false)]);
+      const calls = captureUpdate();
+      const dp = createDigitDataProvider(client, 'pg');
+      await dp.update('departments', {
+        id: 'DEPT_1',
+        data: { code: 'DEPT_1', name: 'Again' },
+        previousData: {} as never,
+        meta: { includeInactive: true },
+      });
+      assert.equal(calls[0].isActive, true);
+      assert.equal(calls[0].data.active, true);
+    });
+
+    it('updates and deletes an inactive row only when the caller is a master screen', async () => {
+      mock.method(client, 'mdmsSearch', async () => [dept(false, true)]);
+      const calls = captureUpdate();
+      const dp = createDigitDataProvider(client, 'pg');
+      await assert.rejects(
+        dp.update('departments', { id: 'DEPT_1', data: { name: 'x' }, previousData: {} as never }),
+        /Record not found/,
+      );
+      await assert.rejects(dp.delete('departments', { id: 'DEPT_1', previousData: {} as never }), /Record not found/);
+
+      const meta = { showInactive: true };
+      await dp.update('departments', { id: 'DEPT_1', data: { name: 'x' }, previousData: {} as never, meta });
+      await dp.delete('departments', { id: 'DEPT_1', previousData: {} as never, meta });
+      assert.equal(calls.length, 2);
+      // Delete clears the stale data flag that develop's delete() left behind.
+      assert.deepEqual([calls[1].isActive, calls[1].data.active], [false, false]);
+    });
+
+    it('delete mirrors the root flag into the data flag', async () => {
+      mock.method(client, 'mdmsSearch', async () => [dept(true, true)]);
+      const calls = captureUpdate();
+      const dp = createDigitDataProvider(client, 'pg');
+      await dp.delete('departments', { id: 'DEPT_1', previousData: {} as never });
+      assert.deepEqual([calls[0].isActive, calls[0].data.active], [false, false]);
+    });
+
+    it('hides a legacy root-true/data-false record from lookups but lists it on master screens', async () => {
+      const records = [dept(true, false), { ...dept(true, true), uniqueIdentifier: 'DEPT_2', data: { code: 'DEPT_2', name: 'Two', active: true } }];
+      mock.method(client, 'mdmsCount', async () => records.length);
+      mock.method(client, 'mdmsSearch', async (_t: string, _s: string, options?: { offset?: number }) =>
+        (options?.offset ? [] : records));
+      const dp = createDigitDataProvider(client, 'pg');
+      const params = { pagination: { page: 1, perPage: 100 }, sort: { field: 'code', order: 'ASC' as const }, filter: {} };
+
+      const lookup = await dp.getList('departments', params);
+      assert.deepEqual(lookup.data.map((r) => r.id), ['DEPT_2']);
+      const master = await dp.getList('departments', { ...params, meta: { showInactive: true } });
+      assert.deepEqual(master.data.map((r) => [r.id, r._isActive]), [['DEPT_1', false], ['DEPT_2', true]]);
+      const inactiveOnly = await dp.getList('departments', { ...params, filter: { _isActive: 'false' }, meta: { showInactive: true } });
+      assert.deepEqual(inactiveOnly.data.map((r) => r.id), ['DEPT_1']);
+    });
+  });
+
+  it('creates permission masters at the state root even from a city session', async () => {
+    const tenants: string[] = [];
+    mock.method(client, 'mdmsCreate', async (t: string, schemaCode: string, uid: string, data: Record<string, unknown>) => {
+      tenants.push(t);
+      return { id: 'x', tenantId: t, schemaCode, uniqueIdentifier: uid, data, isActive: true };
+    });
+    const dp = createDigitDataProvider(client, 'pg.citya');
+    await dp.create('role-actions', { data: { id: 'R1', rolecode: 'GRO', actionid: 1, tenantId: 'pg' } });
+    await dp.create('access-roles', { data: { code: 'NEW_ROLE', name: 'New Role' } });
+    await dp.create('departments', { data: { code: 'DEPT_X', name: 'X' } });
+    assert.deepEqual(tenants, ['pg', 'pg', 'pg.citya']);
+  });
+
+  it('getList(access-actions) without a role filter lists every action in the actions master', async () => {
+    const actions = [
+      { id: 1, url: '/a', displayName: 'A' },
+      { id: 2, url: '/b', displayName: 'B' },
+    ].map((a) => ({
+      id: `id-${a.id}`, tenantId: 'pg', schemaCode: 'ACCESSCONTROL-ACTIONS-TEST.actions-test',
+      uniqueIdentifier: String(a.id), data: a, isActive: true,
+    }));
+    const searched: string[] = [];
+    mock.method(client, 'mdmsCount', async () => actions.length);
+    mock.method(client, 'mdmsSearch', async (t: string, _s: string, options?: { offset?: number }) => {
+      searched.push(t);
+      return options?.offset ? [] : actions;
+    });
+    const byRole = mock.method(client, 'accessActionsSearch', async () => []);
+    const dp = createDigitDataProvider(client, 'pg.citya');
+    const { data } = await dp.getList('access-actions', {
+      pagination: { page: 1, perPage: 100 }, sort: { field: 'id', order: 'ASC' }, filter: {},
+    });
+    assert.deepEqual(data.map((r) => String(r.id)), ['1', '2']);
+    assert.ok(searched.every((t) => t === 'pg'));
+    assert.equal(byRole.mock.callCount(), 0);
   });
 
   it('does not let a stale reActivateEmployee in the form payload override the fresh fetch (closes #813)', async () => {
@@ -888,26 +1112,34 @@ describe('createDigitDataProvider', () => {
     assert.equal(result.data.find((r) => r.id === 'CITY_001')?.tenantId, 'ke.mycitynew');
   });
 
-  it('getList(access-roles) returns one record per role code', async () => {
-    // egov-accesscontrol merges the tenant's roles with the state tenant's, so
-    // a role defined at both levels comes back twice.
-    mock.method(client, 'accessRolesSearch', async () => [
-      { code: 'HRMS_ADMIN', name: 'HRMS Admin', tenantId: 'ke' },
-      { code: 'HRMS_ADMIN', name: 'HRMS Admin', tenantId: 'ke.bomet' },
-      { code: 'LOC_ADMIN', name: 'Localisation admin', tenantId: 'ke' },
-      { code: 'LOC_ADMIN', name: 'Localisation admin', tenantId: 'ke.bomet' },
-      { code: 'MDMS_ADMIN', name: 'MDMS ADMIN', tenantId: 'ke' },
-    ]);
+  it('getList(access-roles) reads the MDMS roles master; inactive roles only on master screens', async () => {
+    // access-roles is backed by ACCESSCONTROL-ROLES.roles itself, so a role
+    // disabled via the root-level isActive stays reachable on the master
+    // screens (meta.showInactive) but disappears from every other consumer
+    // (e.g. role dropdowns) — egovernments/CCRS#1846.
+    const roles = [
+      { code: 'ACCOUNT_ADMIN', name: 'Account Admin', isActive: false },
+      { code: 'MDMS_ADMIN', name: 'MDMS ADMIN', isActive: true },
+    ].map((r) => ({
+      id: `id-${r.code}`, tenantId: 'ke', schemaCode: 'ACCESSCONTROL-ROLES.roles',
+      uniqueIdentifier: r.code, data: { code: r.code, name: r.name }, isActive: r.isActive,
+    }));
+    const matching = (options?: { isActive?: boolean }) =>
+      options?.isActive === undefined ? roles : roles.filter((r) => r.isActive === options.isActive);
+    mock.method(client, 'mdmsCount', async (_t: string, _s: string, options?: { isActive?: boolean }) =>
+      matching(options).length);
+    mock.method(client, 'mdmsSearch', async (_t: string, _s: string, options?: { isActive?: boolean; offset?: number }) =>
+      (options?.offset ? [] : matching(options)));
 
     const dp = createDigitDataProvider(client, 'ke');
-    const result = await dp.getList('access-roles', {
-      pagination: { page: 1, perPage: 100 },
-      sort: { field: 'name', order: 'ASC' },
-      filter: {},
-    });
+    const params = { pagination: { page: 1, perPage: 100 }, sort: { field: 'code', order: 'ASC' as const }, filter: {} };
 
-    assert.deepEqual(result.data.map((r) => r.id), ['HRMS_ADMIN', 'LOC_ADMIN', 'MDMS_ADMIN']);
-    assert.equal(result.total, 3);
+    const lookup = await dp.getList('access-roles', params);
+    assert.deepEqual(lookup.data.map((r) => r.id), ['MDMS_ADMIN']);
+
+    const masterScreen = await dp.getList('access-roles', { ...params, meta: { showInactive: true } });
+    assert.deepEqual(masterScreen.data.map((r) => r.id), ['ACCOUNT_ADMIN', 'MDMS_ADMIN']);
+    assert.equal(masterScreen.data.find((r) => r.id === 'ACCOUNT_ADMIN')?._isActive, false);
   });
 
   it('keeps records whose id extraction failed, under distinct synthetic ids', async () => {
@@ -915,17 +1147,17 @@ describe('createDigitDataProvider', () => {
     // are as broken as a real duplicate — react-admin keys on id — but they are
     // NOT the same record, so dropping the later one would hide a real row.
     // Each repeat gets its own id instead.
-    mock.method(client, 'accessRolesSearch', async () => [
+    mock.method(client, 'accessActionsSearch', async () => [
       { name: 'No code at all', tenantId: 'ke' },
       { name: 'Also no code', tenantId: 'ke' },
-      { code: 'MDMS_ADMIN', name: 'MDMS ADMIN', tenantId: 'ke' },
+      { id: 'MDMS_ADMIN', name: 'MDMS ADMIN', tenantId: 'ke' },
     ]);
 
     const dp = createDigitDataProvider(client, 'ke');
-    const result = await dp.getList('access-roles', {
+    const result = await dp.getList('access-actions', {
       pagination: { page: 1, perPage: 100 },
       sort: { field: 'name', order: 'ASC' },
-      filter: {},
+      filter: { roleCodes: ['GRO'] },
     });
 
     assert.equal(result.data.length, 3, 'no row may be dropped for lacking an id');
@@ -941,17 +1173,17 @@ describe('createDigitDataProvider', () => {
   it('does not let a synthetic blank id swallow a real record that collides with it', async () => {
     // A real record whose code happens to equal the synthetic id must survive,
     // even though it is listed AFTER the blank-id records that generate one.
-    mock.method(client, 'accessRolesSearch', async () => [
+    mock.method(client, 'accessActionsSearch', async () => [
       { name: 'No code at all', tenantId: 'ke' },
       { name: 'Also no code', tenantId: 'ke' },
-      { code: '#blank-1', name: 'Real role oddly named', tenantId: 'ke' },
+      { id: '#blank-1', name: 'Real role oddly named', tenantId: 'ke' },
     ]);
 
     const dp = createDigitDataProvider(client, 'ke');
-    const result = await dp.getList('access-roles', {
+    const result = await dp.getList('access-actions', {
       pagination: { page: 1, perPage: 100 },
       sort: { field: 'name', order: 'ASC' },
-      filter: {},
+      filter: { roleCodes: ['GRO'] },
     });
 
     assert.equal(result.data.length, 3);

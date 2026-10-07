@@ -31,32 +31,61 @@ import {
   ScrollText,
   Plug,
   SlidersHorizontal,
+  ToggleRight,
   MessageCircle,
   UserCog,
   Map,
   Globe2,
+  CalendarClock,
+  Inbox,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { getGenericMdmsResources, getResourceLabel } from '@/providers/bridge';
 import { useMastersCapability } from '@/hooks/useMastersCapability';
 import { LEGACY_PGR_DASHBOARD_ENABLED, ONBOARDING_GATE_ENABLED } from '@/config/featureFlags';
-import { NavRow, SectionLabel, ActiveBar, RailBackdrop, RailCloseButton, RailMenuButton, RailPoweredBy } from '@/components/layout/rail';
+import { NavRow, NavExternalRow, SectionLabel, ActiveBar, RailBackdrop, RailCloseButton, RailMenuButton, RailPoweredBy } from '@/components/layout/rail';
 import { railClasses, rowTone } from '@/components/layout/railStyles';
 import { useRailDrawer } from '@/components/layout/useRailDrawer';
 import { AccountMenu, HelpButton, LocaleSwitcher, ThemeSwitcher } from '@/components/layout/HeaderControls';
-import { resumePath } from '@/onboarding/progress';
+import { isOnboardingComplete, resumePath } from '@/onboarding/progress';
+import { complaintDeskUrl, useWorkspaceSlug } from '@/identity/workspaceSlug';
 
 /** Sidebar navigation groups — names are i18n keys resolved at render time */
 const navGroups = [
   {
     labelKey: 'app.nav.notifications',
+    // Ordered the way a first-time operator needs them, not alphabetically and
+    // not by storage: a gateway account must exist (Providers) before a channel
+    // can be switched on (Channels), before anything can be configured
+    // (Configure), which is read against the vocabulary (Events). The raw
+    // Templates/Routing masters come after the guided screen because they are
+    // the bulk-edit path, WhatsApp's extra step after them, and Logs last —
+    // that is where you go once something has been sent. User Preferences is
+    // per-citizen data, not setup, so it sits at the end.
+    //
+    // Labels drop the "Notification" prefix: inside a menu already titled
+    // Notifications it read as "Notifications → Notification Routing". The page
+    // TITLES keep the long form so a screen is unambiguous out of context.
+    //
+    // The masters below are the shared NOTIFICATIONS.* ones, and they appear
+    // HERE ONLY — `advancedResources` drops every id already listed in a
+    // primary group, so Advanced no longer repeats "Notification Events /
+    // Routing / Templates" a second time under different labels.
+    //
+    // The legacy RAINMAKER-PGR.Notification* four are deliberately NOT in this
+    // group: they are read-only history, still reachable at
+    // /manage/notification-<x> and, because they are in no primary group, still
+    // listed in Advanced — so an operator on an un-migrated tenant can see their
+    // data without the sidebar offering two of everything.
     items: [
-      { id: 'notification-configure', nameKey: 'app.nav.notification_configure', path: '/manage/notification-configure', icon: SlidersHorizontal },
-      { id: 'notification-routing', nameKey: 'app.nav.notification_routing', path: '/manage/notification-routing', icon: Bell },
-      { id: 'notification-template', nameKey: 'app.nav.notification_templates', path: '/manage/notification-template', icon: Mail },
-      { id: 'notification-provider-template', nameKey: 'app.nav.notification_provider_templates', path: '/manage/notification-provider-template', icon: MessageCircle },
-      { id: 'notification-log', nameKey: 'app.nav.notification_logs', path: '/manage/notification-log', icon: ScrollText },
       { id: 'notification-provider', nameKey: 'app.nav.notification_providers', path: '/manage/notification-provider', icon: Plug },
+      { id: 'notifications-channel', nameKey: 'app.nav.notification_channels', path: '/manage/notifications-channel', icon: ToggleRight },
+      { id: 'notification-configure', nameKey: 'app.nav.notification_configure', path: '/manage/notification-configure', icon: SlidersHorizontal },
+      { id: 'notifications-event-catalogue', nameKey: 'app.nav.notification_events', path: '/manage/notifications-event-catalogue', icon: CalendarClock },
+      { id: 'notifications-template', nameKey: 'app.nav.notification_templates', path: '/manage/notifications-template', icon: Mail },
+      { id: 'notifications-routing', nameKey: 'app.nav.notification_routing', path: '/manage/notifications-routing', icon: Bell },
+      { id: 'notifications-provider-template', nameKey: 'app.nav.notification_provider_templates', path: '/manage/notifications-provider-template', icon: MessageCircle },
+      { id: 'notification-log', nameKey: 'app.nav.notification_logs', path: '/manage/notification-log', icon: ScrollText },
       { id: 'notification-preference', nameKey: 'app.nav.notification_preferences', path: '/manage/notification-preference', icon: UserCog },
     ],
   },
@@ -112,12 +141,26 @@ const mainLinks = [
   { path: '/manage/public-dashboard', nameKey: 'app.nav.public_dashboard', icon: Globe2 },
 ];
 
-/** Generic MDMS resources for the Advanced section */
-const advancedResources = Object.keys(getGenericMdmsResources()).map((name) => ({
-  id: name,
-  name: getResourceLabel(name),
-  path: `/manage/${name}`,
-}));
+/** Every resource id that already has its own entry in a primary nav group. */
+const primaryNavIds = new Set(navGroups.flatMap((group) => group.items.map((item) => item.id)));
+
+/**
+ * Generic MDMS resources for the Advanced section.
+ *
+ * Derived from the menu definition above rather than from a hand-kept list, so
+ * a resource promoted into a primary group cannot end up listed twice — which
+ * is what "Notification Events / Routing / Templates" were, once under
+ * NOTIFICATIONS and again down here under their long registry labels. Anything
+ * NOT in a primary group stays, including the read-only Legacy (PGR)
+ * Notification masters, for which Advanced is the only way in.
+ */
+const advancedResources = Object.keys(getGenericMdmsResources())
+  .filter((name) => !primaryNavIds.has(name))
+  .map((name) => ({
+    id: name,
+    name: getResourceLabel(name),
+    path: `/manage/${name}`,
+  }));
 
 export function DigitLayout({ children }: { children?: ReactNode }) {
   const { state, logout, setMode, toggleHelp } = useApp();
@@ -178,10 +221,14 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
     setCollapsedGroups((prev) => ({ ...prev, [labelKey]: !prev[labelKey] }));
   };
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
+  const handleLogout = async () => {
+    try { await logout(); navigate('/login'); }
+    catch (error) { window.alert(error instanceof Error ? error.message : 'Sign-out failed. Please retry.'); }
   };
+
+  // Once setup is done, the way to where the workspace's staff handle complaints.
+  const slug = useWorkspaceSlug(state.tenant);
+  const deskUrl = isOnboardingComplete(state.completedPhases) ? complaintDeskUrl(state.environment, slug) : null;
 
   const handleSwitchToOnboarding = () => {
     setMode('onboarding');
@@ -384,18 +431,28 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
           )}
         </nav>
 
-        {/* Sidebar footer: the way back to onboarding while switching is
-            allowed (with onboarding compulsory there is nothing to go back to),
-            then "Powered by DIGIT" */}
-        {!ONBOARDING_GATE_ENABLED && (
+        {/* Sidebar footer: the complaint desk once setup is done, the way back
+            to onboarding while switching is allowed (with onboarding compulsory
+            there is nothing to go back to), then "Powered by DIGIT" */}
+        {(deskUrl || !ONBOARDING_GATE_ENABLED) && (
           <div className="border-t border-border py-2">
-            <NavRow
-              icon={Settings}
-              label={translate('app.nav.switch_to_onboarding')}
-              active={false}
-              collapsed={sidebarCollapsed}
-              onClick={handleSwitchToOnboarding}
-            />
+            {deskUrl && (
+              <NavExternalRow
+                icon={Inbox}
+                label={translate('app.nav.open_complaint_desk', { _: 'Open complaint desk' })}
+                href={deskUrl}
+                collapsed={sidebarCollapsed}
+              />
+            )}
+            {!ONBOARDING_GATE_ENABLED && (
+              <NavRow
+                icon={Settings}
+                label={translate('app.nav.switch_to_onboarding')}
+                active={false}
+                collapsed={sidebarCollapsed}
+                onClick={handleSwitchToOnboarding}
+              />
+            )}
           </div>
         )}
         <RailPoweredBy collapsed={sidebarCollapsed} />

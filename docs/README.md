@@ -18,7 +18,7 @@ your question; version-specific material lives only under `releases/`.
 - [`deployment/`](setup/deployment/) — [deployment modes](setup/deployment/modes.md),
   [CMS vs stock DIGIT](setup/deployment/cms-vs-stock-digit.md), sizing guides
   ([Africa](setup/deployment/decision-guide-africa.md), [India](setup/deployment/decision-guide-india.md)),
-  [identity BFF](setup/deployment/identity-bff.md), [Matomo](setup/deployment/matomo.md).
+  [identity BFF](setup/deployment/identity-bff.md) ([on Helm](setup/deployment/helm-identity.md)), [Matomo](setup/deployment/matomo.md).
   The current single-machine deployment guide is [releases/2.12/deployment](releases/2.12/deployment/README.md).
 - [`onboarding/`](setup/onboarding/README.md) — onboard a city and load its data, with example and sample sheets
 
@@ -45,6 +45,7 @@ One folder per feature; design docs sit next to the feature they describe.
 
 - [2.12](releases/2.12/release-notes-v2.12.md) · [2.12-beta](releases/2.12-beta/release-notes-v2.12-beta.md) ·
   [2.11 upgrade](releases/2.11/migration-v2.10-to-v2.11.md)
+- [2.20 notifications](releases/2.20/notifications/README.md): setup, migration from 2.12, providers, developer guide and the published contract (unreleased; lands with the notifications PR #2097)
 - [Rapid release approach](releases/rapid-release-approach.md)
 
 ## reference/

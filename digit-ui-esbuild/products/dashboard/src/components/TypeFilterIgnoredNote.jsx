@@ -24,7 +24,7 @@ export function typeFilterIgnored(result) {
 
 const TypeFilterIgnoredNote = () => {
   const { t } = useDashboardT();
-  const text = t("DASHBOARD_TYPE_FILTER_NOT_APPLIED", "Type filter not applied");
+  const text = t("DASHBOARD_TYPE_FILTER_NOT_APPLIED", "Category filter not applied");
   return (
     <span className="dashboard-type-filter-ignored" title={text}>
       {text}

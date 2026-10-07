@@ -22,6 +22,7 @@ function loadService({ fetchImpl, defaultCountryCode = "+91", defaultRegex = "^[
     exports: {
       rootTenantId: "pg",
       mobileValidation: { defaultCountryCode, defaultRegex, cacheTtlMs: 300000 },
+      timeouts: { request: 20000, mediaProcessing: 13000, dispatchSettle: 30000 },
       egovServices: {
         egovServicesHost: "http://localhost/",
         mdmsV2SearchPath: "mdms-v2/v2/_search",
@@ -302,4 +303,135 @@ test("REGRESSION NEW1: toAddressableDigits round-trips every reconcilable form",
   ]) {
     assert.equal(s.toAddressableDigits(raw, cfg), want, `failed for ${raw}`);
   }
+});
+
+// Exactly the two active rows on bometfeedbackhub's `ke` root, which serves both
+// ke.bomet (+254) and ke.india (+91).
+const KE_TWO_ROWS = [
+  { isActive: true, data: { countryCode: "+254", mobileNumberRegex: "^(0?[17][0-9]{8}|[6-9][0-9]{9})$" } },
+  { isActive: true, data: { countryCode: "+91", mobileNumberRegex: "^[6-9][0-9]{9}$" } },
+];
+
+function loadKeTwoRows() {
+  return loadService({
+    fetchImpl: async () => ({ ok: true, json: async () => ({ mdms: KE_TWO_ROWS }) }),
+  });
+}
+
+test("REGRESSION: a +91 citizen is not rejected when +254 is the state's first row", async () => {
+  const s = loadKeTwoRows();
+  const ke = await s.getConfig("ke");
+  assert.equal(ke.countryCode, "+254");
+  assert.deepEqual(ke.alternates.map((a) => a.countryCode), ["+91"]);
+  // Previously null: +254 was the only rule tried, and 916307817430 matches neither form.
+  assert.equal(s.toNational("whatsapp:+916307817430", ke), "6307817430");
+});
+
+test("the primary row still wins whenever it can reconcile the number", async () => {
+  const s = loadKeTwoRows();
+  const ke = await s.getConfig("ke");
+  assert.equal(s.toNational("whatsapp:+254712345678", ke), "712345678");
+  assert.equal(s.toNational("0712345678", ke), "0712345678");
+});
+
+test("a number no row accepts is still rejected", async () => {
+  const s = loadKeTwoRows();
+  const ke = await s.getConfig("ke");
+  assert.equal(s.toNational("whatsapp:+447700900123", ke), null);
+});
+
+test("REGRESSION (review): toAddressableDigits keeps the country of the rule that matched", async () => {
+  const s = loadKeTwoRows();
+  const ke = await s.getConfig("ke");
+  // Reconciled through the +91 alternate; rebuilding with the primary gave 2546307817430.
+  assert.equal(s.toAddressableDigits("916307817430", ke), "916307817430");
+  assert.equal(s.toAddressableDigits("whatsapp:+916307817430", ke), "916307817430");
+  // Primary-rule numbers are unchanged.
+  assert.equal(s.toAddressableDigits("254712345678", ke), "254712345678");
+  assert.equal(s.toAddressableDigits("0712345678", ke), "254712345678");
+});
+
+test("resolveNational reports which rule matched", async () => {
+  const s = loadKeTwoRows();
+  const ke = await s.getConfig("ke");
+  assert.equal(s.resolveNational("whatsapp:+916307817430", ke).rule.countryCode, "+91");
+  assert.equal(s.resolveNational("whatsapp:+254712345678", ke).rule.countryCode, "+254");
+  assert.equal(s.resolveNational("whatsapp:+447700900123", ke), null);
+});
+
+test("normalise builds the international form from the matched rule", async () => {
+  const s = loadKeTwoRows();
+  const result = await s.normalise("whatsapp:+916307817430", "ke");
+  assert.equal(result.national, "6307817430");
+  assert.equal(result.international, "916307817430");
+  assert.equal(result.e164, "+916307817430");
+});
+
+test("each mobileNumberRegex is compiled once", () => {
+  const s = loadService();
+  const rule = { countryCode: "+254", mobileNumberRegex: "^0?[17][0-9]{8}$" };
+  const first = s.nationalRegex(rule);
+  assert.equal(s.nationalRegex({ ...rule }), first);
+  // A malformed pattern falls back, and the fallback is cached too.
+  const bad = { countryCode: "+1", mobileNumberRegex: "([" };
+  assert.equal(s.nationalRegex(bad), s.nationalRegex(bad));
+});
+
+test("REGRESSION (review): a permissive primary does not hide the row whose code prefixes the number", async () => {
+  // This file's own example of a permissive rule, as the primary, with a +91 alternate.
+  const s = loadService({
+    fetchImpl: async () => ({
+      ok: true,
+      json: async () => ({
+        mdms: [
+          { isActive: true, data: { countryCode: "+254", mobileNumberRegex: "^[0-9]{9,12}$", default: true } },
+          { isActive: true, data: { countryCode: "+91", mobileNumberRegex: "^[6-9][0-9]{9}$" } },
+        ],
+      }),
+    }),
+  });
+  const ke = await s.getConfig("ke");
+  // 916307817430 also matches ^[0-9]{9,12}$ as sent; the +91 row must still win.
+  const resolved = s.resolveNational("whatsapp:+916307817430", ke);
+  assert.equal(resolved.national, "6307817430");
+  assert.equal(resolved.rule.countryCode, "+91");
+  // The primary still wins for its own numbers.
+  assert.equal(s.resolveNational("whatsapp:+254712345678", ke).rule.countryCode, "+254");
+});
+
+test("REGRESSION (review): a bare national number is not read through an alternate's country code", () => {
+  const s = loadService();
+  const cfg = {
+    countryCode: "+91", mobileNumberRegex: "^[6-9][0-9]{9}$",
+    alternates: [{ countryCode: "+7", mobileNumberRegex: "^[0-9]{9,10}$" }],
+  };
+  // 7912345678 is a valid Indian national number; it must not become +7 912345678.
+  const bare = s.resolveNational("7912345678", cfg);
+  assert.equal(bare.national, "7912345678");
+  assert.equal(bare.rule.countryCode, "+91");
+  assert.equal(s.toAddressableDigits("7912345678", cfg), "917912345678");
+  // Written in international form, the +7 row does apply.
+  assert.equal(s.resolveNational("+7912345678", cfg).rule.countryCode, "+7");
+});
+
+const MOZAMBIQUE = { countryCode: "+258", mobileNumberRegex: "^8[0-9]{8}$" };
+
+test("the 00 international prefix is read as +", () => {
+  const s = loadService();
+  assert.equal(s.toNational("00258841234567", MOZAMBIQUE), "841234567");
+  assert.equal(s.toNational("00 258 84 123 4567", MOZAMBIQUE), "841234567", "separators are ignored");
+  assert.equal(s.toNational("00919876543210", INDIA), "9876543210");
+});
+
+test("a 00-prefixed number replies to the right address, not with the 00 kept", () => {
+  const s = loadService();
+  assert.equal(s.toAddressableDigits("00258841234567", MOZAMBIQUE), "258841234567");
+});
+
+test("00 is only stripped before the tenant's own code", () => {
+  // A trunk-0 national number is untouched, and another country's 00-form is not
+  // reconciled to this tenant.
+  const s = loadService();
+  assert.equal(s.toNational("0712345678", KENYA), "0712345678");
+  assert.equal(s.toNational("00447700900123", MOZAMBIQUE), null);
 });

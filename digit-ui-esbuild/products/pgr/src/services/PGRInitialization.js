@@ -1,3 +1,5 @@
+import { getTenantHierarchy } from "./tenantHierarchy";
+
 /**
  * Initializes PGR module-specific configurations.
  * 
@@ -12,8 +14,6 @@
  * @throws Will throw an error if the boundary data cannot be fetched
  */
 const initializePGRModule = async ({ tenantId }) => {
-  // Get hierarchy type from global config or fallback to "HIERARCHYTEST"
-  const hierarchyType = window?.globalConfigs?.getConfig("HIERARCHY_TYPE") || "ADMIN";
   // Previously scoped the tree to `globalConfigs.BOUNDARY_TYPE`, which on
   // Nai Pepea is "Ward" — that filters the response to leaf rows only and
   // makes `getBoundaryTypeOrder` produce `[Ward]`, collapsing the cascade
@@ -34,6 +34,11 @@ const initializePGRModule = async ({ tenantId }) => {
     console.log("No CITIZEN user info found in localStorage.");
   }
 
+
+  // The tenant's own hierarchy (CMS-BOUNDARY.HierarchySchema), else globalConfigs.
+  // Returned so the module can load the matching rainmaker-boundary-<type> pack.
+  const hierarchy = await getTenantHierarchy(tenantId);
+  const { hierarchyType } = hierarchy;
 
   try {
     // Call boundary-service to get hierarchical boundary data with children included
@@ -59,22 +64,22 @@ const initializePGRModule = async ({ tenantId }) => {
     // boundaryHierarchyOrder unset and the dropdown silently blank).
     const rootBoundary = fetchBoundaryData?.TenantBoundary?.[0]?.boundary;
     if (!Array.isArray(rootBoundary) || rootBoundary.length === 0) {
+      // A workspace that has not created its geography yet: degrade to no cascade.
       console.warn("PGR init: boundary-relationships returned no boundary nodes for", hierarchyType, tenantId);
-      return;
+      Digit.SessionStorage.set("boundaryHierarchyOrder", []);
+      return hierarchy;
     }
     const boundaryHierarchyOrder = getBoundaryTypeOrder(rootBoundary);
 
     // Store the ordered boundary types in session storage for use in dropdown components
     Digit.SessionStorage.set("boundaryHierarchyOrder", boundaryHierarchyOrder);
-
-
   } catch (error) {
-    // Throw readable errors if available from backend, otherwise generic error
-    if (error?.response?.data?.Errors) {
-      throw new Error(error.response.data.Errors[0].message);
-    }
-    throw new Error("An unknown error occurred");
+    // Degrade, don't block the module: a hierarchy boundary-service doesn't know
+    // (a workspace before Geography) leaves the cascade empty.
+    console.warn("PGR init: boundary hierarchy unavailable for", hierarchyType, tenantId, error?.response?.data?.Errors?.[0]?.message || error);
+    Digit.SessionStorage.set("boundaryHierarchyOrder", []);
   }
+  return hierarchy;
 };
 
 /**

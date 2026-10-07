@@ -15,6 +15,7 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import { citizenOtpLogin } from '../../utils/citizen-auth';
+import { appBase } from '../../utils/auth';
 
 type LocFetch = { url: string; messageCount: number; servicedefsDotCount: number };
 
@@ -46,7 +47,7 @@ test.describe('Citizen complaint-type localization', () => {
 
     await citizenOtpLogin(page);
 
-    await page.goto('/digit-ui/citizen/pgr/create-complaint/complaint-type');
+    await page.goto(`${appBase()}/citizen/pgr/create-complaint/complaint-type`);
 
     // The complaint types live behind a combobox; options only enter the
     // DOM once it is opened.

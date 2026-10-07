@@ -62,10 +62,9 @@ export const StoreService = {
     if (!tenantConfigSearch) {
       localStorage.clear();
       sessionStorage.clear();
-      window.location.href = `/${window?.globalPath}/user/invalid-url`;
-      return;
-      // throw new Error("Invalid URL")
-      // return;
+      // The /user/invalid-url page was removed with the legacy identity paths
+      // (D26); fail the init query instead of navigating to a dead route.
+      throw new Error(`No tenant configuration for ${stateCode}: this link is not available.`);
     }
     const { MdmsRes } = await MdmsService.init(stateCode);
     const stateInfo = MdmsRes["common-masters"]?.StateInfo?.[0] || {};

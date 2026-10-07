@@ -1,3 +1,4 @@
+import { tenantSlug } from '../utils/identity-bff';
 /**
  * Citizen v2 wizard — postal-code input accepts alnum/dash characters.
  *
@@ -102,7 +103,7 @@ Catches a regression where the field silently mangles input before the shared is
 
     await citizenOtpLogin(page);
 
-    await page.goto(`${BASE_URL}/digit-ui/citizen/pgr/create-complaint/complaint-type`, {
+    await page.goto(`${BASE_URL}/${tenantSlug()}/digit-ui/citizen/pgr/create-complaint/complaint-type`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });
@@ -155,7 +156,7 @@ Catches: a broken i18next interpolation (post-processors mangling {{length}}), a
 
     await citizenOtpLogin(page);
 
-    await page.goto(`${BASE_URL}/digit-ui/citizen/pgr/create-complaint/complaint-type`, {
+    await page.goto(`${BASE_URL}/${tenantSlug()}/digit-ui/citizen/pgr/create-complaint/complaint-type`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });

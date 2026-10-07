@@ -4,3 +4,7 @@ coverage/
 *.tsbuildinfo
 data/*.jsonl
 agent-tests/data/
+
+# Generated from PGR canonical versioned seed during build.
+src/data/platform-baseline-v1.json
+data/platform-baseline-v1.json

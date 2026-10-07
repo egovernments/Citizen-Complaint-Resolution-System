@@ -13,6 +13,7 @@ import * as parsingUtils from "../services/atoms/Utils/ParsingUtils"
 import { iconRender } from "./iconRender";
 import {getFieldIdName} from "./field";
 import { DEFAULT_MOBILE_PATTERN } from "../constants/mobileValidation";
+import { legacyMultiRootTenantEnabled, mdmsAppId, rebaseAppUrl } from "../services/tenant/tenantRoute";
 
 const GetParamFromUrl = (key, fallback, search) => {
   if (typeof window !== "undefined") {
@@ -144,7 +145,14 @@ const isContextPathMissing = (url) => {
   return url?.indexOf(`/${contextPath}`) === -1;
 }
 const getMultiRootTenant = () => {
-  return window?.globalConfigs?.getConfig("MULTI_ROOT_TENANT") || false;
+  // A canonical tenant-scoped route has already resolved the one active
+  // tenant before the application starts.  The legacy flag means "derive or
+  // choose a tenant inside digit-ui" and must not activate its URL rewriters,
+  // selectors, tenant-list bootstrap, or superuser setup chrome here.
+  return legacyMultiRootTenantEnabled(
+    window?.globalConfigs?.getConfig("MULTI_ROOT_TENANT"),
+    window?.__digitTenantContext,
+  );
 };
 
 const getRoleBasedHomeCard = () => {
@@ -567,5 +575,7 @@ export default {
   sandboxAccess,
   iconRender,
   transformURL,
+  mdmsAppId,
+  rebaseAppUrl,
   getFieldIdName
 };

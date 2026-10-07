@@ -125,7 +125,7 @@ const countLabel = (t, n, singularKey, pluralKey, singular, plural) =>
  */
 /**
  * City name for the tenant the *context* belongs to. cityDetails describes
- * whichever city the header's ChangeCity control currently shows, which for a
+ * whichever tenant the route context currently identifies, which for a
  * state-level employee need not be that tenant — using it blindly would label
  * City A's departments and jurisdictions with City B's name.
  */

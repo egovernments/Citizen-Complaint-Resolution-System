@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "1",
+  "eventId": "11111111-2222-3333-4444-555555555555",
+  "eventType": "XYZ_LICENCE_RENEWED",
+  "eventTime": "2026-09-21T08:02:17.900Z",
+  "producer": "xyz-services",
+  "module": "XYZ",
+  "eventName": "XYZ.LICENCE.RENEWED",
+  "entityType": "LICENCE",
+  "entityId": "XYZ-LIC-2026-0042",
+  "tenantId": "ke.bomet",
+  "channel": "SMS",
+  "subscriberId": "ke.bomet:2c4e6a80-1111-4222-8333-944455556666",
+  "contact": {
+    "userId": "2c4e6a80-1111-4222-8333-944455556666",
+    "type": "CITIZEN",
+    "name": "Amina Otieno",
+    "phone": "+254733111222",
+    "locale": "en_IN"
+  },
+  "renderedBody": "Your licence XYZ-LIC-2026-0042 has been renewed until 31 Dec 2027.",
+  "transactionId": "XYZ-LIC-2026-0042:RENEWED:ke.bomet:2c4e6a80-1111-4222-8333-944455556666:SMS",
+  "templateKey": "XYZ.LICENCE.RENEWED.SMS.en_IN"
+}

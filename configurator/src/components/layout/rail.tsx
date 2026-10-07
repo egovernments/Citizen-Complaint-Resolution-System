@@ -1,5 +1,5 @@
 import type { ComponentType, ReactNode } from 'react';
-import { Menu, X } from 'lucide-react';
+import { ExternalLink, Menu, X } from 'lucide-react';
 import { rowTone } from './railStyles';
 import { DigitFooter } from '@/components/DigitFooter';
 
@@ -58,6 +58,36 @@ export function NavRow({
       {!collapsed && <span className="flex-1 min-w-0">{label}</span>}
       {!collapsed && trailing}
     </button>
+  );
+}
+
+/** A rail row that leaves the console: a link to another app, in a new tab. Styled as NavRow. */
+export function NavExternalRow({
+  icon: Icon,
+  label,
+  href,
+  collapsed,
+}: {
+  icon: ComponentType<{ className?: string }>;
+  label: string;
+  href: string;
+  collapsed: boolean;
+}) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={collapsed ? label : undefined}
+      aria-label={collapsed ? label : undefined}
+      className={`relative w-full min-h-9 flex items-center gap-3 py-2 text-sm text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring ${
+        collapsed ? 'justify-center px-0' : 'px-4'
+      } ${rowTone(false)}`}
+    >
+      <Icon className="w-4 h-4 flex-shrink-0" />
+      {!collapsed && <span className="flex-1 min-w-0">{label}</span>}
+      {!collapsed && <ExternalLink aria-hidden="true" className="w-3.5 h-3.5 flex-shrink-0 text-muted-foreground" />}
+    </a>
   );
 }
 

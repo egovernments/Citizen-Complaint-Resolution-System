@@ -1,4 +1,5 @@
 import { type Page } from '@playwright/test';
+import { appBase } from '../utils/auth';
 
 export class HrmsCreatePage {
   readonly page: Page;
@@ -8,7 +9,7 @@ export class HrmsCreatePage {
   }
 
   async goto() {
-    await this.page.goto('/digit-ui/employee/hrms/create', {
+    await this.page.goto(`${appBase()}/employee/hrms/create`, {
       waitUntil: 'domcontentloaded',
       timeout: 45_000,
     });

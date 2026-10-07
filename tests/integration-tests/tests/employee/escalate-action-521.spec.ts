@@ -1,3 +1,4 @@
+import { tenantSlug } from '../utils/identity-bff';
 /**
  * Employee — manual Escalate action end-to-end (CCRS #521).
  *
@@ -193,7 +194,7 @@ test.describe('employee — manual Escalate action #521', () => {
 
     // ============ Open the assigned complaint detail ============
     await page.goto(
-      `${BASE_URL}/digit-ui/employee/pgr/complaint-details/${COMPLAINT_ID}`,
+      `${BASE_URL}/${tenantSlug()}/digit-ui/employee/pgr/complaint-details/${COMPLAINT_ID}`,
       { waitUntil: 'domcontentloaded', timeout: 30_000 },
     );
     await page.locator('.digit-viewcard-field-pair, .v2-pgr-details').first()

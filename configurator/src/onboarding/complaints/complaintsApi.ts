@@ -1,10 +1,12 @@
 import { localizationService, mdmsService } from '@/api';
 import type { MdmsRecord } from '@/api/types';
 import { toPascal } from '@/utils/excelParser';
+import { labelLocales } from '../labelLocales';
 
 /**
  * Complaint types built from scratch: types, each handled by one department,
- * with optional subtypes, and one resolution time for all of them. Saved as
+ * with optional subtypes, and a resolution time: the workspace default, or the
+ * type's own (a subtype follows its type unless it was saved with its own). Saved as
  * the same RAINMAKER-PGR.ComplaintHierarchy the spreadsheet route writes: a
  * two-level PGR hierarchy whose rows people file against (every subtype, or a
  * type that has none) carry the department and slaHours.
@@ -12,6 +14,11 @@ import { toPascal } from '@/utils/excelParser';
 
 export const HIERARCHY_TYPE = 'PGR';
 export const LEVELS = ['COMPLAINT_TYPE', 'SUB_TYPE'] as const;
+/** Display labels stored on the definition's levels; the level codes stay as they are. */
+const LEVEL_LABELS: Record<(typeof LEVELS)[number], string> = {
+  COMPLAINT_TYPE: 'Complaint Category',
+  SUB_TYPE: 'Complaint Subcategory',
+};
 const DEFINITION_SCHEMA = 'RAINMAKER-PGR.ComplaintHierarchyDefinition';
 const HIERARCHY_SCHEMA = 'RAINMAKER-PGR.ComplaintHierarchy';
 export const DEFAULT_SLA_HOURS = 72;
@@ -20,6 +27,8 @@ export interface DraftSubtype {
   /** Set once saved; a rename keeps it. */
   code?: string;
   name: string;
+  /** Its own resolution time, kept when it was saved with one that differs from its type's. Unset: the type's. */
+  slaHours?: number;
 }
 
 export interface DraftType {
@@ -27,17 +36,39 @@ export interface DraftType {
   name: string;
   department: string;
   subtypes: DraftSubtype[];
+  /** The type's own resolution time. Unset: the workspace default. */
+  slaHours?: number;
 }
 
 export interface ComplaintDraft {
   types: DraftType[];
+  /** The default resolution time, for every type without its own. */
   slaHours: number;
+}
+
+/** The hours a row people file against gets: the subtype's own, else its type's, else the default. */
+export function resolutionHours(draft: ComplaintDraft, type: DraftType, subtype?: DraftSubtype): number {
+  return subtype?.slaHours ?? type.slaHours ?? draft.slaHours;
+}
+
+/** Whether some of the type's subtypes keep their own resolution time. */
+export function hasMixedHours(type: DraftType): boolean {
+  return type.subtypes.some((subtype) => subtype.slaHours !== undefined);
+}
+
+/** The most common value, the earliest on a tie. */
+function mostCommon(values: number[]): number | undefined {
+  const counts = new Map<number, number>();
+  for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
+  let best: number | undefined;
+  for (const [value, count] of counts) if (best === undefined || count > counts.get(best)!) best = value;
+  return best;
 }
 
 export type LoadedComplaints =
   | { editable: true; draft: ComplaintDraft; records: MdmsRecord[]; hasDefinition: boolean }
   /** Set up some other way (a spreadsheet with its own levels): shown, not edited, here. */
-  | { editable: false; leafCount: number; levels: string[] };
+  | { editable: false; leafCount: number; levels: string[]; departments: string[] };
 
 const stateRootOf = (tenantId: string) => tenantId.split('.')[0];
 const dataOf = (record: MdmsRecord) => record.data as Record<string, unknown>;
@@ -71,28 +102,56 @@ export async function loadComplaints(tenantId: string): Promise<LoadedComplaints
 
   if (definition && definedLevels.join('|') !== LEVELS.join('|')) {
     const leafCount = active.filter((record) => dataOf(record).department != null || dataOf(record).slaHours != null).length;
-    return { editable: false, leafCount, levels: definedLevels };
+    // A leaf is a row no other row names as its parent; complaints filed on it go to its department.
+    const parents = new Set(active.map((record) => text(dataOf(record).parentCode)));
+    const departments = active
+      .filter((record) => !parents.has(codeOf(record)))
+      .map((record) => text(dataOf(record).department))
+      .filter(Boolean);
+    return { editable: false, leafCount, levels: definedLevels, departments: Array.from(new Set(departments)) };
   }
 
   const byOrder = (a: MdmsRecord, b: MdmsRecord) => Number(dataOf(a).order ?? 0) - Number(dataOf(b).order ?? 0);
   const typeRows = active.filter((record) => dataOf(record).levelCode === LEVELS[0]).sort(byOrder);
   const subtypeRows = active.filter((record) => dataOf(record).levelCode === LEVELS[1]).sort(byOrder);
-  const leafHours = active.map((record) => Number(dataOf(record).slaHours)).filter((hours) => hours > 0);
+  const hoursOf = (record: MdmsRecord) => {
+    const hours = Number(dataOf(record).slaHours);
+    return hours > 0 ? hours : undefined;
+  };
+  const defined = (values: (number | undefined)[]) => values.filter((hours): hours is number => hours !== undefined);
+  const subtypesOf = (row: MdmsRecord) => subtypeRows.filter((sub) => dataOf(sub).parentCode === codeOf(row));
+  // Hours live on the rows people file against. A type's are its subtypes' most common (or its own as
+  // a leaf); the types' most common becomes the default. A type or subtype that differs keeps its own,
+  // so a save writes back what it loaded.
+  const hoursByType = new Map(
+    typeRows.map((row) => {
+      const subtypes = subtypesOf(row);
+      return [row, mostCommon(defined(subtypes.length ? subtypes.map(hoursOf) : [hoursOf(row)]))] as const;
+    }),
+  );
+  const defaultHours = mostCommon(defined([...hoursByType.values()])) ?? DEFAULT_SLA_HOURS;
 
   const types: DraftType[] = typeRows.map((row) => {
-    const subtypes = subtypeRows.filter((sub) => dataOf(sub).parentCode === codeOf(row));
+    const subtypes = subtypesOf(row);
     const department = text(dataOf(row).department) || text(subtypes.map((sub) => dataOf(sub).department).find(Boolean));
+    const typeHours = hoursByType.get(row);
+    const own = typeHours !== undefined && typeHours !== defaultHours ? typeHours : undefined;
+    const effective = own ?? defaultHours;
     return {
       code: codeOf(row),
       name: text(dataOf(row).name) || codeOf(row),
       department,
-      subtypes: subtypes.map((sub) => ({ code: codeOf(sub), name: text(dataOf(sub).name) || codeOf(sub) })),
+      subtypes: subtypes.map((sub) => {
+        const hours = hoursOf(sub);
+        return { code: codeOf(sub), name: text(dataOf(sub).name) || codeOf(sub), ...(hours !== undefined && hours !== effective && { slaHours: hours }) };
+      }),
+      ...(own !== undefined && { slaHours: own }),
     };
   });
 
   return {
     editable: true,
-    draft: { types, slaHours: leafHours[0] ?? DEFAULT_SLA_HOURS },
+    draft: { types, slaHours: defaultHours },
     records,
     hasDefinition: !!definition,
   };
@@ -136,7 +195,7 @@ export function rowsFor(draft: ComplaintDraft, existingCodes: Iterable<string>):
         active: true,
         path: typeCode,
         // A type with no subtypes is filed against directly, so it carries the leaf fields.
-        ...(leaf ? { department: type.department, slaHours: draft.slaHours, keywords: '' } : {}),
+        ...(leaf ? { department: type.department, slaHours: resolutionHours(draft, type), keywords: '' } : {}),
       },
     });
     for (const sub of type.subtypes) {
@@ -154,7 +213,7 @@ export function rowsFor(draft: ComplaintDraft, existingCodes: Iterable<string>):
           active: true,
           path: `${typeCode}.${subCode}`,
           department: type.department,
-          slaHours: draft.slaHours,
+          slaHours: resolutionHours(draft, type, sub),
           keywords: '',
         },
       });
@@ -208,7 +267,11 @@ async function sync(
   hasDefinition: boolean,
   { shared = false }: { shared?: boolean } = {},
 ): Promise<void> {
-  if (!hasDefinition) {
+  // Re-read before creating: a save whose step update then failed has already created the definition, and the page
+  // still holds the stale `hasDefinition` from when it loaded, so a blind create fails as a duplicate on the retry.
+  const defined = hasDefinition || (await mdmsService.searchRecords(tenantId, DEFINITION_SCHEMA).catch(() => [] as MdmsRecord[]))
+    .some((record) => record.tenantId === tenantId && text(dataOf(record).hierarchyType) === HIERARCHY_TYPE);
+  if (!defined) {
     await mdmsService.create(tenantId, DEFINITION_SCHEMA, HIERARCHY_TYPE, {
       hierarchyType: HIERARCHY_TYPE,
       active: true,
@@ -218,7 +281,7 @@ async function sync(
         parentLevel: index === 0 ? null : LEVELS[index - 1],
         isFreeText: false,
         isLeafServiceCode: index === LEVELS.length - 1,
-        label: levelCode,
+        label: LEVEL_LABELS[levelCode],
       })),
     });
   }
@@ -265,13 +328,10 @@ export async function saveComplaints(
     ).catch(() => undefined);
   }
 
-  await localizationService
-    .uploadComplaintTypeLocalizations(
-      tenantId,
-      rows.map((row) => ({ serviceCode: row.code, name: text(row.data.name), department: text(row.data.department) || undefined })),
-      'en_IN',
-    )
-    .catch(() => undefined);
+  const labels = rows.map((row) => ({ serviceCode: row.code, name: text(row.data.name), department: text(row.data.department) || undefined }));
+  for (const locale of await labelLocales(tenantId)) {
+    await localizationService.uploadComplaintTypeLocalizations(tenantId, labels, locale).catch(() => undefined);
+  }
   await localizationService.cacheBust().catch(() => undefined);
 
   return rows.filter((row) => row.data.slaHours != null).length;

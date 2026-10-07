@@ -4,6 +4,7 @@ import DashboardHeader from "./DashboardHeader";
 import DashboardFilters from "./DashboardFilters";
 import Sidebar from "./Sidebar";
 import DashboardFooter from "./DashboardFooter";
+import PublicTopBar from "./PublicTopBar";
 
 const DashboardLayout = ({
   children,
@@ -61,6 +62,7 @@ const DashboardLayout = ({
           main column like every other mode (#1797). */}
       {!embedded && !publicMode && <Sidebar onSignOut={onSignOut} />}
       <div className="tw-flex tw-min-w-0 tw-flex-1 tw-flex-col tw-overflow-hidden">
+        {publicMode && <PublicTopBar />}
         <DashboardHeader
           visibleLayoutIds={visibleLayoutIds}
           catalogItems={catalogItems}
@@ -79,7 +81,8 @@ const DashboardLayout = ({
           scope={scope}
           readOnly={readOnly}
           publicMode={publicMode}
-          showLanguageMenu={!embedded}
+          // The public page's top bar carries the switcher instead.
+          showLanguageMenu={!embedded && !publicMode}
         />
         <main
           className={

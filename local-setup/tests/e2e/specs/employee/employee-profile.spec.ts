@@ -8,14 +8,14 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { loginViaApi } from '../../utils/auth';
+import { loginViaApi, appBase } from '../../utils/auth';
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:18080';
 const TENANT    = process.env.DIGIT_TENANT    || 'uitest.citya';
 const USERNAME  = process.env.DIGIT_USERNAME  || 'ADMIN';
 const PASSWORD  = process.env.DIGIT_PASSWORD  || 'eGov@123';
 
-const PROFILE_PATH = '/digit-ui/employee/user/profile';
+const profilePath = () => `${appBase()}/employee/user/profile`;
 
 test.describe('Employee Edit Profile (#444)', () => {
   test('profile page renders without a JS crash', async ({ page }) => {
@@ -24,7 +24,7 @@ test.describe('Employee Edit Profile (#444)', () => {
 
     await loginViaApi(page, { baseURL: BASE_URL, tenant: TENANT, username: USERNAME, password: PASSWORD });
 
-    await page.goto(`${BASE_URL}${PROFILE_PATH}`, { waitUntil: 'networkidle', timeout: 30_000 });
+    await page.goto(`${BASE_URL}${profilePath()}`, { waitUntil: 'networkidle', timeout: 30_000 });
     await page.waitForTimeout(3_000);
 
     // Must not land on the error screen
@@ -44,7 +44,7 @@ test.describe('Employee Edit Profile (#444)', () => {
   test('mobile field displays the tenant country prefix, not the India default (+91)', async ({ page }) => {
     await loginViaApi(page, { baseURL: BASE_URL, tenant: TENANT, username: USERNAME, password: PASSWORD });
 
-    await page.goto(`${BASE_URL}${PROFILE_PATH}`, { waitUntil: 'networkidle', timeout: 30_000 });
+    await page.goto(`${BASE_URL}${profilePath()}`, { waitUntil: 'networkidle', timeout: 30_000 });
     await page.waitForTimeout(3_000);
 
     // The profile form must be visible (not an error screen)
@@ -61,7 +61,7 @@ test.describe('Employee Edit Profile (#444)', () => {
 
     await loginViaApi(page, { baseURL: BASE_URL, tenant: TENANT, username: USERNAME, password: PASSWORD });
 
-    await page.goto(`${BASE_URL}${PROFILE_PATH}`, { waitUntil: 'networkidle', timeout: 30_000 });
+    await page.goto(`${BASE_URL}${profilePath()}`, { waitUntil: 'networkidle', timeout: 30_000 });
     await page.waitForTimeout(3_000);
 
     // Confirm the form rendered (bail early if still crashing)

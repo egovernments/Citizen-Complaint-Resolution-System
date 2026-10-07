@@ -1109,6 +1109,7 @@
   white-space: nowrap;
   border-radius: 4px;
   border-width: 1px;
+  border-style: solid;
   border-color: var(--border);
   background-color: var(--surface);
   padding-top: 0px;
@@ -4330,6 +4331,67 @@
   overflow: visible;
   text-overflow: clip;
   white-space: normal;
+}
+
+/* The public page's top bar: the tenant crest and the language switcher on
+ * the theme's header colour, as the app's own top bar draws them. The page
+ * has no DigitUI chrome to borrow one from. */
+
+.dashboard-root.dashboard-public .dashboard-public-topbar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  height: 56px;
+  padding: 0 16px;
+  background: var(--color-header-bg, #0B1F3A);
+  color: var(--color-header-text, #FFFFFF);
+}
+
+/* The same gutter as the page below it (`lg:tw-p-6` on the main column), so
+ * the crest and the switcher line up with the content's edges. */
+
+@media (min-width: 1024px) {
+  .dashboard-root.dashboard-public .dashboard-public-topbar {
+    padding: 0 24px;
+  }
+}
+
+.dashboard-root.dashboard-public .dashboard-public-topbar-crest {
+  display: block;
+  height: 36px;
+  width: auto;
+  max-width: 160px;
+  -o-object-fit: contain;
+     object-fit: contain;
+}
+
+/* The switcher is the bare globe button the header used; on the bar it takes
+ * the header's icon colour, a target the size of the app's, and a ring that
+ * shows on the dark ground. */
+
+.dashboard-root.dashboard-public .dashboard-public-topbar .dashboard-popover-iconbtn {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  color: var(--color-header-icon, var(--color-header-text, #FFFFFF));
+}
+
+.dashboard-root.dashboard-public .dashboard-public-topbar .dashboard-popover-iconbtn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.dashboard-root.dashboard-public .dashboard-public-topbar .dashboard-popover-iconbtn:hover:not(:disabled),
+.dashboard-root.dashboard-public .dashboard-public-topbar .dashboard-popover-iconbtn[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--color-header-text, #FFFFFF) 14%, transparent);
+  color: var(--color-header-icon, var(--color-header-text, #FFFFFF));
+}
+
+.dashboard-root.dashboard-public .dashboard-public-topbar .dashboard-popover-iconbtn:focus-visible {
+  outline: 2px solid var(--color-header-text, #FFFFFF);
+  outline-offset: 2px;
 }
 
 .hover\:tw-bg-\[color-mix\(in_srgb\2c var\(--chrome-foreground\)_12\%\2c transparent\)\]:hover{

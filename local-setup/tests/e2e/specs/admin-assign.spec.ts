@@ -4,7 +4,7 @@
  * by injecting localStorage session state from the OAuth token response.
  */
 import { test, expect } from '@playwright/test';
-import { getDigitToken } from '../utils/auth';
+import { getDigitToken, appBase } from '../utils/auth';
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:18080';
 const TENANT = process.env.DIGIT_TENANT || 'uitest.citya';
@@ -37,7 +37,7 @@ test.describe.serial('Admin login and assign complaints', () => {
     adminUserInfo = tokenResponse.UserRequest as Record<string, unknown>;
 
     // Navigate to login page first (to set the origin)
-    await page.goto(`${BASE_URL}/digit-ui/employee/user/login`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+    await page.goto(`${BASE_URL}${appBase()}/employee/user/login`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
 
     // Inject session into localStorage (same keys the Login component sets)
     await page.evaluate(({ token, userInfo, tenant }) => {
@@ -52,7 +52,7 @@ test.describe.serial('Admin login and assign complaints', () => {
     }, { token: adminToken, userInfo: adminUserInfo, tenant: TENANT });
 
     // Navigate to employee home — should skip login
-    await page.goto(`${BASE_URL}/digit-ui/employee`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+    await page.goto(`${BASE_URL}${appBase()}/employee`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
     await page.waitForTimeout(5000);
 
     const url = page.url();
@@ -61,7 +61,7 @@ test.describe.serial('Admin login and assign complaints', () => {
     // If redirected back to login, the token injection failed
     if (url.includes('/user/login')) {
       // Try again with a page reload
-      await page.goto(`${BASE_URL}/digit-ui/employee`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+      await page.goto(`${BASE_URL}${appBase()}/employee`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
       await page.waitForTimeout(5000);
       console.log(`After retry, URL: ${page.url()}`);
     }
@@ -76,7 +76,7 @@ test.describe.serial('Admin login and assign complaints', () => {
     test.setTimeout(120_000);
 
     // Inject session
-    await page.goto(`${BASE_URL}/digit-ui/employee/user/login`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+    await page.goto(`${BASE_URL}${appBase()}/employee/user/login`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
     await page.evaluate(({ token, userInfo, tenant }) => {
       localStorage.setItem('Employee.token', token);
       localStorage.setItem('Employee.tenant-id', tenant);
@@ -107,7 +107,7 @@ test.describe.serial('Admin login and assign complaints', () => {
     page.on('pageerror', (err) => consoleErrors.push(`PAGE ERROR: ${err.message.slice(0, 200)}`));
 
     // Navigate to inbox
-    await page.goto(`${BASE_URL}/digit-ui/employee/pgr/inbox`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+    await page.goto(`${BASE_URL}${appBase()}/employee/pgr/inbox`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
     await page.waitForTimeout(15_000); // Wait for all API calls to complete
 
     // Report findings
@@ -163,7 +163,7 @@ test.describe.serial('Admin login and assign complaints', () => {
       }
 
       // Inject session
-      await page.goto(`${BASE_URL}/digit-ui/employee/user/login`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+      await page.goto(`${BASE_URL}${appBase()}/employee/user/login`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
       await page.evaluate(({ token, userInfo, tenant }) => {
         localStorage.setItem('Employee.token', token);
         localStorage.setItem('Employee.tenant-id', tenant);
@@ -175,7 +175,7 @@ test.describe.serial('Admin login and assign complaints', () => {
       }, { token: adminToken, userInfo: adminUserInfo, tenant: TENANT });
 
       // Navigate to complaint details
-      await page.goto(`${BASE_URL}/digit-ui/employee/pgr/complaint/details/${serviceRequestId}`, {
+      await page.goto(`${BASE_URL}${appBase()}/employee/pgr/complaint/details/${serviceRequestId}`, {
         waitUntil: 'domcontentloaded',
         timeout: 30_000,
       });

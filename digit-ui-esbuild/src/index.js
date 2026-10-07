@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
 import { initLibraries } from "@egovernments/digit-ui-libraries";
-import { isKeycloakAuth } from "../packages/libraries/src/services/auth/authSurface";
+import { resolveTenantRoute } from "../packages/libraries/src/services/tenant/tenantRoute";
 import "./index.css";
 import App from './App';
 import { applyTheme } from "./theme/applyTheme";
@@ -40,6 +40,73 @@ const getFromInfo = (info) => {
   return info?.tenantId || info?.tenantid || info?.userInfo?.tenantId || null;
 };
 
+const citizenAccountTenant = (routeTenant) => routeTenant.rootTenantId || routeTenant.tenantId.split(".")[0];
+
+// A stored session belongs to this route: the route tenant itself, or, for a
+// citizen, the route tenant's root, where egov-user keeps the citizen account.
+const belongsToRoute = (info, routeTenant) => {
+  const parsed = typeof info === "string" ? parseValue(info) : info;
+  const tenantId = getFromInfo(parsed);
+  if (!tenantId || tenantId === routeTenant.tenantId) return true;
+  const type = parsed?.type || parsed?.userInfo?.type;
+  return type === "CITIZEN" && tenantId === citizenAccountTenant(routeTenant);
+};
+
+const clearAuthFromAnotherTenant = (routeTenant) => {
+  if (!routeTenant) return;
+  const sessionInfo = window.Digit.SessionStorage.get("User")?.info;
+  const token = getFromStorage("token");
+  const citizenToken = getFromStorage("Citizen.token");
+  const employeeToken = getFromStorage("Employee.token");
+  const persistedInfo = token && token === citizenToken
+    ? getFromStorage("Citizen.user-info")
+    : token && token === employeeToken
+      ? getFromStorage("Employee.user-info")
+      : routeTenant.surface === "citizen"
+        ? getFromStorage("Citizen.user-info")
+        : getFromStorage("Employee.user-info");
+  const activeInfo = getFromInfo(sessionInfo) ? sessionInfo : persistedInfo;
+  if (belongsToRoute(activeInfo, routeTenant)) return;
+
+  // Auth storage predates tenant-scoped routes and is shared across tabs. Do
+  // not let a token issued for one tenant silently authenticate another URL.
+  ["token", "user-info", "Employee.token", "Employee.user-info", "Citizen.token", "Citizen.user-info"]
+    .forEach((key) => window.localStorage.removeItem(key));
+  ["User", "user_type", "userType"].forEach((key) => window.Digit.SessionStorage.del(key));
+};
+
+const TENANT_CONFLICT_KEY = "Digit.tenantContextConflict";
+const TENANT_AUTH_KEYS = new Set([
+  "Employee.tenant-id",
+  "Employee.user-info",
+  "Citizen.tenant-id",
+  "Citizen.user-info",
+  "tenant-id",
+  "user-info",
+]);
+
+const installCrossTabTenantGuard = (routeTenant) => {
+  if (!routeTenant) return;
+  const expected = routeTenant.tenantId;
+  window.__digitTenantContextConflict =
+    window.sessionStorage.getItem(TENANT_CONFLICT_KEY) === expected;
+
+  window.addEventListener("storage", (event) => {
+    if (!event.key || !TENANT_AUTH_KEYS.has(event.key) || !event.newValue) return;
+    const sameTenant = event.key.endsWith("tenant-id")
+      ? parseValue(event.newValue) === expected
+      : belongsToRoute(event.newValue, routeTenant);
+    if (sameTenant) return;
+
+    // localStorage is origin-wide. If another tab installs a token for a
+    // different tenant, freeze this tab before it can keep issuing requests
+    // with stale route state. Recovery is an explicit user action in App.
+    window.sessionStorage.setItem(TENANT_CONFLICT_KEY, expected);
+    window.__digitTenantContextConflict = true;
+    window.dispatchEvent(new CustomEvent("digit:tenant-context-conflict"));
+  });
+};
+
 const normalizeLocale = () => {
   window.localStorage.setItem("locale", DEFAULT_LOCALE);
   window.localStorage.setItem("selectedLanguage", DEFAULT_LOCALE);
@@ -50,75 +117,60 @@ const normalizeLocale = () => {
 };
 
 async function bootstrap() {
-  if (isKeycloakAuth()) {
-    const { initAuthAdapter } = await import(
-      "../packages/libraries/src/services/auth/index"
-    );
-    console.log("[bootstrap] Starting initAuthAdapter...");
-    await Promise.race([
-      initAuthAdapter(),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("initAuthAdapter timeout after 15s")), 15000))
-    ]).catch(err => {
-      console.error("[bootstrap] initAuthAdapter failed:", err.message);
-    });
-    console.log("[bootstrap] initAuthAdapter done");
-    // If KC adapter didn't authenticate (SSO check failed/timed out),
-    // fall back to localStorage tokens (same as non-KC path).
-    const user = window.Digit.SessionStorage.get("User");
-    if (!user || !user.access_token) {
-      console.log("[bootstrap] KC adapter not authenticated, recovering from localStorage");
-      const token = getFromStorage("token");
-      const citizenToken = getFromStorage("Citizen.token");
-      const citizenInfo = getFromStorage("Citizen.user-info");
-      const stateCode = window?.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID");
-      const citizenTenantId = getFromStorage("Citizen.tenant-id") || getFromInfo(citizenInfo) || stateCode;
-      const employeeToken = getFromStorage("Employee.token");
-      const employeeInfo = getFromStorage("Employee.user-info");
-      const employeeTenantId = getFromStorage("Employee.tenant-id") || getFromInfo(employeeInfo) || stateCode;
-      const userType = token === citizenToken ? "citizen" : (employeeToken ? "employee" : "citizen");
-
-      if (token) {
-        window.Digit.SessionStorage.set("user_type", userType);
-        window.Digit.SessionStorage.set("userType", userType);
-        const getUserDetails = (access_token, info) => ({ token: access_token, access_token, info });
-        const userDetails = userType === "citizen"
-          ? getUserDetails(citizenToken, citizenInfo)
-          : getUserDetails(employeeToken, employeeInfo);
-        window.Digit.SessionStorage.set("User", userDetails);
-        window.Digit.SessionStorage.set("Citizen.tenantId", citizenTenantId);
-        window.Digit.SessionStorage.set("Employee.tenantId", employeeTenantId);
-        console.log("[bootstrap] Recovered session from localStorage as " + userType);
-      }
+  try {
+    const resolvedTenant = await resolveTenantRoute(window.location.pathname);
+    if (resolvedTenant) {
+      window.__digitTenantContext = resolvedTenant;
+      // Compatibility bridge while upstream modules migrate from the global
+      // string to the route-context helper. This is a route base, not config.
+      window.contextPath = resolvedTenant.appBasePath;
+      window.globalPath = resolvedTenant.appBasePath;
+      clearAuthFromAnotherTenant(resolvedTenant);
+      installCrossTabTenantGuard(resolvedTenant);
     }
-  } else {
-    const user = window.Digit.SessionStorage.get("User");
-    if (!user || !user.access_token || !user.info) {
-      const token = getFromStorage("token");
-      const citizenToken = getFromStorage("Citizen.token");
-      const citizenInfo = getFromStorage("Citizen.user-info");
-      const stateCode = window?.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID");
-      const citizenTenantId = getFromStorage("Citizen.tenant-id") || getFromInfo(citizenInfo) || stateCode;
-      const employeeToken = getFromStorage("Employee.token");
-      const employeeInfo = getFromStorage("Employee.user-info");
-      const employeeTenantId = getFromStorage("Employee.tenant-id") || getFromInfo(employeeInfo) || stateCode;
-      const userType = token === citizenToken ? "citizen" : "employee";
+  } catch (error) {
+    window.__digitTenantContextError = error;
+  }
 
-      window.Digit.SessionStorage.set("user_type", userType);
-      window.Digit.SessionStorage.set("userType", userType);
-      const getUserDetails = (access_token, info) => ({ token: access_token, access_token, info });
-      const userDetails = userType === "citizen"
-        ? getUserDetails(citizenToken, citizenInfo)
-        : getUserDetails(employeeToken, employeeInfo);
-      window.Digit.SessionStorage.set("User", userDetails);
-      window.Digit.SessionStorage.set("Citizen.tenantId", citizenTenantId);
-      window.Digit.SessionStorage.set("Employee.tenantId", employeeTenantId);
-      if (citizenTenantId) window.localStorage.setItem("Citizen.tenant-id", citizenTenantId);
-      if (employeeTenantId) window.localStorage.setItem("Employee.tenant-id", employeeTenantId);
-    }
+  const user = window.Digit.SessionStorage.get("User");
+  if (!user || !user.access_token || !user.info) {
+    const token = getFromStorage("token");
+    const citizenToken = getFromStorage("Citizen.token");
+    const citizenInfo = getFromStorage("Citizen.user-info");
+    const stateCode = window.__digitTenantContext?.tenantId || window?.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID");
+    const citizenTenantId = getFromStorage("Citizen.tenant-id") || getFromInfo(citizenInfo) || stateCode;
+    const employeeToken = getFromStorage("Employee.token");
+    const employeeInfo = getFromStorage("Employee.user-info");
+    const employeeTenantId = getFromStorage("Employee.tenant-id") || getFromInfo(employeeInfo) || stateCode;
+    const userType = token === citizenToken ? "citizen" : "employee";
+
+    window.Digit.SessionStorage.set("user_type", userType);
+    window.Digit.SessionStorage.set("userType", userType);
+    const getUserDetails = (access_token, info) => ({ token: access_token, access_token, info });
+    const userDetails = userType === "citizen"
+      ? getUserDetails(citizenToken, citizenInfo)
+      : getUserDetails(employeeToken, employeeInfo);
+    window.Digit.SessionStorage.set("User", userDetails);
+    window.Digit.SessionStorage.set("Citizen.tenantId", citizenTenantId);
+    window.Digit.SessionStorage.set("Employee.tenantId", employeeTenantId);
+    if (citizenTenantId) window.localStorage.setItem("Citizen.tenant-id", citizenTenantId);
+    if (employeeTenantId) window.localStorage.setItem("Employee.tenant-id", employeeTenantId);
   }
 
   normalizeLocale();
-  const stateCode = window?.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID");
+  const stateCode = window.__digitTenantContext?.tenantId || window?.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID");
+  if (window.__digitTenantContext) {
+    window.Digit.SessionStorage.set("Employee.tenantId", stateCode);
+    window.Digit.SessionStorage.set("Citizen.tenantId", stateCode);
+    // Several enabled PGR screens still read this legacy compatibility
+    // record directly instead of going through ULBService. Keep it pinned to
+    // the route tenant so an old city selection can never escape the URL
+    // boundary, while exposing no selector that can change it.
+    window.Digit.SessionStorage.set("CITIZEN.COMMON.HOME.CITY", {
+      code: stateCode,
+      name: window.__digitTenantContext.name,
+    });
+  }
   const sessionEmployeeTenant = window.Digit.SessionStorage.get("Employee.tenantId");
   const sessionCitizenTenant = window.Digit.SessionStorage.get("Citizen.tenantId");
   if (!sessionEmployeeTenant) {

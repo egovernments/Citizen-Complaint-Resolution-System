@@ -13,6 +13,7 @@
  * state-level tenantId and hierarchy definition tenantId).
  */
 import { test, expect } from '@playwright/test';
+import { appBase } from '../../utils/auth';
 
 const BASE_URL = process.env.BASE_URL || 'https://keycloak-sandbox.live.digit.org';
 const KC_URL = process.env.KC_URL || 'http://localhost:18180';
@@ -109,7 +110,7 @@ test.describe('Citizen PGR complaint wizard', () => {
     const { jwt, email } = await createCitizenSession();
 
     // Set up citizen auth in localStorage
-    await page.goto(`${BASE_URL}/digit-ui/citizen/select-language`, {
+    await page.goto(`${BASE_URL}${appBase()}/citizen/select-language`, {
       waitUntil: 'domcontentloaded',
       timeout: 15_000,
     });
@@ -150,7 +151,7 @@ test.describe('Citizen PGR complaint wizard', () => {
     });
 
     // Navigate to complaint creation
-    await page.goto(`${BASE_URL}/digit-ui/citizen/pgr/create-complaint/complaint-type`, {
+    await page.goto(`${BASE_URL}${appBase()}/citizen/pgr/create-complaint/complaint-type`, {
       waitUntil: 'networkidle',
       timeout: 30_000,
     });

@@ -124,7 +124,7 @@ async function run(ctx) {
         body: 'zz-e2e A6 SMS test-send via Novu. Please ignore.', transactionId: txn,
       }, auth);
       if (!(r.json && r.json.ok === true)) return H.FAIL('A6', `test-send not ok: ${r.status} ${r.text.slice(0, 160)}`);
-      // TEST-tagged dispatch row (tenant_id='TEST', event_name='TEST', template_key='TEST').
+      // TEST-tagged dispatch row (is_test = true, event_name='TEST', template_key='TEST').
       await H.sleep(1500);
       const rows = H.psql(`SELECT channel, status, recipient_value, event_name, template_key `
         + `FROM nb_dispatch_log WHERE transaction_id='${txn}'`);

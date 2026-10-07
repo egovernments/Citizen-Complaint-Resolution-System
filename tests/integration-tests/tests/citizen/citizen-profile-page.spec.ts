@@ -1,3 +1,4 @@
+import { tenantSlug } from '../utils/identity-bff';
 /**
  * Citizen profile field-set lock-down — Story 8.1.
  *
@@ -76,7 +77,7 @@ If a future build legitimately adds a field, update this spec AND citizen-flows.
     }
     await citizenOtpLogin(page, provisioned.mobile);
 
-    await page.goto(`${BASE_URL}/digit-ui/citizen/user/profile`, {
+    await page.goto(`${BASE_URL}/${tenantSlug()}/digit-ui/citizen/user/profile`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });

@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { insertModuleSections, isCitizenHome, mdmsLinkRows } from "./navSections";
+import { insertModuleSections, isCitizenHome, mdmsLinkRows, publicDashboardEnabled } from "./navSections";
 
 const iconOf = (icon) => ({ icon, width: "1.5rem", height: "1.5rem" });
 
@@ -10,7 +10,8 @@ const iconOf = (icon) => ({ icon, width: "1.5rem", height: "1.5rem" });
  * Home, then each enabled module's section (the complaints module registers
  * `PGRCitizenSidebarSection`, the citizen twin of `PGRSidebarSection`), then
  * the links a tenant configures in MDMS (`linkData`, the same rows the home
- * page reads), then Helpline, and Login for a visitor who is not signed in. Edit Profile and
+ * page reads), then the public dashboard once the tenant has published it,
+ * then Helpline, and Login for a visitor who is not signed in. Edit Profile and
  * Logout are not rows here: on desktop they live in the top bar's account
  * menu, as they do for employees, and the phone drawer adds its own.
  */
@@ -31,6 +32,14 @@ export const useCitizenNavItems = (linkData) => {
 
   const sectionFor = (code) => Digit.ComponentRegistryService.getComponent(`${code}CitizenSidebarSection`);
 
+  // The flag lives on the state root, where pgr-services reads it to open the
+  // page's data, whichever city the citizen is in.
+  const stateId = Digit.ULBService.getStateId?.();
+  const { data: dashboardConfig } = Digit.Hooks.useCustomMDMS(stateId, "dss", [{ name: "DashboardConfig" }], {
+    select: (data) => data?.dss?.DashboardConfig,
+    enabled: !!stateId,
+  });
+
   const base = [
     {
       key: "home",
@@ -39,10 +48,23 @@ export const useCitizenNavItems = (linkData) => {
       navigationUrl: `/${contextPath}/citizen/all-services`,
     },
     ...mdmsLinkRows(linkData, {
-      contextPath,
+      contextPath: Digit.Utils.mdmsAppId(),
+      rebaseUrl: Digit.Utils.rebaseAppUrl,
       labelFor: (code) => t(`ACTION_TEST_${Digit.Utils.locale.getTransformedLocale(code)}`),
       hasOwnSection: (code) => typeof sectionFor(code) === "function",
     }),
+    // A page of its own beside this app (/public-dashboard), not one of its
+    // routes, so the row carries a full URL, which the rail opens in a new tab.
+    ...(publicDashboardEnabled(dashboardConfig)
+      ? [
+          {
+            key: "public-dashboard",
+            label: t("CORE_SIDEBAR_PUBLIC_DASHBOARD", "Public Dashboard"),
+            icon: iconOf("Dashboard"),
+            navigationUrl: `${window.location.origin}/${contextPath}/public-dashboard`,
+          },
+        ]
+      : []),
     // The number itself is part of the row, as it was on the old sidebar, so
     // the citizen can read it off as well as tap it.
     ...(helpline

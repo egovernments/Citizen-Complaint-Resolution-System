@@ -1,3 +1,4 @@
+import { withIdentityMembers } from '@/identity/memberProvider';
 /**
  * Bridge module: adapts @digit-mcp/data-provider to the CRS UI's patterns.
  *
@@ -20,7 +21,10 @@ export {
   getResourceLabel,
   getResourceBySchema,
   isAccessControlGated,
+  isReadOnlyResource,
+  readOnlyNoticeFor,
   REGISTRY,
+  DUPLICATE_ACTIVE_KEYS,
 } from '@digit-mcp/data-provider';
 export type { ResourceConfig } from '@digit-mcp/data-provider';
 export { DigitApiClient } from '@digit-mcp/data-provider';
@@ -37,7 +41,7 @@ let _authProvider: AuthProvider | null = null;
 
 export function getDataProvider(tenantId: string): DataProvider {
   if (!_dataProvider || _dataProviderTenant !== tenantId) {
-    _dataProvider = createDigitDataProvider(digitClient, tenantId);
+    _dataProvider = withIdentityMembers(createDigitDataProvider(digitClient, tenantId), tenantId);
     _dataProviderTenant = tenantId;
   }
   return _dataProvider;
