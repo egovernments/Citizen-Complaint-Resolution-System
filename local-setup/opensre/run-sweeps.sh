@@ -160,7 +160,7 @@ while :; do
   if [ "${OPENSRE_ENABLED:-true}" != "true" ]; then
     note paused "OPENSRE_ENABLED=${OPENSRE_ENABLED:-} in .env; not sweeping. The lasting switch is enable_opensre in host_vars."
   elif [ -z "${ANTHROPIC_API_KEY:-}" ]; then
-    note idle "No Anthropic API key. Store one with: bao kv put <secrets_path> opensre_anthropic_api_key=<key>, then redeploy."
+    note idle "No Anthropic API key. Compose: bao kv patch <secrets_path> opensre_anthropic_api_key=<key> (patch, not put: put replaces every tenant secret), then redeploy. Kubernetes: set it in the opensre Secret."
   else
     sweep
   fi
