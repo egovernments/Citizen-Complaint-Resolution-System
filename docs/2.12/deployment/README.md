@@ -64,8 +64,8 @@ the box does hold a live database, see
 | `bootstrap_user` | Admin Username (defaults to ADMIN) | | 
 | `bootstrap_password` | Admin Password (defaults to eGov@123) | |
 | `enable_overpass` | Runs our own map-boundary search service. If `false`, the system uses the public Overpass service. Tested by deploying it and checking both the container and `/overpass/api/interpreter`. | `false` |
-| `pgr_notification_config_driven` | Reads notification messages and routing rules from MDMS instead of using fixed rules in the code. Requires enable_novu: true, a working Novu API key, and notification MDMS data. On the first Novu setup only, novu_disable_user_registration may need to be temporarily set to false. Set it back to true afterward.  | `false` |
-| `novu_bridge_channel` | Chooses the default notification channel: `sms`, `whatsapp`, or `email`. The same values should be present in novu_bridge_channels_enabled. If not, notifications are skipped | `sms` |
+| `pgr_notification_config_driven` | Reads notification messages and routing rules from MDMS instead of using fixed rules in the code. Requires enable_novu: true, a working Novu API key, and notification MDMS data. On the first Novu setup only, novu_disable_user_registration may need to be temporarily set to false. Set it back to true afterward. Notification skipped for no MDMS data present. | `false` |
+| `novu_bridge_channel` | Chooses the default notification channel: `sms`, `whatsapp`, or `email`. The particular value should be present in novu_bridge_channels_enabled. If not, notifications are skipped | `sms` |
 | `novu_bridge_channels_enabled` | Lists the notification channels that Novu Bridge is allowed to use, such as `SMS,EMAIL`. Each listed channel must have a working provider. | `""` |
 | `novu_bridge_sms_provider` | Chooses how regular SMS messages are sent. Leave it blank to use the primary SMS provider configured in Novu, such as `Twilio`. Set it to `ozeki` or `smscountry` to use that gateway instead; the selected provider’s credentials must also be configured. This does not affect WhatsApp. SMS must be present in novu_bridge_channels_enabled | `""` |
 
