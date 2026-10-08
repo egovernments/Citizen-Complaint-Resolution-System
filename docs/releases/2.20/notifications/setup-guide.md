@@ -362,7 +362,9 @@ provider is disabled in Novu or does not carry the channel you picked, or (no pr
 Novu has no enabled provider for the channel. It is the check that marks a real message
 `Skipped` with `NB_PROVIDER_UNAVAILABLE`; for a test the bridge answers
 `409 NB_PROVIDER_UNAVAILABLE`, the Configurator shows the reason, and nothing is sent or
-logged. Fix what it names and test again. If novu-bridge cannot read Novu's provider list at
+logged. Fix what it names and test again. On a workspace with its own notification account
+([tenant-accounts.md](./tenant-accounts.md)) the same check reads that workspace's own
+providers, never the shared account's. If novu-bridge cannot read Novu's provider list at
 that moment, the test is sent unchecked, as a real message would be, and the result says so.
 
 **Logs** filters: **Complaint #**, **Channel**, **Status**, **Produced by**, **Test sends**.

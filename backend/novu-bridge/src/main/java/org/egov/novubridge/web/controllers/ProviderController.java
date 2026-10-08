@@ -699,7 +699,7 @@ public class ProviderController {
         }
 
         String upperChannel = channel == null ? "" : channel.toUpperCase();
-        String unchecked = requireDeliverable(firstText(integrationIdentifier, integrationId), upperChannel);
+        String unchecked = requireDeliverable(account, firstText(integrationIdentifier, integrationId), upperChannel);
         String recipient = StringUtils.hasText(phone) ? phone : email;
         String seed = StringUtils.hasText(txnInput) ? txnInput : (recipient != null ? recipient : upperChannel);
         if (account != null) {
@@ -759,23 +759,32 @@ public class ProviderController {
      * NB_PROVIDER_UNAVAILABLE} and the availability verdict's reason; nothing is sent and no row
      * written, like the other refusals before a send.
      *
+     * <p>Judged in the account the test goes through: a workspace's own Novu organization (#2203)
+     * by that organization's integrations, exactly as its dispatch is
+     * ({@link ProviderAvailabilities#forAccount}), never by the shared account's, and always
+     * through Novu (a workspace never uses the legacy direct gateway, so its unpinned test is always
+     * checked); the shared account as before.
+     *
      * <p>Asked fresh, not from the dispatch snapshot: an operator who just changed a provider in
      * Novu's own dashboard tests that, not what Novu looked like up to a TTL ago (the refreshed
-     * snapshot then serves dispatch too). Fails OPEN like dispatch when Novu's integration list
-     * cannot be read: the test is sent and reports the trigger's own answer, carrying the reason it
-     * was not checked as {@code warning}.
+     * snapshot then serves that account's dispatch too). Fails OPEN like dispatch when Novu's
+     * integration list cannot be read: the test is sent and reports the trigger's own answer,
+     * carrying the reason it was not checked as {@code warning}.
      *
+     * @param account the account the test is sent through ({@code null} = the shared one)
      * @return that reason when the check could not run, else null
      */
-    private String requireDeliverable(String integrationId, String channel) {
+    private String requireDeliverable(NovuAccount account, String integrationId, String channel) {
         boolean named = StringUtils.hasText(integrationId);
-        if (!named && !providers.novu().id().equals(providers.select(null, channel).id())) {
+        if (account == null && !named && !providers.novu().id().equals(providers.select(null, channel).id())) {
             return null; // the legacy direct gateway (SMSCountry's bulk API) answers for itself
         }
-        providerAvailability.invalidate();
+        ProviderAvailability availabilityOfAccount = account == null
+                ? providerAvailability : availabilities.forAccount(account);
+        availabilityOfAccount.invalidate();
         ProviderAvailability.Result availability = named
-                ? providerAvailability.check(integrationId, channel)
-                : providerAvailability.checkUnpinned(channel);
+                ? availabilityOfAccount.check(integrationId, channel)
+                : availabilityOfAccount.checkUnpinned(channel);
         if (!availability.usable()) {
             throw new Refusal(HttpStatus.CONFLICT, "NB_PROVIDER_UNAVAILABLE", availability.message());
         }

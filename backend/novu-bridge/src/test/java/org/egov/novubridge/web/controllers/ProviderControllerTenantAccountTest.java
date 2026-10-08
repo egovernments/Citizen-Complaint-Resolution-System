@@ -221,6 +221,12 @@ class ProviderControllerTenantAccountTest {
         NovuAccount globex = new NovuAccount("globex", "org-globex", "env-globex", "key-globex");
         when(tenantAccounts.isProvisioned("globex")).thenReturn(true);
         when(tenantAccounts.accountFor("globex")).thenReturn(globex);
+        // Each organization has an SMS provider of its own: the test-send gate reads that organization.
+        acmeIntegrations.add(new LinkedHashMap<>(Map.of("_id", "a1", "identifier", "twilio-sms-acme", "providerId", "twilio",
+                "channel", "sms", "active", true)));
+        when(novuClient.listIntegrations(globex)).thenReturn(NovuClient.NovuResponse.builder().statusCode(200)
+                .response(Map.of("data", List.of(Map.of("_id", "g1", "identifier", "twilio-sms-globex", "providerId", "twilio",
+                        "channel", "sms", "active", true)))).build());
         when(novuClient.trigger(any(NovuAccount.class), anyString(), anyString(), any(), any(), anyMap(), anyString(), any()))
                 .thenReturn(NovuClient.NovuResponse.builder().statusCode(201).response(Map.of("data", Map.of())).build());
         Map<String, Object> body = new LinkedHashMap<>(Map.of("channel", "SMS", "to", Map.of("phone", "+254700000000"), "body", "t"));

@@ -605,6 +605,10 @@ paths:
         that never left. A channel on the legacy direct SMSCountry gateway is not checked against
         Novu. When Novu's integration list cannot be read the test is sent anyway, as dispatch
         does, and the 200 carries `warning`.
+
+        With `?tenantId=<workspace>` on a workspace that has its own Novu organization (#2203)
+        the test goes through that organization and the check reads ITS integrations, never the
+        shared account's; it is always made there (a workspace never uses the direct gateway).
       requestBody:
         required: true
         content:
