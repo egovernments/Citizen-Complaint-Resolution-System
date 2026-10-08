@@ -63,7 +63,7 @@ the box does hold a live database, see
 | `domain` | If needs to be deployed on a domain name vs localhost. Also, set `tls_enabled:true` in this case | | 
 | `bootstrap_user` | Admin Username (defaults to ADMIN) | | 
 | `bootstrap_password` | Admin Password (defaults to eGov@123) | |
-| `enable_turbopass` | City-name suggestions in the setup wizard. Off, there is no suggestion box and location search returns 404. The player under this table shows where. | `false` |
+| `enable_turbopass` | City-name suggestions in the setup wizard. Off, there is no suggestion box and location search returns 404. [Watch the video below](#turbopass-video). | `false` |
 | `enable_search_stack` | Turns on the services used by the older inbox search: Elasticsearch, indexer and inbox. Set it to `false` to stop those services. The current Search Complaint and Dashboard pages still open. | `false` |
 | `employee_module_denylist` | Which modules to hide from the employee sidebar. Use the first part of the module's access-control path. `[]` hides none. `["IM"]` does not hide the current Search Complaint or Dashboard cards. | `["IM"]` |
 | `hierarchy_type` | Name of the location list on the complaint form. It must already exist for the city, or the location box stays empty. A city from the setup sheets uses the city name plus `_ADMIN`. | `NAIROBI_ADMIN` |
@@ -105,6 +105,8 @@ These checks used the Nairobi admin account and employee UI image
 open with empty data. Searching existing complaints and showing populated charts
 still need checking. The older `/inbox/v2/_search` request returned `CONFIG_ERROR`
 with the stack on, so its indexing and search have not been confirmed end to end.
+
+### Turbopass video
 
 `enable_turbopass` on the setup wizard. Phase 2, Fetch from OpenStreetMap, then type a city name:
 
