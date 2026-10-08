@@ -1062,7 +1062,7 @@ services:
   - name: keycloak-route
     paths:
     - /auth
-    strip_path: false
+    strip_path: true
 # Token exchange — Keycloak JWT-protected DIGIT API access
 - name: token-exchange-service
   url: http://token-exchange-svc:3000
