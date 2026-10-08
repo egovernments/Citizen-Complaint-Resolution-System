@@ -45,6 +45,10 @@ const STATUS_COLOR: Record<TestStatus | 'never', string> = {
   never: '#484f58',
 };
 
+/** A summary recorded before not-run tracking: its counts may include carried-over results. */
+const isLegacyCount = (r: RunSummary) => typeof r.notRun !== 'number';
+const LEGACY_NOTE = 'Legacy count: recorded before not-run tracking, so it may include results carried over from older runs.';
+
 /**
  * Header strip with one summary stat tile per metric.
  */
@@ -140,13 +144,16 @@ function RunTrend({ runs }: { runs: RunSummary[] }) {
             const passH = (r.passed / total) * 130;
             const failH = (r.failed / total) * 130;
             const skipH = (r.skipped / total) * 130;
+            const legacy = isLegacyCount(r);
             // The unfilled top of the bar is "not run"; say so in the tooltip.
-            const barTitle = r.notRun
-              ? `${r.notRun} of ${r.total} not run${r.cutShort ? ` — cut short: ${r.cutShort}` : ''}`
-              : undefined;
+            const barTitle = legacy
+              ? LEGACY_NOTE
+              : r.notRun
+                ? `${r.notRun} of ${r.total} not run${r.cutShort ? ` — cut short: ${r.cutShort}` : ''}`
+                : undefined;
             return (
               <Box key={r.id} sx={{ flex: 1, textAlign: 'center', minWidth: 60 }}>
-                <Box title={barTitle} sx={{ height: 130, display: 'flex', flexDirection: 'column-reverse', borderRadius: 1, overflow: 'hidden', bgcolor: 'action.hover' }}>
+                <Box title={barTitle} sx={{ height: 130, display: 'flex', flexDirection: 'column-reverse', borderRadius: 1, overflow: 'hidden', bgcolor: 'action.hover', opacity: legacy ? 0.45 : 1 }}>
                   <Box sx={{ height: passH, bgcolor: STATUS_COLOR.passed }} title={`${r.passed} passed`} />
                   <Box sx={{ height: failH, bgcolor: STATUS_COLOR.failed }} title={`${r.failed} failed`} />
                   <Box sx={{ height: skipH, bgcolor: STATUS_COLOR.skipped }} title={`${r.skipped} skipped`} />
@@ -160,6 +167,11 @@ function RunTrend({ runs }: { runs: RunSummary[] }) {
                 {!!r.notRun && (
                   <Typography variant="caption" sx={{ display: 'block', fontSize: 10, color: r.cutShort ? STATUS_COLOR.failed : 'text.secondary' }}>
                     {r.notRun} not run{r.cutShort ? ' ⚠' : ''}
+                  </Typography>
+                )}
+                {legacy && (
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: 10, fontStyle: 'italic' }}>
+                    legacy count
                   </Typography>
                 )}
               </Box>
@@ -179,8 +191,11 @@ function RunTrend({ runs }: { runs: RunSummary[] }) {
 function aggregateByFacet(tests: CatalogTest[], facet: string) {
   const groups = new Map<string, { passed: number; failed: number; skipped: number; notRun: number; total: number }>();
   for (const t of tests) {
-    if (!t.lastStatus && !t.history.length) continue; // never ran anywhere (e.g. config-excluded)
-    const ran = t.ranInLatestRun ?? !!t.lastStatus; // older catalogs lack the flag
+    // Same rule as the builder's run total: only a config-excluded @local-only
+    // test (no verdict, filtered out by playwright.config) is left out; every
+    // other test without a verdict in the latest run counts as not run.
+    if (!t.ranInLatestRun && (t.tags || []).includes('@local-only')) continue;
+    const status = t.currentStatus; // derived in dataProvider: the latest run's outcome
     const values = new Set<string>();
     for (const tag of t.tags) {
       const m = tag.match(/^@([a-z]+):(.+)$/i);
@@ -190,10 +205,10 @@ function aggregateByFacet(tests: CatalogTest[], facet: string) {
     for (const v of values) {
       const g = groups.get(v) ?? { passed: 0, failed: 0, skipped: 0, notRun: 0, total: 0 };
       g.total++;
-      if (!ran) g.notRun++;
-      else if (t.lastStatus === 'passed') g.passed++;
-      else if (t.lastStatus === 'skipped') g.skipped++;
-      else g.failed++;
+      if (status === 'passed') g.passed++;
+      else if (status === 'skipped') g.skipped++;
+      else if (status === 'failed' || status === 'timedOut') g.failed++;
+      else g.notRun++;
       groups.set(v, g);
     }
   }
@@ -228,12 +243,16 @@ export default function Dashboard() {
 
   const latest = runs[0];
   const passRate = latest && latest.total > 0 ? Math.round((latest.passed / latest.total) * 100) : 0;
+  // Compare like with like: an honest count against a legacy one (which may
+  // include carried-over passes) would show a drop that isn't real.
+  const prior = useMemo(
+    () => (latest ? runs.slice(1).find(r => isLegacyCount(r) === isLegacyCount(latest) && r.total > 0) : undefined),
+    [runs, latest],
+  );
   const trendDelta = useMemo(() => {
-    if (runs.length < 2 || !runs[0].total || !runs[1].total) return null;
-    const a = runs[0].passed / runs[0].total;
-    const b = runs[1].passed / runs[1].total;
-    return Math.round((a - b) * 100);
-  }, [runs]);
+    if (!latest?.total || !prior) return null;
+    return Math.round((latest.passed / latest.total - prior.passed / prior.total) * 100);
+  }, [latest, prior]);
 
   const byArea = useMemo(() => aggregateByFacet(tests, 'area'), [tests]);
   const byPersona = useMemo(() => aggregateByFacet(tests, 'persona'), [tests]);
@@ -266,7 +285,9 @@ export default function Dashboard() {
           <StatTile
             label="Trend vs prior run"
             value={trendDelta == null ? '—' : `${trendDelta > 0 ? '+' : ''}${trendDelta}%`}
-            sub={runs.length >= 2 ? `was ${Math.round((runs[1].passed / Math.max(runs[1].total, 1)) * 100)}% on ${runs[1].id.split('_').slice(0,2).join(' ')}` : 'first run'}
+            sub={prior
+              ? `was ${Math.round((prior.passed / Math.max(prior.total, 1)) * 100)}% on ${prior.id.split('_').slice(0,2).join(' ')}`
+              : runs.length >= 2 ? 'no comparable prior run (older ones are legacy counts)' : 'first run'}
             color={trendDelta == null ? undefined : trendDelta >= 0 ? STATUS_COLOR.passed : STATUS_COLOR.failed}
           />
         </Grid>

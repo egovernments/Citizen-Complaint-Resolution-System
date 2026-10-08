@@ -45,12 +45,17 @@ const state = {
 /**
  * Did this test produce a verdict in the latest run? catalog.json carries the
  * flag; older catalogs lack it, so fall back to "its newest history entry is
- * the latest run" (history only gains an entry when the test ran).
+ * the latest run" (history only gains an entry when the test ran — older
+ * builders also wrote one for an interrupted test, which reached no verdict).
  */
 function ranInLatest(t) {
   if (typeof t.ranInLatestRun === 'boolean') return t.ranInLatestRun;
-  return !!(t.history && t.history[0] && t.history[0].runId === state.catalog.lastRunId);
+  const h0 = t.history && t.history[0];
+  return !!(h0 && h0.runId === state.catalog.lastRunId && h0.status !== 'interrupted');
 }
+
+/** A run summary written before not-run tracking: its counts may include carried-over results. */
+function isLegacyCount(r) { return typeof r.notRun !== 'number'; }
 
 /** Latest-run status: lastStatus when it ran, else 'notrun' (or 'never' if it has no result at all). */
 function displayStatus(t) {
@@ -119,10 +124,12 @@ function renderRunSwitcher() {
   const chips = runs.map(r => {
     const isLatest = r.id === latestId;
     const ago = relTime(r.startedAt);
-    const summary = `${r.passed}/${r.total} pass${r.cutShort ? ' ⚠' : ''}`;
+    const legacy = isLegacyCount(r);
+    const summary = `${legacy ? '≈' : ''}${r.passed}/${r.total} pass${r.cutShort ? ' ⚠' : ''}`;
     const tooltip = `${r.id} · ${ago} · ${r.passed}p ${r.failed}f ${r.skipped}s` +
-      (r.notRun ? ` ${r.notRun} not run` : '') + (r.cutShort ? ` · cut short: ${r.cutShort}` : '');
-    return `<a class="run-chip${isLatest ? ' latest' : ''}" target="_blank" rel="noopener"
+      (r.notRun ? ` ${r.notRun} not run` : '') + (r.cutShort ? ` · cut short: ${r.cutShort}` : '') +
+      (legacy ? ' · legacy count: recorded before not-run tracking, may include results carried over from older runs' : '');
+    return `<a class="run-chip${isLatest ? ' latest' : ''}${legacy ? ' legacy' : ''}" target="_blank" rel="noopener"
        href="runs/${escapeAttr(r.id)}/playwright-report/index.html"
        title="${escapeAttr(tooltip)}">
        ${isLatest ? '★ ' : ''}${escapeHtml(r.id.split('_').slice(0,2).join(' '))}
@@ -263,7 +270,8 @@ function renderDots(t) {
     const run = runs[i];
     if (!run) { out.push('<span class="dot empty"></span>'); continue; }
     const h = (t.history || []).find(x => x.runId === run.id);
-    if (!h) { out.push(`<span class="dot notrun" title="${escapeAttr(run.id)} · not run"></span>`); continue; }
+    // 'interrupted' (older catalogs) reached no verdict either — same ring as the badge's "not run".
+    if (!h || h.status === 'interrupted') { out.push(`<span class="dot notrun" title="${escapeAttr(run.id)} · not run"></span>`); continue; }
     out.push(`<span class="dot ${escapeHtml(h.status)}" title="${escapeHtml(h.runId)} · ${escapeHtml(h.status)} · ${formatDuration(h.durationMs)}"></span>`);
   }
   return out.join('');
@@ -298,8 +306,14 @@ function renderDetail(id) {
   const lr = t.latestRun;
   const tagChips = t.tags.map(tagChipHtml).join(' ');
   const dots = renderDots(t);
+  // The carried-over latestRun (and its media) is only kept while that run is
+  // in the window; once it ages out only the history line is left to cite.
   const staleNote = (!ranInLatest(t) && lastKnownText(t))
-    ? `<p class="stale-note">Not run in the latest run (${escapeHtml(state.catalog.lastRunId)}). The result, video and error below are from the last run that reached it: ${escapeHtml(lastKnownText(t))}.</p>`
+    ? `<p class="stale-note">Not run in the latest run (${escapeHtml(state.catalog.lastRunId)}). ` +
+      (lr
+        ? `The result, video and error below are from the last run that reached it: ${escapeHtml(lastKnownText(t))}.`
+        : `Its last result was ${escapeHtml(lastKnownText(t))}; that run is outside the 5-run window, so no video or error is kept for it.`) +
+      `</p>`
     : '';
   const error = (lr && (lr.errorMessage || lr.errorStack))
     ? `<div class="section"><h4>Error</h4><pre class="error">${escapeHtml((lr.errorMessage || '') + '\n\n' + (lr.errorStack || ''))}</pre></div>`
