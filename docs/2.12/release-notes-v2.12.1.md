@@ -9,8 +9,8 @@
 
 | Area | What changed | Who notices |
 |---|---|---|
-| **Escalation** | Complaints move up to the officer's manager reliably, on time, and once per level. Admins edit the timings in Configurator. Automatic escalation is **off** after the upgrade (it was on in v2.12) unless a tenant overlay turns it on. | Citizens, officers, admins |
-| **Roles** | Only the officer holding a complaint sees **Escalate**. A GRO can only assign (naming an officer) or reject. | Employees |
+| **Escalation** | Complaints move up to the officer's reporting line reliably, on time, and once per level. An administrator can edit the duration after which auto-escalation occurs in Configurator. Automatic escalation is **off** by default after the upgrade (it was on in v2.12) unless a tenant overlay turns it on. | Citizens, officers, admins |
+| **Roles** | Only the officer holding a complaint sees an option to **Escalate** a complaint. A GRO can only assign (naming an officer) or reject. | Employees |
 | **Security** | 30+ findings from a partner security audit closed, including two high-severity ones. Hundreds of library vulnerabilities fixed. | Everyone (no visible change) |
 | **Safe deploys** | A redeploy can no longer wipe an existing database. Remote deploys work again. | DevOps |
 
@@ -20,10 +20,10 @@
 
 ## 1. Escalation fixes
 
-- **One rule for manual and automatic escalation:** the complaint goes to the HRMS reporting manager (`reportingTo`) of the officer currently holding it. Automatic escalation runs at time limits based on the complaint type's SLA, for example 80%, 120% and 200% (#2049).
-- **Escalate button:** shown only to the current holder, and only if that officer has a reporting manager (#2138, #2148, #2177).
-- **GRO only routes:** a GRO can assign and reject, but no longer escalate, resolve or reassign (#2096, #2146, #2147). Assigning without naming an officer is rejected (#2137, #2149).
-- **Per-type timings win** over the global default (#2196). Reopening no longer resets the escalation level (#2233).
+- **Standardised manual and automatic escalation:** the complaint goes to the reporting manager (`reportingTo`) of the officer currently holding it. Automatic escalation runs at time limits based on the complaint type's SLA, for example 80%, 120% and 200% of an SLA (#2049).
+- **Escalate button:** shown only to the current assignee of a complaint (The government employee/officer who holds this complaint), and only if that officer has a reporting manager (#2138, #2148, #2177).
+- **GRO only routes:** a Grievance Routing officer (GRO) can assign and reject, but no longer escalate, resolve or reassign a complaint (#2096, #2146, #2147). Assigning without naming an officer is rejected (#2137, #2149).
+- **Per-complaint type timings takes precedence** over the global default (#2196). Reopening no longer resets the escalation level (#2233).
 - **Configurator** has an editor for the escalation policy (#2090).
 
 **Known limitations:** a GRO can assign straight to a higher-level manager and skip the chain ([#2222](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/2222)). Rejected-then-reopened complaints do not escalate automatically ([#2195](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/2195)).
