@@ -169,7 +169,7 @@ Healthy Nai Pepea tenant has 37 seeded types — the count check is loose (> 1) 
 Steps:
 1. test.skip if !liveDeptCode (beforeAll picks first active dept).
 2. Generate a unique code + name; track for cleanup.
-3. Navigate to /complaint-types/create; fill Complaint Subcategory (labelled "Complaint Sub-Type" before #2243, "Name" before that), Service Code, pick Department option, set SLA=24.
+3. Navigate to /complaint-types/create; fill the name field (input[name="name"]; labelled "Complaint Subcategory", "Complaint Sub-Type" before #2243, "Name" before that), Service Code, pick Department option, set SLA=24.
 4. Click Create; wait for navigation back to LIST_PATH.
 5. mdmsSearch at CITY_TENANT for [code]; assert at least 1 hit (proves root → city inheritance).
 6. Search for the code in the list; click the row to open detail.
@@ -191,9 +191,11 @@ Cleanup is API-only — soft-deletes via cleanupMdms in afterAll because there's
     createdCodes.add(storedId(code));
 
     await page.goto(`${LIST_PATH}/create`);
-    // The complaint-type name field was renamed "Name" → "Complaint Sub-Type"
-    // → "Complaint Subcategory" (#2243). Accept both so older builds still match.
-    await page.getByLabel(/^Complaint (Sub-Type|Subcategory)/i).fill(name);
+    // Find the name field by its input name, which DigitFormInput takes from
+    // `source="name"` and which no copy change touches. Its label was renamed
+    // "Name" → "Complaint Sub-Type" → "Complaint Subcategory" (#2243); the
+    // label match is only a fallback. Its id is React's useId, so not #name.
+    await page.locator('input[name="name"]').or(page.getByLabel(/^Complaint (Sub-Type|Subcategory)/i)).first().fill(name);
 
     const codeInput = page.getByLabel(/Service Code/i);
     await codeInput.fill('');
