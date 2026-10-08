@@ -85,7 +85,7 @@ releases:
       # most recent sha tags, so a sha pin vanishes within about a week.
       - image:
           repository: egovio/digit-mcp
-          tag: "2.12-81fc6be"
+          tag: "2.12.1-7a38661"
         service:
           type: ClusterIP
         env:
@@ -121,7 +121,7 @@ releases:
           # Hub's library/digit-mcp). #2023 makes the same fix on the sibling
           # release above; kept separate per that PR's scope.
           repository: egovio/digit-mcp
-          tag: "2.12-81fc6be"
+          tag: "2.12.1-7a38661"
         service:
           type: ClusterIP
         env:

@@ -19,7 +19,7 @@ initContainers: {}
 # Without a rebuild the boundary/location UI wiring is stale. Refs #1160.
 image:
   repository: "digit-ui-esbuild"
-  tag: "2.12-5137119"
+  tag: "2.12.1-7a38661"
 replicas: "1"
 httpPort: 80
 healthChecks:

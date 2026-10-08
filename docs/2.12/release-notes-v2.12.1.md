@@ -1,6 +1,6 @@
 # CMS v2.12.1 Release Notes (patch)
 
-**Upgrades from:** v2.12 · **Source:** branch `2.12.1` @ `7a3866111` (2026-10-07)
+**Upgrades from:** v2.12 · **Images:** pgr-services, digit-ui and digit-mcp `2.12.1-7a38661`; configurator `2.12.1-6e8adb3`
 **Focus:** complaint escalation fixes, and security fixes for Ansible-deployed servers.
 
 > **Upgrading?** Follow the [migration guide](migration-guide-v2.12-to-v2.12.1.md).
@@ -9,12 +9,12 @@
 
 | Area | What changed | Who notices |
 |---|---|---|
-| **Escalation** | Complaints move up to the officer's manager reliably, on time, and once per level. Admins edit the timings in Configurator. Automatic escalation is **off** after the upgrade (it was on in v2.12). | Citizens, officers, admins |
+| **Escalation** | Complaints move up to the officer's manager reliably, on time, and once per level. Admins edit the timings in Configurator. Automatic escalation is **off** after the upgrade (it was on in v2.12) unless a tenant overlay turns it on. | Citizens, officers, admins |
 | **Roles** | Only the officer holding a complaint sees **Escalate**. A GRO can only assign (naming an officer) or reject. | Employees |
-
-> On servers upgraded from v2.12, the Escalation and Roles changes take effect only after the escalation migration ([migration guide, step 6a](migration-guide-v2.12-to-v2.12.1.md#6a-migrate-escalation-required-on-every-upgraded-tenant)).
 | **Security** | 30+ findings from a partner security audit closed, including two high-severity ones. Hundreds of library vulnerabilities fixed. | Everyone (no visible change) |
 | **Safe deploys** | A redeploy can no longer wipe an existing database. Remote deploys work again. | DevOps |
+
+> On servers upgraded from v2.12, the Escalation and Roles changes take effect only after the escalation migration ([migration guide, step 6a](migration-guide-v2.12-to-v2.12.1.md#6a-migrate-escalation-required-on-every-upgraded-tenant)).
 
 ---
 
@@ -29,8 +29,8 @@
 **Known limitations:** a GRO can assign straight to a higher-level manager and skip the chain ([#2222](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/2222)). Rejected-then-reopened complaints do not escalate automatically ([#2195](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/2195)).
 
 **Setup and configuration:**
-- [Escalation setup and configuration](https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/master/docs/escalation.md)
-- [Escalation rollout: preflight, workflow migration and validation](https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/master/docs/migration/pgr-escalation-self-loop.md)
+- [Escalation setup and configuration](../escalation.md)
+- [Escalation rollout: preflight, workflow migration and validation](../migration/pgr-escalation-self-loop.md)
 
 ---
 
