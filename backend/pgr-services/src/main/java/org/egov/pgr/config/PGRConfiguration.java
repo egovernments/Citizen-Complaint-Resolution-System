@@ -87,6 +87,9 @@ public class PGRConfiguration {
     @Value("${egov.workflow.businessservice.search.path}")
     private String wfBusinessServiceSearchPath;
 
+    @Value("${egov.workflow.businessservice.update.path:/egov-workflow-v2/egov-wf/businessservice/_update}")
+    private String wfBusinessServiceUpdatePath;
+
     @Value("${egov.workflow.processinstance.search.path}")
     private String wfProcessInstanceSearchPath;
 

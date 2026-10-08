@@ -47,7 +47,7 @@ export const pgrEscalationDescriptor: SchemaDescriptor = {
       widget: 'chip-array',
       required: true,
       label: 'Automatic-escalation states',
-      help: 'Workflow application statuses scanned automatically. Each state must have an ESCALATE self-loop for SYSTEM. Shipped value: PENDINGATLME.',
+      help: 'Workflow application statuses scanned automatically. pgr-services adds the ESCALATE workflow action each listed state needs. Shipped value: PENDINGATLME.',
     },
     {
       path: 'defaultSlaPercentageByLevel',
