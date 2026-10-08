@@ -17,6 +17,7 @@ import os from 'node:os';
 import ExcelJS from 'exceljs';
 import { getDigitToken } from './auth';
 import { BASE_URL, ROOT_TENANT, ADMIN_USER, ADMIN_PASS } from './env';
+import { hookOr, hierarchyStep } from './configurator-hooks';
 
 export const ROOT = ROOT_TENANT;
 
@@ -302,19 +303,22 @@ export async function phase3UploadMasters(page: Page, mastersFixture: string): P
  * "Create & Continue" (was "Create All", renamed `019b1594`) → creating-depts →
  * Step 3.2 Define Complaint Hierarchy (leave the default 4 levels) → Next:
  * Template → upload the complaint-hierarchy xlsx → Create N Subcategories
- * (was "Create N Sub-types" before #2243; both are accepted so the helper works
- * against builds on either side of the rename).
+ * (was "Create N Sub-types" before #2243).
+ *
+ * Every click and wait goes through the configurator's data-testid hooks
+ * (#2352), falling back to the visible label on builds without them, so a copy
+ * change can't stall the 6 Phase 4 tests at their timeout again.
  */
 export async function completePhase3(page: Page, hierarchyFixture: string): Promise<void> {
-  await page.getByRole('button', { name: /^Create & Continue$/ }).click();
+  await hookOr(page, 'phase3-masters-create', page.getByRole('button', { name: /^Create & Continue$/ })).click();
   // Step 3.2 — define levels (defaults are fine), advance to the template step.
-  await expect(page.getByText('Step 3.2: Define Complaint Hierarchy')).toBeVisible({ timeout: 120_000 });
-  await page.getByRole('button', { name: /Next: Template/i }).click();
-  await expect(page.getByText('Step 3.2: Download & Upload Template')).toBeVisible({ timeout: 15_000 });
+  await expect(hierarchyStep(page, 'define', 'Step 3.2: Define Complaint Hierarchy')).toBeVisible({ timeout: 120_000 });
+  await hookOr(page, 'ch-next-template', page.getByRole('button', { name: /Next: Template/i })).click();
+  await expect(hierarchyStep(page, 'template', 'Step 3.2: Download & Upload Template')).toBeVisible({ timeout: 15_000 });
   await page.locator('#ch-file-upload').setInputFiles(hierarchyFixture);
-  await expect(page.getByText('Step 3.2: Verify & Create')).toBeVisible({ timeout: 30_000 });
-  await page.getByRole('button', { name: /Create \d+ (Sub-types?|Subcategor(y|ies))/i }).click();
-  await expect(page.getByText('Phase 3 Complete!')).toBeVisible({ timeout: 120_000 });
+  await expect(hierarchyStep(page, 'verify', 'Step 3.2: Verify & Create')).toBeVisible({ timeout: 30_000 });
+  await hookOr(page, 'ch-create', page.getByRole('button', { name: /Create \d+ (Sub-types?|Subcategor(y|ies))/i })).click();
+  await expect(hookOr(page, 'phase3-complete', page.getByText('Phase 3 Complete!'))).toBeVisible({ timeout: 120_000 });
 }
 
 /** Composite: Phases 1→2→3 complete, ready at the "Continue to Phase 4" gate. */

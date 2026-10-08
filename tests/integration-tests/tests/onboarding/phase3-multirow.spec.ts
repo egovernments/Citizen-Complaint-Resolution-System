@@ -31,6 +31,7 @@ import {
   completePhase2,
   phase3UploadMasters,
 } from '../utils/onboarding';
+import { hookOr, hierarchyStep } from '../utils/configurator-hooks';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
@@ -66,8 +67,8 @@ test.describe('Onboarding — Phase 3 multi-row masters', () => {
     await expect(page.getByText(/2 designations/).first()).toBeVisible();
 
     // "Create & Continue" (was "Create All") advances into the mandatory
-    // Step 3.2 complaint-hierarchy sub-flow.
-    await page.getByRole('button', { name: /^Create & Continue$/ }).click();
-    await expect(page.getByText('Step 3.2: Define Complaint Hierarchy')).toBeVisible({ timeout: 120_000 });
+    // Step 3.2 complaint-hierarchy sub-flow. Hooks first, labels as fallback.
+    await hookOr(page, 'phase3-masters-create', page.getByRole('button', { name: /^Create & Continue$/ })).click();
+    await expect(hierarchyStep(page, 'define', 'Step 3.2: Define Complaint Hierarchy')).toBeVisible({ timeout: 120_000 });
   });
 });

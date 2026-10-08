@@ -194,7 +194,9 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
   };
 
   return (
-    <div>
+    // data-step lets tests wait for a step without matching its heading copy
+    // (#ch-file-upload is rendered in every step, so it can't tell them apart).
+    <div data-testid="complaint-hierarchy-setup" data-step={step}>
       <input id="ch-file-upload" type="file" accept=".xlsx,.xls" onChange={handleFileUpload} className="hidden" disabled={loading} />
 
       {error && (
@@ -256,7 +258,7 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
             </div>
           </div>
           <div className="flex justify-end mt-6">
-            <SubmitBar label="Next: Template" onSubmit={handleDefine} icon={<ChevronRight className="w-4 h-4" />} />
+            <SubmitBar label="Next: Template" onSubmit={handleDefine} icon={<ChevronRight className="w-4 h-4" />} data-testid="ch-next-template" />
           </div>
         </div>
       )}
@@ -368,11 +370,15 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
           </p>
           <div className="flex justify-between">
             <Button variant="ghost" size="sm" onClick={() => setStep('template')} className="text-muted-foreground hover:text-primary">← Back</Button>
+            {/* data-testid is for the integration suite to click instead of the label,
+                which is copy: "Sub-types" → "Subcategories" (#2243) stalled the
+                onboarding tests until their timeout. */}
             <SubmitBar
               label={loading ? 'Creating…' : `Create ${leaves.length} Subcategories`}
               onSubmit={handleIngest}
               disabled={loading || leaves.length === 0}
               icon={loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
+              data-testid="ch-create"
             />
           </div>
         </div>

@@ -6,6 +6,7 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import { loginConfigurator, CONFIGURATOR_BASE } from '../utils/configurator-auth';
+import { hookOr } from '../utils/configurator-hooks';
 
 type CcrsBuildFlags = {
   legacyPgrDashboardEnabled: boolean;
@@ -243,9 +244,9 @@ Steps:
 1. loginConfigurator (beforeEach).
 2. Navigate to /manage/pgr-dashboard, wait for networkidle.
 3. Assert "Status by Tenant" text is visible within 5s.
-4. For each tab in [Boundary, Department, Complaint Category|Type, Channel], assert a [role="tab"] with that text is visible.
+4. For each tab (boundary, department, type, channel), assert its pgr-breakdown-tab-<value> hook is visible; builds without the hook fall back to a [role="tab"] with that label (Boundary, Department, Complaint Category|Type, Channel).
 5. Assert the first <table> element is visible (the Boundary tab is the default).
-6. Click the Department tab.
+6. Click the Department tab (same hook-or-label lookup).
 7. Assert a [role="tabpanel"] table is visible within 5s.
 
 Confirms tab-switching actually swaps the rendered table — not just the tab indicator.`,
@@ -256,18 +257,27 @@ Confirms tab-switching actually swaps the rendered table — not just the tab in
     // Should show "Status by Tenant" section
     await expect(page.locator('text=Status by Tenant').first()).toBeVisible({ timeout: 5_000 });
 
-    // 4 tab triggers should be present. #2243 renamed "Complaint Type" →
-    // "Complaint Category"; accept both so older builds still match.
-    const tabs = [/Boundary/i, /Department/i, /Complaint (Type|Category)/i, /Channel/i];
-    for (const tab of tabs) {
-      await expect(page.locator('[role="tab"]', { hasText: tab })).toBeVisible({ timeout: 5_000 });
+    // 4 tab triggers should be present. Each is found by its
+    // pgr-breakdown-tab-<value> hook (#2352), keyed by the tab value; builds
+    // without it fall back to the label. #2243 renamed "Complaint Type" →
+    // "Complaint Category", so that fallback accepts both.
+    const tab = (value: string, label: RegExp) =>
+      hookOr(page, `pgr-breakdown-tab-${value}`, page.locator('[role="tab"]', { hasText: label }));
+    const tabs: Array<[string, RegExp]> = [
+      ['boundary', /Boundary/i],
+      ['department', /Department/i],
+      ['type', /Complaint (Type|Category)/i],
+      ['channel', /Channel/i],
+    ];
+    for (const [value, label] of tabs) {
+      await expect(tab(value, label)).toBeVisible({ timeout: 5_000 });
     }
 
     // Default tab (Boundary) should show a table
     await expect(page.locator('table').first()).toBeVisible({ timeout: 5_000 });
 
     // Click Department tab and verify table updates
-    await page.locator('[role="tab"]:has-text("Department")').click();
+    await tab('department', /Department/i).click();
     await expect(page.locator('[role="tabpanel"] table').first()).toBeVisible({ timeout: 5_000 });
   });
 });
