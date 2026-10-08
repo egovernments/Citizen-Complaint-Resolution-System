@@ -21,6 +21,7 @@ import polyglotI18nProvider from 'ra-i18n-polyglot';
 import englishMessages from 'ra-language-english';
 import type { TranslationMessages, Locale } from 'ra-core';
 import { digitClient } from './bridge';
+import { CONFIGURED_STATE_TENANT_ID } from '@/api/config';
 
 // ---------------------------------------------------------------------------
 // Available locales — add new ones here + seed app.* keys in DIGIT API
@@ -714,11 +715,12 @@ async function fetchAppTranslations(locale: string): Promise<Record<string, stri
   if (cached) return cached;
 
   try {
-    const tenantId = digitClient.stateTenantId;
-    // No session tenant yet → no translations to fetch. Returning empty lets
-    // the UI fall through to the bundled English strings instead of pointing
-    // the localization call at a hardcoded `'pg'` that doesn't exist on every
-    // deployment.
+    const sessionTenant = digitClient.stateTenantId;
+    // No session tenant yet (a founder on /signup): read the deployment's root
+    // tenant, where the deploy seeds the configurator-ui bundle, but only when
+    // config names it. Never a hardcoded `'pg'`, which doesn't exist on every
+    // deployment; with neither, the UI falls through to the bundled English.
+    const tenantId = sessionTenant || CONFIGURED_STATE_TENANT_ID.split('.')[0];
     if (!tenantId) return {};
 
     // Fetch from both modules in parallel. rainmaker-common provides shared keys
@@ -735,7 +737,9 @@ async function fetchAppTranslations(locale: string): Promise<Record<string, stri
       const text = (msg as Record<string, unknown>).message as string | undefined;
       if (code && text) flat[code] = text;
     }
-    if (Object.keys(flat).length > 0) {
+    // The root's strings are not cached: the cache is per locale, not per
+    // tenant, and would stand in for the session tenant's own after sign-in.
+    if (sessionTenant && Object.keys(flat).length > 0) {
       writeLocalStorageCache(locale, flat);
     }
     return flat;

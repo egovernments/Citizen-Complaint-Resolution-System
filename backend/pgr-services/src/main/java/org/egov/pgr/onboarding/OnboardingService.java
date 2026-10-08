@@ -32,7 +32,7 @@ public class OnboardingService {
     private static final Set<String> TENANT_ADMIN_FIELDS = Set.of("mobileNumber", "countryCode");
     private static final PhoneNumberUtil PHONE_NUMBERS = PhoneNumberUtil.getInstance();
     // Mobile lines only. Fixed-line, toll-free and VoIP numbers are valid for a
-    // region but egov-user rejects them at DIGIT_ACCOUNT, well after submit.
+    // region but egov-user rejects them at FOUNDER_HRMS, well after submit.
     private static final Set<PhoneNumberType> MOBILE_TYPES =
             Set.of(PhoneNumberType.MOBILE, PhoneNumberType.FIXED_LINE_OR_MOBILE);
 

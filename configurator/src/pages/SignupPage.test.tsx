@@ -370,7 +370,8 @@ describe('expired session', () => {
 });
 
 describe('provisioning', () => {
-  it('shows the worker steps and offers a retry only when the failure is retryable', async () => {
+  /** Walks the wizard to "Create account" and submits, the run coming back as `operation`. */
+  async function submitWith(operation: Record<string, unknown>) {
     vi.mocked(api.session).mockResolvedValue(signedIn);
     vi.mocked(api.tenants).mockResolvedValue({ tenants: [], selectionRequired: false, onboardingRequired: true });
     vi.mocked(api.findSignup).mockResolvedValue({
@@ -386,18 +387,9 @@ describe('provisioning', () => {
       tenantMetadata: { schemaVersion: 1, tenantAdmin: { mobileNumber: '+254700000199' } },
     } as never);
     vi.mocked(api.updateSignup).mockResolvedValue({ id: 'signup-1' } as never);
-    vi.mocked(api.submitSignup).mockResolvedValue({
-      id: 'op-1',
-      signupId: 'signup-1',
-      status: 'RETRYABLE_FAILED',
-      currentStep: 'ORGANIZATION',
-      completedSteps: ['TENANT_FOUNDATION'],
-      errorCode: 'ONBOARDING_VALIDATION_ERROR',
-      errorMessage: 'Could not create the organization.',
-      attempt: 1,
-      createdAt: 0,
-      updatedAt: 0,
-    } as never);
+    const run = { id: 'op-1', signupId: 'signup-1', errorCode: null, errorMessage: null, attempt: 1, createdAt: 0, updatedAt: 0, ...operation };
+    vi.mocked(api.submitSignup).mockResolvedValue(run as never);
+    vi.mocked(api.findOperation).mockResolvedValue(run as never);
 
     render(<SignupPage />);
 
@@ -408,9 +400,58 @@ describe('provisioning', () => {
     fireEvent.click(screen.getByRole('button', { name: /continue/i }));
     fireEvent.click(await screen.findByRole('checkbox'));
     fireEvent.click(screen.getByRole('button', { name: /create account/i }));
+  }
+
+  const spinning = (label: RegExp) => !!screen.getByText(label).closest('li')?.querySelector('.animate-spin');
+
+  it('shows the worker steps and offers a retry only when the failure is retryable', async () => {
+    await submitWith({
+      status: 'RETRYABLE_FAILED',
+      currentStep: 'ORGANIZATION',
+      completedSteps: ['TENANT_FOUNDATION'],
+      errorCode: 'ONBOARDING_VALIDATION_ERROR',
+      errorMessage: 'Could not create the organization.',
+    });
 
     expect(await screen.findByText(/could not create the organization/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument();
+  });
+
+  it("follows PGR's steps, so the step the run is on is the one that spins", async () => {
+    await submitWith({ status: 'RUNNING', currentStep: 'PLATFORM_BASELINE', completedSteps: ['TENANT_FOUNDATION'] });
+
+    expect(await screen.findByText('Setting up the basics')).toBeInTheDocument();
+    expect(spinning(/setting up the basics/i)).toBe(true);
+    expect(spinning(/creating your workspace/i)).toBe(false);
+    expect(screen.getByText('Connecting your sign-in')).toBeInTheDocument();
+  });
+
+  it('spins on the first step not done after a resubmit, not on the stale currentStep', async () => {
+    // OnboardingRepository.resubmit clears completed_steps and leaves current_step alone.
+    await submitWith({ status: 'PENDING', currentStep: 'ORGANIZATION', completedSteps: [] });
+
+    expect(await screen.findByText('Creating your workspace')).toBeInTheDocument();
+    expect(spinning(/creating your workspace/i)).toBe(true);
+    expect(spinning(/setting up your organisation/i)).toBe(false);
+  });
+
+  it('spins nothing once the run has succeeded, even on a step code it does not know', async () => {
+    await submitWith({
+      status: 'SUCCEEDED',
+      currentStep: null,
+      completedSteps: ['TENANT_FOUNDATION', 'PLATFORM_BASELINE', 'FOUNDER_EMPLOYEE', 'ORGANIZATION', 'MEMBERSHIP', 'BINDING'],
+      lifecyclePublishedAt: null,
+    });
+
+    expect(await screen.findByText('Creating your employee record')).toBeInTheDocument();
+    expect(document.querySelector('li .animate-spin')).toBeNull();
+  });
+
+  it('still shows progress on a step code it does not know', async () => {
+    await submitWith({ status: 'RUNNING', currentStep: 'SOME_NEW_STEP', completedSteps: ['TENANT_FOUNDATION', 'PLATFORM_BASELINE'] });
+
+    expect(await screen.findByText('Creating your employee record')).toBeInTheDocument();
+    expect(spinning(/creating your employee record/i)).toBe(true);
   });
 });
 
@@ -653,7 +694,7 @@ describe('resuming a run that was already going', () => {
 
     await waitFor(() => expect(api.submitSignup).toHaveBeenCalledWith('s1', expect.any(String)));
     // Real progress, read from the operation rather than invented.
-    expect(await screen.findByText(/creating your account/i)).toBeInTheDocument();
+    expect(await screen.findByText(/creating your workspace/i)).toBeInTheDocument();
   });
 
   it('surfaces the retry on a resumed retryable failure', async () => {
@@ -681,8 +722,8 @@ describe('resuming a run that was already going', () => {
     render(<SignupPage />);
     await screen.findByText(/setting up kisumu county/i);
 
-    expect(screen.queryByText(/creating your account/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/granting your permissions/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/creating your workspace/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/connecting your sign-in/i)).not.toBeInTheDocument();
   });
 
   it('does not reopen the wizard for an ACTIVE signup whose tenant has not surfaced', async () => {
@@ -717,7 +758,7 @@ describe('a success that is not yet published', () => {
     signupId: 's1',
     status: 'SUCCEEDED' as const,
     currentStep: null,
-    completedSteps: ['TENANT_FOUNDATION', 'ORGANIZATION', 'TENANT_ADMIN_MEMBERSHIP', 'TENANT_ADMIN_ROLES', 'DIGIT_ACCOUNT'],
+    completedSteps: ['TENANT_FOUNDATION', 'PLATFORM_BASELINE', 'FOUNDER_HRMS', 'ORGANIZATION', 'MEMBERSHIP', 'BINDING'],
     errorCode: null,
     errorMessage: null,
     attempt: 1,

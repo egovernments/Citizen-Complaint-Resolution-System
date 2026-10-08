@@ -5,12 +5,12 @@ import {
   type AuthMethod,
   type AvailabilityResult,
   type Operation,
-  type ProvisioningStep,
   type Signup,
   type SignupDraftInput,
   type TenantOption,
   OnboardingError,
   PROVISIONING_STEPS,
+  PROVISIONING_STEP_LABELS,
   authMethods,
   checkIdentifier,
   createSignup,
@@ -41,6 +41,7 @@ import { Stepper } from '@/components/ui/stepper';
 import { AuthShell } from '@/components/signup/AuthPanel';
 import { useAuthResult } from '@/hooks/useAuthResult';
 import { clearSignOutIncomplete, signOutIncomplete } from '@/lib/session';
+import { useOnboardingT } from '@/onboarding/i18n';
 
 const STEPS = [
   { id: 'account', label: 'Account' },
@@ -143,19 +144,6 @@ function SignupMethodIcon({ method }: { method: AuthMethod }) {
   );
 }
 
-/**
- * Founder-facing names for the backend's step codes. Lower-casing the codes
- * themselves read as internal machinery on the one screen where somebody is
- * watching every line, and turned the product name into "digit account".
- */
-const STEP_LABELS: Record<ProvisioningStep, string> = {
-  TENANT_FOUNDATION: 'Creating your account',
-  ORGANIZATION: 'Setting up your organisation',
-  TENANT_ADMIN_MEMBERSHIP: 'Adding you to your organisation',
-  TENANT_ADMIN_ROLES: 'Granting your permissions',
-  DIGIT_ACCOUNT: 'Creating your DIGIT login',
-};
-
 type Phase =
   | 'loading'
   | 'signedOut'
@@ -254,6 +242,7 @@ function AvailabilityNote({
  * instead of a form floating on an empty page.
  */
 function SignupFlow() {
+  const t = useOnboardingT();
   const authResult = useAuthResult();
   const [phase, setPhase] = useState<Phase>('loading');
   const [error, setError] = useState<string | null>(null);
@@ -864,15 +853,20 @@ function SignupFlow() {
   if (phase === 'provisioning' && operation) {
     const done = new Set(operation.completedSteps);
     const failed = operation.status === 'RETRYABLE_FAILED' || operation.status === 'TERMINAL_FAILED';
+    // PGR runs the steps in order, so while the run is live the step in progress is the first one not
+    // done. That holds for a step code this list does not know, and after a resubmit, which clears
+    // completedSteps but leaves currentStep where the last attempt stopped. A settled run spins nothing.
+    const live = operation.status === 'PENDING' || operation.status === 'RUNNING';
+    const current = live ? PROVISIONING_STEPS.find((name) => !done.has(name)) : undefined;
     return (
       <div>
-        <h1 className="text-2xl font-semibold">Setting up {accountName}</h1>
-        <p className="mt-2 text-sm text-muted-foreground">This usually takes a minute or two.</p>
+        <h1 className="text-2xl font-semibold">{t('signup.setting_up', 'Setting up %{name}', { name: accountName })}</h1>
+        <p className="mt-2 text-sm text-muted-foreground">{t('signup.takes_a_minute', 'This usually takes a minute or two.')}</p>
         {banner}
         <ol className="mt-6 space-y-3">
           {PROVISIONING_STEPS.map((name) => {
             const isDone = done.has(name);
-            const isCurrent = operation.currentStep === name && !isDone;
+            const isCurrent = current === name && !isDone;
             return (
               <li key={name} className="flex items-center gap-3 text-sm">
                 {isDone ? (
@@ -883,7 +877,7 @@ function SignupFlow() {
                   <span className="h-4 w-4 rounded-full border border-muted-foreground/40" />
                 )}
                 <span className={isDone ? 'text-foreground' : 'text-muted-foreground'}>
-                  {STEP_LABELS[name]}
+                  {t(`provisioning.${name.toLowerCase()}`, PROVISIONING_STEP_LABELS[name])}
                 </span>
               </li>
             );
@@ -892,9 +886,9 @@ function SignupFlow() {
         {failed && (
           <Alert variant="destructive" className="mt-6">
             <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Setup did not finish</AlertTitle>
+            <AlertTitle>{t('signup.setup_failed', 'Setup did not finish')}</AlertTitle>
             <AlertDescription>
-              {operation.errorMessage || 'The setup could not be completed.'}
+              {operation.errorMessage || t('signup.setup_failed_detail', 'The setup could not be completed.')}
               {operation.errorCode ? ` (${operation.errorCode})` : ''}
             </AlertDescription>
           </Alert>
@@ -914,26 +908,25 @@ function SignupFlow() {
               }
             }}
           >
-            <RefreshCw className="mr-2 h-4 w-4" /> Try again
+            <RefreshCw className="mr-2 h-4 w-4" /> {t('signup.try_again', 'Try again')}
           </Button>
         )}
         {operation.status === 'TERMINAL_FAILED' && (
           <p className="mt-4 text-sm text-muted-foreground">
-            This signup cannot be retried. Please contact support to continue.
+            {t('signup.cannot_retry', 'This signup cannot be retried. Please contact support to continue.')}
           </p>
         )}
         {awaitingPublication && !publishSlow && (
           <div className="mt-6 flex items-center text-sm text-muted-foreground">
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Finishing setup…
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> {t('signup.finishing', 'Finishing setup…')}
           </div>
         )}
         {awaitingPublication && publishSlow && (
           <Alert className="mt-6">
             <Loader2 className="h-4 w-4 animate-spin" />
-            <AlertTitle>Your workspace is almost ready</AlertTitle>
+            <AlertTitle>{t('signup.almost_ready', 'Your workspace is almost ready')}</AlertTitle>
             <AlertDescription>
-              We're finishing setup. This page will continue automatically, or you can come back
-              and sign in again shortly.
+              {t('signup.almost_ready_detail', 'We\'re finishing setup. This page will continue automatically, or you can come back and sign in again shortly.')}
             </AlertDescription>
           </Alert>
         )}
