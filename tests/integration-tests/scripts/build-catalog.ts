@@ -75,10 +75,14 @@ interface RunSummary {
   /**
    * Counted in `total` but produced no verdict in THIS run: never started
    * (global timeout, crash, spec not collected) or was interrupted.
+   * null = legacy count: written before this field existed and its report was
+   * not available to recompute from, so the counts may include results carried
+   * over from older runs. Absent only in summaries the next build hasn't
+   * visited yet.
    */
-  notRun: number;
+  notRun?: number | null;
   /** Playwright's own message when the run stopped early (e.g. global timeout), else null. */
-  cutShort: string | null;
+  cutShort?: string | null;
   /** On disk, but the Playwright config filters it out on this deployment. */
   excluded: number;
   total: number;
@@ -373,42 +377,68 @@ function indexResults(report: PwReport): Map<string, { test: PwTest; result: PwR
   return byId;
 }
 
+type RunCounts = Record<'passed' | 'failed' | 'skipped' | 'timedOut' | 'notRun' | 'excluded' | 'total', number>;
+
 /**
- * Outcome counts for ONE run over the tests on disk. `verdictOf` returns the
- * test's status in that run, or undefined if it produced no result there;
- * 'interrupted' (killed mid-flight) counts as no verdict. See the did-not-run
- * note in buildCatalog for why `notRun` and `excluded` are kept apart.
+ * A result's verdict, or undefined when it produced none. 'interrupted' means
+ * the global timeout killed it mid-flight: it started but reached no verdict.
  */
-function countRun(
-  tests: Array<Pick<CatalogTest, 'id' | 'tags'>>,
-  verdictOf: (id: string) => TestStatus | undefined,
-  localStack: boolean,
-): Pick<RunSummary, 'passed' | 'failed' | 'skipped' | 'timedOut' | 'notRun' | 'excluded' | 'total'> {
-  const verdict = (id: string) => {
-    const s = verdictOf(id);
-    return s && s !== 'interrupted' ? s : undefined;
-  };
-  const counted = tests.filter(t => !(!localStack && !verdict(t.id) && (t.tags || []).includes('@local-only')));
-  const ran = counted.map(t => verdict(t.id)).filter((s): s is TestStatus => !!s);
-  return {
-    passed: ran.filter(s => s === 'passed').length,
-    failed: ran.filter(s => s === 'failed' || s === 'timedOut').length,
-    skipped: ran.filter(s => s === 'skipped').length,
-    timedOut: ran.filter(s => s === 'timedOut').length,
-    notRun: counted.length - ran.length,
-    excluded: tests.length - counted.length,
-    total: counted.length,
-  };
+function verdictOf(result: PwResult | undefined): TestStatus | undefined {
+  return result && result.status !== 'interrupted' ? result.status : undefined;
 }
 
 /**
- * Playwright records an early stop as a run-level error ("Timed out waiting
- * 4800s for the test suite to run"); return the first such message, else null.
+ * Tally one run in a single pass. Each entry is one test in the suite with its
+ * verdict (undefined = no result in that run); `excluded` entries are left out
+ * of `total` entirely. See the did-not-run note in buildCatalog for why
+ * `notRun` and `excluded` are kept apart.
  */
+function tally(entries: Iterable<{ verdict: TestStatus | undefined; excluded: boolean }>): RunCounts {
+  const c: RunCounts = { passed: 0, failed: 0, skipped: 0, timedOut: 0, notRun: 0, excluded: 0, total: 0 };
+  for (const { verdict, excluded } of entries) {
+    if (excluded) { c.excluded++; continue; }
+    c.total++;
+    if (verdict === undefined) c.notRun++;
+    else if (verdict === 'passed') c.passed++;
+    else if (verdict === 'skipped') c.skipped++;
+    else if (verdict === 'failed' || verdict === 'timedOut') {
+      c.failed++;
+      if (verdict === 'timedOut') c.timedOut++;
+    }
+  }
+  return c;
+}
+
+/**
+ * Counts for a PAST run, from that run's own report.json alone. Its spec
+ * entries (tests/**\/*.spec.ts, the same files the AST walk reads) are the
+ * suite as it was then, so the result doesn't depend on how today's specs have
+ * moved or grown. Entries with no result are that run's not-run tests;
+ * @local-only specs never reach a remote report, so nothing is excluded.
+ */
+function countReport(report: PwReport): RunCounts {
+  const entries: Array<{ verdict: TestStatus | undefined; excluded: boolean }> = [];
+  for (const { spec } of flattenSpecs(report)) {
+    if (!/\.spec\.ts$/.test(spec.file)) continue; // fixtures/*.setup.ts are not tests in the catalog
+    const t = (spec.tests || [])[0];
+    entries.push({ verdict: verdictOf(t?.results?.[t.results.length - 1]), excluded: false });
+  }
+  return tally(entries);
+}
+
+/**
+ * Playwright's run-level message when the run stopped before every test got a
+ * turn — the global timeout or --max-failures — else null. Matched exactly, so
+ * an unrelated run-level error (a fixture, a teardown) isn't read as cut short.
+ */
+const CUT_SHORT = [
+  /^Timed out waiting [\d.]+s for the test suite to run/,
+  /^Testing stopped early after \d+ maximum allowed failures/,
+];
 function cutShortOf(report: PwReport): string | null {
   return (report.errors || [])
     .map(e => (e.message || '').replace(/\x1b\[[0-9;]*m/g, '').split('\n')[0].trim())
-    .find(m => /timed out waiting|stopped early|interrupted/i.test(m)) ?? null;
+    .find(m => CUT_SHORT.some(re => re.test(m))) ?? null;
 }
 
 function buildCatalog(opts: BuildOptions): { catalog: Catalog; nextHistory: HistoryFile } {
@@ -458,7 +488,11 @@ function buildCatalog(opts: BuildOptions): { catalog: Catalog; nextHistory: Hist
   let preservedCount = 0;
   for (const rec of ast) {
     seenIds.add(rec.id);
-    const ran = latestById.get(rec.id);
+    // An interrupted result reached no verdict, so it is handled exactly like
+    // no result: the previous lastStatus/latestRun carry over and no history
+    // entry is written — otherwise it would overwrite the last real result.
+    const indexed = latestById.get(rec.id);
+    const ran = verdictOf(indexed?.result) ? indexed : undefined;
     let lastStatus: TestStatus | null = null;
     let lastDurationMs: number | null = null;
     let latestRun: LatestRun | null = null;
@@ -521,9 +555,7 @@ function buildCatalog(opts: BuildOptions): { catalog: Catalog; nextHistory: Hist
       source: rec.source,
       lastStatus,
       lastDurationMs,
-      // An interrupted test (killed mid-flight by the global timeout) started
-      // but reached no verdict, so it counts as not run, not as a failure.
-      ranInLatestRun: !!ran && ran.result.status !== 'interrupted',
+      ranInLatestRun: !!ran,
       history: trimmedHistory,
       latestRun,
       parseError: rec.parseError,
@@ -575,7 +607,10 @@ function buildCatalog(opts: BuildOptions): { catalog: Catalog; nextHistory: Hist
     id: opts.runId,
     startedAt: report.stats?.startTime || new Date().toISOString(),
     durationMs: report.stats?.duration ?? 0,
-    ...countRun(tests, id => latestById.get(id)?.result.status, localStack),
+    ...tally(tests.map(t => ({
+      verdict: t.ranInLatestRun ? (t.lastStatus ?? undefined) : undefined,
+      excluded: !localStack && !t.ranInLatestRun && (t.tags || []).includes('@local-only'),
+    }))),
     cutShort: cutShortOf(report),
     sha: opts.sha,
     branch: opts.branch,
@@ -583,26 +618,33 @@ function buildCatalog(opts: BuildOptions): { catalog: Catalog; nextHistory: Hist
   };
 
   // Summaries written before `notRun` existed counted carried-over results as
-  // that run's outcome. Recompute each one still in the window from its own
-  // runs/<id>/report.json, so the trend doesn't show a fake cliff between the
-  // last old-style run and the first honest one. One-shot: the recomputed
-  // summary carries `notRun` and is persisted, so it is never redone.
+  // that run's outcome. Recompute each one still in the window from its OWN
+  // runs/<id>/report.json (countReport — never joined against today's specs,
+  // which may have moved or grown since), so the trend doesn't show a fake
+  // cliff between the last old-style run and the first honest one. When that
+  // report isn't available (runs published elsewhere, folder gone, unreadable),
+  // mark the summary `notRun: null` = legacy count; the dashboards render it
+  // as such and don't compare against it. Either way the result is persisted,
+  // so each old summary is visited exactly once.
   let recomputed = 0;
-  const windowRuns = priorRuns.slice(0, HISTORY_LIMIT - 1).map(r => {
-    if (typeof r.notRun === 'number' || !runsAreLocal) return r;
-    const p = path.join(runsDir!, r.id, 'report.json');
-    if (!fs.existsSync(p)) return r;
-    try {
-      const old = JSON.parse(fs.readFileSync(p, 'utf8')) as PwReport;
-      const byId = indexResults(old);
-      recomputed++;
-      return { ...r, ...countRun(tests, id => byId.get(id)?.result.status, localStack), cutShort: cutShortOf(old) };
-    } catch (e) {
-      console.warn(`[build-catalog] could not recompute ${r.id} from ${p}: ${(e as Error).message}`);
-      return r;
+  let markedLegacy = 0;
+  const windowRuns = priorRuns.slice(0, HISTORY_LIMIT - 1).map((r): RunSummary => {
+    if (r.notRun !== undefined) return r;
+    const p = runsAreLocal ? path.join(runsDir!, r.id, 'report.json') : null;
+    if (p && fs.existsSync(p)) {
+      try {
+        const old = JSON.parse(fs.readFileSync(p, 'utf8')) as PwReport;
+        recomputed++;
+        return { ...r, ...countReport(old), cutShort: cutShortOf(old) };
+      } catch (e) {
+        console.warn(`[build-catalog] could not recompute ${r.id} from ${p}: ${(e as Error).message}`);
+      }
     }
+    markedLegacy++;
+    return { ...r, notRun: null, cutShort: null };
   });
-  if (recomputed) console.log(`[build-catalog] recomputed ${recomputed} pre-notRun run summaries from their report.json`);
+  if (recomputed) console.log(`[build-catalog] recomputed ${recomputed} pre-notRun run summaries from their own report.json`);
+  if (markedLegacy) console.log(`[build-catalog] marked ${markedLegacy} pre-notRun run summaries as legacy counts (no report.json to recompute from)`);
 
   const catalog: Catalog = {
     generatedAt: new Date().toISOString(),

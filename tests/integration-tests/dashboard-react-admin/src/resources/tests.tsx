@@ -11,10 +11,10 @@ import {
   useGetList,
 } from 'react-admin';
 import { Suspense, lazy, useMemo } from 'react';
-import { Box, Card, CardContent, Chip, Divider, Grid, Link as MuiLink, Stack, Typography } from '@mui/material';
+import { Alert, Box, Card, CardContent, Chip, Divider, Grid, Link as MuiLink, Stack, Typography } from '@mui/material';
 
 const MonacoEditor = lazy(() => import('@monaco-editor/react'));
-import type { CatalogTest, HistoryEntry, RunSummary, TestStatus } from '../types';
+import type { CatalogTest, RunSlot, TestStatus } from '../types';
 
 // ---------------------------------------------------------------------------
 // Filters: every facet always-on alongside search; no "Add filter" dropdown.
@@ -83,12 +83,10 @@ const STATUS_COLORS: Record<TestStatus | 'never', 'success' | 'error' | 'warning
 
 function StatusBadge() {
   const r = useRecordContext<CatalogTest>();
-  const status = (r?.lastStatus ?? 'never') as TestStatus | 'never';
-  // lastStatus is the last KNOWN result; when the latest run never reached the
-  // test, show that instead of an old green/red that looks current.
-  // Its carried-over result may already have aged out (lastStatus null) while
-  // history still proves it ran before — that is "not run", not "never".
-  if (r && r.ranInLatestRun === false && (r.lastStatus || r.history.length)) {
+  // currentStatus (derived in dataProvider) is the LATEST run's outcome; a test
+  // that run didn't reach is "not run", never its older carried-over result.
+  const current = r?.currentStatus ?? 'never';
+  if (r && current === 'notrun') {
     const last = r.lastStatus ?? r.history[0]?.status;
     const from = r.latestRun?.runId ?? r.history[0]?.runId;
     return (
@@ -100,6 +98,7 @@ function StatusBadge() {
       />
     );
   }
+  const status = current as TestStatus | 'never';
   return (
     <Chip
       size="small"
@@ -188,18 +187,12 @@ const HISTORY_COLOR: Record<string, string> = {
 };
 function HistoryDots() {
   const r = useRecordContext<CatalogTest>();
-  // One slot per run in the window (newest first), so a dot means the same run
-  // on every row; a run this test produced no result in renders as a hollow
-  // "not run" ring instead of older results sliding left into its slot.
-  const { data: runs } = useGetList<RunSummary>('runs', {
-    pagination: { page: 1, perPage: HISTORY_SLOTS },
-    sort: { field: 'startedAt', order: 'DESC' },
-  });
   if (!r) return null;
-  const slots: Array<HistoryEntry | { notRun: string } | null> = runs?.length
-    ? Array.from({ length: HISTORY_SLOTS }, (_, i) =>
-        runs[i] ? (r.history.find(h => h.runId === runs[i].id) ?? { notRun: runs[i].id }) : null)
-    : Array.from({ length: HISTORY_SLOTS }, (_, i) => r.history[i] ?? null);
+  // One slot per run in the window (newest first; aligned once in dataProvider),
+  // so a dot means the same run on every row; a run this test produced no
+  // verdict in renders as a hollow "not run" ring instead of older results
+  // sliding left into its slot.
+  const slots: Array<RunSlot | null> = Array.from({ length: HISTORY_SLOTS }, (_, i) => r.runSlots?.[i] ?? null);
   return (
     <Stack direction="row" spacing={0.5} alignItems="center">
       {slots.map((h, i) => {
@@ -207,7 +200,7 @@ function HistoryDots() {
           return (
             <Box
               key={i}
-              title={`${h.notRun} · not run`}
+              title={`${h.runId} · not run`}
               sx={{
                 width: 8, height: 8, borderRadius: '50%',
                 border: '1px solid', borderColor: 'text.secondary',
@@ -281,7 +274,7 @@ export const TestList = () => (
         '& .column-file': { width: '22%' },
         '& .column-tags': { width: '26%' },
         '& .column-history': { width: '8%' },
-        '& .column-lastStatus': { width: '8%' },
+        '& .column-currentStatus': { width: '8%' },
         '& .column-duration': { width: '8%' },
       }}
     >
@@ -289,7 +282,8 @@ export const TestList = () => (
       <FunctionField label="File" source="file" render={() => <FileCell />} />
       <FunctionField label="Tags" source="tags" render={() => <TagsCell />} />
       <FunctionField label="Last 5" source="history" render={() => <HistoryDots />} />
-      <FunctionField label="Last status" source="lastStatus" render={() => <StatusBadge />} />
+      {/* Sorts on the latest run's status, not the carried-over lastStatus. */}
+      <FunctionField label="Status" source="currentStatus" render={() => <StatusBadge />} />
       <FunctionField label="Duration" source="duration" render={() => <DurationCell />} />
     </Datagrid>
   </List>
@@ -447,7 +441,10 @@ function RunHistoryBlock() {
       {r.history.map((h, i) => {
         const dur = h.durationMs < 1000 ? `${Math.round(h.durationMs)}ms` : `${(h.durationMs/1000).toFixed(1)}s`;
         const reportLink = rootedUrl(`runs/${h.runId}/playwright-report/index.html`);
-        const isLatest = r.latestRun?.runId === h.runId;
+        // latestRun is the run whose media is kept — the latest run only when
+        // the test ran in it; otherwise it is the carried-over last result.
+        const hasMedia = r.latestRun?.runId === h.runId;
+        const isLatest = hasMedia && !!r.ranInLatestRun;
         return (
           <Box
             key={i}
@@ -465,16 +462,17 @@ function RunHistoryBlock() {
             <Typography variant="caption" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
               {h.runId}
               {isLatest && <Typography component="span" variant="caption" color="primary.main" sx={{ ml: 1 }}>★ latest</Typography>}
+              {hasMedia && !isLatest && <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>last result</Typography>}
             </Typography>
             <Typography variant="caption" sx={{ fontVariantNumeric: 'tabular-nums', textAlign: 'right' }}>
               {dur}
             </Typography>
             <Stack direction="row" spacing={1.5}>
               <MuiLink href={reportLink} target="_blank" rel="noopener" variant="caption">Report</MuiLink>
-              {isLatest && r.latestRun?.videoUrl && (
+              {hasMedia && r.latestRun?.videoUrl && (
                 <MuiLink href={rootedUrl(r.latestRun.videoUrl)} target="_blank" rel="noopener" variant="caption">Video</MuiLink>
               )}
-              {isLatest && r.latestRun?.traceUrl && (
+              {hasMedia && r.latestRun?.traceUrl && (
                 <MuiLink href={rootedUrl(r.latestRun.traceUrl)} target="_blank" rel="noopener" variant="caption">Trace</MuiLink>
               )}
             </Stack>
@@ -545,7 +543,16 @@ function TestShowLayout() {
         <Grid size={{ xs: 12, md: 7 }}>
           <Card sx={{ height: '100%' }}>
             <CardContent>
-              <SectionHeader>Latest run · video</SectionHeader>
+              <SectionHeader>{r.ranInLatestRun ? 'Latest run · video' : 'Last result · video'}</SectionHeader>
+              {/* Same note as v1: a test the latest run didn't reach must not
+                  present an older run's video and error as current. */}
+              {!r.ranInLatestRun && r.currentStatus === 'notrun' && (
+                <Alert severity="warning" sx={{ mb: 1.5 }}>
+                  {r.latestRun
+                    ? `Not run in the latest run. The video and error below are from ${r.latestRun.runId}, the last run that reached it (${r.lastStatus ?? r.history[0]?.status}).`
+                    : `Not run in the latest run. Its last result was ${r.history[0]?.status} in ${r.history[0]?.runId}; that run is outside the 5-run window, so no video or error is kept for it.`}
+                </Alert>
+              )}
               {r.latestRun?.videoUrl ? (
                 <video
                   src={rootedUrl(r.latestRun.videoUrl)}

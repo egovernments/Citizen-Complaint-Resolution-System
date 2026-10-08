@@ -25,6 +25,12 @@ export interface LatestRun {
   errorStack: string | null;
 }
 
+/** Latest-run status: the verdict when it ran, else 'notrun' (it ran before) or 'never'. */
+export type CurrentStatus = TestStatus | 'notrun' | 'never';
+
+/** One slot per run in the window, newest first: that run's entry, or a not-run marker. */
+export type RunSlot = HistoryEntry | { runId: string; notRun: true };
+
 export interface CatalogTest {
   id: string;
   title: string;
@@ -34,14 +40,22 @@ export interface CatalogTest {
   tags: string[];
   description: string | null;
   source: string;
-  /** Last KNOWN outcome — may come from an older run; see ranInLatestRun. */
+  /** Last KNOWN outcome — may come from an older run. Read currentStatus instead. */
   lastStatus: TestStatus | null;
   lastDurationMs: number | null;
-  /** False when the test produced no verdict in the latest run (absent in older catalogs). */
+  /**
+   * False when the test produced no verdict in the latest run. Older catalogs
+   * lack it; dataProvider derives it, so after load it is always set.
+   */
   ranInLatestRun?: boolean;
   history: HistoryEntry[];
   latestRun: LatestRun | null;
   parseError: string | null;
+  // ---- derived by dataProvider on load (not in catalog.json) ----
+  /** What every list/badge/filter/sort reads: correct by default, no flag to remember. */
+  currentStatus?: CurrentStatus;
+  /** History aligned to catalog.runs, so a dot means the same run on every row. */
+  runSlots?: RunSlot[];
 }
 
 export interface RunSummary {
@@ -52,8 +66,11 @@ export interface RunSummary {
   failed: number;
   skipped: number;
   timedOut: number;
-  /** In `total` but no verdict in this run (absent in older catalogs). */
-  notRun?: number;
+  /**
+   * In `total` but no verdict in this run. null or absent = legacy count:
+   * recorded before not-run tracking, may include carried-over results.
+   */
+  notRun?: number | null;
   /** Playwright's message when the run stopped early (e.g. global timeout). */
   cutShort?: string | null;
   total: number;

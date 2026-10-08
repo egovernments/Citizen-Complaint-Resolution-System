@@ -9,9 +9,15 @@ import {
 } from 'react-admin';
 import type { RunSummary } from '../types';
 
-/** " · 68 not run · cut short" — empty for a complete run (and for older catalogs). */
+/**
+ * " · 68 not run · cut short" for a counted run, " · legacy count" for one
+ * recorded before not-run tracking (its counts may include carried-over
+ * results), empty for a complete run.
+ */
 const notRunSuffix = (r: RunSummary) =>
-  `${r.notRun ? ` · ${r.notRun} not run` : ''}${r.cutShort ? ' · cut short' : ''}`;
+  typeof r.notRun !== 'number'
+    ? ' · legacy count'
+    : `${r.notRun ? ` · ${r.notRun} not run` : ''}${r.cutShort ? ' · cut short' : ''}`;
 
 export const RunList = () => (
   <List perPage={20} sort={{ field: 'startedAt', order: 'DESC' }}>

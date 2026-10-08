@@ -278,3 +278,4 @@ a.run-chip {
 a.run-chip:hover { border-color: var(--accent); text-decoration: none; }
 a.run-chip.latest { border-color: var(--accent); color: var(--accent); }
 a.run-chip .run-chip-stats { color: var(--muted); font-size: 10px; }
+a.run-chip.legacy { border-style: dashed; opacity: 0.7; }
