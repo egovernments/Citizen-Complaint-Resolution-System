@@ -4346,6 +4346,106 @@
         - integration_tests_dir is defined
         - ansible_system != "Darwin"
 
+    # ---- Regression email alerts (opt-in: test_alerts_enabled) ----
+    # A systemd timer runs tests/integration-tests/scripts/regression-alert.mjs
+    # every test_alerts_poll_minutes (default 5). Each poll reads the published
+    # catalog.json; when a NEW run has appeared it compares every test with the
+    # run before it and mails test_alerts_to the tests that regressed, became
+    # skipped or stopped running. Settings are the test_alerts_* host_vars
+    # (documented in inventory/host_vars/_example.yml). The SMTP password is
+    # host_vars test_alerts_smtp_password if set, else this tenant's OpenBao key
+    # of the same name. bootstrap_secrets only seeds a fresh tenant, so on an
+    # existing one put it with `bao kv patch {{ secrets_path }}
+    # test_alerts_smtp_password=…`. A missing required setting leaves alerts OFF
+    # with a warning: a mail misconfiguration must not fail the whole deploy.
+    # Runbook: tests/integration-tests/runner/README.md.
+    - name: "integration-tests alerts — resolve the SMTP password (host_vars, else OpenBao)"
+      ansible.builtin.set_fact:
+        _test_alerts_smtp_pw: >-
+          {{ test_alerts_smtp_password | default('', true)
+             or bao_secrets.json.data.data.test_alerts_smtp_password | default('', true) }}
+      no_log: true
+      when: test_alerts_enabled | default(false) | bool
+
+    - name: "integration-tests alerts — check required settings"
+      ansible.builtin.set_fact:
+        _test_alerts_missing: "{{ [
+            ('enable_integration_tests' if not (enable_integration_tests | default(false) | bool) else ''),
+            ('test_alerts_smtp_host' if not (test_alerts_smtp_host | default('', true)) else ''),
+            ('test_alerts_from' if not (test_alerts_from | default('', true)) else ''),
+            ('test_alerts_to' if (test_alerts_to | default([], true) | length) == 0 else ''),
+            ('test_alerts_smtp_password' if (test_alerts_smtp_user | default('', true)) and not _test_alerts_smtp_pw else ''),
+          ] | select | list }}"
+      when: test_alerts_enabled | default(false) | bool
+
+    - name: "integration-tests alerts — WARNING: enabled but not configured, alerts stay off"
+      ansible.builtin.debug:
+        msg: >-
+          test_alerts_enabled is true but these are missing: {{ _test_alerts_missing | join(', ') }}.
+          No alert mail will be sent from this box until they are set.
+      when:
+        - test_alerts_enabled | default(false) | bool
+        - _test_alerts_missing | length > 0
+
+    - name: "integration-tests alerts — decide whether the timer runs on this box"
+      ansible.builtin.set_fact:
+        _test_alerts_on: >-
+          {{ (test_alerts_enabled | default(false) | bool)
+             and (_test_alerts_missing | default(['off']) | length == 0)
+             and (integration_tests_dir is defined)
+             and ansible_system != 'Darwin' }}
+
+    - name: "integration-tests alerts — env file (root-only; holds the SMTP password)"
+      ansible.builtin.template:
+        src: templates/ccrs-test-alerts.env.j2
+        dest: /etc/ccrs-test-alerts.env
+        owner: root
+        group: root
+        mode: "0600"
+      no_log: true
+      when: _test_alerts_on | bool
+
+    - name: "integration-tests alerts — install the poll service and its timer"
+      ansible.builtin.template:
+        src: "templates/{{ item }}.j2"
+        dest: "/etc/systemd/system/{{ item }}"
+        mode: "0644"
+      loop:
+        - ccrs-test-alerts.service
+        - ccrs-test-alerts.timer
+      when: _test_alerts_on | bool
+
+    - name: "integration-tests alerts — enable + start the timer"
+      ansible.builtin.systemd:
+        name: ccrs-test-alerts.timer
+        state: started
+        enabled: true
+        daemon_reload: true
+      # In --check mode the unit above was not actually written, so systemd
+      # cannot find it yet; a real run writes it first.
+      ignore_errors: "{{ ansible_check_mode }}"
+      when: _test_alerts_on | bool
+
+    # Turning alerts off (or never having them) must leave no timer running and
+    # no password on disk.
+    - name: "integration-tests alerts — off: stop + disable the timer if present"
+      ansible.builtin.systemd:
+        name: ccrs-test-alerts.timer
+        state: stopped
+        enabled: false
+      failed_when: false
+      when:
+        - not (_test_alerts_on | bool)
+        - ansible_system != "Darwin"
+
+    - name: "integration-tests alerts — off: remove the env file"
+      ansible.builtin.file:
+        path: /etc/ccrs-test-alerts.env
+        state: absent
+      when:
+        - not (_test_alerts_on | bool)
+        - ansible_system != "Darwin"
+
     # Host nginx (Linux) — package install + /etc/nginx site. Skipped on
     # macOS, where nginx runs as a container instead (next block).
     #

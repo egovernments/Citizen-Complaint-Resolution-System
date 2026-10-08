@@ -53,3 +53,92 @@ since it serves on the same vhost). The playbook installs Playwright browsers,
 the `integration-tests-runner.service` systemd unit, and the nginx proxy block.
 On `nginx_preserve_vhost` hosts (e.g. Bomet), add the `/integration-tests/api/`
 block by hand from `../deploy/nginx-integration-tests.conf`.
+
+## Regression email alerts
+
+`../scripts/regression-alert.mjs` mails the team when a new run regressed. A
+systemd timer (`ccrs-test-alerts.timer`) runs it every 5 minutes. Each poll
+reads the published `catalog.json`. If a run has appeared since the last poll,
+it compares every test with the run before it and sends one mail listing the
+tests that:
+
+| Group | Meaning | Mails? |
+|---|---|---|
+| Regressed | failed or timed out now; passed the last time it ran | yes |
+| Now skipped | skipped now; passed the last time it ran | yes |
+| Stopped running | passed in the previous run; no result now (cut off by the global timeout, setup failed, …) | yes |
+| Fixed | passed now; failed the last time it ran | listed only |
+
+The mail carries the run and previous-run summaries, the "cut short" message,
+a GitHub compare link between the two runs' commits, and a dashboard link per
+test. Tests whose 5-run history already had failures are labelled flaky.
+
+How it behaves:
+
+- **Change-only.** Each run is compared once, so a test that stays red is not
+  mailed again, and a run with only fixes sends nothing. A problem that persists
+  (say, every run executing nothing) is reported once, on the run where it began.
+- **First poll on a box** only records the newest run as the baseline, so
+  enabling alerts doesn't mail old news.
+- **Several runs between polls** (RUN-button runs) are each compared with their
+  own predecessor, oldest first.
+- **A failed send** (SMTP down, bad password) leaves the state where it was, so
+  the next poll retries. Nothing is lost, and nothing is sent twice.
+- **Optional watchdog:** with `test_alerts_stale_after_hours` > 0 it also mails
+  once when no new run has appeared for that long, e.g. because the nightly
+  redeploy failed its smoke check and never started the tests.
+- Plain Node with no npm dependencies, and curl does the SMTP. A broken
+  `npm install` of the suite can't silence its own alerts.
+
+### Enable it
+
+The `test_alerts_*` variables, documented in
+`local-setup/ansible/inventory/host_vars/_example.yml`, go in that box's
+host_vars. The minimum:
+
+```yaml
+test_alerts_enabled: true
+test_alerts_smtp_host: "smtp.example.org"
+test_alerts_smtp_user: "test-alerts@example.org"
+test_alerts_from: "CCRS test alerts <test-alerts@example.org>"
+test_alerts_to: ["ccrs-test-alerts@example.org"]
+```
+
+Put the SMTP password in OpenBao (`bao kv patch <secrets_path>
+test_alerts_smtp_password=<value>`), or set `test_alerts_smtp_password` in
+host_vars. Then redeploy. The deploy writes `/etc/ccrs-test-alerts.env`
+(root-only) and enables the timer. If anything required is missing it prints
+a WARNING and leaves alerts off, so the deploy itself never fails because of
+mail settings.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `test_alerts_enabled` | `false` | turn the timer on |
+| `test_alerts_smtp_host` | — | SMTP server (required) |
+| `test_alerts_smtp_port` | `587` | SMTP port (465 is blocked outbound on the Hetzner boxes) |
+| `test_alerts_smtp_starttls` | `true` | require STARTTLS on `smtp://` |
+| `test_alerts_smtp_tls` | `false` | implicit TLS (`smtps://`) instead |
+| `test_alerts_smtp_user` | — | SMTP login; omit for an unauthenticated relay |
+| `test_alerts_smtp_password` | OpenBao | host_vars value wins over the OpenBao key of the same name |
+| `test_alerts_from` | — | sender, `Name <addr>` (required) |
+| `test_alerts_to` | — | list of recipients (required); a group address is easiest |
+| `test_alerts_box_name` | inventory host | label in the subject |
+| `test_alerts_dashboard_url` | `https://<domain>/tests/` | base for the per-test links |
+| `test_alerts_poll_minutes` | `5` | timer interval |
+| `test_alerts_max_list` | `40` | max tests listed per group |
+| `test_alerts_stale_after_hours` | `0` (off) | mail once when no new run appears for this long |
+
+### Operate it (on the box)
+
+```bash
+systemctl list-timers ccrs-test-alerts.timer        # next / last poll
+journalctl -u ccrs-test-alerts.service -n 50        # what each poll compared and sent
+cat /var/lib/ccrs-test-alerts/state.json            # last handled run
+
+# Preview the mail for the newest run without sending or touching state:
+set -a; . /etc/ccrs-test-alerts.env; set +a
+node <tests checkout>/scripts/regression-alert.mjs --dry-run --since <previous-run-id>
+```
+
+To resend a run's mail, edit `lastRunId` in the state file back to the run
+before it. Deleting the state file re-baselines without mailing.

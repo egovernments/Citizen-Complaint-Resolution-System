@@ -1,0 +1,29 @@
+# One poll of the integration-test regression alerts: read the published
+# catalog.json, compare any new run with the one before it, mail regressions.
+# Started every 5 minutes by ccrs-test-alerts.timer. Rendered by the playbook
+# when test_alerts_enabled: true (see tests/integration-tests/runner/README.md).
+[Unit]
+Description=CCRS integration-test regression email alerts (one poll)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# A throwaway unprivileged account per poll: the script only reads the
+# world-readable catalog.json and writes its own state. systemd reads the
+# root-only EnvironmentFile before dropping privileges, so the SMTP password
+# never has to be readable by the poll's account on disk.
+DynamicUser=yes
+StateDirectory=ccrs-test-alerts
+EnvironmentFile=/etc/ccrs-test-alerts.env
+ExecStart=/usr/bin/env node {{ integration_tests_dir }}/scripts/regression-alert.mjs
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+TimeoutStartSec=180
+Nice=10
