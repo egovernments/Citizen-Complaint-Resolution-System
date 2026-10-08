@@ -32,7 +32,7 @@ and in which language, so other modules and products can reuse it rather than bu
 | Which provider a channel uses | Fixed by server settings. Channels were switched on or off on the server | **Notifications → Channels**: one active provider per channel (SMS, WhatsApp, email) per state or workspace, switched on, off or changed by hand. Takes effect within about a minute |
 | Login OTP SMS | A separate SMS service with its own setup; wording not editable | Same SMS channel, provider and log as every other SMS, through the workspace's own account where it has one. Wording for login, registration and password-reset OTPs is editable per language |
 | Honest status | A message whose channel was off was already marked "Skipped" | Also: if a channel that is on has no usable provider (none added, or the chosen one deleted or switched off), the message is marked **Skipped, provider unavailable**, not "Sent" |
-| Checking a provider | **Verify** and **Test** on the Providers screen | **Check status** (says plainly that it does not prove the credentials) and **Test**, which sends one real message. Test messages are flagged in the log and hidden unless asked for. On the deployment's shared account, a Test that nothing could deliver (the provider is switched off or serves another channel, or the channel has no provider) is refused with the reason instead of being reported as sent |
+| Checking a provider | **Verify** and **Test** on the Providers screen | **Check status** (says plainly that it does not prove the credentials) and **Test**, which sends one real message. Test messages are flagged in the log and hidden unless asked for. A Test that nothing could deliver (the provider is switched off or serves another channel, or the channel has no provider) is refused with the reason instead of being reported as sent, on the deployment's shared account and on a workspace's own account alike, each judged by its own providers |
 | Delivery log | Complaint number, channel and status filters, recipients masked | Adds delivery confirmation where the provider reports back (**Delivered**, **Bounced**, **Failed**), a test-send filter, and whether a message was a finished message from a module or built by the notification module. One masking rule on screen and in the API: user ids in full, a phone as its last three digits (`+***678`), an email as its first letter and domain (`c***@example.org`) |
 | Checking templates | A **Validate** button on Configure | The same checks run on **every save**: errors block the save, warnings inform |
 | WhatsApp templates | Sync approved templates from Twilio | Same, plus a save-time check that the message's placeholders match the approved template's variables |
@@ -76,8 +76,9 @@ Things operators can rely on:
   another provider first.
 - **A Test does not report success for a message nothing could deliver.** If the provider is
   switched off or serves another channel, or the channel has no provider at all, the Test is
-  refused with the reason and nothing is sent. This applies to the deployment's shared account;
-  for a workspace's own account, see Known limits.
+  refused with the reason and nothing is sent. This holds for the deployment's shared account and
+  for a workspace's own account: a workspace's Test is checked against the workspace's own
+  providers only, never the shared account's.
 - **No message goes to a guessed number.** A phone number stored without a country code is
   completed with the person's own code, else the workspace's mobile-number rule, else the
   deployment's default. With none of these, the message is skipped as an invalid contact and
@@ -222,10 +223,6 @@ Guides: [adding-a-provider.md](./adding-a-provider.md) (2.20, a worked example),
   messages stay "Sent"** even when delivered, because Twilio's own delivery reports are not
   yet matched to the log. For a workspace's own providers, the platform operator has to set up
   delivery reports for each one; until then their messages also stay "Sent".
-- **In a workspace's own account, a Test can still report success when nothing can deliver
-  it**, for example when the workspace has no active provider: the delivery engine accepts the
-  test message and then fails it. The check that refuses such a Test on the shared account is
-  not applied to a workspace's own account yet. Check that a test message actually arrived.
 - **Citizen phone sign-in through the new sign-in service does not use notifications yet.** The
   notification side can already send a sign-in code through the workspace's own account;
   connecting the sign-in service is a separate follow-up. Until then, phone sign-in there is
