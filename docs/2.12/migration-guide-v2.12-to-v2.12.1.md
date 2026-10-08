@@ -80,6 +80,7 @@ What changes:
 - The `ufw` firewall is switched on.
 - Internal ports listen on `127.0.0.1` only. Reach them through an SSH tunnel, for example `ssh -L 15432:127.0.0.1:15432 <server>`.
 - Calls without a token to the APIs, `/user/_search`, `/mcp` and `/status/` return `401`.
+- **Automatic escalation is switched off** (it was on in v2.12). Turn it back on in step 6b.
 
 > **Novu:** sign-up is now disabled. If `enable_novu: true` and Novu has no admin account yet, the deploy fails with `Account creation is disabled`. Set an existing key in `novu_api_key`, or set `enable_novu: false` for now.
 
@@ -125,12 +126,55 @@ Code cannot do these:
 
 ## 6. Escalation
 
-Keep automatic escalation off (`PGR_ESCALATION_ENABLED=false`, the default) until the checks below pass. Then follow:
+### 6a. Migrate escalation (required on every upgraded tenant)
 
-1. [Escalation rollout guide](https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/master/docs/migration/pgr-escalation-self-loop.md): preflight, the **mandatory** workflow-role fix for existing tenants, and validation.
-2. [Escalation setup and configuration](https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/master/docs/escalation.md): the `EscalationConfig` policy, edited in DIGIT Studio → PGR **Escalation policy**.
+Until this is done, the new roles do not apply, and manual **Escalate** still moves complaints to the old `PENDINGATSUPERVISOR` state. Do it straight after the redeploy.
 
-If **Escalation policy** is missing in DIGIT Studio, the tenant predates v2.12.1. Create the `RAINMAKER-PGR.EscalationConfig` schema from `utilities/default-data-handler/src/main/resources/schema/RAINMAKER-PGR.json` first.
+1. **Update the `EscalationConfig` schema.** Check which shape the tenant has:
+
+   ```bash
+   docker exec docker-postgres psql -U egov -tAc "select tenantid, definition->'properties' ? 'eligibleStatuses' from eg_mdms_schema_definition where code='RAINMAKER-PGR.EscalationConfig'"
+   ```
+
+   | Result | Action |
+   |---|---|
+   | `<state>\|t` | Nothing to do. |
+   | `<state>\|f` (v2.12 shape) | Configurator cannot save the new policy. Update the schema in place, as below. |
+   | no row | Create the schema with `POST /mdms-v2/schema/v1/_create`, using the definition from the file below. |
+
+   The schema API cannot update, so update the row directly:
+
+   ```bash
+   # On the controller, from the 2.12.1 checkout
+   jq -c '.[] | select(.code=="RAINMAKER-PGR.EscalationConfig") | .definition' \
+     utilities/default-data-handler/src/main/resources/schema/RAINMAKER-PGR.json > esc-schema.json
+   scp esc-schema.json <server>:/tmp/
+
+   # On the server
+   docker exec -i docker-postgres psql -U egov -v def="$(cat /tmp/esc-schema.json)" <<'EOF'
+   UPDATE eg_mdms_schema_definition
+      SET definition = :'def'::jsonb,
+          lastmodifiedtime = (extract(epoch from now())*1000)::bigint
+    WHERE code = 'RAINMAKER-PGR.EscalationConfig' AND tenantid = '<state tenant>';
+   EOF
+   docker restart digit-mdms-backend-1
+   ```
+
+2. **Follow the [escalation rollout guide](https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/master/docs/migration/pgr-escalation-self-loop.md):** preflight, the workflow-role and data migration, and validation.
+3. **Set the policy** in Configurator → PGR **Escalation policy**. See [escalation setup and configuration](https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/master/docs/escalation.md).
+
+### 6b. Turn on automatic escalation (optional)
+
+Do this after 6a. Do not edit `/opt/digit/docker-compose.egov-digit.yaml` on the server, because the next deploy overwrites it. Instead, create `local-setup/docker-compose.<tenant>.yml` on the controller. The deploy applies it last, on every run:
+
+```yaml
+services:
+  pgr-services:
+    environment:
+      PGR_ESCALATION_ENABLED: "true"
+```
+
+Then run `./deploy.sh <tenant>`.
 
 ---
 
@@ -138,6 +182,6 @@ If **Escalation policy** is missing in DIGIT Studio, the tenant predates v2.12.1
 
 | Area | How |
 |---|---|
-| Security | Check out `v2.12` and redeploy. v2.12 uses the unpinned `openbao/openbao:latest`, which no longer starts; pin it first to the digest used in v2.12.1's `docker-compose.egov-digit.yaml`. Firewall rules stay until `ufw disable`. |
-| Escalation | Set `PGR_ESCALATION_ENABLED=false` and restart pgr-services. Do not give GRO the escalation roles back. |
+| Security | Check out `v2.12` and redeploy. If you completed step 6a, first set `PGR_ESCALATION_ENABLED: "false"` in the step 6b overlay: v2.12 turns its old scheduler on, and that scheduler mis-times the new workflow. v2.12 uses the unpinned `openbao/openbao:latest`, which no longer starts; pin it first to the digest used in v2.12.1's `docker-compose.egov-digit.yaml`. Firewall rules stay until `ufw disable`. |
+| Escalation | Set `PGR_ESCALATION_ENABLED: "false"` in the step 6b overlay and redeploy. Do not give GRO the escalation roles back. |
 | Database | Restore the step 1.1 backup, only if data was damaged. |

@@ -1,7 +1,7 @@
 # CMS v2.12.1 Release Notes (patch)
 
 **Upgrades from:** v2.12 · **Source:** branch `2.12.1` @ `7a3866111` (2026-10-07)
-**Focus:** complaint escalation fixes and security fixes for Ansible-deployed servers.
+**Focus:** complaint escalation fixes, and security fixes for Ansible-deployed servers.
 
 > **Upgrading?** Follow the [migration guide](migration-guide-v2.12-to-v2.12.1.md).
 
@@ -9,8 +9,10 @@
 
 | Area | What changed | Who notices |
 |---|---|---|
-| **Escalation** | Complaints move up to the officer's manager reliably, on time, and once per level. Admins edit the timings in DIGIT Studio. | Citizens, officers, admins |
+| **Escalation** | Complaints move up to the officer's manager reliably, on time, and once per level. Admins edit the timings in Configurator. Automatic escalation is **off** after the upgrade (it was on in v2.12). | Citizens, officers, admins |
 | **Roles** | Only the officer holding a complaint sees **Escalate**. A GRO can only assign (naming an officer) or reject. | Employees |
+
+> On servers upgraded from v2.12, the Escalation and Roles changes take effect only after the escalation migration ([migration guide, step 6a](migration-guide-v2.12-to-v2.12.1.md#6a-migrate-escalation-required-on-every-upgraded-tenant)).
 | **Security** | 30+ findings from a partner security audit closed, including two high-severity ones. Hundreds of library vulnerabilities fixed. | Everyone (no visible change) |
 | **Safe deploys** | A redeploy can no longer wipe an existing database. Remote deploys work again. | DevOps |
 
@@ -22,7 +24,7 @@
 - **Escalate button:** shown only to the current holder, and only if that officer has a reporting manager (#2138, #2148, #2177).
 - **GRO only routes:** a GRO can assign and reject, but no longer escalate, resolve or reassign (#2096, #2146, #2147). Assigning without naming an officer is rejected (#2137, #2149).
 - **Per-type timings win** over the global default (#2196). Reopening no longer resets the escalation level (#2233).
-- **DIGIT Studio** has an editor for the escalation policy (#2090).
+- **Configurator** has an editor for the escalation policy (#2090).
 
 **Known limitations:** a GRO can assign straight to a higher-level manager and skip the chain ([#2222](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/2222)). Rejected-then-reopened complaints do not escalate automatically ([#2195](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/2195)).
 
