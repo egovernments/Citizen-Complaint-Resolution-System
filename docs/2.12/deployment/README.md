@@ -128,7 +128,7 @@ with the stack on, so its indexing and search have not been confirmed end to end
 
 `enable_turbopass` on the setup wizard. Phase 2, Fetch from OpenStreetMap, then type a city name:
 
-<video src="https://github.com/user-attachments/assets/5c1d7f83-b309-484b-b2b3-5fb3c51d4706" controls width="720"></video>
+https://github.com/user-attachments/assets/5c1d7f83-b309-484b-b2b3-5fb3c51d4706
 
 ## Start Deployment
 
