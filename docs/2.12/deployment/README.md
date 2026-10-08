@@ -64,10 +64,47 @@ the box does hold a live database, see
 | `bootstrap_user` | Admin Username (defaults to ADMIN) | | 
 | `bootstrap_password` | Admin Password (defaults to eGov@123) | |
 | `enable_turbopass` | City-name suggestions in the setup wizard. Off, there is no suggestion box and location search returns 404. The player under this table shows where. | `false` |
-| `enable_search_stack` | Search, and a Dashboard card on the employee home page. Off, the card is hidden and the search services stop. | `false` |
+| `enable_search_stack` | Turns on the services used by the older inbox search: Elasticsearch, indexer and inbox. Set it to `false` to stop those services. The current Search Complaint and Dashboard pages still open. | `false` |
+| `employee_module_denylist` | Which modules to hide from the employee sidebar. Use the first part of the module's access-control path. `[]` hides none. `["IM"]` does not hide the current Search Complaint or Dashboard cards. | `["IM"]` |
 | `hierarchy_type` | Name of the location list on the complaint form. It must already exist for the city, or the location box stays empty. A city from the setup sheets uses the city name plus `_ADMIN`. | `NAIROBI_ADMIN` |
 | `enable_digit_ui_v2` | The newer citizen website at `/citizen/`. Set `nginx_features.digit_ui_v2` to the same value. One without the other leaves the page missing, and the nginx switch alone stops the deploy. | `false` |
 | `digit_ui_mode` | How the employee website is served. `container` uses the digit-ui container. `static` serves built files. `hmr` is live reload and needs a source folder, or the deploy stops. | `container` |
+
+After changing `mycity.yml`, run the deployment again to apply the setting.
+
+The search stack has three parts: Elasticsearch stores searchable data, the
+indexer adds complaint events to it, and the inbox service searches that data.
+Turning the stack off removes their containers but keeps the stored data.
+
+The current Search Complaint page searches through the complaint service (PGR)
+directly. Dashboard access depends on the user's permissions. Both pages can still
+open when the search stack is off. The flag also turns search-service checks on or
+off in Gatus, the health dashboard.
+
+Set `elasticsearch_password` in OpenBao, the deployment's secret store. Elasticsearch,
+the indexer and inbox must use the same password. With search enabled, a fresh
+installation stops if the password is missing or still set to `changeme-elastic`.
+An existing installation warns and continues instead. With search disabled, this
+password check is skipped. An installation is considered existing when its main
+PostgreSQL data volume is already present.
+
+`employee_module_denylist` is a separate sidebar setting. It hides entries whose
+module code matches the list; it does not stop services or remove user permissions.
+We checked both list values below with search on and off:
+
+| `enable_search_stack` | `employee_module_denylist` | Search services | Employee pages |
+|---|---|---|---|
+| `false` | `[]` | Stopped and removed | Search Complaint and Dashboard open |
+| `false` | `["IM"]` | Stopped and removed | Search Complaint and Dashboard open |
+| `true` | `[]` | Running and healthy | Search Complaint and Dashboard open |
+| `true` | `["IM"]` | Running and healthy | Search Complaint and Dashboard open |
+
+These checks used the Nairobi admin account and employee UI image
+`egovio/digit-ui-esbuild:2.12-5137119`. The city had no complaints, so Search showed
+"No Results Found" and Dashboard showed zero counts. This confirms that the pages
+open with empty data. Searching existing complaints and showing populated charts
+still need checking. The older `/inbox/v2/_search` request returned `CONFIG_ERROR`
+with the stack on, so its indexing and search have not been confirmed end to end.
 
 `enable_turbopass` on the setup wizard. Phase 2, Fetch from OpenStreetMap, then type a city name:
 
