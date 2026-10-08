@@ -1765,7 +1765,7 @@ services:
     cap_drop: [ALL]
     # Parameterized so deploys can pin a nightly-develop (or other) build via
     # PGR_SERVICES_IMAGE in the env; default keeps the prior behaviour.
-    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:2.12-5137119}
+    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:2.12.1-7a38661}
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -1935,7 +1935,7 @@ services:
     # DIGIT_UI_IMAGE. Default is the modern esbuild bundle image (CI-built by
     # the Container Build Pipeline, multi-arch); the bundle lives at
     # /var/web/digit-ui, matching the mounted digit-ui.conf root.
-    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:2.12-5137119}
+    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:2.12.1-7a38661}
     container_name: digit-ui
     ports:
       - "${PROXY_BIND_IP:-127.0.0.1}:18080:80"
@@ -1969,7 +1969,7 @@ services:
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
     cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE, NET_BIND_SERVICE]
-    image: ${CONFIGURATOR_IMAGE:-egovio/configurator:2.12-5137119}
+    image: ${CONFIGURATOR_IMAGE:-egovio/configurator:2.12.1-6e8adb3}
     container_name: configurator
     # Per-tenant runtime config, rendered by the ansible deploy from host_vars
     # (templates/configurator-config.js.j2) and mounted over the neutral
@@ -2298,7 +2298,7 @@ services:
     # pulls the public build published by this repo's own image pipeline
     # (build/build-config.yml -> egovio/digit-mcp). Override MCP_IMAGE to use a
     # different registry/tag.
-    image: ${MCP_IMAGE:-egovio/digit-mcp:2.12-81fc6be}
+    image: ${MCP_IMAGE:-egovio/digit-mcp:2.12.1-7a38661}
     container_name: digit-mcp
     restart: unless-stopped
     depends_on:
@@ -2372,7 +2372,7 @@ services:
     # MCP_IMAGE override to a flag-carrying tag is required; the ansible deploy
     # verifies /v1/version reports readOnly=true after start and fails otherwise
     # (see playbook-deploy.yml, "assert the image honours MCP_READ_ONLY").
-    image: ${MCP_IMAGE:-egovio/digit-mcp:2.12-81fc6be}
+    image: ${MCP_IMAGE:-egovio/digit-mcp:2.12.1-7a38661}
     container_name: digit-mcp-readonly
     restart: unless-stopped
     depends_on:

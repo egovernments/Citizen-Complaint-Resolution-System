@@ -212,8 +212,8 @@
         fail_msg: >-
           digit_ui_mode '{{ digit_ui_mode }}' builds the SPA from source on the
           target, but digit_ui_esbuild_repo is empty. Either set
-          digit_ui_bundle_image (static mode — the default,
-          egovio/digit-ui-esbuild:2.12-5137119) and skip the build entirely,
+          digit_ui_bundle_image (static mode — the default) and skip the
+          build entirely,
           or point digit_ui_esbuild_repo at a source tree to clone.
       when:
         - digit_ui_mode in ['static', 'hmr']
@@ -3394,9 +3394,7 @@
       when: enable_mcp | default(false)
 
     # ==================== Verify the read-only MCP actually dropped writes ====================
-    # The digit-mcp image defaults to the pre-read-only tag
-    # (egovio/digit-mcp:2.12-81fc6be, see docker-compose.egov-digit.yaml). An
-    # image that predates MCP_READ_ONLY ignores the env var and serves the FULL
+    # A digit-mcp image that predates MCP_READ_ONLY ignores the env var and serves the FULL
     # write toolset (tenant_destroy, mdms_create, user_create, ...) on the public
     # /mcp + /v1 routes behind nothing but basic auth — a silent full-admin
     # exposure that a passing /healthz and a "healthy" container both hide. The
