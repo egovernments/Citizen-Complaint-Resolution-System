@@ -65,7 +65,7 @@ the box does hold a live database, see
 | `bootstrap_password` | Admin Password (defaults to eGov@123) | |
 | `enable_turbopass` | City-name suggestions in the setup wizard. Off, there is no suggestion box and location search returns 404. [Watch the video below](#turbopass-video). | `false` |
 | `enable_search_stack` | Turns on the services used by the older inbox search: Elasticsearch, indexer and inbox. Set it to `false` to stop those services. The current Search Complaint and Dashboard pages still open. | `false` |
-| `employee_module_denylist` | Which modules to hide from the employee sidebar. Use the first part of the module's access-control path. `[]` hides none. `["IM"]` does not hide the current Search Complaint or Dashboard cards. | `["IM"]` |
+| `employee_module_denylist` | Hides matching entries from the employee sidebar. Use the exact first part of the entry's access-control path, including capitals and spaces. `[]` hides none. Home cards and page access remain available. | `["Dashboard"]` |
 | `hierarchy_type` | Name of the location list on the complaint form. It must already exist for the city, or the location box stays empty. A city from the setup sheets uses the city name plus `_ADMIN`. | `NAIROBI_ADMIN` |
 | `enable_digit_ui_v2` | The newer citizen website at `/citizen/`. Set `nginx_features.digit_ui_v2` to the same value. One without the other leaves the page missing, and the nginx switch alone stops the deploy. | `false` |
 | `digit_ui_mode` | How the employee website is served. `container` uses the digit-ui container. `static` serves built files. `hmr` is live reload and needs a source folder, or the deploy stops. | `container` |
@@ -88,9 +88,27 @@ An existing installation warns and continues instead. With search disabled, this
 password check is skipped. An installation is considered existing when its main
 PostgreSQL data volume is already present.
 
-`employee_module_denylist` is a separate sidebar setting. It hides entries whose
-module code matches the list; it does not stop services or remove user permissions.
-We checked both list values below with search on and off:
+`employee_module_denylist` is a separate sidebar setting. It matches the first
+part of each access-control path, before the first dot. The match is case-sensitive.
+Check the paths returned by `/access/v1/actions/mdms/_get` for your employee roles;
+a label on screen can differ from its path. For example, Nairobi's Search Complaint
+entry uses `SearchTicket`, and Create Complaint uses `New Ticket`.
+
+We tested these values on the Nairobi employee UI:
+
+| List value | Sidebar result |
+|---|---|
+| `[]` or `["IM"]` | Home, Create Complaint, Search Complaint and Dashboard remain. No entry in this account has an `IM` path. |
+| `["Dashboard"]` | Dashboard disappears; Home and both complaint entries remain. |
+| `["New Ticket", "SearchTicket", "Dashboard"]` | Only Home remains. |
+| `["dashboard", "SearchTicket.child", "PGR"]` | All entries remain: these values do not match their path roots. |
+
+Home cards remained in every case. With all three sidebar entries hidden, the
+Search Complaint home card still opened the search form. This setting does not
+stop services, remove user permissions or block direct links. It is for navigation,
+not access control. Reload the browser after applying a change.
+
+We also checked `[]` and `["IM"]` with search on and off:
 
 | `enable_search_stack` | `employee_module_denylist` | Search services | Employee pages |
 |---|---|---|---|
