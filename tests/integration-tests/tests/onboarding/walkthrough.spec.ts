@@ -58,14 +58,14 @@ test.describe('Onboarding — full walkthrough (Phases 1–3)', () => {
   test('login → Phase 1 → Phase 2 → Phase 3 → ready for Phase 4', {
     annotation: {
       type: 'description',
-      description: `End-to-end UI walk through the configurator's onboarding wizard for a brand-new tenant: login (Onboarding mode) → Phase 1 (tenant xlsx + skip branding) → Phase 2 (Upload from Excel → create hierarchy + upload boundary xlsx + verify + upload) → Phase 3 (Common-masters xlsx with Departments/Designations → Create & Continue → Step 3.2 Define Complaint Hierarchy → upload hierarchy template → Create N Sub-types) → ready for Phase 4. Drives only the UI; the wizard's internal API calls are exercised through the actual buttons/file pickers, not API helpers.
+      description: `End-to-end UI walk through the configurator's onboarding wizard for a brand-new tenant: login (Onboarding mode) → Phase 1 (tenant xlsx + skip branding) → Phase 2 (Upload from Excel → create hierarchy + upload boundary xlsx + verify + upload) → Phase 3 (Common-masters xlsx with Departments/Designations → Create & Continue → Step 3.2 Define Complaint Hierarchy → upload hierarchy template → Create N Subcategories, "Create N Sub-types" before #2243) → ready for Phase 4. Drives only the UI; the wizard's internal API calls are exercised through the actual buttons/file pickers, not API helpers.
 
 Steps:
 1. setTimeout 360s; generate four xlsx fixtures (tenant, boundary, masters, complaint-hierarchy) in beforeAll.
 2. Open /configurator/login, fill ADMIN/eGov@123/ke, click Onboarding, click Sign In, wait for /configurator/phase/1.
 3. Phase 1: click Start Setup → upload tenant xlsx → assert tenant code cell → click Upload to DIGIT → on the branding step click Continue → assert "Phase 1 Complete!" → click Continue to Phase 2.
 4. Phase 2: click "Upload from Excel" on the "Choose Your Data Source" landing → "Option 1: Create New Hierarchy" → fill #hierarchyType → Create Hierarchy → upload boundary xlsx → verify → "Upload N Boundaries" → Continue to Phase 3.
-5. Phase 3: click Start Setup → upload masters xlsx → Create & Continue → Step 3.2 Define Complaint Hierarchy (leave default levels) → Next: Template → upload complaint-hierarchy xlsx → Create N Sub-types → assert "Phase 3 Complete!" within 120s → assert "Continue to Phase 4" button is visible.
+5. Phase 3: click Start Setup → upload masters xlsx → Create & Continue → Step 3.2 Define Complaint Hierarchy (leave default levels) → Next: Template → upload complaint-hierarchy xlsx → Create N Subcategories (or "Create N Sub-types" on older builds) → assert "Phase 3 Complete!" within 120s → assert "Continue to Phase 4" button is visible.
 
 Teardown is API-only because the configurator has no UI delete affordance for tenants — tracked in CCRS#21. Phase 4 (employee xlsx) is intentionally a separate spec because it needs jurisdiction+role validation setup. Test timeout is 360s because Phase 2 boundary uploads + Phase 3 creates can each take 60–120s.`,
     },

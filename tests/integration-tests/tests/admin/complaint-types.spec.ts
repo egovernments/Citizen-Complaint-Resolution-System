@@ -169,7 +169,7 @@ Healthy Nai Pepea tenant has 37 seeded types — the count check is loose (> 1) 
 Steps:
 1. test.skip if !liveDeptCode (beforeAll picks first active dept).
 2. Generate a unique code + name; track for cleanup.
-3. Navigate to /complaint-types/create; fill Complaint Sub-Type (the field formerly labelled "Name"), Service Code, pick Department option, set SLA=24.
+3. Navigate to /complaint-types/create; fill Complaint Subcategory (labelled "Complaint Sub-Type" before #2243, "Name" before that), Service Code, pick Department option, set SLA=24.
 4. Click Create; wait for navigation back to LIST_PATH.
 5. mdmsSearch at CITY_TENANT for [code]; assert at least 1 hit (proves root → city inheritance).
 6. Search for the code in the list; click the row to open detail.
@@ -191,8 +191,9 @@ Cleanup is API-only — soft-deletes via cleanupMdms in afterAll because there's
     createdCodes.add(storedId(code));
 
     await page.goto(`${LIST_PATH}/create`);
-    // The complaint-type name field was renamed "Name" → "Complaint Sub-Type".
-    await page.getByLabel(/^Complaint Sub-Type/i).fill(name);
+    // The complaint-type name field was renamed "Name" → "Complaint Sub-Type"
+    // → "Complaint Subcategory" (#2243). Accept both so older builds still match.
+    await page.getByLabel(/^Complaint (Sub-Type|Subcategory)/i).fill(name);
 
     const codeInput = page.getByLabel(/Service Code/i);
     await codeInput.fill('');
