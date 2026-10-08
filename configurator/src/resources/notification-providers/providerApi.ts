@@ -130,6 +130,10 @@ export interface TestSendResponse {
   transactionId?: string;
   errorCode?: string;
   errorMessage?: string;
+  /** Set when the bridge could not check that anything can deliver the test (Novu's
+   *  integration list unreadable) and sent it unchecked. A test nothing can deliver is
+   *  refused instead: 409 NB_PROVIDER_UNAVAILABLE, thrown as a BridgeError. */
+  warning?: string;
 }
 
 /** Twilio Content template metadata as the bridge returns it — NO routing decision; the

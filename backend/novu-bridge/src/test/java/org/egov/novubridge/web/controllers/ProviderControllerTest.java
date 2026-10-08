@@ -67,6 +67,12 @@ class ProviderControllerTest {
         // integration were configured (NovuClient's own no-op default).
         when(novuClient.applyWhatsappIntegrationOverride(anyMap(), anyString()))
                 .thenAnswer(inv -> inv.getArgument(0));
+        // Default: an active provider per channel, so test-send's availability check passes
+        // (ProviderControllerTestSendAvailabilityTest covers its refusals). Tests restub as needed.
+        when(novuClient.listIntegrations()).thenReturn(novuResp(200, Map.of("data", List.of(
+                Map.of("_id", "d1", "identifier", "twilio-sms-d1", "providerId", "twilio", "channel", "sms", "active", true),
+                Map.of("_id", "d2", "identifier", "twilio-whatsapp-d2", "providerId", "twilio", "channel", "sms", "active", true),
+                Map.of("_id", "d3", "identifier", "smtp-d3", "providerId", "nodemailer", "channel", "email", "active", true)))));
     }
 
     private NovuClient.NovuResponse novuResp(int status, Map<String, Object> body) {

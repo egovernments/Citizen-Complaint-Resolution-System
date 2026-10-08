@@ -111,6 +111,8 @@ On every dispatch, the bridge reads the tenant's `NOTIFICATIONS.Channel` row at 
 
 The check cannot see whether the worker loads DIGIT's providers. It relies on `NOVU_BRIDGE_DIGIT_WORKER_PROVIDERS`: with the flag off, a selected SMSCountry, Ozeki or Jasmin provider is `SKIPPED / NB_PROVIDER_UNAVAILABLE`. See [DIGIT's worker providers](#digits-worker-providers).
 
+**Test** (`POST /providers/test-send`) runs the same check before it sends: on the integration it names, or with none named, on the channel's Novu default (a channel on the direct SMSCountry gateway above is not checked against Novu). Where dispatch would record `SKIPPED`, the test is refused with `409 NB_PROVIDER_UNAVAILABLE` and the same reason, and nothing is sent (an integration id Novu does not know at all is still `400 NB_PROVIDER_NOT_FOUND`); before, Novu accepted it and the test read *dispatched* for a message that never left. The test reads Novu's list fresh rather than from the cache, so a provider just changed in Novu's own dashboard is judged as it is now. If the list cannot be read, the test is sent anyway, like a dispatch, and its answer carries a `warning` that it was not checked.
+
 ### Removing a provider
 
 Integrations are deployment-wide, so `POST /providers/_delete`, and `_update` with `active: false`, refuse with `409 NB_PROVIDER_IN_USE` while a tenant still sends through the provider:

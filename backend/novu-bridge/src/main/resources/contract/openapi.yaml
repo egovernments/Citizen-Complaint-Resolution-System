@@ -563,6 +563,18 @@ paths:
 
         The derived `subscriberId` is `nb-test-<sha256(seed)[0:16]>` with no clock and no
         random, so repeating a test is idempotent.
+
+        **Refused when nothing could deliver it** (`409 NB_PROVIDER_UNAVAILABLE`, the reason in
+        `Errors[0].message`; nothing is sent and no row is written). Before triggering, the test
+        runs dispatch's availability check, on a fresh read of Novu's integrations: a named
+        integration must be active, on Novu's channel for `channel`, and not an SMSCountry,
+        Ozeki or Jasmin one while `NOVU_BRIDGE_DIGIT_WORKER_PROVIDERS=false`; with none named, a
+        channel that goes through Novu needs an active integration that delivers it (and, under
+        that flag, a default that is not one of those three). Novu accepts a trigger nothing can
+        deliver and fails it inside, so without the check the answer was `ok: true` for a message
+        that never left. A channel on the legacy direct SMSCountry gateway is not checked against
+        Novu. When Novu's integration list cannot be read the test is sent anyway, as dispatch
+        does, and the 200 carries `warning`.
       requestBody:
         required: true
         content:
@@ -588,7 +600,7 @@ paths:
                 transactionId: { type: string, description: "Seeds the stable subscriberId; supply it to repeat a test exactly." }
       responses:
         "200":
-          description: Always 200 — a rejected send reports `ok:false` with the provider's code
+          description: The send was attempted — a rejected send reports `ok:false` with the provider's code
           content:
             application/json:
               schema:
@@ -599,6 +611,7 @@ paths:
                   transactionId: { type: string }
                   errorCode: { type: string, description: "Only when `ok` is false." }
                   errorMessage: { type: string, description: "Only when `ok` is false." }
+                  warning: { type: string, description: "Only when the availability check could not run (Novu's integration list unreadable): the test was sent unchecked." }
         "400":
           description: "`NB_INVALID_CHANNEL`, `NB_UNKNOWN_PROVIDER_TYPE`, `NB_PROVIDER_TYPE_UNAVAILABLE` (the type or the named integration is SMSCountry, Ozeki or Jasmin on a worker without DIGIT's providers), `NB_PROVIDER_NOT_FOUND`"
           content:
@@ -606,6 +619,11 @@ paths:
               schema: { $ref: "#/components/schemas/ErrorEnvelope" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/AdminForbidden" }
+        "409":
+          description: "`NB_PROVIDER_UNAVAILABLE` — nothing could deliver the test: the named integration is disabled or on another channel, or (none named) Novu has no active integration that delivers the channel, or its default is a DIGIT worker provider the worker does not load. Nothing was sent; the message says what to fix"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
 
   /novu-bridge/novu-adapter/v1/config/source:
     get:

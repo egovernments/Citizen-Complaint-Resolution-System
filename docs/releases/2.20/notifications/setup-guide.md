@@ -352,6 +352,14 @@ The text is three localization messages in module `egov-user`:
 flagged as a test and hidden unless the **Test sends** filter is *Show test sends*. It proves
 the provider and credentials only — not routing, templates or the channel switch.
 
+A test that nothing could deliver is refused, with the reason, instead of being sent: the
+provider is disabled in Novu or does not carry the channel you picked, or (no provider named)
+Novu has no enabled provider for the channel. It is the check that marks a real message
+`Skipped` with `NB_PROVIDER_UNAVAILABLE`; for a test the bridge answers
+`409 NB_PROVIDER_UNAVAILABLE`, the Configurator shows the reason, and nothing is sent or
+logged. Fix what it names and test again. If novu-bridge cannot read Novu's provider list at
+that moment, the test is sent unchecked, as a real message would be, and the result says so.
+
 **Logs** filters: **Complaint #**, **Channel**, **Status**, **Produced by**, **Test sends**.
 Recipients are masked server-side, with one rule: a user uuid is an id and is shown as it is;
 a phone keeps its last three digits (`+***678`), an email its first character and domain
