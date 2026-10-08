@@ -821,3 +821,91 @@ describe('a success that is not yet published', () => {
     expect(screen.queryByText(/choose a workspace/i)).not.toBeInTheDocument();
   });
 });
+
+/**
+ * The checklist reads the operation the worker checkpoints, so the poll must
+ * outlive answers that change nothing, come back empty or never return, and a
+ * single failed check is a blip rather than an error.
+ */
+describe('polling while the worker runs', () => {
+  const provisioning = {
+    id: 's1',
+    status: 'PROVISIONING' as const,
+    accountName: 'Kisumu County',
+    urlSlug: 'kisumu-county',
+    countryCode: 'KE',
+    languages: ['en'],
+    version: 4,
+    createdAt: 0,
+    updatedAt: 0,
+  };
+  const running = {
+    id: 'op1',
+    signupId: 's1',
+    status: 'RUNNING' as const,
+    currentStep: 'ORGANIZATION',
+    completedSteps: ['TENANT_FOUNDATION'],
+    errorCode: null,
+    errorMessage: null,
+    attempt: 1,
+    lifecyclePublishedAt: null,
+    createdAt: 0,
+    updatedAt: 0,
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.mocked(api.session).mockResolvedValue(signedIn);
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [], selectionRequired: false, onboardingRequired: true });
+    vi.mocked(api.findSignup).mockResolvedValue(provisioning as never);
+    vi.mocked(api.submitSignup).mockResolvedValue(running as never);
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const tick = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+  const start = async () => {
+    render(<SignupPage />);
+    expect(await screen.findByText(/setting up kisumu county/i)).toBeInTheDocument();
+  };
+
+  it('keeps polling when an answer changes nothing or comes back empty', async () => {
+    // The same object every time: a poll re-armed only on change would stop after the first.
+    vi.mocked(api.findOperation).mockResolvedValueOnce(null).mockResolvedValue(running as never);
+    await start();
+    await tick(3000);
+    await tick(3000);
+    await tick(3000);
+    expect(api.findOperation).toHaveBeenCalledTimes(3);
+  });
+
+  it('abandons a check that never answers and asks again', async () => {
+    vi.mocked(api.findOperation).mockImplementationOnce(
+      (_id: string, signal?: AbortSignal) =>
+        new Promise((_resolve, reject) => signal?.addEventListener('abort', () => reject(new Error('aborted')))) as never,
+    ).mockResolvedValue(running as never);
+    await start();
+    await tick(3000);
+    expect(api.findOperation).toHaveBeenCalledTimes(1);
+    await tick(10_000);
+    await tick(3000);
+    expect(api.findOperation).toHaveBeenCalledTimes(2);
+    expect(screen.queryByText(/aborted/i)).not.toBeInTheDocument();
+  });
+
+  it('shows an error only after three failed checks in a row, and clears it once one succeeds', async () => {
+    vi.mocked(api.findOperation)
+      .mockRejectedValueOnce(new Error('Status check failed'))
+      .mockRejectedValueOnce(new Error('Status check failed'))
+      .mockRejectedValueOnce(new Error('Status check failed'))
+      .mockResolvedValue(running as never);
+    await start();
+    await tick(3000);
+    await tick(3000);
+    expect(screen.queryByText(/status check failed/i)).not.toBeInTheDocument();
+    await tick(3000);
+    expect(await screen.findByText(/status check failed/i)).toBeInTheDocument();
+    await tick(3000);
+    await waitFor(() => expect(screen.queryByText(/status check failed/i)).not.toBeInTheDocument());
+    expect(api.findOperation).toHaveBeenCalledTimes(4);
+  });
+});
