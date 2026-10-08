@@ -68,6 +68,12 @@ the box does hold a live database, see
 | `novu_bridge_channel` | Chooses the default notification channel: `sms`, `whatsapp`, or `email`. The particular value should be present in novu_bridge_channels_enabled. If not, notifications are skipped | `sms` |
 | `novu_bridge_channels_enabled` | Lists the notification channels that Novu Bridge is allowed to use, such as `SMS,EMAIL`. Each listed channel must have a working provider. | `""` |
 | `novu_bridge_sms_provider` | Chooses how regular SMS messages are sent. Leave it blank to use the primary SMS provider configured in Novu, such as `Twilio`. Set it to `ozeki` or `smscountry` to use that gateway instead; the selected provider’s credentials must also be configured. This does not affect WhatsApp. SMS must be present in novu_bridge_channels_enabled | `""` |
+| `enable_keycloak` | Starts Keycloak so the portals can use SSO login. Also set the required authentication provider to `keycloak`. | `false` |
+| `auth_provider` | Chooses the citizen login method when no citizen-specific setting is provided. Leave it blank or use `digit` for DIGIT OTP login; use `keycloak` for SSO. | `""` |
+| `citizen_auth_provider` | Chooses the login method only for the citizen portal and overrides `auth_provider`. Use `digit` for OTP login or `keycloak` for SSO. | `digit` |
+| `employee_auth_provider` | Chooses the login method only for the employee portal. Use `digit` for normal DIGIT employee login or `keycloak` for SSO. It does not use the value of `auth_provider`. | `digit` |
+| `keycloak_client_id` | Identifies the DIGIT UI application inside Keycloak. Normally, keep `digit-ui`; changing it without creating the same client in Keycloak will break login. | `digit-ui` |
+| `keycloak_dev_redirect_uris` | Adds extra addresses that Keycloak may return users to during local UI development. Keep it empty outside development and use exact localhost addresses and ports. | `[]` |
 
 ## Start Deployment
 
