@@ -1622,6 +1622,8 @@ credentials file (only the types you create; values are never printed or reporte
    "twilio-sms": {"credentials": {"accountSid": "AC...", "token": "...", "from": "+1..."}}}
 
 env: DIGIT_URL, DIGIT_USERNAME (ADMIN), DIGIT_PASSWORD (eGov@123), DIGIT_LOGIN_TENANT,
+     DIGIT_ACCESS_TOKEN (a DIGIT access token used instead of username/password, e.g. a
+     Keycloak-only workspace founder's; checked with one read first, never printed),
      STATE_ROOT / NOTIF_ROOTS (for --all), NOTIF_CHANNELS_ALLOWLIST, NOVU_BRIDGE_SMS_PROVIDER
 exit: 0 ok · 1 warnings · 2 a tenant failed · 3 403 · 4 refused to start""")
     ap.add_argument("mode", choices=("plan", "apply"))
@@ -1735,12 +1737,21 @@ def run(argv=None):
         ctx.roots, roots_source = (resolve_roots(args) if args.all else ([], "--tenant"))
         sn.USERNAME = os.environ.get("DIGIT_USERNAME", "ADMIN")
         sn.PASSWORD = os.environ.get("DIGIT_PASSWORD", "eGov@123")
+        # A bearer token instead of the password login: a workspace founder who signs in through
+        # Keycloak only has no DIGIT password (seed-notifications.py documents DIGIT_ACCESS_TOKEN).
+        sn.ACCESS_TOKEN = os.environ.get("DIGIT_ACCESS_TOKEN", "").strip()
         sn.LOGIN_TENANT = args.login_tenant or (ctx.roots[0] if ctx.roots else
                                                 args.tenant[0].split(".")[0])
         try:
             ctx.tok = sn.token()
+        except urllib.error.HTTPError as exc:
+            raise RefuseToStart("%s was refused (HTTP %d)%s" % (
+                "the supplied DIGIT_ACCESS_TOKEN" if sn.ACCESS_TOKEN else "login as %s at %s" % (sn.USERNAME, sn.LOGIN_TENANT),
+                exc.code, ": it has expired, or it is not a DIGIT access token of a user there"
+                if sn.ACCESS_TOKEN else ""))
         except (urllib.error.URLError, OSError, KeyError, ValueError) as exc:
-            raise RefuseToStart("login as %s at %s failed: %s" % (sn.USERNAME, sn.LOGIN_TENANT, exc))
+            raise RefuseToStart("%s failed: %s" % (sn.who() if sn.ACCESS_TOKEN else
+                                                   "login as %s at %s" % (sn.USERNAME, sn.LOGIN_TENANT), exc))
         ctx.settings = bridge_settings(args)
         ctx.integrations, ctx.integrations_error = read_integrations(ctx)
         ctx.pre_catalog = []

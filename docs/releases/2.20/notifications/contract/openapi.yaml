@@ -171,6 +171,15 @@ paths:
         `transactionId`, any phone or email quoted in `lastErrorMessage`, and the whole
         `providerResponse` tree. Stored rows are untouched.
 
+        One masking rule, the same for every field: an **id stays an id** (a canonical
+        `8-4-4-4-12` hex UUID is never masked, alone or embedded, whatever digits it holds);
+        an **email** keeps the first character and the domain (`c***@example.org`); a
+        **phone** is every run of 7+ digits outside a UUID, cut to `***` and its last three
+        digits (`+254712345678` → `+***678`, `ke:+254712345678` → `ke:+***678`). So a
+        recipient addressed by user uuid shows the uuid, and one addressed by phone (no
+        account, or a login OTP) shows the masked phone. The Configurator's Logs screen
+        applies the same rule again (for older bridges).
+
         Statuses and their transitions are described in `outputs.md`.
       parameters:
         - { name: tenantId, in: query, required: true, schema: { type: string },
@@ -584,6 +593,18 @@ paths:
 
         The derived `subscriberId` is `nb-test-<sha256(seed)[0:16]>` with no clock and no
         random, so repeating a test is idempotent.
+
+        **Refused when nothing could deliver it** (`409 NB_PROVIDER_UNAVAILABLE`, the reason in
+        `Errors[0].message`; nothing is sent and no row is written). Before triggering, the test
+        runs dispatch's availability check, on a fresh read of Novu's integrations: a named
+        integration must be active, on Novu's channel for `channel`, and not an SMSCountry,
+        Ozeki or Jasmin one while `NOVU_BRIDGE_DIGIT_WORKER_PROVIDERS=false`; with none named, a
+        channel that goes through Novu needs an active integration that delivers it (and, under
+        that flag, a default that is not one of those three). Novu accepts a trigger nothing can
+        deliver and fails it inside, so without the check the answer was `ok: true` for a message
+        that never left. A channel on the legacy direct SMSCountry gateway is not checked against
+        Novu. When Novu's integration list cannot be read the test is sent anyway, as dispatch
+        does, and the 200 carries `warning`.
       requestBody:
         required: true
         content:
@@ -609,7 +630,7 @@ paths:
                 transactionId: { type: string, description: "Seeds the stable subscriberId; supply it to repeat a test exactly." }
       responses:
         "200":
-          description: Always 200 — a rejected send reports `ok:false` with the provider's code
+          description: The send was attempted — a rejected send reports `ok:false` with the provider's code
           content:
             application/json:
               schema:
@@ -620,6 +641,7 @@ paths:
                   transactionId: { type: string }
                   errorCode: { type: string, description: "Only when `ok` is false." }
                   errorMessage: { type: string, description: "Only when `ok` is false." }
+                  warning: { type: string, description: "Only when the availability check could not run (Novu's integration list unreadable): the test was sent unchecked." }
         "400":
           description: "`NB_INVALID_CHANNEL`, `NB_UNKNOWN_PROVIDER_TYPE`, `NB_PROVIDER_TYPE_UNAVAILABLE` (the type or the named integration is SMSCountry, Ozeki or Jasmin on a worker without DIGIT's providers), `NB_PROVIDER_NOT_FOUND`"
           content:
@@ -627,6 +649,11 @@ paths:
               schema: { $ref: "#/components/schemas/ErrorEnvelope" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/AdminForbidden" }
+        "409":
+          description: "`NB_PROVIDER_UNAVAILABLE` — nothing could deliver the test: the named integration is disabled or on another channel, or (none named) Novu has no active integration that delivers the channel, or its default is a DIGIT worker provider the worker does not load. Nothing was sent; the message says what to fix"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
 
   /novu-bridge/novu-adapter/v1/config/source:
     get:
@@ -1387,7 +1414,7 @@ components:
         tenantId: { type: string }
         channel: { type: string, description: "`SMS` | `WHATSAPP` | `EMAIL`, or `NONE` for a decision taken before a channel existed." }
         sourcePath: { $ref: "#/components/schemas/DispatchSourcePath" }
-        recipientValue: { type: string, description: "Masked. `none` on a channel-less row." }
+        recipientValue: { type: string, description: "The subscriber: a user uuid (shown as it is: an id, not PII), or a phone / `tenant:phone` / email, masked (see the masking rule on `GET /logs`). `none` on a channel-less row." }
         templateKey: { type: string, nullable: true }
         templateVersion: { type: string, nullable: true }
         status: { $ref: "#/components/schemas/DispatchStatus" }

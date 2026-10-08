@@ -45,7 +45,9 @@ public class DispatchPipelineService {
     private final DispatchLogRepository dispatchLogRepository;
     private final NovuBridgeConfiguration config;
     private final ProviderAvailability providerAvailability;
+    private final TenantPhoneNumbers phoneNumbers;
 
+    /** Phones are completed with the deployment's country code only (no tenant rule is read). */
     public DispatchPipelineService(EnvelopeValidator envelopeValidator,
                                    PreferenceServiceClient preferenceServiceClient,
                                    DeliveryProviderRegistry providers,
@@ -53,6 +55,19 @@ public class DispatchPipelineService {
                                    DispatchLogRepository dispatchLogRepository,
                                    NovuBridgeConfiguration config,
                                    ProviderAvailability providerAvailability) {
+        this(envelopeValidator, preferenceServiceClient, providers, channelPolicy, dispatchLogRepository, config,
+                providerAvailability, new TenantPhoneNumbers(config));
+    }
+
+    @Autowired
+    public DispatchPipelineService(EnvelopeValidator envelopeValidator,
+                                   PreferenceServiceClient preferenceServiceClient,
+                                   DeliveryProviderRegistry providers,
+                                   ChannelPolicyClient channelPolicy,
+                                   DispatchLogRepository dispatchLogRepository,
+                                   NovuBridgeConfiguration config,
+                                   ProviderAvailability providerAvailability,
+                                   TenantPhoneNumbers phoneNumbers) {
         this.envelopeValidator = envelopeValidator;
         this.preferenceServiceClient = preferenceServiceClient;
         this.providers = providers;
@@ -60,6 +75,7 @@ public class DispatchPipelineService {
         this.dispatchLogRepository = dispatchLogRepository;
         this.config = config;
         this.providerAvailability = providerAvailability;
+        this.phoneNumbers = phoneNumbers;
     }
 
     private TenantAccountService tenantAccounts;
@@ -160,6 +176,21 @@ public class DispatchPipelineService {
             return skip(event, context, "NB_CONTACT_MISSING",
                     "Recipient has no " + (email ? "email" : "phone") + " for channel " + channel,
                     "Missing contact for channel " + channel);
+        }
+        if (!email) {
+            // DIGIT stores numbers nationally; the provider needs E.164. Completed with the
+            // tenant's own country code, never sent as a bare "+" + national number.
+            String e164 = phoneNumbers.toE164(contact.getPhone(), event.getTenantId());
+            if (e164 == null) {
+                return skip(event, context, "NB_CONTACT_INVALID", "Recipient phone "
+                                + PiiMask.mask(contact.getPhone()) + " has no country code, and none is known for "
+                                + "tenant " + event.getTenantId() + " (" + phoneNumbers.describeSources(event.getTenantId())
+                                + "). Nothing was sent.",
+                        "Phone without a country code for channel " + channel);
+            }
+            if (!e164.equals(contact.getPhone())) {
+                contact = contact.toBuilder().phone(e164).build();
+            }
         }
         // Business-initiated WhatsApp must use an approved template; the provider rejects free-form.
         if ("WHATSAPP".equalsIgnoreCase(channel) && !StringUtils.hasText(event.getTemplateId())) {

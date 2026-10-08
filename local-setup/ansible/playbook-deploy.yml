@@ -8065,12 +8065,49 @@
                   | select('match', '^[^|]+[|][0-9]+$') | map('split', '|') | list)
              if (notif_complaint_roots.rc | default(1)) == 0 else {} }}
 
+    # Self-serve WORKSPACES (signups pgr-services provisioned) are not seeded here. Their roots
+    # have no ADMIN (the deploy's login there failed noisily: "NOT SEEDED — the access-control
+    # rows failed") and their founder signs in through Keycloak only, so has no DIGIT password.
+    # pgr-services seeds a workspace's notification defaults itself when it provisions it
+    # (onboarding step NOTIFICATION_DEFAULTS). Listed with their NOTIFICATIONS.Routing row count,
+    # so one provisioned before that step, or whose step failed, gets an exact ACTION below. A
+    # failed query (no onboarding tables on this box) lists none: every root is seeded as before.
+    - name: "notif-seed — list the self-serve workspaces (pgr-services seeds them at signup)"
+      when: seed_notifications | default(enable_novu | default(false))
+      tags: ['notifications', 'notification-seed']
+      ansible.builtin.shell: |
+        set -o pipefail
+        printf '%s\n' "select w.t, (select count(*) from eg_mdms_data d
+                          where d.tenantid = w.t and d.schemacode = 'NOTIFICATIONS.Routing')
+                        from (select requested_tenant_id as t from eg_pgr_onboarding_signup where status = 'ACTIVE'
+                              union select tenant_id from eg_pgr_onboarding_workspace where seed_version is not null) w
+                        where coalesce(w.t, '') <> '' order by 1;" \
+          | docker exec -i docker-postgres psql -U egov -d egov -v ON_ERROR_STOP=1 -tAq -F '|'
+      args:
+        executable: /bin/bash
+      register: notif_workspace_roots
+      changed_when: false
+      failed_when: false
+
+    - name: "notif-seed — routing rows per self-serve workspace"
+      when: seed_notifications | default(enable_novu | default(false))
+      tags: ['notifications', 'notification-seed']
+      ansible.builtin.set_fact:
+        # workspace root -> its NOTIFICATIONS.Routing row count (state_root is never one).
+        notif_workspace_routing: >-
+          {{ dict(notif_workspace_roots.stdout_lines | default([])
+                  | select('match', '^[A-Za-z][A-Za-z0-9_-]*[|][0-9]+$') | map('split', '|') | list)
+             if (notif_workspace_roots.rc | default(1)) == 0 else {} }}
+
     - name: "notif-seed — the state roots to seed"
       when: seed_notifications | default(enable_novu | default(false))
       tags: ['notifications', 'notification-seed']
       ansible.builtin.set_fact:
+        notif_seed_workspaces: >-
+          {{ notif_workspace_routing.keys() | list | sort | reject('in', [notif_seed_tenant | trim]) | list }}
         notif_seed_roots: >-
-          {{ ([notif_seed_tenant | trim] + (notif_complaint_counts.keys() | list | sort))
+          {{ ([notif_seed_tenant | trim] + (notif_complaint_counts.keys() | list | sort
+                 | reject('in', notif_workspace_routing.keys() | list | reject('in', [notif_seed_tenant | trim]) | list) | list))
              | select('match', '^[A-Za-z][A-Za-z0-9_-]*$')
              | reject('match', notifications_seed_exclude | default('(?i)^(PW_|pwt)'))
              | unique | list }}
@@ -8135,6 +8172,11 @@
                  ~ ' this run did not see (#1943): re-run --tags notifications once Postgres answers.'])
              + (['Excluded (notifications_seed_exclude): ' ~ (notif_seed_roots_skipped | join(', '))]
                 if notif_seed_roots_skipped else [])
+             + (['Self-serve workspaces, NOT seeded by the deploy (pgr-services seeds them when it provisions them; '
+                 ~ 'no ADMIN exists there): '
+                 ~ (notif_seed_workspaces | zip(notif_seed_workspaces | map('extract', notif_workspace_routing))
+                    | map('join', '=') | join(', ')) ~ ' (=NOTIFICATIONS.Routing rows)']
+                if notif_seed_workspaces else [])
              + (['NOT seeded, not a plain tenant code: ' ~ (notif_seed_roots_invalid | to_json)]
                 if notif_seed_roots_invalid else [])
              + (['notifications_adopt_defaults covers: ' ~ (notif_adopt_roots | join(', '))]
@@ -8431,6 +8473,32 @@
           Demo complaints only (a restored dump): add {{ item }} to `notifications_adopt_defaults`
           in host_vars (e.g. `notifications_adopt_defaults: [{{ item }}]`) and re-run
           `--tags notifications` instead. See docs/releases/2.20/notifications/migration.md.
+
+    # A workspace with no routing: provisioned before pgr-services seeded notification defaults
+    # at signup, or its NOTIFICATION_DEFAULTS step failed (pgr-services logged "notification
+    # defaults were NOT fully seeded"). The deploy cannot log in there, so say exactly how to
+    # finish it with the token of an admin who can (the founder's, from the Configurator).
+    - name: "notif-seed — ACTION: a self-serve workspace has no notification configuration"
+      when:
+        - seed_notifications | default(enable_novu | default(false))
+        - (notif_workspace_routing[item] | default('0') | int) == 0
+      tags: ['notifications', 'notification-seed']
+      loop: "{{ notif_seed_workspaces | default([]) }}"
+      ansible.builtin.debug:
+        msg: >-
+          {{ item }} is a self-serve workspace with no notification configuration
+          ({{ ((notif_complaint_counts[item] | default('0')) ~ ' complaint(s)')
+              if (notif_complaint_counts_known | bool) else 'complaint count unknown' }}): its
+          complaints send NO notifications (SKIPPED / NB_NO_ROUTING). The deploy does not log in at
+          workspaces (no ADMIN there; the founder signs in through Keycloak only). pgr-services seeds a
+          workspace when it provisions it; this one predates that, or its step failed. Seed it once with
+          the DIGIT access token of an admin of {{ item }} (the founder's, from a signed-in Configurator):
+          `cd {{ digit_dir }}/notification-seed && export DIGIT_URL=http://127.0.0.1:{{ upstream_kong_port }}
+          NOTIF_TENANT={{ item }} DIGIT_ACCESS_TOKEN=<token> && NOTIF_SEED_PHASE=access python3 seed-notifications.py`,
+          restart egov-accesscontrol if it printed ACL-CHANGED, then
+          `NOTIF_SEED_PHASE=data NOTIF_ADOPT_DEFAULTS=1 NOTIF_CHANNELS_ALLOWLIST='{{ notif_channels_allowlist | trim }}'
+          SCHEMA_FILE=RAINMAKER-PGR.json NOTIF_SCHEMA_FILE=NOTIFICATIONS.json DATA_DIR=. python3 seed-notifications.py`.
+          See docs/releases/2.20/notifications/setup-guide.md, "New workspaces".
 
     - name: "notif-seed — WARNING: channel rows were not written"
       when:

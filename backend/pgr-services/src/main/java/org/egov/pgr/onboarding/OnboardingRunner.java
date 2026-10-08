@@ -24,7 +24,8 @@ import java.util.function.LongSupplier;
 @Component
 @ConditionalOnProperty(name = "pgr.onboarding.runner.enabled", havingValue = "true")
 public class OnboardingRunner implements SmartLifecycle {
-    public static final List<String> STEPS = List.of("TENANT_FOUNDATION", "PLATFORM_BASELINE", "FOUNDER_HRMS", "ORGANIZATION", "MEMBERSHIP", "BINDING",
+    public static final List<String> STEPS = List.of("TENANT_FOUNDATION", "PLATFORM_BASELINE", NotificationDefaultsStep.STEP,
+            "FOUNDER_HRMS", "ORGANIZATION", "MEMBERSHIP", "BINDING",
             // #2203, non-fatal: the workspace's own Novu account (OnboardingSteps#notificationAccount).
             OnboardingSteps.NOTIFICATION_ACCOUNT);
     static final String THREAD_PREFIX = "pgr-onboarding-";

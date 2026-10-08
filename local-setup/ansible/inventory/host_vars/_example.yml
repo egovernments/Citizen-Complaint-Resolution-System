@@ -699,8 +699,14 @@ novu_bridge_smscountry_password: ""
 # novu_bridge_preference_enabled: false
 # novu_bridge_preference_fail_open: true
 
-# Country code prefixed to OTP numbers that arrive without one (core SMS from
-# user-otp / egov-user), e.g. "254". Blank = numbers are sent as received.
+# Deployment-wide LAST-RESORT country code for phone numbers that arrive without
+# one (login OTPs from user-otp / egov-user, complaint notifications), e.g. "+254".
+# The tenant's own common-masters.MobileNumberValidation rule (written at workspace
+# signup from the signup country) and the user's own egov-user countryCode come
+# first, so a deployment with workspaces in several countries sends each its own
+# code; this is used only at a tenant that has no rule. Blank and no rule = the
+# message is NOT sent (SKIPPED / NB_CONTACT_INVALID on Logs), never as "+" + the
+# national number.
 # novu_bridge_core_sms_country_code: ""
 
 # Per-channel Novu workflow ids the bridge triggers (the rendered message travels

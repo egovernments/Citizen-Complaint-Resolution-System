@@ -260,6 +260,22 @@ public class ProviderCatalog {
             SMSCOUNTRY, "SMS", OZEKI, "SMS", JASMIN, "SMS");
 
     /**
+     * The DIGIT channel an integration is POSITIVELY known to deliver, or null when that cannot be
+     * told: the catalog marker in its identifier ({@code twilio-whatsapp-…}, {@code whatsapp-…},
+     * {@code twilio-sms-…}), else a Novu provider id that serves one channel only (SMSCountry,
+     * Ozeki, Jasmin: SMS). Unlike {@link #digitChannelOf} a bare {@code twilio} or hand-made
+     * integration is NOT guessed to be SMS, so a caller refusing on this never refuses an
+     * integration it cannot identify.
+     */
+    public static String knownDigitChannel(String identifier, String novuProviderId) {
+        String type = typeFromIdentifier(identifier);
+        if (type == null && isWorkerProvider(novuProviderId)) {
+            type = TYPE_BY_NOVU_SMS_PROVIDER.get(novuProviderId.trim().toLowerCase(Locale.ROOT));
+        }
+        return type == null ? null : CHANNEL_BY_TYPE.get(type);
+    }
+
+    /**
      * The DIGIT channel ({@code SMS}, {@code WHATSAPP}, {@code EMAIL}) an integration delivers, which
      * Novu's own channel cannot tell apart for SMS and WhatsApp: the catalog type first (identifier
      * marker, then providerId), else Novu's channel, where an unmarked {@code sms} integration (a
