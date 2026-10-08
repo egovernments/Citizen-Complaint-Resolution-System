@@ -27,6 +27,7 @@ import {
   completePhase1,
   completePhase2,
 } from '../utils/onboarding';
+import { hookOr } from '../utils/configurator-hooks';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
@@ -76,7 +77,8 @@ test.describe('Onboarding — Phase 3 validation', () => {
     await expect(page.getByText('No departments or designations found in the file.').first())
       .toBeVisible({ timeout: 15_000 });
     await expect(page.getByText('Step 3.1: Upload Common Master Excel')).toBeVisible();
-    // No "Create & Continue" submit button should be on screen until preview lands.
-    await expect(page.getByRole('button', { name: /^Create & Continue$/ })).toHaveCount(0);
+    // No "Create & Continue" submit button should be on screen until preview
+    // lands — by its hook, or by its label on builds without one.
+    await expect(hookOr(page, 'phase3-masters-create', page.getByRole('button', { name: /^Create & Continue$/ }))).toHaveCount(0);
   });
 });

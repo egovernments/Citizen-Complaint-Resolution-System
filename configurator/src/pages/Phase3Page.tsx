@@ -460,11 +460,14 @@ export default function Phase3Page() {
 
           <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-0">
             <Button variant="ghost" size="sm" onClick={() => setStep('upload')} className="text-muted-foreground hover:text-primary">← Change File</Button>
+            {/* Stable hook for the integration suite; the label is copy ("Create All"
+                → "Create & Continue" broke its Phase 3 helper once already). */}
             <SubmitBar
               label={loading ? 'Creating...' : 'Create & Continue'}
               onSubmit={handleUpload}
               disabled={loading || (departments.length === 0 && designations.length === 0)}
               icon={loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
+              data-testid="phase3-masters-create"
             />
           </div>
         </DigitCard>
@@ -520,11 +523,16 @@ export default function Phase3Page() {
       {/* Complete */}
       {step === 'complete' && (
         <DigitCard>
-          <Banner
-            successful={true}
-            message="Phase 3 Complete!"
-            info={`Common masters configured for tenant: ${targetTenant.toUpperCase()}`}
-          />
+          {/* Unstyled wrapper: Banner and DigitCard don't pass props through, and
+              the suite waits up to 120 s on "Phase 3 Complete!" in every Phase 4
+              test, so it gets a hook that a copy change can't break. */}
+          <div data-testid="phase3-complete">
+            <Banner
+              successful={true}
+              message="Phase 3 Complete!"
+              info={`Common masters configured for tenant: ${targetTenant.toUpperCase()}`}
+            />
+          </div>
 
           <div className="mt-6 p-4 bg-muted rounded">
             <Table>

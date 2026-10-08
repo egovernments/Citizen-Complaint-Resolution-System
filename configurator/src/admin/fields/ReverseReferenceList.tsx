@@ -15,17 +15,26 @@ interface ReverseReferenceListProps {
 
 export function ReverseReferenceList({ resource, target, id, label, displayField = 'name', limit = 5 }: ReverseReferenceListProps) {
   const navigate = useNavigate();
-  const { data, total, isPending } = useGetManyReference(
+  const { data, total, isPending, error } = useGetManyReference(
     resource,
     { target, id, pagination: { page: 1, perPage: limit }, sort: { field: displayField, order: 'ASC' }, filter: {} },
     { enabled: !!id }
   );
 
-  if (isPending) return <div className="text-sm text-muted-foreground animate-pulse">Loading {label}...</div>;
-  if (!data || data.length === 0) return <div className="text-sm text-muted-foreground">No {label.toLowerCase()} found</div>;
+  // Label-independent hooks for tests, on every render: data-testid names the
+  // list by resource (data-target tells apart two lists of the same resource
+  // on one page), and data-state says which render this is. A failed lookup
+  // keeps its existing copy but reports data-state="error", so a test can
+  // tell it from a genuinely empty list. While loading the hook is already
+  // present, so a test should wait for data-state empty|loaded, not just the
+  // element.
+  const hook = { 'data-testid': `reverse-ref-${resource}`, 'data-target': target };
+  if (isPending) return <div className="text-sm text-muted-foreground animate-pulse" {...hook} data-state="loading">Loading {label}...</div>;
+  if (error) return <div className="text-sm text-muted-foreground" {...hook} data-state="error">No {label.toLowerCase()} found</div>;
+  if (!data || data.length === 0) return <div className="text-sm text-muted-foreground" {...hook} data-state="empty">No {label.toLowerCase()} found</div>;
 
   return (
-    <div>
+    <div {...hook} data-state="loaded">
       <div className="flex items-center gap-2 mb-2">
         <span className="text-sm font-medium text-muted-foreground">{label}</span>
         <Badge variant="secondary" className="text-xs">{total}</Badge>
