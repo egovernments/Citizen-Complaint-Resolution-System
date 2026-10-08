@@ -534,11 +534,13 @@ export default function PgrDashboard() {
       <DigitCard className="!mb-0 !max-w-none">
         <h3 className="text-sm font-semibold text-foreground mb-4">Status by Tenant</h3>
         <Tabs value={activeTab} onValueChange={setActiveTab}>
+          {/* data-testid follows the tab value, not its label: "Complaint Type" →
+              "Complaint Category" (#2243) broke the suite's tab locator. */}
           <TabsList>
-            <TabsTrigger value="boundary">Boundary</TabsTrigger>
-            <TabsTrigger value="department">Department</TabsTrigger>
-            <TabsTrigger value="type">Complaint Category</TabsTrigger>
-            <TabsTrigger value="channel">Channel</TabsTrigger>
+            <TabsTrigger value="boundary" data-testid="pgr-breakdown-tab-boundary">Boundary</TabsTrigger>
+            <TabsTrigger value="department" data-testid="pgr-breakdown-tab-department">Department</TabsTrigger>
+            <TabsTrigger value="type" data-testid="pgr-breakdown-tab-type">Complaint Category</TabsTrigger>
+            <TabsTrigger value="channel" data-testid="pgr-breakdown-tab-channel">Channel</TabsTrigger>
           </TabsList>
           <TabsContent value="boundary">
             <BreakdownTable rows={stats.byBoundary} />
