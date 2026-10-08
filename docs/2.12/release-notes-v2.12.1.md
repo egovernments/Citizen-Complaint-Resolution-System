@@ -66,3 +66,19 @@ Seeded password `eGov@123` (#1) · fixed OTP `123456` (#4) · anonymous MinIO do
 - **Citizen UI:** new complaint filing flow, "My Complaints" inbox and updated copy.
 - **Employee UI:** sidebar, inbox search and filter fixes, tenant switcher, renamed to "Complaint Management System".
 - **Infra:** EKS terraform sample defaults to 4 worker nodes (#2060).
+
+---
+
+## 4. Service builds
+
+Image tags changed since v2.12. These are the defaults in both the Docker Compose files and the Helm charts.
+
+| Service | v2.12 | v2.12.1 |
+|---|---|---|
+| `egovio/pgr-services` | `2.12-5137119` | `2.12.1-7a38661` |
+| `egovio/pgr-services-db` (migrations) | `2.12-5137119` | `2.12.1-7a38661` |
+| `egovio/digit-mcp` | `2.12-81fc6be` | `2.12.1-7a38661` |
+| `egovio/digit-ui-esbuild` | `2.12-5137119` | `2.12.1-7a38661` |
+| `egovio/configurator` | `2.12-5137119` | `2.12.1-6e8adb3` |
+
+All other images keep their v2.12 tags. Third-party images are now pinned by digest (#17).
