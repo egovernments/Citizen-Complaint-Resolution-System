@@ -43,7 +43,7 @@ services:
     # Hardening (review): match the base stack — no caps, no priv-escalation.
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
-    image: egovio/pgr-services-db:2.12-5137119
+    image: egovio/pgr-services-db:2.12.1-7a38661
     container_name: pgr-services-migration
     depends_on:
       postgres-db:
