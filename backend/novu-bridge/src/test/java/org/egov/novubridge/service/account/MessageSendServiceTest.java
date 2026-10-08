@@ -91,7 +91,7 @@ class MessageSendServiceTest {
         assertEquals("SENT", outcome.body().get("status"));
         assertEquals("tenant:acme", outcome.body().get("account"));
         assertEquals("jasmin-acme", outcome.body().get("provider"));
-        assertTrue(outcome.body().get("transactionId").toString().startsWith("otp-"));
+        assertTrue(outcome.body().get("transactionId").toString().startsWith("otp_"));
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<String, Object>> payload = ArgumentCaptor.forClass(Map.class);
@@ -117,6 +117,35 @@ class MessageSendServiceTest {
         assertEquals("SENT", row.getValue().getStatus());
         assertEquals("OTP", row.getValue().getTemplateKey());
         assertEquals("acme.city", row.getValue().getTenantId());
+    }
+
+    /**
+     * #2342's Logs masking (PiiMask: ids are ids) over #2203's OTP rows: the row's transaction id and
+     * hashed subscriber id are ids, and the Logs API must show them as they are, the same in every
+     * row. As {@code otp-<uuid>} and {@code otp-<16 hex>} about one row in six came back with a digit
+     * run masked ({@code otp-***456…}), so a transaction id copied from the screen matched nothing.
+     */
+    @Test
+    void theLedgerRowsIds_comeBackFromTheLogsMaskingAsTheyAre() {
+        ArgumentCaptor<DispatchLogEntry> rows = ArgumentCaptor.forClass(DispatchLogEntry.class);
+        for (int i = 0; i < 200; i++) {
+            service.send(request("acme.city", "SMS", "+2547" + String.format("%08d", 10_000_000 + i * 7919)));
+        }
+        verify(ledger, org.mockito.Mockito.times(200)).upsert(rows.capture());
+        for (DispatchLogEntry row : rows.getAllValues()) {
+            // What DispatchLogController applies on the way out.
+            assertEquals(row.getTransactionId(), org.egov.novubridge.util.PiiMask.maskEmbedded(row.getTransactionId()));
+            assertEquals(row.getRecipientValue(), org.egov.novubridge.util.PiiMask.mask(row.getRecipientValue()));
+            assertTrue(row.getRecipientValue().matches("otp_[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"),
+                    row.getRecipientValue());
+            assertEquals(row.getTransactionId(), row.getEventId());
+        }
+        // The subscriber id is stable per number: the same citizen is one Novu subscriber.
+        service.send(request("acme.city", "SMS", "+254710000000"));
+        service.send(request("acme.city", "SMS", "+254710000000"));
+        verify(ledger, org.mockito.Mockito.times(202)).upsert(rows.capture());
+        List<DispatchLogEntry> all = rows.getAllValues();
+        assertEquals(all.get(all.size() - 1).getRecipientValue(), all.get(all.size() - 2).getRecipientValue());
     }
 
     @Test

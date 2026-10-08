@@ -148,7 +148,10 @@ public class ProviderAvailability {
      * </ul>
      *
      * <p>An env pin Novu cannot use (no such integration, inactive, or on another Novu channel) is
-     * judged like no pin: Novu falls back to its default for the channel.
+     * judged like no pin: Novu falls back to its default for the channel. In a tenant's own account
+     * (#2203) the env pin is not looked at at all: it names an integration of the shared account,
+     * and a trigger through the tenant's organization never carries it
+     * ({@code NovuClient#identifyThenTrigger(NovuAccount, ...)}), so Novu's default there decides.
      *
      * <p>Uses the same cached snapshot as {@link #check}, so the cost is one Novu list per TTL, not
      * per event, whatever the flag.
@@ -170,7 +173,8 @@ public class ProviderAvailability {
             return new Result(Status.UNKNOWN,
                     "Novu integrations could not be listed; delivering " + channel + " without checking", null);
         }
-        String envPin = "WHATSAPP".equalsIgnoreCase(channel) && StringUtils.hasText(config.getWhatsappIntegrationId())
+        String envPin = account == null && "WHATSAPP".equalsIgnoreCase(channel)
+                && StringUtils.hasText(config.getWhatsappIntegrationId())
                 ? config.getWhatsappIntegrationId().trim() : null;
         if (envPin != null) {
             Integration pinned = current.byKey().get(key(envPin));

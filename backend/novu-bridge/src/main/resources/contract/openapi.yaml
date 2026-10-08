@@ -1134,7 +1134,9 @@ paths:
 
         The code is never logged, never written to the ledger and never echoed in an error. Each
         send writes one `nb_dispatch_log` row (module `identity`, event `OTP_SEND`, recipient as
-        a hashed subscriber id), visible on the Logs screen. Rate limiting is the caller's.
+        a hashed subscriber id `otp_<uuid>`, stable per tenant and number), visible on the Logs
+        screen. Both ids are UUID-shaped, so the Logs masking leaves them as they are. Rate
+        limiting is the caller's.
       requestBody:
         required: true
         content:
@@ -1346,7 +1348,7 @@ components:
       properties:
         tenantId: { type: string, description: "The tenant (its root's account sends)." }
         channel: { type: string, enum: [SMS, EMAIL] }
-        recipient: { type: string, description: "SMS: E.164 (`+` and 7 to 15 digits). EMAIL: an address." }
+        recipient: { type: string, description: "SMS: E.164 (`+` and 7 to 15 digits), else `400 NB_INVALID_REQUEST`; a national number is never completed with a country code here (dispatch does that for DIGIT's stored numbers; a sign-in code goes only to the number as the caller validated it). EMAIL: an address." }
         templateKey: { type: string, enum: [OTP] }
         payload:
           type: object
@@ -1361,7 +1363,7 @@ components:
       type: object
       properties:
         status: { type: string, enum: [SENT, QUEUED] }
-        transactionId: { type: string, description: "Novu's transaction id (`otp-<uuid>`)." }
+        transactionId: { type: string, description: "Novu's transaction id (`otp_<uuid>`), also the ledger row's `transactionId` and `eventId`." }
         tenantId: { type: string }
         channel: { type: string }
         provider: { type: string, description: "The integration identifier the send was pinned to." }

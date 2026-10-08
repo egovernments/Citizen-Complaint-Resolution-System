@@ -93,7 +93,11 @@ The screens send `?tenantId=<workspace>` on every provider call; the bridge deci
 ```
 
 `payload.expiresAt` (an ISO-8601 instant) may replace `expiresInSeconds`. `channel` is `SMS` or
-`EMAIL`; `recipient` is E.164 for SMS. The message is sent through the tenant's own organization,
+`EMAIL`; `recipient` is E.164 for SMS, and anything else is `400 NB_INVALID_REQUEST`. Unlike a
+complaint notification, whose stored national number the bridge completes with the tenant's
+country code, a national number here is refused rather than completed: a sign-in code goes only to
+the number the citizen typed, as the caller validated it against the tenant's mobile rule.
+The message is sent through the tenant's own organization,
 pinned to the provider its channel row selects, else its primary active provider for the
 channel. The bridge then waits up to 5 s (`NOVU_BRIDGE_MESSAGES_CONFIRM_TIMEOUT_MS`) for Novu's
 job to finish.
@@ -111,7 +115,9 @@ job to finish.
 Success body: `{"data": {"status", "transactionId", "tenantId", "channel", "provider", "account"}}`;
 `transactionId` is Novu's. The code is never logged, never stored and never echoed in an error.
 Each send writes one ledger row (module `identity`, event `OTP_SEND`, recipient as a hashed
-subscriber id) that the Logs screen shows. Rate limits and lockout are the caller's.
+subscriber id `otp_<uuid>`, stable per tenant and number; transaction id `otp_<uuid>`) that the
+Logs screen shows with both ids as they are: they are UUID-shaped, which the Logs masking treats
+as ids. Rate limits and lockout are the caller's.
 `GET /tenants/{tenant}` with the same token says whether a tenant is provisioned and which
 channels have a usable provider (the capability lookup for hiding `phone_otp`).
 

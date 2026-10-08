@@ -108,6 +108,29 @@ class ProviderAvailabilityUnpinnedTest {
         assertEquals(ProviderAvailability.Status.AVAILABLE, availability.checkUnpinned("SMS").status());
     }
 
+    /**
+     * #2203 + #2342: in a workspace's own Novu organization the deployment-wide WhatsApp pin is never
+     * sent (it names a shared-account integration), so the check must not judge by it either: an
+     * integration of the workspace that happens to carry the same identifier is not what Novu uses.
+     */
+    @Test
+    void inAWorkspacesOwnAccount_theSharedWhatsappEnvPinIsNotApplied() {
+        config.setWhatsappIntegrationId("jasmin-aa");
+        integration("jasmin-aa", "jasmin", "sms", true, false);
+        integration("twilio-whatsapp-acme", "twilio", "sms", true, true);
+        org.egov.novubridge.service.account.NovuAccount acme =
+                new org.egov.novubridge.service.account.NovuAccount("acme", "org-acme", "env-acme", "key-acme");
+        when(novuClient.listIntegrations(acme)).thenAnswer(inv -> NovuClient.NovuResponse.builder()
+                .statusCode(200).response(Map.of("data", integrations)).build());
+
+        // The shared account: the pin names a worker provider the worker lacks.
+        assertEquals(ProviderAvailability.Status.WORKER_PROVIDER_MISSING, availability.checkUnpinned("WHATSAPP").status());
+        // The workspace: Novu sends through its primary WhatsApp integration, which is fine.
+        ProviderAvailability workspace = new ProviderAvailability(novuClient, config, acme);
+        assertEquals(ProviderAvailability.Status.AVAILABLE, workspace.checkUnpinned("WHATSAPP").status());
+        verify(novuClient).listIntegrations(acme);
+    }
+
     @Test
     void withTheFlagOn_aWorkerPrimaryIsFine_andNovuIsListedOncePerTtl() {
         config.setDigitWorkerProviders(true);

@@ -72,6 +72,25 @@ public final class Values {
         return sha256Hex(seed).substring(0, 16);
     }
 
+    /**
+     * A deterministic id shaped as a canonical UUID: the first 128 bits of SHA-256(seed) with the
+     * RFC 9562 version-8 (custom) and variant bits set. For ids that reach the Logs API, whose
+     * masking ({@link PiiMask}) leaves a canonical UUID alone but masks any 7+ digit run in other
+     * hex ({@link #stableId}'s 16 hex chars hold one in about one id in six).
+     */
+    public static String stableUuid(String seed) {
+        byte[] hash = HexFormat.of().parseHex(sha256Hex(seed));
+        hash[6] = (byte) ((hash[6] & 0x0f) | 0x80);
+        hash[8] = (byte) ((hash[8] & 0x3f) | 0x80);
+        long msb = 0;
+        long lsb = 0;
+        for (int i = 0; i < 8; i++) {
+            msb = (msb << 8) | (hash[i] & 0xff);
+            lsb = (lsb << 8) | (hash[i + 8] & 0xff);
+        }
+        return new java.util.UUID(msb, lsb).toString();
+    }
+
     /** SMS and WHATSAPP deliver on Novu's {@code sms} channel (WhatsApp rides Twilio SMS); EMAIL on {@code email}. */
     public static String novuChannel(String channel) {
         if (!StringUtils.hasText(channel)) {

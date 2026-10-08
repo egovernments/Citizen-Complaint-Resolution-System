@@ -46,6 +46,8 @@ import java.util.regex.Pattern;
 public class MessageSendService {
 
     public static final String TEMPLATE_OTP = "OTP";
+    /** Prefix of an OTP send's transaction id and subscriber id: {@code otp_<uuid>}. */
+    static final String OTP_ID_PREFIX = "otp_";
     private static final Pattern E164 = Pattern.compile("\\+[1-9][0-9]{6,14}");
     private static final Pattern EMAIL = Pattern.compile("[^\\s@]+@[^\\s@]+\\.[^\\s@]+");
     private static final Pattern CODE = Pattern.compile("[0-9A-Za-z]{4,12}");
@@ -90,8 +92,10 @@ public class MessageSendService {
                     "Tenant " + r.root() + " cannot send " + r.channel() + ": " + ready.reason());
         }
 
-        String transactionId = "otp-" + UUID.randomUUID();
-        String subscriberId = "otp-" + Values.stableId(r.root() + ":" + r.recipient().toLowerCase(Locale.ROOT));
+        // Both are canonical UUIDs behind an "otp_" prefix, so the Logs API's masking (PiiMask: ids are
+        // ids) shows them as they are; "otp-<uuid>" and a 16-hex hash had their digit runs masked.
+        String transactionId = OTP_ID_PREFIX + UUID.randomUUID();
+        String subscriberId = OTP_ID_PREFIX + Values.stableUuid(r.root() + ":" + r.recipient().toLowerCase(Locale.ROOT));
         boolean email = "EMAIL".equals(r.channel());
         String workflow = email ? accounts.getOtpWorkflowEmail() : accounts.getOtpWorkflowSms();
         Map<String, Object> payload = new HashMap<>();
@@ -165,8 +169,13 @@ public class MessageSendService {
         }
         String recipient = Values.str(body.get("recipient"));
         recipient = recipient == null ? "" : recipient.trim();
+        // E.164 only, never completed here: dispatch completes DIGIT's national numbers with the tenant's
+        // country code (TenantPhoneNumbers), but a sign-in code goes to the number the citizen typed, which
+        // the caller has already validated against the tenant's mobile rule. Guessing a country for a
+        // national number could send someone's sign-in code to another person.
         if ("SMS".equals(channel) ? !E164.matcher(recipient).matches() : !EMAIL.matcher(recipient).matches()) {
-            throw invalid("SMS".equals(channel) ? "recipient must be an E.164 phone number (+ and 7 to 15 digits)"
+            throw invalid("SMS".equals(channel) ? "recipient must be an E.164 phone number (+ and 7 to 15 digits); "
+                    + "a national number is not completed with a country code here"
                     : "recipient must be an email address");
         }
         Map<String, Object> payload = Values.asMap(body.get("payload"));

@@ -126,7 +126,7 @@ The internal APIs of [tenant-accounts.md](../tenant-accounts.md): `/tenants/**` 
 | `NB_NO_PROVIDER_FOR_CHANNEL` | 422 | `_send`: the tenant has an organization but no usable provider carries the channel (the selected one is missing, disabled or the wrong channel, or none is active). The BFF maps it to `OTP_CHANNEL_UNAVAILABLE` |
 | `NB_PROVIDER_FAILED` | 502 | `_send`: Novu ran the send and the provider refused it; the message carries Novu's short reason, masked |
 | `NB_NOVU_TRIGGER_FAILED` | 502 | `_send`: Novu refused the trigger |
-| `NB_INVALID_REQUEST` / `NB_UNKNOWN_TEMPLATE` | 400 | `_send` body malformed (channel, E.164 recipient, 4-12 character code, an expiry within 24 h), or a `templateKey` other than `OTP` |
+| `NB_INVALID_REQUEST` / `NB_UNKNOWN_TEMPLATE` | 400 | `_send` body malformed (channel, E.164 recipient: a national number is refused, never completed with a country code, 4-12 character code, an expiry within 24 h), or a `templateKey` other than `OTP` |
 
 ## Contract documents (HTTP only)
 
