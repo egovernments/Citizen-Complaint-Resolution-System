@@ -1,6 +1,6 @@
 # CMS v2.12.1 Release Notes (patch)
 
-**Upgrades from:** v2.12 · **Images:** pgr-services, digit-ui and digit-mcp `2.12.1-7a38661`; configurator `2.12.1-6e8adb3`
+**Upgrades from:** v2.12
 **Focus:** complaint escalation fixes, and security fixes for Ansible-deployed servers.
 
 > **Upgrading?** Follow the [migration guide](migration-guide-v2.12-to-v2.12.1.md).
@@ -71,14 +71,12 @@ Seeded password `eGov@123` (#1) · fixed OTP `123456` (#4) · anonymous MinIO do
 
 ## 4. Service builds
 
-Image tags changed since v2.12. These are the defaults in both the Docker Compose files and the Helm charts.
+Images changed in v2.12.1. These are the defaults in both the Docker Compose files and the Helm charts. All other images keep their v2.12 tags.
 
-| Service | v2.12 | v2.12.1 |
-|---|---|---|
-| `egovio/pgr-services` | `2.12-5137119` | `2.12.1-7a38661` |
-| `egovio/pgr-services-db` (migrations) | `2.12-5137119` | `2.12.1-7a38661` |
-| `egovio/digit-mcp` | `2.12-81fc6be` | `2.12.1-7a38661` |
-| `egovio/digit-ui-esbuild` | `2.12-5137119` | `2.12.1-7a38661` |
-| `egovio/configurator` | `2.12-5137119` | `2.12.1-6e8adb3` |
-
-All other images keep their v2.12 tags. Third-party images are now pinned by digest (#17).
+| Service | Image |
+|---|---|
+| pgr-services | `egovio/pgr-services:2.12.1-7a38661` |
+| pgr-services-db | `egovio/pgr-services-db:2.12.1-7a38661` |
+| digit-mcp | `egovio/digit-mcp:2.12.1-7a38661` |
+| digit-ui | `egovio/digit-ui-esbuild:2.12.1-7a38661` |
+| configurator | `egovio/configurator:2.12.1-6e8adb3` |
