@@ -425,7 +425,7 @@ Catches a regression where the dup detection fails and all 3 rows would be sent 
   test('5a. Show page renders "Related" reverse references (complaint-types + employees)', {
     annotation: {
       type: 'description',
-      description: `Asserts the Department Show page renders the "Related" section with both "Complaint Types" and "Employees" sub-lists. Both should render even when empty. Picks the first non-PW_ active department to probe — avoids depending on any specific seed code.
+      description: `Asserts the Department Show page renders the "Related" section with both "Complaint Categories" ("Complaint Types" before #2243) and "Employees" sub-lists. Both should render even when empty. Picks the first non-PW_ active department to probe — avoids depending on any specific seed code.
 
 Steps:
 1. mdmsSearch for active departments (limit 20).
@@ -433,8 +433,8 @@ Steps:
 3. test.skip if no such record.
 4. Navigate to /departments/<code>/show.
 5. Assert text /^Related$/i is visible.
-6. Assert text /Complaint Types/i is visible.
-7. Assert text /^Employees$/i is visible.
+6. Assert "Complaint Categories" or "No complaint categories found" is visible (older builds: "Complaint Types" / "No complaint types found").
+7. Assert "Employees" or "No employees found" is visible.
 
 Doesn't assert what's INSIDE the related lists — that depends on tenant content. Only that the section structure renders.`,
     },
