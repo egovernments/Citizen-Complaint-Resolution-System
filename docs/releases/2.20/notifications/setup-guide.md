@@ -164,7 +164,7 @@ Status card messages:
 | "… is on and delivering through *Name*" | Nothing. |
 | "No channel policy row for …" | Switch the channel on so the choice is explicit. |
 | "… is off. Every event on this channel is recorded SKIPPED / NB_NO_PROVIDER …" | Switch on once its provider exists. |
-| "… is on but no provider is configured for it." | [Add a provider](#3-add-a-provider). Until Novu holds an active integration for the channel, every message on it is `SKIPPED / NB_PROVIDER_UNAVAILABLE` (never a false `SENT`). |
+| "… is on but no provider is configured for it." | [Add a provider](#3-add-a-provider). Until Novu holds an active integration for the channel (a workspace with its own notification account: in that account), every message on it is `SKIPPED / NB_PROVIDER_UNAVAILABLE` (never a false `SENT`). |
 | "… is on but no provider is selected." | Select one. |
 | "… selected provider *Name* no longer exists / is disabled / does not serve …" | Re-enable it or select another. Meanwhile every message is `SKIPPED / NB_PROVIDER_UNAVAILABLE` (never a false `SENT`). The same happens to an SMSCountry / Ozeki / Jasmin provider while `NOVU_BRIDGE_DIGIT_WORKER_PROVIDERS=false` (the Novu worker does not load DIGIT's providers — [providers.md](./providers.md#digits-worker-providers)). |
 | "… the Novu workflow complaints-… is missing" | Deployment job: re-run `./deploy.sh`. |
@@ -629,6 +629,13 @@ templates, WhatsApp provider templates and routing — from the same files
 (`backend/pgr-services/docs/onboarding-workspace-contract.md`). It writes **no channel rows**: the
 workspace follows `novu_bridge_channels_enabled` until its admin switches channels on (§4), and it
 has no provider until one is added (§3).
+
+With per-tenant notification accounts on ([tenant-accounts.md](./tenant-accounts.md)), the last
+step of the same signup (`NOTIFICATION_ACCOUNT`) also gives the workspace its own Novu
+organization, which starts with **no providers**. Its messages then go only through that
+organization: until its admin adds a provider there, every message on an enabled channel is
+recorded `SKIPPED / NB_PROVIDER_UNAVAILABLE` and a **Test** is refused with the reason. The
+deployment's shared providers are never used for it.
 
 The deploy does **not** seed workspaces: their root has no `ADMIN`, and the founder signs in
 through Keycloak only, so has no DIGIT password. It lists them instead (`notif-seed — roots`:

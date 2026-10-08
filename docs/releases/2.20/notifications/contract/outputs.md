@@ -97,9 +97,11 @@ On a workspace's own organization the seed starts with the workspace, so two wor
 the same number keep two rows.
 
 **OTP rows** (`POST /messages/_send`): module `identity`, `event_name` = `OTP_SEND`,
-`template_key` = `OTP`, `recipient_value` = `otp-<sha256(root:recipient)[0:16]>` (never the
-phone or address), `transaction_id` and `provider_ref` = Novu's transaction id, status `SENT` or
-`FAILED` (`NB_PROVIDER_FAILED`, `NB_NOVU_*`). The code is never stored.
+`template_key` = `OTP`, `recipient_value` = `otp_<uuid>`, a UUID-shaped SHA-256 of
+`root:recipient` (stable per tenant and number; never the phone or address), `transaction_id`,
+`event_id` and `provider_ref` = Novu's transaction id `otp_<uuid>`, status `SENT` or `FAILED`
+(`NB_PROVIDER_FAILED`, `NB_NOVU_*`). Both ids are UUID-shaped, so the masking on read shows them
+as they are. The code is never stored.
 
 ## The DLQ
 

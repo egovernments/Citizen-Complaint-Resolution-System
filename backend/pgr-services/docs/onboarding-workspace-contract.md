@@ -55,6 +55,10 @@ The data is `src/main/resources/onboarding/notification-defaults.json`, generate
 
 The step is create-only and idempotent (a row is matched by its schema's `x-unique` fields), and it never writes configuration over a routing row it did not seed. It is **non-fatal**: a failure is logged (`Workspace <T>: notification defaults were NOT fully seeded (<code>)`), recorded in the operation's record progress as `notifications:skipped:<code>`, and the signup carries on; only a lost lease stops it. Finish such a workspace, or one provisioned before this step existed, with `seed-notifications.py` and an admin's `DIGIT_ACCESS_TOKEN` (docs/releases/2.20/notifications/setup-guide.md, "New workspaces"). `PGR_ONBOARDING_NOTIFICATION_DEFAULTS_ENABLED=false` skips the step.
 
+## Notification account (step NOTIFICATION_ACCOUNT)
+
+The last step, after `BINDING`, gives the workspace its own Novu organization through novu-bridge's internal `POST /tenants/{tenant}/_provision` (docs/releases/2.20/notifications/tenant-accounts.md), when `PGR_ONBOARDING_NOTIFICATION_ACCOUNT_URL` and `PGR_ONBOARDING_NOTIFICATION_ACCOUNT_TOKEN` are set; otherwise it is a no-op. It writes nothing to DIGIT, so the provisioner's write scope has no rule for it, and it needs nothing from `NOTIFICATION_DEFAULTS` (the organization holds providers and workflows; templates and routing stay in MDMS). Provisioning is idempotent on the bridge side. The step is **non-fatal**: a failure is recorded as `notification-account: DEFERRED` in the operation's record progress and retried by `NotificationAccountReconciler`; the signup completes either way.
+
 ## Agreed errors and rename replay contract
 
 Error envelope follows existing PGR controllers: `{"Errors":[{"code":"WORKSPACE_VERSION_CONFLICT","message":"Reload workspace state and retry"}]}`. Codes/statuses: WORKSPACE_AUTH_REQUIRED (401), WORKSPACE_ADMIN_REQUIRED (403), WORKSPACE_VERSION_CONFLICT (409), WORKSPACE_PROBE_INCOMPLETE (409), WORKSPACE_INVALID_STATE (400), WORKSPACE_DEPENDENCY_UNAVAILABLE (503).

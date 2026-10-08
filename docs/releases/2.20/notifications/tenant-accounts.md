@@ -50,6 +50,10 @@ signup saga ... BINDING -> NOTIFICATION_ACCOUNT ──> novu-bridge POST /tenant
   pgr-services). It never fails a signup: if Novu or the bridge is down, the workspace is created
   without its own messaging, the step is recorded as `DEFERRED`, and pgr-services retries it every
   10 minutes (`PGR_ONBOARDING_NOTIFICATION_ACCOUNT_RECONCILE_INTERVAL_MS`) until it succeeds.
+  The workspace's notification configuration (templates, routing, access rows) comes from the
+  earlier step `NOTIFICATION_DEFAULTS` ([setup-guide §8.6](./setup-guide.md#86-new-workspaces));
+  the new organization starts with no providers, so its messages are
+  `SKIPPED / NB_PROVIDER_UNAVAILABLE` until its admin adds one.
 - **Routing.** Every message of a tenant whose ROOT has its own organization goes through it:
   complaint notifications, DIGIT login OTPs (`egov.core.notification.sms`), Configurator
   test-sends, `_dry-run` sends and `messages/_send`. Subscribers are created in that
@@ -207,8 +211,10 @@ new organization starts with no providers, so it is an explicit operator step:
   ```
 
 Then add each tenant's providers (its admins in the Configurator, or the admin API) before its
-next message: until then its channels have no provider (`SKIPPED / NB_PROVIDER_UNAVAILABLE` where
-a channel pins one).
+next message: until then every message on its enabled channels is recorded
+`SKIPPED / NB_PROVIDER_UNAVAILABLE` (a channel that selects a provider of the shared account finds
+it missing; one that selects none finds no active provider in the new organization), never a
+false `SENT`, and a **Test** is refused with the same reason.
 
 ## What else changes
 
@@ -218,7 +224,7 @@ a channel pins one).
 | Logs screen | Unchanged: the ledger is the bridge's own. A row sent through a tenant's organization records `novuAccount: tenant:<root>` in its provider response; OTP sends appear as `OTP_SEND` |
 | Test-send | Goes through the workspace's own organization and its own `complaints-sms` / `complaints-email` workflows; its ledger row is scoped to the workspace. It is checked first against that organization's providers only, as its dispatch is: nothing there to deliver it (the named provider missing, disabled or on another channel, or none named and no active provider for the channel) is `409 NB_PROVIDER_UNAVAILABLE` with the reason, and nothing is sent |
 | WhatsApp template sync | Reads the Twilio account of the workspace's own organization |
-| `seed-notifications.py` | Unchanged: it seeds MDMS masters, which are per tenant anyway. A seeded channel row that pins no provider sends through the organization's primary provider |
+| `seed-notifications.py` | Unchanged: it seeds MDMS masters, which are per tenant anyway. A seeded channel row that pins no provider sends through the organization's primary provider, and is `SKIPPED / NB_PROVIDER_UNAVAILABLE` while the organization has no active provider for the channel |
 | `migrate-notifications.py` | Unchanged: it migrates 2.12 tenants, which stay on the shared account; `--create-provider` creates providers there. To give a migrated tenant its own organization, backfill it, then add its providers there |
 | Novu worker providers | SMSCountry, Ozeki and Jasmin are loaded once by the shared Novu worker and work for every organization |
 | Novu dashboard | The platform admin sees every tenant organization in the organization switcher |
