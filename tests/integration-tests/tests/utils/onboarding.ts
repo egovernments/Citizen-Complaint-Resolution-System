@@ -301,7 +301,9 @@ export async function phase3UploadMasters(page: Page, mastersFixture: string): P
  * Drive from the Phase 3 masters preview all the way to "Phase 3 Complete!":
  * "Create & Continue" (was "Create All", renamed `019b1594`) → creating-depts →
  * Step 3.2 Define Complaint Hierarchy (leave the default 4 levels) → Next:
- * Template → upload the complaint-hierarchy xlsx → Create N Sub-types.
+ * Template → upload the complaint-hierarchy xlsx → Create N Subcategories
+ * (was "Create N Sub-types" before #2243; both are accepted so the helper works
+ * against builds on either side of the rename).
  */
 export async function completePhase3(page: Page, hierarchyFixture: string): Promise<void> {
   await page.getByRole('button', { name: /^Create & Continue$/ }).click();
@@ -311,7 +313,7 @@ export async function completePhase3(page: Page, hierarchyFixture: string): Prom
   await expect(page.getByText('Step 3.2: Download & Upload Template')).toBeVisible({ timeout: 15_000 });
   await page.locator('#ch-file-upload').setInputFiles(hierarchyFixture);
   await expect(page.getByText('Step 3.2: Verify & Create')).toBeVisible({ timeout: 30_000 });
-  await page.getByRole('button', { name: /Create \d+ Sub-types?/i }).click();
+  await page.getByRole('button', { name: /Create \d+ (Sub-types?|Subcategor(y|ies))/i }).click();
   await expect(page.getByText('Phase 3 Complete!')).toBeVisible({ timeout: 120_000 });
 }
 

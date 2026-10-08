@@ -237,13 +237,13 @@ Loose regex tolerates "1,234", "0", "12.5%" — anything that's actually numeric
   test('breakdown table with 4 tabs', {
     annotation: {
       type: 'description',
-      description: `Asserts the "Status by Tenant" breakdown panel renders with all four tab triggers (Boundary, Department, Complaint Type, Channel), the Boundary tab is selected by default with a visible table, and switching to Department also renders a table inside the active tabpanel.
+      description: `Asserts the "Status by Tenant" breakdown panel renders with all four tab triggers (Boundary, Department, Complaint Category — "Complaint Type" before #2243 — and Channel), the Boundary tab is selected by default with a visible table, and switching to Department also renders a table inside the active tabpanel.
 
 Steps:
 1. loginConfigurator (beforeEach).
 2. Navigate to /manage/pgr-dashboard, wait for networkidle.
 3. Assert "Status by Tenant" text is visible within 5s.
-4. For each tab in ['Boundary','Department','Complaint Type','Channel'], assert [role="tab"]:has-text(<tab>) is visible.
+4. For each tab in [Boundary, Department, Complaint Category|Type, Channel], assert a [role="tab"] with that text is visible.
 5. Assert the first <table> element is visible (the Boundary tab is the default).
 6. Click the Department tab.
 7. Assert a [role="tabpanel"] table is visible within 5s.
@@ -256,10 +256,11 @@ Confirms tab-switching actually swaps the rendered table — not just the tab in
     // Should show "Status by Tenant" section
     await expect(page.locator('text=Status by Tenant').first()).toBeVisible({ timeout: 5_000 });
 
-    // 4 tab triggers should be present
-    const tabs = ['Boundary', 'Department', 'Complaint Type', 'Channel'];
+    // 4 tab triggers should be present. #2243 renamed "Complaint Type" →
+    // "Complaint Category"; accept both so older builds still match.
+    const tabs = [/Boundary/i, /Department/i, /Complaint (Type|Category)/i, /Channel/i];
     for (const tab of tabs) {
-      await expect(page.locator(`[role="tab"]:has-text("${tab}")`)).toBeVisible({ timeout: 5_000 });
+      await expect(page.locator('[role="tab"]', { hasText: tab })).toBeVisible({ timeout: 5_000 });
     }
 
     // Default tab (Boundary) should show a table
