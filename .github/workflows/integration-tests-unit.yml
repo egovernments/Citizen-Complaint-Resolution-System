@@ -23,6 +23,11 @@ jobs:
     defaults:
       run:
         working-directory: tests/integration-tests
+    env:
+      # The unit test files. bash expands them (globstar for **; nullglob so a
+      # pattern with no match on this branch drops out instead of reaching node
+      # as a literal), and node gets plain file paths.
+      UNIT_TESTS: scripts/**/*.test.ts scripts/**/*.test.mjs runner/**/*.test.ts tests/identity-unit/**/*.test.ts
     steps:
       - uses: actions/checkout@v4
 
@@ -32,8 +37,24 @@ jobs:
           cache: npm
           cache-dependency-path: tests/integration-tests/package-lock.json
 
-      # @playwright/test installs without browsers; nothing here launches one.
+      # @playwright/test installs without browsers.
       - run: npm ci
+
+      # Some unit tests drive a real browser (develop's
+      # tests/identity-unit/hosted-fixture.test.ts launches Chromium). Install
+      # it when any unit test mentions it, wherever that test lives, and skip
+      # the download on a branch where none does.
+      - name: Install Chromium if a unit test uses it
+        shell: bash
+        run: |
+          shopt -s globstar nullglob
+          # shellcheck disable=SC2206 # split and glob UNIT_TESTS on purpose
+          files=($UNIT_TESTS)
+          if [ "${#files[@]}" -gt 0 ] && grep -q chromium "${files[@]}"; then
+            npx playwright install --with-deps chromium
+          else
+            echo "No unit test mentions chromium; no browser installed."
+          fi
 
       # tsconfig.json's include leaves scripts/ out, so nothing else checks it.
       - name: Type-check scripts/ (strict)
@@ -42,12 +63,10 @@ jobs:
       - name: Unit tests
         shell: bash
         run: |
-          # bash expands the globs (globstar for **; nullglob so a pattern with
-          # no match on this branch drops out instead of reaching node as a
-          # literal), and node gets plain file paths. No files at all means a
-          # broken checkout, not a pass.
+          # No files at all means a broken checkout, not a pass.
           shopt -s globstar nullglob
-          files=(scripts/**/*.test.ts scripts/**/*.test.mjs runner/**/*.test.ts tests/identity-unit/**/*.test.ts)
+          # shellcheck disable=SC2206 # split and glob UNIT_TESTS on purpose
+          files=($UNIT_TESTS)
           if [ "${#files[@]}" -eq 0 ]; then
             echo "::error::no unit test files found under tests/integration-tests"
             exit 1
