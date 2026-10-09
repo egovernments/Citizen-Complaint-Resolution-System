@@ -15,6 +15,9 @@ import { Alert, Box, Card, CardContent, Chip, Divider, Grid, Link as MuiLink, St
 
 const MonacoEditor = lazy(() => import('@monaco-editor/react'));
 import type { CatalogTest, RunSlot, TestStatus } from '../types';
+import { PAGE_SIZE, hasReport, reportsKept, summarize, windowOf } from '../runWindow';
+import { RunPager, useRunWindow } from '../RunPager';
+import { reportUrl, rootedUrl } from '../urls';
 
 // ---------------------------------------------------------------------------
 // Filters: every facet always-on alongside search; no "Add filter" dropdown.
@@ -173,11 +176,11 @@ function TitleCell() {
 }
 
 /**
- * Sparkline of the last 5 run outcomes for this test. Mirrors the vanilla
- * dashboard's dot row: green=passed, red=failed/timedOut, amber=skipped,
- * outlined=no entry. Hover any dot for the run-id + duration.
+ * Sparkline of this test's outcomes in the five runs of the current run
+ * window (RunPager). Mirrors the vanilla dashboard's dot row:
+ * green=passed, red=failed/timedOut, amber=skipped, ring=not run,
+ * dashed=no run (short last page). Hover any dot for the run-id + duration.
  */
-const HISTORY_SLOTS = 5;
 const HISTORY_COLOR: Record<string, string> = {
   passed: '#2ea043',
   failed: '#f85149',
@@ -187,12 +190,14 @@ const HISTORY_COLOR: Record<string, string> = {
 };
 function HistoryDots() {
   const r = useRecordContext<CatalogTest>();
+  const { win } = useRunWindow();
   if (!r) return null;
   // One slot per run in the window (newest first; aligned once in dataProvider),
   // so a dot means the same run on every row; a run this test produced no
   // verdict in renders as a hollow "not run" ring instead of older results
   // sliding left into its slot.
-  const slots: Array<RunSlot | null> = Array.from({ length: HISTORY_SLOTS }, (_, i) => r.runSlots?.[i] ?? null);
+  const page = windowOf(r.runSlots ?? [], win.page).items;
+  const slots: Array<RunSlot | null> = Array.from({ length: PAGE_SIZE }, (_, i) => page[i] ?? null);
   return (
     <Stack direction="row" spacing={0.5} alignItems="center">
       {slots.map((h, i) => {
@@ -249,10 +254,17 @@ function DurationCell() {
 }
 
 const ListActions = () => (
-  <TopToolbar>
+  <TopToolbar sx={{ alignItems: 'center' }}>
+    <RunPager />
     <FilterButton />
   </TopToolbar>
 );
+
+/** Column header for the dots: which runs of the window they show. */
+function RunsColumnLabel() {
+  const { win } = useRunWindow();
+  return <span title={`One dot per run, newest first: ${win.label}`}>{win.total ? `Runs ${win.first}–${win.last}` : 'Runs'}</span>;
+}
 
 export const TestList = () => (
   <List
@@ -281,7 +293,7 @@ export const TestList = () => (
       <FunctionField label="Title" source="title" render={() => <TitleCell />} />
       <FunctionField label="File" source="file" render={() => <FileCell />} />
       <FunctionField label="Tags" source="tags" render={() => <TagsCell />} />
-      <FunctionField label="Last 5" source="history" render={() => <HistoryDots />} />
+      <FunctionField label={<RunsColumnLabel />} source="history" sortable={false} render={() => <HistoryDots />} />
       {/* Sorts on the latest run's status, not the carried-over lastStatus. */}
       <FunctionField label="Status" source="currentStatus" render={() => <StatusBadge />} />
       <FunctionField label="Duration" source="duration" render={() => <DurationCell />} />
@@ -293,13 +305,6 @@ export const TestList = () => (
 // Show: description, video, source.
 // ---------------------------------------------------------------------------
 
-/**
- * The catalog stores attachment URLs relative to the dashboard root (e.g.
- * 'runs/<id>/test-results/.../video.webm'). Browsers resolve such relative
- * URLs against the *current page* URL, which under react-router becomes
- * '/tests-v2/tests/<id>/show' and yields broken paths. Anchor every URL
- * to import.meta.env.BASE_URL so relatives behave like '/tests-v2/runs/...'.
- */
 /** Strip ANSI color/style escape sequences so terminal output renders cleanly. */
 function stripAnsi(s: string): string {
   // Match either real ESC (0x1b) or the literal "[" wrapped form Playwright
@@ -307,14 +312,6 @@ function stripAnsi(s: string): string {
   // covers SGR codes + their bracketed pseudo-form.
   // eslint-disable-next-line no-control-regex
   return s.replace(/\u001b\[[0-9;]*m/g, '').replace(/\[\d{1,3}(?:;\d{1,3})*m/g, '');
-}
-
-function rootedUrl(rel: string | null | undefined): string | undefined {
-  if (!rel) return undefined;
-  if (/^https?:\/\//i.test(rel)) return rel;
-  if (rel.startsWith('/')) return rel;
-  const base = import.meta.env.BASE_URL || '/';
-  return `${base}${rel}`.replace(/\/{2,}/g, '/');
 }
 
 // VideoBlock was inlined into the show layout's hero card; the standalone
@@ -428,29 +425,39 @@ const TagsListShow = () => {
 };
 
 /**
- * Tabular run history. Each row: status, run-id, duration, links to the
- * stock Playwright report + per-attachment for the latest run.
+ * Tabular run history for the five runs of the current run window. Each row:
+ * status (or "not run"), run-id, duration, a link to that run's stock
+ * Playwright report while it still has one ("report pruned" after), and the
+ * video/trace for the run whose media is kept. Below: the test's record across
+ * every run the catalog keeps.
  */
 function RunHistoryBlock() {
   const r = useRecordContext<CatalogTest>();
-  if (!r || !r.history.length) {
-    return <Typography variant="body2" color="text.secondary">No prior runs recorded.</Typography>;
+  const { runs, win } = useRunWindow();
+  if (!r || !runs.length) {
+    return <Typography variant="body2" color="text.secondary">No runs recorded yet.</Typography>;
   }
+  const byId = new Map(runs.map(run => [run.id, run]));
+  const slots = windowOf(r.runSlots ?? [], win.page).items;
+  const recent = summarize(r.runSlots ?? []);
+  const kept = reportsKept(runs);
   return (
     <Box>
-      {r.history.map((h, i) => {
-        const dur = h.durationMs < 1000 ? `${Math.round(h.durationMs)}ms` : `${(h.durationMs/1000).toFixed(1)}s`;
-        const reportLink = rootedUrl(`runs/${h.runId}/playwright-report/index.html`);
+      {slots.map((slot, i) => {
+        const run = byId.get(slot.runId);
+        const withReport = hasReport(run);
+        const h = 'notRun' in slot ? null : slot;
+        const dur = !h ? '—' : h.durationMs < 1000 ? `${Math.round(h.durationMs)}ms` : `${(h.durationMs/1000).toFixed(1)}s`;
         // latestRun is the run whose media is kept — the latest run only when
         // the test ran in it; otherwise it is the carried-over last result.
-        const hasMedia = r.latestRun?.runId === h.runId;
+        const hasMedia = !!h && withReport && r.latestRun?.runId === slot.runId;
         const isLatest = hasMedia && !!r.ranInLatestRun;
         return (
           <Box
             key={i}
             sx={{
               display: 'grid',
-              gridTemplateColumns: '90px minmax(220px, 1fr) 70px auto',
+              gridTemplateColumns: '90px minmax(220px, 1fr) 70px 150px',
               alignItems: 'center',
               gap: 1.5,
               py: 0.75,
@@ -458,9 +465,11 @@ function RunHistoryBlock() {
               borderColor: 'divider',
             }}
           >
-            <Chip size="small" label={h.status} color={STATUS_COLORS[h.status] ?? 'default'} sx={{ width: 80 }} />
+            {h
+              ? <Chip size="small" label={h.status} color={STATUS_COLORS[h.status] ?? 'default'} sx={{ width: 80 }} />
+              : <Chip size="small" label="not run" variant="outlined" sx={{ width: 80 }} title="No result in this run" />}
             <Typography variant="caption" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-              {h.runId}
+              {slot.runId}
               {isLatest && <Typography component="span" variant="caption" color="primary.main" sx={{ ml: 1 }}>★ latest</Typography>}
               {hasMedia && !isLatest && <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>last result</Typography>}
             </Typography>
@@ -468,7 +477,18 @@ function RunHistoryBlock() {
               {dur}
             </Typography>
             <Stack direction="row" spacing={1.5}>
-              <MuiLink href={reportLink} target="_blank" rel="noopener" variant="caption">Report</MuiLink>
+              {withReport
+                ? <MuiLink href={reportUrl(slot.runId)} target="_blank" rel="noopener" variant="caption">Report</MuiLink>
+                : (
+                  <Typography
+                    variant="caption"
+                    color="text.disabled"
+                    title={`Only the newest ${kept} runs keep their report, video and traces; this run's results are all that is left.`}
+                    sx={{ cursor: 'help' }}
+                  >
+                    report pruned
+                  </Typography>
+                )}
               {hasMedia && r.latestRun?.videoUrl && (
                 <MuiLink href={rootedUrl(r.latestRun.videoUrl)} target="_blank" rel="noopener" variant="caption">Video</MuiLink>
               )}
@@ -479,6 +499,16 @@ function RunHistoryBlock() {
           </Box>
         );
       })}
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        sx={{ display: 'block', mt: 1, cursor: 'help' }}
+        title={`Across all ${recent.runs} runs the dashboard keeps, not only the five shown`}
+      >
+        Last {recent.runs} runs: {recent.passed} passed · {recent.failed} failed
+        {recent.skipped > 0 && ` · ${recent.skipped} skipped`}
+        {recent.notRun > 0 && ` · ${recent.notRun} not run`}
+      </Typography>
     </Box>
   );
 }
@@ -487,12 +517,15 @@ function RunHistoryBlock() {
  * Compact section heading: small uppercase label + thin divider, used to
  * give the show page consistent visual hierarchy across cards.
  */
-function SectionHeader({ children }: { children: React.ReactNode }) {
+function SectionHeader({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
   return (
     <Box sx={{ mb: 1.5 }}>
-      <Typography variant="overline" sx={{ color: 'text.secondary', letterSpacing: '0.08em', fontWeight: 600 }}>
-        {children}
-      </Typography>
+      <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1} useFlexGap flexWrap="wrap">
+        <Typography variant="overline" sx={{ color: 'text.secondary', letterSpacing: '0.08em', fontWeight: 600 }}>
+          {children}
+        </Typography>
+        {action}
+      </Stack>
       <Divider sx={{ mt: 0.25 }} />
     </Box>
   );
@@ -534,6 +567,7 @@ function HeaderCard() {
  */
 function TestShowLayout() {
   const r = useRecordContext<CatalogTest>();
+  const { runs, win } = useRunWindow();
   if (!r) return null;
   return (
     <Box sx={{ p: { xs: 1, sm: 2 }, maxWidth: 1400, mx: 'auto' }}>
@@ -550,7 +584,7 @@ function TestShowLayout() {
                 <Alert severity="warning" sx={{ mb: 1.5 }}>
                   {r.latestRun
                     ? `Not run in the latest run. The video and error below are from ${r.latestRun.runId}, the last run that reached it (${r.lastStatus ?? r.history[0]?.status}).`
-                    : `Not run in the latest run. Its last result was ${r.history[0]?.status} in ${r.history[0]?.runId}; that run is outside the 5-run window, so no video or error is kept for it.`}
+                    : `Not run in the latest run. Its last result was ${r.history[0]?.status} in ${r.history[0]?.runId}; that run's report has been pruned (only the newest ${reportsKept(runs)} runs keep one), so no video or error is kept for it.`}
                 </Alert>
               )}
               {r.latestRun?.videoUrl ? (
@@ -585,7 +619,9 @@ function TestShowLayout() {
         <Grid size={{ xs: 12, md: 5 }}>
           <Card sx={{ height: '100%' }}>
             <CardContent>
-              <SectionHeader>Run history (last 5)</SectionHeader>
+              <SectionHeader action={<RunPager />}>
+                {win.total ? `Run history · runs ${win.first}–${win.last} of ${win.total}` : 'Run history'}
+              </SectionHeader>
               <RunHistoryBlock />
             </CardContent>
           </Card>

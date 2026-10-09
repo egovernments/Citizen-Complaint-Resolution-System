@@ -1,5 +1,6 @@
 import type { DataProvider } from 'react-admin';
 import type { Catalog, CatalogTest, RunSummary } from './types';
+import { slotsFor } from './runWindow';
 
 /**
  * In-memory dataProvider over /tests/catalog.json.
@@ -20,16 +21,16 @@ import type { Catalog, CatalogTest, RunSummary } from './types';
 
 let cache: Promise<Catalog> | null = null;
 
-/** Run slots shown per test: the builder keeps the same 5-run window. */
-const RUN_WINDOW = 5;
-
 /**
  * Derive, once per load, everything that answers "what happened in the latest
  * run" — so components read one field instead of each re-deriving it from
  * lastStatus (which is only the last KNOWN result, possibly from an older run).
+ * runSlots covers every run the catalog keeps (up to 30); the views page
+ * through it five at a time (runWindow.ts).
  */
 function normalize(c: Catalog): Catalog {
-  const windowIds = c.runs.slice(0, RUN_WINDOW).map(r => r.id); // builder writes newest first
+  c.runs.forEach((r, i) => { r.position = i; }); // builder writes newest first
+  const runIds = c.runs.map(r => r.id);
   for (const t of c.tests) {
     if (typeof t.ranInLatestRun !== 'boolean') {
       // Older catalogs: history only gains an entry when the test ran (older
@@ -40,10 +41,7 @@ function normalize(c: Catalog): Catalog {
     t.currentStatus = t.ranInLatestRun
       ? (t.lastStatus ?? 'never')
       : (t.lastStatus || t.history.length ? 'notrun' : 'never');
-    t.runSlots = windowIds.map(id => {
-      const h = t.history.find(x => x.runId === id);
-      return h && h.status !== 'interrupted' ? h : { runId: id, notRun: true as const };
-    });
+    t.runSlots = slotsFor(t, runIds);
   }
   return c;
 }

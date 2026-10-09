@@ -302,7 +302,7 @@ integration_tests_basic_auth_user: "digit-tests"
 # (it's nice'd, but still). Leave off unless you want in-dashboard runs.
 enable_integration_tests_runner: false
 # integration_tests_runner_port: 8181        # loopback port the daemon listens on
-# integration_tests_runner_run_limit: 5      # keep at most N runs on disk
+# integration_tests_runner_run_limit: 5      # runs that keep their full report (videos/traces) on disk; the dashboards keep results for 30
 # integration_tests_runner_branch: "deployed"
 # Env file the run sources so it targets THIS box's tenant (BASE_URL/DIGIT_TENANT/
 # LOCALITY_CODE/SERVICE_CODE). Point at the deploy env you already maintain.
