@@ -17,7 +17,11 @@ HOST_DIR ?= /var/www/tests
 # Runs whose full report (runs/<id>/) stays on the host; build-catalog and
 # publish.sh must agree on it. Results are kept for 30 runs regardless.
 RUN_LIMIT ?= 5
-LOCK := /tmp/digit-tests.lock
+# Single-flight lock: this checkout's directory itself, which run-cycle.sh also
+# locks when it runs here (its REPO_DIR), so a make cycle and a RUN-button or
+# nightly cycle can't run in one checkout at once, whichever user starts them.
+# A file in /tmp was a different file per user under systemd's PrivateTmp.
+LOCK ?= $(CURDIR)
 
 # Run-id format: 2026-05-07_1430_a1b2c3d
 RUN_ID := $(shell date -u +%Y-%m-%d_%H%M)_$(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
@@ -25,7 +29,7 @@ RUN_ID := $(shell date -u +%Y-%m-%d_%H%M)_$(shell git rev-parse --short HEAD 2>/
 .PHONY: test-and-publish run catalog publish prepare fetch-history
 
 test-and-publish:
-	@flock -n $(LOCK) -c '$(MAKE) _do-cycle' || (echo "Another run is already in progress; exiting." >&2; exit 1)
+	@flock -n "$(LOCK)" -c '$(MAKE) _do-cycle' || (echo "Another run is already in progress; exiting." >&2; exit 1)
 
 _do-cycle: prepare fetch-history run catalog publish
 
