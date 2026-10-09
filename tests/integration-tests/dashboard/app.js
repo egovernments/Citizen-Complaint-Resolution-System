@@ -2,7 +2,9 @@
  * filterable table + per-test detail pane.
  *
  * Filter semantics:
- *   - Status filter (passed/failed/skipped/never-ran): OR within the group.
+ *   - Status filter (passed/failed/skipped/not-run/never-ran): OR within the group.
+ *     Status is the LATEST run's outcome; a test that did not run in it shows
+ *     "not run" (its older result stays visible in the detail pane).
  *   - Each facet (persona/area/layer/kind/ccrs/health): OR within the group.
  *   - Across groups: AND.
  *   - Search box: substring match on title or file path.
@@ -25,8 +27,10 @@ const STATUS_OPTIONS = [
   { value: 'failed',   label: 'Failed'  },
   { value: 'timedOut', label: 'Timed out' },
   { value: 'skipped',  label: 'Skipped' },
+  { value: 'notrun',   label: 'Not run (latest)' },
   { value: 'never',    label: 'Never ran' },
 ];
+const STATUS_TEXT = { notrun: 'not run', never: 'never ran' };
 
 const state = {
   catalog: null,
@@ -37,6 +41,35 @@ const state = {
   },
   selectedId: null,
 };
+
+/**
+ * Did this test produce a verdict in the latest run? catalog.json carries the
+ * flag; older catalogs lack it, so fall back to "its newest history entry is
+ * the latest run" (history only gains an entry when the test ran — older
+ * builders also wrote one for an interrupted test, which reached no verdict).
+ */
+function ranInLatest(t) {
+  if (typeof t.ranInLatestRun === 'boolean') return t.ranInLatestRun;
+  const h0 = t.history && t.history[0];
+  return !!(h0 && h0.runId === state.catalog.lastRunId && h0.status !== 'interrupted');
+}
+
+/** A run summary written before not-run tracking: its counts may include carried-over results. */
+function isLegacyCount(r) { return typeof r.notRun !== 'number'; }
+
+/** Latest-run status: lastStatus when it ran, else 'notrun' (or 'never' if it has no result at all). */
+function displayStatus(t) {
+  if (ranInLatest(t)) return t.lastStatus || 'never';
+  return (t.lastStatus || (t.history && t.history.length)) ? 'notrun' : 'never';
+}
+
+/** "passed in 2026-10-01_1544_71d4743d" — where a carried-over lastStatus came from. */
+function lastKnownText(t) {
+  const runId = (t.latestRun && t.latestRun.runId) || (t.history && t.history[0] && t.history[0].runId);
+  if (!t.lastStatus && !runId) return '';
+  const st = t.lastStatus || (t.history && t.history[0] && t.history[0].status) || '?';
+  return runId ? `${st} in ${runId}` : st;
+}
 
 async function init() {
   try {
@@ -68,9 +101,11 @@ function renderRunSummary() {
     `<span class="pill pass">${r.passed} passed</span>`,
     `<span class="pill fail">${r.failed} failed</span>`,
     `<span class="pill skip">${r.skipped} skipped</span>`,
+    r.notRun ? `<span class="pill notrun" title="In the suite but produced no result in this run">${r.notRun} not run</span>` : '',
+    r.cutShort ? `<span class="pill cut" title="${escapeAttr(r.cutShort)}">⚠ run cut short</span>` : '',
     `<span class="muted">${r.total} total · ${formatDuration(r.durationMs)} · ${escapeHtml(r.branch)}@${escapeHtml(r.sha || '?')} · ${ago}</span>`,
     `<span class="muted">vs ${escapeHtml(r.baseUrl)}</span>`,
-  ].join(' ');
+  ].filter(Boolean).join(' ');
   renderRunSwitcher();
 }
 
@@ -89,9 +124,12 @@ function renderRunSwitcher() {
   const chips = runs.map(r => {
     const isLatest = r.id === latestId;
     const ago = relTime(r.startedAt);
-    const summary = `${r.passed}/${r.total} pass`;
-    const tooltip = `${r.id} · ${ago} · ${r.passed}p ${r.failed}f ${r.skipped}s`;
-    return `<a class="run-chip${isLatest ? ' latest' : ''}" target="_blank" rel="noopener"
+    const legacy = isLegacyCount(r);
+    const summary = `${legacy ? '≈' : ''}${r.passed}/${r.total} pass${r.cutShort ? ' ⚠' : ''}`;
+    const tooltip = `${r.id} · ${ago} · ${r.passed}p ${r.failed}f ${r.skipped}s` +
+      (r.notRun ? ` ${r.notRun} not run` : '') + (r.cutShort ? ` · cut short: ${r.cutShort}` : '') +
+      (legacy ? ' · legacy count: recorded before not-run tracking, may include results carried over from older runs' : '');
+    return `<a class="run-chip${isLatest ? ' latest' : ''}${legacy ? ' legacy' : ''}" target="_blank" rel="noopener"
        href="runs/${escapeAttr(r.id)}/playwright-report/index.html"
        title="${escapeAttr(tooltip)}">
        ${isLatest ? '★ ' : ''}${escapeHtml(r.id.split('_').slice(0,2).join(' '))}
@@ -102,9 +140,9 @@ function renderRunSwitcher() {
 }
 
 function renderStatusFilter() {
-  const counts = { passed: 0, failed: 0, timedOut: 0, skipped: 0, never: 0 };
+  const counts = { passed: 0, failed: 0, timedOut: 0, skipped: 0, notrun: 0, never: 0 };
   for (const t of state.catalog.tests) {
-    const s = t.lastStatus || 'never';
+    const s = displayStatus(t);
     counts[s] = (counts[s] || 0) + 1;
   }
   const wrap = document.getElementById('filter-status');
@@ -163,8 +201,7 @@ function applyFilters(tests) {
   const f = state.filters;
   return tests.filter(t => {
     if (f.status.size) {
-      const s = t.lastStatus || 'never';
-      if (!f.status.has(s)) return false;
+      if (!f.status.has(displayStatus(t))) return false;
     }
     for (const facet of FACET_ORDER) {
       const want = f.facets[facet];
@@ -204,26 +241,37 @@ function renderTable() {
 }
 
 function rowHtml(t) {
-  const dots = renderDots(t.history);
+  const dots = renderDots(t);
   const tags = t.tags.map(tagChipHtml).join('');
-  const status = t.lastStatus || 'unknown';
-  const dur = t.lastDurationMs != null ? formatDuration(t.lastDurationMs) : '—';
+  const status = displayStatus(t);
+  const statusTitle = status === 'notrun' ? `Not run in the latest run · last: ${lastKnownText(t)}` : '';
+  const dur = ranInLatest(t) && t.lastDurationMs != null ? formatDuration(t.lastDurationMs) : '—';
   return `<tr data-id="${escapeAttr(t.id)}">
     <td class="title-cell">${escapeHtml(t.title)}<div class="describe">${escapeHtml(t.describe)}</div></td>
     <td class="file-cell" title="${escapeAttr(t.file)}:${t.line}">${escapeHtml(t.file)}:${t.line}</td>
     <td class="tag-cell">${tags}</td>
     <td class="numeric"><div class="dot-row">${dots}</div></td>
     <td class="numeric">${dur}</td>
-    <td><span class="status-badge ${escapeHtml(status)}">${escapeHtml(status)}</span></td>
+    <td><span class="status-badge ${escapeHtml(status === 'never' ? 'unknown' : status)}"${statusTitle ? ` title="${escapeAttr(statusTitle)}"` : ''}>${escapeHtml(STATUS_TEXT[status] || status)}</span></td>
   </tr>`;
 }
 
-function renderDots(history) {
+/**
+ * One dot per run in catalog.runs (newest first), so a dot always means the
+ * same run for every test. A run the test produced no result in renders as a
+ * hollow "not run" dot instead of the test's older results sliding left into
+ * that slot.
+ */
+function renderDots(t) {
   const slots = 5;
+  const runs = (state.catalog.runs || []).slice(0, slots);
   const out = [];
   for (let i = 0; i < slots; i++) {
-    const h = history[i];
-    if (!h) { out.push('<span class="dot empty"></span>'); continue; }
+    const run = runs[i];
+    if (!run) { out.push('<span class="dot empty"></span>'); continue; }
+    const h = (t.history || []).find(x => x.runId === run.id);
+    // 'interrupted' (older catalogs) reached no verdict either — same ring as the badge's "not run".
+    if (!h || h.status === 'interrupted') { out.push(`<span class="dot notrun" title="${escapeAttr(run.id)} · not run"></span>`); continue; }
     out.push(`<span class="dot ${escapeHtml(h.status)}" title="${escapeHtml(h.runId)} · ${escapeHtml(h.status)} · ${formatDuration(h.durationMs)}"></span>`);
   }
   return out.join('');
@@ -257,7 +305,16 @@ function renderDetail(id) {
   detail.hidden = false;
   const lr = t.latestRun;
   const tagChips = t.tags.map(tagChipHtml).join(' ');
-  const dots = renderDots(t.history);
+  const dots = renderDots(t);
+  // The carried-over latestRun (and its media) is only kept while that run is
+  // in the window; once it ages out only the history line is left to cite.
+  const staleNote = (!ranInLatest(t) && lastKnownText(t))
+    ? `<p class="stale-note">Not run in the latest run (${escapeHtml(state.catalog.lastRunId)}). ` +
+      (lr
+        ? `The result, video and error below are from the last run that reached it: ${escapeHtml(lastKnownText(t))}.`
+        : `Its last result was ${escapeHtml(lastKnownText(t))}; that run is outside the 5-run window, so no video or error is kept for it.`) +
+      `</p>`
+    : '';
   const error = (lr && (lr.errorMessage || lr.errorStack))
     ? `<div class="section"><h4>Error</h4><pre class="error">${escapeHtml((lr.errorMessage || '') + '\n\n' + (lr.errorStack || ''))}</pre></div>`
     : '';
@@ -281,6 +338,7 @@ function renderDetail(id) {
     <button class="close-btn" id="close-detail" aria-label="Close">×</button>
     <h2>${escapeHtml(t.title)}</h2>
     <div class="describe">${escapeHtml(t.describe)} · ${escapeHtml(t.file)}:${t.line}</div>
+    ${staleNote}
     ${description}
     <div class="section"><h4>Tags</h4>${tagChips}</div>
     <div class="section"><h4>Last 5 runs</h4><div class="dot-row">${dots}</div><div class="history-row">${historyHtml(t.history)}</div></div>
@@ -367,7 +425,9 @@ function linkifyAndEscape(s) {
 
 function buildClaudePrompt(t) {
   const lr = t.latestRun;
-  const status = t.lastStatus || 'never ran';
+  const status = ranInLatest(t)
+    ? (t.lastStatus || 'never ran')
+    : `not run in the latest run (${state.catalog.lastRunId}); last known: ${lastKnownText(t) || 'never ran'}`;
   const errorBlock = lr && (lr.errorMessage || lr.errorStack)
     ? `\n\nError:\n${lr.errorMessage || ''}\n${lr.errorStack || ''}`
     : '';

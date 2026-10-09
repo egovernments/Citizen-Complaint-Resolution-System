@@ -20,13 +20,41 @@ import type { Catalog, CatalogTest, RunSummary } from './types';
 
 let cache: Promise<Catalog> | null = null;
 
+/** Run slots shown per test: the builder keeps the same 5-run window. */
+const RUN_WINDOW = 5;
+
+/**
+ * Derive, once per load, everything that answers "what happened in the latest
+ * run" — so components read one field instead of each re-deriving it from
+ * lastStatus (which is only the last KNOWN result, possibly from an older run).
+ */
+function normalize(c: Catalog): Catalog {
+  const windowIds = c.runs.slice(0, RUN_WINDOW).map(r => r.id); // builder writes newest first
+  for (const t of c.tests) {
+    if (typeof t.ranInLatestRun !== 'boolean') {
+      // Older catalogs: history only gains an entry when the test ran (older
+      // builders also wrote one for an interrupted test, which reached no verdict).
+      const h0 = t.history[0];
+      t.ranInLatestRun = !!h0 && h0.runId === c.lastRunId && h0.status !== 'interrupted';
+    }
+    t.currentStatus = t.ranInLatestRun
+      ? (t.lastStatus ?? 'never')
+      : (t.lastStatus || t.history.length ? 'notrun' : 'never');
+    t.runSlots = windowIds.map(id => {
+      const h = t.history.find(x => x.runId === id);
+      return h && h.status !== 'interrupted' ? h : { runId: id, notRun: true as const };
+    });
+  }
+  return c;
+}
+
 function fetchCatalog(): Promise<Catalog> {
   if (cache) return cache;
   cache = (async () => {
     const url = `${import.meta.env.BASE_URL}catalog.json?t=${Date.now()}`;
     const resp = await fetch(url, { credentials: 'include' });
     if (!resp.ok) throw new Error(`catalog.json: HTTP ${resp.status}`);
-    return resp.json() as Promise<Catalog>;
+    return normalize((await resp.json()) as Catalog);
   })();
   return cache;
 }
@@ -76,8 +104,8 @@ function applyFilter<T extends Record<string, unknown>>(
         if (!v.some(want => tags.includes(want as string))) return false;
         continue;
       }
-      // Direct equality on other fields.
-      if (row[k] !== v) return false;
+      // Direct equality on other fields; an array means "any of these".
+      if (Array.isArray(v) ? !v.includes(row[k]) : row[k] !== v) return false;
     }
     return true;
   });
