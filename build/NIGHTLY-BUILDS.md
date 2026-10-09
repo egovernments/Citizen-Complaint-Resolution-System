@@ -36,7 +36,10 @@ it with different refs/tags.
    `nightly-develop` (rolling) and `develop-<short-sha>` (immutable — the first
    8 hex chars of the commit it built), then prunes to the **5 most recently
    pushed** snapshot tags per image. This is the public source the compose
-   defaults and `local-setup/local-deploy.sh` pull from.
+   defaults and `local-setup/local-deploy.sh` pull from. The job runs only in
+   `egovernments/Citizen-Complaint-Resolution-System`: a fork holding egovio
+   credentials would otherwise publish its own `develop` under these same names
+   and prune this repo's snapshots.
 
 2. **GitHub Actions — on release published.**
    [`.github/workflows/release-build.yml`](../.github/workflows/release-build.yml).

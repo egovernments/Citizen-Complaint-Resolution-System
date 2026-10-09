@@ -161,8 +161,11 @@ services:
   # Was absent while this service was a Go binary that self-migrated with GORM
   # AutoMigrate. It is now Spring Boot + Flyway, so it joins the same pattern:
   # the migrator owns the schema and the app's embedded Flyway is off.
+  # Same build as the service image (nightly-develop — see the note there). The
+  # 2.12 -db image predates the Java rewrite: its migration lacks the duplicate
+  # collapse that lets the unique index build on a database the Go service filled.
   digit-user-preferences-service-migration:
-    image: ${DIGIT_USER_PREFERENCES_SERVICE_DB_IMAGE:-egovio/digit-user-preferences-service-db:2.12-5137119}
+    image: ${DIGIT_USER_PREFERENCES_SERVICE_DB_IMAGE:-egovio/digit-user-preferences-service-db:nightly-develop}
     container_name: digit-user-preferences-service-migration
     profiles: ["notifications"]   # active exactly when digit-user-preferences-service is
     depends_on:
