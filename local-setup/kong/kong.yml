@@ -73,6 +73,9 @@ plugins:
     # Nothing here needs it. DIGIT authenticates with the `auth-token` request
     # header (allowed above) and a Bearer Authorization header, not cookies or
     # TLS client certs — which is all the credentials flag governs.
+    # A DEV tenant can opt back in for an explicit origin list with
+    # `kong_cors_credentials` (see host_vars/_example.yml); the wildcard assert
+    # in the playbook keeps that from ever pairing with '*'.
     max_age: 3600
 - name: request-size-limiting
   config:
