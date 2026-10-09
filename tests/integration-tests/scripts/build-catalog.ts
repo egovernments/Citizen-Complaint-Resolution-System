@@ -92,9 +92,10 @@ interface RunSummary {
   notRun?: number | null;
   /**
    * Why the run stopped before every planned test got a turn: Playwright's own
-   * run-level message (global timeout or --max-failures), or its first
-   * run-level error when the run planned no test at all. null = it ran to the
-   * end.
+   * run-level message (the global timeout, in whatever task it fired, or
+   * --max-failures), or its first run-level error when the run planned no test
+   * at all. null = it ran to the end, except on a legacy count (notRun: null),
+   * where null means unknown: there was no report to tell.
    */
   cutShort?: string | null;
   /** On disk but not planned by this run (see CatalogTest.excluded); outside `total`. */
@@ -480,11 +481,14 @@ function recount(stored: RunSummary, report: PwReport): RunSummary {
 
 /**
  * Playwright's run-level message when the run stopped before every test got a
- * turn — the global timeout or --max-failures — else null. Matched exactly, so
- * an unrelated run-level error (a fixture, a teardown) isn't read as cut short.
+ * turn — the global timeout or --max-failures — else null. Matched on those
+ * two messages only, so an unrelated run-level error (a fixture, a teardown)
+ * isn't read as cut short. The global timeout names whichever task was running
+ * when it fired (taskRunner.js: `for the ${currentTaskName} to run`): "test
+ * suite", "global setup", "start dev server", "teardown for test suite"…
  */
 const CUT_SHORT = [
-  /^Timed out waiting [\d.]+s for the test suite to run/,
+  /^Timed out waiting [\d.]+s for the .+ to run/,
   /^Testing stopped early after \d+ maximum allowed failures/,
 ];
 function cutShortOf(report: PwReport): string | null {

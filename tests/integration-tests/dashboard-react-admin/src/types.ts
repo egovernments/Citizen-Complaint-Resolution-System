@@ -71,7 +71,10 @@ export interface RunSummary {
    * recorded before not-run tracking, may include carried-over results.
    */
   notRun?: number | null;
-  /** Playwright's message when the run stopped early (e.g. global timeout). */
+  /**
+   * Playwright's message when the run stopped early (e.g. global timeout).
+   * null = it ran to the end, except on a legacy count, where it is unknown.
+   */
   cutShort?: string | null;
   total: number;
   sha: string;
