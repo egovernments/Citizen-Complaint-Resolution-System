@@ -119,9 +119,17 @@ test_alerts_to: ["ccrs-test-alerts@example.org"]
 Put the SMTP password in OpenBao (`bao kv patch <secrets_path>
 test_alerts_smtp_password=<value>`), or set `test_alerts_smtp_password` in
 host_vars. Then redeploy. The deploy writes `/etc/ccrs-test-alerts.env`
-(root-only) and enables the timer. If anything required is missing it prints
+(root-only), copies the script to `/usr/local/lib/ccrs-test-alerts/`
+(root-owned) and enables the timer. If anything required is missing it prints
 a WARNING and leaves alerts off, so the deploy itself never fails because of
 mail settings.
+
+The timer runs that root-owned copy, not the script in the checkout. The
+checkout belongs to the test-runner account (`digit-tests`), which also runs
+the Playwright suite and the RUN-button daemon, and each poll has the SMTP
+password in its environment: a script that account could edit would hand it
+the password. A change to the script therefore reaches the box with the next
+deploy.
 
 | Variable | Default | Meaning |
 |---|---|---|
@@ -149,7 +157,7 @@ cat /var/lib/ccrs-test-alerts/state.json            # last handled run
 
 # Preview the mail for the newest run without sending or touching state:
 set -a; . /etc/ccrs-test-alerts.env; set +a
-node <tests checkout>/scripts/regression-alert.mjs --dry-run --since <previous-run-id>
+node /usr/local/lib/ccrs-test-alerts/regression-alert.mjs --dry-run --since <previous-run-id>
 ```
 
 To resend a run's mail, edit `lastRunId` in the state file back to the run
