@@ -118,6 +118,18 @@ How it behaves:
     `553` for a sender the account may not use, `550` for an unknown
     recipient): fix `test_alerts_from` / `test_alerts_to` and redeploy. Retries
     cannot succeed until then.
+- **Longer gaps than the catalog keeps.** The catalog holds the last few runs
+  (5, or more if the dashboard's window is raised). When the last run the alerts
+  handled has dropped out of it (alerts were off, or sends kept failing), every
+  run still in the catalog is compared. The oldest of them has no predecessor
+  left, so it is compared with each test's last result at or before the last
+  handled run (or the earliest result the test's history still has), and its
+  section says so (`Folded: …`, with how many runs in between test histories
+  still show). A test that broke in a run that has since dropped out is still
+  reported, folded into that oldest run.
+- **A catalog older than the state** (restored from a backup, or rebuilt): the
+  poll logs a `WARNING`, re-baselines on the catalog's newest run and mails
+  nothing.
 - **The state file** (`/var/lib/ccrs-test-alerts/state.json`) is replaced in
   one step (written to a temp file, flushed to disk, renamed). If it exists but
   can't be read, is empty or isn't JSON, the poll logs `ERROR: the state file
