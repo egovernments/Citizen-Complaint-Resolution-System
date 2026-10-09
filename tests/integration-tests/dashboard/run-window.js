@@ -1,11 +1,13 @@
 /* Run-window paging for the vanilla dashboard (app.js).
  *
  * catalog.json keeps results for the newest 30 runs (build-catalog's
- * HISTORY_LIMIT); the dashboard shows them PAGE_SIZE at a time, newest first.
- * Page 0 is the newest five. Pure functions, no DOM: loaded by index.html
- * before app.js (window.RunWindow) and by scripts/dashboard-run-window.test.ts
- * under Node (module.exports). The react-admin dashboard has the same rules in
- * dashboard-react-admin/src/runWindow.ts.
+ * DEFAULT_HISTORY_LIMIT); the dashboard shows them PAGE_SIZE at a time, newest
+ * first. A window is named by its start: 0 is the newest five, and the URL
+ * names any other window by the id of its newest run (?runs=<id>), so a shared
+ * link keeps showing the same runs after newer ones arrive. Pure functions, no
+ * DOM: loaded by index.html before app.js (window.RunWindow) and by
+ * scripts/dashboard-run-window.test.ts under Node (module.exports). The
+ * react-admin dashboard pages the same way in dashboard-react-admin/src/runWindow.ts.
  */
 (function (root, factory) {
   const api = factory();
@@ -27,27 +29,41 @@
     return Math.min(p, pageCount(total) - 1);
   }
 
+  /** A start position that exists for `total` runs: 0 for junk, the oldest run at most. */
+  function clampStart(start, total) {
+    const s = Math.floor(Number(start));
+    if (!Number.isFinite(s) || s < 0) return 0;
+    return Math.min(s, Math.max(0, (total || 0) - 1));
+  }
+
   /**
-   * The runs on one page plus what the pager needs. `runs` is catalog.runs
-   * (newest first). `label` is the "runs X–Y of N" indicator, 1-based.
+   * Up to PAGE_SIZE runs starting at position `start` of `runs` (catalog.runs,
+   * newest first; 0 = the newest runs), plus what the pager needs. `label` is
+   * the "runs X–Y of N" indicator, 1-based. Newer/Older move the start by
+   * PAGE_SIZE.
    */
-  function windowOf(runs, page) {
+  function windowAt(runs, start) {
     const all = runs || [];
     const total = all.length;
-    const p = clampPage(page, total);
-    const start = p * PAGE_SIZE;
-    const slice = all.slice(start, start + PAGE_SIZE);
+    const s = clampStart(start, total);
+    const slice = all.slice(s, s + PAGE_SIZE);
     return {
-      page: p,
+      start: s,
       pages: pageCount(total),
       total,
-      first: total ? start + 1 : 0,
-      last: start + slice.length,
+      first: total ? s + 1 : 0,
+      last: s + slice.length,
       runs: slice,
-      hasNewer: p > 0,
-      hasOlder: p < pageCount(total) - 1,
-      label: total ? `runs ${start + 1}–${start + slice.length} of ${total}` : 'no runs',
+      hasNewer: s > 0,
+      hasOlder: s + PAGE_SIZE < total,
+      label: total ? `runs ${s + 1}–${s + slice.length} of ${total}` : 'no runs',
     };
+  }
+
+  /** Page `page` of five (0 = newest): the window at page * PAGE_SIZE. */
+  function windowOf(runs, page) {
+    const p = clampPage(page, (runs || []).length);
+    return Object.assign(windowAt(runs, p * PAGE_SIZE), { page: p });
   }
 
   /**
@@ -106,20 +122,42 @@
     return run && !hasReport(run) ? null : reportPath(latestRun.runId);
   }
 
-  /** `?runs=3` → page 2. Missing or junk → 0 (the newest runs). */
-  function parsePageParam(search) {
+  /** Run ids are minted as YYYY-MM-DD_HHMM_<sha> (UTC), so they sort by age. */
+  const RUN_ID = /^\d{4}-\d{2}-\d{2}_/;
+
+  /**
+   * The window a URL asks for, as a start position in `runs` (catalog.runs):
+   *   ?runs=<run id>  the window starting at that run. A run the catalog no
+   *                   longer keeps resolves to the newest kept run before it,
+   *                   which for a run that aged out is the oldest window.
+   *   ?runs=<n>       page n of five, as written before run ids were used.
+   *   none or junk    0, the newest runs.
+   */
+  function startFromSearch(search, runs) {
+    const all = runs || [];
     const v = new URLSearchParams(search || '').get('runs');
-    const n = v === null ? NaN : parseInt(v, 10);
-    return Number.isFinite(n) && n > 1 ? n - 1 : 0;
+    if (!v) return 0;
+    if (/^-?\d+$/.test(v)) return clampPage(parseInt(v, 10) - 1, all.length) * PAGE_SIZE;
+    const at = all.findIndex(r => r.id === v);
+    if (at >= 0) return at;
+    if (!RUN_ID.test(v)) return 0;
+    const before = all.findIndex(r => String(r.id) < v);
+    return before >= 0 ? before : Math.max(0, all.length - PAGE_SIZE);
   }
 
-  /** `search` with the runs page set (1-based); the newest page drops the param. */
-  function withPageParam(search, page) {
+  /**
+   * `search` naming the window that starts at `start`: ?runs=<id of its newest
+   * run>. The newest window drops the param, so a plain link always shows the
+   * latest runs. Other params are left alone.
+   */
+  function searchForStart(search, runs, start) {
     const params = new URLSearchParams(search || '');
-    if (page > 0) params.set('runs', String(page + 1));
+    const all = runs || [];
+    const s = clampStart(start, all.length);
+    if (s > 0) params.set('runs', String(all[s].id));
     else params.delete('runs');
-    const s = params.toString();
-    return s ? `?${s}` : '';
+    const out = params.toString();
+    return out ? `?${out}` : '';
   }
 
   /**
@@ -153,7 +191,7 @@
   }
 
   return {
-    PAGE_SIZE, pageCount, clampPage, windowOf, hasReport, reportsKept, isLegacyCount, reportPath, runChip, latestRunReportPath,
-    parsePageParam, withPageParam, slotsFor, recentSummary,
+    PAGE_SIZE, pageCount, clampPage, clampStart, windowAt, windowOf, hasReport, reportsKept, isLegacyCount, reportPath,
+    runChip, latestRunReportPath, startFromSearch, searchForStart, slotsFor, recentSummary,
   };
 });

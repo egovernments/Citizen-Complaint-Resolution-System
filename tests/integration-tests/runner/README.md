@@ -57,9 +57,19 @@ or each kind prunes to its own.
 Both dashboards show the runs **five at a time, newest first**, with
 **‹ Newer / Older ›** and a "runs 6–10 of 30" indicator: the run chips (v1 top
 bar), the per-test dots and the per-test run history follow the window, and so
-does the v2 home page's run trend. The page is kept across refreshes: v1 in the
-URL (`?runs=2`), v2 in the react-admin store (localStorage), shared by its list,
-test and home views.
+does the v2 home page's run trend.
+
+- **v1** names any window but the newest in the URL by its newest run,
+  `?runs=2026-10-07_1020_bcf55fd61`, so a refresh or a shared link shows the
+  same runs after newer runs arrive (the window then reads e.g. "runs 7–11").
+  A link to a run that has aged out of the 30 opens the oldest runs; the old
+  `?runs=<page>` form still works and is rewritten to a run id. Without the
+  parameter the dashboard shows the newest runs.
+- **v2** keeps the page for the browser tab (sessionStorage), shared by its
+  list, test and home views, together with the newest run at the time. Once a
+  newer run is in the catalog, or in a new tab, it starts on the newest runs
+  again: the dots and run history never stay on old runs while the status
+  column next to them already shows a newer one.
 
 What each summary covers:
 

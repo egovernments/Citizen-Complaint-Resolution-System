@@ -23,8 +23,10 @@ const v1 = require('../dashboard/run-window.js') as {
   windowOf<T>(runs: T[], page: unknown): { page: number; pages: number; total: number; first: number; last: number; runs: T[]; hasNewer: boolean; hasOlder: boolean; label: string };
   hasReport(run: unknown): boolean;
   reportsKept(runs: unknown[]): number;
-  parsePageParam(search: string): number;
-  withPageParam(search: string, page: number): string;
+  clampStart(start: unknown, total: number): number;
+  windowAt<T>(runs: T[], start: unknown): { start: number; pages: number; total: number; first: number; last: number; runs: T[]; hasNewer: boolean; hasOlder: boolean; label: string };
+  startFromSearch(search: string, runs: Array<{ id: string }>): number;
+  searchForStart(search: string, runs: Array<{ id: string }>, start: number): string;
   isLegacyCount(run: unknown): boolean;
   reportPath(runId: string): string;
   runChip(run: unknown, latestId: string): { href: string | null; pruned: boolean; legacy: boolean; latest: boolean; cls: string; label: string; stats: string };
@@ -102,17 +104,97 @@ for (const impl of impls) {
   });
 }
 
-test('v1 run-window.js: the ?runs= page survives a refresh and leaves other params alone', () => {
-  assert.equal(v1.parsePageParam(''), 0);
-  assert.equal(v1.parsePageParam('?runs=1'), 0);
-  assert.equal(v1.parsePageParam('?runs=3'), 2);
-  assert.equal(v1.parsePageParam('?x=1&runs=6'), 5);
-  for (const junk of ['?runs=0', '?runs=-2', '?runs=abc', '?runs=']) assert.equal(v1.parsePageParam(junk), 0, junk);
-  assert.equal(v1.withPageParam('', 2), '?runs=3');
-  assert.equal(v1.withPageParam('?runs=3', 0), '');
-  assert.equal(v1.withPageParam('?x=1', 1), '?x=1&runs=2');
-  assert.equal(v1.withPageParam('?x=1&runs=4', 0), '?x=1');
-  for (const p of [0, 1, 5]) assert.equal(v1.parsePageParam(v1.withPageParam('?x=1', p)), p);
+// ---------------------------------------------------------------------------
+// v1: a window in the URL is named by its newest run, so a link is stable.
+// ---------------------------------------------------------------------------
+
+/** `n` run ids in the minted format, newest first, six hours apart, the newest at `newest` hours. */
+const mintedRuns = (n: number, newest = 1000) => Array.from({ length: n }, (_, i) => {
+  const d = new Date(Date.UTC(2026, 8, 1) + (newest - i) * 6 * 3_600_000);
+  const p2 = (x: number) => String(x).padStart(2, '0');
+  return { id: `${d.getUTCFullYear()}-${p2(d.getUTCMonth() + 1)}-${p2(d.getUTCDate())}_${p2(d.getUTCHours())}${p2(d.getUTCMinutes())}_sha${newest - i}` };
+});
+const idsOf = (rs: Array<{ id: string }>) => rs.map(r => r.id);
+
+test('v1 run-window.js: ?runs=<run id> round-trips, leaves other params alone, and the newest window has no param', () => {
+  const all = mintedRuns(30);
+  assert.equal(v1.searchForStart('', all, 0), '');
+  assert.equal(v1.searchForStart('?runs=' + all[7].id, all, 0), '', 'back on the newest window the param goes');
+  assert.equal(v1.searchForStart('?x=1', all, 5), `?x=1&runs=${all[5].id}`);
+  for (const start of [0, 1, 5, 7, 25, 29]) {
+    assert.equal(v1.startFromSearch(v1.searchForStart('?x=1', all, start), all), start, `start ${start}`);
+  }
+  assert.equal(v1.startFromSearch('', all), 0);
+});
+
+test('v1 run-window.js: a shared ?runs=<run id> link shows the same runs after newer runs arrive', () => {
+  const before = mintedRuns(30);
+  const link = v1.searchForStart('', before, 10);
+  const shown = idsOf(v1.windowAt(before, v1.startFromSearch(link, before)).runs);
+  assert.deepEqual(shown, idsOf(before.slice(10, 15)));
+  // three more runs: everything shifts down by three, the oldest three age out
+  const after = [...mintedRuns(3, 1003), ...before].slice(0, 30);
+  const start = v1.startFromSearch(link, after);
+  assert.equal(start, 13);
+  const w = v1.windowAt(after, start);
+  assert.deepEqual(idsOf(w.runs), shown);
+  assert.equal(w.label, 'runs 14–18 of 30');
+});
+
+test('v1 run-window.js: a link to a run that aged out opens the oldest runs; junk opens the newest', () => {
+  const all = mintedRuns(30);
+  const agedOut = mintedRuns(1, 1000 - 40)[0].id;   // older than every kept run
+  assert.equal(v1.startFromSearch(`?runs=${agedOut}`, all), 25);
+  assert.deepEqual(idsOf(v1.windowAt(all, 25).runs), idsOf(all.slice(25)));
+  assert.equal(v1.startFromSearch(`?runs=${agedOut}`, all.slice(0, 3)), 0, 'three runs: the oldest window is the only one');
+  // an id between two kept runs (e.g. a run that never published) opens at the next older kept run
+  const between = all[4].id.replace(/_sha\d+$/, '_zzz').replace(/_(\d{2})(\d{2})_/, (_m, h, m) => `_${h}${String(Number(m) + 1).padStart(2, '0')}_`);
+  assert.equal(v1.startFromSearch(`?runs=${between}`, all), 4);
+  for (const junk of ['?runs=abc', '?runs=', '?runs=%20', '?runs=../x']) assert.equal(v1.startFromSearch(junk, all), 0, junk);
+});
+
+test('v1 run-window.js: old ?runs=<page> links still open that page', () => {
+  const all = mintedRuns(30);
+  assert.equal(v1.startFromSearch('?runs=1', all), 0);
+  assert.equal(v1.startFromSearch('?runs=3', all), 10);
+  assert.equal(v1.startFromSearch('?x=1&runs=6', all), 25);
+  assert.equal(v1.startFromSearch('?runs=99', all), 25, 'past the end: the oldest page');
+  for (const junk of ['?runs=0', '?runs=-2']) assert.equal(v1.startFromSearch(junk, all), 0, junk);
+  // and they are rewritten to the stable form
+  assert.equal(v1.searchForStart('?runs=3', all, v1.startFromSearch('?runs=3', all)), `?runs=${all[10].id}`);
+});
+
+test('v1 run-window.js: a window can start at any run; Newer/Older move it by five', () => {
+  const all = runs(31);
+  const w = v1.windowAt(all, 7);
+  assert.deepEqual(idsOf(w.runs), ['run-8', 'run-9', 'run-10', 'run-11', 'run-12']);
+  assert.deepEqual([w.start, w.first, w.last, w.label, w.hasNewer, w.hasOlder], [7, 8, 12, 'runs 8–12 of 31', true, true]);
+  const tail = v1.windowAt(all, 27);
+  assert.deepEqual([tail.label, tail.hasOlder, tail.runs.length], ['runs 28–31 of 31', false, 4]);
+  assert.equal(v1.windowAt(all, 26).hasOlder, false, 'runs 27–31 are the oldest five');
+  assert.equal(v1.windowAt(all, 25).hasOlder, true);
+  assert.equal(v1.windowAt(all, 0).hasNewer, false);
+  for (const junk of [-1, NaN, 'x', undefined]) assert.equal(v1.clampStart(junk, 31), 0, String(junk));
+  assert.equal(v1.clampStart(99, 31), 30);
+  assert.equal(v1.clampStart(3, 0), 0);
+  assert.deepEqual(v1.windowAt([], 4).label, 'no runs');
+});
+
+// ---------------------------------------------------------------------------
+// v2: the stored page only holds while no newer run has arrived.
+// ---------------------------------------------------------------------------
+
+test('v2 runWindow.ts: the stored page holds until a newer run arrives, then the newest runs show', () => {
+  const stored = (page: unknown, lastRunId: unknown) => JSON.stringify({ page, lastRunId });
+  assert.equal(v2.pageFor(stored(3, 'run-a'), 'run-a', 30), 3);
+  assert.equal(v2.pageFor(stored(3, 'run-a'), 'run-b', 30), 0, 'a newer run: back to the newest page');
+  assert.equal(v2.pageFor(stored(9, 'run-a'), 'run-a', 12), 2, 'clamped to the pages there are');
+  assert.equal(v2.pageFor(null, 'run-a', 30), 0, 'nothing stored (new tab)');
+  assert.equal(v2.pageFor(stored(3, 'run-a'), undefined, 0), 0, 'catalog still loading');
+  assert.equal(v2.pageFor(JSON.stringify({ page: 2 }), undefined, 30), 0, 'no newest run to compare against');
+  for (const junk of ['{', '3', 'null', '"x"', stored('x', 'run-a'), stored(-2, 'run-a'), JSON.stringify({ page: 2 })]) {
+    assert.equal(v2.pageFor(junk, 'run-a', 30), 0, junk);
+  }
 });
 
 const history = [
