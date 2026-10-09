@@ -316,9 +316,10 @@ enable_integration_tests_runner: false
 #   now skipped      skipped now, passed last time it ran
 #   stopped running  passed in the previous run, no result now (e.g. the run
 #                    was cut short by its global timeout, or setup failed)
-# plus, for context, the ones that were fixed. One mail per run at most, and
-# only on a change: a test that stays red is not mailed again, and the first
-# poll on a box only records a baseline. Needs enable_integration_tests: true
+# plus, for context, the ones that were fixed. Only on a change: a test that
+# stays red is not mailed again, and the first poll on a box only records a
+# baseline. At most one mail per poll (several runs to report go out as one
+# digest), and never the same mail twice. Needs enable_integration_tests: true
 # (the timer reads /var/www/integration-tests). The script is plain Node:
 # tests/integration-tests/scripts/regression-alert.mjs. Runbook, dry-run and
 # troubleshooting: tests/integration-tests/runner/README.md.
