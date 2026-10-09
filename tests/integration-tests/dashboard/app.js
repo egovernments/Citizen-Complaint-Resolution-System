@@ -64,9 +64,6 @@ function ranInLatest(t) {
   return !!(h0 && h0.runId === state.catalog.lastRunId && h0.status !== 'interrupted');
 }
 
-/** A run summary written before not-run tracking: its counts may include carried-over results. */
-function isLegacyCount(r) { return typeof r.notRun !== 'number'; }
-
 /** Latest-run status: lastStatus when it ran, else 'notrun' (or 'never' if it has no result at all). */
 function displayStatus(t) {
   if (ranInLatest(t)) return t.lastStatus || 'never';
@@ -156,23 +153,18 @@ function renderRunSwitcher() {
   const kept = RW.reportsKept(all);
   const latestId = state.catalog.lastRunId;
   const chips = win.runs.map(r => {
-    const isLatest = r.id === latestId;
-    const ago = relTime(r.startedAt);
-    const legacy = isLegacyCount(r);
-    const pruned = !RW.hasReport(r);
-    const summary = `${legacy ? '≈' : ''}${r.passed}/${r.total} pass${r.cutShort ? ' ⚠' : ''}`;
-    const tooltip = `${r.id} · ${ago} · ${r.passed}p ${r.failed}f ${r.skipped}s` +
+    const chip = RW.runChip(r, latestId); // link or not: decided (and unit-tested) in run-window.js
+    const tooltip = `${r.id} · ${relTime(r.startedAt)} · ${r.passed}p ${r.failed}f ${r.skipped}s` +
       (r.notRun ? ` ${r.notRun} not run` : '') + (r.cutShort ? ` · cut short: ${r.cutShort}` : '') +
-      (legacy ? ' · legacy count: recorded before not-run tracking, may include results carried over from older runs' : '') +
-      (pruned ? ` · report pruned: only the newest ${kept} runs keep their report, video and traces` : '');
-    const cls = `run-chip${isLatest ? ' latest' : ''}${legacy ? ' legacy' : ''}${pruned ? ' pruned' : ''}`;
-    const body = `${isLatest ? '★ ' : ''}${escapeHtml(r.id.split('_').slice(0,2).join(' '))}
-       <span class="run-chip-stats">${summary}${pruned ? ' · report pruned' : ''}</span>`;
-    return pruned
-      ? `<span class="${cls}" title="${escapeAttr(tooltip)}">${body}</span>`
-      : `<a class="${cls}" target="_blank" rel="noopener"
-       href="runs/${escapeAttr(r.id)}/playwright-report/index.html"
-       title="${escapeAttr(tooltip)}">${body}</a>`;
+      (chip.legacy ? ' · legacy count: recorded before not-run tracking, may include results carried over from older runs' : '') +
+      (chip.pruned ? ` · report pruned: only the newest ${kept} runs keep their report, video and traces` : '');
+    const body = `${escapeHtml(chip.label)}
+       <span class="run-chip-stats">${escapeHtml(chip.stats)}</span>`;
+    return chip.href
+      ? `<a class="${chip.cls}" target="_blank" rel="noopener"
+       href="${escapeAttr(chip.href)}"
+       title="${escapeAttr(tooltip)}">${body}</a>`
+      : `<span class="${chip.cls}" title="${escapeAttr(tooltip)}">${body}</span>`;
   }).join('');
   el.innerHTML = `<span class="run-switcher-label">Runs:</span>
     <button type="button" class="run-pager" id="runs-newer" ${win.hasNewer ? '' : 'disabled'} title="Show the five newer runs">‹ Newer</button>
@@ -385,9 +377,9 @@ function renderDetail(id) {
   const trace = (lr && lr.traceUrl)
     ? `<a href="${escapeAttr(lr.traceUrl)}" target="_blank">Open trace.zip</a>`
     : '';
-  const lrRun = lr && (state.catalog.runs || []).find(r => r.id === lr.runId);
-  const reportLink = (lr && lr.runId && (!lrRun || RW.hasReport(lrRun)))
-    ? `<a href="runs/${escapeAttr(lr.runId)}/playwright-report/index.html" target="_blank">Open Playwright report</a>`
+  const reportHref = RW.latestRunReportPath(lr, state.catalog.runs);
+  const reportLink = reportHref
+    ? `<a href="${escapeAttr(reportHref)}" target="_blank">Open Playwright report</a>`
     : '';
   const description = t.description
     ? `<div class="section"><h4>Description</h4><div class="description-body">${descriptionToHtml(t.description)}</div></div>`

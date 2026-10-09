@@ -12,8 +12,3 @@ export function rootedUrl(rel: string | null | undefined): string | undefined {
   const base = import.meta.env.BASE_URL || '/';
   return `${base}${rel}`.replace(/\/{2,}/g, '/');
 }
-
-/** A run's standalone Playwright HTML report (only valid while the run has its report). */
-export function reportUrl(runId: string): string | undefined {
-  return rootedUrl(`runs/${runId}/playwright-report/index.html`);
-}

@@ -26,9 +26,10 @@ let cache: Promise<Catalog> | null = null;
  * run" — so components read one field instead of each re-deriving it from
  * lastStatus (which is only the last KNOWN result, possibly from an older run).
  * runSlots covers every run the catalog keeps (up to 30); the views page
- * through it five at a time (runWindow.ts).
+ * through it five at a time (runWindow.ts). Exported for
+ * scripts/dashboard-run-window.test.ts.
  */
-function normalize(c: Catalog): Catalog {
+export function normalize(c: Catalog): Catalog {
   c.runs.forEach((r, i) => { r.position = i; }); // builder writes newest first
   const runIds = c.runs.map(r => r.id);
   for (const t of c.tests) {
