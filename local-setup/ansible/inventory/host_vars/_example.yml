@@ -1140,6 +1140,15 @@ status_basic_auth_user: digit-status
 # kong_cors_origins:
 #   - "https://{{ domain }}"
 #   - "https://analytics.example.org"
+#
+# DEV tenant only — a configurator running on a developer's machine
+# (`VITE_ONBOARDING_API_ORIGIN=https://<domain> npm run dev`, see
+# configurator/README.md) needs its origin here AND in identity_allowed_origins,
+# plus these two flags, because its onboarding calls are cross-site and carry
+# the identity BFF's session cookie. Not for production: any page served from a
+# listed origin can then act as whoever is signed in on that browser.
+# kong_cors_credentials: false
+# identity_cookie_same_site: "Lax"          # "None" for the dev case above
 
 # ==================== nginx security headers ====================
 # X-Content-Type-Options, X-Frame-Options, Referrer-Policy and HSTS (when

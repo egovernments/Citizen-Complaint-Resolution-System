@@ -1735,6 +1735,10 @@
     # after this can't leave it live. (Vinoth review: previously pinned ~190
     # lines after up -d, opening the window on every image-pin-recreate redeploy.)
     # Override with `kong_cors_origins` in host_vars for extra origins.
+    # `kong_cors_credentials: true` adds `credentials: true` after the pinned
+    # list, for a cross-site dev frontend whose onboarding calls carry the
+    # identity BFF cookie. Safe only because the wildcard assert below still
+    # holds: Kong then echoes listed origins, never an arbitrary one.
     #
     # kong.yml is a single-file bind mount, so the edit MUST preserve the inode
     # (#1683). ansible.builtin.replace os.rename()s a temp file over it (new
@@ -1755,7 +1759,7 @@
       ansible.builtin.replace:
         path: "{{ digit_dir }}/kong/.kong.yml.pinned"
         regexp: "(origins:\\s+# kong-cors-origins-marker\\n)(?:[ \\t]*-[ \\t]*.*\\n)+"
-        replace: "\\1{% for o in (kong_cors_origins | default([ ('https://' if (tls_enabled | default(true)) else 'http://') ~ domain ])) %}    - '{{ o }}'\n{% endfor %}"
+        replace: "\\1{% for o in (kong_cors_origins | default([ ('https://' if (tls_enabled | default(true)) else 'http://') ~ domain ])) %}    - '{{ o }}'\n{% endfor %}{% if kong_cors_credentials | default(false) | bool %}    credentials: true\n{% endif %}"
       register: kong_cors_pin
 
     # Real OTP: the two request-termination mocks on /user-otp and /otp must go, or

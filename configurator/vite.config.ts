@@ -5,7 +5,10 @@ import path from 'path'
 // Local Compose Kong defaults to 18000. For an SSH tunnel override:
 //   PROXY_PORT=18280 vite
 //   ssh -N -L 18280:127.0.0.1:18000 <host>
-const PROXY_TARGET = `http://127.0.0.1:${process.env.PROXY_PORT || '18000'}`
+// Or proxy straight to a deployed tenant's public origin, which also reaches
+// paths nginx serves outside Kong (e.g. /turbopass):
+//   PROXY_TARGET=https://<tenant-domain> vite
+const PROXY_TARGET = process.env.PROXY_TARGET || `http://127.0.0.1:${process.env.PROXY_PORT || '18000'}`
 
 const apiProxy = {
   target: PROXY_TARGET,
