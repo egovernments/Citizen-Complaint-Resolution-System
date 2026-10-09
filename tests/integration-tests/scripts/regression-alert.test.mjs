@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   runsToProcess, analyzeRun, needsAlert, composeMail, composeStaleMail,
-  buildMessage, curlInvocation, readConfig, bareAddress, tick, retryDelayMs,
+  buildMessage, curlInvocation, readConfig, bareAddress, tick, retryDelayMs, classifySendError, sendMail,
 } from './regression-alert.mjs';
 
 const R1 = '2026-10-04_1542_aaaa1111';
@@ -155,7 +155,7 @@ test('tick: a new run with regressions mails once and advances; the next tick is
 test('tick: a failed send keeps the run and retries after a growing pause', () => {
   const { cfg, state } = box(catalog, { lastRunId: R2 });
   const t0 = Date.parse('2026-10-09T03:09:00Z');
-  const fail = () => { throw new Error('curl exited 67 (last SMTP reply 454)'); };
+  const fail = () => { throw Object.assign(new Error('curl exited 7: Failed to connect'), { curlExit: 7, reply: '' }); };
   const sent = [];
   const ok = (_c, s) => { sent.push(s); return '250'; };
   assert.equal(tick({ cfg, opts: {}, now: t0, send: fail }), 1);
@@ -174,8 +174,68 @@ test('tick: a failed send keeps the run and retries after a growing pause', () =
   assert.equal(state().retryAfter, undefined);
 });
 
-test('retryDelayMs: 5, 10, 20, 40 minutes, then hourly', () => {
+test('retryDelayMs: 5, 10, 20, 40 minutes, then hourly; a throttled login 1, 2, then 4 hours', () => {
   assert.deepEqual([1, 2, 3, 4, 5, 12].map(n => retryDelayMs(n) / 60_000), [5, 10, 20, 40, 60, 60]);
+  assert.deepEqual([1, 2, 3, 4, 9].map(n => retryDelayMs(n, 'throttled') / 60_000), [60, 120, 240, 240, 240]);
+});
+
+test('classifySendError: a 4xx to AUTH is a throttle, a 5xx a rejected login', () => {
+  const err = (curlExit, reply) => Object.assign(new Error('x'), { curlExit, reply });
+  assert.equal(classifySendError(err(67, '454')), 'throttled'); // Gmail: Too many login attempts
+  assert.equal(classifySendError(err(67, '535')), 'rejected');  // Gmail: Username and Password not accepted
+  assert.equal(classifySendError(err(67, '534')), 'rejected');  // Gmail: Application-specific password required
+  assert.equal(classifySendError(err(7, '')), 'other');         // could not connect
+  assert.equal(classifySendError(err(55, '550')), 'other');     // a refused recipient is not a login problem
+  assert.equal(classifySendError(new Error('spawn curl ENOENT')), 'other');
+});
+
+test('sendMail: hands curl\'s exit code and the relay\'s reply to the caller (fake curl on PATH)', () => {
+  const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'ra-curl-'));
+  const fake = (reply, code) => fs.writeFileSync(path.join(bin, 'curl'),
+    `#!/bin/sh\ncat >/dev/null\nprintf '%s' '${reply}'\n[ ${code} -eq 0 ] || echo 'curl: (${code}) Login denied' >&2\nexit ${code}\n`, { mode: 0o755 });
+  const cfg = { smtpUrl: 'smtp://h:587', starttls: true, smtpUser: 'u@x.org', smtpPass: 'p', from: 'a@x.org', to: ['r@x.org'] };
+  const savedPath = process.env.PATH;
+  process.env.PATH = `${bin}:${savedPath}`;
+  try {
+    fake('250', 0);
+    assert.equal(sendMail(cfg, 's', 't'), '250');
+    fake('454', 67);
+    assert.throws(() => sendMail(cfg, 's', 't'), e => e.curlExit === 67 && e.reply === '454'
+      && classifySendError(e) === 'throttled' && /last SMTP reply 454/.test(e.message));
+  } finally {
+    process.env.PATH = savedPath;
+  }
+});
+
+function captureLog(fn) {
+  const lines = [];
+  const orig = console.log;
+  console.log = (...m) => lines.push(m.join(' '));
+  try { return { result: fn(), lines }; } finally { console.log = orig; }
+}
+
+test('tick: a throttled login says so, and waits an hour before the next login', () => {
+  const { cfg, state } = box(catalog, { lastRunId: R2 });
+  const t0 = Date.parse('2026-10-09T03:09:00Z');
+  const throttled = () => { throw Object.assign(new Error('curl exited 67 (last SMTP reply 454): curl: (67) Login denied'), { curlExit: 67, reply: '454' }); };
+  const { result, lines } = captureLog(() => tick({ cfg, opts: {}, now: t0, send: throttled }));
+  assert.equal(result, 1);
+  assert.equal(state().sendFailure, 'throttled');
+  assert.equal(state().retryAfter, new Date(t0 + 60 * 60_000).toISOString());
+  assert.match(lines.join('\n'), /send failed \(1 in a row, login throttled\)/);
+  assert.match(lines.join('\n'), /Too many login attempts.*not necessarily a wrong password/s);
+  const later = captureLog(() => tick({ cfg, opts: {}, now: t0 + 30 * 60_000, send: () => assert.fail('must not log in') }));
+  assert.match(later.lines.join('\n'), /holding off until .* \(the relay is throttling logins\)/);
+});
+
+test('tick: a rejected login points at the credentials and keeps the short backoff', () => {
+  const { cfg, state } = box(catalog, { lastRunId: R2 });
+  const t0 = Date.parse('2026-10-09T03:09:00Z');
+  const rejected = () => { throw Object.assign(new Error('curl exited 67 (last SMTP reply 535)'), { curlExit: 67, reply: '535' }); };
+  const { lines } = captureLog(() => tick({ cfg, opts: {}, now: t0, send: rejected }));
+  assert.equal(state().sendFailure, 'rejected');
+  assert.equal(state().retryAfter, new Date(t0 + 5 * 60_000).toISOString());
+  assert.match(lines.join('\n'), /login rejected.*app password/s);
 });
 
 test('tick: a half-written catalog is skipped without touching state', () => {

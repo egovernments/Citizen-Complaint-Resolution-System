@@ -84,10 +84,18 @@ How it behaves:
   own predecessor, oldest first.
 - **A failed send** (SMTP down, bad password) leaves the run unhandled, so a
   later poll retries it. Nothing is lost, and nothing is sent twice. Retries
-  back off (5, 10, 20, 40 minutes, then hourly), because a relay that throttles
-  logins, like Gmail's `454 4.7.0 Too many login attempts`, stays throttled
-  when it is retried every poll. The journal shows each attempt and the relay's
-  reply code (`SMTP 250` once it accepted the message).
+  back off: 5, 10, 20, 40 minutes, then hourly. The journal shows each attempt
+  and the relay's reply code (`SMTP 250` once it accepted the message). Two
+  login failures get their own message:
+  - **`login throttled`** (a 4xx to AUTH, e.g. Gmail's `454 4.7.0 Too many
+    login attempts`): the relay has locked logins to the sender account for a
+    while. That is not necessarily a wrong password, and every attempt can
+    extend the lock, so retries wait 1, 2, then 4 hours. Check the sender
+    account for a security alert or lock, and don't retry by hand (each
+    `curl`/probe is another attempt).
+  - **`login rejected`** (a 5xx to AUTH, e.g. `535 5.7.8`): the user or password
+    is wrong, or the account needs an app password (Gmail/Workspace: 2-Step
+    Verification on, then an app password). Fix the setting and redeploy.
 - **Optional watchdog:** with `test_alerts_stale_after_hours` > 0 it also mails
   once when no new run has appeared for that long, e.g. because the nightly
   redeploy failed its smoke check and never started the tests.
