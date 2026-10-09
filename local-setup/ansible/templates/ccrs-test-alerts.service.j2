@@ -16,7 +16,10 @@ Type=oneshot
 DynamicUser=yes
 StateDirectory=ccrs-test-alerts
 EnvironmentFile=/etc/ccrs-test-alerts.env
-ExecStart=/usr/bin/env node {{ integration_tests_dir }}/scripts/regression-alert.mjs
+# A root-owned copy the deploy refreshes, not the script in the checkout: the
+# checkout belongs to the test-runner account, and this process holds the
+# SMTP password (see "copy the poll script" in playbook-deploy.yml).
+ExecStart=/usr/bin/env node {{ _test_alerts_lib }}/regression-alert.mjs
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict

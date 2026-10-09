@@ -5270,7 +5270,9 @@
     # existing one put it with `bao kv patch {{ secrets_path }}
     # test_alerts_smtp_password=…`. A missing required setting leaves alerts OFF
     # with a warning: a mail misconfiguration must not fail the whole deploy.
-    # Runbook: tests/integration-tests/runner/README.md.
+    # The poll runs a root-owned COPY of the script (see "copy the poll
+    # script" below), never the checkout itself. Runbook:
+    # tests/integration-tests/runner/README.md.
     - name: "integration-tests alerts — resolve the SMTP password (host_vars, else OpenBao)"
       ansible.builtin.set_fact:
         _test_alerts_smtp_pw: >-
@@ -5306,6 +5308,8 @@
              and (_test_alerts_missing | default(['off']) | length == 0)
              and (integration_tests_dir is defined)
              and ansible_system != 'Darwin' }}
+        # Where the poll script runs from: root-owned, outside the checkout.
+        _test_alerts_lib: /usr/local/lib/ccrs-test-alerts
 
     - name: "integration-tests alerts — env file (root-only; holds the SMTP password)"
       ansible.builtin.template:
@@ -5315,6 +5319,38 @@
         group: root
         mode: "0600"
       no_log: true
+      when: _test_alerts_on | bool
+
+    # The poll's environment holds the SMTP password, so the code it runs must
+    # be writable by root only. The checkout is not: "integration-tests runner
+    # — own its checkout and webroot" above hands integration_tests_dir to the
+    # runner account, which also runs the Playwright suite and the RUN-button
+    # daemon. Running the script from there would let anything running as that
+    # account edit it and read the password on the next poll. So the deploy
+    # copies it to a root-owned directory and the unit runs that copy; it is
+    # refreshed on every deploy (nothing to restart: each poll is a fresh
+    # process). This also keeps the poll clear of the checkout's location: the
+    # unit's ProtectHome=true hides /home, where a checkout may live.
+    - name: "integration-tests alerts — root-owned directory for the poll script"
+      ansible.builtin.file:
+        path: "{{ _test_alerts_lib }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      when: _test_alerts_on | bool
+
+    - name: "integration-tests alerts — copy the poll script out of the runner-owned checkout"
+      ansible.builtin.copy:
+        src: "{{ integration_tests_dir }}/scripts/regression-alert.mjs"
+        dest: "{{ _test_alerts_lib }}/regression-alert.mjs"
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0644"
+      # In --check mode (deploy.sh --check) the directory above was not
+      # actually created on a first enable; a real run creates it first.
+      ignore_errors: "{{ ansible_check_mode }}"
       when: _test_alerts_on | bool
 
     - name: "integration-tests alerts — install the poll service and its timer"
@@ -5338,8 +5374,8 @@
       ignore_errors: "{{ ansible_check_mode }}"
       when: _test_alerts_on | bool
 
-    # Turning alerts off (or never having them) must leave no timer running and
-    # no password on disk.
+    # Turning alerts off (or never having them) must leave no timer running, no
+    # password on disk, and nothing of the alerts installed.
     - name: "integration-tests alerts — off: stop + disable the timer if present"
       ansible.builtin.systemd:
         name: ccrs-test-alerts.timer
@@ -5350,13 +5386,27 @@
         - not (_test_alerts_on | bool)
         - ansible_system != "Darwin"
 
-    - name: "integration-tests alerts — off: remove the env file"
+    - name: "integration-tests alerts — off: remove the env file, the units and the script copy"
       ansible.builtin.file:
-        path: /etc/ccrs-test-alerts.env
+        path: "{{ item }}"
         state: absent
+      loop:
+        - /etc/ccrs-test-alerts.env
+        - /etc/systemd/system/ccrs-test-alerts.timer
+        - /etc/systemd/system/ccrs-test-alerts.service
+        - "{{ _test_alerts_lib }}"
+      register: _test_alerts_removed
       when:
         - not (_test_alerts_on | bool)
         - ansible_system != "Darwin"
+
+    - name: "integration-tests alerts — off: reload systemd after removing the units"
+      ansible.builtin.systemd:
+        daemon_reload: true
+      when:
+        - not (_test_alerts_on | bool)
+        - ansible_system != "Darwin"
+        - _test_alerts_removed is changed
 
     # Host nginx (Linux) — package install + /etc/nginx site. Skipped on
     # macOS, where nginx runs as a container instead (next block).
