@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   runsToProcess, analyzeRun, needsAlert, composeMail, composeStaleMail,
-  buildMessage, curlInvocation, readConfig, bareAddress, tick, retryDelayMs, classifySendError, sendMail,
+  buildMessage, curlInvocation, readConfig, bareAddress, tick, retryDelayMs, classifySendError, sendMail, curlEnv,
 } from './regression-alert.mjs';
 
 const R1 = '2026-10-04_1542_aaaa1111';
@@ -132,6 +132,7 @@ test('buildMessage: headers, encoded non-ASCII subject, base64 body that round-t
 test('curlInvocation: STARTTLS on smtp://, password only in the config file', () => {
   const cfg = { smtpUrl: 'smtp://smtp.example.org:587', starttls: true, smtpUser: 'u@x.org', smtpPass: 'p"a\\ss', from: 'A <a@x.org>' };
   const { args, config } = curlInvocation(cfg, ['r1@x.org', 'r2@x.org'], '/tmp/c.conf');
+  assert.equal(args[0], '--disable', 'first, so ~/.curlrc is never read');
   assert.ok(args.includes('--ssl-reqd'));
   assert.equal(args[args.indexOf('--write-out') + 1], '%{response_code}', 'the relay\'s reply code is logged');
   assert.deepEqual(args.filter((_, i) => args[i - 1] === '--mail-rcpt'), ['r1@x.org', 'r2@x.org']);
@@ -140,6 +141,10 @@ test('curlInvocation: STARTTLS on smtp://, password only in the config file', ()
   assert.equal(config, 'user = "u@x.org:p\\"a\\\\ss"\n');
   assert.ok(!curlInvocation({ ...cfg, smtpUrl: 'smtps://h:465' }, ['r@x'], '/c').args.includes('--ssl-reqd'));
   assert.equal(curlInvocation({ ...cfg, smtpUser: '' }, ['r@x'], '/c').config, '', 'no auth → no config file');
+});
+
+test('curlEnv: drops every ALERT_* variable, keeps the rest', () => {
+  assert.deepEqual(curlEnv({ PATH: '/bin', HOME: '/h', ALERT_SMTP_PASS: 's', ALERT_SMTP_USER: 'u', ALERT_TO: 'x' }), { PATH: '/bin', HOME: '/h' });
 });
 
 test('readConfig: recipients by comma or space; STATE_DIRECTORY; defaults', () => {
@@ -250,10 +255,14 @@ process.stdout.write(reply);
 if (code !== '0') process.stderr.write('curl: (' + code + ') Login denied\\n');
 process.exit(Number(code));
 `, { mode: 0o755 });
-  const saved = { PATH: process.env.PATH, TMPDIR: process.env.TMPDIR, FAKE_CURL: process.env.FAKE_CURL };
+  const saved = { PATH: process.env.PATH, TMPDIR: process.env.TMPDIR, FAKE_CURL: process.env.FAKE_CURL,
+    ALERT_SMTP_USER: process.env.ALERT_SMTP_USER, ALERT_SMTP_PASS: process.env.ALERT_SMTP_PASS };
   const tmp = tempDir(t, 'ra-tmpdir-');
   process.env.PATH = `${bin}${path.delimiter}${saved.PATH}`;
   process.env.TMPDIR = tmp; // sendMail's scratch dir goes here, so the test can see it is removed
+  // as on the box, where the unit's EnvironmentFile= puts the login in the poll's environment
+  process.env.ALERT_SMTP_USER = 'u@x.org';
+  process.env.ALERT_SMTP_PASS = 'env-secret';
   t.after(() => {
     for (const [k, v] of Object.entries(saved)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
   });
@@ -271,6 +280,9 @@ test('sendMail: hands curl\'s exit code and the relay\'s reply to the caller (fa
     && classifySendError(e) === 'throttled' && /last SMTP reply 454/.test(e.message));
   const [ok, failed] = calls();
   for (const c of [ok, failed]) {
+    assert.equal(c.args[0], '--disable');
+    assert.deepEqual(c.env.filter(k => k.startsWith('ALERT_')), [], 'no ALERT_* (password, login) in curl\'s environment');
+    assert.ok(c.env.includes('PATH'), 'the rest of the environment is passed on');
     assert.equal(c.configMode, '600', 'the file holding the password is private to the poll');
     assert.equal(c.config, 'user = "u@x.org:p\\"a\\\\ss"\n');
     assert.ok(!c.args.join(' ').includes('p"a'), 'password never on argv');

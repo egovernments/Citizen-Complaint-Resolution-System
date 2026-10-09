@@ -272,9 +272,12 @@ function curlQuote(v) {
  * config file (mode 0600), never on argv where `ps` would show it.
  */
 export function curlInvocation(cfg, recipients, configPath) {
+  // --disable must come first: it stops curl reading ~/.curlrc, where a stray
+  // `verbose` would print the AUTH exchange (the password, base64) into the
+  // error text and from there into the journal.
   // --write-out prints the server's last reply code (250 once it accepted the
   // message after DATA), so the log shows what the relay said, not just "sent".
-  const args = ['--silent', '--show-error', '--connect-timeout', '20', '--max-time', '90',
+  const args = ['--disable', '--silent', '--show-error', '--connect-timeout', '20', '--max-time', '90',
     '--write-out', '%{response_code}',
     '--url', cfg.smtpUrl, '--mail-from', bareAddress(cfg.from), '--upload-file', '-'];
   if (cfg.starttls && /^smtp:/i.test(cfg.smtpUrl)) args.push('--ssl-reqd');
@@ -285,6 +288,15 @@ export function curlInvocation(cfg, recipients, configPath) {
     args.push('--config', configPath);
   }
   return { args, config };
+}
+
+/**
+ * The environment curl runs with: ours minus every ALERT_* variable. curl reads
+ * the login from the 0600 config file; ALERT_SMTP_PASS / ALERT_SMTP_USER in its
+ * environment would only be one more place to leak them from.
+ */
+export function curlEnv(env = process.env) {
+  return Object.fromEntries(Object.entries(env).filter(([k]) => !k.startsWith('ALERT_')));
 }
 
 /**
@@ -299,7 +311,7 @@ export function sendMail(cfg, subject, text) {
   try {
     const { args, config } = curlInvocation(cfg, cfg.to, configPath);
     if (config) fs.writeFileSync(configPath, config, { mode: 0o600 });
-    const r = spawnSync('curl', args, { input: message, encoding: 'utf8', timeout: 120_000 });
+    const r = spawnSync('curl', args, { input: message, encoding: 'utf8', timeout: 120_000, env: curlEnv() });
     if (r.error) throw r.error;
     const reply = (r.stdout || '').trim();
     if (r.status !== 0) {
