@@ -1,0 +1,139 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opensre
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: opensre
+spec:
+  # One replica, always. Two would investigate the same failures twice and
+  # bill for both; the de-duplication state is per-pod.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: opensre
+  template:
+    metadata:
+      labels:
+        app: opensre
+      annotations:
+        # Roll the pod when the sweep loop or the redaction rules change.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      {{- if .Values.rbac.create }}
+      serviceAccountName: {{ .Values.rbac.serviceAccountName }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+        - name: opensre
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # The image's entrypoint runs its baked-in copy of the loop; run the
+          # ConfigMap copy instead, so a change to the sweep logic ships with
+          # the chart rather than needing a new image.
+          command: ["sh", "/opt/ccrs/run-sweeps.sh"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          env:
+            - name: OPENSRE_ENABLED
+              value: "true"
+            - name: OPENSRE_GATUS_URL
+              value: {{ .Values.endpoints.gatusUrl | quote }}
+            - name: OPENSRE_SWEEP_INTERVAL_MINUTES
+              value: {{ .Values.sweep.intervalMinutes | quote }}
+            - name: OPENSRE_DEDUPE_HOURS
+              value: {{ .Values.sweep.dedupeHours | quote }}
+            - name: OPENSRE_INVESTIGATION_TIMEOUT_SECONDS
+              value: {{ .Values.sweep.investigationTimeoutSeconds | quote }}
+            - name: LLM_PROVIDER
+              value: {{ .Values.model.provider | quote }}
+            - name: ANTHROPIC_REASONING_MODEL
+              value: {{ .Values.model.name | quote }}
+            - name: ANTHROPIC_TOOLCALL_MODEL
+              value: {{ .Values.model.name | quote }}
+            # Missing or empty secret keys leave these empty: the agent then
+            # logs that it is idle (no API key) or simply sees less (no Grafana
+            # token) instead of crash-looping.
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secret.name }}
+                  key: {{ .Values.secret.anthropicApiKeyKey }}
+                  optional: true
+            - name: GRAFANA_INSTANCE_URL
+              value: {{ .Values.endpoints.grafanaUrl | quote }}
+            - name: GRAFANA_READ_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secret.name }}
+                  key: {{ .Values.secret.grafanaTokenKey }}
+                  optional: true
+            - name: TEMPO_URL
+              value: {{ .Values.endpoints.tempoUrl | quote }}
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: {{ .Values.endpoints.kafkaBootstrapServers | quote }}
+            - name: KAFKA_SECURITY_PROTOCOL
+              value: {{ .Values.endpoints.kafkaSecurityProtocol | quote }}
+            # The sweep loop writes a kubeconfig from the projected service
+            # account token before every sweep; this is the namespace its
+            # context defaults to.
+            - name: KUBECONFIG_NAMESPACE
+              value: {{ .Values.rbac.defaultNamespace | quote }}
+            # No product analytics, no Sentry, no local prompt log.
+            - name: OPENSRE_NO_TELEMETRY
+              value: "1"
+            - name: OPENSRE_SENTRY_DISABLED
+              value: "1"
+            - name: OPENSRE_PROMPT_LOG_DISABLED
+              value: "1"
+            - name: HOME
+              value: /home/opensre
+            - name: TMPDIR
+              value: /tmp
+          volumeMounts:
+            - name: config
+              mountPath: /opt/ccrs
+              readOnly: true
+            {{- if .Values.runbook.configMapName }}
+            - name: runbook
+              mountPath: /opt/ccrs/known-issues.md
+              subPath: known-issues.md
+              readOnly: true
+            {{- end }}
+            # Writable paths, with the root filesystem read-only: the agent's
+            # own state (~/.opensre, ~/.kube), its log file, and scratch space.
+            - name: home
+              mountPath: /home/opensre
+            - name: logs
+              mountPath: /var/log/opensre
+            - name: tmp
+              mountPath: /tmp
+          resources:
+{{ toYaml .Values.resources | indent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: opensre
+            defaultMode: 0555
+        {{- if .Values.runbook.configMapName }}
+        - name: runbook
+          configMap:
+            name: {{ .Values.runbook.configMapName }}
+        {{- end }}
+        # The pod log is the durable record — cluster logging (and Loki, when
+        # the logs tier is on) collects it. These are working space only.
+        - name: home
+          emptyDir: {}
+        - name: logs
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}

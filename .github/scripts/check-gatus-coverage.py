@@ -109,6 +109,7 @@ COMPOSE_FILES = [
     LS / "docker-compose.tilt.yml",
     LS / "docker-compose.monitoring.yml",
     LS / "docker-compose.matomo.yml",
+    LS / "docker-compose.opensre.yml",
 ]
 K8S_DIR = LS / "k8s"
 GATUS_COMPOSE = LS / "gatus/config.yaml"
@@ -145,6 +146,7 @@ EXEMPT = {
     "otel-collector": "observability plumbing: telemetry pipeline, not a serving dependency",
     "node-exporter": "observability plumbing: host-metrics exporter (#1335), not a serving dependency; scraped by prometheus, absent from k3s tier and docker-compose.yml",
     "docker-socket-proxy": "observability plumbing: read-only Docker-socket broker (promtail/cadvisor read the daemon through it instead of mounting the raw socket — a hardening measure); exposes only the internal proxy port on the monitoring network, not a serving dependency, absent from k3s tier and docker-compose.yml",
+    "container-stats": "observability plumbing: per-container metrics collector (docker_stats via docker-socket-proxy); scraped by prometheus, not a serving dependency, absent from k3s tier (kubelet/cAdvisor covers it there) and docker-compose.yml",
     "postgres-exporter": "observability plumbing: database-metrics exporter (#1615), not a serving dependency; scraped by prometheus, absent from k3s tier and docker-compose.yml. The DATABASE it reads is already covered by the PostgreSQL check; this container going down costs metrics, not service.",
     # Deploy-time only: nothing declares depends_on openbao, and ansible reads its
     # secrets during the deploy and injects them as env, so a runtime outage does
@@ -169,6 +171,10 @@ EXEMPT = {
     # image and /healthz as digit-mcp, which the DIGIT MCP check already covers;
     # a public read-only instance is opt-in and not part of the default perimeter.
     "digit-mcp-readonly": "opt-in read-only variant of digit-mcp; same /healthz, covered by the DIGIT MCP check",
+    # Diagnose-only SRE agent (docker-compose.opensre.yml). A shell loop that
+    # calls Gatus's API and the OpenSRE CLI; it opens no listener, so there is
+    # nothing to probe, and it being down costs diagnoses, not service.
+    "opensre": "no port: diagnose-only agent loop, calls out to gatus/grafana/tempo/redpanda and listens on nothing",
 }
 
 # Suffixes that mark generated one-shot migration containers. These are created

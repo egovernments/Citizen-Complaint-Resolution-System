@@ -2293,11 +2293,15 @@ services:
     cap_drop: [ALL]
     image: tecnativa/docker-socket-proxy:0.3.0
     container_name: digit-docker-socket-proxy
-    profiles: [obs-logs]
+    # obs-metrics, not obs-logs: container-stats (docker-compose.monitoring.yml)
+    # reads per-container stats through it at the metrics level too. Levels are
+    # cumulative, so promtail (obs-logs) still finds it.
+    profiles: [obs-metrics]
     restart: unless-stopped
     environment:
       # Read-only container enumeration — exactly what promtail's
-      # docker_sd_configs calls (GET /containers/json, GET /containers/{id}/json).
+      # docker_sd_configs calls (GET /containers/json, GET /containers/{id}/json)
+      # and what container-stats reads (GET /containers/{id}/stats).
       CONTAINERS: "1"
       # Everything else explicitly denied. POST=0 is the important one: it
       # blocks every mutating call, including container create/start/exec.

@@ -10,6 +10,12 @@ scrape_configs:
     static_configs:
       - targets: ['otel-collector:8889']
 
+  # Per-container CPU/memory/network/block I/O, restarts and uptime from
+  # container-stats (docker-compose.monitoring.yml), labelled container_name.
+  - job_name: container-stats
+    static_configs:
+      - targets: ['container-stats:8890']
+
   # Host-level metrics (CPU/mem/disk/net) from node-exporter, added by the
   # docker-compose.monitoring.yml overlay (issue #1335). Reached by DNS name
   # over egov-network. Feeds the "Node Exporter Full" Grafana dashboard.

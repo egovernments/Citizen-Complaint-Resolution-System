@@ -38,6 +38,7 @@ The same components appear on both tiers under different names. What matters is 
 |---|---|---|
 | **Gatus** (compose) / **blackbox** (k8s) | Is it up? Can a citizen reach it? | You find out from users |
 | **Prometheus** + **node-exporter** | Is the box healthy? Is something leaking memory? Is the disk filling? | No capacity signal and no trend — you see the outage, never the run-up to it |
+| **container-stats** (compose) | Which container is using the memory or CPU? Is one restarting? | You know the box is short of memory, not which service took it |
 | **Grafana** | Somewhere to look | The data exists and nobody can read it |
 | **Loki** + **Promtail** | What did it actually say when it broke? | Errors are unreachable without SSH |
 | **OTEL collector** + **Tempo** | Where did this request spend its time, across services? | Cross-service latency is guesswork |
@@ -55,7 +56,7 @@ Set it in `host_vars/<tenant>.yml`. Levels are **cumulative** — each includes 
 
 | Level | Adds | Footprint |
 |---|---|---|
-| `metrics` | Prometheus, node-exporter, Grafana | ~1.2 GB |
+| `metrics` | Prometheus, node-exporter, container-stats, Grafana | ~1.2 GB |
 | `logs` | + Loki, Promtail | ~1.8 GB |
 | `traces` **(default)** | + Tempo | ~2.2 GB |
 
@@ -116,8 +117,8 @@ docker compose ps --format '{{.Name}}' | sort     # which containers actually st
 grep -E 'OTEL_(TRACES|METRICS)_EXPORTER' /opt/digit/.env
 ```
 
-Expect `digit-gatus` and `digit-otel-collector` at every level; Prometheus, Grafana and
-node-exporter from `metrics` up; Loki and Promtail from `logs` up; Tempo only at
+Expect `digit-gatus` and `digit-otel-collector` at every level; Prometheus, Grafana,
+node-exporter, container-stats and docker-socket-proxy from `metrics` up; Loki and Promtail from `logs` up; Tempo only at
 `traces`.
 
 At `metrics` and `logs`, `OTEL_TRACES_EXPORTER` is set to `none` — otherwise every Java service would keep shipping spans to a Tempo that is not running, and the collector would log export failures on a loop.
@@ -202,7 +203,7 @@ Being explicit, because a gap you chose is different from one you missed.
 
 **Ansible tier — nothing monitors the monitoring.** Not just Promtail and node-exporter:
 Gatus has no check for **any** of the seven observability services. `grafana`,
-`prometheus`, `loki`, `tempo`, `otel-collector` and `node-exporter` are all exempted in
+`prometheus`, `loki`, `tempo`, `otel-collector`, `node-exporter` and `container-stats` are all exempted in
 `.github/scripts/check-gatus-coverage.py` as *"observability plumbing … not a serving
 dependency"*, and `promtail` additionally exposes no HTTP listener to check. The
 reasoning is that these failing costs visibility, not service — but the consequence is
@@ -222,5 +223,6 @@ quietly.
 
 - `alerting-runbook.md` — what each alert means, what to do when it fires, and how to turn alerting on
 - `dashboard-metrics.md` — what the dashboard instrumentation measures, client and server side
+- `opensre.md` — the optional diagnose-only AI agent that investigates failing checks and logs its diagnosis
 - `local-setup/README.md` — what the Ansible playbook deploys
 - `local-setup/ansible/README.md` — deploy stages, including the health gates

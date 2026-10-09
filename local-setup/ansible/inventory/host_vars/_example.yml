@@ -364,6 +364,26 @@ enable_search_stack: false
 # matomo_archive_interval: 3600   # seconds between report-archiving passes
 # upstream_matomo_port: 18081     # loopback bind + the Host header nginx sends
 
+# ────────── OpenSRE (diagnose-only AI SRE agent) ──────────
+# An AI agent that reads this box's monitoring (Gatus, Prometheus and Loki via
+# Grafana, Tempo, Redpanda consumer lag) and, whenever Gatus shows checks
+# failing, writes a root-cause diagnosis to /opt/digit/opensre/logs/. It changes
+# nothing and sends no alerts. 1 GB memory cap.
+#
+# Needs a PROJECT-OWNED Anthropic API key in OpenBao (not a personal one):
+#   bao kv patch <secrets_path> opensre_anthropic_api_key=<key>
+# Without it the container starts and idles. The Grafana read token it also
+# needs is minted by the deploy. Tokens, phone numbers and emails in what it
+# reads are masked before they reach the model — local-setup/opensre/guardrails.yml.
+#
+# Tempo is only used at observability_level `traces`. Setting this back to
+# false removes the container; its logs stay on disk.
+# See docs/operations/monitoring/opensre.md.
+# enable_opensre: false
+# opensre_model: claude-opus-5          # model for investigations
+# opensre_sweep_interval_minutes: 15    # how often it checks Gatus (no model call when all green)
+# opensre_dedupe_hours: 6               # don't re-investigate the same failures within this window
+
 # Pull + start digit-mcp + mcp-postgres. The MCP server exposes a REST
 # shim on :3000 (POST /v1/tenant/bootstrap, POST /v1/tools/:name) that
 # the configurator/frontend uses for tenant onboarding. Serving that shim
