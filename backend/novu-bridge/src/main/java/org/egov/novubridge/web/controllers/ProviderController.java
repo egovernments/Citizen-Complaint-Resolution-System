@@ -542,9 +542,10 @@ public class ProviderController {
 
     /**
      * A live test through the same provider seam as dispatch. The subscriberId is derived from the
-     * input (no clock/random) so a re-test is reproducible. Writes one masked, {@code is_test} row
-     * at the operator's tenant. Refused first, with nothing sent and no row, when nothing could
-     * deliver it: {@link #requireDeliverable}.
+     * input (no clock/random), so a re-test reuses one test subscriber. The transactionId is new for
+     * every test unless the caller supplies one ({@link #freshTestTransactionId}). Writes one masked,
+     * {@code is_test} row at the operator's tenant. Refused first, with nothing sent and no row, when
+     * nothing could deliver it: {@link #requireDeliverable}.
      */
     @PostMapping("/providers/test-send")
     public ResponseEntity<Map<String, Object>> testSend(@RequestBody Map<String, Object> body) {
@@ -577,7 +578,7 @@ public class ProviderController {
         String recipient = StringUtils.hasText(phone) ? phone : email;
         String seed = StringUtils.hasText(txnInput) ? txnInput : (recipient != null ? recipient : upperChannel);
         String subscriberId = "nb-test-" + stableId(seed);
-        String transactionId = StringUtils.hasText(txnInput) ? txnInput : subscriberId;
+        String transactionId = StringUtils.hasText(txnInput) ? txnInput : freshTestTransactionId();
         String workflow = StringUtils.hasText(workflowId) ? workflowId
                 : ("EMAIL".equals(upperChannel) ? WORKFLOW_EMAIL : WORKFLOW_SMS);
 
@@ -616,6 +617,17 @@ public class ProviderController {
             out.put("warning", unchecked);
         }
         return ResponseEntity.ok(out);
+    }
+
+    /**
+     * A new transactionId for one test. Novu runs a transactionId once: a trigger that repeats one
+     * is still answered {@code 201 processed}, and the worker then drops it ("transactionId property
+     * is not unique"). With the id derived from the recipient, every Test after the first to the
+     * same number read {@code ok:true} and logged SENT for a message that never left. The UUID after
+     * an underscore is an id under the Logs masking ({@code PiiMask}), so it is shown whole.
+     */
+    static String freshTestTransactionId() {
+        return "nb-test_" + UUID.randomUUID();
     }
 
     /**
