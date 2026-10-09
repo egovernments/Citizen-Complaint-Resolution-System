@@ -19,14 +19,21 @@ initContainers:
   dbMigration:
     enabled: true
     schemaTable: "digit_user_preferences_service_schema"
+    # Same build as the app image below — see the tag note there.
     image:
       repository: "digit-user-preferences-service-db"
-      tag: "2.12-5137119"
+      tag: "nightly-develop"   # RELEASE STEP: the same tag as image.tag
+      pullPolicy: IfNotPresent   # Always while the tag is rolling (templates/deployment.yaml)
 
 # Container Configs
+# The Spring Boot build (#1982) exists only on develop. Every 2.12 / master tag of
+# this image (2.12-5137119, v2.12, master-*) is the retired Go binary, which reads
+# DB_HOST/DB_USER and none of the datasource settings this chart and extraEnv.java
+# supply, so it cannot reach the database and the pod never turns ready.
 image:
   repository: "digit-user-preferences-service"
-  tag: "2.12-5137119"
+  tag: "nightly-develop"   # RELEASE STEP: the release (or develop-<sha8>) tag
+  pullPolicy: IfNotPresent   # Always while the tag is rolling (templates/deployment.yaml)
 replicas: "1"
 httpPort: 8080
 appType: "java-spring"

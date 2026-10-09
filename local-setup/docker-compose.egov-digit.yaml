@@ -2881,7 +2881,14 @@ services:
     # Hardening: no capabilities, no privilege escalation (see file header).
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
-    image: ${DIGIT_USER_PREFERENCES_SERVICE_IMAGE:-egovio/digit-user-preferences-service:2.12-5137119}
+    # The Spring Boot build (backend/digit-user-preferences-service, #1982), which
+    # exists only on develop. Every 2.12 / master tag of this image (2.12-5137119,
+    # v2.12, master-*) is the retired Go binary: it reads DB_HOST/DB_USER only, so
+    # under the environment below it dials localhost:5432, exits, and never turns
+    # healthy, and novu-bridge's depends_on then fails the whole `compose up`.
+    # The -db migrator in docker-compose.migrations.yml moves with this tag.
+    # RELEASE STEP: pin the release (or develop-<sha8>) tag here, as for novu-bridge.
+    image: ${DIGIT_USER_PREFERENCES_SERVICE_IMAGE:-egovio/digit-user-preferences-service:nightly-develop}
     container_name: digit-user-preferences-service
     restart: unless-stopped
     profiles: ["notifications"]
@@ -2909,9 +2916,9 @@ services:
       interval: 30s
       timeout: 5s
       retries: 5
-      # This service is implemented in Go (see backend/digit-user-preferences-service),
-      # not Spring Boot. Even so, a 30s grace period proved insufficient during a
-      # full-stack cold start and was an outlier among its slow-starting peers.
+      # A 30s grace period proved insufficient during a full-stack cold start and
+      # was an outlier among its slow-starting peers (that was the Go build; the
+      # Spring Boot one starts slower still).
       # novu-bridge is the only service that depends_on this one with
       # condition: service_healthy, so when it flaps the whole `compose up -d`
       # exits non-zero, ansible stops the play, and every task after

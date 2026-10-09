@@ -1,2 +1,17 @@
+{{- /*
+  Pull policy follows the tag that will actually run, for the app image and the
+  db-migration image alike: IfNotPresent for an immutable tag (a release,
+  develop-<sha8>), Always for a rolling one (nightly-*, latest, develop, …), or a
+  node that already holds the image keeps running whatever the tag pointed at
+  when it was first pulled. common.name merges the env.yaml per-chart overrides
+  into .Values; run it first so the decision sees an overriding tag too. Same
+  rule as common-services/novu-bridge.
+*/ -}}
+{{- $_ := include "common.name" . }}
+{{- range $img := list .Values.image .Values.initContainers.dbMigration.image }}
+{{- if regexMatch "^(latest|nightly-.*|develop|main|master)$" (toString $img.tag) }}
+{{- $_ := set $img "pullPolicy" "Always" }}
+{{- end }}
+{{- end }}
 # deployment.yaml
 {{- template "common.deployment" . -}}

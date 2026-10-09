@@ -1205,6 +1205,110 @@ describe('notification stack images come from one build', () => {
   });
 });
 
+describe('digit-user-preferences-service runs the implementation its definition is written for', () => {
+  // #1982 rewrote the service from Go to Spring Boot and rewrote its compose and Helm
+  // definitions to match, but both kept defaulting to 2.12-5137119: the Go binary.
+  // It reads only DB_*, so under the Spring definition it dialled localhost:5432 and
+  // exited, never turned healthy, and novu-bridge's depends_on then failed the whole
+  // `compose up` of every enable_novu deploy. These tie the default image to the
+  // implementation in backend/, and the definition to what that implementation reads.
+  const SRC = 'backend/digit-user-preferences-service';
+  const CHART = 'devops/deploy-as-code/charts/common-services/digit-user-preferences-service';
+  const base = read('local-setup/docker-compose.egov-digit.yaml');
+  const migrations = read('local-setup/docker-compose.migrations.yml');
+  const props = read(`${SRC}/src/main/resources/application.properties`);
+  const values = read(`${CHART}/values.yaml`);
+
+  // Tags that carry the Spring Boot build. Only develop has one: every release and
+  // master tag published so far (2.12-5137119, v2.12, master-*) is the Go binary.
+  // When a release is cut from the Java tree, add its tag here.
+  const JAVA_BUILD_TAG = /^(nightly-develop|develop-[0-9a-f]{7,})$/;
+
+  const block = (file: string, service: string) => {
+    const found = file.split(/^(?=  [\w.-]+:\s*$)/m).filter((b) => b.startsWith(`  ${service}:`));
+    expect(found).toHaveLength(1);
+    return found[0];
+  };
+  const composeTag = (file: string, env: string, image: string) =>
+    file.match(new RegExp(`image: \\$\\{${env}:-egovio/${image}:([^}\\s]+)\\}`))?.[1] ?? null;
+  const envOf = (b: string) =>
+    Object.fromEntries([...b.matchAll(/^ {6}([A-Z][A-Z0-9_]*):\s*['"]?([^'"\n#]*?)['"]?\s*$/gm)].map((m) => [m[1], m[2]]));
+  const service = block(base, 'digit-user-preferences-service');
+  const env = { ...envOf(service), ...envOf(block(migrations, 'digit-user-preferences-service')) };
+
+  test('the source is the Spring Boot service, and CI builds that tree into the image', () => {
+    expect(fs.existsSync(path.join(REPO_ROOT, SRC, 'pom.xml'))).toBe(true);
+    expect(fs.existsSync(path.join(REPO_ROOT, SRC, 'go.mod'))).toBe(false);
+    const entry = read('build/build-config.yml').split(/^(?=  - name:)/m)
+      .find((e) => e.includes(`/${SRC}"`));
+    expect(entry).toMatch(new RegExp(`work-dir: "${SRC}"\\n\\s+image-name: "digit-user-preferences-service"\\n\\s+dockerfile: "build/maven/Dockerfile"`));
+    expect(entry).toContain(`work-dir: "${SRC}/src/main/resources/db"`);
+  });
+
+  test('compose defaults the service and its migrator to one Spring Boot build', () => {
+    const app = composeTag(base, 'DIGIT_USER_PREFERENCES_SERVICE_IMAGE', 'digit-user-preferences-service');
+    const db = composeTag(migrations, 'DIGIT_USER_PREFERENCES_SERVICE_DB_IMAGE', 'digit-user-preferences-service-db');
+    expect(app).toMatch(JAVA_BUILD_TAG);
+    expect(db).toBe(app);
+  });
+
+  test('the Helm chart defaults the app and its db-migration init container to one Spring Boot build', () => {
+    const app = values.match(/^image:\n {2}repository: "digit-user-preferences-service"\n {2}tag: "([^"]+)"/m)?.[1];
+    const db = values.match(/^ {4}image:\n {6}repository: "digit-user-preferences-service-db"\n {6}tag: "([^"]+)"/m)?.[1];
+    expect(app).toMatch(JAVA_BUILD_TAG);
+    expect(db).toBe(app);
+    expect(values).toMatch(/^appType: "java-spring"$/m);
+    // A rolling default must not stick on a node that pulled it once.
+    const tpl = read(`${CHART}/templates/deployment.yaml`);
+    expect(tpl).toContain('range $img := list .Values.image .Values.initContainers.dbMigration.image');
+    expect(tpl).toContain('$_ := set $img "pullPolicy" "Always"');
+  });
+
+  test('every variable compose sets is one the service or its launcher reads', () => {
+    // application.properties placeholders, plus what build/maven/start.sh (the CI
+    // Dockerfile's entrypoint) reads. A misspelt key, or one only some other build of
+    // this image understands, is silently ignored at runtime and shows up here instead.
+    const read_ = new Set([
+      ...[...props.matchAll(/\$\{([A-Z][A-Z0-9_]*)/g)].map((m) => m[1]),
+      ...[...read('build/maven/start.sh').matchAll(/\$\{?([A-Z][A-Z0-9_]*)/g)].map((m) => m[1]),
+    ]);
+    expect(Object.keys(env).sort()).toEqual(expect.arrayContaining(
+      ['SERVER_PORT', 'SERVER_CONTEXT_PATH', 'SPRING_DATASOURCE_URL', 'SPRING_DATASOURCE_USERNAME',
+        'SPRING_DATASOURCE_PASSWORD', 'SPRING_FLYWAY_ENABLED']));
+    expect(Object.keys(env).filter((k) => !read_.has(k))).toEqual([]);
+    expect(env.SPRING_FLYWAY_ENABLED).toBe('false');
+  });
+
+  test('the healthcheck and probes hit where the service serves health, on the port it listens on', () => {
+    expect(props).toMatch(/^server\.port=\$\{SERVER_PORT:8080\}$/m);
+    expect(props).toMatch(/^management\.endpoints\.web\.base-path=\/$/m);
+    expect(props).toMatch(/^management\.endpoints\.web\.exposure\.include=(?:.*,)?health(?:,.*)?$/m);
+    const probe = service.match(/test: \["CMD-SHELL", "wget -qO- http:\/\/127\.0\.0\.1:(\d+)(\/\S*) /);
+    expect(probe).not.toBeNull();
+    expect({ port: probe![1], path: probe![2] }).toEqual({ port: env.SERVER_PORT, path: '/health' });
+    expect(values).toMatch(/^httpPort: 8080$/m);
+    expect(values).toMatch(/- name: SERVER_PORT\n {4}value: "8080"/);
+    expect(values).toMatch(/livenessProbePath: "\/health"/);
+    expect(values).toMatch(/readinessProbePath: "\/health"/);
+  });
+
+  test("novu-bridge's consent check posts to the path the controller maps", () => {
+    expect(props).toMatch(/^user\.preference\.context-path=\$\{SERVER_CONTEXT_PATH:\/user-preference\}$/m);
+    const controller = read(`${SRC}/src/main/java/org/egov/userpreference/controller/PreferenceController.java`);
+    expect(controller).toContain('@RequestMapping("${user.preference.context-path}/v1")');
+    expect(controller).toContain('@PostMapping("/_search")');
+    const searchPath = `${env.SERVER_CONTEXT_PATH}/v1/_search`;
+    const bridge = envOf(block(base, 'novu-bridge'));
+    expect(bridge.NOVU_BRIDGE_PREFERENCE_HOST).toBe(`http://digit-user-preferences-service:${env.SERVER_PORT}`);
+    expect(bridge.NOVU_BRIDGE_PREFERENCE_CHECK_PATH).toBe(searchPath);
+    expect(bridge.NOVU_BRIDGE_PREFERENCE_SEARCH_PATH).toBe(searchPath);
+    const k8s = read('devops/deploy-as-code/charts/environments/env.yaml');
+    expect(values).toMatch(/- name: SERVER_CONTEXT_PATH\n {4}value: "\/user-preference"/);
+    expect(k8s).toContain('preference-check-path: "/user-preference/v1/_search"');
+    expect(k8s).toContain('digit-user-preferences-service: "http://digit-user-preferences-service.egov:8080/"');
+  });
+});
+
 describe('tenant-master repair is report-only unless opted in', () => {
   // Kanav review of #2097 (4079418087): the repair ran with APPLY=1 by default on every
   // non-pg deploy, so a live tenant that deliberately withheld grants got pg's back.
