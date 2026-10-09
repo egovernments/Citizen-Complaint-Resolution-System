@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   runsToProcess, analyzeRun, needsAlert, composeMail, composeStaleMail,
-  buildMessage, curlInvocation, readConfig, bareAddress, tick,
+  buildMessage, curlInvocation, readConfig, bareAddress, tick, retryDelayMs,
 } from './regression-alert.mjs';
 
 const R1 = '2026-10-04_1542_aaaa1111';
@@ -103,6 +103,7 @@ test('curlInvocation: STARTTLS on smtp://, password only in the config file', ()
   const cfg = { smtpUrl: 'smtp://smtp.example.org:587', starttls: true, smtpUser: 'u@x.org', smtpPass: 'p"a\\ss', from: 'A <a@x.org>' };
   const { args, config } = curlInvocation(cfg, ['r1@x.org', 'r2@x.org'], '/tmp/c.conf');
   assert.ok(args.includes('--ssl-reqd'));
+  assert.equal(args[args.indexOf('--write-out') + 1], '%{response_code}', 'the relay\'s reply code is logged');
   assert.deepEqual(args.filter((_, i) => args[i - 1] === '--mail-rcpt'), ['r1@x.org', 'r2@x.org']);
   assert.equal(args[args.indexOf('--mail-from') + 1], 'a@x.org');
   assert.ok(!args.join(' ').includes('p"a'), 'password never on argv');
@@ -151,10 +152,30 @@ test('tick: a new run with regressions mails once and advances; the next tick is
   assert.equal(sent.length, 1, 'same run is never mailed twice');
 });
 
-test('tick: a failed send keeps the state so the next tick retries', () => {
+test('tick: a failed send keeps the run and retries after a growing pause', () => {
   const { cfg, state } = box(catalog, { lastRunId: R2 });
-  assert.equal(tick({ cfg, opts: {}, send: () => { throw new Error('535 auth failed'); } }), 1);
-  assert.equal(state().lastRunId, R2);
+  const t0 = Date.parse('2026-10-09T03:09:00Z');
+  const fail = () => { throw new Error('curl exited 67 (last SMTP reply 454)'); };
+  const sent = [];
+  const ok = (_c, s) => { sent.push(s); return '250'; };
+  assert.equal(tick({ cfg, opts: {}, now: t0, send: fail }), 1);
+  assert.equal(state().lastRunId, R2, 'the run is not marked handled');
+  assert.equal(state().sendFailures, 1);
+  assert.equal(tick({ cfg, opts: {}, now: t0 + 60_000, send: ok }), 1, 'held off: no login one minute later');
+  assert.equal(sent.length, 0);
+  assert.equal(tick({ cfg, opts: {}, now: t0 + 5 * 60_000, send: fail }), 1, '5 min later it tries again');
+  assert.equal(state().sendFailures, 2);
+  assert.equal(state().retryAfter, new Date(t0 + 15 * 60_000).toISOString(), 'then waits 10 min');
+  // the timer fires on its own schedule, a moment before retryAfter: that tick goes ahead
+  assert.equal(tick({ cfg, opts: {}, now: t0 + 15 * 60_000 - 1_000, send: ok }), 0);
+  assert.equal(sent.length, 1);
+  assert.equal(state().lastRunId, R3);
+  assert.equal(state().sendFailures, undefined, 'a success clears the failure count');
+  assert.equal(state().retryAfter, undefined);
+});
+
+test('retryDelayMs: 5, 10, 20, 40 minutes, then hourly', () => {
+  assert.deepEqual([1, 2, 3, 4, 5, 12].map(n => retryDelayMs(n) / 60_000), [5, 10, 20, 40, 60, 60]);
 });
 
 test('tick: a half-written catalog is skipped without touching state', () => {

@@ -22,7 +22,10 @@
  *      ("Verdict" excludes `interrupted`: the global timeout killed the test.)
  *   4. If anything regressed, became skipped or stopped running, mail the
  *      summary to ALERT_TO. Then record the run as handled. A failed send is
- *      retried on the next tick, because the state is only advanced after it.
+ *      retried, because the state is only advanced after it, but with a
+ *      growing pause (5, 10, 20, 40, then every 60 minutes): a relay that
+ *      throttles logins (Gmail: "454 4.7.0 Too many login attempts") stays
+ *      throttled if it is retried every tick.
  *
  * The first tick on a box (no state file) only records the newest run as the
  * baseline and sends nothing, so enabling alerts doesn't mail old news.
@@ -268,7 +271,10 @@ function curlQuote(v) {
  * config file (mode 0600), never on argv where `ps` would show it.
  */
 export function curlInvocation(cfg, recipients, configPath) {
+  // --write-out prints the server's last reply code (250 once it accepted the
+  // message after DATA), so the log shows what the relay said, not just "sent".
   const args = ['--silent', '--show-error', '--connect-timeout', '20', '--max-time', '90',
+    '--write-out', '%{response_code}',
     '--url', cfg.smtpUrl, '--mail-from', bareAddress(cfg.from), '--upload-file', '-'];
   if (cfg.starttls && /^smtp:/i.test(cfg.smtpUrl)) args.push('--ssl-reqd');
   for (const r of recipients) args.push('--mail-rcpt', r);
@@ -280,6 +286,7 @@ export function curlInvocation(cfg, recipients, configPath) {
   return { args, config };
 }
 
+/** Send one mail; returns the relay's final SMTP reply code (e.g. "250"). */
 function sendMail(cfg, subject, text) {
   const message = buildMessage({ from: cfg.from, to: cfg.to, subject, text });
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccrs-alert-'));
@@ -289,7 +296,9 @@ function sendMail(cfg, subject, text) {
     if (config) fs.writeFileSync(configPath, config, { mode: 0o600 });
     const r = spawnSync('curl', args, { input: message, encoding: 'utf8', timeout: 120_000 });
     if (r.error) throw r.error;
-    if (r.status !== 0) throw new Error(`curl exited ${r.status}: ${(r.stderr || '').trim()}`);
+    const reply = (r.stdout || '').trim();
+    if (r.status !== 0) throw new Error(`curl exited ${r.status} (last SMTP reply ${reply || 'none'}): ${(r.stderr || '').trim()}`);
+    return reply;
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -345,6 +354,11 @@ function writeState(p, state) {
 
 const log = (...m) => console.log('[regression-alert]', ...m);
 
+/** Pause after the nth failed send in a row: 5, 10, 20, 40 minutes, then hourly. */
+export function retryDelayMs(failures) {
+  return Math.min(5 * 2 ** Math.max(0, failures - 1), 60) * 60_000;
+}
+
 /** One poll. Returns the process exit code. */
 export function tick({ cfg, opts, now = Date.now(), send = sendMail }) {
   const catalogPath = opts.catalog || path.join(cfg.webroot, 'catalog.json');
@@ -392,17 +406,26 @@ export function tick({ cfg, opts, now = Date.now(), send = sendMail }) {
     }
   }
 
+  // The 30 s slack: the timer fires a few hundred ms before retryAfter (which was
+  // stamped after node started), and holding off then would add a whole poll.
+  if (!opts.dryRun && mails.length && state.retryAfter && now + 30_000 < Date.parse(state.retryAfter)) {
+    log(`holding off until ${state.retryAfter}: the last ${plural(state.sendFailures || 1, 'send')} failed`);
+    return 1;
+  }
   for (const m of mails) {
     if (opts.dryRun) {
       console.log(`\n===== DRY RUN — would mail ${cfg.to.join(', ') || '(no ALERT_TO)'} =====\nSubject: ${m.subject}\n\n${m.text}`);
       continue;
     }
     try {
-      send(cfg, m.subject, m.text);
-      log(`mailed ${cfg.to.length} recipient(s): ${m.subject}`);
+      const reply = send(cfg, m.subject, m.text);
+      log(`mailed ${cfg.to.length} recipient(s)${typeof reply === 'string' && reply ? ` (SMTP ${reply})` : ''}: ${m.subject}`);
     } catch (e) {
-      // Don't advance the state: the next tick retries the whole batch.
-      log(`send failed, will retry next tick: ${e.message}`);
+      // Don't advance lastRunId: a later tick retries the whole batch, after a pause.
+      const sendFailures = (state.sendFailures || 0) + 1;
+      const retryAfter = new Date(now + retryDelayMs(sendFailures)).toISOString();
+      writeState(statePath, { ...state, lastRunId, sendFailures, retryAfter });
+      log(`send failed (${sendFailures} in a row), retrying after ${retryAfter}: ${e.message}`);
       return 1;
     }
   }

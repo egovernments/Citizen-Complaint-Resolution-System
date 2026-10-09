@@ -82,8 +82,12 @@ How it behaves:
   enabling alerts doesn't mail old news.
 - **Several runs between polls** (RUN-button runs) are each compared with their
   own predecessor, oldest first.
-- **A failed send** (SMTP down, bad password) leaves the state where it was, so
-  the next poll retries. Nothing is lost, and nothing is sent twice.
+- **A failed send** (SMTP down, bad password) leaves the run unhandled, so a
+  later poll retries it. Nothing is lost, and nothing is sent twice. Retries
+  back off (5, 10, 20, 40 minutes, then hourly), because a relay that throttles
+  logins, like Gmail's `454 4.7.0 Too many login attempts`, stays throttled
+  when it is retried every poll. The journal shows each attempt and the relay's
+  reply code (`SMTP 250` once it accepted the message).
 - **Optional watchdog:** with `test_alerts_stale_after_hours` > 0 it also mails
   once when no new run has appeared for that long, e.g. because the nightly
   redeploy failed its smoke check and never started the tests.
