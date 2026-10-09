@@ -592,7 +592,10 @@ paths:
         Logs screen on request, never counted as real traffic.
 
         The derived `subscriberId` is `nb-test-<sha256(seed)[0:16]>` with no clock and no
-        random, so repeating a test is idempotent.
+        random, so repeated tests reuse one test subscriber. Each test is triggered with a new
+        `transactionId` (`nb-test_<uuid>`): Novu runs a transactionId once, answering a repeat
+        `201` and then dropping it, so a reused one would read `ok: true` for a message that
+        never left.
 
         **Refused when nothing could deliver it** (`409 NB_PROVIDER_UNAVAILABLE`, the reason in
         `Errors[0].message`; nothing is sent and no row is written). Before triggering, the test
@@ -631,7 +634,7 @@ paths:
                 workflowId: { type: string, description: "Override the per-channel default workflow." }
                 contentSid: { type: string, description: "WHATSAPP provider template id." }
                 variables: { type: array, items: {}, description: "Turned into 1-based positional contentVariables." }
-                transactionId: { type: string, description: "Seeds the stable subscriberId; supply it to repeat a test exactly." }
+                transactionId: { type: string, description: "Used as given as the trigger's transactionId, and seeds the subscriberId. Novu runs a transactionId once, so a repeat with the same value is not sent again; omit it and each test gets its own." }
       responses:
         "200":
           description: The send was attempted — a rejected send reports `ok:false` with the provider's code

@@ -92,9 +92,11 @@ Indexes: unique `(transaction_id, channel, recipient_value)`; `(status, last_mod
 
 **Test-send rows** (`POST /providers/test-send`; a test refused before sending, e.g.
 `409 NB_PROVIDER_UNAVAILABLE`, writes none): at the operator's tenant, `is_test = true`,
-`event_name` and `template_key` = `TEST`, subscriber `nb-test-<sha256(seed)[0:16]>` (repeatable).
-On a workspace's own organization the seed starts with the workspace, so two workspaces testing
-the same number keep two rows.
+`event_name` and `template_key` = `TEST`, subscriber `nb-test-<sha256(seed)[0:16]>` (the same for
+every test to one recipient), transaction id `nb-test_<uuid>`, new for every test (one row per test).
+A caller-supplied `transactionId` is used as given; Novu does not send a repeat of one.
+On a workspace's own organization the seed starts with the workspace, so each workspace has its
+own test subscriber.
 
 **OTP rows** (`POST /messages/_send`): module `identity`, `event_name` = `OTP_SEND`,
 `template_key` = `OTP`, `recipient_value` = `otp_<uuid>`, a UUID-shaped SHA-256 of
