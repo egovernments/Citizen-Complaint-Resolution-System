@@ -308,6 +308,52 @@ enable_integration_tests_runner: false
 # LOCALITY_CODE/SERVICE_CODE). Point at the deploy env you already maintain.
 # integration_tests_runner_tenant_env: "/opt/integration-tests/deploy/bomet.env"
 
+# Regression email alerts for the integration tests. A systemd timer polls the
+# published catalog.json every test_alerts_poll_minutes; when a NEW run has
+# appeared it compares every test with the run before it and mails
+# test_alerts_to the tests that
+#   regressed        failed or timed out now, passed last time it ran
+#   now skipped      skipped now, passed last time it ran
+#   stopped running  passed in the previous run, no result now (e.g. the run
+#                    was cut short by its global timeout, or setup failed)
+# plus, for context, the ones that were fixed. One mail per run at most, and
+# only on a change: a test that stays red is not mailed again, and the first
+# poll on a box only records a baseline. Needs enable_integration_tests: true
+# (the timer reads /var/www/integration-tests). The script is plain Node:
+# tests/integration-tests/scripts/regression-alert.mjs. Runbook, dry-run and
+# troubleshooting: tests/integration-tests/runner/README.md.
+#
+# If a required setting is missing the deploy prints a WARNING and leaves
+# alerts off; a mail misconfiguration never fails the deploy. Setting
+# test_alerts_enabled: false stops the timer and deletes the env file.
+test_alerts_enabled: false
+# test_alerts_smtp_host: "smtp.example.org"     # required
+# test_alerts_smtp_port: 587                     # 465 is blocked outbound on the Hetzner boxes
+# test_alerts_smtp_starttls: true                # require STARTTLS on port 587 (recommended)
+# test_alerts_smtp_tls: false                    # true = implicit TLS (smtps://), usually port 465
+# test_alerts_smtp_user: "test-alerts@example.org"   # omit for an unauthenticated relay
+# test_alerts_from: "CCRS test alerts <test-alerts@example.org>"   # required; must be a sender the SMTP account may use
+# Recipients (required). A single group / mailing-list address is easiest:
+# people join and leave the list without anyone editing the box.
+# test_alerts_to:
+#   - "ccrs-test-alerts@example.org"
+# test_alerts_box_name: "bomet"                  # label in the subject; default: inventory hostname
+# test_alerts_dashboard_url: "https://bomet.example.org/tests/"   # default: https://<domain>/tests/
+# test_alerts_poll_minutes: 5                    # how often the timer checks for a new run
+# test_alerts_max_list: 40                       # max tests listed per group in one mail
+# test_alerts_stale_after_hours: 0               # >0: also mail once when no new run appears for this long
+#                                                #     (e.g. 26 on a daily box, 8 on a 4x/day box); 0 = off
+#
+# SMTP password: test_alerts_smtp_password. Never commit it (this repo is
+# public; scripts/check-committed-secrets.sh enforces that). Either:
+#   - keep it in OpenBao (preferred): on a box that is already set up,
+#       bao kv patch <secrets_path> test_alerts_smtp_password=<value>
+#     (bootstrap_secrets.test_alerts_smtp_password below seeds it on a FRESH
+#     tenant only, because that seed never overwrites an existing secret), or
+#   - set test_alerts_smtp_password in this host_vars file (it wins over OpenBao).
+# The deploy writes it to /etc/ccrs-test-alerts.env (root-only, 0600).
+# test_alerts_smtp_password: ""
+
 # ────────── Optional services (opt-in via flags) ──────────
 
 # Start the real OTP stack: egov-otp (stores OTPs) + user-otp (orchestrates
@@ -1331,3 +1377,6 @@ bootstrap_secrets:
   pgr_digit_provisioner_password: ""
   pgr_digit_oauth_client_secret: ""
   identity_smtp_password: ""
+  # Integration-test alert mail (test_alerts_*). Seeds a fresh tenant only; on
+  # an existing one use `bao kv patch <secrets_path> test_alerts_smtp_password=…`.
+  test_alerts_smtp_password: ""
