@@ -21,7 +21,7 @@ const read = (...parts: string[]) => fs.readFileSync(path.join(...parts), 'utf8'
 
 /**
  * Drop whole-line comments. Both files below explain in prose exactly what they
- * must never do ("never passes --allowed-tool", "no secrets"), so a naive scan
+ * must never do ("never passes --dangerously-bypass-approvals", "no secrets"), so a naive scan
  * of the raw text matches its own documentation.
  */
 const code = (text: string) =>
@@ -60,17 +60,50 @@ describe('OpenSRE compose/helm parity', () => {
   });
 
   /**
-   * The agent is diagnose-only on both tiers. `--dangerously-bypass-approvals`
-   * or a blanket `--allowed-tool` in the sweep loop would let the model run
-   * OpenSRE's mutating tools, which is the one property this deployment must
-   * not lose.
+   * The agent is diagnose-only on both tiers. `opensre ask` denies every tool
+   * that does not declare itself read-only, and in the pinned release that is
+   * almost all of them, so the loop approves a fixed list by name. Each tool
+   * on it was read and only reads. Growing the list must be a reviewed change,
+   * so the expected set lives here too. `--dangerously-bypass-approvals` would
+   * let the model run OpenSRE's mutating tools.
    */
-  test('the sweep loop never authorises approval-gated tools', () => {
+  const READ_ONLY_TOOLS = [
+    'get_kafka_consumer_group_lag',
+    'get_kafka_topic_health',
+    'kubernetes_describe_pod',
+    'kubernetes_get_events',
+    'kubernetes_get_pod_logs',
+    'kubernetes_get_resource',
+    'kubernetes_list_configmaps',
+    'kubernetes_list_daemonsets',
+    'kubernetes_list_deployments',
+    'kubernetes_list_ingresses',
+    'kubernetes_list_nodes',
+    'kubernetes_list_pods',
+    'kubernetes_list_services',
+    'kubernetes_list_statefulsets',
+    'query_grafana_alert_rules',
+    'query_grafana_annotations',
+    'query_grafana_logs',
+    'query_grafana_metrics',
+    'query_grafana_service_names',
+    'query_grafana_traces',
+    'query_tempo',
+  ];
+
+  test('the sweep loop approves only the reviewed read-only tools', () => {
     const loop = code(read(COMPOSE_DIR, 'run-sweeps.sh'));
-    const invocation = loop.match(/^\s*set -- --json ask.*$/m)?.[0];
-    expect(invocation).toBeDefined();
+    expect(loop).toMatch(/^\s*set -- --json ask.*$/m);
     expect(loop).not.toMatch(/--dangerously-bypass-approvals/);
-    expect(loop).not.toMatch(/--allowed-tool/);
+
+    const list = loop.match(/^READ_ONLY_TOOLS="([^"]*)"/m)?.[1];
+    expect(list).toBeDefined();
+    expect(list!.split(/\s+/).filter(Boolean).sort()).toEqual(READ_ONLY_TOOLS);
+
+    // The list is the only source of approvals: one --allowed-tool, fed by it.
+    const approvals = [...loop.matchAll(/--allowed-tool\s+([^\s;]+)/g)].map((m) => m[1]);
+    expect(approvals).toEqual(['"$tool"']);
+    expect(loop).toMatch(/for tool in \$READ_ONLY_TOOLS; do set -- "\$@" --allowed-tool "\$tool"; done/);
   });
 
   test('the Kubernetes RBAC stays read-only and excludes secrets', () => {

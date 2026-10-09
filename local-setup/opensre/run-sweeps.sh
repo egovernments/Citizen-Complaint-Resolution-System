@@ -11,9 +11,10 @@
 # $LOG_DIR/investigations.log, and stdout, which promtail ships to Loki. Nothing
 # is sent anywhere else: no Slack, no alert channel.
 #
-# Read-only by construction: `opensre ask` runs read-only tools automatically
-# and denies anything that mutates state or does not declare its side effects.
-# This script never passes --allowed-tool or --dangerously-bypass-approvals.
+# Read-only by construction: `opensre ask` runs a tool without approval only
+# when it declares itself read-only, and denies everything else. This script
+# approves a fixed list of read-only tools by name (READ_ONLY_TOOLS below) and
+# never passes --dangerously-bypass-approvals.
 set -u
 
 LOG_DIR=${OPENSRE_LOG_DIR:-/var/log/opensre}
@@ -23,6 +24,28 @@ GATUS_URL=${OPENSRE_GATUS_URL:-http://gatus:8080}
 TIMEOUT_S=${OPENSRE_INVESTIGATION_TIMEOUT_SECONDS:-900}
 RUNBOOK=/opt/ccrs/known-issues.md
 STATE_FILE="$LOG_DIR/.last-investigation"
+
+# Tools approved for every investigation. `opensre ask` treats a tool that
+# declares no side-effect level as needing approval, and the first denied call
+# ends the whole investigation (exit 3, approval_denied). In 0.1.2026.9.21 only
+# query_grafana_metrics declares itself read-only, so without this list the
+# agent sees Prometheus and nothing else: an investigation stopped after 15 s.
+# Every tool here only reads: Loki, Tempo and Grafana queries, Kafka offsets
+# and topic metadata, and Kubernetes get/list. That was checked against the
+# pinned release's source. A tool whose source is not configured on a tier is
+# simply unavailable there. Read a tool's implementation before adding it, and
+# check the list again when bumping OPENSRE_VERSION. The Viewer Grafana token
+# and the get/list-only RBAC still refuse writes if a tool ever tried one.
+READ_ONLY_TOOLS="
+  query_grafana_metrics query_grafana_logs query_grafana_service_names
+  query_grafana_traces query_grafana_alert_rules query_grafana_annotations
+  query_tempo
+  get_kafka_consumer_group_lag get_kafka_topic_health
+  kubernetes_list_pods kubernetes_get_pod_logs kubernetes_describe_pod
+  kubernetes_get_events kubernetes_list_deployments kubernetes_list_statefulsets
+  kubernetes_list_daemonsets kubernetes_list_services kubernetes_list_ingresses
+  kubernetes_list_configmaps kubernetes_list_nodes kubernetes_get_resource
+"
 
 # OpenSRE reads ~/.opensre/guardrails.yml before every LLM call. It masks
 # session tokens and citizen contact details before anything leaves the box.
@@ -122,9 +145,10 @@ $checks
 
 You are diagnosing only; a human acts on what you find. Scope is infrastructure only: the host, containers, the observability stack, the API gateway, databases, the Redpanda broker and consumer lag. Do not investigate application data such as complaints, notifications or users.
 
-For each failing check give: the root cause with evidence from your tools (Grafana/Prometheus metrics, Loki logs, Tempo traces, Kafka consumer-group lag), whether the checks share a cause, what citizens experience, and the exact commands a human should run with the risk of each. Say 'unknown' rather than guess. The attached known-issues page is this deployment's runbook."
+For each failing check give: the root cause with evidence from your tools (Grafana/Prometheus metrics, Loki logs, Tempo traces, Kafka consumer-group lag), whether the checks share a cause, what citizens experience, and the exact commands a human should run with the risk of each. Say 'unknown' rather than guess. To find which container is using memory or CPU, query Prometheus: on Docker Compose the container_* metrics (job container-stats) are labelled container_name and include restarts and uptime; on Kubernetes use cAdvisor's container_* metrics, labelled namespace/pod/container. The Java services also export jvm_* (heap, garbage collection, threads) and http_* metrics labelled service_name. The attached known-issues page is this deployment's runbook. Only your final message is recorded: make it the complete report, and never refer to an earlier message."
 
   set -- --json ask --ephemeral
+  for tool in $READ_ONLY_TOOLS; do set -- "$@" --allowed-tool "$tool"; done
   if [ -f "$RUNBOOK" ]; then set -- "$@" -i "$RUNBOOK"; fi
 
   note investigating "Investigating: $fingerprint"

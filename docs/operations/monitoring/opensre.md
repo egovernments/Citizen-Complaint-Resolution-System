@@ -27,8 +27,9 @@ failing.
 | Same failing checks as an investigation in the last `opensre_dedupe_hours` (default 6) | One `unchanged` line | No |
 | Anything else failing (now **and** on 2 of the last 3 checks) | One investigation | Yes |
 
-An investigation is a single `opensre ask` run. The agent reads Grafana (Prometheus metrics and
-Loki logs), Tempo traces and Redpanda consumer-group lag. It is given this deployment's
+An investigation is a single `opensre ask` run. The agent reads Grafana (Prometheus metrics,
+Loki logs, traces, alert rules and annotations), Tempo, Redpanda consumer-group lag and topic
+health, and on Kubernetes the cluster API. It is given this deployment's
 [known-issues runbook](../../releases/2.12/operations/known-issues.md). It returns the root cause with
 evidence, the impact on citizens, and the commands a person should run, with the risk of each.
 
@@ -46,9 +47,14 @@ notifications or users.
 
 Read-only is enforced in two places:
 
-- **OpenSRE itself.** `opensre ask` runs read-only tools automatically and **denies** any tool
-  that mutates state or does not declare its side effects. The sweep loop never passes
-  `--allowed-tool` or `--dangerously-bypass-approvals`.
+- **OpenSRE itself.** `opensre ask` runs a tool without approval only when the tool declares
+  itself read-only, and **denies** everything else. In the pinned release that leaves only the
+  Prometheus tool, and the first denied call ends the investigation. So the sweep loop approves a
+  fixed list of tools by name (`READ_ONLY_TOOLS` in `run-sweeps.sh`): the Grafana, Tempo, Kafka
+  and Kubernetes tools above, each checked to only read. It never passes
+  `--dangerously-bypass-approvals`. The parity test fails if the list changes without the test
+  changing too. Read a tool's implementation before adding it, and recheck the list when
+  upgrading OpenSRE.
 - **Credentials.** The only credentials in the container are a Viewer Grafana token and the model
   API key.
 
@@ -145,7 +151,9 @@ OpenSRE's own product telemetry, Sentry error reporting and local prompt log are
 Update `OPENSRE_VERSION` and both `OPENSRE_SHA256_*` build args in
 `local-setup/opensre/Dockerfile`. Take the checksums from the release's `.sha256` assets. Also
 update the `image:` tag in `docker-compose.opensre.yml` to match. Check the new release's
-changelog for changes to `opensre ask`, since upstream is still alpha and moves daily.
+changelog for changes to `opensre ask`, since upstream is still alpha and moves daily. Recheck
+`READ_ONLY_TOOLS` in `run-sweeps.sh` too: a renamed tool makes every investigation fail with
+"unknown registered tool name", and a tool that now writes must come off the list.
 
 ---
 
@@ -209,9 +217,14 @@ nothing to react to and logs that it cannot reach Gatus.
 
 ## Limits
 
-- **No container view on compose.** There is no Docker access there, so the agent cannot read
-  restart counts or `docker inspect`; it infers crash loops from Loki logs, Gatus history and
-  node-exporter's OOM-kill counter. The Kubernetes tier does not have this limitation.
+- **Container state on compose comes from metrics only.** The agent has no Docker access. It
+  sees each container's CPU, memory, restarts and uptime through `container-stats` (Prometheus
+  `container_*`, labelled `container_name`), but not `docker inspect` output such as exit codes or
+  the reason for an OOM kill. The Kubernetes tier reads pod state from the cluster API.
+- **It reasons only from telemetry.** It cannot fetch a health endpoint's response body (such as
+  a `/readyz` that names the failing dependency), and silent logs are not proof that a service
+  is down. A service that logs nothing and exports no metrics can look stopped. Its reports mark
+  such causes "unconfirmed" and list the read-only check that settles them; run that check first.
 - **No traces on Kubernetes.** That tier runs Jaeger, which OpenSRE does not integrate with.
 - **Loki context.** Below `observability_level: logs` (compose) or with `monitoring.logs: false`
   (Kubernetes) there is no Loki, so investigations have no log context. Below `traces` on compose
