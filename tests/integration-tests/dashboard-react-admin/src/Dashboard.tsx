@@ -191,10 +191,10 @@ function RunTrend({ runs }: { runs: RunSummary[] }) {
 function aggregateByFacet(tests: CatalogTest[], facet: string) {
   const groups = new Map<string, { passed: number; failed: number; skipped: number; notRun: number; total: number }>();
   for (const t of tests) {
-    // Same rule as the builder's run total: only a config-excluded @local-only
-    // test (no verdict, filtered out by playwright.config) is left out; every
-    // other test without a verdict in the latest run counts as not run.
-    if (!t.ranInLatestRun && (t.tags || []).includes('@local-only')) continue;
+    // The builder's own call (normalize derives it for older catalogs): a test
+    // the latest run never planned is outside its total, so out of the bars
+    // too; every other test without a verdict in it counts as not run.
+    if (t.excluded) continue;
     const status = t.currentStatus; // derived in dataProvider: the latest run's outcome
     const values = new Set<string>();
     for (const tag of t.tags) {
@@ -295,7 +295,7 @@ export default function Dashboard() {
           <StatTile
             label="Tests in suite"
             value={tests.length}
-            sub={`${tests.filter(t => t.tags.some(tg => tg.startsWith('@layer:ui'))).length} UI · ${tests.filter(t => t.tags.some(tg => tg.startsWith('@layer:api'))).length} API`}
+            sub={`${tests.filter(t => t.tags.some(tg => tg.startsWith('@layer:ui'))).length} UI · ${tests.filter(t => t.tags.some(tg => tg.startsWith('@layer:api'))).length} API · ${tests.filter(t => t.excluded).length} excluded by config`}
           />
         </Grid>
         <Grid size={{ xs: 6, md: 3 }}>
