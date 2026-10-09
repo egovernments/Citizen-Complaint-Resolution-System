@@ -107,7 +107,7 @@ rsync -avh --delete \
   dashboard/ "$HOST_SSH:$HOST_DIR/"
 
 # Prune older runs' reports on host to RUN_LIMIT. Their results stay in
-# history/catalog (build-catalog's HISTORY_LIMIT), flagged hasReport: false.
+# history/catalog (build-catalog's DEFAULT_HISTORY_LIMIT, 30), flagged hasReport: false.
 ssh "$HOST_SSH" "
   set -e
   cd '$HOST_DIR/runs'
