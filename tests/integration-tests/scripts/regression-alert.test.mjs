@@ -8,6 +8,7 @@ import path from 'node:path';
 import {
   runsToProcess, analyzeRun, needsAlert, composeMail, composeStaleMail,
   buildMessage, curlInvocation, readConfig, bareAddress, tick, retryDelayMs, classifySendError, sendMail, curlEnv,
+  splitAddressList, isAddress, configProblems,
 } from './regression-alert.mjs';
 
 const R1 = '2026-10-04_1542_aaaa1111';
@@ -131,11 +132,11 @@ test('buildMessage: headers, encoded non-ASCII subject, base64 body that round-t
 
 test('curlInvocation: STARTTLS on smtp://, password only in the config file', () => {
   const cfg = { smtpUrl: 'smtp://smtp.example.org:587', starttls: true, smtpUser: 'u@x.org', smtpPass: 'p"a\\ss', from: 'A <a@x.org>' };
-  const { args, config } = curlInvocation(cfg, ['r1@x.org', 'r2@x.org'], '/tmp/c.conf');
+  const { args, config } = curlInvocation(cfg, ['r1@x.org', 'Team Two <r2@x.org>'], '/tmp/c.conf');
   assert.equal(args[0], '--disable', 'first, so ~/.curlrc is never read');
   assert.ok(args.includes('--ssl-reqd'));
   assert.equal(args[args.indexOf('--write-out') + 1], '%{response_code}', 'the relay\'s reply code is logged');
-  assert.deepEqual(args.filter((_, i) => args[i - 1] === '--mail-rcpt'), ['r1@x.org', 'r2@x.org']);
+  assert.deepEqual(args.filter((_, i) => args[i - 1] === '--mail-rcpt'), ['r1@x.org', 'r2@x.org'], 'bare addresses in the envelope');
   assert.equal(args[args.indexOf('--mail-from') + 1], 'a@x.org');
   assert.ok(!args.join(' ').includes('p"a'), 'password never on argv');
   assert.equal(config, 'user = "u@x.org:p\\"a\\\\ss"\n');
@@ -143,13 +144,37 @@ test('curlInvocation: STARTTLS on smtp://, password only in the config file', ()
   assert.equal(curlInvocation({ ...cfg, smtpUser: '' }, ['r@x'], '/c').config, '', 'no auth → no config file');
 });
 
+test('splitAddressList / isAddress / configProblems: one entry per recipient, each a usable address', () => {
+  assert.deepEqual(splitAddressList('a@x.org,b@x.org , ,'), ['a@x.org', 'b@x.org']);
+  assert.deepEqual(splitAddressList('CCRS team <team@x.org>'), ['CCRS team <team@x.org>'], 'spaces do not split');
+  assert.deepEqual(splitAddressList('"A, B" <ab@x.org>, <odd,one@x.org>'), ['"A, B" <ab@x.org>', '<odd,one@x.org>']);
+  assert.deepEqual(splitAddressList(undefined), []);
+  assert.ok(isAddress('a.b+c@x.org'));
+  for (const bad of ['CCRS', 'team', 'a@', '@x', 'a b@x.org', 'a@x.org,b@x.org']) assert.ok(!isAddress(bad), bad);
+  const cfg = readConfig({ ALERT_SMTP_URL: 'smtp://h:587', ALERT_FROM: 'CCRS <a@x.org>', ALERT_TO: 'CCRS team <team@x.org>, ok@x.org' });
+  assert.deepEqual(configProblems(cfg), []);
+  assert.deepEqual(configProblems({ ...cfg, from: 'CCRS alerts', to: ['ok@x.org', 'team'] }), [
+    'ALERT_FROM is not "addr" or "Name <addr>": CCRS alerts',
+    'ALERT_TO entry is not "addr" or "Name <addr>": team',
+  ]);
+  assert.deepEqual(configProblems({ ...cfg, smtpUrl: '', from: '', to: [] }), ['ALERT_SMTP_URL is not set', 'ALERT_FROM is not set', 'ALERT_TO is not set']);
+});
+
+test('tick: a recipient that is not an address stops the poll before any login', (t) => {
+  const { dir } = box(t, catalog, { lastRunId: R2 });
+  const cfg = readConfig({ ALERT_SMTP_URL: 'smtp://h:587', ALERT_FROM: 'a@x.org', ALERT_TO: 'CCRS team', ALERT_WEBROOT: dir, ALERT_STATE_FILE: path.join(dir, 'state.json') });
+  const { result, lines } = captureLog(() => tick({ cfg, opts: {}, send: () => assert.fail('must not send') }));
+  assert.equal(result, 2);
+  assert.match(lines.join('\n'), /ALERT_TO entry is not "addr" or "Name <addr>": CCRS team/);
+});
+
 test('curlEnv: drops every ALERT_* variable, keeps the rest', () => {
   assert.deepEqual(curlEnv({ PATH: '/bin', HOME: '/h', ALERT_SMTP_PASS: 's', ALERT_SMTP_USER: 'u', ALERT_TO: 'x' }), { PATH: '/bin', HOME: '/h' });
 });
 
-test('readConfig: recipients by comma or space; STATE_DIRECTORY; defaults', () => {
-  const c = readConfig({ ALERT_TO: 'a@x.org, b@x.org  c@x.org', STATE_DIRECTORY: '/var/lib/ccrs-test-alerts', ALERT_SMTP_STARTTLS: 'false' });
-  assert.deepEqual(c.to, ['a@x.org', 'b@x.org', 'c@x.org']);
+test('readConfig: recipients split on commas only; STATE_DIRECTORY; defaults', () => {
+  const c = readConfig({ ALERT_TO: 'CCRS team <team@x.org>, "Doe, Jane" <jd@x.org>,c@x.org', STATE_DIRECTORY: '/var/lib/ccrs-test-alerts', ALERT_SMTP_STARTTLS: 'false' });
+  assert.deepEqual(c.to, ['CCRS team <team@x.org>', '"Doe, Jane" <jd@x.org>', 'c@x.org']);
   assert.equal(c.stateFile, '/var/lib/ccrs-test-alerts/state.json');
   assert.equal(c.starttls, false);
   assert.equal(c.maxList, 40);
@@ -229,7 +254,12 @@ test('classifySendError: a 4xx to AUTH is a throttle, a 5xx a rejected login', (
   assert.equal(classifySendError(err(67, '535')), 'rejected');  // Gmail: Username and Password not accepted
   assert.equal(classifySendError(err(67, '534')), 'rejected');  // Gmail: Application-specific password required
   assert.equal(classifySendError(err(7, '')), 'other');         // could not connect
-  assert.equal(classifySendError(err(55, '550')), 'other');     // a refused recipient is not a login problem
+  assert.equal(classifySendError(err(55, '550')), 'other');     // no MAIL/RCPT in the message: not known to be an address
+  const curlErr = (curlExit, reply, what) => Object.assign(new Error(`curl exited ${curlExit} (last SMTP reply ${reply}): curl: (${curlExit}) ${what} failed: ${reply}`), { curlExit, reply });
+  assert.equal(classifySendError(curlErr(55, '550', 'RCPT')), 'address'); // Mailpit: recipient not allowed
+  assert.equal(classifySendError(curlErr(55, '553', 'MAIL')), 'address'); // sender not owned by the account
+  assert.equal(classifySendError(curlErr(55, '450', 'RCPT')), 'other');   // 4xx: try again later
+  assert.equal(classifySendError(curlErr(55, '554', 'DATA')), 'other');   // the message, not an address
   assert.equal(classifySendError(new Error('spawn curl ENOENT')), 'other');
 });
 

@@ -40,7 +40,8 @@
  *   ALERT_SMTP_USER       SMTP login (omit for an unauthenticated relay)
  *   ALERT_SMTP_PASS       SMTP password
  *   ALERT_FROM            "Name <addr>" or addr
- *   ALERT_TO              recipients, comma- or space-separated
+ *   ALERT_TO              recipients, comma-separated, each "Name <addr>" or addr
+ *                         (a display name with a comma must be "quoted")
  *   ALERT_BOX_NAME        label in the subject, e.g. bomet
  *   ALERT_DASHBOARD_URL   e.g. https://bometfeedbackhub.digit.org/tests/
  *   ALERT_REPO_URL        for compare links (default: the egovernments repo)
@@ -238,6 +239,33 @@ export function bareAddress(value) {
   return (m ? m[1] : String(value)).trim();
 }
 
+/** A bare address the relay can take in MAIL FROM / RCPT TO: local@domain, no spaces. */
+export function isAddress(value) {
+  return /^[^\s<>@,"]+@[^\s<>@,"]+$/.test(String(value));
+}
+
+/**
+ * Split a recipient list on commas, but not on one inside a "quoted" display
+ * name or <angle brackets>:
+ *   'CCRS team <team@x.org>, "Doe, Jane" <jd@x.org>' → two entries.
+ * Not on whitespace: "CCRS team <team@x.org>" is one recipient, not three.
+ */
+export function splitAddressList(value) {
+  const out = [];
+  let cur = '';
+  let quoted = false;
+  let angle = false;
+  for (const ch of String(value ?? '')) {
+    if (ch === '"' && !angle) quoted = !quoted;
+    else if (ch === '<' && !quoted) angle = true;
+    else if (ch === '>' && !quoted) angle = false;
+    else if (ch === ',' && !quoted && !angle) { out.push(cur); cur = ''; continue; }
+    cur += ch;
+  }
+  out.push(cur);
+  return out.map(e => e.trim()).filter(Boolean);
+}
+
 /** RFC 5322 message: UTF-8 text body, base64 so long lines and symbols survive any relay. */
 export function buildMessage({ from, to, subject, text, date = new Date() }) {
   const domain = bareAddress(from).split('@')[1] || 'localhost';
@@ -281,7 +309,8 @@ export function curlInvocation(cfg, recipients, configPath) {
     '--write-out', '%{response_code}',
     '--url', cfg.smtpUrl, '--mail-from', bareAddress(cfg.from), '--upload-file', '-'];
   if (cfg.starttls && /^smtp:/i.test(cfg.smtpUrl)) args.push('--ssl-reqd');
-  for (const r of recipients) args.push('--mail-rcpt', r);
+  // The envelope takes bare addresses; display names only go in the To: header.
+  for (const r of recipients) args.push('--mail-rcpt', bareAddress(r));
   let config = '';
   if (cfg.smtpUser) {
     config = `user = ${curlQuote(`${cfg.smtpUser}:${cfg.smtpPass ?? ''}`)}\n`;
@@ -330,7 +359,7 @@ export function sendMail(cfg, subject, text) {
 // ---------------------------------------------------------------------------
 
 export function readConfig(env = process.env) {
-  const to = String(env.ALERT_TO || '').split(/[,\s]+/).map(s => s.trim()).filter(Boolean);
+  const to = splitAddressList(env.ALERT_TO);
   const stateDir = env.STATE_DIRECTORY ? env.STATE_DIRECTORY.split(':')[0] : '/var/lib/ccrs-test-alerts';
   return {
     smtpUrl: env.ALERT_SMTP_URL || '',
@@ -347,6 +376,19 @@ export function readConfig(env = process.env) {
     maxList: Math.max(1, Number(env.ALERT_MAX_LIST) || 40),
     staleAfterHours: Math.max(0, Number(env.ALERT_STALE_AFTER_HOURS) || 0),
   };
+}
+
+/** What is missing or malformed in the mail settings (empty when they can be used). */
+export function configProblems(cfg) {
+  const problems = [];
+  if (!cfg.smtpUrl) problems.push('ALERT_SMTP_URL is not set');
+  if (!cfg.from) problems.push('ALERT_FROM is not set');
+  else if (!isAddress(bareAddress(cfg.from))) problems.push(`ALERT_FROM is not "addr" or "Name <addr>": ${cfg.from}`);
+  if (!cfg.to.length) problems.push('ALERT_TO is not set');
+  for (const r of cfg.to) {
+    if (!isAddress(bareAddress(r))) problems.push(`ALERT_TO entry is not "addr" or "Name <addr>": ${r}`);
+  }
+  return problems;
 }
 
 function parseArgs(argv) {
@@ -381,11 +423,16 @@ const log = (...m) => console.log('[regression-alert]', ...m);
  *   throttled  a 4xx to AUTH: refused for now, e.g. Gmail's "454 4.7.0 Too many
  *              login attempts" lock on the account. The password may be right.
  *   rejected   a 5xx to AUTH: wrong user/password, or an app password is needed.
- *   other      connection, TLS, a refused sender or recipient, …
+ *   address    a 5xx to MAIL FROM or RCPT TO: the relay refuses the sender or a
+ *              recipient for good (curl: "MAIL failed: 553", "RCPT failed: 550").
+ *              A settings problem; retrying will not fix it.
+ *   other      connection, TLS, a 4xx (try later), …
  */
 export function classifySendError(e) {
-  if (e?.curlExit === 67 && /^4\d\d$/.test(e.reply || '')) return 'throttled';
-  if (e?.curlExit === 67 && /^5\d\d$/.test(e.reply || '')) return 'rejected';
+  const reply = e?.reply || '';
+  if (e?.curlExit === 67 && /^4\d\d$/.test(reply)) return 'throttled';
+  if (e?.curlExit === 67 && /^5\d\d$/.test(reply)) return 'rejected';
+  if (/^5\d\d$/.test(reply) && /\b(MAIL|RCPT) failed\b/.test(e?.message || '')) return 'address';
   return 'other';
 }
 
@@ -396,6 +443,9 @@ const SEND_FAILURE_HINTS = {
     + 'Check the sender account for a security alert or lock; do not retry by hand.',
   rejected: 'The SMTP relay rejected the login: test_alerts_smtp_user / test_alerts_smtp_password are '
     + 'wrong, or the account needs an app password. Fix them in host_vars or OpenBao and redeploy.',
+  address: 'The SMTP relay refused the sender (MAIL FROM) or a recipient (RCPT TO). Check test_alerts_from '
+    + '(an address the SMTP account may send as) and every test_alerts_to address in host_vars, then redeploy. '
+    + 'Retrying will not help until they are fixed.',
 };
 
 /**
@@ -411,8 +461,10 @@ export function retryDelayMs(failures, kind = 'other') {
 export function tick({ cfg, opts, now = Date.now(), send = sendMail }) {
   const catalogPath = opts.catalog || path.join(cfg.webroot, 'catalog.json');
   const statePath = opts.state || cfg.stateFile;
-  if (!opts.dryRun && (!cfg.smtpUrl || !cfg.from || !cfg.to.length)) {
-    log('ALERT_SMTP_URL, ALERT_FROM and ALERT_TO are required (see /etc/ccrs-test-alerts.env)');
+  const problems = opts.dryRun ? [] : configProblems(cfg);
+  if (problems.length) {
+    for (const p of problems) log(p);
+    log('nothing can be sent: fix the test_alerts_* settings in host_vars and redeploy (they become /etc/ccrs-test-alerts.env)');
     return 2;
   }
   let catalog;
@@ -457,8 +509,8 @@ export function tick({ cfg, opts, now = Date.now(), send = sendMail }) {
   // The 30 s slack: the timer fires a few hundred ms before retryAfter (which was
   // stamped after node started), and holding off then would add a whole poll.
   if (!opts.dryRun && mails.length && state.retryAfter && now + 30_000 < Date.parse(state.retryAfter)) {
-    const why = state.sendFailure === 'throttled' ? ' (the relay is throttling logins)'
-      : state.sendFailure === 'rejected' ? ' (the relay rejected the login)' : '';
+    const why = { throttled: ' (the relay is throttling logins)', rejected: ' (the relay rejected the login)',
+      address: ' (the relay refused the sender or a recipient)' }[state.sendFailure] ?? '';
     log(`holding off until ${state.retryAfter}: the last ${plural(state.sendFailures || 1, 'send')} failed${why}`);
     return 1;
   }
@@ -476,7 +528,7 @@ export function tick({ cfg, opts, now = Date.now(), send = sendMail }) {
       const sendFailures = (state.sendFailures || 0) + 1;
       const retryAfter = new Date(now + retryDelayMs(sendFailures, sendFailure)).toISOString();
       writeState(statePath, { ...state, lastRunId, sendFailures, sendFailure, retryAfter });
-      const label = { throttled: ', login throttled', rejected: ', login rejected' }[sendFailure] ?? '';
+      const label = { throttled: ', login throttled', rejected: ', login rejected', address: ', sender or recipient refused' }[sendFailure] ?? '';
       log(`send failed (${sendFailures} in a row${label}), retrying after ${retryAfter}: ${e.message}`);
       if (SEND_FAILURE_HINTS[sendFailure]) log(SEND_FAILURE_HINTS[sendFailure]);
       return 1;
