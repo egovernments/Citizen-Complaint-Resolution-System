@@ -1,18 +1,19 @@
 /**
  * run-cycle.sh end to end, with Playwright faked: history keeps HISTORY_LIMIT
- * runs while runs/ is pruned to the RUN_LIMIT newest, and the catalog's
- * `hasReport` matches what is left on disk.
+ * runs while runs/ is pruned to the RUN_LIMIT newest, the catalog's
+ * `hasReport` matches what is left on disk, and only one cycle at a time
+ * works on a webroot or a checkout.
  *
  * Run: npm run test:catalog-unit
  *
- * The real run-cycle.sh and the real scripts/build-catalog.ts run against a
- * throwaway checkout (one spec file); a fake `npx` first on PATH answers
- * `npx playwright test` with a canned report.json and hands everything else
- * (`npx tsx …`) to the real npx.
+ * The real run-cycle.sh and the real scripts/build-catalog.ts run against
+ * throwaway checkouts (one spec file); a fake `npx` first on PATH answers
+ * `npx playwright test` with a canned report.json (after waiting for $GATE to
+ * exist, when set) and hands everything else (`npx tsx …`) to the real npx.
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync, execFileSync } from 'node:child_process';
+import { spawn, spawnSync, execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -31,26 +32,37 @@ const skip = missingTools.length
   : false;
 
 let tmp = '';
-let repo = '';
-let www = '';
 let shim = '';
 let canned = '';
 
-before(() => {
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'run-cycle-test-'));
-  repo = path.join(tmp, 'repo');
-  www = path.join(tmp, 'www');
-  shim = path.join(tmp, 'bin');
-  canned = path.join(tmp, 'reports');
-  for (const d of [path.join(repo, 'tests'), path.join(www, 'runs'), shim, canned]) fs.mkdirSync(d, { recursive: true });
+/** A throwaway tests/integration-tests checkout with one spec. */
+function checkout(name: string): string {
+  const repo = path.join(tmp, name);
+  fs.mkdirSync(path.join(repo, 'tests'), { recursive: true });
   fs.writeFileSync(path.join(repo, 'tsconfig.json'), '{"compilerOptions":{"strict":true}}');
   fs.writeFileSync(path.join(repo, 'tests', 'a.spec.ts'), "import { test } from '@playwright/test';\n\ntest('alpha', async () => {});\n");
   fs.symlinkSync(path.join(SUITE, 'scripts'), path.join(repo, 'scripts'));
   fs.symlinkSync(path.join(SUITE, 'node_modules'), path.join(repo, 'node_modules'));
+  return repo;
+}
+
+/** An empty webroot. */
+function webroot(name: string): string {
+  const www = path.join(tmp, name);
+  fs.mkdirSync(path.join(www, 'runs'), { recursive: true });
+  return www;
+}
+
+before(() => {
+  tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'run-cycle-test-'));
+  shim = path.join(tmp, 'bin');
+  canned = path.join(tmp, 'reports');
+  for (const d of [shim, canned]) fs.mkdirSync(d, { recursive: true });
   const realNpx = execFileSync('bash', ['-c', 'command -v npx']).toString().trim();
   fs.writeFileSync(path.join(shim, 'npx'), [
     '#!/usr/bin/env bash',
     'if [[ "$1" == "playwright" ]]; then',
+    '  if [[ -n "${GATE:-}" ]]; then until [[ -e "$GATE" ]]; do sleep 0.1; done; fi',
     '  cp "$CANNED/$RUN_ID.json" report.json',
     '  mkdir -p test-results/alpha playwright-report',
     '  echo "<h1>$RUN_ID</h1>" > playwright-report/index.html',
@@ -62,9 +74,10 @@ before(() => {
 });
 after(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
-const runId = (i: number) => `2026-09-0${1 + Math.floor(i / 4)}_${['0001', '0651', '1020', '1550'][i % 4]}_abc${i}`;
+const runId = (i: number) => `2026-09-${String(1 + Math.floor(i / 4)).padStart(2, '0')}_${['0001', '0651', '1020', '1550'][i % 4]}_abc${i}`;
 
-function runCycle(i: number): void {
+/** The canned report for run `i` and the env run-cycle.sh gets from server.mjs. */
+function prepare(i: number, repo: string, www: string, extra: Record<string, string> = {}): NodeJS.ProcessEnv {
   const id = runId(i);
   fs.writeFileSync(path.join(canned, `${id}.json`), JSON.stringify({
     config: { rootDir: path.join(repo, 'tests'), projects: [] },
@@ -72,24 +85,37 @@ function runCycle(i: number): void {
     suites: [{ title: 'a.spec.ts', file: 'a.spec.ts', specs: [{ title: 'alpha', file: 'a.spec.ts', line: 3, column: 1, tests: [{ results: [{ status: i % 3 ? 'passed' : 'failed', duration: 100, attachments: [] }] }] }] }],
     errors: [],
   }));
-  fs.mkdirSync(path.join(www, 'runs', id), { recursive: true }); // server.mjs makes it before the job starts
-  const r = spawnSync('bash', [path.join(SUITE, 'runner', 'run-cycle.sh')], {
-    env: {
-      ...process.env,
-      PATH: `${shim}:${process.env.PATH}`,
-      CANNED: canned,
-      RUN_ID: id, REPO_DIR: repo, WEBROOT: www,
-      RUN_LIMIT: '2', HISTORY_LIMIT: '4', BRANCH: 'test',
-      RUN_LOCK: path.join(tmp, 'lock'),
-    },
-    encoding: 'utf8',
-    timeout: 120_000,
-  });
-  assert.equal(r.status, 0, `run-cycle ${id} exited ${r.status}\n${r.stdout}\n${r.stderr}`);
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    PATH: `${shim}:${process.env.PATH}`,
+    CANNED: canned,
+    RUN_ID: id, REPO_DIR: repo, WEBROOT: www,
+    RUN_LIMIT: '2', HISTORY_LIMIT: '4', BRANCH: 'test',
+    ...extra,
+  };
+  delete env.RUN_LOCK;
+  if (extra.RUN_LOCK) env.RUN_LOCK = extra.RUN_LOCK;
+  return env;
+}
+
+const SCRIPT = path.join(SUITE, 'runner', 'run-cycle.sh');
+
+/** One cycle to completion. `daemonDir`: make runs/<id>/ + run.log first, as server.mjs does. */
+function runCycle(i: number, repo: string, www: string, o: { daemonDir?: boolean; env?: Record<string, string> } = {}) {
+  if (o.daemonDir !== false) {
+    fs.mkdirSync(path.join(www, 'runs', runId(i)), { recursive: true });
+    fs.writeFileSync(path.join(www, 'runs', runId(i), 'run.log'), 'daemon log\n');
+  }
+  return spawnSync('bash', [SCRIPT], { env: prepare(i, repo, www, o.env), encoding: 'utf8', timeout: 120_000 });
 }
 
 test('six cycles with HISTORY_LIMIT=4 RUN_LIMIT=2: four runs of results, two reports on disk, hasReport matches disk', { skip }, () => {
-  for (let i = 0; i < 6; i++) runCycle(i);
+  const repo = checkout('repo');
+  const www = webroot('www');
+  for (let i = 0; i < 6; i++) {
+    const r = runCycle(i, repo, www);
+    assert.equal(r.status, 0, `run-cycle ${runId(i)} exited ${r.status}\n${r.stdout}\n${r.stderr}`);
+  }
   const catalog = JSON.parse(fs.readFileSync(path.join(www, 'catalog.json'), 'utf8'));
   const history = JSON.parse(fs.readFileSync(path.join(www, 'history.json'), 'utf8'));
   const newest = [5, 4, 3, 2].map(runId);
@@ -101,4 +127,76 @@ test('six cycles with HISTORY_LIMIT=4 RUN_LIMIT=2: four runs of results, two rep
   assert.deepEqual(catalog.tests[0].history.map((h: { runId: string }) => h.runId), newest);
   assert.equal(catalog.tests[0].latestRun.runId, runId(5));
   assert.ok(fs.existsSync(path.join(www, 'runs', runId(5), 'playwright-report', 'index.html')));
+});
+
+test('one cycle at a time per webroot and per checkout: a second exits 1 and leaves runs/ alone', { skip }, async () => {
+  const repoA = checkout('lock-repo-a');
+  const repoB = checkout('lock-repo-b');
+  const www = webroot('lock-www');
+  const otherWww = webroot('lock-www-other');
+  const gate = path.join(tmp, 'lock-gate');
+
+  // A: a slow cycle (its Playwright waits for the gate), started like the daemon does.
+  const a = 10;
+  fs.mkdirSync(path.join(www, 'runs', runId(a)), { recursive: true });
+  const childA = spawn('bash', [SCRIPT], { env: prepare(a, repoA, www, { GATE: gate }), stdio: ['ignore', 'pipe', 'pipe'] });
+  let outA = '';
+  childA.stdout.on('data', d => { outA += d; });
+  childA.stderr.on('data', d => { outA += d; });
+  const doneA = new Promise<number | null>(resolve => childA.on('exit', code => resolve(code)));
+  const phaseA = path.join(www, 'runs', runId(a), 'phase');
+  for (let waited = 0; !(fs.existsSync(phaseA) && fs.readFileSync(phaseA, 'utf8').trim() === 'running'); waited += 100) {
+    assert.ok(waited < 30_000, `cycle A never reached "running":\n${outA}`);
+    await new Promise(r => setTimeout(r, 100));
+  }
+
+  try {
+    // B: same webroot, its own checkout, started without a daemon folder (a nightly wrapper)
+    const b = runCycle(11, repoB, www, { daemonDir: false });
+    assert.equal(b.status, 1, `B exited ${b.status}\n${b.stdout}\n${b.stderr}`);
+    assert.match(b.stderr, /another run holds the lock on .*lock-www — aborting/);
+    assert.equal(fs.existsSync(path.join(www, 'runs', runId(11))), false, 'B left no folder behind');
+
+    // C: same webroot, the daemon made its folder and run.log: it gets the phase for the RUN button
+    const c = runCycle(12, repoB, www);
+    assert.equal(c.status, 1);
+    assert.equal(fs.readFileSync(path.join(www, 'runs', runId(12), 'phase'), 'utf8').trim(), 'aborted-locked');
+
+    // D: another webroot but A's checkout: the checkout is locked too
+    const d = runCycle(13, repoA, otherWww, { daemonDir: false });
+    assert.equal(d.status, 1, `D exited ${d.status}\n${d.stderr}`);
+    assert.match(d.stderr, /another run holds the lock on .*lock-repo-a — aborting/);
+    assert.deepEqual(fs.readdirSync(path.join(otherWww, 'runs')), []);
+
+    // the lock does not depend on /tmp: a different TMPDIR (as under PrivateTmp) still collides
+    const e = runCycle(14, repoB, www, { daemonDir: false, env: { TMPDIR: fs.mkdtempSync(path.join(tmp, 'private-tmp-')) } });
+    assert.equal(e.status, 1);
+  } finally {
+    fs.writeFileSync(gate, '');
+  }
+
+  assert.equal(await doneA, 0, `cycle A failed:\n${outA}`);
+  // A published, and its prune removed C's aborted folder
+  const catalog = JSON.parse(fs.readFileSync(path.join(www, 'catalog.json'), 'utf8'));
+  assert.deepEqual(catalog.runs.map((r: { id: string }) => r.id), [runId(a)]);
+  assert.deepEqual(fs.readdirSync(path.join(www, 'runs')), [runId(a)]);
+
+  // with A done, the webroot is free again
+  const f = runCycle(15, repoB, www);
+  assert.equal(f.status, 0, `F exited ${f.status}\n${f.stderr}`);
+});
+
+test('RUN_LOCK names another lock to use instead of the webroot', { skip }, () => {
+  const repo = checkout('runlock-repo');
+  const www = webroot('runlock-www');
+  const lockFile = path.join(tmp, 'runlock');
+  fs.writeFileSync(lockFile, '');
+  // hold the lock file, as another cycle with the same RUN_LOCK would
+  const holder = spawnSync('flock', ['-n', lockFile, 'bash', '-c',
+    `RUN_LOCK=${JSON.stringify(lockFile)} bash ${JSON.stringify(SCRIPT)}`], { env: prepare(20, repo, www, { RUN_LOCK: lockFile }), encoding: 'utf8', timeout: 60_000 });
+  assert.equal(holder.status, 1, `a cycle on a held RUN_LOCK must abort\n${holder.stderr}`);
+  assert.match(holder.stderr, /another run holds the lock on .*runlock — aborting/);
+  // free, it runs
+  const r = runCycle(21, repo, www, { env: { RUN_LOCK: lockFile } });
+  assert.equal(r.status, 0, r.stderr);
 });

@@ -17,10 +17,17 @@
 #               (build-catalog's DEFAULT_HISTORY_LIMIT); older ones show results
 #               but no report link.
 #   BRANCH      branch label recorded in the catalog (default "deployed")
-#   RUN_LOCK    single-flight lock file (default /tmp/digit-tests.lock)
+#   RUN_LOCK    lock this file or directory instead of $WEBROOT (optional)
 #
-# Single-flight via flock — a second cycle while one is running exits 1 (the
-# daemon already 409s the fast path; this guards restarts/cron overlap too).
+# Single-flight via flock: a second cycle while one is running exits 1 without
+# touching runs/ (the daemon already 409s the fast path; this guards restarts,
+# cron and the nightly wrappers too). A cycle locks the two things it writes:
+# the webroot it publishes and prunes, and the checkout it runs in. Each lock
+# is flock(2) on the DIRECTORY itself, the same inode for every user and mount
+# namespace. It used to be the file /tmp/digit-tests.lock, but the RUN-button
+# daemon runs this script as digit-tests under PrivateTmp=true while the
+# nightly wrappers run it as root, so each saw its own /tmp: a button run and a
+# nightly could overlap, and one's prune could delete the other's runs/<id>/.
 set -uo pipefail
 
 : "${RUN_ID:?RUN_ID required}"
@@ -29,18 +36,30 @@ WEBROOT="${WEBROOT:?WEBROOT required}"
 TENANT_ENV="${TENANT_ENV:-}"
 RUN_LIMIT="${RUN_LIMIT:-5}"
 BRANCH="${BRANCH:-deployed}"
-LOCK="${RUN_LOCK:-/tmp/digit-tests.lock}"
+LOCK="${RUN_LOCK:-$WEBROOT}"
 
 RUN_DIR="$WEBROOT/runs/$RUN_ID"
-mkdir -p "$RUN_DIR"
 phase() { echo "$1" > "$RUN_DIR/phase"; echo "===== phase: $1 ====="; }
 
-exec 9>"$LOCK"
-if ! flock -n 9; then
-  echo "[run-cycle] another run holds $LOCK — aborting" >&2
-  phase "aborted-locked"
+# Another cycle holds <path>: leave runs/ as it is. Only a folder the daemon
+# already made for this run (it holds the run.log the RUN button shows) gets
+# the phase; the running cycle's prune removes it.
+busy() {
+  echo "[run-cycle] another run holds the lock on $1 — aborting" >&2
+  if [[ -d "$RUN_DIR" ]]; then phase "aborted-locked"; fi
   exit 1
+}
+
+mkdir -p "$WEBROOT"
+# A directory can only be opened read-only; flock does not need more.
+if [[ -d "$LOCK" ]]; then exec 9<"$LOCK"; else exec 9>>"$LOCK"; fi \
+  || { echo "[run-cycle] cannot open lock $LOCK" >&2; exit 2; }
+flock -n 9 || busy "$LOCK"
+if [[ ! "$REPO_DIR" -ef "$LOCK" ]]; then
+  exec 8<"$REPO_DIR" || { echo "[run-cycle] cannot open $REPO_DIR" >&2; exit 2; }
+  flock -n 8 || busy "$REPO_DIR"
 fi
+mkdir -p "$RUN_DIR"
 
 cd "$REPO_DIR" || { echo "[run-cycle] cannot cd $REPO_DIR" >&2; exit 2; }
 

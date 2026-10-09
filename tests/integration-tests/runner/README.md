@@ -32,7 +32,11 @@ This is the smallest thing that can: Node core only, no extra deps.
   → **local** copy of `catalog.json`/`history.json`/`runs/<id>/` into the webroot
   (this is `scripts/publish.sh` with the ssh/rsync swapped for a local copy, since
   serving and running are the same host now) → prune `runs/` (see Retention).
-  `flock` is the cross-process lock.
+  `flock` on the webroot directory and on the checkout is the cross-process
+  lock: one cycle at a time per webroot and per checkout, whether the RUN-button
+  daemon (user `digit-tests`, private `/tmp`) or a nightly wrapper (root) starts
+  it. A second cycle exits 1 and leaves `runs/` alone. `RUN_LOCK` names another
+  file or directory to lock instead of the webroot.
 
 ## Retention
 
