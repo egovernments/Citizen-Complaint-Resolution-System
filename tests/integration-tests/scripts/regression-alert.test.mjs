@@ -15,23 +15,24 @@ const R2 = '2026-10-05_1542_bbbb2222';
 const R3 = '2026-10-06_1544_cccc3333';
 const run = (id, sha, extra = {}) => ({ id, sha, branch: 'nightly', startedAt: `${id.slice(0, 10)}T15:42:00.000Z`, passed: 10, failed: 1, skipped: 1, total: 12, ...extra });
 const h = (runId, status) => ({ runId, status, durationMs: 1000 });
-const t = (id, history, extra = {}) => ({ id, title: id, file: `tests/${id}.spec.ts`, line: 1, history, latestRun: null, ...extra });
+const t2 = (id, history, extra = {}) => ({ id, title: id, file: `tests/${id}.spec.ts`, line: 1, history, latestRun: null, ...extra });
 
 // history is newest first, like build-catalog writes it
 const catalog = {
   lastRunId: R3,
   runs: [run(R3, 'cccc3333', { notRun: 2, cutShort: 'Timed out waiting 4800s for the test suite to run' }), run(R2, 'bbbb2222'), run(R1, 'aaaa1111')],
   tests: [
-    t('a-regressed', [h(R3, 'failed'), h(R2, 'passed')], { latestRun: { runId: R3, errorMessage: '\x1b[31mError: boom\x1b[39m\n  at x' } }),
-    t('b-flaky', [h(R3, 'timedOut'), h(R2, 'passed'), h(R1, 'failed')]),
-    t('c-now-skipped', [h(R3, 'skipped'), h(R2, 'passed')]),
-    t('d-stopped', [h(R2, 'passed')]),
-    t('e-interrupted', [h(R3, 'interrupted'), h(R2, 'passed')]),
-    t('f-fixed', [h(R3, 'passed'), h(R2, 'failed')]),
-    t('g-gap', [h(R3, 'failed'), h(R1, 'passed')]),          // not reached in R2 (cut-off run)
-    t('h-never', []),
-    t('i-skip-then-gone', [h(R2, 'skipped')]),
-    t('j-steady-fail', [h(R3, 'failed'), h(R2, 'failed')]),
+    t2('a-regressed', [h(R3, 'failed'), h(R2, 'passed')], { latestRun: { runId: R3, errorMessage: '\x1b[31mError: boom\x1b[39m\n  at x' } }),
+    t2('b-flaky', [h(R3, 'timedOut'), h(R2, 'passed'), h(R1, 'failed')]),
+    t2('c-now-skipped', [h(R3, 'skipped'), h(R2, 'passed')]),
+    t2('d-stopped', [h(R2, 'passed')]),
+    t2('e-interrupted', [h(R3, 'interrupted'), h(R2, 'passed')]),
+    t2('f-fixed', [h(R3, 'passed'), h(R2, 'failed')]),
+    t2('g-gap', [h(R3, 'failed'), h(R1, 'passed')]),          // not reached in R2 (cut-off run)
+    t2('h-never', []),
+    t2('i-skip-then-gone', [h(R2, 'skipped')]),
+    t2('j-steady-fail', [h(R3, 'failed'), h(R2, 'failed')]),
+    t2('k-long-gone', [h(R1, 'passed')]),                      // stopped two runs ago, not now
   ],
 };
 
@@ -64,8 +65,32 @@ test('analyzeRun sorts every test into the right group', () => {
 });
 
 test('needsAlert: a run with only fixes (or nothing) sends no mail', () => {
-  const quiet = { tests: [t('x', [h(R3, 'passed'), h(R2, 'failed')]), t('y', [h(R3, 'failed'), h(R2, 'failed')])] };
+  const quiet = { tests: [t2('x', [h(R3, 'passed'), h(R2, 'failed')]), t2('y', [h(R3, 'failed'), h(R2, 'failed')])] };
   assert.equal(needsAlert(analyzeRun(quiet, run(R3), run(R2))), false);
+});
+
+test('needsAlert: a run that only stopped running (or only got skipped) still sends a mail', () => {
+  const stoppedOnly = { tests: [t2('x', [h(R2, 'passed')])] };
+  const a = analyzeRun(stoppedOnly, run(R3), run(R2));
+  assert.deepEqual(a.stopped.map(x => x.id), ['x']);
+  assert.equal(needsAlert(a), true);
+  const skippedOnly = { tests: [t2('y', [h(R3, 'skipped'), h(R2, 'passed')])] };
+  assert.equal(needsAlert(analyzeRun(skippedOnly, run(R3), run(R2))), true);
+});
+
+test('analyzeRun: in a batch, each run is judged against the runs before it, never after', () => {
+  const batch = {
+    runs: [run(R3), run(R2), run(R1)],
+    tests: [
+      t2('red-then-fixed', [h(R3, 'passed'), h(R2, 'failed'), h(R1, 'failed')]),
+      t2('regressed-stays-red', [h(R3, 'failed'), h(R2, 'failed'), h(R1, 'passed')]),
+    ],
+  };
+  const [r2, r3] = runsToProcess(batch, R1).map(({ run: r, prev }) => analyzeRun(batch, r, prev));
+  assert.deepEqual(r2.regressed.map(x => x.id), ['regressed-stays-red'], 'R2 broke it; R1 had passed');
+  assert.deepEqual(r2.fixed.map(x => x.id), [], 'R3 passing later does not make R2 a fix');
+  assert.deepEqual(r3.regressed.map(x => x.id), [], 'still red in R3 is not news');
+  assert.deepEqual(r3.fixed.map(x => x.id), ['red-then-fixed']);
 });
 
 test('composeMail: subject counts, compare link, deep links, truncation', () => {
@@ -79,6 +104,11 @@ test('composeMail: subject counts, compare link, deep links, truncation', () => 
   assert.match(m.text, /https:\/\/box\.example\/tests\/#test\/a-regressed/);
   assert.match(m.text, /flaky: failed 1 of the last 2 runs/);
   assert.match(m.text, /… and 1 more \(see the dashboard\)/, 'maxList=2 truncates the 3 regressions');
+  const section = title => m.text.split(/\n\n/).find(p => p.startsWith(title)) || '';
+  assert.match(section('STOPPED RUNNING'), /tests\/d-stopped\.spec\.ts:1 — d-stopped\n.*tests\/e-interrupted\.spec\.ts:1 — e-interrupted/);
+  assert.match(section('FIXED'), /✓ tests\/f-fixed\.spec\.ts:1 — f-fixed/);
+  assert.match(section('NOW SKIPPED'), /○ tests\/c-now-skipped\.spec\.ts:1 — c-now-skipped {2}\(last passed in 2026-10-05_1542_bbbb2222\)/);
+  assert.doesNotMatch(m.text, /k-long-gone/);
 });
 
 test('composeStaleMail names the last run', () => {
@@ -119,12 +149,21 @@ test('readConfig: recipients by comma or space; STATE_DIRECTORY; defaults', () =
   assert.equal(c.starttls, false);
   assert.equal(c.maxList, 40);
   assert.equal(bareAddress('Name <n@x.org>'), 'n@x.org');
+  // systemd passes StateDirectory= as STATE_DIRECTORY (colon-separated when several)
+  assert.equal(readConfig({ STATE_DIRECTORY: '/var/lib/private/x:/var/lib/other' }).stateFile, '/var/lib/private/x/state.json');
+  assert.equal(readConfig({ STATE_DIRECTORY: '/srv/a', ALERT_STATE_FILE: '/srv/b/s.json' }).stateFile, '/srv/b/s.json', 'an explicit file wins');
 });
 
 // --- tick: the 5-minute poll, end to end with a fake sender ---------------
 
-function box(catalogObj, stateObj) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ra-test-'));
+function tempDir(t, prefix) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  return dir;
+}
+
+function box(t, catalogObj, stateObj) {
+  const dir = tempDir(t, 'ra-test-');
   fs.writeFileSync(path.join(dir, 'catalog.json'), JSON.stringify(catalogObj));
   if (stateObj) fs.writeFileSync(path.join(dir, 'state.json'), JSON.stringify(stateObj));
   const cfg = readConfig({ ALERT_SMTP_URL: 'smtp://h:587', ALERT_FROM: 'a@x.org', ALERT_TO: 'r@x.org', ALERT_BOX_NAME: 'test', ALERT_WEBROOT: dir, ALERT_STATE_FILE: path.join(dir, 'state.json') });
@@ -132,16 +171,16 @@ function box(catalogObj, stateObj) {
   return { dir, cfg, state };
 }
 
-test('tick: first run on a box only baselines', () => {
-  const { cfg, state } = box(catalog);
+test('tick: first run on a box only baselines', (t) => {
+  const { cfg, state } = box(t, catalog);
   const sent = [];
   assert.equal(tick({ cfg, opts: {}, send: (_c, s) => sent.push(s) }), 0);
   assert.equal(sent.length, 0);
   assert.equal(state().lastRunId, R3);
 });
 
-test('tick: a new run with regressions mails once and advances; the next tick is quiet', () => {
-  const { cfg, state } = box(catalog, { lastRunId: R2 });
+test('tick: a new run with regressions mails once and advances; the next tick is quiet', (t) => {
+  const { cfg, state } = box(t, catalog, { lastRunId: R2 });
   const sent = [];
   const send = (_c, s) => sent.push(s);
   assert.equal(tick({ cfg, opts: {}, send }), 0);
@@ -152,8 +191,8 @@ test('tick: a new run with regressions mails once and advances; the next tick is
   assert.equal(sent.length, 1, 'same run is never mailed twice');
 });
 
-test('tick: a failed send keeps the run and retries after a growing pause', () => {
-  const { cfg, state } = box(catalog, { lastRunId: R2 });
+test('tick: a failed send keeps the run and retries after a growing pause', (t) => {
+  const { cfg, state } = box(t, catalog, { lastRunId: R2 });
   const t0 = Date.parse('2026-10-09T03:09:00Z');
   const fail = () => { throw Object.assign(new Error('curl exited 7: Failed to connect'), { curlExit: 7, reply: '' }); };
   const sent = [];
@@ -189,22 +228,56 @@ test('classifySendError: a 4xx to AUTH is a throttle, a 5xx a rejected login', (
   assert.equal(classifySendError(new Error('spawn curl ENOENT')), 'other');
 });
 
-test('sendMail: hands curl\'s exit code and the relay\'s reply to the caller (fake curl on PATH)', () => {
-  const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'ra-curl-'));
-  const fake = (reply, code) => fs.writeFileSync(path.join(bin, 'curl'),
-    `#!/bin/sh\ncat >/dev/null\nprintf '%s' '${reply}'\n[ ${code} -eq 0 ] || echo 'curl: (${code}) Login denied' >&2\nexit ${code}\n`, { mode: 0o755 });
-  const cfg = { smtpUrl: 'smtp://h:587', starttls: true, smtpUser: 'u@x.org', smtpPass: 'p', from: 'a@x.org', to: ['r@x.org'] };
-  const savedPath = process.env.PATH;
-  process.env.PATH = `${bin}:${savedPath}`;
-  try {
-    fake('250', 0);
-    assert.equal(sendMail(cfg, 's', 't'), '250');
-    fake('454', 67);
-    assert.throws(() => sendMail(cfg, 's', 't'), e => e.curlExit === 67 && e.reply === '454'
-      && classifySendError(e) === 'throttled' && /last SMTP reply 454/.test(e.message));
-  } finally {
-    process.env.PATH = savedPath;
+// A stand-in for curl, put first on PATH: records how it was called (argv,
+// environment names, the --config file's mode and text, stdin) and answers
+// with process.env.FAKE_CURL = "<reply> <exit code>" (default "250 0").
+function fakeCurl(t) {
+  const bin = tempDir(t, 'ra-curl-');
+  const calls = path.join(bin, 'calls.jsonl');
+  fs.writeFileSync(path.join(bin, 'curl'), `#!${process.execPath}
+const fs = require('node:fs');
+const args = process.argv.slice(2);
+const rec = { args, env: Object.keys(process.env), stdin: fs.readFileSync(0, 'utf8') };
+const i = args.indexOf('--config');
+if (i !== -1) {
+  rec.configPath = args[i + 1];
+  rec.configMode = (fs.statSync(rec.configPath).mode & 0o777).toString(8);
+  rec.config = fs.readFileSync(rec.configPath, 'utf8');
+}
+fs.appendFileSync(${JSON.stringify(calls)}, JSON.stringify(rec) + '\\n');
+const [reply, code] = (process.env.FAKE_CURL || '250 0').split(' ');
+process.stdout.write(reply);
+if (code !== '0') process.stderr.write('curl: (' + code + ') Login denied\\n');
+process.exit(Number(code));
+`, { mode: 0o755 });
+  const saved = { PATH: process.env.PATH, TMPDIR: process.env.TMPDIR, FAKE_CURL: process.env.FAKE_CURL };
+  const tmp = tempDir(t, 'ra-tmpdir-');
+  process.env.PATH = `${bin}${path.delimiter}${saved.PATH}`;
+  process.env.TMPDIR = tmp; // sendMail's scratch dir goes here, so the test can see it is removed
+  t.after(() => {
+    for (const [k, v] of Object.entries(saved)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+  });
+  const read = () => (fs.existsSync(calls) ? fs.readFileSync(calls, 'utf8').trim().split('\n').map(l => JSON.parse(l)) : []);
+  return { tmp, calls: read };
+}
+
+test('sendMail: hands curl\'s exit code and the relay\'s reply to the caller (fake curl on PATH)', (t) => {
+  const { tmp, calls } = fakeCurl(t);
+  const cfg = { smtpUrl: 'smtp://h:587', starttls: true, smtpUser: 'u@x.org', smtpPass: 'p"a\\ss', from: 'a@x.org', to: ['r@x.org'] };
+  process.env.FAKE_CURL = '250 0';
+  assert.equal(sendMail(cfg, 's', 't'), '250');
+  process.env.FAKE_CURL = '454 67';
+  assert.throws(() => sendMail(cfg, 's', 't'), e => e.curlExit === 67 && e.reply === '454'
+    && classifySendError(e) === 'throttled' && /last SMTP reply 454/.test(e.message));
+  const [ok, failed] = calls();
+  for (const c of [ok, failed]) {
+    assert.equal(c.configMode, '600', 'the file holding the password is private to the poll');
+    assert.equal(c.config, 'user = "u@x.org:p\\"a\\\\ss"\n');
+    assert.ok(!c.args.join(' ').includes('p"a'), 'password never on argv');
+    assert.ok(!fs.existsSync(c.configPath), 'config file gone after the send');
   }
+  assert.match(ok.stdin, /^From: a@x\.org\r\n/);
+  assert.deepEqual(fs.readdirSync(tmp), [], 'the scratch dir is removed after a success and after a failure');
 });
 
 function captureLog(fn) {
@@ -214,8 +287,8 @@ function captureLog(fn) {
   try { return { result: fn(), lines }; } finally { console.log = orig; }
 }
 
-test('tick: a throttled login says so, and waits an hour before the next login', () => {
-  const { cfg, state } = box(catalog, { lastRunId: R2 });
+test('tick: a throttled login says so, and waits an hour before the next login', (t) => {
+  const { cfg, state } = box(t, catalog, { lastRunId: R2 });
   const t0 = Date.parse('2026-10-09T03:09:00Z');
   const throttled = () => { throw Object.assign(new Error('curl exited 67 (last SMTP reply 454): curl: (67) Login denied'), { curlExit: 67, reply: '454' }); };
   const { result, lines } = captureLog(() => tick({ cfg, opts: {}, now: t0, send: throttled }));
@@ -228,8 +301,8 @@ test('tick: a throttled login says so, and waits an hour before the next login',
   assert.match(later.lines.join('\n'), /holding off until .* \(the relay is throttling logins\)/);
 });
 
-test('tick: a rejected login points at the credentials and keeps the short backoff', () => {
-  const { cfg, state } = box(catalog, { lastRunId: R2 });
+test('tick: a rejected login points at the credentials and keeps the short backoff', (t) => {
+  const { cfg, state } = box(t, catalog, { lastRunId: R2 });
   const t0 = Date.parse('2026-10-09T03:09:00Z');
   const rejected = () => { throw Object.assign(new Error('curl exited 67 (last SMTP reply 535)'), { curlExit: 67, reply: '535' }); };
   const { lines } = captureLog(() => tick({ cfg, opts: {}, now: t0, send: rejected }));
@@ -238,15 +311,15 @@ test('tick: a rejected login points at the credentials and keeps the short backo
   assert.match(lines.join('\n'), /login rejected.*app password/s);
 });
 
-test('tick: a half-written catalog is skipped without touching state', () => {
-  const { dir, cfg, state } = box(catalog, { lastRunId: R2 });
+test('tick: a half-written catalog is skipped without touching state', (t) => {
+  const { dir, cfg, state } = box(t, catalog, { lastRunId: R2 });
   fs.writeFileSync(path.join(dir, 'catalog.json'), '{"runs": [');
   assert.equal(tick({ cfg, opts: {}, send: () => assert.fail('must not send') }), 0);
   assert.equal(state().lastRunId, R2);
 });
 
-test('tick: stale watchdog mails once per stale run when enabled', () => {
-  const { cfg } = box(catalog, { lastRunId: R3 });
+test('tick: stale watchdog mails once per stale run when enabled', (t) => {
+  const { cfg } = box(t, catalog, { lastRunId: R3 });
   cfg.staleAfterHours = 26;
   const sent = [];
   const send = (_c, s) => sent.push(s);
@@ -257,8 +330,31 @@ test('tick: stale watchdog mails once per stale run when enabled', () => {
   assert.match(sent[0], /no new test run for 26h/);
 });
 
-test('tick: --dry-run never writes state and never sends', () => {
-  const { cfg, state } = box(catalog, { lastRunId: R2 });
+test('tick: the state file is replaced in one step, never rewritten in place', (t) => {
+  const { dir, cfg, state } = box(t, catalog, { lastRunId: R2 });
+  // A hard link shares the file's inode: a rename leaves it holding the old
+  // state, an in-place rewrite would change it too (and a crash mid-write
+  // could leave state.json empty or half-written).
+  const witness = path.join(dir, 'witness.json');
+  fs.linkSync(path.join(dir, 'state.json'), witness);
+  assert.equal(tick({ cfg, opts: {}, send: () => '250' }), 0);
+  assert.equal(state().lastRunId, R3);
+  assert.equal(JSON.parse(fs.readFileSync(witness, 'utf8')).lastRunId, R2);
+  assert.ok(!fs.existsSync(path.join(dir, 'state.json.tmp')), 'no temp file left behind');
+});
+
+test('tick: during a backoff, a run that needs no mail is still recorded as handled', (t) => {
+  const quiet = { runs: [run(R3), run(R2)], tests: [t2('x', [h(R3, 'passed'), h(R2, 'failed')])] };
+  const retryAfter = '2026-10-09T05:00:00.000Z';
+  const { cfg, state } = box(t, quiet, { lastRunId: R2, sendFailures: 1, sendFailure: 'other', retryAfter });
+  const { result, lines } = captureLog(() => tick({ cfg, opts: {}, now: Date.parse('2026-10-09T04:00:00Z'), send: () => assert.fail('nothing to send') }));
+  assert.equal(result, 0);
+  assert.equal(state().lastRunId, R3, 'nothing to mail, so nothing to hold off');
+  assert.doesNotMatch(lines.join('\n'), /holding off/);
+});
+
+test('tick: --dry-run never writes state and never sends', (t) => {
+  const { cfg, state } = box(t, catalog, { lastRunId: R2 });
   const orig = console.log; console.log = () => {};
   try { assert.equal(tick({ cfg, opts: { dryRun: true }, send: () => assert.fail('must not send') }), 0); }
   finally { console.log = orig; }
