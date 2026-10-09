@@ -119,6 +119,12 @@ interface RunSummary {
    * Absent in summaries written before this field existed: treat as true.
    */
   hasReport?: boolean;
+  /**
+   * The RUN_LIMIT this run was built with. While a run built with a larger
+   * one still has its report, later builds keep that many reports (see
+   * buildCatalog). Absent in summaries written before this field existed.
+   */
+  runLimit?: number;
   /** On disk, but the Playwright config filters it out on this deployment. */
   excluded: number;
   total: number;
@@ -365,6 +371,8 @@ interface BuildOptions {
   /**
    * Runs that keep runs/<id>/ on disk (default DEFAULT_REPORT_LIMIT). Only runs
    * in the history window can keep one, so above historyLimit it has no effect.
+   * With local runs, a larger limit a recent run was built with wins (see
+   * buildCatalog).
    */
   reportLimit?: number;
 }
@@ -498,7 +506,7 @@ function buildCatalog(opts: BuildOptions): { catalog: Catalog; nextHistory: Hist
   const oldHistory = readHistory(opts.publicHistoryPath ?? opts.historyPath);
   const priorCatalog = readPriorCatalog(opts.publicCatalogPath ?? null);
   const historyLimit = opts.historyLimit ?? DEFAULT_HISTORY_LIMIT;
-  const reportLimit = opts.reportLimit ?? DEFAULT_REPORT_LIMIT;
+  const requestedLimit = opts.reportLimit ?? DEFAULT_REPORT_LIMIT;
 
   // Every prior run summary stays for the whole history window, whether or not
   // its runs/<id>/ folder survived: its counts and the per-test results that
@@ -521,6 +529,24 @@ function buildCatalog(opts: BuildOptions): { catalog: Catalog; nextHistory: Hist
   const runsAreLocal = !!runsDir && fs.existsSync(path.join(runsDir, opts.runId));
   const runExists = (id: string): boolean =>
     !runsAreLocal || fs.existsSync(path.join(runsDir!, id));
+
+  // One box can run the suite with two RUN_LIMITs: naipepea's nightly wrapper
+  // passes 12, its RUN button 5 (integration_tests_runner_run_limit). Each run
+  // used to prune runs/ to its own limit, so a button run cut the nightly's 12
+  // reports down to 5 and the count never got back to 12. So, while any run
+  // that still has its report was built with a larger RUN_LIMIT, keep that
+  // many. Once those runs have lost their reports to newer ones, the smaller
+  // limit applies again: lowering RUN_LIMIT everywhere takes effect within the
+  // old limit's number of runs. Local runs only: publish.sh prunes the host to
+  // exactly its own RUN_LIMIT, so there the flags must follow that.
+  const reportLimit = runsAreLocal
+    ? Math.max(requestedLimit, ...priorRuns
+      .filter(r => r.hasReport !== false && runExists(r.id))
+      .map(r => r.runLimit ?? 0))
+    : requestedLimit;
+  if (reportLimit > requestedLimit) {
+    console.log(`[build-catalog] RUN_LIMIT=${requestedLimit}, but a run that still has its report was built with RUN_LIMIT=${reportLimit}: keeping ${reportLimit} reports`);
+  }
 
   // Runs that keep their report after this cycle: newest first, the current
   // run plus each prior run whose folder still exists, up to reportLimit. A run
@@ -666,6 +692,7 @@ function buildCatalog(opts: BuildOptions): { catalog: Catalog; nextHistory: Hist
     }))),
     cutShort: cutShortOf(report),
     hasReport: true,
+    runLimit: requestedLimit,
     sha: opts.sha,
     branch: opts.branch,
     baseUrl: opts.baseUrl,

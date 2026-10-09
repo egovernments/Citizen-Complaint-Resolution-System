@@ -49,8 +49,17 @@ on disk and `RUN_LIMIT`; `run-cycle.sh` then deletes exactly the folders marked
 false, so disk and catalog always agree. A run that lost its report keeps its
 counts and per-test results in both dashboards, but nothing links into it
 ("report pruned"). Once pruned, a run stays pruned even if `RUN_LIMIT` is raised
-later. Give button runs and scheduled runs on the same box the same `RUN_LIMIT`,
-or each kind prunes to its own.
+later.
+
+Button runs and scheduled runs on one box may pass different limits (naipepea's
+nightly wrapper passes `RUN_LIMIT=12`, the button `integration_tests_runner_run_limit`,
+default 5). Each run summary records the `RUN_LIMIT` it was built with, and while
+any run that still has its report was built with a larger one, every run keeps
+that many reports, so a button run no longer cuts the nightly's 12 down to 5.
+Lowering the limit everywhere takes effect once the runs built with the old one
+have lost their reports, i.e. after at most the old limit's number of runs.
+(`publish.sh` prunes its remote host to exactly its own `RUN_LIMIT`, so there
+build-catalog follows that.)
 
 ## Dashboards and the run window
 

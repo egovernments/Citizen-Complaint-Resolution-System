@@ -201,6 +201,38 @@ test('publish.sh model (runs not local): the newest RUN_LIMIT positions keep a r
   assert.deepEqual(withReport(c.runs), ['r006', 'r005', 'r004', 'r003'], 'r000–r002 were pruned on the host and cannot come back');
 });
 
+test('mixed limits: a run with a smaller RUN_LIMIT does not prune the reports a larger-limit run keeps', () => {
+  // naipepea: the nightly passes RUN_LIMIT=12, the RUN button 5
+  const www = webroot('mixed');
+  cycles(www, 0, 13, { reportLimit: 12 });
+  const c = cycles(www, 14, 16, { reportLimit: 5 });
+  assert.deepEqual(withReport(c.runs), newest(16, 12));
+  assert.deepEqual(onDisk(www), newest(16, 12).sort());
+  const byId = new Map(c.runs.map(r => [r.id, r]));
+  assert.deepEqual([byId.get('r016')!.runLimit, byId.get('r013')!.runLimit], [5, 12], 'each run records the limit it was built with');
+  // the next nightly finds its 12 reports still there
+  assert.deepEqual(withReport(cycle(www, 17, { reportLimit: 12 }).runs), newest(17, 12));
+});
+
+test('mixed limits: lowering RUN_LIMIT everywhere takes effect once the larger-limit runs have lost their reports', () => {
+  const www = webroot('lowered');
+  cycles(www, 0, 13, { reportLimit: 12 });            // r002–r013 keep reports, built with 12
+  let c = cycles(www, 14, 24, { reportLimit: 5 });     // r013 still has its report
+  assert.deepEqual(withReport(c.runs), newest(24, 12));
+  c = cycle(www, 25, { reportLimit: 5 });              // r013 holds the 12 one last time
+  assert.deepEqual(withReport(c.runs), newest(25, 12));
+  c = cycle(www, 26, { reportLimit: 5 });              // no run with a report was built with 12
+  assert.deepEqual(withReport(c.runs), newest(26, 5));
+  assert.deepEqual(onDisk(www), newest(26, 5).sort());
+});
+
+test('publish.sh model: build-catalog follows its RUN_LIMIT exactly, because publish.sh prunes the host to it', () => {
+  const www = webroot('ci-lowered');
+  cycles(www, 0, 13, { reportLimit: 12, local: false });
+  const c = cycle(www, 14, { reportLimit: 5, local: false });
+  assert.deepEqual(withReport(c.runs), newest(14, 5));
+});
+
 test('RUN_LIMIT above HISTORY_LIMIT is capped at the history window', () => {
   const www = webroot('cap');
   const c = cycles(www, 0, 9, { historyLimit: 4, reportLimit: 10 });

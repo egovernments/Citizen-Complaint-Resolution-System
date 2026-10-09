@@ -83,6 +83,8 @@ export interface RunSummary {
    * still there.
    */
   hasReport?: boolean;
+  /** The RUN_LIMIT the run was built with (absent in older catalogs). */
+  runLimit?: number;
   total: number;
   sha: string;
   branch: string;

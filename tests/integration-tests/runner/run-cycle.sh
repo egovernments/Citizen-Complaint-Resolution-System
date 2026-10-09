@@ -11,9 +11,11 @@
 #   WEBROOT     served dir (catalog.json/history.json/runs live here)
 #   TENANT_ENV  optional env file to source (BASE_URL/DIGIT_TENANT/LOCALITY_CODE/…)
 #   RUN_LIMIT   keep the full report (runs/<id>/: Playwright report, videos,
-#               traces, run.log) for at most this many runs (default 5). The
-#               catalog keeps results for more runs than that (build-catalog's
-#               HISTORY_LIMIT, 30); older ones show results but no report link.
+#               traces, run.log) for this many runs (default 5), or for more
+#               while a run that still has its report was built with a larger
+#               RUN_LIMIT (build-catalog). The catalog keeps results for 30 runs
+#               (build-catalog's DEFAULT_HISTORY_LIMIT); older ones show results
+#               but no report link.
 #   BRANCH      branch label recorded in the catalog (default "deployed")
 #   RUN_LOCK    single-flight lock file (default /tmp/digit-tests.lock)
 #
