@@ -20,6 +20,16 @@ import * as path from 'node:path';
 const HERE = __dirname;
 const SUITE = path.resolve(HERE, '..');
 
+/**
+ * run-cycle.sh takes its lock with flock(1) and bounds Playwright with
+ * timeout(1): GNU util-linux and coreutils, on every Linux box and CI runner
+ * but not on a stock Mac. Skip with the reason rather than fail there.
+ */
+const missingTools = ['flock', 'timeout'].filter(cmd => spawnSync('bash', ['-c', `command -v ${cmd}`]).status !== 0);
+const skip = missingTools.length
+  ? `run-cycle.sh needs GNU ${missingTools.join(' and ')} on PATH (both ship with Linux; on macOS install util-linux and coreutils)`
+  : false;
+
 let tmp = '';
 let repo = '';
 let www = '';
@@ -78,7 +88,7 @@ function runCycle(i: number): void {
   assert.equal(r.status, 0, `run-cycle ${id} exited ${r.status}\n${r.stdout}\n${r.stderr}`);
 }
 
-test('six cycles with HISTORY_LIMIT=4 RUN_LIMIT=2: four runs of results, two reports on disk, hasReport matches disk', () => {
+test('six cycles with HISTORY_LIMIT=4 RUN_LIMIT=2: four runs of results, two reports on disk, hasReport matches disk', { skip }, () => {
   for (let i = 0; i < 6; i++) runCycle(i);
   const catalog = JSON.parse(fs.readFileSync(path.join(www, 'catalog.json'), 'utf8'));
   const history = JSON.parse(fs.readFileSync(path.join(www, 'history.json'), 'utf8'));
