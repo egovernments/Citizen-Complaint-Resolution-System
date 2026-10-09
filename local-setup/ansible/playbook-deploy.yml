@@ -5281,31 +5281,60 @@
       no_log: true
       when: test_alerts_enabled | default(false) | bool
 
+    # test_alerts_to may be one address (a string) or a list. A string used to
+    # reach the env file joined character by character ("t,e,a,m,@,…"), so make
+    # it a one-element list first.
+    - name: "integration-tests alerts — recipients as a list (one address may be a plain string)"
+      ansible.builtin.set_fact:
+        _test_alerts_to_list: >-
+          {{ ([_to] if (_to is string or _to is mapping or _to is not iterable) else _to)
+             | map('string') | map('trim') | select | list }}
+      vars:
+        _to: "{{ test_alerts_to | default('', true) }}"
+      when: test_alerts_enabled | default(false) | bool
+
+    # Every address must be "addr@domain" or "Name <addr@domain>": the script
+    # mails the bare address and keeps the name for the To: header. Several
+    # addresses in ONE string ("a@x.org, b@x.org") are refused, not guessed at:
+    # they go in a YAML list. A bad address is reported like a missing setting
+    # (alerts stay off), instead of the poll failing on every run at RCPT TO.
     - name: "integration-tests alerts — check required settings"
       ansible.builtin.set_fact:
         _test_alerts_missing: "{{ [
             ('enable_integration_tests' if not (enable_integration_tests | default(false) | bool) else ''),
             ('test_alerts_smtp_host' if not (test_alerts_smtp_host | default('', true)) else ''),
             ('test_alerts_from' if not (test_alerts_from | default('', true)) else ''),
-            ('test_alerts_to' if (test_alerts_to | default([], true) | length) == 0 else ''),
+            ('test_alerts_to' if (_test_alerts_to_list | length) == 0 else ''),
             ('test_alerts_smtp_password' if (test_alerts_smtp_user | default('', true)) and not _test_alerts_smtp_pw else ''),
           ] | select | list }}"
+        _test_alerts_invalid: >-
+          {{ (['test_alerts_from must be "addr@domain" or "Name <addr@domain>" (got: ' ~ test_alerts_from ~ ')']
+                if (test_alerts_from | default('', true))
+                   and not ((test_alerts_from | string) is match(_addr_re)) else [])
+             + (['test_alerts_to entries must each be one "addr@domain" or "Name <addr@domain>", several go in a YAML list (not valid: '
+                  ~ (_test_alerts_to_list | reject('match', _addr_re) | join(' | ')) ~ ')']
+                if (_test_alerts_to_list | reject('match', _addr_re) | list | length) > 0 else []) }}
+      vars:
+        _addr_re: '^\s*(?:[^\s<>@,"]+@[^\s<>@,"]+|(?:"[^"]*"\s*|[^"<>,@]*)<[^\s<>@,"]+@[^\s<>@,"]+>)\s*$'
       when: test_alerts_enabled | default(false) | bool
 
     - name: "integration-tests alerts — WARNING: enabled but not configured, alerts stay off"
       ansible.builtin.debug:
         msg: >-
-          test_alerts_enabled is true but these are missing: {{ _test_alerts_missing | join(', ') }}.
-          No alert mail will be sent from this box until they are set.
+          {{ (['test_alerts_enabled is true, but no alert mail will be sent from this box until these are fixed.']
+              + (['Missing: ' ~ (_test_alerts_missing | join(', ')) ~ '.'] if _test_alerts_missing else [])
+              + (['Invalid: ' ~ (_test_alerts_invalid | join('; ')) ~ '.'] if _test_alerts_invalid else []))
+             | join(' ') }}
       when:
         - test_alerts_enabled | default(false) | bool
-        - _test_alerts_missing | length > 0
+        - (_test_alerts_missing + _test_alerts_invalid) | length > 0
 
     - name: "integration-tests alerts — decide whether the timer runs on this box"
       ansible.builtin.set_fact:
         _test_alerts_on: >-
           {{ (test_alerts_enabled | default(false) | bool)
              and (_test_alerts_missing | default(['off']) | length == 0)
+             and (_test_alerts_invalid | default(['off']) | length == 0)
              and (integration_tests_dir is defined)
              and ansible_system != 'Darwin' }}
         # Where the poll script runs from: root-owned, outside the checkout.

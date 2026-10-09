@@ -124,9 +124,10 @@ Put the SMTP password in OpenBao (`bao kv patch <secrets_path>
 test_alerts_smtp_password=<value>`), or set `test_alerts_smtp_password` in
 host_vars. Then redeploy. The deploy writes `/etc/ccrs-test-alerts.env`
 (root-only), copies the script to `/usr/local/lib/ccrs-test-alerts/`
-(root-owned) and enables the timer. If anything required is missing it prints
-a WARNING and leaves alerts off, so the deploy itself never fails because of
-mail settings.
+(root-owned) and enables the timer. If anything required is missing or
+malformed (for example a recipient that is not one `addr@domain` or
+`Name <addr@domain>`) it prints a WARNING and leaves alerts off, so the
+deploy itself never fails because of mail settings.
 
 The timer runs that root-owned copy, not the script in the checkout. The
 checkout belongs to the test-runner account (`digit-tests`), which also runs
@@ -145,7 +146,7 @@ deploy.
 | `test_alerts_smtp_user` | — | SMTP login; omit for an unauthenticated relay |
 | `test_alerts_smtp_password` | OpenBao | host_vars value wins over the OpenBao key of the same name |
 | `test_alerts_from` | — | sender, `Name <addr>` (required) |
-| `test_alerts_to` | — | list of recipients (required); a group address is easiest |
+| `test_alerts_to` | — | recipients (required): a list, or one address as a string; each `addr` or `Name <addr>`; a group address is easiest |
 | `test_alerts_box_name` | inventory host | label in the subject |
 | `test_alerts_dashboard_url` | `https://<domain>/tests/` | base for the per-test links |
 | `test_alerts_poll_minutes` | `5` | timer interval |
