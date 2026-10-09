@@ -14,6 +14,9 @@ DIGIT_TENANT ?= ke.nairobi
 LOCALITY_CODE ?= NAIROBI_CITY_VIWANDANI
 HOST_SSH ?= egov-nairobi
 HOST_DIR ?= /var/www/tests
+# Runs whose full report (runs/<id>/) stays on the host; build-catalog and
+# publish.sh must agree on it. Results are kept for 30 runs regardless.
+RUN_LIMIT ?= 5
 LOCK := /tmp/digit-tests.lock
 
 # Run-id format: 2026-05-07_1430_a1b2c3d
@@ -54,17 +57,17 @@ catalog:
 		echo "No report.json — Playwright may have crashed before producing one." >&2; \
 		exit 6; \
 	fi
-	@env BRANCH=$(BRANCH) BASE_URL=$(BASE_URL) GIT_SHA="$$(cat .git-sha 2>/dev/null || echo '')" \
+	@env BRANCH=$(BRANCH) BASE_URL=$(BASE_URL) GIT_SHA="$$(cat .git-sha 2>/dev/null || echo '')" RUN_LIMIT=$(RUN_LIMIT) \
 		npx tsx scripts/build-catalog.ts "$(RUN_ID)"
 
 publish:
 	@echo "===== publish ====="
-	@HOST_SSH=$(HOST_SSH) HOST_DIR=$(HOST_DIR) bash scripts/publish.sh "$(RUN_ID)"
+	@HOST_SSH=$(HOST_SSH) HOST_DIR=$(HOST_DIR) RUN_LIMIT=$(RUN_LIMIT) bash scripts/publish.sh "$(RUN_ID)"
 
 catalog-only:
 	@LATEST_RUN_ID=$$(ls -t test-results 2>/dev/null | head -1 || date -u +ad-hoc-%H%M); \
-		env BRANCH=$(BRANCH) BASE_URL=$(BASE_URL) GIT_SHA="$$(git rev-parse --short HEAD)" \
+		env BRANCH=$(BRANCH) BASE_URL=$(BASE_URL) GIT_SHA="$$(git rev-parse --short HEAD)" RUN_LIMIT=$(RUN_LIMIT) \
 		npx tsx scripts/build-catalog.ts "$$LATEST_RUN_ID"
 
 publish-only:
-	@HOST_SSH=$(HOST_SSH) HOST_DIR=$(HOST_DIR) bash scripts/publish.sh "$(RUN_ID)"
+	@HOST_SSH=$(HOST_SSH) HOST_DIR=$(HOST_DIR) RUN_LIMIT=$(RUN_LIMIT) bash scripts/publish.sh "$(RUN_ID)"

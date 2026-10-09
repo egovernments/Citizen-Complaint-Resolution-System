@@ -26,7 +26,8 @@
  *   RUNNER_REPO_DIR    vendored tests/integration-tests    (default: parent of this file)
  *   RUNNER_WEBROOT     served dir holding catalog.json/runs (default /var/www/integration-tests)
  *   RUNNER_TENANT_ENV  env file sourced by the job (BASE_URL, DIGIT_TENANT, …)  (optional)
- *   RUNNER_RUN_LIMIT   keep at most this many runs          (default 5)
+ *   RUNNER_RUN_LIMIT   keep the full report for this many runs (default 5;
+ *                      results for older runs stay in the catalog, see README)
  *   RUNNER_BRANCH      branch the job reports in the catalog (default "deployed")
  */
 import { createServer } from 'node:http';
