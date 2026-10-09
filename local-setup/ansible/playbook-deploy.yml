@@ -4492,7 +4492,9 @@
       when: _test_alerts_on | bool
 
     # Turning alerts off (or never having them) must leave no timer running, no
-    # password on disk, and nothing of the alerts installed.
+    # password on disk, nothing of the alerts installed, and no state: turning
+    # them back on then starts from a fresh baseline instead of mailing every
+    # run since they were turned off.
     - name: "integration-tests alerts — off: stop + disable the timer if present"
       ansible.builtin.systemd:
         name: ccrs-test-alerts.timer
@@ -4503,7 +4505,7 @@
         - not (_test_alerts_on | bool)
         - ansible_system != "Darwin"
 
-    - name: "integration-tests alerts — off: remove the env file, the units and the script copy"
+    - name: "integration-tests alerts — off: remove the env file, the units, the script copy and the state"
       ansible.builtin.file:
         path: "{{ item }}"
         state: absent
@@ -4512,6 +4514,10 @@
         - /etc/systemd/system/ccrs-test-alerts.timer
         - /etc/systemd/system/ccrs-test-alerts.service
         - "{{ _test_alerts_lib }}"
+        # With DynamicUser=yes, StateDirectory= lives in /var/lib/private and
+        # /var/lib/ccrs-test-alerts is a symlink to it: remove both.
+        - /var/lib/ccrs-test-alerts
+        - /var/lib/private/ccrs-test-alerts
       register: _test_alerts_removed
       when:
         - not (_test_alerts_on | bool)

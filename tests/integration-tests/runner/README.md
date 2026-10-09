@@ -81,7 +81,10 @@ How it behaves:
   mailed again, and a run with only fixes sends nothing. A problem that persists
   (say, every run executing nothing) is reported once, on the run where it began.
 - **First poll on a box** only records the newest run as the baseline, so
-  enabling alerts doesn't mail old news.
+  enabling alerts doesn't mail old news. The same goes for turning them back
+  on: turning alerts off (`test_alerts_enabled: false`, or settings the deploy
+  refuses) deletes their state along with the timer, units, script copy and
+  env file.
 - **One mail per poll, so one SMTP login.** Several new runs (RUN-button runs
   between polls, or runs that piled up while sending failed) are each compared
   with their own predecessor, oldest first; the ones with something to report go

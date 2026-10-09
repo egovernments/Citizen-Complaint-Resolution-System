@@ -325,8 +325,10 @@ enable_integration_tests_runner: false
 # troubleshooting: tests/integration-tests/runner/README.md.
 #
 # If a required setting is missing or malformed the deploy prints a WARNING
-# and leaves alerts off; a mail misconfiguration never fails the deploy. Setting
-# test_alerts_enabled: false stops the timer and deletes the env file.
+# and leaves alerts off; a mail misconfiguration never fails the deploy.
+# Alerts off (test_alerts_enabled: false, or that WARNING) stops the timer and
+# deletes the env file, the units, the script copy and the alert state, so
+# turning them back on starts from a fresh baseline (no backlog of old runs).
 test_alerts_enabled: false
 # test_alerts_smtp_host: "smtp.example.org"     # required
 # test_alerts_smtp_port: 587                     # 465 is blocked outbound on the Hetzner boxes
