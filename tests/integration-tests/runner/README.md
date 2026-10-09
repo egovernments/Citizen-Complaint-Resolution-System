@@ -179,16 +179,16 @@ deploy.
 |---|---|---|
 | `test_alerts_enabled` | `false` | turn the timer on |
 | `test_alerts_smtp_host` | — | SMTP server (required) |
-| `test_alerts_smtp_port` | `587` | SMTP port (465 is blocked outbound on the Hetzner boxes) |
+| `test_alerts_smtp_port` | `587`, or `465` with `test_alerts_smtp_tls` | SMTP port (465 is blocked outbound on the Hetzner boxes) |
 | `test_alerts_smtp_starttls` | `true` | on `smtp://`: `true` requires STARTTLS; `false` uses it only when the relay offers it, which anyone on the path can strip, and the login then goes unencrypted |
-| `test_alerts_smtp_tls` | `false` | implicit TLS (`smtps://`) instead |
+| `test_alerts_smtp_tls` | `false` | implicit TLS (`smtps://`) instead; the port then defaults to 465 |
 | `test_alerts_smtp_user` | — | SMTP login; omit for an unauthenticated relay |
 | `test_alerts_smtp_password` | OpenBao | host_vars value wins over the OpenBao key of the same name |
 | `test_alerts_from` | — | sender, `Name <addr>` (required) |
 | `test_alerts_to` | — | recipients (required): a list, or one address as a string; each `addr` or `Name <addr>`; a group address is easiest |
 | `test_alerts_box_name` | inventory host | label in the subject |
 | `test_alerts_dashboard_url` | `https://<domain>/tests/` | base for the per-test links |
-| `test_alerts_poll_minutes` | `5` | timer interval |
+| `test_alerts_poll_minutes` | `5` | timer interval, a whole number of minutes, 1 or more |
 | `test_alerts_max_list` | `40` | max tests listed per group |
 | `test_alerts_stale_after_hours` | `0` (off) | mail once when no new run appears for this long |
 
