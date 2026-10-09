@@ -94,6 +94,31 @@ test('analyzeRun: in a batch, each run is judged against the runs before it, nev
   assert.deepEqual(r3.fixed.map(x => x.id), ['red-then-fixed']);
 });
 
+test('analyzeRun: a skip in between neither hides a regression nor a fix; "now skipped" is news once', () => {
+  const R0 = '2026-10-03_1542_00000000';
+  const c = {
+    runs: [run(R3), run(R2), run(R1), run(R0)],
+    tests: [
+      t2('pass-skip-fail', [h(R3, 'failed'), h(R2, 'skipped'), h(R1, 'passed')]),
+      t2('fail-skip-pass', [h(R3, 'passed'), h(R2, 'skipped'), h(R1, 'failed')]),
+      t2('pass-skip-skip', [h(R3, 'skipped'), h(R2, 'skipped'), h(R1, 'passed')]),
+      t2('fail-pass-skip-fail', [h(R3, 'failed'), h(R2, 'skipped'), h(R1, 'passed'), h(R0, 'failed')]),
+    ],
+  };
+  const a = analyzeRun(c, run(R3), run(R2));
+  assert.deepEqual(a.regressed.map(x => [x.id, x.since]), [['fail-pass-skip-fail', R1], ['pass-skip-fail', R1]]);
+  assert.deepEqual(a.fixed.map(x => [x.id, x.since]), [['fail-skip-pass', R1]]);
+  assert.deepEqual(a.nowSkipped, [], 'skipped again is not news');
+  assert.deepEqual(a.regressed.find(x => x.id === 'fail-pass-skip-fail').flaky, { fails: 1, of: 2 }, 'a skip is not a run of the test');
+});
+
+test('analyzeRun: in a batch, "flaky" counts only the runs before the one compared', () => {
+  const c = { runs: [run(R3), run(R2), run(R1)], tests: [t2('x', [h(R3, 'failed'), h(R2, 'failed'), h(R1, 'passed')])] };
+  const a = analyzeRun(c, run(R2), run(R1));
+  assert.deepEqual(a.regressed.map(x => x.id), ['x']);
+  assert.equal(a.regressed[0].flaky, null, 'R3 came after R2: its failure says nothing about R2');
+});
+
 test('composeMail: subject counts, compare link, deep links, truncation', () => {
   const a = analyzeRun(catalog, catalog.runs[0], catalog.runs[1]);
   const cfg = { boxName: 'bomet', dashboardUrl: 'https://box.example/tests/', repoUrl: 'https://github.com/o/r', maxList: 2 };
