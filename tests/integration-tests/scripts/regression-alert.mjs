@@ -15,10 +15,11 @@
  *   2. If its newest run was already handled (state file), exit quietly.
  *   3. For every run newer than the last handled one, oldest first, compare
  *      each test with the run before it:
- *        regressed       failed or timed out now; its last earlier verdict passed
+ *        regressed       failed or timed out now; the last time it RAN (a skip
+ *                        doesn't count) it passed
  *        now skipped     skipped now; its last earlier verdict passed
  *        stopped running passed in the previous run; no result now
- *        fixed           passed now; its last earlier verdict failed/timed out
+ *        fixed           passed now; the last time it ran it failed/timed out
  *      ("Verdict" excludes `interrupted`: the global timeout killed the test.)
  *   4. If anything regressed, became skipped or stopped running, mail the
  *      summary to ALERT_TO. Then record the run as handled. A failed send is
@@ -116,18 +117,23 @@ export function analyzeRun(catalog, run, prev) {
   for (const t of catalog.tests || []) {
     const history = Array.isArray(t.history) ? t.history : []; // newest first
     const here = verdict(history.find(h => h.runId === run.id));
-    const earlier = history.find(h => runKey(h.runId) < key && verdict(h));
-    const before = verdict(earlier);
+    // Every earlier result with a verdict, newest first. Only runs BEFORE this
+    // one: when a batch of runs is compared, the newer ones are already in history.
+    const earlier = history.filter(h => runKey(h.runId) < key && verdict(h));
+    const last = earlier[0];                                  // a skip counts: "now skipped" is news once
+    const lastRan = earlier.find(h => h.status !== 'skipped'); // passed → skipped → failed is still a regression
+    const before = verdict(last);
+    const ran = verdict(lastRan);
     const ref = { id: t.id, title: t.title, file: t.file, line: t.line };
-    if (here && FAILED.has(here) && before === 'passed') {
-      const priorFails = history.filter(h => h.runId !== run.id && FAILED.has(h.status)).length;
-      const priorRuns = history.filter(h => h.runId !== run.id && verdict(h)).length;
+    if (here && FAILED.has(here) && ran === 'passed') {
+      const ranBefore = earlier.filter(h => h.status !== 'skipped');
+      const priorFails = ranBefore.filter(h => FAILED.has(h.status)).length;
       const err = t.latestRun && t.latestRun.runId === run.id ? firstErrorLine(t.latestRun.errorMessage) : '';
-      regressed.push({ ...ref, status: here, since: earlier.runId, error: err, flaky: priorFails > 0 ? { fails: priorFails, of: priorRuns } : null });
+      regressed.push({ ...ref, status: here, since: lastRan.runId, error: err, flaky: priorFails > 0 ? { fails: priorFails, of: ranBefore.length } : null });
     } else if (here === 'skipped' && before === 'passed') {
-      nowSkipped.push({ ...ref, since: earlier.runId });
-    } else if (here === 'passed' && before && FAILED.has(before)) {
-      fixed.push({ ...ref, since: earlier.runId });
+      nowSkipped.push({ ...ref, since: last.runId });
+    } else if (here === 'passed' && ran && FAILED.has(ran)) {
+      fixed.push({ ...ref, since: lastRan.runId });
     } else if (!here && prev && verdict(history.find(h => h.runId === prev.id)) === 'passed') {
       stopped.push(ref);
     }

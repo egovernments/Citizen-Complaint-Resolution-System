@@ -64,14 +64,16 @@ tests that:
 
 | Group | Meaning | Mails? |
 |---|---|---|
-| Regressed | failed or timed out now; passed the last time it ran | yes |
+| Regressed | failed or timed out now; passed the last time it ran (a skip in between doesn't count) | yes |
 | Now skipped | skipped now; passed the last time it ran | yes |
 | Stopped running | passed in the previous run; no result now (cut off by the global timeout, setup failed, …) | yes |
-| Fixed | passed now; failed the last time it ran | listed only |
+| Fixed | passed now; failed the last time it ran (a skip in between doesn't count) | listed only |
 
 The mail carries the run and previous-run summaries, the "cut short" message,
 a GitHub compare link between the two runs' commits, and a dashboard link per
-test. Tests whose 5-run history already had failures are labelled flaky.
+test. A regressed test that had already failed in its recent history is
+labelled flaky ("failed 2 of the last 4 runs", counting the runs before this
+one in which it ran).
 
 How it behaves:
 
