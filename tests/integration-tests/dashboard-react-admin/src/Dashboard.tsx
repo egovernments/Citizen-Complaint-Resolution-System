@@ -5,7 +5,7 @@
  * tests across every run the catalog keeps (up to 30). Driven entirely by the
  * already-fetched catalog.json — no extra API calls.
  */
-import { useGetList } from 'react-admin';
+import { Link, useCreatePath, useGetList } from 'react-admin';
 import {
   Alert,
   Box,
@@ -15,7 +15,6 @@ import {
   Divider,
   Grid,
   LinearProgress,
-  Link as MuiLink,
   Stack,
   Typography,
 } from '@mui/material';
@@ -275,6 +274,7 @@ export default function Dashboard() {
   const byArea = useMemo(() => aggregateByFacet(tests, 'area'), [tests]);
   const byPersona = useMemo(() => aggregateByFacet(tests, 'persona'), [tests]);
   const fails = useMemo(() => topFailers(tests), [tests]);
+  const createPath = useCreatePath();
 
   return (
     <Box sx={{ p: { xs: 1, sm: 2 }, maxWidth: 1400, mx: 'auto' }}>
@@ -371,13 +371,15 @@ export default function Dashboard() {
                         {test.file}:{test.line}
                       </Typography>
                     </Box>
-                    <MuiLink
-                      href={`#/tests/${encodeURIComponent(test.id)}/show`}
+                    {/* A router link: the app uses BrowserRouter, so a "#/tests/…"
+                        href only appended a hash to the current page. */}
+                    <Link
+                      to={createPath({ resource: 'tests', id: test.id, type: 'show' })}
                       variant="caption"
                       sx={{ flexShrink: 0 }}
                     >
                       Open
-                    </MuiLink>
+                    </Link>
                   </Stack>
                 </Box>
               ))}
