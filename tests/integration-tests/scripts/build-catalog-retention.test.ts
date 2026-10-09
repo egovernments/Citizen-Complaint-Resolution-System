@@ -226,6 +226,42 @@ test('a 5-run history from before this change grows instead of resetting; a lega
   assert.equal(c.tests.find(t => t.id === id('alpha'))!.history.length, 6);
 });
 
+test('first build after the deploy: pre-notRun summaries are recomputed or marked legacy, and each gets hasReport', () => {
+  // A history.json written before `notRun` and `hasReport` existed, with more
+  // runs than RUN_LIMIT. r005–r007 still have their report.json (recomputed
+  // from it), r002–r004 have a folder but no report.json, r000–r001 have no
+  // folder at all (both marked legacy).
+  const www = webroot('pre-notrun');
+  const legacyIds = [7, 6, 5, 4, 3, 2, 1, 0];
+  const legacyRuns = legacyIds.map(i => ({
+    id: runId(i), startedAt: `2026-09-01T0${i}:00:00.000Z`, durationMs: 1, passed: 3, failed: 0, skipped: 0, timedOut: 0,
+    excluded: 0, total: 3, sha: 'old', branch: 'old', baseUrl: 'x',
+  })) as unknown as RunSummary[];
+  const perTest = Object.fromEntries(TESTS.map(t => [id(t.title), legacyIds.map(i => ({ runId: runId(i), status: 'passed', durationMs: 5 }))]));
+  fs.writeFileSync(path.join(www, 'history.json'), JSON.stringify({ perTest, runs: legacyRuns }, null, 2));
+  for (const i of [7, 6, 5]) {
+    fs.mkdirSync(path.join(www, 'runs', runId(i)));
+    fs.copyFileSync(report({ alpha: 'passed', beta: 'failed' }, i), path.join(www, 'runs', runId(i), 'report.json'));
+  }
+  for (const i of [4, 3, 2]) fs.mkdirSync(path.join(www, 'runs', runId(i)));
+
+  const c = cycle(www, 8, { reportLimit: 3 });
+
+  assert.deepEqual(ids(c.runs), newest(8, 9));
+  for (const r of c.runs) assert.equal(typeof r.hasReport, 'boolean', `${r.id} has no boolean hasReport`);
+  assert.deepEqual(withReport(c.runs), ['r008', 'r007', 'r006']);
+  // run-cycle.sh's prune follows hasReport, so disk holds exactly those three
+  assert.deepEqual(onDisk(www), ['r006', 'r007', 'r008']);
+  const byId = new Map(c.runs.map(r => [r.id, r]));
+  for (const i of [7, 6, 5]) {
+    assert.deepEqual([byId.get(runId(i))!.notRun, byId.get(runId(i))!.failed], [1, 1], `${runId(i)} recomputed from its report.json`);
+  }
+  for (const i of [4, 3, 2, 1, 0]) assert.equal(byId.get(runId(i))!.notRun, null, `${runId(i)} marked legacy`);
+  // the persisted history agrees, so the next build sees the same flags
+  const h = JSON.parse(fs.readFileSync(path.join(www, 'history.json'), 'utf8')) as HistoryFile;
+  assert.deepEqual(h.runs.map(r => [r.id, r.hasReport]), c.runs.map(r => [r.id, r.hasReport]));
+});
+
 test('the headline still counts only the latest run, however long the history', () => {
   const www = webroot('headline');
   cycles(www, 0, 28, { reportLimit: 12 });
