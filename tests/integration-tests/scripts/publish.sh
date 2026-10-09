@@ -9,7 +9,10 @@
 # Env overrides:
 #   HOST_SSH        — ssh target (default: egov-nairobi)
 #   HOST_DIR        — remote directory (default: /var/www/tests)
-#   RUN_LIMIT       — keep at most this many runs on host (default: 5)
+#   RUN_LIMIT       — keep the full report (runs/<id>/) for at most this many
+#                     runs on host (default: 5). Pass the same value to
+#                     build-catalog.ts (the Makefile does) so its `hasReport`
+#                     flags match what this prune leaves.
 #   RSYNC_RETRIES   — total attempts before giving up (default: 2)
 set -euo pipefail
 
@@ -103,7 +106,8 @@ rsync -avh --delete \
   --exclude=history.json \
   dashboard/ "$HOST_SSH:$HOST_DIR/"
 
-# Prune older runs on host to RUN_LIMIT.
+# Prune older runs' reports on host to RUN_LIMIT. Their results stay in
+# history/catalog (build-catalog's HISTORY_LIMIT), flagged hasReport: false.
 ssh "$HOST_SSH" "
   set -e
   cd '$HOST_DIR/runs'

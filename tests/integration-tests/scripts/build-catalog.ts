@@ -3,12 +3,15 @@
  *
  * Inputs:
  *   - report.json (Playwright JSON reporter output, written next to playwright.config.ts)
- *   - history.json (rolling 5-run history per test; created on first run if absent)
+ *   - history.json (rolling history: the newest HISTORY_LIMIT runs; created on first run if absent)
  *   - tests/**\/*.spec.ts (source-of-truth for tag + source code per test)
  *
  * Outputs:
- *   - catalog.json (consumed by dashboard SPA)
- *   - history.json (updated with the new run prepended; trimmed to 5 entries)
+ *   - catalog.json (consumed by the dashboard SPAs)
+ *   - history.json (updated with the new run prepended; trimmed to HISTORY_LIMIT runs)
+ *
+ * Retention has two tiers (DEFAULT_HISTORY_LIMIT / DEFAULT_REPORT_LIMIT below):
+ * results for the newest 30 runs, full reports for the newest RUN_LIMIT of them.
  *
  * Run:
  *   node --import tsx/esm scripts/build-catalog.ts <runId>
@@ -22,7 +25,32 @@ import { Project, Node, SyntaxKind, CallExpression } from 'ts-morph';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const HISTORY_LIMIT = 5;
+/**
+ * How many runs history.json and catalog.json remember: the run summaries, and
+ * each test's per-run results (its newest HISTORY_LIMIT entries). The dashboards
+ * page through them five at a time. Override with HISTORY_LIMIT=<n>.
+ */
+const DEFAULT_HISTORY_LIMIT = 30;
+/**
+ * How many of those runs keep their full report — runs/<id>/ with the
+ * Playwright HTML report, videos, traces and run.log. run-cycle.sh and
+ * publish.sh prune runs/ to their RUN_LIMIT and pass the same value here, so
+ * each run summary's `hasReport` matches what is on disk after the prune.
+ * Older runs keep their results but lose the drill-down. Override with RUN_LIMIT=<n>.
+ */
+const DEFAULT_REPORT_LIMIT = 5;
+
+/** A positive integer from the environment, else the fallback. */
+function limitFromEnv(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (raw === undefined || raw === '') return fallback;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 1) {
+    console.warn(`[build-catalog] ignoring ${name}=${raw} (want a positive integer); using ${fallback}`);
+    return fallback;
+  }
+  return n;
+}
 
 type TestStatus = 'passed' | 'failed' | 'skipped' | 'timedOut' | 'interrupted';
 
@@ -35,8 +63,15 @@ interface CatalogTest {
   tags: string[];
   description: string | null;
   source: string;
+  /** Last KNOWN outcome — may come from an older run; see ranInLatestRun. */
   lastStatus: TestStatus | null;
   lastDurationMs: number | null;
+  /**
+   * True only when this test produced a verdict in the run this catalog was
+   * built from. When false, lastStatus/latestRun are carried over from an
+   * earlier run and must not be shown as the current result.
+   */
+  ranInLatestRun: boolean;
   history: HistoryEntry[];
   latestRun: LatestRun | null;
   parseError: string | null;
@@ -65,6 +100,25 @@ interface RunSummary {
   failed: number;
   skipped: number;
   timedOut: number;
+  /**
+   * Counted in `total` but produced no verdict in THIS run: never started
+   * (global timeout, crash, spec not collected) or was interrupted.
+   * null = legacy count: written before this field existed and its report was
+   * not available to recompute from, so the counts may include results carried
+   * over from older runs. Absent only in summaries the next build hasn't
+   * visited yet.
+   */
+  notRun?: number | null;
+  /** Playwright's own message when the run stopped early (e.g. global timeout), else null. */
+  cutShort?: string | null;
+  /**
+   * Whether runs/<id>/ (Playwright report, videos, traces, run.log) still
+   * exists after this build's prune: true for the newest RUN_LIMIT runs, false
+   * for older ones, whose counts and per-test results stay but whose report is
+   * gone, so the dashboards must not link into it. Once false it stays false.
+   * Absent in summaries written before this field existed: treat as true.
+   */
+  hasReport?: boolean;
   /** On disk, but the Playwright config filters it out on this deployment. */
   excluded: number;
   total: number;
@@ -225,6 +279,8 @@ interface PwReport {
   config: { rootDir: string; projects: Array<{ name: string; outputDir: string }> };
   stats: { startTime: string; duration: number; expected: number; unexpected: number; skipped: number; flaky: number };
   suites: PwSuite[];
+  /** Run-level errors, e.g. "Timed out waiting 4800s for the test suite to run". */
+  errors?: Array<{ message?: string }>;
 }
 interface PwSuite {
   title: string;
@@ -304,6 +360,13 @@ interface BuildOptions {
   baseUrl: string;
   branch: string;
   sha: string;
+  /** Runs kept in history/catalog (default DEFAULT_HISTORY_LIMIT). */
+  historyLimit?: number;
+  /**
+   * Runs that keep runs/<id>/ on disk (default DEFAULT_REPORT_LIMIT). Only runs
+   * in the history window can keep one, so above historyLimit it has no effect.
+   */
+  reportLimit?: number;
 }
 
 function readPriorCatalog(p: string | null): Map<string, CatalogTest> {
@@ -332,6 +395,95 @@ function readHistory(p: string | null): HistoryFile {
   }
 }
 
+/**
+ * Per-test last result of one report, keyed by the AST id (file:line:title).
+ * Tests that never started (no results) are absent.
+ */
+function indexResults(report: PwReport): Map<string, { test: PwTest; result: PwResult; spec: PwSpec; describePath: string[] }> {
+  // Playwright's JSON reporter emits spec.file relative to config.rootDir
+  // (= testDir, e.g. `<repo>/tests`), so it lacks the `tests/` prefix that
+  // the AST ids carry. Older versions emitted absolute paths. Resolve against
+  // rootDir first so both shapes normalize to the same cwd-relative id the
+  // AST produces — otherwise nothing matches and every lastStatus is null.
+  const reportRootDir = report.config?.rootDir || process.cwd();
+  const byId = new Map<string, { test: PwTest; result: PwResult; spec: PwSpec; describePath: string[] }>();
+  for (const { spec, describePath } of flattenSpecs(report)) {
+    const absFile = path.isAbsolute(spec.file) ? spec.file : path.resolve(reportRootDir, spec.file);
+    const file = path.relative(process.cwd(), absFile).replace(/\\/g, '/');
+    const id = `${file}:${spec.line}:${spec.title}`;
+    const t = (spec.tests || [])[0];
+    if (!t) continue;
+    const r = (t.results || [])[t.results.length - 1];
+    if (!r) continue;
+    byId.set(id, { test: t, result: r, spec, describePath });
+  }
+  return byId;
+}
+
+type RunCounts = Record<'passed' | 'failed' | 'skipped' | 'timedOut' | 'notRun' | 'excluded' | 'total', number>;
+
+/**
+ * A result's verdict, or undefined when it produced none. 'interrupted' means
+ * the global timeout killed it mid-flight: it started but reached no verdict.
+ */
+function verdictOf(result: PwResult | undefined): TestStatus | undefined {
+  return result && result.status !== 'interrupted' ? result.status : undefined;
+}
+
+/**
+ * Tally one run in a single pass. Each entry is one test in the suite with its
+ * verdict (undefined = no result in that run); `excluded` entries are left out
+ * of `total` entirely. See the did-not-run note in buildCatalog for why
+ * `notRun` and `excluded` are kept apart.
+ */
+function tally(entries: Iterable<{ verdict: TestStatus | undefined; excluded: boolean }>): RunCounts {
+  const c: RunCounts = { passed: 0, failed: 0, skipped: 0, timedOut: 0, notRun: 0, excluded: 0, total: 0 };
+  for (const { verdict, excluded } of entries) {
+    if (excluded) { c.excluded++; continue; }
+    c.total++;
+    if (verdict === undefined) c.notRun++;
+    else if (verdict === 'passed') c.passed++;
+    else if (verdict === 'skipped') c.skipped++;
+    else if (verdict === 'failed' || verdict === 'timedOut') {
+      c.failed++;
+      if (verdict === 'timedOut') c.timedOut++;
+    }
+  }
+  return c;
+}
+
+/**
+ * Counts for a PAST run, from that run's own report.json alone. Its spec
+ * entries (tests/**\/*.spec.ts, the same files the AST walk reads) are the
+ * suite as it was then, so the result doesn't depend on how today's specs have
+ * moved or grown. Entries with no result are that run's not-run tests;
+ * @local-only specs never reach a remote report, so nothing is excluded.
+ */
+function countReport(report: PwReport): RunCounts {
+  const entries: Array<{ verdict: TestStatus | undefined; excluded: boolean }> = [];
+  for (const { spec } of flattenSpecs(report)) {
+    if (!/\.spec\.ts$/.test(spec.file)) continue; // fixtures/*.setup.ts are not tests in the catalog
+    const t = (spec.tests || [])[0];
+    entries.push({ verdict: verdictOf(t?.results?.[t.results.length - 1]), excluded: false });
+  }
+  return tally(entries);
+}
+
+/**
+ * Playwright's run-level message when the run stopped before every test got a
+ * turn — the global timeout or --max-failures — else null. Matched exactly, so
+ * an unrelated run-level error (a fixture, a teardown) isn't read as cut short.
+ */
+const CUT_SHORT = [
+  /^Timed out waiting [\d.]+s for the test suite to run/,
+  /^Testing stopped early after \d+ maximum allowed failures/,
+];
+function cutShortOf(report: PwReport): string | null {
+  return (report.errors || [])
+    .map(e => (e.message || '').replace(/\x1b\[[0-9;]*m/g, '').split('\n')[0].trim())
+    .find(m => CUT_SHORT.some(re => re.test(m))) ?? null;
+}
+
 function buildCatalog(opts: BuildOptions): { catalog: Catalog; nextHistory: HistoryFile } {
   if (!fs.existsSync(opts.reportPath)) {
     throw new Error(`report.json not found at ${opts.reportPath}`);
@@ -340,65 +492,60 @@ function buildCatalog(opts: BuildOptions): { catalog: Catalog; nextHistory: Hist
   const ast = collectFromAst();
   const astById = new Map(ast.map(r => [r.id, r]));
 
-  const flat = flattenSpecs(report);
   const seenIds = new Set<string>();
-
-  // Build per-test latestRun map keyed by id.
-  // Playwright's JSON reporter emits spec.file relative to config.rootDir
-  // (= testDir, e.g. `<repo>/tests`), so it lacks the `tests/` prefix that
-  // the AST ids carry. Older versions emitted absolute paths. Resolve against
-  // rootDir first so both shapes normalize to the same cwd-relative id the
-  // AST produces — otherwise nothing matches and every lastStatus is null.
-  const reportRootDir = report.config?.rootDir || process.cwd();
-  const latestById = new Map<string, { test: PwTest; result: PwResult; spec: PwSpec; describePath: string[] }>();
-  for (const { spec, describePath } of flat) {
-    const absFile = path.isAbsolute(spec.file) ? spec.file : path.resolve(reportRootDir, spec.file);
-    const file = path.relative(process.cwd(), absFile).replace(/\\/g, '/');
-    const id = `${file}:${spec.line}:${spec.title}`;
-    const t = (spec.tests || [])[0];
-    if (!t) continue;
-    const r = (t.results || [])[t.results.length - 1];
-    if (!r) continue;
-    latestById.set(id, { test: t, result: r, spec, describePath });
-  }
+  const latestById = indexResults(report);
 
   const oldHistory = readHistory(opts.publicHistoryPath ?? opts.historyPath);
   const priorCatalog = readPriorCatalog(opts.publicCatalogPath ?? null);
+  const historyLimit = opts.historyLimit ?? DEFAULT_HISTORY_LIMIT;
+  const reportLimit = opts.reportLimit ?? DEFAULT_REPORT_LIMIT;
 
-  // The runs/ folders on disk are the source of truth for what the dashboard
-  // can actually open. In the local-serve model the published history/catalog
-  // live in the webroot next to runs/, so drop any prior-history run whose
-  // runs/<id>/ folder no longer exists — otherwise a folder that an earlier
-  // cycle pruned (or that a failed-no-report run occupied without ever writing
-  // a report/catalog entry) leaves the catalog pointing at a 404, and the
-  // reportless-but-newer folder that evicted it stays invisible (#907 skew).
-  // Only trust disk when the runs are actually local (the current run's own
-  // folder is present); the CI rsync model publishes runs elsewhere, so there
-  // we keep the old purely-logical window and this stays a no-op.
+  // Every prior run summary stays for the whole history window, whether or not
+  // its runs/<id>/ folder survived: its counts and the per-test results that
+  // point at it are still worth showing. What a pruned run loses is the
+  // drill-down, so each summary records `hasReport` and the dashboards only
+  // link into runs that have one.
+  const priorRuns = oldHistory.runs.filter(r => r.id !== opts.runId).slice(0, historyLimit - 1);
+
+  // The runs/ folders on disk are the source of truth for which reports the
+  // dashboard can actually open. In the local-serve model (run-cycle.sh) the
+  // published history/catalog live in the webroot next to runs/, so a run
+  // whose folder an earlier cycle pruned, or that vanished by hand, has no
+  // report — otherwise the catalog would point at a 404 (#907 skew). Only
+  // trust disk when the runs are actually local (the current run's own folder
+  // is present); the CI rsync model (publish.sh) publishes runs elsewhere and
+  // prunes the host to the newest RUN_LIMIT, so there the window is logical.
   const runsDir = opts.publicHistoryPath
     ? path.join(path.dirname(opts.publicHistoryPath), 'runs')
     : null;
   const runsAreLocal = !!runsDir && fs.existsSync(path.join(runsDir, opts.runId));
   const runExists = (id: string): boolean =>
     !runsAreLocal || fs.existsSync(path.join(runsDir!, id));
-  const priorRuns = oldHistory.runs.filter(r => r.id !== opts.runId && runExists(r.id));
 
-  // Surviving run-id set after this run is published: the current run plus the
-  // still-extant prior runs, capped at the rolling window. run-cycle.sh prunes
-  // runs/ to exactly this set, so a latestRun pointer into it is guaranteed
-  // reachable; pointers to anything else are dropped below.
-  const survivingRunIds = new Set<string>(
-    [opts.runId, ...priorRuns.map(r => r.id)].slice(0, HISTORY_LIMIT)
-  );
+  // Runs that keep their report after this cycle: newest first, the current
+  // run plus each prior run whose folder still exists, up to reportLimit. A run
+  // once marked pruned stays pruned (its report can't come back, even if the
+  // limit is raised later). run-cycle.sh prunes runs/ to exactly this set, so a
+  // link into one of them is guaranteed reachable; links into anything else
+  // (latestRun pointers below, report links in the dashboards) are dropped.
+  const reportRunIds = new Set<string>([opts.runId]);
+  for (const r of priorRuns) {
+    if (reportRunIds.size >= reportLimit) break;
+    if (r.hasReport !== false && runExists(r.id)) reportRunIds.add(r.id);
+  }
 
   // Merge: every test from disk → CatalogTest. Tests that ran get latestRun.
   // Tests that didn't run inherit their last-seen latestRun from the prior
-  // catalog if and only if that runId is still in the rolling window.
+  // catalog if and only if that run still has its report (videos, traces).
   const tests: CatalogTest[] = [];
   let preservedCount = 0;
   for (const rec of ast) {
     seenIds.add(rec.id);
-    const ran = latestById.get(rec.id);
+    // An interrupted result reached no verdict, so it is handled exactly like
+    // no result: the previous lastStatus/latestRun carry over and no history
+    // entry is written — otherwise it would overwrite the last real result.
+    const indexed = latestById.get(rec.id);
+    const ran = verdictOf(indexed?.result) ? indexed : undefined;
     let lastStatus: TestStatus | null = null;
     let lastDurationMs: number | null = null;
     let latestRun: LatestRun | null = null;
@@ -432,10 +579,10 @@ function buildCatalog(opts: BuildOptions): { catalog: Catalog; nextHistory: Hist
       };
     } else {
       // Test didn't run this time. Keep the prior latestRun pointer if its
-      // referenced runId is still in the rolling window — its video/trace
-      // are still on disk under runs/<id>/.
+      // referenced run still has its report — its video/trace are still on
+      // disk under runs/<id>/.
       const prior = priorCatalog.get(rec.id);
-      if (prior?.latestRun && survivingRunIds.has(prior.latestRun.runId)) {
+      if (prior?.latestRun && reportRunIds.has(prior.latestRun.runId)) {
         latestRun = prior.latestRun;
         lastStatus = prior.lastStatus;
         lastDurationMs = prior.lastDurationMs;
@@ -448,7 +595,7 @@ function buildCatalog(opts: BuildOptions): { catalog: Catalog; nextHistory: Hist
     const newHistory: HistoryEntry[] = ran
       ? [{ runId: opts.runId, status: ran.result.status, durationMs: ran.result.duration }, ...priorHistory]
       : priorHistory;
-    const trimmedHistory = newHistory.slice(0, HISTORY_LIMIT);
+    const trimmedHistory = newHistory.slice(0, historyLimit);
 
     tests.push({
       id: rec.id,
@@ -461,6 +608,7 @@ function buildCatalog(opts: BuildOptions): { catalog: Catalog; nextHistory: Hist
       source: rec.source,
       lastStatus,
       lastDurationMs,
+      ranInLatestRun: !!ran,
       history: trimmedHistory,
       latestRun,
       parseError: rec.parseError,
@@ -483,11 +631,19 @@ function buildCatalog(opts: BuildOptions): { catalog: Catalog; nextHistory: Hist
 
   // Run summary (counts derived from disk-truth, not just stats — accounts for did-not-run).
   //
-  // ...but "did not run" has two very different causes, and only one is a signal:
+  // The outcome counts describe THIS run only. A test that produced no verdict
+  // here lands in `notRun`, never in passed/failed via its carried-over
+  // lastStatus: counting stale results is how bomet showed ~71% from 10-02 to
+  // 10-05 while the suite was cut off at the 80-min global timeout and 68 tests
+  // never started — the drop only appeared on 10-06, when the last run that
+  // had reached them aged out of the window.
+  //
+  // "Did not run" has two very different causes, and only one is a signal:
   //
   //   a) the spec stopped being collected (renamed, crashed, filtered by mistake)
-  //      — a real regression, and the reason this is derived from disk rather
-  //        than from report.json's stats. Must keep counting against the run.
+  //      or the run never reached it — a real regression, and the reason this
+  //      is derived from disk rather than from report.json's stats. Counts
+  //      against the run as `notRun`.
   //   b) playwright.config.ts EXCLUDES it here by design: `grepInvert:
   //      /@local-only/` unless LOCAL_STACK=1. Those specs need the Keycloak
   //      admin port (18180), which is loopback-only, so on any remote
@@ -500,37 +656,57 @@ function buildCatalog(opts: BuildOptions): { catalog: Catalog; nextHistory: Hist
   // the real pass rate with no way to ever recover them. Bucket (b) separately
   // and keep it out of `total`; leave (a) exactly as it was.
   const localStack = process.env.LOCAL_STACK === '1';
-  const configExcluded = (t: CatalogTest) =>
-    !localStack && t.lastStatus === null && (t.tags || []).includes('@local-only');
-
-  const counted = tests.filter(t => !configExcluded(t));
-  const passed = counted.filter(t => t.lastStatus === 'passed').length;
-  const failed = counted.filter(t => t.lastStatus === 'failed' || t.lastStatus === 'timedOut').length;
-  const skipped = counted.filter(t => t.lastStatus === 'skipped').length;
-  const excluded = tests.length - counted.length;
-  const total = counted.length;
-
   const newRun: RunSummary = {
     id: opts.runId,
     startedAt: report.stats?.startTime || new Date().toISOString(),
     durationMs: report.stats?.duration ?? 0,
-    passed,
-    failed,
-    skipped,
-    timedOut: counted.filter(t => t.lastStatus === 'timedOut').length,
-    excluded,
-    total,
+    ...tally(tests.map(t => ({
+      verdict: t.ranInLatestRun ? (t.lastStatus ?? undefined) : undefined,
+      excluded: !localStack && !t.ranInLatestRun && (t.tags || []).includes('@local-only'),
+    }))),
+    cutShort: cutShortOf(report),
+    hasReport: true,
     sha: opts.sha,
     branch: opts.branch,
     baseUrl: opts.baseUrl,
   };
+
+  // Summaries written before `notRun` existed counted carried-over results as
+  // that run's outcome. Recompute each one still in the window from its OWN
+  // runs/<id>/report.json (countReport — never joined against today's specs,
+  // which may have moved or grown since), so the trend doesn't show a fake
+  // cliff between the last old-style run and the first honest one. When that
+  // report isn't available (runs published elsewhere, folder gone, unreadable),
+  // mark the summary `notRun: null` = legacy count; the dashboards render it
+  // as such and don't compare against it. Either way the result is persisted,
+  // so each old summary is visited exactly once.
+  let recomputed = 0;
+  let markedLegacy = 0;
+  const windowRuns = priorRuns.map((r): RunSummary => {
+    const hasReport = reportRunIds.has(r.id);
+    if (r.notRun !== undefined) return { ...r, hasReport };
+    const p = runsAreLocal ? path.join(runsDir!, r.id, 'report.json') : null;
+    if (p && fs.existsSync(p)) {
+      try {
+        const old = JSON.parse(fs.readFileSync(p, 'utf8')) as PwReport;
+        recomputed++;
+        return { ...r, ...countReport(old), cutShort: cutShortOf(old), hasReport };
+      } catch (e) {
+        console.warn(`[build-catalog] could not recompute ${r.id} from ${p}: ${(e as Error).message}`);
+      }
+    }
+    markedLegacy++;
+    return { ...r, notRun: null, cutShort: null, hasReport };
+  });
+  if (recomputed) console.log(`[build-catalog] recomputed ${recomputed} pre-notRun run summaries from their own report.json`);
+  if (markedLegacy) console.log(`[build-catalog] marked ${markedLegacy} pre-notRun run summaries as legacy counts (no report.json to recompute from)`);
 
   const catalog: Catalog = {
     generatedAt: new Date().toISOString(),
     lastRunId: opts.runId,
     tagFacets,
     tests: tests.sort((a, b) => a.id.localeCompare(b.id)),
-    runs: [newRun, ...priorRuns].slice(0, HISTORY_LIMIT),
+    runs: [newRun, ...windowRuns],
   };
 
   // Persist next history.json.
@@ -540,6 +716,20 @@ function buildCatalog(opts: BuildOptions): { catalog: Catalog; nextHistory: Hist
   }
   const nextHistory: HistoryFile = { perTest: nextPerTest, runs: catalog.runs };
   return { catalog, nextHistory };
+}
+
+/**
+ * JSON for catalog.json / history.json: indented like before, except that each
+ * per-test history entry sits on one line. With 30 runs of history the entries
+ * outnumber everything else in the file, and an entry spread over five indented
+ * lines is mostly whitespace. Field names stay as they are, so every reader of
+ * the old format (both dashboards, scripts/regression-alert.mjs, jq) is unaffected.
+ */
+function stringifyCatalog(value: unknown): string {
+  return JSON.stringify(value, null, 2).replace(
+    /\{\n\s*"runId": ("(?:[^"\\\n]|\\.)*"),\n\s*"status": ("\w+"),\n\s*"durationMs": ([-+.\deE]+)\n\s*\}/g,
+    '{ "runId": $1, "status": $2, "durationMs": $3 }',
+  );
 }
 
 function main(): void {
@@ -556,17 +746,22 @@ function main(): void {
   const catalogPath = process.env.CATALOG_JSON || 'catalog.json';
   const publicHistoryPath = process.env.PUBLIC_HISTORY_JSON || null;
   const publicCatalogPath = process.env.PUBLIC_CATALOG_JSON || null;
+  const historyLimit = limitFromEnv('HISTORY_LIMIT', DEFAULT_HISTORY_LIMIT);
+  const reportLimit = limitFromEnv('RUN_LIMIT', DEFAULT_REPORT_LIMIT);
 
   const { catalog, nextHistory } = buildCatalog({
     runId, reportPath, historyPath, catalogPath,
     publicHistoryPath, publicCatalogPath, baseUrl, branch, sha,
+    historyLimit, reportLimit,
   });
-  fs.writeFileSync(catalogPath, JSON.stringify(catalog, null, 2));
-  fs.writeFileSync(historyPath, JSON.stringify(nextHistory, null, 2));
-  console.log(`[build-catalog] wrote ${catalogPath} (${catalog.tests.length} tests, ${catalog.runs.length} runs)`);
+  fs.writeFileSync(catalogPath, stringifyCatalog(catalog));
+  fs.writeFileSync(historyPath, stringifyCatalog(nextHistory));
+  const withReport = catalog.runs.filter(r => r.hasReport !== false).length;
+  console.log(`[build-catalog] wrote ${catalogPath} (${catalog.tests.length} tests, ${catalog.runs.length} runs, ${withReport} with a report)`);
   console.log(`[build-catalog] wrote ${historyPath}`);
 }
 
 if (require.main === module) main();
 
-export { buildCatalog, collectFromAst, extractTags };
+export { buildCatalog, collectFromAst, extractTags, stringifyCatalog, limitFromEnv, DEFAULT_HISTORY_LIMIT, DEFAULT_REPORT_LIMIT };
+export type { Catalog, CatalogTest, HistoryFile, RunSummary };

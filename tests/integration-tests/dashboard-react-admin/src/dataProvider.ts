@@ -1,5 +1,6 @@
 import type { DataProvider } from 'react-admin';
 import type { Catalog, CatalogTest, RunSummary } from './types';
+import { slotsFor } from './runWindow';
 
 /**
  * In-memory dataProvider over /tests/catalog.json.
@@ -20,13 +21,38 @@ import type { Catalog, CatalogTest, RunSummary } from './types';
 
 let cache: Promise<Catalog> | null = null;
 
+/**
+ * Derive, once per load, everything that answers "what happened in the latest
+ * run" — so components read one field instead of each re-deriving it from
+ * lastStatus (which is only the last KNOWN result, possibly from an older run).
+ * runSlots covers every run the catalog keeps (up to 30); the views page
+ * through it five at a time (runWindow.ts).
+ */
+function normalize(c: Catalog): Catalog {
+  c.runs.forEach((r, i) => { r.position = i; }); // builder writes newest first
+  const runIds = c.runs.map(r => r.id);
+  for (const t of c.tests) {
+    if (typeof t.ranInLatestRun !== 'boolean') {
+      // Older catalogs: history only gains an entry when the test ran (older
+      // builders also wrote one for an interrupted test, which reached no verdict).
+      const h0 = t.history[0];
+      t.ranInLatestRun = !!h0 && h0.runId === c.lastRunId && h0.status !== 'interrupted';
+    }
+    t.currentStatus = t.ranInLatestRun
+      ? (t.lastStatus ?? 'never')
+      : (t.lastStatus || t.history.length ? 'notrun' : 'never');
+    t.runSlots = slotsFor(t, runIds);
+  }
+  return c;
+}
+
 function fetchCatalog(): Promise<Catalog> {
   if (cache) return cache;
   cache = (async () => {
     const url = `${import.meta.env.BASE_URL}catalog.json?t=${Date.now()}`;
     const resp = await fetch(url, { credentials: 'include' });
     if (!resp.ok) throw new Error(`catalog.json: HTTP ${resp.status}`);
-    return resp.json() as Promise<Catalog>;
+    return normalize((await resp.json()) as Catalog);
   })();
   return cache;
 }
@@ -76,8 +102,8 @@ function applyFilter<T extends Record<string, unknown>>(
         if (!v.some(want => tags.includes(want as string))) return false;
         continue;
       }
-      // Direct equality on other fields.
-      if (row[k] !== v) return false;
+      // Direct equality on other fields; an array means "any of these".
+      if (Array.isArray(v) ? !v.includes(row[k]) : row[k] !== v) return false;
     }
     return true;
   });

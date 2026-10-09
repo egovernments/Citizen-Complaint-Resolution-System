@@ -17,7 +17,9 @@ front-end is a drop-in.
       show with description, video, source, tags
 - [x] `runs` resource — list with summary, show links to standalone
       Playwright report
-- [ ] Per-test sparkline of last 5 runs in the list
+- [x] Per-test run dots in the list, five runs a page (‹ Newer / Older ›) over
+      the 30 runs the catalog keeps — see `../runner/README.md` (Retention,
+      Dashboards and the run window)
 - [ ] "Copy as Claude prompt" action on the show page
 - [ ] Trace-zip viewer link on the show page
 - [ ] Theme tokens matched to the configurator's palette
