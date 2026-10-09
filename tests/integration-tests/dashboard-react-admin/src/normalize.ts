@@ -3,7 +3,7 @@
  * only (no React, no import.meta), so scripts/dashboard-normalize.test.ts can
  * run them under Node.
  */
-import type { Catalog } from './types';
+import type { Catalog, CatalogTest, TestStatus } from './types';
 
 /** Run slots shown per test: the builder keeps the same 5-run window. */
 export const RUN_WINDOW = 5;
@@ -31,4 +31,18 @@ export function normalize(c: Catalog): Catalog {
     });
   }
   return c;
+}
+
+/**
+ * The newest result that reached a verdict, for "last: passed in <run>" on a
+ * test the latest run didn't reach. Catalogs from older builders can hold an
+ * interrupted lastStatus or history entry, which reached none, so both are
+ * skipped. runId is null when nothing says which run it came from.
+ */
+export function lastKnown(t: CatalogTest): { status: TestStatus; runId: string | null } | null {
+  const h = t.history.find(x => x.status !== 'interrupted');
+  if (t.lastStatus && t.lastStatus !== 'interrupted') {
+    return { status: t.lastStatus, runId: t.latestRun?.runId ?? h?.runId ?? null };
+  }
+  return h ? { status: h.status, runId: h.runId } : null;
 }

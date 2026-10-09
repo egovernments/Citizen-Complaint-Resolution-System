@@ -63,12 +63,24 @@ function displayStatus(t) {
   return (t.lastStatus || (t.history && t.history.length)) ? 'notrun' : 'never';
 }
 
+/**
+ * The newest result that reached a verdict, as { status, runId }, or null.
+ * Catalogs from older builders can hold an interrupted lastStatus or history
+ * entry, which reached none, so both are skipped.
+ */
+function lastKnown(t) {
+  const h = (t.history || []).find(x => x.status !== 'interrupted');
+  if (t.lastStatus && t.lastStatus !== 'interrupted') {
+    return { status: t.lastStatus, runId: (t.latestRun && t.latestRun.runId) || (h && h.runId) || null };
+  }
+  return h ? { status: h.status, runId: h.runId } : null;
+}
+
 /** "passed in 2026-10-01_1544_71d4743d" — where a carried-over lastStatus came from. */
 function lastKnownText(t) {
-  const runId = (t.latestRun && t.latestRun.runId) || (t.history && t.history[0] && t.history[0].runId);
-  if (!t.lastStatus && !runId) return '';
-  const st = t.lastStatus || (t.history && t.history[0] && t.history[0].status) || '?';
-  return runId ? `${st} in ${runId}` : st;
+  const k = lastKnown(t);
+  if (!k) return '';
+  return k.runId ? `${k.status} in ${k.runId}` : k.status;
 }
 
 async function init() {
@@ -308,11 +320,13 @@ function renderDetail(id) {
   const dots = renderDots(t);
   // The carried-over latestRun (and its media) is only kept while that run is
   // in the window; once it ages out only the history line is left to cite.
-  const staleNote = (!ranInLatest(t) && lastKnownText(t))
+  const known = lastKnown(t);
+  const staleNote = (!ranInLatest(t) && known)
     ? `<p class="stale-note">Not run in the latest run (${escapeHtml(state.catalog.lastRunId)}). ` +
-      (lr
+      (lr && lr.runId === known.runId
         ? `The result, video and error below are from the last run that reached it: ${escapeHtml(lastKnownText(t))}.`
-        : `Its last result was ${escapeHtml(lastKnownText(t))}; that run is outside the 5-run window, so no video or error is kept for it.`) +
+        : `Its last result was ${escapeHtml(lastKnownText(t))}; no video or error is kept for that run.` +
+          (lr ? ` The media below is from ${escapeHtml(lr.runId)}, where it was stopped before a verdict.` : '')) +
       `</p>`
     : '';
   const error = (lr && (lr.errorMessage || lr.errorStack))
