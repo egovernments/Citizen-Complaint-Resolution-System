@@ -40,7 +40,7 @@ let root = '';
 let cwd = '';
 before(() => {
   cwd = process.cwd();
-  root = fs.mkdtempSync(path.join(os.tmpdir(), 'build-catalog-test-'));
+  root = fs.mkdtempSync(path.join(os.tmpdir(), 'build-catalog-retention-test-'));
   fs.mkdirSync(path.join(root, 'tests'));
   fs.writeFileSync(path.join(root, 'tests', 'a.spec.ts'), SPEC);
   fs.writeFileSync(path.join(root, 'tsconfig.json'), JSON.stringify({ compilerOptions: { strict: true } }));
