@@ -1,7 +1,8 @@
 # Developer guide
 
 For developers connecting a module to notifications or changing novu-bridge. Related:
-[kafka-events.md](./kafka-events.md) (topics, publishing, verifying),
+[tenant-accounts.md](./tenant-accounts.md) (each workspace's own Novu organization, and
+`POST /messages/_send` for sign-in codes), [kafka-events.md](./kafka-events.md) (topics, publishing, verifying),
 [providers.md](./providers.md) (adapters, adding a provider), [contract/](./contract/README.md)
 (schemas, OpenAPI, error codes, outputs).
 
@@ -198,8 +199,9 @@ Use a translator bound to the topic, not shape-sniffing in the consumer. Model:
 - accept every field-name variant the real producer emits (`mobileNumber`/`mobile`/`phone`/`to`,
   `message`/`body`/`text`, `tenantId`/`tenant`); refuse without phone or text
   (`NB_INVALID_CORE_SMS`);
-- fill gaps from configuration (`NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT`,
-  `NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE`) and derive `eventId` and `transactionId`
+- fill gaps from configuration (`NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT`; the country code of a
+  national number from the tenant's `common-masters.MobileNumberValidation` rule, else
+  `NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE` — `service/TenantPhoneNumbers`) and derive `eventId` and `transactionId`
   (`CORE:<tenant>:<uuid>`) from the Kafka record's topic, partition, offset and timestamp: unique
   per send, the same on a redelivery (so the replay guard does not send an OTP twice), and
   without the phone number, since the id reaches logs, gateway requests and error messages;

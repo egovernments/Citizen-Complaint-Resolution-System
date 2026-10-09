@@ -127,6 +127,13 @@ onboarding:
   oauthClientId: "egov-user-client"
   # Secret keys: provisioner-password, onboarding-token, oauth-client-secret (may be empty).
   secretName: "pgr-onboarding"
+  # Per-tenant notification accounts (#2203): the NOTIFICATION_ACCOUNT step gives each new
+  # workspace its own Novu organization through novu-bridge's INTERNAL admin API, in-cluster
+  # (never through the gateway). Set it together with novu-bridge's tenant-accounts.enabled;
+  # the token is that chart's Secret key `internal-admin-token`. Blank = the step does nothing.
+  # It never fails a signup: a workspace created while Novu is down is retried in the background.
+  notificationAccountUrl: ""    # e.g. http://novu-bridge.egov:8080/novu-bridge
+  notificationAccountSecretName: "novu-bridge-tenant-accounts"
 java-args: "-Dspring.profiles.active=monitoring"
 
 # Additional Container Envs
@@ -311,6 +318,15 @@ env: |
         name: {{ .Values.onboarding.secretName }}
         key: oauth-client-secret
         optional: true
+  {{- if .Values.onboarding.notificationAccountUrl }}
+  - name: PGR_ONBOARDING_NOTIFICATION_ACCOUNT_URL
+    value: {{ .Values.onboarding.notificationAccountUrl | quote }}
+  - name: PGR_ONBOARDING_NOTIFICATION_ACCOUNT_TOKEN
+    valueFrom:
+      secretKeyRef:
+        name: {{ .Values.onboarding.notificationAccountSecretName }}
+        key: internal-admin-token
+  {{- end }}
   - name: EGOV_ENC_HOST
     valueFrom:
       configMapKeyRef:

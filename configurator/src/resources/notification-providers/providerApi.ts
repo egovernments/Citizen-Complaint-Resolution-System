@@ -130,6 +130,10 @@ export interface TestSendResponse {
   transactionId?: string;
   errorCode?: string;
   errorMessage?: string;
+  /** Set when the bridge could not check that anything can deliver the test (Novu's
+   *  integration list unreadable) and sent it unchecked. A test nothing can deliver is
+   *  refused instead: 409 NB_PROVIDER_UNAVAILABLE, thrown as a BridgeError. */
+  warning?: string;
 }
 
 /** Twilio Content template metadata as the bridge returns it — NO routing decision; the
@@ -154,6 +158,35 @@ export type { MatchedTemplate as TwilioMatchedTemplate, UnmatchedTemplate as Twi
  *  page's own origin. Falls back to a relative URL in non-browser contexts. */
 function origin(): string {
   return typeof window !== 'undefined' && window.location ? window.location.origin : '';
+}
+
+/**
+ * Per-tenant notification accounts (#2203). The workspace whose notification account
+ * every provider call acts on: the session's root tenant. On a workspace that has its
+ * own Novu organization the bridge then adds, rotates, deletes and tests providers THERE
+ * (for that workspace's admins only); on any other tenant it keeps acting on the
+ * deployment's shared account under the old rules, so sending it is always safe.
+ */
+export function accountTenant(): string {
+  return String(digitClient.stateTenantId || '').trim();
+}
+
+/** Appends `tenantId=<accountTenant()>` unless the path already names one. Exported for tests. */
+export function withAccount(path: string, tenant: string = accountTenant()): string {
+  if (!tenant || /[?&]tenantId=/.test(path)) return path;
+  return `${path}${path.includes('?') ? '&' : '?'}tenantId=${encodeURIComponent(tenant)}`;
+}
+
+/** Whose notification account the provider screens show, as the bridge reports it. */
+export interface NotificationAccount {
+  tenantAccountsEnabled: boolean;
+  /** TENANT: the workspace's own Novu organization. SHARED: the deployment's account. */
+  mode: 'TENANT' | 'SHARED';
+  tenantId: string | null;
+  /** PROVISIONED, NOT_PROVISIONED, PROVISIONING, FAILED, DEPROVISIONED, DISABLED or UNKNOWN. */
+  status: string;
+  /** Whether THIS caller may add, change, test or delete providers there. */
+  manageable: boolean;
 }
 
 /**
@@ -182,7 +215,7 @@ async function call<T>(path: string, method: 'GET' | 'POST', body?: unknown): Pr
   const token = digitClient.getAuthInfo().token;
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  const response = await fetch(`${origin()}${path}`, {
+  const response = await fetch(`${origin()}${withAccount(path)}`, {
     method,
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -214,6 +247,15 @@ async function call<T>(path: string, method: 'GET' | 'POST', body?: unknown): Pr
     throw new BridgeError(msg, code, response.status);
   }
   return data as T;
+}
+
+/**
+ * GET /integrations, for its `account` block: whose notification account the screens act
+ * on and whether this user may manage it. Null from a bridge without per-tenant accounts.
+ */
+export async function fetchNotificationAccount(): Promise<NotificationAccount | null> {
+  const payload = await call<{ account?: NotificationAccount }>('/novu-bridge/novu-adapter/v1/integrations', 'GET');
+  return payload.account ?? null;
 }
 
 /** Unwrap the `{data: T}` envelope the newer provider endpoints use. */

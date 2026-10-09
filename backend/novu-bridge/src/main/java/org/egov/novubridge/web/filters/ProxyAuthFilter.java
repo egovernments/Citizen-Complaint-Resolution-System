@@ -6,6 +6,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.novubridge.config.NovuBridgeConfiguration;
+import org.egov.novubridge.service.account.TenantAccountService;
 import org.egov.novubridge.util.Values;
 import org.egov.novubridge.util.ServiceUrl;
 import org.springframework.http.HttpEntity;
@@ -44,6 +45,11 @@ import java.util.concurrent.ConcurrentHashMap;
  * ({@code /logs}, {@code /config/source}) are limited to the caller's tenants (403
  * {@code NB_TENANT_NOT_ALLOWED}). The resolved {@link Caller} is cached 60s keyed by SHA-256 of
  * the token, never the raw token, and handed to the controllers as a request attribute.
+ *
+ * <p>Per-tenant accounts (#2203): a provider write or test-send whose {@code tenantId} query
+ * parameter names a workspace with its OWN Novu organization is decided on that workspace alone:
+ * an admin role held at its root passes (no owning-state listing needed), anyone else is refused,
+ * the owning state's admins included. Without such a selector nothing changes.
  */
 @Slf4j
 public class ProxyAuthFilter extends OncePerRequestFilter {
@@ -144,11 +150,19 @@ public class ProxyAuthFilter extends OncePerRequestFilter {
 
     private final RestTemplate restTemplate;
     private final NovuBridgeConfiguration config;
+    /** Per-tenant Novu accounts (#2203); null = none, every provider path is the shared account's. */
+    private final TenantAccountService tenantAccounts;
     private final ConcurrentHashMap<String, CachedUser> validTokenCache = new ConcurrentHashMap<>();
 
     public ProxyAuthFilter(RestTemplate restTemplate, NovuBridgeConfiguration config) {
+        this(restTemplate, config, null);
+    }
+
+    public ProxyAuthFilter(RestTemplate restTemplate, NovuBridgeConfiguration config,
+                           TenantAccountService tenantAccounts) {
         this.restTemplate = restTemplate;
         this.config = config;
+        this.tenantAccounts = tenantAccounts;
     }
 
     @Override
@@ -252,6 +266,21 @@ public class ProxyAuthFilter extends OncePerRequestFilter {
         if (!OWNING_STATE_PATHS.contains(normalize(pathOf(request)))) {
             // Tenant-scoped: the controller checks the event's tenant against the caller's states.
             return true;
+        }
+        // #2203: a workspace with its own Novu organization is managed by ITS admins, and only by
+        // them. The selector is the same `tenantId` query parameter the controllers act on.
+        String selector = request.getParameter("tenantId");
+        if (tenantAccounts != null && StringUtils.hasText(selector) && tenantAccounts.isProvisioned(selector)) {
+            String root = TenantAccountService.rootOf(selector);
+            if (caller.administersStateOf(root)) {
+                return true;
+            }
+            log.warn("Proxy auth: refusing {} {} — workspace {} has its own notification account and the caller "
+                    + "is an admin at {}, not there", request.getMethod(), pathOf(request), root, caller.adminStateTenants());
+            // root is validated ([a-z0-9_-]): safe to echo.
+            writeError(response, HttpStatus.FORBIDDEN, "NB_TENANT_NOT_ALLOWED", "Workspace " + root
+                    + " has its own notification account; managing it needs an admin role held at " + root);
+            return false;
         }
         Set<String> owning = config.providerAdminStateTenants();
         if (caller.administersAnyOf(owning)) {

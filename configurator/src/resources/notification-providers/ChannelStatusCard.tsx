@@ -39,6 +39,7 @@ import {
 } from './providerCatalog';
 import { CHANNELS, deriveChannelStatus, type ChannelRow, type ChannelStatus } from './channelStatus';
 import { CHANNEL_RESOURCE, useChannelRows } from './useChannelRows';
+import { canManageProviders, useNotificationAccount } from './useNotificationAccount';
 import type { ProviderCatalogState } from './useProviderCatalog';
 import { notify } from './providerToast';
 import { useApp } from '../../App';
@@ -68,7 +69,9 @@ export function ChannelStatusCard({ catalogState }: { catalogState: ProviderCata
   // Switching a channel or choosing its provider writes NOTIFICATIONS.Channel, which only the
   // provider-admin roles may do. Offering it to everyone meant non-admins learned that from a 403.
   const { state } = useApp();
-  const canManage = isProviderAdmin(state.user?.roles);
+  // #2203: narrowed by the bridge's answer for the workspace's own notification account.
+  const { account } = useNotificationAccount();
+  const canManage = canManageProviders(isProviderAdmin(state.user?.roles), account);
   // The whole configuration, for the validate-on-save check below.
   const config = useNotificationConfig();
   const guardSnapshot = channelGuardSnapshot(config);

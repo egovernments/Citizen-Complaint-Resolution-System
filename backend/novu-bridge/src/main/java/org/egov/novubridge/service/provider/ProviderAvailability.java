@@ -3,7 +3,9 @@ package org.egov.novubridge.service.provider;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.novubridge.config.NovuBridgeConfiguration;
 import org.egov.novubridge.service.NovuClient;
+import org.egov.novubridge.service.account.NovuAccount;
 import org.egov.novubridge.util.Values;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -26,13 +28,19 @@ import java.util.Map;
  * <p>With {@code novu.bridge.digit.worker.providers=false} an SMSCountry, Ozeki or Jasmin
  * integration is {@link Status#WORKER_PROVIDER_MISSING}: the worker has no handler for it. That holds
  * for a pinned one ({@link #check}) and for the one Novu would pick for a channel nothing pins
- * ({@link #checkUnpinned}).
+ * ({@link #checkUnpinned}). A channel nothing pins also needs Novu to hold an active integration
+ * that delivers it at all ({@link Status#NO_ACTIVE_INTEGRATION}), whatever the flag.
  */
 @Slf4j
 @Component
 public class ProviderAvailability {
 
-    public enum Status { AVAILABLE, MISSING, INACTIVE, CHANNEL_MISMATCH, WORKER_PROVIDER_MISSING, UNKNOWN }
+    public enum Status {
+        AVAILABLE, MISSING, INACTIVE, CHANNEL_MISMATCH, WORKER_PROVIDER_MISSING,
+        /** Nothing pinned and Novu holds no active integration that delivers the channel. */
+        NO_ACTIVE_INTEGRATION,
+        UNKNOWN
+    }
 
     /**
      * The verdict, the sentence that goes in the dispatch row's error message, and the
@@ -56,14 +64,26 @@ public class ProviderAvailability {
 
     private final NovuClient novuClient;
     private final NovuBridgeConfiguration config;
+    /** Whose integrations this instance answers for; null = the shared account (the Spring bean). */
+    private final NovuAccount account;
 
     private volatile Snapshot snapshot;
     /** Epoch millis of the last failed list call; 0 = none since the last success/invalidate. */
     private volatile long lastFailureAt;
 
+    @Autowired
     public ProviderAvailability(NovuClient novuClient, NovuBridgeConfiguration config) {
+        this(novuClient, config, null);
+    }
+
+    /**
+     * The same checks over one tenant's own Novu account (#2203): {@link ProviderAvailabilities}
+     * keeps one instance per provisioned tenant, so each has its own snapshot and TTL.
+     */
+    public ProviderAvailability(NovuClient novuClient, NovuBridgeConfiguration config, NovuAccount account) {
         this.novuClient = novuClient;
         this.config = config;
+        this.account = account;
     }
 
     /**
@@ -108,16 +128,33 @@ public class ProviderAvailability {
     }
 
     /**
-     * A channel that pins no provider and goes through Novu, on a deployment whose worker does not
-     * load DIGIT's providers ({@code novu.bridge.digit.worker.providers=false}): Novu triggers it
-     * through the integration {@code NOVU_BRIDGE_INTEGRATION_ID_WHATSAPP} names (WhatsApp), else
-     * through its PRIMARY active integration on the channel. If that is an SMSCountry, Ozeki or Jasmin
-     * one (a leftover from before the flag was turned off), the worker has no handler and the row
-     * would read SENT for a message that never left: {@link Status#WORKER_PROVIDER_MISSING}. With no
-     * primary flagged, only when EVERY active integration on the channel is one of them.
+     * A channel that pins no provider and goes through Novu. Novu triggers it through the
+     * integration {@code NOVU_BRIDGE_INTEGRATION_ID_WHATSAPP} names (WhatsApp), else through its
+     * PRIMARY active integration on the channel, and when it has NO active integration for the
+     * channel it accepts the trigger anyway and fails the job ("Subscriber does not have an active
+     * integration"), so the row would read SENT for a message that never left. Two checks:
      *
-     * <p>Always AVAILABLE with the flag on, so the stock deployment never calls Novu here. Uses the
-     * same cached snapshot as {@link #check}, so the cost is one Novu list per TTL, not per event.
+     * <ul>
+     *   <li><b>Always</b>: Novu must hold at least one ACTIVE integration on the channel's Novu
+     *       channel that is not positively known to deliver ANOTHER DIGIT channel (a Twilio
+     *       WhatsApp integration does not send SMS, nor an SMS-only one WhatsApp:
+     *       {@link ProviderCatalog#knownDigitChannel}). None is {@link Status#NO_ACTIVE_INTEGRATION}.
+     *       An integration the bridge cannot identify counts, so this never refuses a hand-made
+     *       one that might deliver.</li>
+     *   <li>With {@code novu.bridge.digit.worker.providers=false} only: if the integration Novu
+     *       would pick is an SMSCountry, Ozeki or Jasmin one (a leftover from before the flag was
+     *       turned off), the worker has no handler: {@link Status#WORKER_PROVIDER_MISSING}. With no
+     *       primary flagged, only when EVERY active integration on the channel is one of them.</li>
+     * </ul>
+     *
+     * <p>An env pin Novu cannot use (no such integration, inactive, or on another Novu channel) is
+     * judged like no pin: Novu falls back to its default for the channel. In a tenant's own account
+     * (#2203) the env pin is not looked at at all: it names an integration of the shared account,
+     * and a trigger through the tenant's organization never carries it
+     * ({@code NovuClient#identifyThenTrigger(NovuAccount, ...)}), so Novu's default there decides.
+     *
+     * <p>Uses the same cached snapshot as {@link #check}, so the cost is one Novu list per TTL, not
+     * per event, whatever the flag.
      *
      * <p>Fails OPEN when Novu cannot be listed ({@link Status#UNKNOWN}, like {@link #check}): an
      * unpinned channel carries login OTPs (CORE_SMS) and every legacy row, and refusing them all on a
@@ -127,39 +164,49 @@ public class ProviderAvailability {
      * @return the verdict; its {@code identifier} is always null (nothing new is pinned)
      */
     public Result checkUnpinned(String channel) {
-        if (config.isDigitWorkerProvidersEnabled()) {
+        String wanted = Values.novuChannel(channel);
+        if (wanted == null) {
             return new Result(Status.AVAILABLE, null, null);
         }
-        String envPin = "WHATSAPP".equalsIgnoreCase(channel) && StringUtils.hasText(config.getWhatsappIntegrationId())
-                ? config.getWhatsappIntegrationId().trim() : null;
         Snapshot current = snapshotForCheck();
         if (current == null) {
             return new Result(Status.UNKNOWN,
                     "Novu integrations could not be listed; delivering " + channel + " without checking", null);
         }
+        String envPin = account == null && "WHATSAPP".equalsIgnoreCase(channel)
+                && StringUtils.hasText(config.getWhatsappIntegrationId())
+                ? config.getWhatsappIntegrationId().trim() : null;
         if (envPin != null) {
             Integration pinned = current.byKey().get(key(envPin));
-            if (pinned != null && ProviderCatalog.isWorkerProvider(pinned.providerId())) {
-                return workerProviderMissing(channel, "NOVU_BRIDGE_INTEGRATION_ID_WHATSAPP names " + envPin, pinned);
+            if (pinned != null && pinned.active() && wanted.equals(pinned.novuChannel())) {
+                if (!config.isDigitWorkerProvidersEnabled() && ProviderCatalog.isWorkerProvider(pinned.providerId())) {
+                    return workerProviderMissing(channel, "NOVU_BRIDGE_INTEGRATION_ID_WHATSAPP names " + envPin, pinned);
+                }
+                return new Result(Status.AVAILABLE, null, null);
             }
-            return new Result(Status.AVAILABLE, null, null);
-        }
-        String wanted = Values.novuChannel(channel);
-        if (wanted == null) {
-            return new Result(Status.AVAILABLE, null, null);
+            // Novu cannot use it, so it falls back to the channel's default: judged below.
         }
         Integration primary = null;
         boolean anyActive = false;
+        boolean anyForChannel = false;
         boolean allWorker = true;
         for (Integration integration : current.all()) {
             if (!integration.active() || !wanted.equals(integration.novuChannel())) {
                 continue;
             }
             anyActive = true;
+            String delivers = ProviderCatalog.knownDigitChannel(integration.identifier(), integration.providerId());
+            anyForChannel |= delivers == null || delivers.equalsIgnoreCase(channel);
             allWorker &= ProviderCatalog.isWorkerProvider(integration.providerId());
             if (integration.primary() && primary == null) {
                 primary = integration;
             }
+        }
+        if (!anyForChannel) {
+            return noActiveIntegration(channel, wanted, anyActive);
+        }
+        if (config.isDigitWorkerProvidersEnabled()) {
+            return new Result(Status.AVAILABLE, null, null);
         }
         if (primary != null) {
             return ProviderCatalog.isWorkerProvider(primary.providerId())
@@ -167,11 +214,21 @@ public class ProviderAvailability {
                             + label(primary), primary)
                     : new Result(Status.AVAILABLE, null, null);
         }
-        if (anyActive && allWorker) {
+        if (allWorker) {
             return workerProviderMissing(channel, "every active Novu '" + wanted + "' integration is one of "
                     + "DIGIT's worker providers", null);
         }
         return new Result(Status.AVAILABLE, null, null);
+    }
+
+    private static Result noActiveIntegration(String channel, String novuChannel, boolean otherChannelsOnly) {
+        return new Result(Status.NO_ACTIVE_INTEGRATION, channel + " has no provider selected, and Novu has no active "
+                + "integration that delivers " + channel + (otherChannelsOnly
+                        ? " (its active '" + novuChannel + "' integrations deliver another channel)"
+                        : " on its '" + novuChannel + "' channel")
+                + ", so Novu would fail every send (\"Subscriber does not have an active integration\")."
+                + " Nothing was sent. Add a provider for " + channel + " on Notifications \u2192 Providers and select"
+                + " it on the channel.", null);
     }
 
     private static Result workerProviderMissing(String channel, String why, Integration integration) {
@@ -220,7 +277,8 @@ public class ProviderAvailability {
     }
 
     private Map<String, Integration> fetch(List<Integration> all) {
-        NovuClient.NovuResponse response = novuClient.listIntegrations();
+        NovuClient.NovuResponse response = account == null
+                ? novuClient.listIntegrations() : novuClient.listIntegrations(account);
         Map<String, Object> body = response == null ? null : response.getResponse();
         List<Object> data = Values.asList(body == null ? null : body.get("data"));
         if (data == null) {

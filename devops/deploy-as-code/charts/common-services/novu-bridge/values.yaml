@@ -42,6 +42,25 @@ heap: "-Xmx192m -Xms192m"
 # is not set (the helmfile sets it for both this chart and the novu worker).
 digit-worker-providers: true
 provider-admin-tenants: ""
+# Per-tenant Novu accounts (#2203): one Novu ORGANIZATION per root tenant, created by the bridge
+# signed in as the Novu platform admin (the account whose key is novu-api-key). OFF by default.
+# Turning it on needs the Secret named below in this namespace, created out of band (never
+# committed), with keys:
+#   novu-admin-email, novu-admin-password   the Novu platform admin login
+#   encryption-key                          >= 32 random chars; encrypts the stored tenant API keys
+#   encryption-key-previous                 (optional) the previous key during a rotation
+#   internal-admin-token                    /novu-adapter/v1/tenants/** (pgr-services, operators)
+#   internal-send-token                     (optional) POST /messages/_send (the Identity BFF)
+# e.g. kubectl -n egov create secret generic novu-bridge-tenant-accounts \
+#        --from-literal=encryption-key=$(openssl rand -hex 32) \
+#        --from-literal=internal-admin-token=$(openssl rand -hex 24) ...
+# A missing Secret or key keeps the pod from starting, and the bridge itself refuses to start
+# with the feature on and no usable encryption key or login: it fails closed. The two internal
+# APIs are not routed by the gateway (no accesscontrol action exists for them).
+tenant-accounts:
+  enabled: false
+  secretName: "novu-bridge-tenant-accounts"
+  environment: "Development"
 java-args: "-Dspring.profiles.active=monitoring"
 
 # Health Checks
@@ -86,6 +105,9 @@ env: |
       configMapKeyRef:
         name: egov-config
         key: state-level-tenant-id
+  # Last-resort country code (e.g. "+254") for a phone with none; the user's own code and the
+  # tenant's common-masters.MobileNumberValidation rule come first. Blank, at a tenant without a
+  # rule: the message is SKIPPED / NB_CONTACT_INVALID, never sent as "+" + the national number.
   - name: NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE
     value: ""
   - name: NOVU_BRIDGE_KAFKA_DLQ_TOPIC
@@ -144,6 +166,45 @@ env: |
     value: {{ index .Values "novu-base-url" | quote }}
   - name: NOVU_API_KEY
     value: {{ index .Values "novu-api-key" | quote }}
+  # Per-tenant Novu accounts (#2203); see tenant-accounts above.
+  - name: NOVU_BRIDGE_TENANT_ACCOUNTS_ENABLED
+    value: {{ index .Values "tenant-accounts" "enabled" | toString | quote }}
+  {{- if index .Values "tenant-accounts" "enabled" }}
+  - name: NOVU_BRIDGE_TENANT_ACCOUNTS_ENVIRONMENT
+    value: {{ index .Values "tenant-accounts" "environment" | quote }}
+  - name: NOVU_BRIDGE_NOVU_ADMIN_EMAIL
+    valueFrom:
+      secretKeyRef:
+        name: {{ index .Values "tenant-accounts" "secretName" }}
+        key: novu-admin-email
+  - name: NOVU_BRIDGE_NOVU_ADMIN_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: {{ index .Values "tenant-accounts" "secretName" }}
+        key: novu-admin-password
+  - name: NOVU_BRIDGE_TENANT_KEY_ENCRYPTION_KEY
+    valueFrom:
+      secretKeyRef:
+        name: {{ index .Values "tenant-accounts" "secretName" }}
+        key: encryption-key
+  - name: NOVU_BRIDGE_TENANT_KEY_ENCRYPTION_KEY_PREVIOUS
+    valueFrom:
+      secretKeyRef:
+        name: {{ index .Values "tenant-accounts" "secretName" }}
+        key: encryption-key-previous
+        optional: true
+  - name: NOVU_BRIDGE_INTERNAL_ADMIN_TOKEN
+    valueFrom:
+      secretKeyRef:
+        name: {{ index .Values "tenant-accounts" "secretName" }}
+        key: internal-admin-token
+  - name: NOVU_BRIDGE_INTERNAL_SEND_TOKEN
+    valueFrom:
+      secretKeyRef:
+        name: {{ index .Values "tenant-accounts" "secretName" }}
+        key: internal-send-token
+        optional: true
+  {{- end }}
   - name: NOVU_BRIDGE_DISPATCH_LOG_ENABLED
     value: "true"
   - name: JAVA_OPTS

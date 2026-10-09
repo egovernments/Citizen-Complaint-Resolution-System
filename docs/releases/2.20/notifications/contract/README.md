@@ -8,7 +8,7 @@ The published interface of novu-bridge.
 | [`envelope-v1.schema.json`](./envelope-v1.schema.json) | JSON Schema (2020-12) of the inbound **envelope**: a finished message for one recipient on one channel |
 | [`examples/thin/`](./examples/thin) | Thin events: PGR `APPLY`, PGR `ASSIGN`, a module with no notification code, an account-less recipient |
 | [`examples/`](./examples) | Envelopes: complaint SMS, complaint email, WhatsApp with a provider template, DIGIT-core login OTP, a non-PGR module |
-| [`openapi.yaml`](./openapi.yaml) | OpenAPI 3.0 for every `/novu-adapter/v1` endpoint, with its auth tier |
+| [`openapi.yaml`](./openapi.yaml) | OpenAPI 3.0 for every `/novu-adapter/v1` endpoint, with its auth tier, including the internal tenant-account API and `POST /messages/_send` ([../tenant-accounts.md](../tenant-accounts.md)) |
 | [`error-codes.md`](./error-codes.md) | Every `NB_*` code |
 | [`outputs.md`](./outputs.md) | The dispatch log, the DLQ message, delivery receipts |
 

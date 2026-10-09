@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.novubridge.config.NovuBridgeConfiguration;
+import org.egov.novubridge.service.account.NovuAccount;
 import org.egov.novubridge.util.PiiMask;
 import org.egov.novubridge.web.models.Contact;
 import org.egov.tracer.model.CustomException;
@@ -50,10 +51,25 @@ public class NovuClient {
                                             String transactionId, Map<String, Object> data,
                                             String templateId, Map<String, Object> contentVariables,
                                             String integrationIdentifier) {
+        return identifyThenTrigger(null, subscriberId, contact, channel, renderedBody, renderedSubject,
+                transactionId, data, templateId, contentVariables, integrationIdentifier);
+    }
+
+    /**
+     * {@link #identifyThenTrigger} in a tenant's own Novu account; {@code null} = the shared one.
+     * The subscriber is created in that account, and the deployment-wide WhatsApp integration pin
+     * ({@code novu.bridge.integration.id.whatsapp}) is not applied there: it names an integration
+     * of the shared account.
+     */
+    public NovuResponse identifyThenTrigger(NovuAccount account, String subscriberId, Contact contact, String channel,
+                                            String renderedBody, String renderedSubject,
+                                            String transactionId, Map<String, Object> data,
+                                            String templateId, Map<String, Object> contentVariables,
+                                            String integrationIdentifier) {
         // Channel-scoped subscriber: SMS wants "+E164" and WhatsApp "whatsapp:+E164" in the same
         // phone field; one shared subscriber would let the two legs clobber each other.
         String scopedSubscriberId = StringUtils.hasText(channel) ? subscriberId + ":" + channel : subscriberId;
-        identify(scopedSubscriberId, contact);
+        identify(account, scopedSubscriberId, contact);
 
         String phone = contact != null ? contact.getPhone() : null;
         String email = contact != null ? contact.getEmail() : null;
@@ -68,10 +84,12 @@ public class NovuClient {
 
         Map<String, Object> overrides = StringUtils.hasText(templateId)
                 ? buildProviderTemplateOverrides(templateId, contentVariables) : null;
-        overrides = applyWhatsappIntegrationOverride(overrides, channel);
+        if (account == null) {
+            overrides = applyWhatsappIntegrationOverride(overrides, channel);
+        }
         // The tenant's pick wins over the deployment-wide WhatsApp pin: it is more specific and needs no redeploy.
         overrides = applyIntegrationOverride(overrides, channel, integrationIdentifier);
-        return trigger(config.getNovuWorkflowId(channel), scopedSubscriberId, phone, email, payload,
+        return trigger(account, config.getNovuWorkflowId(channel), scopedSubscriberId, phone, email, payload,
                 transactionId, overrides);
     }
 
@@ -136,7 +154,13 @@ public class NovuClient {
 
     /** Upsert a Novu subscriber. Non-fatal: a missing profile degrades tracking, not delivery. */
     public void identify(String subscriberId, Contact contact) {
-        if (!StringUtils.hasText(subscriberId) || recentlyIdentified(subscriberId)) {
+        identify(null, subscriberId, contact);
+    }
+
+    /** {@link #identify} in a tenant's own account ({@code null} = shared): subscribers live per environment. */
+    public void identify(NovuAccount account, String subscriberId, Contact contact) {
+        String cacheKey = NovuAccount.label(account) + "|" + subscriberId;
+        if (!StringUtils.hasText(subscriberId) || recentlyIdentified(cacheKey)) {
             return;
         }
         try {
@@ -162,8 +186,8 @@ public class NovuClient {
             }
             // subscriberId falls back to tenantId:phone for a recipient with no uuid.
             log.info("Novu identify (upsert) subscriberId={}", PiiMask.maskEmbedded(subscriberId));
-            send(HttpMethod.POST, "/v1/subscribers", body);
-            identifiedAt.put(subscriberId, System.currentTimeMillis());
+            send(account, HttpMethod.POST, "/v1/subscribers", body);
+            identifiedAt.put(cacheKey, System.currentTimeMillis());
         } catch (Exception e) {
             log.warn("Novu identify failed for subscriberId={} (continuing to trigger): {}",
                     PiiMask.maskEmbedded(subscriberId), e.getMessage());
@@ -192,6 +216,12 @@ public class NovuClient {
      */
     public NovuResponse trigger(String workflowId, String subscriberId, String phone, String email,
                                 Map<String, Object> payload, String transactionId, Map<String, Object> overrides) {
+        return trigger(null, workflowId, subscriberId, phone, email, payload, transactionId, overrides);
+    }
+
+    /** {@link #trigger} in a tenant's own account; {@code null} = the shared one. */
+    public NovuResponse trigger(NovuAccount account, String workflowId, String subscriberId, String phone, String email,
+                                Map<String, Object> payload, String transactionId, Map<String, Object> overrides) {
         Map<String, Object> to = new HashMap<>();
         to.put("subscriberId", subscriberId);
         putIfText(to, "phone", phone);
@@ -206,15 +236,20 @@ public class NovuClient {
             request.put("overrides", overrides);
         }
         // Never log the request (recipient + message text) or headers (ApiKey); the ids can embed a phone.
-        log.info("Novu trigger workflowId={} subscriberId={} channel-phone={} txn={} overrides={}",
-                workflowId, PiiMask.maskEmbedded(subscriberId), PiiMask.mask(phone),
+        log.info("Novu trigger account={} workflowId={} subscriberId={} channel-phone={} txn={} overrides={}",
+                NovuAccount.label(account), workflowId, PiiMask.maskEmbedded(subscriberId), PiiMask.mask(phone),
                 PiiMask.maskEmbedded(transactionId), hasOverrides);
-        return exchange(HttpMethod.POST, "/v1/events/trigger", request, "NB_NOVU_TRIGGER_FAILED", "triggering Novu event");
+        return exchange(account, HttpMethod.POST, "/v1/events/trigger", request, "NB_NOVU_TRIGGER_FAILED", "triggering Novu event");
     }
 
     /** {@code GET /v1/integrations}. The raw body carries provider credentials: callers must redact. */
     public NovuResponse listIntegrations() {
-        return exchange(HttpMethod.GET, "/v1/integrations", null, "NB_NOVU_INTEGRATIONS_FAILED", "listing Novu integrations");
+        return listIntegrations(null);
+    }
+
+    /** {@link #listIntegrations()} of a tenant's own account; {@code null} = the shared one. Callers must redact. */
+    public NovuResponse listIntegrations(NovuAccount account) {
+        return exchange(account, HttpMethod.GET, "/v1/integrations", null, "NB_NOVU_INTEGRATIONS_FAILED", "listing Novu integrations");
     }
 
     public NovuResponse createIntegration(String name, String identifier, String providerId,
@@ -228,6 +263,12 @@ public class NovuClient {
      */
     public NovuResponse createIntegration(String name, String identifier, String providerId,
                                           String channel, Map<String, Object> credentials, boolean active) {
+        return createIntegration(null, name, identifier, providerId, channel, credentials, active);
+    }
+
+    /** {@link #createIntegration} in a tenant's own account; {@code null} = the shared one. */
+    public NovuResponse createIntegration(NovuAccount account, String name, String identifier, String providerId,
+                                          String channel, Map<String, Object> credentials, boolean active) {
         Map<String, Object> body = new HashMap<>();
         body.put("name", name);
         putIfText(body, "identifier", identifier);
@@ -236,9 +277,10 @@ public class NovuClient {
         body.put("active", active);
         body.put("check", false);
         body.put("credentials", credentials != null ? credentials : new HashMap<>());
-        log.info("Novu create integration name={} identifier={} providerId={} channel={} credentialKeys={}",
-                name, identifier, providerId, channel, credentials != null ? credentials.keySet() : "none");
-        return exchange(HttpMethod.POST, "/v1/integrations", body, "NB_NOVU_INTEGRATION_CREATE_FAILED",
+        log.info("Novu create integration account={} name={} identifier={} providerId={} channel={} credentialKeys={}",
+                NovuAccount.label(account), name, identifier, providerId, channel,
+                credentials != null ? credentials.keySet() : "none");
+        return exchange(account, HttpMethod.POST, "/v1/integrations", body, "NB_NOVU_INTEGRATION_CREATE_FAILED",
                 "creating Novu integration");
     }
 
@@ -247,6 +289,12 @@ public class NovuClient {
      * set wholesale, so {@code credentials} must be complete (that is the rotation path).
      */
     public NovuResponse updateIntegration(String integrationId, String name,
+                                          Map<String, Object> credentials, Boolean active) {
+        return updateIntegration(null, integrationId, name, credentials, active);
+    }
+
+    /** {@link #updateIntegration} in a tenant's own account; {@code null} = the shared one. */
+    public NovuResponse updateIntegration(NovuAccount account, String integrationId, String name,
                                           Map<String, Object> credentials, Boolean active) {
         Map<String, Object> body = new HashMap<>();
         putIfText(body, "name", name);
@@ -257,43 +305,75 @@ public class NovuClient {
             body.put("active", active);
         }
         body.put("check", false);
-        log.info("Novu update integration id={} name={} active={} credentialKeys={}",
-                integrationId, name, active, credentials != null ? credentials.keySet() : "unchanged");
-        return exchange(HttpMethod.PUT, "/v1/integrations/" + integrationId, body,
+        log.info("Novu update integration account={} id={} name={} active={} credentialKeys={}",
+                NovuAccount.label(account), integrationId, name, active,
+                credentials != null ? credentials.keySet() : "unchanged");
+        return exchange(account, HttpMethod.PUT, "/v1/integrations/" + integrationId, body,
                 "NB_NOVU_INTEGRATION_UPDATE_FAILED", "updating Novu integration");
     }
 
     /** Destroys the integration and its credentials; callers must first check no tenant routes through it. */
     public NovuResponse deleteIntegration(String integrationId) {
-        log.info("Novu delete integration id={}", integrationId);
-        return exchange(HttpMethod.DELETE, "/v1/integrations/" + integrationId, null,
+        return deleteIntegration(null, integrationId);
+    }
+
+    /** {@link #deleteIntegration} in a tenant's own account; {@code null} = the shared one. */
+    public NovuResponse deleteIntegration(NovuAccount account, String integrationId) {
+        log.info("Novu delete integration account={} id={}", NovuAccount.label(account), integrationId);
+        return exchange(account, HttpMethod.DELETE, "/v1/integrations/" + integrationId, null,
                 "NB_NOVU_INTEGRATION_DELETE_FAILED", "deleting Novu integration");
     }
 
     public NovuResponse listWorkflows() {
-        return exchange(HttpMethod.GET, "/v2/workflows?limit=100&page=0", null, "NB_NOVU_WORKFLOWS_FAILED",
+        return listWorkflows(null);
+    }
+
+    /** {@link #listWorkflows()} of a tenant's own account; {@code null} = the shared one. */
+    public NovuResponse listWorkflows(NovuAccount account) {
+        return exchange(account, HttpMethod.GET, "/v2/workflows?limit=100&page=0", null, "NB_NOVU_WORKFLOWS_FAILED",
                 "listing Novu workflows");
     }
 
-    /** One Novu call with the server-side ApiKey. The error message never includes the request body (secrets). */
+    /** {@code POST /v2/workflows}: the tenant-organization workflows the bridge provisions. */
+    public NovuResponse createWorkflow(NovuAccount account, Map<String, Object> workflow) {
+        log.info("Novu create workflow account={} workflowId={}", NovuAccount.label(account), workflow.get("workflowId"));
+        return exchange(account, HttpMethod.POST, "/v2/workflows", workflow, "NB_NOVU_WORKFLOW_CREATE_FAILED",
+                "creating Novu workflow");
+    }
+
+    /**
+     * {@code GET /v1/notifications?transactionId=}: the notification a trigger created and its
+     * jobs, for {@code messages/_send} to learn whether the provider accepted the message.
+     */
+    public NovuResponse notificationsByTransaction(NovuAccount account, String transactionId) {
+        String path = "/v1/notifications?page=0&limit=10&transactionId="
+                + java.net.URLEncoder.encode(transactionId, java.nio.charset.StandardCharsets.UTF_8);
+        return exchange(account, HttpMethod.GET, path, null, "NB_NOVU_NOTIFICATIONS_FAILED", "reading Novu notifications");
+    }
+
+    /**
+     * One Novu call with the account's ApiKey (the shared {@code NOVU_API_KEY} for {@code null}).
+     * The error message never includes the request body (secrets).
+     */
     @SuppressWarnings({"unchecked", "rawtypes"})
-    private NovuResponse exchange(HttpMethod method, String path, Object body, String errorCode, String action) {
+    private NovuResponse exchange(NovuAccount account, HttpMethod method, String path, Object body,
+                                  String errorCode, String action) {
         try {
-            ResponseEntity<Map> response = send(method, path, body);
+            ResponseEntity<Map> response = send(account, method, path, body);
             return NovuResponse.builder()
                     .statusCode(response.getStatusCode().value())
                     .response(response.getBody())
                     .build();
         } catch (Exception e) {
-            log.error("Novu {} {} failed", method, path, e);
+            log.error("Novu {} {} failed (account={})", method, path, NovuAccount.label(account), e);
             throw new CustomException(errorCode, "Failed " + action + ": " + e.getMessage());
         }
     }
 
     @SuppressWarnings("rawtypes")
-    private ResponseEntity<Map> send(HttpMethod method, String path, Object body) {
+    private ResponseEntity<Map> send(NovuAccount account, HttpMethod method, String path, Object body) {
         HttpHeaders headers = new HttpHeaders();
-        headers.set("Authorization", "ApiKey " + config.getNovuApiKey());
+        headers.set("Authorization", "ApiKey " + (account == null ? config.getNovuApiKey() : account.apiKey()));
         headers.setContentType(MediaType.APPLICATION_JSON);
         HttpEntity<?> entity = body == null ? new HttpEntity<>(headers) : new HttpEntity<>(body, headers);
         return restTemplate.exchange(ServiceUrl.join(config.getNovuBaseUrl(), path), method, entity, Map.class);

@@ -183,6 +183,14 @@ python3 migrate-notifications.py apply --tenant mycity --yes --report apply-myci
 
 ### Who logs in
 
+An admin with no DIGIT password — a self-serve workspace's founder signs in through Keycloak
+only — authenticates with a token instead: `export DIGIT_ACCESS_TOKEN=<that admin's DIGIT access
+token>` (where to find it: [setup-guide §8.6](./setup-guide.md#86-new-workspaces)), and
+`DIGIT_USERNAME` / `DIGIT_PASSWORD` are then ignored. The token is checked with one read before
+anything else (`REFUSED: the supplied DIGIT_ACCESS_TOKEN was refused (HTTP 401)` when it has
+expired) and never printed. Keep `DIGIT_LOGIN_TENANT` (or `--login-tenant`) at that admin's root:
+it still decides who may create a provider, below.
+
 Log in **at the root you migrate** (`DIGIT_LOGIN_TENANT=<root>`, default: the first root): its
 MDMS rows are written with that admin's roles, and novu-bridge previews a tenant's events
 (`_resolve`, `_dry-run` without `send`) for an admin of the event tenant's own state root. That is
@@ -236,6 +244,14 @@ Read every `customised` and `partial` tenant. The copy is the tenant's own rows 
 conversion the bridge already applies to them (`notifications_convert.py` mirrors
 `LegacyMasterAdapter`), so what it sends today is what it sends after. Inactive rows stay
 inactive. Default rows it never had are not added.
+
+The shipped default **wording** changed in 2.20: no `EGOVS` / `ई-गव फाउंडेशन` signature, no
+`DIGIT:` subject prefix, the assignee addressed as "Dear {emp_name}" instead of "Shri …", and no
+`{ao_designation} - {ulb}` line (it shipped as literal `{ulb}` on a tenant without districts). A
+2.12 tenant still on the 2.12 default wording therefore plans as `customised`, its only
+differences being `body` / `subject` against the new defaults. That is expected: `apply` copies
+the tenant's own rows, old wording included — nothing is rewritten. Edit the templates on
+**Configure** afterwards if you want the new wording.
 
 ### Apply
 
@@ -461,6 +477,17 @@ Changed defaults worth checking: `NOVU_BRIDGE_CHANNEL_POLICY_SCHEMA` is `NOTIFIC
 (legacy fallback automatic — leave it unset); `NOVU_BRIDGE_KAFKA_INPUT_TOPICS` adds
 `notifications.events`; `NOVU_BRIDGE_PROXY_ALLOWED_ROLES` adds `MDMS_ADMIN`; the new
 `NOVU_BRIDGE_PROXY_ADMIN_ROLES` gates provider create/rotate/delete.
+
+## Per-tenant notification accounts
+
+New in this release ([tenant-accounts.md](./tenant-accounts.md)): each signup workspace gets its
+own Novu organization at tenant creation. On a box with `enable_novu` and `enable_keycloak` it is
+on by default; the upgrade deploy then generates its secrets into OpenBao and moves the Novu
+admin off its old password (dashboard login included: read the new one with
+`bao kv get -field=novu_admin_password <secrets_path>`). Nothing moves by itself: every existing
+tenant, migrated or not, keeps the shared account until you list it in
+`novu_tenant_accounts_backfill` (then add its providers in its own organization). To stay exactly
+as before, set `novu_tenant_accounts: false`.
 
 ## After the upgrade
 

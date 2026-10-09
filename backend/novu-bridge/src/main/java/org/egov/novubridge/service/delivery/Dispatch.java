@@ -2,6 +2,7 @@ package org.egov.novubridge.service.delivery;
 
 import lombok.Builder;
 import lombok.Value;
+import org.egov.novubridge.service.account.NovuAccount;
 import org.egov.novubridge.web.models.Contact;
 
 import java.util.Map;
@@ -34,4 +35,6 @@ public class Dispatch {
     String workflowOverride;
     /** Novu integration the tenant pinned for this channel; blank = the transport picks. */
     String integrationIdentifier;
+    /** The tenant's own Novu account (#2203); null = the deployment's shared account. */
+    NovuAccount novuAccount;
 }

@@ -1,5 +1,7 @@
 package org.egov.novubridge.config;
 
+import org.egov.novubridge.service.account.TenantAccountService;
+import org.egov.novubridge.web.filters.InternalAuthFilter;
 import org.egov.novubridge.web.filters.ProxyAuthFilter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
@@ -29,11 +31,26 @@ public class MainConfiguration {
      */
     @Bean
     public FilterRegistrationBean<ProxyAuthFilter> proxyAuthFilter(
-            RestTemplate restTemplate, org.egov.novubridge.config.NovuBridgeConfiguration config) {
+            RestTemplate restTemplate, org.egov.novubridge.config.NovuBridgeConfiguration config,
+            TenantAccountService tenantAccounts) {
         FilterRegistrationBean<ProxyAuthFilter> registration =
-                new FilterRegistrationBean<>(new ProxyAuthFilter(restTemplate, config));
+                new FilterRegistrationBean<>(new ProxyAuthFilter(restTemplate, config, tenantAccounts));
         registration.addUrlPatterns("/novu-adapter/v1/*");
         registration.setOrder(1);
+        return registration;
+    }
+
+    /**
+     * The machine APIs of #2203 ({@code /tenants/**}, {@code /messages/**}): internal tokens only,
+     * never a DIGIT user token. ProxyAuthFilter does not cover these paths.
+     */
+    @Bean
+    public FilterRegistrationBean<InternalAuthFilter> internalAuthFilter(TenantAccountsConfiguration accounts) {
+        FilterRegistrationBean<InternalAuthFilter> registration =
+                new FilterRegistrationBean<>(new InternalAuthFilter(accounts));
+        registration.addUrlPatterns("/novu-adapter/v1/tenants", "/novu-adapter/v1/tenants/*",
+                "/novu-adapter/v1/messages", "/novu-adapter/v1/messages/*");
+        registration.setOrder(0);
         return registration;
     }
 }

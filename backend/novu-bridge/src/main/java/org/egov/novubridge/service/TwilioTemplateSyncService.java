@@ -1,6 +1,7 @@
 package org.egov.novubridge.service;
 
 import lombok.extern.slf4j.Slf4j;
+import org.egov.novubridge.service.account.NovuAccount;
 import org.egov.tracer.model.CustomException;
 import org.egov.novubridge.util.Values;
 import org.springframework.http.HttpEntity;
@@ -37,9 +38,14 @@ public class TwilioTemplateSyncService {
     /**
      * @return {@code {templates:[{templateId, templateName, language, approvalStatus, tokens[]}], total}}
      */
-    @SuppressWarnings("unchecked")
     public Map<String, Object> syncWhatsappTemplates() {
-        String[] creds = twilioCredentials();
+        return syncWhatsappTemplates(null);
+    }
+
+    /** The templates of the Twilio account linked in a tenant's own Novu account; {@code null} = shared. */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> syncWhatsappTemplates(NovuAccount account) {
+        String[] creds = twilioCredentials(account);
         String accountSid = creds[0], authToken = creds[1];
 
         List<Map<String, Object>> templates = new ArrayList<>();
@@ -76,8 +82,8 @@ public class TwilioTemplateSyncService {
 
     /** Twilio Account SID + Auth Token from the Novu twilio integration (internal use only). */
     @SuppressWarnings("unchecked")
-    private String[] twilioCredentials() {
-        NovuClient.NovuResponse res = novuClient.listIntegrations();
+    private String[] twilioCredentials(NovuAccount account) {
+        NovuClient.NovuResponse res = account == null ? novuClient.listIntegrations() : novuClient.listIntegrations(account);
         Object data = res != null && res.getResponse() != null ? res.getResponse().get("data") : null;
         if (data instanceof List) {
             for (Object o : (List<Object>) data) {

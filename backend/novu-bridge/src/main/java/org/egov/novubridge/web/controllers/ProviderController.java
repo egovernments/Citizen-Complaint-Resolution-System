@@ -4,11 +4,15 @@ import lombok.extern.slf4j.Slf4j;
 import org.egov.novubridge.repository.DispatchLogRepository;
 import org.egov.novubridge.service.NovuClient;
 import org.egov.novubridge.service.TwilioTemplateSyncService;
+import org.egov.novubridge.service.account.AccountException;
+import org.egov.novubridge.service.account.NovuAccount;
+import org.egov.novubridge.service.account.TenantAccountService;
 import org.egov.novubridge.service.delivery.DeliveryProvider;
 import org.egov.novubridge.service.delivery.DeliveryProviderRegistry;
 import org.egov.novubridge.service.delivery.DeliveryResult;
 import org.egov.novubridge.service.delivery.Dispatch;
 import org.egov.novubridge.service.policy.ChannelPolicyClient;
+import org.egov.novubridge.service.provider.ProviderAvailabilities;
 import org.egov.novubridge.service.provider.ProviderAvailability;
 import org.egov.novubridge.service.provider.ProviderCatalog;
 import org.egov.novubridge.service.provider.ProviderType;
@@ -19,6 +23,7 @@ import org.egov.novubridge.web.models.Contact;
 import org.egov.novubridge.web.models.DispatchLogEntry;
 import org.egov.novubridge.web.models.ProviderCreateResponse;
 import org.egov.tracer.model.CustomException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.StringUtils;
@@ -52,6 +57,10 @@ import static org.egov.novubridge.util.Values.unwrapData;
  * _delete and test-send additionally need an admin role held at a state that owns the
  * deployment's providers: {@link org.egov.novubridge.config.NovuBridgeConfiguration#providerAdminStateTenants()}).
  *
+ * <p>Per-tenant accounts (#2203): with {@code ?tenantId=<workspace>} on a workspace that has its own
+ * Novu organization, every endpoint here acts on THAT organization, for an admin of that workspace
+ * ({@link AccountSelection}); otherwise on the deployment's shared account, as before.
+ *
  * <p>Secrets stay server-side: operator credentials go straight to Novu and are never persisted,
  * logged (key names only) or echoed. Every response goes through the {@link IntegrationProjection}
  * allowlist. Each write invalidates {@link ProviderAvailability} so dispatch sees it on the next event.
@@ -71,6 +80,17 @@ public class ProviderController {
     private final ProviderCatalog catalog;
     private final ChannelPolicyClient channelPolicy;
     private final ProviderAvailability providerAvailability;
+
+    // ------------------------------------------------------------ per-tenant accounts (#2203)
+    private TenantAccountService tenantAccounts;
+    private ProviderAvailabilities availabilities;
+
+    /** Absent (tests, feature wiring off) = every request acts on the shared account, as before #2203. */
+    @Autowired(required = false)
+    public void setTenantAccounts(TenantAccountService tenantAccounts, ProviderAvailabilities availabilities) {
+        this.tenantAccounts = tenantAccounts;
+        this.availabilities = availabilities;
+    }
 
     public ProviderController(NovuClient novuClient,
                               DeliveryProviderRegistry providers,
@@ -99,7 +119,9 @@ public class ProviderController {
     /** The linked Twilio account's WhatsApp Content templates. Never returns credentials. */
     @GetMapping("/providers/twilio-templates")
     public ResponseEntity<Map<String, Object>> twilioTemplates() {
-        return ResponseEntity.ok(twilioTemplateSyncService.syncWhatsappTemplates());
+        NovuAccount account = requestAccount(false);
+        return ResponseEntity.ok(account == null ? twilioTemplateSyncService.syncWhatsappTemplates()
+                : twilioTemplateSyncService.syncWhatsappTemplates(account));
     }
 
     /**
@@ -109,8 +131,13 @@ public class ProviderController {
      */
     @PostMapping("/providers")
     public ResponseEntity<ProviderCreateResponse> createProvider(@RequestBody Map<String, Object> body) {
+        return createProvider(requestAccount(true), body);
+    }
+
+    /** {@link #createProvider(Map)} in a given account ({@code null} = shared): the admin API's entry. */
+    public ResponseEntity<ProviderCreateResponse> createProvider(NovuAccount account, Map<String, Object> body) {
         if (StringUtils.hasText(str(body.get("type")))) {
-            return createFromCatalog(body);
+            return createFromCatalog(account, body);
         }
         String channel = str(body.get("channel"));
         String providerId = str(body.get("providerId"));
@@ -126,9 +153,11 @@ public class ProviderController {
         if ("WHATSAPP".equalsIgnoreCase(channel) && !StringUtils.hasText(identifier)) {
             identifier = "whatsapp-" + stableId(StringUtils.hasText(name) ? name : providerId);
         }
-        NovuClient.NovuResponse novuResponse =
-                novuClient.createIntegration(name, identifier, providerId, novuChannel, asMap(body.get("credentials")));
-        providerAvailability.invalidate();
+        NovuClient.NovuResponse novuResponse = account == null
+                ? novuClient.createIntegration(name, identifier, providerId, novuChannel, asMap(body.get("credentials")))
+                : novuClient.createIntegration(account, name, identifier, providerId, novuChannel,
+                        asMap(body.get("credentials")), true);
+        invalidate(account);
         return projected(unwrapData(novuResponse.getResponse()));
     }
 
@@ -138,7 +167,7 @@ public class ProviderController {
      * picks the credential form from the identifier alone, so {@code ozeki-x} on a twilio-sms
      * integration would be rotated with Ozeki's form and a prefix-less one could never be rotated.
      */
-    private ResponseEntity<ProviderCreateResponse> createFromCatalog(Map<String, Object> body) {
+    private ResponseEntity<ProviderCreateResponse> createFromCatalog(NovuAccount account, Map<String, Object> body) {
         ProviderType type = catalog.require(str(body.get("type")));
         Map<String, Object> credentials = asMap(body.get("credentials"));
         catalog.validateRequired(type, credentials);
@@ -154,10 +183,12 @@ public class ProviderController {
         // Absent means active: Novu's own default (inactive) would make it invisible to every trigger.
         boolean active = !body.containsKey("active") || truthy(body.get("active"));
 
-        NovuClient.NovuResponse novuResponse = novuClient.createIntegration(
-                name, identifier, type.getNovuProviderId(), type.novuChannel(),
-                catalog.toNovuCredentials(type, credentials), active);
-        providerAvailability.invalidate();
+        NovuClient.NovuResponse novuResponse = account == null
+                ? novuClient.createIntegration(name, identifier, type.getNovuProviderId(), type.novuChannel(),
+                        catalog.toNovuCredentials(type, credentials), active)
+                : novuClient.createIntegration(account, name, identifier, type.getNovuProviderId(), type.novuChannel(),
+                        catalog.toNovuCredentials(type, credentials), active);
+        invalidate(account);
         return projected(unwrapData(novuResponse.getResponse()));
     }
 
@@ -170,11 +201,16 @@ public class ProviderController {
      */
     @PostMapping("/providers/_update")
     public ResponseEntity<ProviderCreateResponse> updateProvider(@RequestBody Map<String, Object> body) {
+        return updateProvider(requestAccount(true), body);
+    }
+
+    /** {@link #updateProvider(Map)} in a given account ({@code null} = shared). */
+    public ResponseEntity<ProviderCreateResponse> updateProvider(NovuAccount account, Map<String, Object> body) {
         String id = str(body.get("id"));
         if (!StringUtils.hasText(id)) {
             throw new CustomException("NB_INVALID_PROVIDER", "id is required");
         }
-        List<Map<String, Object>> integrations = listIntegrations();
+        List<Map<String, Object>> integrations = listIntegrations(account);
         Map<String, Object> existing = findIntegration(integrations, id);
 
         String name = str(body.get("name"));
@@ -211,12 +247,13 @@ public class ProviderController {
                     "Nothing to update: supply at least one of name, credentials, active");
         }
         if (Boolean.FALSE.equals(active)) {
-            requireNotInUse(body, existing, integrations, "disable");
+            requireNotInUse(account, body, existing, integrations, "disable");
         }
 
-        NovuClient.NovuResponse novuResponse =
-                novuClient.updateIntegration(str(existing.get("_id")), name, novuCredentials, active);
-        providerAvailability.invalidate();
+        NovuClient.NovuResponse novuResponse = account == null
+                ? novuClient.updateIntegration(str(existing.get("_id")), name, novuCredentials, active)
+                : novuClient.updateIntegration(account, str(existing.get("_id")), name, novuCredentials, active);
+        invalidate(account);
         Map<String, Object> updated = unwrapData(novuResponse.getResponse());
         return projected(updated.isEmpty() ? existing : updated);
     }
@@ -227,16 +264,25 @@ public class ProviderController {
      */
     @PostMapping("/providers/_delete")
     public ResponseEntity<Map<String, Object>> deleteProvider(@RequestBody Map<String, Object> body) {
+        return deleteProvider(requestAccount(true), body);
+    }
+
+    /** {@link #deleteProvider(Map)} in a given account ({@code null} = shared). */
+    public ResponseEntity<Map<String, Object>> deleteProvider(NovuAccount account, Map<String, Object> body) {
         String id = str(body.get("id"));
         if (!StringUtils.hasText(id)) {
             throw new CustomException("NB_INVALID_PROVIDER", "id is required");
         }
-        List<Map<String, Object>> integrations = listIntegrations();
+        List<Map<String, Object>> integrations = listIntegrations(account);
         Map<String, Object> existing = findIntegration(integrations, id);
-        requireNotInUse(body, existing, integrations, "delete");
+        requireNotInUse(account, body, existing, integrations, "delete");
 
-        novuClient.deleteIntegration(str(existing.get("_id")));
-        providerAvailability.invalidate();
+        if (account == null) {
+            novuClient.deleteIntegration(str(existing.get("_id")));
+        } else {
+            novuClient.deleteIntegration(account, str(existing.get("_id")));
+        }
+        invalidate(account);
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("id", id);
         data.put("deleted", true);
@@ -267,8 +313,12 @@ public class ProviderController {
      * be read refuses too, and so does an unreadable Novu integration list (the lookup before this
      * throws). Integrations are deployment-wide, so a state outside that set is not checked.
      */
-    private void requireNotInUse(Map<String, Object> body, Map<String, Object> integration,
+    private void requireNotInUse(NovuAccount account, Map<String, Object> body, Map<String, Object> integration,
                                  List<Map<String, Object>> integrations, String verb) {
+        if (account != null) {
+            requireNotInUseByTenant(account, body, integration, integrations, verb);
+            return;
+        }
         String tenantId = str(body.get("tenantId"));
         if (!StringUtils.hasText(tenantId)) {
             throw new CustomException("NB_INVALID_PROVIDER",
@@ -337,6 +387,48 @@ public class ProviderController {
             throw new Refusal(HttpStatus.CONFLICT, "NB_PROVIDER_IN_USE", "Provider " + label
                     + " is the last active " + digitChannel + " integration, and these channels are on "
                     + "with no provider selected, so Novu sends them through it: " + String.join(", ", onDefault)
+                    + ". Select a provider on those channels (or add and enable another " + digitChannel
+                    + " provider) first.");
+        }
+    }
+
+    /**
+     * {@link #requireNotInUse} for a tenant's own account (#2203): only that root's channel rows can
+     * send through it, and the deployment's env pins name the shared account's integrations, so the
+     * set of states is exactly the root. A body {@code tenantId} of another root is refused.
+     */
+    private void requireNotInUseByTenant(NovuAccount account, Map<String, Object> body, Map<String, Object> integration,
+                                         List<Map<String, Object>> integrations, String verb) {
+        String root = account.tenantRoot();
+        String given = str(body.get("tenantId"));
+        if (StringUtils.hasText(given) && !root.equals(ChannelPolicyClient.stateTenant(given.trim()))) {
+            throw new Refusal(HttpStatus.BAD_REQUEST, "NB_TENANT_MISMATCH", "tenantId " + given.trim()
+                    + " is not workspace " + root + ", whose notification account this request acts on");
+        }
+        String identifier = str(integration.get("identifier"));
+        String id = str(integration.get("_id"));
+        String label = StringUtils.hasText(identifier) ? identifier : id;
+        String digitChannel = ProviderCatalog.digitChannelOf(integration);
+        boolean lastActive = digitChannel != null && isLastActiveOfItsChannel(integration, integrations, digitChannel);
+        ChannelPolicyClient.ProviderUsage usage;
+        try {
+            usage = channelPolicy.providerUsage(List.of(root), identifier, id,
+                    lastActive ? List.of(digitChannel) : List.of());
+        } catch (RuntimeException e) {
+            log.warn("Refusing to {} provider {} of {}: channel rows unreadable ({})", verb, label, root, e.getMessage());
+            throw new Refusal(HttpStatus.CONFLICT, "NB_PROVIDER_IN_USE", "Could not confirm that no channel "
+                    + "selects provider " + label + " (channel rows unreadable: " + e.getMessage()
+                    + "). Nothing was changed; try again once MDMS answers.");
+        }
+        if (!usage.selecting().isEmpty()) {
+            throw new Refusal(HttpStatus.CONFLICT, "NB_PROVIDER_IN_USE", "Provider " + label
+                    + " is still selected on a channel for " + root + ". Point that channel at another provider first.");
+        }
+        List<String> onDefault = lastActive ? usage.unpinned(digitChannel) : List.of();
+        if (!onDefault.isEmpty()) {
+            throw new Refusal(HttpStatus.CONFLICT, "NB_PROVIDER_IN_USE", "Provider " + label
+                    + " is the last active " + digitChannel + " provider of " + root + ", and these channels are on "
+                    + "with no provider selected, so they send through it: " + String.join(", ", onDefault)
                     + ". Select a provider on those channels (or add and enable another " + digitChannel
                     + " provider) first.");
         }
@@ -411,14 +503,44 @@ public class ProviderController {
         return refusal.toResponse();
     }
 
+    @ExceptionHandler(AccountException.class)
+    ResponseEntity<Map<String, Object>> refused(AccountException refusal) {
+        return refusal.toResponse();
+    }
+
+    /** The account this request acts on ({@link AccountSelection}); null = the shared one. */
+    private NovuAccount requestAccount(boolean write) {
+        return AccountSelection.select(tenantAccounts, AccountSelection.currentSelector(),
+                ProxyAuthFilter.currentCaller(), write);
+    }
+
+    /** A provider write changes what dispatch may pin: drop that account's availability snapshot. */
+    private void invalidate(NovuAccount account) {
+        if (account == null || availabilities == null) {
+            providerAvailability.invalidate();
+        } else {
+            availabilities.invalidate(account);
+        }
+    }
+
     /** By Novu {@code _id} or {@code identifier}; Novu v2.3.0 has no GET-by-id, so this lists. */
-    private Map<String, Object> findIntegration(String id) {
-        return findIntegration(listIntegrations(), id);
+    private Map<String, Object> findIntegration(NovuAccount account, String id) {
+        return findIntegration(listIntegrations(account), id);
     }
 
     /** Throws {@code NB_NOVU_INTEGRATIONS_FAILED} when Novu cannot be asked. */
-    private List<Map<String, Object>> listIntegrations() {
-        return IntegrationProjection.extractList(novuClient.listIntegrations().getResponse());
+    private List<Map<String, Object>> listIntegrations(NovuAccount account) {
+        return IntegrationProjection.extractList((account == null
+                ? novuClient.listIntegrations() : novuClient.listIntegrations(account)).getResponse());
+    }
+
+    /** The account's provider list through the projection allowlist: never a credential. */
+    public List<Map<String, Object>> listProjected(NovuAccount account) {
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (Map<String, Object> integration : listIntegrations(account)) {
+            out.add(IntegrationProjection.projectListItem(integration));
+        }
+        return out;
     }
 
     private static Map<String, Object> findIntegration(List<Map<String, Object>> integrations, String id) {
@@ -439,7 +561,8 @@ public class ProviderController {
     public ResponseEntity<Map<String, Object>> templates(
             @RequestParam(required = false) String channel,
             @RequestParam(required = false) String providerId) {
-        NovuClient.NovuResponse novuResponse = novuClient.listWorkflows();
+        NovuAccount account = requestAccount(false);
+        NovuClient.NovuResponse novuResponse = account == null ? novuClient.listWorkflows() : novuClient.listWorkflows(account);
         List<Map<String, Object>> workflows = extractWorkflows(novuResponse.getResponse());
         String wantedStep = StringUtils.hasText(channel) ? toNovuChannel(channel) : null;
         List<Map<String, Object>> data = new ArrayList<>(workflows.size());
@@ -505,8 +628,7 @@ public class ProviderController {
         String channel = str(body.get("channel"));
         String providerId = str(body.get("providerId"));
 
-        NovuClient.NovuResponse novuResponse = novuClient.listIntegrations();
-        List<Map<String, Object>> integrations = IntegrationProjection.extractList(novuResponse.getResponse());
+        List<Map<String, Object>> integrations = listIntegrations(requestAccount(false));
         String novuChannel = StringUtils.hasText(channel) ? toNovuChannel(channel) : null;
         Map<String, Object> match = null;
         for (Map<String, Object> i : integrations) {
@@ -542,8 +664,10 @@ public class ProviderController {
 
     /**
      * A live test through the same provider seam as dispatch. The subscriberId is derived from the
-     * input (no clock/random) so a re-test is reproducible. Writes one masked, {@code is_test} row
-     * at the operator's tenant.
+     * input (no clock/random), so a re-test reuses one test subscriber. The transactionId is new for
+     * every test unless the caller supplies one ({@link #freshTestTransactionId}). Writes one masked,
+     * {@code is_test} row at the operator's tenant. Refused first, with nothing sent and no row, when
+     * nothing could deliver it: {@link #requireDeliverable}.
      */
     @PostMapping("/providers/test-send")
     public ResponseEntity<Map<String, Object>> testSend(@RequestBody Map<String, Object> body) {
@@ -554,12 +678,16 @@ public class ProviderController {
         String workflowId = str(body.get("workflowId"));
         String txnInput = str(body.get("transactionId"));
         String tenantId = StringUtils.hasText(str(body.get("tenantId"))) ? str(body.get("tenantId")) : "TEST";
+        NovuAccount account = requestAccount(true);
+        if (account != null && !StringUtils.hasText(str(body.get("tenantId")))) {
+            tenantId = account.tenantRoot();
+        }
 
         // `id` pins the trigger to one integration; `type` alone fills in the channel.
         String integrationId = firstText(str(body.get("integrationId")), str(body.get("id")));
         String integrationIdentifier = null;
         if (StringUtils.hasText(integrationId)) {
-            Map<String, Object> integration = findIntegration(integrationId);
+            Map<String, Object> integration = findIntegration(account, integrationId);
             // Novu would accept the trigger and the test would read ok:true for a message the worker drops.
             catalog.requireAvailable(str(integration.get("providerId")));
             integrationIdentifier = str(integration.get("identifier"));
@@ -572,10 +700,15 @@ public class ProviderController {
         }
 
         String upperChannel = channel == null ? "" : channel.toUpperCase();
+        String unchecked = requireDeliverable(account, firstText(integrationIdentifier, integrationId), upperChannel);
         String recipient = StringUtils.hasText(phone) ? phone : email;
         String seed = StringUtils.hasText(txnInput) ? txnInput : (recipient != null ? recipient : upperChannel);
+        if (account != null) {
+            // Two workspaces testing the same number must not share one ledger row (#2203).
+            seed = account.tenantRoot() + "|" + seed;
+        }
         String subscriberId = "nb-test-" + stableId(seed);
-        String transactionId = StringUtils.hasText(txnInput) ? txnInput : subscriberId;
+        String transactionId = StringUtils.hasText(txnInput) ? txnInput : freshTestTransactionId();
         String workflow = StringUtils.hasText(workflowId) ? workflowId
                 : ("EMAIL".equals(upperChannel) ? WORKFLOW_EMAIL : WORKFLOW_SMS);
 
@@ -591,10 +724,11 @@ public class ProviderController {
                 .contentVariables(toContentVariables(asList(body.get("variables"))))
                 .workflowOverride(workflow)
                 .integrationIdentifier(integrationIdentifier)
+                .novuAccount(account)
                 .build();
         // A named integration is a Novu integration by construction (SMSCountry included), so the
-        // legacy direct-gateway route must not swallow it.
-        DeliveryProvider transport = StringUtils.hasText(integrationIdentifier)
+        // legacy direct-gateway route must not swallow it; nor may it a tenant's own account.
+        DeliveryProvider transport = StringUtils.hasText(integrationIdentifier) || account != null
                 ? providers.novu() : providers.select(null, upperChannel);
         DeliveryResult result = transport.send(dispatch);
 
@@ -610,7 +744,63 @@ public class ProviderController {
             out.put("errorCode", result.getProviderCode());
             out.put("errorMessage", result.getProviderMessage());
         }
+        if (unchecked != null) {
+            out.put("warning", unchecked);
+        }
         return ResponseEntity.ok(out);
+    }
+
+    /**
+     * A new transactionId for one test. Novu runs a transactionId once: a trigger that repeats one
+     * is still answered {@code 201 processed}, and the worker then drops it ("transactionId property
+     * is not unique"). With the id derived from the recipient, every Test after the first to the
+     * same number read {@code ok:true} and logged SENT for a message that never left. The UUID after
+     * an underscore is an id under the Logs masking ({@code PiiMask}), so it is shown whole.
+     */
+    static String freshTestTransactionId() {
+        return "nb-test_" + UUID.randomUUID();
+    }
+
+    /**
+     * Test-send's availability gate, the one dispatch applies: a named integration must exist, be
+     * active, deliver the test's channel and be loadable by the worker
+     * ({@link ProviderAvailability#check}); with none named, a channel that goes through Novu needs
+     * an active Novu integration that delivers it ({@link ProviderAvailability#checkUnpinned}). Novu
+     * accepts a trigger nothing can deliver and fails it inside, so without this the test would
+     * read {@code ok:true} for a message that never left. Refused with {@code 409
+     * NB_PROVIDER_UNAVAILABLE} and the availability verdict's reason; nothing is sent and no row
+     * written, like the other refusals before a send.
+     *
+     * <p>Judged in the account the test goes through: a workspace's own Novu organization (#2203)
+     * by that organization's integrations, exactly as its dispatch is
+     * ({@link ProviderAvailabilities#forAccount}), never by the shared account's, and always
+     * through Novu (a workspace never uses the legacy direct gateway, so its unpinned test is always
+     * checked); the shared account as before.
+     *
+     * <p>Asked fresh, not from the dispatch snapshot: an operator who just changed a provider in
+     * Novu's own dashboard tests that, not what Novu looked like up to a TTL ago (the refreshed
+     * snapshot then serves that account's dispatch too). Fails OPEN like dispatch when Novu's
+     * integration list cannot be read: the test is sent and reports the trigger's own answer,
+     * carrying the reason it was not checked as {@code warning}.
+     *
+     * @param account the account the test is sent through ({@code null} = the shared one)
+     * @return that reason when the check could not run, else null
+     */
+    private String requireDeliverable(NovuAccount account, String integrationId, String channel) {
+        boolean named = StringUtils.hasText(integrationId);
+        if (account == null && !named && !providers.novu().id().equals(providers.select(null, channel).id())) {
+            return null; // the legacy direct gateway (SMSCountry's bulk API) answers for itself
+        }
+        ProviderAvailability availabilityOfAccount = account == null
+                ? providerAvailability : availabilities.forAccount(account);
+        availabilityOfAccount.invalidate();
+        ProviderAvailability.Result availability = named
+                ? availabilityOfAccount.check(integrationId, channel)
+                : availabilityOfAccount.checkUnpinned(channel);
+        if (!availability.usable()) {
+            throw new Refusal(HttpStatus.CONFLICT, "NB_PROVIDER_UNAVAILABLE", availability.message());
+        }
+        return availability.status() == ProviderAvailability.Status.UNKNOWN ? availability.message() : null;
     }
 
     /** SMS and WHATSAPP to Novu {@code sms}; EMAIL to {@code email}; anything else is NB_INVALID_CHANNEL. */

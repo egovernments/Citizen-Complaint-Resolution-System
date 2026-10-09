@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import org.egov.common.contract.response.ResponseInfo;
 import org.egov.novubridge.config.NovuBridgeConfiguration;
 import org.egov.novubridge.service.DispatchPipelineService;
+import org.egov.novubridge.service.account.TenantAccountService;
 import org.egov.novubridge.service.resolution.NotificationResolver;
 import org.egov.novubridge.service.resolution.ResolutionOutcome;
 import org.egov.novubridge.service.policy.ChannelPolicyClient;
@@ -13,6 +14,7 @@ import org.egov.novubridge.web.models.DispatchDryRunRequest;
 import org.egov.novubridge.web.models.DispatchDryRunResponse;
 import org.egov.novubridge.web.models.ThinEventResolveRequest;
 import org.egov.novubridge.web.models.ThinEventResolveResponse;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
@@ -48,6 +50,14 @@ public class DispatchController {
         this.notificationResolver = notificationResolver;
         this.responseInfoFactory = responseInfoFactory;
         this.config = config;
+    }
+
+    private TenantAccountService tenantAccounts;
+
+    /** Per-tenant accounts (#2203); absent = the shared account only. */
+    @Autowired(required = false)
+    public void setTenantAccounts(TenantAccountService tenantAccounts) {
+        this.tenantAccounts = tenantAccounts;
     }
 
     @PostMapping("/_validate")
@@ -105,6 +115,12 @@ public class DispatchController {
             return;
         }
         String owners = owning.isEmpty() ? "(none configured)" : String.join(", ", owning);
+        // #2203: a workspace with its own Novu organization sends through it, not the shared
+        // providers, so its own admin may run a real send for its events.
+        if (sends && tenantAccounts != null && caller.administersStateOf(tenantId)
+                && tenantAccounts.isProvisioned(tenantId)) {
+            return;
+        }
         if (sends) {
             throw new ProviderController.Refusal(HttpStatus.FORBIDDEN, "NB_TENANT_NOT_ALLOWED",
                     "_dry-run with send:true sends a real message through the deployment's shared providers, so "

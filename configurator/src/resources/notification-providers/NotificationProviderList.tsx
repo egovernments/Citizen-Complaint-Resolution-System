@@ -16,6 +16,8 @@ import { AddProviderDialog } from './AddProviderDialog';
 import { ProviderRowActions } from './ProviderRowActions';
 import { useProviderCatalog } from './useProviderCatalog';
 import { useChannelRows } from './useChannelRows';
+import { canManageProviders, useNotificationAccount } from './useNotificationAccount';
+import { NotificationAccountBanner } from './NotificationAccountBanner';
 import { useApp } from '../../App';
 import { channelGuardSnapshot, useNotificationConfig } from '../notification-configure/useNotificationGuard';
 
@@ -68,7 +70,10 @@ export function NotificationProviderList() {
   // Add / rename / rotate / enable / disable / delete / test are admin-only on the
   // bridge; offering them to everyone meant non-admins only learned that from a 403.
   const { state } = useApp();
-  const canManage = isProviderAdmin(state.user?.roles);
+  // #2203: on a workspace with its own notification account the bridge says whether THIS
+  // user may manage it; the role check alone cannot see where the role is held.
+  const { account } = useNotificationAccount();
+  const canManage = canManageProviders(isProviderAdmin(state.user?.roles), account);
   // What Disable / Delete are validated against before they are sent (null while loading).
   const guardSnapshot = channelGuardSnapshot(useNotificationConfig());
 
@@ -163,14 +168,19 @@ export function NotificationProviderList() {
             <AddProviderDialog catalogState={catalogState} />
           ) : (
             <span className="text-xs text-muted-foreground max-w-xs">
-              {t('app.providers.admin_only', {
-                _: 'Read-only: adding, changing or testing a provider needs the SUPERUSER, MDMS_ADMIN or ACCOUNT_ADMIN role at the state tenant.',
-              })}
+              {account?.mode === 'TENANT'
+                ? t('app.providers.admin_only_workspace', {
+                    _: 'Read-only: adding, changing or testing a provider needs the SUPERUSER, MDMS_ADMIN or ACCOUNT_ADMIN role in this workspace.',
+                  })
+                : t('app.providers.admin_only', {
+                    _: 'Read-only: adding, changing or testing a provider needs the SUPERUSER, MDMS_ADMIN or ACCOUNT_ADMIN role at the state tenant.',
+                  })}
             </span>
           )}
         </div>
       }
     >
+      <NotificationAccountBanner account={account} />
       <DigitDatagrid
         columns={columns}
         rowActions={(record) => (

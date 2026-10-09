@@ -699,8 +699,14 @@ novu_bridge_smscountry_password: ""
 # novu_bridge_preference_enabled: false
 # novu_bridge_preference_fail_open: true
 
-# Country code prefixed to OTP numbers that arrive without one (core SMS from
-# user-otp / egov-user), e.g. "254". Blank = numbers are sent as received.
+# Deployment-wide LAST-RESORT country code for phone numbers that arrive without
+# one (login OTPs from user-otp / egov-user, complaint notifications), e.g. "+254".
+# The tenant's own common-masters.MobileNumberValidation rule (written at workspace
+# signup from the signup country) and the user's own egov-user countryCode come
+# first, so a deployment with workspaces in several countries sends each its own
+# code; this is used only at a tenant that has no rule. Blank and no rule = the
+# message is NOT sent (SKIPPED / NB_CONTACT_INVALID on Logs), never as "+" + the
+# national number.
 # novu_bridge_core_sms_country_code: ""
 
 # Per-channel Novu workflow ids the bridge triggers (the rendered message travels
@@ -978,8 +984,26 @@ grafana_anonymous_enabled: false
 # The BFF's DIGIT admin username/tenant are configured in the identity block
 # above; its password belongs in bootstrap_secrets.identity_digit_admin_password.
 # novu_admin_email: "admin@digit.local"      # Novu's own first-run account
-# novu_admin_password: "Digit@12345"
+# novu_admin_password: "Digit@12345"         # with novu_tenant_accounts on, leave this UNSET: the
+#                                            # deploy generates one in OpenBao (novu_admin_password)
+#                                            # and refuses the published default
 # novu_org_name: "DIGIT"
+#
+# ── Per-tenant Novu accounts (#2203) ──
+# Each signup workspace gets its own Novu ORGANIZATION (its own provider credentials, managed by
+# its own admins in the Configurator); every other tenant keeps the shared account. Default: on
+# when both enable_novu and enable_keycloak are (self-serve signup); set it to override either way.
+# Secrets (generated into OpenBao on first use, never in host_vars):
+#   novu_bridge_tenant_key_encryption_key, novu_bridge_internal_admin_token,
+#   novu_bridge_internal_send_token, novu_admin_password
+# Turning it on for a box whose Novu admin still has the old password: the deploy changes it from
+# novu_admin_password_legacy (default the published "Digit@12345") to the OpenBao one, before
+# anything signs in. Read it back with `bao kv get -field=novu_admin_password <secrets_path>`.
+# novu_tenant_accounts: true
+# novu_admin_password_legacy: "Digit@12345"
+# Tenants that predate the feature are moved onto their own organization only when listed here
+# (idempotent; each then needs its own providers): docs/releases/2.20/notifications/tenant-accounts.md
+# novu_tenant_accounts_backfill: []          # e.g. ["acme", "globex"]
 
 # ── Host / platform ──
 # deploy_become: true                   # false = macOS thin path, no sudo

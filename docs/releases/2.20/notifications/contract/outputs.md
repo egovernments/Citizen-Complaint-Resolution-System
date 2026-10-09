@@ -74,13 +74,13 @@ sent again, and no phone number is in it.
 | `tenant_id` | varchar(256) NOT NULL | |
 | `channel` | varchar(64) NOT NULL | `UNKNOWN` on an envelope rejection without one; `NONE` on channel-less rows |
 | `source_path` | varchar(32) NOT NULL, default `PRERENDERED` | `PRERENDERED` \| `RESOLVED`; filter `sourcePath` |
-| `recipient_value` | varchar(256) NOT NULL | `subscriberId` or `none`; stored raw, masked on read; unique key part |
+| `recipient_value` | varchar(256) NOT NULL | `subscriberId` or `none`; stored raw, masked on read (a user uuid is an id and is shown as it is; a phone becomes `***` + its last 3 digits, an email `c***@domain` — the rule on `GET /logs` in [openapi.yaml](./openapi.yaml)); unique key part |
 | `template_key` | varchar(256) | `templateKey`, else `<audience>.<action>.<toState>.<channel>.<locale>`, else `eventName` |
 | `template_version` | varchar(64) | reserved |
 | `status` | varchar(32) NOT NULL | see above |
 | `attempt_count` | int NOT NULL | always 1 — no internal retry |
 | `last_error_code` / `last_error_message` | varchar(128) / text | `NB_*` code; provider's own words, stored raw, phones and emails masked on read |
-| `provider_response_jsonb` | jsonb | transport acceptance, later the receipt; deep-masked on read |
+| `provider_response_jsonb` | jsonb | transport acceptance, later the receipt; deep-masked on read. `novuAccount: tenant:<root>` when the message went through a tenant's own Novu organization ([tenant-accounts.md](../tenant-accounts.md)); absent = the shared account |
 | `is_test` | boolean NOT NULL, default false | test-sends; hidden unless `includeTest=true` |
 | `provider_ref` | varchar(256) | provider correlation id (Novu transactionId, SMSCountry job id) |
 | `delivered_time` | bigint | set by a `DELIVERED` receipt |
@@ -90,8 +90,20 @@ Indexes: unique `(transaction_id, channel, recipient_value)`; `(status, last_mod
 `(tenant_id, event_name)`, `(reference_number)`, `(provider_ref)`, `(tenant_id, is_test)`,
 `(tenant_id, source_path)`.
 
-**Test-send rows** (`POST /providers/test-send`): at the operator's tenant, `is_test = true`,
-`event_name` and `template_key` = `TEST`, subscriber `nb-test-<sha256(seed)[0:16]>` (repeatable).
+**Test-send rows** (`POST /providers/test-send`; a test refused before sending, e.g.
+`409 NB_PROVIDER_UNAVAILABLE`, writes none): at the operator's tenant, `is_test = true`,
+`event_name` and `template_key` = `TEST`, subscriber `nb-test-<sha256(seed)[0:16]>` (the same for
+every test to one recipient), transaction id `nb-test_<uuid>`, new for every test (one row per test).
+A caller-supplied `transactionId` is used as given; Novu does not send a repeat of one.
+On a workspace's own organization the seed starts with the workspace, so each workspace has its
+own test subscriber.
+
+**OTP rows** (`POST /messages/_send`): module `identity`, `event_name` = `OTP_SEND`,
+`template_key` = `OTP`, `recipient_value` = `otp_<uuid>`, a UUID-shaped SHA-256 of
+`root:recipient` (stable per tenant and number; never the phone or address), `transaction_id`,
+`event_id` and `provider_ref` = Novu's transaction id `otp_<uuid>`, status `SENT` or `FAILED`
+(`NB_PROVIDER_FAILED`, `NB_NOVU_*`). Both ids are UUID-shaped, so the masking on read shows them
+as they are. The code is never stored.
 
 ## The DLQ
 
@@ -149,6 +161,12 @@ Outcome words, case-insensitive substring, first match wins: `undeliv`, `fail`, 
 |---|---|
 | `/receipts/novu` | `{"type": "message.delivered", "data": {"transactionId": "…"}}` |
 | `/receipts/smscountry` | `GET …/receipts/smscountry?jobno=4689&status=DELIVRD&secret=…` (`jobno` = the job id SMSCountry returned to the legacy direct route, stored as `provider_ref`. A message sent through an SMSCountry *provider* has Novu's `transactionId` as its `provider_ref` — the job id stays in Novu's message record — so a DR for it matches no row) |
+
+Matching does not depend on which Novu account sent the message: transaction ids are unique, so a
+receipt for a message a tenant's own organization sent is filed under the right row. Each sender's
+report has to be configured where it is sent from, though: a gateway DR callback or Novu webhook
+set up for the shared account does not cover a tenant's own providers
+([tenant-accounts.md](../tenant-accounts.md#what-else-changes)).
 
 Other path segments are parsed the same way but need a Kong route. The response is always
 `200` once authenticated, e.g.
