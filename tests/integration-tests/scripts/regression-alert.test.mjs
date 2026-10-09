@@ -8,7 +8,7 @@ import path from 'node:path';
 import {
   runsToProcess, analyzeRun, needsAlert, composeMail, composeStaleMail,
   buildMessage, curlInvocation, readConfig, bareAddress, tick, retryDelayMs, classifySendError, sendMail, curlEnv,
-  splitAddressList, isAddress, configProblems,
+  splitAddressList, isAddress, configProblems, readState, writeState,
 } from './regression-alert.mjs';
 
 const R1 = '2026-10-04_1542_aaaa1111';
@@ -303,8 +303,12 @@ test('tick: a failed send keeps the run and retries after a growing pause', (t) 
   assert.equal(tick({ cfg, opts: {}, now: t0, send: fail }), 1);
   assert.equal(state().lastRunId, R2, 'the run is not marked handled');
   assert.equal(state().sendFailures, 1);
-  assert.equal(tick({ cfg, opts: {}, now: t0 + 60_000, send: ok }), 1, 'held off: no login one minute later');
-  assert.equal(sent.length, 0);
+  const before = state();
+  const held = captureLog(() => tick({ cfg, opts: {}, now: t0 + 60_000, send: ok }));
+  assert.equal(held.result, 0, 'holding off is the plan, not a failed poll: the unit stays green');
+  assert.match(held.lines.join('\n'), /holding off until 2026-10-09T03:14:00\.000Z: the last send failed/);
+  assert.equal(sent.length, 0, 'no login one minute later');
+  assert.deepEqual(state(), before, 'holding off changes nothing');
   assert.equal(tick({ cfg, opts: {}, now: t0 + 5 * 60_000, send: fail }), 1, '5 min later it tries again');
   assert.equal(state().sendFailures, 2);
   assert.equal(state().retryAfter, new Date(t0 + 15 * 60_000).toISOString(), 'then waits 10 min');
@@ -480,6 +484,162 @@ test('tick: during a backoff, a run that needs no mail is still recorded as hand
   assert.equal(result, 0);
   assert.equal(state().lastRunId, R3, 'nothing to mail, so nothing to hold off');
   assert.doesNotMatch(lines.join('\n'), /holding off/);
+  assert.equal(state().retryAfter, retryAfter, 'the pause still applies to the next mail');
+  assert.equal(state().sendFailures, 1);
+});
+
+// --- one mail per poll, recorded around the send --------------------------
+
+const catalog4 = (() => {
+  const R4 = '2026-10-07_1542_dddd4444';
+  return {
+    R4,
+    runs: [run(R4, 'dddd4444'), run(R3, 'cccc3333'), run(R2, 'bbbb2222'), run(R1, 'aaaa1111')],
+    tests: [
+      t2('breaks-in-r2', [h(R4, 'failed'), h(R3, 'failed'), h(R2, 'failed'), h(R1, 'passed')]),
+      t2('breaks-in-r3', [h(R4, 'failed'), h(R3, 'failed'), h(R2, 'passed'), h(R1, 'passed')]),
+      t2('breaks-in-r4', [h(R4, 'failed'), h(R3, 'passed'), h(R2, 'passed'), h(R1, 'passed')]),
+    ],
+  };
+})();
+const upTo = (c, runId) => ({ ...c, runs: c.runs.slice(c.runs.findIndex(r => r.id === runId)) });
+
+test('tick: several runs to report go out as ONE digest mail (one login), oldest first', (t) => {
+  const { cfg, state } = box(t, catalog4, { lastRunId: R1 });
+  const sent = [];
+  assert.equal(tick({ cfg, opts: {}, send: (_c, subject, text) => { sent.push({ subject, text }); return '250'; } }), 0);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].subject, `[CCRS tests][test] 3 runs: 3 regressed — latest ${catalog4.R4}`);
+  const sections = sent[0].text.split(/^=== \d of 3 =+$/m).slice(1);
+  assert.deepEqual(sections.map(x => x.match(/^Run: +(\S+)/m)[1]), [R2, R3, catalog4.R4]);
+  assert.deepEqual(sections.map(x => x.match(/✗ tests\/(\S+)\.spec/)[1]), ['breaks-in-r2', 'breaks-in-r3', 'breaks-in-r4']);
+  assert.equal(state().lastRunId, catalog4.R4);
+});
+
+test('composeMail: one run to report among several new ones says the others had nothing', () => {
+  const c = { runs: catalog4.runs, tests: [t2('x', [h(R3, 'failed'), h(R2, 'passed'), h(R1, 'passed')])] };
+  const analyses = runsToProcess(upTo(c, R3), R1).map(({ run: r, prev }) => analyzeRun(c, r, prev));
+  const m = composeMail(analyses.filter(needsAlert), { boxName: 'b', dashboardUrl: '', repoUrl: 'https://github.com/o/r', maxList: 40 }, { newRuns: analyses.length });
+  assert.equal(m.subject, `[CCRS tests][b] 1 regressed — ${R3}`);
+  assert.match(m.text, /^Since: {5}the last mail \(1 other new run had nothing to report\)$/m);
+});
+
+test('tick: a mail that was delivered is never sent again when a later one fails', (t) => {
+  // The bug this guards: run 2's mail went out, run 3's failed, and the next
+  // poll sent run 2 again (twice), then run 3.
+  const { dir, cfg, state } = box(t, upTo(catalog4, R2), { lastRunId: R1 });
+  const put = c => fs.writeFileSync(path.join(dir, 'catalog.json'), JSON.stringify(c));
+  const delivered = [];
+  const ok = (_c, subject) => { delivered.push(subject); return '250'; };
+  const down = () => { throw Object.assign(new Error('curl exited 7: Failed to connect'), { curlExit: 7, reply: '' }); };
+  const t0 = Date.parse('2026-10-09T03:00:00Z');
+  assert.equal(tick({ cfg, opts: {}, now: t0, send: ok }), 0);
+  assert.equal(state().lastRunId, R2, 'progress saved right after the mail');
+  put(upTo(catalog4, catalog4.R4));
+  assert.equal(tick({ cfg, opts: {}, now: t0 + 60_000, send: down }), 1);
+  assert.equal(state().lastRunId, R2, 'the delivered run stays handled');
+  assert.equal(tick({ cfg, opts: {}, now: t0 + 10 * 60_000, send: ok }), 0);
+  assert.equal(tick({ cfg, opts: {}, now: t0 + 20 * 60_000, send: ok }), 0);
+  assert.deepEqual(delivered, [
+    `[CCRS tests][test] 1 regressed — ${R2}`,
+    `[CCRS tests][test] 2 runs: 2 regressed — latest ${catalog4.R4}`,
+  ]);
+  assert.equal(state().lastRunId, catalog4.R4);
+});
+
+test('tick: "sending" is on disk before curl starts, and gone once the mail is recorded', (t) => {
+  const { cfg, state } = box(t, catalog, { lastRunId: R2 });
+  let during;
+  assert.equal(tick({ cfg, opts: {}, now: Date.parse('2026-10-09T03:00:00Z'), send: () => { during = state(); return '250'; } }), 0);
+  assert.equal(during.lastRunId, R2, 'not yet handled while sending');
+  assert.deepEqual(Object.keys(during.sending).sort(), ['at', 'lastRunId', 'subject']);
+  assert.equal(during.sending.lastRunId, R3, 'the runs this mail covers');
+  assert.equal(during.sending.at, '2026-10-09T03:00:00.000Z');
+  assert.match(during.sending.subject, /3 regressed/);
+  assert.equal(state().sending, undefined);
+  assert.equal(state().lastRunId, R3);
+});
+
+test('tick: if the state file cannot be written, nothing is sent, poll after poll', (t) => {
+  const { dir, cfg, state } = box(t, catalog, { lastRunId: R2 });
+  fs.mkdirSync(path.join(dir, 'state.json.tmp')); // blocks the write, even for root
+  for (let i = 0; i < 3; i++) {
+    const { result, lines } = captureLog(() => tick({ cfg, opts: {}, send: () => assert.fail('must not send') }));
+    assert.equal(result, 1);
+    assert.match(lines.join('\n'), /ERROR: could not write the state file .* \(before sending\)[^]*not sending/);
+  }
+  assert.equal(state().lastRunId, R2);
+});
+
+test('tick: a mail sent but not recorded is not sent again by the next poll', (t) => {
+  const { dir, cfg, state } = box(t, catalog, { lastRunId: R2 });
+  const tmp = path.join(dir, 'state.json.tmp');
+  const sent = [];
+  // The send succeeds; the state write right after it fails.
+  const first = captureLog(() => tick({ cfg, opts: {}, now: Date.parse('2026-10-09T03:00:00Z'), send: (_c, s) => { sent.push(s); fs.mkdirSync(tmp); return '250'; } }));
+  assert.equal(first.result, 1);
+  assert.match(first.lines.join('\n'), /mail went out but is not recorded/);
+  assert.equal(state().lastRunId, R2);
+  assert.equal(state().sending.lastRunId, R3);
+  fs.rmdirSync(tmp);
+  const second = captureLog(() => tick({ cfg, opts: {}, now: Date.parse('2026-10-09T03:05:00Z'), send: (_c, s) => { sent.push(s); return '250'; } }));
+  assert.equal(second.result, 0);
+  assert.equal(sent.length, 1, 'at most once');
+  assert.match(second.lines.join('\n'), /WARNING: the poll at 2026-10-09T03:00:00\.000Z was sending "\[CCRS tests\]\[test\] 3 regressed[^"]*" and did not record the result/);
+  assert.equal(state().lastRunId, R3);
+  assert.equal(state().sending, undefined);
+});
+
+test('tick: an operator replay (--since) starts where it is told and clears a leftover "sending" mark', (t) => {
+  const stale = { lastRunId: R3, subject: 'old', at: '2026-10-01T00:00:00.000Z' };
+  const { cfg, state } = box(t, catalog, { lastRunId: R3, sending: stale });
+  const down = () => { throw Object.assign(new Error('curl exited 7'), { curlExit: 7, reply: '' }); };
+  captureLog(() => assert.equal(tick({ cfg, opts: { since: R2 }, send: down }), 1));
+  assert.equal(state().lastRunId, R2, 'the replay starts at --since');
+  assert.equal(state().sending, undefined, 'the old mark must not later pass for this failed mail');
+  const sent = [];
+  captureLog(() => tick({ cfg, opts: { since: R2 }, now: Date.now() + 3_600_000, send: (_c, s2) => { sent.push(s2); return '250'; } }));
+  assert.equal(sent.length, 1);
+  assert.equal(state().sending, undefined);
+});
+
+test('tick: a state file that exists but is empty or not JSON stops the poll loudly; it is left alone', (t) => {
+  for (const [content, why] of [['', /the file is empty/], ['{"lastRunId": "2026-10-0', /not valid JSON/], ['[]', /not a JSON object/]]) {
+    const { dir, cfg } = box(t, catalog);
+    fs.writeFileSync(path.join(dir, 'state.json'), content);
+    const { result, lines } = captureLog(() => tick({ cfg, opts: {}, send: () => assert.fail('must not send') }));
+    assert.equal(result, 1);
+    assert.match(lines.join('\n'), /ERROR: the state file .* can't be used/);
+    assert.match(lines.join('\n'), why);
+    assert.match(lines.join('\n'), /Delete it to re-baseline/);
+    assert.equal(fs.readFileSync(path.join(dir, 'state.json'), 'utf8'), content, 'not overwritten by a silent re-baseline');
+  }
+  assert.deepEqual(readState('/nonexistent/state.json'), { state: null }, 'only a missing file is a first poll');
+});
+
+test('tick: the failure count is per kind, so a throttle after other failures still starts at 1 hour', (t) => {
+  const t0 = Date.parse('2026-10-09T03:00:00Z');
+  const { cfg, state } = box(t, catalog, { lastRunId: R2, sendFailure: 'other', sendFailures: 4, retryAfter: new Date(t0 - 1).toISOString() });
+  const throttled = () => { throw Object.assign(new Error('curl exited 67 (last SMTP reply 454)'), { curlExit: 67, reply: '454' }); };
+  const { lines } = captureLog(() => tick({ cfg, opts: {}, now: t0, send: throttled }));
+  assert.match(lines.join('\n'), /send failed \(1 in a row, login throttled\)/);
+  assert.equal(state().sendFailures, 1);
+  assert.equal(state().retryAfter, new Date(t0 + 60 * 60_000).toISOString(), '1 hour, not the 4-hour cap');
+  captureLog(() => tick({ cfg, opts: {}, now: t0 + 60 * 60_000, send: throttled }));
+  assert.equal(state().sendFailures, 2);
+  assert.equal(state().retryAfter, new Date(t0 + 3 * 60 * 60_000).toISOString(), 'then 2 hours');
+});
+
+test('writeState: fsyncs the file and its directory, replaces atomically, leaves no temp file', (t) => {
+  const dir = tempDir(t, 'ra-state-');
+  const p = path.join(dir, 'state.json');
+  const fsyncs = [];
+  const orig = fs.fsyncSync;
+  fs.fsyncSync = fd => { fsyncs.push(fs.fstatSync(fd).isDirectory() ? 'dir' : 'file'); return orig(fd); };
+  try { writeState(p, { lastRunId: R3, skipped: undefined }); } finally { fs.fsyncSync = orig; }
+  assert.deepEqual(fsyncs, ['file', 'dir']);
+  assert.equal(fs.readFileSync(p, 'utf8'), `{\n  "lastRunId": "${R3}"\n}\n`);
+  assert.deepEqual(fs.readdirSync(dir), ['state.json']);
 });
 
 test('tick: --dry-run never writes state and never sends', (t) => {

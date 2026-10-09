@@ -82,13 +82,24 @@ How it behaves:
   (say, every run executing nothing) is reported once, on the run where it began.
 - **First poll on a box** only records the newest run as the baseline, so
   enabling alerts doesn't mail old news.
-- **Several runs between polls** (RUN-button runs) are each compared with their
-  own predecessor, oldest first.
-- **A failed send** (SMTP down, bad password) leaves the run unhandled, so a
-  later poll retries it. Nothing is lost, and nothing is sent twice. Retries
-  back off: 5, 10, 20, 40 minutes, then hourly. The journal shows each attempt
-  and the relay's reply code (`SMTP 250` once it accepted the message). These
-  failures get their own message:
+- **One mail per poll, so one SMTP login.** Several new runs (RUN-button runs
+  between polls, or runs that piled up while sending failed) are each compared
+  with their own predecessor, oldest first; the ones with something to report go
+  out together as one digest, a section per run.
+- **Nothing is sent twice.** The poll writes "sending" to its state file before
+  it hands the mail to curl, and sends nothing if it cannot write it (a mail it
+  could not record would go out again on every poll). It records the result
+  right after. If a poll dies in between (power cut, killed, the second write
+  failing), the next one logs a `WARNING ... did not record the result` and does
+  not resend: that mail may or may not have arrived.
+- **A failed send** (SMTP down, bad password) leaves the runs unhandled, so a
+  later poll retries them. Retries back off: 5, 10, 20, 40 minutes, then hourly.
+  Each kind of failure below counts on its own, so the schedule starts over
+  when the kind changes. A poll that is waiting out the pause logs
+  `holding off until …` and exits 0 (the unit is not "failed"); a poll whose
+  send failed exits 1. The journal shows each attempt and the relay's reply
+  code (`SMTP 250` once it accepted the message). These failures get their own
+  message:
   - **`login throttled`** (a 4xx to AUTH, e.g. Gmail's `454 4.7.0 Too many
     login attempts`): the relay has locked logins to the sender account for a
     while. That is not necessarily a wrong password, and every attempt can
@@ -107,6 +118,12 @@ How it behaves:
     `553` for a sender the account may not use, `550` for an unknown
     recipient): fix `test_alerts_from` / `test_alerts_to` and redeploy. Retries
     cannot succeed until then.
+- **The state file** (`/var/lib/ccrs-test-alerts/state.json`) is replaced in
+  one step (written to a temp file, flushed to disk, renamed). If it exists but
+  can't be read, is empty or isn't JSON, the poll logs `ERROR: the state file
+  … can't be used`, sends nothing and exits 1 until someone deletes it
+  (re-baseline on the newest run, mailing nothing) or restores it. Silently
+  starting over would skip every run since the last one handled.
 - **Optional watchdog:** with `test_alerts_stale_after_hours` > 0 it also mails
   once when no new run has appeared for that long, e.g. because the nightly
   redeploy failed its smoke check and never started the tests.

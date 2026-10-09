@@ -21,16 +21,29 @@
  *        stopped running passed in the previous run; no result now
  *        fixed           passed now; the last time it ran it failed/timed out
  *      ("Verdict" excludes `interrupted`: the global timeout killed the test.)
- *   4. If anything regressed, became skipped or stopped running, mail the
- *      summary to ALERT_TO. Then record the run as handled. A failed send is
- *      retried, because the state is only advanced after it, but with a
- *      growing pause (5, 10, 20, 40, then every 60 minutes). A login the relay
+ *   4. If anything regressed, became skipped or stopped running, mail it to
+ *      ALERT_TO: ONE mail per poll, so one SMTP login. Several runs that need
+ *      a mail (runs piled up between polls, or while sends were failing) go
+ *      out together as a digest with a section per run.
+ *   5. Record the runs as handled. The state file says "sending" before curl
+ *      starts (no send at all if that can't be written) and is updated right
+ *      after, so a mail goes out at most once: a poll that finds a leftover
+ *      "sending" mark (the previous one died, or could not record the result)
+ *      logs it and does not resend. A failed send leaves the runs unhandled
+ *      and is retried after a pause that grows with each failure OF THE SAME
+ *      KIND: 5, 10, 20, 40, then every 60 minutes; for a login the relay
  *      refuses for now (a 4xx to AUTH, e.g. Gmail's "454 4.7.0 Too many login
- *      attempts" account lock) waits longer, 1, 2, then 4 hours, because every
- *      attempt can extend that lock; the log says so in plain words.
+ *      attempts" account lock) 1, 2, then 4 hours, because every attempt can
+ *      extend that lock. The log says which kind, in plain words.
+ *
+ * Exit codes: 0 when the poll did what it should (including "nothing new" and
+ * "holding off" during a pause), 1 when a send or the state file failed, 2 for
+ * missing or malformed settings.
  *
  * The first tick on a box (no state file) only records the newest run as the
- * baseline and sends nothing, so enabling alerts doesn't mail old news.
+ * baseline and sends nothing, so enabling alerts doesn't mail old news. A state
+ * file that exists but can't be read or parsed is NOT a first tick: the poll
+ * logs an error and sends nothing until it is deleted (re-baseline) or fixed.
  *
  * Works on catalogs from before and after the not-run tracking change: it
  * compares runs through each test's runId-tagged history, which both have.
@@ -54,7 +67,7 @@
  *
  * CLI (for operators and replays):
  *   node regression-alert.mjs [--dry-run] [--catalog <path>] [--state <path>] [--since <runId>]
- *   --dry-run prints the mail(s) instead of sending and never writes state.
+ *   --dry-run prints the mail instead of sending and never writes state.
  *   --since <runId> treats that run as the last handled one (replays).
  */
 import fs from 'node:fs';
@@ -174,17 +187,10 @@ function listGroup(lines, title, items, cfg, render) {
   if (items.length > cfg.maxList) lines.push(`  … and ${items.length - cfg.maxList} more (see the dashboard)`);
 }
 
-/** Subject + plain-text body for one analysed run. */
-export function composeMail(a, cfg) {
+/** The lines for one analysed run: what ran, against what, and each group. */
+function runLines(a, cfg) {
   const { run, prev } = a;
-  const counts = [];
-  if (a.regressed.length) counts.push(`${a.regressed.length} regressed`);
-  if (a.nowSkipped.length) counts.push(`${a.nowSkipped.length} now skipped`);
-  if (a.stopped.length) counts.push(`${a.stopped.length} stopped running`);
-  const subject = `[CCRS tests][${cfg.boxName}] ${counts.join(', ')} — ${run.id}`;
-
   const lines = [];
-  lines.push(`Box:       ${cfg.boxName}${cfg.dashboardUrl ? `  (${cfg.dashboardUrl})` : ''}`);
   lines.push(`Run:       ${run.id}  (${run.branch || '?'}@${run.sha || '?'})`);
   lines.push(`Result:    ${summaryLine(run)}`);
   if (run.cutShort) lines.push(`Cut short: ${run.cutShort}`);
@@ -212,7 +218,41 @@ export function composeMail(a, cfg) {
   listGroup(lines, 'FIXED — failing before, passing now', a.fixed, cfg, t => {
     lines.push(`  ✓ ${t.file}:${t.line} — ${t.title}`);
   });
+  return lines;
+}
 
+/** "3 regressed, 1 now skipped, 2 stopped running", summed over the analyses. */
+function countsLine(list) {
+  const n = k => list.reduce((sum, a) => sum + a[k].length, 0);
+  return [[n('regressed'), 'regressed'], [n('nowSkipped'), 'now skipped'], [n('stopped'), 'stopped running']]
+    .filter(([c]) => c > 0).map(([c, what]) => `${c} ${what}`).join(', ');
+}
+
+/**
+ * Subject + plain-text body for the analysed runs that need a mail, oldest
+ * first (one analysis or an array). One run gives that run's mail; several give
+ * one digest with a section per run, so a backlog costs one SMTP login rather
+ * than one per run. `newRuns` (how many runs the poll compared) lets the mail
+ * say when other new runs had nothing to report.
+ */
+export function composeMail(analyses, cfg, { newRuns = 0 } = {}) {
+  const list = Array.isArray(analyses) ? analyses : [analyses];
+  const newest = list[list.length - 1].run;
+  const lines = [`Box:       ${cfg.boxName}${cfg.dashboardUrl ? `  (${cfg.dashboardUrl})` : ''}`];
+  const quiet = Math.max(0, newRuns - list.length);
+  const quietNote = quiet ? ` (${plural(quiet, 'other new run')} had nothing to report)` : '';
+  let subject;
+  if (list.length === 1) {
+    subject = `[CCRS tests][${cfg.boxName}] ${countsLine(list)} — ${newest.id}`;
+    if (quiet) lines.push(`Since:     the last mail${quietNote}`);
+    lines.push(...runLines(list[0], cfg));
+  } else {
+    subject = `[CCRS tests][${cfg.boxName}] ${list.length} runs: ${countsLine(list)} — latest ${newest.id}`;
+    lines.push(`Runs:      ${list.length} runs to report since the last mail, oldest first${quietNote}`);
+    list.forEach((a, i) => {
+      lines.push('', `=== ${i + 1} of ${list.length} ${'='.repeat(60)}`, ...runLines(a, cfg));
+    });
+  }
   lines.push('', '—', 'Sent by tests/integration-tests/scripts/regression-alert.mjs on the box.',
     'Recipients and SMTP are the test_alerts_* settings in that box\'s host_vars.');
   return { subject, text: lines.join('\n') + '\n' };
@@ -496,11 +536,52 @@ function readJson(p) {
   return JSON.parse(fs.readFileSync(p, 'utf8'));
 }
 
-function writeState(p, state) {
-  fs.mkdirSync(path.dirname(p), { recursive: true });
+/**
+ * Read the state file: `{ state: null }` when there is none yet (first poll),
+ * `{ state }` when it parses to an object, `{ error }` when it exists but can't
+ * be trusted (unreadable, empty, not JSON). Only a missing file re-baselines:
+ * silently starting over on a damaged one would skip every run since.
+ */
+export function readState(p) {
+  let raw;
+  try {
+    raw = fs.readFileSync(p, 'utf8');
+  } catch (e) {
+    return e.code === 'ENOENT' ? { state: null } : { error: e.message };
+  }
+  if (!raw.trim()) return { error: 'the file is empty' };
+  try {
+    const state = JSON.parse(raw);
+    return state && typeof state === 'object' && !Array.isArray(state) ? { state } : { error: 'not a JSON object' };
+  } catch (e) {
+    return { error: `not valid JSON (${e.message})` };
+  }
+}
+
+/**
+ * Replace the state file durably: write a temp file, fsync it, rename it over
+ * the old one, fsync the directory. A crash or power cut leaves the old state
+ * or the new one, never an empty or half-written file.
+ */
+export function writeState(p, state) {
+  const dir = path.dirname(p);
+  fs.mkdirSync(dir, { recursive: true });
   const tmp = `${p}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(state, null, 2));
+  const fd = fs.openSync(tmp, 'w', 0o644);
+  try {
+    fs.writeSync(fd, `${JSON.stringify(state, null, 2)}\n`);
+    fs.fsyncSync(fd);
+  } finally {
+    fs.closeSync(fd);
+  }
   fs.renameSync(tmp, p);
+  let dirFd;
+  try {
+    dirFd = fs.openSync(dir, 'r');
+    fs.fsyncSync(dirFd);
+  } catch { /* not every platform can fsync a directory; the rename is still atomic */ } finally {
+    if (dirFd !== undefined) fs.closeSync(dirFd);
+  }
 }
 
 const log = (...m) => console.log('[regression-alert]', ...m);
@@ -528,6 +609,16 @@ export function classifySendError(e) {
   return 'other';
 }
 
+/** What the log adds to "send failed (N in a row…)", and to "holding off", per kind. */
+const FAILURE_LABELS = {
+  throttled: ', login throttled', rejected: ', login rejected', starttls: ', STARTTLS or login required',
+  address: ', sender or recipient refused',
+};
+const HOLD_OFF_REASONS = {
+  throttled: ' (the relay is throttling logins)', rejected: ' (the relay rejected the login)',
+  starttls: ' (the relay wants STARTTLS or a login first)', address: ' (the relay refused the sender or a recipient)',
+};
+
 const SEND_FAILURE_HINTS = {
   throttled: 'The SMTP relay refused the login for now: it is throttling logins to the sender account '
     + '(Gmail: "454 4.7.0 Too many login attempts, please try again later"). That is not necessarily a '
@@ -546,8 +637,9 @@ const SEND_FAILURE_HINTS = {
 };
 
 /**
- * Pause after the nth failed send in a row: 5, 10, 20, 40 minutes, then hourly;
- * for a throttled login 1, 2, then 4 hours, so the relay's lock can run out.
+ * Pause after the nth failed send in a row of the same kind: 5, 10, 20, 40
+ * minutes, then hourly; for a throttled login 1, 2, then 4 hours, so the
+ * relay's lock can run out. tick() restarts the count when the kind changes.
  */
 export function retryDelayMs(failures, kind = 'other') {
   const [first, cap] = kind === 'throttled' ? [60, 240] : [5, 60];
@@ -576,63 +668,121 @@ export function tick({ cfg, opts, now = Date.now(), send = sendMail }) {
   const latest = catalog.runs?.[0];
   if (!latest?.id) { log('catalog has no runs yet'); return 0; }
 
-  let state = {};
-  try { state = readJson(statePath); } catch { /* first tick on this box */ }
-  const lastRunId = opts.since || state.lastRunId;
+  const read = readState(statePath);
+  if (read.error) {
+    const fix = 'Delete it to re-baseline on the newest run (sends nothing), or restore it to carry on where it was.';
+    if (!opts.dryRun) {
+      log(`ERROR: the state file ${statePath} can't be used: ${read.error}. Nothing is sent until it is fixed. ${fix}`);
+      return 1;
+    }
+    log(`warning: the state file ${statePath} can't be used (${read.error}); the dry run carries on without it`);
+  }
+  let state = read.state || {};
+  const at = new Date(now).toISOString();
+  const save = (next, when) => {
+    if (opts.dryRun) return true;
+    try {
+      writeState(statePath, next);
+      return true;
+    } catch (e) {
+      log(`ERROR: could not write the state file ${statePath} (${when}): ${e.message}`);
+      return false;
+    }
+  };
+
+  let lastRunId = opts.since || state.lastRunId;
   if (!lastRunId) {
     log(`no state yet — baseline is ${latest.id}; alerting starts with the next run`);
-    if (!opts.dryRun) writeState(statePath, { lastRunId: latest.id, baselinedAt: new Date(now).toISOString() });
-    return 0;
+    return save({ lastRunId: latest.id, baselinedAt: at }, 'recording the baseline') ? 0 : 1;
   }
 
-  const mails = [];
+  // A "sending" mark left behind: an earlier poll handed a mail to curl and
+  // never recorded how that ended (it was killed, or the state write after the
+  // send failed). The mail may have gone out, so it is not sent again: at most
+  // once beats a copy on every poll.
+  if (state.sending && !opts.since && !opts.dryRun) {
+    const { sending } = state;
+    log(`WARNING: the poll at ${sending.at} was sending "${sending.subject}" and did not record the result, `
+      + 'so it is unknown whether that mail arrived. It is not sent again; the runs it covered count as handled.');
+    state = { ...state, lastRunId: sending.lastRunId || lastRunId, staleAlertedFor: sending.staleAlertedFor, sending: undefined };
+    if (!save(state, 'clearing the interrupted send')) return 1;
+    lastRunId = state.lastRunId;
+  }
+
   if (latest.id !== lastRunId && !catalog.runs.some(r => r.id === lastRunId)) {
     log(`last handled run ${lastRunId} has left the catalog window; comparing only the newest run`);
   }
-  for (const { run, prev } of runsToProcess(catalog, lastRunId)) {
-    const a = analyzeRun(catalog, run, prev);
-    log(`${run.id} vs ${prev?.id ?? '(none)'}: ${a.regressed.length} regressed, ${a.nowSkipped.length} now skipped, ${a.stopped.length} stopped running, ${a.fixed.length} fixed`);
-    if (needsAlert(a)) mails.push(composeMail(a, cfg));
+  const plan = runsToProcess(catalog, lastRunId);
+  const analyses = plan.map(({ run, prev }) => analyzeRun(catalog, run, prev));
+  for (const a of analyses) {
+    log(`${a.run.id} vs ${a.prev?.id ?? '(none)'}: ${a.regressed.length} regressed, ${a.nowSkipped.length} now skipped, ${a.stopped.length} stopped running, ${a.fixed.length} fixed`);
   }
+  const toMail = analyses.filter(needsAlert);
+  const newLast = plan.length ? plan[plan.length - 1].run.id : lastRunId;
+
   let staleFor = state.staleAlertedFor;
-  if (cfg.staleAfterHours > 0 && latest.id === lastRunId && staleFor !== latest.id) {
+  let mail = null;
+  if (toMail.length) {
+    mail = composeMail(toMail, cfg, { newRuns: plan.length });
+  } else if (cfg.staleAfterHours > 0 && !plan.length && latest.id === lastRunId && staleFor !== latest.id) {
     const age = (now - Date.parse(latest.startedAt)) / 3_600_000;
     if (Number.isFinite(age) && age > cfg.staleAfterHours) {
-      mails.push(composeStaleMail(latest, cfg.staleAfterHours, cfg));
+      mail = composeStaleMail(latest, cfg.staleAfterHours, cfg);
       staleFor = latest.id;
     }
   }
+  // An unresolved send failure (its kind, count and pause) outlives runs that
+  // need no mail, so the next mail still waits out the pause.
+  const failure = { sendFailure: state.sendFailure, sendFailures: state.sendFailures, retryAfter: state.retryAfter };
 
-  // The 30 s slack: the timer fires a few hundred ms before retryAfter (which was
-  // stamped after node started), and holding off then would add a whole poll.
-  if (!opts.dryRun && mails.length && state.retryAfter && now + 30_000 < Date.parse(state.retryAfter)) {
-    const why = { throttled: ' (the relay is throttling logins)', rejected: ' (the relay rejected the login)',
-      starttls: ' (the relay wants STARTTLS or a login first)', address: ' (the relay refused the sender or a recipient)' }[state.sendFailure] ?? '';
-    log(`holding off until ${state.retryAfter}: the last ${plural(state.sendFailures || 1, 'send')} failed${why}`);
+  if (!mail) {
+    if (newLast !== state.lastRunId && !save({ ...failure, lastRunId: newLast, staleAlertedFor: staleFor, updatedAt: at }, 'recording the runs')) return 1;
+    return 0;
+  }
+  if (opts.dryRun) {
+    console.log(`\n===== DRY RUN — would mail ${cfg.to.join(', ') || '(no ALERT_TO)'} =====\nSubject: ${mail.subject}\n\n${mail.text}`);
+    return 0;
+  }
+
+  // Waiting out a pause is the plan, not a failure: exit 0, or the unit would
+  // show "failed" on every poll of a 4-hour backoff. The 30 s slack: the timer
+  // fires a few hundred ms before retryAfter (stamped after node started), and
+  // holding off then would add a whole poll.
+  if (state.retryAfter && now + 30_000 < Date.parse(state.retryAfter)) {
+    const lastSends = (state.sendFailures || 1) > 1 ? `the last ${state.sendFailures} sends` : 'the last send';
+    log(`holding off until ${state.retryAfter}: ${lastSends} failed${HOLD_OFF_REASONS[state.sendFailure] ?? ''}`);
+    return 0;
+  }
+
+  // Say "sending" first, and don't send if that can't be written: a mail that
+  // went out but could not be recorded would go out again on every poll.
+  const sending = { lastRunId: newLast, staleAlertedFor: staleFor, subject: mail.subject, at };
+  if (!save({ ...state, lastRunId, sending }, 'before sending')) {
+    log('not sending: without a record of it, the same mail would go out again on every poll');
     return 1;
   }
-  for (const m of mails) {
-    if (opts.dryRun) {
-      console.log(`\n===== DRY RUN — would mail ${cfg.to.join(', ') || '(no ALERT_TO)'} =====\nSubject: ${m.subject}\n\n${m.text}`);
-      continue;
+  let reply;
+  try {
+    reply = send(cfg, mail.subject, mail.text);
+  } catch (e) {
+    // The runs stay unhandled; a later poll retries them after the pause. The
+    // count is per kind: a throttled login after three connection errors is the
+    // first throttle (1 hour), not the fourth failure (4 hours).
+    const sendFailure = classifySendError(e);
+    const sendFailures = state.sendFailure === sendFailure ? (state.sendFailures || 0) + 1 : 1;
+    const retryAfter = new Date(now + retryDelayMs(sendFailures, sendFailure)).toISOString();
+    log(`send failed (${sendFailures} in a row${FAILURE_LABELS[sendFailure] ?? ''}), retrying after ${retryAfter}: ${e.message}`);
+    if (SEND_FAILURE_HINTS[sendFailure]) log(SEND_FAILURE_HINTS[sendFailure]);
+    if (!save({ ...state, lastRunId, sending: undefined, sendFailure, sendFailures, retryAfter }, 'recording the failed send')) {
+      log('the failed send could not be recorded; the next poll will take this mail as possibly sent and not retry it');
     }
-    try {
-      const reply = send(cfg, m.subject, m.text);
-      log(`mailed ${cfg.to.length} recipient(s)${typeof reply === 'string' && reply ? ` (SMTP ${reply})` : ''}: ${m.subject}`);
-    } catch (e) {
-      // Don't advance lastRunId: a later tick retries the whole batch, after a pause.
-      const sendFailure = classifySendError(e);
-      const sendFailures = (state.sendFailures || 0) + 1;
-      const retryAfter = new Date(now + retryDelayMs(sendFailures, sendFailure)).toISOString();
-      writeState(statePath, { ...state, lastRunId, sendFailures, sendFailure, retryAfter });
-      const label = { throttled: ', login throttled', rejected: ', login rejected', starttls: ', STARTTLS or login required',
-      address: ', sender or recipient refused' }[sendFailure] ?? '';
-      log(`send failed (${sendFailures} in a row${label}), retrying after ${retryAfter}: ${e.message}`);
-      if (SEND_FAILURE_HINTS[sendFailure]) log(SEND_FAILURE_HINTS[sendFailure]);
-      return 1;
-    }
+    return 1;
   }
-  if (!opts.dryRun) writeState(statePath, { lastRunId: latest.id, staleAlertedFor: staleFor, updatedAt: new Date(now).toISOString() });
+  log(`mailed ${cfg.to.length} recipient(s)${typeof reply === 'string' && reply ? ` (SMTP ${reply})` : ''}: ${mail.subject}`);
+  if (!save({ lastRunId: newLast, staleAlertedFor: staleFor, updatedAt: at }, 'after sending')) {
+    log('the mail went out but is not recorded; the "sending" mark stops the next poll from sending it again');
+    return 1;
+  }
   return 0;
 }
 
