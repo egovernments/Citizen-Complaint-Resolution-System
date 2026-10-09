@@ -323,8 +323,8 @@ enable_integration_tests_runner: false
 # tests/integration-tests/scripts/regression-alert.mjs. Runbook, dry-run and
 # troubleshooting: tests/integration-tests/runner/README.md.
 #
-# If a required setting is missing the deploy prints a WARNING and leaves
-# alerts off; a mail misconfiguration never fails the deploy. Setting
+# If a required setting is missing or malformed the deploy prints a WARNING
+# and leaves alerts off; a mail misconfiguration never fails the deploy. Setting
 # test_alerts_enabled: false stops the timer and deletes the env file.
 test_alerts_enabled: false
 # test_alerts_smtp_host: "smtp.example.org"     # required
@@ -333,8 +333,11 @@ test_alerts_enabled: false
 # test_alerts_smtp_tls: false                    # true = implicit TLS (smtps://), usually port 465
 # test_alerts_smtp_user: "test-alerts@example.org"   # omit for an unauthenticated relay
 # test_alerts_from: "CCRS test alerts <test-alerts@example.org>"   # required; must be a sender the SMTP account may use
-# Recipients (required). A single group / mailing-list address is easiest:
-# people join and leave the list without anyone editing the box.
+# Recipients (required): a list, or one address as a plain string. Each entry
+# is one "addr@domain" or "Name <addr@domain>"; several addresses go in a
+# list, not in one comma-separated string. A single group / mailing-list
+# address is easiest: people join and leave the list without anyone editing
+# the box.
 # test_alerts_to:
 #   - "ccrs-test-alerts@example.org"
 # test_alerts_box_name: "bomet"                  # label in the subject; default: inventory hostname
