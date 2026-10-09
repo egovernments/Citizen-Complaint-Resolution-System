@@ -96,6 +96,11 @@ How it behaves:
   - **`login rejected`** (a 5xx to AUTH, e.g. `535 5.7.8`): the user or password
     is wrong, or the account needs an app password (Gmail/Workspace: 2-Step
     Verification on, then an app password). Fix the setting and redeploy.
+  - **`STARTTLS or login required`** (a `530`, e.g. `530 5.7.0 Must issue a
+    STARTTLS command first` or `530 5.7.0 Authentication required`): not a
+    wrong password. Set `test_alerts_smtp_starttls: true` (or
+    `test_alerts_smtp_tls: true` on port 465); if the relay needs a login, set
+    `test_alerts_smtp_user` and the password.
   - **`sender or recipient refused`** (a 5xx to `MAIL FROM` or `RCPT TO`, e.g.
     `553` for a sender the account may not use, `550` for an unknown
     recipient): fix `test_alerts_from` / `test_alerts_to` and redeploy. Retries
@@ -141,7 +146,7 @@ deploy.
 | `test_alerts_enabled` | `false` | turn the timer on |
 | `test_alerts_smtp_host` | — | SMTP server (required) |
 | `test_alerts_smtp_port` | `587` | SMTP port (465 is blocked outbound on the Hetzner boxes) |
-| `test_alerts_smtp_starttls` | `true` | require STARTTLS on `smtp://` |
+| `test_alerts_smtp_starttls` | `true` | on `smtp://`: `true` requires STARTTLS; `false` uses it only when the relay offers it, which anyone on the path can strip, and the login then goes unencrypted |
 | `test_alerts_smtp_tls` | `false` | implicit TLS (`smtps://`) instead |
 | `test_alerts_smtp_user` | — | SMTP login; omit for an unauthenticated relay |
 | `test_alerts_smtp_password` | OpenBao | host_vars value wins over the OpenBao key of the same name |

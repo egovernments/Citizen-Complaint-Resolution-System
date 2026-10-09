@@ -36,7 +36,8 @@
  *
  * Configuration (environment; the deploy writes /etc/ccrs-test-alerts.env):
  *   ALERT_SMTP_URL        smtp://host:587 (STARTTLS) or smtps://host:465
- *   ALERT_SMTP_STARTTLS   true|false — require STARTTLS on smtp:// (default true)
+ *   ALERT_SMTP_STARTTLS   on smtp://: true (default) requires STARTTLS; false uses it
+ *                         only when the relay offers it (see curlInvocation)
  *   ALERT_SMTP_USER       SMTP login (omit for an unauthenticated relay)
  *   ALERT_SMTP_PASS       SMTP password
  *   ALERT_FROM            "Name <addr>" or addr
@@ -308,7 +309,11 @@ export function curlInvocation(cfg, recipients, configPath) {
   const args = ['--disable', '--silent', '--show-error', '--connect-timeout', '20', '--max-time', '90',
     '--write-out', '%{response_code}',
     '--url', cfg.smtpUrl, '--mail-from', bareAddress(cfg.from), '--upload-file', '-'];
-  if (cfg.starttls && /^smtp:/i.test(cfg.smtpUrl)) args.push('--ssl-reqd');
+  // smtp://: --ssl-reqd fails unless STARTTLS succeeds; --ssl (starttls false)
+  // upgrades when the relay offers STARTTLS and otherwise carries on in clear,
+  // login included. Anyone on the path can strip that offer, so false is a
+  // downgrade risk. smtps:// is TLS from the first byte either way.
+  if (/^smtp:/i.test(cfg.smtpUrl)) args.push(cfg.starttls ? '--ssl-reqd' : '--ssl');
   // The envelope takes bare addresses; display names only go in the To: header.
   for (const r of recipients) args.push('--mail-rcpt', bareAddress(r));
   let config = '';
@@ -420,6 +425,9 @@ const log = (...m) => console.log('[regression-alert]', ...m);
 /**
  * What kind of send failure this was, from curl's exit code and the relay's
  * last reply. curl exits 67 (CURLE_LOGIN_DENIED) when the relay refuses AUTH.
+ *   starttls   a 530 (5.7.0), to AUTH or to MAIL FROM: the relay wants STARTTLS
+ *              ("Must issue a STARTTLS command first") or a login ("Authentication
+ *              required") before it takes mail. Not a wrong password.
  *   throttled  a 4xx to AUTH: refused for now, e.g. Gmail's "454 4.7.0 Too many
  *              login attempts" lock on the account. The password may be right.
  *   rejected   a 5xx to AUTH: wrong user/password, or an app password is needed.
@@ -430,6 +438,7 @@ const log = (...m) => console.log('[regression-alert]', ...m);
  */
 export function classifySendError(e) {
   const reply = e?.reply || '';
+  if (reply === '530') return 'starttls';
   if (e?.curlExit === 67 && /^4\d\d$/.test(reply)) return 'throttled';
   if (e?.curlExit === 67 && /^5\d\d$/.test(reply)) return 'rejected';
   if (/^5\d\d$/.test(reply) && /\b(MAIL|RCPT) failed\b/.test(e?.message || '')) return 'address';
@@ -443,6 +452,11 @@ const SEND_FAILURE_HINTS = {
     + 'Check the sender account for a security alert or lock; do not retry by hand.',
   rejected: 'The SMTP relay rejected the login: test_alerts_smtp_user / test_alerts_smtp_password are '
     + 'wrong, or the account needs an app password. Fix them in host_vars or OpenBao and redeploy.',
+  starttls: 'The SMTP relay answered 530: it wants STARTTLS, or a login, before it takes mail. That is not a '
+    + 'wrong password. Set test_alerts_smtp_starttls: true (port 587) or test_alerts_smtp_tls: true (port 465) so '
+    + 'the connection is always encrypted: with starttls false the poll only uses STARTTLS when the relay offers '
+    + 'it, so a 530 then means it was not offered (or the offer was stripped on the way). If the relay needs a '
+    + 'login, set test_alerts_smtp_user and the password. Then redeploy.',
   address: 'The SMTP relay refused the sender (MAIL FROM) or a recipient (RCPT TO). Check test_alerts_from '
     + '(an address the SMTP account may send as) and every test_alerts_to address in host_vars, then redeploy. '
     + 'Retrying will not help until they are fixed.',
@@ -510,7 +524,7 @@ export function tick({ cfg, opts, now = Date.now(), send = sendMail }) {
   // stamped after node started), and holding off then would add a whole poll.
   if (!opts.dryRun && mails.length && state.retryAfter && now + 30_000 < Date.parse(state.retryAfter)) {
     const why = { throttled: ' (the relay is throttling logins)', rejected: ' (the relay rejected the login)',
-      address: ' (the relay refused the sender or a recipient)' }[state.sendFailure] ?? '';
+      starttls: ' (the relay wants STARTTLS or a login first)', address: ' (the relay refused the sender or a recipient)' }[state.sendFailure] ?? '';
     log(`holding off until ${state.retryAfter}: the last ${plural(state.sendFailures || 1, 'send')} failed${why}`);
     return 1;
   }
@@ -528,7 +542,8 @@ export function tick({ cfg, opts, now = Date.now(), send = sendMail }) {
       const sendFailures = (state.sendFailures || 0) + 1;
       const retryAfter = new Date(now + retryDelayMs(sendFailures, sendFailure)).toISOString();
       writeState(statePath, { ...state, lastRunId, sendFailures, sendFailure, retryAfter });
-      const label = { throttled: ', login throttled', rejected: ', login rejected', address: ', sender or recipient refused' }[sendFailure] ?? '';
+      const label = { throttled: ', login throttled', rejected: ', login rejected', starttls: ', STARTTLS or login required',
+      address: ', sender or recipient refused' }[sendFailure] ?? '';
       log(`send failed (${sendFailures} in a row${label}), retrying after ${retryAfter}: ${e.message}`);
       if (SEND_FAILURE_HINTS[sendFailure]) log(SEND_FAILURE_HINTS[sendFailure]);
       return 1;
