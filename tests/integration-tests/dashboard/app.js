@@ -12,10 +12,12 @@
  * Run window: catalog.json keeps results for the newest 30 runs, the newest
  * RUN_LIMIT of which still have their report folder (run.hasReport). The run
  * chips, the per-test dots and the detail pane's run list show five runs at a
- * time (run-window.js), paged with Newer/Older; the page is kept in `?runs=N`
- * so a refresh or a shared link lands on the same runs. The headline and the
- * status filter always describe the LATEST run; the detail pane's "last N
- * runs" line summarises every run the catalog keeps.
+ * time (run-window.js), paged with Newer/Older. Any window but the newest is
+ * kept in the URL as `?runs=<id of its newest run>`, so a refresh or a shared
+ * link shows the same runs even after newer runs arrive; without the param the
+ * newest runs are shown. The headline and the status filter always describe
+ * the LATEST run; the detail pane's "last N runs" line summarises every run
+ * the catalog keeps.
  */
 'use strict';
 
@@ -48,7 +50,7 @@ const state = {
     search: '',
   },
   selectedId: null,
-  runPage: 0,   // 0 = newest five runs; see run-window.js
+  runStart: 0,  // position in catalog.runs of the window's newest run (0 = newest); see run-window.js
 };
 const RW = window.RunWindow;
 
@@ -89,12 +91,10 @@ async function init() {
     return;
   }
   for (const facet of FACET_ORDER) state.filters.facets[facet] = new Set();
-  const askedPage = RW.parsePageParam(location.search);
-  state.runPage = RW.clampPage(askedPage, (state.catalog.runs || []).length);
-  if (state.runPage !== askedPage) {
-    // ?runs= points past the runs this catalog keeps: show (and link) the oldest page instead.
-    history.replaceState(null, '', location.pathname + RW.withPageParam(location.search, state.runPage) + location.hash);
-  }
+  // ?runs=<run id>, an old ?runs=<page>, or a run that has since aged out:
+  // resolve it, then name the window by its run id from here on.
+  state.runStart = RW.startFromSearch(location.search, state.catalog.runs);
+  syncRunsParam();
   renderRunSummary();
   renderStatusFilter();
   renderFacetFilters();
@@ -122,17 +122,23 @@ function renderRunSummary() {
   renderRunSwitcher();
 }
 
-/** The five runs on the current page of catalog.runs, plus the pager state. */
+/** The five runs of the current window of catalog.runs, plus the pager state. */
 function runWindow() {
-  return RW.windowOf(state.catalog.runs || [], state.runPage);
+  return RW.windowAt(state.catalog.runs || [], state.runStart);
+}
+
+/** Point `?runs=` at the current window (dropped for the newest), keeping other params and the hash. */
+function syncRunsParam() {
+  const search = RW.searchForStart(location.search, state.catalog.runs, state.runStart);
+  if (search !== location.search) history.replaceState(null, '', location.pathname + search + location.hash);
 }
 
 /** Move the run window (0 = newest); keeps `?runs=` in the URL and redraws what follows it. */
-function setRunPage(page) {
-  const next = RW.clampPage(page, (state.catalog.runs || []).length);
-  if (next === state.runPage) return;
-  state.runPage = next;
-  history.replaceState(null, '', location.pathname + RW.withPageParam(location.search, next) + location.hash);
+function setRunStart(start) {
+  const next = RW.clampStart(start, (state.catalog.runs || []).length);
+  if (next === state.runStart) return;
+  state.runStart = next;
+  syncRunsParam();
   renderRunSwitcher();
   renderTable();
   if (state.selectedId) renderDetail(state.selectedId);
@@ -171,8 +177,8 @@ function renderRunSwitcher() {
     ${chips}
     <button type="button" class="run-pager" id="runs-older" ${win.hasOlder ? '' : 'disabled'} title="Show the five older runs">Older ›</button>
     <span class="run-window-label" id="run-window-label">${escapeHtml(win.label)}</span>`;
-  document.getElementById('runs-newer').addEventListener('click', () => setRunPage(state.runPage - 1));
-  document.getElementById('runs-older').addEventListener('click', () => setRunPage(state.runPage + 1));
+  document.getElementById('runs-newer').addEventListener('click', () => setRunStart(Math.max(0, state.runStart - RW.PAGE_SIZE)));
+  document.getElementById('runs-older').addEventListener('click', () => setRunStart(state.runStart + RW.PAGE_SIZE));
 }
 
 function renderStatusFilter() {

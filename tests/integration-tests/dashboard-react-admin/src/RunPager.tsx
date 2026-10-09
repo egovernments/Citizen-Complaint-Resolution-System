@@ -1,6 +1,7 @@
-import { useGetList, useStore } from 'react-admin';
+import { useSyncExternalStore } from 'react';
+import { useGetList } from 'react-admin';
 import { Button, Stack, Typography } from '@mui/material';
-import { RUN_PAGE_STORE_KEY, clampPage, windowOf } from './runWindow';
+import { RUN_PAGE_STORAGE_KEY, clampPage, pageFor, windowOf, type StoredRunPage } from './runWindow';
 import type { RunSummary } from './types';
 
 /** catalog.runs in catalog order (newest first) — the order runSlots is aligned to. */
@@ -12,16 +13,51 @@ export function useCatalogRuns(): RunSummary[] {
   return data ?? [];
 }
 
+// The shared run page lives in sessionStorage: it survives a refresh and
+// moving between the tests list, a test and the home dashboard, but a new tab
+// or a later visit starts on the newest runs. Every view reads it through
+// useSyncExternalStore, so moving the page in one redraws all of them.
+const listeners = new Set<() => void>();
+let inMemory: string | null = null; // when sessionStorage is unavailable
+
+function readStoredPage(): string | null {
+  try {
+    return sessionStorage.getItem(RUN_PAGE_STORAGE_KEY);
+  } catch {
+    return inMemory;
+  }
+}
+
+function writeStoredPage(value: StoredRunPage): void {
+  inMemory = JSON.stringify(value);
+  try {
+    sessionStorage.setItem(RUN_PAGE_STORAGE_KEY, inMemory);
+  } catch {
+    // storage disabled: the page lasts until the tab reloads
+  }
+  listeners.forEach(notify => notify());
+}
+
+function subscribe(onChange: () => void): () => void {
+  listeners.add(onChange);
+  return () => {
+    listeners.delete(onChange);
+  };
+}
+
 /**
- * The run page every view shares (0 = newest five runs). Kept in the
- * react-admin store, which persists to localStorage, so it survives a refresh
- * and moving between the tests list, a test and the home dashboard.
+ * The run page every view shares (0 = newest five runs). It is stored with the
+ * newest run it was picked against and drops back to the newest runs once a
+ * newer run is in the catalog (runWindow.pageFor).
  */
 export function useRunWindow() {
   const runs = useCatalogRuns();
-  const [stored, setStored] = useStore<number>(RUN_PAGE_STORE_KEY, 0);
-  const win = windowOf(runs, stored);
-  const setPage = (p: number) => setStored(clampPage(p, runs.length));
+  const raw = useSyncExternalStore(subscribe, readStoredPage, () => null);
+  const lastRunId = runs[0]?.id;
+  const win = windowOf(runs, pageFor(raw, lastRunId, runs.length));
+  const setPage = (p: number) => {
+    if (lastRunId) writeStoredPage({ page: clampPage(p, runs.length), lastRunId });
+  };
   return { runs, win, setPage };
 }
 

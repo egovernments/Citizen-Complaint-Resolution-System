@@ -3,19 +3,26 @@
  * dashboard.
  *
  * catalog.json keeps results for the newest 30 runs (build-catalog's
- * HISTORY_LIMIT); the dashboard shows them PAGE_SIZE at a time, newest first.
- * Page 0 is the newest five. The page lives in the react-admin store
- * (localStorage), so it survives a refresh and moving between views. Pure
- * functions only (no React, no import.meta) so scripts/dashboard-run-window.test.ts
- * can run them under Node. The vanilla dashboard has the same rules in
- * dashboard/run-window.js.
+ * DEFAULT_HISTORY_LIMIT); the dashboard shows them PAGE_SIZE at a time, newest
+ * first. Page 0 is the newest five. The page is kept for the browser tab
+ * (sessionStorage, see RunPager.tsx) together with the newest run it was
+ * picked against, and goes back to the newest runs once a newer run arrives
+ * (pageFor). Pure functions only (no React, no import.meta) so
+ * scripts/dashboard-run-window.test.ts can run them under Node. The vanilla
+ * dashboard pages the same way in dashboard/run-window.js.
  */
 import type { CatalogTest, HistoryEntry, RunSlot, RunSummary } from './types';
 
 export const PAGE_SIZE = 5;
 
-/** react-admin store key for the current page (0 = newest runs). */
-export const RUN_PAGE_STORE_KEY = 'runWindow.page';
+/** sessionStorage key for the current page: a StoredRunPage as JSON. */
+export const RUN_PAGE_STORAGE_KEY = 'digit-tests.runWindow';
+
+/** What is stored: the page (0 = newest runs) and the newest run when it was picked. */
+export interface StoredRunPage {
+  page: number;
+  lastRunId: string;
+}
 
 export function pageCount(total: number): number {
   return Math.max(1, Math.ceil((total || 0) / PAGE_SIZE));
@@ -26,6 +33,24 @@ export function clampPage(page: number, total: number): number {
   const p = Math.floor(Number(page));
   if (!Number.isFinite(p) || p < 0) return 0;
   return Math.min(p, pageCount(total) - 1);
+}
+
+/**
+ * The page to show, from the stored value (raw JSON, or null when nothing is
+ * stored): the stored page while `lastRunId` (the catalog's newest run) is
+ * still the run it was picked against, else 0. Each new run shifts every
+ * page by one run, and the status column always describes the newest run, so
+ * a page kept across runs would show other runs than the ones picked.
+ */
+export function pageFor(raw: string | null, lastRunId: string | undefined, total: number): number {
+  if (!raw || !lastRunId) return 0;
+  let stored: Partial<StoredRunPage> | null;
+  try {
+    stored = JSON.parse(raw) as Partial<StoredRunPage> | null;
+  } catch {
+    return 0;
+  }
+  return stored && stored.lastRunId === lastRunId ? clampPage(stored.page as number, total) : 0;
 }
 
 export interface RunWindow<T> {
