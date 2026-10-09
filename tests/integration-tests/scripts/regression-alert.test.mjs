@@ -140,7 +140,11 @@ test('curlInvocation: STARTTLS on smtp://, password only in the config file', ()
   assert.equal(args[args.indexOf('--mail-from') + 1], 'a@x.org');
   assert.ok(!args.join(' ').includes('p"a'), 'password never on argv');
   assert.equal(config, 'user = "u@x.org:p\\"a\\\\ss"\n');
-  assert.ok(!curlInvocation({ ...cfg, smtpUrl: 'smtps://h:465' }, ['r@x'], '/c').args.includes('--ssl-reqd'));
+  assert.ok(!args.includes('--ssl'), 'required, not merely tried');
+  const optional = curlInvocation({ ...cfg, starttls: false }, ['r@x'], '/c').args;
+  assert.ok(optional.includes('--ssl') && !optional.includes('--ssl-reqd'), 'starttls false: STARTTLS when offered');
+  const smtps = curlInvocation({ ...cfg, smtpUrl: 'smtps://h:465' }, ['r@x'], '/c').args;
+  assert.ok(!smtps.includes('--ssl-reqd') && !smtps.includes('--ssl'), 'smtps:// is TLS throughout');
   assert.equal(curlInvocation({ ...cfg, smtpUser: '' }, ['r@x'], '/c').config, '', 'no auth → no config file');
 });
 
@@ -248,11 +252,14 @@ test('retryDelayMs: 5, 10, 20, 40 minutes, then hourly; a throttled login 1, 2, 
   assert.deepEqual([1, 2, 3, 4, 9].map(n => retryDelayMs(n, 'throttled') / 60_000), [60, 120, 240, 240, 240]);
 });
 
-test('classifySendError: a 4xx to AUTH is a throttle, a 5xx a rejected login', () => {
+test('classifySendError: a 4xx to AUTH is a throttle, a 5xx a rejected login, a 530 wants STARTTLS', () => {
   const err = (curlExit, reply) => Object.assign(new Error('x'), { curlExit, reply });
   assert.equal(classifySendError(err(67, '454')), 'throttled'); // Gmail: Too many login attempts
   assert.equal(classifySendError(err(67, '535')), 'rejected');  // Gmail: Username and Password not accepted
   assert.equal(classifySendError(err(67, '534')), 'rejected');  // Gmail: Application-specific password required
+  assert.equal(classifySendError(err(67, '530')), 'starttls');  // Mailpit/Gmail: 530 5.7.0 Must issue a STARTTLS command first (to AUTH)
+  assert.equal(classifySendError(Object.assign(new Error('curl exited 55 (last SMTP reply 530): curl: (55) MAIL failed: 530'), { curlExit: 55, reply: '530' })),
+    'starttls');                                                 // 530 5.7.0 Authentication required (to MAIL FROM)
   assert.equal(classifySendError(err(7, '')), 'other');         // could not connect
   assert.equal(classifySendError(err(55, '550')), 'other');     // no MAIL/RCPT in the message: not known to be an address
   const curlErr = (curlExit, reply, what) => Object.assign(new Error(`curl exited ${curlExit} (last SMTP reply ${reply}): curl: (${curlExit}) ${what} failed: ${reply}`), { curlExit, reply });
@@ -351,6 +358,17 @@ test('tick: a rejected login points at the credentials and keeps the short backo
   assert.equal(state().sendFailure, 'rejected');
   assert.equal(state().retryAfter, new Date(t0 + 5 * 60_000).toISOString());
   assert.match(lines.join('\n'), /login rejected.*app password/s);
+});
+
+test('tick: a 530 says STARTTLS (or a login) is required, not that the password is wrong', (t) => {
+  const { cfg, state } = box(t, catalog, { lastRunId: R2 });
+  const needsTls = () => { throw Object.assign(new Error('curl exited 67 (last SMTP reply 530): curl: (67) Login denied'), { curlExit: 67, reply: '530' }); };
+  const { lines } = captureLog(() => tick({ cfg, opts: {}, now: Date.parse('2026-10-09T03:09:00Z'), send: needsTls }));
+  assert.equal(state().sendFailure, 'starttls');
+  const out = lines.join('\n');
+  assert.match(out, /send failed \(1 in a row, STARTTLS or login required\)/);
+  assert.match(out, /not a wrong password.*test_alerts_smtp_starttls: true/s);
+  assert.doesNotMatch(out, /app password/);
 });
 
 test('tick: a half-written catalog is skipped without touching state', (t) => {

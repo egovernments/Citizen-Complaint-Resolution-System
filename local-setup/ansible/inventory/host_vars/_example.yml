@@ -329,7 +329,9 @@ enable_integration_tests_runner: false
 test_alerts_enabled: false
 # test_alerts_smtp_host: "smtp.example.org"     # required
 # test_alerts_smtp_port: 587                     # 465 is blocked outbound on the Hetzner boxes
-# test_alerts_smtp_starttls: true                # require STARTTLS on port 587 (recommended)
+# test_alerts_smtp_starttls: true                # require STARTTLS on port 587 (recommended). false: use
+#                                                #   STARTTLS only if the relay offers it; anyone on the path
+#                                                #   can strip that offer, and the login then goes in clear
 # test_alerts_smtp_tls: false                    # true = implicit TLS (smtps://), usually port 465
 # test_alerts_smtp_user: "test-alerts@example.org"   # omit for an unauthenticated relay
 # test_alerts_from: "CCRS test alerts <test-alerts@example.org>"   # required; must be a sender the SMTP account may use
