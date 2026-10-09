@@ -3,12 +3,12 @@
  *
  * Inputs:
  *   - report.json (Playwright JSON reporter output, written next to playwright.config.ts)
- *   - history.json (rolling history: the newest HISTORY_LIMIT runs; created on first run if absent)
+ *   - history.json (rolling history: the newest DEFAULT_HISTORY_LIMIT runs, env HISTORY_LIMIT; created on first run if absent)
  *   - tests/**\/*.spec.ts (source-of-truth for tag + source code per test)
  *
  * Outputs:
  *   - catalog.json (consumed by the dashboard SPAs)
- *   - history.json (updated with the new run prepended; trimmed to HISTORY_LIMIT runs)
+ *   - history.json (updated with the new run prepended; trimmed to the same limit)
  *
  * Retention has two tiers (DEFAULT_HISTORY_LIMIT / DEFAULT_REPORT_LIMIT below):
  * results for the newest 30 runs, full reports for the newest RUN_LIMIT of them.
@@ -27,7 +27,7 @@ import * as path from 'path';
 
 /**
  * How many runs history.json and catalog.json remember: the run summaries, and
- * each test's per-run results (its newest HISTORY_LIMIT entries). The dashboards
+ * each test's per-run results (its newest entries, as many). The dashboards
  * page through them five at a time. Override with HISTORY_LIMIT=<n>.
  */
 const DEFAULT_HISTORY_LIMIT = 30;

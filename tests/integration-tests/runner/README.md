@@ -40,12 +40,14 @@ This is the smallest thing that can: Node core only, no extra deps.
 
 ## Retention
 
-Two tiers, so the dashboards can show a month of results without keeping a
-month of videos:
+Two tiers, so the dashboards can show 30 runs of results without keeping 30
+runs of videos. How long 30 runs last depends on how often the box runs the
+suite: about a week at naipepea's four runs a day, about a month on a box that
+runs it once a night (bomet).
 
 | What | Kept for | Set by |
 |------|----------|--------|
-| Run summaries + each test's per-run result (`history.json`, `catalog.json`) | newest **30** runs | `HISTORY_LIMIT` in `scripts/build-catalog.ts` (env `HISTORY_LIMIT` overrides) |
+| Run summaries + each test's per-run result (`history.json`, `catalog.json`) | newest **30** runs | `DEFAULT_HISTORY_LIMIT` in `scripts/build-catalog.ts` (env `HISTORY_LIMIT` overrides) |
 | Full report — `runs/<id>/`: Playwright HTML report, videos, traces, `run.log` | newest **`RUN_LIMIT`** runs | `RUN_LIMIT` (`RUNNER_RUN_LIMIT` for button runs; the nightly wrappers pass their own) |
 
 `build-catalog.ts` marks every run summary `hasReport: true|false` from what is
