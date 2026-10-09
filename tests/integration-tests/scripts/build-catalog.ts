@@ -44,6 +44,14 @@ interface CatalogTest {
    * earlier run and must not be shown as the current result.
    */
   ranInLatestRun: boolean;
+  /**
+   * True when the run this catalog was built from never planned this test: the
+   * Playwright config or command line filtered it out (testIgnore/testMatch,
+   * grep/grepInvert such as @local-only, --project, file arguments). It is on
+   * disk but outside that run's `total`, so it is neither a result nor "not
+   * run". The dashboards read this instead of re-deriving it.
+   */
+  excluded: boolean;
   history: HistoryEntry[];
   latestRun: LatestRun | null;
   parseError: string | null;
@@ -73,17 +81,23 @@ interface RunSummary {
   skipped: number;
   timedOut: number;
   /**
-   * Counted in `total` but produced no verdict in THIS run: never started
-   * (global timeout, crash, spec not collected) or was interrupted.
+   * Counted in `total` but produced no verdict in THIS run: the run planned it
+   * but never got to it (global timeout, a failed dependency project,
+   * --max-failures, a spec that failed to load) or it was interrupted.
    * null = legacy count: written before this field existed and its report was
    * not available to recompute from, so the counts may include results carried
    * over from older runs. Absent only in summaries the next build hasn't
    * visited yet.
    */
   notRun?: number | null;
-  /** Playwright's own message when the run stopped early (e.g. global timeout), else null. */
+  /**
+   * Why the run stopped before every planned test got a turn: Playwright's own
+   * run-level message (global timeout or --max-failures), or its first
+   * run-level error when the run planned no test at all. null = it ran to the
+   * end.
+   */
   cutShort?: string | null;
-  /** On disk, but the Playwright config filters it out on this deployment. */
+  /** On disk but not planned by this run (see CatalogTest.excluded); outside `total`. */
   excluded: number;
   total: number;
   sha: string;
@@ -352,27 +366,39 @@ function readHistory(p: string | null): HistoryFile {
   }
 }
 
+/** One test the report planned, with its last result (undefined = it never started). */
+interface ReportEntry {
+  spec: PwSpec;
+  result: PwResult | undefined;
+  describePath: string[];
+}
+
 /**
- * Per-test last result of one report, keyed by the AST id (file:line:title).
- * Tests that never started (no results) are absent.
+ * Every test one report PLANNED, keyed by the AST id (file:line:title).
+ *
+ * This is what tells `notRun` from `excluded` (checked against Playwright
+ * 1.59.1's JSON reporter): every test the run scheduled is listed, and one it
+ * never got to (global timeout, a failed dependency project, --max-failures)
+ * is listed with `results: []`. A test the config or command line filtered
+ * out (testIgnore/testMatch, grep/grepInvert, --project, file arguments) is
+ * not listed at all.
  */
-function indexResults(report: PwReport): Map<string, { test: PwTest; result: PwResult; spec: PwSpec; describePath: string[] }> {
+function indexReport(report: PwReport): Map<string, ReportEntry> {
   // Playwright's JSON reporter emits spec.file relative to config.rootDir
   // (= testDir, e.g. `<repo>/tests`), so it lacks the `tests/` prefix that
   // the AST ids carry. Older versions emitted absolute paths. Resolve against
   // rootDir first so both shapes normalize to the same cwd-relative id the
   // AST produces — otherwise nothing matches and every lastStatus is null.
   const reportRootDir = report.config?.rootDir || process.cwd();
-  const byId = new Map<string, { test: PwTest; result: PwResult; spec: PwSpec; describePath: string[] }>();
+  const byId = new Map<string, ReportEntry>();
   for (const { spec, describePath } of flattenSpecs(report)) {
     const absFile = path.isAbsolute(spec.file) ? spec.file : path.resolve(reportRootDir, spec.file);
     const file = path.relative(process.cwd(), absFile).replace(/\\/g, '/');
     const id = `${file}:${spec.line}:${spec.title}`;
     const t = (spec.tests || [])[0];
     if (!t) continue;
-    const r = (t.results || [])[t.results.length - 1];
-    if (!r) continue;
-    byId.set(id, { test: t, result: r, spec, describePath });
+    const results = t.results || [];
+    byId.set(id, { spec, result: results[results.length - 1], describePath });
   }
   return byId;
 }
@@ -436,9 +462,21 @@ const CUT_SHORT = [
   /^Testing stopped early after \d+ maximum allowed failures/,
 ];
 function cutShortOf(report: PwReport): string | null {
+  return runErrors(report).find(m => CUT_SHORT.some(re => re.test(m))) ?? null;
+}
+
+/** First line of each run-level error, colour codes stripped. */
+function runErrors(report: PwReport): string[] {
   return (report.errors || [])
-    .map(e => (e.message || '').replace(/\x1b\[[0-9;]*m/g, '').split('\n')[0].trim())
-    .find(m => CUT_SHORT.some(re => re.test(m))) ?? null;
+    .map(e => (e.message || '').replace(/\x1b\[[0-9;]*m/g, '').split('\n')[0].trim());
+}
+
+/**
+ * Why a run that planned no test at all stopped, e.g. "Error: Cannot find
+ * module …" from a spec that failed to load: its first run-level error.
+ */
+function firstRunError(report: PwReport): string | null {
+  return runErrors(report).find(Boolean) ?? null;
 }
 
 function buildCatalog(opts: BuildOptions): { catalog: Catalog; nextHistory: HistoryFile } {
@@ -450,7 +488,16 @@ function buildCatalog(opts: BuildOptions): { catalog: Catalog; nextHistory: Hist
   const astById = new Map(ast.map(r => [r.id, r]));
 
   const seenIds = new Set<string>();
-  const latestById = indexResults(report);
+  const reportById = indexReport(report);
+  // A run that planned none of the tests on disk never got as far as
+  // scheduling: a spec that fails to load aborts the whole run with an empty
+  // report, and so does a global setup that throws. Such a report can't say
+  // what the config would have left out, so each test keeps the previous
+  // build's call (on a first build, the @local-only rule playwright.config.ts
+  // applies unless LOCAL_STACK=1) and everything else counts as not run —
+  // never as excluded, which would turn a broken run into an empty one.
+  const plannedNothing = !ast.some(r => reportById.has(r.id));
+  const localStack = process.env.LOCAL_STACK === '1';
 
   const oldHistory = readHistory(opts.publicHistoryPath ?? opts.historyPath);
   const priorCatalog = readPriorCatalog(opts.publicCatalogPath ?? null);
@@ -488,27 +535,31 @@ function buildCatalog(opts: BuildOptions): { catalog: Catalog; nextHistory: Hist
   let preservedCount = 0;
   for (const rec of ast) {
     seenIds.add(rec.id);
+    const entry = reportById.get(rec.id);
+    const prior = priorCatalog.get(rec.id);
+    const excluded = plannedNothing
+      ? (typeof prior?.excluded === 'boolean' ? prior.excluded : !localStack && rec.tags.includes('@local-only'))
+      : !entry;
     // An interrupted result reached no verdict, so it is handled exactly like
     // no result: the previous lastStatus/latestRun carry over and no history
     // entry is written — otherwise it would overwrite the last real result.
-    const indexed = latestById.get(rec.id);
-    const ran = verdictOf(indexed?.result) ? indexed : undefined;
+    const result = entry?.result && verdictOf(entry.result) ? entry.result : undefined;
     let lastStatus: TestStatus | null = null;
     let lastDurationMs: number | null = null;
     let latestRun: LatestRun | null = null;
 
-    if (ran) {
+    if (result) {
       // Playwright nests two status fields:
       //   test.status   : 'expected' | 'unexpected' | 'flaky' | 'skipped'
       //   result.status : 'passed'   | 'failed'     | 'timedOut' | 'skipped' | 'interrupted'
       // We want the result-level outcome — that's what users mean by "passed".
-      lastStatus = ran.result.status;
-      lastDurationMs = ran.result.duration;
+      lastStatus = result.status;
+      lastDurationMs = result.duration;
 
       const screenshots: string[] = [];
       let videoUrl: string | null = null;
       let traceUrl: string | null = null;
-      for (const a of ran.result.attachments || []) {
+      for (const a of result.attachments || []) {
         if (!a.path) continue;
         const url = attachmentUrl(a.path, opts.runId);
         if (a.contentType === 'video/webm' || /\.webm$/i.test(a.path)) videoUrl = url;
@@ -521,14 +572,13 @@ function buildCatalog(opts: BuildOptions): { catalog: Catalog; nextHistory: Hist
         videoUrl,
         traceUrl,
         screenshotUrls: screenshots,
-        errorMessage: ran.result.error?.message ?? null,
-        errorStack: ran.result.error?.stack ?? null,
+        errorMessage: result.error?.message ?? null,
+        errorStack: result.error?.stack ?? null,
       };
     } else {
       // Test didn't run this time. Keep the prior latestRun pointer if its
       // referenced runId is still in the rolling window — its video/trace
       // are still on disk under runs/<id>/.
-      const prior = priorCatalog.get(rec.id);
       if (prior?.latestRun && survivingRunIds.has(prior.latestRun.runId)) {
         latestRun = prior.latestRun;
         lastStatus = prior.lastStatus;
@@ -539,8 +589,8 @@ function buildCatalog(opts: BuildOptions): { catalog: Catalog; nextHistory: Hist
 
     // History merge: prepend this run's outcome (if any) to prior history.
     const priorHistory = oldHistory.perTest[rec.id] || [];
-    const newHistory: HistoryEntry[] = ran
-      ? [{ runId: opts.runId, status: ran.result.status, durationMs: ran.result.duration }, ...priorHistory]
+    const newHistory: HistoryEntry[] = result
+      ? [{ runId: opts.runId, status: result.status, durationMs: result.duration }, ...priorHistory]
       : priorHistory;
     const trimmedHistory = newHistory.slice(0, HISTORY_LIMIT);
 
@@ -555,7 +605,8 @@ function buildCatalog(opts: BuildOptions): { catalog: Catalog; nextHistory: Hist
       source: rec.source,
       lastStatus,
       lastDurationMs,
-      ranInLatestRun: !!ran,
+      ranInLatestRun: !!result,
+      excluded,
       history: trimmedHistory,
       latestRun,
       parseError: rec.parseError,
@@ -585,33 +636,38 @@ function buildCatalog(opts: BuildOptions): { catalog: Catalog; nextHistory: Hist
   // never started — the drop only appeared on 10-06, when the last run that
   // had reached them aged out of the window.
   //
-  // "Did not run" has two very different causes, and only one is a signal:
+  // A test on disk with no verdict is one of two very different things, and
+  // only one is a signal:
   //
-  //   a) the spec stopped being collected (renamed, crashed, filtered by mistake)
-  //      or the run never reached it — a real regression, and the reason this
-  //      is derived from disk rather than from report.json's stats. Counts
-  //      against the run as `notRun`.
-  //   b) playwright.config.ts EXCLUDES it here by design: `grepInvert:
-  //      /@local-only/` unless LOCAL_STACK=1. Those specs need the Keycloak
-  //      admin port (18180), which is loopback-only, so on any remote
-  //      deployment they are filtered out before the run starts and never
-  //      reach report.json — not even as 'skipped'. They are still on disk, so
-  //      the AST walk above enumerates them, and they used to land in `total`
-  //      with lastStatus null: pure denominator, permanently unpassable.
+  //   a) the run PLANNED it but never got to it: the global timeout or
+  //      --max-failures stopped the run, a dependency project failed, it was
+  //      interrupted, or a spec failed to load and nothing ran at all. A real
+  //      loss of coverage, and the reason the suite is enumerated from disk
+  //      rather than from report.json's stats: it stays in `total` as `notRun`.
+  //   b) the run never planned it: playwright.config.ts or the command line
+  //      leaves it out by design. `grepInvert: /@local-only/` unless
+  //      LOCAL_STACK=1 (those specs need the Keycloak admin port, 18180, which
+  //      is loopback-only), develop's `testIgnore` for tests/identity-real/
+  //      (they have their own config), a --grep or --project run. The AST walk
+  //      still enumerates them, but they can never pass here: counted in
+  //      `total` they are pure denominator. They are `excluded`, outside it.
   //
-  // On bomet that was 11 keycloak specs pinning the headline ~4 points under
-  // the real pass rate with no way to ever recover them. Bucket (b) separately
-  // and keep it out of `total`; leave (a) exactly as it was.
-  const localStack = process.env.LOCAL_STACK === '1';
+  // The report draws that line itself (indexReport): (a) is listed there with
+  // no result, (b) is not listed at all. Deciding it from the report rather
+  // than from a tag keeps every way of leaving a test out in (b): matching on
+  // @local-only alone left develop's 3 identity-real specs in `notRun` on
+  // every run. The flip side is that a spec dropped from the plan by mistake
+  // (a bad testIgnore) is excluded too, so the dashboards show `excluded`.
   const newRun: RunSummary = {
     id: opts.runId,
     startedAt: report.stats?.startTime || new Date().toISOString(),
     durationMs: report.stats?.duration ?? 0,
     ...tally(tests.map(t => ({
       verdict: t.ranInLatestRun ? (t.lastStatus ?? undefined) : undefined,
-      excluded: !localStack && !t.ranInLatestRun && (t.tags || []).includes('@local-only'),
+      excluded: t.excluded,
     }))),
-    cutShort: cutShortOf(report),
+    cutShort: cutShortOf(report)
+      ?? (plannedNothing && tests.some(t => !t.excluded) ? firstRunError(report) ?? 'Playwright planned no tests' : null),
     sha: opts.sha,
     branch: opts.branch,
     baseUrl: opts.baseUrl,
