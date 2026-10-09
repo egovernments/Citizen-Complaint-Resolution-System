@@ -20,7 +20,6 @@
 {"code": "app.nav.mdms_schemas", "message": "MDMS स्कीमा", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.nav.boundaries", "message": "सीमाएं", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.nav.advanced", "message": "उन्नत", "module": "configurator-ui", "locale": "hi_IN"},
-{"code": "app.nav.switch_to_onboarding", "message": "ऑनबोर्डिंग पर जाएं", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.header.management_mode", "message": "प्रबंधन मोड", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.header.title", "message": "DIGIT Management Studio", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.resources.complaint_types", "message": "शिकायत प्रकार", "module": "configurator-ui", "locale": "hi_IN"},

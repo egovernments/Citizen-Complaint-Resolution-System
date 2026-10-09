@@ -796,14 +796,36 @@ describe('a success that is not yet published', () => {
 
   it('opens the workspace once the outcome is published', async () => {
     vi.mocked(api.findOperation).mockResolvedValue({ ...succeeded, lifecyclePublishedAt: 1 } as never);
+    vi.mocked(api.selectContext).mockResolvedValue({
+      access_token: 't',
+      token_type: 'bearer',
+      expires_in: 3600,
+      scope: '',
+      UserRequest: { uuid: 'u', userName: 'kcbff', name: 'Founder', emailId: 'f@x.test', tenantId: 'kisumucounty', roles: [] },
+    });
 
     render(<SignupPage />);
     await screen.findByText(/finishing setup/i);
     vi.mocked(api.tenants).mockResolvedValue({ tenants: [kisumu], selectionRequired: true, onboardingRequired: false });
     await tick(3000);
 
+    // Single workspace enters directly without showing choose a workspace picker
+    await waitFor(() => expect(api.selectContext).toHaveBeenCalledWith('kisumucounty'));
+    expect(screen.queryByText(/choose a workspace/i)).not.toBeInTheDocument();
+  });
+
+  it('shows the workspace picker when multiple workspaces exist after publishing', async () => {
+    vi.mocked(api.findOperation).mockResolvedValue({ ...succeeded, lifecyclePublishedAt: 1 } as never);
+
+    render(<SignupPage />);
+    await screen.findByText(/finishing setup/i);
+    const otherTenant = { organizationAlias: 'nairobi', tenantId: 'nairobi', name: 'Nairobi City', roles: [] };
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [kisumu, otherTenant], selectionRequired: true, onboardingRequired: false });
+    await tick(3000);
+
     expect(await screen.findByText(/choose a workspace/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /kisumu county/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /nairobi city/i })).toBeInTheDocument();
   });
 
   it('says it is almost ready after a long wait, and slows down without giving up', async () => {
