@@ -12,18 +12,26 @@ import java.util.regex.Pattern;
  * or a log line. Mirrors the configurator's client-side {@code maskRecipient()}
  * rules so operators see identical shapes regardless of which layer masked.
  *
+ * <p>ONE rule, applied the same way to every field and log line (recipient values,
+ * transaction ids, error messages, provider responses):
  * <ul>
- *   <li>Emails keep the first char of the local part: {@code c***@example.org}.</li>
- *   <li>Runs of 7+ digits (phone numbers) collapse to {@code ***} + their last 3
- *       digits: {@code 0712345678 -> ***678}.</li>
- *   <li>UUIDs (hex + dashes, no 7+-digit run) pass through untouched — they are
- *       not PII.</li>
+ *   <li><b>Ids are ids.</b> A canonical UUID ({@code 8-4-4-4-12} hex) is a user, event or
+ *       process id, not contact data: it is never masked, standing alone or embedded in a
+ *       longer string. Before this rule a UUID whose hex happened to hold 7+ consecutive
+ *       digits was masked as if it were a phone ({@code …-d1234966d08b -> …-d***966d08b})
+ *       while the next UUID passed untouched.</li>
+ *   <li><b>Emails</b> keep the first char of the local part: {@code c***@example.org}.</li>
+ *   <li><b>Phones</b>: every run of 7+ digits outside a UUID collapses to {@code ***} +
+ *       its last 3 digits: {@code +254712345678 -> +***678}.</li>
  * </ul>
  */
 public final class PiiMask {
 
     // A phone-number-shaped run: 7 or more consecutive digits.
     private static final Pattern LONG_DIGIT_RUN = Pattern.compile("\\d{7,}");
+    // A canonical UUID: an identifier, never masked. Not part of a longer hex/dash token.
+    private static final Pattern UUID_TOKEN = Pattern.compile(
+            "(?<![0-9A-Fa-f-])[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}(?![0-9A-Fa-f-])");
     // An email token inside an arbitrary (e.g. colon-delimited) string.
     private static final Pattern EMAIL_TOKEN = Pattern.compile("[^\\s:;,]+@[^\\s:;,]+");
 
@@ -32,7 +40,8 @@ public final class PiiMask {
 
     /**
      * Mask a single recipient value. A value containing {@code @} is treated as an
-     * email; otherwise any 7+-digit run is masked. UUIDs pass through unchanged.
+     * email; otherwise any 7+-digit run outside a UUID is masked. UUIDs pass through
+     * unchanged.
      */
     public static String mask(String value) {
         if (value == null) {
@@ -119,7 +128,19 @@ public final class PiiMask {
         return firstChar + "***" + domainWithAt;
     }
 
+    /** Masks digit runs in the text between UUIDs; the UUIDs themselves are copied as they are. */
     private static String maskDigits(String value) {
+        Matcher ids = UUID_TOKEN.matcher(value);
+        StringBuilder out = new StringBuilder(value.length());
+        int from = 0;
+        while (ids.find()) {
+            out.append(maskDigitRuns(value.substring(from, ids.start()))).append(ids.group());
+            from = ids.end();
+        }
+        return out.append(maskDigitRuns(value.substring(from))).toString();
+    }
+
+    private static String maskDigitRuns(String value) {
         Matcher m = LONG_DIGIT_RUN.matcher(value);
         StringBuffer sb = new StringBuffer();
         while (m.find()) {

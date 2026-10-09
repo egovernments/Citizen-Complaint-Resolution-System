@@ -1423,6 +1423,9 @@ describe('notification deploy tasks (Kanav review of #2097, round 2)', () => {
     expect(pick).toContain('[notif_seed_tenant | trim] + (notif_complaint_counts.keys()');
     expect(pick).toContain("select('match', '^[A-Za-z][A-Za-z0-9_-]*$')");
     expect(pick).toContain("notifications_seed_exclude | default('(?i)^(PW_|pwt)')");
+    // Self-serve workspaces are seeded by pgr-services at signup, never with the deploy's ADMIN login.
+    expect(pick).toContain("reject('in', notif_workspace_routing.keys()");
+    expect(task('notif-seed — list the self-serve workspaces (pgr-services seeds them at signup)')).toContain('failed_when: false');
     for (const name of [
       'notif-seed — access-control rows (phase 1 of 2)',
       'notif-seed — schemas, channel rows, fresh-tenant defaults (phase 2 of 2)',

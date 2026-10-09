@@ -542,8 +542,10 @@ public class ProviderController {
 
     /**
      * A live test through the same provider seam as dispatch. The subscriberId is derived from the
-     * input (no clock/random) so a re-test is reproducible. Writes one masked, {@code is_test} row
-     * at the operator's tenant.
+     * input (no clock/random), so a re-test reuses one test subscriber. The transactionId is new for
+     * every test unless the caller supplies one ({@link #freshTestTransactionId}). Writes one masked,
+     * {@code is_test} row at the operator's tenant. Refused first, with nothing sent and no row, when
+     * nothing could deliver it: {@link #requireDeliverable}.
      */
     @PostMapping("/providers/test-send")
     public ResponseEntity<Map<String, Object>> testSend(@RequestBody Map<String, Object> body) {
@@ -572,10 +574,11 @@ public class ProviderController {
         }
 
         String upperChannel = channel == null ? "" : channel.toUpperCase();
+        String unchecked = requireDeliverable(firstText(integrationIdentifier, integrationId), upperChannel);
         String recipient = StringUtils.hasText(phone) ? phone : email;
         String seed = StringUtils.hasText(txnInput) ? txnInput : (recipient != null ? recipient : upperChannel);
         String subscriberId = "nb-test-" + stableId(seed);
-        String transactionId = StringUtils.hasText(txnInput) ? txnInput : subscriberId;
+        String transactionId = StringUtils.hasText(txnInput) ? txnInput : freshTestTransactionId();
         String workflow = StringUtils.hasText(workflowId) ? workflowId
                 : ("EMAIL".equals(upperChannel) ? WORKFLOW_EMAIL : WORKFLOW_SMS);
 
@@ -610,7 +613,54 @@ public class ProviderController {
             out.put("errorCode", result.getProviderCode());
             out.put("errorMessage", result.getProviderMessage());
         }
+        if (unchecked != null) {
+            out.put("warning", unchecked);
+        }
         return ResponseEntity.ok(out);
+    }
+
+    /**
+     * A new transactionId for one test. Novu runs a transactionId once: a trigger that repeats one
+     * is still answered {@code 201 processed}, and the worker then drops it ("transactionId property
+     * is not unique"). With the id derived from the recipient, every Test after the first to the
+     * same number read {@code ok:true} and logged SENT for a message that never left. The UUID after
+     * an underscore is an id under the Logs masking ({@code PiiMask}), so it is shown whole.
+     */
+    static String freshTestTransactionId() {
+        return "nb-test_" + UUID.randomUUID();
+    }
+
+    /**
+     * Test-send's availability gate, the one dispatch applies: a named integration must exist, be
+     * active, deliver the test's channel and be loadable by the worker
+     * ({@link ProviderAvailability#check}); with none named, a channel that goes through Novu needs
+     * an active Novu integration that delivers it ({@link ProviderAvailability#checkUnpinned}). Novu
+     * accepts a trigger nothing can deliver and fails it inside, so without this the test would
+     * read {@code ok:true} for a message that never left. Refused with {@code 409
+     * NB_PROVIDER_UNAVAILABLE} and the availability verdict's reason; nothing is sent and no row
+     * written, like the other refusals before a send.
+     *
+     * <p>Asked fresh, not from the dispatch snapshot: an operator who just changed a provider in
+     * Novu's own dashboard tests that, not what Novu looked like up to a TTL ago (the refreshed
+     * snapshot then serves dispatch too). Fails OPEN like dispatch when Novu's integration list
+     * cannot be read: the test is sent and reports the trigger's own answer, carrying the reason it
+     * was not checked as {@code warning}.
+     *
+     * @return that reason when the check could not run, else null
+     */
+    private String requireDeliverable(String integrationId, String channel) {
+        boolean named = StringUtils.hasText(integrationId);
+        if (!named && !providers.novu().id().equals(providers.select(null, channel).id())) {
+            return null; // the legacy direct gateway (SMSCountry's bulk API) answers for itself
+        }
+        providerAvailability.invalidate();
+        ProviderAvailability.Result availability = named
+                ? providerAvailability.check(integrationId, channel)
+                : providerAvailability.checkUnpinned(channel);
+        if (!availability.usable()) {
+            throw new Refusal(HttpStatus.CONFLICT, "NB_PROVIDER_UNAVAILABLE", availability.message());
+        }
+        return availability.status() == ProviderAvailability.Status.UNKNOWN ? availability.message() : null;
     }
 
     /** SMS and WHATSAPP to Novu {@code sms}; EMAIL to {@code email}; anything else is NB_INVALID_CHANNEL. */

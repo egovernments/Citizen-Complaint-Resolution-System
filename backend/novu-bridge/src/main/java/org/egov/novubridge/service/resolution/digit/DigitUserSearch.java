@@ -6,6 +6,7 @@ import org.egov.common.contract.request.Role;
 import org.egov.common.contract.request.User;
 import org.egov.novubridge.config.NovuBridgeConfiguration;
 import org.egov.novubridge.service.resolution.Recipient;
+import org.egov.novubridge.util.PhoneNumbers;
 import org.egov.novubridge.util.ServiceUrl;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -91,15 +92,18 @@ public class DigitUserSearch {
         return new Recipient(text(raw.get("uuid")), type, text(raw.get("name")), phone, email, null);
     }
 
-    /** {@code countryCode + mobileNumber}, unless the number is already E.164 ({@code +...}). */
+    /**
+     * The user's own number in E.164 when egov-user gives its country code ({@code +254},
+     * {@code 254}: a national trunk 0 is dropped, an already-international number kept); else the
+     * national number as stored, which the dispatch pipeline completes with the tenant's code.
+     */
     public static String withCountryCode(String mobileNumber, String countryCode) {
         if (!StringUtils.hasText(mobileNumber)) {
             return null;
         }
-        if (mobileNumber.startsWith("+")) {
-            return mobileNumber;
-        }
-        return StringUtils.hasText(countryCode) ? countryCode + mobileNumber : mobileNumber;
+        String e164 = PhoneNumbers.isInternational(mobileNumber) || PhoneNumbers.dialDigits(countryCode) != null
+                ? PhoneNumbers.toE164(mobileNumber, countryCode) : null;
+        return e164 != null ? e164 : mobileNumber.trim();
     }
 
     /** egov-user refuses a tenant-wide search without a user, and a Kafka message has none. */

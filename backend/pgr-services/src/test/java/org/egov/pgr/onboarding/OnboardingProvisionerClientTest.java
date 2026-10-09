@@ -201,4 +201,37 @@ public class OnboardingProvisionerClientTest {
         assertTrue(expected>900);assertEquals(expected,writes);assertEquals(expected,details);
     }
 
+    /** NOTIFICATION_DEFAULTS may create its own schemas and the packaged seed rows verbatim — nothing else, never an update. */
+    @SuppressWarnings("unchecked")
+    @Test public void notificationDefaultsWriteOnlyTheirSchemasAndSeedRowsVerbatim() throws Exception {
+        var defaults=new NotificationDefaults(mapper); var scope=scope(NotificationDefaultsStep.STEP);
+        String roleActions="ACCESSCONTROL-ROLEACTIONS.roleactions", templates="NOTIFICATIONS.Template";
+        java.util.function.BiFunction<String,Map<String,Object>,Map<String,Object>> mdmsRow=(schema,data)->Map.of("Mdms",
+                Map.of("tenantId","newtown","schemaCode",schema,"uniqueIdentifier","x","isActive",true,"data",data));
+        Map<String,Object> roleAction=mapper.convertValue(defaults.data(defaults.recordsBySchema().get(roleActions).get(0),"newtown"),Map.class);
+        Map<String,Object> template=mapper.convertValue(defaults.data(defaults.recordsBySchema().get(templates).get(0),"newtown"),Map.class);
+
+        client.write(scope,"mdms","/egov-mdms-service/schema/v1/_create",Map.of("SchemaDefinition",Map.of("tenantId","newtown","code",templates,"definition",Map.of())));
+        client.write(scope,"mdms","/egov-mdms-service/v2/_create/"+roleActions,mdmsRow.apply(roleActions,roleAction));
+        client.write(scope,"mdms","/egov-mdms-service/v2/_create/"+templates,mdmsRow.apply(templates,template));
+        assertEquals(3,writes);
+
+        Map<String,Object> widened=new LinkedHashMap<>(roleAction); widened.put("rolecode","CITIZEN");
+        Map<String,Object> otherTenant=new LinkedHashMap<>(roleAction); otherTenant.put("tenantId","othertown");
+        Map<String,Object> rewritten=new LinkedHashMap<>(template); rewritten.put("body","Send your OTP to this number");
+        List<Runnable> refused=List.of(
+                ()->client.write(scope,"mdms","/egov-mdms-service/v2/_create/"+roleActions,mdmsRow.apply(roleActions,widened)),
+                ()->client.write(scope,"mdms","/egov-mdms-service/v2/_create/"+roleActions,mdmsRow.apply(roleActions,otherTenant)),
+                ()->client.write(scope,"mdms","/egov-mdms-service/v2/_create/"+templates,mdmsRow.apply(templates,rewritten)),
+                ()->client.write(scope,"mdms","/egov-mdms-service/v2/_update/"+templates,mdmsRow.apply(templates,template)),
+                ()->client.write(scope,"mdms","/egov-mdms-service/schema/v1/_create",Map.of("SchemaDefinition",Map.of("tenantId","newtown","code","common-masters.StateInfo","definition",Map.of()))),
+                ()->client.write(scope,"mdms","/egov-mdms-service/v2/_create/common-masters.StateInfo",mdmsRow.apply("common-masters.StateInfo",Map.of("code","newtown"))),
+                ()->client.write(scope,"localization","/localization/messages/v1/_upsert",Map.of("tenantId","newtown","messages",List.of())));
+        for(Runnable write:refused)
+            assertEquals("SIGNUP_WRITE_SCOPE_DENIED",assertThrows(OnboardingFailure.class,write::run).getCode());
+        assertEquals("nothing refused reached a service",3,writes);
+        // And the baseline step may not write notification rows (the scope names its step).
+        assertEquals("SIGNUP_WRITE_SCOPE_DENIED",assertThrows(OnboardingFailure.class,()->client.write(scope("PLATFORM_BASELINE"),"mdms",
+                "/egov-mdms-service/v2/_create/"+templates,mdmsRow.apply(templates,template))).getCode());
+    }
 }

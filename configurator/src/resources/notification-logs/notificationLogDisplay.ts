@@ -94,20 +94,36 @@ export function sourcePathDisplay(value: unknown): CellText {
   return { text: choice ? choice.name : raw, muted: false };
 }
 
-/** Mask a recipient (phone/email) so the log never renders a full PII value:
- *  keep the domain for emails, the last 3 digits for phones.
- *  The server also masks recipient_value/transaction_id (novu-bridge PiiMask) —
- *  this is defense-in-depth for older bridges. */
+/** A canonical 8-4-4-4-12 hex UUID, not part of a longer hex/dash token. */
+const UUID_TOKEN =
+  /(?<![0-9A-Fa-f-])[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}(?![0-9A-Fa-f-])/g;
+
+/** Every run of 7+ digits becomes `***` + its last 3 digits. */
+function maskDigitRuns(text: string): string {
+  return text.replace(/\d{7,}/g, (run) => `***${run.slice(-3)}`);
+}
+
+/** Mask a recipient with novu-bridge's PiiMask rule, so both layers show the same thing:
+ *  - an id stays an id: a canonical UUID is never masked (a user uuid is not contact data);
+ *  - an email keeps its first character and domain: `c***@example.org`;
+ *  - a phone is every run of 7+ digits outside a UUID: `+254712345678` -> `+***678`.
+ *  The server already masks recipient_value / transaction_id; applying the same rule again
+ *  is a no-op on its output and defense-in-depth for older bridges. */
 export function maskRecipient(value: unknown): string {
   const s = String(value ?? '');
   if (!s) return '--';
   if (s.includes('@')) {
-    const [local, domain] = s.split('@');
-    const head = local.slice(0, 1);
-    return `${head}***@${domain}`;
+    const at = s.indexOf('@');
+    return `${s.slice(0, 1)}***${s.slice(at)}`;
   }
-  if (s.length <= 3) return '***';
-  return `***${s.slice(-3)}`;
+  let out = '';
+  let from = 0;
+  for (const id of s.matchAll(UUID_TOKEN)) {
+    const start = id.index ?? 0;
+    out += maskDigitRuns(s.slice(from, start)) + id[0];
+    from = start + id[0].length;
+  }
+  return out + maskDigitRuns(s.slice(from));
 }
 
 /**

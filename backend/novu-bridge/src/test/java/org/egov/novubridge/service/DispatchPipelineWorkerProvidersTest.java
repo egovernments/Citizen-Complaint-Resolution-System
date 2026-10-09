@@ -29,6 +29,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -156,12 +157,34 @@ class DispatchPipelineWorkerProvidersTest {
     }
 
     @Test
-    void withTheWorkerProvidersOn_theUnpinnedChannelIsDelivered_withoutListingNovu() {
+    void withTheWorkerProvidersOn_theUnpinnedChannelIsDelivered_afterOneNovuList() {
         unpinnedSmsRow();
 
         service.process(sms(), true, null);
+        service.process(sms(), true, null);
 
-        assertEquals("SENT", row().getStatus());
-        verify(novuClient, never()).listIntegrations();
+        verify(novuClient, times(1)).listIntegrations();
+        verify(novuClient, times(2)).identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(),
+                anyString(), any(), any(), any(), any());
+    }
+
+    // Field finding (dev deployment, 2026-10-07): a channel switched on with no provider selected
+    // and no Novu integration was logged SENT for every message while Novu failed each job.
+    @Test
+    void withTheWorkerProvidersOn_anUnpinnedChannelWithNoNovuIntegration_isSkippedVisibly_notSent() {
+        unpinnedSmsRow();
+        NovuClient.NovuResponse empty = new NovuClient.NovuResponse();
+        empty.setStatusCode(200);
+        empty.setResponse(Map.of("data", List.of()));
+        when(novuClient.listIntegrations()).thenReturn(empty);
+
+        service.process(sms(), true, null);
+
+        DispatchLogEntry row = row();
+        assertEquals("SKIPPED", row.getStatus());
+        assertEquals("NB_PROVIDER_UNAVAILABLE", row.getLastErrorCode());
+        assertTrue(row.getLastErrorMessage().contains("no active integration"), row.getLastErrorMessage());
+        verify(novuClient, never()).identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(),
+                anyString(), any(), any(), any(), any());
     }
 }

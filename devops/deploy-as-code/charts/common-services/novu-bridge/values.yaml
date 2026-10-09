@@ -86,6 +86,9 @@ env: |
       configMapKeyRef:
         name: egov-config
         key: state-level-tenant-id
+  # Last-resort country code (e.g. "+254") for a phone with none; the user's own code and the
+  # tenant's common-masters.MobileNumberValidation rule come first. Blank, at a tenant without a
+  # rule: the message is SKIPPED / NB_CONTACT_INVALID, never sent as "+" + the national number.
   - name: NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE
     value: ""
   - name: NOVU_BRIDGE_KAFKA_DLQ_TOPIC

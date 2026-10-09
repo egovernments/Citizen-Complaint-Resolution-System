@@ -27,6 +27,7 @@ public class OnboardingProvisionerClient {
     private final Environment env;
     private final Set<String> signupSchemas, signupWorkflows;
     private final PlatformBaseline baselinePacks;
+    private final NotificationDefaults notificationDefaults;
     private Map<String, Object> login;
     private long expiresAt;
     /** Set by the first successful login: a later 400/401 then means the password really changed. */
@@ -41,7 +42,7 @@ public class OnboardingProvisionerClient {
         this.mapper = mapper;
         this.env = env;
         var schemas = new HashSet<String>(); var workflows = new HashSet<String>();
-        try { baselinePacks = new PlatformBaseline(mapper); }
+        try { baselinePacks = new PlatformBaseline(mapper); notificationDefaults = new NotificationDefaults(mapper); }
         catch (java.io.IOException e) { throw new IllegalStateException("Onboarding baseline unavailable", e); }
         baselinePacks.schemas().forEach(schema -> schemas.add(schema.path("code").asText()));
         baselinePacks.workflows().forEach(workflow -> workflows.add(workflow.path("businessService").asText()));
@@ -149,6 +150,21 @@ public class OnboardingProvisionerClient {
         boolean foundation = "TENANT_FOUNDATION".equals(step), upgrade = BaselineUpgrader.STEP.equals(step),
                 baseline = "PLATFORM_BASELINE".equals(step) || upgrade;
         JsonNode payload;
+        if (NotificationDefaultsStep.STEP.equals(step)) {
+            // MDMS creates only: the notification schemas, and the packaged seed rows verbatim (never an update).
+            if (!"mdms".equals(service)) denied();
+            if ("/egov-mdms-service/schema/v1/_create".equals(path)) {
+                payload = body.path("SchemaDefinition"); requireTenant(payload, tenant);
+                if (!notificationDefaults.isSchema(payload.path("code").asText())) denied();
+                return; // JSON schema property definitions are not tenant-bearing request data.
+            }
+            payload = body.path("Mdms"); String schema = payload.path("schemaCode").asText();
+            if (!path.equals("/egov-mdms-service/v2/_create/" + schema)) denied();
+            requireTenant(payload, tenant);
+            if (!notificationDefaults.isSeedRecord(schema, payload.path("data"), tenant)) denied();
+            requireNestedTenants(body, tenant);
+            return;
+        }
         if ("mdms".equals(service) && "/egov-mdms-service/schema/v1/_create".equals(path) && (foundation || baseline)) {
             payload = body.path("SchemaDefinition"); requireTenant(payload, tenant);
             if (!signupSchemas.contains(payload.path("code").asText()) || foundation && !"tenant.tenants".equals(payload.path("code").asText())) denied();

@@ -476,6 +476,95 @@ class SeederLogin(unittest.TestCase):
         self.assertNotIn("NOTIF-LOGIN-REFUSED", out)
 
 
+class SeederAccessToken(unittest.TestCase):
+    """Field finding (dev deployment, 2026-10-07): a self-serve workspace's founder signs in through
+    Keycloak only and has no DIGIT password, so the seeder and the migration (username/password
+    only) could not run for that workspace. DIGIT_ACCESS_TOKEN replaces the login."""
+
+    TOKEN = "f0unders-access-t0ken"
+
+    def setUp(self):
+        import urllib.error
+        self.calls = []
+        self.answer = None
+        originals = {name: getattr(sn, name) for name in ("ACCESS_TOKEN", "TENANT", "_post")}
+        for name, value in originals.items():
+            self.addCleanup(setattr, sn, name, value)
+        sn.ACCESS_TOKEN = self.TOKEN
+        sn.TENANT = "kworkspace"
+
+        def post(path, body, tok=None, headers=None):
+            self.calls.append((path, body))
+            if self.answer is not None:
+                raise self.answer
+            import io
+            return io.BytesIO(b'{"mdms": []}')
+        sn._post = post
+        self.http_error = lambda code: urllib.error.HTTPError("http://kong" + "/mdms-v2/v2/_search", code, "x", {}, None)
+
+    def login(self):
+        import contextlib
+        import io
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            try:
+                return sn.login(), None, out.getvalue()
+            except SystemExit as exc:
+                return None, exc.code, out.getvalue()
+
+    def test_the_token_is_used_and_checked_with_one_read_never_a_password_login(self):
+        tok, code, _ = self.login()
+        self.assertEqual(tok, self.TOKEN)
+        self.assertIsNone(code)
+        self.assertEqual([path for path, _ in self.calls], ["/mdms-v2/v2/_search"])
+        self.assertEqual(self.calls[0][1]["RequestInfo"]["authToken"], self.TOKEN)
+        self.assertEqual(self.calls[0][1]["MdmsCriteria"]["tenantId"], "kworkspace")
+
+    def test_a_refused_token_is_exit_4_and_the_token_is_never_printed(self):
+        for status in (401, 403):
+            with self.subTest(status=status):
+                self.answer = self.http_error(status)
+                tok, code, out = self.login()
+                self.assertEqual(code, 4)
+                self.assertIn("NOTIF-LOGIN-REFUSED:", out)
+                self.assertIn("DIGIT_ACCESS_TOKEN", out)
+                self.assertNotIn(self.TOKEN, out)
+
+    def test_a_server_error_on_the_check_is_not_a_refused_token(self):
+        self.answer = self.http_error(502)
+        tok, code, out = self.login()
+        self.assertEqual(code, 2)
+        self.assertIn("NOTIF-LOGIN-ERROR:", out)
+        self.assertNotIn("NOTIF-LOGIN-REFUSED", out)
+
+    def test_who_names_the_token_not_a_user(self):
+        self.assertEqual(sn.who(), "the supplied DIGIT_ACCESS_TOKEN")
+        sn.ACCESS_TOKEN = ""
+        self.assertNotIn("TOKEN", sn.who())
+
+    def test_the_migration_takes_the_same_token_and_refuses_a_bad_one_before_reading(self):
+        import contextlib
+        import io
+        self.answer = self.http_error(401)
+        # migrate-notifications.py loads its own copy of the seeder module.
+        for name in ("ACCESS_TOKEN", "_post", "URL", "LOGIN_TENANT"):
+            self.addCleanup(setattr, mn.sn, name, getattr(mn.sn, name))
+        mn.sn._post = sn._post
+        env = {"DIGIT_ACCESS_TOKEN": self.TOKEN, "DIGIT_URL": "http://kong"}
+        saved = {k: os.environ.get(k) for k in env}
+        os.environ.update(env)
+        for k, v in saved.items():
+            self.addCleanup(lambda k=k, v=v: os.environ.__setitem__(k, v) if v is not None else os.environ.pop(k, None))
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+            rc = mn.run(["plan", "--tenant", "kworkspace", "--bridge-container", "", "--worker-container", ""])
+        self.assertEqual(rc, 4)
+        self.assertIn("DIGIT_ACCESS_TOKEN was refused (HTTP 401)", err.getvalue())
+        self.assertNotIn(self.TOKEN, err.getvalue())
+        self.assertEqual([path for path, _ in self.calls], ["/mdms-v2/v2/_search"],
+                         "nothing but the token check was read")
+
+
 try:
     import jinja2
     import yaml
@@ -525,6 +614,49 @@ class ProviderOwnerNotes(unittest.TestCase):
         self.assertIn("It also owns the providers", notes["mz"])
         self.assertIn("only an admin of ke or mz may create one.", notes["pg"])
 
+
+
+@unittest.skipIf(jinja2 is None, "needs jinja2 + PyYAML (ansible's own dependencies)")
+class WorkspaceRootsAreNotSeededByTheDeploy(unittest.TestCase):
+    """Field finding (dev deployment, 2026-10-07): every self-serve workspace root with complaints
+    printed "NOT SEEDED — the access-control rows failed (exit 2)": the deploy logged in as ADMIN,
+    which does not exist at a workspace. Workspaces are seeded by pgr-services at signup, so the
+    deploy leaves them out of the ADMIN loop and names the ones still without routing."""
+
+    @classmethod
+    def setUpClass(cls):
+        import ast
+        import re
+        with open(os.path.join(REPO, "local-setup", "ansible", "playbook-deploy.yml"), encoding="utf-8") as fh:
+            tasks = [t for p in yaml.safe_load(fh) for t in p.get("tasks", []) or []]
+        task = next(t for t in tasks if t.get("name") == "notif-seed — the state roots to seed")
+        cls.facts = task["ansible.builtin.set_fact"]
+        action = next(t for t in tasks if t.get("name") == "notif-seed — ACTION: a self-serve workspace has no notification configuration")
+        cls.action_when = [w for w in action["when"] if "notif_workspace_routing" in w][0]
+        env = jinja2.Environment()
+        env.tests["match"] = lambda value, pattern: re.match(pattern, value) is not None   # ansible's test
+        cls.env = env
+        cls.literal = staticmethod(ast.literal_eval)
+
+    def render(self, name, **values):
+        return self.literal(self.env.from_string(self.facts[name]).render(**values).strip())
+
+    def test_workspace_roots_leave_the_admin_loop_but_state_root_never_does(self):
+        values = dict(notif_seed_tenant="ke ", notif_complaint_counts={"ke": "12", "knewman": "3", "pg": "40", "PW_x": "1"},
+                      notif_workspace_routing={"knewman": "0", "kpgr": "24", "ke": "0"})
+        self.assertEqual(self.render("notif_seed_roots", **values), ["ke", "pg"])
+        self.assertEqual(self.render("notif_seed_workspaces", **values), ["knewman", "kpgr"])
+
+    def test_without_the_onboarding_tables_every_root_is_seeded_as_before(self):
+        values = dict(notif_seed_tenant="ke", notif_complaint_counts={"ke": "1", "knewman": "3"}, notif_workspace_routing={})
+        self.assertEqual(self.render("notif_seed_roots", **values), ["ke", "knewman"])
+        self.assertEqual(self.render("notif_seed_workspaces", **values), [])
+
+    def test_only_a_workspace_without_routing_gets_the_action(self):
+        when = self.env.from_string("{{ " + self.action_when + " }}")
+        routing = {"knewman": "0", "kpgr": "24"}
+        self.assertEqual(when.render(item="knewman", notif_workspace_routing=routing), "True")
+        self.assertEqual(when.render(item="kpgr", notif_workspace_routing=routing), "False")
 
 if __name__ == "__main__":
     unittest.main()

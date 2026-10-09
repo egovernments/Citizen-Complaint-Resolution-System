@@ -67,6 +67,12 @@ class ProviderControllerTest {
         // integration were configured (NovuClient's own no-op default).
         when(novuClient.applyWhatsappIntegrationOverride(anyMap(), anyString()))
                 .thenAnswer(inv -> inv.getArgument(0));
+        // Default: an active provider per channel, so test-send's availability check passes
+        // (ProviderControllerTestSendAvailabilityTest covers its refusals). Tests restub as needed.
+        when(novuClient.listIntegrations()).thenReturn(novuResp(200, Map.of("data", List.of(
+                Map.of("_id", "d1", "identifier", "twilio-sms-d1", "providerId", "twilio", "channel", "sms", "active", true),
+                Map.of("_id", "d2", "identifier", "twilio-whatsapp-d2", "providerId", "twilio", "channel", "sms", "active", true),
+                Map.of("_id", "d3", "identifier", "smtp-d3", "providerId", "nodemailer", "channel", "email", "active", true)))));
     }
 
     private NovuClient.NovuResponse novuResp(int status, Map<String, Object> body) {
@@ -396,7 +402,7 @@ class ProviderControllerTest {
         Map<String, Object> out = controller.testSend(req).getBody();
         assertEquals(true, out.get("ok"));
         assertEquals(201, out.get("novuStatus"));
-        assertTrue(((String) out.get("transactionId")).startsWith("nb-test-"));
+        assertTrue(((String) out.get("transactionId")).startsWith("nb-test_"));
 
         ArgumentCaptor<String> phone = ArgumentCaptor.forClass(String.class);
         verify(novuClient).trigger(eq("complaints-sms"), anyString(), phone.capture(),
@@ -494,9 +500,75 @@ class ProviderControllerTest {
         req.put("channel", "SMS");
         req.put("to", Map.of("phone", "+15550100"));
 
+        controller.testSend(req);
+        controller.testSend(req);
+        ArgumentCaptor<String> subscriber = ArgumentCaptor.forClass(String.class);
+        verify(novuClient, org.mockito.Mockito.times(2)).trigger(anyString(), subscriber.capture(), nullable(String.class),
+                nullable(String.class), anyMap(), anyString(), nullable(Map.class));
+        assertEquals(subscriber.getAllValues().get(0), subscriber.getAllValues().get(1),
+                "same recipient must reuse one test subscriber (no clock/random)");
+        assertTrue(subscriber.getValue().startsWith("nb-test-"));
+    }
+
+    /**
+     * Novu runs a transactionId once: a repeat is answered 201 and then dropped by the worker
+     * ("transactionId property is not unique"). Seen live: the second Test to the same number read
+     * ok:true and logged SENT while nothing was sent. Each test must trigger with its own id.
+     */
+    @Test
+    void testSend_repeatedTest_triggersWithANewTransactionIdEachTime() {
+        when(novuClient.trigger(anyString(), anyString(), nullable(String.class),
+                nullable(String.class), anyMap(), anyString(), nullable(Map.class)))
+                .thenReturn(novuResp(201, Map.of()));
+
+        Map<String, Object> req = new LinkedHashMap<>();
+        req.put("channel", "SMS");
+        req.put("to", Map.of("phone", "+15550100"));
+
         String txn1 = (String) controller.testSend(req).getBody().get("transactionId");
         String txn2 = (String) controller.testSend(req).getBody().get("transactionId");
-        assertEquals(txn1, txn2, "same recipient must yield a reproducible transactionId (no clock/random)");
+        assertFalse(txn1.equals(txn2), "a repeated test must not reuse a transactionId Novu has already run");
+
+        ArgumentCaptor<String> sent = ArgumentCaptor.forClass(String.class);
+        verify(novuClient, org.mockito.Mockito.times(2)).trigger(anyString(), anyString(), nullable(String.class),
+                nullable(String.class), anyMap(), sent.capture(), nullable(Map.class));
+        assertEquals(List.of(txn1, txn2), sent.getAllValues(), "the id reported is the id Novu was triggered with");
+
+        ArgumentCaptor<DispatchLogEntry> rows = ArgumentCaptor.forClass(DispatchLogEntry.class);
+        verify(dispatchLogRepository, org.mockito.Mockito.times(2)).upsert(rows.capture());
+        assertEquals(List.of(txn1, txn2), rows.getAllValues().stream().map(DispatchLogEntry::getTransactionId).toList(),
+                "each test keeps its own ledger row");
+    }
+
+    @Test
+    void testSend_transactionId_isShownWholeOnTheLogsScreen() {
+        when(novuClient.trigger(anyString(), anyString(), nullable(String.class),
+                nullable(String.class), anyMap(), anyString(), nullable(Map.class)))
+                .thenReturn(novuResp(201, Map.of()));
+        Map<String, Object> req = new LinkedHashMap<>();
+        req.put("channel", "SMS");
+        req.put("to", Map.of("phone", "+15550100"));
+
+        for (int i = 0; i < 20; i++) {
+            String txn = (String) controller.testSend(req).getBody().get("transactionId");
+            assertTrue(txn.matches("nb-test_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"), txn);
+            assertEquals(txn, org.egov.novubridge.util.PiiMask.maskEmbedded(txn), "a test id is an id: never masked on the Logs screen");
+        }
+    }
+
+    @Test
+    void testSend_callerSuppliedTransactionId_isUsedAsGiven() {
+        when(novuClient.trigger(anyString(), anyString(), nullable(String.class),
+                nullable(String.class), anyMap(), anyString(), nullable(Map.class)))
+                .thenReturn(novuResp(201, Map.of()));
+        Map<String, Object> req = new LinkedHashMap<>();
+        req.put("channel", "SMS");
+        req.put("to", Map.of("phone", "+15550100"));
+        req.put("transactionId", "ops-retry-42");
+
+        assertEquals("ops-retry-42", controller.testSend(req).getBody().get("transactionId"));
+        verify(novuClient).trigger(anyString(), anyString(), nullable(String.class),
+                nullable(String.class), anyMap(), eq("ops-retry-42"), nullable(Map.class));
     }
 
     @Test
