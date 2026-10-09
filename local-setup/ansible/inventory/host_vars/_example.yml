@@ -331,11 +331,12 @@ enable_integration_tests_runner: false
 # turning them back on starts from a fresh baseline (no backlog of old runs).
 test_alerts_enabled: false
 # test_alerts_smtp_host: "smtp.example.org"     # required
-# test_alerts_smtp_port: 587                     # 465 is blocked outbound on the Hetzner boxes
+# test_alerts_smtp_port: 587                     # default 587, or 465 with test_alerts_smtp_tls: true;
+#                                                #   465 is blocked outbound on the Hetzner boxes
 # test_alerts_smtp_starttls: true                # require STARTTLS on port 587 (recommended). false: use
 #                                                #   STARTTLS only if the relay offers it; anyone on the path
 #                                                #   can strip that offer, and the login then goes in clear
-# test_alerts_smtp_tls: false                    # true = implicit TLS (smtps://), usually port 465
+# test_alerts_smtp_tls: false                    # true = implicit TLS (smtps://); the port then defaults to 465
 # test_alerts_smtp_user: "test-alerts@example.org"   # omit for an unauthenticated relay
 # test_alerts_from: "CCRS test alerts <test-alerts@example.org>"   # required; must be a sender the SMTP account may use
 # Recipients (required): a list, or one address as a plain string. Each entry
@@ -347,7 +348,7 @@ test_alerts_enabled: false
 #   - "ccrs-test-alerts@example.org"
 # test_alerts_box_name: "bomet"                  # label in the subject; default: inventory hostname
 # test_alerts_dashboard_url: "https://bomet.example.org/tests/"   # default: https://<domain>/tests/
-# test_alerts_poll_minutes: 5                    # how often the timer checks for a new run
+# test_alerts_poll_minutes: 5                    # how often the timer checks for a new run (whole minutes, >= 1)
 # test_alerts_max_list: 40                       # max tests listed per group in one mail
 # test_alerts_stale_after_hours: 0               # >0: also mail once when no new run appears for this long
 #                                                #     (e.g. 26 on a daily box, 8 on a 4x/day box); 0 = off
