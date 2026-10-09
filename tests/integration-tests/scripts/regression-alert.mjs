@@ -21,6 +21,11 @@
  *        stopped running passed in the previous run; no result now
  *        fixed           passed now; the last time it ran it failed/timed out
  *      ("Verdict" excludes `interrupted`: the global timeout killed the test.)
+ *      If the last handled run has left the catalog, the oldest run still in it
+ *      is compared with each test's result at or before the last handled run
+ *      instead (the runs in between are folded into it). If the last handled
+ *      run is newer than the whole catalog (restored from a backup), the poll
+ *      re-baselines on the catalog's newest run and mails nothing.
  *   4. If anything regressed, became skipped or stopped running, mail it to
  *      ALERT_TO: ONE mail per poll, so one SMTP login. Several runs that need
  *      a mail (runs piled up between polls, or while sends were failing) go
@@ -96,18 +101,33 @@ function verdict(entry) {
 
 /**
  * The runs newer than `lastRunId`, oldest first, each paired with the run
- * before it in the catalog. If `lastRunId` has left the catalog's window (the
- * poller was down for a while), only the newest run is compared.
+ * before it in the catalog.
+ *
+ * When `lastRunId` is no longer in the catalog (alerts were off, or sends kept
+ * failing, for longer than the catalog's run window), every run newer than it
+ * is returned. The oldest of those has no predecessor left in the catalog, so
+ * it carries `since: lastRunId`: analyzeRun then compares it with each test's
+ * result at or before that run, which folds the runs in between into it.
  */
 export function runsToProcess(catalog, lastRunId) {
   const runs = Array.isArray(catalog?.runs) ? catalog.runs : []; // newest first
   if (!runs.length || !lastRunId || runs[0].id === lastRunId) return [];
   const idx = runs.findIndex(r => r.id === lastRunId);
-  const fresh = idx === -1 ? [runs[0]] : runs.slice(0, idx);
+  const fresh = idx !== -1 ? runs.slice(0, idx) : runs.filter(r => runKey(r.id) > runKey(lastRunId));
   return fresh.reverse().map(run => {
-    const i = runs.findIndex(r => r.id === run.id);
-    return { run, prev: runs[i + 1] ?? null };
+    const prev = runs[runs.indexOf(run) + 1] ?? null;
+    return prev || idx !== -1 ? { run, prev } : { run, prev: null, since: lastRunId };
   });
+}
+
+/**
+ * Is the last handled run newer than every run in the catalog? Then the
+ * catalog went back in time (restored from a backup, or rebuilt), and its
+ * newest run is old news: re-baseline on it rather than mail it again.
+ */
+export function catalogIsBehind(catalog, lastRunId) {
+  const runs = Array.isArray(catalog?.runs) ? catalog.runs : [];
+  return Boolean(runs.length && lastRunId) && !runs.some(r => r.id === lastRunId) && runKey(lastRunId) >= runKey(runs[0].id);
 }
 
 /** First line of a Playwright error message, ANSI stripped, capped. */
@@ -120,39 +140,55 @@ function firstErrorLine(message) {
 /**
  * Compare one run with the run before it, test by test.
  * Returns the four groups plus the run summaries for the mail.
+ *
+ * With `since` (see runsToProcess) the run's predecessor has left the catalog:
+ * each test is compared with its last result at or before `since`, the last
+ * run the alerts handled, or, when its history no longer reaches back that
+ * far, with the earliest result it still has. So a test that broke in a run
+ * that has since left the catalog is still reported, here. `folded` counts the
+ * runs between the two that test histories still show (a lower bound).
  */
-export function analyzeRun(catalog, run, prev) {
+export function analyzeRun(catalog, run, prev, since = null) {
   const regressed = [];
   const nowSkipped = [];
   const stopped = [];
   const fixed = [];
   const key = runKey(run.id);
+  const sinceKey = since ? runKey(since) : null;
+  const between = new Set();
   for (const t of catalog.tests || []) {
     const history = Array.isArray(t.history) ? t.history : []; // newest first
     const here = verdict(history.find(h => h.runId === run.id));
     // Every earlier result with a verdict, newest first. Only runs BEFORE this
     // one: when a batch of runs is compared, the newer ones are already in history.
-    const earlier = history.filter(h => runKey(h.runId) < key && verdict(h));
+    const allEarlier = history.filter(h => runKey(h.runId) < key && verdict(h));
+    const lastPassed = allEarlier.find(h => h.status === 'passed');
+    let earlier = allEarlier;
+    if (since) {
+      for (const h of allEarlier) if (runKey(h.runId) > sinceKey) between.add(h.runId);
+      const known = allEarlier.filter(h => runKey(h.runId) <= sinceKey);
+      earlier = known.length ? known : allEarlier.slice().reverse(); // reversed: the earliest result first
+    }
     const last = earlier[0];                                  // a skip counts: "now skipped" is news once
     const lastRan = earlier.find(h => h.status !== 'skipped'); // passed → skipped → failed is still a regression
     const before = verdict(last);
     const ran = verdict(lastRan);
     const ref = { id: t.id, title: t.title, file: t.file, line: t.line };
     if (here && FAILED.has(here) && ran === 'passed') {
-      const ranBefore = earlier.filter(h => h.status !== 'skipped');
+      const ranBefore = allEarlier.filter(h => h.status !== 'skipped');
       const priorFails = ranBefore.filter(h => FAILED.has(h.status)).length;
       const err = t.latestRun && t.latestRun.runId === run.id ? firstErrorLine(t.latestRun.errorMessage) : '';
-      regressed.push({ ...ref, status: here, since: lastRan.runId, error: err, flaky: priorFails > 0 ? { fails: priorFails, of: ranBefore.length } : null });
+      regressed.push({ ...ref, status: here, since: lastPassed.runId, error: err, flaky: priorFails > 0 ? { fails: priorFails, of: ranBefore.length } : null });
     } else if (here === 'skipped' && before === 'passed') {
-      nowSkipped.push({ ...ref, since: last.runId });
+      nowSkipped.push({ ...ref, since: lastPassed.runId });
     } else if (here === 'passed' && ran && FAILED.has(ran)) {
       fixed.push({ ...ref, since: lastRan.runId });
-    } else if (!here && prev && verdict(history.find(h => h.runId === prev.id)) === 'passed') {
+    } else if (!here && (since || prev) && verdict(history.find(h => h.runId === (since || prev.id))) === 'passed') {
       stopped.push(ref);
     }
   }
   const byFile = (a, b) => `${a.file}:${a.line}`.localeCompare(`${b.file}:${b.line}`, undefined, { numeric: true });
-  return { run, prev, regressed: regressed.sort(byFile), nowSkipped: nowSkipped.sort(byFile), stopped: stopped.sort(byFile), fixed: fixed.sort(byFile) };
+  return { run, prev, since, folded: between.size, regressed: regressed.sort(byFile), nowSkipped: nowSkipped.sort(byFile), stopped: stopped.sort(byFile), fixed: fixed.sort(byFile) };
 }
 
 /** Does this analysis warrant a mail? */
@@ -200,6 +236,13 @@ function runLines(a, cfg) {
     if (prev.sha && run.sha && prev.sha !== run.sha) {
       lines.push(`Changes:   ${cfg.repoUrl.replace(/\/$/, '')}/compare/${prev.sha}...${run.sha}`);
     }
+  } else if (a.since) {
+    const seen = a.folded ? `at least ${plural(a.folded, 'run')} show` : 'none shows';
+    lines.push(`Previous:  ${a.since}  (the last run handled; no longer in the catalog)`);
+    lines.push(`Folded:    the runs between the two have left the catalog too (${seen} in`,
+      '           test histories), so they are not compared one by one. Each test is',
+      `           compared with its last result at or before ${a.since}, or the`,
+      '           earliest one it still has: what changed in those runs shows up here.');
   }
 
   listGroup(lines, 'REGRESSED — passed before, failing now', a.regressed, cfg, t => {
@@ -709,13 +752,23 @@ export function tick({ cfg, opts, now = Date.now(), send = sendMail }) {
     lastRunId = state.lastRunId;
   }
 
-  if (latest.id !== lastRunId && !catalog.runs.some(r => r.id === lastRunId)) {
-    log(`last handled run ${lastRunId} has left the catalog window; comparing only the newest run`);
+  // An unresolved send failure (its kind, count and pause) outlives runs that
+  // need no mail, so the next mail still waits out the pause.
+  const failure = { sendFailure: state.sendFailure, sendFailures: state.sendFailures, retryAfter: state.retryAfter };
+
+  if (catalogIsBehind(catalog, lastRunId)) {
+    log(`WARNING: the last handled run ${lastRunId} is newer than every run in the catalog (newest: ${latest.id}). `
+      + `Was the catalog restored from a backup? Re-baselining on ${latest.id}; nothing is mailed.`);
+    return save({ ...failure, lastRunId: latest.id, rebaselinedAt: at }, 're-baselining') ? 0 : 1;
   }
   const plan = runsToProcess(catalog, lastRunId);
-  const analyses = plan.map(({ run, prev }) => analyzeRun(catalog, run, prev));
+  const analyses = plan.map(({ run, prev, since }) => analyzeRun(catalog, run, prev, since));
   for (const a of analyses) {
-    log(`${a.run.id} vs ${a.prev?.id ?? '(none)'}: ${a.regressed.length} regressed, ${a.nowSkipped.length} now skipped, ${a.stopped.length} stopped running, ${a.fixed.length} fixed`);
+    if (a.since) {
+      const seen = a.folded ? `at least ${plural(a.folded, 'run')} in between folded in` : 'no run in between shows in test histories';
+      log(`last handled run ${a.since} has left the catalog: ${a.run.id} is compared with each test's result at or before it (${seen})`);
+    }
+    log(`${a.run.id} vs ${a.prev?.id ?? a.since}: ${a.regressed.length} regressed, ${a.nowSkipped.length} now skipped, ${a.stopped.length} stopped running, ${a.fixed.length} fixed`);
   }
   const toMail = analyses.filter(needsAlert);
   const newLast = plan.length ? plan[plan.length - 1].run.id : lastRunId;
@@ -731,10 +784,6 @@ export function tick({ cfg, opts, now = Date.now(), send = sendMail }) {
       staleFor = latest.id;
     }
   }
-  // An unresolved send failure (its kind, count and pause) outlives runs that
-  // need no mail, so the next mail still waits out the pause.
-  const failure = { sendFailure: state.sendFailure, sendFailures: state.sendFailures, retryAfter: state.retryAfter };
-
   if (!mail) {
     if (newLast !== state.lastRunId && !save({ ...failure, lastRunId: newLast, staleAlertedFor: staleFor, updatedAt: at }, 'recording the runs')) return 1;
     return 0;

@@ -8,7 +8,7 @@ import path from 'node:path';
 import {
   runsToProcess, analyzeRun, needsAlert, composeMail, composeStaleMail,
   buildMessage, curlInvocation, readConfig, bareAddress, tick, retryDelayMs, classifySendError, sendMail, curlEnv,
-  splitAddressList, isAddress, configProblems, readState, writeState,
+  splitAddressList, isAddress, configProblems, readState, writeState, catalogIsBehind,
 } from './regression-alert.mjs';
 
 const R1 = '2026-10-04_1542_aaaa1111';
@@ -46,9 +46,60 @@ test('runsToProcess: every newer run, oldest first, each with its predecessor', 
   assert.deepEqual(out.map(x => [x.run.id, x.prev?.id]), [[R2, R1], [R3, R2]]);
 });
 
-test('runsToProcess: a handled run that left the window → only the newest', () => {
+test('runsToProcess: a handled run that left the window → every run, the oldest folding in the gap', () => {
   const out = runsToProcess(catalog, '2026-09-01_0000_old');
-  assert.deepEqual(out.map(x => [x.run.id, x.prev?.id]), [[R3, R2]]);
+  assert.deepEqual(out.map(x => [x.run.id, x.prev?.id ?? null, x.since ?? null]),
+    [[R1, null, '2026-09-01_0000_old'], [R2, R1, null], [R3, R2, null]]);
+});
+
+test('catalogIsBehind: only a handled run newer than everything in the catalog', () => {
+  assert.equal(catalogIsBehind(catalog, '2026-10-08_0900_eeee5555'), true, 'restored from an older backup');
+  assert.equal(catalogIsBehind(catalog, R3), false);
+  assert.equal(catalogIsBehind(catalog, R1), false);
+  assert.equal(catalogIsBehind(catalog, '2026-09-01_0000_old'), false, 'older: the window moved on');
+  assert.equal(catalogIsBehind({ runs: [] }, R3), false);
+});
+
+// The catalog keeps W1, W2. The last handled run, S, and D1, D2 after it have
+// left it; per-test histories still show some of them.
+const S0 = '2026-09-20_1542_55550000';
+const D1 = '2026-09-21_1542_d1d1d1d1';
+const D2 = '2026-09-22_1542_d2d2d2d2';
+const W1 = '2026-09-23_1542_a1a1a1a1';
+const W2 = '2026-09-24_1542_a2a2a2a2';
+const gap = {
+  runs: [run(W2, 'a2a2a2a2'), run(W1, 'a1a1a1a1')],
+  tests: [
+    t2('broke-in-d2', [h(W2, 'failed'), h(W1, 'failed'), h(D2, 'failed'), h(S0, 'passed')]),
+    t2('short-history', [h(W2, 'passed'), h(W1, 'failed'), h(D2, 'failed'), h(D1, 'passed')]),
+    t2('fixed-in-d1', [h(W2, 'passed'), h(W1, 'passed'), h(D1, 'passed'), h(S0, 'failed')]),
+    t2('passed-at-s-then-gone', [h(S0, 'passed')]),
+    t2('blip-in-d1', [h(W2, 'passed'), h(W1, 'passed'), h(D1, 'failed'), h(S0, 'passed')]),
+    t2('steady', [h(W2, 'passed'), h(W1, 'passed'), h(D2, 'passed'), h(D1, 'passed'), h(S0, 'passed')]),
+    t2('breaks-in-w2', [h(W2, 'failed'), h(W1, 'passed'), h(D2, 'passed')]),
+  ],
+};
+
+test('analyzeRun: across a gap, the oldest run left is compared with what the last mail knew', () => {
+  const [w1, w2] = runsToProcess(gap, S0).map(({ run: r, prev, since }) => analyzeRun(gap, r, prev, since));
+  assert.equal(w1.since, S0);
+  assert.equal(w1.folded, 2, 'D1 and D2 still show in histories');
+  assert.deepEqual(w1.regressed.map(x => [x.id, x.since]), [['broke-in-d2', S0], ['short-history', D1]],
+    'broke in a run that left the catalog: still reported, folded into W1');
+  assert.deepEqual(w1.regressed.map(x => x.flaky), [{ fails: 1, of: 2 }, { fails: 1, of: 2 }], 'flaky counts the folded runs too');
+  assert.deepEqual(w1.fixed.map(x => x.id), ['fixed-in-d1']);
+  assert.deepEqual(w1.stopped.map(x => x.id), ['passed-at-s-then-gone'], 'passed in the last handled run, nothing since');
+  assert.equal(w2.since, null);
+  assert.deepEqual(w2.regressed.map(x => [x.id, x.since]), [['breaks-in-w2', W1]], 'W2 is compared with W1 as usual');
+  assert.deepEqual(w2.fixed.map(x => x.id), ['short-history']);
+});
+
+test('composeMail: a folded run says what it was compared with', () => {
+  const [w1] = runsToProcess(gap, S0).map(({ run: r, prev, since }) => analyzeRun(gap, r, prev, since));
+  const m = composeMail(w1, { boxName: 'b', dashboardUrl: '', repoUrl: 'https://github.com/o/r', maxList: 40 });
+  assert.match(m.text, new RegExp(`^Previous: {2}${S0} {2}\\(the last run handled; no longer in the catalog\\)$`, 'm'));
+  assert.match(m.text, /^Folded: {4}the runs between the two have left the catalog too \(at least 2 runs show in$/m);
+  assert.match(m.text, new RegExp(`compared with its last result at or before ${S0}`));
 });
 
 test('analyzeRun sorts every test into the right group', () => {
@@ -522,6 +573,29 @@ test('composeMail: one run to report among several new ones says the others had 
   const m = composeMail(analyses.filter(needsAlert), { boxName: 'b', dashboardUrl: '', repoUrl: 'https://github.com/o/r', maxList: 40 }, { newRuns: analyses.length });
   assert.equal(m.subject, `[CCRS tests][b] 1 regressed — ${R3}`);
   assert.match(m.text, /^Since: {5}the last mail \(1 other new run had nothing to report\)$/m);
+});
+
+test('tick: after a gap longer than the catalog window, every run left is mailed, the gap folded in', (t) => {
+  const { cfg, state } = box(t, gap, { lastRunId: S0 });
+  const sent = [];
+  const { result, lines } = captureLog(() => tick({ cfg, opts: {}, send: (_c, subject, text) => { sent.push({ subject, text }); return '250'; } }));
+  assert.equal(result, 0);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].subject, `[CCRS tests][test] 2 runs: 3 regressed, 1 stopped running — latest ${W2}`);
+  assert.match(sent[0].text, /=== 1 of 2 =+\nRun: +2026-09-23_1542_a1a1a1a1[^]*Folded:[^]*=== 2 of 2 =+\nRun: +2026-09-24_1542_a2a2a2a2/);
+  assert.match(lines.join('\n'), /last handled run 2026-09-20_1542_55550000 has left the catalog: 2026-09-23_1542_a1a1a1a1 is compared with each test's result at or before it \(at least 2 runs in between folded in\)/);
+  assert.equal(state().lastRunId, W2);
+});
+
+test('tick: a catalog older than the state (restored from a backup) re-baselines without mailing', (t) => {
+  const ahead = '2026-10-08_0900_eeee5555';
+  const { cfg, state } = box(t, catalog, { lastRunId: ahead, sendFailure: 'other', sendFailures: 2, retryAfter: '2026-10-09T05:00:00.000Z' });
+  const { result, lines } = captureLog(() => tick({ cfg, opts: {}, now: Date.parse('2026-10-09T04:00:00Z'), send: () => assert.fail('old news') }));
+  assert.equal(result, 0);
+  assert.match(lines.join('\n'), /WARNING: the last handled run 2026-10-08_0900_eeee5555 is newer than every run in the catalog \(newest: 2026-10-06_1544_cccc3333\)[^]*Re-baselining/);
+  assert.equal(state().lastRunId, R3);
+  assert.equal(state().retryAfter, '2026-10-09T05:00:00.000Z', 'a pending pause is kept');
+  assert.equal(tick({ cfg, opts: {}, send: () => assert.fail('nothing new') }), 0, 'and the next poll is quiet');
 });
 
 test('tick: a mail that was delivered is never sent again when a later one fails', (t) => {
