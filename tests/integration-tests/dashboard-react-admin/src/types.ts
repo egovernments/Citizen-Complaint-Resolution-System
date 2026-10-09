@@ -65,6 +65,8 @@ export interface CatalogTest {
   // ---- derived by dataProvider on load (not in catalog.json) ----
   /** What every list/badge/filter/sort reads: correct by default, no flag to remember. */
   currentStatus?: CurrentStatus;
+  /** currentStatus's place in normalize's STATUS_SEVERITY (0 = most urgent); the Status column sorts on it. */
+  statusRank?: number;
   /** History aligned to catalog.runs, so a dot means the same run on every row. */
   runSlots?: RunSlot[];
 }

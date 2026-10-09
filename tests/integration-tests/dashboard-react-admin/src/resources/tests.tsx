@@ -289,8 +289,9 @@ export const TestList = () => (
       <FunctionField label="File" source="file" render={() => <FileCell />} />
       <FunctionField label="Tags" source="tags" render={() => <TagsCell />} />
       <FunctionField label="Last 5" source="history" render={() => <HistoryDots />} />
-      {/* Sorts on the latest run's status, not the carried-over lastStatus. */}
-      <FunctionField label="Status" source="currentStatus" render={() => <StatusBadge />} />
+      {/* Sorts on the latest run's status, not the carried-over lastStatus, by
+          severity rather than alphabetically: failed first (STATUS_SEVERITY). */}
+      <FunctionField label="Status" source="currentStatus" sortBy="statusRank" render={() => <StatusBadge />} />
       <FunctionField label="Duration" source="duration" render={() => <DurationCell />} />
     </Datagrid>
   </List>
