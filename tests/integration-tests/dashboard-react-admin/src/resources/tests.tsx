@@ -15,9 +15,9 @@ import { Alert, Box, Card, CardContent, Chip, Divider, Grid, Link as MuiLink, St
 
 const MonacoEditor = lazy(() => import('@monaco-editor/react'));
 import type { CatalogTest, RunSlot, TestStatus } from '../types';
-import { PAGE_SIZE, hasReport, reportsKept, summarize, windowOf } from '../runWindow';
+import { PAGE_SIZE, historyRows, reportsKept, summarize, windowOf } from '../runWindow';
 import { RunPager, useRunWindow } from '../RunPager';
-import { reportUrl, rootedUrl } from '../urls';
+import { rootedUrl } from '../urls';
 
 // ---------------------------------------------------------------------------
 // Filters: every facet always-on alongside search; no "Add filter" dropdown.
@@ -437,21 +437,16 @@ function RunHistoryBlock() {
   if (!r || !runs.length) {
     return <Typography variant="body2" color="text.secondary">No runs recorded yet.</Typography>;
   }
-  const byId = new Map(runs.map(run => [run.id, run]));
-  const slots = windowOf(r.runSlots ?? [], win.page).items;
+  // Which rows link a report and which carry the kept video/trace (latestRun:
+  // the latest run only when the test ran in it, else the carried-over last
+  // result) is decided in runWindow.historyRows.
+  const rows = historyRows(r, runs, win.page);
   const recent = summarize(r.runSlots ?? []);
   const kept = reportsKept(runs);
   return (
     <Box>
-      {slots.map((slot, i) => {
-        const run = byId.get(slot.runId);
-        const withReport = hasReport(run);
-        const h = 'notRun' in slot ? null : slot;
+      {rows.map(({ runId, entry: h, reportPath, hasMedia, isLatest }, i) => {
         const dur = !h ? '—' : h.durationMs < 1000 ? `${Math.round(h.durationMs)}ms` : `${(h.durationMs/1000).toFixed(1)}s`;
-        // latestRun is the run whose media is kept — the latest run only when
-        // the test ran in it; otherwise it is the carried-over last result.
-        const hasMedia = !!h && withReport && r.latestRun?.runId === slot.runId;
-        const isLatest = hasMedia && !!r.ranInLatestRun;
         return (
           <Box
             key={i}
@@ -469,7 +464,7 @@ function RunHistoryBlock() {
               ? <Chip size="small" label={h.status} color={STATUS_COLORS[h.status] ?? 'default'} sx={{ width: 80 }} />
               : <Chip size="small" label="not run" variant="outlined" sx={{ width: 80 }} title="No result in this run" />}
             <Typography variant="caption" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-              {slot.runId}
+              {runId}
               {isLatest && <Typography component="span" variant="caption" color="primary.main" sx={{ ml: 1 }}>★ latest</Typography>}
               {hasMedia && !isLatest && <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>last result</Typography>}
             </Typography>
@@ -477,8 +472,8 @@ function RunHistoryBlock() {
               {dur}
             </Typography>
             <Stack direction="row" spacing={1.5}>
-              {withReport
-                ? <MuiLink href={reportUrl(slot.runId)} target="_blank" rel="noopener" variant="caption">Report</MuiLink>
+              {reportPath
+                ? <MuiLink href={rootedUrl(reportPath)} target="_blank" rel="noopener" variant="caption">Report</MuiLink>
                 : (
                   <Typography
                     variant="caption"

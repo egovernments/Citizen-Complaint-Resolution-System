@@ -10,7 +10,7 @@
  * can run them under Node. The vanilla dashboard has the same rules in
  * dashboard/run-window.js.
  */
-import type { CatalogTest, RunSlot, RunSummary } from './types';
+import type { CatalogTest, HistoryEntry, RunSlot, RunSummary } from './types';
 
 export const PAGE_SIZE = 5;
 
@@ -77,6 +77,47 @@ export function hasReport(run: Pick<RunSummary, 'hasReport'> | undefined | null)
 /** Runs that keep their report, i.e. the RUN_LIMIT the box prunes to. */
 export function reportsKept(runs: readonly RunSummary[]): number {
   return runs.filter(hasReport).length;
+}
+
+/** A run's standalone Playwright report, relative to the app base (urls.rootedUrl roots it). */
+export function reportPath(runId: string): string {
+  return `runs/${runId}/playwright-report/index.html`;
+}
+
+/** Where a run's "Report" link points, or null once its report was pruned (render "report pruned"). */
+export function runReportPath(run: Pick<RunSummary, 'id' | 'hasReport'> | undefined | null): string | null {
+  return run && hasReport(run) ? reportPath(run.id) : null;
+}
+
+/** One row of the test page's run history (RunHistoryBlock). */
+export interface HistoryRow {
+  runId: string;
+  /** The test's result in that run; null when it produced none ("not run"). */
+  entry: HistoryEntry | null;
+  /** The run's report, or null once it was pruned: no link, "report pruned". */
+  reportPath: string | null;
+  /** This is the run whose video/trace the catalog keeps for the test (latestRun). */
+  hasMedia: boolean;
+  /** ...and that run is the latest one; otherwise it is the carried-over last result. */
+  isLatest: boolean;
+}
+
+/**
+ * The test page's run history for one page of the run window: a row per run,
+ * newest first, aligned to catalog.runs through test.runSlots.
+ */
+export function historyRows(
+  test: Pick<CatalogTest, 'runSlots' | 'latestRun' | 'ranInLatestRun'>,
+  runs: readonly RunSummary[],
+  page: number,
+): HistoryRow[] {
+  const byId = new Map(runs.map(run => [run.id, run]));
+  return windowOf(test.runSlots ?? [], page).items.map(slot => {
+    const entry = 'notRun' in slot ? null : slot;
+    const path = runReportPath(byId.get(slot.runId));
+    const hasMedia = !!entry && !!path && test.latestRun?.runId === slot.runId;
+    return { runId: slot.runId, entry, reportPath: path, hasMedia, isLatest: hasMedia && !!test.ranInLatestRun };
+  });
 }
 
 /**

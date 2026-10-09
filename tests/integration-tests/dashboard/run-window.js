@@ -64,6 +64,48 @@
     return (runs || []).filter(hasReport).length;
   }
 
+  /** A run summary written before not-run tracking: its counts may include carried-over results. */
+  function isLegacyCount(run) {
+    return typeof run.notRun !== 'number';
+  }
+
+  /** A run's standalone Playwright report, relative to the dashboard. */
+  function reportPath(runId) {
+    return `runs/${runId}/playwright-report/index.html`;
+  }
+
+  /**
+   * What the top bar's chip for `run` shows. It links to the run's report only
+   * while the run still has one (href null = render plain text); a pruned run
+   * keeps its counts and says "report pruned". Text is unescaped.
+   */
+  function runChip(run, latestId) {
+    const pruned = !hasReport(run);
+    const legacy = isLegacyCount(run);
+    const latest = run.id === latestId;
+    return {
+      href: pruned ? null : reportPath(run.id),
+      pruned,
+      legacy,
+      latest,
+      cls: `run-chip${latest ? ' latest' : ''}${legacy ? ' legacy' : ''}${pruned ? ' pruned' : ''}`,
+      label: `${latest ? '★ ' : ''}${String(run.id).split('_').slice(0, 2).join(' ')}`,
+      stats: `${legacy ? '≈' : ''}${run.passed}/${run.total} pass${run.cutShort ? ' ⚠' : ''}${pruned ? ' · report pruned' : ''}`,
+    };
+  }
+
+  /**
+   * The detail pane's "Open Playwright report" target for a test's latestRun,
+   * or null. build-catalog only keeps latestRun pointers into runs that still
+   * have a report, so this is null only when the catalog lists the run as
+   * pruned; a run the catalog doesn't list (older catalogs) keeps its link.
+   */
+  function latestRunReportPath(latestRun, runs) {
+    if (!latestRun || !latestRun.runId) return null;
+    const run = (runs || []).find(r => r.id === latestRun.runId);
+    return run && !hasReport(run) ? null : reportPath(latestRun.runId);
+  }
+
   /** `?runs=3` → page 2. Missing or junk → 0 (the newest runs). */
   function parsePageParam(search) {
     const v = new URLSearchParams(search || '').get('runs');
@@ -110,5 +152,8 @@
     return out;
   }
 
-  return { PAGE_SIZE, pageCount, clampPage, windowOf, hasReport, reportsKept, parsePageParam, withPageParam, slotsFor, recentSummary };
+  return {
+    PAGE_SIZE, pageCount, clampPage, windowOf, hasReport, reportsKept, isLegacyCount, reportPath, runChip, latestRunReportPath,
+    parsePageParam, withPageParam, slotsFor, recentSummary,
+  };
 });

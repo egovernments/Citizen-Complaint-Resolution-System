@@ -1,7 +1,9 @@
 /**
  * Run-window paging of both dashboards: the vanilla dashboard/run-window.js
  * and the react-admin dashboard-react-admin/src/runWindow.ts get the same
- * cases, so the two stay in step.
+ * cases, so the two stay in step. Also the decisions the views only render:
+ * which runs link to a report (none once pruned), the v1 run chips and detail
+ * link, the v2 run history rows, and v2 normalize's slot alignment.
  *
  * Run: npm run test:catalog-unit
  */
@@ -9,6 +11,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import * as v2 from '../dashboard-react-admin/src/runWindow';
+import { normalize } from '../dashboard-react-admin/src/dataProvider';
+import type { Catalog, CatalogTest, RunSummary } from '../dashboard-react-admin/src/types';
 
 const require = createRequire(__filename);
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -21,6 +25,10 @@ const v1 = require('../dashboard/run-window.js') as {
   reportsKept(runs: unknown[]): number;
   parsePageParam(search: string): number;
   withPageParam(search: string, page: number): string;
+  isLegacyCount(run: unknown): boolean;
+  reportPath(runId: string): string;
+  runChip(run: unknown, latestId: string): { href: string | null; pruned: boolean; legacy: boolean; latest: boolean; cls: string; label: string; stats: string };
+  latestRunReportPath(latestRun: unknown, runs: unknown[]): string | null;
   slotsFor(test: unknown, runs: Array<{ id: string }>): Array<Record<string, unknown>>;
   recentSummary(test: unknown, runs: Array<{ id: string }>): { runs: number; passed: number; failed: number; skipped: number; notRun: number };
 };
@@ -129,4 +137,105 @@ test('the "last N runs" summary counts every run the catalog keeps (v1 and v2 ag
   const want = { runs: 7, passed: 1, failed: 2, skipped: 1, notRun: 3 };
   assert.deepEqual(v1.recentSummary({ history }, all), want);
   assert.deepEqual(v2.summarize(v2.slotsFor({ history } as never, all.map(r => r.id))), want);
+});
+
+// ---------------------------------------------------------------------------
+// Report links: a run is linked only while it still has runs/<id>/.
+// ---------------------------------------------------------------------------
+
+const REPORT = (id: string) => `runs/${id}/playwright-report/index.html`;
+const summary = (id: string, extra: Partial<RunSummary> = {}): RunSummary => ({
+  id, startedAt: '2026-10-01T00:00:00Z', durationMs: 1, passed: 2, failed: 1, skipped: 0, timedOut: 0,
+  notRun: 0, cutShort: null, total: 3, sha: 'x', branch: 'b', baseUrl: 'u', ...extra,
+});
+
+test('a run is linked to its report until it is pruned (v1 chip and v2 link agree)', () => {
+  const cases: Array<[RunSummary, string | null]> = [
+    [summary('kept', { hasReport: true }), REPORT('kept')],
+    [summary('old-catalog'), REPORT('old-catalog')], // no field: the folder was still there
+    [summary('pruned', { hasReport: false }), null],
+  ];
+  for (const [run, want] of cases) {
+    assert.equal(v1.runChip(run, 'other').href, want, `v1 ${run.id}`);
+    assert.equal(v2.runReportPath(run), want, `v2 ${run.id}`);
+  }
+  assert.equal(v2.runReportPath(undefined), null, 'v2: a run the catalog does not list gets no link');
+});
+
+test('v1 run chip: pruned runs are plain text marked "report pruned"; latest and legacy runs are marked', () => {
+  const pruned = v1.runChip(summary('2026-10-01_0001_aaa', { hasReport: false }), 'x');
+  assert.deepEqual([pruned.href, pruned.pruned, pruned.cls], [null, true, 'run-chip pruned']);
+  assert.match(pruned.stats, /^2\/3 pass · report pruned$/);
+  assert.equal(pruned.label, '2026-10-01 0001');
+  const latest = v1.runChip(summary('2026-10-02_0651_bbb', { hasReport: true, cutShort: 'Timed out' }), '2026-10-02_0651_bbb');
+  assert.deepEqual([latest.href, latest.latest, latest.cls], [REPORT('2026-10-02_0651_bbb'), true, 'run-chip latest']);
+  assert.equal(latest.label, '★ 2026-10-02 0651');
+  assert.equal(latest.stats, '2/3 pass ⚠');
+  const legacy = v1.runChip(summary('r', { notRun: null }), 'x');
+  assert.deepEqual([legacy.legacy, legacy.cls, legacy.stats], [true, 'run-chip legacy', '≈2/3 pass']);
+  assert.equal(v1.isLegacyCount({ notRun: 0 }), false);
+  assert.equal(v1.isLegacyCount({}), true);
+});
+
+test('v1 detail pane: "Open Playwright report" only while the latestRun\'s run keeps its report', () => {
+  const runs = [summary('a', { hasReport: true }), summary('b', { hasReport: false })];
+  assert.equal(v1.latestRunReportPath(null, runs), null);
+  assert.equal(v1.latestRunReportPath({ runId: 'a' }, runs), REPORT('a'));
+  assert.equal(v1.latestRunReportPath({ runId: 'b' }, runs), null, 'pruned run');
+  assert.equal(v1.latestRunReportPath({ runId: 'gone' }, runs), REPORT('gone'), 'a run an older catalog does not list keeps its link');
+});
+
+test('v2 run history: report link, media and "latest" per row of the visible page', () => {
+  // 7 runs, newest first: r1–r3 keep their report, r4–r7 were pruned.
+  const runs = [1, 2, 3, 4, 5, 6, 7].map(i => summary(`r${i}`, { hasReport: i <= 3 }));
+  const t = {
+    history: [
+      { runId: 'r2', status: 'failed', durationMs: 10 },
+      { runId: 'r4', status: 'passed', durationMs: 20 },
+      { runId: 'r6', status: 'passed', durationMs: 30 },
+    ],
+    latestRun: { runId: 'r2', videoUrl: 'v', traceUrl: 't', screenshotUrls: [], errorMessage: null, errorStack: null },
+    ranInLatestRun: false,
+  } as unknown as CatalogTest;
+  t.runSlots = v2.slotsFor(t, runs.map(r => r.id));
+  const page0 = v2.historyRows(t, runs, 0);
+  assert.deepEqual(page0.map(r => r.runId), ['r1', 'r2', 'r3', 'r4', 'r5']);
+  assert.deepEqual(page0.map(r => r.reportPath), [REPORT('r1'), REPORT('r2'), REPORT('r3'), null, null]);
+  assert.deepEqual(page0.map(r => r.entry?.status ?? null), [null, 'failed', null, 'passed', null]);
+  assert.deepEqual(page0.map(r => r.hasMedia), [false, true, false, false, false]);
+  assert.deepEqual(page0.map(r => r.isLatest), [false, false, false, false, false], 'r2 is the carried-over last result, not the latest run');
+  const ranLatest = v2.historyRows({ ...t, latestRun: { ...t.latestRun!, runId: 'r1' }, ranInLatestRun: true, runSlots: v2.slotsFor({ history: [{ runId: 'r1', status: 'passed', durationMs: 1 }] } as never, runs.map(r => r.id)) }, runs, 0);
+  assert.deepEqual([ranLatest[0].hasMedia, ranLatest[0].isLatest], [true, true]);
+  // a pointer into a pruned run (older catalogs) gets no video/trace links either
+  const intoPruned = v2.historyRows({ ...t, latestRun: { ...t.latestRun!, runId: 'r4' } }, runs, 0);
+  assert.deepEqual(intoPruned.map(r => r.hasMedia), [false, false, false, false, false]);
+  const page1 = v2.historyRows(t, runs, 1);
+  assert.deepEqual(page1.map(r => [r.runId, r.reportPath]), [['r6', null], ['r7', null]], 'the oldest page: pruned runs, no links');
+});
+
+test('v2 normalize aligns every test\'s runSlots to ALL kept runs, not just the first page', () => {
+  const runs = Array.from({ length: 12 }, (_, i) => summary(`run-${i + 1}`)); // newest first
+  const catalog = {
+    generatedAt: '', lastRunId: 'run-1', tagFacets: {},
+    runs,
+    tests: [{
+      id: 't', title: 't', describe: '', file: 'a.spec.ts', line: 1, tags: [], description: null, source: '',
+      lastStatus: 'failed', lastDurationMs: 1, ranInLatestRun: true, latestRun: null, parseError: null,
+      history: [
+        { runId: 'run-1', status: 'failed', durationMs: 1 },
+        { runId: 'run-7', status: 'failed', durationMs: 1 },
+        { runId: 'run-12', status: 'passed', durationMs: 1 },
+      ],
+    }],
+  } as unknown as Catalog;
+  const c = normalize(catalog);
+  const t = c.tests[0];
+  assert.equal(t.runSlots!.length, 12);
+  assert.deepEqual(t.runSlots!.map(s => s.runId), runs.map(r => r.id));
+  assert.deepEqual(c.runs.map(r => r.position), runs.map((_, i) => i));
+  // page 2 (runs 6–10) and the short page 3 (runs 11–12) have real slots, not empty dots
+  assert.deepEqual(v2.windowOf(t.runSlots!, 1).items.map(s => ('notRun' in s ? 'notrun' : s.status)), ['notrun', 'failed', 'notrun', 'notrun', 'notrun']);
+  assert.deepEqual(v2.windowOf(t.runSlots!, 2).items.map(s => ('notRun' in s ? 'notrun' : s.status)), ['notrun', 'passed']);
+  // "Top failing tests" and "Last N runs" tally all 12 runs
+  assert.deepEqual(v2.summarize(t.runSlots!), { runs: 12, passed: 1, failed: 2, skipped: 0, notRun: 9 });
 });

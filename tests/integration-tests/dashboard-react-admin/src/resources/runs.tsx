@@ -8,17 +8,18 @@ import {
   useRecordContext,
 } from 'react-admin';
 import type { RunSummary } from '../types';
-import { hasReport } from '../runWindow';
-import { reportUrl } from '../urls';
+import { runReportPath } from '../runWindow';
+import { rootedUrl } from '../urls';
 
 /**
  * Link to the run's standalone Playwright report, or "report pruned" once the
  * runner deleted runs/<id>/ (only the newest RUN_LIMIT runs keep one; older
- * runs keep their counts and per-test results only).
+ * runs keep their counts and per-test results only). runReportPath decides.
  */
-const ReportCell = ({ run, long }: { run: RunSummary; long?: boolean }) =>
-  hasReport(run) ? (
-    <a href={reportUrl(run.id)} target="_blank" rel="noopener" onClick={e => e.stopPropagation()}>
+const ReportCell = ({ run, long }: { run: RunSummary; long?: boolean }) => {
+  const path = runReportPath(run);
+  return path ? (
+    <a href={rootedUrl(path)} target="_blank" rel="noopener" onClick={e => e.stopPropagation()}>
       {long ? 'Open Playwright report for this run →' : 'Report'}
     </a>
   ) : (
@@ -26,6 +27,7 @@ const ReportCell = ({ run, long }: { run: RunSummary; long?: boolean }) =>
       report pruned
     </span>
   );
+};
 
 /**
  * " · 68 not run · cut short" for a counted run, " · legacy count" for one
