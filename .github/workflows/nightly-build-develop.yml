@@ -16,6 +16,16 @@ concurrency:
 
 jobs:
   build:
+    # Only the canonical repository publishes the develop channel. A fork that carries
+    # this file and egovio push credentials otherwise builds ITS develop under the same
+    # egovio/<image>:nightly-develop and develop-<sha8> names, and its prune evicts this
+    # repo's snapshots. Two forks did exactly that every evening, hours after this
+    # nightly: `nightly-develop` ended up as a fork's build (still the Go
+    # digit-user-preferences-service, which cannot start under the develop compose
+    # definition) and the develop-<sha8> pins aged out within days. A fork's own builds
+    # belong under its own tags (build.yml dispatches tag by branch name).
+    # Like the schedule itself, this takes effect from the default branch.
+    if: github.repository == 'egovernments/Citizen-Complaint-Resolution-System'
     uses: ./.github/workflows/build-images.yml
     with:
       ref: develop
