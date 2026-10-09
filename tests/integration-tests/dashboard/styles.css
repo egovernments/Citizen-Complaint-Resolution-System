@@ -40,6 +40,8 @@ a:hover { text-decoration: underline; }
 #run-summary .pill.pass { background: rgba(46,160,67,0.2); color: var(--pass); }
 #run-summary .pill.fail { background: rgba(248,81,73,0.2); color: var(--fail); }
 #run-summary .pill.skip { background: rgba(210,153,34,0.2); color: var(--skip); }
+#run-summary .pill.notrun { background: transparent; color: var(--fg); border: 1px dashed var(--muted); }
+#run-summary .pill.cut { background: rgba(248,81,73,0.2); color: var(--fail); font-weight: 600; cursor: help; }
 
 #layout {
   display: grid;
@@ -154,6 +156,7 @@ a:hover { text-decoration: underline; }
 .dot.timedOut { background: var(--fail); }
 .dot.skipped  { background: var(--skip); }
 .dot.empty    { background: transparent; border: 1px dashed var(--border); width: 6px; height: 6px; }
+.dot.notrun   { background: transparent; border: 1px solid var(--muted); width: 6px; height: 6px; }
 
 .status-badge {
   display: inline-block;
@@ -168,6 +171,8 @@ a:hover { text-decoration: underline; }
 .status-badge.timedOut { background: rgba(248,81,73,0.2);  color: var(--fail); }
 .status-badge.skipped  { background: rgba(210,153,34,0.2); color: var(--skip); }
 .status-badge.unknown  { background: var(--panel-2); color: var(--muted); }
+.status-badge.notrun   { background: transparent; color: var(--fg); border: 1px dashed var(--muted); cursor: help; }
+.stale-note { margin: 8px 0; padding: 6px 10px; border-left: 3px solid var(--skip); background: var(--panel-2); color: var(--fg); font-size: 13px; }
 
 #detail {
   background: var(--panel);
@@ -273,3 +278,4 @@ a.run-chip {
 a.run-chip:hover { border-color: var(--accent); text-decoration: none; }
 a.run-chip.latest { border-color: var(--accent); color: var(--accent); }
 a.run-chip .run-chip-stats { color: var(--muted); font-size: 10px; }
+a.run-chip.legacy { border-style: dashed; opacity: 0.7; }
