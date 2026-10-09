@@ -791,4 +791,9 @@ function main(): void {
 
 if (require.main === module) main();
 
-export { buildCatalog, collectFromAst, extractTags };
+export {
+  buildCatalog, collectFromAst, extractTags,
+  // run accounting, exported for scripts/build-catalog.test.ts
+  indexReport, verdictOf, tally, countReport, recount, cutShortOf,
+};
+export type { Catalog, CatalogTest, HistoryFile, RunSummary, PwReport };
