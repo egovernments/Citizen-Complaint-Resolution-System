@@ -15,6 +15,7 @@ import { Alert, Box, Card, CardContent, Chip, Divider, Grid, Link as MuiLink, St
 
 const MonacoEditor = lazy(() => import('@monaco-editor/react'));
 import type { CatalogTest, RunSlot, TestStatus } from '../types';
+import { lastKnown } from '../normalize';
 
 // ---------------------------------------------------------------------------
 // Filters: every facet always-on alongside search; no "Add filter" dropdown.
@@ -87,14 +88,15 @@ function StatusBadge() {
   // that run didn't reach is "not run", never its older carried-over result.
   const current = r?.currentStatus ?? 'never';
   if (r && current === 'notrun') {
-    const last = r.lastStatus ?? r.history[0]?.status;
-    const from = r.latestRun?.runId ?? r.history[0]?.runId;
+    const last = lastKnown(r);
     return (
       <Chip
         size="small"
         label="not run"
         variant="outlined"
-        title={`Not run in the latest run · last: ${last}${from ? ` in ${from}` : ''}`}
+        title={last
+          ? `Not run in the latest run · last: ${last.status}${last.runId ? ` in ${last.runId}` : ''}`
+          : 'Not run in the latest run · no earlier result in the window'}
       />
     );
   }
@@ -535,6 +537,10 @@ function HeaderCard() {
 function TestShowLayout() {
   const r = useRecordContext<CatalogTest>();
   if (!r) return null;
+  const last = lastKnown(r);
+  // The media kept belongs to the last result only when latestRun is that
+  // run; an older catalog can still point it at a run that interrupted it.
+  const mediaIsLast = !!last && r.latestRun?.runId === last.runId;
   return (
     <Box sx={{ p: { xs: 1, sm: 2 }, maxWidth: 1400, mx: 'auto' }}>
       <HeaderCard />
@@ -548,9 +554,12 @@ function TestShowLayout() {
                   present an older run's video and error as current. */}
               {!r.ranInLatestRun && r.currentStatus === 'notrun' && (
                 <Alert severity="warning" sx={{ mb: 1.5 }}>
-                  {r.latestRun
-                    ? `Not run in the latest run. The video and error below are from ${r.latestRun.runId}, the last run that reached it (${r.lastStatus ?? r.history[0]?.status}).`
-                    : `Not run in the latest run. Its last result was ${r.history[0]?.status} in ${r.history[0]?.runId}; that run is outside the 5-run window, so no video or error is kept for it.`}
+                  {!last
+                    ? 'Not run in the latest run, and no earlier run in the window reached it.'
+                    : mediaIsLast
+                      ? `Not run in the latest run. The video and error below are from ${r.latestRun?.runId}, the last run that reached it (${last.status}).`
+                      : `Not run in the latest run. Its last result was ${last.status}${last.runId ? ` in ${last.runId}` : ''}; no video or error is kept for that run.` +
+                        (r.latestRun ? ` The media below is from ${r.latestRun.runId}, where it was stopped before a verdict.` : '')}
                 </Alert>
               )}
               {r.latestRun?.videoUrl ? (

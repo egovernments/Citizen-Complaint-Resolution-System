@@ -407,7 +407,11 @@ type RunCounts = Record<'passed' | 'failed' | 'skipped' | 'timedOut' | 'notRun' 
 
 /**
  * A result's verdict, or undefined when it produced none. 'interrupted' means
- * the global timeout killed it mid-flight: it started but reached no verdict.
+ * Playwright stopped the test mid-flight (Ctrl-C / SIGINT): it started but
+ * reached no verdict. The global timeout does not produce it: Playwright
+ * 1.59 reports the test in flight when that fires as 'skipped', the same as
+ * a test skipped after a serial-mode or beforeAll failure, so that one test
+ * counts as skipped; the ones after it have no result and count as not run.
  */
 function verdictOf(result: PwResult | undefined): TestStatus | undefined {
   return result && result.status !== 'interrupted' ? result.status : undefined;
@@ -566,6 +570,9 @@ function buildCatalog(opts: BuildOptions): { catalog: Catalog; nextHistory: Hist
     // no result: the previous lastStatus/latestRun carry over and no history
     // entry is written — otherwise it would overwrite the last real result.
     const result = entry?.result && verdictOf(entry.result) ? entry.result : undefined;
+    // Older builders also wrote a history entry for an interrupted result; it
+    // reached no verdict either, so it is dropped like the result itself.
+    const priorHistory = (oldHistory.perTest[rec.id] || []).filter(h => h.status !== 'interrupted');
     let lastStatus: TestStatus | null = null;
     let lastDurationMs: number | null = null;
     let latestRun: LatestRun | null = null;
@@ -597,20 +604,29 @@ function buildCatalog(opts: BuildOptions): { catalog: Catalog; nextHistory: Hist
         errorMessage: result.error?.message ?? null,
         errorStack: result.error?.stack ?? null,
       };
-    } else {
+    } else if (prior?.latestRun && survivingRunIds.has(prior.latestRun.runId)) {
       // Test didn't run this time. Keep the prior latestRun pointer if its
       // referenced runId is still in the rolling window — its video/trace
       // are still on disk under runs/<id>/.
-      if (prior?.latestRun && survivingRunIds.has(prior.latestRun.runId)) {
+      if (prior.lastStatus !== 'interrupted') {
         latestRun = prior.latestRun;
         lastStatus = prior.lastStatus;
         lastDurationMs = prior.lastDurationMs;
         preservedCount++;
+      } else {
+        // A catalog from an older builder can hold an interrupted result as
+        // the last outcome. It reached no verdict, so don't carry it: fall
+        // back to the newest real result in the history (status only — the
+        // media kept was the interrupted run's), or to no status at all.
+        const real = priorHistory[0];
+        if (real && survivingRunIds.has(real.runId)) {
+          lastStatus = real.status;
+          lastDurationMs = real.durationMs;
+        }
       }
     }
 
     // History merge: prepend this run's outcome (if any) to prior history.
-    const priorHistory = oldHistory.perTest[rec.id] || [];
     const newHistory: HistoryEntry[] = result
       ? [{ runId: opts.runId, status: result.status, durationMs: result.duration }, ...priorHistory]
       : priorHistory;
