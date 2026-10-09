@@ -73,20 +73,25 @@ const TestFilters = [
 // Cell renderers: chips for tags, colored badge for status, monospace path.
 // ---------------------------------------------------------------------------
 
-const STATUS_COLORS: Record<TestStatus | 'never', 'success' | 'error' | 'warning' | 'default'> = {
+const STATUS_COLORS: Record<TestStatus, 'success' | 'error' | 'warning' | 'default'> = {
   passed: 'success',
   failed: 'error',
   timedOut: 'error',
   interrupted: 'error',
   skipped: 'warning',
-  never: 'default',
 };
+
+const EXCLUDED_WHY = 'the Playwright config or command line leaves it out on this deployment, so it is outside the run total.';
+const EXCLUDED_TEXT = `Not planned by the latest run: ${EXCLUDED_WHY}`;
 
 function StatusBadge() {
   const r = useRecordContext<CatalogTest>();
   // currentStatus (derived in dataProvider) is the LATEST run's outcome; a test
   // that run didn't reach is "not run", never its older carried-over result.
-  const current = r?.currentStatus ?? 'never';
+  const current = r?.currentStatus ?? 'notrun';
+  if (current === 'excluded') {
+    return <Chip size="small" label="excluded" variant="outlined" sx={{ color: 'text.secondary' }} title={EXCLUDED_TEXT} />;
+  }
   if (r && current === 'notrun') {
     const last = lastKnown(r);
     return (
@@ -100,13 +105,13 @@ function StatusBadge() {
       />
     );
   }
-  const status = current as TestStatus | 'never';
+  const status = current as TestStatus;
   return (
     <Chip
       size="small"
       label={status}
       color={STATUS_COLORS[status] ?? 'default'}
-      variant={status === 'never' ? 'outlined' : 'filled'}
+      variant="filled"
     />
   );
 }
@@ -552,6 +557,12 @@ function TestShowLayout() {
               <SectionHeader>{r.ranInLatestRun ? 'Latest run · video' : 'Last result · video'}</SectionHeader>
               {/* Same note as v1: a test the latest run didn't reach must not
                   present an older run's video and error as current. */}
+              {r.currentStatus === 'excluded' && (
+                <Alert severity="info" sx={{ mb: 1.5 }}>
+                  {`Excluded from the latest run: ${EXCLUDED_WHY}`}
+                  {last ? ` Its last result was ${last.status}${last.runId ? ` in ${last.runId}` : ''}.` : ''}
+                </Alert>
+              )}
               {!r.ranInLatestRun && r.currentStatus === 'notrun' && (
                 <Alert severity="warning" sx={{ mb: 1.5 }}>
                   {!last

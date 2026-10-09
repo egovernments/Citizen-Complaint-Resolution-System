@@ -22,9 +22,15 @@ export function normalize(c: Catalog): Catalog {
       const h0 = t.history[0];
       t.ranInLatestRun = !!h0 && h0.runId === c.lastRunId && h0.status !== 'interrupted';
     }
-    t.currentStatus = t.ranInLatestRun
-      ? (t.lastStatus ?? 'never')
-      : (t.lastStatus || t.history.length ? 'notrun' : 'never');
+    if (typeof t.excluded !== 'boolean') {
+      // Older catalogs: the builder's exclusion rule back then — an
+      // @local-only test with no verdict in the latest run.
+      t.excluded = !t.ranInLatestRun && (t.tags || []).includes('@local-only');
+    }
+    // Bucketed as the run summary counts it, so 'notrun' tests add up to run.notRun.
+    t.currentStatus = t.excluded
+      ? 'excluded'
+      : t.ranInLatestRun && t.lastStatus ? t.lastStatus : 'notrun';
     t.runSlots = windowIds.map(id => {
       const h = t.history.find(x => x.runId === id);
       return h && h.status !== 'interrupted' ? h : { runId: id, notRun: true as const };
