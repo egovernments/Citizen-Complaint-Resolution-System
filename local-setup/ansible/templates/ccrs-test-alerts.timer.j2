@@ -1,0 +1,12 @@
+# Poll for a newly published integration-test run every
+# {{ test_alerts_poll_minutes | default(5) }} minutes (ccrs-test-alerts.service does the work).
+[Unit]
+Description=Poll for integration-test regressions every {{ test_alerts_poll_minutes | default(5) }} minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec={{ test_alerts_poll_minutes | default(5) }}min
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

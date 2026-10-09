@@ -54,6 +54,8 @@ SECRET_KEYS = {
   "status_basic_auth_password","integration_tests_basic_auth_password",
   "twilio_auth_token","novu_api_key","novu_bridge_smscountry_password",
   "gatus_slack_webhook_url","ansible_become_password",
+  # integration-test regression alert mail (test_alerts_*)
+  "test_alerts_smtp_password",
 }
 PLACEHOLDERS = {"", "CHANGE_ME", None}
 import re as _re
