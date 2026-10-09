@@ -24,6 +24,12 @@ GATUS_URL=${OPENSRE_GATUS_URL:-http://gatus:8080}
 TIMEOUT_S=${OPENSRE_INVESTIGATION_TIMEOUT_SECONDS:-900}
 RUNBOOK=/opt/ccrs/known-issues.md
 STATE_FILE="$LOG_DIR/.last-investigation"
+# Docker API for the container-state page (compose tier; see container_state).
+# Empty turns it off, which is the Kubernetes default: there the agent reads
+# pod state through the cluster API instead.
+DOCKER_API_URL=${OPENSRE_DOCKER_API_URL:-}
+COMPOSE_PROJECT=${OPENSRE_COMPOSE_PROJECT:-}
+CONTAINER_STATE="$HOME/container-state.md"
 
 # Tools approved for every investigation. `opensre ask` treats a tool that
 # declares no side-effect level as needing approval, and the first denied call
@@ -118,6 +124,54 @@ failing_checks() {
                    | join("; ")) } ]'
 }
 
+# A `docker inspect` summary of every container in this deployment, attached to
+# each investigation. OpenSRE has no Docker tool, and inferring container state
+# from telemetry is where it goes wrong: it once read a quiet service's empty
+# logs as "Keycloak is down". So the loop reads the state itself, through
+# docker-socket-proxy, which serves GET /containers/... and refuses every write.
+#
+# Only state fields leave this function: status, health and its last check
+# output, exit code, OOM kill, restarts, timestamps, memory limit and restart
+# policy. Never .Config (its Env holds the stack's passwords and tokens), .Args
+# or .Path. The page still goes through guardrails.yml, like everything else.
+# The parity test fails if the filter starts reading any of those.
+CONTAINER_STATE_FILTER='
+def name: .Name | ltrimstr("/");
+def ts: if . == null or startswith("0001-") then "-" else .[0:19] + "Z" end;
+def health: .State.Health.Status // "-";
+def abnormal:
+  .State.Restarting or .State.OOMKilled or .RestartCount > 0
+  or health == "unhealthy"
+  or (.State.Status != "running" and .State.ExitCode != 0);
+def lastcheck: (.State.Health.Log // [])[-1].Output // "" | gsub("\\s+"; " ") | .[0:300];
+sort_by(name) |
+"# Container state (docker inspect, read-only)",
+"",
+"Every container of this deployment, read through the Docker API just before this investigation. Exited containers with exit code 0 and restart policy `no` are one-shot jobs (migrations, seeds) that finished.",
+"",
+"| container | status | health | restarts | exit | OOM-killed | started | finished | memory limit | restart policy |",
+"|---|---|---|---|---|---|---|---|---|---|",
+(.[] | "| \(name) | \(.State.Status) | \(health) | \(.RestartCount) | \(.State.ExitCode) | \(.State.OOMKilled) | \(.State.StartedAt | ts) | \(.State.FinishedAt | ts) | \(if .HostConfig.Memory > 0 then "\(.HostConfig.Memory / 1048576 | floor) MiB" else "none" end) | \(.HostConfig.RestartPolicy.Name // "-") |"),
+"",
+"## Not running cleanly",
+"",
+(map(select(abnormal)) | if length == 0 then "None." else .[] | "- **\(name)**: \(.State.Status), exit \(.State.ExitCode), OOM-killed \(.State.OOMKilled), restarts \(.RestartCount), health \(health)\(if .State.Error != "" then ", error: \(.State.Error | .[0:300])" else "" end)\(if lastcheck != "" then ", last health check output: `\(lastcheck)`" else "" end)" end)
+'
+
+container_state() {
+  [ -n "$DOCKER_API_URL" ] || return 1
+  filters=$(jq -cn --arg p "$COMPOSE_PROJECT" \
+    'if $p == "" then {} else {label: ["com.docker.compose.project=\($p)"]} end')
+  list=$(curl -fsS --max-time 10 -G "$DOCKER_API_URL/containers/json" \
+    --data-urlencode all=1 --data-urlencode "filters=$filters") || return 1
+  ids=$(printf '%s' "$list" | jq -r '.[].Id') || return 1
+  [ -n "$ids" ] || return 1
+  # A container removed between the list and its inspect is skipped, not fatal.
+  for id in $ids; do
+    curl -fsS --max-time 10 "$DOCKER_API_URL/containers/$id/json" || true
+  done | jq -s -r "$CONTAINER_STATE_FILTER"
+}
+
 sweep() {
   write_incluster_kubeconfig
   if ! failing=$(failing_checks) || [ -z "$failing" ]; then
@@ -145,11 +199,19 @@ $checks
 
 You are diagnosing only; a human acts on what you find. Scope is infrastructure only: the host, containers, the observability stack, the API gateway, databases, the Redpanda broker and consumer lag. Do not investigate application data such as complaints, notifications or users.
 
-For each failing check give: the root cause with evidence from your tools (Grafana/Prometheus metrics, Loki logs, Tempo traces, Kafka consumer-group lag), whether the checks share a cause, what citizens experience, and the exact commands a human should run with the risk of each. Say 'unknown' rather than guess. To find which container is using memory or CPU, query Prometheus: on Docker Compose the container_* metrics (job container-stats) are labelled container_name and include restarts and uptime; on Kubernetes use cAdvisor's container_* metrics, labelled namespace/pod/container. The Java services also export jvm_* (heap, garbage collection, threads) and http_* metrics labelled service_name. The attached known-issues page is this deployment's runbook. Only your final message is recorded: make it the complete report, and never refer to an earlier message."
+For each failing check give: the root cause with evidence from your tools (Grafana/Prometheus metrics, Loki logs, Tempo traces, Kafka consumer-group lag), whether the checks share a cause, what citizens experience, and the exact commands a human should run with the risk of each. Say 'unknown' rather than guess. To find which container is using memory or CPU, query Prometheus: on Docker Compose the container_* metrics (job container-stats) are labelled container_name and include restarts and uptime; on Kubernetes use cAdvisor's container_* metrics, labelled namespace/pod/container. The Java services also export jvm_* (heap, garbage collection, threads) and http_* metrics labelled service_name. The attached known-issues page is this deployment's runbook. When a container-state page is attached, it is a docker inspect summary of every container in this deployment taken just before this investigation (status, health and its last check output, exit code, OOM kill, restarts); check it before concluding from missing logs or metrics that a service is down. Only your final message is recorded: make it the complete report, and never refer to an earlier message."
 
   set -- --json ask --ephemeral
   for tool in $READ_ONLY_TOOLS; do set -- "$@" --allowed-tool "$tool"; done
   if [ -f "$RUNBOOK" ]; then set -- "$@" -i "$RUNBOOK"; fi
+  if container_state > "$CONTAINER_STATE" 2>/dev/null && [ -s "$CONTAINER_STATE" ]; then
+    set -- "$@" -i "$CONTAINER_STATE"
+  else
+    rm -f "$CONTAINER_STATE"
+    if [ -n "$DOCKER_API_URL" ]; then
+      note warning "Docker API unreachable at $DOCKER_API_URL; investigating without container state"
+    fi
+  fi
 
   note investigating "Investigating: $fingerprint"
   started=$(date +%s)

@@ -43,7 +43,8 @@ notifications or users.
 |---|---|
 | Query Grafana with a **Viewer** service-account token (read datasources) | Change dashboards, alert rules, users or datasources |
 | Read Tempo's HTTP API and Redpanda consumer-group offsets | Produce to Kafka or move offsets |
-| Read Gatus's status API | Touch Docker (no socket is mounted) or any database |
+| Read Gatus's status API | Touch any database |
+| Compose: read container state (status, health, exit code, OOM kill, restarts) through `docker-socket-proxy` | Write to Docker: the proxy refuses every write, and no socket is mounted |
 
 Read-only is enforced in two places:
 
@@ -217,10 +218,15 @@ nothing to react to and logs that it cannot reach Gatus.
 
 ## Limits
 
-- **Container state on compose comes from metrics only.** The agent has no Docker access. It
-  sees each container's CPU, memory, restarts and uptime through `container-stats` (Prometheus
-  `container_*`, labelled `container_name`), but not `docker inspect` output such as exit codes or
-  the reason for an OOM kill. The Kubernetes tier reads pod state from the cluster API.
+- **Container state on compose is a snapshot, not a tool.** The agent cannot call Docker. Before
+  each investigation the sweep loop reads every container of the deployment through
+  `docker-socket-proxy` (`GET` only) and attaches a `docker inspect` summary: status, health and
+  the last health-check output, exit code, OOM kill, restarts, timestamps, memory limit and
+  restart policy. It never copies environment variables, commands or arguments, which hold the
+  stack's secrets; the parity test enforces that. Usage over time comes from `container-stats`
+  (Prometheus `container_*`, labelled `container_name`). Without the proxy (below
+  `observability_level: metrics`) the loop logs a warning and investigates without the page. The
+  Kubernetes tier reads pod state from the cluster API instead.
 - **It reasons only from telemetry.** It cannot fetch a health endpoint's response body (such as
   a `/readyz` that names the failing dependency), and silent logs are not proof that a service
   is down. A service that logs nothing and exports no metrics can look stopped. Its reports mark

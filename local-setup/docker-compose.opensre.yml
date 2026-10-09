@@ -13,8 +13,9 @@
 #
 # Reads, never writes: Grafana through a Viewer-role service-account token the
 # deploy mints (Prometheus + Loki via the datasource proxy), Tempo's HTTP API,
-# Redpanda consumer-group offsets, and Gatus's status API. No Docker socket, no
-# database credentials, no published port.
+# Redpanda consumer-group offsets, Gatus's status API, and container state
+# through docker-socket-proxy (GET only; the proxy refuses every write). No
+# Docker socket, no database credentials, no published port.
 #
 # No depends_on: grafana, tempo and gatus are profile-gated or optional, and a
 # depends_on on a service excluded by profile makes compose reject the whole
@@ -43,6 +44,12 @@ services:
       OPENSRE_SWEEP_INTERVAL_MINUTES: ${OPENSRE_SWEEP_INTERVAL_MINUTES:-15}
       OPENSRE_DEDUPE_HOURS: ${OPENSRE_DEDUPE_HOURS:-6}
       OPENSRE_GATUS_URL: http://gatus:8080
+      # The sweep loop attaches a docker inspect summary (state fields only, never
+      # env or command) of this project's containers to each investigation. The
+      # proxy runs from observability_level metrics up; without it the loop logs a
+      # warning and investigates without the page.
+      OPENSRE_DOCKER_API_URL: http://docker-socket-proxy:2375
+      OPENSRE_COMPOSE_PROJECT: ${COMPOSE_PROJECT_NAME}
 
       LLM_PROVIDER: anthropic
       ANTHROPIC_API_KEY: ${OPENSRE_ANTHROPIC_API_KEY:-}

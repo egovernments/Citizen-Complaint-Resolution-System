@@ -106,6 +106,32 @@ describe('OpenSRE compose/helm parity', () => {
     expect(loop).toMatch(/for tool in \$READ_ONLY_TOOLS; do set -- "\$@" --allowed-tool "\$tool"; done/);
   });
 
+  /**
+   * The container-state page is built from `docker inspect`, whose .Config.Env
+   * carries the stack's passwords and tokens. The filter may read state fields
+   * only, and the Docker API may only be read.
+   */
+  test('the container-state page never copies env, command or args, and only reads Docker', () => {
+    const loop = code(read(COMPOSE_DIR, 'run-sweeps.sh'));
+    const filter = loop.match(/^CONTAINER_STATE_FILTER='([^']*)'/m)?.[1];
+    expect(filter).toBeDefined();
+    expect(filter).toMatch(/\.State\b/);
+    for (const forbidden of [/\.Config\b/, /\.Args\b/, /\.Path\b/, /\.Mounts\b/, /\.NetworkSettings\b/, /\bEnv\b/]) {
+      expect(filter).not.toMatch(forbidden);
+    }
+
+    // Join `\`-continued lines first, so a flag on the next line still counts.
+    const dockerCalls = loop
+      .replace(/\\\n\s*/g, ' ')
+      .split('\n')
+      .filter((l) => l.includes('$DOCKER_API_URL/'));
+    expect(dockerCalls.length).toBeGreaterThan(0);
+    for (const line of dockerCalls) {
+      expect(line).not.toMatch(/(^|\s)(-X|--request)\b/);
+      if (/--data/.test(line)) expect(line).toMatch(/\s-G\s/);
+    }
+  });
+
   test('the Kubernetes RBAC stays read-only and excludes secrets', () => {
     const rbac = code(read(CHART_DIR, 'templates', 'rbac.yaml'));
     const verbs = [...rbac.matchAll(/^\s*verbs:\s*\[(.*)\]$/gm)].map((m) => m[1]);
