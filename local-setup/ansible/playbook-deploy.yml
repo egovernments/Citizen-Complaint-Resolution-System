@@ -3946,6 +3946,26 @@
         | map(attribute='stdout_lines') | flatten
         | select('search', 'otel-collector-config')
         | list | length > 0
+    # container-stats is the same collector binary with the same no-watch, no-
+    # reload behaviour, so it gets the same narrow gate on its own config file.
+    - name: "Container stats — restart when its config changed"
+      ansible.builtin.shell: |
+        set -e
+        if [ -z "$(docker ps -q -f name='^digit-container-stats$')" ]; then
+          echo "NOCHANGE container-stats not running"
+          exit 0
+        fi
+        docker restart digit-container-stats
+      args:
+        executable: /bin/bash
+      register: container_stats_restart
+      changed_when: "'NOCHANGE' not in container_stats_restart.stdout"
+      when: >-
+        config_sync.results | default([])
+        | selectattr('item.key', 'equalto', 'otel')
+        | map(attribute='stdout_lines') | flatten
+        | select('search', 'container-stats-config')
+        | list | length > 0
 
     # novu-worker loads its mounted providers once, at boot, and compose recreates it
     # only for an image or env change. Restart it when the staged provider files

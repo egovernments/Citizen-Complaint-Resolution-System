@@ -62,6 +62,41 @@ services:
     networks:
       - egov-network
 
+  # Per-container metrics: CPU, memory (usage, limit, percent), network, block
+  # I/O, restarts and uptime for every container on the box, labelled
+  # container_name and container_image_name. node-exporter shows that the HOST
+  # is short of memory; this shows WHICH container is using it. The Kubernetes
+  # tier gets the same from kubelet/cAdvisor.
+  #
+  # An OpenTelemetry Collector running only the docker_stats receiver (config:
+  # otel/container-stats-config.yaml, which explains why it is not a receiver
+  # in otel-collector). It reads the daemon through docker-socket-proxy (GET
+  # /containers/... only), so it holds no socket and can change nothing.
+  # Prometheus scrapes it as job container-stats; no host port is published.
+  container-stats:
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    # Same image as otel-collector, so no extra pull on most boxes.
+    image: egovio/opentelemetry-collector-contrib:0.114.0
+    container_name: digit-container-stats
+    profiles: [obs-metrics]
+    # A refused Docker API call makes the collector exit; restarting keeps it
+    # trying instead of silently staying down.
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./otel/container-stats-config.yaml:/etc/otelcol-contrib/config.yaml:ro
+    depends_on:
+      docker-socket-proxy:
+        condition: service_started
+    # Measured at ~52 MiB with 44 containers (704 series); room for growth.
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    networks:
+      - egov-network
+
   # Database metrics (#1615). Postgres is under every complaint, user lookup
   # and workflow transition, and the only thing we knew about it was whether a
   # TCP connect succeeded — which stays green while the connection pool is

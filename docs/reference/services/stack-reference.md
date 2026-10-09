@@ -308,7 +308,7 @@ Between them these include:
 
 | Category | Services |
 |----------|----------|
-| **Observability** | Prometheus + node-exporter (metrics), Loki + Promtail (logs), OpenTelemetry Collector + Tempo (traces), Grafana (dashboards), Gatus (uptime). All of it deploys by default. Set **`observability_level`** in `host_vars` to deploy less — `metrics`, `logs` or `traces` (the default), each level including the ones before it. `gatus` and `otel-collector` are ungated and run at every level. See [Enabling monitoring](../../operations/monitoring/enabling-monitoring.md). |
+| **Observability** | Prometheus + node-exporter + container-stats (metrics), Loki + Promtail (logs), OpenTelemetry Collector + Tempo (traces), Grafana (dashboards), Gatus (uptime). All of it deploys by default. Set **`observability_level`** in `host_vars` to deploy less — `metrics`, `logs` or `traces` (the default), each level including the ones before it. `gatus` and `otel-collector` are ungated and run at every level. See [Enabling monitoring](../../operations/monitoring/enabling-monitoring.md). |
 | **Infrastructure** | PostgreSQL 16, PgBouncer, Redis, Redpanda (Kafka), MinIO, Elasticsearch |
 | **Core DIGIT** | MDMS v2, User, Workflow v2, Localization, Boundary, Access Control, IDGEN, Encryption, Persister, Filestore, HRMS, Indexer, Inbox |
 | **Application** | PGR Services, URL Shortening, Default Data Handler, Boundary Management |
