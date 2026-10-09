@@ -236,10 +236,14 @@ class ProviderControllerTenantAccountTest {
         request("globex", "globex");
         Object globexTxn = controller.testSend(body).getBody().get("transactionId");
 
-        verify(novuClient).trigger(eq(ACME), eq("complaints-sms"), anyString(), eq("+254700000000"), any(), anyMap(), anyString(), any());
-        verify(novuClient).trigger(eq(globex), eq("complaints-sms"), anyString(), eq("+254700000000"), any(), anyMap(), anyString(), any());
+        org.mockito.ArgumentCaptor<String> acmeSubscriber = org.mockito.ArgumentCaptor.forClass(String.class);
+        org.mockito.ArgumentCaptor<String> globexSubscriber = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(novuClient).trigger(eq(ACME), eq("complaints-sms"), acmeSubscriber.capture(), eq("+254700000000"), any(), anyMap(), anyString(), any());
+        verify(novuClient).trigger(eq(globex), eq("complaints-sms"), globexSubscriber.capture(), eq("+254700000000"), any(), anyMap(), anyString(), any());
         verify(novuClient, never()).trigger(anyString(), anyString(), any(), any(), anyMap(), anyString(), any());
         org.junit.jupiter.api.Assertions.assertNotEquals(acmeTxn, globexTxn);
+        // Every test has its own transaction id (#2342); the test subscriber is per workspace too.
+        org.junit.jupiter.api.Assertions.assertNotEquals(acmeSubscriber.getValue(), globexSubscriber.getValue());
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
