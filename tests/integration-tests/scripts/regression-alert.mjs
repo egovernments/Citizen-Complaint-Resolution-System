@@ -23,9 +23,10 @@
  *   4. If anything regressed, became skipped or stopped running, mail the
  *      summary to ALERT_TO. Then record the run as handled. A failed send is
  *      retried, because the state is only advanced after it, but with a
- *      growing pause (5, 10, 20, 40, then every 60 minutes): a relay that
- *      throttles logins (Gmail: "454 4.7.0 Too many login attempts") stays
- *      throttled if it is retried every tick.
+ *      growing pause (5, 10, 20, 40, then every 60 minutes). A login the relay
+ *      refuses for now (a 4xx to AUTH, e.g. Gmail's "454 4.7.0 Too many login
+ *      attempts" account lock) waits longer, 1, 2, then 4 hours, because every
+ *      attempt can extend that lock; the log says so in plain words.
  *
  * The first tick on a box (no state file) only records the newest run as the
  * baseline and sends nothing, so enabling alerts doesn't mail old news.
@@ -286,8 +287,12 @@ export function curlInvocation(cfg, recipients, configPath) {
   return { args, config };
 }
 
-/** Send one mail; returns the relay's final SMTP reply code (e.g. "250"). */
-function sendMail(cfg, subject, text) {
+/**
+ * Send one mail; returns the relay's final SMTP reply code (e.g. "250"). On
+ * failure the thrown error carries curl's exit code and that reply
+ * (`curlExit`, `reply`) for classifySendError.
+ */
+export function sendMail(cfg, subject, text) {
   const message = buildMessage({ from: cfg.from, to: cfg.to, subject, text });
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccrs-alert-'));
   const configPath = path.join(dir, 'curl.conf');
@@ -297,7 +302,11 @@ function sendMail(cfg, subject, text) {
     const r = spawnSync('curl', args, { input: message, encoding: 'utf8', timeout: 120_000 });
     if (r.error) throw r.error;
     const reply = (r.stdout || '').trim();
-    if (r.status !== 0) throw new Error(`curl exited ${r.status} (last SMTP reply ${reply || 'none'}): ${(r.stderr || '').trim()}`);
+    if (r.status !== 0) {
+      const err = new Error(`curl exited ${r.status} (last SMTP reply ${reply || 'none'}): ${(r.stderr || '').trim()}`);
+      Object.assign(err, { curlExit: r.status, reply });
+      throw err;
+    }
     return reply;
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
@@ -354,9 +363,36 @@ function writeState(p, state) {
 
 const log = (...m) => console.log('[regression-alert]', ...m);
 
-/** Pause after the nth failed send in a row: 5, 10, 20, 40 minutes, then hourly. */
-export function retryDelayMs(failures) {
-  return Math.min(5 * 2 ** Math.max(0, failures - 1), 60) * 60_000;
+/**
+ * What kind of send failure this was, from curl's exit code and the relay's
+ * last reply. curl exits 67 (CURLE_LOGIN_DENIED) when the relay refuses AUTH.
+ *   throttled  a 4xx to AUTH: refused for now, e.g. Gmail's "454 4.7.0 Too many
+ *              login attempts" lock on the account. The password may be right.
+ *   rejected   a 5xx to AUTH: wrong user/password, or an app password is needed.
+ *   other      connection, TLS, a refused sender or recipient, …
+ */
+export function classifySendError(e) {
+  if (e?.curlExit === 67 && /^4\d\d$/.test(e.reply || '')) return 'throttled';
+  if (e?.curlExit === 67 && /^5\d\d$/.test(e.reply || '')) return 'rejected';
+  return 'other';
+}
+
+const SEND_FAILURE_HINTS = {
+  throttled: 'The SMTP relay refused the login for now: it is throttling logins to the sender account '
+    + '(Gmail: "454 4.7.0 Too many login attempts, please try again later"). That is not necessarily a '
+    + 'wrong password, and every attempt can extend the lock, so retries wait 1, 2, then 4 hours. '
+    + 'Check the sender account for a security alert or lock; do not retry by hand.',
+  rejected: 'The SMTP relay rejected the login: test_alerts_smtp_user / test_alerts_smtp_password are '
+    + 'wrong, or the account needs an app password. Fix them in host_vars or OpenBao and redeploy.',
+};
+
+/**
+ * Pause after the nth failed send in a row: 5, 10, 20, 40 minutes, then hourly;
+ * for a throttled login 1, 2, then 4 hours, so the relay's lock can run out.
+ */
+export function retryDelayMs(failures, kind = 'other') {
+  const [first, cap] = kind === 'throttled' ? [60, 240] : [5, 60];
+  return Math.min(first * 2 ** Math.max(0, failures - 1), cap) * 60_000;
 }
 
 /** One poll. Returns the process exit code. */
@@ -409,7 +445,9 @@ export function tick({ cfg, opts, now = Date.now(), send = sendMail }) {
   // The 30 s slack: the timer fires a few hundred ms before retryAfter (which was
   // stamped after node started), and holding off then would add a whole poll.
   if (!opts.dryRun && mails.length && state.retryAfter && now + 30_000 < Date.parse(state.retryAfter)) {
-    log(`holding off until ${state.retryAfter}: the last ${plural(state.sendFailures || 1, 'send')} failed`);
+    const why = state.sendFailure === 'throttled' ? ' (the relay is throttling logins)'
+      : state.sendFailure === 'rejected' ? ' (the relay rejected the login)' : '';
+    log(`holding off until ${state.retryAfter}: the last ${plural(state.sendFailures || 1, 'send')} failed${why}`);
     return 1;
   }
   for (const m of mails) {
@@ -422,10 +460,13 @@ export function tick({ cfg, opts, now = Date.now(), send = sendMail }) {
       log(`mailed ${cfg.to.length} recipient(s)${typeof reply === 'string' && reply ? ` (SMTP ${reply})` : ''}: ${m.subject}`);
     } catch (e) {
       // Don't advance lastRunId: a later tick retries the whole batch, after a pause.
+      const sendFailure = classifySendError(e);
       const sendFailures = (state.sendFailures || 0) + 1;
-      const retryAfter = new Date(now + retryDelayMs(sendFailures)).toISOString();
-      writeState(statePath, { ...state, lastRunId, sendFailures, retryAfter });
-      log(`send failed (${sendFailures} in a row), retrying after ${retryAfter}: ${e.message}`);
+      const retryAfter = new Date(now + retryDelayMs(sendFailures, sendFailure)).toISOString();
+      writeState(statePath, { ...state, lastRunId, sendFailures, sendFailure, retryAfter });
+      const label = { throttled: ', login throttled', rejected: ', login rejected' }[sendFailure] ?? '';
+      log(`send failed (${sendFailures} in a row${label}), retrying after ${retryAfter}: ${e.message}`);
+      if (SEND_FAILURE_HINTS[sendFailure]) log(SEND_FAILURE_HINTS[sendFailure]);
       return 1;
     }
   }
