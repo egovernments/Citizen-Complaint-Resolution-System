@@ -47,7 +47,7 @@ const STATUS_COLOR: Record<TestStatus | 'never', string> = {
 
 /** A summary recorded before not-run tracking: its counts may include carried-over results. */
 const isLegacyCount = (r: RunSummary) => typeof r.notRun !== 'number';
-const LEGACY_NOTE = 'Legacy count: recorded before not-run tracking, so it may include results carried over from older runs.';
+const LEGACY_NOTE = 'Legacy count: recorded before not-run tracking, so it may include results carried over from older runs. Whether it was cut short is unknown.';
 
 /**
  * Header strip with one summary stat tile per metric.

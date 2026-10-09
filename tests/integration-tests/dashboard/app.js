@@ -56,6 +56,8 @@ function ranInLatest(t) {
 
 /** A run summary written before not-run tracking: its counts may include carried-over results. */
 function isLegacyCount(r) { return typeof r.notRun !== 'number'; }
+/** Its cutShort is null too, but that means unknown there, not "ran to the end". */
+const LEGACY_TEXT = 'legacy count: recorded before not-run tracking, may include results carried over from older runs; whether it was cut short is unknown';
 
 /** Latest-run status: lastStatus when it ran, else 'notrun' (or 'never' if it has no result at all). */
 function displayStatus(t) {
@@ -115,6 +117,7 @@ function renderRunSummary() {
     `<span class="pill skip">${r.skipped} skipped</span>`,
     r.notRun ? `<span class="pill notrun" title="In the suite but produced no result in this run">${r.notRun} not run</span>` : '',
     r.cutShort ? `<span class="pill cut" title="${escapeAttr(r.cutShort)}">⚠ run cut short</span>` : '',
+    isLegacyCount(r) ? `<span class="muted" title="${escapeAttr(LEGACY_TEXT)}">legacy count · cut short: unknown</span>` : '',
     `<span class="muted">${r.total} total · ${formatDuration(r.durationMs)} · ${escapeHtml(r.branch)}@${escapeHtml(r.sha || '?')} · ${ago}</span>`,
     `<span class="muted">vs ${escapeHtml(r.baseUrl)}</span>`,
   ].filter(Boolean).join(' ');
@@ -140,7 +143,7 @@ function renderRunSwitcher() {
     const summary = `${legacy ? '≈' : ''}${r.passed}/${r.total} pass${r.cutShort ? ' ⚠' : ''}`;
     const tooltip = `${r.id} · ${ago} · ${r.passed}p ${r.failed}f ${r.skipped}s` +
       (r.notRun ? ` ${r.notRun} not run` : '') + (r.cutShort ? ` · cut short: ${r.cutShort}` : '') +
-      (legacy ? ' · legacy count: recorded before not-run tracking, may include results carried over from older runs' : '');
+      (legacy ? ` · ${LEGACY_TEXT}` : '');
     return `<a class="run-chip${isLatest ? ' latest' : ''}${legacy ? ' legacy' : ''}" target="_blank" rel="noopener"
        href="runs/${escapeAttr(r.id)}/playwright-report/index.html"
        title="${escapeAttr(tooltip)}">
