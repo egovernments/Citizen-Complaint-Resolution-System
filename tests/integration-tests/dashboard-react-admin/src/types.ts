@@ -28,7 +28,7 @@ export interface LatestRun {
 /** Latest-run status: the verdict when it ran, else 'notrun' (it ran before) or 'never'. */
 export type CurrentStatus = TestStatus | 'notrun' | 'never';
 
-/** One slot per run in the window, newest first: that run's entry, or a not-run marker. */
+/** One slot per run in catalog.runs, newest first: that run's entry, or a not-run marker. */
 export type RunSlot = HistoryEntry | { runId: string; notRun: true };
 
 export interface CatalogTest {
@@ -54,7 +54,10 @@ export interface CatalogTest {
   // ---- derived by dataProvider on load (not in catalog.json) ----
   /** What every list/badge/filter/sort reads: correct by default, no flag to remember. */
   currentStatus?: CurrentStatus;
-  /** History aligned to catalog.runs, so a dot means the same run on every row. */
+  /**
+   * History aligned to catalog.runs (all of them, newest first), so a dot means
+   * the same run on every row. Views show one page of it (runWindow.ts).
+   */
   runSlots?: RunSlot[];
 }
 
@@ -73,10 +76,20 @@ export interface RunSummary {
   notRun?: number | null;
   /** Playwright's message when the run stopped early (e.g. global timeout). */
   cutShort?: string | null;
+  /**
+   * False once runs/<id>/ (Playwright report, videos, traces, run.log) was
+   * pruned: only the newest RUN_LIMIT runs keep one. The run's counts and
+   * per-test results stay; nothing may link into it. Absent (older catalogs) =
+   * still there.
+   */
+  hasReport?: boolean;
   total: number;
   sha: string;
   branch: string;
   baseUrl: string;
+  // ---- derived by dataProvider on load (not in catalog.json) ----
+  /** Index in catalog.runs: 0 = newest. Sort on it to get the order runSlots uses. */
+  position?: number;
 }
 
 export interface Catalog {

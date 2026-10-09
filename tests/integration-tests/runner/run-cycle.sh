@@ -10,8 +10,12 @@
 #   REPO_DIR    vendored tests/integration-tests checkout
 #   WEBROOT     served dir (catalog.json/history.json/runs live here)
 #   TENANT_ENV  optional env file to source (BASE_URL/DIGIT_TENANT/LOCALITY_CODE/…)
-#   RUN_LIMIT   keep at most this many runs (default 5)
+#   RUN_LIMIT   keep the full report (runs/<id>/: Playwright report, videos,
+#               traces, run.log) for at most this many runs (default 5). The
+#               catalog keeps results for more runs than that (build-catalog's
+#               HISTORY_LIMIT, 30); older ones show results but no report link.
 #   BRANCH      branch label recorded in the catalog (default "deployed")
+#   RUN_LOCK    single-flight lock file (default /tmp/digit-tests.lock)
 #
 # Single-flight via flock — a second cycle while one is running exits 1 (the
 # daemon already 409s the fast path; this guards restarts/cron overlap too).
@@ -23,7 +27,7 @@ WEBROOT="${WEBROOT:?WEBROOT required}"
 TENANT_ENV="${TENANT_ENV:-}"
 RUN_LIMIT="${RUN_LIMIT:-5}"
 BRANCH="${BRANCH:-deployed}"
-LOCK="/tmp/digit-tests.lock"
+LOCK="${RUN_LOCK:-/tmp/digit-tests.lock}"
 
 RUN_DIR="$WEBROOT/runs/$RUN_ID"
 mkdir -p "$RUN_DIR"
@@ -66,9 +70,10 @@ if [[ ! -f report.json ]]; then
   phase "failed-no-report"
   exit 6
 fi
-# Feed the live on-box history/catalog so the rolling 5-run history accumulates
-# across button presses instead of resetting each run.
-env BRANCH="$BRANCH" BASE_URL="${BASE_URL:-}" GIT_SHA="$(cat .git-sha)" \
+# Feed the live on-box history/catalog so the rolling history (30 runs)
+# accumulates across button presses instead of resetting each run. RUN_LIMIT
+# tells it which runs keep a report after the prune below (`hasReport`).
+env BRANCH="$BRANCH" BASE_URL="${BASE_URL:-}" GIT_SHA="$(cat .git-sha)" RUN_LIMIT="$RUN_LIMIT" \
   PUBLIC_HISTORY_JSON="$WEBROOT/history.json" \
   PUBLIC_CATALOG_JSON="$WEBROOT/catalog.json" \
   npx tsx scripts/build-catalog.ts "$RUN_ID" \
@@ -94,16 +99,18 @@ rsync -a --delete --exclude=run.log --exclude=phase \
 rsync -a --delete test-results "$RUN_DIR/" 2>/dev/null \
   || cp -rf test-results "$RUN_DIR/"
 
-# Prune runs/ to exactly the set the dashboard references — the run ids in the
-# history.json we just published. This keeps runs/ in lockstep with the catalog:
-# a failed-no-report run creates a runs/<id>/ folder but never a catalog entry,
-# and the old mtime-based prune ("newest RUN_LIMIT folders") let those
-# newer-but-reportless folders evict the runs the catalog still pointed at — so
-# the dashboard showed a stale "last run" and 404'd on it (#907 skew).
-# build-catalog already dropped dead ids from history, so honouring that set here
-# converges disk == catalog. Falls back to the recency prune if the ids can't be
-# read (missing/old node, malformed json).
-KEEP_IDS="$(node -e 'const fs=require("fs");try{const h=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write((h.runs||[]).map(r=>r.id).join("\n"))}catch(e){}' "$WEBROOT/history.json" 2>/dev/null)"
+# Prune runs/ to exactly the set the dashboard links into — the runs in the
+# history.json we just published that still have a report (`hasReport` not
+# false: the newest RUN_LIMIT runs whose folder existed). Older runs stay in
+# history with their results, but their folder goes. This keeps runs/ in
+# lockstep with the catalog: a failed-no-report run creates a runs/<id>/ folder
+# but never a catalog entry, and the old mtime-based prune ("newest RUN_LIMIT
+# folders") let those newer-but-reportless folders evict the runs the catalog
+# still pointed at — so the dashboard showed a stale "last run" and 404'd on it
+# (#907 skew). build-catalog decided `hasReport` from what is on disk, so
+# honouring that set here converges disk == catalog. Falls back to the recency
+# prune if the ids can't be read (missing/old node, malformed json).
+KEEP_IDS="$(node -e 'const fs=require("fs");try{const h=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write((h.runs||[]).filter(r=>r.hasReport!==false).map(r=>r.id).join("\n"))}catch(e){}' "$WEBROOT/history.json" 2>/dev/null)"
 if [[ -n "$KEEP_IDS" ]]; then
   ( shopt -s nullglob; cd "$WEBROOT/runs" 2>/dev/null || exit 0
     for d in */; do

@@ -1,7 +1,8 @@
 /**
- * Home dashboard. Surfaces overall test-suite health across the last N
- * runs in catalog.runs, plus per-area / per-persona pass rates and the
- * worst-offender tests over the rolling window. Driven entirely by the
+ * Home dashboard. Surfaces overall test-suite health: the latest run's
+ * headline numbers and per-area / per-persona pass rates, the run trend for
+ * the five runs of the shared run window (RunPager), and the worst-offender
+ * tests across every run the catalog keeps (up to 30). Driven entirely by the
  * already-fetched catalog.json — no extra API calls.
  */
 import { useGetList } from 'react-admin';
@@ -20,6 +21,8 @@ import {
 } from '@mui/material';
 import { useMemo } from 'react';
 import type { CatalogTest, RunSummary, TestStatus } from './types';
+import { RunPager, useRunWindow } from './RunPager';
+import { hasReport, summarize } from './runWindow';
 
 function formatDuration(ms: number): string {
   if (ms < 1000) return `${Math.round(ms)}ms`;
@@ -119,9 +122,13 @@ function GroupedPassRate({
 }
 
 /**
- * Run-by-run pass/fail/skip stacked bars across the runs window.
+ * Run-by-run pass/fail/skip stacked bars for the five runs of the shared run
+ * window, newest first like every other run row in the dashboard; page with
+ * Newer/Older.
  */
-function RunTrend({ runs }: { runs: RunSummary[] }) {
+function RunTrend() {
+  const { win } = useRunWindow();
+  const runs = win.items;
   if (runs.length === 0) {
     return (
       <Card sx={{ height: '100%' }}>
@@ -131,15 +138,17 @@ function RunTrend({ runs }: { runs: RunSummary[] }) {
       </Card>
     );
   }
-  const ordered = [...runs].sort((a, b) => a.startedAt.localeCompare(b.startedAt));
   return (
     <Card sx={{ height: '100%' }}>
       <CardContent>
-        <Typography variant="overline" color="text.secondary" sx={{ display: 'block', mb: 1, letterSpacing: '0.08em' }}>
-          Run trend (last {ordered.length})
-        </Typography>
-        <Stack direction="row" spacing={1.5} alignItems="flex-end" sx={{ height: 160, mt: 0.5 }}>
-          {ordered.map(r => {
+        <Stack direction="row" alignItems="center" justifyContent="space-between" useFlexGap flexWrap="wrap" sx={{ mb: 1 }}>
+          <Typography variant="overline" color="text.secondary" sx={{ letterSpacing: '0.08em' }}>
+            Run trend · {win.label} · newest first
+          </Typography>
+          <RunPager />
+        </Stack>
+        <Stack direction="row" spacing={1.5} alignItems="flex-end" sx={{ height: 172, mt: 0.5 }}>
+          {runs.map(r => {
             const total = Math.max(r.total, 1);
             const passH = (r.passed / total) * 130;
             const failH = (r.failed / total) * 130;
@@ -172,6 +181,16 @@ function RunTrend({ runs }: { runs: RunSummary[] }) {
                 {legacy && (
                   <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: 10, fontStyle: 'italic' }}>
                     legacy count
+                  </Typography>
+                )}
+                {!hasReport(r) && (
+                  <Typography
+                    variant="caption"
+                    color="text.disabled"
+                    sx={{ display: 'block', fontSize: 10, cursor: 'help' }}
+                    title="This run's report, videos and traces were pruned; its counts are all that is left."
+                  >
+                    report pruned
                   </Typography>
                 )}
               </Box>
@@ -218,17 +237,19 @@ function aggregateByFacet(tests: CatalogTest[], facet: string) {
 }
 
 /**
- * Tests that have been red the most often in the rolling history window.
+ * Tests that have been red the most often across every run the catalog keeps
+ * (catalog.runs, up to 30 — deliberately not the five-run page: a flake needs
+ * the long window to show). `ran` counts the runs that reached the test.
  * Surfaces flake/regression candidates.
  */
 function topFailers(tests: CatalogTest[]) {
   return tests
     .map(t => {
-      const fails = t.history.filter(h => h.status === 'failed' || h.status === 'timedOut').length;
-      return { test: t, fails };
+      const s = summarize(t.runSlots ?? []);
+      return { test: t, fails: s.failed, ran: s.runs - s.notRun };
     })
     .filter(x => x.fails >= 1)
-    .sort((a, b) => b.fails - a.fails || (b.test.history.length - a.test.history.length))
+    .sort((a, b) => b.fails - a.fails || b.ran - a.ran)
     .slice(0, 8);
 }
 
@@ -236,10 +257,7 @@ export default function Dashboard() {
   const { data: tests = [] } = useGetList<CatalogTest>('tests', {
     pagination: { page: 1, perPage: 1000 },
   });
-  const { data: runs = [] } = useGetList<RunSummary>('runs', {
-    pagination: { page: 1, perPage: 50 },
-    sort: { field: 'startedAt', order: 'DESC' },
-  });
+  const { runs } = useRunWindow(); // catalog order, newest first
 
   const latest = runs[0];
   const passRate = latest && latest.total > 0 ? Math.round((latest.passed / latest.total) * 100) : 0;
@@ -310,7 +328,7 @@ export default function Dashboard() {
       {/* Run trend */}
       <Grid container spacing={2} sx={{ mb: 2 }}>
         <Grid size={12}>
-          <RunTrend runs={runs} />
+          <RunTrend />
         </Grid>
       </Grid>
 
@@ -330,16 +348,21 @@ export default function Dashboard() {
           <Card>
             <CardContent>
               <Typography variant="overline" color="text.secondary" sx={{ display: 'block', mb: 1, letterSpacing: '0.08em' }}>
-                Top failing tests (last {runs.length || 0} runs)
+                Top failing tests (last {runs.length || 0} runs, all the dashboard keeps)
               </Typography>
               {fails.length === 0 && (
-                <Typography variant="body2" color="text.secondary">All green — no failing tests in the rolling history window.</Typography>
+                <Typography variant="body2" color="text.secondary">All green — no failing tests in the last {runs.length} runs.</Typography>
               )}
-              {fails.map(({ test, fails }, i) => (
+              {fails.map(({ test, fails, ran }, i) => (
                 <Box key={test.id}>
                   {i > 0 && <Divider />}
                   <Stack direction="row" spacing={2} alignItems="center" sx={{ py: 1 }}>
-                    <Chip label={`${fails}/${test.history.length || 1}`} size="small" sx={{ bgcolor: STATUS_COLOR.failed, color: '#fff', minWidth: 56 }} />
+                    <Chip
+                      label={`${fails}/${ran}`}
+                      title={`Failed in ${fails} of the ${ran} runs (of the last ${runs.length}) that reached it`}
+                      size="small"
+                      sx={{ bgcolor: STATUS_COLOR.failed, color: '#fff', minWidth: 56 }}
+                    />
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                       <Typography variant="body2" sx={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {test.title}

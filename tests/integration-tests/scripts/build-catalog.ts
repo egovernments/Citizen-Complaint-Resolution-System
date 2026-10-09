@@ -3,12 +3,15 @@
  *
  * Inputs:
  *   - report.json (Playwright JSON reporter output, written next to playwright.config.ts)
- *   - history.json (rolling 5-run history per test; created on first run if absent)
+ *   - history.json (rolling history: the newest HISTORY_LIMIT runs; created on first run if absent)
  *   - tests/**\/*.spec.ts (source-of-truth for tag + source code per test)
  *
  * Outputs:
- *   - catalog.json (consumed by dashboard SPA)
- *   - history.json (updated with the new run prepended; trimmed to 5 entries)
+ *   - catalog.json (consumed by the dashboard SPAs)
+ *   - history.json (updated with the new run prepended; trimmed to HISTORY_LIMIT runs)
+ *
+ * Retention has two tiers (DEFAULT_HISTORY_LIMIT / DEFAULT_REPORT_LIMIT below):
+ * results for the newest 30 runs, full reports for the newest RUN_LIMIT of them.
  *
  * Run:
  *   node --import tsx/esm scripts/build-catalog.ts <runId>
@@ -22,7 +25,32 @@ import { Project, Node, SyntaxKind, CallExpression } from 'ts-morph';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const HISTORY_LIMIT = 5;
+/**
+ * How many runs history.json and catalog.json remember: the run summaries, and
+ * each test's per-run results (its newest HISTORY_LIMIT entries). The dashboards
+ * page through them five at a time. Override with HISTORY_LIMIT=<n>.
+ */
+const DEFAULT_HISTORY_LIMIT = 30;
+/**
+ * How many of those runs keep their full report — runs/<id>/ with the
+ * Playwright HTML report, videos, traces and run.log. run-cycle.sh and
+ * publish.sh prune runs/ to their RUN_LIMIT and pass the same value here, so
+ * each run summary's `hasReport` matches what is on disk after the prune.
+ * Older runs keep their results but lose the drill-down. Override with RUN_LIMIT=<n>.
+ */
+const DEFAULT_REPORT_LIMIT = 5;
+
+/** A positive integer from the environment, else the fallback. */
+function limitFromEnv(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (raw === undefined || raw === '') return fallback;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 1) {
+    console.warn(`[build-catalog] ignoring ${name}=${raw} (want a positive integer); using ${fallback}`);
+    return fallback;
+  }
+  return n;
+}
 
 type TestStatus = 'passed' | 'failed' | 'skipped' | 'timedOut' | 'interrupted';
 
@@ -83,6 +111,14 @@ interface RunSummary {
   notRun?: number | null;
   /** Playwright's own message when the run stopped early (e.g. global timeout), else null. */
   cutShort?: string | null;
+  /**
+   * Whether runs/<id>/ (Playwright report, videos, traces, run.log) still
+   * exists after this build's prune: true for the newest RUN_LIMIT runs, false
+   * for older ones, whose counts and per-test results stay but whose report is
+   * gone, so the dashboards must not link into it. Once false it stays false.
+   * Absent in summaries written before this field existed: treat as true.
+   */
+  hasReport?: boolean;
   /** On disk, but the Playwright config filters it out on this deployment. */
   excluded: number;
   total: number;
@@ -324,6 +360,13 @@ interface BuildOptions {
   baseUrl: string;
   branch: string;
   sha: string;
+  /** Runs kept in history/catalog (default DEFAULT_HISTORY_LIMIT). */
+  historyLimit?: number;
+  /**
+   * Runs that keep runs/<id>/ on disk (default DEFAULT_REPORT_LIMIT). Only runs
+   * in the history window can keep one, so above historyLimit it has no effect.
+   */
+  reportLimit?: number;
 }
 
 function readPriorCatalog(p: string | null): Map<string, CatalogTest> {
@@ -454,36 +497,46 @@ function buildCatalog(opts: BuildOptions): { catalog: Catalog; nextHistory: Hist
 
   const oldHistory = readHistory(opts.publicHistoryPath ?? opts.historyPath);
   const priorCatalog = readPriorCatalog(opts.publicCatalogPath ?? null);
+  const historyLimit = opts.historyLimit ?? DEFAULT_HISTORY_LIMIT;
+  const reportLimit = opts.reportLimit ?? DEFAULT_REPORT_LIMIT;
 
-  // The runs/ folders on disk are the source of truth for what the dashboard
-  // can actually open. In the local-serve model the published history/catalog
-  // live in the webroot next to runs/, so drop any prior-history run whose
-  // runs/<id>/ folder no longer exists — otherwise a folder that an earlier
-  // cycle pruned (or that a failed-no-report run occupied without ever writing
-  // a report/catalog entry) leaves the catalog pointing at a 404, and the
-  // reportless-but-newer folder that evicted it stays invisible (#907 skew).
-  // Only trust disk when the runs are actually local (the current run's own
-  // folder is present); the CI rsync model publishes runs elsewhere, so there
-  // we keep the old purely-logical window and this stays a no-op.
+  // Every prior run summary stays for the whole history window, whether or not
+  // its runs/<id>/ folder survived: its counts and the per-test results that
+  // point at it are still worth showing. What a pruned run loses is the
+  // drill-down, so each summary records `hasReport` and the dashboards only
+  // link into runs that have one.
+  const priorRuns = oldHistory.runs.filter(r => r.id !== opts.runId).slice(0, historyLimit - 1);
+
+  // The runs/ folders on disk are the source of truth for which reports the
+  // dashboard can actually open. In the local-serve model (run-cycle.sh) the
+  // published history/catalog live in the webroot next to runs/, so a run
+  // whose folder an earlier cycle pruned, or that vanished by hand, has no
+  // report — otherwise the catalog would point at a 404 (#907 skew). Only
+  // trust disk when the runs are actually local (the current run's own folder
+  // is present); the CI rsync model (publish.sh) publishes runs elsewhere and
+  // prunes the host to the newest RUN_LIMIT, so there the window is logical.
   const runsDir = opts.publicHistoryPath
     ? path.join(path.dirname(opts.publicHistoryPath), 'runs')
     : null;
   const runsAreLocal = !!runsDir && fs.existsSync(path.join(runsDir, opts.runId));
   const runExists = (id: string): boolean =>
     !runsAreLocal || fs.existsSync(path.join(runsDir!, id));
-  const priorRuns = oldHistory.runs.filter(r => r.id !== opts.runId && runExists(r.id));
 
-  // Surviving run-id set after this run is published: the current run plus the
-  // still-extant prior runs, capped at the rolling window. run-cycle.sh prunes
-  // runs/ to exactly this set, so a latestRun pointer into it is guaranteed
-  // reachable; pointers to anything else are dropped below.
-  const survivingRunIds = new Set<string>(
-    [opts.runId, ...priorRuns.map(r => r.id)].slice(0, HISTORY_LIMIT)
-  );
+  // Runs that keep their report after this cycle: newest first, the current
+  // run plus each prior run whose folder still exists, up to reportLimit. A run
+  // once marked pruned stays pruned (its report can't come back, even if the
+  // limit is raised later). run-cycle.sh prunes runs/ to exactly this set, so a
+  // link into one of them is guaranteed reachable; links into anything else
+  // (latestRun pointers below, report links in the dashboards) are dropped.
+  const reportRunIds = new Set<string>([opts.runId]);
+  for (const r of priorRuns) {
+    if (reportRunIds.size >= reportLimit) break;
+    if (r.hasReport !== false && runExists(r.id)) reportRunIds.add(r.id);
+  }
 
   // Merge: every test from disk → CatalogTest. Tests that ran get latestRun.
   // Tests that didn't run inherit their last-seen latestRun from the prior
-  // catalog if and only if that runId is still in the rolling window.
+  // catalog if and only if that run still has its report (videos, traces).
   const tests: CatalogTest[] = [];
   let preservedCount = 0;
   for (const rec of ast) {
@@ -526,10 +579,10 @@ function buildCatalog(opts: BuildOptions): { catalog: Catalog; nextHistory: Hist
       };
     } else {
       // Test didn't run this time. Keep the prior latestRun pointer if its
-      // referenced runId is still in the rolling window — its video/trace
-      // are still on disk under runs/<id>/.
+      // referenced run still has its report — its video/trace are still on
+      // disk under runs/<id>/.
       const prior = priorCatalog.get(rec.id);
-      if (prior?.latestRun && survivingRunIds.has(prior.latestRun.runId)) {
+      if (prior?.latestRun && reportRunIds.has(prior.latestRun.runId)) {
         latestRun = prior.latestRun;
         lastStatus = prior.lastStatus;
         lastDurationMs = prior.lastDurationMs;
@@ -542,7 +595,7 @@ function buildCatalog(opts: BuildOptions): { catalog: Catalog; nextHistory: Hist
     const newHistory: HistoryEntry[] = ran
       ? [{ runId: opts.runId, status: ran.result.status, durationMs: ran.result.duration }, ...priorHistory]
       : priorHistory;
-    const trimmedHistory = newHistory.slice(0, HISTORY_LIMIT);
+    const trimmedHistory = newHistory.slice(0, historyLimit);
 
     tests.push({
       id: rec.id,
@@ -612,6 +665,7 @@ function buildCatalog(opts: BuildOptions): { catalog: Catalog; nextHistory: Hist
       excluded: !localStack && !t.ranInLatestRun && (t.tags || []).includes('@local-only'),
     }))),
     cutShort: cutShortOf(report),
+    hasReport: true,
     sha: opts.sha,
     branch: opts.branch,
     baseUrl: opts.baseUrl,
@@ -628,20 +682,21 @@ function buildCatalog(opts: BuildOptions): { catalog: Catalog; nextHistory: Hist
   // so each old summary is visited exactly once.
   let recomputed = 0;
   let markedLegacy = 0;
-  const windowRuns = priorRuns.slice(0, HISTORY_LIMIT - 1).map((r): RunSummary => {
-    if (r.notRun !== undefined) return r;
+  const windowRuns = priorRuns.map((r): RunSummary => {
+    const hasReport = reportRunIds.has(r.id);
+    if (r.notRun !== undefined) return { ...r, hasReport };
     const p = runsAreLocal ? path.join(runsDir!, r.id, 'report.json') : null;
     if (p && fs.existsSync(p)) {
       try {
         const old = JSON.parse(fs.readFileSync(p, 'utf8')) as PwReport;
         recomputed++;
-        return { ...r, ...countReport(old), cutShort: cutShortOf(old) };
+        return { ...r, ...countReport(old), cutShort: cutShortOf(old), hasReport };
       } catch (e) {
         console.warn(`[build-catalog] could not recompute ${r.id} from ${p}: ${(e as Error).message}`);
       }
     }
     markedLegacy++;
-    return { ...r, notRun: null, cutShort: null };
+    return { ...r, notRun: null, cutShort: null, hasReport };
   });
   if (recomputed) console.log(`[build-catalog] recomputed ${recomputed} pre-notRun run summaries from their own report.json`);
   if (markedLegacy) console.log(`[build-catalog] marked ${markedLegacy} pre-notRun run summaries as legacy counts (no report.json to recompute from)`);
@@ -651,7 +706,7 @@ function buildCatalog(opts: BuildOptions): { catalog: Catalog; nextHistory: Hist
     lastRunId: opts.runId,
     tagFacets,
     tests: tests.sort((a, b) => a.id.localeCompare(b.id)),
-    runs: [newRun, ...windowRuns].slice(0, HISTORY_LIMIT),
+    runs: [newRun, ...windowRuns],
   };
 
   // Persist next history.json.
@@ -661,6 +716,20 @@ function buildCatalog(opts: BuildOptions): { catalog: Catalog; nextHistory: Hist
   }
   const nextHistory: HistoryFile = { perTest: nextPerTest, runs: catalog.runs };
   return { catalog, nextHistory };
+}
+
+/**
+ * JSON for catalog.json / history.json: indented like before, except that each
+ * per-test history entry sits on one line. With 30 runs of history the entries
+ * outnumber everything else in the file, and an entry spread over five indented
+ * lines is mostly whitespace. Field names stay as they are, so every reader of
+ * the old format (both dashboards, scripts/regression-alert.mjs, jq) is unaffected.
+ */
+function stringifyCatalog(value: unknown): string {
+  return JSON.stringify(value, null, 2).replace(
+    /\{\n\s*"runId": ("(?:[^"\\\n]|\\.)*"),\n\s*"status": ("\w+"),\n\s*"durationMs": ([-+.\deE]+)\n\s*\}/g,
+    '{ "runId": $1, "status": $2, "durationMs": $3 }',
+  );
 }
 
 function main(): void {
@@ -677,17 +746,22 @@ function main(): void {
   const catalogPath = process.env.CATALOG_JSON || 'catalog.json';
   const publicHistoryPath = process.env.PUBLIC_HISTORY_JSON || null;
   const publicCatalogPath = process.env.PUBLIC_CATALOG_JSON || null;
+  const historyLimit = limitFromEnv('HISTORY_LIMIT', DEFAULT_HISTORY_LIMIT);
+  const reportLimit = limitFromEnv('RUN_LIMIT', DEFAULT_REPORT_LIMIT);
 
   const { catalog, nextHistory } = buildCatalog({
     runId, reportPath, historyPath, catalogPath,
     publicHistoryPath, publicCatalogPath, baseUrl, branch, sha,
+    historyLimit, reportLimit,
   });
-  fs.writeFileSync(catalogPath, JSON.stringify(catalog, null, 2));
-  fs.writeFileSync(historyPath, JSON.stringify(nextHistory, null, 2));
-  console.log(`[build-catalog] wrote ${catalogPath} (${catalog.tests.length} tests, ${catalog.runs.length} runs)`);
+  fs.writeFileSync(catalogPath, stringifyCatalog(catalog));
+  fs.writeFileSync(historyPath, stringifyCatalog(nextHistory));
+  const withReport = catalog.runs.filter(r => r.hasReport !== false).length;
+  console.log(`[build-catalog] wrote ${catalogPath} (${catalog.tests.length} tests, ${catalog.runs.length} runs, ${withReport} with a report)`);
   console.log(`[build-catalog] wrote ${historyPath}`);
 }
 
 if (require.main === module) main();
 
-export { buildCatalog, collectFromAst, extractTags };
+export { buildCatalog, collectFromAst, extractTags, stringifyCatalog, limitFromEnv, DEFAULT_HISTORY_LIMIT, DEFAULT_REPORT_LIMIT };
+export type { Catalog, CatalogTest, HistoryFile, RunSummary };

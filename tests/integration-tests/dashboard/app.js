@@ -8,6 +8,14 @@
  *   - Each facet (persona/area/layer/kind/ccrs/health): OR within the group.
  *   - Across groups: AND.
  *   - Search box: substring match on title or file path.
+ *
+ * Run window: catalog.json keeps results for the newest 30 runs, the newest
+ * RUN_LIMIT of which still have their report folder (run.hasReport). The run
+ * chips, the per-test dots and the detail pane's run list show five runs at a
+ * time (run-window.js), paged with Newer/Older; the page is kept in `?runs=N`
+ * so a refresh or a shared link lands on the same runs. The headline and the
+ * status filter always describe the LATEST run; the detail pane's "last N
+ * runs" line summarises every run the catalog keeps.
  */
 'use strict';
 
@@ -40,7 +48,9 @@ const state = {
     search: '',
   },
   selectedId: null,
+  runPage: 0,   // 0 = newest five runs; see run-window.js
 };
+const RW = window.RunWindow;
 
 /**
  * Did this test produce a verdict in the latest run? catalog.json carries the
@@ -82,6 +92,12 @@ async function init() {
     return;
   }
   for (const facet of FACET_ORDER) state.filters.facets[facet] = new Set();
+  const askedPage = RW.parsePageParam(location.search);
+  state.runPage = RW.clampPage(askedPage, (state.catalog.runs || []).length);
+  if (state.runPage !== askedPage) {
+    // ?runs= points past the runs this catalog keeps: show (and link) the oldest page instead.
+    history.replaceState(null, '', location.pathname + RW.withPageParam(location.search, state.runPage) + location.hash);
+  }
   renderRunSummary();
   renderStatusFilter();
   renderFacetFilters();
@@ -109,34 +125,62 @@ function renderRunSummary() {
   renderRunSwitcher();
 }
 
+/** The five runs on the current page of catalog.runs, plus the pager state. */
+function runWindow() {
+  return RW.windowOf(state.catalog.runs || [], state.runPage);
+}
+
+/** Move the run window (0 = newest); keeps `?runs=` in the URL and redraws what follows it. */
+function setRunPage(page) {
+  const next = RW.clampPage(page, (state.catalog.runs || []).length);
+  if (next === state.runPage) return;
+  state.runPage = next;
+  history.replaceState(null, '', location.pathname + RW.withPageParam(location.search, next) + location.hash);
+  renderRunSwitcher();
+  renderTable();
+  if (state.selectedId) renderDetail(state.selectedId);
+}
+
 /**
- * Renders a small panel showing every run in catalog.runs (oldest+newest).
- * Each chip links to that run's standalone Playwright HTML report at
- * /tests/runs/<id>/playwright-report/, so users can dig into any historical
- * run's video/trace/etc independently of which run is currently 'latest' in
- * the catalog. The current latest run is marked with a star.
+ * The run chips for the current window (newest first) with the Newer/Older
+ * pager. A chip links to that run's standalone Playwright HTML report at
+ * /tests/runs/<id>/playwright-report/ while the run still has one; older runs
+ * keep their counts but lose the folder, so their chip is plain text marked
+ * "report pruned". The latest run is marked with a star.
  */
 function renderRunSwitcher() {
   const el = document.getElementById('run-switcher');
-  const runs = state.catalog.runs || [];
-  if (runs.length === 0) { el.innerHTML = ''; return; }
+  const all = state.catalog.runs || [];
+  if (all.length === 0) { el.innerHTML = ''; return; }
+  const win = runWindow();
+  const kept = RW.reportsKept(all);
   const latestId = state.catalog.lastRunId;
-  const chips = runs.map(r => {
+  const chips = win.runs.map(r => {
     const isLatest = r.id === latestId;
     const ago = relTime(r.startedAt);
     const legacy = isLegacyCount(r);
+    const pruned = !RW.hasReport(r);
     const summary = `${legacy ? '≈' : ''}${r.passed}/${r.total} pass${r.cutShort ? ' ⚠' : ''}`;
     const tooltip = `${r.id} · ${ago} · ${r.passed}p ${r.failed}f ${r.skipped}s` +
       (r.notRun ? ` ${r.notRun} not run` : '') + (r.cutShort ? ` · cut short: ${r.cutShort}` : '') +
-      (legacy ? ' · legacy count: recorded before not-run tracking, may include results carried over from older runs' : '');
-    return `<a class="run-chip${isLatest ? ' latest' : ''}${legacy ? ' legacy' : ''}" target="_blank" rel="noopener"
+      (legacy ? ' · legacy count: recorded before not-run tracking, may include results carried over from older runs' : '') +
+      (pruned ? ` · report pruned: only the newest ${kept} runs keep their report, video and traces` : '');
+    const cls = `run-chip${isLatest ? ' latest' : ''}${legacy ? ' legacy' : ''}${pruned ? ' pruned' : ''}`;
+    const body = `${isLatest ? '★ ' : ''}${escapeHtml(r.id.split('_').slice(0,2).join(' '))}
+       <span class="run-chip-stats">${summary}${pruned ? ' · report pruned' : ''}</span>`;
+    return pruned
+      ? `<span class="${cls}" title="${escapeAttr(tooltip)}">${body}</span>`
+      : `<a class="${cls}" target="_blank" rel="noopener"
        href="runs/${escapeAttr(r.id)}/playwright-report/index.html"
-       title="${escapeAttr(tooltip)}">
-       ${isLatest ? '★ ' : ''}${escapeHtml(r.id.split('_').slice(0,2).join(' '))}
-       <span class="run-chip-stats">${summary}</span>
-     </a>`;
+       title="${escapeAttr(tooltip)}">${body}</a>`;
   }).join('');
-  el.innerHTML = `<span class="run-switcher-label">Runs:</span> ${chips}`;
+  el.innerHTML = `<span class="run-switcher-label">Runs:</span>
+    <button type="button" class="run-pager" id="runs-newer" ${win.hasNewer ? '' : 'disabled'} title="Show the five newer runs">‹ Newer</button>
+    ${chips}
+    <button type="button" class="run-pager" id="runs-older" ${win.hasOlder ? '' : 'disabled'} title="Show the five older runs">Older ›</button>
+    <span class="run-window-label" id="run-window-label">${escapeHtml(win.label)}</span>`;
+  document.getElementById('runs-newer').addEventListener('click', () => setRunPage(state.runPage - 1));
+  document.getElementById('runs-older').addEventListener('click', () => setRunPage(state.runPage + 1));
 }
 
 function renderStatusFilter() {
@@ -226,6 +270,10 @@ function applyFilters(tests) {
 }
 
 function renderTable() {
+  const win = runWindow();
+  const head = document.getElementById('runs-col');
+  head.textContent = win.total ? `Runs ${win.first}–${win.last}` : 'Runs';
+  head.title = `One dot per run, newest first: ${win.label}. Page with Newer/Older at the top.`;
   const filtered = applyFilters(state.catalog.tests);
   document.getElementById('result-meta').textContent =
     `${filtered.length} of ${state.catalog.tests.length} tests shown`;
@@ -257,24 +305,33 @@ function rowHtml(t) {
 }
 
 /**
- * One dot per run in catalog.runs (newest first), so a dot always means the
- * same run for every test. A run the test produced no result in renders as a
- * hollow "not run" dot instead of the test's older results sliding left into
- * that slot.
+ * One dot per run in the current window (newest first), so a dot always means
+ * the same run for every test. A run the test produced no result in renders as
+ * a hollow "not run" dot instead of the test's older results sliding left into
+ * that slot; a short last page pads with dashed empty dots.
  */
 function renderDots(t) {
-  const slots = 5;
-  const runs = (state.catalog.runs || []).slice(0, slots);
+  const slots = RW.slotsFor(t, runWindow().runs);
   const out = [];
-  for (let i = 0; i < slots; i++) {
-    const run = runs[i];
-    if (!run) { out.push('<span class="dot empty"></span>'); continue; }
-    const h = (t.history || []).find(x => x.runId === run.id);
+  for (let i = 0; i < RW.PAGE_SIZE; i++) {
+    const h = slots[i];
+    if (!h) { out.push('<span class="dot empty"></span>'); continue; }
     // 'interrupted' (older catalogs) reached no verdict either — same ring as the badge's "not run".
-    if (!h || h.status === 'interrupted') { out.push(`<span class="dot notrun" title="${escapeAttr(run.id)} · not run"></span>`); continue; }
+    if (h.notRun) { out.push(`<span class="dot notrun" title="${escapeAttr(h.runId)} · not run"></span>`); continue; }
     out.push(`<span class="dot ${escapeHtml(h.status)}" title="${escapeHtml(h.runId)} · ${escapeHtml(h.status)} · ${formatDuration(h.durationMs)}"></span>`);
   }
   return out.join('');
+}
+
+/** "Last 30 runs: 24 passed · 3 failed · 3 not run" — across every run the catalog keeps. */
+function recentSummaryHtml(t) {
+  const runs = state.catalog.runs || [];
+  if (!runs.length) return '';
+  const s = RW.recentSummary(t, runs);
+  const parts = [`${s.passed} passed`, `${s.failed} failed`];
+  if (s.skipped) parts.push(`${s.skipped} skipped`);
+  if (s.notRun) parts.push(`${s.notRun} not run`);
+  return `<div class="recent-summary" title="Across all ${s.runs} runs the dashboard keeps, not only the five shown">Last ${s.runs} runs: ${parts.join(' · ')}</div>`;
 }
 
 function tagChipHtml(tag) {
@@ -306,13 +363,14 @@ function renderDetail(id) {
   const lr = t.latestRun;
   const tagChips = t.tags.map(tagChipHtml).join(' ');
   const dots = renderDots(t);
-  // The carried-over latestRun (and its media) is only kept while that run is
-  // in the window; once it ages out only the history line is left to cite.
+  const win = runWindow();
+  // The carried-over latestRun (and its media) is only kept while that run
+  // still has its report; once that is pruned only the history is left to cite.
   const staleNote = (!ranInLatest(t) && lastKnownText(t))
     ? `<p class="stale-note">Not run in the latest run (${escapeHtml(state.catalog.lastRunId)}). ` +
       (lr
         ? `The result, video and error below are from the last run that reached it: ${escapeHtml(lastKnownText(t))}.`
-        : `Its last result was ${escapeHtml(lastKnownText(t))}; that run is outside the 5-run window, so no video or error is kept for it.`) +
+        : `Its last result was ${escapeHtml(lastKnownText(t))}; that run's report has been pruned (only the newest ${RW.reportsKept(state.catalog.runs)} runs keep one), so no video or error is kept for it.`) +
       `</p>`
     : '';
   const error = (lr && (lr.errorMessage || lr.errorStack))
@@ -327,7 +385,8 @@ function renderDetail(id) {
   const trace = (lr && lr.traceUrl)
     ? `<a href="${escapeAttr(lr.traceUrl)}" target="_blank">Open trace.zip</a>`
     : '';
-  const reportLink = (lr && lr.runId)
+  const lrRun = lr && (state.catalog.runs || []).find(r => r.id === lr.runId);
+  const reportLink = (lr && lr.runId && (!lrRun || RW.hasReport(lrRun)))
     ? `<a href="runs/${escapeAttr(lr.runId)}/playwright-report/index.html" target="_blank">Open Playwright report</a>`
     : '';
   const description = t.description
@@ -341,7 +400,7 @@ function renderDetail(id) {
     ${staleNote}
     ${description}
     <div class="section"><h4>Tags</h4>${tagChips}</div>
-    <div class="section"><h4>Last 5 runs</h4><div class="dot-row">${dots}</div><div class="history-row">${historyHtml(t.history)}</div></div>
+    <div class="section"><h4 title="Newest first; page with Newer/Older at the top">${win.total ? `Runs ${win.first}–${win.last} of ${win.total}` : 'Runs'}</h4><div class="dot-row">${dots}</div><div class="history-row">${historyHtml(t, win.runs)}</div>${recentSummaryHtml(t)}</div>
     ${video}
     ${screenshots}
     <div class="section"><h4>Actions</h4><div class="actions">${trace} ${reportLink} <button id="copy-claude-prompt">Copy as Claude prompt</button></div></div>
@@ -448,9 +507,14 @@ function buildClaudePrompt(t) {
   ].filter(Boolean).join('\n');
 }
 
-function historyHtml(history) {
-  if (!history.length) return '<span class="muted">no prior runs</span>';
-  return history.map(h => `${h.runId}: ${h.status} (${formatDuration(h.durationMs)})`).join(' · ');
+/** The test's result in each run of the current window, newest first. */
+function historyHtml(t, windowRuns) {
+  if (!windowRuns.length) return '<span class="muted">no runs yet</span>';
+  return RW.slotsFor(t, windowRuns)
+    .map(h => h.notRun
+      ? `${escapeHtml(h.runId)}: not run`
+      : `${escapeHtml(h.runId)}: ${escapeHtml(h.status)} (${formatDuration(h.durationMs)})`)
+    .join(' · ');
 }
 
 function hookSearch() {
