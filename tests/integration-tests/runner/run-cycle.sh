@@ -28,6 +28,16 @@
 # daemon runs this script as digit-tests under PrivateTmp=true while the
 # nightly wrappers run it as root, so each saw its own /tmp: a button run and a
 # nightly could overlap, and one's prune could delete the other's runs/<id>/.
+#
+# Ownership: the RUN-button daemon runs this script as the webroot's owner
+# (digit-tests; the playbook chowns the webroot to it), the nightly wrappers as
+# root, and they also create runs/<id>/ and its run.log as root. A root run
+# therefore hands everything it leaves in the webroot (its run folder,
+# catalog.json, history.json, and any older root-owned runs/<id>/) back to the
+# webroot's owner when it exits, and its artifacts in the checkout to the
+# checkout's owner. Otherwise the daemon's next prune can't delete a root-owned
+# folder, and its next run can't clear the checkout. A prune that fails anyway
+# says so in run.log instead of failing silently.
 set -uo pipefail
 
 : "${RUN_ID:?RUN_ID required}"
@@ -41,12 +51,34 @@ LOCK="${RUN_LOCK:-$WEBROOT}"
 RUN_DIR="$WEBROOT/runs/$RUN_ID"
 phase() { echo "$1" > "$RUN_DIR/phase"; echo "===== phase: $1 ====="; }
 
-# Another cycle holds <path>: leave runs/ as it is. Only a folder the daemon
-# already made for this run (it holds the run.log the RUN button shows) gets
-# the phase; the running cycle's prune removes it.
+# As root, give <paths> (recursively) the owner of <reference>; a no-op for
+# anyone else, who can only have written files they own.
+own_like() {
+  local ref="$1"; shift
+  (( EUID == 0 )) || return 0
+  local p
+  for p in "$@"; do
+    [[ -e "$p" ]] || continue
+    chown -R --reference="$ref" -- "$p" \
+      || echo "[run-cycle] could not give $p the owner of $ref" >&2
+  done
+}
+
+# Everything this run leaves behind, owned like where it lives: the webroot's
+# runs/ (this run's folder and any older root-owned ones), catalog.json and
+# history.json; in the checkout, the artifacts the run wrote there.
+leave_owned() {
+  own_like "$WEBROOT" "$WEBROOT/runs" "$WEBROOT/catalog.json" "$WEBROOT/history.json"
+  own_like "$REPO_DIR" "$REPO_DIR/.git-sha" "$REPO_DIR/report.json" "$REPO_DIR/catalog.json" \
+    "$REPO_DIR/history.json" "$REPO_DIR/playwright-report" "$REPO_DIR/test-results"
+}
+
+# Another cycle holds <path>: leave runs/ as it is. Only a folder made for this
+# run before it started (the daemon's or a wrapper's, holding run.log) gets the
+# phase, and the owner of the webroot, so the running cycle's prune removes it.
 busy() {
   echo "[run-cycle] another run holds the lock on $1 — aborting" >&2
-  if [[ -d "$RUN_DIR" ]]; then phase "aborted-locked"; fi
+  if [[ -d "$RUN_DIR" ]]; then phase "aborted-locked"; own_like "$WEBROOT" "$RUN_DIR"; fi
   exit 1
 }
 
@@ -59,6 +91,9 @@ if [[ ! "$REPO_DIR" -ef "$LOCK" ]]; then
   exec 8<"$REPO_DIR" || { echo "[run-cycle] cannot open $REPO_DIR" >&2; exit 2; }
   flock -n 8 || busy "$REPO_DIR"
 fi
+# From here on this cycle owns the webroot: on every exit, success or not,
+# hand what it wrote back to the owners (while it still holds the locks).
+trap leave_owned EXIT
 mkdir -p "$RUN_DIR"
 
 cd "$REPO_DIR" || { echo "[run-cycle] cannot cd $REPO_DIR" >&2; exit 2; }
@@ -111,7 +146,13 @@ if [[ "${RESULTS_COUNT:-0}" -lt 1 ]]; then
   exit 3
 fi
 
-cp -f catalog.json history.json "$WEBROOT/" 2>/dev/null || true
+# The prune below follows the published history.json, so a run that could not
+# publish it must not prune: it would delete its own folder.
+if ! cp -f catalog.json history.json "$WEBROOT/"; then
+  echo "[run-cycle] could not publish catalog.json/history.json to $WEBROOT — not pruning" >&2
+  phase "failed-publish"
+  exit 8
+fi
 # Copy run artifacts in alongside the daemon-written run.log (don't wipe the dir).
 cp -f report.json "$RUN_DIR/" 2>/dev/null || true
 rsync -a --delete --exclude=run.log --exclude=phase \
@@ -119,6 +160,15 @@ rsync -a --delete --exclude=run.log --exclude=phase \
   || cp -rf playwright-report "$RUN_DIR/"
 rsync -a --delete test-results "$RUN_DIR/" 2>/dev/null \
   || cp -rf test-results "$RUN_DIR/"
+
+# prune_run <id>: delete runs/<id>/, and say so in run.log if any of it stays.
+prune_run() {
+  local err
+  err="$(rm -rf -- "$WEBROOT/runs/$1" 2>&1)"
+  if [[ -e "$WEBROOT/runs/$1" ]]; then
+    echo "[run-cycle] could not prune runs/$1 (owner $(stat -c %U "$WEBROOT/runs/$1" 2>/dev/null || echo ?), this run is $(id -un 2>/dev/null || id -u)): ${err%%$'\n'*}" >&2
+  fi
+}
 
 # Prune runs/ to exactly the set the dashboard links into — the runs in the
 # history.json we just published that still have a report (`hasReport` not
@@ -133,13 +183,15 @@ rsync -a --delete test-results "$RUN_DIR/" 2>/dev/null \
 # prune if the ids can't be read (missing/old node, malformed json).
 KEEP_IDS="$(node -e 'const fs=require("fs");try{const h=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write((h.runs||[]).filter(r=>r.hasReport!==false).map(r=>r.id).join("\n"))}catch(e){}' "$WEBROOT/history.json" 2>/dev/null)"
 if [[ -n "$KEEP_IDS" ]]; then
-  ( shopt -s nullglob; cd "$WEBROOT/runs" 2>/dev/null || exit 0
-    for d in */; do
-      id="${d%/}"
-      grep -qxF -- "$id" <<<"$KEEP_IDS" || rm -rf -- "$id"
-    done ) || true
+  shopt -s nullglob
+  for d in "$WEBROOT"/runs/*/; do
+    id="$(basename "$d")"
+    grep -qxF -- "$id" <<<"$KEEP_IDS" || prune_run "$id"
+  done
+  shopt -u nullglob
 else
-  ( cd "$WEBROOT/runs" && ls -1t | tail -n +"$((RUN_LIMIT+1))" | xargs -r rm -rf ) || true
+  while IFS= read -r id; do prune_run "$id"; done \
+    < <(cd "$WEBROOT/runs" 2>/dev/null && ls -1t | tail -n +"$((RUN_LIMIT+1))")
 fi
 
 phase "done"
