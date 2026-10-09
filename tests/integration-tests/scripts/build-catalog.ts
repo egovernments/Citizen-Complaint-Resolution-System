@@ -438,9 +438,10 @@ function tally(entries: Iterable<{ verdict: TestStatus | undefined; excluded: bo
 /**
  * Counts for a PAST run, from that run's own report.json alone. Its spec
  * entries (tests/**\/*.spec.ts, the same files the AST walk reads) are the
- * suite as it was then, so the result doesn't depend on how today's specs have
- * moved or grown. Entries with no result are that run's not-run tests;
- * @local-only specs never reach a remote report, so nothing is excluded.
+ * suite as that run planned it, so the result doesn't depend on how today's
+ * specs have moved or grown. Entries with no result are that run's not-run
+ * tests. A test the run didn't plan isn't in its report at all, so `excluded`
+ * here is always 0: see recount for what a recomputed summary keeps instead.
  */
 function countReport(report: PwReport): RunCounts {
   const entries: Array<{ verdict: TestStatus | undefined; excluded: boolean }> = [];
@@ -450,6 +451,27 @@ function countReport(report: PwReport): RunCounts {
     entries.push({ verdict: verdictOf(t?.results?.[t.results.length - 1]), excluded: false });
   }
   return tally(entries);
+}
+
+/**
+ * A summary written before `notRun` existed, recounted from that run's own
+ * report.json (see the recompute in buildCatalog). The outcome counts,
+ * `notRun` and `total` come from the report. `excluded` keeps the stored
+ * value: it was that build's call against the spec tree it saw, and a report
+ * can't say which specs on disk it left out. A report that planned no test at
+ * all (a spec failed to load, global setup threw) means nothing ran: the
+ * stored total stays and all of it is not run, as buildCatalog counts such a
+ * run today.
+ */
+function recount(stored: RunSummary, report: PwReport): RunSummary {
+  const counts = countReport(report);
+  if (counts.total === 0) {
+    return {
+      ...stored, passed: 0, failed: 0, skipped: 0, timedOut: 0, notRun: stored.total,
+      cutShort: cutShortOf(report) ?? firstRunError(report) ?? 'Playwright planned no tests',
+    };
+  }
+  return { ...stored, ...counts, excluded: stored.excluded ?? 0, cutShort: cutShortOf(report) };
 }
 
 /**
@@ -675,13 +697,16 @@ function buildCatalog(opts: BuildOptions): { catalog: Catalog; nextHistory: Hist
 
   // Summaries written before `notRun` existed counted carried-over results as
   // that run's outcome. Recompute each one still in the window from its OWN
-  // runs/<id>/report.json (countReport — never joined against today's specs,
+  // runs/<id>/report.json (recount — never joined against today's specs,
   // which may have moved or grown since), so the trend doesn't show a fake
-  // cliff between the last old-style run and the first honest one. When that
-  // report isn't available (runs published elsewhere, folder gone, unreadable),
-  // mark the summary `notRun: null` = legacy count; the dashboards render it
-  // as such and don't compare against it. Either way the result is persisted,
-  // so each old summary is visited exactly once.
+  // cliff between the last old-style run and the first honest one. A run
+  // whose runs/<id>/ folder is gone never gets here: runExists already dropped
+  // it from the window above. When the folder is there but its report.json is
+  // missing or unreadable, or the runs are published elsewhere (the CI rsync
+  // model, no runs/ next to the history), mark the summary `notRun: null` =
+  // legacy count; the dashboards render it as such and don't compare against
+  // it. Either way the result is persisted, so each old summary is visited
+  // exactly once.
   let recomputed = 0;
   let markedLegacy = 0;
   const windowRuns = priorRuns.slice(0, HISTORY_LIMIT - 1).map((r): RunSummary => {
@@ -691,7 +716,7 @@ function buildCatalog(opts: BuildOptions): { catalog: Catalog; nextHistory: Hist
       try {
         const old = JSON.parse(fs.readFileSync(p, 'utf8')) as PwReport;
         recomputed++;
-        return { ...r, ...countReport(old), cutShort: cutShortOf(old) };
+        return recount(r, old);
       } catch (e) {
         console.warn(`[build-catalog] could not recompute ${r.id} from ${p}: ${(e as Error).message}`);
       }
