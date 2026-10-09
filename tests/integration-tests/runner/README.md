@@ -145,6 +145,17 @@ How it behaves:
 - Plain Node with no npm dependencies, and curl does the SMTP. A broken
   `npm install` of the suite can't silence its own alerts.
 
+**Limitation: a test that moves to another line.** Test ids are
+`file:line:title` (`scripts/build-catalog.ts`), and the catalog drops the
+history of an id that no longer exists. An edit that shifts a test to another
+line (code added above it, in the same spec file) gives it a new id with no
+history. On that run the alert sees a new test with no earlier result, and the
+old id is simply gone. So if the moved test fails in that same run, it is
+reported neither as regressed nor as stopped running; from the next run on its
+last result is already that failure, so it stays unreported until it passes
+and breaks again. The dashboard shows it red as usual. The alerter can't fix
+this: the history it would need is no longer in the catalog.
+
 ### Enable it
 
 The `test_alerts_*` variables, documented in
