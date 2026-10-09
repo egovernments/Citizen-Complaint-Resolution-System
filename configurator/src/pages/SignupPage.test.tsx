@@ -828,6 +828,19 @@ describe('a success that is not yet published', () => {
     expect(screen.getByRole('button', { name: /nairobi city/i })).toBeInTheDocument();
   });
 
+  it('falls back to the workspace picker if automatic entry fails for a single workspace', async () => {
+    vi.mocked(api.findOperation).mockResolvedValue({ ...succeeded, lifecyclePublishedAt: 1 } as never);
+    vi.mocked(api.selectContext).mockRejectedValue(new Error('Network failure'));
+
+    render(<SignupPage />);
+    await screen.findByText(/finishing setup/i);
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [kisumu], selectionRequired: true, onboardingRequired: false });
+    await tick(3000);
+
+    expect(await screen.findByText(/choose a workspace/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /kisumu county/i })).toBeInTheDocument();
+  });
+
   it('says it is almost ready after a long wait, and slows down without giving up', async () => {
     // A fresh object per read, as the network gives; the poll re-arms on change.
     vi.mocked(api.findOperation).mockImplementation(async () => ({ ...succeeded }) as never);

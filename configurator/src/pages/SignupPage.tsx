@@ -606,14 +606,16 @@ function SignupFlow() {
     };
   }, [phase, seedFrom, restart]);
 
-  const enter = useCallback(async (option: TenantOption) => {
+  const enter = useCallback(async (option: TenantOption): Promise<boolean> => {
     setSaving(true);
     setError(null);
     try {
       await enterWorkspace(option.tenantId, sessionUser);
+      return true;
     } catch (caught) {
       setError(errorText(caught));
       setSaving(false);
+      return false;
     }
   }, [sessionUser]);
 
@@ -626,11 +628,15 @@ function SignupFlow() {
       try {
         const view = await tenants();
         if (!live) return;
+        setTenantOptions(view.tenants);
         if (view.tenants.length === 1) {
-          await enter(view.tenants[0]);
+          const ok = await enter(view.tenants[0]);
+          if (!live) return;
+          if (!ok) {
+            setPhase('chooseTenant');
+          }
           return;
         }
-        setTenantOptions(view.tenants);
         setPhase('chooseTenant');
       } catch (caught) {
         if (live) setError(errorText(caught));

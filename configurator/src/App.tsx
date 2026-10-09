@@ -6,7 +6,7 @@ import { describeWorkspaceError } from '@/onboarding/errors';
 import { translatorFrom } from '@/onboarding/i18n';
 import { toast } from '@/hooks/use-toast';
 import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
-import { useState, createContext, useContext, useEffect, useCallback } from 'react';
+import { useState, createContext, useContext, useEffect, useCallback, useRef } from 'react';
 import OnboardingLayout from './onboarding/OnboardingLayout';
 import { OnboardingI18n } from './onboarding/OnboardingI18n';
 import { appStore } from './providers/appStore';
@@ -67,6 +67,10 @@ import './App.css';
 import { LEGACY_PGR_DASHBOARD_ENABLED } from '@/config/featureFlags';
 
 // App context for global state
+function hasAdminRole(roles?: (string | { code: string })[]): boolean {
+  if (!roles) return false;
+  return roles.some((r) => (typeof r === 'string' ? r === 'ACCOUNT_ADMIN' : r?.code === 'ACCOUNT_ADMIN'));
+}
 
 interface AppState {
   isAuthenticated: boolean;
@@ -269,11 +273,7 @@ function restoreApiClientFromStorage(): { isAuthenticated: boolean; user: AppSta
         tenantId: restoredTenant,
       }, restoredTenant);
 
-      const userRoles = parsed.user.roles || [];
-      const isAdmin = userRoles.some((r: string | { code: string }) =>
-        typeof r === 'string' ? r === 'ACCOUNT_ADMIN' : r?.code === 'ACCOUNT_ADMIN'
-      );
-      const restoredPhases = !isAdmin ? [1, 2, 3, 4, 5] : (parsed.completedPhases || []);
+      const restoredPhases = !hasAdminRole(parsed.user.roles) ? [1, 2, 3, 4, 5] : (parsed.completedPhases || []);
 
       return {
         isAuthenticated: true,
@@ -303,6 +303,7 @@ function getConfiguredTenantDefault(): string {
 }
 
 function App() {
+  const refreshSeq = useRef(0);
   // Initialize state from localStorage if available
   const [state, setState] = useState<AppState>(() => {
     const restored = restoreApiClientFromStorage();
@@ -375,12 +376,12 @@ function App() {
   // Sync onboarding progress from backend on session restore
   useEffect(() => {
     if (!state.isAuthenticated || !state.user) return;
-    const admin = state.user.roles?.includes('ACCOUNT_ADMIN');
+    const admin = hasAdminRole(state.user.roles as (string | { code: string })[]);
     if (!admin) return;
-    let cancelled = false;
+    const seq = ++refreshSeq.current;
     searchWorkspace(state.tenant)
       .then(view => {
-        if (!cancelled) {
+        if (seq === refreshSeq.current) {
           const phases = completedSteps(view.Workspace);
           setState(s => ({ ...s, completedPhases: phases }));
         }
@@ -388,9 +389,6 @@ function App() {
       .catch(() => {
         // If backend unreachable, keep the localStorage copy as fallback
       });
-    return () => {
-      cancelled = true;
-    };
   }, [state.isAuthenticated, state.tenant]);
 
   // Persist auth state to localStorage
@@ -415,9 +413,11 @@ function App() {
   }, [state.isAuthenticated, state.user, state.environment, state.tenant, state.targetTenant, state.currentPhase, state.completedPhases]);
 
   const login = (user: AppState['user'], env: string, tenant: string) => {
+    const admin = hasAdminRole(user?.roles);
+    const completedPhases = admin ? [] : [1, 2, 3, 4, 5];
     // Fresh login resets targetTenant to the session tenant. Phase 1 will
     // point it at a child tenant once a create succeeds.
-    setState(s => ({ ...s, isAuthenticated: true, user, environment: env, tenant, targetTenant: tenant }));
+    setState(s => ({ ...s, isAuthenticated: true, user, environment: env, tenant, targetTenant: tenant, completedPhases }));
 
     // Configure digitClient with the same auth as apiClient
     const { token } = apiClient.getAuth();
@@ -461,6 +461,7 @@ function App() {
   };
 
   const completePhase = async (phase: number, skip = false): Promise<boolean> => {
+    refreshSeq.current++;
     try {
       const latest = await searchWorkspace(state.tenant);
       const updated = await updateWorkspace(state.tenant, WORKSPACE_STEPS[phase - 1], skip ? 'SKIPPED' : 'DONE', latest.Workspace.version);
