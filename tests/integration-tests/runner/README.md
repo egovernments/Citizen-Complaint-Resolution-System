@@ -37,6 +37,13 @@ This is the smallest thing that can: Node core only, no extra deps.
   daemon (user `digit-tests`, private `/tmp`) or a nightly wrapper (root) starts
   it. A second cycle exits 1 and leaves `runs/` alone. `RUN_LOCK` names another
   file or directory to lock instead of the webroot.
+  Run as root (the nightly wrappers, which also create `runs/<id>/` and its
+  `run.log` as root), a cycle hands everything it leaves in the webroot (`runs/`,
+  including older root-owned run folders, `catalog.json`, `history.json`) to the
+  webroot's owner when it exits, and its artifacts in the checkout to the
+  checkout's owner, so the daemon (`digit-tests`) can prune and rerun after it.
+  A folder a prune cannot delete is named in `run.log`
+  (`[run-cycle] could not prune runs/<id> …`).
 
 ## Retention
 

@@ -200,3 +200,68 @@ test('RUN_LOCK names another lock to use instead of the webroot', { skip }, () =
   const r = runCycle(21, repo, www, { env: { RUN_LOCK: lockFile } });
   assert.equal(r.status, 0, r.stderr);
 });
+
+test('a prune that fails says so in run.log, and the run still publishes', {
+  skip: skip || (process.getuid?.() === 0 ? 'root ignores the permission bits this test relies on' : false),
+}, () => {
+  const repo = checkout('prunefail-repo');
+  const www = webroot('prunefail-www');
+  // a folder the next prune must delete, which this user can't empty
+  const locked = path.join(www, 'runs', 'stale-run', 'sub');
+  fs.mkdirSync(locked, { recursive: true });
+  fs.writeFileSync(path.join(locked, 'file'), 'x');
+  fs.chmodSync(locked, 0o555);
+  try {
+    const r = runCycle(30, repo, www, { env: { RUN_LIMIT: '1' } });
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stderr, /\[run-cycle\] could not prune runs\/stale-run \(owner \S+, this run is \S+\): rm: cannot remove/);
+    assert.equal(fs.readFileSync(path.join(www, 'runs', runId(30), 'phase'), 'utf8').trim(), 'done');
+  } finally {
+    fs.chmodSync(locked, 0o755);
+  }
+});
+
+test('run as root (the nightly wrappers), it leaves the webroot owned like the webroot, so the webroot owner can prune it', {
+  skip: skip || (process.getuid?.() !== 0 ? 'needs root, as the on-box nightly wrappers run it (e.g. in a node:22 container)' : false)
+    || (spawnSync('bash', ['-c', 'command -v setpriv']).status !== 0 ? 'needs setpriv (util-linux)' : false),
+}, () => {
+  const owner = { uid: 65534, gid: 65534 };   // nobody: stands in for digit-tests
+  fs.chmodSync(tmp, 0o755);                     // mkdtemp made it 0700; the owner must reach its checkout
+  const repo = checkout('owner-repo');          // the daemon's checkout, shared with the nightly
+  const www = webroot('owner-www');
+  const home = path.join(tmp, 'owner-home');
+  fs.mkdirSync(home, { recursive: true });
+  for (const p of [repo, www, home]) execFileSync('chown', ['-R', `${owner.uid}:${owner.gid}`, p]);
+  const notOwned = (dir: string) => execFileSync('find', [dir, '!', '-uid', String(owner.uid), '-printf', '%P\n']).toString().split('\n').filter(Boolean);
+
+  // two nightly runs as root; the wrapper makes runs/<id>/ and run.log as root first
+  for (const i of [40, 41]) {
+    const r = runCycle(i, repo, www, { env: { RUN_LIMIT: '2' } });
+    assert.equal(r.status, 0, r.stderr);
+    if (i === 40) execFileSync('chown', ['-R', '0:0', path.join(www, 'runs', runId(40))]); // as an older run-cycle.sh left it
+  }
+  assert.deepEqual(notOwned(www), [], 'root left nothing in the webroot it owns, and healed the older root-owned folder');
+  assert.deepEqual(notOwned(repo), [], 'nor in the checkout');
+
+  // a nightly that finds the webroot locked: its wrapper-made folder is handed back too
+  fs.mkdirSync(path.join(www, 'runs', runId(39)));
+  fs.writeFileSync(path.join(www, 'runs', runId(39), 'run.log'), 'wrapper log\n');
+  const aborted = spawnSync('flock', ['-n', www, 'bash', SCRIPT], { env: prepare(39, repo, www), encoding: 'utf8', timeout: 60_000 });
+  assert.equal(aborted.status, 1, aborted.stderr);
+  assert.equal(fs.readFileSync(path.join(www, 'runs', runId(39), 'phase'), 'utf8').trim(), 'aborted-locked');
+  assert.deepEqual(notOwned(www), [], 'the aborted run\'s folder belongs to the webroot owner');
+
+  // a RUN-button run as the webroot's owner. It asks for RUN_LIMIT=1, but the
+  // root runs were built with 2, so it keeps two reports and must delete r40,
+  // the folder the root "wrapper" made.
+  const env = prepare(42, repo, www, { RUN_LIMIT: '1', HOME: home });
+  fs.mkdirSync(path.join(www, 'runs', runId(42)));
+  execFileSync('chown', [`${owner.uid}:${owner.gid}`, path.join(www, 'runs', runId(42))]);
+  const r = spawnSync('setpriv', [`--reuid=${owner.uid}`, `--regid=${owner.gid}`, '--clear-groups', 'bash', SCRIPT], { env, encoding: 'utf8', timeout: 120_000 });
+  assert.equal(r.status, 0, `${r.stdout}\n${r.stderr}`);
+  assert.doesNotMatch(r.stderr, /could not prune/);
+  const catalog = JSON.parse(fs.readFileSync(path.join(www, 'catalog.json'), 'utf8'));
+  assert.deepEqual(catalog.runs.map((x: { id: string; hasReport: boolean }) => [x.id, x.hasReport]), [[runId(42), true], [runId(41), true], [runId(40), false]]);
+  // disk == the runs with a report: the root-made r40 is gone
+  assert.deepEqual(fs.readdirSync(path.join(www, 'runs')).sort(), [runId(41), runId(42)]);
+});
