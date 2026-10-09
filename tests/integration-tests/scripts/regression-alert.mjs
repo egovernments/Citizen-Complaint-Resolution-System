@@ -229,11 +229,6 @@ export function composeStaleMail(latest, hours, cfg) {
   return { subject, text };
 }
 
-/** RFC 2047 encoded-word for non-ASCII header values. */
-function encodeHeader(value) {
-  return /^[\x20-\x7e]*$/.test(value) ? value : `=?UTF-8?B?${Buffer.from(value, 'utf8').toString('base64')}?=`;
-}
-
 /** The bare address out of "Name <addr>" (or addr itself). */
 export function bareAddress(value) {
   const m = String(value).match(/<([^>]+)>/);
@@ -267,14 +262,96 @@ export function splitAddressList(value) {
   return out.map(e => e.trim()).filter(Boolean);
 }
 
+// ---------------------------------------------------------------------------
+// Headers: RFC 5322 folding, RFC 2047 encoded-words for anything not ASCII
+// ---------------------------------------------------------------------------
+
+/** RFC 2047 §2: a header line that carries an encoded-word stays within 76 characters. */
+const MAX_HEADER_LINE = 76;
+/**
+ * UTF-8 bytes per encoded-word: 39 bytes are 52 base64 characters, so a word is
+ * 64 characters (the limit is 75) and "Subject: " plus one word still fits a line.
+ */
+const WORD_BYTES = 39;
+
+/** Text as "B" encoded-words of at most WORD_BYTES bytes each, never splitting a character. */
+function encodedWords(text) {
+  const words = [];
+  let chunk = '';
+  for (const ch of text) { // by code point: a multi-byte character stays in one word
+    if (chunk && Buffer.byteLength(chunk + ch, 'utf8') > WORD_BYTES) { words.push(chunk); chunk = ''; }
+    chunk += ch;
+  }
+  if (chunk) words.push(chunk);
+  return words.map(w => `=?UTF-8?B?${Buffer.from(w, 'utf8').toString('base64')}?=`);
+}
+
+/**
+ * Unstructured text (the Subject) as header tokens: ASCII words stay as they
+ * are, each run of other words becomes encoded-words. A decoder drops the
+ * space between two encoded-words, so a run is encoded together, its own
+ * spaces included.
+ */
+function textTokens(text) {
+  const tokens = [];
+  let run = [];
+  const flush = () => { if (run.length) tokens.push(...encodedWords(run.join(' '))); run = []; };
+  for (const word of String(text).split(/\s+/).filter(Boolean)) {
+    if (/^[\x21-\x7e]+$/.test(word) && !word.includes('=?')) { flush(); tokens.push(word); } else run.push(word);
+  }
+  flush();
+  return tokens;
+}
+
+/** A display name as header tokens: plain words as they are, other ASCII quoted, anything else encoded. */
+function phraseTokens(name) {
+  if (/^[\w!#$%&'*+\-/=?^`{|}~]+( [\w!#$%&'*+\-/=?^`{|}~]+)*$/.test(name) && /^[\x20-\x7e]*$/.test(name) && !name.includes('=?')) {
+    return name.split(' ');
+  }
+  if (/^[\x20-\x7e]*$/.test(name)) return [`"${name.replace(/[\\"]/g, '\\$&')}"`];
+  return encodedWords(name);
+}
+
+/** "Name <addr>", '"Doe, Jane" <addr>' or "addr" as header tokens. */
+function mailboxTokens(value) {
+  const m = String(value).trim().match(/^(.*?)\s*<([^<>]*)>$/s);
+  if (!m) return [String(value).trim()];
+  let name = m[1].trim();
+  if (name.length >= 2 && name.startsWith('"') && name.endsWith('"')) name = name.slice(1, -1).replace(/\\(.)/g, '$1');
+  return name ? [...phraseTokens(name), `<${m[2].trim()}>`] : [`<${m[2].trim()}>`];
+}
+
+/** "Field: tok tok …", folded onto continuation lines so no line passes MAX_HEADER_LINE. */
+function foldHeader(field, tokens) {
+  const lines = [];
+  let line = `${field}:`;
+  for (const tok of tokens) {
+    if (line.length + 1 + tok.length > MAX_HEADER_LINE && line.trim() !== `${field}:`) { lines.push(line); line = ''; }
+    line += ` ${tok}`;
+  }
+  lines.push(line);
+  return lines.join('\r\n');
+}
+
+/** Address-list header (To:): mailboxes separated by commas. */
+function addressHeader(field, mailboxes) {
+  const tokens = [];
+  mailboxes.forEach((mb, i) => {
+    const toks = mailboxTokens(mb);
+    if (i < mailboxes.length - 1) toks[toks.length - 1] += ',';
+    tokens.push(...toks);
+  });
+  return foldHeader(field, tokens);
+}
+
 /** RFC 5322 message: UTF-8 text body, base64 so long lines and symbols survive any relay. */
 export function buildMessage({ from, to, subject, text, date = new Date() }) {
   const domain = bareAddress(from).split('@')[1] || 'localhost';
   const body = Buffer.from(text, 'utf8').toString('base64').replace(/.{76}/g, '$&\r\n');
   return [
-    `From: ${from}`,
-    `To: ${to.join(', ')}`,
-    `Subject: ${encodeHeader(subject)}`,
+    addressHeader('From', [from]),
+    addressHeader('To', to),
+    foldHeader('Subject', textTokens(subject)),
     `Date: ${date.toUTCString().replace('GMT', '+0000')}`,
     `Message-ID: <${crypto.randomUUID()}@${domain}>`,
     'MIME-Version: 1.0',

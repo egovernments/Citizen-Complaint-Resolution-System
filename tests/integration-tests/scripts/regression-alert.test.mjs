@@ -117,17 +117,61 @@ test('composeStaleMail names the last run', () => {
   assert.equal(m.subject, `[CCRS tests][naipepea] no new test run for 26h — last ${R3}`);
 });
 
+// An RFC 2047 reader, strict: each encoded-word must hold whole UTF-8 characters.
+function headerValue(head, field) {
+  const line = head.replace(/\r\n(?=[ \t])/g, '').split('\r\n').find(l => l.startsWith(`${field}:`));
+  assert.ok(line, `${field}: header present`);
+  return line.slice(field.length + 1).trim()
+    .replace(/(\?=)\s+(?==\?)/g, '$1') // the space between two encoded-words is not part of the text
+    .replace(/=\?UTF-8\?B\?([A-Za-z0-9+/=]*)\?=/g, (_, b64) => new TextDecoder('utf-8', { fatal: true }).decode(Buffer.from(b64, 'base64')));
+}
+function assertHeaderShape(head) {
+  for (const l of head.split('\r\n')) assert.ok(l.length <= 76, `header line within 76 characters: ${l}`);
+  for (const w of head.match(/=\?[^?]+\?B\?[^?]*\?=/g) || []) assert.ok(w.length <= 75, `encoded-word within 75 characters: ${w}`);
+}
+
 test('buildMessage: headers, encoded non-ASCII subject, base64 body that round-trips', () => {
   const text = 'Run: x — ✗ regressed\n' + 'y'.repeat(300) + '\n';
   const msg = buildMessage({ from: 'CCRS alerts <alerts@example.org>', to: ['a@x.org', 'b@x.org'], subject: '[x] 1 regressed — r', text, date: new Date('2026-10-08T06:30:00Z') });
   const [head, body] = msg.split('\r\n\r\n');
   assert.match(head, /^From: CCRS alerts <alerts@example\.org>$/m);
   assert.match(head, /^To: a@x\.org, b@x\.org$/m);
-  assert.match(head, /^Subject: =\?UTF-8\?B\?/m, 'non-ASCII subject is an encoded-word');
+  assert.match(head, /^Subject: \[x\] 1 regressed =\?UTF-8\?B\?4oCU\?= r$/m, 'only the non-ASCII word is encoded');
+  assert.equal(headerValue(head, 'Subject'), '[x] 1 regressed — r');
   assert.match(head, /^Date: Thu, 08 Oct 2026 06:30:00 \+0000$/m);
   assert.match(head, /^Message-ID: <[0-9a-f-]+@example\.org>$/m);
   assert.ok(body.split('\r\n').every(l => l.length <= 76), 'body lines wrapped for SMTP');
   assert.equal(Buffer.from(body.replace(/\r\n/g, ''), 'base64').toString('utf8'), text);
+});
+
+test('buildMessage: a long subject folds into short encoded-words that never split a character', () => {
+  const cfg = { boxName: 'bomet', dashboardUrl: '', repoUrl: 'https://github.com/o/r', maxList: 40 };
+  const real = composeMail(analyzeRun(catalog, catalog.runs[0], catalog.runs[1]), cfg).subject;
+  const long = `[CCRS tests][Ñairobi-Süd] ${'Übersicht ✗ 😀 '.repeat(8)}— ${R3}`;
+  // 4-byte characters (UTF-16 surrogate pairs) back to back: a word boundary
+  // must fall between two of them, never inside one
+  const emoji = `[CCRS tests] ${'😀'.repeat(30)} ${'äö😀'.repeat(12)} — ${R3}`;
+  for (const subject of [real, long, emoji]) {
+    const [head] = buildMessage({ from: 'a@x.org', to: ['b@x.org'], subject, text: 't' }).split('\r\n\r\n');
+    assertHeaderShape(head);
+    assert.equal(headerValue(head, 'Subject'), subject.replace(/\s+/g, ' ').trim());
+  }
+  const [head] = buildMessage({ from: 'a@x.org', to: ['b@x.org'], subject: long, text: 't' }).split('\r\n\r\n');
+  assert.ok(head.split('\r\n').filter(l => /^ /.test(l)).length >= 3, 'continuation lines');
+});
+
+test('buildMessage: display names are quoted or encoded; addresses stay bare', () => {
+  const msg = buildMessage({
+    from: 'Équipe CCRS — alertes <alerts@example.org>',
+    to: ['CCRS team <team@x.org>', '"Doe, Jane" <jd@x.org>', 'Dept. of Tests <dt@x.org>', 'plain@x.org', 'Zoë Ñ <z@x.org>'],
+    subject: 's', text: 't',
+  });
+  const [head] = msg.split('\r\n\r\n');
+  assertHeaderShape(head);
+  assert.match(head, /^From: =\?UTF-8\?B\?[^ ]+\?= <alerts@example\.org>$/m, 'non-ASCII name encoded, address bare');
+  assert.equal(headerValue(head, 'From'), 'Équipe CCRS — alertes <alerts@example.org>');
+  assert.equal(headerValue(head, 'To'), 'CCRS team <team@x.org>, "Doe, Jane" <jd@x.org>, "Dept. of Tests" <dt@x.org>, plain@x.org, Zoë Ñ <z@x.org>');
+  assert.ok(!/[^\x00-\x7f]/.test(head), 'the header block is pure ASCII');
 });
 
 test('curlInvocation: STARTTLS on smtp://, password only in the config file', () => {
