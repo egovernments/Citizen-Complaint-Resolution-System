@@ -13,6 +13,11 @@ export function publicDashboardPath(slug: string): string {
 export interface DashboardConfigData extends Record<string, unknown> {
   id: string;
   publicDashboardEnabled?: boolean;
+  /**
+   * Supervisor dashboard number mask per locale ({ "<locale>": mask, default: mask }) or a legacy string mask
+   * for every locale (dss.DashboardConfig schema). Display only.
+   */
+  numberFormat?: Record<string, string> | string;
   /** IANA zone, e.g. "Africa/Nairobi". Absent/invalid falls back to Africa/Nairobi server-side. */
   timeZone?: string;
   /**

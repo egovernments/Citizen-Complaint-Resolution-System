@@ -246,4 +246,14 @@ describe('PublicDashboardConfigure', () => {
     expect(await screen.findByText('mdms-v2 unreachable')).toBeInTheDocument();
     expect(input).toHaveValue('Asia/Kolkata');
   });
+
+  // CCRS#950: dss.DashboardConfig.numberFormat is edited here (it was in the record but on no screen)
+  it('saves the number format into DashboardConfig', async () => {
+    getConfig.mockResolvedValue(record({ id: 'default', numberFormat: { en_IN: '#,##0.00' } }));
+    render(<PublicDashboardConfigure />);
+    fireEvent.change(await screen.findByLabelText('Number format mask 1'), { target: { value: '#.##0,00' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save number format' }));
+    await waitFor(() => expect(upsertConfig).toHaveBeenCalledWith('ke', { numberFormat: { en_IN: '#.##0,00' } }));
+    expect(await screen.findByText(/number format saved/i)).toBeTruthy();
+  });
 });
