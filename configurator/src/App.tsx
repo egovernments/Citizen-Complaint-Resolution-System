@@ -92,7 +92,6 @@ interface AppState {
 
 interface AppContextType {
   state: AppState;
-  login: (user: AppState['user'], env: string, tenant: string) => void;
   logout: () => Promise<void>;
   /** Point subsequent onboarding writes/reads at a child tenant. Called by
    *  Phase 1 after `tenant.tenants` create succeeds. */
@@ -412,41 +411,6 @@ function App() {
     }
   }, [state.isAuthenticated, state.user, state.environment, state.tenant, state.targetTenant, state.currentPhase, state.completedPhases]);
 
-  const login = (user: AppState['user'], env: string, tenant: string) => {
-    const admin = hasAdminRole(user?.roles);
-    const completedPhases = admin ? [] : [1, 2, 3, 4, 5];
-    // Fresh login resets targetTenant to the session tenant. Phase 1 will
-    // point it at a child tenant once a create succeeds.
-    setState(s => ({ ...s, isAuthenticated: true, user, environment: env, tenant, targetTenant: tenant, completedPhases }));
-
-    // Configure digitClient with the same auth as apiClient
-    const { token } = apiClient.getAuth();
-    if (token && user) {
-      configureDigitClient(env, token, {
-        id: user.id ?? 0,
-        uuid: user.uuid ?? '',
-        userName: user.name,
-        name: user.name,
-        mobileNumber: user.mobileNumber ?? '',
-        type: 'EMPLOYEE',
-        roles: user.roles?.map(r => ({ code: r, name: r, tenantId: tenant })) || [],
-        tenantId: tenant,
-      }, tenant);
-    }
-
-    // Track user in telemetry
-    if (user) {
-      identifyUser({
-        id: user.email || user.name,
-        name: user.name,
-        email: user.email,
-        tenant,
-        roles: user.roles,
-      });
-      trackEvent('login', { tenant, environment: env });
-    }
-  };
-
   const setTargetTenant = (code: string) => {
     setState(s => ({ ...s, targetTenant: code }));
     trackEvent('target_tenant_set', { targetTenant: code });
@@ -545,7 +509,6 @@ function App() {
 
   const contextValue: AppContextType = {
     state,
-    login,
     logout,
     setTargetTenant,
     completePhase,
