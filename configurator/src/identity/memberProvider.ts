@@ -33,10 +33,14 @@ export function withIdentityMembers(base: DataProvider, tenantId: string): DataP
       for (const key of ['emailId', 'userName', 'uuid', 'id', 'tenantId']) user[key] = current.user?.[key];
       delete user.password;
       if (params.data.isActive === false) {
+        // The Edit form appends the picked reason to deactivationDetails; record that one, not OTHERS.
+        const details = params.data.deactivationDetails as Array<{ reasonForDeactivation?: unknown }> | undefined;
+        const picked = Array.isArray(details) ? details[details.length - 1]?.reasonForDeactivation : undefined;
         await deactivateAndRemove(
           async () => ({ ...current, tenantId }) as unknown as MemberEmployee,
           employee => base.update(resource, { ...params, data: { ...params.data, ...employee, user } }),
           apiClient.getAuth().user?.uuid,
+          typeof picked === 'string' && picked ? picked : undefined,
         );
         return { data: { ...current, ...params.data, user } };
       }
