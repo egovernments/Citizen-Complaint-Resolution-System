@@ -22,3 +22,20 @@ export function levelsForSave(levels: unknown): Record<string, unknown>[] {
     active: typeof l.active === 'boolean' ? l.active : true,
   }));
 }
+
+// What ComplaintHierarchyEdit saves for a LIVE definition: the structure is the saved one (level codes, parents, leaf
+// flag, order: complaints and nodes already point at it), only each level's label / free-text / active come from the
+// form, matched by level code. A level the form does not carry keeps its saved values.
+export function levelsForEdit(saved: unknown, edited: unknown): Record<string, unknown>[] {
+  const was = (Array.isArray(saved) ? (saved as (EditorLevel & Record<string, unknown>)[]) : []).filter((l) => l && l.levelCode);
+  const now = new Map((Array.isArray(edited) ? (edited as EditorLevel[]) : []).filter((l) => l && l.levelCode).map((l) => [l.levelCode, l]));
+  return was.map((l) => {
+    const e = now.get(l.levelCode) ?? {};
+    return {
+      ...l,
+      label: typeof e.label === 'string' && e.label.trim() ? e.label.trim() : (typeof l.label === 'string' && l.label) || (l.levelCode as string),
+      isFreeText: typeof e.isFreeText === 'boolean' ? e.isFreeText : !!l.isFreeText,
+      active: typeof e.active === 'boolean' ? e.active : l.active !== false,
+    };
+  });
+}

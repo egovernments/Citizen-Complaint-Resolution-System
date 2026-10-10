@@ -25,6 +25,8 @@ export interface ComplaintLevelEditorProps {
   source?: string;
   label?: string;
   help?: string;
+  /** a live definition: level codes, parents and the leaf level are read-only, no rows added or removed */
+  locked?: boolean;
 }
 
 /** Multi-row editor for a complaint hierarchy's CONFIGURABLE levels. Each row
@@ -39,6 +41,7 @@ export function ComplaintLevelEditor({
   source = 'levels',
   label = 'Hierarchy Levels',
   help,
+  locked = false,
 }: ComplaintLevelEditorProps) {
   const { id, field } = useInput({ source });
 
@@ -102,10 +105,12 @@ export function ComplaintLevelEditor({
       {rows.length === 0 ? (
         <div className="flex items-center justify-between gap-3 rounded-md border border-dashed p-3">
           <p className="text-sm text-muted-foreground">No levels yet</p>
-          <Button type="button" variant="outline" size="sm" onClick={addRow}>
-            <Plus className="w-4 h-4" />
-            Add level
-          </Button>
+          {!locked && (
+            <Button type="button" variant="outline" size="sm" onClick={addRow}>
+              <Plus className="w-4 h-4" />
+              Add level
+            </Button>
+          )}
         </div>
       ) : (
         <div className="space-y-2">
@@ -116,14 +121,14 @@ export function ComplaintLevelEditor({
               .filter((t) => t);
             return (
               <div key={index} className="relative border rounded p-3 pr-10 bg-muted/30">
-                <button
+                {!locked && <button
                   type="button"
                   onClick={() => removeRow(index)}
                   aria-label={`Remove level ${index + 1}`}
                   className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <Trash2 className="h-4 w-4" />
-                </button>
+                </button>}
                 <div className="mb-2 text-xs font-semibold text-muted-foreground">
                   Level {index + 1}
                 </div>
@@ -135,6 +140,7 @@ export function ComplaintLevelEditor({
                     <Input
                       type="text"
                       value={row.levelCode}
+                      disabled={locked}
                       onChange={(e) => updateRow(index, { levelCode: e.target.value })}
                       placeholder="e.g. AUTHORITY_TYPE, SECTOR, SUB_TYPE"
                     />
@@ -149,7 +155,7 @@ export function ComplaintLevelEditor({
                       <Select
                         value={row.parentLevel ?? ''}
                         onValueChange={(v) => updateRow(index, { parentLevel: v || null })}
-                        disabled={parentChoices.length === 0}
+                        disabled={locked || parentChoices.length === 0}
                       >
                         <SelectTrigger>
                           <SelectValue
@@ -175,6 +181,7 @@ export function ComplaintLevelEditor({
                   <input
                     type="checkbox"
                     checked={row.isLeafServiceCode}
+                    disabled={locked}
                     onChange={(e) => updateRow(index, { isLeafServiceCode: e.target.checked })}
                   />
                   Leaf level (its values are complaint serviceCodes)
@@ -214,12 +221,14 @@ export function ComplaintLevelEditor({
               </div>
             );
           })}
-          <div>
-            <Button type="button" variant="outline" size="sm" onClick={addRow}>
-              <Plus className="w-4 h-4" />
-              Add level
-            </Button>
-          </div>
+          {!locked && (
+            <div>
+              <Button type="button" variant="outline" size="sm" onClick={addRow}>
+                <Plus className="w-4 h-4" />
+                Add level
+              </Button>
+            </div>
+          )}
         </div>
       )}
 

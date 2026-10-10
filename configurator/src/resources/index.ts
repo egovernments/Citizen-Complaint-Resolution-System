@@ -58,3 +58,4 @@ export { BoundaryHierarchyCreate } from './boundary-hierarchies/BoundaryHierarch
 export { ComplaintHierarchyList } from './complaint-hierarchies/ComplaintHierarchyList';
 export { ComplaintHierarchyShow } from './complaint-hierarchies/ComplaintHierarchyShow';
 export { ComplaintHierarchyCreate } from './complaint-hierarchies/ComplaintHierarchyCreate';
+export { ComplaintHierarchyEdit } from './complaint-hierarchies/ComplaintHierarchyEdit';
