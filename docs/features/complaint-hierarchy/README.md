@@ -105,7 +105,7 @@ the analytics MV use.
 |---|---|---|
 | **MDMS schemas** | `schema/RAINMAKER-PGR.json` + data‑handler config + Helm `values.yaml` | **breaking** — rename `ClassificationNode`→`ComplaintHierarchy` + leaf fields; delete `ServiceDefs`/`HierarchySchema`/`ComplaintTypeDepartments` |
 | **Backend** (`pgr-services`) | `PGRConstants`, `MDMSUtils`, `ServiceRequestValidator`, `PGRService`, `NotificationService`, `DashboardQueryBuilder`, `PGRQueryBuilder`, `MigrationUtils`, `V20260608000000__create_v2_grain_mvs.sql` | **changed** — validate / SLA‑map / dept‑name / grain MV all read `ComplaintHierarchy` leaf rows |
-| **Citizen / employee UI** | `digit-ui-esbuild/.../pgr`, `frontend/micro-ui/web/.../pgr`, `digit-ui-v2` — cascade picker + create flows + details breakdown | repointed to `ComplaintHierarchy`; **no flat fallback** |
+| **Citizen / employee UI** | `digit-ui-esbuild/.../pgr`, `frontend/micro-ui/web/.../pgr` — cascade picker + create flows + details breakdown | repointed to `ComplaintHierarchy`; **no flat fallback** |
 | **Configurator** | hierarchy resources, Phase‑3 Excel setup, one‑click migrate button | rewritten to write leaf rows into `ComplaintHierarchy`; breaking/one‑way copy |
 
 `pgr-services` now validates `serviceCode` against **`ComplaintHierarchy` leaf rows** (JSONPath

@@ -196,8 +196,8 @@ Type the URLs exactly as written, trailing slash included.
 | What | Port 80 (recommended) | Direct port (fallback) | Log in with |
 |------|-----------------------|------------------------|-------------|
 | Employee UI | http://localhost/digit-ui/ | http://localhost:18000/digit-ui/ | `ADMIN` / `eGov@123`, city **City A** |
-| Citizen SPA | http://localhost/citizen/ | http://localhost:18000/digit-ui/citizen/ (see note 1) | — |
-| Configurator (DIGIT Studio) | http://localhost/configurator/ | http://localhost:18890/configurator/ (see note 2) | `ADMIN` / `eGov@123`, tenant code **`pg`** |
+| Citizen UI | http://localhost/digit-ui/citizen/ | http://localhost:18000/digit-ui/citizen/ | — |
+| Configurator (DIGIT Studio) | http://localhost/configurator/ | http://localhost:18890/configurator/ (see note below) | `ADMIN` / `eGov@123`, tenant code **`pg`** |
 | Grafana | http://localhost/grafana/ | http://localhost:13000/grafana/ | `admin` / generated password (below) |
 | Gatus health board | http://localhost/status/ | http://localhost:18889/ | `digit-status` / generated password (below); no password on the direct port |
 
@@ -205,13 +205,9 @@ Type the URLs exactly as written, trailing slash included.
 > from the same row instead.** To fix port 80 itself, see
 > [If the port-80 URLs return 404](#if-the-port-80-urls-return-404) below.
 
-1. The Citizen SPA at `/citizen/` is served only by nginx on port 80. Its
-   fallback is the citizen app built into the employee UI bundle, served
-   through Kong. It is a different, older app, but it has its own
-   complaint-filing pages.
-2. The configurator's direct port serves the page but not the APIs it logs in
-   through, so the login fails there. Use it only to confirm the container is
-   up; to log in, get the port-80 URL working.
+Note: the configurator's direct port serves the page but not the APIs it logs
+in through, so the login fails there. Use it only to confirm the container is
+up; to log in, get the port-80 URL working.
 
 The employee UI fallback is Kong on `18000`, not the employee UI container's
 own port `18080`. Like the configurator's, that port serves the page without

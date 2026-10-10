@@ -8,8 +8,8 @@
 # moment the stack is up.
 #
 # FULL means every optional subsystem this profile knows about is on:
-# notifications (Novu), MCP, the configurator wizard, and both
-# SPAs (legacy employee UI at /digit-ui/ and the citizen SPA at /citizen/).
+# notifications (Novu), MCP, the configurator wizard, and the DIGIT UI
+# (employee at /digit-ui/, citizen at /digit-ui/citizen/).
 #
 # SIZING. Needs ~16 GB for the containers alone. On a 16 GB box the notification
 # stack is what tips it over — use localhost-slim.yml.example instead, which is
@@ -179,17 +179,7 @@ asset_s3_bucket: "pg-egov-assets"
 #         `hmr`       — esbuild dev server in tmux, live-reload on save.
 digit_ui_mode: container
 
-# The Vite/React-19 citizen SPA at /citizen/. Keep false: D26 retired its
-# citizen sign-in and the deploy refuses `true`. Citizens use
-# /<tenant-slug>/digit-ui/citizen instead.
-enable_digit_ui_v2: false
 
-# Unset by default, so deploy builds the reviewed vendored `digit-ui-v2/` and
-# sibling `ui-shared/` sources from this checkout. To test an external source,
-# uncomment both values and point them at the required repo/branch; cloning is
-# performed on the target so native Vite binaries match its architecture.
-# digit_ui_v2_repo: "https://github.com/egovernments/Citizen-Complaint-Resolution-System.git"
-# digit_ui_v2_branch: "develop"
 
 # Branch of the digit-ui-esbuild repo used when digit_ui_mode builds on the box.
 # Inert while digit_ui_mode is `container` and build_digit_ui is false.
@@ -371,7 +361,6 @@ nginx_features:
   api_pgr: false           # /api/pgr/ — proxied to MCP for the dashboard
   mcp: true                # /mcp + /v1/* — needs enable_mcp: true
   keycloak: true           # /auth/ + /identity/v1/ — needs enable_keycloak: true
-  digit_ui_v2: false       # /citizen/ — retired with enable_digit_ui_v2 (D26)
   integration_tests: false      # /tests/ + /tests-v2/
   integration_tests_runner: false  # /tests/api/
 
