@@ -279,6 +279,27 @@ describe('createDigitDataProvider', () => {
     assert.equal(entityCreateCalls, 0);
   });
 
+  it('boundary edit re-parents the node when the parent changed, and only then', async () => {
+    mock.method(client, 'boundarySearch', async () => [{ tenantId: 'ke', code: 'W1', auditDetails: {} }]);
+    mock.method(client, 'mdmsSearch', async () => []);   // boundaryGetList's sub-tenant lookup: none
+    mock.method(client, 'boundaryUpdate', async (_t: string, b: Record<string, unknown>[]) => b);
+    mock.method(client, 'boundaryRelationshipSearch', async () => [{
+      tenantId: 'ke', hierarchyType: 'ADMIN',
+      boundary: [{ code: 'C', boundaryType: 'County', children: [
+        { code: 'S1', boundaryType: 'SubCounty', children: [{ code: 'W1', boundaryType: 'Ward', children: [] }] },
+        { code: 'S2', boundaryType: 'SubCounty', children: [] },
+      ] }],
+    }]);
+    const moves: Record<string, unknown>[] = [];
+    mock.method(client, 'boundaryRelationshipUpdate', async (_t: string, r: Record<string, unknown>) => { moves.push(r); return []; });
+    const dp = createDigitDataProvider(client, 'ke');
+    await dp.update('boundaries', { id: 'W1', data: { code: 'W1', parent: 'S2' }, previousData: {} as never });
+    assert.deepEqual(moves, [{ code: 'W1', hierarchyType: 'ADMIN', boundaryType: 'Ward', parent: 'S2' }]);
+    await dp.update('boundaries', { id: 'W1', data: { code: 'W1', parent: 'S1' }, previousData: {} as never });
+    await dp.update('boundaries', { id: 'W1', data: { code: 'W1', additionalDetails: { a: 1 } }, previousData: {} as never });
+    assert.equal(moves.length, 1, 'same parent / no parent field: no relationship write');
+  });
+
   it('resumes relationship creation when the entity already exists from a partial attempt', async () => {
     mock.method(client, 'boundaryHierarchySearch', async () => [{
       tenantId: 'ke',
