@@ -57,4 +57,3 @@ export function rowsToNumberFormat(rows: Row[]): Record<string, string> {
   }
   return out;
 }
-
