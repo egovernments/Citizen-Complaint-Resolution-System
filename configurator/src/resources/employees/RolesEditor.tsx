@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState, useEffect } from 'react';
 import type { KeyboardEvent } from 'react';
-import { useInput } from 'ra-core';
+import { useInput, type InputProps } from 'ra-core';
 import { ChevronDown, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,6 +12,7 @@ export interface RolesEditorProps {
   label?: string;
   tenantId: string;
   help?: string;
+  validate?: InputProps['validate'];
 }
 
 export function RolesEditor({
@@ -19,8 +20,9 @@ export function RolesEditor({
   label = 'Roles',
   tenantId,
   help,
+  validate,
 }: RolesEditorProps) {
-  const { id, field, fieldState, isRequired } = useInput({ source });
+  const { id, field, fieldState, isRequired } = useInput({ source, validate });
   const { roles: available, isLoading, buildRole } = useRolesLookup();
 
   const value: Role[] = useMemo(() => {
