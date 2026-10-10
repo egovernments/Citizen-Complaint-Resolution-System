@@ -17,6 +17,7 @@ export function ComplaintTypeEdit() {
             placeholder="Select department..."
           />
           <DigitFormInput source="slaHours" label="SLA (hours)" type="number" validate={v.slaHours} />
+          <DigitFormInput source="order" label="Display order" type="number" help="Position among its siblings in the citizen and employee pickers (ascending)." />
           <DigitFormInput source="keywords" label="Keywords" />
           {/* The active flag was previously omitted from this dedicated
               edit form, so operators had no way to enable/disable a

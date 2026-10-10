@@ -16,6 +16,9 @@ interface Level {
   levelCode: string;
   parentLevel: string | null;
   isLeafServiceCode: boolean;
+  label: string;
+  isFreeText: boolean;
+  active: boolean;
 }
 
 export interface ComplaintLevelEditorProps {
@@ -30,8 +33,8 @@ export interface ComplaintLevelEditorProps {
  *  add or remove rows to make a 2-level or 5-level taxonomy with no code
  *  change. Directly analogous to the boundary HierarchyLevelEditor; row 0 is
  *  the root (no parent), and each later row's parent is limited to an earlier
- *  level. The Create screen's transform stamps `order` (= row index + 1) and
- *  `isFreeText`/`label` before submit. */
+ *  level. Each row also carries its label, free-text flag and active flag; the
+ *  Create screen's transform (levelsForSave) keeps them and stamps only `order` (= row index + 1). */
 export function ComplaintLevelEditor({
   source = 'levels',
   label = 'Hierarchy Levels',
@@ -48,6 +51,9 @@ export function ComplaintLevelEditor({
         parentLevel:
           typeof r.parentLevel === 'string' && r.parentLevel ? r.parentLevel : null,
         isLeafServiceCode: !!r.isLeafServiceCode,
+        label: typeof r.label === 'string' ? r.label : '',
+        isFreeText: !!r.isFreeText,
+        active: r.active === undefined ? true : !!r.active,
       };
     });
   }, [field.value]);
@@ -68,6 +74,9 @@ export function ComplaintLevelEditor({
         levelCode: '',
         parentLevel: rows.length === 0 ? null : last?.levelCode || null,
         isLeafServiceCode: false,
+        label: '',
+        isFreeText: false,
+        active: true,
       },
     ]);
   };
@@ -170,6 +179,38 @@ export function ComplaintLevelEditor({
                   />
                   Leaf level (its values are complaint serviceCodes)
                 </label>
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <Label className="mb-1.5 block text-xs font-medium text-foreground">Label</Label>
+                    <Input
+                      type="text"
+                      aria-label={`Level ${index + 1} label`}
+                      value={row.label}
+                      onChange={(e) => updateRow(index, { label: e.target.value })}
+                      placeholder={row.levelCode || 'shown to citizens; empty = the level code'}
+                    />
+                  </div>
+                  <div className="flex flex-col justify-end gap-2">
+                    <label className="flex items-center gap-2 text-xs font-medium text-foreground">
+                      <input
+                        type="checkbox"
+                        aria-label={`Level ${index + 1} free text`}
+                        checked={row.isFreeText}
+                        onChange={(e) => updateRow(index, { isFreeText: e.target.checked })}
+                      />
+                      Free text (typed, not picked from a list)
+                    </label>
+                    <label className="flex items-center gap-2 text-xs font-medium text-foreground">
+                      <input
+                        type="checkbox"
+                        aria-label={`Level ${index + 1} active`}
+                        checked={row.active}
+                        onChange={(e) => updateRow(index, { active: e.target.checked })}
+                      />
+                      Active
+                    </label>
+                  </div>
+                </div>
               </div>
             );
           })}

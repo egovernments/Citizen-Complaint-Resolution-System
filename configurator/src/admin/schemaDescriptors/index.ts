@@ -7,6 +7,7 @@ import { autoEscalationIgnoreDescriptor } from './auto-escalation-ignore';
 import { workflowBsMasterDescriptor } from './workflow-bs-master';
 import { pgrUiConstantsDescriptor } from './pgr-ui-constants';
 import { stateInfoDescriptor } from './state-info';
+import { complaintHierarchyNodesDescriptor } from './complaint-hierarchy-nodes';
 import { notificationRoutingDescriptor } from './notification-routing';
 import { notificationTemplateDescriptor } from './notification-template';
 import { notificationChannelDescriptor } from './notification-channel';
@@ -30,6 +31,7 @@ const DESCRIPTORS: Record<string, SchemaDescriptor> = {
   [workflowBsMasterDescriptor.schema]: workflowBsMasterDescriptor,
   [pgrUiConstantsDescriptor.schema]: pgrUiConstantsDescriptor,
   [stateInfoDescriptor.schema]: stateInfoDescriptor,
+  [complaintHierarchyNodesDescriptor.schema]: complaintHierarchyNodesDescriptor,
   [notificationRoutingDescriptor.schema]: notificationRoutingDescriptor,
   [notificationTemplateDescriptor.schema]: notificationTemplateDescriptor,
   [notificationChannelDescriptor.schema]: notificationChannelDescriptor,

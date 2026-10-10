@@ -70,6 +70,7 @@ export function ComplaintTypeCreate() {
         validate={v.required}
       />
       <DigitFormInput source="slaHours" label="SLA (hours)" type="number" validate={v.slaHours} />
+      <DigitFormInput source="order" label="Display order" type="number" help="Position among its siblings in the citizen and employee pickers (ascending)." />
       <DigitFormInput source="name" label="Complaint Subcategory" validate={v.name} />
       <DigitFormCodeInput source="serviceCode" label="Service Code" deriveFrom="name" validate={v.codeRequired} />
     </DigitCreate>
