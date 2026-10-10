@@ -18,7 +18,6 @@ interface Level {
   isLeafServiceCode: boolean;
   label: string;
   isFreeText: boolean;
-  active: boolean;
 }
 
 export interface ComplaintLevelEditorProps {
@@ -35,7 +34,7 @@ export interface ComplaintLevelEditorProps {
  *  add or remove rows to make a 2-level or 5-level taxonomy with no code
  *  change. Directly analogous to the boundary HierarchyLevelEditor; row 0 is
  *  the root (no parent), and each later row's parent is limited to an earlier
- *  level. Each row also carries its label, free-text flag and active flag; the
+ *  level. Each row also carries its label and free-text flag; the
  *  Create screen's transform (levelsForSave) keeps them and stamps only `order` (= row index + 1). */
 export function ComplaintLevelEditor({
   source = 'levels',
@@ -56,7 +55,6 @@ export function ComplaintLevelEditor({
         isLeafServiceCode: !!r.isLeafServiceCode,
         label: typeof r.label === 'string' ? r.label : '',
         isFreeText: !!r.isFreeText,
-        active: r.active === undefined ? true : !!r.active,
       };
     });
   }, [field.value]);
@@ -79,7 +77,6 @@ export function ComplaintLevelEditor({
         isLeafServiceCode: false,
         label: '',
         isFreeText: false,
-        active: true,
       },
     ]);
   };
@@ -206,15 +203,6 @@ export function ComplaintLevelEditor({
                         onChange={(e) => updateRow(index, { isFreeText: e.target.checked })}
                       />
                       Free text (typed, not picked from a list)
-                    </label>
-                    <label className="flex items-center gap-2 text-xs font-medium text-foreground">
-                      <input
-                        type="checkbox"
-                        aria-label={`Level ${index + 1} active`}
-                        checked={row.active}
-                        onChange={(e) => updateRow(index, { active: e.target.checked })}
-                      />
-                      Active
                     </label>
                   </div>
                 </div>

@@ -10,7 +10,7 @@ import { levelsForSave } from './hierarchyLevels';
  *  (RAINMAKER-PGR.ComplaintHierarchyDefinition); the data-provider targets the
  *  session tenant, so do NOT put tenantId in the record (the schema is
  *  additionalProperties:false). The transform (levelsForSave) keeps each level's
- *  label / free-text / active and fills only what is empty; `order` is the row position. */
+ *  label and free-text flag and fills only what is empty; `order` is the row position. */
 export function ComplaintHierarchyCreate() {
   return (
     <DigitCreate

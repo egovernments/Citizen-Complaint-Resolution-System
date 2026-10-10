@@ -5,7 +5,7 @@ import { ComplaintLevelEditor } from './ComplaintLevelEditor';
 import { levelsForEdit } from './hierarchyLevels';
 
 /** Edit a live complaint hierarchy: each level's label (what the citizen and employee pickers show when no
- *  <HIERARCHY>_<LEVEL> message is localized), free-text and active flags, and the definition's Active flag.
+ *  <HIERARCHY>_<LEVEL> message is localized) and free-text flag, and the definition's Active flag.
  *  The structure (level codes, parents, leaf level, order) is locked: nodes and filed complaints point at it;
  *  restructuring is the Migrate action. */
 export function ComplaintHierarchyEdit() {
