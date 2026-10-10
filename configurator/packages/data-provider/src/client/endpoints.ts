@@ -32,6 +32,7 @@ export const ENDPOINTS = {
   PGR_COUNT: '/pgr-services/v2/request/_count',
   WORKFLOW_BUSINESS_SERVICE_SEARCH: '/egov-workflow-v2/egov-wf/businessservice/_search',
   WORKFLOW_BUSINESS_SERVICE_CREATE: '/egov-workflow-v2/egov-wf/businessservice/_create',
+  WORKFLOW_BUSINESS_SERVICE_UPDATE: '/egov-workflow-v2/egov-wf/businessservice/_update',
   WORKFLOW_PROCESS_SEARCH: '/egov-workflow-v2/egov-wf/process/_search',
   FILESTORE_UPLOAD: '/filestore/v1/files',
   FILESTORE_URL: '/filestore/v1/files/url',

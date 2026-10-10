@@ -18,6 +18,51 @@ describe('createDigitDataProvider', () => {
     __setMdmsSearchAllLimitsForTesting();
   });
 
+  it('workflow update changes only the roles of each action, against the live definition', async () => {
+    const live = {
+      tenantId: 'pg', businessService: 'PGR', business: 'pgr-services', businessServiceSla: 1,
+      states: [
+        { uuid: 's0', state: null, actions: [{ action: 'APPLY', nextState: 's1', roles: ['CITIZEN'] }] },
+        { uuid: 's1', state: 'PENDINGFORASSIGNMENT', actions: [{ action: 'ASSIGN', nextState: 's2', roles: ['GRO', 'DGRO'] }] },
+      ],
+    };
+    mock.method(client, 'workflowBusinessServiceSearch', async () => [live]);
+    type Bs = { states: Array<{ actions: Array<Record<string, unknown>> }> };
+    let sent: Bs | null = null;
+    mock.method(client, 'workflowBusinessServiceUpdate', async (bs: Record<string, unknown>) => { sent = bs as unknown as Bs; return bs; });
+
+    const dp = createDigitDataProvider(client, 'pg');
+    await dp.update('workflow-business-services', {
+      id: 'PGR',
+      data: {
+        businessService: 'PGR',
+        states: [
+          { uuid: 's0', state: null, actions: [{ action: 'APPLY', nextState: 'elsewhere', roles: ['CITIZEN'] }] },
+          { uuid: 's1', state: 'PENDINGFORASSIGNMENT', actions: [{ action: 'ASSIGN', nextState: 's2', roles: ['GRO'] }, { action: 'INVENTED', roles: ['X'] }] },
+        ],
+      },
+      previousData: {} as never,
+    });
+
+    assert.ok(sent, 'workflowBusinessServiceUpdate should have been called');
+    const s = sent as unknown as Bs;
+    assert.deepEqual(s.states[1].actions, [{ action: 'ASSIGN', nextState: 's2', roles: ['GRO'] }]);
+    // next states and the action list come from the live definition
+    assert.equal(s.states[0].actions[0].nextState, 's1');
+  });
+
+  it('workflow list falls back to the complaint workflow when a search naming none is empty', async () => {
+    const calls: unknown[] = [];
+    mock.method(client, 'workflowBusinessServiceSearch', async (_t: string, codes?: string[]) => {
+      calls.push(codes);
+      return codes ? [{ tenantId: 'pg', businessService: 'PGR', states: [] }] : [];
+    });
+    const dp = createDigitDataProvider(client, 'pg');
+    const r = await dp.getList('workflow-business-services', { pagination: { page: 1, perPage: 25 }, sort: { field: 'businessService', order: 'ASC' }, filter: {} });
+    assert.deepEqual(calls, [undefined, ['PGR']]);
+    assert.deepEqual(r.data.map((x) => x.id), ['PGR']);
+  });
+
   it('returns a DataProvider with all 9 methods', () => {
     const dp = createDigitDataProvider(client, 'pg');
     assert.ok(dp.getList);

@@ -642,6 +642,13 @@ export class DigitApiClient {
     return (data.BusinessServices || [])[0] || {};
   }
 
+  async workflowBusinessServiceUpdate(businessService: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const data = await this.request<{ BusinessServices?: Record<string, unknown>[] }>(this.endpoint('WORKFLOW_BUSINESS_SERVICE_UPDATE'), {
+      RequestInfo: this.buildRequestInfo(), BusinessServices: [businessService],
+    });
+    return (data.BusinessServices || [])[0] || {};
+  }
+
   async workflowProcessSearch(tenantId: string, businessIds?: string[], options?: {
     limit?: number; offset?: number; history?: boolean;
   }): Promise<Record<string, unknown>[]> {

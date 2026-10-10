@@ -984,6 +984,9 @@ async function userGetList(client: DigitApiClient, config: ResourceConfig, tenan
  * caller that genuinely wants only PGR still passes the filter (see the
  * `getOne` path below, which searches by the requested id).
  */
+/** The business service listed when the Workflow list names none. */
+const DEFAULT_WORKFLOW = 'PGR';
+
 async function workflowBsGetList(client: DigitApiClient, config: ResourceConfig, tenantId: string, filter?: Record<string, unknown>): Promise<RaRecord[]> {
   const requested = filter?.businessServices;
   const listed = Array.isArray(requested)
@@ -995,7 +998,10 @@ async function workflowBsGetList(client: DigitApiClient, config: ResourceConfig,
   // cannot accidentally ask for "no business services" and get all of them by
   // a coincidence of the client's param handling.
   const codes = listed.length > 0 ? listed : undefined;
-  const services = await client.workflowBusinessServiceSearch(tenantId, codes);
+  let services = await client.workflowBusinessServiceSearch(tenantId, codes);
+  // egov-workflow-v2 answers [] to a search that names no business service, which left this list empty. With no
+  // filter, list the complaint workflow (the one this console configures).
+  if (!codes && services.length === 0) services = await client.workflowBusinessServiceSearch(tenantId, [DEFAULT_WORKFLOW]);
   return services.map((s) => normalizeRecord(s, config));
 }
 
@@ -1932,6 +1938,29 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
         }
         const updated = await client.userUpdate(merged);
         return { data: normalizeRecord(updated, config) };
+      }
+      if (config.type === 'workflow-bs') {
+        // Only the roles of each action change (who may ASSIGN, RESOLVE, ...): states, actions and next states stay
+        // as the live definition has them, so the form cannot add, drop or rewire a transition.
+        const data = params.data as Record<string, unknown>;
+        const code = String(data.businessService || params.id);
+        const [live] = await client.workflowBusinessServiceSearch(tenantId, [code]);
+        if (!live) throw new Error(`Workflow business service not found: ${code}`);
+        const edited = new Map<string, unknown>();
+        for (const st of (data.states as Array<Record<string, unknown>> | undefined) ?? []) {
+          for (const ac of (st.actions as Array<Record<string, unknown>> | undefined) ?? []) {
+            if (Array.isArray(ac.roles)) edited.set(`${st.state ?? ''}|${ac.action}`, ac.roles);
+          }
+        }
+        const states = ((live.states as Array<Record<string, unknown>> | undefined) ?? []).map((st) => ({
+          ...st,
+          actions: ((st.actions as Array<Record<string, unknown>> | undefined) ?? []).map((ac) => {
+            const roles = edited.get(`${st.state ?? ''}|${ac.action}`);
+            return roles ? { ...ac, roles } : ac;
+          }),
+        }));
+        const updated = await client.workflowBusinessServiceUpdate({ ...live, states });
+        return { data: normalizeRecord(Object.keys(updated).length ? updated : { ...live, states }, config) };
       }
       throw new Error(`Update not supported for resource type: ${config.type}`);
     },
