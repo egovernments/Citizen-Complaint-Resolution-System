@@ -611,12 +611,24 @@ function wantsInactive(meta: unknown): boolean {
   return Boolean((meta as { showInactive?: boolean } | undefined)?.showInactive);
 }
 
+const HRMS_PAGE = 500;
+/** Every employee of a tenant: HRMS _search pages by limit/offset (2.x windows by employee uuid). */
+async function employeeSearchAll(client: DigitApiClient, tenant: string): Promise<Record<string, unknown>[]> {
+  const all: Record<string, unknown>[] = [];
+  for (let offset = 0; ; offset += HRMS_PAGE) {
+    const page = await client.employeeSearch(tenant, { limit: HRMS_PAGE, offset });
+    all.push(...page);
+    if (page.length < HRMS_PAGE) return all;
+  }
+}
+
 async function hrmsGetList(client: DigitApiClient, config: ResourceConfig, tenantId: string, filter?: Record<string, unknown>): Promise<RaRecord[]> {
   // Honor a __tenantId override (e.g. the assignee picker on a city complaint
   // must list the CITY's employees, not the root/session tenant's).
   const tenant = pickTenant(tenantId, filter);
-  // First try searching the resolved tenant
-  const employees = await client.employeeSearch(tenant, { limit: 500 });
+  // First try searching the resolved tenant (every page: one 500-row page silently dropped
+  // everyone after the 500th - the assignee picker and the Employees list missed them)
+  const employees = await employeeSearchAll(client, tenant);
   if (employees.length > 0) return employees.map((e) => normalizeRecord(e, config));
 
   // If root tenant returned 0 results, search all city-level sub-tenants
@@ -628,7 +640,7 @@ async function hrmsGetList(client: DigitApiClient, config: ResourceConfig, tenan
 
     if (cityTenants.length > 0) {
       const results = await Promise.all(
-        cityTenants.map((ct) => client.employeeSearch(ct, { limit: 500 }).catch(() => []))
+        cityTenants.map((ct) => employeeSearchAll(client, ct).catch(() => []))
       );
       const allEmployees = results.flat();
       return allEmployees.map((e) => normalizeRecord(e, config));

@@ -660,6 +660,23 @@ describe('createDigitDataProvider', () => {
     assert.equal(byRole.mock.callCount(), 0);
   });
 
+  it('lists every employee of the tenant, not only the first HRMS page of 500', async () => {
+    // A county with 589 employees: one limit=500 call left 89 of them out of the assignee
+    // picker and the Employees list.
+    const all = Array.from({ length: 589 }, (_, i) => ({ uuid: `emp-${i}`, code: `E${i}`, tenantId: 'ke.bomet', user: { name: `Employee ${i}` } }));
+    const calls: { limit?: number; offset?: number }[] = [];
+    mock.method(client, 'employeeSearch', async (_t: string, o: { limit?: number; offset?: number } = {}) => {
+      calls.push({ limit: o.limit, offset: o.offset });
+      return all.slice(o.offset ?? 0, (o.offset ?? 0) + (o.limit ?? 100));
+    });
+    const dp = createDigitDataProvider(client, 'ke');
+    const { data } = await dp.getList('employees', {
+      pagination: { page: 1, perPage: 1000 }, sort: { field: 'user.name', order: 'ASC' }, filter: { __tenantId: 'ke.bomet' },
+    });
+    assert.equal(data.length, 589);
+    assert.deepEqual(calls, [{ limit: 500, offset: 0 }, { limit: 500, offset: 500 }]);
+  });
+
   it('does not let a stale reActivateEmployee in the form payload override the fresh fetch (closes #813)', async () => {
     // EmployeeEdit.tsx has no input bound to reActivateEmployee, so any value
     // present in the submitted form data is a stale leftover from whatever
