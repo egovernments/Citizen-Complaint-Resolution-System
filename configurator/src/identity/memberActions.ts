@@ -42,8 +42,11 @@ export async function createAndLink<T extends MemberEmployee>(input: T, search: 
   return employee;
 }
 
-/** Always re-read before deactivation; retrying a failed removal skips the completed HRMS write. */
-export async function deactivateAndRemove<T extends MemberEmployee>(read: () => Promise<T>, update: (employee: T) => Promise<unknown>, actorUuid?: string): Promise<T> {
+/**
+ * Always re-read before deactivation; retrying a failed removal skips the completed HRMS write.
+ * `reason` is the deactivation reason the operator picked (OTHERS when none was).
+ */
+export async function deactivateAndRemove<T extends MemberEmployee>(read: () => Promise<T>, update: (employee: T) => Promise<unknown>, actorUuid?: string, reason = 'OTHERS'): Promise<T> {
   const employee = await read();
   const uuid = employeeUuid(employee);
   if (actorUuid === uuid) throw new MessageError('members.self_removal', 'You cannot remove your own membership.');
@@ -54,7 +57,7 @@ export async function deactivateAndRemove<T extends MemberEmployee>(read: () => 
       ...employee, user, isActive: false, reActivateEmployee: false,
       deactivationDetails: [
         ...(Array.isArray(employee.deactivationDetails) ? employee.deactivationDetails : []),
-        { reasonForDeactivation: 'OTHERS', effectiveFrom: Date.now() },
+        { reasonForDeactivation: reason, effectiveFrom: Date.now() },
       ],
     });
   }

@@ -23,6 +23,12 @@ it('routes edit-form deactivation through both HRMS and BFF removal', async () =
   expect(base.update.mock.calls[0][1].data.isActive).toBe(false);
   expect(removeMember).toHaveBeenCalledWith('acme', 'u');
 });
+it('records the deactivation reason picked on the edit form, not OTHERS', async () => {
+  const details = [{ reasonForDeactivation: 'ORDERBYCOMMISSIONER', effectiveFrom: 1 }];
+  await provider().update('employees', { id: 'u', data: { ...row, isActive: false, deactivationDetails: details }, previousData: row });
+  const sent = base.update.mock.calls[0][1].data.deactivationDetails;
+  expect(sent[sent.length - 1].reasonForDeactivation).toBe('ORDERBYCOMMISSIONER');
+});
 it('refuses cross-workspace removal before HRMS mutation', async () => {
   base.getOne.mockResolvedValue({ data: { ...row, tenantId: 'other' } });
   await expect(provider().delete('employees', { id: 'u' })).rejects.toThrow('this workspace');
