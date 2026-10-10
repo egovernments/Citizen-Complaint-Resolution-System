@@ -19,11 +19,17 @@ import { notificationsEventCatalogueDescriptor } from './notifications-event-cat
 import { mapConfigDescriptor } from './map-config';
 import { analyticsProviderDescriptor } from './analytics-provider';
 import { pgrEscalationDescriptor } from './pgr-escalation';
+import { dashboardPackDescriptor } from './dss-dashboard-pack';
+import { kpiDefinitionDescriptor } from './dss-kpi-definition';
+import { adminConsoleSchemaDescriptor } from './admin-console-schema';
 
 /** Map of schema code -> descriptor. Add new entries as we cover more schemas. */
 const DESCRIPTORS: Record<string, SchemaDescriptor> = {
   [mobileValidationDescriptor.schema]: mobileValidationDescriptor,
   [formValidationsDescriptor.schema]: formValidationsDescriptor,
+  [dashboardPackDescriptor.schema]: dashboardPackDescriptor,
+  [kpiDefinitionDescriptor.schema]: kpiDefinitionDescriptor,
+  [adminConsoleSchemaDescriptor.schema]: adminConsoleSchemaDescriptor,
   [themeConfigDescriptor.schema]: themeConfigDescriptor,
   [tenantBoundaryDescriptor.schema]: tenantBoundaryDescriptor,
   [autoEscalationIgnoreDescriptor.schema]: autoEscalationIgnoreDescriptor,

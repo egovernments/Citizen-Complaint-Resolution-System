@@ -230,6 +230,12 @@ export const REGISTRY: Record<string, ResourceConfig> = {
   'pgr-ui-constants':       { type: 'mdms', label: 'PGR UI Constants',         schema: 'RAINMAKER-PGR.UIConstants',                idField: 'code',              nameField: 'REOPENSLA' },
   'pgr-escalation':         { type: 'mdms', label: 'PGR Escalation',           schema: 'RAINMAKER-PGR.EscalationConfig',           idField: 'code',              nameField: 'code' },
   'map-config':             { type: 'mdms', label: 'Map Configuration',        schema: 'RAINMAKER-PGR.MapConfig',                  idField: 'code',              nameField: 'code' },
+  // ours#864: masters the apps read that had no screen (dashboards, admin-console templates, user-field
+  // validation rules). Nested fields are edited through their schema descriptors (json / chip-array widgets).
+  'dashboard-packs':        { type: 'mdms', label: 'Dashboard Packs',          schema: 'dss.DashboardPack',                        idField: 'id',                nameField: 'id', descriptionField: 'description' },
+  'kpi-definitions':        { type: 'mdms', label: 'Dashboard KPIs',           schema: 'dss.KpiDefinition',                        idField: 'id',                nameField: 'id', descriptionField: 'status' },
+  'admin-console-schema':   { type: 'mdms', label: 'Admin Console Templates',  schema: 'CRS-ADMIN-CONSOLE.adminSchema',            idField: 'title',             nameField: 'title' },
+  'form-validations':       { type: 'mdms', label: 'Form Validations',         schema: 'common-masters.FormValidations',           idField: 'fieldType',         nameField: 'fieldType', descriptionField: 'regex' },
   // -------------------------------------------------------------------------
   // Notification configuration — the shared NOTIFICATIONS.* namespace.
   //
