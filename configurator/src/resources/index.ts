@@ -48,6 +48,7 @@ export { RoleActionCreate } from './role-actions/RoleActionCreate';
 export { RoleActionEdit } from './role-actions/RoleActionEdit';
 export { WorkflowServiceList } from './workflow-services/WorkflowServiceList';
 export { WorkflowServiceShow } from './workflow-services/WorkflowServiceShow';
+export { WorkflowServiceEdit } from './workflow-services/WorkflowServiceEdit';
 export { WorkflowProcessList } from './workflow-processes/WorkflowProcessList';
 export { WorkflowProcessShow } from './workflow-processes/WorkflowProcessShow';
 export { MdmsSchemaList } from './mdms-schemas/MdmsSchemaList';

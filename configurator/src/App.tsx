@@ -36,7 +36,7 @@ import {
   AccessRoleList, AccessRoleShow,
   AccessActionList, AccessActionShow,
   RoleActionList, RoleActionShow, RoleActionCreate, RoleActionEdit,
-  WorkflowServiceList, WorkflowServiceShow,
+  WorkflowServiceList, WorkflowServiceShow, WorkflowServiceEdit,
   WorkflowProcessList, WorkflowProcessShow,
   MdmsSchemaList, MdmsSchemaShow,
   BoundaryHierarchyList, BoundaryHierarchyShow, BoundaryHierarchyCreate,
@@ -167,7 +167,7 @@ function ManagementAdminResources() {
         {canViewResource('role-actions') && (
           <Resource name="role-actions" list={RoleActionList} show={RoleActionShow} create={RoleActionCreate} edit={RoleActionEdit} />
         )}
-        {canViewResource('workflow-business-services') && <Resource name="workflow-business-services" list={WorkflowServiceList} show={WorkflowServiceShow} />}
+        {canViewResource('workflow-business-services') && <Resource name="workflow-business-services" list={WorkflowServiceList} show={WorkflowServiceShow} edit={WorkflowServiceEdit} />}
         {canViewResource('workflow-processes') && <Resource name="workflow-processes" list={WorkflowProcessList} show={WorkflowProcessShow} />}
         {canViewResource('mdms-schemas') && <Resource name="mdms-schemas" list={MdmsSchemaList} show={MdmsSchemaShow} />}
         {canViewResource('boundary-hierarchies') && <Resource name="boundary-hierarchies" list={BoundaryHierarchyList} show={BoundaryHierarchyShow} create={BoundaryHierarchyCreate} />}

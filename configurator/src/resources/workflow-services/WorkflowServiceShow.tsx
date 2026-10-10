@@ -21,6 +21,7 @@ import {
 import { parseAudience, describeAudience } from '../notification-configure/audienceScheme';
 import { legacyEventName } from '../notification-configure/legacyAdapter';
 import { useNotificationConfig } from '../notification-configure/useNotificationGuard';
+import { useMastersCapability } from '@/hooks/useMastersCapability';
 
 /** Case-insensitive, trimmed comparison helper (mirrors the checker). */
 function eq(a: unknown, b: unknown): boolean {
@@ -163,9 +164,13 @@ function ValidationPanel() {
 
 export function WorkflowServiceShow() {
   const { record } = useShowController();
+  const { canEditResource } = useMastersCapability();
 
   return (
-    <DigitShow title={record ? `Workflow: ${record.businessService ?? record.id}` : 'Workflow Service'}>
+    <DigitShow
+      title={record ? `Workflow: ${record.businessService ?? record.id}` : 'Workflow Service'}
+      hasEdit={canEditResource('workflow-business-services')}
+    >
       {(rec: Record<string, unknown>) => {
         const states = rec.states as Array<Record<string, unknown>> | undefined;
         const sla = Number(rec.businessServiceSla);
