@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Check, ChevronRight, LayoutGrid, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Check, ChevronRight, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useApp } from '../App';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useMastersCapability } from '@/hooks/useMastersCapability';
-import { ONBOARDING_GATE_ENABLED } from '@/config/featureFlags';
 import { NavRow, SectionLabel, RailBackdrop, RailCloseButton, RailMenuButton, RailPoweredBy } from '@/components/layout/rail';
 import { railClasses } from '@/components/layout/railStyles';
 import { useRailDrawer } from '@/components/layout/useRailDrawer';
@@ -39,7 +38,7 @@ function StepMark({ status }: { status: StepStatus }) {
 
 
 export default function OnboardingLayout() {
-  const { state, logout, setMode, toggleHelp } = useApp();
+  const { state, logout, toggleHelp } = useApp();
   const t = useOnboardingT();
   const statusWord: Record<StepStatus, string> = {
     done: t('layout.status.done', 'done'),
@@ -77,10 +76,6 @@ export default function OnboardingLayout() {
     catch (error) { window.alert(error instanceof Error ? error.message : t('layout.sign_out_failed', 'Sign-out failed. Please retry.')); }
   };
 
-  const handleGoToManagement = () => {
-    setMode('management');
-    navigate('/manage');
-  };
 
   const openMobileNav = () => {
     setCollapsed(false);
@@ -172,12 +167,6 @@ export default function OnboardingLayout() {
           ))}
         </nav>
 
-        {/* Footer: the way out while switching is allowed, then "Powered by DIGIT" */}
-        {!ONBOARDING_GATE_ENABLED && (
-          <div className="border-t border-border py-2">
-            <NavRow icon={LayoutGrid} label={t('layout.go_to_management', 'Go to Management')} active={false} collapsed={collapsed} onClick={handleGoToManagement} />
-          </div>
-        )}
         <RailPoweredBy collapsed={collapsed} />
       </aside>
 

@@ -80,12 +80,8 @@ function buildAuthStateBlob(token: string, userRequest: Record<string, unknown>)
     environment: BASE_URL,
     tenant: TENANT,
     targetTenant: TENANT,
-    // Management mode is the gate for `/manage/*` (react-admin) routes —
-    // EmployeeCreate, ComplaintCreate, etc. all live there. App.tsx routes
-    // onboarding-mode users to /phase/1 instead.
-    mode: 'management',
-    currentPhase: 1,
-    completedPhases: [],
+    currentPhase: 5,
+    completedPhases: [1, 2, 3, 4, 5],
   };
 }
 
