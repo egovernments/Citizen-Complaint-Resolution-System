@@ -3,6 +3,7 @@ import { MdmsService } from "../../elements/MDMS";
 import { Storage } from "../../atoms/Utils/Storage";
 import { ApiCacheService } from "../../atoms/ApiCacheService";
 import { TenantConfigSearch } from "../../elements/TenantConfigService";
+import { tenantLabelKey } from "../../../utils/tenantLabel";
 
 const getImgUrl = (url, fallbackUrl) => {
 
@@ -175,12 +176,12 @@ export const StoreService = {
       .reduce((unique, ele) => (unique.find((item) => item.code === ele.code) ? unique : [...unique, ele]), []);
       if (Digit.Utils.getMultiRootTenant()) {
         initData.tenants = MdmsRes?.tenant?.cities.map((tenant) => ({
-            i18nKey: `TENANT_TENANTS_${tenant.code.replace(".", "_").toUpperCase()}`,
+            i18nKey: tenantLabelKey(tenant.code),
             ...tenant,
         }));
       } else {
         initData.tenants = MdmsRes?.tenant?.tenants.map((tenant) => ({
-            i18nKey: `TENANT_TENANTS_${tenant.code.replace(".", "_").toUpperCase()}`,
+            i18nKey: tenantLabelKey(tenant.code),
             ...tenant,
         }));
     }
