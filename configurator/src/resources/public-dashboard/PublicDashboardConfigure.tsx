@@ -18,6 +18,7 @@ import {
   type PreviewTile,
 } from './kpiCatalog';
 import { listTimeZones } from '@/lib/timezones';
+import { NumberFormatCard } from './NumberFormatCard';
 import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { useWorkspaceSlug } from '@/identity/workspaceSlug';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -164,6 +165,20 @@ export default function PublicDashboardConfigure() {
       setError(cause instanceof Error ? cause.message : 'Could not update the dashboard time zone.');
     } finally {
       setSavingTimeZone(false);
+    }
+  };
+
+  // dss.DashboardConfig.numberFormat: the supervisor dashboard's per-language number mask (CCRS#950)
+  const setNumberFormat = async (numberFormat: Record<string, string>) => {
+    setError(null);
+    setWarning(null);
+    setSavedMessage(null);
+    try {
+      await mdmsService.upsertDashboardConfig(tenantId, { numberFormat });
+      setConfig((prev) => ({ ...(prev ?? {}), numberFormat }));
+      setSavedMessage('Dashboard number format saved. Supervisors see it the next time they open the dashboard.');
+    } catch (cause: unknown) {
+      setError(cause instanceof Error ? cause.message : 'Could not update the dashboard number format.');
     }
   };
 
@@ -441,6 +456,9 @@ export default function PublicDashboardConfigure() {
           </p>
         </CardContent>
       </Card>
+
+      <NumberFormatCard key={JSON.stringify(config?.numberFormat ?? null)} value={config?.numberFormat}
+        onSave={setNumberFormat} disabled={saving || savingTimeZone} />
 
       <Dialog open={dialogOpen} onOpenChange={(open) => { if (!saving) setDialogOpen(open); }}>
         <DialogContent className="sm:max-w-lg">
