@@ -1219,4 +1219,33 @@ describe('createDigitDataProvider', () => {
       assert.deepEqual(result.data.map((r) => r.id), ['BOMET_CENTRAL', 'NAIROBI_CENTRAL']);
     });
   });
+
+  it('user update sends active, roles, dob and photo, and keeps the rest of the server record', async () => {
+    const server = {
+      id: 7, uuid: 'u-1', userName: 'jane', type: 'CITIZEN', tenantId: 'pg', name: 'Jane', active: true,
+      roles: [{ code: 'CITIZEN', name: 'Citizen', tenantId: 'pg' }], dob: null, photo: null, otpReference: 'x',
+    };
+    mock.method(client, 'userSearch', async () => [server]);
+    let sent: Record<string, unknown> | null = null;
+    mock.method(client, 'userUpdate', async (u: Record<string, unknown>) => { sent = u; return u; });
+
+    const dp = createDigitDataProvider(client, 'pg');
+    const roles = [{ code: 'CITIZEN', name: 'Citizen', tenantId: 'pg' }, { code: 'CSR', name: 'CSR', tenantId: 'pg' }];
+    await dp.update('users', {
+      id: 'u-1',
+      data: { id: 'u-1', uuid: 'u-1', userName: 'changed', type: 'EMPLOYEE', active: false, roles, dob: '31/01/1990', photo: 'fs-1' },
+      previousData: {} as never,
+    });
+
+    assert.ok(sent, 'userUpdate should have been called');
+    const u = sent as Record<string, unknown>;
+    assert.equal(u.active, false);
+    assert.deepEqual(u.roles, roles);
+    assert.equal(u.dob, '31/01/1990');
+    assert.equal(u.photo, 'fs-1');
+    // disabled on the form: never taken from the payload
+    assert.equal(u.userName, 'jane');
+    assert.equal(u.type, 'CITIZEN');
+    assert.equal(u.id, 7);
+  });
 });

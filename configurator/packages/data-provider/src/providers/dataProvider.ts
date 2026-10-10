@@ -1925,7 +1925,8 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
         const existing = await client.userSearch(tenantId, { uuid: [uuid] });
         if (!existing.length) throw new Error(`User not found: ${uuid}`);
         const base = existing[0] as Record<string, unknown>;
-        const editable = ['name', 'mobileNumber', 'emailId', 'gender'];
+        // active / roles / dob / photo: the Access section and the profile extras of the Edit User form
+        const editable = ['name', 'mobileNumber', 'emailId', 'gender', 'dob', 'photo', 'active', 'roles'];
         const merged: Record<string, unknown> = { ...base };
         for (const key of editable) {
           if (key in data) merged[key] = data[key];
