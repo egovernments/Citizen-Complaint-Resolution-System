@@ -1,6 +1,7 @@
 import React from "react";
 import { useQuery } from "react-query";
 import { useTranslation } from "react-i18next";
+import { tenantLabelKey } from "../utils/tenantLabel";
 
 const transformTenantCode = (tenant, data) => {
   const city = data.tenants.find(t => t.code === tenant.code)?.city;
@@ -18,7 +19,7 @@ const useModuleTenants = (module, config = {}) => {
         .find((e) => e.module === module)
         .tenants.map((tenant) => ({
           ...tenant,
-          ulbKey: t(`TENANT_TENANTS_${tenant?.code?.toUpperCase?.()?.replace(".", "_")}`),
+          ulbKey: t(tenantLabelKey(tenant?.code)),
           ddrKey: t(
             `DDR_${transformTenantCode(tenant, data)}`
           ),
@@ -28,7 +29,7 @@ const useModuleTenants = (module, config = {}) => {
         .find((e) => e.module === module)
         .tenants.map((tenant) => ({
           ...tenant,
-          ulbKey: t(`TENANT_TENANTS_${tenant?.code?.toUpperCase?.()?.replace(".", "_")}`),
+          ulbKey: t(tenantLabelKey(tenant?.code)),
           ddrKey: t(
             `DDR_${transformTenantCode(tenant, data)}`
           ),

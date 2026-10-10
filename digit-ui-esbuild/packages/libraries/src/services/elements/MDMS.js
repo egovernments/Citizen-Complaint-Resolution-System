@@ -4,6 +4,7 @@ import Urls from "../atoms/urls";
 import { Request, ServiceRequest } from "../atoms/Utils/Request";
 import { PersistantStorage } from "../atoms/Utils/Storage";
 import idbCache from "../atoms/Utils/idbCache";
+import { tenantLabelKey } from "../../utils/tenantLabel";
 
 // export const stringReplaceAll = (str = "", searcher = "", replaceWith = "") => {
 //   if (searcher == "") return str;
@@ -35,7 +36,7 @@ const GetCitiesWithi18nKeys = (MdmsRes, moduleCode) => {
       emailId,
       address,
       contactNumber,
-      i18nKey: "TENANT_TENANTS_" + code.replace(".", "_").toUpperCase(),
+      i18nKey: tenantLabelKey(code),
     }))
     .sort((cityA, cityB) => {
       const na = cityA.name.toLowerCase(),
