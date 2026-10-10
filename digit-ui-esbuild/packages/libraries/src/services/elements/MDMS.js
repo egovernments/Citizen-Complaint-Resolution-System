@@ -4,7 +4,7 @@ import Urls from "../atoms/urls";
 import { Request, ServiceRequest } from "../atoms/Utils/Request";
 import { PersistantStorage } from "../atoms/Utils/Storage";
 import idbCache from "../atoms/Utils/idbCache";
-import { tenantLabelKey } from "../../utils/tenantLabel";
+import { tenantKeyPrefix, tenantLabelKey } from "../../utils/tenantLabel";
 
 // export const stringReplaceAll = (str = "", searcher = "", replaceWith = "") => {
 //   if (searcher == "") return str;
@@ -1092,7 +1092,7 @@ const GetSlumLocalityMapping = (MdmsRes, tenantId) =>
           ...prev[curr.locality],
           {
             ...curr,
-            i18nKey: `${tenantId.toUpperCase().replace(".", "_")}_${curr.locality}_${curr.code}`,
+            i18nKey: `${tenantKeyPrefix(tenantId)}_${curr.locality}_${curr.code}`,
           },
         ],
       }
@@ -1101,7 +1101,7 @@ const GetSlumLocalityMapping = (MdmsRes, tenantId) =>
         [curr.locality]: [
           {
             ...curr,
-            i18nKey: `${tenantId.toUpperCase().replace(".", "_")}_${curr.locality}_${curr.code}`,
+            i18nKey: `${tenantKeyPrefix(tenantId)}_${curr.locality}_${curr.code}`,
           },
         ],
       };
