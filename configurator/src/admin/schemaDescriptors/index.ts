@@ -16,6 +16,8 @@ import { notificationsTemplateDescriptor } from './notifications-template';
 import { notificationsChannelDescriptor } from './notifications-channel';
 import { notificationsProviderTemplateDescriptor } from './notifications-provider-template';
 import { notificationsEventCatalogueDescriptor } from './notifications-event-catalogue';
+import { inboxVisibilityDescriptor } from './inbox-visibility';
+import { actionMappingDescriptor } from './action-mapping';
 import { mapConfigDescriptor } from './map-config';
 import { analyticsProviderDescriptor } from './analytics-provider';
 import { pgrEscalationDescriptor } from './pgr-escalation';
@@ -39,6 +41,8 @@ const DESCRIPTORS: Record<string, SchemaDescriptor> = {
   [notificationsChannelDescriptor.schema]: notificationsChannelDescriptor,
   [notificationsProviderTemplateDescriptor.schema]: notificationsProviderTemplateDescriptor,
   [notificationsEventCatalogueDescriptor.schema]: notificationsEventCatalogueDescriptor,
+  [inboxVisibilityDescriptor.schema]: inboxVisibilityDescriptor,
+  [actionMappingDescriptor.schema]: actionMappingDescriptor,
   [mapConfigDescriptor.schema]: mapConfigDescriptor,
   [analyticsProviderDescriptor.schema]: analyticsProviderDescriptor,
   [pgrEscalationDescriptor.schema]: pgrEscalationDescriptor,
