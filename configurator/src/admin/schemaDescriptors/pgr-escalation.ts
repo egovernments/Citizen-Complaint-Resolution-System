@@ -17,6 +17,7 @@ import type { SchemaDescriptor } from './types';
  */
 export const pgrEscalationDescriptor: SchemaDescriptor = {
   schema: 'RAINMAKER-PGR.EscalationConfig',
+  customEditor: 'escalation-policy',
   groups: [
     { title: 'Policy', fields: ['code', 'maxDepth', 'eligibleStatuses'] },
     {

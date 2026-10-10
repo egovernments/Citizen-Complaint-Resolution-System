@@ -3,6 +3,7 @@ import { ThemeConfigEditor } from './ThemeConfigEditor';
 import { StateInfoEditor } from './StateInfoEditor';
 import { MapConfigEditor } from './MapConfigEditor';
 import { AnalyticsProvidersEditor } from '../analytics/AnalyticsProvidersEditor';
+import { EscalationPolicyEditor } from '../escalation/EscalationPolicyEditor';
 
 /**
  * Registry of custom editors keyed by the `customEditor` field on
@@ -32,6 +33,8 @@ export const customEditors: Record<string, ComponentType> = {
   // city, and one delete would switch analytics off everywhere. This editor
   // writes only rows the tenant owns and never deletes.
   'analytics-provider': AnalyticsProvidersEditor,
+  // Dedicated operator-grade editor for RAINMAKER-PGR.EscalationConfig (Issue #2091).
+  'escalation-policy': EscalationPolicyEditor,
 };
 
-export { ThemeConfigEditor, StateInfoEditor, MapConfigEditor, AnalyticsProvidersEditor };
+export { ThemeConfigEditor, StateInfoEditor, MapConfigEditor, AnalyticsProvidersEditor, EscalationPolicyEditor };
