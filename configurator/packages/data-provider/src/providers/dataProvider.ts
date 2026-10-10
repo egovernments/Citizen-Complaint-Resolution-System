@@ -1909,6 +1909,21 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
         if (data.additionalDetails !== undefined) merged.additionalDetails = data.additionalDetails;
         if (data.geometry !== undefined) merged.geometry = data.geometry;
         const updated = await client.boundaryUpdate(tenantId, [merged]);
+        // A new parent (BoundaryEdit's Parent field) is a relationship change: re-parent the node in its
+        // hierarchy (boundary-relationships/_update moves its children too). Only when it differs from the tree.
+        const newParent = typeof data.parent === 'string' ? data.parent.trim() : '';
+        if (newParent) {
+          const self = (await fetchAll(resource)).find((r) => String(r.code ?? r.id) === code);
+          const curParent = typeof self?.parentCode === 'string' ? self.parentCode : '';
+          if (self && curParent && curParent !== newParent) {
+            await client.boundaryRelationshipUpdate(tenantId, {
+              code,
+              hierarchyType: self.hierarchyType,
+              boundaryType: self.boundaryType,
+              parent: newParent,
+            });
+          }
+        }
         if (updated.length) return { data: normalizeRecord(updated[0], config) };
         return { data: { ...data, id: code } as RaRecord };
       }
