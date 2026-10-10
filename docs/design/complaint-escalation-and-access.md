@@ -1,0 +1,193 @@
+# Complaint escalation and access
+
+| | |
+|---|---|
+| **Status** | Proposal for review |
+| **Date** | 2026-10-07 |
+| **Baseline** | CCRS on DIGIT 3 (`ChakshuGautam/ccrs-digit3`, branch `develop`) |
+| **Scope** | `pgr-services`, PGR workflow definition, MDMS config, PGR employee copy |
+
+One model for who owns a complaint, who is senior to whom, and who may see and act on it.
+
+Items marked **(proposed)** are recommendations not yet confirmed. Section 8 lists what's out of scope and what's still open.
+
+## 1. Problem
+
+1. **Escalate to a role:** stuck complaints go to the next role up, not to a hand-wired boss.
+2. **Seniors see juniors' work:** within their area and department.
+3. **The owner has rights:** the person holding a complaint acts on it; others don't.
+
+Anonymous and pseudo-anonymous filing are a separate feature with their own design doc. They share one mechanism with this design: hiding sensitive fields (§5).
+
+## 2. Starting point (DIGIT 3)
+
+| Area | Today | Problem |
+|---|---|---|
+| Escalation | Goes to the owner's row in a CCRS-owned supervisor table (`eg_pgr_supervisor_edge`), seeded from 2.x `reportingTo` | Depends on a hand-maintained person-to-person chart |
+| Team inbox | Follows the same table. Nobody below you, or a team over 25, falls back to every open complaint in the tenant | Silent over-exposure |
+| Owner rights | None. Any GRO, LME or viewer can resolve; any role, even a citizen, can call `ESCALATE` | Nobody is accountable for a resolution |
+| Access rules (ABAC) | Works on search only, served through ccrs-compat from DIGIT 3 MDMS | Updates aren't checked |
+
+## 3. Model
+
+```mermaid
+flowchart LR
+  O["1 · Ownership<br/>exactly one owner"] --> H["2 · Hierarchy<br/>role ladder + department + area"]
+  H --> A["3 · Actions<br/>owner acts · seniors see, take over, transfer"]
+```
+
+**Senior:** employee A is senior to B for a complaint when all three hold:
+
+- A's role is higher on the ladder than B's.
+- A is in the complaint's department.
+- A's area covers the complaint's locality.
+
+**Any rung** can be configured to skip the department check, the area check, or both (e.g. a commissioner). Escalation, visibility and permissions all use this one definition.
+
+**People with more than one department:** every department check in this design treats a person as belonging to *all* their departments (the DIGIT 3 employee record's department plus `eg_pgr_employee_department`). How extra departments are assigned and maintained is a separate, open discussion.
+
+```mermaid
+flowchart TB
+  UI["Employee & citizen UI"] --> KONG["Kong gateway<br/>Keycloak token · strips client X-Roles"]
+  KONG --> PGR["pgr-services<br/>escalation scheduler · owner & ABAC checks"]
+  PGR --> WF["DIGIT 3 workflow (internal only)<br/>actions · assigneeCheck backstop"]
+  PGR --> MDMS["MDMS<br/>EscalationConfig ladder · ABAC rules"]
+  PGR --> COPY["PGR employee copy<br/>roles · areas · departments · active (15-min refresh)"]
+  COPY -.-> KC["Keycloak groups (roles)"]
+  COPY -.-> EMP["DIGIT 3 employee service"]
+  PGR --> DB["pgr DB<br/>owner · rung · past owners"]
+```
+
+## 4. Ownership and escalation
+
+**A complaint with a worker always has exactly one owner, a named individual.** Escalation never leaves it unowned and never skips a rung: it hands the complaint to one person in the next role, or it doesn't happen.
+
+```mermaid
+flowchart TD
+  T["Scheduler · every 5 min"] --> D{"Past this rung's threshold?"}
+  D -- no --> W["Wait"]
+  D -- yes --> F["Filter next role: active · may act in this state ·<br/>area covers locality · same department"]
+  F --> N{"Anyone left?"}
+  N -- no --> HOLD["Stay with current owner · reason on complaint · admin report<br/>(retried every 5 min)"]
+  N -- yes --> R["Rank: most specific area → owner's boss →<br/>fewest open complaints → lowest code"]
+  R --> E["ESCALATE to one person · store owner + rung"]
+```
+
+- **Boss-based escalation is retired.** The supervisor table stays as the org chart and only breaks ties.
+- **Thresholds** are percentages of the complaint type's SLA (shipped: 80%, 120%, 200%), counted from **first assignment**.
+- **Overdue** (100% of SLA, counted from filing) is the citizen's clock and is unchanged.
+- **Unassigned too long:** a new or reopened complaint waiting for a GRO for more than N hours appears on the admin report.
+- **Auto-assign at filing** is optional per city, off by default.
+- **A senior transferring a complaint down** restarts the clock for that rung.
+- **(proposed) Role holders** come from PGR's employee copy, which gains roles (from Keycloak groups) and areas. Changes take effect within 15 minutes.
+
+**Configuration:** this extends `RAINMAKER-PGR.EscalationConfig`. A city record overrides the state record, which works on DIGIT 3 because tenants stay `ke` / `ke.bomet`. Saving a ladder checks that its roles exist and grants them the workflow actions they need.
+
+```jsonc
+{
+  "code": "DEFAULT",
+  "defaultSlaPercentageByLevel": [80, 120, 200],
+  "autoAssign": false,
+  "unassignedAlertHours": 4,
+  "roleLadder": [
+    { "role": "PGR_LME" },
+    { "role": "JUNIOR_ENGINEER" },
+    { "role": "CITY_ENGINEER" },
+    { "role": "COMMISSIONER", "ignoreArea": true, "ignoreDepartment": true }
+  ],
+  "departmentLadders": { "WATER": [ /* … */ ] }
+}
+```
+
+## 5. Who can see and do what
+
+For a complaint currently owned by someone at rung *k*:
+
+| Who | See | Comment | Reassign (to GRO queue) | Take over / Transfer | Resolve / Escalate |
+|---|---|---|---|---|---|
+| **Owner** (rung *k*) | ✅ | ✅ | ✅ | – | ✅ |
+| **Seniors** (above *k*, same area and department) | ✅ | ✅ | ✅ | ✅ | Only after taking over |
+| **Previous owners** | ✅ | ✅ | ❌ | ❌ | ❌ |
+| **Peers at rung *k*** (not the owner) | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **Lower rungs** (never owned it) | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **GRO** (same area and department) | ✅ | ✅ | ✅ | ❌ | Only after assigning it to themselves |
+| **Complainant** | ✅ | ✅ | ❌ | ❌ | Reopen and rate only |
+
+**Example:** a ladder of 10 → 5 → 3 → 1 → 1 people, with the complaint assigned to one level-1 worker.
+
+- **Before any escalation:** level-2 people who cover its area and department can already see it, and can comment, reassign, take over or transfer. The other nine level-1 workers can't see it.
+- **Escalated to level 2:** the assignment changes to exactly one of the five. The level-1 worker becomes a previous owner (read and comment).
+- **Escalated to level 3:** the level-2 person who held it becomes a previous owner. The other level-2 people can no longer see it.
+
+**Other rules:**
+
+- **Closed complaints** stay visible to the same people, read-only.
+- **Default inbox for seniors:** the rung directly below, plus anything overdue or held deeper.
+- **Sensitive fields** (e.g. the citizen's phone) follow ownership, not rank. A senior gets them only by taking over.
+- **Each complaint stores** its owner, the owner's rung and its past owners. The Team inbox becomes one database query, with no 25-person cap and no tenant-wide fallback.
+
+## 6. Actions and enforcement
+
+| Action (with a worker) | Workflow setting | Note |
+|---|---|---|
+| `RESOLVE` | `assigneeCheck` on | |
+| `ESCALATE` | Ladder roles only, `assigneeCheck` on | One action for manual and automatic. The scheduler uses the workflow's internal system endpoint, which records the actor as `system` |
+| `REASSIGN` | As today | Sends the complaint back to the GRO queue |
+| `TAKE_OVER` (new) | Self-loop | Senior check in pgr-services |
+| `TRANSFER` (new) | Self-loop | Senior check in pgr-services; owners can't pick a peer |
+| `COMMENT` | As today | Who may comment is restricted in pgr-services |
+
+`PGR_VIEWER` becomes view-only.
+
+```mermaid
+flowchart LR
+  U["Request"] --> K["1 · Kong<br/>valid token · role may call the path"]
+  K --> P["2 · pgr-services<br/>the rules in §5"]
+  P --> W["3 · DIGIT 3 workflow<br/>role list + assigneeCheck"]
+```
+
+- **pgr-services** is the primary check and gives clear errors. It needs four new facts for its rules: caller roles, assignees, attempted action and ladder ranks.
+- **The workflow service must stay internal-only.** Its system endpoint (`/workflow/v3/system/transition`) skips role and ownership checks.
+- **`ENFORCE` is the target for every city, and new cities start there.** A per-city switch (`OFF` → `REPORT_ONLY` → `ENFORCE`) exists only for live cities migrating from 2.x, so the platform change and the permission change don't land on the same day:
+  - `OFF`: today's behaviour, until the city's ladder and rules are configured.
+  - `REPORT_ONLY`: rules are evaluated and would-be denials are logged, but nothing is blocked.
+  - `ENFORCE`: rules apply, and `assigneeCheck` is turned on.
+- **New workflow actions** are added by a one-time script for existing cities. New cities get them from the default workflow, and the 2.x rebuild adds them for migrated cities. After that, saving a ladder keeps the roles in sync.
+
+## 7. Rollout
+
+```mermaid
+flowchart LR
+  P1["1 · Escalation<br/>ladder · selection · hold report · clock"] --> P2["2 · Visibility<br/>owner + rung · roles in employee copy · Team inbox"]
+  P2 --> P3["3 · Actions<br/>TAKE_OVER · TRANSFER · narrowed ESCALATE · report-only → enforce"]
+```
+
+**(proposed)** Per city: configure the ladder as part of city setup, before escalation is switched on. For a live city, tell staff that escalations now go to the next role in their area and department.
+
+## 8. Scope, open questions and asks
+
+**Out of scope**
+
+- **Anonymous and pseudo-anonymous filing:** separate design doc.
+- **Untangling workflow roles from API roles.** Today one role (e.g. `GRO`) grants both workflow actions and API access. This design restricts actions by attributes (ownership, rank, department, area) and leaves the role vocabulary as it is. Separating the two deserves its own proposal.
+- **How people get more than one department** (§3 covers only how the checks treat them).
+
+**Open**
+
+- **Reopen and the escalation clock:**
+  - (a) Restart the clock and flag reopened complaints *(recommended)*.
+  - (b) Restart the clock one rung higher.
+  - (c) Keep DIGIT 3's behaviour: the clock runs from filing.
+- **Which rungs skip the area or department check:** set per city during ladder setup.
+
+**Asks for the migration team**
+
+1. **Production cities still on 2.x (e.g. Mozambique)** aren't affected until they migrate. Each one needs an impact check before `ENFORCE`:
+   - whether automatic escalation and the Team inbox are in use
+   - who resolves complaints in practice (GROs or viewers resolving others' complaints will be blocked)
+   - whether employees have areas and departments filled in
+2. **#613** (GRO resolves any complaint) is superseded by §5.
+3. **`ESCALATE` is open to every role on DIGIT 3,** including citizens. §6 narrows it to ladder roles.
+4. **Supervisor table admin rights** include supervisor roles. Restrict them, and check that employees exist in the tenant.
+5. **Staging escalation** scans only the `pg` state, so Bomet complaints may never escalate there.
+6. **Workflow tooling for adding actions** (§6) is needed in the register script and the 2.x rebuild.
