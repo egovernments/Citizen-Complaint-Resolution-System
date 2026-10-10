@@ -40,7 +40,7 @@ import {
   WorkflowProcessList, WorkflowProcessShow,
   MdmsSchemaList, MdmsSchemaShow,
   BoundaryHierarchyList, BoundaryHierarchyShow, BoundaryHierarchyCreate,
-  ComplaintHierarchyList, ComplaintHierarchyShow, ComplaintHierarchyCreate,
+  ComplaintHierarchyList, ComplaintHierarchyShow, ComplaintHierarchyCreate, ComplaintHierarchyEdit,
   AdvancedPage,
 } from '@/resources';
 // Novu-into-configurator read-only screens. Imported directly (not via the
@@ -171,7 +171,7 @@ function ManagementAdminResources() {
         {canViewResource('workflow-processes') && <Resource name="workflow-processes" list={WorkflowProcessList} show={WorkflowProcessShow} />}
         {canViewResource('mdms-schemas') && <Resource name="mdms-schemas" list={MdmsSchemaList} show={MdmsSchemaShow} />}
         {canViewResource('boundary-hierarchies') && <Resource name="boundary-hierarchies" list={BoundaryHierarchyList} show={BoundaryHierarchyShow} create={BoundaryHierarchyCreate} />}
-        {canViewResource('complaint-hierarchies') && <Resource name="complaint-hierarchies" list={ComplaintHierarchyList} show={ComplaintHierarchyShow} create={ComplaintHierarchyCreate} />}
+        {canViewResource('complaint-hierarchies') && <Resource name="complaint-hierarchies" list={ComplaintHierarchyList} show={ComplaintHierarchyShow} create={ComplaintHierarchyCreate} edit={ComplaintHierarchyEdit} />}
 
         {/* Novu-into-configurator: read-only notification surfaces served by the
             novu-bridge proxy (not egov-mdms). Names match the 'custom' registry

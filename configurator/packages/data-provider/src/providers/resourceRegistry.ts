@@ -212,6 +212,8 @@ export const REGISTRY: Record<string, ResourceConfig> = {
   'employee-status': { type: 'mdms', label: 'Employee Status', schema: MDMS_SCHEMAS.EMPLOYEE_STATUS, idField: 'code', nameField: 'code' },
   'employee-type': { type: 'mdms', label: 'Employee Type', schema: MDMS_SCHEMAS.EMPLOYEE_TYPE, idField: 'code', nameField: 'code' },
   'cron-jobs': { type: 'mdms', label: 'Cron Jobs', schema: 'common-masters.CronJobAPIConfig', idField: 'jobName', nameField: 'jobName' },
+  // ours#861: every node of the complaint tree, interior types included (Complaint Categories lists only leaves).
+  'complaint-hierarchy-nodes': { type: 'mdms', label: 'Complaint Hierarchy Nodes', schema: 'RAINMAKER-PGR.ComplaintHierarchy', idField: 'code', nameField: 'name', descriptionField: 'levelCode' },
   'ui-homepage': { type: 'mdms', label: 'UI Homepage', schema: 'common-masters.uiHomePage', idField: 'redirectURL', nameField: 'redirectURL' },
 
   // Added by Stage-0 registry hygiene: schemas live on `ke` but had no UI surface.

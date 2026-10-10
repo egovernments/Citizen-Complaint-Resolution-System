@@ -7,6 +7,7 @@ import { useShowController } from 'ra-core';
 import { useQuery } from '@tanstack/react-query';
 import { mdmsService } from '@/api';
 import { useApp } from '../../App';
+import { useMastersCapability } from '@/hooks/useMastersCapability';
 
 /** A raw RAINMAKER-PGR.ComplaintHierarchy adjacency-list row (interior node or leaf). */
 interface HierarchyNode {
@@ -27,6 +28,7 @@ const isLeafNode = (n: HierarchyNode) => n.department != null || n.slaHours != n
 export function ComplaintHierarchyShow() {
   const { record } = useShowController({ queryOptions: { meta: MASTER_SCREEN_META } });
   const { state } = useApp();
+  const { canEditResource } = useMastersCapability();
   // ComplaintHierarchy data is scoped PER TENANT — in some deployments it lives at
   // the state root, in others at the sub-tenant the user operates under (prod: the
   // "Complaint_Hierarchy" nodes are seeded at mz.ige, not mz). The definition is
@@ -84,6 +86,7 @@ export function ComplaintHierarchyShow() {
   return (
     <DigitShow
       title={record ? `Hierarchy: ${record.hierarchyType ?? record.id}` : 'Complaint Hierarchy'}
+      hasEdit={canEditResource('complaint-hierarchies')}
     >
       {(rec: Record<string, unknown>) => {
         const levels = (rec.levels as Array<Record<string, unknown>> | undefined) ?? [];
