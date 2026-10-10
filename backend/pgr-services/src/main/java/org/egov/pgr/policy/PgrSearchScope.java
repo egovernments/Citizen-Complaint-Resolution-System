@@ -12,7 +12,7 @@ import java.util.List;
  * MDMS-authored {@link ScopePolicy}. Clients can only narrow within this, never widen.
  *
  * Fields (all "null/empty = no restriction on this axis"):
- * - tenant scope:      always applied (LIKE prefix at state level, = at city level).
+ * - tenant scope:      always applied (the tenant plus its "." subtree at state level, = at city level).
  * - citizenUuid:       a pure CITIZEN sees only their own complaints (account_id = their uuid).
  * - departmentCodes:   an employee is restricted to the union of their HRMS assignment departments.
  * - jurisdictionCodes: an employee is restricted to the union of their HRMS jurisdiction (boundary)
