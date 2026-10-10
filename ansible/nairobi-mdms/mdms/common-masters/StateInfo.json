@@ -3,26 +3,22 @@
     "tenantId": "ke",
     "data": {
       "code": "KE",
-      "name": "Kenya",
-      "logoUrl": "https://storage.googleapis.com/stateless-printlion-co-ke2/2024/03/f061daec-government-vector-icons_bomet-county-logo_bomet-county-logo.jpg",
-      "bannerUrl": "https://s3.ap-south-1.amazonaws.com/pb-egov-assets/pb.testing/Punjab-bg-QA.jpg",
+      "name": "Nairobi City County",
+      "logoUrl": "/digit-ui/nairobi-emblem.png",
+      "bannerUrl": "/digit-ui/nairobi-login-bg.jpg",
       "languages": [
         {
           "label": "ENGLISH",
           "value": "en_IN"
-        },
-        {
-          "label": "ಕನ್ನಡ",
-          "value": "ka_IN"
         }
       ],
       "qrCodeURL": "https://lh3.googleusercontent.com/-311gz2-xcHw/X6KRNSQTkWI/AAAAAAAAAKU/JmHSj-6rKPMVFbo6oL5x4JhYTTg8-UHmwCK8BGAsYHg/s0/2020-11-04.png",
-      "statelogo": "https://storage.googleapis.com/stateless-printlion-co-ke2/2024/03/f061daec-government-vector-icons_bomet-county-logo_bomet-county-logo.jpg",
+      "statelogo": "/digit-ui/nairobi-emblem.png",
       "defaultUrl": {
         "citizen": "/user/register",
         "employee": "/user/login"
       },
-      "logoUrlWhite": "https://storage.googleapis.com/stateless-printlion-co-ke2/2024/03/f061daec-government-vector-icons_bomet-county-logo_bomet-county-logo.jpg",
+      "logoUrlWhite": "/digit-ui/nairobi-emblem.png",
       "hasLocalisation": true,
       "localizationModules": [
         {
