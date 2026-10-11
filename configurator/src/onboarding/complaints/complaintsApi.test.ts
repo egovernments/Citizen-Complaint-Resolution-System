@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { localizationService, mdmsService } from '@/api';
 import type { MdmsRecord } from '@/api/types';
 import { loadComplaints, nextData, rowsFingerprint, rowsFor, saveComplaints, type ComplaintDraft } from './complaintsApi';
@@ -288,6 +288,28 @@ describe('a city workspace', () => {
     expect(create).toHaveBeenCalledWith('ke', 'RAINMAKER-PGR.ComplaintHierarchy', 'WaterLeak', expect.objectContaining({ code: 'WaterLeak' }));
     expect(update.mock.calls.filter(([record]) => record.tenantId === 'ke')).toEqual([]);
     expect(setActive.mock.calls.filter(([record, isActive]) => record.tenantId === 'ke' && !isActive)).toEqual([]);
+  });
+});
+
+describe('a city workspace where pgr finds its own rows', () => {
+  afterEach(() => { delete window.__CONFIGURATOR_CONFIG__; });
+
+  it('writes nothing at the state root when COMPLAINT_TYPES_STATE_COPY is "false"', async () => {
+    window.__CONFIGURATOR_CONFIG__ = { COMPLAINT_TYPES_STATE_COPY: 'false' };
+    const cityRows = [row('Garbage', { levelCode: 'COMPLAINT_TYPE', name: 'Garbage', department: 'HEALTH', slaHours: 72 }, { tenantId: 'ke.a' })];
+    search.mockImplementation(async (tenant, schema) => (schema === 'RAINMAKER-PGR.ComplaintHierarchyDefinition' || tenant === 'ke' ? [] : cityRows));
+    const saved: ComplaintDraft = {
+      slaHours: 72,
+      types: [
+        { code: 'Garbage', name: 'Garbage', department: 'HEALTH', subtypes: [] },
+        { name: 'Water leak', department: 'WATER', subtypes: [] },
+      ],
+    };
+    await saveComplaints('ke.a', { editable: true, draft: saved, records: cityRows, hasDefinition: true }, saved);
+
+    expect(create).toHaveBeenCalledWith('ke.a', 'RAINMAKER-PGR.ComplaintHierarchy', 'WaterLeak', expect.objectContaining({ code: 'WaterLeak' }));
+    expect(create.mock.calls.filter(([tenant]) => tenant === 'ke')).toEqual([]);
+    expect(search.mock.calls.filter(([tenant]) => tenant === 'ke')).toEqual([]);
   });
 });
 

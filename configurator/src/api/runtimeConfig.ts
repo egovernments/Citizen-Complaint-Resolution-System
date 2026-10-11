@@ -28,6 +28,13 @@ export interface ConfiguratorRuntimeConfig {
   OVERPASS_URL?: string;
   TURBOPASS_URL?: string;
   BOUNDARY_SEARCH_LIMIT?: string | number;
+  /**
+   * "false" stops onboarding Complaints from copying a city's complaint types
+   * to the state root. Keep the copy (the default) where pgr-services validates
+   * serviceCode at the state root; switch it off where pgr finds a city's own
+   * rows (a root copy is shared by every city under that state).
+   */
+  COMPLAINT_TYPES_STATE_COPY?: string | boolean;
 }
 
 declare global {
