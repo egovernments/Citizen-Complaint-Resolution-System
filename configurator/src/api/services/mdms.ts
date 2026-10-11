@@ -222,11 +222,19 @@ export const mdmsService = {
       (r) => r.isActive !== false && (r.data as { moduleName?: string } | undefined)?.moduleName === 'CMS',
     );
     // The tenant's own row is never rewritten. A row inherited from the state
-    // stands only while it names the hierarchy this tenant uses: a city that
-    // creates a hierarchy of its own records it, or the apps (which resolve the
-    // hierarchy per tenant, falling back to the state) keep the state's.
+    // stands only while it describes the hierarchy this tenant uses (its name
+    // and its top and bottom levels): a city that creates a hierarchy of its
+    // own, or the same name over other levels, records it, or the apps (which
+    // resolve the hierarchy per tenant, falling back to the state) would keep
+    // the state's and cap the city's areas at the state's levels.
     if (cms.some((r) => r.tenantId === tenantId)) return null;
-    if (cms.some((r) => (r.data as { hierarchy?: string } | undefined)?.hierarchy === hierarchy.hierarchy)) return null;
+    const same = (r: MdmsRecord) => {
+      const d = (r.data ?? {}) as { hierarchy?: string; highestHierarchy?: string; lowestHierarchy?: string };
+      return d.hierarchy === hierarchy.hierarchy
+        && d.highestHierarchy === hierarchy.highestHierarchy
+        && d.lowestHierarchy === hierarchy.lowestHierarchy;
+    };
+    if (cms.some(same)) return null;
     return this.create(tenantId, MDMS_SCHEMAS.HIERARCHY_SCHEMA, 'CMS.All', {
       moduleName: 'CMS',
       department: 'All',
