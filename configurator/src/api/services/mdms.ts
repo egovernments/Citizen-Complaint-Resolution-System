@@ -218,10 +218,23 @@ export const mdmsService = {
       );
     }
     const rows = await this.searchRecords(tenantId, MDMS_SCHEMAS.HIERARCHY_SCHEMA);
-    const visible = rows.find(
+    const cms = rows.filter(
       (r) => r.isActive !== false && (r.data as { moduleName?: string } | undefined)?.moduleName === 'CMS',
     );
-    if (visible) return null;
+    // The tenant's own row is never rewritten. A row inherited from the state
+    // stands only while it describes the hierarchy this tenant uses (its name
+    // and its top and bottom levels): a city that creates a hierarchy of its
+    // own, or the same name over other levels, records it, or the apps (which
+    // resolve the hierarchy per tenant, falling back to the state) would keep
+    // the state's and cap the city's areas at the state's levels.
+    if (cms.some((r) => r.tenantId === tenantId)) return null;
+    const same = (r: MdmsRecord) => {
+      const d = (r.data ?? {}) as { hierarchy?: string; highestHierarchy?: string; lowestHierarchy?: string };
+      return d.hierarchy === hierarchy.hierarchy
+        && d.highestHierarchy === hierarchy.highestHierarchy
+        && d.lowestHierarchy === hierarchy.lowestHierarchy;
+    };
+    if (cms.some(same)) return null;
     return this.create(tenantId, MDMS_SCHEMAS.HIERARCHY_SCHEMA, 'CMS.All', {
       moduleName: 'CMS',
       department: 'All',
