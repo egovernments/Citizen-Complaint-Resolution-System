@@ -68,6 +68,7 @@ const TopBar = ({
    * flag: only here can the two URLs be compared. A tenant whose state and
    * city marks genuinely differ keeps both images and the rule between them.
    */
+  const loggedin = userDetails?.access_token ? true : false;
   const ulbLogo = logoUrlWhite || stateInfo?.logoUrlWhite;
   const ulbLogoDuplicatesHeaderImg = Boolean(ulbLogo) && ulbLogo === logoUrl;
   // The desktop bar shows the tenant crest at its left and hides the logo slot
@@ -75,7 +76,20 @@ const TopBar = ({
   // for a signed-in user of a city without a ULB grade; signed out, or with a
   // grade, the slot held text alone and the bar had no crest. It renders in
   // every case now, ahead of whatever label the case carries.
-  const crestSrc = ulbLogo || logoUrl;
+  // The crest of the county a user works in, when that county's Branding set one: tenant.tenants imageId (a filestore
+  // file), drawn as an origin-free filestore path. A logoId without imageId is inherited data (Bomet: the state's
+  // default image) and keeps the state crest. Employees: the signed-in city. Citizens: the home city they picked;
+  // until they pick one, the state crest.
+  const crestCity = (() => {
+    if (!loggedin) return null;
+    if (!CITIZEN) return cityDetails;
+    const home = Digit.ULBService.getCitizenCurrentTenant?.(true);
+    return home ? (Digit.SessionStorage.get("initData")?.tenants || []).find((x) => x?.code === home) : null;
+  })();
+  const cityCrest = crestCity?.imageId
+    ? `/filestore/v1/files/id?tenantId=${encodeURIComponent(crestCity.code)}&fileStoreId=${encodeURIComponent(crestCity.imageId)}`
+    : null;
+  const crestSrc = cityCrest || ulbLogo || logoUrl;
   // Signed out, the crest's caption is the state's MYCITY label, shown only
   // when a tenant has seeded it: unseeded, it printed the raw key.
   const mycityKey = `MYCITY_${stateInfo?.code?.toUpperCase()}_LABEL`;
@@ -105,7 +119,6 @@ const TopBar = ({
   // Citizens get this same bar (#2038 review): the legacy citizen header had
   // its own height, gutters, carets and a notifications bell that opened a
   // blank page, since this deployment does not enable the engagement module.
-  const loggedin = userDetails?.access_token ? true : false;
 
   //checking for custom topbar components
   const CustomEmployeeTopBar = Digit.ComponentRegistryService?.getComponent("CustomEmployeeTopBar");
