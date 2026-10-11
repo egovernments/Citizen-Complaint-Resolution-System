@@ -69,6 +69,11 @@ describe('loadBranding', () => {
     expect(loaded.themeRecord).toBeNull();
   });
 
+  it('asks for the workspace record by its id, not the first page of the state\'s tenants', async () => {
+    await loadBranding('acme');
+    expect(search).toHaveBeenCalledWith('acme', 'tenant.tenants', { uniqueIdentifiers: ['acme'] });
+  });
+
   it('fails clearly when the workspace has no tenant record', async () => {
     search.mockResolvedValue([]);
     await expect(loadBranding('acme')).rejects.toThrow(/no tenant record/);

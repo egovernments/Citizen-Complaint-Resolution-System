@@ -74,8 +74,10 @@ export async function loadBranding(tenantId: string): Promise<Branding> {
   const stateRoot = stateRootOf(tenantId);
   const [tenants, themes] = await Promise.all([
     // A city's record lives at its state root; mdms-v2 resolves up the tree, so
-    // searching at the tenant itself finds it either way.
-    mdmsService.searchRecords(tenantId, MDMS_SCHEMAS.TENANT),
+    // searching at the tenant itself finds it either way. Ask for this tenant's
+    // own record by its id: a state with more than one page of tenant rows
+    // (its counties and their nodes) need not return it on the first page.
+    mdmsService.searchRecords(tenantId, MDMS_SCHEMAS.TENANT, { uniqueIdentifiers: [tenantId] }),
     mdmsService.searchRecords(stateRoot, THEME_SCHEMA).catch(() => [] as MdmsRecord[]),
   ]);
   const tenantRecord = tenants.find((record) => record.uniqueIdentifier === tenantId && record.isActive !== false);
