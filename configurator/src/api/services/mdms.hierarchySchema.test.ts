@@ -33,12 +33,35 @@ describe('ensureHierarchySchema', () => {
     expect(body.Mdms.data).toEqual({ moduleName: 'CMS', department: 'All', ...LEVELS });
   });
 
-  it('leaves an existing CMS row alone, including one inherited from the state', async () => {
+  it('leaves an inherited CMS row alone while it names the same hierarchy', async () => {
     post.mockResolvedValueOnce({
       mdms: [{ tenantId: 'ke', schemaCode: SCHEMA, isActive: true, data: { moduleName: 'CMS', hierarchy: 'ADMIN' } }],
     });
 
-    expect(await mdmsService.ensureHierarchySchema('ke.bomet', LEVELS)).toBeNull();
+    expect(await mdmsService.ensureHierarchySchema('ke.bomet', { ...LEVELS, hierarchy: 'ADMIN' })).toBeNull();
+    expect(post).toHaveBeenCalledTimes(1);
+  });
+
+  it('records its own row when the inherited one names another hierarchy (a county with its own)', async () => {
+    post.mockResolvedValueOnce({
+      mdms: [{ tenantId: 'ke', schemaCode: SCHEMA, isActive: true, data: { moduleName: 'CMS', hierarchy: 'ADMIN' } }],
+    });
+
+    await mdmsService.ensureHierarchySchema('ke.kilima', { ...LEVELS, hierarchy: 'KILIMA_ADMIN' });
+
+    expect(post).toHaveBeenCalledTimes(2);
+    const [url, body] = post.mock.calls[1];
+    expect(url).toBe(`/mdms-v2/v2/_create/${SCHEMA}`);
+    expect(body.Mdms).toMatchObject({ tenantId: 'ke.kilima', uniqueIdentifier: 'CMS.All' });
+    expect(body.Mdms.data.hierarchy).toBe('KILIMA_ADMIN');
+  });
+
+  it('never rewrites the tenant\'s own row, whatever it names', async () => {
+    post.mockResolvedValueOnce({
+      mdms: [{ tenantId: 'ke.kilima', schemaCode: SCHEMA, isActive: true, data: { moduleName: 'CMS', hierarchy: 'OLD' } }],
+    });
+
+    expect(await mdmsService.ensureHierarchySchema('ke.kilima', { ...LEVELS, hierarchy: 'KILIMA_ADMIN' })).toBeNull();
     expect(post).toHaveBeenCalledTimes(1);
   });
 
