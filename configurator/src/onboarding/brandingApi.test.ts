@@ -106,6 +106,16 @@ describe('saveBranding', () => {
     expect(upsertMessages).not.toHaveBeenCalled();
   });
 
+  it('stores a path, not the session origin, when the API is this app\'s own origin', async () => {
+    vi.mocked(apiClient.getEnvironment).mockReturnValueOnce(window.location.origin);
+    upload.mockResolvedValue({ fileStoreId: 'file-2', fileName: 'logo.png' });
+    const file = new File(['x'], 'logo.png', { type: 'image/png' });
+
+    await saveBranding(branding(), { name: 'acme', logo: { kind: 'upload', file }, theme: null });
+
+    expect(update).toHaveBeenCalledWith(tenantRecord, expect.objectContaining({ logoId: '/filestore/v1/files/id?tenantId=acme&fileStoreId=file-2', imageId: 'file-2' }));
+  });
+
   it('drops logoId (not nullable) when the logo is removed', async () => {
     const withLogo = record({ data: { ...tenantRecord.data, logoId: 'https://old', imageId: 'old' } });
     await saveBranding(branding({ tenantRecord: withLogo, logoUrl: 'https://old' }), {

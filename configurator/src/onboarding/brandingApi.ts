@@ -102,10 +102,19 @@ export async function loadBranding(tenantId: string): Promise<Branding> {
  * signed storage link that expires after a day, and the apps draw logoId
  * straight into an <img>, so the logo points at /files/id, which streams the
  * file by its id for as long as the file exists.
+ *
+ * When the API is this app's own origin the link is a path, not a URL: the
+ * session's origin is whatever the admin signed in through (a tunnel, an
+ * internal host, an IP), and stored in the tenant record it would break the
+ * logo for everyone else and on any later change of domain. The apps share
+ * the API's origin, so a path resolves for them. A cross-origin API keeps the
+ * full URL.
  */
 function fileLink(tenantId: string, fileStoreId: string): string {
   const query = `tenantId=${encodeURIComponent(tenantId)}&fileStoreId=${encodeURIComponent(fileStoreId)}`;
-  return `${apiClient.getEnvironment()}${ENDPOINTS.FILESTORE_FILE}?${query}`;
+  const environment = apiClient.getEnvironment();
+  const sameOrigin = typeof window !== 'undefined' && environment === window.location.origin;
+  return `${sameOrigin ? '' : environment}${ENDPOINTS.FILESTORE_FILE}?${query}`;
 }
 
 export async function saveBranding(
