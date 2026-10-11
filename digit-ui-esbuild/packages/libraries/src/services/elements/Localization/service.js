@@ -4,9 +4,43 @@ import i18next from "i18next";
 import { Request } from "../../atoms/Utils/Request";
 import { ApiCacheService } from "../../atoms/ApiCacheService";
 
-const LOCALE_LIST = (locale) => `Locale.${locale}.List`;
-const LOCALE_ALL_LIST = () => `Locale.List`;
-const LOCALE_MODULE = (locale, module) => `Locale.${locale}.${module}`;
+// #941 node labels: labels are asked for at the tenant the user works at (an employee's tenant, a citizen's home city),
+// when it lies below the tenant the caller passed (the state code); ccrs-compat merges that tenant's chain per key,
+// nearest first. The browser cache is kept per label tenant (`scope`), so another tenant never reads this one's bundle.
+let scope = "";
+const scoped = () => (scope ? `${scope}.` : "");
+const LOCALE_LIST = (locale) => `Locale.${scoped()}${locale}.List`;
+const LOCALE_ALL_LIST = () => `Locale.${scoped()}List`;
+const LOCALE_MODULE = (locale, module) => `Locale.${scoped()}${locale}.${module}`;
+
+const labelTenant = (stateTenant) => {
+  try {
+    const user = Digit.UserService?.getUser?.();
+    const own =
+      user?.info?.type === "EMPLOYEE"
+        ? Digit.SessionStorage.get("Employee.tenantId") || user?.info?.tenantId
+        : Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code;
+    if (own && stateTenant && String(own).startsWith(`${stateTenant}.`)) return String(own);
+  } catch (e) {
+    // no user / storage yet: the tenant asked for
+  }
+  return stateTenant || "";
+};
+
+// Run `fn` with the cache keys of `sc` (a write scheduled under one scope lands in that scope's keys).
+const inScope = (sc, fn) => {
+  const prev = scope;
+  scope = sc;
+  try {
+    return fn();
+  } finally {
+    scope = prev;
+  }
+};
+
+// Every module this page asked for, and the (scope, locale) pairs already revalidated on this page load.
+const asked = new Set();
+const revalidated = new Set();
 
 const TransformArrayToObj = (traslationList) => {
   return traslationList.reduce(
@@ -94,21 +128,46 @@ export const LocalizationService = {
     // fell back to en_IN, so picking Swahili in the UI did nothing.
     // Locale codes already carry their region (xx_YY), so the append is
     // never correct. Drop it.
+    const tenant = labelTenant(tenantId);
+    if (tenant !== scope) {
+      // the user's label tenant changed (signed in at a node, picked a home city): reload what the page already has
+      if (scope) modules = getUnique([...modules, ...asked]);
+      scope = tenant;
+    }
+    modules.forEach((m) => asked.add(m));
+    const sc = scope;
     const [newModules, messages] = LocalizationStore.get(locale, modules);
     if (newModules.length > 0) {
-      const data = await Request({ url: Urls.localization, params: { module: newModules.join(","), locale, tenantId }, useCache: false });
+      const data = await Request({ url: Urls.localization, params: { module: newModules.join(","), locale, tenantId: tenant }, useCache: false });
       messages.push(...data.messages);
-      setTimeout(() => LocalizationStore.store(locale, newModules, data.messages), 100);
+      setTimeout(() => inScope(sc, () => LocalizationStore.store(locale, newModules, data.messages)), 100);
+    }
+    // a bundle served from the browser cache (kept for a day) is revalidated once per page load: a label changed since
+    // is shown as soon as it arrives (i18next bindI18nStore "added" re-renders), not a day later
+    const cachedModules = modules.filter((m) => !newModules.includes(m));
+    const key = `${sc}|${locale}`;
+    if (cachedModules.length && !revalidated.has(key)) {
+      revalidated.add(key);
+      Request({ url: Urls.localization, params: { module: cachedModules.join(","), locale, tenantId: tenant }, useCache: false })
+        .then((data) => {
+          const fresh = data?.messages || [];
+          inScope(sc, () =>
+            cachedModules.forEach((m) => LocalizationStore.setCacheData(LOCALE_MODULE(locale, m), fresh.filter((x) => x.module === m)))
+          );
+          if (sc === scope) LocalizationStore.updateResources(locale, fresh);
+        })
+        .catch(() => {});
     }
     LocalizationStore.updateResources(locale, messages);
     return messages;
   },
   getUpdatedMessages: async ({ modules = [], locale = Digit.Utils.getDefaultLanguage(), tenantId }) => {
     const [module, messages] = LocalizationStore.get(locale, modules);
-    const data = await Request({ url: Urls.localization, params: { module: modules.join(","), locale, tenantId }, useCache: false });
+    const sc = scope;
+    const data = await Request({ url: Urls.localization, params: { module: modules.join(","), locale, tenantId: labelTenant(tenantId) }, useCache: false });
     const uniques = getUniqueData(messages,data.messages);
     messages.push(...uniques);
-    setTimeout(() => LocalizationStore.store(locale, modules, uniques), 100);
+    setTimeout(() => inScope(sc, () => LocalizationStore.store(locale, modules, uniques)), 100);
     LocalizationStore.updateResources(locale, messages);
     return messages;
   },
