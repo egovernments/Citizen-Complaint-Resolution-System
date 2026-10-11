@@ -432,6 +432,40 @@ describe('createDigitDataProvider', () => {
     assert.equal(captured!.slaHours, 48);
   });
 
+  describe('an edit at a tenant below the state of a record it inherits (nearest wins)', () => {
+    const inheritedRow = () => ({
+      id: 'state-id', tenantId: 'pg', schemaCode: 'common-masters.Department', uniqueIdentifier: 'DEPT_1',
+      data: { code: 'DEPT_1', name: 'State Name', active: true }, isActive: true,
+      auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 },
+    });
+
+    it('creates the node\'s own record and leaves the ancestor\'s row untouched', async () => {
+      mock.method(client, 'mdmsSearch', async () => [inheritedRow()]);
+      const updated: unknown[] = [];
+      mock.method(client, 'mdmsUpdate', async (rec: unknown) => { updated.push(rec); return rec; });
+      let created: { tenant: string; uid: string; data: Record<string, unknown> } | null = null;
+      mock.method(client, 'mdmsCreate', async (tenant: string, schema: string, uid: string, data: Record<string, unknown>) => {
+        created = { tenant, uid, data };
+        return { id: 'node-id', tenantId: tenant, schemaCode: schema, uniqueIdentifier: uid, data, isActive: true };
+      });
+      const dp = createDigitDataProvider(client, 'pg.citya.health');
+      await dp.update('departments', { id: 'DEPT_1', data: { code: 'DEPT_1', name: 'Node Name', active: true }, previousData: {} as never });
+      assert.deepEqual(created, { tenant: 'pg.citya.health', uid: 'DEPT_1', data: { code: 'DEPT_1', name: 'Node Name', active: true } });
+      assert.equal(updated.length, 0, 'the ancestor\'s row is not updated');
+    });
+
+    it('a city folded into its state (the create is a duplicate of the edited row) edits in place, as before', async () => {
+      mock.method(client, 'mdmsSearch', async () => [inheritedRow()]);
+      mock.method(client, 'mdmsCreate', async () => { throw new Error('DUPLICATE_RECORD: Duplicate record'); });
+      let updated: { tenantId: string; data: Record<string, unknown> } | null = null;
+      mock.method(client, 'mdmsUpdate', async (rec: { tenantId: string; data: Record<string, unknown> }) => { updated = rec; return rec; });
+      const dp = createDigitDataProvider(client, 'pg.citest');
+      await dp.update('departments', { id: 'DEPT_1', data: { code: 'DEPT_1', name: 'New Name', active: true }, previousData: {} as never });
+      assert.equal(updated!.tenantId, 'pg');
+      assert.equal(updated!.data.name, 'New Name');
+    });
+  });
+
   it('strips id and underscore-prefixed metadata from MDMS update payload', async () => {
     // The form payload includes the ra-admin id and the
     // _-prefixed fields normalizeMdmsRecord glued on. MDMS schemas

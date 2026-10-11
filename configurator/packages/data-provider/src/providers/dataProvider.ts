@@ -1757,6 +1757,29 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
         // merged record so partial updates, updateMany, and reactivation cannot
         // revive a competing PGR Workflow.AutoEscalation policy.
         rejectLegacyPgrEscalationWrite(config, existing.data);
+        // Nearest wins: at a tenant below the state, a search falls back to the nearest ancestor that has rows,
+        // so `existing` may be the ancestor's record (stamped with the ancestor's tenant). Editing it in place would
+        // change it for every tenant under that ancestor; an edit made AT a node is that node's override instead: the
+        // record is created at the session tenant (same uniqueIdentifier), the ancestor's row stays as it was.
+        const writeTenant = mdmsTenantFor(client, config, tenantId);
+        const inherited =
+          !STATE_LEVEL_SCHEMAS.has(config.schema!) &&
+          typeof existing.tenantId === 'string' && existing.tenantId !== writeTenant &&
+          writeTenant.startsWith(`${existing.tenantId}.`);
+        // A city folded into its state's data tenant (ke.bomet stores at ke) sees the same rows stamped with the state:
+        // the create is then a duplicate of the very row being edited, and the edit goes in place as before.
+        if (inherited) {
+          let own: MdmsRecord | null = null;
+          try {
+            own = await client.mdmsCreate(writeTenant, config.schema!, existing.uniqueIdentifier, existing.data);
+          } catch (e) {
+            if (!/MDMS_DUPLICATE|DUPLICATE_RECORD|already exists/i.test(String((e as Error)?.message ?? ''))) throw e;
+          }
+          if (own) {
+            if (!desiredIsActive) own = await client.mdmsUpdate(own, false);
+            return { data: normalizeMdmsRecord(own, config) };
+          }
+        }
         const updated = await client.mdmsUpdate(existing, desiredIsActive);
         if (config.leafServiceDefAdapter) {
           // includeInactive: a leaf that was just disabled must still map back.
