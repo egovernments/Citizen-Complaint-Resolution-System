@@ -250,7 +250,7 @@ export default function EmployeesStep() {
 
   const loaded = options !== null && employees !== null;
   const header = (
-    <StepHeader eyebrow={t('step.your_organisation', 'Your organisation')} title={t('steps.employees', 'Employees')} done={done}>
+    <StepHeader eyebrow={t('step.your_account', 'Your account')} title={t('steps.employees', 'Employees')} done={done}>
       {t('employees.intro', 'The people who will use your complaint system.')}
     </StepHeader>
   );

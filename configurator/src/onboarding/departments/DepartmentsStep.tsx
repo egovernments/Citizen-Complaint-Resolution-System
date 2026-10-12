@@ -278,7 +278,7 @@ export default function DepartmentsStep() {
 
   return (
     <div className="space-y-8">
-      <StepHeader eyebrow={t('step.your_organisation', 'Your organisation')} title={t('steps.departments', 'Departments')} done={done}>
+      <StepHeader eyebrow={t('step.your_account', 'Your account')} title={t('steps.departments', 'Departments')} done={done}>
         {t('departments.intro', 'The departments complaints get routed to, and the designations your employees hold.')}
       </StepHeader>
 

@@ -432,7 +432,7 @@ describe('provisioning', () => {
 
     expect(await screen.findByText('Creating your workspace')).toBeInTheDocument();
     expect(spinning(/creating your workspace/i)).toBe(true);
-    expect(spinning(/setting up your organisation/i)).toBe(false);
+    expect(spinning(/setting up your account/i)).toBe(false);
   });
 
   it('spins nothing once the run has succeeded, even on a step code it does not know', async () => {
