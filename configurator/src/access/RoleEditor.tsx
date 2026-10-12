@@ -17,6 +17,7 @@ import {
 } from './policyModel';
 import { ConcurrentChangeError, applySave, loadRole, planSave, type Edited, type Loaded, type Write } from './roleEditorData';
 import { AVAILABLE_CONDITION_VARS } from './engineVars';
+import { cellKey, roleGrid, statusLabel, type WfEdit } from './workflowModel';
 
 /**
  * Access › Roles › <role>: the Role editor (design screen 1, owner 2026-10-12). What the role may do (role-actions),
@@ -48,12 +49,13 @@ export default function RoleEditor() {
   const [caps, setCaps] = useState<Record<string, boolean>>({});
   const [scope, setScope] = useState<RoleScope | null>(null);
   const [fields, setFields] = useState<Record<string, FieldEdit | undefined>>({});
+  const [wf, setWf] = useState<WfEdit>({});
   const [plan, setPlan] = useState<Write[] | null>(null);
   const [planError, setPlanError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
-    setLoaded(null); setLoadError(null); setPlan(null); setCaps({}); setScope(null); setFields({});
+    setLoaded(null); setLoadError(null); setPlan(null); setCaps({}); setScope(null); setFields({}); setWf({});
     try {
       const l = await loadRole(digitClient, root, isNew ? null : codeParam!);
       if (!isNew && !l.role) throw new Error(`No role ${codeParam} at ${root}`);
@@ -90,7 +92,8 @@ export default function RoleEditor() {
     });
   }, [attrs, fields, roleCode]);
 
-  const edited: Edited = { code: roleCode, name, description, caps, scope, fields };
+  const edited: Edited = { code: roleCode, name, description, caps, scope, fields, workflow: wf };
+  const grid = roleGrid(loaded?.workflow ?? null, roleCode);
   const summary = plainWords({
     caps: CAPABILITIES.filter((c) => capOn(c.id)).map((c) => c.id),
     levels,
@@ -125,7 +128,7 @@ export default function RoleEditor() {
   if (loadError) return <Alert variant="destructive" className="m-6"><AlertDescription>{loadError}</AlertDescription></Alert>;
   if (!loaded) return <div className="flex items-center gap-2 p-6 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading the role</div>;
 
-  const dirty = Object.keys(caps).length > 0 || scope !== null || Object.values(fields).some(Boolean)
+  const dirty = Object.keys(caps).length > 0 || scope !== null || Object.values(fields).some(Boolean) || Object.keys(wf).length > 0
     || (!isNew && (name !== String(loaded.role?.data.name ?? '') || description !== String(loaded.role?.data.description ?? '')))
     || (isNew && !!code);
 
@@ -139,6 +142,7 @@ export default function RoleEditor() {
               {!isNew && <span className="font-mono text-sm text-muted-foreground">{roleCode}</span>}
             </div>
             <div className="flex gap-2">
+              {!isNew && <Button variant="outline" onClick={() => navigate(`/manage/access/roles/${encodeURIComponent(roleCode)}/rows`)} data-testid="role-rows">Policy rows</Button>}
               {canEdit && <Button onClick={review} disabled={!dirty} data-testid="role-review"><Save className="mr-2 h-4 w-4" />Save role</Button>}
             </div>
           </CardHeader>
@@ -269,6 +273,37 @@ export default function RoleEditor() {
           </CardContent>
         </Card>
 
+        <Card>
+          <CardHeader><CardTitle>Workflow actions by complaint status</CardTitle></CardHeader>
+          <CardContent className="flex flex-col gap-3 overflow-x-auto">
+            {!loaded.workflow ? <p className="text-sm text-muted-foreground">The PGR workflow is not readable at {root}.</p> : (
+              <table className="w-full min-w-[560px] text-sm" data-testid="workflow-grid">
+                <thead><tr className="text-left text-xs uppercase text-muted-foreground"><th className="p-2">Status</th>{grid.actions.map((a) => <th key={a} className="p-2">{a.charAt(0) + a.slice(1).toLowerCase()}</th>)}</tr></thead>
+                <tbody>
+                  {grid.statuses.map((st) => (
+                    <tr key={st} className="border-t">
+                      <td className="p-2">{statusLabel(st)}</td>
+                      {grid.actions.map((a) => {
+                        const c = grid.cell(st, a);
+                        const k = cellKey(st, a);
+                        return (
+                          <td key={a} className="p-2">
+                            {c === null ? <span className="text-muted-foreground">–</span> : (
+                              <input type="checkbox" aria-label={`${a} when ${statusLabel(st).toLowerCase()}`} disabled={!canEdit}
+                                checked={wf[k] ?? c === 'on'} onChange={(e) => setWf({ ...wf, [k]: e.target.checked })} />
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            <p className="text-xs text-muted-foreground">Which actions the employee app offers this role on a complaint in each status. The workflow is shared: only this role's ticks change. An action is still refused on a complaint outside the role's scope.</p>
+          </CardContent>
+        </Card>
+
         {(plan || planError) && (
           <Card className="border-2 border-primary" data-testid="role-plan">
             <CardHeader><CardTitle>You are about to change</CardTitle></CardHeader>
@@ -281,6 +316,7 @@ export default function RoleEditor() {
                     <li key={`${w.kind}-${w.uid}`}>
                       {w.kind === 'role' && <>Role <code>{w.uid}</code>: {w.op === 'create' ? 'create' : 'update name / description'} (ACCESSCONTROL-ROLES)</>}
                       {w.kind === 'grant' && <>Grant <code>{w.uid}</code>: {w.op} (ACCESSCONTROL-ROLEACTIONS)</>}
+                      {w.kind === 'workflow' && <>Workflow <code>{w.uid}</code>, only {roleCode}: {w.changes.map((c) => `${c.on ? '+' : '-'} ${c.action} when ${statusLabel(c.status).toLowerCase()}`).join(', ')}</>}
                       {w.kind === 'action' && (
                         <>Action <code>{w.uid}</code> (complaint search):
                           {(['role', 'shared'] as const).map((who) => {
