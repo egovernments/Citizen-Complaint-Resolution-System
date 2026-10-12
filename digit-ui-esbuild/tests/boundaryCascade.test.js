@@ -20,7 +20,7 @@ process.on("exit", () => {
     // Best effort; the temp file is process-scoped.
   }
 });
-const { disambiguateLabels, levelsFilledAbove, optionsForLevels, pathsByCode, selectionAfterPick } = require(OUT);
+const { disambiguateLabels, levelsFilledAbove, locksAutoFilled, optionsForLevels, pathsByCode, selectionAfterPick } = require(OUT);
 
 const node = (code, boundaryType, children = []) => ({ code, name: code, boundaryType, children });
 
@@ -114,4 +114,18 @@ test("a pick reports how many levels above it it filled in", () => {
   assert.equal(levelsFilledAbove(byCode("CHEPALUNGU"), county, pick("CHEPALUNGU"), hierarchy), 0);
   // A ward from another sub-county changes the one above it.
   assert.equal(levelsFilledAbove(byCode("CHEMANER"), first, pick("CHEMANER"), hierarchy), 1);
+});
+
+test("levels the pin filled lock while the pin sits in a ward (CCRS#1444)", () => {
+  const inWard = { lat: -0.78, lng: 35.34, ward: { code: "SIGOR", name: "Sigor" } };
+  // The employee form passes nothing: a pin in a ward locks, no pin or a pin
+  // outside every ward doesn't, and Clear (a null point) unlocks.
+  assert.equal(locksAutoFilled(undefined, inWard), true);
+  assert.equal(locksAutoFilled(undefined, { ...inWard, ward: { name: "Sigor" } }), true);
+  assert.equal(locksAutoFilled(undefined, { lat: -0.78, lng: 35.34, ward: null }), false);
+  assert.equal(locksAutoFilled(undefined, null), false);
+  assert.equal(locksAutoFilled(undefined, undefined), false);
+  // A caller that decides for itself (the citizen wizard) keeps its say.
+  assert.equal(locksAutoFilled(false, inWard), false);
+  assert.equal(locksAutoFilled(true, null), true);
 });

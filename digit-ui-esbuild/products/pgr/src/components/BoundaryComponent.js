@@ -7,6 +7,7 @@ import { sameLevelName } from "../utils/boundaryLevels";
 import {
   disambiguateLabels,
   levelsFilledAbove,
+  locksAutoFilled,
   optionsForLevels,
   pathsByCode,
   selectionAfterPick,
@@ -193,7 +194,7 @@ const BoundaryComponent = ({ t, config, onSelect, userType, formData, readOnly }
   const [selectedValues, setSelectedValues] = useState({});
   // Track which levels were filled by the map auto-fill (vs manually
   // selected by the user). Only auto-filled levels should render as
-  // disabled when readOnly is true — once the user changes a level
+  // disabled when locked (lockAutoFilled) — once the user changes a level
   // manually, that level (and any children that get reset) flips to
   // interactive so they can keep editing.
   const [autoFilledKeys, setAutoFilledKeys] = useState({});
@@ -259,6 +260,7 @@ const BoundaryComponent = ({ t, config, onSelect, userType, formData, readOnly }
   // pick manually.
   const wardHintCode = formData?.GeoLocationsPoint?.ward?.code;
   const wardHintName = formData?.GeoLocationsPoint?.ward?.name;
+  const lockAutoFilled = locksAutoFilled(readOnly, formData?.GeoLocationsPoint);
   useEffect(() => {
     if (!wardHintCode && !wardHintName) return;
     if (!childrenData || childrenData.length === 0) return;
@@ -429,7 +431,7 @@ const BoundaryComponent = ({ t, config, onSelect, userType, formData, readOnly }
                 required={config?.isMandatory !== false}
                 onChange={(selectedValue) => handleSelection(selectedValue)}
                 selected={selectedAtLevel}
-                // Read-only when (a) the caller asked for it, AND
+                // Read-only when (a) the pin's ward locks it (lockAutoFilled), AND
                 // (b) this level was filled by the map auto-fill —
                 // NOT just by any value present. If the user
                 // manually picks something at this level (e.g.
@@ -437,7 +439,7 @@ const BoundaryComponent = ({ t, config, onSelect, userType, formData, readOnly }
                 // cleared in handleSelection so the field flips back
                 // to interactive — they can keep refining without
                 // getting locked out by their own click.
-                disabled={waiting || (!!readOnly && !!autoFilledKeys[key] && !!selectedAtLevel)}
+                disabled={waiting || (lockAutoFilled && !!autoFilledKeys[key] && !!selectedAtLevel)}
               />
             );
           }
