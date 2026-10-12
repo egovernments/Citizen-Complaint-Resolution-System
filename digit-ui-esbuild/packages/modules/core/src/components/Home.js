@@ -10,6 +10,7 @@ import { CitizenServices as CitizenServicesV2 } from "@egovernments/digit-ui-com
 import React, { Fragment } from "react";
 import { useTranslation } from "react-i18next";
 import { RoleBasedEmployeeHome } from "./RoleBasedEmployeeHome";
+import CitizenHomeBanner from "./CitizenHomeBanner";
 import QuickSetupConfigComponent from "../pages/employee/QuickStart/Config";
 
 /* 
@@ -103,10 +104,9 @@ const CitizenHome = ({ getCitizenMenu, isLoading }) => {
   });
 
   return (
-    <CitizenServicesV2
-      modules={v2Modules}
-      renderIcon={moduleIcon}
-    />
+    <CitizenHomeBanner>
+      <CitizenServicesV2 modules={v2Modules} renderIcon={moduleIcon} />
+    </CitizenHomeBanner>
   );
 };
 
