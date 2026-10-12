@@ -18,11 +18,11 @@ public class PlatformBaselineSeedTest {
 
     /**
      * Existing workspaces are upgraded (BaselineUpgrader) only when the seed's version rises, so a content change
-     * under an unchanged version never reaches them. v2 is still unreleased (it changed in place until #2269 merged);
-     * from then on, changing the seed means bumping "version" and recording both here.
+     * under an unchanged version never reaches them. v2 changed in place until #2269 merged; from then on, changing
+     * the seed means bumping "version" and recording both here. v3 carries the onboarding Geography step's labels.
      */
-    private static final String VERSION = "2";
-    private static final String SHA256 = "3ad6eeb96e50bc7c493896bd76c18c3c6493191524ebc92483ffdccfa2020078";
+    private static final String VERSION = "3";
+    private static final String SHA256 = "fb14dd1b35173ff2476b80254bf34506f3401e38f3657eb88b1a3a277c2f64a8";
     @Test public void contentChangesComeWithAVersionBump() throws Exception {
         byte[] bytes;
         try (var in = PlatformBaselineSeedTest.class.getResourceAsStream("/onboarding/platform-baseline-v1.json")) { bytes = in.readAllBytes(); }

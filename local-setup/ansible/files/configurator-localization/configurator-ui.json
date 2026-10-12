@@ -7902,6 +7902,1212 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.geography.agreement_failed",
+    "message": "The agreement check failed when this boundary data was built, so it can't say how far the set is confirmed. Rebuilding the boundary data may fix it.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.agreement_predates",
+    "message": "This server's boundary data predates the agreement check, so it can't say how far the set is confirmed.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.confidence_explain",
+    "message": "What confidence means",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.confidence_hint.high",
+    "message": "Every level a second, independently drawn source has is confirmed by it.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.confidence_hint.low",
+    "message": "No level could be checked against a second source, or a level differs from a source that isn't older.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.confidence_hint.medium",
+    "message": "Some levels only partly match a second source, or differ from an older one because the map has since changed.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.confidence_missing",
+    "message": "If you find that key boundaries are not present in the preconfigured set, kindly upload them using the “Upload from Excel” option.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.confidence_prefix",
+    "message": "Confidence:",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.confidence_short.high",
+    "message": "High",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.confidence_short.low",
+    "message": "Low",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.confidence_short.medium",
+    "message": "Medium",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.confidence_tip",
+    "message": "Confidence shows how far a second, independently drawn boundary set confirms these boundaries.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.confidence.high",
+    "message": "High confidence",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.confidence.low",
+    "message": "Low confidence",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.confidence.medium",
+    "message": "Medium confidence",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.confirmed_means_other",
+    "message": "Confirmed means another source has nearly the same areas. It doesn't mean your government has endorsed this exact file, and “one source only” means a level couldn't be checked, not that it is wrong.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.confirmed_means_second",
+    "message": "Confirmed means a second, independently drawn set has nearly the same areas. It doesn't mean your government has endorsed this exact file, and “one source only” means a level couldn't be checked, not that it is wrong.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.create_failures",
+    "message": "%{count} boundaries failed to create.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.created.area_one",
+    "message": "%{count} area",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.created.area_other",
+    "message": "%{count} areas",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.created.areas",
+    "message": "Areas",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.created.back",
+    "message": "Back to Geography",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.created.body",
+    "message": "%{areas} in the %{hierarchy} hierarchy on %{workspace}, from %{source}.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.created.body_failed",
+    "message": "All %{areas} from %{source} were refused by the boundary service. Nothing was added to the %{hierarchy} hierarchy on %{workspace}.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.created.body_partial",
+    "message": "%{areas} could not be created.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.created.level",
+    "message": "Level",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.created.skipped_one",
+    "message": "%{count} area was left out: unnamed, or lying in no area of the level above. The review step listed them.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.created.skipped_other",
+    "message": "%{count} areas were left out: unnamed, or lying in no area of the level above. The review step listed them.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.created.title",
+    "message": "Boundaries created",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.created.title_failed",
+    "message": "No boundaries were created",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.created.title_partial",
+    "message": "Some boundaries were not created",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.created.total",
+    "message": "Total",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.creating",
+    "message": "Creating...",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.creating_body",
+    "message": "Building geographic hierarchy and writing polygons to the database...",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.creating_title",
+    "message": "Creating Boundaries",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.empty_body",
+    "message": "Your complaint services are routed inside a boundary hierarchy: countries, districts, wards. Bring one in from a source above to get started.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.empty_title",
+    "message": "No boundaries yet",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel_body",
+    "message": "Bring in your own levels and areas from a spreadsheet.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel_intro",
+    "message": "Define your levels, fill the template with your areas, and upload it.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel_title",
+    "message": "Upload from Excel",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.add_level",
+    "message": "Add Level",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.available_for_tenant",
+    "message": "Available hierarchies for tenant: %{tenant}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.col_code",
+    "message": "Unique boundary code",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.col_name",
+    "message": "Display name",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.col_parent",
+    "message": "Parent boundary code (optional for root)",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.col_type",
+    "message": "Level type (%{levels})",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.common_types",
+    "message": "Common types: ADMIN, REVENUE, ADMIN1, ADMIN2",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.create_failed",
+    "message": "Failed to create hierarchy. Please try again.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.create_for_tenant",
+    "message": "Define the boundary hierarchy for tenant: %{tenant}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.create_heading",
+    "message": "Create Boundary Hierarchy",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.create_hierarchy",
+    "message": "Create Hierarchy",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.create_new",
+    "message": "Create a new hierarchy",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.create_new_body",
+    "message": "Define its levels, like County → Sub-county → Ward.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.create_new_button",
+    "message": "Create New Hierarchy",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.define_levels",
+    "message": "Define Levels (top to bottom)",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.download_template",
+    "message": "Download Template",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.drop_here",
+    "message": "Drop your filled boundary template here",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.file",
+    "message": "File: %{name}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.geojson_hint",
+    "message": "After upload, you'll be able to attach an optional GeoJSON file for real boundary outlines on the map.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.hierarchy_and_levels",
+    "message": "Hierarchy: %{hierarchy} • Levels: %{levels}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.landing_heading",
+    "message": "Add to an existing hierarchy or start a new one?",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.level_n",
+    "message": "Level %{n}:",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.levels_line",
+    "message": "Levels: %{levels}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.levels_required",
+    "message": "At least 2 hierarchy levels are required",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.lowest",
+    "message": "[Lowest]",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.missing_code",
+    "message": "Missing boundary code",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.missing_name",
+    "message": "Missing boundary name",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.missing_type",
+    "message": "Missing boundary type",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.no_errors",
+    "message": "No errors found",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.none_found",
+    "message": "No hierarchies found for this tenant.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.nothing_valid",
+    "message": "No valid boundaries to upload",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.or_browse",
+    "message": "or click to browse",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.parent_missing",
+    "message": "Parent \"%{code}\" not found",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.parse_failed",
+    "message": "Failed to parse Excel file. Please ensure it is a valid .xlsx file.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.parsing",
+    "message": "Parsing Excel file...",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.polygons",
+    "message": "Polygon outlines (optional)",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.polygons_hint",
+    "message": "Drop a GeoJSON FeatureCollection to draw real boundary outlines on the citizen map. Skip to use the default placeholder shape.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.polygons_matched",
+    "message": "%{file} — %{matched} of %{total} boundaries will get real outlines (%{features} features in file, %{byCode} matched by code, %{byName} by name).",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.required_columns",
+    "message": "Required columns:",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.reupload",
+    "message": "Re-upload Fixed File",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.root",
+    "message": "[Root]",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.rule_no_skip",
+    "message": "Do not skip hierarchy levels",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.rule_parent",
+    "message": "Parent boundary must exist before child",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.rule_unique",
+    "message": "Each boundary must have a unique code",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.rules",
+    "message": "Important Rules:",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.select_heading",
+    "message": "Select Existing Hierarchy",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.select_required",
+    "message": "Please select a hierarchy",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.summary",
+    "message": "Summary: %{total} total | %{valid} | %{errors}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.summary_errors",
+    "message": "%{count} errors",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.summary_valid",
+    "message": "%{count} valid",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.tab_all",
+    "message": "All (%{count})",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.tab_errors",
+    "message": "Errors (%{count})",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.tab_valid",
+    "message": "Valid (%{count})",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.type_name",
+    "message": "Hierarchy Type Name",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.type_required",
+    "message": "Hierarchy type name is required",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.type_reserved",
+    "message": "\"%{type}\" is reserved for the workspace root. Choose another hierarchy name.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.upload_failed",
+    "message": "Failed to upload boundaries. Please try again.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.upload_heading",
+    "message": "Boundary Data Upload",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.upload_n",
+    "message": "Upload %{count} Boundaries",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.uploading",
+    "message": "Uploading...",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.use_existing",
+    "message": "Use an existing hierarchy",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.use_existing_one",
+    "message": "Upload more areas into the hierarchy you already have.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.use_existing_other",
+    "message": "Upload more areas into one of your %{count} hierarchies.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.use_selected",
+    "message": "Use Selected Hierarchy",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.verify_heading",
+    "message": "Verify Boundary Data",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.fetch_action",
+    "message": "Search boundaries",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.fetch_body",
+    "message": "Pull administrative boundaries, with map polygons, from the official sets (OCHA COD-AB, geoBoundaries) or OpenStreetMap.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.fetch_intro",
+    "message": "Search for your area and pick which administrative levels become your boundary hierarchy.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.fetch_title",
+    "message": "Fetch boundaries",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.figures_scope",
+    "message": "These figures are for all of %{country}, not just %{place}.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.gate_hint",
+    "message": "Bring in a boundary hierarchy to continue.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.google.accepted",
+    "message": "Google accepted the key",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.google.back_to_osm",
+    "message": "Maps for %{tenant} are back on OpenStreetMap tiles.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.google.explain",
+    "message": "Boundaries come from %{source} either way — a Google Maps key only changes the map they are drawn on, here and on the boundary pages. It is saved in this tenant's Map Config and sent to every browser that shows a map, so restrict it to this site in Google Cloud Console.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.google.google_maps",
+    "message": "Google Maps",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.google.key_placeholder",
+    "message": "Google Maps JavaScript API key",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.google.osm_tiles",
+    "message": "OpenStreetMap tiles",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.google.replace_key",
+    "message": "Replace the saved key",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.google.save",
+    "message": "Save",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.google.save_failed",
+    "message": "%{check}, and saving it to Map Config failed: %{reason}. A deployment whose MapConfig schema predates the mapProvider field rejects it — see docs/features/maps/README.md.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.google.saved",
+    "message": "Saved. Maps for %{tenant} now draw on Google Maps.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.google.saved_unverified",
+    "message": "Saved, but Google didn't confirm the key in time, so it isn't verified. If Google rejects it later, maps for %{tenant} fall back to OpenStreetMap tiles and say why.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.google.summary",
+    "message": "Map provider: %{provider} (optional)",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.google.switch_back",
+    "message": "Switch back to OpenStreetMap tiles",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.google.unconfirmed",
+    "message": "Google didn't confirm the key in time",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.google.update_failed",
+    "message": "Couldn't update Map Config: %{reason}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.hierarchy_count_one",
+    "message": "%{count} hierarchy",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.hierarchy_count_other",
+    "message": "%{count} hierarchies",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.how_heading",
+    "message": "How do you want to bring in your geography?",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.imported",
+    "message": "Boundaries imported",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.intro",
+    "message": "The boundary hierarchies your complaint services work in. Bring them in from one of three sources.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.level_status.confirmed",
+    "message": "Confirmed",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.level_status.differs",
+    "message": "Differs",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.level_status.partly",
+    "message": "Partly confirmed",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.level_status.single",
+    "message": "One source only",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.level_status.unmeasured",
+    "message": "Not measured",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.levels.at_least_two",
+    "message": "Select at least two levels to form a hierarchy.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.levels.contiguous",
+    "message": "Selected levels must be contiguous — you can't skip a level in between, the hierarchy is a strict parent→child chain. Re-include %{gaps}, or trim from the top/bottom of the range instead.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.levels.create",
+    "message": "Create Hierarchy & Boundaries",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.levels.examples",
+    "message": "Examples: %{examples}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.levels.examples_more",
+    "message": "Examples: %{examples}, etc.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.levels.heading",
+    "message": "Map Admin Levels",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.levels.intro",
+    "message": "We found %{count} levels of administrative boundaries for %{place}. Tick the levels to include and name each — the selection must be a contiguous range (you can drop the outer levels, but not skip one in the middle).",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.levels.level_n",
+    "message": "Level %{n}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.levels.name_label",
+    "message": "Hierarchy Name",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.levels.name_placeholder",
+    "message": "e.g., District",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.levels.regions_one",
+    "message": "%{count} region",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.levels.regions_other",
+    "message": "%{count} regions",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.levels.suggested",
+    "message": "Suggested: what %{country} calls this level. Edit it if your tenant uses another name.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.levels.this_country",
+    "message": "this country",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.levels.unnamed",
+    "message": "Name every selected level (missing: %{levels}).",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.load_failed",
+    "message": "Couldn’t load your boundaries. %{reason}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.nothing_in_it_yet",
+    "message": "Nothing in it yet",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.official_for",
+    "message": "Official boundaries for %{country}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.osm.all_skipped",
+    "message": "All fetched features were skipped (unnamed, name not romanizable, or no parent found). Nothing to create.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.osm.create_failed",
+    "message": "Failed to create boundaries.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.osm.levels_mismatch",
+    "message": "A \"%{type}\" hierarchy already exists on %{tenant} with levels [%{existing}], which do not match your mapped levels [%{mapped}]. Boundaries cannot be created against mismatched level names. Either rename your mapped levels to match the existing hierarchy, or use the Excel path's \"use existing hierarchy\" option.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.osm.type_reserved",
+    "message": "\"%{type}\" is reserved for the workspace root. Set HIERARCHY_TYPE to another hierarchy name.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.preconfigured_checking",
+    "message": "Checking which boundaries we hold for your country…",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.preconfigured_detected",
+    "message": "Boundaries detected",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.preconfigured_error",
+    "message": "We hold official boundaries for %{country}, but couldn't load them just now.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.preconfigured_intro",
+    "message": "Official boundaries for %{country}. Search for your city or region, then pick which levels become your boundary hierarchy.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.preconfigured_no_country",
+    "message": "This workspace has no country recorded from signup, so we can't tell which boundaries to offer. Fetch or upload them instead.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.preconfigured_none",
+    "message": "We don't hold preconfigured boundaries for %{country} yet. Fetch or upload them instead.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.preconfigured_title",
+    "message": "Preconfigured boundaries",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.preconfigured_unavailable",
+    "message": "Preconfigured boundaries aren't available on this deployment. Fetch or upload them instead.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.preconfigured_use",
+    "message": "Use these boundaries",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.quality.leaf_hint",
+    "message": "An area with nothing inside it at the next level is where the map data stops: it becomes a leaf of your hierarchy.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.quality.level",
+    "message": "Level %{level}: %{kept} of %{total} areas",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.quality.no_parent",
+    "message": "%{count} lie in no area of the level above (skipped)",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.quality.present",
+    "message": "present in %{covered} of %{parents} areas of the level above",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.quality.summary",
+    "message": "Data check for the selected levels: %{total} areas, %{kept} will be created",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.quality.summary_skipped",
+    "message": "Data check for the selected levels: %{total} areas, %{kept} will be created, %{skipped} skipped",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.quality.unnamed",
+    "message": "%{count} unnamed (skipped)",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.review.create_n",
+    "message": "Create %{count} Boundaries",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.review.explain",
+    "message": "Unnamed features and features whose centroid falls in no parent boundary are excluded rather than guessed. If these matter, fix them in OpenStreetMap (or use the Excel path) and re-run the search. Creation proceeds with the remaining %{count} boundaries.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.review.heading",
+    "message": "Review Before Creating",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.review.item",
+    "message": "%{name} — %{level} (OSM level %{osmLevel}) — %{reason}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.review.skipped",
+    "message": "%{count} feature(s) will be SKIPPED:",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.schema_not_saved",
+    "message": "Boundaries were created, but the hierarchy record didn't save: %{reason}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.search.button",
+    "message": "Search",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.search.enter_name",
+    "message": "Please enter a location name to search.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.search.intro",
+    "message": "Enter the name of your city or region to fetch its administrative boundaries and their map polygons.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.search.no_boundaries",
+    "message": "No administrative boundaries came back for \"%{place}\". Try a different place.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.search.official_intro",
+    "message": "Enter the name of your city or region. Its boundaries and map polygons come from the official set below.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.search.official_title",
+    "message": "Search %{country}'s official boundaries",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.search.pick_suggestion",
+    "message": "Pick a place from the suggestions.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.search.placeholder",
+    "message": "e.g., Maputo",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.search.placeholder_country",
+    "message": "e.g., a city in %{country}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.search.source",
+    "message": "Boundary source",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.source_excel",
+    "message": "your Excel upload",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.source_line",
+    "message": "Source: %{source}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.source_official",
+    "message": "the official boundaries for %{country} (%{dataset})",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.source_place",
+    "message": "%{source} for %{place}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.table.error",
+    "message": "Error",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.table.parent",
+    "message": "Parent",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.table.showing",
+    "message": "Showing first 20 of %{count} rows",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.table.status",
+    "message": "Status",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.table.type",
+    "message": "Type",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.table.valid",
+    "message": "Valid",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.turbopass_unavailable",
+    "message": "Boundary search isn't set up on this deployment: the turbopass boundary service isn't reachable, or has no boundary data loaded. An administrator can enable it (enable_turbopass, with a boundary DB — see turbopass/README.md). Until then, use Upload from Excel.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.groups.account",
     "message": "Account",
     "module": "configurator-ui",

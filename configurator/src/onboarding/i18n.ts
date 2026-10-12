@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { createElement, Fragment, useCallback, type ReactNode } from 'react';
 import { useTranslate } from 'ra-core';
 
 /** Values for `%{name}` placeholders. */
@@ -45,6 +45,16 @@ export function translatorFrom(translate: (key: string, options?: Record<string,
     // With no translator above (a test, say), translate hands back the key.
     return text === full ? fill(english, params) : text;
   };
+}
+
+/**
+ * A translated sentence with React nodes in its `%{name}` slots, for a word the sentence styles (a
+ * bold hierarchy name). Translate without those params, so their slots survive, then place the nodes.
+ */
+export function withNodes(text: string, nodes: Record<string, ReactNode>): ReactNode[] {
+  return text
+    .split(/%\{(\w+)\}/)
+    .map((part, i) => createElement(Fragment, { key: i }, i % 2 === 1 ? (part in nodes ? nodes[part] : `%{${part}}`) : part));
 }
 
 /** The onboarding translator for this render. */

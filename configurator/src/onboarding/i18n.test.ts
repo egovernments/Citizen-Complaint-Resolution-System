@@ -1,5 +1,7 @@
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { MessageError, englishT, type OnboardingT } from './i18n';
+import { MessageError, englishT, withNodes, type OnboardingT } from './i18n';
 import { describeSaveError } from './errors';
 import { deactivateAndRemove } from '@/identity/memberActions';
 
@@ -19,5 +21,13 @@ describe('MessageError', () => {
     );
     expect(err).toBeInstanceOf(MessageError);
     expect(describeSaveError(err, 'fallback', hindi)).toBe('आप अपनी सदस्यता नहीं हटा सकते।');
+  });
+});
+
+describe('withNodes', () => {
+  it('places nodes in their slots and leaves an unknown slot as written', () => {
+    const text = englishT('x', 'Hierarchy: %{hierarchy} • Levels: %{levels} %{other}', { levels: 'County → Ward' });
+    const html = renderToStaticMarkup(createElement('p', null, withNodes(text, { hierarchy: createElement('b', null, 'ADMIN') })));
+    expect(html).toBe('<p>Hierarchy: <b>ADMIN</b> • Levels: County → Ward %{other}</p>');
   });
 });
