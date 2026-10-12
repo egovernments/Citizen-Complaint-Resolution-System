@@ -27,11 +27,15 @@ Upgrading a 2.12 deployment? Read [migration.md](./migration.md) first.
 | WhatsApp | A Twilio account with a WhatsApp-enabled sender **and Meta-approved message templates**. Nothing sends without them — start approval early. |
 | Email | An SMTP mailbox. Gmail / Microsoft 365 need an **app password**, not the account password. |
 
-**SMS also carries login OTPs.** With `enable_otp_services: true` (which requires
-`enable_novu: true`; the deploy refuses otherwise), login OTPs go through the same SMS
-channel, provider and log. Switching SMS off stops OTP login (rows read
-`SKIPPED / NB_NO_PROVIDER`, event name `CORE.SMS.OTP`); changing the SMS provider changes
-who sends OTPs.
+**Citizen sign-in codes do not go through notifications yet.** In 2.20 citizens sign in through
+the Identity BFF, which sends its codes with its own sender (`http` to a gateway the deployment
+runs, or `log` for development); connecting it to the bridge's
+[`messages/_send`](./tenant-accounts.md#sending-a-code-messages_send) is a follow-up. **SMS
+carries the codes of DIGIT's older OTP service**, where a deployment still uses it
+(`enable_otp_services: true`, which requires `enable_novu: true`; the deploy refuses otherwise):
+they go through the same SMS channel, provider and log. Switching SMS off stops that OTP login
+(rows read `SKIPPED / NB_NO_PROVIDER`, event name `CORE.SMS.OTP`); changing the SMS provider
+changes who sends those codes.
 
 **Roles.** Two tiers, set at deploy time:
 
@@ -318,9 +322,13 @@ body. Without one the message is `SKIPPED / NB_TEMPLATE_NOT_APPROVED`.
 ### 5.6 Changing the OTP wording
 
 **Configure → Login and registration OTP (SMS)**, at the end of the page, edits the text of
-the OTP SMS. It changes the wording only: the OTP service (`user-otp`) builds the SMS itself
-and novu-bridge delivers it, so on/off and provider stay on **Channels** (SMS, [§4](#4-switch-the-channel-on)).
-The OTP has no event, routing or template row.
+the SMS of **DIGIT's older OTP service** (`user-otp`), where a deployment still uses it
+(`enable_otp_services`). It does not change the codes of 2.20's citizen sign-in (the Identity
+BFF), which do not go through notifications yet, nor the fixed text of
+[`messages/_send`](./tenant-accounts.md#sending-a-code-messages_send). It changes the wording
+only: `user-otp` builds the SMS itself and novu-bridge delivers it, so on/off and provider stay
+on **Channels** (SMS, [§4](#4-switch-the-channel-on)). The OTP has no event, routing or template
+row.
 
 The text is three localization messages in module `egov-user`:
 
@@ -414,7 +422,8 @@ Checklist:
 - [ ] WhatsApp: **your own** approved templates are synced and saved.
 - [ ] India SMS: every body is DLT-registered, per language ([§8.4](#84-sms-india-dlt-registration)).
 - [ ] A real complaint transition arrived on a handset / in a mailbox — not just a `SENT` row.
-- [ ] With OTP login: a phone login works since SMS was switched on.
+- [ ] Where DIGIT's older OTP service is used: a phone login through it works since SMS was
+      switched on.
 - [ ] Only the right people hold an admin role.
 
 | Symptom | Likely cause | Fix |
@@ -434,7 +443,7 @@ Checklist:
 | `400 NB_PROVIDER_TYPE_UNAVAILABLE` creating / testing an SMSCountry, Ozeki or Jasmin provider | The Novu worker does not load DIGIT's providers (`NOVU_BRIDGE_DIGIT_WORKER_PROVIDERS=false`) | Use a Novu-native provider, or turn them on: Helm `global.novuWorkerDigitProviders: true` ([providers.md](./providers.md#digits-worker-providers)) |
 | Banner "not been migrated yet" | Tenant still on its 2.12 configuration | `migrate-notifications.py plan --tenant mycity`, review, then `apply` ([migration.md](./migration.md#3-copy-each-tenants-configuration)) |
 | Banner "No notification configuration on this tenant" | Defaults never installed | Fresh install: `./deploy.sh mycity --tags notifications`. A tenant with complaints (the deploy printed `notif-seed — ACTION: this tenant has no notification configuration`): `migrate-notifications.py plan --tenant mycity --adopt-defaults`, then `apply --tenant mycity --adopt-defaults --yes` ([migration.md](./migration.md#3-copy-each-tenants-configuration)) |
-| OTP login stopped | SMS off or its provider broke | [§4](#4-switch-the-channel-on); look for `CORE.SMS.OTP` rows |
+| OTP login of DIGIT's older OTP service stopped | SMS off or its provider broke | [§4](#4-switch-the-channel-on); look for `CORE.SMS.OTP` rows. Citizen sign-in through the Identity BFF does not use notifications: check its own OTP sender |
 | The deploy prints `notif-seed — ACTION: a self-serve workspace has no notification configuration` | A workspace provisioned before pgr-services seeded notification defaults at signup, or whose step failed | Seed it once with its admin's access token ([§8.6](#86-new-workspaces)) |
 | `{emp_name}` in a message | Placeholder has no value for that event | Use tokens the Events screen lists for it |
 | `SKIPPED / NB_NO_ROUTING` for a complaint in `pg.citya` | The complaint's state root (`pg`) has no configuration — the deploy reported it `none` (`notif-seed — result per state root`), or could not log in there (`WARNING: could not log in at a complaint root`) | Install its defaults (`migrate-notifications.py plan/apply --tenant pg --adopt-defaults`), or seed it by hand ([§8.2](#82-whatsapp-server-side)); then configure it logged in at `pg` |
@@ -458,7 +467,7 @@ in E.164 (`+254712345678`). The bridge completes a number that has no `+` / `00`
 None of them: the message is recorded `SKIPPED / NB_CONTACT_INVALID` and not sent — never as
 `+` followed by the national number, which is someone else's number or nobody's. Fix it by
 adding the tenant's mobile rule (Configurator → Mobile Number Validation) or setting the
-deployment fallback. The same rule applies to login OTPs (`CORE.SMS.*` rows).
+deployment fallback. The same rule applies to the codes of DIGIT's older OTP service (`CORE.SMS.*` rows).
 
 ## 8. Deployment reference
 
@@ -474,11 +483,11 @@ Ansible `host_vars/<tenant>.yml` (re-run `./deploy.sh` after changing):
 | `notifications_seed_exclude` | Regex of state roots the seed skips (and lists) even though they have complaints. The seed covers `state_root` and **every state root with complaints** — novu-bridge reads a complaint's configuration at its own root (#1943) | `(?i)^(PW_\|pwt)` (test-suite junk) |
 | `notif_seed_user` / `notif_seed_pass` | The admin the seed logs in as, **at each root** it seeds. At a root other than `state_root`, any failure — the user does not exist there, a write refused with 403, MDMS unreadable — is a warning with the command that finishes it; only `state_root` fails the deploy | `ADMIN` / `eGov@123` |
 | `novu_bridge_provider_admin_tenants` | Extra state tenants whose admins may manage providers, besides `state_root` (#1999 multi-root boxes) | blank |
-| `enable_otp_services` | Real OTP login; requires `enable_novu` | `false` |
+| `enable_otp_services` | Real OTP login through DIGIT's older OTP service (`user-otp`), not the Identity BFF's citizen sign-in; requires `enable_novu` | `false` |
 | `novu_bridge_proxy_allowed_roles` / `novu_bridge_proxy_admin_roles` | The two role tiers ([§1](#1-before-you-start)) | see §1 |
-| `novu_admin_email` / `novu_admin_password` | Novu's first account, which novu-bridge also signs in as to manage tenant organizations. With `novu_tenant_accounts` on, leave the password unset: the deploy keeps one in OpenBao and refuses the published default | — |
-| `novu_tenant_accounts` | Each signup workspace gets its own Novu organization and manages its own providers ([tenant-accounts.md](./tenant-accounts.md)) | `enable_novu and enable_keycloak` |
-| `novu_admin_password_legacy` | The Novu admin's password before tenant accounts were turned on; the deploy changes it to the OpenBao one | `Digit@12345` |
+| `novu_admin_email` / `novu_admin_password` | Novu's first account, which novu-bridge also signs in as to manage tenant organizations. With `novu_tenant_accounts` on, leave the password unset (the deploy keeps one in OpenBao and refuses the published default), unless the admin has a custom password you want to keep: then pin it here | — |
+| `novu_tenant_accounts` | Each signup workspace gets its own Novu organization and manages its own providers ([tenant-accounts.md](./tenant-accounts.md)). Unset, it is on only if the deploy can sign in to Novu as the admin with the password the bridge gets; otherwise off for that deploy, with an `ACTION` line. `true` makes a refused sign-in stop the deploy ([tenant-accounts.md](./tenant-accounts.md#when-the-admin-sign-in-is-refused)) | `enable_novu and enable_keycloak` (verified) |
+| `novu_admin_password_legacy` | The Novu admin's password before tenant accounts were turned on; the deploy changes it to the OpenBao one. Pin a hand-changed password here before upgrading | `Digit@12345` |
 | `novu_tenant_accounts_backfill` | Existing tenants to move onto their own organization on this deploy | `[]` |
 | `novu_api_key` | Leave unset; the deploy mints it | — |
 | `notification_stack_tag` | Image tag of pgr-services, pgr-services-db, novu-bridge and novu-bridge-db — one build ([migration.md](./migration.md#1-take-all-four-images-from-one-build)). Pin a `develop-<sha8>` or release tag; the deploy warns while it is rolling | `nightly-develop` (rolling; a stopgap until the release pins one) |
@@ -503,7 +512,7 @@ set them in host_vars, not in `.env`); on Helm set them in
 | `NOVU_BRIDGE_RECEIPTS_SECRET` | Enables delivery receipts ([§8.3](#83-delivery-receipts)) | blank = off |
 | `NOVU_BRIDGE_PREFERENCE_ENABLED` / `NOVU_BRIDGE_PREFERENCE_FAIL_OPEN` | Consent gate; allow delivery when the preference service is down | Compose `false` / `true` |
 | `NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE` | Last-resort country code for numbers sent without one, after the user's and the tenant's (see `novu_bridge_core_sms_country_code`) | blank |
-| `NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT` | Tenant of a login OTP that carries none, **and** the state that owns the providers. Compose: the deploy rewrites `pg` to `state_root` and fails if the running bridge has anything else. Helm: egov-config `state-level-tenant-id` | `state_root` |
+| `NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT` | Tenant of a code from DIGIT's older OTP service that carries none, **and** the state that owns the providers. Compose: the deploy rewrites `pg` to `state_root` and fails if the running bridge has anything else. Helm: egov-config `state-level-tenant-id` | `state_root` |
 | `NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS` | Extra states whose admins may manage providers (from `novu_bridge_provider_admin_tenants`; Helm `provider-admin-tenants`) | blank |
 | `NOVU_BRIDGE_TENANT_ACCOUNTS_ENABLED` | Per-tenant Novu organizations ([tenant-accounts.md](./tenant-accounts.md)); from `novu_tenant_accounts` (Helm `tenant-accounts.enabled`) | `false` |
 | `NOVU_BRIDGE_NOVU_ADMIN_EMAIL` / `_PASSWORD`, `NOVU_BRIDGE_TENANT_KEY_ENCRYPTION_KEY` (`_PREVIOUS`), `NOVU_BRIDGE_INTERNAL_ADMIN_TOKEN`, `NOVU_BRIDGE_INTERNAL_SEND_TOKEN` | Its secrets: from OpenBao on Compose, from the `novu-bridge-tenant-accounts` Secret on Helm. Never in host_vars | blank |

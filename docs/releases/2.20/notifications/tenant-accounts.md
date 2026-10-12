@@ -2,8 +2,16 @@
 
 Each workspace (root tenant) can have **its own Novu organization**: its own SMS, WhatsApp and
 email provider credentials, managed by its own admins in the Configurator, and used for every
-message of that workspace, including citizen sign-in codes. Tenants without one keep using the
+message the notification module sends for that workspace. Tenants without one keep using the
 deployment's shared Novu account exactly as before. Tracking issue: #2203.
+
+**Citizen sign-in codes are not among those messages yet.** In 2.20 citizens sign in through the
+Identity BFF, which sends its codes with its own sender (`http` to a gateway the deployment runs,
+or `log` for development), not through notifications. The bridge's
+[`messages/_send`](#sending-a-code-messages_send) is ready for it, for a workspace with its own
+organization only and with fixed text; connecting the BFF is a follow-up. Codes from DIGIT's
+older OTP service (`user-otp`), where a deployment still uses it, do go through notifications,
+and through the workspace's organization when it has one.
 
 | You are | Read |
 |---|---|
@@ -55,19 +63,24 @@ signup saga ... BINDING -> NOTIFICATION_ACCOUNT ──> novu-bridge POST /tenant
   the new organization starts with no providers, so its messages are
   `SKIPPED / NB_PROVIDER_UNAVAILABLE` until its admin adds one.
 - **Routing.** Every message of a tenant whose ROOT has its own organization goes through it:
-  complaint notifications, DIGIT login OTPs (`egov.core.notification.sms`), Configurator
-  test-sends, `_dry-run` sends and `messages/_send`. Subscribers are created in that
+  complaint notifications, codes from DIGIT's older OTP service where a deployment still uses it
+  (`egov.core.notification.sms`), Configurator test-sends, `_dry-run` sends and
+  `messages/_send`. Subscribers are created in that
   organization, and a channel's selected provider (`NOTIFICATIONS.Channel.provider`) is looked up
   among that organization's providers. Any other tenant runs the exact code path it ran before.
   If a tenant's account cannot be read (database down, wrong encryption key), its messages fail
   (`FAILED / NB_TENANT_ACCOUNT_UNAVAILABLE`, then the DLQ); they never fall back to the shared
   account.
 - **Deprovision.** Self-hosted Novu 2.3.0 cannot delete an organization (its organization API has
-  no delete). `POST /tenants/{tenant}/_deprovision` therefore deletes every integration of the
-  organization (and with it every provider credential), regenerates the environment's API key
-  without keeping the new one, erases the stored key and marks the row `DEPROVISIONED`. The old
-  key stops working at once. The tenant falls back to the shared account; a later `_provision`
-  reuses the same organization, which still has its workflows but no providers.
+  no delete). `POST /tenants/{tenant}/_deprovision` therefore, in this order: marks the row
+  `DEPROVISIONING` and erases the stored key, so the tenant is back on the shared account before
+  Novu is touched; regenerates the environment's API key without keeping the new one (the old key
+  stops working at once, also for a replica that still caches it); deletes every integration of
+  the organization (and with it every provider credential); marks the row `DEPROVISIONED`. If a
+  Novu call fails part-way, the call answers the error and the row stays `DEPROVISIONING` with
+  `lastErrorCode`: still on the shared account, never `PROVISIONED` with its credentials half gone.
+  Calling `_deprovision` again resumes it. A later `_provision` reuses the same organization,
+  which still has its workflows but no providers.
 
 ## In the Configurator
 
@@ -87,6 +100,13 @@ The screens send `?tenantId=<workspace>` on every provider call; the bridge deci
 ([providers.md](./providers.md#who-may-manage-providers)).
 
 ## Sending a code: `messages/_send`
+
+Nothing calls this yet: 2.20's citizen sign-in (the Identity BFF) has only its `http` and `log`
+senders, and connecting it is the follow-up described under **Wiring the BFF** below. Two limits
+hold until then and after: it sends only for a tenant whose root has its own organization (any
+other answers `409 NB_TENANT_NOT_PROVISIONED`), and the text is fixed: the `digit-otp-sms` /
+`digit-otp-email` workflows carry the code and its expiry, and the OTP wording on Configure
+(which belongs to DIGIT's older OTP service) does not apply.
 
 `POST /novu-bridge/novu-adapter/v1/messages/_send`, on the internal network only (Kong answers
 404), with header `X-Novu-Bridge-Token: <NOVU_BRIDGE_INTERNAL_SEND_TOKEN>`:
@@ -169,12 +189,39 @@ The deploy then:
    before anything signs in. The Novu dashboard login changes with it: read it with
    `bao kv get -field=novu_admin_password <secrets_path>`;
 4. writes the secrets into their own `.env` block (removed again when switched off), passes them
-   to novu-bridge, and gives pgr-services the admin token for the `NOTIFICATION_ACCOUNT` step.
+   to novu-bridge, and gives pgr-services the admin token for the `NOTIFICATION_ACCOUNT` step;
+5. **verifies** that it can sign in to Novu as that admin with the password it gives the bridge:
+   before the stack starts when Novu is already running (an upgrade; the legacy password working
+   is enough there, since step 3 follows), and again after step 3 and the API-key mint. See
+   [When the admin sign-in is refused](#when-the-admin-sign-in-is-refused).
+
+### When the admin sign-in is refused
+
+The usual cause is a Novu admin whose password was changed by hand (in the Novu dashboard), so it
+is neither the generated one nor `novu_admin_password_legacy`, and step 3 could not move it. A
+bridge holding a password Novu refuses could never provision a workspace, so the deploy does not
+hand it over:
+
+| The box | The deploy |
+|---|---|
+| `novu_tenant_accounts` not set (on by default) and no workspace provisioned yet | Switches per-tenant accounts **off for this deploy** (`NOVU_BRIDGE_TENANT_ACCOUNTS_ENABLED=false`, the secrets block leaves `.env`; when this is found only after the stack started, novu-bridge and pgr-services are recreated) and continues. Every tenant uses the shared account as before, and tenant creation skips the notification-account step. It prints `novu tenant accounts — ACTION: per-tenant notification accounts are OFF on this box for this deploy` with what to pin. The next deploy checks again |
+| `novu_tenant_accounts: true` in host_vars | Stops, with the same text: the operator asked for the feature |
+| Workspaces already have their own organization (`PROVISIONED` rows), or they cannot be counted | Stops, with the same text: switching off would move their messages onto the shared account |
+
+What to pin, in `host_vars/<box>.yml`: the admin's current password as
+`novu_admin_password_legacy` (the deploy then moves the admin onto a generated password kept in
+OpenBao), or as `novu_admin_password` (kept as it is; never the published default), plus
+`novu_admin_email` if the admin is another account. Or set `novu_tenant_accounts: false` to run
+the box on the shared account only and silence the check. When a deploy stops here, the stack it
+started is still running with the refused password: workspace provisioning fails
+(`NB_NOVU_PLATFORM_LOGIN_FAILED`), and workspaces that already have an organization keep sending
+through it (they use their stored keys, not the admin sign-in). Pin and re-run.
 
 Registration stays disabled (`DISABLE_USER_REGISTRATION=true`): creating an organization is not a
 registration.
 
-**Helm.** Create the Secret, then set `tenant-accounts.enabled: true` for novu-bridge and
+**Helm.** Off by default (the chart's `tenant-accounts.enabled: false`): opt in. Create the
+Secret, then set `tenant-accounts.enabled: true` for novu-bridge and
 `onboarding.notificationAccountUrl` for pgr-services:
 
 ```bash
@@ -187,11 +234,20 @@ kubectl -n egov create secret generic novu-bridge-tenant-accounts \
 
 The bridge refuses to start with the feature on and no encryption key of at least 32 characters
 or no Novu admin login. A blank internal token switches its API off (`403 NB_INTERNAL_API_DISABLED`).
+Nothing on Helm verifies the admin password as the Compose deploy does: put the admin's current
+password in the Secret, and check with one `_provision` (a wrong one answers
+`502 NB_NOVU_PLATFORM_LOGIN_FAILED`).
 
 **Encryption key rotation.** Put the old value in `NOVU_BRIDGE_TENANT_KEY_ENCRYPTION_KEY_PREVIOUS`
 (Helm key `encryption-key-previous`) and the new one in place, then re-provision each tenant
 (`_backfill` with every tenant) so its key is stored again under the new one; the state view's
 `apiKeyEncryptionKeyId` says which key wrote it. Then drop the previous key.
+
+A provision stores the key again whenever the stored one does not open under the CURRENT key,
+whatever wrote it. So a tenant whose sends fail `NB_TENANT_ACCOUNT_UNAVAILABLE` because its key was
+written by a key this bridge no longer has (rotated twice, a wrong or missing `_PREVIOUS`, the key
+changed without one) is repaired by `_provision` (or `_backfill`) for that tenant: the bridge
+reads the organization's key from Novu again with the admin sign-in.
 
 ## Existing tenants (backfill)
 
@@ -239,6 +295,10 @@ false `SENT`, and a **Test** is refused with the same reason.
 - **The internal APIs** take only `X-Novu-Bridge-Token` (a separate admin and send token,
   compared in constant time), never a DIGIT session, and Kong terminates both prefixes with 404.
   The send token can read a tenant's status and send; it cannot provision or touch credentials.
+  Whether a request is one of them is decided on the path as Spring MVC maps it (path parameters
+  dropped, decoded, dot segments applied, any case, no trailing slash), so `/v1;x/tenants` or
+  `/v1/%74enants` needs the token too; a path with `;`, an encoded `/`, `\`, `.` or `%`, `//` or a
+  dot segment is refused with `400 NB_REQUEST_REJECTED` before anything else.
 - **The Configurator path** acts on a workspace's organization only for an admin of that
   workspace, decided in the bridge from the egov-user session, never from the browser.
 - **Fail closed:** an unreadable account fails the message rather than using the shared account.
@@ -250,8 +310,8 @@ false `SENT`, and a **Test** is refused with the same reason.
 Against stock Novu 2.3.0 (api and worker, DIGIT's worker providers mounted) with registration
 disabled, mock Jasmin gateways and the bridge built from this change: two tenants provisioned into
 two organizations (a re-provision created nothing), each given a Jasmin provider pointing at a
-different gateway and a fake Twilio account with a different SID; OTPs, complaint thin events and
-DIGIT login OTPs for each tenant reached only that tenant's gateway, a tenant without an
+different gateway and a fake Twilio account with a different SID; `_send` codes, complaint thin
+events and codes from DIGIT's older OTP service for each tenant reached only that tenant's gateway, a tenant without an
 organization stayed on the shared one, the three `_send` errors came back distinct, deprovision
 revoked the key, and Kong answered 404 for both internal prefixes even for an authenticated
 admin session.
