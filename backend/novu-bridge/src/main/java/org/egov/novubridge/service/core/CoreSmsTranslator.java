@@ -126,8 +126,15 @@ public class CoreSmsTranslator {
         String category = first(sms, List.of("category"));
         // user-otp sends the national number: complete it with THIS tenant's country code (its
         // MobileNumberValidation rule, else the deployment's). Unknown: keep it as given, without a
-        // '+', and the pipeline records SKIPPED / NB_CONTACT_INVALID instead of sending it.
-        String e164 = phoneNumbers.toE164(mobile, tenant.trim());
+        // '+', and the pipeline records SKIPPED / NB_CONTACT_INVALID instead of sending it. A rule
+        // MDMS could not answer for: also kept as given, and the pipeline's own lookup records it
+        // FAILED / NB_CONFIG_UNAVAILABLE (a ledger row, then the redacted DLQ), never a guess.
+        String e164;
+        try {
+            e164 = phoneNumbers.toE164(mobile, tenant.trim());
+        } catch (TenantPhoneNumbers.RuleUnavailable unavailable) {
+            e164 = null;
+        }
         String phone = e164 != null ? e164 : mobile.trim();
         String id = UUID.nameUUIDFromBytes((EVENT_TYPE + ":" + recordKey).getBytes(StandardCharsets.UTF_8)).toString();
         Map<String, Object> data = new LinkedHashMap<>();
