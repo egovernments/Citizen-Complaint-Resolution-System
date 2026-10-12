@@ -8484,6 +8484,30 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.provisioning_errors.COUNTRY_NOT_SUPPORTED",
+    "message": "Accounts can’t be set up in this country yet.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.provisioning_errors.ONBOARDING_IDENTIFIER_TAKEN",
+    "message": "Another workspace took this account URL while yours was being set up.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.provisioning_errors.TENANT_ADMIN_ACCOUNT_REJECTED",
+    "message": "Your user account couldn’t be created with the details you gave. This is usually the mobile number: check it, then create the account again.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.provisioning_errors.TENANT_TAKEN",
+    "message": "Another workspace took this account URL while yours was being set up.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.provisioning_step.binding",
     "message": "Connecting your sign-in",
     "module": "configurator-ui",
@@ -8550,6 +8574,168 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.signup_errors.ACCOUNT_LOCKED",
+    "message": "Your account in this workspace is locked. Ask its admin to unlock it.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup_errors.DIGIT_ACCOUNT_INACTIVE",
+    "message": "Your account in this workspace isn’t active. Ask its admin to turn it back on.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup_errors.EMPLOYEE_ACCOUNT_NOT_LINKED",
+    "message": "Your sign-in isn’t connected to an account in this workspace yet. Ask its admin to invite you.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup_errors.NETWORK_ERROR",
+    "message": "Couldn’t reach the server. Check your connection and try again.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup_errors.ONBOARDING_DRAFT_CONFLICT",
+    "message": "Your details were changed in another tab or window. Reload the page to see the latest, then carry on.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup_errors.ONBOARDING_DRAFT_LOCKED",
+    "message": "Setup has already started, so these details can’t be changed now. Reload the page to see how it’s going.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup_errors.ONBOARDING_IDENTIFIER_TAKEN",
+    "message": "That account URL is already taken. Choose a different one.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup_errors.ONBOARDING_OPERATION_NOT_FOUND",
+    "message": "We couldn’t find this setup run. Reload the page.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup_errors.ONBOARDING_OPERATION_NOT_RETRYABLE",
+    "message": "Setup can’t be retried from here right now. Reload the page to see where it’s up to.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup_errors.ONBOARDING_PROVISIONED_FIELD_LOCKED",
+    "message": "The account code and country can’t change after a setup attempt. Put them back as they were to carry on.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup_errors.ONBOARDING_PUBLICATION_PENDING",
+    "message": "The last attempt is still finishing. Wait a minute, then try again.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup_errors.ONBOARDING_SIGNUP_NOT_FOUND",
+    "message": "We couldn’t find your sign-up. Reload the page to start again.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup_errors.PENDING_INVITATION",
+    "message": "Accept your invitation to this workspace first.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup_errors.SIGNUP_UNAVAILABLE",
+    "message": "Sign-up by email isn’t available right now. Try again later, or sign up another way.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup_errors.TENANT_CONTEXT_UNAVAILABLE",
+    "message": "You can’t open this workspace with this sign-in.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup_errors.TENANT_ROLES_MISSING",
+    "message": "This workspace isn’t fully set up yet. Try again in a few minutes.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup_errors.UNSUPPORTED_RETURN_TO",
+    "message": "Sign-up can’t be started from this address. Open the sign-up page from the main site and try again.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup_errors.UNTRUSTED_ORIGIN",
+    "message": "Sign-up can’t be started from this address. Open the sign-up page from the main site and try again.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup_fields.accepted_terms_version",
+    "message": "Agree to the terms of service to continue.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup_fields.account_code",
+    "message": "The account code must be 2 to 32 characters, using A–Z, 0–9 and hyphens.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup_fields.account_name",
+    "message": "Enter a name for your account.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup_fields.country_code",
+    "message": "Choose your base country from the list.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup_fields.financial_year_policy",
+    "message": "Choose a financial year.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup_fields.languages",
+    "message": "Choose at least one language.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup_fields.time_zone",
+    "message": "Choose a timezone.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup_fields.url_slug",
+    "message": "The account URL must be 2 to 63 lowercase letters, digits and hyphens, with at least two letters.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup.account_code_taken",
+    "message": "That account code is already taken. Go back and choose a different one.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.signup.almost_ready",
     "message": "Your workspace is almost ready",
     "module": "configurator-ui",
@@ -8568,8 +8754,116 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.signup.correct_details",
+    "message": "Change my details",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup.country_not_supported",
+    "message": "Accounts can’t be set up in that country yet. Choose another one.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup.details_invalid",
+    "message": "Some of your details aren’t valid. Check them and try again.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup.error_reference",
+    "message": "Something went wrong on our side. Try again, and if it keeps happening, contact support with reference %{code}.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup.error_unavailable",
+    "message": "A service sign-up needs isn’t responding right now. Try again in a minute.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup.error_unknown",
+    "message": "Something went wrong. Try again.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.signup.finishing",
     "message": "Finishing setup…",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup.magic_link_invalid",
+    "message": "Enter your first name, last name and a valid email address.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup.mobile_invalid",
+    "message": "That isn’t a valid mobile number in %{country}.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup.mobile_invalid_any",
+    "message": "That isn’t a valid mobile number for the country you chose.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup.mobile_purpose",
+    "message": "Used to create your account inside the new workspace.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup.mobile_rejected",
+    "message": "Check this number: your user account couldn’t be created with it.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup.mobile_required",
+    "message": "Enter your mobile number.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup.mobile_rule",
+    "message": "Mobile numbers in %{country} have %{digits} digits and start with %{prefixes}, for example %{example}.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup.mobile_rule_digits",
+    "message": "Mobile numbers in %{country} have %{digits} digits, for example %{example}.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup.mobile_rule_or",
+    "message": "or",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup.mobile_rule_range",
+    "message": "%{from} to %{to}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup.mobile_rule_unknown",
+    "message": "Enter the number without the %{dial} prefix.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup.session_expired",
+    "message": "Your sign-in expired. Sign in again to pick up where you left off.",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -8588,6 +8882,24 @@
   {
     "code": "app.onboarding.signup.setup_failed_detail",
     "message": "The setup could not be completed.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup.setup_failed_retryable",
+    "message": "Setup hit a problem that’s usually temporary. Try again.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup.setup_reference",
+    "message": "Reference: %{code}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup.slug_clashes",
+    "message": "This URL clashes with an existing workspace (“%{tenant}”). Choose a different one.",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
