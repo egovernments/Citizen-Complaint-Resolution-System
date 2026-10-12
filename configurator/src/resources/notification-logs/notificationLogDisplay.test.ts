@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { maskRecipient, recipientDisplay } from './notificationLogDisplay';
 
 // The same rule as novu-bridge's PiiMask (backend/novu-bridge/.../util/PiiMask.java, PiiMaskTest):
@@ -28,6 +30,25 @@ describe('maskRecipient', () => {
 
   it('does not treat a longer hex token as a uuid', () => {
     expect(maskRecipient('0b7e5a10-3c2d-4f1e-9a8b-d12349660d08b')).toBe('0b7e5a10-3c2d-4f1e-9a8b-d***660d08b');
+  });
+
+  it('does not treat a uuid glued to a hex character or a dash as a uuid', () => {
+    expect(maskRecipient('a0b7e5a10-3c2d-4f1e-9a8b-d1234966d08b')).toBe('a0b7e5a10-3c2d-4f1e-9a8b-d***966d08b');
+    expect(maskRecipient('-0b7e5a10-3c2d-4f1e-9a8b-d1234966d08b')).toBe('-0b7e5a10-3c2d-4f1e-9a8b-d***966d08b');
+  });
+
+  it('keeps every uuid in a composite value and masks the phone between them', () => {
+    const a = '0b7e5a10-3c2d-4f1e-9a8b-d1234966d08b';
+    const b = '12345678-1234-1234-1234-123456789012';
+    expect(maskRecipient(`${a}:${b}`)).toBe(`${a}:${b}`);
+    expect(maskRecipient(`ke:+254712345678:${a}`)).toBe(`ke:+***678:${a}`);
+    expect(maskRecipient(`${a}/0712345678/${b}`)).toBe(`${a}/***678/${b}`);
+  });
+
+  it('parses on Safari before 16.4: no regex lookbehind in this module', () => {
+    // App.tsx imports this module up front; a lookbehind is a SyntaxError there and blanks the app.
+    const source = readFileSync(path.resolve(__dirname, 'notificationLogDisplay.ts'), 'utf8');
+    expect(source).not.toMatch(/\(\?<[=!]/);
   });
 
   it('renders a dash for an empty value and keeps the literal none', () => {

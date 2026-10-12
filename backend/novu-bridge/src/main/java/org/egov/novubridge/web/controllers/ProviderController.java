@@ -780,8 +780,9 @@ public class ProviderController {
      * <p>Asked fresh, not from the dispatch snapshot: an operator who just changed a provider in
      * Novu's own dashboard tests that, not what Novu looked like up to a TTL ago (the refreshed
      * snapshot then serves that account's dispatch too). Fails OPEN like dispatch when Novu's
-     * integration list cannot be read: the test is sent and reports the trigger's own answer,
-     * carrying the reason it was not checked as {@code warning}.
+     * integration list cannot be read, or a read failed within the TTL (that back-off is shared with
+     * dispatch and kept): the test is sent and reports the trigger's own answer, carrying the reason
+     * it was not checked as {@code warning}.
      *
      * @param account the account the test is sent through ({@code null} = the shared one)
      * @return that reason when the check could not run, else null
@@ -793,10 +794,11 @@ public class ProviderController {
         }
         ProviderAvailability availabilityOfAccount = account == null
                 ? providerAvailability : availabilities.forAccount(account);
-        availabilityOfAccount.invalidate();
+        // Fresh, but not by invalidate(): that would also drop the failure back-off dispatch
+        // shares, so every Test during a Novu outage would be one more doomed list call.
         ProviderAvailability.Result availability = named
-                ? availabilityOfAccount.check(integrationId, channel)
-                : availabilityOfAccount.checkUnpinned(channel);
+                ? availabilityOfAccount.checkFresh(integrationId, channel)
+                : availabilityOfAccount.checkUnpinnedFresh(channel);
         if (!availability.usable()) {
             throw new Refusal(HttpStatus.CONFLICT, "NB_PROVIDER_UNAVAILABLE", availability.message());
         }

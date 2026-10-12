@@ -127,6 +127,26 @@ public class NovuClient {
         return overrides;
     }
 
+    /**
+     * {@code GET /v1/environments/me}: the Novu environment the API key belongs to
+     * ({@code data._id}). {@code GET /v1/integrations} lists the integrations of EVERY environment
+     * of the organization (Novu 2.3.0 filters it by organization only), while a trigger only ever
+     * uses the key's own.
+     */
+    public NovuResponse currentEnvironment() {
+        return currentEnvironment(null);
+    }
+
+    /**
+     * {@link #currentEnvironment()} with a tenant account's own API key (#2203): that key belongs to
+     * an environment of the TENANT'S organization, which the shared key's environment id never
+     * matches. {@code null} = the shared account.
+     */
+    public NovuResponse currentEnvironment(NovuAccount account) {
+        return exchange(account, HttpMethod.GET, "/v1/environments/me", null, "NB_NOVU_INTEGRATIONS_FAILED",
+                "reading the Novu environment of the API key");
+    }
+
     /** Twilio approved-Content-template envelope; {@code contentVariables} must be a JSON string. */
     public static Map<String, Object> buildProviderTemplateOverrides(String contentSid,
                                                                      Map<String, ?> contentVariables) {

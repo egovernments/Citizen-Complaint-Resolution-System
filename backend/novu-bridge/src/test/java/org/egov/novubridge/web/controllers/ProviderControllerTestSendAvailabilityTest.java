@@ -33,6 +33,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -101,6 +102,12 @@ class ProviderControllerTestSendAvailabilityTest {
         return body;
     }
 
+    private static Map<String, Object> whatsapp(String id) {
+        Map<String, Object> body = sms(id);
+        body.put("channel", "WHATSAPP");
+        return body;
+    }
+
     private void assertUnavailable(Map<String, Object> request, String... inMessage) {
         ProviderController.Refusal refusal = assertThrows(ProviderController.Refusal.class,
                 () -> controller().testSend(request));
@@ -160,6 +167,21 @@ class ProviderControllerTestSendAvailabilityTest {
         integration("i1", "smtp-aa", "nodemailer", "email", true);
 
         assertUnavailable(sms("i1"), "'email' integration", "SMS");
+    }
+
+    @Test
+    void aWhatsAppTestThroughATwilioSmsIntegration_isUnavailable() {
+        // Both are Novu 'sms' integrations; Novu's channel alone let this one through.
+        integration("i1", "twilio-sms-aa", "twilio", "sms", true);
+
+        assertUnavailable(whatsapp("i1"), "twilio-sms-aa", "delivers SMS, not WHATSAPP");
+    }
+
+    @Test
+    void anSmsTestThroughATwilioWhatsAppIntegration_isUnavailable() {
+        integration("i1", "twilio-whatsapp-aa", "twilio", "sms", true);
+
+        assertUnavailable(sms("twilio-whatsapp-aa"), "delivers WHATSAPP, not SMS");
     }
 
     @Test
@@ -235,6 +257,19 @@ class ProviderControllerTestSendAvailabilityTest {
     }
 
     // ---- Novu's integration list unreadable: fails open, like dispatch ------------------
+
+    @Test
+    void repeatedTestsDuringANovuOutage_askNovuOnce_andLeaveDispatchsBackoffInPlace() {
+        when(novuClient.listIntegrations()).thenThrow(new IllegalStateException("connection refused"));
+
+        for (int i = 0; i < 3; i++) {
+            Map<String, Object> out = controller().testSend(sms(null)).getBody();
+            assertTrue(String.valueOf(out.get("warning")).contains("could not be listed"), String.valueOf(out));
+        }
+        assertEquals(ProviderAvailability.Status.UNKNOWN, availability.checkUnpinned("SMS").status(),
+                "dispatch is still backing off");
+        verify(novuClient, times(1)).listIntegrations();
+    }
 
     @Test
     void whenNovuCannotBeListed_theTestIsSent_andSaysItWasNotChecked() {

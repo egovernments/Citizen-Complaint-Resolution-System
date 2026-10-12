@@ -16,6 +16,7 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
@@ -23,6 +24,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -66,6 +68,9 @@ class DispatchPipelinePhoneNumberTest {
         when(mdms.exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), eq(Map.class))).thenAnswer(inv -> {
             Map<String, Object> body = (Map<String, Object>) ((HttpEntity) inv.getArgument(2)).getBody();
             String tenant = (String) ((Map<String, Object>) body.get("MdmsCriteria")).get("tenantId");
+            if ("unreachable".equals(tenant)) {
+                throw new ResourceAccessException("mdms down");
+            }
             List<Object> rows = "kworkspace".equals(tenant)
                     ? List.of(Map.of("isActive", true, "data", Map.of("countryCode", "+254", "default", true,
                             "mobileNumberRegex", "^[17][0-9]{8}$")))
@@ -132,6 +137,21 @@ class DispatchPipelinePhoneNumberTest {
         assertEquals("NB_CONTACT_INVALID", row.getLastErrorCode());
         assertTrue(row.getLastErrorMessage().contains("norule"), row.getLastErrorMessage());
         assertFalse(row.getLastErrorMessage().contains("762061507"), "the message carries no full phone");
+        verify(novuClient, never()).identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(),
+                anyString(), any(), any(), any(), any());
+    }
+
+    @Test
+    void aRuleMdmsCannotAnswerFor_isFailedAndThrownForTheDlq_neverSentWithTheDeploymentCode() {
+        config.setCoreSmsCountryCode("+255");
+
+        TenantPhoneNumbers.RuleUnavailable thrown = assertThrows(TenantPhoneNumbers.RuleUnavailable.class,
+                () -> service.process(sms("unreachable", "0712345678"), true, null));
+
+        assertEquals("NB_CONFIG_UNAVAILABLE", thrown.getCode());
+        DispatchLogEntry row = row();
+        assertEquals("FAILED", row.getStatus(), "a row the Logs screen shows; a replay is not blocked by it");
+        assertEquals("NB_CONFIG_UNAVAILABLE", row.getLastErrorCode());
         verify(novuClient, never()).identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(),
                 anyString(), any(), any(), any(), any());
     }

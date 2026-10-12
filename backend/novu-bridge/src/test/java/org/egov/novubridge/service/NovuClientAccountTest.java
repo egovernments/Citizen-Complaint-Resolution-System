@@ -64,6 +64,8 @@ class NovuClientAccountTest {
         novuClient.deleteIntegration(ACME, "i1");
         novuClient.listWorkflows(ACME);
         novuClient.notificationsByTransaction(ACME, "otp-1");
+        // #2342 merge: the environment filter must ask about the TENANT key's environment.
+        novuClient.currentEnvironment(ACME);
 
         for (HttpEntity<?> entity : entities()) {
             assertEquals("ApiKey acme-key", entity.getHeaders().getFirst("Authorization"));
@@ -73,7 +75,10 @@ class NovuClientAccountTest {
     @Test
     void theLegacyMethods_stillUseTheSharedKey() {
         novuClient.listIntegrations();
-        assertEquals("ApiKey shared-key", entities().get(0).getHeaders().getFirst("Authorization"));
+        novuClient.currentEnvironment();
+        for (HttpEntity<?> entity : entities()) {
+            assertEquals("ApiKey shared-key", entity.getHeaders().getFirst("Authorization"));
+        }
     }
 
     @Test

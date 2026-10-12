@@ -57,6 +57,8 @@ public class NotificationDefaultsStepTest {
             String path = call.getArgument(2); Map<String, Object> body = call.getArgument(3);
             if (path.contains("schema/v1/_create")) {
                 String code = (String) ((Map<String, Object>) body.get("SchemaDefinition")).get("code");
+                assertTrue("the packaged schema, verbatim, as the provisioner requires: " + code, defaults.isSeedSchema(code,
+                        mapper.valueToTree(((Map<String, Object>) body.get("SchemaDefinition")).get("definition"))));
                 schemas.add(code); writes.add("schema:" + code);
                 return mapper.createObjectNode();
             }
@@ -126,6 +128,62 @@ public class NotificationDefaultsStepTest {
         steps.perform(NotificationDefaultsStep.STEP, signup, op, progress);   // no exception
         assertEquals(0, count("NOTIFICATIONS.Routing"));
         assertEquals("DONE", op.getRecordProgress().get("notifications:skipped:MDMS_SCHEMA_VALIDATION_FAILED"));
+    }
+
+    /**
+     * Review of #2342: every failure but a lost lease was swallowed, the retryable ones too (an MDMS 503, a
+     * 401/429, MDMS_RECORD_NOT_VISIBLE after 2.25 s of waits): the step read complete and the workspace could
+     * end with no routing, never retried. A retryable failure now goes back to the runner, which retries it.
+     */
+    @Test public void aRetryableFailureGoesBackToTheRunner_andTheRetryWritesOnlyWhatIsMissing() {
+        failSchema = "NOTIFICATIONS.Template"; failOn = new OnboardingFailure("PROVISIONING_HTTP_503", true, 503);
+        step(true);
+        assertEquals("PROVISIONING_HTTP_503", assertThrows(OnboardingFailure.class,
+                () -> steps.perform(NotificationDefaultsStep.STEP, signup, op, progress)).getCode());
+        assertEquals(0, count("NOTIFICATIONS.Routing"));
+        assertEquals("1", op.getRecordProgress().get(NotificationDefaultsStep.RETRYABLE_FAILURES));
+        assertFalse("not given up", op.getRecordProgress().keySet().stream().anyMatch(k -> k.startsWith("notifications:skipped:")));
+        long before = count("ACCESSCONTROL-ROLEACTIONS.roleactions");
+
+        failSchema = null;   // MDMS is back; the runner retries the step
+        steps.perform(NotificationDefaultsStep.STEP, signup, op, progress);
+        assertEquals(24, count("NOTIFICATIONS.Routing"));
+        assertEquals(42, count("NOTIFICATIONS.Template"));
+        assertEquals("nothing the first attempt wrote is written again", before, count("ACCESSCONTROL-ROLEACTIONS.roleactions"));
+    }
+
+    @Test public void aRowNeverVisibleIsRetried_notSkipped() {
+        step(true).setVisibilityWaitsMs(new long[0]);
+        defaults.schemas().forEach(schema -> schemas.add(schema.path("code").asText()));
+        doReturn(mapper.createObjectNode()).when(client).write(any(), anyString(), anyString(), anyMap());   // accepted, never visible
+        assertEquals("MDMS_RECORD_NOT_VISIBLE", assertThrows(OnboardingFailure.class,
+                () -> steps.perform(NotificationDefaultsStep.STEP, signup, op, progress)).getCode());
+    }
+
+    @Test public void afterItsRetryBudget_aRetryableFailureGivesUpWithoutFailingTheSignup() {
+        failSchema = "NOTIFICATIONS.Template"; failOn = new OnboardingFailure("PROVISIONING_UNAVAILABLE", true);
+        step(true);
+        op.getRecordProgress().put(NotificationDefaultsStep.RETRYABLE_FAILURES, String.valueOf(NotificationDefaultsStep.MAX_RETRYABLE_FAILURES - 1));
+        steps.perform(NotificationDefaultsStep.STEP, signup, op, progress);   // no exception: the signup goes on
+        assertEquals("DONE", op.getRecordProgress().get("notifications:skipped:PROVISIONING_UNAVAILABLE"));
+        assertEquals(String.valueOf(NotificationDefaultsStep.MAX_RETRYABLE_FAILURES), op.getRecordProgress().get(NotificationDefaultsStep.RETRYABLE_FAILURES));
+        assertTrue("it gives up before the runner's 12 retries without progress would stop the signup",
+                NotificationDefaultsStep.MAX_RETRYABLE_FAILURES < 12);
+    }
+
+    @Test public void theRunnerRetriesARetryableFailureOfThisStep_itDoesNotFailTheSignup() {
+        OnboardingWorkerService worker = mock(OnboardingWorkerService.class);
+        OnboardingSteps mocked = mock(OnboardingSteps.class);
+        doThrow(new OnboardingFailure("PROVISIONING_HTTP_503", true, 503)).when(mocked)
+                .perform(eq(NotificationDefaultsStep.STEP), any(), any(), any());
+        op.getCompletedSteps().addAll(List.of("TENANT_FOUNDATION", "PLATFORM_BASELINE"));
+        OnboardingRepository repository = mock(OnboardingRepository.class);
+        when(repository.checkpoint(any(), any(), anyLong())).thenReturn(true);
+        UUID token = UUID.randomUUID();
+        new OnboardingRunner(worker, repository, mocked, mock(OnboardingLifecyclePublisher.class)).process(op, signup, token);
+        verify(worker).fail(eq(op.getId()), eq(token), eq(true), eq("PROVISIONING_HTTP_503"), any(),
+                eq(NotificationDefaultsStep.STEP), eq(List.of("TENANT_FOUNDATION", "PLATFORM_BASELINE")));
+        verify(worker, never()).complete(any(), any(), any());
     }
 
     @Test public void aLostLeaseStillStopsTheRun() {

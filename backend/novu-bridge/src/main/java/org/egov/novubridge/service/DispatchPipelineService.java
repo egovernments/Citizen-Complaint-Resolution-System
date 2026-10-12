@@ -179,8 +179,16 @@ public class DispatchPipelineService {
         }
         if (!email) {
             // DIGIT stores numbers nationally; the provider needs E.164. Completed with the
-            // tenant's own country code, never sent as a bare "+" + national number.
-            String e164 = phoneNumbers.toE164(contact.getPhone(), event.getTenantId());
+            // tenant's own country code, never sent as a bare "+" + national number. A rule MDMS
+            // could not answer for is not "no rule" (that would fall to the deployment's code,
+            // another country's on a multi-country box): FAILED, and the consumer DLQs it.
+            String e164;
+            try {
+                e164 = phoneNumbers.toE164(contact.getPhone(), event.getTenantId());
+            } catch (TenantPhoneNumbers.RuleUnavailable unavailable) {
+                persist(event, context, "FAILED", unavailable.getCode(), unavailable.getMessage());
+                throw unavailable;
+            }
             if (e164 == null) {
                 return skip(event, context, "NB_CONTACT_INVALID", "Recipient phone "
                                 + PiiMask.mask(contact.getPhone()) + " has no country code, and none is known for "

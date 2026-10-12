@@ -398,12 +398,13 @@ bridge).
 | Code | Cause | Fix |
 |---|---|---|
 | `NB_NO_PROVIDER` | Channel off for this tenant (expected on a new city) | [§4](#4-switch-the-channel-on) |
-| `NB_PROVIDER_UNAVAILABLE` | Selected provider missing, disabled or wrong channel — or no provider selected and Novu has no active integration for the channel — or SMSCountry / Ozeki / Jasmin with `NOVU_BRIDGE_DIGIT_WORKER_PROVIDERS=false` | [§3](#3-add-a-provider) / [§4](#4-switch-the-channel-on); for the last, select a Novu-native provider or turn the worker providers on |
+| `NB_PROVIDER_UNAVAILABLE` | Selected provider missing, disabled or wrong channel (a Twilio SMS provider selected for WhatsApp, or the reverse, included) — or no provider selected and Novu has no active integration for the channel — or SMSCountry / Ozeki / Jasmin with `NOVU_BRIDGE_DIGIT_WORKER_PROVIDERS=false` | [§3](#3-add-a-provider) / [§4](#4-switch-the-channel-on); for the last, select a Novu-native provider or turn the worker providers on |
 | `NB_NO_ROUTING` | No routing row for the event | Add one ([§5.2](#52-routing-and-audiences)) |
 | `NB_NO_TEMPLATE` | No template in the recipient's language or `en_IN` | Add it |
 | `NB_NO_RECIPIENTS` | Every audience named nobody | Check the role has holders in this tenant |
 | `NB_CONTACT_MISSING` | Recipient has no phone / email | Fix the record or route another channel |
 | `NB_CONTACT_INVALID` | A phone without a country code, at a tenant with no mobile rule and no deployment fallback | [§7 Phone numbers](#phone-numbers) |
+| `NB_CONFIG_UNAVAILABLE` (`FAILED`) | A phone without a country code, and the tenant's mobile rule could not be read from MDMS | Replay from the DLQ once MDMS answers ([§7 Phone numbers](#phone-numbers)) |
 | `NB_TEMPLATE_NOT_APPROVED` | WhatsApp without an approved template | [§5.5](#55-whatsapp-provider-templates) |
 | `NB_PREFERENCE_DENIED` | Recipient has not consented to the channel | Nothing — consent working |
 | `NB_UNKNOWN_AUDIENCE_SCHEME` | Audience prefix unknown | Fix the routing row |
@@ -468,6 +469,18 @@ None of them: the message is recorded `SKIPPED / NB_CONTACT_INVALID` and not sen
 `+` followed by the national number, which is someone else's number or nobody's. Fix it by
 adding the tenant's mobile rule (Configurator → Mobile Number Validation) or setting the
 deployment fallback. The same rule applies to the codes of DIGIT's older OTP service (`CORE.SMS.*` rows).
+
+The deployment fallback is used only where MDMS **answered** that the tenant and its root have no
+rule. A rule MDMS cannot be asked for is not "no rule": the bridge uses the last rule it read for
+that tenant, and with none the message is recorded `FAILED / NB_CONFIG_UNAVAILABLE` and
+dead-lettered for replay — never sent with another country's code. Such a failure is remembered for
+5 seconds, so a short MDMS outage costs a few dead-lettered messages, not one MDMS call each.
+
+Digits that start with the country code (`254712345678`) are either already international or a
+national number that happens to start with it; the rule's `mobileNumberRegex` decides when exactly
+one reading matches it. Without one (the deployment fallback) a number that leaves 9 or more digits
+after the code is read as already carrying it. A bracketed trunk `(0)` (`+254 (0) 712345678`) is
+dropped.
 
 ## 8. Deployment reference
 
@@ -613,7 +626,7 @@ language (Hindi registers separately).
 | Citizen | assigned / re-assigned | complaint type, id, date, employee name, designation, department |
 | Citizen | rejected | complaint type, id, date, rejection reason (free text; DLT caps a variable at ~30 characters — drop it if enforced) |
 | Citizen | resolved | complaint type, id, date, employee name |
-| Employee | assigned to you | employee name, complaint type, id, designation, city |
+| Employee | assigned to you | employee name, id, complaint type |
 | Employee | feedback received | employee name, complaint type, id, rating |
 
 ### 8.5 Testing email without a real mailbox
@@ -670,6 +683,21 @@ unset DIGIT_ACCESS_TOKEN NOTIF_CHANNELS_ALLOWLIST
 ```
 
 `NOTIF_ADOPT_DEFAULTS=1` is right for a workspace even when it has complaints: a workspace never ran
-2.12's hard-coded notifications, so there is no wording of its own to preserve. A refused token is
-exit 4 (`NOTIF-LOGIN-REFUSED`: expired, or not a DIGIT token of a user at that workspace) and
-nothing is read or written. `migrate-notifications.py` takes the same `DIGIT_ACCESS_TOKEN`.
+2.12's hard-coded notifications, so there is no wording of its own to preserve. The token is checked
+with egov-user (`/user/_details`) before anything is read; a refused one is exit 4
+(`NOTIF-LOGIN-REFUSED`: expired, or not a DIGIT token of a user at that workspace) and nothing is
+read or written. `migrate-notifications.py` takes the same `DIGIT_ACCESS_TOKEN`.
+
+**Channels differ by how the workspace was seeded.** One seeded at signup has **no channel rows**:
+it follows the deployment's `novu_bridge_channels_enabled` as it is now and as it changes, until its
+admin switches a channel on the **Channels** screen. One seeded by hand as above gets channel rows
+**written once** from `NOTIF_CHANNELS_ALLOWLIST` (the bridge's setting at that moment): a later change
+of `novu_bridge_channels_enabled` does not reach it; switch its channels on the **Channels** screen.
+
+The signup step runs only where the notification stack does: Ansible renders
+`PGR_ONBOARDING_NOTIFICATION_DEFAULTS_ENABLED` from `enable_novu` (override:
+`pgr_onboarding_notification_defaults_enabled`), Helm from `onboarding.notificationDefaultsEnabled`.
+A retryable failure (MDMS or egov-user unavailable, a row not yet visible) is retried by the signup
+on its back-off, up to 10 times; after that, or at once for a failure retrying cannot fix, the step
+gives up without stopping the signup and pgr-services logs `notification defaults were NOT fully
+seeded`.

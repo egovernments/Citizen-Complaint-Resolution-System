@@ -94,9 +94,13 @@ export function sourcePathDisplay(value: unknown): CellText {
   return { text: choice ? choice.name : raw, muted: false };
 }
 
-/** A canonical 8-4-4-4-12 hex UUID, not part of a longer hex/dash token. */
+/** A canonical 8-4-4-4-12 hex UUID, not part of a longer hex/dash token. No lookbehind: Safari
+ *  before 16.4 cannot even parse one, and this module is imported up front by App.tsx, so a
+ *  lookbehind here would break the whole Configurator there. The character before the UUID is
+ *  matched instead (group 1: empty at the start, or a non-hex, non-dash character); the UUID is
+ *  group 2. The lookahead is fine everywhere. */
 const UUID_TOKEN =
-  /(?<![0-9A-Fa-f-])[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}(?![0-9A-Fa-f-])/g;
+  /(^|[^0-9A-Fa-f-])([0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12})(?![0-9A-Fa-f-])/g;
 
 /** Every run of 7+ digits becomes `***` + its last 3 digits. */
 function maskDigitRuns(text: string): string {
@@ -119,9 +123,9 @@ export function maskRecipient(value: unknown): string {
   let out = '';
   let from = 0;
   for (const id of s.matchAll(UUID_TOKEN)) {
-    const start = id.index ?? 0;
-    out += maskDigitRuns(s.slice(from, start)) + id[0];
-    from = start + id[0].length;
+    const start = (id.index ?? 0) + id[1].length;
+    out += maskDigitRuns(s.slice(from, start)) + id[2];
+    from = start + id[2].length;
   }
   return out + maskDigitRuns(s.slice(from));
 }

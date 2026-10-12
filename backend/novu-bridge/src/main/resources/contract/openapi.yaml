@@ -606,19 +606,24 @@ paths:
 
         **Refused when nothing could deliver it** (`409 NB_PROVIDER_UNAVAILABLE`, the reason in
         `Errors[0].message`; nothing is sent and no row is written). Before triggering, the test
-        runs dispatch's availability check, on a fresh read of Novu's integrations: a named
-        integration must be active, on Novu's channel for `channel`, and not an SMSCountry,
-        Ozeki or Jasmin one while `NOVU_BRIDGE_DIGIT_WORKER_PROVIDERS=false`; with none named, a
+        runs dispatch's availability check, on a fresh read of Novu's integrations (only those of
+        the API key's Novu environment count): a named integration must be active, on Novu's
+        channel for `channel`, deliver `channel` itself (SMS and WhatsApp share Novu's `sms`
+        channel: a Twilio SMS integration does not deliver a WhatsApp test, nor a Twilio
+        WhatsApp one an SMS test), and not be an SMSCountry, Ozeki or Jasmin one while
+        `NOVU_BRIDGE_DIGIT_WORKER_PROVIDERS=false`; with none named, a
         channel that goes through Novu needs an active integration that delivers it (and, under
         that flag, a default that is not one of those three). Novu accepts a trigger nothing can
         deliver and fails it inside, so without the check the answer was `ok: true` for a message
         that never left. A channel on the legacy direct SMSCountry gateway is not checked against
-        Novu. When Novu's integration list cannot be read the test is sent anyway, as dispatch
-        does, and the 200 carries `warning`.
+        Novu. When Novu's integration list cannot be read, or a read failed within the cache TTL
+        (that back-off is shared with dispatch and a test does not reset it), the test is sent
+        anyway, as dispatch does, and the 200 carries `warning`.
 
         With `?tenantId=<workspace>` on a workspace that has its own Novu organization (#2203)
-        the test goes through that organization and the check reads ITS integrations, never the
-        shared account's; it is always made there (a workspace never uses the direct gateway).
+        the test goes through that organization and the check reads ITS integrations (those of
+        its own API key's environment), never the shared account's; it is always made there (a
+        workspace never uses the direct gateway).
       requestBody:
         required: true
         content:

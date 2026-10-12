@@ -119,8 +119,9 @@ Env:
                      for a workspace whose admin signs in through Keycloak only and so has
                      no DIGIT password (the founder of a self-serve workspace). It must
                      belong to a user holding MDMS_ADMIN (or ACCOUNT_ADMIN / SUPERUSER) at
-                     NOTIF_TENANT; it is checked with one MDMS read before anything else,
-                     and a refused one is NOTIF-LOGIN-REFUSED (exit 4). Never printed.
+                     NOTIF_TENANT; it is checked with egov-user (/user/_details) before
+                     anything else, and a refused one is NOTIF-LOGIN-REFUSED (exit 4).
+                     Never printed.
   DIGIT_USERNAME     admin username         (default: ADMIN; ignored with DIGIT_ACCESS_TOKEN)
   DIGIT_PASSWORD     admin password         (default: eGov@123; ignored with DIGIT_ACCESS_TOKEN)
   DIGIT_LOGIN_TENANT tenant to auth against (default: $NOTIF_TENANT)
@@ -388,15 +389,50 @@ def who():
     return "%s at %s" % (USERNAME, LOGIN_TENANT)
 
 
+# egov-user's own token introspection: what Kong's auth enrichment and the pgr-services onboarding
+# provisioner call. NOT an MDMS search: Kong treats /mdms-v2/v2/_search as auth-optional and forwards
+# a request whose token it rejects ANONYMOUSLY, so the search answers 200 for any token at all.
+TOKEN_CHECK_PATH = "/user/_details"
+
+
+class TokenRefused(Exception):
+    """The token check was answered, but not with a user: the token is not a live DIGIT access
+    token (expired, revoked, never one). `detail` says how it was refused; never the token."""
+
+    def __init__(self, detail):
+        super().__init__(detail)
+        self.detail = detail
+
+
 def check_access_token(tok):
-    """A supplied token is not a login, so prove it works before anything is read: one MDMS
-    search at the tenant. Kong answers 401 for a token egov-user does not know (expired, or not a
-    DIGIT access token), which login() turns into NOTIF-LOGIN-REFUSED, instead of a 401 on the
-    first write halfway through."""
-    body = ri(tok)
-    body["MdmsCriteria"] = {"tenantId": TENANT or LOGIN_TENANT, "schemaCode": "tenant.tenants",
-                            "limit": 1, "offset": 0}
-    _post("/mdms-v2/v2/_search", body, tok).read()
+    """A supplied token is not a login, so prove it works before anything is read:
+    `POST /user/_details?access_token=<token>`, with the token in RequestInfo as well (Kong
+    refuses a protected POST without one). egov-user checks the query token itself, whatever the
+    gateway does, and answers the user it belongs to. Refused (TokenRefused, or an HTTPError
+    401/403 that login() turns into NOTIF-LOGIN-REFUSED): Kong's or egov-user's 401/403, egov-user's
+    InvalidAccessTokenException (a 400 on this stack), or a 200 that names no user. A 5xx or no
+    answer is an error, not a refusal. The token travels in the query, as for Kong's own check;
+    it is never printed."""
+    path = TOKEN_CHECK_PATH + "?" + urllib.parse.urlencode({"access_token": tok})
+    try:
+        answer = _post(path, ri(tok), tok).read()
+    except urllib.error.HTTPError as exc:
+        if exc.code == 400:
+            try:
+                body = exc.read().decode("utf-8", "replace")
+            except Exception:  # noqa: BLE001 — an unreadable body is not a refusal
+                body = ""
+            if "InvalidAccessTokenException" in body:
+                raise TokenRefused("HTTP 400 InvalidAccessTokenException")
+        raise
+    try:
+        user = json.loads(answer.decode("utf-8", "replace") if isinstance(answer, bytes) else answer)
+    except ValueError:
+        raise TokenRefused("HTTP 200 that is not a user")
+    if isinstance(user, dict) and isinstance(user.get("UserRequest"), dict):
+        user = user["UserRequest"]
+    if not isinstance(user, dict) or not (user.get("uuid") or user.get("userName")):
+        raise TokenRefused("HTTP 200 without a user")
     return tok
 
 
@@ -416,12 +452,18 @@ LOGIN_REFUSED_EXIT = 4
 
 def login():
     """The admin token. A refused login (4xx from /user/oauth/token: the user does not exist
-    at LOGIN_TENANT, or the password is wrong — or, with DIGIT_ACCESS_TOKEN, a 401/403 on the
-    check read) prints NOTIF-LOGIN-REFUSED and exits 4 — the playbook reports that root and
-    carries on with the others. Anything else (Kong down, an answer without a token) prints
-    NOTIF-LOGIN-ERROR and exits 2. Nothing is read or written either way."""
+    at LOGIN_TENANT, or the password is wrong — or, with DIGIT_ACCESS_TOKEN, a token egov-user
+    does not resolve to a user: check_access_token) prints NOTIF-LOGIN-REFUSED and exits 4 —
+    the playbook reports that root and carries on with the others. Anything else (Kong down, an
+    answer without a token) prints NOTIF-LOGIN-ERROR and exits 2. Nothing is read or written
+    either way."""
     try:
         return token()
+    except TokenRefused as exc:
+        print("NOTIF-LOGIN-REFUSED: tenant=%s — the supplied DIGIT_ACCESS_TOKEN was refused (%s): it has "
+              "expired, or it is not a DIGIT access token of a user at %s. Nothing was read or written for "
+              "%s." % (TENANT, exc.detail, TENANT, TENANT))
+        sys.exit(LOGIN_REFUSED_EXIT)
     except urllib.error.HTTPError as exc:
         if ACCESS_TOKEN and exc.code in (401, 403):
             print("NOTIF-LOGIN-REFUSED: tenant=%s — the supplied DIGIT_ACCESS_TOKEN was refused "
@@ -443,7 +485,7 @@ def login():
 
 
 def _login_endpoint():
-    return "/mdms-v2/v2/_search (the DIGIT_ACCESS_TOKEN check)" if ACCESS_TOKEN else "/user/oauth/token"
+    return TOKEN_CHECK_PATH + " (the DIGIT_ACCESS_TOKEN check)" if ACCESS_TOKEN else "/user/oauth/token"
 
 
 def ri(tok):

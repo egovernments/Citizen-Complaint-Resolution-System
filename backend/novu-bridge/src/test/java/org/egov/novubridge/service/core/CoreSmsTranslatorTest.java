@@ -176,6 +176,28 @@ class CoreSmsTranslatorTest {
                 "tenantId", "kworkspace"), KEY).getContact().getPhone());
     }
 
+    // Review of #2342: with MDMS down and nothing cached the OTP went to the DEPLOYMENT's code,
+    // another country's on a multi-country box. Now the number stays national, and the pipeline's
+    // own lookup records it FAILED / NB_CONFIG_UNAVAILABLE (DispatchPipelinePhoneNumberTest).
+    @Test
+    void anOtpTenantWhoseRuleCannotBeRead_keepsItsNationalNumber_notTheDeploymentCode() {
+        org.springframework.web.client.RestTemplate mdms = org.mockito.Mockito.mock(org.springframework.web.client.RestTemplate.class);
+        org.mockito.Mockito.when(mdms.exchange(org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.eq(org.springframework.http.HttpMethod.POST),
+                org.mockito.ArgumentMatchers.any(org.springframework.http.HttpEntity.class),
+                org.mockito.ArgumentMatchers.eq(Map.class)))
+                .thenThrow(new org.springframework.web.client.ResourceAccessException("mdms down"));
+        config.setMdmsHost("http://mdms");
+        config.setMdmsSearchPath("/mdms-v2/v2/_search");
+        CoreSmsTranslator tenantAware = new CoreSmsTranslator(config,
+                new org.egov.novubridge.service.TenantPhoneNumbers(mdms, config));
+
+        NotificationEvent india = tenantAware.translate(Map.of("mobileNumber", "9415787824", "message", "x",
+                "tenantId", "iworkspace"), KEY);
+
+        assertEquals("9415787824", india.getContact().getPhone(), "not +2549415787824");
+    }
+
     @Test
     void noCountryCodeAnywhere_leavesTheNumberNational_neverPlusNational() {
         config.setCoreSmsCountryCode("");

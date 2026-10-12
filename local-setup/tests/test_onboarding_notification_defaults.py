@@ -26,6 +26,14 @@ def _load(name, filename):
 build = _load("build_onboarding_notification_defaults", "build-onboarding-notification-defaults.py")
 sn = _load("seed_notifications_for_packaging_test", "seed-notifications.py")
 
+try:
+    import jinja2
+except ImportError:  # pragma: no cover
+    # CI installs it (local-setup-ci.yaml, config-contracts): there it must fail, not skip.
+    if os.environ.get("CI"):
+        raise
+    jinja2 = None
+
 
 class PackagedDefaults(unittest.TestCase):
 
@@ -65,6 +73,47 @@ class PackagedDefaults(unittest.TestCase):
         import io
         with contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(build.main(["--check"]), 1)
+
+
+@unittest.skipIf(jinja2 is None, "needs jinja2 (ansible's own dependency)")
+class TheStepFollowsEnableNovu(unittest.TestCase):
+    """Review of #2342: PGR_ONBOARDING_NOTIFICATION_DEFAULTS_ENABLED was set nowhere, so a deployment
+    without the notification stack wrote ~180 unused rows into every new workspace."""
+
+    @classmethod
+    def setUpClass(cls):
+        with open(os.path.join(REPO, "local-setup", "ansible", "templates", "digit.env.j2"), encoding="utf-8") as fh:
+            lines = [l for l in fh.read().splitlines() if l.startswith("PGR_ONBOARDING_NOTIFICATION_DEFAULTS_ENABLED=")]
+        cls.lines = lines
+        env = jinja2.Environment()
+        # Ansible's `bool` filter, as far as these values go.
+        env.filters["bool"] = lambda v: v if isinstance(v, bool) else str(v).strip().lower() in ("1", "true", "yes", "on")
+        cls.template = env.from_string(lines[0]) if lines else None
+
+    def render(self, **values):
+        return self.template.render(**values).split("=", 1)[1]
+
+    def test_the_env_file_renders_it_once_from_enable_novu(self):
+        self.assertEqual(len(self.lines), 1)
+        self.assertEqual(self.render(enable_novu=True), "true")
+        self.assertEqual(self.render(enable_novu=False), "false")
+        self.assertEqual(self.render(), "false", "enable_novu unset: the notification stack is off")
+        self.assertEqual(self.render(enable_novu=True, pgr_onboarding_notification_defaults_enabled=False), "false")
+        self.assertEqual(self.render(enable_novu=False, pgr_onboarding_notification_defaults_enabled="true"), "true")
+
+    def test_compose_passes_it_to_pgr_services_off_by_default(self):
+        with open(os.path.join(REPO, "local-setup", "docker-compose.egov-digit.yaml"), encoding="utf-8") as fh:
+            compose = fh.read()
+        self.assertEqual(compose.count("PGR_ONBOARDING_NOTIFICATION_DEFAULTS_ENABLED: "
+                                       "${PGR_ONBOARDING_NOTIFICATION_DEFAULTS_ENABLED:-false}"), 1)
+
+    def test_helm_sets_it_with_the_runner(self):
+        with open(os.path.join(REPO, "devops", "deploy-as-code", "charts", "urban", "pgr-services", "values.yaml"),
+                  encoding="utf-8") as fh:
+            values = fh.read()
+        self.assertIn("  notificationDefaultsEnabled: true\n", values)
+        self.assertIn("- name: PGR_ONBOARDING_NOTIFICATION_DEFAULTS_ENABLED\n"
+                      "    value: {{ .Values.onboarding.notificationDefaultsEnabled | quote }}", values)
 
 
 if __name__ == "__main__":

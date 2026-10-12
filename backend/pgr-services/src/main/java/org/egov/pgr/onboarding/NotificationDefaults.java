@@ -47,6 +47,12 @@ public class NotificationDefaults {
     public Map<String, List<JsonNode>> recordsBySchema() { return Collections.unmodifiableMap(recordsBySchema); }
     public List<String> unique(String schemaCode) { return unique.getOrDefault(schemaCode, List.of()); }
     public boolean isSchema(String code) { return schemaCodes.contains(code); }
+    /** True only for one of the seed's own schemas, its definition verbatim: the provisioner creates nothing else here. */
+    public boolean isSeedSchema(String code, JsonNode definition) {
+        for (JsonNode schema : seed.path("schemas"))
+            if (schema.path("code").asText().equals(code)) return schema.path("definition").equals(definition);
+        return false;
+    }
     public Set<String> configurationSchemas() { return texts(seed.path("configurationSchemas")); }
     /** The routing masters, either namespace: a row in one the seed did not write means the tenant has its own configuration. */
     public Set<String> routingSchemas() { return texts(seed.path("routingSchemas")); }

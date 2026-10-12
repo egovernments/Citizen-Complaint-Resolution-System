@@ -8140,8 +8140,10 @@
       when: seed_notifications | default(enable_novu | default(false))
       tags: ['notifications', 'notification-seed']
       ansible.builtin.set_fact:
+        # notifications_seed_exclude applies here too: test signups (pwt…) are workspaces as well.
         notif_seed_workspaces: >-
-          {{ notif_workspace_routing.keys() | list | sort | reject('in', [notif_seed_tenant | trim]) | list }}
+          {{ notif_workspace_routing.keys() | list | sort | reject('in', [notif_seed_tenant | trim])
+             | reject('match', notifications_seed_exclude | default('(?i)^(PW_|pwt)')) | list }}
         notif_seed_roots: >-
           {{ ([notif_seed_tenant | trim] + (notif_complaint_counts.keys() | list | sort
                  | reject('in', notif_workspace_routing.keys() | list | reject('in', [notif_seed_tenant | trim]) | list) | list))
@@ -8529,13 +8531,15 @@
           complaints send NO notifications (SKIPPED / NB_NO_ROUTING). The deploy does not log in at
           workspaces (no ADMIN there; the founder signs in through Keycloak only). pgr-services seeds a
           workspace when it provisions it; this one predates that, or its step failed. Seed it once with
-          the DIGIT access token of an admin of {{ item }} (the founder's, from a signed-in Configurator):
+          the DIGIT access token of an admin of {{ item }} (the founder's, from a signed-in Configurator),
+          read without echo so it stays out of the shell history:
           `cd {{ digit_dir }}/notification-seed && export DIGIT_URL=http://127.0.0.1:{{ upstream_kong_port }}
-          NOTIF_TENANT={{ item }} DIGIT_ACCESS_TOKEN=<token> && NOTIF_SEED_PHASE=access python3 seed-notifications.py`,
+          NOTIF_TENANT={{ item }} && read -rs DIGIT_ACCESS_TOKEN && export DIGIT_ACCESS_TOKEN &&
+          NOTIF_SEED_PHASE=access python3 seed-notifications.py` (paste the token after the first line),
           restart egov-accesscontrol if it printed ACL-CHANGED, then
           `NOTIF_SEED_PHASE=data NOTIF_ADOPT_DEFAULTS=1 NOTIF_CHANNELS_ALLOWLIST='{{ notif_channels_allowlist | trim }}'
-          SCHEMA_FILE=RAINMAKER-PGR.json NOTIF_SCHEMA_FILE=NOTIFICATIONS.json DATA_DIR=. python3 seed-notifications.py`.
-          See docs/releases/2.20/notifications/setup-guide.md, "New workspaces".
+          SCHEMA_FILE=RAINMAKER-PGR.json NOTIF_SCHEMA_FILE=NOTIFICATIONS.json DATA_DIR=. python3 seed-notifications.py`
+          and `unset DIGIT_ACCESS_TOKEN`. See docs/releases/2.20/notifications/setup-guide.md, "New workspaces".
 
     - name: "notif-seed — WARNING: channel rows were not written"
       when:
