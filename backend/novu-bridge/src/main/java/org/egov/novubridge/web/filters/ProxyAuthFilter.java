@@ -50,6 +50,14 @@ import java.util.concurrent.ConcurrentHashMap;
  * parameter names a workspace with its OWN Novu organization is decided on that workspace alone:
  * an admin role held at its root passes (no owning-state listing needed), anyone else is refused,
  * the owning state's admins included. Without such a selector nothing changes.
+ *
+ * <p>Paths: every decision (whether to authenticate at all, the admin tier, the owning-state and
+ * tenant-scoped sets) is made on {@link RequestPaths#canonical the canonical path}, never the raw
+ * URI, so a variant Spring MVC maps the same way ({@code ;x} parameters, a trailing slash, another
+ * case) cannot slip out of a tier. The filter authenticates EVERY path in the namespace except the
+ * ones with their own authentication (receipts, the #2203 machine APIs) and the public contract
+ * documents: a path added later is protected until someone decides otherwise. A request whose raw
+ * path is not plain ({@link RequestPaths#rejection}) is refused with 400.
  */
 @Slf4j
 public class ProxyAuthFilter extends OncePerRequestFilter {
@@ -165,30 +173,44 @@ public class ProxyAuthFilter extends OncePerRequestFilter {
         this.tenantAccounts = tenantAccounts;
     }
 
+    /**
+     * The namespace's paths this filter leaves to others: machine callers with their own
+     * authentication (the receipt secret; InternalAuthFilter's tokens) and the public contract
+     * documents (no tenant data). Everything else in the namespace is authenticated.
+     */
+    private static final List<String> NOT_AUTHENTICATED_HERE = List.of(
+            NAMESPACE + "/receipts",
+            NAMESPACE + "/contract",
+            NAMESPACE + "/tenants",
+            NAMESPACE + "/messages");
+
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         // CORS preflight must pass unauthenticated.
         if (HttpMethod.OPTIONS.matches(request.getMethod())) {
             return true;
         }
-        String path = pathOf(request);
-        // Machine callers with their own authentication (receipt secret), and the public contract
-        // documents (no tenant data).
-        if (path.startsWith("/novu-adapter/v1/receipts")
-                || path.startsWith("/novu-adapter/v1/contract")) {
-            return true;
+        String path = RequestPaths.inNamespace(request);
+        if (path.isEmpty()) {
+            return true; // Not an API path: health, the error page.
         }
-        return !(path.startsWith("/novu-adapter/v1/config")
-                || path.startsWith("/novu-adapter/v1/logs")
-                || path.startsWith("/novu-adapter/v1/integrations")
-                || path.startsWith("/novu-adapter/v1/preferences")
-                || path.startsWith("/novu-adapter/v1/providers")
-                || path.startsWith("/novu-adapter/v1/dispatch"));
+        for (String prefix : NOT_AUTHENTICATED_HERE) {
+            if (RequestPaths.isAtOrUnder(path, prefix)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
+        String why = RequestPaths.rejection(request);
+        if (why != null) {
+            log.warn("Proxy auth: refusing {} with {} in its path", request.getMethod(), why);
+            RequestFirewallFilter.reject(response, why);
+            return;
+        }
         // Escape hatch for local dev.
         if (config.getProxyAuthEnabled() == null || !config.getProxyAuthEnabled()) {
             chain.doFilter(request, response);
@@ -263,7 +285,7 @@ public class ProxyAuthFilter extends OncePerRequestFilter {
                             + String.join(", ", config.getProxyAdminRoles()));
             return false;
         }
-        if (!OWNING_STATE_PATHS.contains(normalize(pathOf(request)))) {
+        if (!OWNING_STATE_PATHS.contains(pathOf(request))) {
             // Tenant-scoped: the controller checks the event's tenant against the caller's states.
             return true;
         }
@@ -301,7 +323,7 @@ public class ProxyAuthFilter extends OncePerRequestFilter {
     /** Every {@code tenantId} value must be the caller's; a missing one is the controller's 400. */
     private boolean tenantCheckPasses(HttpServletRequest request, HttpServletResponse response,
                                       Caller caller) throws IOException {
-        if (!TENANT_SCOPED_READS.contains(normalize(pathOf(request)))) {
+        if (!TENANT_SCOPED_READS.contains(pathOf(request))) {
             return true;
         }
         String[] tenantIds = request.getParameterValues("tenantId");
@@ -339,22 +361,16 @@ public class ProxyAuthFilter extends OncePerRequestFilter {
         return ADMIN_ONLY_PATHS.contains(normalize(path));
     }
 
-    /** With or without the {@code /novu-bridge} context prefix, depending on the container. */
+    /** The canonical path from the namespace on, with or without the {@code /novu-bridge} context. */
     private static String pathOf(HttpServletRequest request) {
-        String path = request.getServletPath();
-        if (!StringUtils.hasText(path)) {
-            path = request.getRequestURI();
-        }
-        return path == null ? "" : path;
+        return RequestPaths.inNamespace(request);
     }
 
+    /** A path as given (a test's, a log's) in the form the sets above are written in. */
     private static String normalize(String path) {
-        int at = path.indexOf(NAMESPACE);
-        String p = at < 0 ? path : path.substring(at);
-        while (p.length() > 1 && p.endsWith("/")) {
-            p = p.substring(0, p.length() - 1);
-        }
-        return p;
+        String p = RequestPaths.canonical(path);
+        int at = p.indexOf(NAMESPACE);
+        return at < 0 ? p : p.substring(at);
     }
 
     private static boolean containsAny(Set<String> roles, List<String> allowed) {

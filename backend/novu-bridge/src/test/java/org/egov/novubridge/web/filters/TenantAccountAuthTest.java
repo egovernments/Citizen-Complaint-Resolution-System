@@ -144,6 +144,63 @@ class TenantAccountAuthTest {
         assertEquals(403, internal(request("POST", "/novu-adapter/v1/messages/_send", " "), send).getStatus());
     }
 
+    /** Review B1: what the servlet container hands the filter for a variant spelling. */
+    private static MockHttpServletRequest raw(String method, String requestUri, String token) {
+        MockHttpServletRequest req = new MockHttpServletRequest();
+        req.setMethod(method);
+        req.setRequestURI(requestUri);
+        req.setContextPath("/novu-bridge");
+        if (token != null) {
+            req.addHeader(InternalAuthFilter.HEADER, token);
+        }
+        return req;
+    }
+
+    @Test
+    void everySpellingSpringMvcMapsOntoAMachineApi_needsItsToken() throws Exception {
+        for (String uri : new String[] {
+                "/novu-bridge/novu-adapter/v1;x/tenants",
+                "/novu-bridge/novu-adapter/v1/tenants;x",
+                "/novu-bridge/novu-adapter/v1;x/tenants/_backfill",
+                "/novu-bridge/novu-adapter/v1;x/tenants/pg/_provision",
+                "/novu-bridge/novu-adapter/v1;x/tenants/acme/_deprovision",
+                "/novu-bridge/novu-adapter/v1;x/messages/_send",
+                "/novu-bridge;x/novu-adapter/v1/messages/_send",
+                "/novu-bridge/novu-adapter/v1/%74enants/acme/_provision",
+                "/novu-bridge/novu-adapter/v1/%6Dessages/_send",
+                "/novu-bridge/novu-adapter/v1/tenants/",
+                "/novu-bridge/novu-adapter/v1/Tenants/acme/_provision",
+                "/novu-bridge/novu-adapter/V1/messages/_send",
+                "/novu-bridge/novu-adapter/v1/zz/../tenants",
+        }) {
+            MockFilterChain chain = new MockFilterChain();
+            MockHttpServletResponse res = internal(raw("POST", uri, null), chain);
+            assertTrue(res.getStatus() == 400 || res.getStatus() == 401, uri + " -> " + res.getStatus());
+            assertNull(chain.getRequest(), uri + " reached the controller");
+        }
+    }
+
+    @Test
+    void aSpellingThatIsNotPlain_isRefusedWith400_evenWithTheToken() throws Exception {
+        MockFilterChain chain = new MockFilterChain();
+        MockHttpServletResponse res = internal(raw("POST", "/novu-bridge/novu-adapter/v1;x/tenants/acme/_provision", ADMIN), chain);
+        assertEquals(400, res.getStatus());
+        assertTrue(res.getContentAsString().contains(RequestFirewallFilter.CODE));
+        assertNull(chain.getRequest());
+    }
+
+    @Test
+    void theSendTokensStatusRead_isJudgedOnTheCanonicalPath() throws Exception {
+        // One segment after /tenants once decoded and trailing slashes dropped: still the status read.
+        MockFilterChain status = new MockFilterChain();
+        assertEquals(200, internal(raw("GET", "/novu-bridge/novu-adapter/v1/tenants/%61cme/", SEND), status).getStatus());
+        assertNotNull(status.getRequest());
+        // Two segments, however spelt: the admin token's.
+        MockFilterChain providers = new MockFilterChain();
+        assertEquals(401, internal(raw("GET", "/novu-bridge/novu-adapter/v1/tenants/acme/provider%73", SEND), providers).getStatus());
+        assertNull(providers.getRequest());
+    }
+
     @Test
     void otherPaths_areNotThisFiltersBusiness() throws Exception {
         MockFilterChain chain = new MockFilterChain();

@@ -31,6 +31,13 @@ import java.security.MessageDigest;
  * token switches its API OFF (403 {@code NB_INTERNAL_API_DISABLED}): there is no default secret.
  * DIGIT user tokens are never accepted here, so a workspace admin cannot reach these endpoints
  * even with a valid session.
+ *
+ * <p>Which requests are "these APIs" is decided on {@link RequestPaths#canonical the canonical
+ * path} (path parameters dropped, decoded, dot segments applied, no trailing slash, any case), never
+ * on the raw URI, and the filter is registered for every path: a variant Spring MVC maps onto a
+ * controller here ({@code /v1;x/tenants}, {@code /tenants/}) is judged as the plain path, so it
+ * needs the token too. A request in either namespace whose raw path is not plain (see
+ * {@link RequestPaths#rejection}) is refused with 400 before any token check.
  */
 @Slf4j
 public class InternalAuthFilter extends OncePerRequestFilter {
@@ -47,14 +54,20 @@ public class InternalAuthFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        String path = pathOf(request);
+        String path = RequestPaths.inNamespace(request);
         return !(isTenants(path) || isMessages(path));
     }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
-        String path = pathOf(request);
+        String why = RequestPaths.rejection(request);
+        if (why != null) {
+            log.warn("Internal API: refusing {} with {} in its path", request.getMethod(), why);
+            RequestFirewallFilter.reject(response, why);
+            return;
+        }
+        String path = RequestPaths.inNamespace(request);
         String presented = request.getHeader(HEADER);
         boolean messages = isMessages(path);
         // A tenant's status is the one read the send token may make.
@@ -87,31 +100,19 @@ public class InternalAuthFilter extends OncePerRequestFilter {
                 expected.trim().getBytes(StandardCharsets.UTF_8), presented.trim().getBytes(StandardCharsets.UTF_8));
     }
 
+    /** {@code path} is canonical, from the namespace on ({@link RequestPaths#inNamespace}). */
     private static boolean isTenants(String path) {
-        int at = path.indexOf(TENANTS);
-        return at >= 0 && (path.length() == at + TENANTS.length() || path.charAt(at + TENANTS.length()) == '/');
+        return RequestPaths.isAtOrUnder(path, TENANTS);
     }
 
     private static boolean isMessages(String path) {
-        int at = path.indexOf(MESSAGES);
-        return at >= 0 && (path.length() == at + MESSAGES.length() || path.charAt(at + MESSAGES.length()) == '/');
+        return RequestPaths.isAtOrUnder(path, MESSAGES);
     }
 
     /** {@code /tenants/{id}} exactly: one segment after the prefix. */
     private static boolean isTenantStatus(String path) {
-        String rest = path.substring(path.indexOf(TENANTS) + TENANTS.length());
-        while (rest.endsWith("/")) {
-            rest = rest.substring(0, rest.length() - 1);
-        }
-        return rest.startsWith("/") && rest.indexOf('/', 1) < 0 && rest.length() > 1;
-    }
-
-    private static String pathOf(HttpServletRequest request) {
-        String path = request.getRequestURI();
-        if (!StringUtils.hasText(path)) {
-            path = request.getServletPath();
-        }
-        return path == null ? "" : path;
+        String rest = path.substring(TENANTS.length());
+        return rest.startsWith("/") && rest.length() > 1 && rest.indexOf('/', 1) < 0;
     }
 
     private static void write(HttpServletResponse response, HttpStatus status, String code, String message)

@@ -37,11 +37,18 @@ info:
     tenant's events, so the admin of each root runs them for its own tenants, as
     `migrate-notifications.py` does when it previews a root.
 
-    `ProxyAuthFilter` is registered on `/novu-adapter/v1/*` but gates only the namespaces
-    `config`, `logs`, `integrations`, `preferences`, `providers` and `dispatch`. `InternalAuthFilter`
-    gates `tenants` and `messages` with the internal tokens. Anything else — the contract
-    documents, the machine callbacks, the actuator endpoints — passes through unauthenticated by
-    design.
+    `ProxyAuthFilter` authenticates every path under `/novu-adapter/v1` except `receipts` (their
+    own secret), `tenants` and `messages` (`InternalAuthFilter`, the internal tokens) and the
+    `contract` documents (unauthenticated by design); a path added later is authenticated until
+    it is listed otherwise. Paths outside the namespace (health, actuator) are not gated. Both
+    filters decide on the path as it maps: `;` path parameters dropped, percent-decoding applied,
+    dot segments resolved, no trailing slash, any case; so `/v1;x/tenants` or `/v1/%74enants`
+    is the tenant admin API and needs its token.
+
+    **Paths that are not plain** are refused before anything else with
+    `400 NB_REQUEST_REJECTED`: a `;` (or `%3B`), an encoded `/` or `\` (`%2F`, `%5C`) or a
+    backslash, an encoded `.` or `%` (`%2E`, `%25`), a control character, `//`, or a `.` / `..`
+    segment. No client of this API sends one.
 
     ## Per-tenant Novu accounts (#2203)
 
