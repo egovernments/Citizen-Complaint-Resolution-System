@@ -7266,6 +7266,36 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.docs.all",
+    "message": "All documentation",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.docs.getting_started",
+    "message": "Getting started guide",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.docs.heading",
+    "message": "Documentation",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.docs.new_tab",
+    "message": "(opens in a new tab)",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.docs.section_guide",
+    "message": "%{section} guide",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.employees.add_departments",
     "message": "Add departments",
     "module": "configurator-ui",
