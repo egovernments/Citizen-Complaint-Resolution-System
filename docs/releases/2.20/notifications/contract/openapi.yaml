@@ -884,8 +884,12 @@ paths:
         Creates the tenant's Novu organization (or adopts the one Novu already has under its
         name, after a crash), reads its environment's API key, stores it encrypted, and creates
         every workflow the bridge triggers, OTP included. Calling it again for a provisioned
-        tenant changes nothing and returns the current state; a tenant never gets a second
-        organization. A sub-tenant id (`acme.city`) provisions its root (`acme`).
+        tenant changes nothing and returns the current state, unless its stored key does not
+        open under the CURRENT encryption key (written by the previous key mid-rotation, or by a
+        key the bridge no longer has: rotated twice, a wrong `_PREVIOUS`): then the key is read
+        from Novu again and stored under the current one, which is how a tenant whose sends fail
+        `NB_TENANT_ACCOUNT_UNAVAILABLE` is repaired. A tenant never gets a second organization.
+        A sub-tenant id (`acme.city`) provisions its root (`acme`).
         pgr-services calls it as the last, non-fatal step of tenant creation.
       parameters:
         - $ref: "#/components/parameters/TenantId"

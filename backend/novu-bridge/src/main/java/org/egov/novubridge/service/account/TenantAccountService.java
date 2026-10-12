@@ -181,11 +181,14 @@ public class TenantAccountService {
         requireEnabled();
         String root = rootOf(tenantId);
         Optional<TenantAccountRepository.Row> before = repository.find(root);
-        // Nothing to do: provisioned, current workflow set, and the key stored under the CURRENT
-        // encryption key (one written by the previous key, mid-rotation, is stored again).
+        // Nothing to do: provisioned, current workflow set, and a stored key that decrypts under the
+        // CURRENT encryption key. Any other stored key (the previous key's, mid-rotation; one no
+        // configured key can read, after a second rotation or a key changed without _PREVIOUS) is
+        // fetched from Novu again and stored under the current key: that is how such a tenant,
+        // whose every send fails NB_TENANT_ACCOUNT_UNAVAILABLE, is repaired.
         if (before.isPresent() && before.get().provisioned() && before.get().workflowsVersion() >= TenantWorkflows.VERSION
                 && StringUtils.hasText(before.get().apiKeyCiphertext())
-                && !cipher().writtenByPreviousKey(before.get().apiKeyCiphertext())) {
+                && cipher().readableByCurrentKey(before.get().apiKeyCiphertext(), root)) {
             return new ProvisionResult(view(before.get()), false, List.of());
         }
         long now = clock.getAsLong();

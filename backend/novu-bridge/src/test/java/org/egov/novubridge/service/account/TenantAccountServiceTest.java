@@ -219,6 +219,48 @@ class TenantAccountServiceTest {
     }
 
     @Test
+    void aStoredKeyNoConfiguredKeyCanRead_isFetchedAgain_andStoredUnderTheCurrentKey() {
+        // Review S1: a value written by a key this bridge no longer has (rotated twice, a wrong or
+        // missing _PREVIOUS) made every send fail NB_TENANT_ACCOUNT_UNAVAILABLE while _provision
+        // and _backfill answered "PROVISIONED, nothing to do". The repair is a provision.
+        service.provision("acme");
+        String unknownKey = new ApiKeyCipher("deadbeefdeadbeefdeadbeefdeadbeef-gone", null).encrypt("key-dev-org-acme", "acme");
+        repository.rows.put("acme", repository.rows.get("acme").toBuilder().apiKeyCiphertext(unknownKey)
+                .apiKeyId(unknownKey.split(":")[1]).build());
+        assertEquals("NB_TENANT_ACCOUNT_UNAVAILABLE",
+                assertThrows(CustomException.class, () -> service.accountFor("acme")).getCode());
+
+        TenantAccountService.ProvisionResult repaired = service.provision("acme");
+
+        assertFalse(repaired.organizationCreated());
+        assertEquals("PROVISIONED", repaired.state().get("status"));
+        verify(platform, times(2)).login();
+        verify(platform, times(2)).switchOrganization("jwt-admin", "org-acme");
+        String stored = repository.rows.get("acme").apiKeyCiphertext();
+        assertEquals("key-dev-org-acme", new ApiKeyCipher(SECRET, null).decrypt(stored, "acme"));
+        assertEquals(new ApiKeyCipher(SECRET, null).currentKeyId(), repository.rows.get("acme").apiKeyId());
+        assertEquals("key-dev-org-acme", service.accountFor("acme").apiKey(), "sends work again");
+        verify(platform, times(1)).createOrganization(anyString(), anyString());
+
+        // Current again: the next provision is a no-op.
+        service.provision("acme");
+        verify(platform, times(2)).login();
+    }
+
+    @Test
+    void aStoredKeyUnderTheCurrentKeyIdThatDoesNotOpen_isFetchedAgain() {
+        service.provision("acme");
+        String stored = repository.rows.get("acme").apiKeyCiphertext();
+        String altered = stored.substring(0, stored.length() - 4) + (stored.endsWith("AAAA") ? "BBBB" : "AAAA");
+        repository.rows.put("acme", repository.rows.get("acme").toBuilder().apiKeyCiphertext(altered).build());
+
+        service.provision("acme");
+
+        verify(platform, times(2)).login();
+        assertEquals("key-dev-org-acme", service.accountFor("acme").apiKey());
+    }
+
+    @Test
     void routing_aProvisionedRootAnswersItsOwnAccount_forEveryTenantUnderIt() {
         service.provision("acme");
 

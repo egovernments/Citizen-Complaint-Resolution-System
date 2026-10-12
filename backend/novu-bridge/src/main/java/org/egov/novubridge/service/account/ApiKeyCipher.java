@@ -101,9 +101,22 @@ public final class ApiKeyCipher {
         }
     }
 
-    /** Whether a stored value was written with the previous key (a re-encrypt candidate). */
-    public boolean writtenByPreviousKey(String stored) {
-        return previousKid != null && stored != null && stored.startsWith(PREFIX + ":" + previousKid + ":");
+    /**
+     * Whether a stored value is current: written by the CURRENT key and decrypting under it for this
+     * tenant. Anything else needs storing again: a value written by the previous key (mid-rotation),
+     * by a key this bridge no longer has (rotated twice, a wrong or missing {@code _PREVIOUS}, the
+     * key changed without one), or altered.
+     */
+    public boolean readableByCurrentKey(String stored, String tenantRoot) {
+        if (stored == null || !stored.startsWith(PREFIX + ":" + currentKid + ":")) {
+            return false;
+        }
+        try {
+            decrypt(stored, tenantRoot);
+            return true;
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
     }
 
     public String currentKeyId() {
