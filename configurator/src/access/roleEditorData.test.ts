@@ -90,3 +90,37 @@ describe('role editor save', () => {
     expect(() => planSave(l, { ...edited, name: ' ' })).toThrow(/ROLE_NAME/);
   });
 });
+
+describe('role editor save: workflow actions by status', () => {
+  const pgr = () => ({ businessService: 'PGR', tenantId: 'ke', states: [
+    { state: 'PENDINGFORASSIGNMENT', actions: [{ action: 'ASSIGN', roles: ['GRO'], nextState: 'PENDINGATLME' }, { action: 'REJECT', roles: ['GRO'], nextState: 'REJECTED' }] },
+    { state: 'PENDINGATLME', actions: [{ action: 'RESOLVE', roles: ['PGR_LME'], nextState: 'RESOLVED' }] },
+  ] });
+  const withWorkflow = (store: { bs: any }) => {
+    const f = fakeMdms(seed());
+    const updates: any[] = [];
+    f.c.workflowBusinessServiceSearch = async () => [JSON.parse(JSON.stringify(store.bs))];
+    f.c.workflowBusinessServiceUpdate = async (b) => { updates.push(b); store.bs = b; return b; };
+    return { ...f, updates };
+  };
+  it('writes only this role into the ticked actions, with the role', async () => {
+    const store = { bs: pgr() };
+    const { c, updates } = withWorkflow(store);
+    const l = await loadRole(c, 'ke', null);
+    const plan = planSave(l, { ...edited, workflow: { 'PENDINGFORASSIGNMENT|ASSIGN': true, 'PENDINGFORASSIGNMENT|REJECT': true } });
+    expect(plan.find((w) => w.kind === 'workflow')).toMatchObject({ role: 'SUBCOUNTY_GRO', changes: [{ action: 'ASSIGN', on: true }, { action: 'REJECT', on: true }] });
+    await applySave(c, l, plan);
+    expect(updates).toHaveLength(1);
+    expect(store.bs.states[0].actions.map((a: any) => a.roles)).toEqual([['GRO', 'SUBCOUNTY_GRO'], ['GRO', 'SUBCOUNTY_GRO']]);
+    expect(store.bs.states[1].actions[0].roles).toEqual(['PGR_LME']);
+  });
+  it('refuses when the workflow changed after the page loaded (nothing written to it)', async () => {
+    const store = { bs: pgr() };
+    const { c, updates } = withWorkflow(store);
+    const l = await loadRole(c, 'ke', 'GRO');
+    store.bs.states[1].actions[0].roles.push('SOMEONE_ELSE');
+    await expect(applySave(c, l, planSave(l, { code: 'GRO', name: 'Grievance officer', description: '', caps: {}, scope: null, fields: {}, workflow: { 'PENDINGATLME|RESOLVE': true } })))
+      .rejects.toBeInstanceOf(ConcurrentChangeError);
+    expect(updates).toEqual([]);
+  });
+});

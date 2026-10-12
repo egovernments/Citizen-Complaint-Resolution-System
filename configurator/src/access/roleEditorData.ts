@@ -12,6 +12,7 @@ import {
   actionsOf, changedPaths, roleActionUid, withRoleFieldRule, withRoleScope,
   type ActionRow, type Clause, type OnDeny, type RoleScope, type VarDef, BASE_VARS,
 } from './policyModel';
+import { sameDefinition, withRoleActions, type BusinessService, type WfEdit } from './workflowModel';
 
 export const ROLES = 'ACCESSCONTROL-ROLES.roles';
 export const ROLEACTIONS = 'ACCESSCONTROL-ROLEACTIONS.roleactions';
@@ -25,7 +26,12 @@ export interface MdmsClient {
   mdmsSearch(tenantId: string, schemaCode: string, options?: { limit?: number; offset?: number; uniqueIdentifiers?: string[]; isActive?: boolean }): Promise<MdmsRecord[]>;
   mdmsCreate(tenantId: string, schemaCode: string, uniqueIdentifier: string, data: Record<string, unknown>): Promise<MdmsRecord>;
   mdmsUpdate(record: MdmsRecord, isActive: boolean): Promise<MdmsRecord>;
+  /** the PGR workflow definition (workflow actions by status); optional so a reader without it still loads */
+  workflowBusinessServiceSearch?(tenantId: string, businessServices?: string[]): Promise<Record<string, unknown>[]>;
+  workflowBusinessServiceUpdate?(businessService: Record<string, unknown>): Promise<Record<string, unknown>>;
 }
+
+export const WORKFLOW = 'PGR';
 
 export async function searchAll(c: MdmsClient, tenant: string, schema: string, extra: { isActive?: boolean } = {}): Promise<MdmsRecord[]> {
   const out: MdmsRecord[] = [];
@@ -44,14 +50,16 @@ export interface Loaded {
   grants: MdmsRecord[];                    // this role's role-action rows (active and inactive)
   searchAction: MdmsRecord | null;         // the complaint-search action row (scope + field rules)
   catalogue: Record<string, unknown>[];    // ACCESSCONTROL-RESOURCE.attributes rows (optional master)
+  workflow: BusinessService | null;        // the PGR business service at the root (null: not readable here)
 }
 
 export async function loadRole(c: MdmsClient, root: string, code: string | null): Promise<Loaded> {
-  const [roles, actionRecs, grants, catalogue] = await Promise.all([
+  const [roles, actionRecs, grants, catalogue, workflows] = await Promise.all([
     code ? c.mdmsSearch(root, ROLES, { uniqueIdentifiers: [code] }) : Promise.resolve([]),
     searchAll(c, root, ACTIONS),
     code ? searchAll(c, root, ROLEACTIONS) : Promise.resolve([]),
     searchAll(c, root, RESOURCE_ATTRS).catch(() => [] as MdmsRecord[]),
+    c.workflowBusinessServiceSearch ? c.workflowBusinessServiceSearch(root, [WORKFLOW]).catch(() => []) : Promise.resolve([]),
   ]);
   const actions = actionRecs.map((r) => ({ id: Number(r.data.id), url: String(r.data.url ?? ''), displayName: r.data.displayName as string | undefined }))
     .filter((a) => Number.isFinite(a.id));
@@ -62,6 +70,7 @@ export async function loadRole(c: MdmsClient, root: string, code: string | null)
     grants: grants.filter((g) => g.data.rolecode === code),
     searchAction: actionRecs.find((r) => r.data.url === COMPLAINT_SEARCH_URL && r.isActive !== false) ?? null,
     catalogue: catalogue.filter((r) => r.isActive !== false).map((r) => r.data),
+    workflow: ((workflows as unknown[]).find((b: any) => b?.businessService === WORKFLOW) as BusinessService | undefined) ?? null,
   };
 }
 
@@ -72,13 +81,15 @@ export interface Edited {
   caps: Record<string, boolean>;                         // capability id -> wanted (absent = unchanged)
   scope: RoleScope | null;                               // null = leave the role's scope as it is
   fields: Record<string, { clause: Clause | null; onDeny?: OnDeny } | undefined>; // path -> the role's branch (undefined = unchanged)
+  workflow?: WfEdit;                                     // `${status}|${action}` -> the role takes it (absent = unchanged)
 }
 
 export type Write =
   | { kind: 'role'; op: 'create' | 'update'; uid: string; data: Record<string, unknown> }
   | { kind: 'grant'; op: 'create'; uid: string; data: Record<string, unknown> }
   | { kind: 'grant'; op: 'activate' | 'deactivate'; uid: string; record: MdmsRecord }
-  | { kind: 'action'; op: 'update'; uid: string; data: Record<string, unknown>; changes: ReturnType<typeof changedPaths> };
+  | { kind: 'action'; op: 'update'; uid: string; data: Record<string, unknown>; changes: ReturnType<typeof changedPaths> }
+  | { kind: 'workflow'; op: 'update'; uid: string; role: string; next: BusinessService; changes: { status: string; action: string; on: boolean }[] };
 
 export function planSave(l: Loaded, e: Edited, vocab: VarDef[] = BASE_VARS): Write[] {
   if (!ROLE_CODE.test(e.code)) throw new Error('ROLE_CODE: upper case letters, digits and _ (2 to 64), starting with a letter');
@@ -111,6 +122,11 @@ export function planSave(l: Loaded, e: Edited, vocab: VarDef[] = BASE_VARS): Wri
     const changes = changedPaths(l.searchAction.data, data);
     if (changes.length) writes.push({ kind: 'action', op: 'update', uid: l.searchAction.uniqueIdentifier, data, changes });
   }
+  if (e.workflow && Object.keys(e.workflow).length) {
+    if (!l.workflow) throw new Error(`NO_WORKFLOW: the ${WORKFLOW} workflow is not readable at ${l.root}`);
+    const w = withRoleActions(l.workflow, e.code, e.workflow);
+    if (w) writes.push({ kind: 'workflow', op: 'update', uid: WORKFLOW, role: e.code, next: w.next, changes: w.changes });
+  }
   return writes;
 }
 
@@ -133,6 +149,15 @@ export async function applySave(c: MdmsClient, l: Loaded, plan: Write[]): Promis
     }
     await c.mdmsUpdate({ ...fresh, data: action.data }, true);
     done.push(`action ${action.uid}`);
+  }
+  const wf = plan.find((w) => w.kind === 'workflow') as Extract<Write, { kind: 'workflow' }> | undefined;
+  if (wf) {
+    // shared by every role too: re-read and refuse on any change since load, then write the edited copy
+    const fresh = c.workflowBusinessServiceSearch ? ((await c.workflowBusinessServiceSearch(l.root, [WORKFLOW])) as unknown as BusinessService[]).find((b) => b.businessService === WORKFLOW) : undefined;
+    if (!fresh || !sameDefinition(fresh, l.workflow)) throw new ConcurrentChangeError(`the ${WORKFLOW} workflow`);
+    const next = withRoleActions(fresh, wf.role, Object.fromEntries(wf.changes.map((x) => [`${x.status}|${x.action}`, x.on])));
+    if (next) await c.workflowBusinessServiceUpdate!(next.next as unknown as Record<string, unknown>);
+    done.push(`workflow ${WORKFLOW}`);
   }
   for (const w of plan) {
     if (w.kind === 'role') {
