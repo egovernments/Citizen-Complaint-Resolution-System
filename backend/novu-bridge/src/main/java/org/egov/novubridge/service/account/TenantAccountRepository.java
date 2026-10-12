@@ -19,6 +19,8 @@ public class TenantAccountRepository {
     public static final String PROVISIONING = "PROVISIONING";
     public static final String PROVISIONED = "PROVISIONED";
     public static final String FAILED = "FAILED";
+    /** A deprovision has begun and not completed: not routed (shared account), key forgotten; a re-run resumes. */
+    public static final String DEPROVISIONING = "DEPROVISIONING";
     public static final String DEPROVISIONED = "DEPROVISIONED";
 
     @Builder(toBuilder = true)
@@ -105,6 +107,17 @@ public class TenantAccountRepository {
         jdbc.update("UPDATE nb_tenant_account SET status = ?, last_error_code = ?, last_error_message = ?, "
                         + "lease_owner = NULL, lease_until = NULL, last_modified_time = ? WHERE tenant_id = ? AND lease_owner = ?",
                 status, code, message, now, tenantId, owner);
+    }
+
+    /**
+     * The first write of a deprovision, before anything in Novu: the tenant stops being routed to its
+     * own account and the stored key is forgotten. The lease is kept for the steps that follow.
+     */
+    public void markDeprovisioning(String tenantId, String owner, long now) {
+        jdbc.update("UPDATE nb_tenant_account SET status = ?, api_key_ciphertext = NULL, api_key_id = NULL, "
+                        + "workflows_version = 0, last_error_code = NULL, last_error_message = NULL, last_modified_time = ? "
+                        + "WHERE tenant_id = ? AND lease_owner = ?",
+                DEPROVISIONING, now, tenantId, owner);
     }
 
     public void markDeprovisioned(String tenantId, String owner, long now) {

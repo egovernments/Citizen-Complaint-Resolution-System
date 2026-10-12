@@ -940,7 +940,7 @@ paths:
                       tenantId: { type: string }
                       tenantAccountsEnabled: { type: boolean }
                       provisioned: { type: boolean }
-                      status: { type: string, enum: [NOT_PROVISIONED, PROVISIONING, PROVISIONED, FAILED, DEPROVISIONED] }
+                      status: { type: string, enum: [NOT_PROVISIONED, PROVISIONING, PROVISIONED, FAILED, DEPROVISIONING, DEPROVISIONED] }
                       account: { $ref: "#/components/schemas/TenantAccount" }
                       channels:
                         type: object
@@ -955,10 +955,13 @@ paths:
       security: [{ internalAdminToken: [] }]
       description: |
         Self-hosted Novu 2.3.0 cannot delete an organization (its organization API has no
-        delete), so: every integration of the organization is deleted (and with it every
-        provider credential), the environment's API key is regenerated and the new one is not
-        kept, the stored key is erased and the row is marked DEPROVISIONED. The tenant then uses
-        the shared account again. A later `_provision` reuses the same organization.
+        delete), so, in this order: the row is marked DEPROVISIONING and the stored key erased
+        (from here the tenant uses the shared account again, whatever fails next); the
+        environment's API key is regenerated and the new one is not kept (any copy of the old
+        key stops working); every integration of the organization is deleted (and with it every
+        provider credential); the row is marked DEPROVISIONED. A failure part-way answers the
+        error and leaves DEPROVISIONING with `lastErrorCode`; calling `_deprovision` again
+        resumes it. A later `_provision` reuses the same organization.
       parameters:
         - $ref: "#/components/parameters/TenantId"
       responses:
@@ -1324,7 +1327,7 @@ components:
       description: A tenant's Novu account as the bridge records it. Never the API key.
       properties:
         tenantId: { type: string, example: acme }
-        status: { type: string, enum: [PROVISIONING, PROVISIONED, FAILED, DEPROVISIONED] }
+        status: { type: string, enum: [PROVISIONING, PROVISIONED, FAILED, DEPROVISIONING, DEPROVISIONED] }
         provisioned: { type: boolean }
         organizationId: { type: string }
         organizationName: { type: string, example: DIGIT tenant acme }
@@ -1357,7 +1360,7 @@ components:
         tenantAccountsEnabled: { type: boolean }
         mode: { type: string, enum: [TENANT, SHARED] }
         tenantId: { type: string, nullable: true }
-        status: { type: string, enum: [PROVISIONED, NOT_PROVISIONED, PROVISIONING, FAILED, DEPROVISIONED, DISABLED, UNKNOWN] }
+        status: { type: string, enum: [PROVISIONED, NOT_PROVISIONED, PROVISIONING, FAILED, DEPROVISIONING, DEPROVISIONED, DISABLED, UNKNOWN] }
         manageable: { type: boolean }
 
     SendRequest:

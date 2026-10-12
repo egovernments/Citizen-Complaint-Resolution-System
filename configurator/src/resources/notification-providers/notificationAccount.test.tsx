@@ -84,5 +84,9 @@ describe('who may manage, and what the screen says', () => {
     expect(notice?.tone).toBe('warning');
     expect(notice?.english).toContain('does not have its own notification account');
     expect(accountNotice({ ...shared, status: 'PROVISIONING' })?.key).toBe('app.providers.account_provisioning');
+    // A deprovision that stopped part-way is already off its own account (the bridge's DEPROVISIONING).
+    for (const status of ['FAILED', 'DEPROVISIONING', 'DEPROVISIONED']) {
+      expect(accountNotice({ ...shared, status })?.key).toBe('app.providers.account_missing');
+    }
   });
 });

@@ -43,10 +43,12 @@ import java.util.regex.Pattern;
  * it throws, rather than quietly sending a provisioned tenant's messages through the shared account.
  *
  * <p><b>Deprovision</b>: self-hosted Novu 2.3.0 cannot delete an organization (its organization
- * API has no delete), so the bridge deletes the organization's integrations (and with them the
- * tenant's provider credentials), regenerates the environment's API key without keeping the new
- * one, forgets the stored key and marks the row DEPROVISIONED. The tenant falls back to the shared
- * account; a later provision reuses the same organization.
+ * API has no delete). The bridge first marks the row DEPROVISIONING and forgets the stored key, so
+ * the tenant is on the shared account from that moment whatever fails next; then regenerates the
+ * environment's API key without keeping the new one (any copy of the old key stops working), deletes
+ * the organization's integrations (and with them the tenant's provider credentials), and marks the
+ * row DEPROVISIONED. A failure part-way leaves DEPROVISIONING with the error recorded, and running
+ * deprovision again resumes it. A later provision reuses the same organization.
  */
 @Slf4j
 @Service
@@ -280,27 +282,44 @@ public class TenantAccountService {
                     "Tenant " + root + " is being changed by another request; retry in a few seconds");
         }
         try {
+            // Off the tenant's own account FIRST, before any Novu call can fail: from here its messages
+            // go through the shared account and the stored key is gone, whatever happens below.
+            repository.markDeprovisioning(root, owner, now);
+            forgetCached(root);
+            availabilities.forget(root);
             if (StringUtils.hasText(row.organizationId())) {
                 String orgToken = platform.switchOrganization(platform.login(), row.organizationId());
                 NovuPlatformClient.Environment environment = environment(platform.environments(orgToken), root);
-                NovuAccount account = new NovuAccount(root, row.organizationId(), environment.id(), environment.apiKey());
-                int deleted = deleteIntegrations(account);
+                // Revoke the key next: a copy still cached (another replica, for its cache TTL) stops
+                // working now, not after the integrations are gone.
                 platform.regenerateApiKey(orgToken, environment.id());
-                log.info("Tenant {}: deprovisioned (organization {} kept: Novu 2.3.0 cannot delete one; {} "
-                        + "integration(s) deleted, API key regenerated and not stored)", root, row.organizationId(), deleted);
+                // Novu does not return the new key: read it to delete the credentials, never store it.
+                NovuPlatformClient.Environment regenerated = environment(platform.environments(orgToken), root);
+                int deleted = deleteIntegrations(new NovuAccount(root, row.organizationId(), regenerated.id(),
+                        regenerated.apiKey()));
+                log.info("Tenant {}: deprovisioned (organization {} kept: Novu 2.3.0 cannot delete one; API key "
+                        + "regenerated and not stored; {} integration(s) deleted)", root, row.organizationId(), deleted);
             }
             repository.markDeprovisioned(root, owner, clock.getAsLong());
             forgetCached(root);
-            availabilities.forget(root);
             return view(repository.find(root).orElseThrow());
         } catch (AccountException e) {
-            repository.release(root, owner, clock.getAsLong());
+            failDeprovision(root, e.code(), e.getMessage());
             throw e;
         } catch (RuntimeException e) {
-            repository.release(root, owner, clock.getAsLong());
+            failDeprovision(root, "NB_DEPROVISIONING_FAILED", e.getMessage());
             throw new AccountException(HttpStatus.BAD_GATEWAY, "NB_DEPROVISIONING_FAILED",
                     "Deprovisioning tenant " + root + " failed: " + e.getMessage(), e);
         }
+    }
+
+    /** Stays DEPROVISIONING (still on the shared account) with the error; a re-run resumes. */
+    private void failDeprovision(String root, String code, String message) {
+        repository.markFailed(root, owner, TenantAccountRepository.DEPROVISIONING, code, truncate(message),
+                clock.getAsLong());
+        forgetCached(root);
+        log.warn("Tenant {}: deprovisioning stopped part-way ({}): {}; it stays DEPROVISIONING on the shared "
+                + "account, and running deprovision again resumes it", root, code, message);
     }
 
     /** Every integration but Novu's built-in ones (in-app), which hold no tenant credential. */

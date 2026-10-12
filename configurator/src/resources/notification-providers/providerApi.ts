@@ -183,7 +183,7 @@ export interface NotificationAccount {
   /** TENANT: the workspace's own Novu organization. SHARED: the deployment's account. */
   mode: 'TENANT' | 'SHARED';
   tenantId: string | null;
-  /** PROVISIONED, NOT_PROVISIONED, PROVISIONING, FAILED, DEPROVISIONED, DISABLED or UNKNOWN. */
+  /** PROVISIONED, NOT_PROVISIONED, PROVISIONING, FAILED, DEPROVISIONING, DEPROVISIONED, DISABLED or UNKNOWN. */
   status: string;
   /** Whether THIS caller may add, change, test or delete providers there. */
   manageable: boolean;

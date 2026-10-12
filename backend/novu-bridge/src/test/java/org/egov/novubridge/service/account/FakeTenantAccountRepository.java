@@ -86,6 +86,16 @@ class FakeTenantAccountRepository extends TenantAccountRepository {
     }
 
     @Override
+    public void markDeprovisioning(String tenantId, String owner, long now) {
+        Row row = rows.get(tenantId);
+        if (row == null || !owner.equals(row.leaseOwner())) {
+            return;
+        }
+        rows.put(tenantId, row.toBuilder().status(DEPROVISIONING).apiKeyCiphertext(null).apiKeyId(null)
+                .workflowsVersion(0).lastErrorCode(null).lastErrorMessage(null).lastModifiedTime(now).build());
+    }
+
+    @Override
     public void markDeprovisioned(String tenantId, String owner, long now) {
         Row row = rows.get(tenantId);
         if (row == null || !owner.equals(row.leaseOwner())) {

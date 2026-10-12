@@ -50,6 +50,7 @@ export function accountNotice(account: NotificationAccount | null): AccountNotic
         english: "This workspace's notification account is being set up. Reload in a minute." };
     case 'FAILED':
     case 'NOT_PROVISIONED':
+    case 'DEPROVISIONING':
     case 'DEPROVISIONED':
       return account.manageable ? null : { tone: 'warning', key: 'app.providers.account_missing',
         english: 'This workspace does not have its own notification account yet, so it cannot add providers. Ask the platform operator to set one up.' };

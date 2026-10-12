@@ -310,6 +310,11 @@ class TenantAccountServiceTest {
     @Test
     void deprovision_deletesTheTenantsIntegrations_regeneratesTheKey_andFallsBackToShared() {
         service.provision("acme");
+        List<String> statusWhenNovuWasCalled = new ArrayList<>();
+        org.mockito.Mockito.doAnswer(inv -> {
+            statusWhenNovuWasCalled.add(repository.rows.get("acme").status());
+            return null;
+        }).when(platform).regenerateApiKey(anyString(), anyString());
 
         Map<String, Object> state = service.deprovision("acme");
 
@@ -320,6 +325,68 @@ class TenantAccountServiceTest {
         assertEquals(List.of("i-sms"), deleted.getAllValues(), "Novu's built-in in-app integration is left alone");
         verify(platform).regenerateApiKey("jwt-org-acme", "env-dev-org-acme");
         assertNull(service.accountFor("acme"));
+        // Review N1: the tenant is off its own account before Novu is touched, and the key is
+        // revoked before the credentials go.
+        assertEquals(List.of("DEPROVISIONING"), statusWhenNovuWasCalled);
+        InOrder order = inOrder(platform, novuClient);
+        order.verify(platform).regenerateApiKey("jwt-org-acme", "env-dev-org-acme");
+        order.verify(novuClient).deleteIntegration(any(NovuAccount.class), eq("i-sms"));
+    }
+
+    @Test
+    void deprovision_failingPartWay_leavesTheTenantOnTheSharedAccount_andARerunCompletesIt() {
+        service.provision("acme");
+        doThrow(new AccountException(HttpStatus.BAD_GATEWAY, "NB_NOVU_PLATFORM_FAILED", "regenerate refused"))
+                .doNothing()
+                .when(platform).regenerateApiKey(anyString(), anyString());
+
+        AccountException e = assertThrows(AccountException.class, () -> service.deprovision("acme"));
+
+        assertEquals("NB_NOVU_PLATFORM_FAILED", e.code());
+        TenantAccountRepository.Row row = repository.rows.get("acme");
+        assertEquals("DEPROVISIONING", row.status(), "never PROVISIONED with its integrations half gone");
+        assertNull(row.apiKeyCiphertext(), "the stored key is forgotten before Novu is touched");
+        assertEquals("NB_NOVU_PLATFORM_FAILED", row.lastErrorCode());
+        assertNull(row.leaseOwner(), "a failure releases the lease");
+        assertNull(service.accountFor("acme"), "its messages go through the shared account meanwhile");
+        assertFalse(service.isProvisioned("acme"));
+        verify(novuClient, never()).deleteIntegration(any(NovuAccount.class), anyString());
+
+        Map<String, Object> state = service.deprovision("acme");
+
+        assertEquals("DEPROVISIONED", state.get("status"));
+        assertNull(state.get("lastErrorCode"));
+        verify(platform, times(2)).regenerateApiKey("jwt-org-acme", "env-dev-org-acme");
+        verify(novuClient).deleteIntegration(any(NovuAccount.class), eq("i-sms"));
+    }
+
+    @Test
+    void deprovision_failingOnTheIntegrations_isResumedToo() {
+        service.provision("acme");
+        doThrow(new RuntimeException("Novu 500")).doReturn(response(200, Map.of()))
+                .when(novuClient).deleteIntegration(any(NovuAccount.class), anyString());
+
+        AccountException e = assertThrows(AccountException.class, () -> service.deprovision("acme"));
+
+        assertEquals("NB_DEPROVISIONING_FAILED", e.code());
+        assertEquals("DEPROVISIONING", repository.rows.get("acme").status());
+        assertNull(service.accountFor("acme"));
+        assertEquals("DEPROVISIONED", service.deprovision("acme").get("status"));
+        verify(novuClient, times(2)).deleteIntegration(any(NovuAccount.class), eq("i-sms"));
+    }
+
+    @Test
+    void aTenantLeftDeprovisioning_canBeProvisionedAgain() {
+        service.provision("acme");
+        doThrow(new AccountException(HttpStatus.BAD_GATEWAY, "NB_NOVU_PLATFORM_FAILED", "down"))
+                .when(platform).regenerateApiKey(anyString(), anyString());
+        assertThrows(AccountException.class, () -> service.deprovision("acme"));
+
+        TenantAccountService.ProvisionResult again = service.provision("acme");
+
+        assertEquals("PROVISIONED", again.state().get("status"));
+        assertFalse(again.organizationCreated());
+        assertEquals("key-dev-org-acme", service.accountFor("acme").apiKey());
     }
 
     @Test

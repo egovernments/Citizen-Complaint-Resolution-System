@@ -69,6 +69,28 @@ class TenantAccountRepositoryPostgresTest {
     }
 
     @Test
+    void deprovisioning_forgetsTheKeyAtOnce_keepsTheLease_andAFailureKeepsItDeprovisioning() {
+        repository.claim("acme", "a", 1_000, 2_000);
+        repository.markProvisioned("acme", "a", "env", "Development", "v1:x:y", "x", 1, 1_100);
+        assertTrue(repository.claim("acme", "b", 1_200, 2_200));
+
+        repository.markDeprovisioning("acme", "intruder", 1_250);
+        assertEquals("PROVISIONED", repository.find("acme").orElseThrow().status(), "fenced by the lease owner");
+        repository.markDeprovisioning("acme", "b", 1_300);
+        TenantAccountRepository.Row row = repository.find("acme").orElseThrow();
+        assertEquals("DEPROVISIONING", row.status());
+        assertNull(row.apiKeyCiphertext());
+        assertNull(row.apiKeyId());
+        assertEquals("b", row.leaseOwner(), "the deprovision keeps its lease for the Novu steps");
+
+        repository.markFailed("acme", "b", "DEPROVISIONING", "NB_NOVU_PLATFORM_FAILED", "down", 1_400);
+        row = repository.find("acme").orElseThrow();
+        assertEquals("DEPROVISIONING", row.status());
+        assertEquals("NB_NOVU_PLATFORM_FAILED", row.lastErrorCode());
+        assertNull(row.leaseOwner());
+    }
+
+    @Test
     void failureKeepsTheGivenStatus_andReleasesTheLease() {
         repository.claim("acme", "a", 1_000, 2_000);
         repository.markFailed("acme", "a", "FAILED", "NB_NOVU_UNAVAILABLE", "down", 1_100);
