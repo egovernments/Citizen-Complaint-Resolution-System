@@ -1,0 +1,96 @@
+name: Integration-tests unit tests
+
+# The offline parts of tests/integration-tests: the catalog builder and the
+# dashboards' derivations (scripts/), the runner (runner/) and, on develop, the
+# identity fixtures (tests/identity-unit/). None of them needs a deployment or
+# a browser. The test files are found by glob, so new ones run without editing
+# this workflow.
+
+on:
+  pull_request:
+    branches: [develop, master]
+    paths:
+      - 'tests/integration-tests/**'
+      - '.github/workflows/integration-tests-unit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: tests/integration-tests
+    env:
+      # The unit test files. bash expands them (globstar for **; nullglob so a
+      # pattern with no match on this branch drops out instead of reaching node
+      # as a literal), and node gets plain file paths.
+      UNIT_TESTS: scripts/**/*.test.ts scripts/**/*.test.mjs runner/**/*.test.ts tests/identity-unit/**/*.test.ts
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tests/integration-tests/package-lock.json
+
+      # @playwright/test installs without browsers.
+      - run: npm ci
+
+      # Some unit tests drive a real browser (develop's
+      # tests/identity-unit/hosted-fixture.test.ts launches Chromium). Install
+      # it when any unit test mentions it, wherever that test lives, and skip
+      # the download on a branch where none does.
+      - name: Install Chromium if a unit test uses it
+        shell: bash
+        run: |
+          shopt -s globstar nullglob
+          # shellcheck disable=SC2206 # split and glob UNIT_TESTS on purpose
+          files=($UNIT_TESTS)
+          if [ "${#files[@]}" -gt 0 ] && grep -q chromium "${files[@]}"; then
+            npx playwright install --with-deps chromium
+          else
+            echo "No unit test mentions chromium; no browser installed."
+          fi
+
+      # tsconfig.json's include leaves scripts/ out, so nothing else checks it.
+      - name: Type-check scripts/ (strict)
+        run: npx tsc -p scripts/tsconfig.json
+
+      - name: Unit tests
+        shell: bash
+        run: |
+          # No files at all means a broken checkout, not a pass.
+          shopt -s globstar nullglob
+          # shellcheck disable=SC2206 # split and glob UNIT_TESTS on purpose
+          files=($UNIT_TESTS)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "::error::no unit test files found under tests/integration-tests"
+            exit 1
+          fi
+          printf '%s\n' "${files[@]}"
+          node --import tsx --test "${files[@]}"
+
+  # The react-admin dashboard: `tsc -b && vite build` type-checks all of it;
+  # the unit tests above only reach its pure normalize.ts.
+  dashboard-react-admin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: tests/integration-tests/dashboard-react-admin
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tests/integration-tests/dashboard-react-admin/package-lock.json
+
+      - run: npm ci
+
+      - run: npm run build

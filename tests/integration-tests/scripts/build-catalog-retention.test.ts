@@ -183,6 +183,26 @@ test('a latestRun pointer is dropped once its run loses the report, the history 
   for (const t of c.tests) if (t.latestRun) assert.ok(kept.has(t.latestRun.runId), `${t.id} → ${t.latestRun.runId}`);
 });
 
+test('an interrupted lastStatus from an older builder falls back to a real result from a run that is listed but lost its report', () => {
+  const www = webroot('interrupted-fallback');
+  cycles(www, 0, 3, { reportLimit: 2 });   // r003, r002 keep reports; r000, r001 are listed without
+  // what an older builder left behind for alpha: an interrupted last result in r003, its real one in r000
+  const h = JSON.parse(fs.readFileSync(path.join(www, 'history.json'), 'utf8')) as HistoryFile;
+  h.perTest[id('alpha')] = [{ runId: 'r003', status: 'interrupted', durationMs: 9 }, { runId: 'r000', status: 'failed', durationMs: 1234 }];
+  fs.writeFileSync(path.join(www, 'history.json'), JSON.stringify(h));
+  const cat = JSON.parse(fs.readFileSync(path.join(www, 'catalog.json'), 'utf8')) as Catalog;
+  const prior = cat.tests.find(t => t.id === id('alpha'))!;
+  prior.lastStatus = 'interrupted';
+  prior.latestRun = { ...prior.latestRun!, runId: 'r003' };
+  fs.writeFileSync(path.join(www, 'catalog.json'), JSON.stringify(cat));
+  assert.equal(cat.runs.find(r => r.id === 'r000')!.hasReport, false);
+
+  const c = cycle(www, 4, { reportLimit: 2, statuses: { beta: 'passed', gamma: 'passed' } });
+  const alpha = c.tests.find(t => t.id === id('alpha'))!;
+  assert.deepEqual([alpha.lastStatus, alpha.lastDurationMs], ['failed', 1234], 'a status needs no report: r000 is still listed');
+  assert.equal(alpha.latestRun, null, 'the media kept was the interrupted run\'s');
+});
+
 test('a run folder that vanished loses its report and the next run on disk keeps its slot', () => {
   const www = webroot('vanished');
   cycles(www, 0, 13, { reportLimit: 12 });
