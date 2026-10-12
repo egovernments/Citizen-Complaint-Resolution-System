@@ -643,8 +643,9 @@ public class ProviderController {
      * <p>Asked fresh, not from the dispatch snapshot: an operator who just changed a provider in
      * Novu's own dashboard tests that, not what Novu looked like up to a TTL ago (the refreshed
      * snapshot then serves dispatch too). Fails OPEN like dispatch when Novu's integration list
-     * cannot be read: the test is sent and reports the trigger's own answer, carrying the reason it
-     * was not checked as {@code warning}.
+     * cannot be read, or a read failed within the TTL (that back-off is shared with dispatch and
+     * kept): the test is sent and reports the trigger's own answer, carrying the reason it was not
+     * checked as {@code warning}.
      *
      * @return that reason when the check could not run, else null
      */
@@ -653,10 +654,11 @@ public class ProviderController {
         if (!named && !providers.novu().id().equals(providers.select(null, channel).id())) {
             return null; // the legacy direct gateway (SMSCountry's bulk API) answers for itself
         }
-        providerAvailability.invalidate();
+        // Fresh, but not by invalidate(): that would also drop the failure back-off dispatch
+        // shares, so every Test during a Novu outage would be one more doomed list call.
         ProviderAvailability.Result availability = named
-                ? providerAvailability.check(integrationId, channel)
-                : providerAvailability.checkUnpinned(channel);
+                ? providerAvailability.checkFresh(integrationId, channel)
+                : providerAvailability.checkUnpinnedFresh(channel);
         if (!availability.usable()) {
             throw new Refusal(HttpStatus.CONFLICT, "NB_PROVIDER_UNAVAILABLE", availability.message());
         }
