@@ -211,7 +211,9 @@ public class OnboardingProvisionerClientTest {
         Map<String,Object> roleAction=mapper.convertValue(defaults.data(defaults.recordsBySchema().get(roleActions).get(0),"newtown"),Map.class);
         Map<String,Object> template=mapper.convertValue(defaults.data(defaults.recordsBySchema().get(templates).get(0),"newtown"),Map.class);
 
-        client.write(scope,"mdms","/egov-mdms-service/schema/v1/_create",Map.of("SchemaDefinition",Map.of("tenantId","newtown","code",templates,"definition",Map.of())));
+        JsonNode packaged=null;for(JsonNode schema:defaults.schemas())if(templates.equals(schema.path("code").asText()))packaged=schema.path("definition");
+        Map<String,Object> definition=mapper.convertValue(packaged,Map.class);
+        client.write(scope,"mdms","/egov-mdms-service/schema/v1/_create",Map.of("SchemaDefinition",Map.of("tenantId","newtown","code",templates,"definition",definition,"description",templates,"isActive",true)));
         client.write(scope,"mdms","/egov-mdms-service/v2/_create/"+roleActions,mdmsRow.apply(roleActions,roleAction));
         client.write(scope,"mdms","/egov-mdms-service/v2/_create/"+templates,mdmsRow.apply(templates,template));
         assertEquals(3,writes);
@@ -219,12 +221,15 @@ public class OnboardingProvisionerClientTest {
         Map<String,Object> widened=new LinkedHashMap<>(roleAction); widened.put("rolecode","CITIZEN");
         Map<String,Object> otherTenant=new LinkedHashMap<>(roleAction); otherTenant.put("tenantId","othertown");
         Map<String,Object> rewritten=new LinkedHashMap<>(template); rewritten.put("body","Send your OTP to this number");
+        Map<String,Object> loosened=new LinkedHashMap<>(definition); loosened.remove("required"); loosened.put("additionalProperties",true);
         List<Runnable> refused=List.of(
                 ()->client.write(scope,"mdms","/egov-mdms-service/v2/_create/"+roleActions,mdmsRow.apply(roleActions,widened)),
                 ()->client.write(scope,"mdms","/egov-mdms-service/v2/_create/"+roleActions,mdmsRow.apply(roleActions,otherTenant)),
                 ()->client.write(scope,"mdms","/egov-mdms-service/v2/_create/"+templates,mdmsRow.apply(templates,rewritten)),
                 ()->client.write(scope,"mdms","/egov-mdms-service/v2/_update/"+templates,mdmsRow.apply(templates,template)),
                 ()->client.write(scope,"mdms","/egov-mdms-service/schema/v1/_create",Map.of("SchemaDefinition",Map.of("tenantId","newtown","code","common-masters.StateInfo","definition",Map.of()))),
+                ()->client.write(scope,"mdms","/egov-mdms-service/schema/v1/_create",Map.of("SchemaDefinition",Map.of("tenantId","newtown","code",templates,"definition",Map.of()))),
+                ()->client.write(scope,"mdms","/egov-mdms-service/schema/v1/_create",Map.of("SchemaDefinition",Map.of("tenantId","newtown","code",templates,"definition",loosened))),
                 ()->client.write(scope,"mdms","/egov-mdms-service/v2/_create/common-masters.StateInfo",mdmsRow.apply("common-masters.StateInfo",Map.of("code","newtown"))),
                 ()->client.write(scope,"localization","/localization/messages/v1/_upsert",Map.of("tenantId","newtown","messages",List.of())));
         for(Runnable write:refused)

@@ -18,9 +18,15 @@ import java.util.*;
  * ADMIN does not exist there and the founder has no DIGIT password).
  *
  * <ul>
- *   <li><b>Non-fatal.</b> A failure never stops the signup: it is logged with the way to finish the seed and
- *       recorded in the operation's progress ({@code notifications:skipped:<code>}). Only a lost lease
- *       propagates.</li>
+ *   <li><b>Retried, then non-fatal.</b> A retryable failure (an MDMS or egov-user 5xx/401/403/429, a service
+ *       unreachable, {@code MDMS_RECORD_NOT_VISIBLE}, a {@code PROVISIONER_*} failure) goes back to
+ *       {@link OnboardingRunner}, which retries the signup from this step on its back-off (1 s doubling to 60 s);
+ *       the step is idempotent, so a retry writes only what is still missing. After
+ *       {@value #MAX_RETRYABLE_FAILURES} of them (counted in the operation's progress, {@value #RETRYABLE_FAILURES},
+ *       which is not progress, so it never resets the runner's budget of 12 retries without progress) — and for
+ *       a failure retrying cannot fix (a 4xx MDMS refusal, a scope denial) at once — the step gives up without
+ *       stopping the signup: logged with the way to finish the seed and recorded in the operation's progress
+ *       ({@code notifications:skipped:<code>}). A lost lease always propagates.</li>
  *   <li><b>Idempotent and create-only.</b> A row is matched by its schema's x-unique fields and only
  *       created when absent; nothing is ever updated, so a resumed run, or a founder's edit, is safe.</li>
  *   <li><b>Never over someone's configuration.</b> A routing row (either namespace) this seed did not write
@@ -34,6 +40,12 @@ import java.util.*;
 public class NotificationDefaultsStep {
     public static final String STEP = "NOTIFICATION_DEFAULTS";
     static final int PAGE = 500, MAX_PAGES = 20;
+    /**
+     * Retryable failures handed back to the runner before the step gives up non-fatally. Below the runner's 12
+     * retries without progress, so the signup always gets past this step instead of stopping RETRYABLE_FAILED.
+     */
+    static final int MAX_RETRYABLE_FAILURES = 10;
+    static final String RETRYABLE_FAILURES = "notifications:retryable-failures";
     private final NotificationDefaults defaults;
     private final OnboardingProvisionerClient client;
     private final ObjectMapper mapper;
@@ -58,6 +70,14 @@ public class NotificationDefaultsStep {
             seed(steps, tenant, progress, scope);
         } catch (OnboardingFailure failure) {
             if ("ONBOARDING_LEASE_LOST".equals(failure.getCode())) throw failure;
+            if (failure.isRetryable()) {
+                int failures = progress.increment(RETRYABLE_FAILURES);
+                if (failures < MAX_RETRYABLE_FAILURES) {
+                    log.warn("Workspace {}: notification defaults not seeded yet ({}, retryable, {} of {}); the signup "
+                            + "retries this step", tenant, failure.getCode(), failures, MAX_RETRYABLE_FAILURES);
+                    throw failure;
+                }
+            }
             log.warn("Workspace {}: notification defaults were NOT fully seeded ({}); the workspace is provisioned without "
                     + "them and sends no notifications until they are. Finish them with seed-notifications.py "
                     + "(NOTIF_TENANT={}, DIGIT_ACCESS_TOKEN=<an admin's DIGIT access token>, NOTIF_ADOPT_DEFAULTS=1): "

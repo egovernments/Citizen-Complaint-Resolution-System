@@ -151,11 +151,11 @@ public class OnboardingProvisionerClient {
                 baseline = "PLATFORM_BASELINE".equals(step) || upgrade;
         JsonNode payload;
         if (NotificationDefaultsStep.STEP.equals(step)) {
-            // MDMS creates only: the notification schemas, and the packaged seed rows verbatim (never an update).
+            // MDMS creates only: the notification schemas and the packaged seed rows, both verbatim (never an update).
             if (!"mdms".equals(service)) denied();
             if ("/egov-mdms-service/schema/v1/_create".equals(path)) {
                 payload = body.path("SchemaDefinition"); requireTenant(payload, tenant);
-                if (!notificationDefaults.isSchema(payload.path("code").asText())) denied();
+                if (!notificationDefaults.isSeedSchema(payload.path("code").asText(), payload.path("definition"))) denied();
                 return; // JSON schema property definitions are not tenant-bearing request data.
             }
             payload = body.path("Mdms"); String schema = payload.path("schemaCode").asText();
