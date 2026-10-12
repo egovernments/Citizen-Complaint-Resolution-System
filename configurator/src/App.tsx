@@ -55,6 +55,7 @@ import { NotificationConfigure } from '@/resources/notification-configure/Notifi
 import { AnalyticsProvidersEditor } from '@/admin/analytics/AnalyticsProvidersEditor';
 import { EscalationPolicyEditor } from '@/admin/escalation';
 import PgrDashboard from './pages/PgrDashboard';
+import RoleEditor from './access/RoleEditor';
 import OrgChartPage from './pages/org-chart/OrgChartPage';
 import PublicDashboardConfigure from './resources/public-dashboard/PublicDashboardConfigure';
 import { getGenericMdmsResources, getDataProvider, getAuthProvider, configureDigitClient, i18nProvider, DigitApiClient, isReadOnlyResource } from '@/providers/bridge';
@@ -215,6 +216,9 @@ function ManagementAdminResources() {
               the parent tenant. */}
           <Route path="/analytics-providers" element={<AnalyticsProvidersEditor />} />
           <Route path="/advanced" element={<AdvancedPage />} />
+          {/* Access: the Role editor writes the role, its role-actions and its branch of the complaint-search
+              action's scope / field rules; new roles at /access/roles/new */}
+          <Route path="/access/roles/:code" element={<RoleEditor />} />
           <Route
             path="/pgr-dashboard"
             element={LEGACY_PGR_DASHBOARD_ENABLED ? <PgrDashboard /> : <Navigate to="/manage" replace />}
