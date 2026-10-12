@@ -12,6 +12,12 @@ import { execFileSync } from 'child_process';
 
 const REPO_ROOT = path.resolve(__dirname, '../../..');
 const read = (rel: string) => fs.readFileSync(path.join(REPO_ROOT, rel), 'utf8');
+// js-yaml is a declared devDependency, typed here instead of through @types/js-yaml:
+// only safeLoad is used, and only on files from this repository.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const yaml: { safeLoad(src: string): unknown } = require('js-yaml');
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const readYaml = (rel: string): any => yaml.safeLoad(read(rel));
 
 describe('default-data-handler tenant template', () => {
   // ethiopia inherited pg's Indian pincodes [143001-143005] from this
@@ -1136,16 +1142,18 @@ describe('notification stack images come from one build', () => {
     'devops/deploy-as-code/charts/common-services/novu-bridge',
     'devops/deploy-as-code/charts/common-services/digit-user-preferences-service',
   ];
-  // The app image (top-level `image:`) and the Flyway image (initContainers.dbMigration
-  // .image) of a chart, read from its values.yaml by layout (no YAML parser is a declared
-  // dependency here). A null means the layout moved: fix the pattern, do not drop the test.
+  // The app image (top-level `image`) and the Flyway image (initContainers.dbMigration
+  // .image) of a chart, from its values.yaml: <chart> and <chart>-db.
   const chartImages = (dir: string) => {
-    const v = read(`${dir}/values.yaml`);
-    const app = v.match(/^image:\n {2}repository: "[^"]+"\n {2}tag: "([^"]+)"[^\n]*\n {2}pullPolicy: (\S+)/m);
-    const db = v.match(/^ {4}image:\n {6}repository: "[^"]+-db"\n {6}tag: "([^"]+)"[^\n]*\n {6}pullPolicy: (\S+)/m);
-    expect(app).not.toBeNull();
-    expect(db).not.toBeNull();
-    return { app: { tag: app![1], pullPolicy: app![2] }, db: { tag: db![1], pullPolicy: db![2] } };
+    const v = readYaml(`${dir}/values.yaml`);
+    const app = v.image;
+    const db = v.initContainers?.dbMigration?.image;
+    expect(app?.repository).toBe(path.basename(dir));
+    expect(db?.repository).toBe(`${path.basename(dir)}-db`);
+    return {
+      app: { tag: String(app.tag), pullPolicy: app.pullPolicy },
+      db: { tag: String(db.tag), pullPolicy: db.pullPolicy },
+    };
   };
   // digit-user-preferences-service and its migrator ride the same tag: every 2.12 tag of
   // that image is the Go service, so a stack pinned to develop-<sha8> must not leave the
@@ -1283,55 +1291,71 @@ describe('digit-user-preferences-service runs the implementation its definition 
   const CHART = 'devops/deploy-as-code/charts/common-services/digit-user-preferences-service';
   const base = read('local-setup/docker-compose.egov-digit.yaml');
   const migrations = read('local-setup/docker-compose.migrations.yml');
+  const baseY = readYaml('local-setup/docker-compose.egov-digit.yaml');
+  const migrationsY = readYaml('local-setup/docker-compose.migrations.yml');
   const props = read(`${SRC}/src/main/resources/application.properties`);
-  const values = read(`${CHART}/values.yaml`);
+  const values = readYaml(`${CHART}/values.yaml`);
 
-  // Tags that carry the Spring Boot build. Only develop has one: every release and
-  // master tag published so far (2.12-5137119, v2.12, master-*) is the Go binary.
-  // When a release is cut from the Java tree, add its tag here.
-  const JAVA_BUILD_TAG = /^(nightly-develop|develop-[0-9a-f]{7,})$/;
+  // Every tag this image was published under before the rewrite is the Go binary: the
+  // 2.12 release (2.12-5137119, v2.12, v2.12.x) and the master channel (master-*). The
+  // set is closed, so a release cut from the Java tree needs no edit here. What stops a
+  // release from forgetting this image is that both its defaults follow the notification
+  // stack's one tag (the block above), which the release step pins in one go.
+  const GO_BUILD_TAG = /^(2\.12(-[0-9a-f]+)?|v2\.12(\.\d+)*|master(-.*)?)$/;
 
-  const block = (file: string, service: string) => {
-    const found = file.split(/^(?=  [\w.-]+:\s*$)/m).filter((b) => b.startsWith(`  ${service}:`));
-    expect(found).toHaveLength(1);
-    return found[0];
+  // A compose service's environment as a map, whichever form (map or KEY=VALUE list) it
+  // is written in. Values arrive as YAML scalars, so a trailing comment is not part of one.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const envOf = (compose: any, service: string): Record<string, string> => {
+    const svc = compose?.services?.[service];
+    expect(svc).toBeDefined();
+    const e = svc.environment ?? {};
+    const pairs: Array<[string, unknown]> = Array.isArray(e)
+      ? e.map((kv: string) => (kv.includes('=') ? [kv.slice(0, kv.indexOf('=')), kv.slice(kv.indexOf('=') + 1)] : [kv, '']))
+      : Object.entries(e);
+    return Object.fromEntries(pairs.map(([k, v]) => [k, v == null ? '' : String(v)]));
   };
   const composeTag = (file: string, env: string, image: string) =>
     file.match(new RegExp(`image: \\$\\{${env}:-egovio/${image}:\\$\\{NOTIFICATION_STACK_TAG:-([^}\\s]+)\\}\\}`))?.[1] ?? null;
-  const envOf = (b: string) =>
-    Object.fromEntries([...b.matchAll(/^ {6}([A-Z][A-Z0-9_]*):\s*['"]?([^'"\n#]*?)['"]?\s*$/gm)].map((m) => [m[1], m[2]]));
-  const service = block(base, 'digit-user-preferences-service');
-  const env = { ...envOf(service), ...envOf(block(migrations, 'digit-user-preferences-service')) };
+  const service = baseY.services['digit-user-preferences-service'];
+  const env = { ...envOf(baseY, 'digit-user-preferences-service'), ...envOf(migrationsY, 'digit-user-preferences-service') };
 
   test('the source is the Spring Boot service, and CI builds that tree into the image', () => {
     expect(fs.existsSync(path.join(REPO_ROOT, SRC, 'pom.xml'))).toBe(true);
     expect(fs.existsSync(path.join(REPO_ROOT, SRC, 'go.mod'))).toBe(false);
-    const entry = read('build/build-config.yml').split(/^(?=  - name:)/m)
-      .find((e) => e.includes(`/${SRC}"`));
-    expect(entry).toMatch(new RegExp(`work-dir: "${SRC}"\\n\\s+image-name: "digit-user-preferences-service"\\n\\s+dockerfile: "build/maven/Dockerfile"`));
-    expect(entry).toContain(`work-dir: "${SRC}/src/main/resources/db"`);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const builds = (readYaml('build/build-config.yml').config as any[]).flatMap((c) => c.build ?? []);
+    expect(builds.filter((b) => b['work-dir'] === SRC)).toEqual([
+      expect.objectContaining({ 'image-name': 'digit-user-preferences-service', dockerfile: 'build/maven/Dockerfile' }),
+    ]);
+    expect(builds.filter((b) => b['work-dir'] === `${SRC}/src/main/resources/db`)).toEqual([
+      expect.objectContaining({ 'image-name': 'digit-user-preferences-service-db' }),
+    ]);
   });
 
-  test('compose defaults the service and its migrator to one Spring Boot build', () => {
+  test('compose defaults the service and its migrator to the stack tag, never a Go build', () => {
     const app = composeTag(base, 'DIGIT_USER_PREFERENCES_SERVICE_IMAGE', 'digit-user-preferences-service');
     const db = composeTag(migrations, 'DIGIT_USER_PREFERENCES_SERVICE_DB_IMAGE', 'digit-user-preferences-service-db');
-    expect(app).toMatch(JAVA_BUILD_TAG);
+    expect(app).not.toBeNull();
     expect(db).toBe(app);
+    expect(app).not.toMatch(GO_BUILD_TAG);
+    expect(service.image).toBe(`\${DIGIT_USER_PREFERENCES_SERVICE_IMAGE:-egovio/digit-user-preferences-service:\${NOTIFICATION_STACK_TAG:-${app}}}`);
   });
 
-  test('the Helm chart defaults the app and its db-migration init container to one Spring Boot build', () => {
-    const app = values.match(/^image:\n {2}repository: "digit-user-preferences-service"\n {2}tag: "([^"]+)"/m)?.[1];
-    const db = values.match(/^ {4}image:\n {6}repository: "digit-user-preferences-service-db"\n {6}tag: "([^"]+)"/m)?.[1];
-    expect(app).toMatch(JAVA_BUILD_TAG);
-    expect(db).toBe(app);
-    expect(values).toMatch(/^appType: "java-spring"$/m);
+  test('the Helm chart defaults the app and its db-migration init container to one build, never a Go one', () => {
+    const app = String(values.image?.tag);
+    expect(values.image?.repository).toBe('digit-user-preferences-service');
+    expect(values.initContainers?.dbMigration?.image?.repository).toBe('digit-user-preferences-service-db');
+    expect(String(values.initContainers?.dbMigration?.image?.tag)).toBe(app);
+    expect(app).not.toMatch(GO_BUILD_TAG);
+    expect(values.appType).toBe('java-spring');
     // A rolling default must not stick on a node that pulled it once.
     const tpl = read(`${CHART}/templates/deployment.yaml`);
     expect(tpl).toContain('range $img := list .Values.image .Values.initContainers.dbMigration.image');
     expect(tpl).toContain('$_ := set $img "pullPolicy" "Always"');
   });
 
-  test('every variable compose sets is one the service or its launcher reads', () => {
+  test('every variable compose sets is one the service, its launcher or the platform reads', () => {
     // application.properties placeholders, plus what build/maven/start.sh (the CI
     // Dockerfile's entrypoint) reads. A misspelt key, or one only some other build of
     // this image understands, is silently ignored at runtime and shows up here instead.
@@ -1339,10 +1363,14 @@ describe('digit-user-preferences-service runs the implementation its definition 
       ...[...props.matchAll(/\$\{([A-Z][A-Z0-9_]*)/g)].map((m) => m[1]),
       ...[...read('build/maven/start.sh').matchAll(/\$\{?([A-Z][A-Z0-9_]*)/g)].map((m) => m[1]),
     ]);
-    expect(Object.keys(env).sort()).toEqual(expect.arrayContaining(
+    // Read by the JVM itself (JAVA_TOOL_OPTIONS) or by the OpenTelemetry javaagent the
+    // stack mounts into its Java services (OTEL_*), not by the application. Sibling Java
+    // services carry them, so adding them here is not a misspelling.
+    const platform = (k: string) => k === 'JAVA_TOOL_OPTIONS' || /^OTEL_[A-Z0-9_]+$/.test(k);
+    expect(Object.keys(env)).toEqual(expect.arrayContaining(
       ['SERVER_PORT', 'SERVER_CONTEXT_PATH', 'SPRING_DATASOURCE_URL', 'SPRING_DATASOURCE_USERNAME',
         'SPRING_DATASOURCE_PASSWORD', 'SPRING_FLYWAY_ENABLED']));
-    expect(Object.keys(env).filter((k) => !read_.has(k))).toEqual([]);
+    expect(Object.keys(env).filter((k) => !read_.has(k) && !platform(k))).toEqual([]);
     expect(env.SPRING_FLYWAY_ENABLED).toBe('false');
   });
 
@@ -1350,13 +1378,14 @@ describe('digit-user-preferences-service runs the implementation its definition 
     expect(props).toMatch(/^server\.port=\$\{SERVER_PORT:8080\}$/m);
     expect(props).toMatch(/^management\.endpoints\.web\.base-path=\/$/m);
     expect(props).toMatch(/^management\.endpoints\.web\.exposure\.include=(?:.*,)?health(?:,.*)?$/m);
-    const probe = service.match(/test: \["CMD-SHELL", "wget -qO- http:\/\/127\.0\.0\.1:(\d+)(\/\S*) /);
+    const [kind, cmd] = service.healthcheck?.test ?? [];
+    expect(kind).toBe('CMD-SHELL');
+    const probe = String(cmd).match(/^wget -qO- http:\/\/127\.0\.0\.1:(\d+)(\/\S*) /);
     expect(probe).not.toBeNull();
     expect({ port: probe![1], path: probe![2] }).toEqual({ port: env.SERVER_PORT, path: '/health' });
-    expect(values).toMatch(/^httpPort: 8080$/m);
-    expect(values).toMatch(/- name: SERVER_PORT\n {4}value: "8080"/);
-    expect(values).toMatch(/livenessProbePath: "\/health"/);
-    expect(values).toMatch(/readinessProbePath: "\/health"/);
+    expect(values.httpPort).toBe(8080);
+    expect(values.env).toMatch(/^- name: SERVER_PORT\n {2}value: "8080"$/m);
+    expect(values.healthChecks).toMatchObject({ enabled: true, livenessProbePath: '/health', readinessProbePath: '/health' });
   });
 
   test("novu-bridge's consent check posts to the path the controller maps", () => {
@@ -1365,14 +1394,15 @@ describe('digit-user-preferences-service runs the implementation its definition 
     expect(controller).toContain('@RequestMapping("${user.preference.context-path}/v1")');
     expect(controller).toContain('@PostMapping("/_search")');
     const searchPath = `${env.SERVER_CONTEXT_PATH}/v1/_search`;
-    const bridge = envOf(block(base, 'novu-bridge'));
+    const bridge = envOf(baseY, 'novu-bridge');
     expect(bridge.NOVU_BRIDGE_PREFERENCE_HOST).toBe(`http://digit-user-preferences-service:${env.SERVER_PORT}`);
     expect(bridge.NOVU_BRIDGE_PREFERENCE_CHECK_PATH).toBe(searchPath);
     expect(bridge.NOVU_BRIDGE_PREFERENCE_SEARCH_PATH).toBe(searchPath);
-    const k8s = read('devops/deploy-as-code/charts/environments/env.yaml');
-    expect(values).toMatch(/- name: SERVER_CONTEXT_PATH\n {4}value: "\/user-preference"/);
-    expect(k8s).toContain('preference-check-path: "/user-preference/v1/_search"');
-    expect(k8s).toContain('digit-user-preferences-service: "http://digit-user-preferences-service.egov:8080/"');
+    const k8s = readYaml('devops/deploy-as-code/charts/environments/env.yaml');
+    expect(values.env).toMatch(/^- name: SERVER_CONTEXT_PATH\n {2}value: "\/user-preference"$/m);
+    expect(k8s['novu-bridge']['preference-check-path']).toBe(searchPath);
+    expect(k8s.configmaps['egov-service-host'].data['digit-user-preferences-service'])
+      .toBe(`http://digit-user-preferences-service.egov:${values.httpPort}/`);
   });
 });
 
