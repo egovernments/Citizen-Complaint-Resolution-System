@@ -13,6 +13,8 @@ import { completedCount, resumePath, stepForPath, stepStatus, type StepStatus } 
 import { initialsOf, useOrganisation } from './organisation';
 import { trackEvent } from '@/lib/telemetry';
 import { useOnboardingT } from './i18n';
+import { SectionDocs } from './docs/SectionDocs';
+import type { DocsSection } from './docs/docsLinks';
 
 /**
  * The step marks in place of icons: a tick once a step is done, a filled dot
@@ -66,6 +68,7 @@ export default function OnboardingLayout() {
 
   // A step opened, from the rail, a Back or continue, or a resume.
   const openedStep = currentStepLocked ? undefined : currentStep;
+  const docsSection: DocsSection | undefined = location.pathname === HOME_PATH ? 'home' : openedStep?.id;
   useEffect(() => {
     if (openedStep) trackEvent('phase_start', { phase: openedStep.number, step: openedStep.id, tenant: state.tenant });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per step opened, not per tenant re-render
@@ -204,19 +207,24 @@ export default function OnboardingLayout() {
         </header>
 
         <main id="main-content" className="flex-1 overflow-auto min-h-0">
-          <div className="max-w-6xl mx-auto p-4 sm:p-8">
-            {!currentStepEditable && (
-              <Alert className="mb-4">
-                <AlertDescription>
-                  {t(
-                    'layout.view_only',
-                    'Your role has view-only access to %{step}. You can review this step, but creating or editing records here is restricted to roles with write access (e.g. MDMS_ADMIN).',
-                    { step: currentStep ? t(`steps.${currentStep.id}`, currentStep.label) : '' },
-                  )}
-                </AlertDescription>
-              </Alert>
-            )}
-            {currentStepLocked ? <Navigate to={resumePath(completed)} replace /> : <Outlet />}
+          {/* The docs go beside the page from 1400px, where the Employees table still
+              fits next to them; narrower, they sit under the page. */}
+          <div className="mx-auto flex max-w-6xl flex-col gap-8 p-4 sm:p-8 min-[1400px]:max-w-[88rem] min-[1400px]:flex-row min-[1400px]:items-start">
+            <div className="min-w-0 flex-1 min-[1400px]:max-w-6xl">
+              {!currentStepEditable && (
+                <Alert className="mb-4">
+                  <AlertDescription>
+                    {t(
+                      'layout.view_only',
+                      'Your role has view-only access to %{step}. You can review this step, but creating or editing records here is restricted to roles with write access (e.g. MDMS_ADMIN).',
+                      { step: currentStep ? t(`steps.${currentStep.id}`, currentStep.label) : '' },
+                    )}
+                  </AlertDescription>
+                </Alert>
+              )}
+              {currentStepLocked ? <Navigate to={resumePath(completed)} replace /> : <Outlet />}
+            </div>
+            {docsSection && <SectionDocs section={docsSection} className="min-[1400px]:sticky min-[1400px]:top-8 min-[1400px]:w-56 min-[1400px]:shrink-0" />}
           </div>
         </main>
 
