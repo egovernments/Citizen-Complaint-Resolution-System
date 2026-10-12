@@ -12,7 +12,8 @@ import {
   actionsOf, changedPaths, roleActionUid, withRoleFieldRule, withRoleScope,
   type ActionRow, type Clause, type OnDeny, type RoleScope, type VarDef, BASE_VARS,
 } from './policyModel';
-import { sameDefinition, withRoleActions, type BusinessService, type WfEdit } from './workflowModel';
+import { roleGrid, sameDefinition, withRoleActions, type BusinessService, type WfEdit } from './workflowModel';
+import { WORKFLOW_CAPABILITIES } from './policyModel';
 
 export const ROLES = 'ACCESSCONTROL-ROLES.roles';
 export const ROLEACTIONS = 'ACCESSCONTROL-ROLEACTIONS.roleactions';
@@ -124,12 +125,31 @@ export function planSave(l: Loaded, e: Edited, vocab: VarDef[] = BASE_VARS): Wri
     const changes = changedPaths(l.searchAction.data, data);
     if (changes.length) writes.push({ kind: 'action', op: 'update', uid: l.searchAction.uniqueIdentifier, data, changes });
   }
-  if (e.workflow && Object.keys(e.workflow).length) {
+  const wfEdits = workflowEdits(l, e);
+  if (Object.keys(wfEdits).length) {
     if (!l.workflow) throw new Error(`NO_WORKFLOW: the ${WORKFLOW} workflow is not readable at ${l.root}`);
-    const w = withRoleActions(l.workflow, e.code, e.workflow);
+    const w = withRoleActions(l.workflow, e.code, wfEdits);
     if (w) writes.push({ kind: 'workflow', op: 'update', uid: WORKFLOW, role: e.code, next: w.next, changes: w.changes });
   }
   return writes;
+}
+
+/**
+ * The workflow ticks to write: the grid's own edits, plus, when a capability that the workflow's actions need is
+ * switched OFF (WORKFLOW_CAPABILITIES, e.g. "act on complaints"), every action the role holds is unticked in the same
+ * save, so the app stops offering an action the gateway now refuses. A capability off always wins over a tick.
+ */
+export function workflowEdits(l: Loaded, e: Edited): WfEdit {
+  const out: WfEdit = { ...(e.workflow ?? {}) };
+  const off = WORKFLOW_CAPABILITIES.some((cap) => e.caps[cap] === false);
+  if (off && l.workflow) {
+    const g = roleGrid(l.workflow, e.code);
+    for (const st of g.statuses) for (const a of g.actions) {
+      const k = `${st}|${a}`;
+      if (g.cell(st, a) === 'on' || out[k] === true) out[k] = false;
+    }
+  }
+  return out;
 }
 
 export class ConcurrentChangeError extends Error {
@@ -143,21 +163,22 @@ export class ConcurrentChangeError extends Error {
 export async function applySave(c: MdmsClient, l: Loaded, plan: Write[]): Promise<string[]> {
   const done: string[] = [];
   const action = plan.find((w) => w.kind === 'action') as Extract<Write, { kind: 'action' }> | undefined;
-  if (action) {
-    const fresh = (await c.mdmsSearch(l.root, ACTIONS, { uniqueIdentifiers: [action.uid] }))[0];
-    const was = l.searchAction?.auditDetails?.lastModifiedTime;
-    if (!fresh || fresh.auditDetails?.lastModifiedTime !== was || JSON.stringify(fresh.data) !== JSON.stringify(l.searchAction?.data)) {
-      throw new ConcurrentChangeError(`action ${action.uid} (complaint search)`);
-    }
-    await c.mdmsUpdate({ ...fresh, data: action.data }, true);
+  const wf = plan.find((w) => w.kind === 'workflow') as Extract<Write, { kind: 'workflow' }> | undefined;
+  // the shared rows (every role's): re-read BOTH and refuse on any change since load, before writing anything
+  const freshAction = action ? (await c.mdmsSearch(l.root, ACTIONS, { uniqueIdentifiers: [action.uid] }))[0] : undefined;
+  if (action && (!freshAction || freshAction.auditDetails?.lastModifiedTime !== l.searchAction?.auditDetails?.lastModifiedTime
+      || JSON.stringify(freshAction.data) !== JSON.stringify(l.searchAction?.data))) {
+    throw new ConcurrentChangeError(`action ${action.uid} (complaint search)`);
+  }
+  const freshWf = wf && c.workflowBusinessServiceSearch
+    ? ((await c.workflowBusinessServiceSearch(l.root, [WORKFLOW])) as unknown as BusinessService[]).find((b) => b.businessService === WORKFLOW) : undefined;
+  if (wf && (!freshWf || !sameDefinition(freshWf, l.workflow))) throw new ConcurrentChangeError(`the ${WORKFLOW} workflow`);
+  if (action && freshAction) {
+    await c.mdmsUpdate({ ...freshAction, data: action.data }, true);
     done.push(`action ${action.uid}`);
   }
-  const wf = plan.find((w) => w.kind === 'workflow') as Extract<Write, { kind: 'workflow' }> | undefined;
-  if (wf) {
-    // shared by every role too: re-read and refuse on any change since load, then write the edited copy
-    const fresh = c.workflowBusinessServiceSearch ? ((await c.workflowBusinessServiceSearch(l.root, [WORKFLOW])) as unknown as BusinessService[]).find((b) => b.businessService === WORKFLOW) : undefined;
-    if (!fresh || !sameDefinition(fresh, l.workflow)) throw new ConcurrentChangeError(`the ${WORKFLOW} workflow`);
-    const next = withRoleActions(fresh, wf.role, Object.fromEntries(wf.changes.map((x) => [`${x.status}|${x.action}`, x.on])));
+  if (wf && freshWf) {
+    const next = withRoleActions(freshWf, wf.role, Object.fromEntries(wf.changes.map((x) => [`${x.status}|${x.action}`, x.on])));
     if (next) await c.workflowBusinessServiceUpdate!(next.next as unknown as Record<string, unknown>);
     done.push(`workflow ${WORKFLOW}`);
   }

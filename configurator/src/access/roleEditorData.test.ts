@@ -114,6 +114,30 @@ describe('role editor save: workflow actions by status', () => {
     expect(store.bs.states[0].actions.map((a: any) => a.roles)).toEqual([['GRO', 'SUBCOUNTY_GRO'], ['GRO', 'SUBCOUNTY_GRO']]);
     expect(store.bs.states[1].actions[0].roles).toEqual(['PGR_LME']);
   });
+  it('"act on complaints" off also unticks every workflow action of the role, in the same save', async () => {
+    const store = { bs: pgr() };
+    store.bs.states[0].actions[0].roles.push('GRO2'); store.bs.states[1].actions[0].roles.push('GRO2');
+    const { c, updates } = withWorkflow(store);
+    const l = await loadRole(c, 'ke', 'GRO');
+    // even a tick left on in the grid loses to the capability switched off
+    const plan = planSave(l, { code: 'GRO', name: 'Grievance officer', description: '', caps: { update: false }, scope: null, fields: {}, workflow: { 'PENDINGATLME|RESOLVE': true } });
+    expect(plan.find((w) => w.kind === 'workflow')).toMatchObject({ changes: [{ action: 'ASSIGN', on: false }, { action: 'REJECT', on: false }] });
+    await applySave(c, l, plan);
+    expect(updates).toHaveLength(1);
+    expect(store.bs.states.flatMap((s: any) => s.actions.flatMap((a: any) => a.roles))).not.toContain('GRO');
+    expect(store.bs.states[0].actions[0].roles).toContain('GRO2'); // other roles untouched
+  });
+  it('one re-read covers both shared rows: a changed workflow refuses before action 2008 is written', async () => {
+    const store = { bs: pgr() };
+    const { c, calls, updates } = withWorkflow(store);
+    const l = await loadRole(c, 'ke', 'GRO');
+    store.bs.states[1].actions[0].roles.push('SOMEONE_ELSE');
+    const plan = planSave(l, { code: 'GRO', name: 'Grievance officer', description: '', caps: {}, scope: { jurisdiction: 'ALL' }, fields: {}, workflow: { 'PENDINGATLME|RESOLVE': true } });
+    expect(plan.map((w) => w.kind)).toEqual(['action', 'workflow']);
+    await expect(applySave(c, l, plan)).rejects.toBeInstanceOf(ConcurrentChangeError);
+    expect(calls).toEqual([]);
+    expect(updates).toEqual([]);
+  });
   it('refuses when the workflow changed after the page loaded (nothing written to it)', async () => {
     const store = { bs: pgr() };
     const { c, updates } = withWorkflow(store);

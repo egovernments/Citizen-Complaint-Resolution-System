@@ -11,7 +11,7 @@ import { digitClient } from '@/providers/bridge';
 import { useApp } from '../App';
 import { useMastersCapability } from '@/hooks/useMastersCapability';
 import {
-  AXES, CAPABILITIES, KNOWN_FIELDS, PRESETS, actionsOf, capabilityState, describeClause, effectiveScope, maskPreview,
+  AXES, CAPABILITIES, KNOWN_FIELDS, PRESETS, WORKFLOW_CAPABILITIES, actionsOf, capabilityState, describeClause, effectiveScope, maskPreview,
   parseFieldRule, plainWords, scopeBlockOf, unavailableVars, vocabulary,
   type Axis, type Clause, type CatalogueRow, type Level, type OnDeny, type RoleScope,
 } from './policyModel';
@@ -179,7 +179,15 @@ export default function RoleEditor() {
                       <td className="p-2">
                         <input type="checkbox" aria-label={c.label} checked={capOn(c.id)} disabled={!canEdit || st === 'none'}
                           ref={(el) => { if (el) el.indeterminate = caps[c.id] === undefined && st === 'partial'; }}
-                          onChange={(e) => setCaps({ ...caps, [c.id]: e.target.checked })} />
+                          onChange={(e) => {
+                            setCaps({ ...caps, [c.id]: e.target.checked });
+                            // switching off what the workflow's actions need unticks them here too (same reviewed save)
+                            if (!e.target.checked && WORKFLOW_CAPABILITIES.includes(c.id)) {
+                              const off: WfEdit = { ...wf };
+                              for (const st of grid.statuses) for (const a of grid.actions) if (grid.cell(st, a) !== null) off[cellKey(st, a)] = false;
+                              setWf(off);
+                            }
+                          }} />
                       </td>
                       <td className="p-2">{c.label}{st === 'partial' && caps[c.id] === undefined && <span className="ml-2 text-xs text-amber-700">(some granted)</span>}</td>
                       <td className="p-2 font-mono text-xs text-muted-foreground">{acts.length ? acts.map((a) => a.url).join(', ') : 'no such action at this install'}</td>

@@ -332,6 +332,9 @@ export const CAPABILITIES: { id: string; label: string; urls: RegExp }[] = [
   { id: 'manageEmployees', label: 'Manage employees', urls: /^\/egov-hrms\/employees\/_(create|update)$/ },
 ];
 
+/** Capabilities the workflow's actions need: switched off, the role's workflow actions go too (same save). */
+export const WORKFLOW_CAPABILITIES = ['update'];
+
 export function actionsOf(capability: string, actions: ActionRow[]): ActionRow[] {
   const cap = CAPABILITIES.find((c) => c.id === capability);
   return cap ? actions.filter((a) => cap.urls.test(a.url)) : [];
