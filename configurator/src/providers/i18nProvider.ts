@@ -56,6 +56,7 @@ const customEnglishMessages: TranslationMessages = {
       notification_preferences: 'User Preferences',
       tenant_management: 'Tenant Management',
       tenants: 'Tenants',
+      access_attributes: 'Access attributes',
       departments: 'Departments',
       designations: 'Designations',
       hierarchies: 'Hierarchies',
