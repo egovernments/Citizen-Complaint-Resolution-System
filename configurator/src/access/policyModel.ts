@@ -261,7 +261,8 @@ export function parseFieldRule(rule: FieldRule | undefined): ParsedRule {
 export function buildFieldRule(p: Omit<ParsedRule, 'custom'>, vocab: VarDef[] = BASE_VARS): FieldRule {
   const branches: Json[] = [
     ...p.shared.map((c) => toJsonLogic(c, vocab)),
-    ...Object.keys(p.perRole).sort().map((r) => ({ and: [roleGuard(r), toJsonLogic(p.perRole[r], vocab)] }) as Json),
+    // keep the row's own branch order (a new role goes last): a re-save never reorders a shared condition
+    ...Object.keys(p.perRole).map((r) => ({ and: [roleGuard(r), toJsonLogic(p.perRole[r], vocab)] }) as Json),
   ];
   // no branch at all = never shown in full (the engines fail closed on a false condition)
   const condition: Json = branches.length === 0 ? false : branches.length === 1 ? branches[0] : { or: branches };

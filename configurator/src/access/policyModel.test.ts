@@ -1,4 +1,6 @@
 import jsonLogic from 'json-logic-js';
+import fixture from './condition-vars.fixture.json';
+import { AVAILABLE_CONDITION_VARS } from './engineVars';
 import {
   BASE_VARS, PRESETS, actionsOf, buildFieldRule, capabilityState, changedPaths, effectiveScope, fromJsonLogic,
   maskPreview, parseFieldRule, plainWords, toJsonLogic, unavailableVars, vocabulary, withRoleFieldRule, withRoleScope,
@@ -153,5 +155,25 @@ describe('capabilities and plain words', () => {
   it('describes the role', () => {
     expect(plainWords({ caps: ['search', 'update'], levels: { jurisdiction: 'OWN', department: 'ALL' }, fields: [{ label: 'Citizen mobile', when: 'the complaint is assigned to them', onDeny: { strategy: 'MASK_SHOW_LAST_N', n: 3 } }] }))
       .toBe('Can search and view complaints, act on complaints (workflow actions). Sees complaints in the areas they cover, in every department, plus anything assigned to them. Citizen mobile is shown in full when the complaint is assigned to them, otherwise masked to the last 3 characters.');
+  });
+});
+
+describe('the engines\' parity fixture (condition-vars.json, #1424)', () => {
+  const vocab = vocabulary([], AVAILABLE_CONDITION_VARS);
+  for (const [name, cond] of Object.entries(fixture.conditions)) {
+    it(`${name}: the builder parses it and writes it back unchanged`, () => {
+      const p = parseFieldRule({ condition: cond, onDeny: { strategy: 'REDACT' } });
+      expect(p.custom).toBe(false);
+      expect(buildFieldRule(p, vocab).condition).toEqual(cond);
+      for (const c of [...p.shared, ...Object.values(p.perRole)]) expect(unavailableVars(c, vocab)).toEqual([]);
+    });
+    it(`${name}: means what the engines expect (json-logic-js)`, () => {
+      for (const [doc, want] of Object.entries((fixture.expected as any)[name])) {
+        expect(!!jsonLogic.apply(cond as any, (fixture.docs as any)[doc]), `${name} on ${doc}`).toBe(want);
+      }
+    });
+  }
+  it('every new variable is available', () => {
+    for (const v of ['resource.complaint.status', 'resource.complaint.assignedToCaller', 'user.roles']) expect(vocab.find((x) => x.var === v)!.requires).toBeUndefined();
   });
 });
