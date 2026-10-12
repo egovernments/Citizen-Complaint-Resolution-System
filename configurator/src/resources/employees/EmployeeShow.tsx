@@ -3,6 +3,9 @@ import { FieldSection, FieldRow, DateField, StatusChip } from '@/admin/fields';
 import { EntityLink } from '@/components/ui/EntityLink';
 import { Badge } from '@/components/ui/badge';
 import { useShowController } from 'ra-core';
+import { useApp } from '../../App';
+import { canResetPasswords } from '@/identity/resetPassword';
+import { ResetPasswordAction } from './ResetPasswordAction';
 import {
   Table,
   TableHeader,
@@ -14,6 +17,8 @@ import {
 
 export function EmployeeShow() {
   const { record } = useShowController();
+  const { state } = useApp();
+  const mayReset = canResetPasswords(state.user?.roles);
 
   return (
     <DigitShow title={record ? `Employee: ${(record.user as Record<string,unknown>)?.name ?? record.code ?? record.id}` : 'Employee'} hasEdit>
@@ -43,6 +48,12 @@ export function EmployeeShow() {
               <FieldRow label="Gender">{String(user?.gender ?? '--')}</FieldRow>
               <FieldRow label="Date of Birth"><DateField value={user?.dob} showTime={false} /></FieldRow>
               <FieldRow label="Email">{String(user?.emailId ?? '--')}</FieldRow>
+              {mayReset && typeof user?.uuid === 'string' && (
+                <FieldRow label="Password">
+                  <ResetPasswordAction tenantId={String(rec.tenantId ?? user?.tenantId ?? '')} uuid={user.uuid}
+                    name={String(user?.name ?? rec.code ?? '')} />
+                </FieldRow>
+              )}
               {roles && roles.length > 0 && (
                 <FieldRow label="Roles">
                   <div className="flex flex-wrap gap-1">
