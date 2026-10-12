@@ -42,40 +42,25 @@ function mergeFinal(heard: string, next: string): string {
 
 /** Canonical speech recognition regional tags for Web Speech API. */
 const DEFAULT_SPEECH_TAGS: Record<string, string> = {
-  en: "en-US", // English
   fr: "fr-FR", // French
   pt: "pt-PT", // Portuguese
   sw: "sw-KE", // Swahili
-  es: "es-ES", // Spanish
-  de: "de-DE", // German
-  hi: "hi-IN", // Hindi
-  ar: "ar-SA", // Arabic
 };
 
-/** Standard regional tags well-supported by speech recognition engines. */
-const STANDARD_REGIONAL_REGEX =
-  /^(en-(US|GB|IN|KE|AU|CA|NZ|ZA)|fr-(FR|CA|BE|CH)|pt-(PT|BR)|sw-(KE|TZ)|es-(ES|MX|US)|de-(DE|AT|CH)|hi-IN|ar-(SA|AE|EG))$/i;
-
 /**
- * Resolve the BCP-47 speech recognition language tag (e.g. "en-IN", "fr-FR",
+ * Resolve the BCP-47 speech recognition language tag (e.g. "en-US", "fr-FR",
  * "pt-PT", "sw-KE") corresponding to the active application locale (#2367).
  *
- * Web Speech API requires hyphenated BCP-47 tags (rec.lang).
- * If the user's browser has a regional dialect matching the selected language
- * (e.g. navigator.languages has "en-KE" or "fr-FR"), that variant is preferred
- * for accurate accent recognition; otherwise it maps to standard regional speech tags.
+ * For English, preserves previous behavior: matches the browser's English
+ * variant (en-KE, en-IN…), else en-US.
+ * For other languages, uses the browser's regional variant if available,
+ * else the canonical tag (e.g. pt-BR if explicitly set, else pt-PT, fr-FR, sw-KE).
  */
 export function speechRecognitionLocale(explicitLocale?: string): string {
   const rawLocale =
     explicitLocale ||
-    (typeof window !== "undefined" &&
-      ((window as any).Digit?.SessionStorage?.get("locale") ||
-        (window as any).Digit?.StoreData?.getCurrentLanguage?.() ||
-        (window as any).i18next?.language)) ||
-    (typeof localStorage !== "undefined" &&
-      (localStorage.getItem("Citizen.locale") || localStorage.getItem("locale"))) ||
-    (typeof navigator !== "undefined" && navigator.language) ||
-    "en-US";
+    (typeof window !== "undefined" && (window as any).Digit?.StoreData?.getCurrentLanguage?.()) ||
+    "en";
 
   const normalized = String(rawLocale).trim().replace(/_/g, "-");
   const langPrefix = normalized.split("-")[0].toLowerCase();
@@ -83,19 +68,29 @@ export function speechRecognitionLocale(explicitLocale?: string): string {
   const browserLangs =
     (typeof navigator !== "undefined" && (navigator.languages || [navigator.language])) || [];
 
-  // 1. If the browser has a regional dialect matching the language, prefer it
-  // for higher accent recognition accuracy (e.g. en-KE in Kenya, fr-FR / fr-CA, pt-PT / pt-BR).
-  const browserVariant = browserLangs.find(
-    (l) => new RegExp(`^${langPrefix}(-|$)`, "i").test(l || "") && (l || "").length > 2
-  );
-  if (browserVariant) return browserVariant;
-
-  // 2. If normalized tag is already a standard regional speech dialect, use it:
-  if (STANDARD_REGIONAL_REGEX.test(normalized)) {
-    return normalized;
+  // For English: keep old behavior (browser's English variant, else en-US).
+  // DIGIT's "en_IN" represents generic English across all deployments (e.g. Kenya / Bomet).
+  if (langPrefix === "en") {
+    const browserEn = browserLangs.find(
+      (l) => typeof l === "string" && (l.toLowerCase() === "en" || l.toLowerCase().startsWith("en-"))
+    );
+    return browserEn || "en-US";
   }
 
-  // 3. Canonical regional fallback for the language family:
+  // Check if browser has a matching regional dialect (e.g. fr-CA, pt-BR)
+  const browserVariant = browserLangs.find(
+    (l) => typeof l === "string" && (l.toLowerCase() === langPrefix || l.toLowerCase().startsWith(`${langPrefix}-`))
+  );
+  if (browserVariant && browserVariant.length > 2) {
+    return browserVariant;
+  }
+
+  // Preserve Brazilian Portuguese if explicitly set
+  if (normalized.toLowerCase() === "pt-br") {
+    return "pt-BR";
+  }
+
+  // Canonical tag fallback for known languages
   if (DEFAULT_SPEECH_TAGS[langPrefix]) {
     return DEFAULT_SPEECH_TAGS[langPrefix];
   }
@@ -376,6 +371,8 @@ export function VoiceSheet({ open, onClose, onUse, tr, locale }: VoiceSheetProps
       : errorCode === "service-not-allowed"
       ? // Safari refuses speech recognition while Siri is switched off.
         tr("CS_VOICE_SERVICE_OFF", "Voice input is turned off on this device. On an iPhone or Mac, turn on Siri in Settings, then try again.")
+      : errorCode === "language-not-supported"
+      ? tr("CS_VOICE_LANGUAGE_NOT_SUPPORTED", "Voice input isn't available in this language. Type your complaint instead.")
       : errorCode === "no-speech"
       ? tr("CS_VOICE_NO_SPEECH", "We didn't hear anything. Try again and speak close to the microphone.")
       : errorCode === "audio-capture"

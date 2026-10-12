@@ -1,7 +1,7 @@
 // Pins speech recognition language mapping for Web Speech API (#2367).
 // Run from digit-ui-esbuild/:  node --test tests/voiceLocale.test.js
 
-const { test, beforeEach, afterEach } = require("node:test");
+const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("path");
 const fs = require("fs");
@@ -32,58 +32,120 @@ process.on("exit", () => {
 
 const { speechRecognitionLocale } = require(OUT);
 
-test("maps standard app locales directly to BCP-47 speech tags", () => {
-  assert.equal(speechRecognitionLocale("en_IN"), "en-IN");
-  assert.equal(speechRecognitionLocale("fr_FR"), "fr-FR");
-  assert.equal(speechRecognitionLocale("pt_PT"), "pt-PT");
-  assert.equal(speechRecognitionLocale("pt_BR"), "pt-BR");
-  assert.equal(speechRecognitionLocale("sw_KE"), "sw-KE");
-});
+// Node 21+ exposes globalThis.navigator as a configurable, getter-only property.
+// Use Object.defineProperty to safely stub and restore navigator across all Node versions.
+const origNavDescriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
 
-test("maps generic or non-standard speech regions to supported dialects", () => {
-  // fr_KE is not a standard speech model; defaults to fr-FR
-  assert.equal(speechRecognitionLocale("fr_KE"), "fr-FR");
-  assert.equal(speechRecognitionLocale("fr"), "fr-FR");
+function stubNavigator(value) {
+  Object.defineProperty(globalThis, "navigator", {
+    value,
+    configurable: true,
+    writable: true,
+  });
+}
 
-  // pt_MZ (Mozambique) maps to standard European Portuguese
-  assert.equal(speechRecognitionLocale("pt_MZ"), "pt-PT");
-  assert.equal(speechRecognitionLocale("pt"), "pt-PT");
-});
+function restoreNavigator() {
+  if (origNavDescriptor) {
+    Object.defineProperty(globalThis, "navigator", origNavDescriptor);
+  } else {
+    delete globalThis.navigator;
+  }
+}
 
-test("respects browser's regional dialect when available for better accent recognition", () => {
-  const origNav = global.navigator;
+test("English: defaults to en-US when browser has no regional English, even with DIGIT en_IN", () => {
+  stubNavigator({ languages: [] });
   try {
-    global.navigator = { languages: ["en-KE", "sw-KE"] };
-    assert.equal(speechRecognitionLocale("en_IN"), "en-KE");
-
-    global.navigator = { languages: ["fr-CA", "en-US"] };
-    assert.equal(speechRecognitionLocale("fr"), "fr-CA");
-
-    global.navigator = { languages: ["pt-BR", "en-US"] };
-    assert.equal(speechRecognitionLocale("pt"), "pt-BR");
+    assert.equal(speechRecognitionLocale("en_IN"), "en-US");
+    assert.equal(speechRecognitionLocale("en"), "en-US");
+    assert.equal(speechRecognitionLocale("en_US"), "en-US");
   } finally {
-    global.navigator = origNav;
+    restoreNavigator();
   }
 });
 
-test("dynamically resolves active locale from Digit.SessionStorage when no argument is passed", () => {
-  const origWindow = global.window;
-  const origNav = global.navigator;
+test("English: respects browser's regional English variant when available", () => {
+  stubNavigator({ languages: ["en-KE", "sw-KE"] });
   try {
-    delete global.navigator;
+    assert.equal(speechRecognitionLocale("en_IN"), "en-KE");
+    assert.equal(speechRecognitionLocale("en"), "en-KE");
+  } finally {
+    restoreNavigator();
+  }
+
+  stubNavigator({ languages: ["en-GB"] });
+  try {
+    assert.equal(speechRecognitionLocale("en_IN"), "en-GB");
+  } finally {
+    restoreNavigator();
+  }
+
+  stubNavigator({ languages: ["en-IN"] });
+  try {
+    assert.equal(speechRecognitionLocale("en_IN"), "en-IN");
+  } finally {
+    restoreNavigator();
+  }
+});
+
+test("maps French and Portuguese to canonical tags, falling back from non-standard regions", () => {
+  stubNavigator({ languages: [] });
+  try {
+    assert.equal(speechRecognitionLocale("fr_FR"), "fr-FR");
+    assert.equal(speechRecognitionLocale("fr"), "fr-FR");
+    // fr_KE (Kenya French) is not a standard speech model; defaults to fr-FR
+    assert.equal(speechRecognitionLocale("fr_KE"), "fr-FR");
+
+    assert.equal(speechRecognitionLocale("pt_PT"), "pt-PT");
+    assert.equal(speechRecognitionLocale("pt"), "pt-PT");
+    // pt_MZ (Mozambique) maps to standard European Portuguese
+    assert.equal(speechRecognitionLocale("pt_MZ"), "pt-PT");
+    // pt_BR explicitly specified
+    assert.equal(speechRecognitionLocale("pt_BR"), "pt-BR");
+
+    assert.equal(speechRecognitionLocale("sw_KE"), "sw-KE");
+  } finally {
+    restoreNavigator();
+  }
+});
+
+test("respects browser's regional dialect for French and Portuguese", () => {
+  stubNavigator({ languages: ["fr-CA", "en-US"] });
+  try {
+    assert.equal(speechRecognitionLocale("fr"), "fr-CA");
+    assert.equal(speechRecognitionLocale("fr_FR"), "fr-CA");
+  } finally {
+    restoreNavigator();
+  }
+
+  stubNavigator({ languages: ["pt-BR", "en-US"] });
+  try {
+    assert.equal(speechRecognitionLocale("pt"), "pt-BR");
+    assert.equal(speechRecognitionLocale("pt_PT"), "pt-BR");
+  } finally {
+    restoreNavigator();
+  }
+});
+
+test("dynamically resolves active locale from Digit.StoreData.getCurrentLanguage when no argument passed", () => {
+  stubNavigator({ languages: [] });
+  const origWindow = global.window;
+  try {
     global.window = {
       Digit: {
-        SessionStorage: {
-          get: (k) => (k === "locale" ? "fr_FR" : null),
+        StoreData: {
+          getCurrentLanguage: () => "fr_FR",
         },
       },
     };
     assert.equal(speechRecognitionLocale(), "fr-FR");
 
-    global.window.Digit.SessionStorage.get = (k) => (k === "locale" ? "pt_PT" : null);
+    global.window.Digit.StoreData.getCurrentLanguage = () => "pt_PT";
     assert.equal(speechRecognitionLocale(), "pt-PT");
+
+    global.window.Digit.StoreData.getCurrentLanguage = () => "en_IN";
+    assert.equal(speechRecognitionLocale(), "en-US");
   } finally {
     global.window = origWindow;
-    global.navigator = origNav;
+    restoreNavigator();
   }
 });
