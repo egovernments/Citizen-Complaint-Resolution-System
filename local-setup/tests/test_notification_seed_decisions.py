@@ -631,6 +631,10 @@ try:
     import jinja2
     import yaml
 except ImportError:  # pragma: no cover
+    # CI installs both (local-setup-ci.yaml, config-contracts): there a missing one must fail the
+    # run, not quietly skip the playbook-render cases below.
+    if os.environ.get("CI"):
+        raise
     jinja2 = yaml = None
 
 
@@ -695,6 +699,8 @@ class WorkspaceRootsAreNotSeededByTheDeploy(unittest.TestCase):
         cls.facts = task["ansible.builtin.set_fact"]
         action = next(t for t in tasks if t.get("name") == "notif-seed — ACTION: a self-serve workspace has no notification configuration")
         cls.action_when = [w for w in action["when"] if "notif_workspace_routing" in w][0]
+        cls.action_loop = action["loop"]
+        cls.action_msg = action["ansible.builtin.debug"]["msg"]
         env = jinja2.Environment()
         env.tests["match"] = lambda value, pattern: re.match(pattern, value) is not None   # ansible's test
         cls.env = env
@@ -713,6 +719,22 @@ class WorkspaceRootsAreNotSeededByTheDeploy(unittest.TestCase):
         values = dict(notif_seed_tenant="ke", notif_complaint_counts={"ke": "1", "knewman": "3"}, notif_workspace_routing={})
         self.assertEqual(self.render("notif_seed_roots", **values), ["ke", "knewman"])
         self.assertEqual(self.render("notif_seed_workspaces", **values), [])
+
+    def test_excluded_test_signups_are_neither_listed_nor_given_an_action(self):
+        # Review of #2342: lowercase pwt… test signups are workspaces too, and were listed.
+        values = dict(notif_seed_tenant="ke", notif_complaint_counts={"ke": "1", "pwtsignup1": "2"},
+                      notif_workspace_routing={"pwtsignup1": "0", "PW_x": "0", "knewman": "0"})
+        self.assertEqual(self.render("notif_seed_workspaces", **values), ["knewman"])
+        self.assertEqual(self.render("notif_seed_roots", **values), ["ke"], "nor seeded as a plain root")
+        self.assertIn("notif_seed_workspaces", self.action_loop, "the ACTION loops over the filtered list")
+        values["notifications_seed_exclude"] = "^knew"
+        self.assertEqual(self.render("notif_seed_workspaces", **values), ["PW_x", "pwtsignup1"])
+
+    def test_the_action_reads_the_token_without_echo(self):
+        # Review of #2342: `DIGIT_ACCESS_TOKEN=<token>` on the command line lands in the shell history.
+        self.assertIn("read -rs DIGIT_ACCESS_TOKEN && export DIGIT_ACCESS_TOKEN", self.action_msg)
+        self.assertNotIn("DIGIT_ACCESS_TOKEN=<", self.action_msg)
+        self.assertIn("unset DIGIT_ACCESS_TOKEN", self.action_msg)
 
     def test_only_a_workspace_without_routing_gets_the_action(self):
         when = self.env.from_string("{{ " + self.action_when + " }}")
