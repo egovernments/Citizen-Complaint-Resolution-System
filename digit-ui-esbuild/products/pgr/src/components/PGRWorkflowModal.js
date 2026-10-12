@@ -24,26 +24,30 @@ const ModalHeading = (props) => {
   return <h1 className="heading-m">{props.label}</h1>;
 };
 
+// FormComposerV2 resets the form whenever a non-empty defaultValues changes, so the form
+// starts from one stable empty object.
+const NO_DEFAULTS = {};
+
 const PGRWorkflowModal = ({ 
   selectedAction,
   config,
   onSubmit, 
   closeModal,
-  sessionFormData,
-  setSessionFormData,
-  clearSessionFormData,
   popupModuleActionBarStyles,
   popupModuleMianStyles 
 }) => {
 
     
   const { t } = useTranslation();
+  // What this opening of the modal has entered. It lives and dies with the modal: closing
+  // it for any reason drops it, and each action starts empty. It used to be one session
+  // object shared by every action and merged into on each change, so an employee picked
+  // in Assign survived a cancel and was submitted with a later Resolve (#1967).
+  const [formData, setFormData] = useState(NO_DEFAULTS);
 
-  const onFormValueChange = (setValue, formData, formState, reset, setError, clearErrors, trigger, getValues) => {
-    if (!_.isEqual(sessionFormData, formData)) {
-      setSessionFormData({ ...sessionFormData, ...formData });
-    }
-  }
+  const onFormValueChange = (setValue, values) => {
+    if (!_.isEqual(formData, values)) setFormData(values);
+  };
 
   if (!config || !selectedAction) return null;
 
@@ -55,7 +59,7 @@ const PGRWorkflowModal = ({
       actionCancelLabel={t(config.label.cancel)}     
       actionCancelOnSubmit={closeModal}
       actionSaveLabel={t(config.label.submit)}
-      actionSaveOnSubmit={()=> onSubmit(sessionFormData)}
+      actionSaveOnSubmit={() => onSubmit(formData)}
       headerBarEnd={<CloseBtn onClick={closeModal} />}
       formId="modal-action"
     >
@@ -65,7 +69,7 @@ const PGRWorkflowModal = ({
         inline
         childrenAtTheBottom
         onFormValueChange={onFormValueChange}
-        defaultValues={sessionFormData}
+        defaultValues={NO_DEFAULTS}
         formId="modal-action"
       />
     </Modal>
