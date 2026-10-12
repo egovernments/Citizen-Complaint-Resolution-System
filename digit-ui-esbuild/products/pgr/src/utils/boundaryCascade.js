@@ -95,3 +95,14 @@ export const disambiguateLabels = (options, parentLabelOf) => {
     return { value: option.value, label: parent ? `${option.label} (${parent})` : option.label };
   });
 };
+
+/**
+ * Whether the levels the map pin filled are locked, so the address can't
+ * drift away from the pin (CCRS#1444); moving the pin re-fills them. A caller
+ * that decides for itself passes `readOnly` (the citizen wizard does). The
+ * employee form is composed from config, bundled or MDMS, and passes nothing,
+ * so it locks while the pin sits in a ward. A form without a map (the inbox
+ * filter) never has a ward, so nothing locks there.
+ */
+export const locksAutoFilled = (readOnly, mapPoint) =>
+  readOnly != null ? !!readOnly : !!(mapPoint?.ward?.code || mapPoint?.ward?.name);
