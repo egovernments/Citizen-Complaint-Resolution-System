@@ -11,7 +11,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import * as v2 from '../dashboard-react-admin/src/runWindow';
-import { normalize } from '../dashboard-react-admin/src/dataProvider';
+import { normalize } from '../dashboard-react-admin/src/normalize';
 import type { Catalog, CatalogTest, RunSummary } from '../dashboard-react-admin/src/types';
 
 const require = createRequire(__filename);
