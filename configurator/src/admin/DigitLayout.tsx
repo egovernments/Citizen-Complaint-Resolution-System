@@ -114,6 +114,8 @@ const navGroups = [
       { id: 'employees', nameKey: 'app.nav.employees', path: '/manage/employees', icon: Users },
       { id: 'org-chart', nameKey: 'app.nav.org_chart', path: '/manage/org-chart', icon: Network },
       { id: 'users', nameKey: 'app.nav.users', path: '/manage/users', icon: User },
+      // Access: who holds which role where; grant a role at a tenant with areas
+      { id: 'access-people', nameKey: 'app.nav.access_people', path: '/manage/access/people', icon: UserCog, requiredRoles: ['SUPERUSER', 'ACCOUNT_ADMIN', 'HRMS_ADMIN'] },
     ],
   },
   {
