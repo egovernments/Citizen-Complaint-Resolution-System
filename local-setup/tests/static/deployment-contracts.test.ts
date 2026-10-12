@@ -1355,6 +1355,20 @@ describe('digit-user-preferences-service runs the implementation its definition 
     expect(tpl).toContain('$_ := set $img "pullPolicy" "Always"');
   });
 
+  // V20260205120000__create_user_preference.sql was edited after it shipped (#2081 added
+  // the duplicate collapse), and the develop chart ran the 2.12 -db image until #2368, so
+  // a cluster's history can hold the earlier checksum. With validation on, Flyway stops at
+  // "Migration checksum mismatch for migration version 20260205120000" and the pod never
+  // leaves Init (review of #2368). Compose has always migrated with validation off.
+  test('both migrators skip checksum validation; the Helm one otherwise keeps the common env', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const entries = (tpl: string): any[] => yaml.safeLoad(tpl.replace(/\{\{[^}]*\}\}/g, 'TEMPLATED')) as any[];
+    const common = entries(readYaml('devops/deploy-as-code/charts/common/values.yaml').initContainers.dbMigration.env);
+    const own = entries(values.initContainers?.dbMigration?.env ?? '');
+    expect(own).toEqual([...common, { name: 'FLYWAY_VALIDATE_ON_MIGRATE', value: 'false' }]);
+    expect(envOf(migrationsY, 'digit-user-preferences-service-migration').FLYWAY_VALIDATE_ON_MIGRATE).toBe('false');
+  });
+
   test('every variable compose sets is one the service, its launcher or the platform reads', () => {
     // application.properties placeholders, plus what build/maven/start.sh (the CI
     // Dockerfile's entrypoint) reads. A misspelt key, or one only some other build of
