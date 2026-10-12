@@ -442,7 +442,7 @@ uses it: its SMS moves from the retired senders to novu-bridge.
   subscribed (above), so none published meanwhile is lost. An OTP whose
   `expiryTime` has passed is dropped with an INFO log (no phone, no text) — no ledger row, no
   DLQ message.
-- A login OTP's national number now gets the country code of the OTP's tenant
+- An OTP's national number now gets the country code of the OTP's tenant
   (`common-masters.MobileNumberValidation`), which outranks `NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE`; the
   latter applies only at a tenant with no rule. A tenant whose seeded rule differs from the
   deployment code — `pg`'s `+91` on a Kenyan box — sends its OTPs with the rule's code: fix the
@@ -454,7 +454,7 @@ uses it: its SMS moves from the retired senders to novu-bridge.
   under `pg` and drop it as `SKIPPED / NB_NO_PROVIDER`, with the old sender already gone). The
   deploy fails at the end if the running bridge has anything other than `state_root`. Helm reads
   `state-level-tenant-id` from the `egov-config` ConfigMap. **SMS must be switched on, with a provider, at that tenant**
-  or every OTP is `SKIPPED / NB_NO_PROVIDER` and phone login stops.
+  or every OTP is `SKIPPED / NB_NO_PROVIDER` and phone login through this service stops.
 
 ## 5. Bridge settings now come from host_vars
 
