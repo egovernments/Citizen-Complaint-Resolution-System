@@ -6,6 +6,7 @@ import { BRAND_THEMES } from './brandThemes';
 import { STEP_REQUIREMENT, WORKSPACE_ERRORS } from './errors';
 import { INVITE_ERRORS } from './employees/inviteErrors';
 import { PROVISIONING_STEP_LABELS } from '@/api/onboarding';
+import { PROVISIONING_ERRORS, SIGNUP_ERRORS, SIGNUP_FIELD_ERRORS, signupFieldKey } from './signup/signupErrors';
 
 /**
  * Onboarding's English lives in the code, as each t(key, english) call's fallback. The two
@@ -69,6 +70,10 @@ function dynamicKeys(): Map<string, string> {
   for (const [code, english] of Object.entries(INVITE_ERRORS)) keys.set(`invite_errors.${code}`, english);
   // The signup progress screen (pages/SignupPage) names each provisioning step.
   for (const [step, english] of Object.entries(PROVISIONING_STEP_LABELS)) keys.set(`provisioning_step.${step.toLowerCase()}`, english);
+  // ...and puts its errors in words (#2353).
+  for (const [code, english] of Object.entries(SIGNUP_ERRORS)) keys.set(`signup_errors.${code}`, english);
+  for (const [field, english] of Object.entries(SIGNUP_FIELD_ERRORS)) keys.set(signupFieldKey(field), english);
+  for (const [code, english] of Object.entries(PROVISIONING_ERRORS)) keys.set(`provisioning_errors.${code}`, english);
   return keys;
 }
 
