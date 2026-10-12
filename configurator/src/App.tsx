@@ -17,12 +17,13 @@ import GeographyStep from './onboarding/geography/GeographyStep';
 import DepartmentsStep from './onboarding/departments/DepartmentsStep';
 import EmployeesStep from './onboarding/employees/EmployeesStep';
 import { HOME_PATH, ONBOARDING_STEPS } from './onboarding/steps';
+import { ALL_STEP_QUERIES } from './onboarding/stepQueries';
 import { finishesOnboarding, isOnboardingComplete } from './onboarding/progress';
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
 import RootLanding from './pages/RootLanding';
 import { CoreAdminContext, CoreAdminUI, Resource, CustomRoutes } from 'ra-core';
-import { QueryClient } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { DigitLayout, DigitDashboard, MdmsResourcePage, MdmsResourceShow, MdmsResourceEdit, MdmsResourceCreate } from '@/admin';
 import {
   DepartmentList, DepartmentShow, DepartmentEdit, DepartmentCreate, DepartmentBulkImport,
@@ -115,7 +116,8 @@ export const useApp = () => {
   return context;
 };
 
-// react-admin query client (shared across ManagementAdmin mounts)
+// One query client for the app: react-admin's (shared across ManagementAdmin
+// mounts) and the onboarding steps' loads (keyed under 'onboarding').
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 5 * 60 * 1000 } },
 });
@@ -424,6 +426,7 @@ function App() {
     // Storage, both API clients and the cached providers first, then the BFF
     // session best-effort, so sign-out never fails closed.
     await signOutThisDevice();
+    queryClient.removeQueries({ queryKey: ALL_STEP_QUERIES });
     setState(s => ({ ...s, isAuthenticated: false, user: null, currentPhase: 1, completedPhases: [], targetTenant: s.tenant }));
   };
 
@@ -527,6 +530,7 @@ function App() {
 
   return (
     <AppContext.Provider value={contextValue}>
+      <QueryClientProvider client={queryClient}>
       <ThemeProvider>
       <BrowserRouter basename="/configurator">
         <PageViewTracker />
@@ -572,6 +576,7 @@ function App() {
         <Toaster />
       </BrowserRouter>
       </ThemeProvider>
+      </QueryClientProvider>
     </AppContext.Provider>
   );
 }

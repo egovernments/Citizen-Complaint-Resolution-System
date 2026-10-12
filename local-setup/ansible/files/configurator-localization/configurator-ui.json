@@ -6474,6 +6474,12 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.common.refresh_failed",
+    "message": "Couldn’t refresh this list, so it may be out of date.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.common.remove",
     "message": "Remove",
     "module": "configurator-ui",
@@ -7586,6 +7592,12 @@
   {
     "code": "app.onboarding.employees.jurisdictions_hint",
     "message": "Where this person can act.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.jurisdictions_loading",
+    "message": "Loading your areas…",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
