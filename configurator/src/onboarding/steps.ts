@@ -23,11 +23,14 @@ export interface OnboardingStep {
  */
 export const ONBOARDING_STEPS: OnboardingStep[] = [
   { id: 'branding', number: 1, path: '/onboarding/branding', label: 'Branding', group: 'Account', icon: Building2, master: 'tenants' },
-  { id: 'geography', number: 2, path: '/onboarding/geography', label: 'Geography', group: 'Organisation', icon: MapPin, master: 'boundaries' },
-  { id: 'departments', number: 3, path: '/onboarding/departments', label: 'Departments', group: 'Organisation', icon: Network, master: 'departments' },
-  { id: 'employees', number: 4, path: '/onboarding/employees', label: 'Employees', group: 'Organisation', icon: Users, master: 'employees' },
+  { id: 'geography', number: 2, path: '/onboarding/geography', label: 'Geography', group: 'Account', icon: MapPin, master: 'boundaries' },
+  { id: 'departments', number: 3, path: '/onboarding/departments', label: 'Departments', group: 'Account', icon: Network, master: 'departments' },
+  { id: 'employees', number: 4, path: '/onboarding/employees', label: 'Employees', group: 'Account', icon: Users, master: 'employees' },
   { id: 'complaints', number: 5, path: '/onboarding/complaints', label: 'Complaints Template', group: 'Complaints', icon: MessageSquareText, master: 'complaint-hierarchy' },
 ];
+
+/** Onboarding's Home: where an account lands until setup is done. Not a step, so it is never locked. */
+export const HOME_PATH = '/onboarding/home';
 
 export function stepById(id: OnboardingStepId): OnboardingStep {
   return ONBOARDING_STEPS.find((step) => step.id === id)!;

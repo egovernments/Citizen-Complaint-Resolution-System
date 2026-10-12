@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Check, ChevronRight, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Check, ChevronRight, House, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useApp } from '../App';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useMastersCapability } from '@/hooks/useMastersCapability';
@@ -8,7 +8,7 @@ import { NavRow, SectionLabel, RailBackdrop, RailCloseButton, RailMenuButton, Ra
 import { railClasses } from '@/components/layout/railStyles';
 import { useRailDrawer } from '@/components/layout/useRailDrawer';
 import { AccountMenu, HelpButton, LocaleSwitcher, ThemeSwitcher } from '@/components/layout/HeaderControls';
-import { ONBOARDING_STEPS } from './steps';
+import { HOME_PATH, ONBOARDING_STEPS } from './steps';
 import { completedCount, resumePath, stepForPath, stepStatus, type StepStatus } from './progress';
 import { initialsOf, useOrganisation } from './organisation';
 import { trackEvent } from '@/lib/telemetry';
@@ -123,7 +123,7 @@ export default function OnboardingLayout() {
               className="w-full text-left rounded border border-border bg-card p-3 transition-colors hover:border-primary/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
               <span className="flex items-center justify-between gap-2">
-                <span className="text-sm font-semibold text-foreground">{t('layout.setup_title', 'Let’s set up your organisation')}</span>
+                <span className="text-sm font-semibold text-foreground">{t('layout.setup_account', 'Let’s set up your account')}</span>
                 <ChevronRight aria-hidden="true" className="w-4 h-4 text-muted-foreground flex-shrink-0" />
               </span>
               <span
@@ -145,6 +145,15 @@ export default function OnboardingLayout() {
 
         {/* Steps */}
         <nav aria-label={t('layout.setup_steps', 'Setup steps')} className="flex-1 py-2 overflow-y-auto">
+          <div className="pb-2">
+            <NavRow
+              icon={House}
+              label={t('layout.home', 'Home')}
+              active={location.pathname === HOME_PATH}
+              collapsed={collapsed}
+              onClick={() => navigate(HOME_PATH)}
+            />
+          </div>
           {groups.map((group) => (
             <div key={group} className="pb-4">
               {!collapsed && <SectionLabel>{t(`groups.${group.toLowerCase()}`, group)}</SectionLabel>}

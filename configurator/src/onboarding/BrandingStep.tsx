@@ -129,7 +129,7 @@ export default function BrandingStep() {
     if (!branding) return;
     const trimmed = name.trim();
     if (!trimmed) {
-      setNameError(t('branding.name_required', 'Enter your organisation’s name.'));
+      setNameError(t('branding.account_name_required', 'Enter your account’s name.'));
       return;
     }
     if (trimmed.length > NAME_MAX) {
@@ -175,7 +175,7 @@ export default function BrandingStep() {
   if (loadError) {
     return (
       <div className="space-y-6">
-        <StepHeader eyebrow={t('branding.eyebrow', 'Organisation setup')} title={t('steps.branding', 'Branding')} done={done} />
+        <StepHeader eyebrow={t('branding.account_eyebrow', 'Account setup')} title={t('steps.branding', 'Branding')} done={done} />
         <Alert variant="destructive">
           <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
             <span>{t('branding.load_failed', 'Couldn’t load your workspace’s branding.')} {loadError}</span>
@@ -190,7 +190,7 @@ export default function BrandingStep() {
 
   return (
     <div className="max-w-xl space-y-8">
-      <StepHeader eyebrow={t('branding.eyebrow', 'Organisation setup')} title={t('steps.branding', 'Branding')} done={done}>
+      <StepHeader eyebrow={t('branding.account_eyebrow', 'Account setup')} title={t('steps.branding', 'Branding')} done={done}>
         {t('branding.intro', 'Your logo, name and colour appear across your workspace and on the services citizens and employees experience.')}
       </StepHeader>
 
@@ -204,11 +204,11 @@ export default function BrandingStep() {
         <div className="space-y-6">
           {/* Logo */}
           <div className="space-y-2">
-            <p className="text-sm font-medium text-foreground">{t('branding.logo', 'Organisation logo')}</p>
+            <p className="text-sm font-medium text-foreground">{t('branding.account_logo', 'Account logo')}</p>
             <div className="flex items-center gap-4 rounded-md border border-dashed border-border bg-card p-4">
               <div className="w-14 h-14 rounded-md bg-primary/10 text-primary text-base font-semibold flex items-center justify-center flex-shrink-0 overflow-hidden">
                 {shownLogo ? (
-                  <img src={shownLogo} alt={t('branding.logo', 'Organisation logo')} className="w-full h-full object-contain bg-card" />
+                  <img src={shownLogo} alt={t('branding.account_logo', 'Account logo')} className="w-full h-full object-contain bg-card" />
                 ) : (
                   initialsOf(name || branding.name)
                 )}
@@ -244,7 +244,7 @@ export default function BrandingStep() {
           {/* Name */}
           <div className="space-y-2">
             <label htmlFor={nameId} className="block text-sm font-medium text-foreground">
-              {t('branding.name', 'Organisation name')}
+              {t('branding.account_name', 'Account name')}
             </label>
             <Input
               id={nameId}

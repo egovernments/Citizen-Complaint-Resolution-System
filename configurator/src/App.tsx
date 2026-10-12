@@ -11,12 +11,13 @@ import OnboardingLayout from './onboarding/OnboardingLayout';
 import { OnboardingI18n } from './onboarding/OnboardingI18n';
 import { appStore } from './providers/appStore';
 import ComplaintsStep from './onboarding/ComplaintsStep';
+import HomePage from './onboarding/home/HomePage';
 import BrandingStep from './onboarding/BrandingStep';
 import GeographyStep from './onboarding/geography/GeographyStep';
 import DepartmentsStep from './onboarding/departments/DepartmentsStep';
 import EmployeesStep from './onboarding/employees/EmployeesStep';
-import { ONBOARDING_STEPS } from './onboarding/steps';
-import { finishesOnboarding, isOnboardingComplete, resumePath } from './onboarding/progress';
+import { HOME_PATH, ONBOARDING_STEPS } from './onboarding/steps';
+import { finishesOnboarding, isOnboardingComplete } from './onboarding/progress';
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
 import RootLanding from './pages/RootLanding';
@@ -523,7 +524,6 @@ function App() {
 
   const onboardingDone = isOnboardingComplete(state.completedPhases);
   const inOnboarding = !onboardingDone;
-  const onboardingResume = resumePath(state.completedPhases);
 
   return (
     <AppContext.Provider value={contextValue}>
@@ -546,13 +546,14 @@ function App() {
               ? inOnboarding ? <OnboardingI18n><MastersCapabilityProvider><OnboardingLayout /></MastersCapabilityProvider></OnboardingI18n> : <Navigate to="/manage" />
               : <RootLanding />
           }>
-            <Route index element={<Navigate to={onboardingResume} replace />} />
+            <Route index element={<Navigate to={HOME_PATH} replace />} />
+            <Route path="onboarding/home" element={<HomePage />} />
             <Route path="onboarding/branding" element={<BrandingStep />} />
             <Route path="onboarding/geography" element={<GeographyStep />} />
             <Route path="onboarding/departments" element={<DepartmentsStep />} />
             <Route path="onboarding/employees" element={<EmployeesStep />} />
             <Route path="onboarding/complaints" element={<ComplaintsStep />} />
-            <Route path="onboarding/*" element={<Navigate to={onboardingResume} replace />} />
+            <Route path="onboarding/*" element={<Navigate to={HOME_PATH} replace />} />
             {/* The old numbered phases, for bookmarks and the pages that still link to them */}
             <Route path="phase/:number" element={<LegacyPhaseRedirect />} />
             <Route path="complete" element={<Navigate to="/onboarding/complaints" replace />} />
@@ -562,7 +563,7 @@ function App() {
           <Route path="/manage/*" element={
             state.isAuthenticated && !inOnboarding
               ? <ManagementAdmin />
-              : state.isAuthenticated ? <Navigate to={onboardingResume} /> : <Navigate to="/login" />
+              : state.isAuthenticated ? <Navigate to={HOME_PATH} /> : <Navigate to="/login" />
           } />
         </Routes>
 

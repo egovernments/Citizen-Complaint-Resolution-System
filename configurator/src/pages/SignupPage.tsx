@@ -887,7 +887,7 @@ function SignupFlow() {
                   <span className="h-4 w-4 rounded-full border border-muted-foreground/40" />
                 )}
                 <span className={isDone ? 'text-foreground' : 'text-muted-foreground'}>
-                  {t(`provisioning.${name.toLowerCase()}`, PROVISIONING_STEP_LABELS[name])}
+                  {t(`provisioning_step.${name.toLowerCase()}`, PROVISIONING_STEP_LABELS[name])}
                 </span>
               </li>
             );

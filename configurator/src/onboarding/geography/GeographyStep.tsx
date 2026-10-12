@@ -148,7 +148,7 @@ export default function GeographyStep() {
 
   return (
     <div className="space-y-8">
-      <StepHeader eyebrow="Your organisation" title="Geography" done={done}>
+      <StepHeader eyebrow="Your account" title="Geography" done={done}>
         The boundary hierarchies your complaint services work in. Bring them in from one of three sources.
       </StepHeader>
 

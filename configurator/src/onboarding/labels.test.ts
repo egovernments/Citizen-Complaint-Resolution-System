@@ -68,7 +68,7 @@ function dynamicKeys(): Map<string, string> {
   for (const [code, english] of Object.entries(WORKSPACE_ERRORS)) keys.set(`errors.${code}`, english);
   for (const [code, english] of Object.entries(INVITE_ERRORS)) keys.set(`invite_errors.${code}`, english);
   // The signup progress screen (pages/SignupPage) names each provisioning step.
-  for (const [step, english] of Object.entries(PROVISIONING_STEP_LABELS)) keys.set(`provisioning.${step.toLowerCase()}`, english);
+  for (const [step, english] of Object.entries(PROVISIONING_STEP_LABELS)) keys.set(`provisioning_step.${step.toLowerCase()}`, english);
   return keys;
 }
 

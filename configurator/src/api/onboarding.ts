@@ -201,7 +201,8 @@ export const PROVISIONING_STEPS = [
 export type ProvisioningStep = (typeof PROVISIONING_STEPS)[number];
 
 /**
- * Founder-facing names for the step codes, the English for `app.onboarding.provisioning.<code>`.
+ * Founder-facing names for the step codes, the English for `app.onboarding.provisioning_step.<code>`
+ * (a new key family when the wording moved from "organisation" to "account": workspaces keep a key's first text).
  * Lower-casing the codes themselves read as internal machinery on the one screen where somebody
  * is watching every line.
  */
@@ -209,8 +210,8 @@ export const PROVISIONING_STEP_LABELS: Record<ProvisioningStep, string> = {
   TENANT_FOUNDATION: 'Creating your workspace',
   PLATFORM_BASELINE: 'Setting up the basics',
   FOUNDER_HRMS: 'Creating your employee record',
-  ORGANIZATION: 'Setting up your organisation',
-  MEMBERSHIP: 'Adding you to your organisation',
+  ORGANIZATION: 'Setting up your account',
+  MEMBERSHIP: 'Adding you to your account',
   BINDING: 'Connecting your sign-in',
 };
 
