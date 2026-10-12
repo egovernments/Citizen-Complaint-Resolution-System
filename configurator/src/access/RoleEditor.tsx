@@ -142,6 +142,7 @@ export default function RoleEditor() {
               {!isNew && <span className="font-mono text-sm text-muted-foreground">{roleCode}</span>}
             </div>
             <div className="flex gap-2">
+              {!isNew && <Button variant="outline" onClick={() => navigate(`/manage/access/roles/${encodeURIComponent(roleCode)}/rows`)} data-testid="role-rows">Policy rows</Button>}
               {canEdit && <Button onClick={review} disabled={!dirty} data-testid="role-review"><Save className="mr-2 h-4 w-4" />Save role</Button>}
             </div>
           </CardHeader>

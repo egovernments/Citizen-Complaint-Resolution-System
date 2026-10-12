@@ -56,6 +56,7 @@ import { AnalyticsProvidersEditor } from '@/admin/analytics/AnalyticsProvidersEd
 import { EscalationPolicyEditor } from '@/admin/escalation';
 import PgrDashboard from './pages/PgrDashboard';
 import RoleEditor from './access/RoleEditor';
+import PolicyRows from './access/PolicyRows';
 import OrgChartPage from './pages/org-chart/OrgChartPage';
 import PublicDashboardConfigure from './resources/public-dashboard/PublicDashboardConfigure';
 import { getGenericMdmsResources, getDataProvider, getAuthProvider, configureDigitClient, i18nProvider, DigitApiClient, isReadOnlyResource } from '@/providers/bridge';
@@ -219,6 +220,7 @@ function ManagementAdminResources() {
           {/* Access: the Role editor writes the role, its role-actions and its branch of the complaint-search
               action's scope / field rules; new roles at /access/roles/new */}
           <Route path="/access/roles/:code" element={<RoleEditor />} />
+          <Route path="/access/roles/:code/rows" element={<PolicyRows />} />
           <Route
             path="/pgr-dashboard"
             element={LEGACY_PGR_DASHBOARD_ENABLED ? <PgrDashboard /> : <Navigate to="/manage" replace />}

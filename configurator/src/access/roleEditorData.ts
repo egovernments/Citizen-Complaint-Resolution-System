@@ -51,6 +51,7 @@ export interface Loaded {
   searchAction: MdmsRecord | null;         // the complaint-search action row (scope + field rules)
   catalogue: Record<string, unknown>[];    // ACCESSCONTROL-RESOURCE.attributes rows (optional master)
   workflow: BusinessService | null;        // the PGR business service at the root (null: not readable here)
+  mastersActions?: MdmsRecord[];           // actions carrying resource.masters conditions (Policy rows, read only)
 }
 
 export async function loadRole(c: MdmsClient, root: string, code: string | null): Promise<Loaded> {
@@ -70,6 +71,7 @@ export async function loadRole(c: MdmsClient, root: string, code: string | null)
     grants: grants.filter((g) => g.data.rolecode === code),
     searchAction: actionRecs.find((r) => r.data.url === COMPLAINT_SEARCH_URL && r.isActive !== false) ?? null,
     catalogue: catalogue.filter((r) => r.isActive !== false).map((r) => r.data),
+    mastersActions: actionRecs.filter((r) => (r.data as any)?.resource?.masters && r.isActive !== false),
     workflow: ((workflows as unknown[]).find((b: any) => b?.businessService === WORKFLOW) as BusinessService | undefined) ?? null,
   };
 }
