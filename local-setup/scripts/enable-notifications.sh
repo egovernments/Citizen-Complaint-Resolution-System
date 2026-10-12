@@ -81,9 +81,10 @@ NOVU_API_LOCAL="${NOVU_API_LOCAL:-http://localhost:14002}" # novu-api direct por
 # novu-bridge-db must come from the same build (pgr-services' thin events need a bridge
 # of the same build; each app needs the migrations its -db image carries). This tag is
 # written to .env as NOTIFICATION_STACK_TAG, which the compose files use as the default
-# tag of all four, and the two app images below derive from it. `nightly-develop` is the
+# tag of all four — and of digit-user-preferences-service and its -db migrator — and the
+# two app images below derive from it. `nightly-develop` is the
 # rolling tag the develop nightly publishes; it moves per image, so pin an immutable
-# develop-<sha8> or release tag that exists for all four on a box you care about. The
+# develop-<sha8> or release tag that exists for all six on a box you care about. The
 # default is a stopgap until the release pins one (build/NIGHTLY-BUILDS.md "Release step").
 NOTIFICATION_STACK_TAG="${NOTIFICATION_STACK_TAG:-nightly-develop}"
 NOVU_BRIDGE_IMAGE="${NOVU_BRIDGE_IMAGE:-egovio/novu-bridge:$NOTIFICATION_STACK_TAG}"
@@ -474,7 +475,8 @@ normalize_step() { local x="$1"; [[ "$x" =~ ^[0-9]+$ ]] && x="step$x"; echo "$x"
 #   pgr-services from this stack needs a novu-bridge from the SAME build: an older
 #   bridge dead-letters its thin events, and nothing replays them.
 #   pre : pgr-services exists as a compose service
-#   act : write NOTIFICATION_STACK_TAG (moves pgr-services-db + novu-bridge-db too);
+#   act : write NOTIFICATION_STACK_TAG (moves pgr-services-db, novu-bridge-db and
+#         digit-user-preferences-service[-db] too);
 #         pin the pgr image; when a bridge is already running, recreate IT first
 #         (new bridge before new pgr); then up -d pgr-services
 #   post: the container is running
@@ -1142,7 +1144,7 @@ KEY ENV VARS (override on the command line; defaults are the reference-box value
   NOTIF_TENANT=$NOTIF_TENANT   ADMIN_USER=$ADMIN_USER   ADMIN_PASS=******
   NOVU_API_LOCAL=$NOVU_API_LOCAL
   NOVU_BASE_URL=$NOVU_BASE_URL   (bootstrap-novu-whatsapp.sh target — step8)
-  NOTIFICATION_STACK_TAG=$NOTIFICATION_STACK_TAG   (pgr-services, pgr-services-db, novu-bridge, novu-bridge-db: one build)
+  NOTIFICATION_STACK_TAG=$NOTIFICATION_STACK_TAG   (pgr-services, novu-bridge, digit-user-preferences-service + their -db: one build)
   NOVU_BRIDGE_IMAGE=$NOVU_BRIDGE_IMAGE   PGR_IMAGE_WA=$PGR_IMAGE_WA
   CHANNELS_ENABLED=$CHANNELS_ENABLED
   PROXY_ALLOWED_ROLES=$PROXY_ALLOWED_ROLES

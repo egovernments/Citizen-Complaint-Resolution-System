@@ -1722,19 +1722,21 @@ services:
     # Hardening: no capabilities, no privilege escalation (see file header).
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
-    # ONE BUILD, FOUR IMAGES: pgr-services, pgr-services-db (migrations.yml),
+    # ONE BUILD, ONE TAG: pgr-services, pgr-services-db (migrations.yml),
     # novu-bridge and novu-bridge-db (migrations.yml) all default to
     # ${NOTIFICATION_STACK_TAG}, so they move together. pgr-services emits thin events
     # that only a bridge from the same build resolves (an older bridge dead-letters
     # them), and each app needs the Flyway migrations its -db image carries.
-    # `nightly-develop` is what the develop nightly publishes for all four
+    # digit-user-preferences-service and its -db migrator, which the bridge calls for
+    # consent, follow the same tag, so pinning it never leaves them on a rolling one.
+    # `nightly-develop` is what the develop nightly publishes for all six
     # (build/NIGHTLY-BUILDS.md); it moves per image, so a live deployment pins an
     # immutable develop-<sha8> or release tag via notification_stack_tag in host_vars
     # (the deploy warns while it resolves to a rolling tag). The default itself is a
-    # stopgap: the release pins develop-<sha8> here, in the four image lines at once
+    # stopgap: the release pins develop-<sha8> here, in the six image lines at once
     # (build/NIGHTLY-BUILDS.md "Release step").
     # PGR_SERVICES_IMAGE still overrides this one image (e.g. a local build) — then
-    # pin the other three to the same build yourself.
+    # pin the rest of the stack to the same build yourself.
     image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:${NOTIFICATION_STACK_TAG:-nightly-develop}}
     depends_on:
       pgbouncer:
@@ -2886,9 +2888,12 @@ services:
     # v2.12, master-*) is the retired Go binary: it reads DB_HOST/DB_USER only, so
     # under the environment below it dials localhost:5432, exits, and never turns
     # healthy, and novu-bridge's depends_on then fails the whole `compose up`.
-    # The -db migrator in docker-compose.migrations.yml moves with this tag.
-    # RELEASE STEP: pin the release (or develop-<sha8>) tag here, as for novu-bridge.
-    image: ${DIGIT_USER_PREFERENCES_SERVICE_IMAGE:-egovio/digit-user-preferences-service:nightly-develop}
+    # It follows NOTIFICATION_STACK_TAG with the rest of the notification stack (see
+    # the ONE BUILD, ONE TAG note on pgr-services), and so does its -db migrator in
+    # docker-compose.migrations.yml, so notification_stack_tag pins the pair.
+    # DIGIT_USER_PREFERENCES_SERVICE_IMAGE overrides this one image; pin
+    # DIGIT_USER_PREFERENCES_SERVICE_DB_IMAGE to the same build with it.
+    image: ${DIGIT_USER_PREFERENCES_SERVICE_IMAGE:-egovio/digit-user-preferences-service:${NOTIFICATION_STACK_TAG:-nightly-develop}}
     container_name: digit-user-preferences-service
     restart: unless-stopped
     profiles: ["notifications"]
@@ -2932,7 +2937,7 @@ services:
     # Hardening: no capabilities, no privilege escalation (see file header).
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
-    # Same build as pgr-services — see the ONE BUILD, FOUR IMAGES note there.
+    # Same build as pgr-services — see the ONE BUILD, ONE TAG note there.
     # NOVU_BRIDGE_IMAGE overrides this one image; novu-bridge-migration then still
     # follows NOTIFICATION_STACK_TAG unless NOVU_BRIDGE_DB_IMAGE is pinned too.
     image: ${NOVU_BRIDGE_IMAGE:-egovio/novu-bridge:${NOTIFICATION_STACK_TAG:-nightly-develop}}

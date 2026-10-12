@@ -1134,6 +1134,7 @@ describe('notification stack images come from one build', () => {
   const CHARTS = [
     'devops/deploy-as-code/charts/urban/pgr-services',
     'devops/deploy-as-code/charts/common-services/novu-bridge',
+    'devops/deploy-as-code/charts/common-services/digit-user-preferences-service',
   ];
   // The app image (top-level `image:`) and the Flyway image (initContainers.dbMigration
   // .image) of a chart, read from its values.yaml by layout (no YAML parser is a declared
@@ -1146,11 +1147,16 @@ describe('notification stack images come from one build', () => {
     expect(db).not.toBeNull();
     return { app: { tag: app![1], pullPolicy: app![2] }, db: { tag: db![1], pullPolicy: db![2] } };
   };
+  // digit-user-preferences-service and its migrator ride the same tag: every 2.12 tag of
+  // that image is the Go service, so a stack pinned to develop-<sha8> must not leave the
+  // pair on a rolling default of its own (review of #2368).
   const images: Array<[string, string, string]> = [
     [base, 'PGR_SERVICES_IMAGE', 'egovio/pgr-services'],
     [base, 'NOVU_BRIDGE_IMAGE', 'egovio/novu-bridge'],
+    [base, 'DIGIT_USER_PREFERENCES_SERVICE_IMAGE', 'egovio/digit-user-preferences-service'],
     [migrations, 'PGR_SERVICES_DB_IMAGE', 'egovio/pgr-services-db'],
     [migrations, 'NOVU_BRIDGE_DB_IMAGE', 'egovio/novu-bridge-db'],
+    [migrations, 'DIGIT_USER_PREFERENCES_SERVICE_DB_IMAGE', 'egovio/digit-user-preferences-service-db'],
   ];
   // The default tag of one image line: ${OVERRIDE:-<image>:${NOTIFICATION_STACK_TAG:-<tag>}}.
   const composeDefault = (file: string, override: string, image: string) => {
@@ -1169,9 +1175,9 @@ describe('notification stack images come from one build', () => {
   });
 
   // The release step (build/NIGHTLY-BUILDS.md) swaps the stopgap rolling default for an
-  // immutable develop-<sha8> in SIX places — four compose lines and two charts. Bumping
-  // only some of them is exactly the split build this block exists to prevent.
-  test('all four images default to ONE tag, in compose and in both Helm charts', () => {
+  // immutable develop-<sha8> in six compose lines and three charts. Bumping only some of
+  // them is exactly the split build this block exists to prevent.
+  test('every stack image defaults to ONE tag, in compose and in every stack Helm chart', () => {
     const tags = new Set(images.map(([file, override, image]) => composeDefault(file, override, image)));
     for (const dir of CHARTS) {
       const { app, db } = chartImages(dir);
@@ -1185,10 +1191,71 @@ describe('notification stack images come from one build', () => {
     expect(env).toContain("NOTIFICATION_STACK_TAG={{ notification_stack_tag | default('') }}");
   });
 
+  // Every image line that defaults to ${NOTIFICATION_STACK_TAG}, found in the compose files
+  // themselves rather than taken from the list above, so a new follower cannot join the
+  // stack without the release step, the registry check and the preflight learning of it.
+  const followers = () => [base, migrations].flatMap((file) =>
+    [...file.matchAll(/image: \$\{(\w+):-egovio\/([\w-]+):\$\{NOTIFICATION_STACK_TAG:-[^}]+\}\}/g)]
+      .map((m) => m[2])).sort();
+  const nightly = read('build/NIGHTLY-BUILDS.md');
+  const releaseStep = nightly.slice(nightly.indexOf('### Release step: pin the notification stack'));
+  const releaseSteps = releaseStep.slice(0, releaseStep.indexOf('\n### ', 1));
+
+  test('the list above is every image that follows NOTIFICATION_STACK_TAG', () => {
+    expect(followers()).toEqual(images.map(([, , image]) => image.replace('egovio/', '')).sort());
+  });
+
+  test('the release step names every follower: registry check, edit list and leftover grep', () => {
+    const loop = releaseSteps.match(/for img in ([^;]+); do/);
+    expect(loop).not.toBeNull();
+    expect(loop![1].replace(/\\\n/g, ' ').split(/\s+/).filter(Boolean).sort()).toEqual(followers());
+    // Compose lines, two values per chart, and enable-notifications.sh's default.
+    const WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine',
+      'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen'];
+    const count = releaseSteps.match(/in these \*\*(\w+)\*\* values/);
+    expect(count).not.toBeNull();
+    expect(WORDS.indexOf(count![1])).toBe(followers().length + 2 * CHARTS.length + 1);
+    const grep = releaseSteps.match(/grep -n 'nightly-develop'[^`]*?\| grep -E '([^']+)'/);
+    expect(grep).not.toBeNull();
+    for (const dir of CHARTS) {
+      expect(releaseSteps).toContain(`\`${dir}/values.yaml\``);
+      expect(grep![0]).toContain(`${dir}/values.yaml`);
+    }
+    for (const image of followers()) {
+      const service = image.replace(/-db$/, '');
+      expect(releaseSteps).toContain(`\`${image.endsWith('-db') ? `${service}-migration` : service}\``);
+      expect(grep![1].split('|')).toContain(service);
+    }
+  });
+
+  test('the deploy preflight checks every follower for partial pins and rolling tags', () => {
+    const play = read('local-setup/ansible/playbook-deploy.yml');
+    const task = play.slice(play.indexOf('- name: "preflight — notification-stack images: resolve what each one will run"'));
+    const repos = task.match(/ {8}_repos:\n((?: {10}\w+: egovio\/[\w-]+\n)+)/);
+    expect(repos).not.toBeNull();
+    const pairs = [...repos![1].matchAll(/(\w+): egovio\/([\w-]+)/g)].map((m) => [m[1], m[2]]);
+    expect(pairs.map(([, image]) => image).sort()).toEqual(followers());
+    const inUse = task.slice(0, task.indexOf('_repos:'));
+    for (const [v, image] of pairs) {
+      // The host_vars pin the preflight reads is the one the image catalog writes to .env.
+      expect(catalog).toMatch(new RegExp(`\\{image: ${image}, env: \\w+, var: ${v}[,}]`));
+      expect(inUse).toContain(`'${v}'`);
+    }
+  });
+
   // Kanav/Vinoth review of #2097: the charts pulled a rolling tag with Always while
   // env.yaml forced `nightly-develop` over any chart pin. The charts now default to
   // IfNotPresent and switch to Always only for a rolling tag, and env.yaml leaves the tag
   // to the charts unless a deployment pins one.
+  test.each(CHARTS)('%s takes global.notificationStackTag for the app and its migrator', (chartDir) => {
+    const tpl = read(`${chartDir}/templates/deployment.yaml`);
+    expect(tpl).toContain('{{- $stackTag := (.Values.global | default dict).notificationStackTag -}}');
+    expect(tpl).toContain('{{- $_ := set .Values.image "tag" $stackTag }}');
+    expect(tpl).toContain('{{- $_ := set .Values.initContainers.dbMigration.image "tag" $stackTag }}');
+    // Before common.name merges the env.yaml per-chart overrides, so those still win.
+    expect(tpl.indexOf('$stackTag')).toBeLessThan(tpl.indexOf('include "common.name"'));
+  });
+
   test.each(CHARTS)('%s pulls IfNotPresent unless the tag is rolling', (chartDir) => {
     const { app, db } = chartImages(chartDir);
     expect(app.pullPolicy).toBe('IfNotPresent');
@@ -1230,7 +1297,7 @@ describe('digit-user-preferences-service runs the implementation its definition 
     return found[0];
   };
   const composeTag = (file: string, env: string, image: string) =>
-    file.match(new RegExp(`image: \\$\\{${env}:-egovio/${image}:([^}\\s]+)\\}`))?.[1] ?? null;
+    file.match(new RegExp(`image: \\$\\{${env}:-egovio/${image}:\\$\\{NOTIFICATION_STACK_TAG:-([^}\\s]+)\\}\\}`))?.[1] ?? null;
   const envOf = (b: string) =>
     Object.fromEntries([...b.matchAll(/^ {6}([A-Z][A-Z0-9_]*):\s*['"]?([^'"\n#]*?)['"]?\s*$/gm)].map((m) => [m[1], m[2]]));
   const service = block(base, 'digit-user-preferences-service');

@@ -22,7 +22,7 @@ initContainers:
     # Same build as the app image below — see the tag note there.
     image:
       repository: "digit-user-preferences-service-db"
-      tag: "nightly-develop"   # RELEASE STEP: the same tag as image.tag
+      tag: "nightly-develop"   # RELEASE STEP: develop-<sha8> — the same tag as image.tag
       pullPolicy: IfNotPresent   # Always while the tag is rolling (templates/deployment.yaml)
 
 # Container Configs
@@ -30,9 +30,14 @@ initContainers:
 # this image (2.12-5137119, v2.12, master-*) is the retired Go binary, which reads
 # DB_HOST/DB_USER and none of the datasource settings this chart and extraEnv.java
 # supply, so it cannot reach the database and the pod never turns ready.
+# This pair follows the notification stack's tag: global.notificationStackTag in
+# charts/environments/env.yaml, when set, moves it with pgr-services and novu-bridge
+# (templates/deployment.yaml); otherwise these chart defaults apply. `nightly-develop`
+# is the same stopgap as there — the release step (build/NIGHTLY-BUILDS.md) pins
+# develop-<sha8> here and in the other two stack charts at once.
 image:
   repository: "digit-user-preferences-service"
-  tag: "nightly-develop"   # RELEASE STEP: the release (or develop-<sha8>) tag
+  tag: "nightly-develop"   # RELEASE STEP: develop-<sha8> of the merge build
   pullPolicy: IfNotPresent   # Always while the tag is rolling (templates/deployment.yaml)
 replicas: "1"
 httpPort: 8080

@@ -12,7 +12,7 @@ Read this before deploying 2.20 over a 2.12 deployment. First-time setup is
 | Login OTP SMS | `egov-notification-sms` (or `otp-publisher`) | novu-bridge consumes `egov.core.notification.sms`; same channel policy, provider and log as other SMS |
 | Providers | Novu dashboard / deploy-time env | Configurator → Notifications → Providers (credentials stored in Novu) |
 | Channel on/off | `novu_bridge_channels_enabled` | Channel rows (Configurator → Notifications → Channels). The env list is a fallback for a tenant with no rows; the upgrade turns it into rows ([step 3](#channel-rows-what-happens-to-an-existing-tenant)) |
-| Images | pgr-services and novu-bridge pinned separately | pgr-services, pgr-services-db, novu-bridge and novu-bridge-db share one tag ([step 1](#1-take-all-four-images-from-one-build)) |
+| Images | pgr-services and novu-bridge pinned separately | pgr-services, pgr-services-db, novu-bridge and novu-bridge-db share one tag, and digit-user-preferences-service with its -db image follows it ([step 1](#1-take-all-four-images-from-one-build)) |
 
 ## Before you upgrade
 
@@ -46,24 +46,31 @@ with **one** tag:
 | Helm | `global.notificationStackTag` in `devops/deploy-as-code/charts/environments/env.yaml` | empty → the charts' own defaults, `nightly-develop` |
 | `enable-notifications.sh` | `NOTIFICATION_STACK_TAG` | `nightly-develop` |
 
-`nightly-develop` is the rolling tag the develop nightly publishes for all four
+`digit-user-preferences-service` and `digit-user-preferences-service-db` follow the same tag.
+Every 2.12 tag of that image is the retired Go service, which 2.20's compose and Helm
+definitions cannot start, so a deployment that pins the stack to an immutable tag must not leave
+them on a rolling default of their own. The tag therefore has to exist for all six.
+
+`nightly-develop` is the rolling tag the develop nightly publishes for all six
 (`egovio/<image>:nightly-develop`, plus an immutable `develop-<sha8>`; see
 `build/NIGHTLY-BUILDS.md`). It is the default only until the first release after this stack
 merges pins an immutable `develop-<sha8>` in its place ([Release
 step](../../../../build/NIGHTLY-BUILDS.md#release-step-pin-the-notification-stack)). It moves **per
 image**: when one image's build fails, or two runs overlap, it points at different commits for
-different images. **On a live deployment pin an immutable tag that exists for all four** — a
+different images. **On a live deployment pin an immutable tag that exists for all six** — a
 release tag, or a `develop-<sha8>` you have checked on Docker Hub for `pgr-services`,
-`pgr-services-db`, `novu-bridge` and `novu-bridge-db`. The Ansible deploy warns while any image it
+`pgr-services-db`, `novu-bridge`, `novu-bridge-db`, `digit-user-preferences-service` and
+`digit-user-preferences-service-db`. The Ansible deploy warns while any image it
 runs resolves to a rolling tag; Helm pulls a rolling tag `Always` and an immutable one
 `IfNotPresent`.
 
 A per-image override (`pgr_services_image`, `pgr_services_db_image`, `novu_bridge_image`,
-`novu_bridge_db_image`; Helm `<chart>.image.tag` / `<chart>.initContainers.dbMigration.image.tag`)
-wins over the shared tag for that one image, so pin all four to the same build or none. The
-deploy warns when host_vars pin only some of the images it runs: `pgr_services_image` +
-`pgr_services_db_image` on every box (they run with notifications off too), all four when
-`enable_novu` is on.
+`novu_bridge_db_image`, `digit_user_preferences_service_image`,
+`digit_user_preferences_service_db_image`; Helm `<chart>.image.tag` /
+`<chart>.initContainers.dbMigration.image.tag`) wins over the shared tag for that one image, so
+pin all six to the same build or none. The deploy warns when host_vars pin only some of the
+images it runs: `pgr_services_image` + `pgr_services_db_image` on every box (they run with
+notifications off too), all six when `enable_novu` is on.
 
 ## 2. New novu-bridge before new pgr-services
 
@@ -428,7 +435,7 @@ on the next deploy:
 | `novu_bridge_receipts_secret` | `NOVU_BRIDGE_RECEIPTS_SECRET` |
 | `novu_bridge_preference_enabled` / `novu_bridge_preference_fail_open` | `NOVU_BRIDGE_PREFERENCE_ENABLED` / `_FAIL_OPEN` |
 | `novu_bridge_core_sms_country_code` | `NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE` |
-| `notification_stack_tag`, `pgr_services_db_image`, `novu_bridge_db_image` | `NOTIFICATION_STACK_TAG`, `PGR_SERVICES_DB_IMAGE`, `NOVU_BRIDGE_DB_IMAGE` |
+| `notification_stack_tag`, `pgr_services_db_image`, `novu_bridge_db_image`, `digit_user_preferences_service_db_image` | `NOTIFICATION_STACK_TAG`, `PGR_SERVICES_DB_IMAGE`, `NOVU_BRIDGE_DB_IMAGE`, `DIGIT_USER_PREFERENCES_SERVICE_DB_IMAGE` |
 
 ## Rollback
 
