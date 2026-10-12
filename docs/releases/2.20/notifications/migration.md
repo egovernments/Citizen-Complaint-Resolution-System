@@ -186,10 +186,11 @@ python3 migrate-notifications.py apply --tenant mycity --yes --report apply-myci
 An admin with no DIGIT password — a self-serve workspace's founder signs in through Keycloak
 only — authenticates with a token instead: `export DIGIT_ACCESS_TOKEN=<that admin's DIGIT access
 token>` (where to find it: [setup-guide §8.6](./setup-guide.md#86-new-workspaces)), and
-`DIGIT_USERNAME` / `DIGIT_PASSWORD` are then ignored. The token is checked with one read before
-anything else (`REFUSED: the supplied DIGIT_ACCESS_TOKEN was refused (HTTP 401)` when it has
-expired) and never printed. Keep `DIGIT_LOGIN_TENANT` (or `--login-tenant`) at that admin's root:
-it still decides who may create a provider, below.
+`DIGIT_USERNAME` / `DIGIT_PASSWORD` are then ignored. The token is checked with egov-user's own
+introspection (`/user/_details`) before anything else — `REFUSED: the supplied DIGIT_ACCESS_TOKEN was
+refused (HTTP 401)` when it has expired, or `(HTTP 200 without a user)` — and never printed. Keep
+`DIGIT_LOGIN_TENANT` (or `--login-tenant`) at that admin's root: it still decides who may create a
+provider, below.
 
 Log in **at the root you migrate** (`DIGIT_LOGIN_TENANT=<root>`, default: the first root): its
 MDMS rows are written with that admin's roles, and novu-bridge previews a tenant's events
@@ -252,6 +253,12 @@ The shipped default **wording** changed in 2.20: no `EGOVS` / `ई-गव फा
 differences being `body` / `subject` against the new defaults. That is expected: `apply` copies
 the tenant's own rows, old wording included — nothing is rewritten. Edit the templates on
 **Configure** afterwards if you want the new wording.
+
+**India (DLT):** a tenant that gets the new default wording — a fresh install, a self-serve
+workspace, `--adopt-defaults`, or templates edited to it — sends text that no longer matches SMS
+templates registered against the 2.12 wording. DLT matches on content and drops an unregistered
+message after accepting it, so re-register those templates first
+([setup-guide §8.4](./setup-guide.md#84-sms-india-dlt-registration)).
 
 ### Apply
 
@@ -424,6 +431,11 @@ There is no setting that chooses old or new — the data does. Check with any of
   subscribed (above), so none published meanwhile is lost. An OTP whose
   `expiryTime` has passed is dropped with an INFO log (no phone, no text) — no ledger row, no
   DLQ message.
+- A login OTP's national number now gets the country code of the OTP's tenant
+  (`common-masters.MobileNumberValidation`), which outranks `NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE`; the
+  latter applies only at a tenant with no rule. A tenant whose seeded rule differs from the
+  deployment code — `pg`'s `+91` on a Kenyan box — sends its OTPs with the rule's code: fix the
+  rule, not the setting ([setup-guide §7](./setup-guide.md#phone-numbers)).
 - The tenant an OTP is checked against is `NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT` when the
   message carries none: Compose rewrites it to `state_root` right after it copies the compose
   file, before the bridge-first recreate or any other container starts, so `novu-bridge` never
