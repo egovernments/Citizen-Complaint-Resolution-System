@@ -1,0 +1,228 @@
+---
+# Per-tenant Novu accounts (#2203; review S2 of #2343): they stay on only when novu-bridge
+# can sign in to Novu as the platform admin with the password this deploy gives it.
+#
+# The bridge creates and manages every workspace's own Novu organization with that sign-in.
+# The playbook generates the password (OpenBao), refuses the published default and moves the
+# Novu admin off the legacy password, but a box whose Novu admin has a CUSTOM password that
+# host_vars does not pin cannot be moved (the move prints NOUSER) — the bridge would hold a
+# password Novu refuses, and every workspace provision would fail. So the sign-in is tried:
+#
+#   nta_phase=preflight   before the bridge is given the password (the .env secrets block and
+#                         the stack start), when Novu is already running (an upgrade):
+#                         VERIFIED, or ROTATABLE (the legacy password works, so the move after
+#                         the stack starts changes it) keep them on; UNREACHABLE (a fresh box,
+#                         or the stack is down) leaves the decision to post-start.
+#   nta_phase=post-start  after the legacy-password move and the API-key mint: the
+#                         authoritative check. VERIFIED keeps them on.
+#
+# Not verified:
+#   * `novu_tenant_accounts: true` set explicitly in host_vars → the deploy STOPS (the operator
+#     asked for the feature; switching it off would contradict that);
+#   * workspaces on this box already have their own organization (PROVISIONED rows in
+#     nb_tenant_account), or that could not be counted → the deploy STOPS: switching off would
+#     quietly move their messages onto the shared account;
+#   * otherwise (the default-on case) → per-tenant accounts are switched OFF for this deploy:
+#     NOVU_BRIDGE_TENANT_ACCOUNTS_ENABLED=false and the secrets block leave .env (so the bridge
+#     never holds the refused password, and pgr-services loses the admin token and skips the
+#     notification-account step), and an ACTION line says what to pin. The shared account keeps
+#     working; the next deploy checks again. At post-start the playbook then recreates
+#     novu-bridge and pgr-services (`novu_tenant_accounts_switched_off_after_start`).
+#
+# Sets: novu_tenant_accounts_on, novu_tenant_accounts_switched_off,
+# novu_tenant_accounts_switched_off_after_start, and (preflight switch-off only)
+# novu_admin_password_effective back to what the shared account alone uses.
+#
+# Test seams (never set in production; tests/novu-tenant-accounts-verify-test.yml):
+#   nta_login_override            the sign-in verdict instead of calling Novu
+#   nta_novu_api                  Novu's API base URL (default http://127.0.0.1:14002)
+#   nta_retry_delay               seconds between post-start attempts (default 10)
+#   nta_provisioned_stdout_override / _rc_override / _stderr_override
+#                                 the workspace count query's result instead of running it
+#   nta_env_path                  the compose .env (default {{ digit_dir }}/.env)
+
+- name: "novu tenant accounts — sign in to Novu as the platform admin ({{ nta_phase }})"
+  ansible.builtin.command: python3 -
+  args:
+    stdin: |
+      import json, os, sys, time, urllib.request, urllib.error
+      api, phase = os.environ["NB_API"].rstrip("/"), os.environ["NB_PHASE"]
+      email, new, old = os.environ["NB_EMAIL"], os.environ["NB_NEW"], os.environ["NB_OLD"]
+      def login(password):
+          req = urllib.request.Request(api + "/v1/auth/login", method="POST",
+                                       data=json.dumps({"email": email, "password": password}).encode(),
+                                       headers={"Content-Type": "application/json"})
+          try:
+              with urllib.request.urlopen(req, timeout=20) as r:
+                  raw = r.read()
+                  body = json.loads(raw) if raw else {}
+                  return "ok" if (body.get("data") or {}).get("token") else "no-token"
+          except urllib.error.HTTPError as e:
+              return str(e.code)
+          except (urllib.error.URLError, OSError, ValueError):
+              return "unreachable"
+      # Post-start Novu was just (re)started: give it a moment before calling it unreachable.
+      attempts = 3 if phase == "post-start" else 1
+      for attempt in range(attempts):
+          first = login(new)
+          if first != "unreachable" and not first.startswith("5"):
+              break
+          if attempt + 1 < attempts:
+              time.sleep(float(os.environ.get("NB_RETRY_DELAY", "10")))
+      if first == "ok":
+          print("VERIFIED"); sys.exit(0)
+      if first == "unreachable" or first.startswith("5"):
+          print("UNREACHABLE " + first); sys.exit(0)
+      if phase == "preflight" and old and old != new and login(old) == "ok":
+          print("ROTATABLE"); sys.exit(0)
+      print("REFUSED " + first)
+  environment:
+    NB_API: "{{ nta_novu_api | default('http://127.0.0.1:14002') }}"
+    NB_PHASE: "{{ nta_phase }}"
+    NB_RETRY_DELAY: "{{ nta_retry_delay | default(10) }}"
+    NB_EMAIL: "{{ novu_admin_email_effective }}"
+    NB_NEW: "{{ novu_admin_password_effective }}"
+    NB_OLD: "{{ novu_admin_password_legacy | default('Digit@12345') }}"
+  register: nta_login
+  changed_when: false
+  failed_when: false
+  # The environment carries both passwords; the outcome is printed below.
+  no_log: true
+  when: nta_login_override is not defined
+
+- name: "novu tenant accounts — read the sign-in outcome ({{ nta_phase }})"
+  ansible.builtin.set_fact:
+    nta_outcome: >-
+      {{ ((nta_login_override if nta_login_override is defined else (nta_login.stdout | default('')))
+          | trim)
+         or ('UNREACHABLE probe-exited-' ~ (nta_login.rc | default('?'))) }}
+
+- name: "novu tenant accounts — decide ({{ nta_phase }})"
+  ansible.builtin.set_fact:
+    nta_verified: "{{ (nta_outcome.split(' ') | first) in ['VERIFIED', 'ROTATABLE'] }}"
+    nta_deferred: "{{ nta_phase == 'preflight' and (nta_outcome.split(' ') | first) == 'UNREACHABLE' }}"
+    nta_explicit: "{{ (novu_tenant_accounts | default('') | string | lower) in ['true', 'yes', 'on', '1'] }}"
+
+- name: "novu tenant accounts — Novu platform admin sign-in ({{ nta_phase }})"
+  ansible.builtin.debug:
+    msg: >-
+      {{ novu_admin_email_effective }}: {{ nta_outcome }}{{
+      ' — Novu is not up yet; checked again after the stack starts' if nta_deferred | bool else '' }}
+
+- name: "novu tenant accounts — count workspaces that already have their own account ({{ nta_phase }})"
+  ansible.builtin.shell: >-
+    docker exec -i docker-postgres psql -U egov -d egov -v ON_ERROR_STOP=1 -tAq
+    -c "SELECT count(*) FROM nb_tenant_account WHERE status = 'PROVISIONED'"
+  register: nta_provisioned
+  changed_when: false
+  failed_when: false
+  when:
+    - not (nta_verified | bool)
+    - not (nta_deferred | bool)
+    - nta_provisioned_stdout_override is not defined
+
+- name: "novu tenant accounts — how many ({{ nta_phase }})"
+  ansible.builtin.set_fact:
+    # A number; 0 when the table does not exist yet (a box that never ran the feature); -1 unknown.
+    nta_provisioned_count: >-
+      {%- set out = (nta_provisioned_stdout_override if nta_provisioned_stdout_override is defined
+                     else (nta_provisioned.stdout | default(''))) | string | trim -%}
+      {%- set rc = (nta_provisioned_rc_override if nta_provisioned_rc_override is defined
+                    else (nta_provisioned.rc | default(1))) | int -%}
+      {%- set err = (nta_provisioned_stderr_override if nta_provisioned_stderr_override is defined
+                     else (nta_provisioned.stderr | default(''))) | string -%}
+      {%- if rc == 0 and out is match('^[0-9]+$') -%}{{ out }}
+      {%- elif 'relation "nb_tenant_account" does not exist' in err -%}0
+      {%- else -%}-1{%- endif -%}
+  when:
+    - not (nta_verified | bool)
+    - not (nta_deferred | bool)
+
+- name: "novu tenant accounts — what to do ({{ nta_phase }})"
+  ansible.builtin.set_fact:
+    nta_action: >-
+      novu-bridge cannot sign in to Novu as the platform admin {{ novu_admin_email_effective }} with the
+      password this deploy would give it (sign-in: {{ nta_outcome }}). Per-tenant notification accounts
+      need that sign-in to create and manage each workspace's own Novu organization. The usual cause is
+      a Novu admin whose password was changed by hand, so the deploy could not move it off the published
+      default. Pin the admin's CURRENT password in host_vars/{{ inventory_hostname }}.yml, either as
+      `novu_admin_password_legacy` (the deploy then moves the admin onto a generated password kept in
+      OpenBao) or as `novu_admin_password` (kept as it is; never the published default), plus
+      `novu_admin_email` if the admin is not {{ novu_admin_email_effective }}, and re-run the deploy.
+      To run this box on the shared notification account only, set `novu_tenant_accounts: false`.
+      See docs/releases/2.20/notifications/tenant-accounts.md.
+  when:
+    - not (nta_verified | bool)
+    - not (nta_deferred | bool)
+
+- name: "novu tenant accounts — stop: novu_tenant_accounts is set to true ({{ nta_phase }})"
+  ansible.builtin.fail:
+    msg: >-
+      {{ nta_action }} This box sets `novu_tenant_accounts: true`, so the deploy stops here instead of
+      switching per-tenant accounts off.
+  when:
+    - not (nta_verified | bool)
+    - not (nta_deferred | bool)
+    - nta_explicit | bool
+
+- name: "novu tenant accounts — stop: workspaces here already use their own account ({{ nta_phase }})"
+  ansible.builtin.fail:
+    msg: >-
+      {{ nta_action }} {{ ('Could not count the workspaces that already have their own Novu organization ('
+      ~ ((nta_provisioned.stderr | default('')) | trim | truncate(160)) ~ ')')
+      if (nta_provisioned_count | int) < 0
+      else ((nta_provisioned_count | int | string) ~ ' workspace(s) on this box already send through their own Novu organization') }};
+      switching per-tenant accounts off would move their messages onto the shared account, so the deploy
+      stops here.
+  when:
+    - not (nta_verified | bool)
+    - not (nta_deferred | bool)
+    - (nta_provisioned_count | int) != 0
+
+- name: "novu tenant accounts — switch them off for this deploy ({{ nta_phase }})"
+  ansible.builtin.set_fact:
+    novu_tenant_accounts_on: false
+    novu_tenant_accounts_switched_off: true
+    novu_tenant_accounts_switched_off_after_start: "{{ nta_phase == 'post-start' }}"
+  when:
+    - not (nta_verified | bool)
+    - not (nta_deferred | bool)
+
+# Before the stack starts, the mint and the workflow bootstrap still sign in as the admin: with
+# the feature off they use what they used before #2203 (host_vars, else the published default).
+- name: "novu tenant accounts — the Novu admin sign-in without them ({{ nta_phase }})"
+  ansible.builtin.set_fact:
+    novu_admin_password_effective: "{{ (novu_admin_password | default('', true)) or 'Digit@12345' }}"
+  no_log: true
+  when:
+    - not (nta_verified | bool)
+    - not (nta_deferred | bool)
+    - nta_phase == 'preflight'
+
+- name: "novu tenant accounts — .env: off ({{ nta_phase }})"
+  ansible.builtin.lineinfile:
+    path: "{{ nta_env_path if nta_env_path is defined else digit_dir ~ '/.env' }}"
+    regexp: '^NOVU_BRIDGE_TENANT_ACCOUNTS_ENABLED='
+    line: NOVU_BRIDGE_TENANT_ACCOUNTS_ENABLED=false
+  when:
+    - not (nta_verified | bool)
+    - not (nta_deferred | bool)
+
+- name: "novu tenant accounts — .env: no admin password, keys or tokens for the bridge ({{ nta_phase }})"
+  ansible.builtin.blockinfile:
+    path: "{{ nta_env_path if nta_env_path is defined else digit_dir ~ '/.env' }}"
+    marker: "# {mark} NOVU TENANT ACCOUNT SECRETS"
+    state: absent
+  when:
+    - not (nta_verified | bool)
+    - not (nta_deferred | bool)
+
+- name: "novu tenant accounts — ACTION: per-tenant notification accounts are OFF on this box for this deploy"
+  ansible.builtin.debug:
+    msg: >-
+      ACTION: {{ nta_action }} Until then they are OFF for this deploy: every tenant sends through the
+      shared account exactly as before, and tenant creation skips the notification-account step. The
+      next deploy checks again.
+  when:
+    - not (nta_verified | bool)
+    - not (nta_deferred | bool)

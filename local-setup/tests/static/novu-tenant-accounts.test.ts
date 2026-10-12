@@ -183,6 +183,59 @@ describe('Ansible', () => {
     expect(playbook.match(/NOVU_ADMIN_PASSWORD='\{\{ novu_admin_password_effective \}\}'/g)?.length).toBe(2);
   });
 
+  test('the Novu admin sign-in is verified before the bridge relies on it (review S2)', () => {
+    const at = (name: string) => {
+      const i = playbook.indexOf(`- name: "${name}`);
+      expect(i).toBeGreaterThan(-1);
+      return i;
+    };
+    const preflight = at('novu tenant accounts — verify the Novu admin sign-in (preflight)');
+    const postStart = at('novu tenant accounts — verify the Novu admin sign-in (post-start)');
+    for (const name of ['novu tenant accounts — verify the Novu admin sign-in (preflight)',
+      'novu tenant accounts — verify the Novu admin sign-in (post-start)']) {
+      const t = task(name);
+      expect(t).toContain('ansible.builtin.include_tasks: tasks/novu-tenant-accounts-verify.yml');
+      expect(t).toContain('- novu_tenant_accounts_on | bool');
+    }
+    // Preflight: the password is known, the bridge has not been given it, the stack has not started.
+    expect(preflight).toBeGreaterThan(at('novu tenant accounts — refuse the published default admin password'));
+    expect(preflight).toBeLessThan(at('novu tenant accounts — write secrets into compose .env'));
+    expect(preflight).toBeLessThan(playbook.indexOf('- name: Start DIGIT stack (Linux/Debian)'));
+    // Post-start: after the legacy-password move and the mint, before the bridge is recreated
+    // and before anything provisions.
+    expect(postStart).toBeGreaterThan(at('novu tenant accounts — move the Novu admin off the legacy password'));
+    expect(postStart).toBeGreaterThan(at('novu-bootstrap — resolve effective Novu key (pinned or minted)'));
+    const recreate = at('novu-bootstrap — recreate novu-bridge so it picks up NOVU_API_KEY and the state-root OTP tenant');
+    const recreatePgr = at('novu tenant accounts — recreate pgr-services without the bridge admin token');
+    expect(postStart).toBeLessThan(recreate);
+    expect(postStart).toBeLessThan(recreatePgr);
+    expect(postStart).toBeLessThan(at('novu tenant accounts — provision the tenants listed in novu_tenant_accounts_backfill'));
+    // Switched off after the start: both holders of the old .env are recreated.
+    expect(task('novu-bootstrap — recreate novu-bridge so it picks up NOVU_API_KEY and the state-root OTP tenant'))
+      .toContain('novu_tenant_accounts_switched_off_after_start | default(false) | bool');
+    const pgr = task('novu tenant accounts — recreate pgr-services without the bridge admin token');
+    expect(pgr).toContain('up -d --no-deps --force-recreate pgr-services');
+    expect(pgr).toContain('when: novu_tenant_accounts_switched_off_after_start | default(false) | bool');
+  });
+
+  test('the sign-in check keeps the passwords off the command line and the log, and decides on its own', () => {
+    const verify = read('local-setup/ansible/tasks/novu-tenant-accounts-verify.yml');
+    const probe = verify.slice(verify.indexOf('- name: "novu tenant accounts — sign in to Novu as the platform admin'),
+      verify.indexOf('- name: "novu tenant accounts — read the sign-in outcome'));
+    expect(probe).toContain('ansible.builtin.command: python3 -');
+    expect(probe).toContain('NB_NEW: "{{ novu_admin_password_effective }}"');
+    expect(probe).toContain('no_log: true');
+    expect(probe).not.toMatch(/python3 -c|--password/);
+    // Off for this deploy: the bridge gets neither the switch nor the secrets.
+    expect(verify).toContain('line: NOVU_BRIDGE_TENANT_ACCOUNTS_ENABLED=false');
+    expect(verify).toMatch(/marker: "# \{mark\} NOVU TENANT ACCOUNT SECRETS"\n {4}state: absent/);
+    // The explicit switch and provisioned workspaces stop the deploy instead.
+    expect(verify).toContain('- name: "novu tenant accounts — stop: novu_tenant_accounts is set to true');
+    expect(verify).toContain('- name: "novu tenant accounts — stop: workspaces here already use their own account');
+    // And the matrix that drives it runs in CI.
+    expect(read('.github/workflows/local-setup-ci.yaml')).toContain('tests/novu-tenant-accounts-verify-test.yml');
+  });
+
   test('the optional backfill passes the token by environment, never on the command line', () => {
     const t = task('novu tenant accounts — provision the tenants listed in novu_tenant_accounts_backfill');
     expect(t).toContain('NB_TOKEN: "{{ novu_accounts_secrets.novu_bridge_internal_admin_token }}"');

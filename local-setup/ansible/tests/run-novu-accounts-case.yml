@@ -1,0 +1,95 @@
+---
+# One row of novu-tenant-accounts-verify-test.yml. As in run-guard-case.yml, an ABORT row
+# must abort for the reason it names: `rescue` alone would also catch a template error.
+- name: "{{ case.name }} — a fresh .env and the facts the playbook starts with"
+  ansible.builtin.copy:
+    dest: "{{ nta_scratch.path }}/case.env"
+    mode: '0600'
+    content: |
+      NOTIFICATION_STACK_TAG=develop
+      NOVU_BRIDGE_TENANT_ACCOUNTS_ENABLED=true
+      # BEGIN NOVU TENANT ACCOUNT SECRETS
+      NOVU_BRIDGE_NOVU_ADMIN_EMAIL=admin@digit.local
+      NOVU_BRIDGE_NOVU_ADMIN_PASSWORD=Generated-password-Aa1-
+      NOVU_BRIDGE_INTERNAL_ADMIN_TOKEN=admin-token
+      # END NOVU TENANT ACCOUNT SECRETS
+      NOVU_API_KEY=k
+
+- name: "{{ case.name }} — reset"
+  ansible.builtin.set_fact:
+    novu_tenant_accounts_on: true
+    novu_tenant_accounts_switched_off: false
+    novu_tenant_accounts_switched_off_after_start: false
+    novu_admin_password_effective: Generated-password-Aa1-
+    nta_result: ""
+    nta_reason: ""
+
+- name: "{{ case.name }}"
+  block:
+    - name: "run the check, stubbed"
+      ansible.builtin.include_tasks: ../tasks/novu-tenant-accounts-verify.yml
+      vars:
+        nta_phase: "{{ case.phase }}"
+        nta_env_path: "{{ nta_scratch.path }}/case.env"
+        nta_login_override: "{{ case.login }}"
+        nta_provisioned_stdout_override: "{{ case.count | default('0') }}"
+        nta_provisioned_rc_override: "{{ case.count_rc | default(0) }}"
+        nta_provisioned_stderr_override: "{{ case.count_err | default('') }}"
+        novu_tenant_accounts: "{{ case.explicit | default('') }}"
+      when: not (case.real_probe | default(false))
+    - name: "run the check, real sign-in probe against a closed port"
+      ansible.builtin.include_tasks: ../tasks/novu-tenant-accounts-verify.yml
+      vars:
+        nta_phase: "{{ case.phase }}"
+        nta_env_path: "{{ nta_scratch.path }}/case.env"
+        nta_novu_api: "http://127.0.0.1:9"
+        nta_retry_delay: 0
+        nta_provisioned_stdout_override: "{{ case.count | default('0') }}"
+        nta_provisioned_rc_override: 0
+        novu_tenant_accounts: "{{ case.explicit | default('') }}"
+      when: case.real_probe | default(false)
+    - name: "record: it let the deploy go on"
+      ansible.builtin.set_fact:
+        nta_result: "{{ 'ON' if (novu_tenant_accounts_on | bool) else 'OFF' }}"
+  rescue:
+    - name: "record: it stopped the deploy, and which stop it was"
+      ansible.builtin.set_fact:
+        nta_result: ABORT
+        nta_reason: "{{ ansible_failed_task.name | default('(no task name)') }}"
+
+- name: "{{ case.name }} — read the .env back"
+  ansible.builtin.slurp:
+    src: "{{ nta_scratch.path }}/case.env"
+  register: nta_case_env
+
+- name: "verdict — {{ case.name }}"
+  vars:
+    env_text: "{{ nta_case_env.content | b64decode }}"
+  ansible.builtin.assert:
+    that:
+      - nta_result == case.expect
+      - case.expect != 'ABORT' or (case.reason in nta_reason)
+      # OFF: the bridge is told so, and holds none of the secrets.
+      - case.expect != 'OFF' or ('NOVU_BRIDGE_TENANT_ACCOUNTS_ENABLED=false' in env_text)
+      - case.expect != 'OFF' or ('NOVU TENANT ACCOUNT SECRETS' not in env_text and 'Generated-password' not in env_text)
+      - case.expect != 'OFF' or (novu_tenant_accounts_switched_off | bool)
+      - case.expect != 'OFF' or ((novu_tenant_accounts_switched_off_after_start | bool) == (case.phase == 'post-start'))
+      - case.expect != 'OFF' or ('novu_admin_password_legacy' in nta_action and 'novu_tenant_accounts: false' in nta_action)
+      # Preflight OFF: the mint signs in as it did before #2203.
+      - case.expect != 'OFF' or case.phase != 'preflight' or novu_admin_password_effective == 'Digit@12345'
+      # ON and ABORT: the .env is exactly as the deploy wrote it.
+      - case.expect == 'OFF' or ('NOVU_BRIDGE_TENANT_ACCOUNTS_ENABLED=true' in env_text and 'Generated-password' in env_text)
+      - case.expect == 'OFF' or not (novu_tenant_accounts_switched_off | bool)
+      - case.expect == 'OFF' or novu_admin_password_effective == 'Generated-password-Aa1-'
+      # The other .env lines are never touched.
+      - "'NOTIFICATION_STACK_TAG=develop' in env_text and 'NOVU_API_KEY=k' in env_text"
+    fail_msg: >-
+      {{ case.name }}: expected {{ case.expect }}{{ (' (' ~ case.reason ~ ')') if case.reason is defined else '' }},
+      got {{ nta_result }}{{ (' at ' ~ nta_reason) if nta_reason else '' }}; .env:
+      {{ nta_case_env.content | b64decode }}
+    quiet: true
+
+- name: "{{ case.name }} — clean up"
+  ansible.builtin.file:
+    path: "{{ nta_scratch.path }}/case.env"
+    state: absent

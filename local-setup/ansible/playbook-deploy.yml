@@ -2178,7 +2178,11 @@
     # Per-tenant Novu accounts (#2203). One switch for every task below and for the .env
     # line: on by default wherever self-serve signup and Novu both run, because that is
     # where workspaces need their own provider credentials; host_vars `novu_tenant_accounts`
-    # overrides either way. Meaningless (forced off) without Novu.
+    # overrides either way. Meaningless (forced off) without Novu. "On" is then VERIFIED:
+    # tasks/novu-tenant-accounts-verify.yml (included twice below) signs in to Novu as the
+    # platform admin with the password the bridge would get, and switches the feature off for
+    # this deploy (default) or stops it (explicit `true`, or workspaces already provisioned)
+    # when Novu refuses it.
     - name: "novu tenant accounts — resolve the switch"
       ansible.builtin.set_fact:
         novu_tenant_accounts_on: >-
@@ -3573,6 +3577,16 @@
         - (bao_secrets_novu_accounts.json.data.data | combine(_novu_accounts_to_store))
           != bao_secrets_novu_accounts.json.data.data
       no_log: true
+
+    # Before the bridge is given the admin password: on a box whose Novu already runs (an
+    # upgrade), sign in with it now. Refused → off for this deploy (or stop); see the file.
+    - name: "novu tenant accounts — verify the Novu admin sign-in (preflight)"
+      ansible.builtin.include_tasks: tasks/novu-tenant-accounts-verify.yml
+      vars:
+        nta_phase: preflight
+      when:
+        - enable_novu | default(false) | bool
+        - novu_tenant_accounts_on | bool
 
     - name: "novu tenant accounts — write secrets into compose .env"
       ansible.builtin.blockinfile:
@@ -6771,6 +6785,18 @@
       when:
         - enable_novu | default(false)
 
+    # The authoritative check: after the legacy-password move and the mint (which registers the
+    # admin on an empty Novu), sign in with the password the bridge holds. Refused → off for
+    # this deploy, and the two recreates below give novu-bridge and pgr-services the .env
+    # without the secrets block (or stop; see the file).
+    - name: "novu tenant accounts — verify the Novu admin sign-in (post-start)"
+      ansible.builtin.include_tasks: tasks/novu-tenant-accounts-verify.yml
+      vars:
+        nta_phase: post-start
+      when:
+        - enable_novu | default(false) | bool
+        - novu_tenant_accounts_on | bool
+
     - name: "novu-bootstrap — warn when no Novu key could be minted"
       ansible.builtin.debug:
         msg: >-
@@ -6860,7 +6886,18 @@
       when:
         - enable_novu | default(false)
         - ((effective_novu_key | default('')) | length > 0) or ((core_sms_tenant_rewrite | default({})) is changed)
+          or (novu_tenant_accounts_switched_off_after_start | default(false) | bool)
       changed_when: false
+
+    # Per-tenant accounts switched off after the stack started (the post-start check above):
+    # pgr-services still holds the bridge admin token it got at start. Recreated, it reads the
+    # .env without it and skips the notification-account step of tenant creation.
+    - name: "novu tenant accounts — recreate pgr-services without the bridge admin token"
+      ansible.builtin.shell: |
+        cd {{ digit_dir }}
+        COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} up -d --no-deps --force-recreate pgr-services
+      when: novu_tenant_accounts_switched_off_after_start | default(false) | bool
+      changed_when: true
 
     # The OTP default tenant now also decides WHO may manage providers: novu-bridge lets
     # only admins of that tenant's state (plus NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS) create,
