@@ -101,6 +101,7 @@ export function EmployeeDialog({
   employee,
   emailLocked = false,
   emailNote,
+  optionsRefreshing = false,
   onOpenChange,
   onSave,
   onUpdate,
@@ -114,6 +115,8 @@ export function EmployeeDialog({
   emailLocked?: boolean;
   /** What a new email does for this person, which depends on whether they have joined. */
   emailNote?: string;
+  /** The options are being refetched, so an empty list may only be an older load's. */
+  optionsRefreshing?: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: (input: NewEmployee) => Promise<void>;
   onUpdate?: (employee: Employee, changes: EmployeeChanges) => Promise<void>;
@@ -393,7 +396,12 @@ export function EmployeeDialog({
             picked={jurisdictions}
             onChange={setJurisdictions}
             error={errors.jurisdictions}
-            empty={t('employees.jurisdictions_empty', 'Set up your geography first.')}
+            empty={
+              // Areas added since the options were loaded arrive with the refetch.
+              optionsRefreshing
+                ? t('employees.jurisdictions_loading', 'Loading your areas…')
+                : t('employees.jurisdictions_empty', 'Set up your geography first.')
+            }
             detail={boundaryDetail}
           />
 

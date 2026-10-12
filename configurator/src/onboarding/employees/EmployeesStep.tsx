@@ -16,6 +16,7 @@ import { describeSaveError } from '../errors';
 import { reportStepError, trackStepAction } from '../telemetry';
 import { useOnboardingT, type OnboardingT } from '../i18n';
 import { blockingError, stepKeys, STEP_QUERY_OPTIONS } from '../stepQueries';
+import { RefreshNotice } from '../RefreshNotice';
 import { EmployeeDialog } from './EmployeeDialog';
 import BulkEmployeeImport from './BulkEmployeeImport';
 import { InviteState } from './InviteState';
@@ -99,12 +100,26 @@ export default function EmployeesStep() {
   // Every code HRMS holds, removed employees' included.
   const codes = employeesQuery.data?.codes ?? [];
   const loadError = blockingError(optionsQuery) ?? blockingError(employeesQuery);
+  // A refresh failed with the last load still on screen.
+  const refreshFailed = optionsQuery.isRefetchError || employeesQuery.isRefetchError;
   const memberIndex = membersQuery.data ?? null;
-  const membersFailed = blockingError(membersQuery) !== null;
+  // A failed refresh counts too: the statuses shown would be the last load's.
+  const membersFailed = membersQuery.isError;
+  // Options cached before the account had a department, still being refetched. Drawn as they
+  // are, the step would say "create a department first" until the refetch lands, right after
+  // the user added one. (Areas only fill one field of the dialog, which says they're loading.)
+  const optionsOutdated = optionsQuery.isFetching && !!options && options.departments.length === 0;
 
-  // The table keeps showing while the fresh load comes in behind it.
-  const reload = () => void queryClient.invalidateQueries({ queryKey: stepKeys.workspace(tenant) });
+  // An employee change can't affect departments, designations or areas, so only the employee
+  // list and the invite states reload; the options are the slowest load. The table keeps
+  // showing while the fresh load comes in behind it.
+  const reload = () =>
+    void Promise.all([
+      queryClient.invalidateQueries({ queryKey: stepKeys.employees(tenant) }),
+      queryClient.invalidateQueries({ queryKey: stepKeys.members(tenant) }),
+    ]);
   const reloadMembers = () => void queryClient.invalidateQueries({ queryKey: stepKeys.members(tenant) });
+  const retryLoads = () => void Promise.all([optionsQuery.refetch(), employeesQuery.refetch()]);
   const uuidOf = (employee: Employee) => employee.user?.uuid || employee.uuid;
   const memberOf = (employee: Employee) => {
     const uuid = uuidOf(employee);
@@ -234,7 +249,7 @@ export default function EmployeesStep() {
     reload();
   };
 
-  const loaded = options !== null && employees !== null;
+  const loaded = options !== null && employees !== null && !optionsOutdated;
   const header = (
     <StepHeader eyebrow={t('step.your_account', 'Your account')} title={t('steps.employees', 'Employees')} done={done}>
       {t('employees.intro', 'The people who will use your complaint system.')}
@@ -248,7 +263,7 @@ export default function EmployeesStep() {
         <Alert variant="destructive">
           <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
             <span>{t('employees.load_failed', 'Couldn’t load your employees.')} {loadError}</span>
-            <Button variant="outline" size="sm" onClick={reload}>
+            <Button variant="outline" size="sm" onClick={retryLoads}>
               {t('common.try_again', 'Try again')}
             </Button>
           </AlertDescription>
@@ -271,6 +286,7 @@ export default function EmployeesStep() {
     return (
       <div className="space-y-8">
         {header}
+        {refreshFailed && <RefreshNotice onRetry={retryLoads} />}
         <EmptyState icon={Network} title={t('employees.needs_department_title', 'You will have to create a department first')}>
           {t(
             'employees.needs_department_body',
@@ -307,6 +323,7 @@ export default function EmployeesStep() {
   return (
     <div className="space-y-8">
       {header}
+      {refreshFailed && <RefreshNotice onRetry={retryLoads} />}
 
       {others.length === 0 ? (
         <div className="space-y-6">
@@ -475,6 +492,7 @@ export default function EmployeesStep() {
         employee={editing ?? undefined}
         emailLocked={!!editing && isSelf(editing)}
         emailNote={editing ? emailNote(statusOf(editing)?.kind ?? 'active', t) : undefined}
+        optionsRefreshing={optionsQuery.isFetching}
         onOpenChange={(open) => {
           if (open) return;
           setAdding(false);

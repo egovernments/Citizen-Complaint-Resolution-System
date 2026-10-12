@@ -16,7 +16,8 @@ import { probeGate, useStepProbe } from '../stepProbe';
 import { describeSaveError } from '../errors';
 import { reportStepError, trackStepAction } from '../telemetry';
 import { useOnboardingT, type OnboardingT } from '../i18n';
-import { blockingError, stepKeys, STEP_QUERY_OPTIONS } from '../stepQueries';
+import { blockingError, refreshWorkspace, stepKeys, STEP_QUERY_OPTIONS } from '../stepQueries';
+import { RefreshNotice } from '../RefreshNotice';
 import { MasterDialog } from './MasterDialog';
 import { isSystemRecordCode } from '@/lib/systemRecords';
 import { BulkMastersUpload, type BulkImportSummary } from './BulkMastersUpload';
@@ -225,8 +226,9 @@ export default function DepartmentsStep() {
   const designations = masters.data?.designations ?? null;
   const loadError = blockingError(masters);
 
-  // The table keeps showing while the fresh load comes in behind it.
-  const reload = () => void queryClient.invalidateQueries({ queryKey: stepKeys.workspace(tenant) });
+  // The table keeps showing while the fresh load comes in behind it. Employees reads these
+  // records too, so its load is refreshed as well, even though it isn't on screen.
+  const reload = () => void refreshWorkspace(queryClient, tenant);
 
   const departmentNames = useMemo(
     () => new Map((departments ?? []).map((record) => [record.uniqueIdentifier, recordName(record)])),
@@ -282,6 +284,9 @@ export default function DepartmentsStep() {
       <StepHeader eyebrow={t('step.your_account', 'Your account')} title={t('steps.departments', 'Departments')} done={done}>
         {t('departments.intro', 'The departments complaints get routed to, and the designations your employees hold.')}
       </StepHeader>
+
+      {/* Only with a table on screen: a first load that fails shows the error below instead. */}
+      {masters.isRefetchError && <RefreshNotice onRetry={() => void masters.refetch()} />}
 
       {loadError ? (
         <Alert variant="destructive">

@@ -1,3 +1,5 @@
+import type { QueryClient } from '@tanstack/react-query';
+
 /**
  * The Departments and Employees steps keep what they load in React Query,
  * keyed by workspace. Each step is its own route, so leaving one unmounts it;
@@ -35,4 +37,14 @@ export const STEP_QUERY_OPTIONS = {
 export function blockingError(query: { error: unknown; data: unknown }): string | null {
   if (!query.error || query.data !== undefined) return null;
   return query.error instanceof Error ? query.error.message : String(query.error);
+}
+
+/**
+ * Refresh everything the steps loaded for the workspace, on screen or not. By default
+ * `invalidateQueries` refetches only what is on screen and just marks the rest stale, so a
+ * step opened next drew its old load first: Employees said "create a department first" for
+ * the length of its refetch right after a department was added.
+ */
+export function refreshWorkspace(queryClient: QueryClient, tenant: string) {
+  return queryClient.invalidateQueries({ queryKey: stepKeys.workspace(tenant), refetchType: 'all' });
 }

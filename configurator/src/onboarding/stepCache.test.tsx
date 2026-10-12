@@ -7,7 +7,7 @@ import type { Employee, MdmsRecord } from '@/api/types';
 import DepartmentsStep from './departments/DepartmentsStep';
 import EmployeesStep from './employees/EmployeesStep';
 import { listMasters, removeMaster } from './departments/mastersApi';
-import { listEmployees, loadEmployeeOptions, type EmployeeList, type EmployeeOptions } from './employees/employeesApi';
+import { listEmployees, loadEmployeeOptions, removeEmployee, type EmployeeList, type EmployeeOptions } from './employees/employeesApi';
 import { loadMembers } from './employees/inviteStatus';
 
 const app = {
@@ -26,6 +26,7 @@ vi.mock('./employees/employeesApi', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./employees/employeesApi')>()),
   loadEmployeeOptions: vi.fn(),
   listEmployees: vi.fn(),
+  removeEmployee: vi.fn(),
 }));
 vi.mock('./employees/inviteStatus', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./employees/inviteStatus')>()),
@@ -146,6 +147,44 @@ describe('Departments', () => {
     expect(placeholder()).not.toBeNull();
   });
 
+  it('keeps the table when a refresh fails, says it may be out of date, and Try again refreshes it', async () => {
+    stubMasters();
+    const first = renderStep(<DepartmentsStep />);
+    expect(await screen.findByText('Roads')).toBeInTheDocument();
+    first.unmount();
+
+    stubMasters(async () => {
+      throw new Error('Gateway timeout');
+    });
+    renderStep(<DepartmentsStep />);
+    expect(await screen.findByText(/Couldn’t refresh this list/)).toBeInTheDocument();
+    expect(screen.getByText('Roads')).toBeInTheDocument();
+
+    stubMasters(async () => [record('ROADS', 'Roads'), record('WATER', 'Water')]);
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByText('Water')).toBeInTheDocument();
+    expect(screen.queryByText(/Couldn’t refresh this list/)).not.toBeInTheDocument();
+  });
+
+  it('refreshes what Employees loaded after a change here, though Employees is not on screen', async () => {
+    options.mockResolvedValue({ ...employeeOptions, departments: [] });
+    employees.mockResolvedValue({ active: [], codes: [] });
+    const employeesStep = renderStep(<EmployeesStep />);
+    expect(await screen.findByText('You will have to create a department first')).toBeInTheDocument();
+    employeesStep.unmount();
+    expect(options).toHaveBeenCalledTimes(1);
+
+    stubMasters(async () => [record('ROADS', 'Roads'), record('WATER', 'Water')]);
+    renderStep(<DepartmentsStep />);
+    expect(await screen.findByText('Water')).toBeInTheDocument();
+    vi.mocked(removeMaster).mockResolvedValue(undefined);
+    stubMasters();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Water' }));
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Delete' }));
+
+    await waitFor(() => expect(options).toHaveBeenCalledTimes(2));
+  });
+
   it('says when the first load fails, and Try again loads it', async () => {
     stubMasters(async () => {
       throw new Error('Gateway timeout');
@@ -178,5 +217,54 @@ describe('Employees', () => {
       refresh.resolve({ active: [employee('EMP_0001', 'Wanjiru Kamau'), employee('EMP_0002', 'Otieno Odhiambo')], codes: ['EMP_0001', 'EMP_0002'] }),
     );
     expect(await screen.findByText('Otieno Odhiambo')).toBeInTheDocument();
+  });
+
+  it('holds the placeholder, not "create a department first", while options cached without one are refetched', async () => {
+    options.mockResolvedValue({ ...employeeOptions, departments: [] });
+    employees.mockResolvedValue({ active: [], codes: [] });
+    const first = renderStep(<EmployeesStep />);
+    expect(await screen.findByText('You will have to create a department first')).toBeInTheDocument();
+    first.unmount();
+
+    const refresh = deferred<EmployeeOptions>();
+    options.mockReturnValue(refresh.promise);
+    renderStep(<EmployeesStep />);
+    expect(placeholder()).not.toBeNull();
+    expect(screen.queryByText('You will have to create a department first')).not.toBeInTheDocument();
+
+    await act(async () => refresh.resolve({ ...employeeOptions, boundaries: [{ code: 'W1', name: 'Ward 1', boundaryType: 'Ward' }] } as EmployeeOptions));
+    expect(await screen.findByText('No employees yet')).toBeInTheDocument();
+  });
+
+  it('reloads the employee list and invite states after a remove, not the options', async () => {
+    options.mockResolvedValue(employeeOptions);
+    employees.mockResolvedValue({ active: [employee('EMP_0001', 'Wanjiru Kamau'), employee('EMP_0002', 'Otieno Odhiambo')], codes: ['EMP_0001', 'EMP_0002'] });
+    renderStep(<EmployeesStep />);
+    expect(await screen.findByText('Otieno Odhiambo')).toBeInTheDocument();
+    expect(options).toHaveBeenCalledTimes(1);
+    const membersBefore = vi.mocked(loadMembers).mock.calls.length;
+
+    vi.mocked(removeEmployee).mockResolvedValue(undefined);
+    employees.mockResolvedValue({ active: [employee('EMP_0001', 'Wanjiru Kamau')], codes: ['EMP_0001', 'EMP_0002'] });
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Otieno Odhiambo' }));
+    const dialog = await screen.findByRole('alertdialog');
+    fireEvent.click(within(dialog).getAllByRole('button').find((b) => /delete|remove/i.test(b.textContent ?? '') && !/cancel/i.test(b.textContent ?? ''))!);
+
+    await waitFor(() => expect(screen.queryByText('Otieno Odhiambo')).not.toBeInTheDocument());
+    expect(vi.mocked(loadMembers).mock.calls.length).toBeGreaterThan(membersBefore);
+    expect(options).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the table when a refresh fails and offers Try again', async () => {
+    options.mockResolvedValue(employeeOptions);
+    employees.mockResolvedValue({ active: [employee('EMP_0001', 'Wanjiru Kamau')], codes: ['EMP_0001'] });
+    const first = renderStep(<EmployeesStep />);
+    expect(await screen.findByText('Wanjiru Kamau')).toBeInTheDocument();
+    first.unmount();
+
+    employees.mockRejectedValue(new Error('Gateway timeout'));
+    renderStep(<EmployeesStep />);
+    expect(await screen.findByText(/Couldn’t refresh this list/)).toBeInTheDocument();
+    expect(screen.getByText('Wanjiru Kamau')).toBeInTheDocument();
   });
 });
