@@ -1420,6 +1420,48 @@ describe('digit-user-preferences-service runs the implementation its definition 
   });
 });
 
+describe('egovio images publish only from the canonical repository', () => {
+  // Review of #2368: two forks carrying these workflows and egovio push credentials
+  // overwrote egovio/<image>:nightly-develop with their own develop every evening (the Go
+  // digit-user-preferences-service among it) and pushed this repo's develop-<sha8> out of
+  // the keep-5 prune. Checked by numeric id: a name check would skip every build after a
+  // rename or transfer, silently.
+  const CANONICAL_ID = '1009464192'; // gh api repos/egovernments/Citizen-Complaint-Resolution-System --jq .id
+  const wf = (name: string) => readYaml(`.github/workflows/${name}`);
+
+  test('build-images.yml runs no job outside it, for every caller', () => {
+    const { jobs } = wf('build-images.yml');
+    expect(jobs.enumerate.if).toBe(`github.repository_id == '${CANONICAL_ID}'`);
+    // Every other job needs enumerate, directly or through another job; one that
+    // overrides the implicit success() with !cancelled() must check enumerate itself.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const needs = (j: any): string[] => [].concat(j.needs ?? []);
+    const reaches = (name: string): boolean =>
+      name === 'enumerate' || needs(jobs[name]).some((n) => reaches(n));
+    for (const [name, job] of Object.entries(jobs)) {
+      if (name === 'enumerate') continue;
+      expect([name, needs(job).some((n) => reaches(n))]).toEqual([name, true]);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const cond = String((job as any).if ?? '');
+      if (/cancelled\(\)|always\(\)|failure\(\)/.test(cond)) {
+        expect([name, cond]).toEqual([name, expect.stringContaining("needs.enumerate.result == 'success'")]);
+      }
+    }
+    // Both publishers go through it.
+    for (const caller of ['nightly-build-develop.yml', 'release-build.yml']) {
+      expect(wf(caller).jobs.build.uses).toBe('./.github/workflows/build-images.yml');
+    }
+  });
+
+  test('turbopass-build.yml pushes only from it', () => {
+    const { jobs } = wf('turbopass-build.yml');
+    const step = jobs.tag.steps.find((st: { id?: string }) => st.id === 'tag');
+    expect(step.env.REPOSITORY_ID).toBe('${{ github.repository_id }}');
+    expect(step.run).toContain(`[ "$REPOSITORY_ID" != "${CANONICAL_ID}" ]; then\n  echo "push=false"`);
+    expect(jobs.manifest.if).toBe("needs.tag.outputs.push == 'true'");
+  });
+});
+
 describe('tenant-master repair is report-only unless opted in', () => {
   // Kanav review of #2097 (4079418087): the repair ran with APPLY=1 by default on every
   // non-pg deploy, so a live tenant that deliberately withheld grants got pg's back.

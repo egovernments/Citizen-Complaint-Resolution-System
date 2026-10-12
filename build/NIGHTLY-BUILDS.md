@@ -36,10 +36,21 @@ it with different refs/tags.
    `nightly-develop` (rolling) and `develop-<short-sha>` (immutable — the first
    8 hex chars of the commit it built), then prunes to the **5 most recently
    pushed** snapshot tags per image. This is the public source the compose
-   defaults and `local-setup/local-deploy.sh` pull from. The job runs only in
-   `egovernments/Citizen-Complaint-Resolution-System`: a fork holding egovio
-   credentials would otherwise publish its own `develop` under these same names
-   and prune this repo's snapshots.
+   defaults and `local-setup/local-deploy.sh` pull from. It publishes only from
+   `egovernments/Citizen-Complaint-Resolution-System`: `build-images.yml`, which
+   this and the release build both call, skips every job in any other repository
+   (checked by the numeric repository id, so a rename does not silently stop the
+   builds), and `turbopass-build.yml` builds there without pushing. A fork holding
+   egovio credentials would otherwise publish its own `develop` under these same
+   names and prune this repo's snapshots, which two forks did every evening. The
+   guard runs from each repository's own default branch, so it stops a fork only
+   once the fork carries it: merging it here does not, and the lasting fix is to
+   disable those forks' nightly workflow or rotate the egovio `DOCKER_ACCESS_TOKEN`
+   they hold. The dispatch-only pipelines (`build.yml`, `spa-build.yml`,
+   `pgr-ui-build.yml`) are left open: someone has to run them by hand, and they tag
+   `<branch>-<sha>` of the commit they built, so a fork's run cannot overwrite this
+   repo's tags (a fork's `develop` dispatch does still add `develop-<sha>` tags that
+   the keep-5 prune counts).
 
 2. **GitHub Actions — on release published.**
    [`.github/workflows/release-build.yml`](../.github/workflows/release-build.yml).
