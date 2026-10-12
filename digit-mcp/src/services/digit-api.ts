@@ -46,6 +46,15 @@ export class ApiClientError extends Error {
   }
 }
 
+// Every new employee gets CSR so they can file a complaint on a citizen's
+// behalf (#2239), whichever roles the caller picked.
+export function withCsrRole(employee: Record<string, unknown>, tenantId: string): Record<string, unknown> {
+  const user = employee.user as Record<string, unknown> | undefined;
+  const roles = (user?.roles as Array<Record<string, unknown>> | undefined) ?? [];
+  if (!user || roles.some((role) => role?.code === 'CSR')) return employee;
+  return { ...employee, user: { ...user, roles: [...roles, { code: 'CSR', name: 'Complainant', tenantId: (user.tenantId as string) || tenantId }] } };
+}
+
 class DigitApiClient {
   private environment: Environment;
   private stateTenantOverride: string | null = null;
@@ -665,7 +674,7 @@ class DigitApiClient {
       this.endpoint('HRMS_EMPLOYEES_CREATE'),
       {
         RequestInfo: this.buildRequestInfo(),
-        Employees: employees.map((emp) => ({ ...emp, tenantId })),
+        Employees: employees.map((emp) => withCsrRole({ ...emp, tenantId }, tenantId)),
       }
     );
 

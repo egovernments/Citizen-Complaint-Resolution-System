@@ -10,6 +10,15 @@ export interface DigitApiClientConfig {
   endpointOverrides?: Record<string, string>;
 }
 
+
+// Every new employee gets CSR so they can file a complaint on a citizen's
+// behalf (#2239), whichever roles the caller picked.
+export function withCsrRole(employee: Record<string, unknown>, tenantId: string): Record<string, unknown> {
+  const user = employee.user as Record<string, unknown> | undefined;
+  const roles = (user?.roles as Array<Record<string, unknown>> | undefined) ?? [];
+  if (!user || roles.some((role) => role?.code === 'CSR')) return employee;
+  return { ...employee, user: { ...user, roles: [...roles, { code: 'CSR', name: 'Complainant', tenantId: (user.tenantId as string) || tenantId }] } };
+}
 export class DigitApiClient {
   private baseUrl: string;
   private _stateTenantId: string;
@@ -342,7 +351,7 @@ export class DigitApiClient {
 
   async employeeCreate(tenantId: string, employees: Record<string, unknown>[]): Promise<Record<string, unknown>[]> {
     const data = await this.request<{ Employees?: Record<string, unknown>[] }>(this.endpoint('HRMS_EMPLOYEES_CREATE'), {
-      RequestInfo: this.buildRequestInfo(), Employees: employees.map((emp) => ({ ...emp, tenantId })),
+      RequestInfo: this.buildRequestInfo(), Employees: employees.map((emp) => withCsrRole({ ...emp, tenantId }, tenantId)),
     });
     return data.Employees || [];
   }

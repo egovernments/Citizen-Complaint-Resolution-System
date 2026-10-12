@@ -616,6 +616,11 @@ class UnifiedExcelReader:
                 print(f"   ❌ Row {idx} ({user_name}): no valid roles resolved — skipping employee")
                 continue
 
+            # Every employee gets CSR so they can file a complaint on a
+            # citizen's behalf (#2239), whichever roles the sheet lists.
+            if not any(r['code'] == 'CSR' for r in roles):
+                roles.append({'code': 'CSR', 'name': 'Complainant', 'tenantId': tenant_id})
+
             # Get boundary info (defaults to City level)
             hierarchy = str(row.get('Hierarchy Type', 'ADMIN')).strip()
             boundary_type = str(row.get('Boundary Type', 'City')).strip()

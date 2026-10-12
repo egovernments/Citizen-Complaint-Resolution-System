@@ -4,6 +4,15 @@ import { apiClient } from '../client';
 import { ENDPOINTS } from '../config';
 import type { Employee, EmployeeUser, Role } from '../types';
 
+// Every new employee gets CSR so they can file a complaint on a citizen's
+// behalf (#2239), whichever roles the admin picked.
+export function withCsrRole(employee: Employee): Employee {
+  const roles = employee.user?.roles ?? [];
+  if (!employee.user || roles.some((role) => role.code === 'CSR')) return employee;
+  const tenantId = employee.user.tenantId || employee.tenantId;
+  return { ...employee, user: { ...employee.user, roles: [...roles, { code: 'CSR', name: 'Complainant', tenantId }] } };
+}
+
 export const hrmsService = {
   // ============================================
   // Employee Search
@@ -123,7 +132,7 @@ export const hrmsService = {
 
     const response = await apiClient.post(ENDPOINTS.HRMS_EMPLOYEES_CREATE, {
       RequestInfo: apiClient.buildRequestInfo({ action: '_create' }),
-      Employees: [employee],
+      Employees: [withCsrRole(employee)],
     });
 
     const created = (response.Employees || []) as Employee[];

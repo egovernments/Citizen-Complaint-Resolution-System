@@ -1,6 +1,6 @@
 import { describe, it, beforeEach } from 'node:test';
 import * as assert from 'node:assert/strict';
-import { DigitApiClient } from './DigitApiClient.js';
+import { DigitApiClient, withCsrRole } from './DigitApiClient.js';
 import { ApiClientError, isSessionExpired } from './errors.js';
 
 describe('DigitApiClient', () => {
@@ -207,5 +207,26 @@ describe('isSessionExpired', () => {
       isSessionExpired(400, [{ code: 'INVALID_SEARCH', message: 'tenantId is required' }]),
       false,
     );
+  });
+});
+
+describe('withCsrRole — every new employee can file complaints (#2239)', () => {
+  const roleCodes = (employee: Record<string, unknown>) =>
+    ((employee.user as Record<string, unknown>).roles as Array<{ code: string }>).map((r) => r.code);
+
+  it('adds CSR on the employee tenant to the roles the caller picked', () => {
+    const out = withCsrRole({ code: 'E1', user: { tenantId: 'ke', roles: [{ code: 'GRO', name: 'GRO', tenantId: 'ke' }] } }, 'pg');
+    assert.deepEqual(roleCodes(out), ['GRO', 'CSR']);
+    assert.equal(((out.user as Record<string, unknown>).roles as Array<{ tenantId: string }>)[1].tenantId, 'ke');
+  });
+
+  it('falls back to the request tenant and leaves an existing CSR alone', () => {
+    assert.deepEqual(roleCodes(withCsrRole({ user: {} }, 'ke')), ['CSR']);
+    assert.deepEqual(roleCodes(withCsrRole({ user: { roles: [{ code: 'CSR' }] } }, 'ke')), ['CSR']);
+  });
+
+  it('leaves an employee without a user untouched', () => {
+    const employee = { code: 'E1' };
+    assert.equal(withCsrRole(employee, 'ke'), employee);
   });
 });
