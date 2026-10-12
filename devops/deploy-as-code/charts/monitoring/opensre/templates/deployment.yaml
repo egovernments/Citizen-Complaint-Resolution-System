@@ -48,6 +48,8 @@ spec:
               value: "true"
             - name: OPENSRE_GATUS_URL
               value: {{ .Values.endpoints.gatusUrl | quote }}
+            - name: OPENSRE_DEPLOYMENT
+              value: {{ printf "%s You can read these namespaces: %s." (trim .Values.deployment.description) (join ", " .Values.rbac.namespaces) | quote }}
             - name: OPENSRE_SWEEP_INTERVAL_MINUTES
               value: {{ .Values.sweep.intervalMinutes | quote }}
             - name: OPENSRE_DEDUPE_HOURS
@@ -100,15 +102,13 @@ spec:
             - name: TMPDIR
               value: /tmp
           volumeMounts:
+            # The loop, the redaction rules and the optional runbook, in one
+            # projected volume: a second mount nested inside a ConfigMap volume
+            # (a subPath file under /opt/ccrs) can fail to mount or vanish when
+            # the outer ConfigMap is updated.
             - name: config
               mountPath: /opt/ccrs
               readOnly: true
-            {{- if .Values.runbook.configMapName }}
-            - name: runbook
-              mountPath: /opt/ccrs/known-issues.md
-              subPath: known-issues.md
-              readOnly: true
-            {{- end }}
             # Writable paths, with the root filesystem read-only: the agent's
             # own state (~/.opensre, ~/.kube), its log file, and scratch space.
             - name: home
@@ -121,14 +121,19 @@ spec:
 {{ toYaml .Values.resources | indent 12 }}
       volumes:
         - name: config
-          configMap:
-            name: opensre
+          projected:
             defaultMode: 0555
-        {{- if .Values.runbook.configMapName }}
-        - name: runbook
-          configMap:
-            name: {{ .Values.runbook.configMapName }}
-        {{- end }}
+            sources:
+              - configMap:
+                  name: opensre
+              {{- if .Values.runbook.configMapName }}
+              # Same path as the compose tier's runbook mount.
+              - configMap:
+                  name: {{ .Values.runbook.configMapName }}
+                  items:
+                    - key: known-issues.md
+                      path: runbook/known-issues.md
+              {{- end }}
         # The pod log is the durable record — cluster logging (and Loki, when
         # the logs tier is on) collects it. These are working space only.
         - name: home

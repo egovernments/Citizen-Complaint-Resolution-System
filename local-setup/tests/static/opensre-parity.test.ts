@@ -74,7 +74,6 @@ describe('OpenSRE compose/helm parity', () => {
     'kubernetes_get_events',
     'kubernetes_get_pod_logs',
     'kubernetes_get_resource',
-    'kubernetes_list_configmaps',
     'kubernetes_list_daemonsets',
     'kubernetes_list_deployments',
     'kubernetes_list_ingresses',
@@ -132,7 +131,13 @@ describe('OpenSRE compose/helm parity', () => {
     }
   });
 
-  test('the Kubernetes RBAC stays read-only and excludes secrets', () => {
+  /**
+   * Whatever the agent reads goes to the model provider, so the RBAC is about
+   * data as much as writes. get/list only; no secrets, and no configmaps
+   * (OpenSRE returns their data whole). Namespaced resources are granted per
+   * namespace through RoleBindings; the only cluster-wide grant is nodes.
+   */
+  test('the Kubernetes RBAC stays read-only, per namespace, and excludes secrets and configmaps', () => {
     const rbac = code(read(CHART_DIR, 'templates', 'rbac.yaml'));
     const verbs = [...rbac.matchAll(/^\s*verbs:\s*\[(.*)\]$/gm)].map((m) => m[1]);
     expect(verbs.length).toBeGreaterThan(0);
@@ -140,5 +145,58 @@ describe('OpenSRE compose/helm parity', () => {
       expect(v.replace(/["'\s]/g, '').split(',').sort()).toEqual(['get', 'list']);
     }
     expect(rbac).not.toMatch(/\bsecrets\b/);
+    expect(rbac).not.toMatch(/\bconfigmaps\b/);
+    expect(rbac).not.toMatch(/["*]\*["*]/);
+
+    // Each ClusterRoleBinding may only point at a role whose rules are nodes.
+    const docs = rbac.split(/^---$/m);
+    const resourcesOf = (role: string) => {
+      const doc = docs.find((d) => /kind: ClusterRole\n/.test(d) && new RegExp(`name: ${role}\\n`).test(d));
+      expect(doc).toBeDefined();
+      return [...doc!.matchAll(/resources:\s*\[(.*)\]/g)].flatMap((m) => m[1].replace(/["'\s]/g, '').split(','));
+    };
+    const clusterBound = docs
+      .filter((d) => /kind: ClusterRoleBinding/.test(d))
+      .map((d) => d.match(/roleRef:[\s\S]*?name: (\S+)/)![1]);
+    expect(clusterBound.length).toBeGreaterThan(0);
+    for (const role of clusterBound) expect(resourcesOf(role)).toEqual(['nodes']);
+    expect(rbac).toMatch(/\{\{-? range \.Values\.rbac\.namespaces \}\}[\s\S]*?kind: RoleBinding[\s\S]*?namespace: \{\{ \. \}\}/);
+  });
+
+  /**
+   * Review 4181060071: the prompt used to describe every deployment as one
+   * Docker Compose VM, including on Kubernetes. Each tier now describes itself.
+   */
+  test('each tier describes its own deployment to the agent', () => {
+    const loop = code(read(COMPOSE_DIR, 'run-sweeps.sh'));
+    expect(loop).toMatch(/^DEPLOYMENT=\$\{OPENSRE_DEPLOYMENT:-/m);
+    const prompt = loop.match(/^\s*prompt="([\s\S]*?)"$/m)?.[1];
+    expect(prompt).toContain('$DEPLOYMENT');
+    expect(prompt).not.toMatch(/Docker Compose VM|Redpanda/);
+
+    const compose = read(REPO, 'local-setup', 'docker-compose.opensre.yml');
+    expect(compose).toMatch(/^\s+OPENSRE_DEPLOYMENT: >-\n\s+\S/m);
+    expect(read(CHART_DIR, 'templates', 'deployment.yaml')).toMatch(
+      /- name: OPENSRE_DEPLOYMENT\n\s+value: .*\.Values\.deployment\.description/,
+    );
+    expect(read(CHART_DIR, 'values.yaml')).toMatch(/^deployment:\n\s+description: >-\n\s+\S/m);
+  });
+
+  /**
+   * Review 4181060081 and 4181060087: the runbook is mounted as a directory on
+   * compose (a missing bind-mounted file becomes a root-owned directory) and
+   * projected into the one /opt/ccrs volume on Kubernetes (no mount nested in
+   * a ConfigMap volume). Both put it where the loop looks.
+   */
+  test('both tiers mount the runbook where the loop reads it, without a nested mount', () => {
+    const loop = code(read(COMPOSE_DIR, 'run-sweeps.sh'));
+    expect(loop).toMatch(/^RUNBOOK=\/opt\/ccrs\/runbook\/known-issues\.md$/m);
+    expect(read(REPO, 'local-setup', 'docker-compose.opensre.yml')).toMatch(
+      /^\s+- \.\/opensre\/runbook:\/opt\/ccrs\/runbook:ro$/m,
+    );
+    const deployment = read(CHART_DIR, 'templates', 'deployment.yaml');
+    expect(code(deployment)).not.toMatch(/subPath/);
+    expect(deployment).toMatch(/projected:[\s\S]*?key: known-issues\.md\n\s+path: runbook\/known-issues\.md/);
+    expect([...code(deployment).matchAll(/mountPath: \/opt\/ccrs\b/g)]).toHaveLength(1);
   });
 });

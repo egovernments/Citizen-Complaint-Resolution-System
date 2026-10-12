@@ -157,4 +157,4 @@ local-testing/
 
 # OpenSRE agent output and the runbook copy the deploy drops beside it
 local-setup/opensre/logs/
-local-setup/opensre/known-issues.md
+local-setup/opensre/runbook/

@@ -1,12 +1,14 @@
 #!/bin/sh
-# Sweep loop for OpenSRE on a CCRS compose box (docker-compose.opensre.yml).
+# Sweep loop for OpenSRE on CCRS: the compose tier (docker-compose.opensre.yml)
+# and, byte for byte, the Helm chart (charts/monitoring/opensre).
 #
 # Diagnose-only and log-only. Every OPENSRE_SWEEP_INTERVAL_MINUTES it asks Gatus
 # what is failing:
 #   - nothing failing           -> one "all_clear" line, no model call
-#   - same failures as an investigation within OPENSRE_DEDUPE_HOURS
+#   - every failing check already covered (see "Per-check dedupe" below)
 #                               -> one "unchanged" line, no model call
-#   - otherwise                 -> one `opensre ask` investigation
+#   - otherwise                 -> one `opensre ask` investigation of every
+#                                  failing check
 # Results go to $LOG_DIR/sweeps.jsonl (one JSON object per line), a readable
 # $LOG_DIR/investigations.log, and stdout, which promtail ships to Loki. Nothing
 # is sent anywhere else: no Slack, no alert channel.
@@ -22,8 +24,15 @@ INTERVAL_MIN=${OPENSRE_SWEEP_INTERVAL_MINUTES:-15}
 DEDUPE_HOURS=${OPENSRE_DEDUPE_HOURS:-6}
 GATUS_URL=${OPENSRE_GATUS_URL:-http://gatus:8080}
 TIMEOUT_S=${OPENSRE_INVESTIGATION_TIMEOUT_SECONDS:-900}
-RUNBOOK=/opt/ccrs/known-issues.md
-STATE_FILE="$LOG_DIR/.last-investigation"
+# A directory, not a file, on both tiers: a missing bind-mounted FILE makes
+# Docker create a root-owned directory in its place, a missing directory is
+# just empty.
+RUNBOOK=/opt/ccrs/runbook/known-issues.md
+# What this deployment is, for the prompt: where things run, which components
+# exist, and what a human acts with. Each tier sets its own
+# (docker-compose.opensre.yml, the chart's deployment.description), so the
+# agent does not suggest docker commands on Kubernetes or kubectl on a VM.
+DEPLOYMENT=${OPENSRE_DEPLOYMENT:-not described (OPENSRE_DEPLOYMENT is unset)}
 # Docker API for the container-state page (compose tier; see container_state).
 # Empty turns it off, which is the Kubernetes default: there the agent reads
 # pod state through the cluster API instead.
@@ -42,6 +51,12 @@ CONTAINER_STATE="$HOME/container-state.md"
 # simply unavailable there. Read a tool's implementation before adding it, and
 # check the list again when bumping OPENSRE_VERSION. The Viewer Grafana token
 # and the get/list-only RBAC still refuse writes if a tool ever tried one.
+#
+# Reading is not the only risk: whatever a tool returns goes to the model
+# provider. kubernetes_list_configmaps is left off because it returns every
+# ConfigMap's full data, and the chart's RBAC grants no configmaps either. The
+# pod and workload tools are on because OpenSRE drops env values from what
+# they return (names only) and strips kubectl's last-applied annotation.
 READ_ONLY_TOOLS="
   query_grafana_metrics query_grafana_logs query_grafana_service_names
   query_grafana_traces query_grafana_alert_rules query_grafana_annotations
@@ -50,7 +65,7 @@ READ_ONLY_TOOLS="
   kubernetes_list_pods kubernetes_get_pod_logs kubernetes_describe_pod
   kubernetes_get_events kubernetes_list_deployments kubernetes_list_statefulsets
   kubernetes_list_daemonsets kubernetes_list_services kubernetes_list_ingresses
-  kubernetes_list_configmaps kubernetes_list_nodes kubernetes_get_resource
+  kubernetes_list_nodes kubernetes_get_resource
 "
 
 # OpenSRE reads ~/.opensre/guardrails.yml before every LLM call. It masks
@@ -98,6 +113,77 @@ emit() { printf '%s\n' "$1" | tee -a "$LOG_DIR/sweeps.jsonl"; }
 
 note() { # note <kind> <message>
   emit "$(jq -cn --arg ts "$(now)" --arg kind "$1" --arg msg "$2" '{ts: $ts, kind: $kind, message: $msg}')"
+}
+
+# The Ansible deploy creates the compose tier's ./opensre/logs owned by this
+# container's user. Started without it (a plain `docker compose up`), Docker
+# creates the directory owned by root, and every write here would fail. Keep
+# running instead: log inside the container, and say so on stdout, which still
+# reaches `docker logs` and Loki.
+if ! { [ -d "$LOG_DIR" ] && [ -w "$LOG_DIR" ]; }; then
+  unwritable=$LOG_DIR
+  LOG_DIR="$HOME/logs"
+  mkdir -p "$LOG_DIR"
+  note warning "Cannot write $unwritable; logging to $LOG_DIR inside the container, which is lost when it is recreated. Compose: sudo chown 10001:10001 opensre/logs, then recreate the container."
+fi
+
+# Per-check dedupe. Each failing Gatus check that went into an investigation
+# is remembered, as {key: {last: <epoch>, ok: <bool>, failures: <n>}}. A check
+# is covered for OPENSRE_DEDUPE_HOURS after a completed investigation, and
+# after a failed or timed-out one (which may still have been billed) for 2
+# sweeps, then 4, 8, ... up to OPENSRE_DEDUPE_HOURS. A sweep investigates only
+# when some failing check is not covered, so a noisy incident whose set of
+# failing checks keeps changing does not start a new run on every change, and
+# a run that keeps failing settles at the same rate as one that succeeds.
+DEDUPE_FILE="$LOG_DIR/.dedupe.json"
+DEDUPE_S=$((DEDUPE_HOURS * 3600))
+BACKOFF_S=$((INTERVAL_MIN * 60 * 2))
+
+# The stored state, or {} when there is none or it does not parse.
+dedupe_state() {
+  state=$(jq -c 'if type == "object" then . else {} end' "$DEDUPE_FILE" 2>/dev/null)
+  [ -n "$state" ] || state='{}'
+  printf '%s' "$state"
+}
+
+# For each failing check: until when an earlier investigation covers it
+# (0 = never investigated).
+COVERED_UNTIL='
+def window($e):
+  if $e.ok then $dedupe
+  else [reduce range(1; $e.failures) as $i ($backoff; . * 2), $dedupe] | min end;
+[ .[] | .key as $k | $state[$k] as $e
+  | {key: $k, until: (if $e == null then 0 else $e.last + window($e) end)} ]
+'
+covered_until() { # covered_until <state> <failing>
+  printf '%s' "$2" | jq -c --argjson state "$1" --argjson dedupe "$DEDUPE_S" \
+    --argjson backoff "$BACKOFF_S" "$COVERED_UNTIL"
+}
+
+# Record an investigation of every check in <failing>. Entries older than
+# twice the dedupe window are dropped; the backoff never exceeds the window,
+# so a check that keeps failing keeps its failure count.
+record_investigation() { # record_investigation <state> <failing> <now> <ok>
+  printf '%s' "$1" | jq -c --argjson checks "$2" --argjson now "$3" --argjson ok "$4" \
+    --argjson keep "$((DEDUPE_S * 2))" '
+    reduce ($checks[] | .key) as $k (.;
+      .[$k] = {last: $now, ok: $ok,
+               failures: (if $ok then 0
+                          else (if .[$k].ok == false then .[$k].failures else 0 end) + 1 end)})
+    | with_entries(select($now - .value.last < $keep))' > "$DEDUPE_FILE.tmp" \
+    && mv "$DEDUPE_FILE.tmp" "$DEDUPE_FILE"
+}
+
+utc() { date -u -d "@$1" +%Y-%m-%dT%H:%M:%SZ; }
+
+# A Grafana token that stopped working (Grafana's data wiped, the service
+# account deleted) would otherwise only show as an agent that sees no metrics
+# or logs. The token goes to curl on stdin, not on its command line.
+grafana_rejects_token() {
+  [ -n "${GRAFANA_READ_TOKEN:-}" ] && [ -n "${GRAFANA_INSTANCE_URL:-}" ] || return 1
+  code=$(printf 'header = "Authorization: Bearer %s"\n' "$GRAFANA_READ_TOKEN" \
+    | curl -s -o /dev/null -w '%{http_code}' --max-time 10 -K - "$GRAFANA_INSTANCE_URL/api/user")
+  [ "$code" = 401 ]
 }
 
 # Gatus endpoints failing now AND on at least 2 of their last 3 checks, so one
@@ -185,21 +271,25 @@ sweep() {
 
   fingerprint=$(printf '%s' "$failing" | jq -r '[.[].key] | sort | join(",")')
   now_s=$(date +%s)
-  if [ -f "$STATE_FILE" ]; then
-    read -r last_fp last_s < "$STATE_FILE" || true
-    if [ "${last_fp:-}" = "$fingerprint" ] && [ $((now_s - ${last_s:-0})) -lt $((DEDUPE_HOURS * 3600)) ]; then
-      note unchanged "Same failing checks as the investigation at $(date -u -d "@$last_s" +%Y-%m-%dT%H:%M:%SZ); not re-investigating ($fingerprint)"
-      return
-    fi
+  state=$(dedupe_state)
+  cover=$(covered_until "$state" "$failing")
+  due=$(printf '%s' "$cover" | jq -r --argjson now "$now_s" \
+    '[.[] | select(.until <= $now) | .key] | sort | join(",")')
+  if [ -z "$due" ]; then
+    next=$(printf '%s' "$cover" | jq '[.[].until] | min')
+    note unchanged "Every failing check is covered by an investigation in the last ${DEDUPE_HOURS} h, or backing off after a failed one; not re-investigating until $(utc "$next") ($fingerprint)"
+    return
   fi
 
   checks=$(printf '%s' "$failing" | jq -r '.[] | "- \(.group) / \(.name) [\(.key)]: \(.detail)"')
-  prompt="Infrastructure sweep of this DIGIT CCRS deployment (a single Docker Compose VM) at $(now). Gatus reports these health checks failing:
+  prompt="Infrastructure sweep of this DIGIT CCRS deployment at $(now). The deployment: $DEPLOYMENT
+
+Gatus reports these health checks failing:
 $checks
 
-You are diagnosing only; a human acts on what you find. Scope is infrastructure only: the host, containers, the observability stack, the API gateway, databases, the Redpanda broker and consumer lag. Do not investigate application data such as complaints, notifications or users.
+You are diagnosing only; a human acts on what you find. Scope is infrastructure only: the host or nodes, containers, the observability stack, the API gateway, databases, the Kafka broker and consumer lag. Do not investigate application data such as complaints, notifications or users.
 
-For each failing check give: the root cause with evidence from your tools (Grafana/Prometheus metrics, Loki logs, Tempo traces, Kafka consumer-group lag), whether the checks share a cause, what citizens experience, and the exact commands a human should run with the risk of each. Say 'unknown' rather than guess. To find which container is using memory or CPU, query Prometheus: on Docker Compose the container_* metrics (job container-stats) are labelled container_name and include restarts and uptime; on Kubernetes use cAdvisor's container_* metrics, labelled namespace/pod/container. The Java services also export jvm_* (heap, garbage collection, threads) and http_* metrics labelled service_name. The attached known-issues page is this deployment's runbook. When a container-state page is attached, it is a docker inspect summary of every container in this deployment taken just before this investigation (status, health and its last check output, exit code, OOM kill, restarts); check it before concluding from missing logs or metrics that a service is down. Only your final message is recorded: make it the complete report, and never refer to an earlier message."
+For each failing check give: the root cause with evidence from your tools (Grafana/Prometheus metrics, Loki logs, traces where this deployment has them, Kafka consumer-group lag, and the cluster API on Kubernetes), whether the checks share a cause, what citizens experience, and the exact commands a human should run on this deployment, with the risk of each. Say 'unknown' rather than guess. To find which container is using memory or CPU, query Prometheus: on Docker Compose the container_* metrics (job container-stats) are labelled container_name and include restarts and uptime; on Kubernetes use cAdvisor's container_* metrics, labelled namespace/pod/container. The Java services also export jvm_* (heap, garbage collection, threads) and http_* metrics labelled service_name. The attached known-issues page is this deployment's runbook. When a container-state page is attached, it is a docker inspect summary of every container in this deployment taken just before this investigation (status, health and its last check output, exit code, OOM kill, restarts); check it before concluding from missing logs or metrics that a service is down. Only your final message is recorded: make it the complete report, and never refer to an earlier message."
 
   set -- --json ask --ephemeral
   for tool in $READ_ONLY_TOOLS; do set -- "$@" --allowed-tool "$tool"; done
@@ -212,8 +302,11 @@ For each failing check give: the root cause with evidence from your tools (Grafa
       note warning "Docker API unreachable at $DOCKER_API_URL; investigating without container state"
     fi
   fi
+  if grafana_rejects_token; then
+    note warning "Grafana rejected the read token (401), so this investigation has no Grafana metrics, logs or traces. Compose: redeploy, which mints a new token. Kubernetes: put a new Viewer token in the opensre Secret."
+  fi
 
-  note investigating "Investigating: $fingerprint"
+  note investigating "Investigating: $fingerprint (not covered by an earlier investigation: $due)"
   started=$(date +%s)
   out=$(timeout "$TIMEOUT_S" opensre "$@" "$prompt" 2>"$LOG_DIR/.last-stderr")
   rc=$?
@@ -234,10 +327,14 @@ For each failing check give: the root cause with evidence from your tools (Grafa
     printf '\n\n'
   } >> "$LOG_DIR/investigations.log"
 
-  # Only a completed investigation suppresses repeats; a failed one is retried
-  # on the next sweep.
-  if [ "$rc" -eq 0 ]; then
-    printf '%s %s\n' "$fingerprint" "$now_s" > "$STATE_FILE"
+  # Recorded whatever the exit code: a run that failed or timed out may have
+  # been billed, so it backs off rather than being retried every sweep.
+  if [ "$rc" -eq 0 ]; then ok=true; else ok=false; fi
+  if ! record_investigation "$state" "$failing" "$now_s" "$ok"; then
+    note error "Could not write $DEDUPE_FILE; the next sweep may investigate the same checks again"
+  elif [ "$ok" = false ]; then
+    next=$(covered_until "$(dedupe_state)" "$failing" | jq '[.[].until] | min')
+    note warning "Investigation failed (exit $rc); these checks are retried from $(utc "$next")"
   fi
 }
 

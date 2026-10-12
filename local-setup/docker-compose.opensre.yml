@@ -28,10 +28,12 @@ services:
     build:
       context: ./opensre
     image: ccrs-opensre:0.1.2026.9.21
-    # Always go through the build (a cached no-op when nothing changed), so an
-    # edit to run-sweeps.sh or guardrails.yml is picked up by the next deploy
-    # without a manual `docker compose build`.
-    pull_policy: build
+    # Never pulled (no registry has this tag), and not rebuilt by every
+    # `up -d`: compose builds it when it is missing, and the Ansible deploy
+    # rebuilds it once per run ("OpenSRE — build the agent image"), so an edit
+    # to run-sweeps.sh or guardrails.yml reaches the box on the next deploy.
+    # Without Ansible, run `docker compose build opensre` after such an edit.
+    pull_policy: never
     container_name: digit-opensre
     restart: unless-stopped
     security_opt: ["no-new-privileges:true"]
@@ -44,6 +46,13 @@ services:
       OPENSRE_SWEEP_INTERVAL_MINUTES: ${OPENSRE_SWEEP_INTERVAL_MINUTES:-15}
       OPENSRE_DEDUPE_HOURS: ${OPENSRE_DEDUPE_HOURS:-6}
       OPENSRE_GATUS_URL: http://gatus:8080
+      # The deployment, as the agent should picture it when it names components
+      # and writes the commands a human should run.
+      OPENSRE_DEPLOYMENT: >-
+        One VM running the stack with Docker Compose (project
+        ${COMPOSE_PROJECT_NAME}). Kafka is Redpanda (service redpanda);
+        traces are in Tempo when it runs; container logs reach Loki through
+        promtail. A human acts with docker and docker compose on the VM.
       # The sweep loop attaches a docker inspect summary (state fields only, never
       # env or command) of this project's containers to each investigation. The
       # proxy runs from observability_level metrics up; without it the loop logs a
@@ -70,10 +79,15 @@ services:
       OPENSRE_SENTRY_DISABLED: "1"
       OPENSRE_PROMPT_LOG_DISABLED: "1"
     volumes:
+      # Created by the deploy, owned by the container user (uid 10001). Without
+      # the deploy Docker creates it owned by root; the loop then logs inside
+      # the container and says so (fix: sudo chown 10001:10001 opensre/logs).
       - ./opensre/logs:/var/log/opensre
-      # Copied here by the deploy from docs/releases/2.12/operations/known-issues.md and
-      # attached to each investigation as its runbook.
-      - ./opensre/known-issues.md:/opt/ccrs/known-issues.md:ro
+      # The deploy copies docs/releases/2.12/operations/known-issues.md in here,
+      # and each investigation attaches it as its runbook. A directory, not the
+      # file: a missing bind-mounted file becomes a root-owned directory, a
+      # missing directory is just empty and the loop runs without a runbook.
+      - ./opensre/runbook:/opt/ccrs/runbook:ro
     # The agent is a short-lived Python process per investigation plus a shell
     # loop; 1G is headroom for large Loki/Prometheus responses.
     deploy:

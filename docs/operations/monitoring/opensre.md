@@ -24,8 +24,18 @@ failing.
 | Gatus says | What happens | Model call? |
 |---|---|---|
 | Everything passing | One `all_clear` line | No |
-| Same failing checks as an investigation in the last `opensre_dedupe_hours` (default 6) | One `unchanged` line | No |
-| Anything else failing (now **and** on 2 of the last 3 checks) | One investigation | Yes |
+| Every failing check is already covered (below) | One `unchanged` line, saying when it will look again | No |
+| A failing check (now **and** on 2 of the last 3 checks) that nothing covers | One investigation of all failing checks | Yes |
+
+Dedupe is per check. An investigation covers each check it was given:
+
+- **Completed:** for `opensre_dedupe_hours` (default 6).
+- **Failed or timed out:** for 2 sweeps, then 4, then 8, and so on, up to `opensre_dedupe_hours`. A run
+  that fails may still have been billed, so it is never simply retried on the next sweep.
+
+So a noisy incident whose set of failing checks keeps changing starts a new investigation only
+when a check appears that no investigation has covered. To force a fresh look, delete
+`/opt/digit/opensre/logs/.dedupe.json`.
 
 An investigation is a single `opensre ask` run. The agent reads Grafana (Prometheus metrics,
 Loki logs, traces, alert rules and annotations), Tempo, Redpanda consumer-group lag and topic
@@ -46,7 +56,8 @@ notifications or users.
 | Read Gatus's status API | Touch any database |
 | Compose: read container state (status, health, exit code, OOM kill, restarts) through `docker-socket-proxy` | Write to Docker: the proxy refuses every write, and no socket is mounted |
 
-Read-only is enforced in two places:
+Read-only is enforced in two places (and [what leaves the box](#what-leaves-the-box) is
+limited separately):
 
 - **OpenSRE itself.** `opensre ask` runs a tool without approval only when the tool declares
   itself read-only, and **denies** everything else. In the pinned release that leaves only the
@@ -85,6 +96,18 @@ The flag appears in the rendered `/opt/digit/.env` as `OPENSRE_ENABLED`. The pro
 could not be created, the deploy prints a warning and continues. The agent then works from Tempo,
 Kafka lag and Gatus only, until a later deploy creates the token.
 
+Every deploy checks the stored token against Grafana and mints a new one if Grafana rejects it.
+That happens after the `grafana_data` volume is wiped, or when the service account or token is
+deleted. The sweep loop checks it too, and logs a `warning` on any investigation Grafana refuses.
+
+**Without Ansible** (`docker compose --profile opensre up` from `local-setup/`), the agent still
+starts, but Docker creates `opensre/logs/` owned by root. The loop then logs inside the container,
+which loses the log on every recreate, and says so in a `warning`. Fix it with
+`sudo chown 10001:10001 opensre/logs` and recreate the container. Copy
+`docs/releases/2.12/operations/known-issues.md` into `opensre/runbook/` to give it the runbook.
+After editing `run-sweeps.sh` or `guardrails.yml`, run `docker compose build opensre`; the deploy
+does this on every run.
+
 ## Where the output goes
 
 On the box, in `/opt/digit/opensre/logs/`:
@@ -118,9 +141,13 @@ The same lines are on the container's stdout, so Grafana → Explore → Loki ha
 
 A sweep with nothing failing costs nothing; the Gatus check is a plain HTTP call. Each
 investigation is a paid model call. For reference, a comparable infrastructure investigation on
-bomet (four failing checks, about 20 tool calls) cost about **$0.65–$1** on Claude Opus 5. The
-6-hour de-duplication means a problem that persists costs at most four investigations a day.
-Set `opensre_model` to a cheaper model to trade depth for cost.
+bomet (four failing checks, about 20 tool calls) cost about **$0.65–$1** on Claude Opus 5.
+
+With the defaults (15-minute sweeps, 6-hour dedupe), a problem that persists costs at most four
+investigations a day. An investigation that keeps failing, for example on the 900-second timeout
+or a rate limit, runs at 0, 30 min, 1 h 30, 3 h 30, 7 h 30 and then every 6 hours: seven on its
+first day, then four a day. `local-setup/tests/static/opensre-sweep-loop.test.ts` pins both
+schedules. Set `opensre_model` to a cheaper model to trade depth for cost.
 
 ## What leaves the box
 
@@ -130,19 +157,32 @@ including log lines and metric values. Before every model call, OpenSRE applies
 
 - JWTs, and `access_token` / `authToken` / `Authorization` values. Kong's auth call puts the live
   session token in a query string that the proxy's access log carries into Loki.
-- Password, secret and API-key fields, `sk-` style keys, Novu `ApiKey` headers, OpenBao/Vault
-  tokens, and the `user:password@` part of database and other URLs.
+- Password, secret, salt, credential, token and API-key fields, including env-style names that
+  contain the word (`NOVU_SECRET_KEY=`, `IDENTITY_CONTROL_PLANE_TOKEN=`), and Kubernetes env
+  entries written as a name/value pair (`{"name":"DB_PASSWORD","value":"…"}`, or `name:` and
+  `value:` on two lines). Also `sk-` style keys, Novu `ApiKey` headers, OpenBao/Vault tokens, and
+  the `user:password@` part of database and other URLs.
 - Citizen contact details: mobile/phone/username/email fields, email addresses, OTP codes, and
   Kenyan, Mozambican and Indian mobile numbers, with or without the country code.
 
 **Not masked:** names and free-text complaint descriptions, which no pattern can reliably match.
 The phone rules also mask counters that look like a local mobile number (for example a 9-digit
 offset starting 82–87), so the agent can lose the odd metric value.
-Check a new rule inside the container before relying on it:
+
+**Limits of the mechanism.** OpenSRE stops scanning a message after 1000 matches, and rules it
+has not reached by then are not applied to that message. The credential rules therefore come
+first in the file. It also skips, with only a log warning, any pattern Python cannot compile.
+`local-setup/tests/static/opensre-guardrails.test.ts` compiles every pattern and runs leak samples
+through the same algorithm. Add a sample there with any new rule. To try a string inside the
+container:
 
 ```bash
-docker exec digit-opensre opensre guardrails test 'GET /user/_details?access_token=abc123'
+docker exec digit-opensre opensre guardrails test -- 'GET /user/_details?access_token=abc123'
 ```
+
+The `--` lets a sample start with `-`. The command's "Redacted output" line can garble overlapping
+matches. The redaction applied before a model call merges them, so trust the list of matches above
+that line.
 
 OpenSRE's own product telemetry, Sentry error reporting and local prompt log are switched off
 (`OPENSRE_NO_TELEMETRY`, `OPENSRE_SENTRY_DISABLED`, `OPENSRE_PROMPT_LOG_DISABLED`).
@@ -167,8 +207,19 @@ drift. Edit the compose-tier files under `local-setup/opensre/`, then copy them 
 `files/`.
 
 **It sees more here than on compose.** The pod gets a read-only ServiceAccount, so the agent can
-read pod restart counts, crash-loop and OOM-kill events, pod logs, deployments and nodes — exactly
-the view the compose tier lacks. The RBAC is `get`/`list` only and excludes secrets.
+read pod restart counts, crash-loop and OOM-kill events, pod logs, deployments and nodes. The
+compose tier gets only a snapshot of container state.
+
+The RBAC is `get`/`list` only and is granted per namespace: one RoleBinding into each namespace in
+`rbac.namespaces` (default `egov`, `backbone`, `novu`, `monitoring`), plus nodes cluster-wide. It
+excludes secrets and configmaps, because OpenSRE returns a ConfigMap's data whole. Pod and workload
+specs are allowed because OpenSRE returns only the names of env vars, never their values. Pod logs
+are masked like everything else. Every listed namespace must exist, or the install fails. Remove
+any namespace whose logs should not reach the model provider.
+
+The prompt describes the deployment from `deployment.description` in the chart's values, with the
+namespaces appended, so its suggested commands use `kubectl` and `helmfile`. Rewrite it if your
+cluster is laid out differently.
 
 **It sees less in one place:** this tier runs Jaeger rather than Tempo, and OpenSRE has no Jaeger
 integration, so there are no traces. `endpoints.tempoUrl` is empty on purpose.

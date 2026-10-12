@@ -33,8 +33,9 @@ RUN set -eu; \
 
 # Create /opt/ccrs first: a COPY --chmod that creates the parent directory
 # gives the directory the file's mode too (0644, no search bit), and the
-# non-root user could then not read anything inside it.
-RUN install -d -m 0755 /opt/ccrs
+# non-root user could then not read anything inside it. runbook/ is where both
+# tiers mount the known-issues runbook; empty in the image.
+RUN install -d -m 0755 /opt/ccrs /opt/ccrs/runbook
 COPY --chmod=0755 run-sweeps.sh /usr/local/bin/run-sweeps
 COPY --chmod=0644 guardrails.yml /opt/ccrs/guardrails.yml
 

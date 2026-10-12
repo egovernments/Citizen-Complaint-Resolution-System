@@ -20,6 +20,11 @@
 # descriptions. The sweep prompt keeps the agent on infrastructure, but a log
 # line can still contain them.
 #
+# Order matters: OpenSRE stops scanning a message after 1000 matches, and the
+# rules it has not reached by then are not applied to that message at all. So
+# every credential rule comes first, and the broad citizen-contact rules
+# (phone numbers match plenty of counters too) come last.
+#
 # Test a change inside the running container before relying on it:
 #   docker exec digit-opensre opensre guardrails test 'GET /user/_details?access_token=abc'
 rules:
@@ -47,7 +52,27 @@ rules:
     patterns:
       # A quoted value is masked whole, so a password with a space or comma in
       # it does not leak its tail.
-      - '(?:password|passwd|secret|api[_-]?key|apikey|client_secret)["'']?\s*[=:]\s*(?:"[^"]*"|''[^'']*''|[^&"''\s,}]+)'
+      # The keyword may be followed by more of the name, so env-style names
+      # match too: NOVU_SECRET_KEY=, IDENTITY_CREDENTIAL_KEYS=, ENC_MASTER_SALT=,
+      # IDENTITY_CONTROL_PLANE_TOKEN=, AWS_KEY=. `_key` needs a letter or digit
+      # before it and no letter after, so KEYCLOAK_URL= is left alone. Not
+      # matched: Kubernetes references that name a Secret rather than hold one
+      # (secretKeyRef:, secretRef:, secretName:) and token counts (max_tokens:).
+      - '(?:password|passwd|secret(?!keyref|ref\b|name\b)|salt|api[_-]?key|apikey|private[_-]?key|credential|(?<=[a-z0-9])_token(?!s)|(?<=[a-z0-9])_keys?(?![a-z]))[a-z0-9_]*["'']?\s*[=:]\s*(?:"[^"]*"|''[^'']*''|[^&"''\s,}]+)'
+
+  - name: env_secret_pairs
+    description: env entries written as a name/value pair whose name says it holds a secret
+    action: redact
+    patterns:
+      # Kubernetes and Python forms, where a quote and a comma or a newline sit
+      # between the name and its value, so secret_fields cannot see them:
+      #   {"name":"DB_PASSWORD","value":"s3cr3t"}
+      #   {'name': 'DB_PASSWORD', 'value': 's3cr3t'}
+      #   - name: DB_PASSWORD
+      #     value: s3cr3t
+      # The whole pair is masked, name included. valueFrom (a secretKeyRef)
+      # carries no value and is left alone.
+      - 'name["'']?\s*[:=]\s*["'']?[a-z0-9_.-]*(?:password|passwd|secret|salt|token|api[_-]?key|private[_-]?key|credential|_keys?(?![a-z]))[a-z0-9_.-]*["'']?\s*,?\s*["'']?value["'']?\s*[:=]\s*(?:"[^"]*"|''[^'']*''|[^\s,}]+)'
 
   - name: vault_token
     description: OpenBao/Vault tokens, in the X-Vault-Token header or bare
@@ -68,6 +93,12 @@ rules:
     action: redact
     patterns:
       - 'sk-(?:ant-)?[A-Za-z0-9_-]{20,}'
+
+  - name: otp_code
+    description: one-time passwords in notification and OTP-service logs
+    action: redact
+    patterns:
+      - '\botp\D{0,20}?\d{4,8}\b'
 
   - name: citizen_contact_fields
     description: DIGIT fields that hold a citizen's phone, username or email
@@ -98,9 +129,3 @@ rules:
       - '\b0[17]\d{8}\b'
       - '\b8[2-7]\d{7}\b'
       - '\b[6-9]\d{9}\b'
-
-  - name: otp_code
-    description: one-time passwords in notification and OTP-service logs
-    action: redact
-    patterns:
-      - '\botp\D{0,20}?\d{4,8}\b'

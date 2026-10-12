@@ -1589,9 +1589,10 @@
     # OpenSRE overlay + build context (diagnose-only SRE agent). Copied and
     # layered ALWAYS, like the two overlays above: the service carries
     # `profiles: [opensre]`, so nothing starts until `enable_opensre: true`.
-    # known-issues.md goes into the build dir because the agent attaches it to
-    # every investigation as its runbook; logs/ is the agent's output, owned by
-    # the container user (uid 10001) so it can write there.
+    # opensre/runbook/ holds known-issues.md, which the agent attaches to every
+    # investigation as its runbook (mounted as a directory; .dockerignore keeps
+    # it out of the image). logs/ is the agent's output, owned by the container
+    # user (uid 10001) so it can write there.
     - name: Copy OpenSRE overlay
       copy:
         src: ../docker-compose.opensre.yml
@@ -1602,10 +1603,23 @@
         src: ../opensre/
         dest: "{{ digit_dir }}/opensre/"
 
+    # Where the runbook used to be mounted from, as a single file. Removed so
+    # the build context does not carry a stale copy.
+    - name: Remove the old OpenSRE runbook location
+      file:
+        path: "{{ digit_dir }}/opensre/known-issues.md"
+        state: absent
+
+    - name: Create the OpenSRE runbook directory
+      file:
+        path: "{{ digit_dir }}/opensre/runbook"
+        state: directory
+        mode: "0755"
+
     - name: Copy the known-issues runbook OpenSRE attaches to investigations
       copy:
         src: ../../docs/releases/2.12/operations/known-issues.md
-        dest: "{{ digit_dir }}/opensre/known-issues.md"
+        dest: "{{ digit_dir }}/opensre/runbook/known-issues.md"
         mode: "0644"
 
     - name: Create the OpenSRE log directory (owned by the container user)
@@ -3555,6 +3569,24 @@
       shell: |
         set -o pipefail
         COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} pull --ignore-pull-failures 2>&1 | tee {{ compose_progress_file }}
+      args:
+        chdir: "{{ digit_dir }}"
+        executable: /bin/bash
+      changed_when: false
+
+    # OpenSRE's image is built on the box (opensre/Dockerfile) and carries
+    # `pull_policy: never`, so the pull above skips it and the several `up -d`
+    # below do not rebuild it. It is built once here instead: a cache hit
+    # (seconds) when nothing changed, and when run-sweeps.sh or guardrails.yml
+    # did change, the new image makes the next `up -d` recreate the container.
+    # Every deploy, not only when the build context changed: a build that failed
+    # on one deploy is then retried on the next, instead of the old image
+    # running on unnoticed.
+    - name: "OpenSRE — build the agent image"
+      when: enable_opensre | default(false)
+      shell: |
+        set -o pipefail
+        COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} build opensre 2>&1 | tee -a {{ compose_progress_file }}
       args:
         chdir: "{{ digit_dir }}"
         executable: /bin/bash
@@ -7214,10 +7246,16 @@
     # every later deploy. To rotate: delete the `opensre` service account in
     # Grafana, `bao kv patch <secrets_path> opensre_grafana_token=`, redeploy.
     #
+    # A stored token is checked against Grafana first (GET /api/user). One that
+    # Grafana rejects with 401 is replaced: the grafana_data volume was wiped
+    # (`down -v`, a reinstall) or the service account or token was deleted, and
+    # rendering it into .env again would leave the agent without metrics or
+    # logs and nothing saying so.
+    #
     # Non-fatal by design (block/rescue): the agent is optional, and a box whose
     # Grafana or OpenBao is unhappy must still finish its deploy. Without the
     # token the agent keeps running on Tempo, Kafka lag and Gatus alone.
-    - name: "OpenSRE — mint a read-only Grafana token (first deploy only)"
+    - name: "OpenSRE — mint a read-only Grafana token (when none is stored, or Grafana rejects it)"
       when:
         - enable_opensre | default(false)
         - grafana_health.rc == 0
@@ -7231,10 +7269,29 @@
           register: bao_secrets_opensre
           no_log: true
 
-        - name: "OpenSRE — note whether a token is already stored"
+        - name: "OpenSRE — check the stored Grafana token"
+          ansible.builtin.uri:
+            url: "http://127.0.0.1:13000/api/user"
+            headers:
+              Authorization: "Bearer {{ bao_secrets_opensre.json.data.data.opensre_grafana_token }}"
+            status_code: [200, 401]
+          register: _opensre_token_check
+          when: (bao_secrets_opensre.json.data.data.opensre_grafana_token | default('', true)) | length > 0
+          no_log: true
+
+        - name: "OpenSRE — note whether a token is needed"
           ansible.builtin.set_fact:
             _opensre_needs_token: >-
-              {{ (bao_secrets_opensre.json.data.data.opensre_grafana_token | default('', true)) | length == 0 }}
+              {{ (bao_secrets_opensre.json.data.data.opensre_grafana_token | default('', true)) | length == 0
+                 or (_opensre_token_check.status | default(200)) == 401 }}
+
+        - name: "OpenSRE — the stored Grafana token is rejected; minting a new one"
+          ansible.builtin.debug:
+            msg: >-
+              Grafana answered 401 to the stored OpenSRE token (its data was
+              wiped, or the service account or token was deleted). Minting a
+              new token and replacing the stored one.
+          when: (_opensre_token_check.status | default(200)) == 401
 
         - name: "OpenSRE — look up the opensre service account"
           ansible.builtin.uri:
@@ -7298,8 +7355,9 @@
           when: _opensre_needs_token | bool
           no_log: true
 
-        # The TENANT SECRETS block rendered this line empty earlier in the run;
-        # the next deploy renders it from OpenBao, which now has the value.
+        # The TENANT SECRETS block rendered this line earlier in the run, empty
+        # or with the rejected token; the next deploy renders it from OpenBao,
+        # which now has the new value.
         - name: "OpenSRE — write the token into .env"
           ansible.builtin.lineinfile:
             path: "{{ digit_dir }}/.env"

@@ -38,6 +38,18 @@ endpoints:
   # has no integration for. Left empty deliberately.
   tempoUrl: ""
 
+# The deployment, as the agent should picture it when it names components and
+# writes the commands a human should run. The deployment template appends the
+# namespaces from rbac.namespaces. Describe your cluster if it differs.
+deployment:
+  description: >-
+    A Kubernetes cluster deployed with this repo's helmfiles: the DIGIT services
+    in namespace egov, Kafka (kafka-kraft) and the other backbone services in
+    backbone, Novu in novu, and the monitoring stack in monitoring. Traces go to
+    Jaeger, which you cannot read, so there are none. Read pods, their logs,
+    events, deployments and nodes with your Kubernetes tools. A human acts with
+    kubectl and helmfile.
+
 model:
   # Sent as both ANTHROPIC_REASONING_MODEL and ANTHROPIC_TOOLCALL_MODEL.
   name: claude-opus-5
@@ -57,13 +69,16 @@ secret:
   grafanaTokenKey: grafana-token
 
 # Read-only access to the cluster: this is what lets the agent see restart
-# counts, OOM kills and crash-loop events — the things the compose tier cannot
-# see because it has no Docker access. Verbs are get/list only.
+# counts, OOM kills, crash-loop events and pod logs. Verbs are get/list only,
+# granted per namespace (templates/rbac.yaml), plus nodes cluster-wide.
 rbac:
   create: true
   serviceAccountName: opensre
-  # Namespace the agent looks at first; it can read others through the
-  # ClusterRole below.
+  # The namespaces the agent can read. Each must exist: a RoleBinding into a
+  # missing namespace fails the install. Leave out any whose pod logs should
+  # not reach the model provider.
+  namespaces: [egov, backbone, novu, monitoring]
+  # Namespace the agent looks at first; must be one of the above.
   defaultNamespace: egov
 
 # Optional: a ConfigMap holding a runbook the agent attaches to every
