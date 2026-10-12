@@ -216,7 +216,8 @@ export default function RoleEditor() {
         <Card>
           <CardHeader><CardTitle>Which fields they see</CardTitle></CardHeader>
           <CardContent className="flex flex-col gap-3 overflow-x-auto">
-            <table className="w-full min-w-[720px] text-sm" data-testid="field-rules">
+            {!perRoleRules && <p className="text-sm text-amber-800">A rule for this role alone needs the engines' per-role check, which is not deployed yet. Until then only "Otherwise", which every role shares, can change.</p>}
+            <table className="w-full min-w-[640px] text-sm" data-testid="field-rules">
               <thead><tr className="text-left text-xs uppercase text-muted-foreground"><th className="p-2">Field</th><th className="p-2">Shown in full to this role when</th><th className="p-2">Otherwise (every role)</th><th className="p-2">They see</th></tr></thead>
               <tbody>
                 {fieldRows.map((f) => {
@@ -229,7 +230,7 @@ export default function RoleEditor() {
                       <td className="p-2">
                         {f.parsed.custom ? <span className="text-xs text-amber-700">Custom condition: see Policy rows</span> : (
                           <>
-                            <select aria-label={`${f.label}: shown in full when`} className="w-full rounded-md border bg-background p-2" value={presetId} disabled={!canEdit || !perRoleRules}
+                            <select aria-label={`${f.label}: shown in full when`} className="w-full max-w-[220px] rounded-md border bg-background p-2" value={presetId} disabled={!canEdit || !perRoleRules}
                               onChange={(e) => set({ clause: e.target.value ? PRESETS.find((p) => p.id === e.target.value)!.clause : null })}>
                               <option value="">no rule for this role</option>
                               {PRESETS.map((p) => {
@@ -238,7 +239,6 @@ export default function RoleEditor() {
                               })}
                               {presetId === 'custom' && <option value="custom" disabled>{describeClause(f.roleClause!, vocab)}</option>}
                             </select>
-                            {!perRoleRules && <div className="mt-1 text-xs text-amber-700">Per-role rules arrive with the engines' role check; until then only "Otherwise" can change.</div>}
                             {f.exists && shared && <div className="mt-1 text-xs text-muted-foreground">Also for everyone: {shared}</div>}
                           </>
                         )}
@@ -282,8 +282,19 @@ export default function RoleEditor() {
                       {w.kind === 'role' && <>Role <code>{w.uid}</code>: {w.op === 'create' ? 'create' : 'update name / description'} (ACCESSCONTROL-ROLES)</>}
                       {w.kind === 'grant' && <>Grant <code>{w.uid}</code>: {w.op} (ACCESSCONTROL-ROLEACTIONS)</>}
                       {w.kind === 'action' && (
-                        <>Action <code>{w.uid}</code> (complaint search), only this role's keys:
-                          <pre className="mt-1 whitespace-pre-wrap break-words rounded bg-muted p-2 font-mono text-xs">{w.changes.map((c) => `${c.path}\n  - ${JSON.stringify(c.before) ?? '(none)'}\n  + ${JSON.stringify(c.after) ?? '(none)'}`).join('\n')}</pre>
+                        <>Action <code>{w.uid}</code> (complaint search):
+                          {(['role', 'shared'] as const).map((who) => {
+                            const cs = w.changes.filter((c) => (/\.onDeny(\.|$)/.test(c.path) ? 'shared' : 'role') === who);
+                            if (!cs.length) return null;
+                            return (
+                              <div key={who} className="mt-2" data-testid={`plan-${who}`}>
+                                <div className={who === 'shared' ? 'font-semibold text-amber-800' : 'font-semibold'}>
+                                  {who === 'shared' ? 'Applies to EVERY role that searches complaints:' : `Only ${roleCode}:`}
+                                </div>
+                                <pre className="mt-1 whitespace-pre-wrap break-words rounded bg-muted p-2 font-mono text-xs">{cs.map((c) => `${c.path}\n  - ${JSON.stringify(c.before) ?? '(none)'}\n  + ${JSON.stringify(c.after) ?? '(none)'}`).join('\n')}</pre>
+                              </div>
+                            );
+                          })}
                         </>
                       )}
                     </li>
