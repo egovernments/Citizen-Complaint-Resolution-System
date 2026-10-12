@@ -479,14 +479,24 @@ class SeederLogin(unittest.TestCase):
 class SeederAccessToken(unittest.TestCase):
     """Field finding (dev deployment, 2026-10-07): a self-serve workspace's founder signs in through
     Keycloak only and has no DIGIT password, so the seeder and the migration (username/password
-    only) could not run for that workspace. DIGIT_ACCESS_TOKEN replaces the login."""
+    only) could not run for that workspace. DIGIT_ACCESS_TOKEN replaces the login.
+
+    Review of #2342: the token was checked with an MDMS search, which Kong treats as auth-optional:
+    it forwards a request whose token it rejects ANONYMOUSLY, so a dead token answered 200 and the
+    run went on reading anonymously. The fake gateway below answers the way Kong does
+    (local-setup/kong/kong.yml AUTH_OPTIONAL + auth enrichment), so a check through an auth-optional
+    path cannot pass these tests."""
 
     TOKEN = "f0unders-access-t0ken"
+    # Kong's AUTH_OPTIONAL paths this script reads (a rejected token is dropped, the call goes on).
+    AUTH_OPTIONAL = ("/mdms-v2/v2/_search", "/mdms-v2/schema/v1/_search")
 
     def setUp(self):
         import urllib.error
         self.calls = []
-        self.answer = None
+        self.token_valid = True
+        self.answer = None          # an exception the gateway raises for every call
+        self.details_body = None    # what /user/_details answers a valid token with
         originals = {name: getattr(sn, name) for name in ("ACCESS_TOKEN", "TENANT", "_post")}
         for name, value in originals.items():
             self.addCleanup(setattr, sn, name, value)
@@ -494,13 +504,25 @@ class SeederAccessToken(unittest.TestCase):
         sn.TENANT = "kworkspace"
 
         def post(path, body, tok=None, headers=None):
+            import io
             self.calls.append((path, body))
             if self.answer is not None:
                 raise self.answer
-            import io
-            return io.BytesIO(b'{"mdms": []}')
+            endpoint = path.split("?", 1)[0]
+            if endpoint in self.AUTH_OPTIONAL:
+                # Kong: a token egov-user rejects is ignored here and the request goes on anonymously.
+                return io.BytesIO(b'{"mdms": []}')
+            body_token = ((body or {}).get("RequestInfo") or {}).get("authToken")
+            if not body_token:
+                raise self.http_error(401, path)          # a protected POST without a body token
+            if not self.token_valid:
+                raise self.http_error(401, path)          # Kong resolves the token first: InvalidAccessTokenException
+            if self.details_body is not None:
+                return io.BytesIO(self.details_body)
+            return io.BytesIO(b'{"uuid": "3f0c", "userName": "FOUNDER_1", "type": "EMPLOYEE", "roles": []}')
         sn._post = post
-        self.http_error = lambda code: urllib.error.HTTPError("http://kong" + "/mdms-v2/v2/_search", code, "x", {}, None)
+        self.http_error = lambda code, path="/user/_details", body=b"x": urllib.error.HTTPError(
+            "http://kong" + path, code, "x", {}, __import__("io").BytesIO(body))
 
     def login(self):
         import contextlib
@@ -512,40 +534,68 @@ class SeederAccessToken(unittest.TestCase):
             except SystemExit as exc:
                 return None, exc.code, out.getvalue()
 
-    def test_the_token_is_used_and_checked_with_one_read_never_a_password_login(self):
+    def test_the_token_is_checked_by_egov_user_introspection_never_a_password_login(self):
+        import urllib.parse
         tok, code, _ = self.login()
         self.assertEqual(tok, self.TOKEN)
         self.assertIsNone(code)
-        self.assertEqual([path for path, _ in self.calls], ["/mdms-v2/v2/_search"])
-        self.assertEqual(self.calls[0][1]["RequestInfo"]["authToken"], self.TOKEN)
-        self.assertEqual(self.calls[0][1]["MdmsCriteria"]["tenantId"], "kworkspace")
+        self.assertEqual(len(self.calls), 1)
+        path, body = self.calls[0]
+        endpoint, query = path.split("?", 1)
+        self.assertEqual(endpoint, "/user/_details")
+        self.assertNotIn(endpoint, self.AUTH_OPTIONAL)
+        self.assertEqual(urllib.parse.parse_qs(query)["access_token"], [self.TOKEN])
+        self.assertEqual(body["RequestInfo"]["authToken"], self.TOKEN, "Kong refuses a protected POST without it")
 
     def test_a_refused_token_is_exit_4_and_the_token_is_never_printed(self):
-        for status in (401, 403):
-            with self.subTest(status=status):
-                self.answer = self.http_error(status)
+        self.token_valid = False
+        tok, code, out = self.login()
+        self.assertEqual(code, 4, "an auth-optional check would have answered 200 here")
+        self.assertIn("NOTIF-LOGIN-REFUSED:", out)
+        self.assertIn("DIGIT_ACCESS_TOKEN", out)
+        self.assertNotIn(self.TOKEN, out)
+
+    def test_every_way_egov_user_refuses_is_exit_4(self):
+        cases = {
+            "403": self.http_error(403),
+            "400 InvalidAccessTokenException": self.http_error(
+                400, body=b'{"Errors":[{"code":"InvalidAccessTokenException"}]}'),
+        }
+        for name, error in cases.items():
+            with self.subTest(name):
+                self.answer = error
                 tok, code, out = self.login()
                 self.assertEqual(code, 4)
                 self.assertIn("NOTIF-LOGIN-REFUSED:", out)
-                self.assertIn("DIGIT_ACCESS_TOKEN", out)
+                self.assertNotIn(self.TOKEN, out)
+        self.answer = None
+        for name, body in {"no user": b"{}", "an anonymous search answer": b'{"mdms": []}', "not JSON": b"<html>"}.items():
+            with self.subTest(name):
+                self.details_body = body
+                tok, code, out = self.login()
+                self.assertEqual(code, 4, "a 200 that names no user is no user")
+                self.assertIn("NOTIF-LOGIN-REFUSED:", out)
                 self.assertNotIn(self.TOKEN, out)
 
     def test_a_server_error_on_the_check_is_not_a_refused_token(self):
-        self.answer = self.http_error(502)
-        tok, code, out = self.login()
-        self.assertEqual(code, 2)
-        self.assertIn("NOTIF-LOGIN-ERROR:", out)
-        self.assertNotIn("NOTIF-LOGIN-REFUSED", out)
+        for status, body in ((502, b"x"), (400, b'{"Errors":[{"code":"SOMETHING_ELSE"}]}')):
+            with self.subTest(status=status):
+                self.answer = self.http_error(status, body=body)
+                tok, code, out = self.login()
+                self.assertEqual(code, 2)
+                self.assertIn("NOTIF-LOGIN-ERROR:", out)
+                self.assertIn("/user/_details", out)
+                self.assertNotIn("NOTIF-LOGIN-REFUSED", out)
+                self.assertNotIn(self.TOKEN, out)
 
     def test_who_names_the_token_not_a_user(self):
         self.assertEqual(sn.who(), "the supplied DIGIT_ACCESS_TOKEN")
         sn.ACCESS_TOKEN = ""
         self.assertNotIn("TOKEN", sn.who())
 
-    def test_the_migration_takes_the_same_token_and_refuses_a_bad_one_before_reading(self):
+    def _migrate_plan(self):
         import contextlib
         import io
-        self.answer = self.http_error(401)
         # migrate-notifications.py loads its own copy of the seeder module.
         for name in ("ACCESS_TOKEN", "_post", "URL", "LOGIN_TENANT"):
             self.addCleanup(setattr, mn.sn, name, getattr(mn.sn, name))
@@ -558,11 +608,23 @@ class SeederAccessToken(unittest.TestCase):
         err = io.StringIO()
         with contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
             rc = mn.run(["plan", "--tenant", "kworkspace", "--bridge-container", "", "--worker-container", ""])
+        return rc, err.getvalue()
+
+    def test_the_migration_takes_the_same_token_and_refuses_a_bad_one_before_reading(self):
+        self.token_valid = False
+        rc, err = self._migrate_plan()
         self.assertEqual(rc, 4)
-        self.assertIn("DIGIT_ACCESS_TOKEN was refused (HTTP 401)", err.getvalue())
-        self.assertNotIn(self.TOKEN, err.getvalue())
-        self.assertEqual([path for path, _ in self.calls], ["/mdms-v2/v2/_search"],
+        self.assertIn("DIGIT_ACCESS_TOKEN was refused (HTTP 401)", err)
+        self.assertNotIn(self.TOKEN, err)
+        self.assertEqual([path.split("?", 1)[0] for path, _ in self.calls], ["/user/_details"],
                          "nothing but the token check was read")
+
+    def test_the_migration_refuses_a_check_answered_without_a_user(self):
+        self.details_body = b"{}"
+        rc, err = self._migrate_plan()
+        self.assertEqual(rc, 4)
+        self.assertIn("DIGIT_ACCESS_TOKEN was refused (HTTP 200 without a user)", err)
+        self.assertEqual([path.split("?", 1)[0] for path, _ in self.calls], ["/user/_details"])
 
 
 try:

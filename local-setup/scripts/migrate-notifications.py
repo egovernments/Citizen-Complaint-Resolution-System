@@ -1623,7 +1623,7 @@ credentials file (only the types you create; values are never printed or reporte
 
 env: DIGIT_URL, DIGIT_USERNAME (ADMIN), DIGIT_PASSWORD (eGov@123), DIGIT_LOGIN_TENANT,
      DIGIT_ACCESS_TOKEN (a DIGIT access token used instead of username/password, e.g. a
-     Keycloak-only workspace founder's; checked with one read first, never printed),
+     Keycloak-only workspace founder's; checked with egov-user's /user/_details first, never printed),
      STATE_ROOT / NOTIF_ROOTS (for --all), NOTIF_CHANNELS_ALLOWLIST, NOVU_BRIDGE_SMS_PROVIDER
 exit: 0 ok · 1 warnings · 2 a tenant failed · 3 403 · 4 refused to start""")
     ap.add_argument("mode", choices=("plan", "apply"))
@@ -1744,6 +1744,9 @@ def run(argv=None):
                                                 args.tenant[0].split(".")[0])
         try:
             ctx.tok = sn.token()
+        except sn.TokenRefused as exc:
+            raise RefuseToStart("the supplied DIGIT_ACCESS_TOKEN was refused (%s): it has expired, or it is "
+                                "not a DIGIT access token of a user there" % exc.detail)
         except urllib.error.HTTPError as exc:
             raise RefuseToStart("%s was refused (HTTP %d)%s" % (
                 "the supplied DIGIT_ACCESS_TOKEN" if sn.ACCESS_TOKEN else "login as %s at %s" % (sn.USERNAME, sn.LOGIN_TENANT),
