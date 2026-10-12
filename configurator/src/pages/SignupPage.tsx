@@ -606,6 +606,19 @@ function SignupFlow() {
     };
   }, [phase, seedFrom, restart]);
 
+  const enter = useCallback(async (option: TenantOption): Promise<boolean> => {
+    setSaving(true);
+    setError(null);
+    try {
+      await enterWorkspace(option.tenantId, sessionUser);
+      return true;
+    } catch (caught) {
+      setError(errorText(caught));
+      setSaving(false);
+      return false;
+    }
+  }, [sessionUser]);
+
   // Provisioning done and published: the new tenant appears without another
   // sign-in. Acting on SUCCEEDED alone reads an empty tenant list (CCRS#2303).
   useEffect(() => {
@@ -616,6 +629,14 @@ function SignupFlow() {
         const view = await tenants();
         if (!live) return;
         setTenantOptions(view.tenants);
+        if (view.tenants.length === 1) {
+          const ok = await enter(view.tenants[0]);
+          if (!live) return;
+          if (!ok) {
+            setPhase('chooseTenant');
+          }
+          return;
+        }
         setPhase('chooseTenant');
       } catch (caught) {
         if (live) setError(errorText(caught));
@@ -624,18 +645,7 @@ function SignupFlow() {
     return () => {
       live = false;
     };
-  }, [ready]);
-
-  const enter = async (option: TenantOption) => {
-    setSaving(true);
-    setError(null);
-    try {
-      await enterWorkspace(option.tenantId, sessionUser);
-    } catch (caught) {
-      setError(errorText(caught));
-      setSaving(false);
-    }
-  };
+  }, [ready, enter]);
 
   const accountReady =
     accountName.trim().length > 0 && codeValid && codeState?.available !== false;

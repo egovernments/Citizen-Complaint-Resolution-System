@@ -71,7 +71,7 @@ function writeDraft(tenant: string, stored: StoredDraft | null) {
  * finishes onboarding, and the account moves on to management for good.
  */
 export default function ComplaintsStep() {
-  const { state, completePhase, setMode } = useApp();
+  const { state, completePhase } = useApp();
   const t = useOnboardingT();
   const navigate = useNavigate();
   const tenant = state.targetTenant || state.tenant;
@@ -163,7 +163,6 @@ export default function ComplaintsStep() {
 
   const finish = async () => {
     if (!await completePhase(STEP.number)) return;
-    setMode('management');
     navigate('/manage');
   };
 

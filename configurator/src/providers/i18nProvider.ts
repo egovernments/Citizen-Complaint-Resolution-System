@@ -77,7 +77,6 @@ const customEnglishMessages: TranslationMessages = {
       mdms_schemas: 'MDMS Schemas',
       boundaries: 'Boundaries',
       advanced: 'Advanced',
-      switch_to_onboarding: 'Switch to Onboarding',
       pgr_dashboard: 'PGR Dashboard',
       public_dashboard: 'Public Dashboard',
       main: 'Main',
