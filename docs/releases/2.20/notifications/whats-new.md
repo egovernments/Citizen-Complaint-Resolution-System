@@ -12,12 +12,13 @@ done yet. The guides linked in each section have the setup steps and technical d
   one each channel uses, and edit every message per event, audience, channel and language. Each
   change is checked before it is saved.
 - **Each new workspace** (a customer that signs itself up) starts with default wording and
-  routing, and gets its own **notification account** (by default on Docker Compose deployments;
-  opt-in on Kubernetes): the place its provider credentials live, managed only by its own
-  admins. Other tenants (a tenant is one customer's configuration, such as a state and its
-  cities) share the deployment's account, as before.
+  routing, and, where per-workspace accounts are on, its own **notification account**: the place
+  its provider credentials live, managed only by its own admins. They are on by default when the
+  Ansible deploy runs notifications and self-serve sign-up, off when Docker Compose is started by
+  hand, and opt-in on Kubernetes. Other tenants (a tenant is one customer's configuration, such
+  as a state and its cities) share the deployment's account, as before.
 - **Citizens and employees** get the same kinds of messages as before, with phone numbers
-  completed with the right country code. **Operators** can see what happened to each message,
+  completed with a country code. **Operators** can see what happened to each message,
   including the ones deliberately not sent, and why.
 - **For the platform**, any module can notify people by announcing "this happened". The
   notification module decides who is told, how and in which language, so other modules and
@@ -65,10 +66,16 @@ Things operators can rely on:
 - **Credentials stay in the delivery engine** (the notification service underneath that talks
   to providers), never in the configuration or the logs, and are never shown back in the
   browser. A workspace's credentials sit in its own account, out of other workspaces' reach.
-- **Only the right admins can change providers and channel choices.** On a workspace with its
-  own account, only its own admins (the person who signed it up is one), not even the admins of
-  the state that owns the shared account. Elsewhere, the admins of that state. Everyone else
-  with notification access sees these screens read-only, without the buttons.
+- **Only the right admins can change provider accounts**, and the notification module checks
+  this itself, not just the screen. On a workspace with its own account, only its own admins
+  (the person who signed it up is one), not even the admins of the state that owns the shared
+  account. On the shared account, the admins of that state.
+- **Channel choices** (which channels are on, and which provider each uses) are part of a state's
+  or workspace's configuration. The Configurator offers these controls only to its admins, and on
+  a workspace with its own account only to that workspace's own admins. This is a rule of the
+  screen: someone allowed to edit that configuration directly through the API (a superuser, for
+  example) can still change it. Provider credentials are the hard boundary.
+- Everyone else with notification access sees these screens read-only, without the buttons.
 - **A new workspace is ready to configure from sign-up.** It gets the default events, wording
   and routing, and the person who signed it up can use the Notifications screens once the
   workspace has finished onboarding (the Configurator keeps it there until every step is done).
@@ -79,15 +86,25 @@ Things operators can rely on:
   another provider first.
 - **A Test does not report success for a message nothing could deliver.** If the provider is
   switched off or serves another channel, or the channel has no provider, the Test is refused
-  with the reason and nothing is sent. A workspace's Test is judged against its own providers
-  only, never the shared account's.
-- **No message goes to a guessed number.** A phone number stored without a country code is
-  completed with the person's own code, else the workspace's mobile-number rule, else the
-  deployment's default. With none of these, the message is skipped as an invalid contact and
-  the log says why.
-- **Saving cannot break things silently.** The checks catch, for example, a message with no
-  English version, a mistyped placeholder, a WhatsApp message whose variables do not match the
-  approved template, or OTP wording that leaves out the code.
+  with the reason and nothing is sent. This check needs the delivery engine's provider list:
+  when that cannot be read, the Test is sent anyway, with a warning. A Test through the shared
+  account's older direct SMSCountry connection is not checked; that gateway reports its own
+  errors. A workspace's Test is judged against its own providers only, never the shared
+  account's.
+- **Phone numbers get a country code before anything is sent.** A number stored without one is
+  completed with the person's own code, else the state's or workspace's mobile-number rule, else
+  the deployment's default. With none of these, the message is skipped as an invalid contact and
+  the log says why. Two cases can still go wrong: the deployment's default is a guess for
+  someone from another country, and a long local number that happens to start with the country
+  code can be read as already international. A mobile-number rule that includes the number
+  pattern resolves most of the second.
+- **Saving refuses the mistakes that would break a message**, for example a message with no
+  English version, placeholder braces that cannot be filled in (`{{id}}`, an unclosed `{`), a
+  WhatsApp message that uses a variable its approved template does not have, or OTP wording that
+  leaves out the code. Other problems only **warn**, and the save goes ahead: a placeholder the
+  event does not provide (a misspelt `{emp_nme}` is sent as typed), an approved-template
+  variable the event cannot fill (sent empty), a WhatsApp message with no approved template
+  (skipped when sent), or an SMS long enough to cost several messages.
 
 Guides: [setup-guide.md §3 Add a provider](./setup-guide.md#3-add-a-provider),
 [§4 Switch the channel on](./setup-guide.md#4-switch-the-channel-on),
@@ -103,15 +120,19 @@ Guides: [setup-guide.md §3 Add a provider](./setup-guide.md#3-add-a-provider),
 - Messages in the deployment's default language (English). Where the deployment lets citizens
   choose a language on their profile (off by default), they get the one they chose when a
   template exists in it; the defaults include Hindi.
-- SMS and WhatsApp reach the right number. A mobile number stored without a country code gets
-  the citizen's own code, else their workspace's, else the deployment's default. This includes
-  the first message when an employee files a complaint for them. If no code is known, the
-  message is not sent rather than sent to a wrong number.
+- SMS and WhatsApp numbers get a country code. A mobile number stored without one gets the
+  citizen's own code, else their state's or workspace's, else the deployment's default (a guess
+  for a citizen from another country). This includes the first message when an employee files a
+  complaint for them. If no code is known, the message is not sent.
 - In a workspace with its own account, messages come through that workspace's own provider
   accounts, for example with its own sender name or number.
 - Phone sign-in codes do not come through notifications yet ([Known limits](#known-limits)).
-- A deployment can also switch on a consent check, so a person who has not agreed to a channel is
-  not messaged on it. It is off by default.
+- A deployment can also switch on a consent check: a person is then messaged on a channel only
+  if their stored preferences agree to it, so anyone with no stored preference gets nothing
+  (codes from DIGIT's older OTP service still go out). It is **off** on Docker Compose and
+  Ansible deployments, but **on** in the Kubernetes (Helm) chart and in the notification
+  service's own default. Leave it off unless the deployment collects that consent: on
+  Kubernetes, set `NOVU_BRIDGE_PREFERENCE_ENABLED` to `"false"`, or most messages are skipped.
 
 ### Employees
 
@@ -136,9 +157,12 @@ How to: [developer-guide.md, "Plug a module in"](./developer-guide.md#plug-a-mod
 
 A service that only needs to send a sign-in code can ask the notification module to send it, for
 a workspace with its own account only (any other tenant gets a "no account" answer). The text is
-fixed: the code and when it expires. The answer is clear: sent, no account, no provider for that
-channel, or the provider refused. The code is never logged or stored. Connecting the new sign-in
-service to it is a separate follow-up.
+fixed: the code and when it expires. The answer says what happened: sent, accepted but not yet
+confirmed by the provider, no account, no provider for that channel, the provider refused, or the
+delivery engine could not be reached or refused the send
+([every answer](./tenant-accounts.md#sending-a-code-messages_send)). The notification module
+never logs or stores the code; the delivery engine keeps the sent message, code included, in its
+own activity feed. Connecting the new sign-in service to it is a separate follow-up.
 
 ## Notifications as a reusable module
 
@@ -148,8 +172,10 @@ service to it is a separate follow-up.
 - **Not tied to complaints.** The naming, configuration and screens are module-neutral. A new
   module joins by declaring its events and default wording, without code changes to the
   notification module.
-- **One pipeline.** Every message follows the same channel switches, the same provider choice and
-  the same log. The new sign-in service's codes are the exception for now.
+- **One pipeline.** Every module's messages follow the same channel switches, the same provider
+  choice and the same log. Two sends check only that a provider can carry the channel, not
+  whether the channel is switched on: a provider **Test**, and the sign-in code send above. Both
+  are logged. The new sign-in service's own codes do not go through notifications yet.
 - **One deployment, many customers.** Where per-workspace accounts are on, each workspace has its
   own notification account, so customers on one deployment use their own gateways and sender
   names without sharing credentials. Tenants that do not need one keep sharing the deployment's
@@ -157,8 +183,11 @@ service to it is a separate follow-up.
 
 ## Upgrading an existing 2.12 deployment
 
-- **Deploying 2.20 does not copy or rewrite any tenant's notification configuration.** One thing
-  does change at deploy time, described next.
+- **Deploying 2.20 never copies a tenant's 2.12 configuration, and never adds default wording to
+  a tenant that already has some.** It writes only two things: a tenant with no channel on/off
+  settings gets settings that match what the server already said, so nothing changes; and a
+  fresh install (no notification configuration and no complaints yet) gets the default wording
+  and routing. One thing does change for some tenants, described next.
 - **A tenant that used 2.12's built-in wording, and already has complaints, gets no complaint
   notifications after the deploy** until an operator reviews and installs the default wording in
   the per-tenant step below. Most 2.12 deployments used the built-in wording. The deploy reports
@@ -181,13 +210,19 @@ service to it is a separate follow-up.
   rules, 60 templates, 14 WhatsApp template links) with 8 deliberate customizations added. All
   were kept, the before and after previews matched, and every complaint action produced the
   expected message attempts.
-- **Per-workspace accounts** are on by default on Docker Compose deployments and opt-in on
+- **Per-workspace accounts** are on by default when the Ansible deploy runs notifications (Novu)
+  and self-serve sign-up (Keycloak), unless the deploy cannot sign in as the delivery engine's
+  admin (next point). They are off when Docker Compose is started by hand, and opt-in on
   Kubernetes. Only workspaces that sign up afterwards get one automatically; existing tenants
   keep the shared account until an operator moves them, one by one. A moved tenant's account
   starts empty, so its admins must add providers first, or nothing is delivered for it.
 - **Where per-workspace accounts are on, the delivery engine's admin password changes**, unless
   the operator set their own: the deploy generates one, keeps it in the deployment's secrets
-  store and refuses the publicly documented default. The operator's dashboard login changes too.
+  store and moves the admin onto it. The operator's dashboard login changes too. The publicly
+  documented default password is never handed to the notification module. If the deploy cannot
+  sign in as the admin with the password it would hand over (for example, someone changed it by
+  hand), it switches per-workspace accounts off for that deploy and says what to do. It stops
+  instead if the operator asked for them explicitly or workspaces already have their own.
 - **Workspaces signed up on a pre-release build**, before sign-up installed notification
   defaults, or whose set-up step failed, have no notification configuration, so their complaints
   send nothing. The deploy lists them, with a one-off step for each.
