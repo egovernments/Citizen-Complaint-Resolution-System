@@ -109,7 +109,7 @@ export default function OnboardingLayout() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold leading-5 text-foreground truncate" title={orgName}>{orgName}</p>
-                  <p className="text-xs leading-4 text-muted-foreground truncate">{t('app.header.brand', 'Complaints Management')}</p>
+                  <p className="text-xs leading-4 text-muted-foreground truncate">{t('app.header.product_name', 'Complaint Management System')}</p>
                 </div>
               </>
             )}

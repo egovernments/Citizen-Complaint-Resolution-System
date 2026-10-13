@@ -60,7 +60,7 @@ describe('the Start here card', () => {
 describe('the welcome', () => {
   it('opens by itself the first time, and not again once closed', () => {
     const { unmount } = page();
-    expect(screen.getByRole('dialog')).toHaveTextContent('Complaints Management System');
+    expect(screen.getByRole('dialog')).toHaveTextContent('Complaint Management System');
     fireEvent.click(screen.getByRole('button', { name: /close/i }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     unmount();
@@ -80,7 +80,7 @@ describe('the welcome', () => {
       titles.push(within(dialog).getByRole('heading').textContent);
     }
     expect(titles).toEqual([
-      'Complaints Management System',
+      'Complaint Management System',
       'Complaints Template',
       'Branding',
       'Geography',

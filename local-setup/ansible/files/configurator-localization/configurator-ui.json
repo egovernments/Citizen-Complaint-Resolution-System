@@ -5658,6 +5658,12 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.header.product_name",
+    "message": "Complaint Management System",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.branding.account_eyebrow",
     "message": "Account setup",
     "module": "configurator-ui",
@@ -9457,7 +9463,7 @@
   },
   {
     "code": "app.onboarding.home.tour.cms.title",
-    "message": "Complaints Management System",
+    "message": "Complaint Management System",
     "module": "configurator-ui",
     "locale": "en_IN"
   },

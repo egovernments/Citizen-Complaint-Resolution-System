@@ -51,7 +51,7 @@ export function welcomeSlides(t: OnboardingT): WelcomeSlide[] {
     {
       id: 'cms',
       eyebrow: t('home.tour.cms.eyebrow', 'Welcome'),
-      title: t('home.tour.cms.title', 'Complaints Management System'),
+      title: t('home.tour.cms.title', 'Complaint Management System'),
       paragraphs: [
         t('home.tour.cms.body', 'One modular system connecting citizen voices to responsive institutions and efficient services.'),
         t(
