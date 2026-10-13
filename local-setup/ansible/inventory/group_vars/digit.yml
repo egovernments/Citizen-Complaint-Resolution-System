@@ -386,7 +386,7 @@ digit_ui_esbuild_branch: main
 #
 # This is the multi-arch egovio Docker Hub build of THIS repo's
 # digit-ui-esbuild/ tree (build/build-config.yml → image-name:
-# digit-ui-esbuild). Pinned to the 2.12 release build, so an Ansible deploy
+# digit-ui-esbuild). Pinned to the 2.12.1 release build, so an Ansible deploy
 # serves the SAME bundle as local-setup/docker-compose.egov-digit.yaml — a
 # rolling `nightly-develop` here meant the two paths could diverge silently.
 # Follows `image_tag` (below) when that is set, so `--image-tag=develop-<sha>`
@@ -395,7 +395,7 @@ digit_ui_esbuild_branch: main
 # instead, which then needs digit_ui_esbuild_repo pointed at a source tree.
 digit_ui_bundle_image: >-
   {{ (ccrs_tagged_images | default({})).get('digit-ui-esbuild')
-     or 'egovio/digit-ui-esbuild:2.12-5137119' }}
+     or 'egovio/digit-ui-esbuild:2.12.1-7a38661' }}
 
 # ──────────────────────────────────────────────────────────────────────
 # One-tag deploys (#1729)

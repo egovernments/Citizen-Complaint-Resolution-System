@@ -180,6 +180,14 @@ server {
   # and synced to /var/www/integration-tests{,-v2}/ by the deploy. Behind
   # basic-auth (/etc/nginx/.htpasswd-tests, created by the playbook).
   # catalog.json + runs/ are produced out-of-band by a test runner, not the deploy.
+  #
+  # Both dashboards fetch the whole catalog.json (~1.9 MB at 30 runs) on load.
+  # Cache-Control: no-cache makes the browser revalidate it every time, so an
+  # unchanged catalog costs a 304 and a new run is seen at once. The stock
+  # Debian/Ubuntu nginx.conf has `gzip on;` but no gzip_types, which
+  # compresses text/html only, so the gzip_* lines below are what compress
+  # the JSON (catalog.json, each run's report.json; catalog.json ~1.9 MB ->
+  # ~285 KB) and the dashboards' JS/CSS bundles.
   location = /tests    { return 301 /tests/; }
   location = /tests-v2 { return 301 /tests-v2/; }
   location /tests/ {
@@ -188,6 +196,10 @@ server {
     auth_basic_user_file /etc/nginx/.htpasswd-tests;
     add_header Cache-Control "no-cache, must-revalidate" always;
     {{ security_headers('    ') }}
+    gzip on;
+    gzip_comp_level 5;
+    gzip_vary on;
+    gzip_types application/json application/javascript text/javascript text/css text/plain image/svg+xml;
     try_files $uri $uri/ $uri/index.html =404;
   }
   location /tests-v2/ {
@@ -196,6 +208,10 @@ server {
     auth_basic_user_file /etc/nginx/.htpasswd-tests;
     add_header Cache-Control "no-cache, must-revalidate" always;
     {{ security_headers('    ') }}
+    gzip on;
+    gzip_comp_level 5;
+    gzip_vary on;
+    gzip_types application/json application/javascript text/javascript text/css text/plain image/svg+xml;
     try_files $uri $uri/ /tests-v2/index.html =404;
   }
 {% if nginx_features.integration_tests_runner | default(false) %}

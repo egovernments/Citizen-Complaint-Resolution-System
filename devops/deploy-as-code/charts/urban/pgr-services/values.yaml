@@ -83,9 +83,10 @@ initContainers:
 # nightly publishes, and no immutable tag containing this stack exists until the change
 # that introduced it has merged and been built. RELEASE STEP (build/NIGHTLY-BUILDS.md,
 # "Release step: pin the notification stack"): replace it, here AND in
-# common-services/novu-bridge/values.yaml (image + dbMigration), with the develop-<sha8>
-# the develop nightly minted for the merge commit, checked on Docker Hub for all four
-# images. Until then the template pulls a rolling tag with Always, and a production
+# common-services/novu-bridge/values.yaml and common-services/digit-user-preferences-service/
+# values.yaml (image + dbMigration in each), with the develop-<sha8> the develop nightly
+# minted for the merge commit, checked on Docker Hub for all six images. Until then the
+# template pulls a rolling tag with Always, and a production
 # environment pins explicitly: global.notificationStackTag: "develop-<sha8>" (or a release
 # tag) in its env.yaml.
 image:
@@ -121,6 +122,10 @@ heap: "-Xmx192m -Xms192m"
 # this chart as it stands. Only the docker-compose/Ansible deploy is supported today.
 onboarding:
   runnerEnabled: false
+  # Step NOTIFICATION_DEFAULTS: a new workspace gets the notification schemas, access rows,
+  # templates and routing. Set false when novu / novu-bridge are `installed: false` (nothing
+  # would read those rows). Only used while the runner is enabled.
+  notificationDefaultsEnabled: true
   identityBffUrl: ""            # e.g. http://identity-bff.egov:3000
   provisionerUsername: ""       # e.g. PGR_PROVISIONER
   provisionerTenantId: ""       # the state root, e.g. pb
@@ -287,6 +292,8 @@ env: |
   - name: PGR_ONBOARDING_RUNNER_ENABLED
     value: {{ .Values.onboarding.runnerEnabled | quote }}
   {{- if .Values.onboarding.runnerEnabled }}
+  - name: PGR_ONBOARDING_NOTIFICATION_DEFAULTS_ENABLED
+    value: {{ .Values.onboarding.notificationDefaultsEnabled | quote }}
   - name: PGR_ONBOARDING_IDENTITY_BFF_URL
     value: {{ required "onboarding.identityBffUrl is required when the runner is enabled" .Values.onboarding.identityBffUrl | quote }}
   - name: PGR_ONBOARDING_IDENTITY_BFF_TOKEN

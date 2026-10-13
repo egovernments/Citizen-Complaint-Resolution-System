@@ -4,12 +4,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { toast } from '@/hooks/use-toast';
 import { digitClient } from '@/providers/bridge';
 import { useApp } from '../App';
 import { DENIAL_TEXT, areaTree, covered, grantPreview, mayGrant, minimalPicks, peopleRows, withGrant, type AreaNode, type Grant, type GrantPreview } from './grantModel';
-import { loadRole } from './roleEditorData';
+import { loadRole, searchAll } from './roleEditorData';
+import { AccessTitle } from './AccessChrome';
 import { whenItApplies } from './effectTimes';
 
 /**
@@ -56,7 +57,8 @@ export default function TenantsPeople() {
   const [filter, setFilter] = useState('');
 
   useEffect(() => {
-    Promise.all([digitClient.mdmsSearch(root, 'tenant.tenants', { limit: 500 }), digitClient.mdmsSearch(root, 'ACCESSCONTROL-ROLES.roles', { limit: 500 })])
+    // every ACTIVE tenant, paged: the root can hold more than one page of rows (deactivated test tenants come first)
+    Promise.all([searchAll(digitClient as never, root, 'tenant.tenants', { isActive: true }), searchAll(digitClient as never, root, 'ACCESSCONTROL-ROLES.roles', { isActive: true })])
       .then(([t, r]) => {
         setTenants(t.filter((x) => x.isActive !== false).map((x) => ({ code: String(x.data.code), name: String(x.data.name ?? x.data.code) })).sort((a, b) => a.code.localeCompare(b.code)));
         setRoles(r.filter((x) => x.isActive !== false).map((x) => String(x.data.code)).sort());
@@ -132,7 +134,7 @@ export default function TenantsPeople() {
   return (
     <div className="flex flex-col gap-6 p-6 lg:flex-row" data-testid="tenants-people">
       <Card className="w-full lg:w-72 lg:self-start">
-        <CardHeader><CardTitle className="text-base">Tenants</CardTitle></CardHeader>
+        <CardHeader><AccessTitle level={2} className="text-base">Tenants</AccessTitle></CardHeader>
         <CardContent className="flex max-h-[70vh] flex-col gap-1 overflow-auto">
           {tenants.map((t) => (
             <button key={t.code} type="button" onClick={() => setTenant(t.code)} data-testid={`tenant-${t.code}`}
@@ -147,7 +149,7 @@ export default function TenantsPeople() {
       <main className="flex min-w-0 flex-1 flex-col gap-6">
         {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
         <Card>
-          <CardHeader><CardTitle className="text-2xl">{tenant}: who can do what</CardTitle></CardHeader>
+          <CardHeader><AccessTitle level={1} className="text-2xl">{tenant}: who can do what</AccessTitle></CardHeader>
           <CardContent className="overflow-x-auto">
             {!people ? <div className="flex items-center gap-2 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading</div> : (
               <>
@@ -174,21 +176,21 @@ export default function TenantsPeople() {
         </Card>
 
         <Card className="border-2 border-primary">
-          <CardHeader><CardTitle>Grant a role</CardTitle></CardHeader>
+          <CardHeader><AccessTitle level={2}>Grant a role</AccessTitle></CardHeader>
           <CardContent className="flex flex-col gap-4">
             <div className="flex flex-wrap items-end gap-3">
-              <div className="flex flex-col gap-1"><Label htmlFor="g-person">Person (employee code)</Label><Input id="g-person" value={personCode} onChange={(e) => setPersonCode(e.target.value)} /></div>
+              <div className="flex min-w-0 flex-col gap-1"><Label htmlFor="g-person">Person (employee code)</Label><Input id="g-person" className="w-full min-w-0" value={personCode} onChange={(e) => setPersonCode(e.target.value)} /></div>
               <Button variant="outline" onClick={findPerson} disabled={!personCode.trim()} data-testid="g-find"><Search className="mr-2 h-4 w-4" />Find</Button>
               {employee && <span className="text-sm" data-testid="g-found">{employee.user?.name} · {employee.code} · home {employee.tenantId}</span>}
             </div>
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="flex flex-col gap-1"><Label htmlFor="g-role">Role</Label>
-                <select id="g-role" className="h-10 rounded-md border bg-background px-3" value={role} onChange={(e) => setRole(e.target.value)}>
+            <div className="grid min-w-0 gap-4 md:grid-cols-2">
+              <div className="flex min-w-0 flex-col gap-1"><Label htmlFor="g-role">Role</Label>
+                <select id="g-role" className="h-10 w-full min-w-0 max-w-full truncate rounded-md border bg-background px-3" value={role} onChange={(e) => setRole(e.target.value)}>
                   <option value="">choose a role</option>
                   {roles.map((r) => <option key={r} value={r}>{r}</option>)}
                 </select>
               </div>
-              <div className="flex flex-col gap-1"><Label>Granted at</Label><div className="flex h-10 items-center rounded-md border bg-muted px-3 font-mono text-sm">{tenant} and below</div></div>
+              <div className="flex min-w-0 flex-col gap-1"><Label>Granted at</Label><div className="flex h-10 min-w-0 items-center truncate rounded-md border bg-muted px-3 font-mono text-sm">{tenant} and below</div></div>
             </div>
             {decision && !decision.ok && <Alert variant="destructive"><AlertDescription data-testid="g-denied">{DENIAL_TEXT[decision.reason]}</AlertDescription></Alert>}
             <div>
