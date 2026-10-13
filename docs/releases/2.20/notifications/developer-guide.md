@@ -198,11 +198,19 @@ Use a translator bound to the topic, not shape-sniffing in the consumer. Model:
 - accept every field-name variant the real producer emits (`mobileNumber`/`mobile`/`phone`/`to`,
   `message`/`body`/`text`, `tenantId`/`tenant`); refuse without phone or text
   (`NB_INVALID_CORE_SMS`);
-- fill gaps from configuration (`NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT`,
-  `NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE`) and derive `eventId` and `transactionId`
+- fill gaps from configuration (`NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT`; the country code of a
+  national number from the tenant's `common-masters.MobileNumberValidation` rule, else
+  `NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE` — `service/TenantPhoneNumbers`) and derive `eventId` and `transactionId`
   (`CORE:<tenant>:<uuid>`) from the Kafka record's topic, partition, offset and timestamp: unique
   per send, the same on a redelivery (so the replay guard does not send an OTP twice), and
   without the phone number, since the id reaches logs, gateway requests and error messages;
+- never guess a country code: a rule MDMS could not be asked for is not "no rule"
+  (`TenantPhoneNumbers.RuleUnavailable`, `NB_CONFIG_UNAVAILABLE`: the translator keeps the number
+  national and the pipeline records `FAILED`, then the consumer DLQs). Digits that start with the
+  code are read by the rule's `mobileNumberRegex` when exactly one reading (as they are, or without
+  the code) matches it; otherwise by `PhoneNumbers`' heuristic, "9 or more digits after the code
+  means it is already there", which misreads a long national number that starts with the code — a
+  German `49112345678` (area code 491) goes to `+49112345678` — unless the tenant's pattern settles it;
 - drop what is no longer worth sending: an OTP (`category` `OTP`) whose `expiryTime` (epoch
   milliseconds) has passed is logged at INFO — without phone or text — and gets no dispatch-log
   row and no DLQ message;

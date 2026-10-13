@@ -1722,19 +1722,21 @@ services:
     # Hardening: no capabilities, no privilege escalation (see file header).
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
-    # ONE BUILD, FOUR IMAGES: pgr-services, pgr-services-db (migrations.yml),
+    # ONE BUILD, ONE TAG: pgr-services, pgr-services-db (migrations.yml),
     # novu-bridge and novu-bridge-db (migrations.yml) all default to
     # ${NOTIFICATION_STACK_TAG}, so they move together. pgr-services emits thin events
     # that only a bridge from the same build resolves (an older bridge dead-letters
     # them), and each app needs the Flyway migrations its -db image carries.
-    # `nightly-develop` is what the develop nightly publishes for all four
+    # digit-user-preferences-service and its -db migrator, which the bridge calls for
+    # consent, follow the same tag, so pinning it never leaves them on a rolling one.
+    # `nightly-develop` is what the develop nightly publishes for all six
     # (build/NIGHTLY-BUILDS.md); it moves per image, so a live deployment pins an
     # immutable develop-<sha8> or release tag via notification_stack_tag in host_vars
     # (the deploy warns while it resolves to a rolling tag). The default itself is a
-    # stopgap: the release pins develop-<sha8> here, in the four image lines at once
+    # stopgap: the release pins develop-<sha8> here, in the six image lines at once
     # (build/NIGHTLY-BUILDS.md "Release step").
     # PGR_SERVICES_IMAGE still overrides this one image (e.g. a local build) — then
-    # pin the other three to the same build yourself.
+    # pin the rest of the stack to the same build yourself.
     image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:${NOTIFICATION_STACK_TAG:-nightly-develop}}
     depends_on:
       pgbouncer:
@@ -1824,6 +1826,9 @@ services:
       PGR_ONBOARDING_RUNNER_ENABLED: ${PGR_ONBOARDING_RUNNER_ENABLED:-true}
       PGR_ONBOARDING_RESERVED_TENANT_IDS: ${PGR_ONBOARDING_RESERVED_TENANT_IDS:-pg}
       PGR_ONBOARDING_BASELINE_UPGRADE_ENABLED: ${PGR_ONBOARDING_BASELINE_UPGRADE_ENABLED:-true}
+      # Notification defaults for a new workspace: Ansible renders it from enable_novu. Off by
+      # default, like the opt-in `notifications` profile it serves.
+      PGR_ONBOARDING_NOTIFICATION_DEFAULTS_ENABLED: ${PGR_ONBOARDING_NOTIFICATION_DEFAULTS_ENABLED:-false}
       DIGIT_PROVISIONER_USERNAME: ${PGR_DIGIT_PROVISIONER_USERNAME:-}
       DIGIT_PROVISIONER_PASSWORD: ${PGR_DIGIT_PROVISIONER_PASSWORD:-}
       DIGIT_PROVISIONER_TENANT_ID: ${PGR_DIGIT_PROVISIONER_TENANT_ID:-}
@@ -2039,7 +2044,7 @@ services:
     # DIGIT_UI_IMAGE. Default is the modern esbuild bundle image (CI-built by
     # the Container Build Pipeline, multi-arch); the bundle lives at
     # /var/web/digit-ui, matching the mounted digit-ui.conf root.
-    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:2.12-5137119}
+    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:2.12.1-7a38661}
     container_name: digit-ui
     ports:
       - "${PROXY_BIND_IP:-127.0.0.1}:18080:80"
@@ -2073,7 +2078,7 @@ services:
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
     cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE, NET_BIND_SERVICE]
-    image: ${CONFIGURATOR_IMAGE:-egovio/configurator:2.12-5137119}
+    image: ${CONFIGURATOR_IMAGE:-egovio/configurator:2.12.1-6e8adb3}
     container_name: configurator
     # Per-tenant runtime config, rendered by the ansible deploy from host_vars
     # (templates/configurator-config.js.j2) and mounted over the neutral
@@ -2408,7 +2413,7 @@ services:
     # pulls the public build published by this repo's own image pipeline
     # (build/build-config.yml -> egovio/digit-mcp). Override MCP_IMAGE to use a
     # different registry/tag.
-    image: ${MCP_IMAGE:-egovio/digit-mcp:2.12-81fc6be}
+    image: ${MCP_IMAGE:-egovio/digit-mcp:2.12.1-7a38661}
     container_name: digit-mcp
     restart: unless-stopped
     depends_on:
@@ -2486,7 +2491,7 @@ services:
     # MCP_IMAGE override to a flag-carrying tag is required; the ansible deploy
     # verifies /v1/version reports readOnly=true after start and fails otherwise
     # (see playbook-deploy.yml, "assert the image honours MCP_READ_ONLY").
-    image: ${MCP_IMAGE:-egovio/digit-mcp:2.12-81fc6be}
+    image: ${MCP_IMAGE:-egovio/digit-mcp:2.12.1-7a38661}
     container_name: digit-mcp-readonly
     restart: unless-stopped
     depends_on:
@@ -2881,7 +2886,17 @@ services:
     # Hardening: no capabilities, no privilege escalation (see file header).
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
-    image: ${DIGIT_USER_PREFERENCES_SERVICE_IMAGE:-egovio/digit-user-preferences-service:2.12-5137119}
+    # The Spring Boot build (backend/digit-user-preferences-service, #1982), which
+    # exists only on develop. Every 2.12 / master tag of this image (2.12-5137119,
+    # v2.12, master-*) is the retired Go binary: it reads DB_HOST/DB_USER only, so
+    # under the environment below it dials localhost:5432, exits, and never turns
+    # healthy, and novu-bridge's depends_on then fails the whole `compose up`.
+    # It follows NOTIFICATION_STACK_TAG with the rest of the notification stack (see
+    # the ONE BUILD, ONE TAG note on pgr-services), and so does its -db migrator in
+    # docker-compose.migrations.yml, so notification_stack_tag pins the pair.
+    # DIGIT_USER_PREFERENCES_SERVICE_IMAGE overrides this one image; pin
+    # DIGIT_USER_PREFERENCES_SERVICE_DB_IMAGE to the same build with it.
+    image: ${DIGIT_USER_PREFERENCES_SERVICE_IMAGE:-egovio/digit-user-preferences-service:${NOTIFICATION_STACK_TAG:-nightly-develop}}
     container_name: digit-user-preferences-service
     restart: unless-stopped
     profiles: ["notifications"]
@@ -2909,9 +2924,9 @@ services:
       interval: 30s
       timeout: 5s
       retries: 5
-      # This service is implemented in Go (see backend/digit-user-preferences-service),
-      # not Spring Boot. Even so, a 30s grace period proved insufficient during a
-      # full-stack cold start and was an outlier among its slow-starting peers.
+      # A 30s grace period proved insufficient during a full-stack cold start and
+      # was an outlier among its slow-starting peers (that was the Go build; the
+      # Spring Boot one starts slower still).
       # novu-bridge is the only service that depends_on this one with
       # condition: service_healthy, so when it flaps the whole `compose up -d`
       # exits non-zero, ansible stops the play, and every task after
@@ -2925,7 +2940,7 @@ services:
     # Hardening: no capabilities, no privilege escalation (see file header).
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
-    # Same build as pgr-services — see the ONE BUILD, FOUR IMAGES note there.
+    # Same build as pgr-services — see the ONE BUILD, ONE TAG note there.
     # NOVU_BRIDGE_IMAGE overrides this one image; novu-bridge-migration then still
     # follows NOTIFICATION_STACK_TAG unless NOVU_BRIDGE_DB_IMAGE is pinned too.
     image: ${NOVU_BRIDGE_IMAGE:-egovio/novu-bridge:${NOTIFICATION_STACK_TAG:-nightly-develop}}
@@ -2980,6 +2995,8 @@ services:
       # variable in .env: it resolved to `pg` on every box, so those OTPs were checked
       # against a tenant with no SMS policy and dropped as SKIPPED / NB_NO_PROVIDER.
       NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT: pg
+      # Last-resort country code for a phone with none; the user's own code and the tenant's
+      # common-masters.MobileNumberValidation rule come first (one deployment, several countries).
       NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE: ${NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE:-}
       NOVU_BRIDGE_KAFKA_DLQ_TOPIC: novu-bridge.dlq
       NOVU_BRIDGE_DEFAULT_LOCALE: en_IN

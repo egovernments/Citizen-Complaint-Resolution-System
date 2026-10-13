@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { AccessTitle } from './AccessChrome';
 import { digitClient } from '@/providers/bridge';
 import { useApp } from '../App';
 import {
@@ -62,7 +63,7 @@ export default function CheckAccess() {
   return (
     <div className="flex flex-col gap-6 p-6" data-testid="check-access">
       <Card>
-        <CardHeader><CardTitle className="text-2xl">Check access</CardTitle></CardHeader>
+        <CardHeader><AccessTitle level={1} className="text-2xl">Check access</AccessTitle></CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-5">
           <div className="flex flex-col gap-2 md:col-span-2">
             <Label htmlFor="ca-person">Person (employee code or user id)</Label>
@@ -97,7 +98,7 @@ export default function CheckAccess() {
           <Card data-testid="ca-verdict">
             <CardHeader className="flex flex-row flex-wrap items-center gap-3">
               <span className={`rounded-md px-3 py-1.5 text-sm font-bold ${head.ok ? 'bg-green-100 text-green-900' : 'bg-red-100 text-red-900'}`} data-testid="ca-decision">{head.ok ? 'Allowed' : 'Denied'}</span>
-              <CardTitle className="text-xl">{head.ok ? 'Every layer allows it' : head.text}</CardTitle>
+              <AccessTitle level={2} className="text-xl">{head.ok ? 'Every layer allows it' : head.text}</AccessTitle>
             </CardHeader>
             <CardContent>
               {(answer.checks ?? []).length === 0 && <p className="text-sm text-muted-foreground">No complaint-level checks: {reasonText(answer.layers?.pgr?.reason)}</p>}
@@ -118,7 +119,7 @@ export default function CheckAccess() {
           </Card>
 
           <Card>
-            <CardHeader><CardTitle>Each layer</CardTitle></CardHeader>
+            <CardHeader><AccessTitle level={2}>Each layer</AccessTitle></CardHeader>
             <CardContent className="overflow-x-auto">
               <table className="w-full min-w-[560px] text-sm" data-testid="ca-layers">
                 <thead><tr className="text-left text-xs uppercase text-muted-foreground"><th className="p-2">Layer</th><th className="p-2">Answer</th><th className="p-2">Detail</th></tr></thead>
@@ -140,7 +141,7 @@ export default function CheckAccess() {
 
           {answer.counts && !answer.counts.error && (
             <Card>
-              <CardHeader><CardTitle>What this person sees at {tenantId}</CardTitle></CardHeader>
+              <CardHeader><AccessTitle level={2}>What this person sees at {tenantId}</AccessTitle></CardHeader>
               <CardContent className="grid gap-4 sm:grid-cols-3" data-testid="ca-counts">
                 <div className="rounded-lg border p-4"><div className="text-3xl font-bold tabular-nums">{answer.counts.inScope ?? '–'}</div><div className="text-sm text-muted-foreground">complaints in their scope</div></div>
                 <div className="rounded-lg border p-4"><div className="text-3xl font-bold tabular-nums">{answer.counts.ownAssigned ?? '–'}</div><div className="text-sm text-muted-foreground">assigned to them</div></div>

@@ -20,7 +20,6 @@ import {
   Search,
   Database,
   Shield,
-  ShieldCheck,
   GitBranch,
   MessageSquare,
   History,
@@ -121,8 +120,6 @@ const navGroups = [
     labelKey: 'app.nav.system',
     items: [
       { id: 'access-roles', nameKey: 'app.nav.access_roles', path: '/manage/access-roles', icon: Shield },
-      // Access: may this person do this, and why. Admins only (the explain API refuses others)
-      { id: 'access-check', nameKey: 'app.nav.access_check', path: '/manage/access/check', icon: ShieldCheck, requiredRoles: ['SUPERUSER', 'MDMS_ADMIN', 'ACCOUNT_ADMIN'] },
       { id: 'workflow-business-services', nameKey: 'app.nav.workflows', path: '/manage/workflow-business-services', icon: Workflow },
       { id: 'workflow-processes', nameKey: 'app.nav.processes', path: '/manage/workflow-processes', icon: History },
       { id: 'mdms-schemas', nameKey: 'app.nav.mdms_schemas', path: '/manage/mdms-schemas', icon: FileCode },

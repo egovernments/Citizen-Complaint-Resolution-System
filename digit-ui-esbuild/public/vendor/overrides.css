@@ -10852,3 +10852,165 @@ svg.cms-complaints-go {
     max-width: none;
   }
 }
+
+/* ----------------------------------------------------------------------
+ * Citizen home banner (#2358)
+ *
+ * The photo an admin sets in the Configurator's Branding step, darkened
+ * behind a welcome and the File a Complaint / My Complaints links, above All
+ * Services. Rendered only when globalConfigs CITIZEN_BANNER_ENABLED is on
+ * and StateInfo.bannerUrl is set (CitizenHomeBanner.js).
+ *
+ * Colours come from the theme: the scrim is its dark (--color-primary-1),
+ * the accent its brand colour (--color-primary-2) lightened to read on the
+ * scrim, and the buttons its primary-button and link colours, so a yellow
+ * brand (naipepea) gets dark text where a blue one (Bomet) gets white.
+ *
+ * The title and links carry an extra class of specificity: vendor
+ * `h2[class*="title"]` and `a:not(.digit-button):not(.button)` would
+ * otherwise recolour them for a light page.
+ * -------------------------------------------------------------------- */
+.cms-citizen-home {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+}
+/* All Services sits one level down inside the banner's column, past the
+ * `citizen-home-container > .v2-scope` rules that put it straight on the
+ * page's ground (block 66) and give it the full width on a phone. */
+.citizen .center-container.citizen-home-container > .cms-citizen-home > .v2-scope {
+  background-color: transparent !important;
+}
+@media (max-width: 47.99rem) {
+  .citizen-home-container > .cms-citizen-home {
+    flex: 1 1 100%;
+  }
+}
+.cms-home-banner {
+  position: relative;
+  isolation: isolate;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  min-height: 13.5rem;
+  margin: 1rem 1.5rem 0;
+  border-radius: 12px;
+  overflow: hidden;
+  background-color: var(--color-primary-1, #0B1F3A);
+  color: #FFFFFF;
+}
+.cms-home-banner__image {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.cms-home-banner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  /* Darkest under the words, lighter towards the right so the photo shows. */
+  background: linear-gradient(90deg, rgba(11, 31, 58, 0.92) 0%, rgba(11, 31, 58, 0.75) 50%, rgba(11, 31, 58, 0.4) 100%);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--color-primary-1, #0B1F3A) 92%, transparent) 0%,
+    color-mix(in srgb, var(--color-primary-1, #0B1F3A) 75%, transparent) 50%,
+    color-mix(in srgb, var(--color-primary-1, #0B1F3A) 40%, transparent) 100%
+  );
+}
+.cms-home-banner__content {
+  max-width: 40rem;
+  padding: 1.75rem 2rem;
+}
+.cms-home-banner__eyebrow,
+.cms-home-banner__product {
+  color: #FFFFFF;
+  color: color-mix(in srgb, var(--color-primary-2, #2563EB) 55%, #FFFFFF);
+}
+.cms-home-banner__eyebrow {
+  margin: 0 0 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.cms-home-banner h2.cms-home-banner__title {
+  margin: 0;
+  font-family: "Roboto Condensed", Roboto, sans-serif;
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: normal;
+  color: #FFFFFF;
+}
+.cms-home-banner__name,
+.cms-home-banner__product {
+  display: block;
+}
+.cms-home-banner__tagline {
+  max-width: 32rem;
+  margin: 0.75rem 0 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.88);
+}
+.cms-home-banner__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+.cms-home-banner .cms-home-banner__actions a.cms-home-banner__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 2.5rem;
+  padding: 0 1rem;
+  border: 1px solid #FFFFFF;
+  border-radius: 4px;
+  background-color: #FFFFFF;
+  color: var(--color-link-normal, var(--color-primary-2, #2563EB));
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: filter 0.15s ease-out;
+}
+.cms-home-banner .cms-home-banner__actions a.cms-home-banner__button--primary {
+  border-color: var(--color-primary-2, var(--color-primary-main, #2563EB));
+  background-color: var(--color-primary-2, var(--color-primary-main, #2563EB));
+  color: var(--color-button-primary-text, #FFFFFF);
+}
+.cms-home-banner .cms-home-banner__actions a.cms-home-banner__button:hover {
+  filter: brightness(0.94);
+  text-decoration: none;
+}
+.cms-home-banner .cms-home-banner__actions a.cms-home-banner__button:focus-visible {
+  outline: 2px solid #FFFFFF;
+  outline-offset: 2px;
+}
+@media (max-width: 47.99rem) {
+  .cms-home-banner {
+    min-height: 0;
+    margin: 1rem 1rem 0;
+  }
+  .cms-home-banner::after {
+    /* The words span the whole width on a phone, so the scrim does too. */
+    background: rgba(11, 31, 58, 0.8);
+    background: color-mix(in srgb, var(--color-primary-1, #0B1F3A) 80%, transparent);
+  }
+  .cms-home-banner__content {
+    padding: 1.25rem;
+  }
+  .cms-home-banner h2.cms-home-banner__title {
+    font-size: 1.375rem;
+  }
+  .cms-home-banner .cms-home-banner__actions a.cms-home-banner__button {
+    flex: 1 1 auto;
+  }
+}

@@ -2,6 +2,12 @@
 
 Status: approved. To be implemented next.
 
+> **Update (2026-10):** retention is now two-tier — results for the newest 30
+> runs, full reports (`runs/<id>/`) for the newest `RUN_LIMIT` — and the
+> dashboards page through the runs five at a time. The "last 5 runs" below
+> describes the original design; `../../runner/README.md` (Retention, Dashboards
+> and the run window) is current.
+
 ## Why
 
 Today the suite produces a Playwright HTML report scoped to one run, with videos
@@ -137,7 +143,7 @@ filter sections. Multi-select within a section ORs; across sections ANDs.
 ├── app.js
 ├── styles.css
 ├── catalog.json            ← regenerated each run
-├── history.json            ← rolling 5 runs, used by build-catalog merge
+├── history.json            ← rolling 5 runs, used by build-catalog merge (now 30; see the update note at the top)
 └── runs/
     ├── 2026-05-07_0200_a1b2c3d/
     │   ├── playwright-report/   ← stock Playwright HTML (full report)
