@@ -5,6 +5,7 @@ import { defaultProvisioningPassword, ensureAuthenticated } from '../services/au
 import { autoPaginate, PAGINATION_SCHEMA_PROPERTIES } from '../utils/pagination.js';
 import type { PaginationOptions } from '../utils/pagination.js';
 import { validateTenantId, validateMobileNumber, rejectControlChars, validateStringLength } from '../utils/validation.js';
+import { validateGender } from '../utils/gender.js';
 import { sanitizeUserContent } from '../utils/sanitize.js';
 import { applyFieldMask } from '../utils/field-mask.js';
 
@@ -193,8 +194,7 @@ export function registerUserTools(registry: ToolRegistry): void {
         },
         gender: {
           type: 'string',
-          enum: ['MALE', 'FEMALE'],
-          description: 'Optional gender',
+          description: 'Optional gender: an active code of the tenant\'s common-masters.GenderType master (list them with mdms_search).',
         },
         username: {
           type: 'string',
@@ -216,6 +216,7 @@ export function registerUserTools(registry: ToolRegistry): void {
       await ensureAuthenticated();
 
       const tenantId = args.tenant_id as string;
+      const gender = await validateGender(args.gender, tenantId, (t, s) => digitApi.mdmsV2SearchRaw(t, s));
       const userType = (args.user_type as string) || 'CITIZEN';
       const mobileNumber = args.mobile_number as string;
 
@@ -242,7 +243,7 @@ export function registerUserTools(registry: ToolRegistry): void {
         type: userType,
         active: true,
         emailId: (args.email as string) || null,
-        gender: (args.gender as string) || null,
+        gender,
         roles,
         tenantId: roleTenant,
       };

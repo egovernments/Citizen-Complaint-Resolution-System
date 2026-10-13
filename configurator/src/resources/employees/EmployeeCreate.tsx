@@ -5,7 +5,7 @@ import { useApp } from '../../App';
 import { RolesEditor } from './RolesEditor';
 import { JurisdictionEditor } from './JurisdictionEditor';
 import { AssignmentEditor } from './AssignmentEditor';
-import { GENDER_CHOICES } from '../genderChoices';
+import { useGenderChoices } from '../useGenderChoices';
 
 const STATUS_CHOICES = [
   { value: 'EMPLOYED', label: 'Employed' },
@@ -33,6 +33,7 @@ export function EmployeeCreate() {
   const { state } = useApp();
   const tenantId = state.tenant;
   const { validator: mobileValidate, rules: mobileRules } = useMobileValidator();
+  const genderChoices = useGenderChoices();
 
   const defaults = {
     tenantId,
@@ -133,7 +134,7 @@ export function EmployeeCreate() {
           <DigitFormSelect
             source="user.gender"
             label="Gender"
-            choices={GENDER_CHOICES}
+            choices={genderChoices}
             placeholder="Select gender..."
           />
           <DigitFormInput source="dateOfAppointment" label="Date of Appointment" type="date" />

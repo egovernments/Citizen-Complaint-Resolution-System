@@ -1,7 +1,7 @@
 import { DigitEdit, DigitFormInput, DigitFormSelect, v } from '@/admin';
 import { FieldSection } from '@/admin/fields';
 import { useMobileValidator } from '@/admin/hrms/useMobileValidator';
-import { GENDER_CHOICES } from '../genderChoices';
+import { useGenderChoices } from '../useGenderChoices';
 
 const TYPE_CHOICES = [
   { value: 'CITIZEN', label: 'Citizen' },
@@ -15,6 +15,7 @@ export function UserEdit() {
   // hardcoded 10-digit `v.mobile` regex, which rejects valid non-10-digit
   // tenant numbers (e.g. mz's 9-digit `^8[0-9]{8}$`) and blocks Save.
   const { validator: mobileValidate, rules: mobileRules } = useMobileValidator();
+  const genderChoices = useGenderChoices();
   return (
     <DigitEdit title="Edit User">
       <FieldSection title="Profile">
@@ -31,7 +32,7 @@ export function UserEdit() {
           <DigitFormSelect
             source="gender"
             label="Gender"
-            choices={GENDER_CHOICES}
+            choices={genderChoices}
             placeholder="Select gender..."
           />
           <DigitFormSelect
