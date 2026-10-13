@@ -873,6 +873,10 @@ pgr_onboarding_baseline_upgrade_enabled: true
 # pgr_onboarding_notification_defaults_enabled: false
 identity_digit_admin_username: "ADMIN"  # use a dedicated ACCOUNT_ADMIN in production
 identity_digit_admin_tenant_id: "pg"
+# Root tenants this deploy seeds, comma-separated. Each gets an Identity BFF
+# Organization route (alias and URL slug = the tenant id) when nothing maps it
+# yet; an existing route is never renamed. Unset = state_root; "" skips it.
+# identity_tenant_route_backfill_roots: ke
 # Platform provisioner the runner signs in as (PGR only, internal APIs). It must
 # be an EMPLOYEE of a ROOT tenant (no dot) holding MDMS_ADMIN, ACCOUNT_ADMIN,
 # LOC_ADMIN and HRMS_ADMIN there. With the runner on, the playbook creates it if

@@ -20,7 +20,7 @@ Both return `Workspace` and `Probes`. Search additionally returns `Rename`, cont
 
 Fresh rows start NOT_STARTED, version 1, seedVersion set to the platform seed version the tenant was onboarded with, legacy false. Updates compare the supplied version atomically and increment it once. Step states are NOT_STARTED, IN_PROGRESS, DONE or SKIPPED; only BRANDING may be SKIPPED. DONE runs that step's probe alone and requires it to pass; a dependency failure there returns 503. NOT_STARTED, IN_PROGRESS and SKIPPED writes run no probe. Overall DONE requires every step DONE or SKIPPED. Updates append audit events.
 
-An absent legacy row is synthesized as DONE with all steps DONE, version 0, seedVersion null, legacy true, and null updatedAt/updatedBy at both workspace and step level. The entire Probes block is null. Search performs no writes or dependency probes for that legacy case.
+An absent legacy row is synthesized as DONE with all steps DONE, version 0, seedVersion null, legacy true, and null updatedAt/updatedBy at both workspace and step level. The entire Probes block is null. Search performs no writes or dependency probes for that legacy case. A root tenant the deploy seeds (no signup) reads this way, so its admin lands on management, not setup (#2398). The deploy writes no workspace row for it: a row with a seedVersion would enrol the tenant in platform seed upgrades and in the deploy's self-serve workspace handling.
 
 ## Platform seed upgrades
 

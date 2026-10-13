@@ -7071,6 +7071,56 @@
         - enable_keycloak | default(false)
         - nginx_features.keycloak | default(false)
 
+    # Deploy-seeded roots (#2398). A root the deploy seeds (state_root) never went
+    # through signup, so nothing else gives it the Organization that every staff
+    # sign-in and its /<slug>/digit-ui/ route need. The BFF backfill creates one
+    # (alias and URL slug = the tenant id) for each root in
+    # IDENTITY_TENANT_ROUTE_BACKFILL_ROOTS that no Organization maps yet. It is
+    # idempotent and never renames, overwrites or adopts a mapping. The root's PGR
+    # onboarding workspace needs no write: a tenant with no workspace row already
+    # reads DONE, so its admin lands on /manage. The control plane is not routed
+    # through Kong, so this calls the BFF's loopback port.
+    - name: "identity-bootstrap — Organization route for the deploy-seeded root"
+      ansible.builtin.uri:
+        url: http://127.0.0.1:18400/internal/identity/v1/tenant-routes/_backfill
+        method: POST
+        headers:
+          Authorization: "Bearer {{ identity_secrets.identity_control_plane_token }}"
+        body_format: json
+        body: {actor: ansible-deploy}
+        status_code: [200]
+        timeout: 60
+      register: identity_route_backfill
+      until: (identity_route_backfill.status | default(-1) | int) not in [-1, 500, 502, 503, 504]
+      retries: 6
+      delay: 10
+      changed_when: (identity_route_backfill.json.created | default([])) | length > 0
+      failed_when: false
+      no_log: true
+      when:
+        - enable_keycloak | default(false)
+        - (identity_tenant_route_backfill_roots | default(state_root)) | length > 0
+
+    - name: "identity-bootstrap — ACTION: a deploy-seeded root has no Organization route"
+      when:
+        - identity_route_backfill is not skipped
+        - >-
+          (identity_route_backfill.status | default(-1) | int) != 200
+          or ((identity_route_backfill.json.conflicts | default([]))
+              + (identity_route_backfill.json.skipped | default([])
+                 | rejectattr('reason', 'equalto', 'ALREADY_MAPPED') | list)) | length > 0
+      ansible.builtin.debug:
+        msg: >-
+          Tenant route backfill for {{ identity_tenant_route_backfill_roots | default(state_root) }}
+          answered HTTP {{ identity_route_backfill.status | default('n/a') }}:
+          {{ identity_route_backfill.json | default(identity_route_backfill.msg | default('no response')) }}.
+          A root without a route has no staff sign-in and its /<slug>/digit-ui/ answers 404.
+          NOT_ACTIVE: the tenant is not an active tenant.tenants record yet (check the MCP
+          tenant bootstrap). SLUG_TAKEN / ALIAS_TAKEN: a self-serve workspace already uses
+          that slug or alias, so map the tenant by hand. The next deploy retries; so does
+          POST http://127.0.0.1:18400/internal/identity/v1/tenant-routes/_backfill with
+          IDENTITY_CONTROL_PLANE_TOKEN from {{ digit_dir }}/.env as the Bearer token.
+
     # ────────────────────────────────────────────────────────────────
     # UI-tenant fall-back: until the operator's chosen state_tenant_id is
     # bootstrapped (via /v1/tenant/bootstrap), ADMIN doesn't exist there
