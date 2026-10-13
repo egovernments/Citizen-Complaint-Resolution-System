@@ -476,10 +476,165 @@ class SeederLogin(unittest.TestCase):
         self.assertNotIn("NOTIF-LOGIN-REFUSED", out)
 
 
+class SeederAccessToken(unittest.TestCase):
+    """Field finding (dev deployment, 2026-10-07): a self-serve workspace's founder signs in through
+    Keycloak only and has no DIGIT password, so the seeder and the migration (username/password
+    only) could not run for that workspace. DIGIT_ACCESS_TOKEN replaces the login.
+
+    Review of #2342: the token was checked with an MDMS search, which Kong treats as auth-optional:
+    it forwards a request whose token it rejects ANONYMOUSLY, so a dead token answered 200 and the
+    run went on reading anonymously. The fake gateway below answers the way Kong does
+    (local-setup/kong/kong.yml AUTH_OPTIONAL + auth enrichment), so a check through an auth-optional
+    path cannot pass these tests."""
+
+    TOKEN = "f0unders-access-t0ken"
+    # Kong's AUTH_OPTIONAL paths this script reads (a rejected token is dropped, the call goes on).
+    AUTH_OPTIONAL = ("/mdms-v2/v2/_search", "/mdms-v2/schema/v1/_search")
+
+    def setUp(self):
+        import urllib.error
+        self.calls = []
+        self.token_valid = True
+        self.answer = None          # an exception the gateway raises for every call
+        self.details_body = None    # what /user/_details answers a valid token with
+        originals = {name: getattr(sn, name) for name in ("ACCESS_TOKEN", "TENANT", "_post")}
+        for name, value in originals.items():
+            self.addCleanup(setattr, sn, name, value)
+        sn.ACCESS_TOKEN = self.TOKEN
+        sn.TENANT = "kworkspace"
+
+        def post(path, body, tok=None, headers=None):
+            import io
+            self.calls.append((path, body))
+            if self.answer is not None:
+                raise self.answer
+            endpoint = path.split("?", 1)[0]
+            if endpoint in self.AUTH_OPTIONAL:
+                # Kong: a token egov-user rejects is ignored here and the request goes on anonymously.
+                return io.BytesIO(b'{"mdms": []}')
+            body_token = ((body or {}).get("RequestInfo") or {}).get("authToken")
+            if not body_token:
+                raise self.http_error(401, path)          # a protected POST without a body token
+            if not self.token_valid:
+                raise self.http_error(401, path)          # Kong resolves the token first: InvalidAccessTokenException
+            if self.details_body is not None:
+                return io.BytesIO(self.details_body)
+            return io.BytesIO(b'{"uuid": "3f0c", "userName": "FOUNDER_1", "type": "EMPLOYEE", "roles": []}')
+        sn._post = post
+        self.http_error = lambda code, path="/user/_details", body=b"x": urllib.error.HTTPError(
+            "http://kong" + path, code, "x", {}, __import__("io").BytesIO(body))
+
+    def login(self):
+        import contextlib
+        import io
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            try:
+                return sn.login(), None, out.getvalue()
+            except SystemExit as exc:
+                return None, exc.code, out.getvalue()
+
+    def test_the_token_is_checked_by_egov_user_introspection_never_a_password_login(self):
+        import urllib.parse
+        tok, code, _ = self.login()
+        self.assertEqual(tok, self.TOKEN)
+        self.assertIsNone(code)
+        self.assertEqual(len(self.calls), 1)
+        path, body = self.calls[0]
+        endpoint, query = path.split("?", 1)
+        self.assertEqual(endpoint, "/user/_details")
+        self.assertNotIn(endpoint, self.AUTH_OPTIONAL)
+        self.assertEqual(urllib.parse.parse_qs(query)["access_token"], [self.TOKEN])
+        self.assertEqual(body["RequestInfo"]["authToken"], self.TOKEN, "Kong refuses a protected POST without it")
+
+    def test_a_refused_token_is_exit_4_and_the_token_is_never_printed(self):
+        self.token_valid = False
+        tok, code, out = self.login()
+        self.assertEqual(code, 4, "an auth-optional check would have answered 200 here")
+        self.assertIn("NOTIF-LOGIN-REFUSED:", out)
+        self.assertIn("DIGIT_ACCESS_TOKEN", out)
+        self.assertNotIn(self.TOKEN, out)
+
+    def test_every_way_egov_user_refuses_is_exit_4(self):
+        cases = {
+            "403": self.http_error(403),
+            "400 InvalidAccessTokenException": self.http_error(
+                400, body=b'{"Errors":[{"code":"InvalidAccessTokenException"}]}'),
+        }
+        for name, error in cases.items():
+            with self.subTest(name):
+                self.answer = error
+                tok, code, out = self.login()
+                self.assertEqual(code, 4)
+                self.assertIn("NOTIF-LOGIN-REFUSED:", out)
+                self.assertNotIn(self.TOKEN, out)
+        self.answer = None
+        for name, body in {"no user": b"{}", "an anonymous search answer": b'{"mdms": []}', "not JSON": b"<html>"}.items():
+            with self.subTest(name):
+                self.details_body = body
+                tok, code, out = self.login()
+                self.assertEqual(code, 4, "a 200 that names no user is no user")
+                self.assertIn("NOTIF-LOGIN-REFUSED:", out)
+                self.assertNotIn(self.TOKEN, out)
+
+    def test_a_server_error_on_the_check_is_not_a_refused_token(self):
+        for status, body in ((502, b"x"), (400, b'{"Errors":[{"code":"SOMETHING_ELSE"}]}')):
+            with self.subTest(status=status):
+                self.answer = self.http_error(status, body=body)
+                tok, code, out = self.login()
+                self.assertEqual(code, 2)
+                self.assertIn("NOTIF-LOGIN-ERROR:", out)
+                self.assertIn("/user/_details", out)
+                self.assertNotIn("NOTIF-LOGIN-REFUSED", out)
+                self.assertNotIn(self.TOKEN, out)
+
+    def test_who_names_the_token_not_a_user(self):
+        self.assertEqual(sn.who(), "the supplied DIGIT_ACCESS_TOKEN")
+        sn.ACCESS_TOKEN = ""
+        self.assertNotIn("TOKEN", sn.who())
+
+    def _migrate_plan(self):
+        import contextlib
+        import io
+        # migrate-notifications.py loads its own copy of the seeder module.
+        for name in ("ACCESS_TOKEN", "_post", "URL", "LOGIN_TENANT"):
+            self.addCleanup(setattr, mn.sn, name, getattr(mn.sn, name))
+        mn.sn._post = sn._post
+        env = {"DIGIT_ACCESS_TOKEN": self.TOKEN, "DIGIT_URL": "http://kong"}
+        saved = {k: os.environ.get(k) for k in env}
+        os.environ.update(env)
+        for k, v in saved.items():
+            self.addCleanup(lambda k=k, v=v: os.environ.__setitem__(k, v) if v is not None else os.environ.pop(k, None))
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+            rc = mn.run(["plan", "--tenant", "kworkspace", "--bridge-container", "", "--worker-container", ""])
+        return rc, err.getvalue()
+
+    def test_the_migration_takes_the_same_token_and_refuses_a_bad_one_before_reading(self):
+        self.token_valid = False
+        rc, err = self._migrate_plan()
+        self.assertEqual(rc, 4)
+        self.assertIn("DIGIT_ACCESS_TOKEN was refused (HTTP 401)", err)
+        self.assertNotIn(self.TOKEN, err)
+        self.assertEqual([path.split("?", 1)[0] for path, _ in self.calls], ["/user/_details"],
+                         "nothing but the token check was read")
+
+    def test_the_migration_refuses_a_check_answered_without_a_user(self):
+        self.details_body = b"{}"
+        rc, err = self._migrate_plan()
+        self.assertEqual(rc, 4)
+        self.assertIn("DIGIT_ACCESS_TOKEN was refused (HTTP 200 without a user)", err)
+        self.assertEqual([path.split("?", 1)[0] for path, _ in self.calls], ["/user/_details"])
+
+
 try:
     import jinja2
     import yaml
 except ImportError:  # pragma: no cover
+    # CI installs both (local-setup-ci.yaml, config-contracts): there a missing one must fail the
+    # run, not quietly skip the playbook-render cases below.
+    if os.environ.get("CI"):
+        raise
     jinja2 = yaml = None
 
 
@@ -525,6 +680,67 @@ class ProviderOwnerNotes(unittest.TestCase):
         self.assertIn("It also owns the providers", notes["mz"])
         self.assertIn("only an admin of ke or mz may create one.", notes["pg"])
 
+
+
+@unittest.skipIf(jinja2 is None, "needs jinja2 + PyYAML (ansible's own dependencies)")
+class WorkspaceRootsAreNotSeededByTheDeploy(unittest.TestCase):
+    """Field finding (dev deployment, 2026-10-07): every self-serve workspace root with complaints
+    printed "NOT SEEDED — the access-control rows failed (exit 2)": the deploy logged in as ADMIN,
+    which does not exist at a workspace. Workspaces are seeded by pgr-services at signup, so the
+    deploy leaves them out of the ADMIN loop and names the ones still without routing."""
+
+    @classmethod
+    def setUpClass(cls):
+        import ast
+        import re
+        with open(os.path.join(REPO, "local-setup", "ansible", "playbook-deploy.yml"), encoding="utf-8") as fh:
+            tasks = [t for p in yaml.safe_load(fh) for t in p.get("tasks", []) or []]
+        task = next(t for t in tasks if t.get("name") == "notif-seed — the state roots to seed")
+        cls.facts = task["ansible.builtin.set_fact"]
+        action = next(t for t in tasks if t.get("name") == "notif-seed — ACTION: a self-serve workspace has no notification configuration")
+        cls.action_when = [w for w in action["when"] if "notif_workspace_routing" in w][0]
+        cls.action_loop = action["loop"]
+        cls.action_msg = action["ansible.builtin.debug"]["msg"]
+        env = jinja2.Environment()
+        env.tests["match"] = lambda value, pattern: re.match(pattern, value) is not None   # ansible's test
+        cls.env = env
+        cls.literal = staticmethod(ast.literal_eval)
+
+    def render(self, name, **values):
+        return self.literal(self.env.from_string(self.facts[name]).render(**values).strip())
+
+    def test_workspace_roots_leave_the_admin_loop_but_state_root_never_does(self):
+        values = dict(notif_seed_tenant="ke ", notif_complaint_counts={"ke": "12", "knewman": "3", "pg": "40", "PW_x": "1"},
+                      notif_workspace_routing={"knewman": "0", "kpgr": "24", "ke": "0"})
+        self.assertEqual(self.render("notif_seed_roots", **values), ["ke", "pg"])
+        self.assertEqual(self.render("notif_seed_workspaces", **values), ["knewman", "kpgr"])
+
+    def test_without_the_onboarding_tables_every_root_is_seeded_as_before(self):
+        values = dict(notif_seed_tenant="ke", notif_complaint_counts={"ke": "1", "knewman": "3"}, notif_workspace_routing={})
+        self.assertEqual(self.render("notif_seed_roots", **values), ["ke", "knewman"])
+        self.assertEqual(self.render("notif_seed_workspaces", **values), [])
+
+    def test_excluded_test_signups_are_neither_listed_nor_given_an_action(self):
+        # Review of #2342: lowercase pwt… test signups are workspaces too, and were listed.
+        values = dict(notif_seed_tenant="ke", notif_complaint_counts={"ke": "1", "pwtsignup1": "2"},
+                      notif_workspace_routing={"pwtsignup1": "0", "PW_x": "0", "knewman": "0"})
+        self.assertEqual(self.render("notif_seed_workspaces", **values), ["knewman"])
+        self.assertEqual(self.render("notif_seed_roots", **values), ["ke"], "nor seeded as a plain root")
+        self.assertIn("notif_seed_workspaces", self.action_loop, "the ACTION loops over the filtered list")
+        values["notifications_seed_exclude"] = "^knew"
+        self.assertEqual(self.render("notif_seed_workspaces", **values), ["PW_x", "pwtsignup1"])
+
+    def test_the_action_reads_the_token_without_echo(self):
+        # Review of #2342: `DIGIT_ACCESS_TOKEN=<token>` on the command line lands in the shell history.
+        self.assertIn("read -rs DIGIT_ACCESS_TOKEN && export DIGIT_ACCESS_TOKEN", self.action_msg)
+        self.assertNotIn("DIGIT_ACCESS_TOKEN=<", self.action_msg)
+        self.assertIn("unset DIGIT_ACCESS_TOKEN", self.action_msg)
+
+    def test_only_a_workspace_without_routing_gets_the_action(self):
+        when = self.env.from_string("{{ " + self.action_when + " }}")
+        routing = {"knewman": "0", "kpgr": "24"}
+        self.assertEqual(when.render(item="knewman", notif_workspace_routing=routing), "True")
+        self.assertEqual(when.render(item="kpgr", notif_workspace_routing=routing), "False")
 
 if __name__ == "__main__":
     unittest.main()

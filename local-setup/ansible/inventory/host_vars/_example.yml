@@ -765,8 +765,14 @@ novu_bridge_smscountry_password: ""
 # novu_bridge_preference_enabled: false
 # novu_bridge_preference_fail_open: true
 
-# Country code prefixed to OTP numbers that arrive without one (core SMS from
-# user-otp / egov-user), e.g. "254". Blank = numbers are sent as received.
+# Deployment-wide LAST-RESORT country code for phone numbers that arrive without
+# one (login OTPs from user-otp / egov-user, complaint notifications), e.g. "+254".
+# The tenant's own common-masters.MobileNumberValidation rule (written at workspace
+# signup from the signup country) and the user's own egov-user countryCode come
+# first, so a deployment with workspaces in several countries sends each its own
+# code; this is used only at a tenant that has no rule. Blank and no rule = the
+# message is NOT sent (SKIPPED / NB_CONTACT_INVALID on Logs), never as "+" + the
+# national number.
 # novu_bridge_core_sms_country_code: ""
 
 # Per-channel Novu workflow ids the bridge triggers (the rendered message travels
@@ -862,6 +868,9 @@ pgr_onboarding_runner_enabled: true
 # Idle runner ticks bring workspaces onboarded on an older platform seed up to
 # the current one (create-if-absent; founder edits are kept).
 pgr_onboarding_baseline_upgrade_enabled: true
+# A new workspace gets the notification defaults (schemas, access rows, templates,
+# routing) at signup only where the notification stack runs: unset = enable_novu.
+# pgr_onboarding_notification_defaults_enabled: false
 identity_digit_admin_username: "ADMIN"  # use a dedicated ACCOUNT_ADMIN in production
 identity_digit_admin_tenant_id: "pg"
 # Platform provisioner the runner signs in as (PGR only, internal APIs). It must
