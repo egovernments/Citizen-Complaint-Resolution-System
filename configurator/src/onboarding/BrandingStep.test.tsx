@@ -68,7 +68,7 @@ const page = () =>
   );
 
 const pick = (name = 'banner.jpg', type = 'image/jpeg') =>
-  fireEvent.change(screen.getByTestId('banner-input'), { target: { files: [new File(['x'], name, { type })] } });
+  fireEvent.change(screen.getByTestId('banner-input'), { target: { files: [new File([new Uint8Array([0xff, 0xd8, 0xff])], name, { type })] } });
 
 beforeEach(() => {
   vi.clearAllMocks();

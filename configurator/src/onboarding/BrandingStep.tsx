@@ -53,6 +53,27 @@ function imageSize(file: File): Promise<{ width: number; height: number } | null
   });
 }
 
+/**
+ * Whether the file's bytes are the PNG or JPEG its name says. The picker's file.type
+ * comes from the name alone, while egov-filestore checks the bytes against the
+ * extension and turns a mismatch (a WebP saved as .png) away with its whole format list.
+ */
+function matchesItsName(file: File): Promise<boolean> {
+  const named = /\.png$/i.test(file.name) ? 'png' : /\.jpe?g$/i.test(file.name) ? 'jpeg' : null;
+  if (!named) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const head = new Uint8Array(reader.result as ArrayBuffer);
+      const png = head[0] === 0x89 && head[1] === 0x50 && head[2] === 0x4e && head[3] === 0x47;
+      const jpeg = head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff;
+      resolve(named === 'png' ? png : jpeg);
+    };
+    reader.onerror = () => resolve(false);
+    reader.readAsArrayBuffer(file.slice(0, 4));
+  });
+}
+
 export default function BrandingStep() {
   const { state, completePhase } = useApp();
   const t = useOnboardingT();
@@ -120,7 +141,7 @@ export default function BrandingStep() {
     if (fileInput.current) fileInput.current.value = '';
     if (!file) return;
     setLogoError(null);
-    if (!LOGO_TYPES.includes(file.type)) {
+    if (!LOGO_TYPES.includes(file.type) || !(await matchesItsName(file))) {
       setLogoError(t('branding.logo_type', 'Use a PNG or JPG image.'));
       return;
     }
@@ -152,7 +173,7 @@ export default function BrandingStep() {
     if (bannerInput.current) bannerInput.current.value = '';
     if (!file) return;
     setBannerError(null);
-    if (!LOGO_TYPES.includes(file.type)) {
+    if (!LOGO_TYPES.includes(file.type) || !(await matchesItsName(file))) {
       setBannerError(t('branding.logo_type', 'Use a PNG or JPG image.'));
       return;
     }
@@ -216,7 +237,9 @@ export default function BrandingStep() {
       setLogo(null);
       setBanner(null);
       announceOrganisation({ name: saved.name, logoUrl: saved.logoUrl });
-      if (!await completePhase(STEP.number)) return;
+      // PGR marks Branding done only once the tenant has a logo (imageId); without
+      // one the step is recorded as skipped, which completes it all the same.
+      if (!await completePhase(STEP.number, !saved.tenantRecord.data.imageId)) return;
       navigate(NEXT.path);
     } catch (err) {
       if (err instanceof ThemeSaveError) reportStepError('branding', 'save_theme', err.cause, state.tenant);
@@ -396,11 +419,6 @@ export default function BrandingStep() {
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
               {t('step.save_continue', 'Save and continue')}
             </Button>
-            <Button variant="ghost" disabled={saving} onClick={async () => {
-              setSaving(true);
-              try { if (await completePhase(STEP.number, true)) navigate(NEXT.path); }
-              finally { setSaving(false); }
-            }}>{t('branding.skip', 'Skip branding')}</Button>
           </div>
         </div>
       )}

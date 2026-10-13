@@ -268,7 +268,6 @@
 {"code": "app.onboarding.branding.rename_in_settings", "message": "Change the workspace name in Workspace settings.", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.branding.replace", "message": "Replace", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.branding.save_failed", "message": "Saving your branding failed. Try again.", "module": "configurator-ui", "locale": "en_IN"},
-{"code": "app.onboarding.branding.skip", "message": "Skip branding", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.branding.theme", "message": "Brand Theme", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.branding.theme_hint", "message": "Applied across the services citizens and employees use.", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.branding.theme_not_saved", "message": "Your name and logo are saved, but the theme isn’t.", "module": "configurator-ui", "locale": "en_IN"},
