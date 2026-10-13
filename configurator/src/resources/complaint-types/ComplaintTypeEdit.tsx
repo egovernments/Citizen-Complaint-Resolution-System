@@ -1,6 +1,7 @@
 import { DigitEdit, DigitFormInput, DigitFormSelect, v } from '@/admin';
 import { FieldSection } from '@/admin/fields';
 import { BooleanInput } from '@/admin/widgets';
+import { ParentCodeSelect } from './ParentCodeSelect';
 
 export function ComplaintTypeEdit() {
   return (
@@ -9,7 +10,8 @@ export function ComplaintTypeEdit() {
         <div className="space-y-4">
           {/* Grouping key — parent node code in the ComplaintHierarchy tree
               (replaces the old free-text menuPath). */}
-          <DigitFormInput source="parentCode" label="Parent (group code)" />
+          {/* ours#861 A3: picked from the existing categories - free text let a typo orphan the sub-type. */}
+          <ParentCodeSelect />
           <DigitFormSelect
             source="department"
             label="Department"

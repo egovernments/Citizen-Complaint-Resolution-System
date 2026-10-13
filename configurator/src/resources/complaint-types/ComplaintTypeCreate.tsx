@@ -3,6 +3,7 @@ import { DigitCreate, DigitFormCodeInput, DigitFormInput, DigitFormSelect, v } f
 import { useAvailableLocales } from '@/hooks/useAvailableLocales';
 import { localizationService } from '@/api/services/localization';
 import { digitClient } from '@/providers/bridge';
+import { ParentCodeSelect } from './ParentCodeSelect';
 
 const defaultRecord = {
   active: true,
@@ -61,7 +62,8 @@ export function ComplaintTypeCreate() {
       {/* The grouping key is the parent node's code in the ComplaintHierarchy
           tree (replaces the old free-text menuPath). Optional here — leaves
           created standalone sit ungrouped until parented. */}
-      <DigitFormInput source="parentCode" label="Parent (group code)" />
+      {/* ours#861 A3: picked from the existing categories - free text let a typo orphan the sub-type. */}
+      <ParentCodeSelect />
       <DigitFormSelect
         source="department"
         label="Department"
