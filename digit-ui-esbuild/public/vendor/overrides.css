@@ -7873,9 +7873,12 @@ html :is(.employee, .citizen) .digit-logout-popup-wrapper [class*="popup-footer"
     width: 100% !important;
     justify-content: flex-start !important;
   }
-  .employee .digit-action-bar-wrap.mc_back .digit-button,
-  .employee .mc_back .digit-button {
-    margin-left: 0 !important;
+  /* The button element itself: its classes are `digit-button-primary large`,
+     so a `.digit-button` selector never matched and the 6rem indent stayed.
+     0.5rem matches its inline right margin, so with the bar's own 0.5rem
+     padding it spans the same 16px edges as the link above. */
+  .employee .mc_back button {
+    margin-left: 0.5rem !important;
     min-width: 0 !important;
     width: 100% !important;
   }
