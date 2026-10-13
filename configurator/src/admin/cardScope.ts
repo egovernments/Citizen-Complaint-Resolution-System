@@ -15,3 +15,25 @@ export function cardScope(tenant: string, isMaster: boolean, rows: Record<string
   if (inactive > 0 && listTotal !== undefined) parts.push(`list: ${listTotal} (${inactive} inactive)`);
   return parts.join(' \u00b7 ');
 }
+
+/**
+ * The county-scoped masters (owner 2026-10-12, option B; ccrs/packages/tenant-tree/county-scoped.json "mdms"): a tenant
+ * below the state has its own rows or none.
+ */
+export const COUNTY_SCOPED_SCHEMAS = [
+  'common-masters.Department', 'common-masters.Designation', 'RAINMAKER-PGR.ComplaintHierarchy',
+  'RAINMAKER-PGR.ServiceDefs', 'RAINMAKER-PGR.EscalationConfig', 'RAINMAKER-PGR.UIConstants',
+];
+export const isCountyScopedSchema = (schema: string | undefined): boolean => !!schema && COUNTY_SCOPED_SCHEMAS.includes(schema);
+
+/** A tenant and every tenant below it, from tenant.tenants rows (which all live at the state): active / inactive counts. */
+export function tenantSubtree(tenant: string, rows: Record<string, unknown>[]): { active: number; inactive: number } {
+  let active = 0;
+  let inactive = 0;
+  for (const r of rows) {
+    const code = String(r.code ?? '');
+    if (code !== tenant && !code.startsWith(`${tenant}.`)) continue;
+    if (r._isActive === false) inactive += 1; else active += 1;
+  }
+  return { active, inactive };
+}

@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { getDedicatedResources, getResourceConfig } from '@/providers/bridge';
 import { MASTER_SCREEN_META } from './masterScreens';
 import { useApp } from '../App';
-import { cardScope } from './cardScope';
+import { cardScope, isCountyScopedSchema, tenantSubtree } from './cardScope';
 
 /** egov-user _search's page as the data provider asks for it (dataProvider.ts userGetList). */
 const USERS_PAGE = 100;
@@ -72,9 +72,19 @@ function ResourceCard({ resource }: { resource: string }) {
   // egov-user search answers one page; thousands of citizens are not listed (each page takes seconds), so a full page
   // reads "100+" with the way to find the rest.
   const usersCapped = resource === 'users' && total === USERS_PAGE;
+  // Tenants: every tenant row lives at the state, so at a county the count is its OWN subtree, not the state's rows.
+  const subtree = resource === 'tenants' && listQuery.data ? tenantSubtree(state.tenant, listQuery.data as Record<string, unknown>[]) : null;
+  // option B (owner 2026-10-12): a county with no rows of its own for a county-scoped master has NONE, and the card
+  // opens Create - never the state's rows.
+  const noneHere = !isPending && !error && total === 0 && state.tenant.includes('.') &&
+    isCountyScopedSchema(getResourceConfig(resource)?.schema);
   const scope = usersCapped
     ? `first ${USERS_PAGE} at ${state.tenant} \u00b7 search the list by name or mobile`
-    : cardScope(state.tenant, isMaster, (listQuery.data ?? []) as Record<string, unknown>[], listTotal, inactive);
+    : noneHere
+      ? `none at ${state.tenant} yet \u00b7 Create`
+      : subtree
+      ? `active in ${state.tenant} and below${subtree.inactive ? ` \u00b7 ${subtree.inactive} inactive` : ''} \u00b7 list: ${listTotal} (all tenants)`
+      : cardScope(state.tenant, isMaster, (listQuery.data ?? []) as Record<string, unknown>[], listTotal, inactive);
 
   const navigate = useNavigate();
   const resourceLabel = useResourceLabel();
@@ -83,7 +93,7 @@ function ResourceCard({ resource }: { resource: string }) {
 
   return (
     <button
-      onClick={() => navigate(`/manage/${resource}`)}
+      onClick={() => navigate(noneHere ? `/manage/${resource}/create` : `/manage/${resource}`)}
       className="text-left w-full h-full rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 group"
     >
       {/* The DIGIT console's stat card: a brand-tinted hairline that lifts on hover. */}
@@ -94,7 +104,7 @@ function ResourceCard({ resource }: { resource: string }) {
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-2xl font-bold text-foreground">
-              {isPending ? '...' : error ? '—' : usersCapped ? `${total}+` : (total ?? 0)}
+              {isPending ? '...' : error ? '—' : noneHere ? 'None' : usersCapped ? `${total}+` : subtree ? subtree.active : (total ?? 0)}
             </p>
             {error ? (
               <p className="text-xs text-destructive mt-0.5 truncate max-w-[14rem]" title={error instanceof Error ? error.message : String(error)}>

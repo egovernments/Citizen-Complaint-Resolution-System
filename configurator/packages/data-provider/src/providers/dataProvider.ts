@@ -561,6 +561,15 @@ export function __setMdmsSearchAllLimitsForTesting(batchSize = DEFAULT_MDMS_SEAR
  * can't produce gaps or duplicates.
  */
 async function mdmsSearchAll(client: DigitApiClient, tenant: string, schema: string, criteria?: { isActive?: boolean }): Promise<MdmsRecord[]> {
+  // ours (#1550, option B, owner 2026-10-12): a county never shows the STATE's rows of a county-scoped master
+  // (departments, designations, complaint categories, ...); it has its own or none. Every list, card and picker
+  // reads through here, so they agree; the state's own county (stateCounty) keeps them.
+  return withoutStateRows(tenant, schema, await mdmsSearchAllRows(client, tenant, schema, criteria));
+}
+
+import { withoutStateRows } from './countyScoped.js';
+
+async function mdmsSearchAllRows(client: DigitApiClient, tenant: string, schema: string, criteria?: { isActive?: boolean }): Promise<MdmsRecord[]> {
   const expectedTotal = await client.mdmsCount(tenant, schema, criteria);
   const all: MdmsRecord[] = [];
   const seen = new Set<string>();
