@@ -122,6 +122,7 @@ describe('resourceRegistry', () => {
       'workflow-bs-master': 'Workflow.BusinessServiceMasterConfig',
       'pgr-ui-constants': 'RAINMAKER-PGR.UIConstants',
       'pgr-escalation': 'RAINMAKER-PGR.EscalationConfig',
+      'inbox-visibility': 'RAINMAKER-PGR.InboxVisibilityConfig',
     };
     for (const [resource, schema] of Object.entries(expected)) {
       const cfg = getResourceConfig(resource);
