@@ -9,7 +9,6 @@ import { MASTER_SCREEN_META } from './masterScreens';
 import { attentionItems } from './needsAttention';
 
 const ALL = { pagination: { page: 1, perPage: 1000 }, sort: { field: 'id', order: 'ASC' as const }, filter: {} };
-const COUNT = { pagination: { page: 1, perPage: 1 }, sort: { field: 'id', order: 'ASC' as const }, filter: {} };
 
 /** ours (cfgreview F28, #1574): a short "needs attention" list under the dashboard counts, each item linking to its fix. */
 export function NeedsAttention() {
@@ -17,14 +16,14 @@ export function NeedsAttention() {
   const { canViewResource } = useMastersCapability();
   const cats = useGetList('complaint-hierarchy', ALL, { enabled: canViewResource('complaint-hierarchy') });
   const emps = useGetList('employees', ALL, { enabled: canViewResource('employees') });
-  const tActive = useGetList('tenants', COUNT, { enabled: canViewResource('tenants') });
-  const tListed = useGetList('tenants', { ...COUNT, meta: MASTER_SCREEN_META }, { enabled: canViewResource('tenants') });
+  // every tenant row with the inactive ones (the Tenants list's query, so react-query shares it with the Tenants card)
+  const tenants = useGetList('tenants', { pagination: { page: 1, perPage: 10000 }, sort: { field: 'id', order: 'ASC' }, filter: {}, meta: MASTER_SCREEN_META }, { enabled: canViewResource('tenants') });
   const loading = cats.isPending || emps.isPending;
   const items = attentionItems({
+    tenant: state.tenant,
     categories: cats.data as Record<string, unknown>[] | undefined,
     employees: emps.data as Record<string, unknown>[] | undefined,
-    tenantsListed: tListed.total,
-    tenantsActive: tActive.total,
+    tenants: tenants.data as Record<string, unknown>[] | undefined,
   });
   const setupDone = isOnboardingComplete(state.completedPhases);
 
