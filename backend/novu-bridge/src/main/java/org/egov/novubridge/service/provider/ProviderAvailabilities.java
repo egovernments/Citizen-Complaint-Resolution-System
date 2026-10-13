@@ -22,7 +22,8 @@ public class ProviderAvailabilities {
     /** Keyed by root tenant; replaced when the account behind it changes (re-provision, new key). */
     private final Map<String, Entry> byTenant = new ConcurrentHashMap<>();
 
-    private record Entry(String cacheKey, ProviderAvailability availability) {
+    /** {@code account} is the instance last asked about, so the same instance skips hashing its key. */
+    private record Entry(String cacheKey, NovuAccount account, ProviderAvailability availability) {
     }
 
     public ProviderAvailabilities(NovuClient novuClient, NovuBridgeConfiguration config, ProviderAvailability shared) {
@@ -35,10 +36,17 @@ public class ProviderAvailabilities {
         if (account == null) {
             return shared;
         }
-        Entry entry = byTenant.compute(account.tenantRoot(), (root, existing) ->
-                existing != null && existing.cacheKey().equals(account.cacheKey())
-                        ? existing
-                        : new Entry(account.cacheKey(), new ProviderAvailability(novuClient, config, account)));
+        // TenantAccountService hands out one NovuAccount instance per read of the tenant's row, so
+        // dispatch mostly asks with the instance already stored here, and the key is not hashed again.
+        Entry entry = byTenant.compute(account.tenantRoot(), (root, existing) -> {
+            if (existing != null && existing.account() == account) {
+                return existing;
+            }
+            String key = account.cacheKey();
+            return existing != null && existing.cacheKey().equals(key)
+                    ? new Entry(key, account, existing.availability())
+                    : new Entry(key, account, new ProviderAvailability(novuClient, config, account));
+        });
         return entry.availability();
     }
 

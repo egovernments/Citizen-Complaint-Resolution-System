@@ -27,8 +27,9 @@ import java.util.regex.Pattern;
  *
  * <p><b>Provision</b> is idempotent and safe to retry, from any replica:
  * <ol>
- *   <li>claim a lease on the tenant's row (a concurrent provision of the same tenant gets 409
- *       {@code NB_PROVISIONING_IN_PROGRESS});</li>
+ *   <li>claim a lease on the tenant's row, with a token of its own (a concurrent provision of the
+ *       same tenant, from this replica or another, gets 409 {@code NB_PROVISIONING_IN_PROGRESS}),
+ *       and read the row again under it;</li>
  *   <li>reuse the organization the row records; else adopt one the admin already has under the
  *       tenant's organization name (a crash after Novu created it but before the row recorded it);
  *       else create it, and record its id at once. So a tenant never gets a second organization;</li>
@@ -36,6 +37,9 @@ import java.util.regex.Pattern;
  *       ({@link TenantWorkflows}), store the key encrypted ({@link ApiKeyCipher}), mark PROVISIONED.</li>
  * </ol>
  * A tenant already PROVISIONED with the current workflow set is a no-op that returns its state.
+ * Every write after the claim is fenced by the lease: one that updates nothing means the lease ran
+ * out and another request took the tenant over, so this one stops with 409
+ * {@code NB_PROVISIONING_IN_PROGRESS} rather than report a result it did not store.
  *
  * <p><b>Routing</b>: {@link #accountFor} is what dispatch, test-send and the provider screens ask.
  * A PROVISIONED root answers its own account; anything else answers {@code null}, the shared
@@ -63,12 +67,25 @@ public class TenantAccountService {
     private final NovuClient novuClient;
     private final TenantWorkflows workflows;
     private final ProviderAvailabilities availabilities;
+    /** Distinct roots the routing cache holds at most: its keys come from callers' {@code tenantId}. */
+    static final int CACHE_MAX_ROOTS = 10_000;
+
+    /** This replica; each provision or deprovision leases the row with a token of its own under it. */
     private final String owner = "nb:" + UUID.randomUUID();
     private final Map<String, Cached> cache = new ConcurrentHashMap<>();
     private volatile ApiKeyCipher cipher;
     LongSupplier clock = System::currentTimeMillis;
 
-    private record Cached(Optional<TenantAccountRepository.Row> row, long fetchedAt) {
+    /** One read of a root's row, and its decrypted account, made at most once per read. */
+    private static final class Cached {
+        final Optional<TenantAccountRepository.Row> row;
+        final long fetchedAt;
+        volatile NovuAccount account;
+
+        Cached(Optional<TenantAccountRepository.Row> row, long fetchedAt) {
+            this.row = row;
+            this.fetchedAt = fetchedAt;
+        }
     }
 
     /** What provision answers: the tenant's state, and whether this call created the organization. */
@@ -124,17 +141,24 @@ public class TenantAccountService {
         } catch (AccountException e) {
             return null; // Not a tenant code we could ever have provisioned.
         }
-        Optional<TenantAccountRepository.Row> row;
+        Cached entry;
         try {
-            row = cachedRow(root);
+            entry = cached(root);
         } catch (RuntimeException e) {
             throw new CustomException("NB_TENANT_ACCOUNT_UNAVAILABLE", "Could not read whether tenant " + root
                     + " has its own notification account (" + e.getMessage() + "); not sending through the shared one");
         }
-        if (row.isEmpty() || !row.get().provisioned()) {
+        if (entry.row.isEmpty() || !entry.row.get().provisioned()) {
             return null;
         }
-        return toAccount(row.get());
+        // Decrypted once per read of the row, not once per event; a key that does not decrypt is
+        // not remembered, so every call fails closed until the row or the key is fixed.
+        NovuAccount account = entry.account;
+        if (account == null) {
+            account = toAccount(entry.row.get());
+            entry.account = account;
+        }
+        return account;
     }
 
     /** True when the root has its own account (cached; never throws: an unreadable row reads false). */
@@ -143,7 +167,7 @@ public class TenantAccountService {
             return false;
         }
         try {
-            return cachedRow(rootOf(tenantId)).map(TenantAccountRepository.Row::provisioned).orElse(false);
+            return cached(rootOf(tenantId)).row.map(TenantAccountRepository.Row::provisioned).orElse(false);
         } catch (RuntimeException e) {
             log.warn("Tenant account lookup failed for {}: {}", tenantId, e.getMessage());
             return false;
@@ -161,20 +185,31 @@ public class TenantAccountService {
         return new NovuAccount(row.tenantId(), row.organizationId(), row.environmentId(), key);
     }
 
-    private Optional<TenantAccountRepository.Row> cachedRow(String root) {
+    private Cached cached(String root) {
         long ttl = accounts.getCacheTtlMs() == null ? 30_000L : accounts.getCacheTtlMs();
         long now = clock.getAsLong();
         Cached cached = cache.get(root);
-        if (cached != null && now - cached.fetchedAt() < ttl) {
-            return cached.row();
+        if (cached != null && now - cached.fetchedAt < ttl) {
+            return cached;
         }
-        Optional<TenantAccountRepository.Row> fresh = repository.find(root);
-        cache.put(root, new Cached(fresh, now));
+        Cached fresh = new Cached(repository.find(root), now);
+        if (cache.size() >= CACHE_MAX_ROOTS) {
+            cache.values().removeIf(c -> now - c.fetchedAt >= ttl);
+            if (cache.size() >= CACHE_MAX_ROOTS) {
+                cache.clear();
+            }
+        }
+        cache.put(root, fresh);
         return fresh;
     }
 
     private void forgetCached(String root) {
         cache.remove(root);
+    }
+
+    /** For tests: how many roots the routing cache holds. */
+    int cachedRoots() {
+        return cache.size();
     }
 
     // ---------------------------------------------------------------- provision
@@ -183,27 +218,31 @@ public class TenantAccountService {
         requireEnabled();
         String root = rootOf(tenantId);
         Optional<TenantAccountRepository.Row> before = repository.find(root);
-        // Nothing to do: provisioned, current workflow set, and a stored key that decrypts under the
-        // CURRENT encryption key. Any other stored key (the previous key's, mid-rotation; one no
-        // configured key can read, after a second rotation or a key changed without _PREVIOUS) is
-        // fetched from Novu again and stored under the current key: that is how such a tenant,
-        // whose every send fails NB_TENANT_ACCOUNT_UNAVAILABLE, is repaired.
-        if (before.isPresent() && before.get().provisioned() && before.get().workflowsVersion() >= TenantWorkflows.VERSION
-                && StringUtils.hasText(before.get().apiKeyCiphertext())
-                && cipher().readableByCurrentKey(before.get().apiKeyCiphertext(), root)) {
+        if (before.isPresent() && upToDate(before.get(), root)) {
             return new ProvisionResult(view(before.get()), false, List.of());
         }
+        String lease = newLease();
         long now = clock.getAsLong();
-        if (!repository.claim(root, owner, now, now + leaseMs())) {
+        if (!repository.claim(root, lease, now, now + leaseMs())) {
             throw new AccountException(HttpStatus.CONFLICT, "NB_PROVISIONING_IN_PROGRESS",
                     "Tenant " + root + " is being provisioned by another request; retry in a few seconds");
         }
-        boolean wasProvisioned = before.isPresent() && before.get().provisioned();
+        boolean wasProvisioned = false;
         boolean created = false;
         try {
+            // Read again under the lease: the row may have changed since the read above (another
+            // request provisioned it, or a deprovision completed and forgot its key), and nothing
+            // else can change it now. What a failure restores is decided from this row.
+            TenantAccountRepository.Row row = repository.find(root).orElseThrow(() -> new IllegalStateException(
+                    "tenant " + root + "'s row is missing under its own lease"));
+            wasProvisioned = row.provisioned() && StringUtils.hasText(row.apiKeyCiphertext());
+            if (upToDate(row, root)) {
+                repository.release(root, lease, clock.getAsLong());
+                return new ProvisionResult(view(row), false, List.of());
+            }
             String token = platform.login();
             String orgName = accounts.organizationName(root);
-            String organizationId = repository.find(root).map(TenantAccountRepository.Row::organizationId).orElse(null);
+            String organizationId = row.organizationId();
             if (!StringUtils.hasText(organizationId)) {
                 organizationId = platform.organizations(token).stream()
                         .filter(o -> orgName.equals(o.name()))
@@ -216,39 +255,77 @@ public class TenantAccountService {
                     created = true;
                 }
                 // Recorded before anything else can fail: a retry reuses it, never creates another.
-                repository.recordOrganization(root, organizationId, orgName, clock.getAsLong());
+                fenced(repository.recordOrganization(root, lease, organizationId, orgName, clock.getAsLong()), root,
+                        created ? "organization " + organizationId + " was created and is not recorded" : null);
             }
             String orgToken = platform.switchOrganization(token, organizationId);
             NovuPlatformClient.Environment environment = environment(platform.environments(orgToken), root);
             NovuAccount account = new NovuAccount(root, organizationId, environment.id(), environment.apiKey());
             List<String> workflowsCreated = workflows.ensure(account);
             ApiKeyCipher c = cipher();
-            repository.markProvisioned(root, owner, environment.id(), environment.name(),
-                    c.encrypt(environment.apiKey(), root), c.currentKeyId(), TenantWorkflows.VERSION, clock.getAsLong());
+            fenced(repository.markProvisioned(root, lease, environment.id(), environment.name(),
+                    c.encrypt(environment.apiKey(), root), c.currentKeyId(), TenantWorkflows.VERSION, clock.getAsLong()),
+                    root, null);
             forgetCached(root);
             availabilities.forget(root);
             log.info("Tenant {}: Novu account PROVISIONED (organization {}, environment {}, organization created: {}, "
                     + "workflows created: {})", root, organizationId, environment.name(), created, workflowsCreated);
             return new ProvisionResult(view(repository.find(root).orElseThrow()), created, workflowsCreated);
         } catch (AccountException e) {
-            fail(root, wasProvisioned, e.code(), e.getMessage());
+            fail(root, lease, wasProvisioned, e.code(), e.getMessage());
             throw e;
         } catch (CustomException e) {
-            fail(root, wasProvisioned, e.getCode(), e.getMessage());
+            fail(root, lease, wasProvisioned, e.getCode(), e.getMessage());
             throw new AccountException(HttpStatus.BAD_GATEWAY, e.getCode(), e.getMessage(), e);
         } catch (RuntimeException e) {
-            fail(root, wasProvisioned, "NB_PROVISIONING_FAILED", e.getMessage());
+            fail(root, lease, wasProvisioned, "NB_PROVISIONING_FAILED", e.getMessage());
             throw new AccountException(HttpStatus.INTERNAL_SERVER_ERROR, "NB_PROVISIONING_FAILED",
                     "Provisioning tenant " + root + " failed: " + e.getMessage(), e);
         }
     }
 
-    private void fail(String root, boolean wasProvisioned, String code, String message) {
+    /**
+     * Nothing to do: provisioned, current workflow set, and a stored key that decrypts under the
+     * CURRENT encryption key. Any other stored key (the previous key's, mid-rotation; one no
+     * configured key can read, after a second rotation or a key changed without _PREVIOUS) is
+     * fetched from Novu again and stored under the current key: that is how such a tenant, whose
+     * every send fails NB_TENANT_ACCOUNT_UNAVAILABLE, is repaired.
+     */
+    private boolean upToDate(TenantAccountRepository.Row row, String root) {
+        return row.provisioned() && row.workflowsVersion() >= TenantWorkflows.VERSION
+                && StringUtils.hasText(row.apiKeyCiphertext())
+                && cipher().readableByCurrentKey(row.apiKeyCiphertext(), root);
+    }
+
+    private void fail(String root, String lease, boolean wasProvisioned, String code, String message) {
         // A PROVISIONED tenant whose re-ensure failed keeps sending through its account.
-        repository.markFailed(root, owner, wasProvisioned ? TenantAccountRepository.PROVISIONED
+        int updated = repository.markFailed(root, lease, wasProvisioned ? TenantAccountRepository.PROVISIONED
                 : TenantAccountRepository.FAILED, code, truncate(message), clock.getAsLong());
         forgetCached(root);
-        log.warn("Tenant {}: provisioning failed ({}): {}", root, code, message);
+        if (updated == 0) {
+            log.warn("Tenant {}: provisioning failed ({}): {}; its lease had run out, so the row is left to the "
+                    + "request that holds it now", root, code, message);
+        } else {
+            log.warn("Tenant {}: provisioning failed ({}): {}", root, code, message);
+        }
+    }
+
+    /** A fresh lease token per call: a lease held by another call of this replica is not this one's. */
+    private String newLease() {
+        return owner + ":" + UUID.randomUUID();
+    }
+
+    /**
+     * A write fenced by the lease updated nothing: the lease ran out and another request took the
+     * row over. Stop, and say so, rather than report what was not stored.
+     */
+    private static void fenced(int updated, String root, String orphan) {
+        if (updated > 0) {
+            return;
+        }
+        throw new AccountException(HttpStatus.CONFLICT, "NB_PROVISIONING_IN_PROGRESS", "Tenant " + root
+                + " was taken over by another request after this one's lease ran out; nothing more was written"
+                + (orphan == null ? "" : " (" + orphan + ")") + ". Retry in a few seconds");
     }
 
     private NovuPlatformClient.Environment environment(List<NovuPlatformClient.Environment> environments, String root) {
@@ -276,15 +353,23 @@ public class TenantAccountService {
         if (TenantAccountRepository.DEPROVISIONED.equals(row.status())) {
             return view(row);
         }
+        String lease = newLease();
         long now = clock.getAsLong();
-        if (!repository.claim(root, owner, now, now + leaseMs())) {
+        if (!repository.claim(root, lease, now, now + leaseMs())) {
             throw new AccountException(HttpStatus.CONFLICT, "NB_PROVISIONING_IN_PROGRESS",
                     "Tenant " + root + " is being changed by another request; retry in a few seconds");
         }
         try {
+            // Read again under the lease: another deprovision may have finished in between.
+            row = repository.find(root).orElseThrow(() -> new IllegalStateException(
+                    "tenant " + root + "'s row is missing under its own lease"));
+            if (TenantAccountRepository.DEPROVISIONED.equals(row.status())) {
+                repository.release(root, lease, clock.getAsLong());
+                return view(row);
+            }
             // Off the tenant's own account FIRST, before any Novu call can fail: from here its messages
             // go through the shared account and the stored key is gone, whatever happens below.
-            repository.markDeprovisioning(root, owner, now);
+            fenced(repository.markDeprovisioning(root, lease, now), root, null);
             forgetCached(root);
             availabilities.forget(root);
             if (StringUtils.hasText(row.organizationId())) {
@@ -300,22 +385,22 @@ public class TenantAccountService {
                 log.info("Tenant {}: deprovisioned (organization {} kept: Novu 2.3.0 cannot delete one; API key "
                         + "regenerated and not stored; {} integration(s) deleted)", root, row.organizationId(), deleted);
             }
-            repository.markDeprovisioned(root, owner, clock.getAsLong());
+            fenced(repository.markDeprovisioned(root, lease, clock.getAsLong()), root, null);
             forgetCached(root);
             return view(repository.find(root).orElseThrow());
         } catch (AccountException e) {
-            failDeprovision(root, e.code(), e.getMessage());
+            failDeprovision(root, lease, e.code(), e.getMessage());
             throw e;
         } catch (RuntimeException e) {
-            failDeprovision(root, "NB_DEPROVISIONING_FAILED", e.getMessage());
+            failDeprovision(root, lease, "NB_DEPROVISIONING_FAILED", e.getMessage());
             throw new AccountException(HttpStatus.BAD_GATEWAY, "NB_DEPROVISIONING_FAILED",
                     "Deprovisioning tenant " + root + " failed: " + e.getMessage(), e);
         }
     }
 
     /** Stays DEPROVISIONING (still on the shared account) with the error; a re-run resumes. */
-    private void failDeprovision(String root, String code, String message) {
-        repository.markFailed(root, owner, TenantAccountRepository.DEPROVISIONING, code, truncate(message),
+    private void failDeprovision(String root, String lease, String code, String message) {
+        repository.markFailed(root, lease, TenantAccountRepository.DEPROVISIONING, code, truncate(message),
                 clock.getAsLong());
         forgetCached(root);
         log.warn("Tenant {}: deprovisioning stopped part-way ({}): {}; it stays DEPROVISIONING on the shared "

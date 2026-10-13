@@ -20,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -411,5 +412,110 @@ class TenantAccountServiceTest {
                 () -> service.provision("Acme Corp")).code());
         assertEquals("NB_INVALID_TENANT", assertThrows(AccountException.class,
                 () -> service.provision("../etc")).code());
+    }
+
+    @Test
+    void twoProvisionsOnOneReplica_doNotBothHoldTheLease() {
+        // The second request arrives on the same service (one bridge replica, Compose) while the
+        // first is signed in to Novu and has not created the organization yet.
+        AccountException[] second = new AccountException[1];
+        boolean[] started = new boolean[1];
+        when(platform.login()).thenAnswer(inv -> {
+            if (!started[0]) {
+                started[0] = true;
+                second[0] = assertThrows(AccountException.class, () -> service.provision("acme"));
+            }
+            return "jwt-admin";
+        });
+
+        service.provision("acme");
+
+        assertEquals("NB_PROVISIONING_IN_PROGRESS", second[0].code());
+        verify(platform, times(1)).createOrganization(anyString(), anyString());
+        assertEquals(List.of("DIGIT tenant acme"), novuOrganizations);
+    }
+
+    @Test
+    void everyCallLeasesWithItsOwnToken_soAnExpiredCallOfThisReplicaCannotWriteOverTheNextOne() {
+        when(platform.login()).thenThrow(new AccountException(HttpStatus.BAD_GATEWAY, "NB_NOVU_UNAVAILABLE", "down"))
+                .thenReturn("jwt-admin");
+        assertThrows(AccountException.class, () -> service.provision("acme"));
+        service.provision("acme");
+        service.deprovision("acme");
+
+        assertEquals(3, repository.claims.size());
+        assertEquals(3, new java.util.HashSet<>(repository.claims).size(), String.valueOf(repository.claims));
+    }
+
+    @Test
+    void aReEnsureThatFails_afterADeprovisionFinishedUnderIt_doesNotRestoreProvisioned() {
+        service.provision("acme");
+        // Stale workflows, so the re-ensure goes past its first read.
+        repository.rows.put("acme", repository.rows.get("acme").toBuilder().workflowsVersion(0).build());
+        // Right after that read, a deprovision completes: key forgotten, lease released.
+        repository.afterNextFind = () -> repository.rows.put("acme", repository.rows.get("acme").toBuilder()
+                .status(TenantAccountRepository.DEPROVISIONED).apiKeyCiphertext(null).apiKeyId(null).build());
+        when(platform.login()).thenThrow(new AccountException(HttpStatus.BAD_GATEWAY,
+                "NB_NOVU_PLATFORM_LOGIN_FAILED", "refused"));
+
+        assertThrows(AccountException.class, () -> service.provision("acme"));
+
+        TenantAccountRepository.Row row = repository.rows.get("acme");
+        assertEquals("FAILED", row.status(), "a row without a key is never marked PROVISIONED");
+        assertNull(row.apiKeyCiphertext());
+        assertNull(service.accountFor("acme"), "the tenant stays on the shared account");
+    }
+
+    @Test
+    void aDeprovisionThatAnotherFinishedFirst_doesNothingMoreInNovu() {
+        service.provision("acme");
+        // Right after this deprovision's first read, another one completes and releases the lease.
+        repository.afterNextFind = () -> repository.rows.put("acme", repository.rows.get("acme").toBuilder()
+                .status(TenantAccountRepository.DEPROVISIONED).apiKeyCiphertext(null).apiKeyId(null).build());
+
+        Map<String, Object> state = service.deprovision("acme");
+
+        assertEquals("DEPROVISIONED", state.get("status"));
+        verify(platform, never()).regenerateApiKey(anyString(), anyString());
+        assertNull(repository.rows.get("acme").leaseOwner(), "the lease is released");
+    }
+
+    @Test
+    void aProvisionThatOutlivesItsLease_reportsIt_insteadOfSuccess() {
+        // Novu is slow; meanwhile the lease runs out and another replica takes the row.
+        when(novuClient.listWorkflows(any(NovuAccount.class))).thenAnswer(inv -> {
+            repository.rows.put("acme", repository.rows.get("acme").toBuilder()
+                    .leaseOwner("nb:other-replica").leaseUntil(Long.MAX_VALUE).build());
+            return response(200, Map.of("data", Map.of("workflows", List.of())));
+        });
+
+        AccountException e = assertThrows(AccountException.class, () -> service.provision("acme"));
+
+        assertEquals("NB_PROVISIONING_IN_PROGRESS", e.code());
+        assertEquals(HttpStatus.CONFLICT, e.status());
+        TenantAccountRepository.Row row = repository.rows.get("acme");
+        assertNull(row.apiKeyCiphertext(), "nothing was stored under the other request's lease");
+        assertEquals("nb:other-replica", row.leaseOwner(), "the row is left to the request that holds it");
+    }
+
+    @Test
+    void routing_decryptsTheKeyOncePerReadOfTheRow() {
+        service.provision("acme");
+        accounts.setCacheTtlMs(30_000L);
+
+        NovuAccount first = service.accountFor("acme.city");
+
+        assertSame(first, service.accountFor("acme"), "the same account until the row is read again");
+    }
+
+    @Test
+    void routing_keepsAtMostCacheMaxRoots_whateverTenantIdsCallersSend() {
+        accounts.setCacheTtlMs(30_000L);
+
+        for (int i = 0; i <= TenantAccountService.CACHE_MAX_ROOTS; i++) {
+            service.isProvisioned("ws" + i);
+        }
+
+        assertTrue(service.cachedRoots() <= TenantAccountService.CACHE_MAX_ROOTS);
     }
 }

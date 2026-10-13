@@ -38,10 +38,11 @@ class TenantAccountRepositoryPostgresTest {
     }
 
     @Test
-    void theLease_letsOneOwnerAtATime_andExpires() {
+    void theLease_letsOneCallAtATime_andExpires() {
         assertTrue(repository.claim("acme", "a", 1_000, 2_000));
         assertFalse(repository.claim("acme", "b", 1_500, 2_500), "a live lease blocks another owner");
-        assertTrue(repository.claim("acme", "a", 1_600, 2_600), "the owner renews its own lease");
+        assertFalse(repository.claim("acme", "a", 1_600, 2_600),
+                "a live lease blocks its own token too: owners are per call, never shared by a replica's threads");
         assertTrue(repository.claim("acme", "b", 3_000, 4_000), "an expired lease can be taken over");
         assertEquals("PROVISIONING", repository.find("acme").orElseThrow().status());
     }
@@ -49,11 +50,13 @@ class TenantAccountRepositoryPostgresTest {
     @Test
     void writesAreFencedByTheLeaseOwner() {
         repository.claim("acme", "a", 1_000, 2_000);
-        repository.recordOrganization("acme", "org-1", "DIGIT tenant acme", 1_100);
-        repository.markProvisioned("acme", "intruder", "env", "Development", "v1:x:y", "x", 1, 1_200);
+        assertEquals(0, repository.recordOrganization("acme", "intruder", "org-x", "DIGIT tenant acme", 1_050));
+        assertEquals(1, repository.recordOrganization("acme", "a", "org-1", "DIGIT tenant acme", 1_100));
+        assertEquals(0, repository.markProvisioned("acme", "intruder", "env", "Development", "v1:x:y", "x", 1, 1_200),
+                "a write without the lease reports that it changed nothing");
         assertEquals("PROVISIONING", repository.find("acme").orElseThrow().status(), "a non-owner cannot mark it");
 
-        repository.markProvisioned("acme", "a", "env", "Development", "v1:x:y", "x", 1, 1_300);
+        assertEquals(1, repository.markProvisioned("acme", "a", "env", "Development", "v1:x:y", "x", 1, 1_300));
         TenantAccountRepository.Row row = repository.find("acme").orElseThrow();
         assertEquals("PROVISIONED", row.status());
         assertEquals("org-1", row.organizationId());
