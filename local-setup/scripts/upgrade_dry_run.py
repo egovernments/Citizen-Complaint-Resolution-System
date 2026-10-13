@@ -927,6 +927,35 @@ def find_secret_leaks(root: Path, values: set[bytes]) -> list[str]:
     return leaks
 
 
+def describe_secret_leak_origins(
+    root: Path,
+    leaks: list[str],
+    values: set[bytes],
+    hmac_key: bytes,
+    states: dict[str, dict[str, dict[str, str | None]]],
+) -> list[str]:
+    """Describe a leak using safe field locations, never values or digests."""
+    origins: dict[str, list[str]] = {}
+    for tree_name, tree in states.items():
+        for source_path, fields in tree.items():
+            for field, digest in fields.items():
+                if digest is not None:
+                    origins.setdefault(digest, []).append(
+                        f"{tree_name}:{source_path}:{field}"
+                    )
+    details: list[str] = []
+    for relative in leaks:
+        data = (root / Path(*PurePosixPath(relative).parts)).read_bytes()
+        matched: set[str] = set()
+        for value in values:
+            if value not in data:
+                continue
+            digest = secret_digest(hmac_key, value)
+            matched.update(origins.get(digest, ["tenant-input:unknown-field"]))
+        details.append(f"{relative} <- {', '.join(sorted(matched))}")
+    return details
+
+
 def write_report(output: Path, report: dict[str, Any]) -> None:
     (output / "report.json").write_text(
         json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8"
@@ -1153,11 +1182,22 @@ def main(argv: list[str] | None = None) -> int:
 
             leaks = find_secret_leaks(output, secrets_to_check)
             if leaks:
+                leak_details = describe_secret_leak_origins(
+                    output,
+                    leaks,
+                    secrets_to_check,
+                    hmac_key,
+                    {
+                        "current": current_secret_state,
+                        "backup": backup_secret_state,
+                        "target": target_secret_state,
+                    },
+                )
                 # Fail closed and do not leave an unsafe partial artifact set.
                 shutil.rmtree(output)
                 raise DryRunError(
                     f"secret safety audit failed for {len(leaks)} output file(s); "
-                    f"affected artifact paths: {', '.join(leaks)}; "
+                    f"safe origins: {'; '.join(leak_details)}; "
                     "the timestamped output was removed"
                 )
 

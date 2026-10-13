@@ -88,6 +88,25 @@ class RedactionAndNormalizationTests(unittest.TestCase):
             ):
                 self.assertNotIn(forbidden, serialized)
 
+            output = root / "output"
+            output.mkdir()
+            report = {
+                "status": "BLOCKED",
+                "current_ref": "old",
+                "current_commit": "a" * 40,
+                "target_ref": "new",
+                "target_commit": "b" * 40,
+                "merge": {"conflicts": [], "local_changes": []},
+                "mdms": {"changes": []},
+                "secrets": result,
+            }
+            dry.write_report(output, report)
+            rendered_report = (output / "report.json").read_text() + (
+                output / "report.md"
+            ).read_text()
+            self.assertNotIn("local-secret", rendered_report)
+            self.assertNotIn(next(iter(backup_state[".env"].values())), rendered_report)
+
     def test_unverifiable_render_placeholder_warns_without_blocking(self):
         with temp_directory() as name:
             root = Path(name)
