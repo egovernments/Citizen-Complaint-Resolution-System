@@ -14,6 +14,10 @@ import { BASE_URL, TENANT, ADMIN_USER, ADMIN_PASS } from '../utils/env';
 import { loginViaApi } from '../utils/auth';
 import { surfacePath } from '../utils/identity-bff';
 
+// Signs in through the browser (loginViaApi types the persona password into
+// the hosted form), and traces record filled values: keep it out of the trace.
+test.use({ trace: 'off' });
+
 test.describe('employee account — password action visibility #812', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 

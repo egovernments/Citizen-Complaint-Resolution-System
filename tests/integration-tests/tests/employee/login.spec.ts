@@ -3,7 +3,9 @@ import { loginViaApi, staffContext } from '../utils/auth';
 import { authorizeUrl, enterHostedUsername, identityJson } from '../utils/identity-bff';
 import { BASE_URL, TENANT, ADMIN_USER, ADMIN_PASS } from '../utils/env';
 
-test.use({ storageState: { cookies: [], origins: [] } });
+// Traces record values typed with fill, and this spec types credentials into
+// the sign-in form; keep it out of the published trace.
+test.use({ storageState: { cookies: [], origins: [] }, trace: 'off' });
 test.describe('Employee Login — BFF', () => {
   test('valid credentials return access token', { tag: ['@area:auth', '@persona:employee'] }, async ({ page }) => {
     const context = await staffContext(page, { tenant: TENANT, username: ADMIN_USER, password: ADMIN_PASS }, 'employee');

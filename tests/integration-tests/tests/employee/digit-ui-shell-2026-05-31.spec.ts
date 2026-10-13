@@ -25,6 +25,10 @@ import { authorizeUrl, hostedSignIn, surfacePath, tenantSlug } from '../utils/id
 
 const GLOBAL_CONFIGS_URL = '/digit-ui/globalConfigs.js';
 
+// hostedSignIn types the persona password into the hosted form, and traces
+// record filled values: keep this spec out of the published trace.
+test.use({ trace: 'off' });
+
 const _fixtures = readLifecycleFixtures();
 /**
  * A complaint known to sit in the logged-in employee's inbox, for the #344

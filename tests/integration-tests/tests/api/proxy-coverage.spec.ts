@@ -21,6 +21,10 @@ import { BASE_URL, TENANT, ROOT_TENANT, ADMIN_USER, ADMIN_PASS, LOCALES } from '
 import { tryGetProfile } from '../utils/profile';
 import { getDigitToken, loginViaApi } from '../utils/auth';
 
+// Signs in through the browser (loginViaApi types the persona password into
+// the hosted form), and traces record filled values: keep it out of the trace.
+test.use({ trace: 'off' });
+
 interface ApiCall {
   method: string;
   path: string;
