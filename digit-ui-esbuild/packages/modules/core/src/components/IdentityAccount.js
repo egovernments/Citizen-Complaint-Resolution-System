@@ -69,7 +69,9 @@ export const ChangePhone = ({ t, tenant, onChanged }) => {
   const send = () => run(async () => {
     if (!ownsSession()) return sessionChanged();
     if (Date.now() < resendAt) {
-      return { ok: false, messageKey: "CORE_IDENTITY_OTP_RESEND_TOO_SOON", message: "Please wait before requesting another code." };
+      const seconds = Math.ceil((resendAt - Date.now()) / 1000);
+      return { ok: false, messageKey: "CORE_IDENTITY_OTP_RESEND_TOO_SOON", params: { seconds },
+        message: `Please wait ${seconds} seconds before requesting another code.` };
     }
     const result = await sendCitizenOtp({ mobileNumber, purpose: "change_phone", fetchImpl,
       locale: Digit.StoreData.getCurrentLanguage() });
