@@ -1,7 +1,13 @@
 import { useGetList, useTranslate } from 'ra-core';
 import { DigitCard } from '@/components/digit/DigitCard';
 import { useNavigate } from 'react-router-dom';
-import { getDedicatedResources } from '@/providers/bridge';
+import { getDedicatedResources, getResourceConfig } from '@/providers/bridge';
+import { MASTER_SCREEN_META } from './masterScreens';
+import { useApp } from '../App';
+import { cardScope } from './cardScope';
+
+/** egov-user _search's page as the data provider asks for it (dataProvider.ts userGetList). */
+const USERS_PAGE = 100;
 import { useResourceLabel } from '@/providers/useResourceLabel';
 import { useMastersCapability } from '@/hooks/useMastersCapability';
 import { AVAILABLE_LOCALES } from '@/providers/i18nProvider';
@@ -44,11 +50,31 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
 const LOCALIZATION_LOCALES = AVAILABLE_LOCALES.map((l) => l.locale);
 
 function ResourceCard({ resource }: { resource: string }) {
+  const { state } = useApp();
   const { total, isPending, error } = useGetList(resource, {
     pagination: { page: 1, perPage: 1 },
     sort: { field: 'id', order: 'ASC' },
     filter: resource === 'localization' ? { locales: LOCALIZATION_LOCALES } : {},
   });
+  // ours (cfgreview F03, #1550): the card counted ACTIVE records while the list it opens shows deactivated ones too
+  // (Tenants 9 vs 708), and at a tenant below the state an MDMS read falls back to the nearest ancestor with rows (a
+  // county's "16 departments" can be the state's). The big number stays the active count; the line under it says what
+  // it counts: the tenant, rows inherited from an ancestor, and the list's own total with its inactive rows.
+  const isMaster = getResourceConfig(resource)?.type === 'mdms';
+  const listQuery = useGetList(resource, {
+    pagination: { page: 1, perPage: 10000 },
+    sort: { field: 'id', order: 'ASC' },
+    filter: {},
+    meta: MASTER_SCREEN_META,
+  }, { enabled: isMaster });
+  const listTotal = isMaster ? listQuery.total : undefined;
+  const inactive = listTotal !== undefined && total !== undefined ? Math.max(0, listTotal - total) : 0;
+  // egov-user search answers one page; thousands of citizens are not listed (each page takes seconds), so a full page
+  // reads "100+" with the way to find the rest.
+  const usersCapped = resource === 'users' && total === USERS_PAGE;
+  const scope = usersCapped
+    ? `first ${USERS_PAGE} at ${state.tenant} \u00b7 search the list by name or mobile`
+    : cardScope(state.tenant, isMaster, (listQuery.data ?? []) as Record<string, unknown>[], listTotal, inactive);
 
   const navigate = useNavigate();
   const resourceLabel = useResourceLabel();
@@ -68,7 +94,7 @@ function ResourceCard({ resource }: { resource: string }) {
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-2xl font-bold text-foreground">
-              {isPending ? '...' : error ? '—' : (total ?? 0)}
+              {isPending ? '...' : error ? '—' : usersCapped ? `${total}+` : (total ?? 0)}
             </p>
             {error ? (
               <p className="text-xs text-destructive mt-0.5 truncate max-w-[14rem]" title={error instanceof Error ? error.message : String(error)}>
@@ -77,6 +103,9 @@ function ResourceCard({ resource }: { resource: string }) {
             ) : null}
             <p className="text-xs text-muted-foreground mt-1 truncate" title={label}>
               {label}
+            </p>
+            <p className="text-[11px] text-muted-foreground truncate" title={scope} data-testid={`card-scope-${resource}`}>
+              {scope}
             </p>
           </div>
         </div>

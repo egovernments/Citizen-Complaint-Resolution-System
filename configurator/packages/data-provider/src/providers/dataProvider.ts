@@ -238,6 +238,8 @@ function normalizeMdmsRecord(mdms: MdmsRecord, config: ResourceConfig): RaRecord
     _auditDetails: mdms.auditDetails,
     _schemaCode: mdms.schemaCode,
     _mdmsId: mdms.id,
+    // ours (cfgreview F03, #1550): the tenant the row lives at (an inherited row is an ancestor's)
+    _tenantId: mdms.tenantId,
   } as RaRecord;
 }
 
