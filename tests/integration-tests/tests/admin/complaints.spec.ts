@@ -26,10 +26,9 @@ import { seedComplaintAsCitizen } from '../utils/seed';
 import { BASE_URL, generateCitizenPhone, ROOT_TENANT, TENANT, LOCALITY_CODE, SERVICE_CODE } from '../utils/env';
 
 // Tenant identifiers come from env so the suite runs on any deployment.
-// TENANT_CODE is the STATE/root tenant (citizen tenantId); CITY_TENANT is the
-// configured city (DIGIT_TENANT) — no hardcoded ke / ke.nairobi.
+// TENANT_CODE is the root tenant (citizen tenantId); complaints are searched at
+// TENANT (DIGIT_TENANT). Root workspace only (#2398 decision 2).
 const TENANT_CODE = ROOT_TENANT;
-const CITY_TENANT = TENANT;
 
 const LIST_PATH = '/configurator/manage/complaints';
 const CREATE_PATH = `${LIST_PATH}/create`;
@@ -98,7 +97,7 @@ test.beforeAll(async () => {
   liveServiceCode = leafCodes.includes(SERVICE_CODE) ? SERVICE_CODE : (leafCodes[0] ?? liveServiceCode);
 
   // --- Pick an HRMS employee with PGR_LME role for ASSIGN test ---
-  const employees = await employeeSearch(auth, CITY_TENANT, {
+  const employees = await employeeSearch(auth, TENANT, {
     roles: ['PGR_LME'],
     limit: 100,
   }).catch(() => [] as Record<string, unknown>[]);
@@ -129,7 +128,7 @@ test.beforeAll(async () => {
   // Boundaries don't go through MDMS; we infer one from a recent
   // complaint instead. If none exist yet, the LocalityPicker test will
   // fall back to whatever the cascading select offers.
-  const recent = await pgrSearch(auth, CITY_TENANT, { limit: 10 }).catch(() => []);
+  const recent = await pgrSearch(auth, TENANT, { limit: 10 }).catch(() => []);
   for (const w of recent) {
     const svc = w.service as Record<string, unknown> | undefined;
     const addr = svc?.address as Record<string, unknown> | undefined;
@@ -144,7 +143,7 @@ test.afterAll(async () => {
   const auth = loadAuth();
   const r = await cleanupPgrComplaints(
     Array.from(createdComplaints),
-    CITY_TENANT,
+    TENANT,
     auth,
   );
   if (r.failed.length) {
@@ -157,7 +156,7 @@ test.describe('manage/complaints', () => {
   test('1. file complaint — citizen, locality, required landmark', {
     annotation: {
       type: 'description',
-      description: `End-to-end create-complaint flow on the configurator's manage surface. Drives the whole form (complaint type, description, locality picker cascade, citizen mobile) and intercepts the _create XHR to verify the citizen tenantId is the STATE tenant (root) while address.tenantId is the CITY tenant — a critical contract. Asserts the redirect lands on a fresh PG-PGR-* show URL.
+      description: `End-to-end create-complaint flow on the configurator's manage surface. Drives the whole form (complaint type, description, locality picker cascade, citizen mobile) and intercepts the _create XHR to verify the citizen tenantId is the STATE tenant (root) and the address carries a locality. Asserts the redirect lands on a fresh PG-PGR-* show URL.
 
 Steps:
 1. test.skip if !liveServiceCode (beforeAll picks first active complaint type).
@@ -168,7 +167,7 @@ Steps:
 6. Fill Mobile number with a unique phone from generateCitizenPhone() (valid for the deployment's MDMS mobile rule — 9 digits starting with 7/1).
 7. Set up createReqPromise on /pgr-services/v2/request/_create.
 8. Click Create.
-9. Parse the captured request body; assert service.citizen.tenantId === TENANT_CODE (root) and service.address.tenantId === CITY_TENANT, and address.locality.code is non-empty.
+9. Parse the captured request body; assert service.citizen.tenantId === TENANT_CODE (root) and address.locality.code is non-empty. (The city address-tenant contract was removed with city tenants, #2398 decision 2.)
 10. Wait for URL matching /PG-PGR-/ within 30s.
 11. Capture the SR id from the URL into createdComplaints for cleanup.
 
@@ -199,7 +198,7 @@ Citizen tenant must be ROOT — assigning to city would break login flows. Clean
     // option (RC6 — the old single-combo-first behavior stamped ROOT tenant
     // whenever the default hierarchy's tree had no city boundaries).
     const preferredLocality = liveBoundaryCode || LOCALITY_CODE;
-    const { pickedPreferred } = await pickLocality(page, preferredLocality);
+    await pickLocality(page, preferredLocality);
 
     // Citizen mobile — valid for the deployment's MDMS mobile rule
     // (9 digits starting with 7/1). A raw 10-digit 7… fails that rule.
@@ -221,20 +220,7 @@ Citizen tenant must be ROOT — assigning to city would break login flows. Clean
 
     // Citizen tenant must be the STATE tenant, not the city.
     expect((service.citizen as Record<string, unknown>)?.tenantId).toBe(TENANT_CODE);
-    // Address tenant. When pickLocality found the known-good (city) boundary
-    // in pass 1, the app must stamp CITY — that's the strict contract this
-    // test guards. When pass 1 found nothing anywhere and pass 2 fell back to
-    // whatever combo offered ANY option (e.g. a flat deployment or a
-    // deployment whose only reachable tree is the root hierarchy), the address
-    // tenant must be whichever tenant actually owns the picked boundary —
-    // see resolveComplaintAddressTenant (dataProvider.ts:355-391). On a flat
-    // deployment ROOT === CITY so both branches are equally strict there.
     const address = service.address as Record<string, unknown>;
-    if (pickedPreferred) {
-      expect(address?.tenantId).toBe(CITY_TENANT);
-    } else {
-      expect([TENANT_CODE, CITY_TENANT]).toContain(address?.tenantId);
-    }
     expect(((address?.locality as Record<string, unknown>)?.code) ?? '').toBeTruthy();
 
     // Wait for the redirect to the Show page with a fresh <PREFIX>-PGR-* id
@@ -418,7 +404,7 @@ Sorted exact comparison is strict — adding any new value (e.g. SMS) would fail
 Steps:
 1. Navigate to /configurator/manage/complaints; wait networkidle.
 2. If a per-page selector is visible, click it and pick '10'; wait networkidle.
-3. pgrCount(auth, CITY_TENANT) — get the live API total.
+3. pgrCount(auth, TENANT) — get the live API total.
 4. Locate footer text matching /of\\s+\\d+/i; read it.
 5. Parse the number after "of"; assert it equals apiCount.
 
@@ -436,7 +422,7 @@ Catches the bug class where pagination renders fine but the count number is wron
 
     // Live count via the API.
     const auth = loadAuth();
-    const apiCount = await pgrCount(auth, CITY_TENANT);
+    const apiCount = await pgrCount(auth, TENANT);
 
     // Look for the footer count display ("of N", "Showing 1-10 of N", etc.).
     const footer = page.locator('body').getByText(/of\s+\d+/i).first();
@@ -710,7 +696,7 @@ If the geo link doesn't pop a new tab or doesn't carry the coords, an admin can'
   }) => {
     // Find a complaint that has non-zero geo coords; otherwise skip.
     const auth = loadAuth();
-    const wrappers = await pgrSearch(auth, CITY_TENANT, { limit: 50 });
+    const wrappers = await pgrSearch(auth, TENANT, { limit: 50 });
     let target: { id: string; lat: number; lng: number } | null = null;
     for (const w of wrappers) {
       const svc = w.service as Record<string, unknown> | undefined;
@@ -791,7 +777,7 @@ Catches a regression in the citizen-display heuristic — without this badge adm
     page,
   }) => {
     const auth = loadAuth();
-    const wrappers = await pgrSearch(auth, CITY_TENANT, { limit: 100 });
+    const wrappers = await pgrSearch(auth, TENANT, { limit: 100 });
     let target: string | null = null;
     for (const w of wrappers) {
       const svc = w.service as Record<string, unknown> | undefined;
@@ -817,7 +803,7 @@ Catches a regression in the citizen-display heuristic — without this badge adm
       description: `Pins the server-side pagination contract: clicking Next must trigger a fresh _search XHR with offset > 0, NOT a client-side slice of an already-loaded result set. Critical for tenants with thousands of complaints.
 
 Steps:
-1. pgrCount(auth, CITY_TENANT); test.skip if total < 26 (need 2+ pages at perPage=25).
+1. pgrCount(auth, TENANT); test.skip if total < 26 (need 2+ pages at perPage=25).
 2. Navigate to /complaints; wait networkidle.
 3. Attach a request listener capturing _search URLs into searches[].
 4. Locate Next button; test.skip if not visible.
@@ -833,7 +819,7 @@ Test data: ke.nairobi has 55 complaints (probed 2026-04-23). The 26 minimum keep
     const auth = loadAuth();
     // Need at least 26 complaints (2 pages at perPage=25) for this test to
     // be meaningful. Probed 2026-04-23: ke.nairobi has 55.
-    const total = await pgrCount(auth, CITY_TENANT);
+    const total = await pgrCount(auth, TENANT);
     if (total < 26) test.skip(true, `tenant has ${total} complaints, not enough to paginate`);
 
     await page.goto(LIST_PATH);
@@ -923,7 +909,7 @@ Product decision (2026-07-26): there is no departments page, so the column is NO
     // we know the column has something to render. Prefer one whose department
     // still resolves in the master — scratch complaints from earlier runs can
     // point at departments that have since been soft-deleted.
-    const wrappers = await pgrSearch(auth, CITY_TENANT, { limit: 50 });
+    const wrappers = await pgrSearch(auth, TENANT, { limit: 50 });
     let deptCode: string | null = null;
     let fallbackDeptCode: string | null = null;
     for (const w of wrappers) {
@@ -1058,8 +1044,8 @@ Both client-side (single XHR count) and server-side (persistence) checks — tog
 The previous version asserted count >= 0, wrappers.length <= count and wrappers.length <= 50. All three are tautologies (counts are always >= 0; 0 <= N always holds; 50 was the limit it had just passed), so despite the title nothing asserted a size and the test could not fail. Note pgrCount() returns 0 for any non-numeric body, so even a broken endpoint kept it green.
 
 Steps:
-1. total  = pgrCount(CITY_TENANT)                            — every complaint on the tenant.
-2. queue  = pgrCount(CITY_TENANT, { status: PENDINGFORASSIGNMENT }).
+1. total  = pgrCount(TENANT)                            — every complaint on the tenant.
+2. queue  = pgrCount(TENANT, { status: PENDINGFORASSIGNMENT }).
 3. Assert 0 < queue <= total. A non-empty queue is a real precondition of this suite: lifecycle.setup.ts seeds a PENDINGFORASSIGNMENT complaint every run and pickWorkableComplaint() consumes them, so an empty queue means the filter (or the seed) is broken.
 4. Page the filtered search (the deployment caps one _search page at 200 rows regardless of limit) and assert the DISTINCT serviceRequestIds collected equal 'queue' exactly, every row PENDINGFORASSIGNMENT — the server must surface the whole queue, nothing else, nothing twice.
 5. Assert the page size is honoured EXACTLY: pgrSearch(status, limit 25).length === min(25, queue).
@@ -1075,10 +1061,10 @@ Mutation-proven: flipping the status to a nonsense state drops 'queue' to 0 and 
     // still carry the test.
     const SWEEP_LIMIT = 2_000;
 
-    const total = await pgrCount(auth, CITY_TENANT);
-    const queue = await pgrCount(auth, CITY_TENANT, { status: QUEUE_STATUS });
+    const total = await pgrCount(auth, TENANT);
+    const queue = await pgrCount(auth, TENANT, { status: QUEUE_STATUS });
 
-    expect(total, `tenant ${CITY_TENANT} must hold complaints to measure a queue against`)
+    expect(total, `tenant ${TENANT} must hold complaints to measure a queue against`)
       .toBeGreaterThan(0);
     expect(
       queue,
@@ -1095,7 +1081,7 @@ Mutation-proven: flipping the status to a nonsense state drops 'queue' to 0 and 
     const QUEUE_PAGE = 100;
     const seenSrids = new Set<string>();
     for (let offset = 0; offset < queue + QUEUE_PAGE; offset += QUEUE_PAGE) {
-      const page = await pgrSearch(auth, CITY_TENANT, {
+      const page = await pgrSearch(auth, TENANT, {
         status: QUEUE_STATUS,
         limit: QUEUE_PAGE,
         offset,
@@ -1121,7 +1107,7 @@ Mutation-proven: flipping the status to a nonsense state drops 'queue' to 0 and 
 
     // Page size honoured exactly — not "at most".
     const pageSize = 25;
-    const firstPage = await pgrSearch(auth, CITY_TENANT, { status: QUEUE_STATUS, limit: pageSize });
+    const firstPage = await pgrSearch(auth, TENANT, { status: QUEUE_STATUS, limit: pageSize });
     expect(firstPage.length, `limit=${pageSize} must yield exactly min(limit, queue) rows`).toBe(
       Math.min(pageSize, queue),
     );
@@ -1131,14 +1117,14 @@ Mutation-proven: flipping the status to a nonsense state drops 'queue' to 0 and 
     if (total > SWEEP_LIMIT) {
       test.info().annotations.push({
         type: 'note',
-        description: `unfiltered recount skipped: ${total} complaints on ${CITY_TENANT} exceeds the ${SWEEP_LIMIT} sweep cap`,
+        description: `unfiltered recount skipped: ${total} complaints on ${TENANT} exceeds the ${SWEEP_LIMIT} sweep cap`,
       });
       return;
     }
     let recount = 0;
     let swept = 0;
     for (let offset = 0; offset < total; offset += SWEEP_PAGE) {
-      const page = await pgrSearch(auth, CITY_TENANT, { limit: SWEEP_PAGE, offset });
+      const page = await pgrSearch(auth, TENANT, { limit: SWEEP_PAGE, offset });
       if (page.length === 0) break;
       swept += page.length;
       for (const w of page) {
@@ -1308,7 +1294,7 @@ async function pickLocality(
 }
 
 async function pickWorkableComplaint(auth: AuthInfo): Promise<string | null> {
-  const wrappers = await pgrSearch(auth, CITY_TENANT, {
+  const wrappers = await pgrSearch(auth, TENANT, {
     status: 'PENDINGFORASSIGNMENT',
     limit: 50,
   }).catch(() => []);
@@ -1344,7 +1330,7 @@ async function pickWorkableComplaint(auth: AuthInfo): Promise<string | null> {
   const wfAgrees = async (srid: string): Promise<boolean> => {
     try {
       const r = await fetch(
-        `${BASE_URL}/egov-workflow-v2/egov-wf/process/_search?tenantId=${CITY_TENANT}` +
+        `${BASE_URL}/egov-workflow-v2/egov-wf/process/_search?tenantId=${TENANT}` +
           `&businessIds=${encodeURIComponent(srid)}&history=false`,
         {
           method: 'POST',
@@ -1398,7 +1384,7 @@ async function pickWorkableComplaint(auth: AuthInfo): Promise<string | null> {
     if (id) return id;
   }
   // Fall back to any non-terminal complaint.
-  const any = await pgrSearch(auth, CITY_TENANT, { limit: 10 }).catch(() => []);
+  const any = await pgrSearch(auth, TENANT, { limit: 10 }).catch(() => []);
   for (const w of any) {
     const svc = w.service as Record<string, unknown> | undefined;
     const status = svc?.applicationStatus as string | undefined;

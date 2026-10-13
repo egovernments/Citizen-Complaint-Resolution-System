@@ -10,9 +10,7 @@
  * NOT issue a cache-bust; see test 5.) Cold load is ~7.3 s bound by the
  * server-side `rainmaker-pgr / en_IN` search (§1 DEV-LOG).
  *
- * Tenant parity at `ke` and `ke.nairobi` is 4,259 / 4,259 for enabled
- * modules. Probed 2026-04-23:
- *   - `rainmaker-common` en_IN ~1,760 rows at both tenants.
+ * Probed 2026-04-23:
  *   - `_upsert` single-row → search-after-cache-bust round-trip works.
  *   - `_upsert` with two rows sharing a `code` but different `module`
  *     returns a HARD 400 `DUPLICATE_RECORDS` (not a silent dedup as the
@@ -22,13 +20,11 @@
 import { test, expect } from '@playwright/test';
 import { loadAuth, type AuthInfo } from '../utils/manage/api';
 import { testCode } from '../utils/manage/codes';
-import { ROOT_TENANT, TENANT } from '../utils/env';
+import { ROOT_TENANT } from '../utils/env';
 
-// Tenant-agnostic: root tenant + city tenant come from env (ROOT_TENANT /
-// DIGIT_TENANT), so the parity guard compares the actual deployment's tenants
-// rather than a hardcoded ke / ke.nairobi pair.
+// Root workspace only (#2398 decision 2). The former test 1 (root/city
+// localization parity) was removed with city tenants.
 const TENANT_CODE = ROOT_TENANT;
-const CITY_TENANT = TENANT;
 const LIST_PATH = '/configurator/manage/localization';
 
 const createdKeys = new Set<string>();
@@ -48,58 +44,6 @@ test.afterAll(async () => {
 });
 
 test.describe('manage/localization', () => {
-  test('1. tenant parity — root and city tenants serve a coherent rainmaker-common en_IN bundle', {
-    annotation: {
-      type: 'description',
-      description: `Tenant-parity guard: localization counts at root tenant and city tenant for rainmaker-common / en_IN must be coherent. On a FLAT deployment (root tenant IS the city tenant — the same tenant queried twice) the two counts must match EXACTLY. On a TWO-LEVEL deployment (root != city, e.g. mz / mz.maputo) the localization service resolves the city bundle as root rows PLUS city-specific additions (measured on mz/mz.maputo: 5,789 root rows vs 6,224 city rows — the city adds 435 city-specific rows), so a strict ±2 parity assert is a flat-deployment (Kenya-seed) convention, not a portable service contract. The portable contract this test enforces instead: the city bundle must be AT LEAST as complete as the root's — a city count BELOW root means city-level lookups lost inherited rows, which is the actual regression this test guards against.
-
-Steps:
-1. In parallel, locSearch(TENANT_CODE, 'en_IN', 'rainmaker-common') and locSearch(CITY_TENANT, 'en_IN', 'rainmaker-common').
-2. Assert keRows.length > 100.
-3. If TENANT_CODE === CITY_TENANT (flat deployment): assert cityRows.length === keRows.length exactly.
-   Else (two-level deployment): assert cityRows.length >= keRows.length.
-
-Catches a regression where city-level localization stops inheriting from root, or where one tenant gets a partial seed.`,
-    },
-    tag: ['@area:configurator-manage', '@area:localization', '@kind:regression', '@layer:ui', '@persona:admin'] }, async () => {
-    const auth = loadAuth();
-    const [keRows, cityRows] = await Promise.all([
-      locSearch(auth, TENANT_CODE, 'en_IN', 'rainmaker-common'),
-      locSearch(auth, CITY_TENANT, 'en_IN', 'rainmaker-common'),
-    ]);
-    // Onboarding-data gap: rainmaker-common en_IN must be seeded on this
-    // deployment for the parity comparison to mean anything. On a tenant that
-    // hasn't loaded the localization bundle both counts are ~0 — skip rather
-    // than fail on missing seed data.
-    test.skip(
-      keRows.length <= 100,
-      'rainmaker-common en_IN not seeded on this deployment (localization bundle not loaded)',
-    );
-    expect(keRows.length).toBeGreaterThan(100);
-    if (TENANT_CODE === CITY_TENANT) {
-      // Flat deployment: same tenant queried twice must agree exactly.
-      expect(cityRows.length).toBe(keRows.length);
-    } else {
-      // Two-level deployment: the localization service resolves city = root
-      // rows + city-specific additions (measured on mz/mz.maputo: 5,789 vs
-      // 6,224), so the city bundle must be at least as complete as the
-      // root's. A city count BELOW root means city-level lookups lost
-      // inherited rows — the actual regression this test guards.
-      // Exclude rows this SUITE generated. Tenant-onboarding specs upsert
-      // TENANT_TENANTS_<ROOT>_PWT… labels at the ROOT only, so a full run leaves
-      // root ahead of city by exactly those transient artifacts and the parity
-      // check fails for a reason that has nothing to do with inheritance.
-      // Compare the real deployment bundle instead.
-      const isSuiteArtifact = (code: string) => /(^|_)PW[T_]/i.test(code);
-      const rootReal = keRows.filter((r) => !isSuiteArtifact(String(r.code ?? '')));
-      const cityReal = cityRows.filter((r) => !isSuiteArtifact(String(r.code ?? '')));
-      expect(
-        cityReal.length,
-        `city bundle lost inherited rows (root ${rootReal.length} vs city ${cityReal.length})`,
-      ).toBeGreaterThanOrEqual(rootReal.length);
-    }
-  });
-
   test('2. upsert + cache-bust round-trip — value lands after bust, not before', {
     annotation: {
       type: 'description',
