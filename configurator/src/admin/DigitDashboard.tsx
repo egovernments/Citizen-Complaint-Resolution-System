@@ -17,6 +17,7 @@ import {
   User,
   Shield,
 } from 'lucide-react';
+import { NeedsAttention } from './NeedsAttention';
 
 const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   tenants: Building2,
@@ -103,6 +104,8 @@ export function DigitDashboard() {
           <ResourceCard key={resource} resource={resource} />
         ))}
       </div>
+      {/* ours (cfgreview F28, #1574): what needs attention, with the way to fix it */}
+      <NeedsAttention />
     </div>
   );
 }
