@@ -139,6 +139,25 @@ class RedactionAndNormalizationTests(unittest.TestCase):
             self.assertIn("$.auth.apiToken", state["config.json"])
             self.assertEqual({b"yaml-secret", b"json-secret"}, values)
 
+    def test_ignores_secret_metadata_and_source_variable_assignments(self):
+        with temp_directory() as name:
+            root = Path(name)
+            source = root / "source"
+            normalized = root / "normalized"
+            write(source, ".env", "TOKEN_EXCHANGE_SYSTEM_USER_TYPE=EMPLOYEE\n")
+            write(
+                source,
+                "loader.py",
+                'self.password = password\napi_token = "literal-secret"\n',
+            )
+            state, values = dry.scan_tree_secrets(source, b"ephemeral")
+            self.assertNotIn(".env", state)
+            self.assertEqual({b"literal-secret"}, values)
+            dry.normalize_tree(source, normalized, values)
+            rendered = (normalized / "loader.py").read_text()
+            self.assertIn("self.password = password", rendered)
+            self.assertNotIn("literal-secret", rendered)
+
     def test_secret_metadata_keys_are_not_treated_as_secret_values(self):
         values = dry.sensitive_values(
             {"secrets_path": "secret/digit/city", "token_user_type": "EMPLOYEE"}

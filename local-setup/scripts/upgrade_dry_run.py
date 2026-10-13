@@ -30,6 +30,17 @@ from typing import Any, Iterable
 
 LEGACY_COMMIT = "5f86a10264280735984c661df2de0d1bc9a708a8"
 MDMS_TABLES = ("eg_mdms_data", "eg_mdms_schema_definition")
+SOURCE_CODE_SUFFIXES = {
+    ".go",
+    ".java",
+    ".js",
+    ".php",
+    ".py",
+    ".rb",
+    ".rs",
+    ".ts",
+    ".tsx",
+}
 EXCLUDED_PATTERNS = (
     ".build",
     ".build/**",
@@ -342,12 +353,20 @@ def scan_tree_secrets(
                 SECRET_FIELD_ASSIGNMENT.finditer(text), 1
             ):
                 key = match.group("key")
+                if not is_secret_key(key):
+                    continue
+                raw_value = match.group("value").strip()
+                if path.suffix.lower() in SOURCE_CODE_SUFFIXES:
+                    literal = re.fullmatch(r"(['\"])(.*)\1[,;]?", raw_value)
+                    if literal is None:
+                        continue
+                    raw_value = literal.group(2)
                 _record_secret_value(
                     state,
                     values,
                     rel,
                     f"line:{key}:{index}",
-                    match.group("value"),
+                    raw_value,
                     hmac_key,
                 )
     return state, values
@@ -421,10 +440,16 @@ def compare_secret_states(
         return True
 
 
-def redact_text(text: str, exact_values: Iterable[bytes] = ()) -> str:
-    text = TEXT_SECRET_ASSIGNMENT.sub(
-        lambda match: match.group("prefix") + "<REDACTED>", text
-    )
+def redact_text(
+    text: str,
+    exact_values: Iterable[bytes] = (),
+    *,
+    redact_assignments: bool = True,
+) -> str:
+    if redact_assignments:
+        text = TEXT_SECRET_ASSIGNMENT.sub(
+            lambda match: match.group("prefix") + "<REDACTED>", text
+        )
     text = JSON_SECRET.sub(lambda match: match.group(1) + '"<REDACTED>"', text)
     for raw in sorted(exact_values, key=len, reverse=True):
         try:
@@ -468,7 +493,12 @@ def normalize_tree(
                 target.write_bytes(data)
                 entry["binary"] = True
             else:
-                clean = redact_text(data.decode("utf-8"), exact_secret_values)
+                clean = redact_text(
+                    data.decode("utf-8"),
+                    exact_secret_values,
+                    redact_assignments=path.suffix.lower()
+                    not in SOURCE_CODE_SUFFIXES,
+                )
                 target.write_text(clean, encoding="utf-8", newline="")
                 entry["binary"] = False
             try:
