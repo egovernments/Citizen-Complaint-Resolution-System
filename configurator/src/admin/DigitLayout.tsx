@@ -164,6 +164,9 @@ const advancedResources = Object.keys(getGenericMdmsResources())
 
 // ours (cfgreview F21, #1567): platform-only masters are not offered below the state
 import { isPlatformOnly } from '@/resources/advanced/advancedGroups';
+// ours (cfgreview F13, #1559): the attribute catalogue is a platform list, not a county admin's: it leaves the Access
+// group and is reached from Advanced > Platform, at the state only
+for (const g of navGroups) g.items = g.items.filter((i) => i.id !== 'access-attributes');
 
 export function DigitLayout({ children }: { children?: ReactNode }) {
   const { state, logout, toggleHelp } = useApp();

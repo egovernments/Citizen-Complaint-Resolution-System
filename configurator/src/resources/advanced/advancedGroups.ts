@@ -42,6 +42,7 @@ const GROUPS: { id: string; title: string; blurb: string; items: Record<string, 
     'role-actions': 'Which API actions each role may call.',
   } },
   { id: 'platform', title: 'Platform', blurb: 'Installation-wide and legacy settings. Shown at the state only.', items: {
+    'access-attributes': 'What access rules can be judged on (the attribute catalogue). For platform administrators.',
     'action-mappings': 'The API actions known to the access check.',
     'security-policy': 'Which personal fields are masked, and for whom.',
     'city-modules': 'Which modules each tenant has switched on.',
@@ -64,9 +65,14 @@ export function isPlatformOnly(name: string): boolean {
   return PLATFORM.has(name);
 }
 
+/** Entries that are screens rather than MDMS masters: their path and label. */
+export const ADVANCED_LINKS: Record<string, { path: string; label: string }> = {
+  'access-attributes': { path: '/manage/access/attributes', label: 'Access attributes' },
+};
+
 /** The masters by area, in GROUPS order; unknown ones go to "Other". atState = false leaves the Platform group out. */
 export function groupAdvanced(names: string[], atState: boolean): AdvancedGroup[] {
-  const left = new Set(names);
+  const left = new Set([...names, ...Object.keys(ADVANCED_LINKS)]);
   const out: AdvancedGroup[] = [];
   for (const g of GROUPS) {
     if (g.id === 'platform' && !atState) { for (const n of Object.keys(g.items)) left.delete(n); continue; }

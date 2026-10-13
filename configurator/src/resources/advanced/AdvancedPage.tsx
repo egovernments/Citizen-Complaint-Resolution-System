@@ -3,7 +3,7 @@ import { DigitCard } from '@/components/digit/DigitCard';
 import { useNavigate } from 'react-router-dom';
 import { Database } from 'lucide-react';
 import { useApp } from '../../App';
-import { groupAdvanced } from './advancedGroups';
+import { ADVANCED_LINKS, groupAdvanced } from './advancedGroups';
 
 /**
  * ours (cfgreview F21, #1567): about 40 masters in one flat list, each captioned with its schema code. They are now
@@ -33,7 +33,7 @@ export function AdvancedPage() {
             {g.items.map((it) => (
               <button
                 key={it.name}
-                onClick={() => navigate(`/manage/${it.name}`)}
+                onClick={() => navigate(ADVANCED_LINKS[it.name]?.path ?? `/manage/${it.name}`)}
                 className="text-left w-full"
                 title={getResourceConfig(it.name)?.schema}
               >
@@ -41,7 +41,7 @@ export function AdvancedPage() {
                   <div className="flex items-start gap-3">
                     <Database className="mt-0.5 w-5 h-5 text-primary flex-shrink-0" aria-hidden="true" />
                     <div className="min-w-0">
-                      <p className="text-sm font-medium">{getResourceLabel(it.name)}</p>
+                      <p className="text-sm font-medium">{ADVANCED_LINKS[it.name]?.label ?? getResourceLabel(it.name)}</p>
                       <p className="text-xs text-muted-foreground">{it.description}</p>
                     </div>
                   </div>

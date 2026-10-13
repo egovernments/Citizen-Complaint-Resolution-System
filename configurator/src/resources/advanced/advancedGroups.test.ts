@@ -15,4 +15,8 @@ describe('groupAdvanced', () => {
     expect(isPlatformOnly('security-policy')).toBe(true);
     expect(isPlatformOnly('theme-config')).toBe(false);
   });
+  it('offers the access attribute catalogue under Platform, at the state only (F13, #1559)', () => {
+    expect(groupAdvanced([], true).find((x) => x.id === 'platform')?.items.map((i) => i.name)).toEqual(['access-attributes']);
+    expect(groupAdvanced([], false)).toEqual([]);
+  });
 });
