@@ -2,14 +2,16 @@
  * DIGIT auth utilities — token acquisition and session injection.
  *
  * Every staff token comes from a Keycloak hosted sign-in plus the BFF's
- * `_select`. That is a full browser login, so getDigitToken() keeps ONE browser
- * per worker and caches each token per (user, tenant, surface) until shortly
- * before it expires: the ~20 call sites that used to launch a Chromium and
- * sign in again each time now cost one sign-in per persona per worker.
+ * `_select`. The password is posted by passwordSignIn() with Node's fetch, never
+ * through a Playwright page or request context: Playwright traces every context
+ * a test creates, and a run publishes its traces, step titles and report.json.
+ * Tokens are cached per (user, tenant, surface) until shortly before they
+ * expire, and a refusal per (user, surface), so one wrong password costs ONE
+ * failed login against a realm with brute-force protection, not one per caller.
  */
 import { BASE_URL, IGNORE_HTTPS_ERRORS } from './env';
-import { chromium, type Browser, type Page } from '@playwright/test';
-import { hostedSignIn, selectContext, surfacePath } from './identity-bff';
+import { request as playwrightRequest, type Page } from '@playwright/test';
+import { KeycloakSignInError, passwordSignIn, selectContext, surfacePath, type SignInCookie } from './identity-bff';
 
 export interface TokenResponse {
   access_token: string;
@@ -32,31 +34,29 @@ export interface AuthConfig {
   userType?: 'EMPLOYEE' | 'CITIZEN';
 }
 
-let browser: Promise<Browser> | null = null;
-
-/** One headless browser per worker, relaunched if it ever goes away. */
-function sharedBrowser(): Promise<Browser> {
-  if (!browser) {
-    const launched = chromium.launch();
-    browser = launched;
-    launched.then(
-      (b) => b.on('disconnected', () => { if (browser === launched) browser = null; }),
-      () => { if (browser === launched) browser = null; },
-    );
-  }
-  return browser;
-}
-
-/** Close the shared browser, for scripts that must exit (specs need not call it). */
-export async function closeSharedBrowser(): Promise<void> {
-  const current = browser;
-  browser = null;
-  if (current) await (await current.catch(() => null))?.close();
-}
+type StaffSurface = 'configurator' | 'employee';
 
 /** Tokens are reused until this long before they expire. */
 const EXPIRY_MARGIN_MS = 2 * 60_000;
 const tokens = new Map<string, { token: TokenResponse; expiresAt: number }>();
+/** Keycloak refusals, per (user, surface): never asked twice in one worker. */
+const refusals = new Map<string, KeycloakSignInError>();
+
+/** The BFF session cookies for this persona; a known refusal throws without contacting Keycloak. */
+export async function signIn(baseURL: string, surface: StaffSurface, username: string, password: string): Promise<SignInCookie[]> {
+  if (!username || !password) {
+    throw new Error('No persona credentials: set <ROLE>_LOGIN in the env profile and <ROLE>_PASSWORD in the secrets file');
+  }
+  const key = JSON.stringify([baseURL, surface, username]);
+  const refused = refusals.get(key);
+  if (refused) throw refused;
+  try {
+    return await passwordSignIn({ baseURL, surface, username, password });
+  } catch (err) {
+    if (err instanceof KeycloakSignInError) refusals.set(key, err);
+    throw err;
+  }
+}
 
 /** Acquire a DIGIT token through hosted sign-in and the BFF context exchange. */
 export async function getDigitToken(config: AuthConfig): Promise<TokenResponse> {
@@ -67,23 +67,22 @@ export async function getDigitToken(config: AuthConfig): Promise<TokenResponse> 
   const key = JSON.stringify([baseURL, 'configurator', tenant, config.username, config.password]);
   const hit = tokens.get(key);
   if (hit && hit.expiresAt - EXPIRY_MARGIN_MS > Date.now()) return hit.token;
-  const context = await (await sharedBrowser()).newContext({ ignoreHTTPSErrors: IGNORE_HTTPS_ERRORS });
+  const cookies = await signIn(baseURL, 'configurator', config.username, config.password);
+  const api = await playwrightRequest.newContext({ ignoreHTTPSErrors: IGNORE_HTTPS_ERRORS, storageState: { cookies, origins: [] } });
   try {
-    const token = await staffContext(await context.newPage(), config, 'configurator');
+    const token = await selectContext(api, baseURL, 'configurator', tenant);
     tokens.set(key, { token, expiresAt: Date.now() + token.expires_in * 1000 });
     return token;
   } finally {
-    await context.close();
+    await api.dispose();
   }
 }
 
-export async function staffContext(page: Page, config: AuthConfig, surface: 'configurator' | 'employee') {
+/** Sign in without the page, then give the page's context the BFF session and select. */
+export async function staffContext(page: Page, config: AuthConfig, surface: StaffSurface) {
   if (config.userType === 'CITIZEN') throw new Error('Use citizenSignIn for citizen phone possession');
-  if (!config.username || !config.password) {
-    throw new Error('No persona credentials: set <ROLE>_LOGIN in the env profile and <ROLE>_PASSWORD in the secrets file');
-  }
   const baseURL = config.baseURL || BASE_URL;
-  await hostedSignIn(page, { baseURL, surface, username: config.username, password: config.password });
+  await page.context().addCookies(await signIn(baseURL, surface, config.username, config.password));
   return selectContext(page.request, baseURL, surface, config.authTenant || config.tenant);
 }
 

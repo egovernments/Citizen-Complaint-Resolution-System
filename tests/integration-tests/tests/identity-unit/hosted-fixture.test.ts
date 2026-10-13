@@ -2,7 +2,9 @@ import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { chromium, type Page } from '@playwright/test';
-import { enterHostedUsername, hostedSignIn, selectContext } from '../utils/identity-bff';
+import { enterHostedUsername, hostedSignIn, KeycloakSignInError, selectContext } from '../utils/identity-bff';
+import { getDigitToken } from '../utils/auth';
+import { makeAttempt } from '../utils/profile';
 
 // Browser fixture checks only; the hosted form and landing application are doubles.
 let browser: Awaited<ReturnType<typeof chromium.launch>>;
@@ -181,3 +183,32 @@ test('a refused password fails at once with Keycloak\'s own error, without retry
   assert.equal(state.submissions.length, 1);
   assert(!state.paths.includes('/identity/v1/session'));
 }));
+
+// The helpers' sign-in never goes through a page: the password is posted with Node's fetch.
+const token = (base: string, password: string) =>
+  getDigitToken({ baseURL: base, tenant: 'fixture', username: 'fixture-user', password });
+
+for (const split of [false, true]) {
+  test(`browserless sign-in (${split ? 'split' : 'combined'} form) selects a token, and the token is reused`, async () => fixture({ split, result: 'complete' }, async (_page, base, state) => {
+    assert.equal((await token(base, 'fixture-password')).access_token, 'fixture-token');
+    assert.equal((await token(base, 'fixture-password')).access_token, 'fixture-token');
+    assert.deepEqual(state.submissions, split ? [['username', 'password'], ['username', 'password']] : [['username', 'password']]);
+    assert.equal(state.resultReads, 1, 'the one-use auth result is consumed and checked');
+  }));
+}
+
+test('a refused password costs one Keycloak post; the next caller fails from the refusal cache', async () => fixture({ refuse: true }, async (_page, base, state) => {
+  for (let call = 0; call < 2; call++) {
+    await assert.rejects(token(base, 'wrong-password'), (err: Error) =>
+      err instanceof KeycloakSignInError && /Keycloak refused the sign-in for fixture-user: Invalid username or password\./.test(err.message));
+  }
+  assert.equal(state.submissions.length, 1);
+}));
+
+test('profile discovery rethrows a refused password at once instead of retrying it', async () => {
+  const failures: Record<string, string> = {};
+  let calls = 0;
+  await assert.rejects(makeAttempt(failures)('admin login', async () => { calls++; throw new KeycloakSignInError('refused'); }, null), KeycloakSignInError);
+  assert.equal(calls, 1);
+  assert.deepEqual(failures, {});
+});

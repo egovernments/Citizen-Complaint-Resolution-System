@@ -33,9 +33,10 @@
  * a missing one is generated. With --secrets-out every persona password is
  * written to that file (mode 0600, other lines kept). Passwords never reach
  * stdout. The actor (SEED_ACTOR_*) is any ACCOUNT_ADMIN of the workspace: the
- * signup founder the first time (without SEED_ACTOR_PASSWORD a magic-link
- * founder gets a one-off password through the Keycloak admin API), the seeded
- * admin (the default) after that.
+ * signup founder the first time (without SEED_ACTOR_PASSWORD, a founder with
+ * no password credential — magic-link only — gets a one-off one through the
+ * Keycloak admin API; one with a password is never reset), the seeded admin
+ * (the default) after that.
  * stdout: the env-profile lines to add, then one verified line per persona.
  */
 import { randomBytes } from 'node:crypto';
@@ -149,28 +150,48 @@ async function ensureEmployee(digit: Digit, plan: Plan, spec: Spec, login: strin
   return { code, uuid: created.user?.uuid ?? created.uuid ?? fail(`HRMS created ${code} without a user uuid`) };
 }
 
+async function kc(path: string, init: RequestInit = {}, expect = [200, 201, 204]): Promise<Response> {
+  const { base, token } = await keycloakAdminFresh();
+  const r = await fetch(`${base}/admin/realms/${KC_REALM}${path}`, { ...init,
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
+  if (!expect.includes(r.status)) fail(`Keycloak admin ${init.method ?? 'GET'} ${path.split('?')[0]} -> HTTP ${r.status}`);
+  return r;
+}
+
+async function findUser(login: string): Promise<Record<string, any> | undefined> {
+  return ((await (await kc(`/users?${new URLSearchParams({ email: login, exact: 'true' })}`)).json()) as Array<Record<string, any>>)
+    .find((u) => String(u.email).toLowerCase() === login);
+}
+
+/**
+ * A password for an actor given without one. Only a login with NO password
+ * credential (a magic-link founder) gets a one-off password, which is never
+ * printed or kept; one that has a password is never touched — it may be a
+ * real person's — and SEED_ACTOR_PASSWORD must be supplied instead.
+ */
+export async function ensureActorPassword(login: string): Promise<string> {
+  const user = (await findUser(login)) ?? fail(`No Keycloak user ${login} for SEED_ACTOR_LOGIN`);
+  const credentials = (await (await kc(`/users/${user.id}/credentials`)).json()) as Array<{ type?: string }>;
+  if (credentials.some((c) => c.type === 'password')) {
+    fail(`SEED_ACTOR_LOGIN ${login} already has a password: set SEED_ACTOR_PASSWORD; the script never resets an existing one`);
+  }
+  const password = newPassword();
+  await kc(`/users/${user.id}/reset-password`, { method: 'PUT', body: JSON.stringify({ type: 'password', value: password, temporary: false }) });
+  return password;
+}
+
 /**
  * The Keycloak login: verified email, no pending actions, not locked. A new
  * login gets `password`; an existing one only when `reset` (a password this run
  * generated): re-setting a known one would trip password-history policies and
  * end the sessions of an actor seeding itself. The final sign-in proves it.
  */
-async function ensureLogin(login: string, password: string, reset: boolean, create = true): Promise<void> {
-  const kc = async (path: string, init: RequestInit = {}, expect = [200, 201, 204]) => {
-    const { base, token } = await keycloakAdminFresh();
-    const r = await fetch(`${base}/admin/realms/${KC_REALM}${path}`, { ...init,
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
-    if (!expect.includes(r.status)) fail(`Keycloak admin ${init.method ?? 'GET'} ${path.split('?')[0]} -> HTTP ${r.status}`);
-    return r;
-  };
-  const find = async () => ((await (await kc(`/users?${new URLSearchParams({ email: login, exact: 'true' })}`)).json()) as Array<Record<string, any>>)
-    .find((u) => String(u.email).toLowerCase() === login);
-  let user = await find();
-  if (!user && !create) fail(`No Keycloak user ${login}`);
+async function ensureLogin(login: string, password: string, reset: boolean): Promise<void> {
+  let user = await findUser(login);
   if (!user) {
     await kc('/users', { method: 'POST', body: JSON.stringify({ username: login, email: login, enabled: true, emailVerified: true,
       firstName: 'IT', lastName: login.split('@')[0], requiredActions: [] }) }, [201]);
-    user = (await find()) ?? fail(`Keycloak did not return the new user ${login}`);
+    user = (await findUser(login)) ?? fail(`Keycloak did not return the new user ${login}`);
     reset = true;
   } else if (user.emailVerified !== true || user.requiredActions?.length || user.enabled === false) {
     // The full representation goes back, so the BFF's own attributes survive.
@@ -229,10 +250,8 @@ async function main(): Promise<void> {
   if (generated.length && !secretsOut) fail(`${generated.join(', ')} not set: pass --secrets-out <file> to generate and keep them`);
 
   if (!actorPassword) {
-    // A magic-link founder has no password: give it a one-off one, never printed or kept.
-    actorPassword = newPassword();
-    await ensureLogin(actorLogin.toLowerCase(), actorPassword, true, false);
-    await sleep(2_000);
+    actorPassword = await ensureActorPassword(actorLogin.toLowerCase());
+    await sleep(2_000); // a same-second sign-in after a credential change is revoked (#2284)
   }
   const actor = await playwrightRequest.newContext({ ignoreHTTPSErrors: IGNORE_HTTPS_ERRORS });
   try {
@@ -280,7 +299,9 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((err) => {
-  console.error(`[seed-personas] ${err instanceof Error ? err.message : err}`);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((err) => {
+    console.error(`[seed-personas] ${err instanceof Error ? err.message : err}`);
+    process.exit(1);
+  });
+}

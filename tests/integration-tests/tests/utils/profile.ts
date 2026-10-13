@@ -39,6 +39,7 @@ import {
 import { deriveMobileLengths } from './mdms-mobile';
 import { getPgrIdPrefix } from './pgr-idgen';
 import { getDigitToken } from './auth';
+import { KeycloakSignInError } from './identity-bff';
 import { resolvePersonasForProfile, resolveSeedPlan } from './personas';
 
 // ── shape ────────────────────────────────────────────────────────────────────
@@ -428,13 +429,16 @@ const PROBE_ROUNDS = 2;
  * `fallback` is a decision to keep the run alive, not a decision that the
  * fallback is TRUE, and only this function still knows the difference.
  */
-function makeAttempt(failures: Record<string, string>) {
+export function makeAttempt(failures: Record<string, string>) {
   return async function attempt<T>(label: string, fn: () => Promise<T>, fallback: T): Promise<T> {
     let last = '';
     for (let round = 1; round <= PROBE_ROUNDS; round++) {
       try {
         return await fn();
       } catch (err) {
+        // A refused password is not a blip: retrying it only feeds Keycloak's
+        // brute-force detection, and nothing downstream can run without it.
+        if (err instanceof KeycloakSignInError) throw err;
         last = err instanceof Error ? err.message : String(err);
         console.log(`[profile] ${label} attempt ${round}/${PROBE_ROUNDS} failed: ${last.slice(0, 200)}`);
       }

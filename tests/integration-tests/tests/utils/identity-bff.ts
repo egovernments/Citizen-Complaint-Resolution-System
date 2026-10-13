@@ -79,7 +79,103 @@ export async function enterHostedUsername(page: Page, value: string): Promise<vo
   if (!await page.locator('#password').isVisible()) throw await refusal(page, value);
 }
 
-/** Credentials go only to the hosted form. The landing app owns one-use auth results. */
+/** A cookie the BFF or Keycloak set, in the shape BrowserContext.addCookies takes. */
+export interface SignInCookie {
+  name: string; value: string; domain: string; path: string;
+  expires: number; httpOnly: boolean; secure: boolean; sameSite: 'Strict' | 'Lax' | 'None';
+}
+
+const unescapeHtml = (v: string) => v.replace(/\\u0026/g, '&').replace(/\\\//g, '/').replace(/&amp;/g, '&').replace(/&#x3D;/gi, '=').replace(/&#61;/g, '=');
+
+/**
+ * Hosted sign-in WITHOUT a browser: the Keycloak form is posted with Node's own
+ * fetch, which no Playwright context records. Every staff helper signs in this
+ * way, because Playwright traces every context and request a test creates, and
+ * a password typed or posted there lands in the trace, the step titles and
+ * report.json, all of which a run publishes. Returns the BFF session cookies
+ * for a context to adopt. A refused password throws KeycloakSignInError after
+ * ONE post.
+ */
+export async function passwordSignIn(config: { baseURL: string; surface: Surface; username: string; password: string }): Promise<SignInCookie[]> {
+  if (process.env.IGNORE_HTTPS_ERRORS === '1') process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+  const jar = new Map<string, SignInCookie>();
+  const header = (url: URL) => [...jar.values()]
+    .filter((c) => (url.hostname === c.domain || url.hostname.endsWith(`.${c.domain}`)) && url.pathname.startsWith(c.path))
+    .map((c) => `${c.name}=${c.value}`).join('; ');
+  const store = (raw: string, url: URL) => {
+    const [pair, ...attrs] = raw.split(';').map((p) => p.trim());
+    const at = pair.indexOf('=');
+    const attr = (name: string) => attrs.find((a) => a.toLowerCase().startsWith(`${name}=`))?.slice(name.length + 1);
+    const flag = (name: string) => attrs.some((a) => a.toLowerCase() === name);
+    const cookie: SignInCookie = { name: pair.slice(0, at), value: pair.slice(at + 1),
+      domain: (attr('domain') || url.hostname).replace(/^\./, ''), path: attr('path') || '/', expires: -1,
+      httpOnly: flag('httponly'), secure: flag('secure'),
+      sameSite: (['Strict', 'Lax', 'None'].find((v) => v.toLowerCase() === attr('samesite')?.toLowerCase()) ?? 'Lax') as SignInCookie['sameSite'] };
+    const maxAge = attr('max-age');
+    const expires = maxAge !== undefined ? Date.now() / 1000 + Number(maxAge) : attr('expires') ? Date.parse(attr('expires')!) / 1000 : -1;
+    const key = `${cookie.domain}|${cookie.path}|${cookie.name}`;
+    if (expires !== -1 && expires <= Date.now() / 1000) jar.delete(key);
+    else jar.set(key, { ...cookie, expires: expires === -1 ? -1 : Math.floor(expires) });
+  };
+  const go = async (start: string, form?: Record<string, string>) => {
+    let url = new URL(start);
+    let body = form ? new URLSearchParams(form).toString() : undefined;
+    for (let hop = 0; hop < 15; hop++) {
+      const cookies = header(url);
+      const response = await fetch(url, { method: body ? 'POST' : 'GET', redirect: 'manual', body,
+        headers: { ...(body ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}), ...(cookies ? { Cookie: cookies } : {}) } });
+      for (const raw of response.headers.getSetCookie()) store(raw, url);
+      const location = response.headers.get('location');
+      if (response.status >= 300 && response.status < 400 && location) {
+        url = new URL(location, url);
+        body = undefined;
+        continue;
+      }
+      return { url, html: await response.text() };
+    }
+    throw new Error('Hosted sign-in redirected too many times');
+  };
+  // A login form: Keycloak's pageId (login, login-username, login-password), or a plain form.
+  const formOf = (html: string) => {
+    const pageId = html.match(/pageId"\s*:\s*"([^"]+)"/)?.[1];
+    const action = html.match(/loginAction"\s*:\s*"([^"]+)"/)?.[1] ?? html.match(/<form[^>]*action="([^"]+)"/)?.[1];
+    if (pageId && !/^login(-username|-password)?(\.ftl)?$/.test(pageId)) throw new Error(`Hosted sign-in stopped on Keycloak page ${pageId}`);
+    return action ? { action: unescapeHtml(action), kind: pageId ?? `form${/id="username"/.test(html) ? '+user' : ''}${/id="password"/.test(html) ? '+password' : ''}` } : null;
+  };
+  const origin = new URL(config.baseURL).origin;
+  let page = await go(authorizeUrl(config.baseURL, config.surface));
+  let posted: string | undefined;
+  for (let step = 0; step < 3; step++) {
+    const form = formOf(page.html);
+    if (!form) break;
+    // The same login page again after a post means Keycloak refused the credentials.
+    if (form.kind === posted) {
+      const shown = page.html.match(/"summary"\s*:\s*"([^"]+)"/)?.[1] ?? page.html.match(/id="input-error"[^>]*>([^<]+)</)?.[1];
+      throw new KeycloakSignInError(`Keycloak refused the sign-in for ${config.username}: ${unescapeHtml(shown ?? 'credentials refused').trim()}`);
+    }
+    page = await go(new URL(form.action, page.url).href, { username: config.username, password: config.password });
+    posted = form.kind;
+  }
+  if (page.url.origin !== origin || page.url.pathname.startsWith('/auth/')) throw new Error('Hosted sign-in did not return to the application');
+  const resultId = page.url.searchParams.get('authResult');
+  if (resultId) {
+    const result = await fetch(`${origin}/identity/v1/auth-results/${encodeURIComponent(resultId)}`, { headers: { Cookie: header(page.url) } });
+    if (result.status !== 200 || (await result.json().catch(() => null))?.status !== 'complete') throw new Error('Hosted sign-in was rejected by the BFF');
+  }
+  const session = await fetch(`${origin}/identity/v1/session?surface=${config.surface}`, { headers: { Cookie: header(new URL(`${origin}/identity/v1/session`)) } });
+  if (session.status !== 200 || (await session.json().catch(() => null))?.authenticated !== true) {
+    throw new Error('Hosted sign-in did not establish a BFF session');
+  }
+  return [...jar.values()];
+}
+
+/**
+ * Browser sign-in through the hosted form, for specs that test that form.
+ * It TYPES the password on the page, so the value lands in that test's trace,
+ * step titles and report.json: use throwaway credentials only. Persona
+ * sign-ins go through passwordSignIn() (auth.ts staffContext/getDigitToken).
+ * The landing app owns one-use auth results.
+ */
 export async function hostedSignIn(page: Page, config: {
   baseURL: string; surface: Surface; username: string; password: string;
 }): Promise<void> {

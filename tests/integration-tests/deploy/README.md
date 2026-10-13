@@ -49,7 +49,8 @@ public contracts only (HRMS `_create`, the Keycloak admin API, BFF
 `workspace-members/_link` and the persona's `workspace-invitations/_accept`;
 no mail is sent). It needs an ACCOUNT_ADMIN of the workspace as the actor (the
 signup founder the first time; leave `SEED_ACTOR_PASSWORD` unset for a
-magic-link founder and it gets a one-off password) and Keycloak admin access:
+magic-link founder with no password credential and it gets a one-off one, while
+a login that has a password is never reset) and Keycloak admin access:
 
 ```bash
 cd tests/integration-tests
