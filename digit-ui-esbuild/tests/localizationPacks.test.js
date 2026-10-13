@@ -21,7 +21,32 @@ const SOURCE_DIRS = ["products/pgr/src", "packages/modules/core/src", "packages/
 // Keys from upstream DIGIT screens that CCRS bundles but never routes to
 // (microplan, water and sewerage, audit history, sandbox sign-up).
 const UPSTREAM_ONLY =
-  /^(MP_|WBH_|HCM_|WS_|PAY_|BUILDING_|APPLICATION_PROCESSING_|OF_BILL_|AUDIT_|ACTION_TEST_WATER|SB_FORGOTORGANIZATION_|CASE_NOT_HANDLED$|FAILED_TO_(UN)?ASSIGN_CAMPAIGN$|ASSIGNED_SUCCESSFULLY$|UNASSIGN(ED_SUCCESSFULLY)?$|VIEW_AUDIT_LOGS$|NO_DRAFT_FILE_FOUND$|PLEASE_(FINISH|UPDATE)_|GUIDE_TO_SETUP$|ES_INBOX_APPLICATION_NO$|START$|TAKE_ACTION$|PT_COMMON_GENDER_MALE$|BACK$|NEXT$|SUBMIT$|FORM_STEP$)/;
+  /^(MP_|WBH_|HCM_|WS_|PAY_|BUILDING_|APPLICATION_PROCESSING_|OF_BILL_|AUDIT_|ACTION_TEST_WATER|SB_FORGOTORGANIZATION_|CASE_NOT_HANDLED$|FAILED_TO_(UN)?ASSIGN_CAMPAIGN$|ASSIGNED_SUCCESSFULLY$|UNASSIGN(ED_SUCCESSFULLY)?$|VIEW_AUDIT_LOGS$|NO_DRAFT_FILE_FOUND$|PLEASE_(FINISH|UPDATE)_|GUIDE_TO_SETUP$|ES_INBOX_APPLICATION_NO$|START$|TAKE_ACTION$|PT_COMMON_GENDER_MALE$|NEXT$|SUBMIT$|FORM_STEP$)/;
+
+// Keys built at runtime or picked in a ternary, which the patterns below
+// can't see: the employee action menu (t(action), t(`${action}_SUCCESSFULLY`)),
+// the timeline (t(`CS_COMMON_${status}`)), the account page
+// (`CORE_IDENTITY_${name}`), the employee side bar (ACTION_TEST_<NAME>) and
+// texts chosen by a condition.
+const WORKFLOW_ACTIONS = ["ASSIGN", "REASSIGN", "REJECT", "RESOLVE", "REOPEN", "ESCALATE"];
+const RUNTIME_KEYS = [
+  ...WORKFLOW_ACTIONS,
+  ...WORKFLOW_ACTIONS.map((action) => `${action}_SUCCESSFULLY`),
+  "CS_COMMON_PENDINGFORASSIGNMENT_AFTERREOPEN",
+  "CORE_IDENTITY_UPDATE_PASSWORD",
+  "CORE_IDENTITY_CONFIGURE_TOTP",
+  "CORE_IDENTITY_UPDATE_EMAIL",
+  "CORE_IDENTITY_SURFACE_CITIZEN",
+  "CORE_IDENTITY_SURFACE_EMPLOYEE",
+  "ACTION_TEST_HOME",
+  "BACK",
+  "CORE_COMMON_HOME",
+  "CORE_COMMON_PROFILE_UPDATE_ERROR",
+  "CORE_COMMON_PROFILE_PREFERENCE_UPDATE_ERROR",
+  "CS_COMMON_COMPLAINT_SUBMIT_RETRY",
+  "CS_FILE_ONE_PHOTO",
+  "CS_FILE_N_PHOTOS",
+];
 
 function sourceFiles(dir) {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -63,6 +88,7 @@ function literalKeys() {
     }
   }
   for (const key of identityMessageKeys()) if (!keys.has(key)) keys.set(key, "identityMessages.js");
+  for (const key of RUNTIME_KEYS) if (!keys.has(key)) keys.set(key, "built at runtime");
   return keys;
 }
 

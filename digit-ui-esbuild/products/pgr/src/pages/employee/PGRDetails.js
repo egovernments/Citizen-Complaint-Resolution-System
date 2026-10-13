@@ -653,7 +653,7 @@ const PGRDetails = () => {
                     inline: true,
                     label: t("CS_COMPLAINT_DETAILS_COMPLAINT_NO"),
                     type: "text",
-                    value: pgrData?.ServiceWrappers[0].service?.serviceRequestId || "NA",
+                    value: pgrData?.ServiceWrappers[0].service?.serviceRequestId || t("ES_COMMON_NA"),
                   },
                   // Hierarchy tenants: one row per level (Main Category › Sector ›
                   // Sub-Type …). Flat tenants: the legacy Type + Sub-Type pair.
@@ -662,7 +662,7 @@ const PGRDetails = () => {
                         inline: true,
                         label: r.label,
                         type: "text",
-                        value: r.value || "NA",
+                        value: r.value || t("ES_COMMON_NA"),
                       }))
                     : [
                         {
@@ -691,7 +691,7 @@ const PGRDetails = () => {
                         inline: true,
                         label: r.label,
                         type: "text",
-                        value: r.value || "NA",
+                        value: r.value || t("ES_COMMON_NA"),
                       }))
                     : [
                         {
@@ -709,7 +709,7 @@ const PGRDetails = () => {
                   {
                     inline: true,
                     label: t("CS_COMPLAINT_LANDMARK__DETAILS"),
-                    value: pgrData?.ServiceWrappers[0].service?.address?.landmark || "NA",
+                    value: pgrData?.ServiceWrappers[0].service?.address?.landmark || t("ES_COMMON_NA"),
                   },
                   // Pincode is optional in this deployment; only show it when set.
                   ...(pgrData?.ServiceWrappers[0].service?.address?.pincode
@@ -725,7 +725,7 @@ const PGRDetails = () => {
                   {
                     inline: true,
                     label: t("CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS_DESCRIPTION"),
-                    value: pgrData?.ServiceWrappers[0].service?.description || "NA",
+                    value: pgrData?.ServiceWrappers[0].service?.description || t("ES_COMMON_NA"),
                   },
                 ],
               },

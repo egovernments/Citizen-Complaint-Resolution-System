@@ -1,0 +1,1657 @@
+[
+  {
+    "code": "DASHBOARD_BADGE_BOTTLENECK",
+    "message": "BLOCAGE",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_BADGE_LOW",
+    "message": "FAIBLE",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_BADGE_ON_TRACK",
+    "message": "Dans les délais",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_CARD_HEADER",
+    "message": "Tableau de bord",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_CHANNEL_CSC",
+    "message": "Guichet (CSC)",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_CHANNEL_EMAIL",
+    "message": "E-mail",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_CHANNEL_IVR",
+    "message": "IVR",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_CHANNEL_MOBILE",
+    "message": "Mobile",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_CHANNEL_OTHER",
+    "message": "Autre",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_CHANNEL_SMS",
+    "message": "SMS",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_CHANNEL_WALK_IN",
+    "message": "Sur place",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_CHANNEL_WEB",
+    "message": "Web",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_CHANNEL_WHATSAPP",
+    "message": "WhatsApp",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COL_ASSIGNED",
+    "message": "Attribuées",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COL_AVG_RESOLUTION_TIME",
+    "message": "Temps moyen de résolution",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COL_BREACH_DURATION",
+    "message": "Durée de dépassement",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COL_CSAT",
+    "message": "CSAT",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COL_DEPT",
+    "message": "Dép.",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COL_ESCALATION_RATE",
+    "message": "Taux d'escalade",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COL_ID",
+    "message": "ID",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COL_LOCALITY",
+    "message": "Localité",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COL_NAME",
+    "message": "Nom",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COL_OLDEST_COMPLAINT",
+    "message": "Réclamation la plus ancienne",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COL_OPEN",
+    "message": "Ouvertes",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COL_OWNER",
+    "message": "Responsable",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COL_OWNER_ROLE",
+    "message": "Rôle du responsable",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COL_REOPEN_RATE",
+    "message": "Taux de réouverture",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COL_RESOLVED",
+    "message": "Résolues",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COL_RESOLVED_ON_TIME_RATE",
+    "message": "Taux de résolution dans les délais",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COL_ROLE",
+    "message": "Rôle",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COL_SLA",
+    "message": "SLA",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COL_SLA_STATUS",
+    "message": "Statut SLA",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COL_STATUS",
+    "message": "Statut",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COL_SUBTYPE",
+    "message": "Sous-catégorie",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COL_TYPE",
+    "message": "Catégorie",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COMMON_BATCH_FAILED",
+    "message": "Échec de la requête groupée",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COMMON_CATALOG_UNAVAILABLE",
+    "message": "Catalogue indisponible",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COMMON_COUNT",
+    "message": "Nombre",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COMMON_CREATED",
+    "message": "créées",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COMMON_DAYS",
+    "message": "jours",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COMMON_LOADING",
+    "message": "Chargement…",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COMMON_NO_DATA",
+    "message": "Aucune donnée",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COMMON_NO_TILES_FOR_ROLE",
+    "message": "Aucune tuile dans le pack du catalogue pour ce rôle.",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COMMON_REMOVE",
+    "message": "Retirer",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COMMON_REMOVE_FROM_DASHBOARD",
+    "message": "Retirer du tableau de bord",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COMMON_RESOLVED",
+    "message": "résolues",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COMMON_UPDATED",
+    "message": "Mis à jour",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COMMON_UPDATED_JUST_NOW",
+    "message": "à l'instant",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COMMON_UPDATED_MIN_AGO",
+    "message": "il y a {{n}} min",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COMMON_UPDATED_HR_AGO",
+    "message": "il y a {{n}} h",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COMMON_UPDATED_HRS_AGO",
+    "message": "il y a {{n}} h",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COMMON_UPDATED_DAY_AGO",
+    "message": "il y a {{n}} jour",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COMMON_UPDATED_DAYS_AGO",
+    "message": "il y a {{n}} jours",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COMMON_UNASSIGNED",
+    "message": "Non attribué",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COMMON_UNKNOWN",
+    "message": "Inconnu",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_DOW_FRI",
+    "message": "Ven",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_DOW_MON",
+    "message": "Lun",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_DOW_SAT",
+    "message": "Sam",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_DOW_SUN",
+    "message": "Dim",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_DOW_THU",
+    "message": "Jeu",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_DOW_TUE",
+    "message": "Mar",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_DOW_WED",
+    "message": "Mer",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_EXPORT_COL_KPI",
+    "message": "KPI",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_EXPORT_COL_TITLE",
+    "message": "Titre",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_EXPORT_COL_VALUE",
+    "message": "Valeur",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_EXPORT_ROWS",
+    "message": "lignes",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_ALL_TYPES",
+    "message": "Toutes les catégories",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_ALL_WARDS",
+    "message": "Tous les quartiers",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_CLEAR",
+    "message": "Effacer",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_COMPLAINT_TYPE",
+    "message": "Catégorie de réclamation",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_COMPLAINT_TYPE_FILTER",
+    "message": "Filtre de catégorie de réclamation",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_FROM",
+    "message": "Du",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_FROM_DATE",
+    "message": "Date de début",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_GEOGRAPHY",
+    "message": "Géographie",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_TITLE",
+    "message": "Filtres",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_TO",
+    "message": "Au",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_TO_DATE",
+    "message": "Date de fin",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_WARD_FILTER",
+    "message": "Filtre de quartier",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_GEO_LEVEL_0",
+    "message": "Comté",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_GEO_LEVEL_1",
+    "message": "Sous-comté",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_GEO_LEVEL_2",
+    "message": "Quartier",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_GEO_LEVEL_3",
+    "message": "Réclamations",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_GROUPBY_LABEL",
+    "message": "Regrouper par",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_GROUPBY_LEAF",
+    "message": "Feuille",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_GROUPBY_LEVEL_CATEGORY",
+    "message": "Catégorie",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_GROUPBY_LEVEL_SUB_TYPE",
+    "message": "Sous-catégorie",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_HEADER_ADD",
+    "message": "Ajouter",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_HEADER_ADD_KPI",
+    "message": "Ajouter un KPI",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_HEADER_ALL_KPIS_ON_DASHBOARD",
+    "message": "Tous les KPI disponibles sont déjà sur votre tableau de bord",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_HEADER_ALL_LOCALITIES",
+    "message": "Toutes les localités",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_HEADER_AREA",
+    "message": "Secteur",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_HEADER_AREA_SCOPED",
+    "message": "Limité au secteur",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_HEADER_AVAILABLE_KPIS",
+    "message": "KPI disponibles",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_HEADER_SEARCH_KPIS",
+    "message": "Rechercher des indicateurs",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_HEADER_NO_KPI_MATCHES",
+    "message": "Aucun indicateur ne correspond à votre recherche",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_HEADER_EXPORT",
+    "message": "Exporter",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_HEADER_EXPORT_DASHBOARD",
+    "message": "Exporter le tableau de bord",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_HEADER_KPIS_AVAILABLE",
+    "message": "KPI accessibles à votre rôle",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_HEADER_LANGUAGE",
+    "message": "Langue",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_HEADER_LAST_7_DAYS",
+    "message": "7 derniers jours",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_HEADER_NO_KPIS_FOR_ROLE",
+    "message": "Aucun KPI disponible pour votre rôle",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_HEADER_OFFICER_KPIS_HIDDEN",
+    "message": "KPI des agents : masqués",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_HEADER_OFFICER_KPIS_HIDDEN_TOOLTIP",
+    "message": "Les KPI au niveau agent (par employé) sont masqués pour votre rôle",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_HEADER_OFFICER_KPIS_VISIBLE",
+    "message": "KPI des agents : visibles",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_HEADER_OFFICER_KPIS_VISIBLE_TOOLTIP",
+    "message": "Votre rôle peut voir les KPI au niveau agent (par employé)",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_HEADER_OPERATIONS",
+    "message": "Opérations",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_HEADER_PGR_OPERATIONS",
+    "message": "Opérations PGR",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_HEADER_PUBLIC_SUBTITLE",
+    "message": "Vue publique",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_HEADER_RESET",
+    "message": "Réinitialiser",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_HEADER_RESET_LAYOUT",
+    "message": "Réinitialiser la disposition",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_HEADER_ROLE_SCOPE_TOOLTIP",
+    "message": "Les tuiles du tableau de bord sont limitées à votre rôle par le catalogue analytique",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_HEADER_ROW_SCOPE_TOOLTIP",
+    "message": "Les données du tableau de bord sont limitées par ligne à votre ou vos services",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_HEADER_SCOPED_TO",
+    "message": "Limité à",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_HEADER_SEARCH_PLACEHOLDER",
+    "message": "Rechercher des réclamations, quartiers, citoyens.",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_HEADER_SHOWING",
+    "message": "Affichage de",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_HEADER_TARGET",
+    "message": "Cible",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_HEADER_TITLE",
+    "message": "Opérations de résolution des réclamations",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_HEADER_TYPE_CHART",
+    "message": "GRAPHIQUE",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_HEADER_TYPE_STAT",
+    "message": "STAT",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_HEADER_TYPE_TABLE",
+    "message": "TABLEAU",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_KPI_DISPLAY_CE_METRIC_REOPEN_RATE",
+    "message": "Taux de réouverture",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_KPI_DISPLAY_CL_METRIC_AVG_RESOLUTION_TIME",
+    "message": "Délai moyen de résolution",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_KPI_DISPLAY_CL_METRIC_CREATED_TODAY",
+    "message": "Réclamations créées aujourd'hui",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_KPI_DISPLAY_CL_METRIC_CSAT",
+    "message": "Satisfaction citoyenne",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_KPI_DISPLAY_CL_METRIC_FIRST_ASSIGNMENT_RATE",
+    "message": "Taux de première affectation",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_KPI_DISPLAY_CL_METRIC_NEW_CREATED",
+    "message": "Nouvelles réclamations créées",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_KPI_DISPLAY_CL_METRIC_OLDEST_OPEN",
+    "message": "Réclamation la plus ancienne",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_KPI_DISPLAY_CL_METRIC_REOPEN_RATE",
+    "message": "Taux de réouverture",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_KPI_DISPLAY_CL_METRIC_RESOLUTION_RATE",
+    "message": "Taux de résolution",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_KPI_DISPLAY_CL_METRIC_RESOLVED_ON_TIME_RATE",
+    "message": "Taux de résolution dans les délais",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_KPI_DISPLAY_CL_METRIC_SLA_COMPLIANCE_RATE",
+    "message": "Taux de conformité SLA",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_KPI_DISPLAY_CL_METRIC_SLA_NON_COMPLIANCE_RATE",
+    "message": "Taux de non-conformité SLA",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_KPI_DISPLAY_CL_METRIC_TOTAL_OPEN",
+    "message": "Réclamations ouvertes",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_KPI_DISPLAY_CL_METRIC_TOTAL_RESOLVED",
+    "message": "Réclamations résolues",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_KPI_DISPLAY_RS_METRIC_BREACH_COUNT",
+    "message": "SLA dépassé (ouvertes)",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_KPI_DISPLAY_RS_METRIC_SLA_COMPLIANCE",
+    "message": "Taux de résolution dans les délais",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_LOGIN_DEMO_HEALTH",
+    "message": "Agent de santé",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_LOGIN_DEMO_HEALTH_HINT",
+    "message": "Service médical uniquement",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_LOGIN_DEMO_LOGINS",
+    "message": "Comptes de démonstration",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_LOGIN_DEMO_SUPERVISOR",
+    "message": "Superviseur",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_LOGIN_DEMO_SUPERVISOR_HINT",
+    "message": "tous les services",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_LOGIN_DEMO_WATER",
+    "message": "Agent des eaux",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_LOGIN_DEMO_WATER_HINT",
+    "message": "Service des eaux uniquement",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_LOGIN_ENTER_CREDENTIALS",
+    "message": "Saisissez un nom d'utilisateur et un mot de passe.",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_LOGIN_FILL",
+    "message": "Remplir",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_LOGIN_PASSWORD",
+    "message": "Mot de passe",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_LOGIN_SIGN_IN",
+    "message": "Se connecter",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_LOGIN_SIGN_IN_FAILED",
+    "message": "Échec de la connexion",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_LOGIN_SIGNING_IN",
+    "message": "Connexion…",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_LOGIN_SESSION_EXPIRED",
+    "message": "Votre session a expiré. Veuillez vous reconnecter.",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_LOGIN_SUBTITLE",
+    "message": "Connectez-vous au tableau de bord des opérations",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_LOGIN_TENANT",
+    "message": "tenant",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_LOGIN_USERNAME",
+    "message": "Nom d'utilisateur",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_LOGIN_USERNAME_PLACEHOLDER",
+    "message": "ex. DEMO_SUPERVISOR",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_AREA",
+    "message": "Secteur",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_AREAS",
+    "message": "secteurs",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_BOUNDARIES_ERROR",
+    "message": "Impossible de charger les limites des quartiers",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_CLEAR",
+    "message": "Effacer",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_COMPLAINT_COUNT_PLURAL",
+    "message": "réclamations",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_COMPLAINT_COUNT_SINGULAR",
+    "message": "réclamation",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_EXIT_FULLSCREEN",
+    "message": "Quitter le plein écran",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_FILTER",
+    "message": "Filtre :",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_FULLSCREEN",
+    "message": "Plein écran",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_HOVER_CREATED",
+    "message": "Créées",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_HOVER_OPEN",
+    "message": "Ouvertes",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_HOVER_PCT_OPEN",
+    "message": "% Ouvertes",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_HOVER_PCT_RESOLVED",
+    "message": "% Résolues",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_HOVER_RESOLVED",
+    "message": "Résolues",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_HOVER_TOTAL_CREATED",
+    "message": "Total créées",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LAYER_CREATED",
+    "message": "Créées",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LAYER_OPEN",
+    "message": "Ouvertes",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LAYER_RESOLVED",
+    "message": "Résolues",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_COLLAPSE",
+    "message": "Réduire la légende",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_EXPAND",
+    "message": "Développer la légende",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_FOOTER_FOCUS",
+    "message": " pour cibler",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_FOOTER_ZOOM",
+    "message": "Zoom avant pour explorer · cliquez sur un ",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_NO_COMPLAINTS",
+    "message": "Aucune réclamation",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_PCT_0",
+    "message": "0%",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_PCT_20_40",
+    "message": "20–40%",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_PCT_40_60",
+    "message": "40–60%",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_PCT_60_80",
+    "message": "60–80%",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_PCT_GT_80",
+    "message": "> 80%",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_PCT_LTE_20",
+    "message": "≤ 20%",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_PINS_COVERAGE_OF",
+    "message": " sur ",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_PINS_COVERAGE_SUFFIX",
+    "message": " affichées sur la carte (les autres n'ont pas de localisation)",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_PINS_CREATED",
+    "message": "Points : réclamations enregistrées",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_PINS_OPEN",
+    "message": "Points : réclamations encore ouvertes",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_PINS_OPEN_ONLY",
+    "message": "Points : réclamations encore ouvertes — les points ne suivent pas ce calque",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_PINS_RESOLVED",
+    "message": "Points : réclamations résolues",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_PINS_TRUNCATED",
+    "message": "Affichage des 1 000 plus récentes uniquement",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_PINS_UNMAPPED",
+    "message": " réclamations n'ont pas de quartier et ne sont pas cartographiées",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_TITLE",
+    "message": "Légende de la carte",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_TITLE_CREATED",
+    "message": "Créées",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_TITLE_OPEN",
+    "message": "% Ouvertes",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_TITLE_RESOLVED",
+    "message": "% Résolues",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LOADING",
+    "message": "Chargement…",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LOADING_BOUNDARIES",
+    "message": "Chargement des limites…",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LOCATE_ME",
+    "message": "Me localiser",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_NO_GEO_DATA",
+    "message": "Aucune donnée géographique",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_PIN_APPROXIMATE",
+    "message": "Emplacement approximatif (centroïde du quartier)",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_PIN_CHANNEL",
+    "message": "Canal",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_PIN_COMPLAINT",
+    "message": "Réclamation",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_PIN_FILED",
+    "message": "Déposée",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_PIN_ID",
+    "message": "ID",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_PIN_SLA",
+    "message": "SLA",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_PIN_STATUS",
+    "message": "Statut",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_PIN_WARD",
+    "message": "Quartier",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_PINS_UNAVAILABLE",
+    "message": "Épingles de réclamation indisponibles : l'API analytique doit exposer latitude, longitude et service_request_id au grain des faits.",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_REGION",
+    "message": "Région",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_RESET",
+    "message": "Réinitialiser",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_RESET_VIEW",
+    "message": "Réinitialiser la vue",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_TITLE",
+    "message": "Carte des réclamations",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_ZONE",
+    "message": "Zone",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_ZOOM",
+    "message": "zoom",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_PUBLIC_NOT_AVAILABLE_DESCRIPTION",
+    "message": "Ce tableau de bord n'a pas été activé pour cette collectivité.",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_PUBLIC_NOT_AVAILABLE_TITLE",
+    "message": "Le tableau de bord public n'est pas disponible",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_SERIES_CREATED",
+    "message": "Créées",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_SERIES_FILED",
+    "message": "Déposées",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_SERIES_OPEN",
+    "message": "Ouvertes",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_SERIES_RESOLUTION_RATE",
+    "message": "Taux de résolution",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_SERIES_RESOLVED",
+    "message": "Résolues",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_SERIES_SLA_COMPLIANCE_RATE",
+    "message": "Taux de conformité SLA",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_SIDEBAR_DASHBOARD",
+    "message": "Tableau de bord",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_SIDEBAR_NOT_SIGNED_IN",
+    "message": "Non connecté",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_SIDEBAR_SIGN_OUT",
+    "message": "Se déconnecter",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_SLA_APPROACHING",
+    "message": "Proche du dépassement",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_SLA_BREACHED",
+    "message": "Dépassé",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_SLA_NEARING",
+    "message": "Proche du dépassement",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_SLA_WITHIN",
+    "message": "Dans les délais",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_TABLE_EMPTY_AT_RISK",
+    "message": "Aucune réclamation à risque",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_TABLE_SORT_ASCENDING",
+    "message": "croissant",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_TABLE_SORT_BY",
+    "message": "Trier par",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_TABLE_SORT_DESCENDING",
+    "message": "décroissant",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_TILE_ARIA_DONUT",
+    "message": "Graphique en anneau",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_TILE_CTX_ACROSS_RESOLVED",
+    "message": "Sur les résolues",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_TILE_CTX_BREACHED_OPEN",
+    "message": "Ouvertes en dépassement",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_TILE_CTX_COMPLAINTS",
+    "message": "réclamations",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_TILE_CTX_CSAT",
+    "message": "CSAT",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_TILE_CTX_OPEN_COMPLAINTS",
+    "message": "réclamations ouvertes",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_TILE_CTX_OUT_OF",
+    "message": "Sur",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_TILE_ERR_FAILED_TO_LOAD",
+    "message": "Échec du chargement",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_TILE_ERR_GENERIC",
+    "message": "ERREUR",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_TILE_ERR_NO_ACCESS",
+    "message": "Aucun accès",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_TILE_ERR_OUT_OF_SCOPE",
+    "message": "Hors périmètre",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_TILE_ERR_RESTRICTED",
+    "message": "Restreint",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_TILE_LEGEND_CATCHING_UP",
+    "message": "En rattrapage (≥1.0)",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_TILE_LEGEND_FALLING_BEHIND",
+    "message": "En retard (<1.0)",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_TILE_NO_LIST_DATA",
+    "message": "Aucune donnée de liste",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_TILE_REMOVE",
+    "message": "Retirer du tableau de bord",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_TILE_REMOVE_ARIA",
+    "message": "Retirer",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_TILE_SERIES_RESOLUTION_RATE",
+    "message": "Taux de résolution",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_TYPE_FILTER_ALL_IN",
+    "message": "Tout dans",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_TYPE_FILTER_NOT_APPLIED",
+    "message": "Filtre de catégorie non appliqué",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_UNIT_D",
+    "message": "j",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_UNIT_DAY",
+    "message": "jour",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_UNIT_DAYS",
+    "message": "jours",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_UNIT_HR",
+    "message": "h",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_UNIT_HRS",
+    "message": "h",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_WF_STAGE_ASSIGNED",
+    "message": "Attribuée",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_WF_STAGE_IN_PROGRESS",
+    "message": "En cours",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_WF_STAGE_OPEN",
+    "message": "Ouverte",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_WF_STAGE_PENDINGATLME",
+    "message": "Attribuée",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_WF_STAGE_PENDINGATSUPERVISOR",
+    "message": "En attente chez le superviseur",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_WF_STAGE_PENDINGFORASSIGNMENT",
+    "message": "En attente d'attribution",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_WF_STAGE_PENDINGFORREASSIGNMENT",
+    "message": "En attente de réattribution",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_WF_STAGE_REOPENED",
+    "message": "Rouverte",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_AVG_RESOLUTION_TIME",
+    "message": "Temps moyen de résolution",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_AVG_RESOLUTION_TIME_SUBTITLE",
+    "message": "Durée moy. de résolution",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_COMPLAINTS_BY_TYPE",
+    "message": "Réclamations par catégorie",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_COMPLAINTS_BY_TYPE_SUBTITLE",
+    "message": "Réclamations déposées, par catégorie",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_COMPLAINTS_OVER_TIME",
+    "message": "Réclamations au fil du temps",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_COMPLAINTS_OVER_TIME_SUBTITLE",
+    "message": "Créées, résolues et ouvertes par jour",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_DEPARTMENT_BREACH_SCATTER",
+    "message": "Taux de dépassement vs charge de travail par service",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_DEPARTMENT_BREACH_SCATTER_SUBTITLE",
+    "message": "Charge ouverte vs taux de dépassement en fin de période",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_DEPARTMENT_FLOW_RATIO",
+    "message": "Ratio de flux par service",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_DEPARTMENT_FLOW_RATIO_SUBTITLE",
+    "message": "Résolues ÷ créées",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_DEPARTMENT_RESOLUTION_RATE",
+    "message": "Taux de résolution par service",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_DEPARTMENT_RESOLUTION_RATE_SUBTITLE",
+    "message": "Résolues ÷ déposées par service",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_DEPARTMENTS_BY_TYPE",
+    "message": "Réclamations par service",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OFFICER_SLA",
+    "message": "Agents ayant le plus de réclamations ouvertes",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OFFICER_SLA_SUBTITLE",
+    "message": "Réclamations ouvertes par état SLA et par agent",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OPEN_BY_AGE",
+    "message": "Réclamations par ancienneté",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OPEN_BY_AGE_SUBTITLE",
+    "message": "Réclamations ouvertes par tranche d'ancienneté",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OPEN_BY_CHANNEL",
+    "message": "Réclamations par canal",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OPEN_BY_CHANNEL_SUBTITLE",
+    "message": "Réclamations ouvertes par canal de réception",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OPEN_BY_TYPE_STAGE",
+    "message": "Réclamations ouvertes par étape du flux de travail",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OPEN_BY_TYPE_STAGE_SUBTITLE",
+    "message": "Sous-catégories comptant le plus de réclamations ouvertes, chacune ventilée selon l'étape du flux de travail où elles sont bloquées.",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OVER_TIME_CREATED_DAILY",
+    "message": "Réclamations au fil du temps",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OVER_TIME_OPEN_DAILY",
+    "message": "Réclamations ouvertes au fil du temps (quotidien)",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_WARDS_BY_SLA",
+    "message": "Réclamations par quartier",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_WARDS_BY_SLA_SUBTITLE",
+    "message": "Toutes les réclamations par état SLA — par quartier",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CREATED_TODAY_COUNT",
+    "message": "Réclamations créées aujourd'hui",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CSAT_AVG",
+    "message": "Satisfaction des citoyens",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CSAT_AVG_SUBTITLE",
+    "message": "Note moy. des réclamations résolues",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_FIRST_ASSIGNMENT_RATE_COUNT",
+    "message": "Taux de première attribution",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_FIRST_ASSIGNMENT_RATE_COUNT_SUBTITLE",
+    "message": "Jamais réattribuées ÷ attribuées",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_FLOW_RATIO_COUNT",
+    "message": "Ratio de flux",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_FLOW_RATIO_COUNT_SUBTITLE",
+    "message": "Résolues sur la période ÷ créées sur la période",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_MAP_COMPLAINT_PINS",
+    "message": "Localisation des réclamations",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_MAP_WARD_WOW_CURRENT",
+    "message": "Carte des réclamations (d'une semaine à l'autre)",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_NEW_CREATED_COUNT",
+    "message": "Nouvelles réclamations créées",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_OLDEST_OPEN_AGE",
+    "message": "Réclamation la plus ancienne",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_OLDEST_OPEN_AGE_SUBTITLE",
+    "message": "Réclamation ouverte la plus ancienne",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_OPEN_COMPLAINTS_LIVE",
+    "message": "Réclamations ouvertes",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_REOPEN_RATE_COUNT",
+    "message": "Taux de réouverture",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_REOPEN_RATE_COUNT_SUBTITLE",
+    "message": "Rouvertes ÷ résolues",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_RESOLUTION_RATE_COUNT",
+    "message": "Taux de résolution",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_RESOLVED_DATE_RANGE_COUNT",
+    "message": "Réclamations résolues",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_RESOLVED_ON_TIME_RATE_COUNT",
+    "message": "Taux de résolution dans les délais",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_SLA_COMPLIANCE_RATE_COUNT",
+    "message": "Taux de conformité SLA",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_SLA_COMPLIANCE_RATE_COUNT_SUBTITLE",
+    "message": "Résolues dans le SLA ÷ toutes déposées",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_SLA_NONCOMPLIANCE_RATE_COUNT",
+    "message": "Taux de non-conformité SLA",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_SLA_NONCOMPLIANCE_RATE_COUNT_SUBTITLE",
+    "message": "SLA dépassé ÷ toutes les réclamations",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_COMPLAINT_TYPE_DETAILS",
+    "message": "Détails par catégorie de réclamation",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_COMPLAINT_TYPE_DETAILS_SUBTITLE",
+    "message": "Indicateurs de résolution, de SLA et de réouverture par catégorie de réclamation - toutes les réclamations, restreintes par le filtre de date",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_COMPLAINTS_AT_RISK",
+    "message": "Réclamations à risque",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_COMPLAINTS_AT_RISK_SUBTITLE",
+    "message": "Réclamations ouvertes proches du SLA ou en dépassement",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_RECURRING_WARD_SUBTYPE",
+    "message": "Réclamations récurrentes par quartier et sous-catégorie",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_RECURRING_WARD_SUBTYPE_SUBTITLE",
+    "message": "Paires quartier × sous-catégorie avec ≥ 3 réclamations sur la période",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_SERVICE_QUALITY_BY_CHANNEL",
+    "message": "Qualité de service par canal",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_SERVICE_QUALITY_BY_CHANNEL_SUBTITLE",
+    "message": "Volume, taux de résolution et CSAT par canal de réception",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_SUBTYPE_PERFORMANCE",
+    "message": "Performance par sous-catégorie de réclamation",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_SUBTYPE_PERFORMANCE_SUBTITLE",
+    "message": "Part, temps de résolution et SLA par sous-catégorie",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_WARD_OPEN_DAILY",
+    "message": "Réclamations ouvertes par quartier (quotidien)",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_WARD_PERFORMANCE",
+    "message": "Performance des quartiers",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_WARD_PERFORMANCE_SUBTITLE",
+    "message": "Créées, ouvertes, réouvertures, respect des délais et CSAT par quartier",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TOTAL_COMPLAINTS_COUNT",
+    "message": "Total des réclamations",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TOTAL_COMPLAINTS_COUNT_SUBTITLE",
+    "message": "Réclamations déposées sur la période",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_EP_TABLE_EMPLOYEE_PERFORMANCE",
+    "message": "Performance des agents",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_EP_TABLE_EMPLOYEE_PERFORMANCE_SUBTITLE",
+    "message": "Indicateurs de charge de travail et de qualité par agent",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_RS_BREACH_TOTAL",
+    "message": "SLA dépassé (ouvertes)",
+    "module": "rainmaker-dashboard"
+  }
+]

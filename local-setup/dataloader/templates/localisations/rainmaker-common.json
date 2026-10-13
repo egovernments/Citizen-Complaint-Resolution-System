@@ -9892,5 +9892,65 @@
         "message": "This site is not available.",
         "module": "rainmaker-common",
         "locale": "en_IN"
+    },
+    {
+        "code": "BACK",
+        "message": "Back",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_COMMON_HOME",
+        "message": "Home",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_COMMON_PROFILE_PREFERENCE_UPDATE_ERROR",
+        "message": "We couldn't save your notification preferences. Please try again.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_COMMON_PROFILE_UPDATE_ERROR",
+        "message": "We couldn't save your profile. Please try again.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_CONFIGURE_TOTP",
+        "message": "Set up an authenticator",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_SURFACE_CITIZEN",
+        "message": "Citizen portal",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_SURFACE_CONFIGURATOR",
+        "message": "Configurator",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_SURFACE_EMPLOYEE",
+        "message": "Employee portal",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_UPDATE_EMAIL",
+        "message": "Change email address",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_UPDATE_PASSWORD",
+        "message": "Set or update password",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
     }
 ]

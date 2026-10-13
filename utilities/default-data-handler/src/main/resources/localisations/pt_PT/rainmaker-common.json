@@ -24,6 +24,12 @@
         "locale": "pt_PT"
     },
     {
+        "code": "BACK",
+        "message": "Voltar",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
         "code": "CALL_CENTER_HELPLINE",
         "message": "Centro de atendimento / Linha de apoio",
         "module": "rainmaker-common",
@@ -180,6 +186,12 @@
         "locale": "pt_PT"
     },
     {
+        "code": "CORE_COMMON_HOME",
+        "message": "Início",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
         "code": "CORE_COMMON_LANGUAGE",
         "message": "Idioma",
         "module": "rainmaker-common",
@@ -312,6 +324,18 @@
         "locale": "pt_PT"
     },
     {
+        "code": "CORE_COMMON_PROFILE_PREFERENCE_UPDATE_ERROR",
+        "message": "Não foi possível guardar as suas preferências de notificação. Tente novamente.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_PROFILE_UPDATE_ERROR",
+        "message": "Não foi possível guardar o seu perfil. Tente novamente.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
         "code": "CORE_COMMON_PROFILE_UPDATE_SUCCESS",
         "message": "Perfil atualizado com sucesso",
         "module": "rainmaker-common",
@@ -410,6 +434,12 @@
     {
         "code": "CORE_IDENTITY_CHOOSE_ORGANISATION",
         "message": "Escolha a sua organização",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_CONFIGURE_TOTP",
+        "message": "Configurar uma aplicação de autenticação",
         "module": "rainmaker-common",
         "locale": "pt_PT"
     },
@@ -732,6 +762,24 @@
         "locale": "pt_PT"
     },
     {
+        "code": "CORE_IDENTITY_SURFACE_CITIZEN",
+        "message": "Portal do cidadão",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_SURFACE_CONFIGURATOR",
+        "message": "Configurador",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_SURFACE_EMPLOYEE",
+        "message": "Portal dos funcionários",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
         "code": "CORE_IDENTITY_TENANT_FORBIDDEN",
         "message": "A sua conta não tem acesso a {{tenant}}.",
         "module": "rainmaker-common",
@@ -764,6 +812,18 @@
     {
         "code": "CORE_IDENTITY_UNLINK_PROVIDER",
         "message": "Desassociar fornecedor",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_UPDATE_EMAIL",
+        "message": "Alterar o endereço de email",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_UPDATE_PASSWORD",
+        "message": "Definir ou alterar a palavra-passe",
         "module": "rainmaker-common",
         "locale": "pt_PT"
     },
@@ -1058,6 +1118,12 @@
     {
         "code": "CS_LINK_LOGIN_DSO",
         "message": "Início de sessão DSO",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_LOADING",
+        "message": "A carregar...",
         "module": "rainmaker-common",
         "locale": "pt_PT"
     },

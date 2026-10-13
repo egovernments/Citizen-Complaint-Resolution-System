@@ -24,6 +24,12 @@
         "locale": "fr_FR"
     },
     {
+        "code": "ASSIGN_SUCCESSFULLY",
+        "message": "Attribution réussie",
+        "module": "rainmaker-pgr",
+        "locale": "fr_FR"
+    },
+    {
         "code": "COMPLAINTS_COMPLAINANT_CONTACT_NUMBER",
         "message": "N° de téléphone du plaignant",
         "module": "rainmaker-pgr",
@@ -240,6 +246,12 @@
         "locale": "fr_FR"
     },
     {
+        "code": "CS_COMMON_COMPLAINT_SUBMIT_RETRY",
+        "message": "Un problème est survenu lors de l'envoi de votre réclamation. Veuillez réessayer.",
+        "module": "rainmaker-pgr",
+        "locale": "fr_FR"
+    },
+    {
         "code": "CS_COMMON_COPIED",
         "message": "Copié",
         "module": "rainmaker-pgr",
@@ -294,6 +306,18 @@
         "locale": "fr_FR"
     },
     {
+        "code": "CS_COMMON_LATITUDE_SHORT",
+        "message": "Lat :",
+        "module": "rainmaker-pgr",
+        "locale": "fr_FR"
+    },
+    {
+        "code": "CS_COMMON_LONGITUDE_SHORT",
+        "message": "Long :",
+        "module": "rainmaker-pgr",
+        "locale": "fr_FR"
+    },
+    {
         "code": "CS_COMMON_MOBILE_NO",
         "message": "N° de mobile",
         "module": "rainmaker-pgr",
@@ -325,6 +349,12 @@
     },
     {
         "code": "CS_COMMON_PENDINGFORASSIGNMENT",
+        "message": "En attente d'attribution",
+        "module": "rainmaker-pgr",
+        "locale": "fr_FR"
+    },
+    {
+        "code": "CS_COMMON_PENDINGFORASSIGNMENT_AFTERREOPEN",
         "message": "En attente d'attribution",
         "module": "rainmaker-pgr",
         "locale": "fr_FR"
@@ -876,6 +906,18 @@
         "locale": "fr_FR"
     },
     {
+        "code": "CS_FILE_N_PHOTOS",
+        "message": "{count} photos",
+        "module": "rainmaker-pgr",
+        "locale": "fr_FR"
+    },
+    {
+        "code": "CS_FILE_ONE_PHOTO",
+        "message": "1 photo",
+        "module": "rainmaker-pgr",
+        "locale": "fr_FR"
+    },
+    {
         "code": "CS_FILE_PHOTO",
         "message": "Ajouter une photo",
         "module": "rainmaker-pgr",
@@ -990,6 +1032,12 @@
         "locale": "fr_FR"
     },
     {
+        "code": "CS_LOADING_ADDRESS",
+        "message": "Chargement de l'adresse...",
+        "module": "rainmaker-pgr",
+        "locale": "fr_FR"
+    },
+    {
         "code": "CS_LOCATE_ME",
         "message": "Utiliser ma position actuelle",
         "module": "rainmaker-pgr",
@@ -998,6 +1046,18 @@
     {
         "code": "CS_LOCATION_NOT_FOUND",
         "message": "Lieu introuvable. Essayez une autre recherche.",
+        "module": "rainmaker-pgr",
+        "locale": "fr_FR"
+    },
+    {
+        "code": "CS_MAP_CLICK_TO_SELECT_POINTS",
+        "message": "Cliquez sur la carte pour sélectionner des points",
+        "module": "rainmaker-pgr",
+        "locale": "fr_FR"
+    },
+    {
+        "code": "CS_MAP_SELECTED_LOCATIONS",
+        "message": "Emplacements sélectionnés",
         "module": "rainmaker-pgr",
         "locale": "fr_FR"
     },
@@ -1200,6 +1260,24 @@
         "locale": "fr_FR"
     },
     {
+        "code": "CS_RATING_LABEL",
+        "message": "Note",
+        "module": "rainmaker-pgr",
+        "locale": "fr_FR"
+    },
+    {
+        "code": "CS_RATING_N_STARS",
+        "message": "{count} étoiles",
+        "module": "rainmaker-pgr",
+        "locale": "fr_FR"
+    },
+    {
+        "code": "CS_RATING_ONE_STAR",
+        "message": "1 étoile",
+        "module": "rainmaker-pgr",
+        "locale": "fr_FR"
+    },
+    {
         "code": "CS_REJECTION_DUPLICATE",
         "message": "Réclamation en double",
         "module": "rainmaker-pgr",
@@ -1380,6 +1458,18 @@
         "locale": "fr_FR"
     },
     {
+        "code": "ESCALATE",
+        "message": "Faire remonter",
+        "module": "rainmaker-pgr",
+        "locale": "fr_FR"
+    },
+    {
+        "code": "ESCALATE_SUCCESSFULLY",
+        "message": "Remontée avec succès",
+        "module": "rainmaker-pgr",
+        "locale": "fr_FR"
+    },
+    {
         "code": "ES_COMMON_CLEAR_SEARCH",
         "message": "Effacer la recherche",
         "module": "rainmaker-pgr",
@@ -1508,6 +1598,54 @@
     {
         "code": "PGR_SUB_TYPE",
         "message": "Sous-catégorie de réclamation",
+        "module": "rainmaker-pgr",
+        "locale": "fr_FR"
+    },
+    {
+        "code": "REASSIGN",
+        "message": "Réattribuer",
+        "module": "rainmaker-pgr",
+        "locale": "fr_FR"
+    },
+    {
+        "code": "REASSIGN_SUCCESSFULLY",
+        "message": "Réattribution réussie",
+        "module": "rainmaker-pgr",
+        "locale": "fr_FR"
+    },
+    {
+        "code": "REJECT",
+        "message": "Rejeter",
+        "module": "rainmaker-pgr",
+        "locale": "fr_FR"
+    },
+    {
+        "code": "REJECT_SUCCESSFULLY",
+        "message": "Rejet réussi",
+        "module": "rainmaker-pgr",
+        "locale": "fr_FR"
+    },
+    {
+        "code": "REOPEN",
+        "message": "Rouvrir",
+        "module": "rainmaker-pgr",
+        "locale": "fr_FR"
+    },
+    {
+        "code": "REOPEN_SUCCESSFULLY",
+        "message": "Rouverte avec succès",
+        "module": "rainmaker-pgr",
+        "locale": "fr_FR"
+    },
+    {
+        "code": "RESOLVE",
+        "message": "Résoudre",
+        "module": "rainmaker-pgr",
+        "locale": "fr_FR"
+    },
+    {
+        "code": "RESOLVE_SUCCESSFULLY",
+        "message": "Résolue avec succès",
         "module": "rainmaker-pgr",
         "locale": "fr_FR"
     },
