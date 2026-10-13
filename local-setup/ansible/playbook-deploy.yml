@@ -7172,6 +7172,43 @@
           POST http://127.0.0.1:18400/internal/identity/v1/tenant-routes/_backfill with
           IDENTITY_CONTROL_PLANE_TOKEN from {{ digit_dir }}/.env as the Bearer token.
 
+    # nginx answers any well-formed slug with the SPA shell, so "public UI serves
+    # the tenant route" passes for a slug no workspace owns. `/` and every
+    # tenantless /digit-ui/ link redirect to the default slug, so it must resolve
+    # to a tenant through the Identity BFF, the same lookup the SPA makes.
+    - name: "validate — digit_ui_default_tenant_slug resolves to a tenant"
+      ansible.builtin.uri:
+        url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/identity/v1/tenant-contexts/{{ digit_ui_default_tenant_slug }}"
+        status_code: [200]
+        timeout: 10
+        validate_certs: "{{ tls_enabled | default(true) }}"
+        headers: "{{ {} if (tls_enabled | default(true)) else {'Host': domain} }}"
+      register: default_slug_context
+      until: default_slug_context.status | default(0) == 200
+      retries: 6
+      delay: 10
+      failed_when: false
+      when:
+        - enable_keycloak | default(false)
+        - nginx_features.keycloak | default(false)
+        - digit_ui_default_tenant_slug | default('') | length > 0
+
+    - name: "validate — digit_ui_default_tenant_slug names a workspace"
+      ansible.builtin.assert:
+        that:
+          - default_slug_context.status | default(0) == 200
+          - (default_slug_context.json.tenant.urlSlug | default('')) == digit_ui_default_tenant_slug
+        fail_msg: >-
+          /identity/v1/tenant-contexts/{{ digit_ui_default_tenant_slug }} answered HTTP
+          {{ default_slug_context.status | default('none') }}: no workspace owns
+          digit_ui_default_tenant_slug, so `/` and every tenantless /digit-ui/ link
+          redirect to a route that cannot sign anyone in. Set it to a workspace's URL
+          slug, or leave it empty.
+      when:
+        - enable_keycloak | default(false)
+        - nginx_features.keycloak | default(false)
+        - digit_ui_default_tenant_slug | default('') | length > 0
+
     # ────────────────────────────────────────────────────────────────
     # UI-tenant fall-back: until the operator's chosen state_tenant_id is
     # bootstrapped (via /v1/tenant/bootstrap), ADMIN doesn't exist there
@@ -9044,59 +9081,69 @@
 
       when: run_ci_tests | default(false) and (run_playwright_tests | default(false))
     # D26: the UI is served only on tenant routes (/<slug>/digit-ui/), which the host
-    # nginx answers, not the :18080 container. The specs need the tenant's URL slug.
-    - name: Skip Playwright E2E without a tenant URL slug
-      ansible.builtin.debug:
-        msg: >-
-          Playwright E2E skipped: set e2e_tenant_slug (or digit_ui_default_tenant_slug)
-          to the seeded tenant's URL slug; every spec opens /<slug>/digit-ui/.
-      when:
-        - run_ci_tests | default(false) and (run_playwright_tests | default(false))
-        - (e2e_tenant_slug | default(digit_ui_default_tenant_slug | default(''), true)) | length == 0
-
-    - name: Wait for DIGIT UI to serve pages (up to 10 min)
-      shell: >-
-        curl -sf {{ _e2e_base_url }}/{{ _e2e_tenant_slug }}/digit-ui/ -o /dev/null
+    # nginx answers, not the :18080 container. The specs run on ONE root workspace
+    # (#2398: city tenants are out of scope) and read tests/integration-tests' env
+    # names: the slug, the root tenant it resolves to, and the persona logins and
+    # fixed OTP from e2e_env. Nothing here defaults a tenant or a credential. A
+    # failure fails this stage where it happens; the rescue records it so the rest
+    # of the converge still runs, and "Fail if any CI test failed" fails the play.
+    - name: Playwright E2E on the root workspace
+      when: run_ci_tests | default(false) and (run_playwright_tests | default(false))
       vars:
         _e2e_base_url: "{{ ('https://' if (tls_enabled | default(true)) else 'http://') + domain }}"
         _e2e_tenant_slug: "{{ e2e_tenant_slug | default(digit_ui_default_tenant_slug | default(''), true) }}"
-      register: ui_health
-      retries: 60
-      delay: 10
-      until: ui_health.rc == 0
-      changed_when: false
+      block:
+        - name: Require a workspace slug for the Playwright E2E
+          ansible.builtin.assert:
+            that: _e2e_tenant_slug | length > 0
+            fail_msg: >-
+              run_playwright_tests is on but no slug is set: set e2e_tenant_slug (or
+              digit_ui_default_tenant_slug) to the workspace's URL slug; every spec
+              opens /<slug>/digit-ui/.
 
-      when:
-        - run_ci_tests | default(false) and (run_playwright_tests | default(false))
-        - (e2e_tenant_slug | default(digit_ui_default_tenant_slug | default(''), true)) | length > 0
-    - name: Run Playwright E2E tests (Bomet tenant)
-      shell: |
-        cd {{ digit_dir }}/e2e-tests
-        BASE_URL={{ ('https://' if (tls_enabled | default(true)) else 'http://') + domain }} \
-        E2E_TENANT_SLUG={{ e2e_tenant_slug | default(digit_ui_default_tenant_slug | default(''), true) }} \
-        DIGIT_TENANT={{ boot_tenant | mandatory }} \
-        DIGIT_USERNAME=BOMET_ADMIN \
-        DIGIT_PASSWORD=eGov@123 \
-        DIGIT_EMPLOYEE_USER=BOMET_ADMIN \
-        DIGIT_EMPLOYEE_PASSWORD=eGov@123 \
-        CI=1 \
-        npx playwright test --config=e2e/playwright.config.ts \
-          --timeout=60000 \
-          employee-login \
-          employee-logout \
-          console-errors \
-          pgr-flow \
-          citizen-pgr-complaint-api
-      args:
-        chdir: "{{ digit_dir }}/e2e-tests"
-      register: playwright_result
-      changed_when: false
-      timeout: 900
-      ignore_errors: yes
+        - name: Wait for DIGIT UI to serve pages (up to 10 min)
+          shell: >-
+            curl -sf {{ _e2e_base_url }}/{{ _e2e_tenant_slug }}/digit-ui/ -o /dev/null
+          register: ui_health
+          retries: 60
+          delay: 10
+          until: ui_health.rc == 0
+          changed_when: false
 
-      when:
-        - run_ci_tests | default(false) and (run_playwright_tests | default(false))
-        - (e2e_tenant_slug | default(digit_ui_default_tenant_slug | default(''), true)) | length > 0
+        - name: Resolve the workspace tenant from its slug
+          ansible.builtin.uri:
+            url: "{{ _e2e_base_url }}/identity/v1/tenant-contexts/{{ _e2e_tenant_slug }}"
+            validate_certs: "{{ tls_enabled | default(true) }}"
+          register: e2e_tenant_context
+
+        - name: Require a root workspace for the Playwright E2E
+          ansible.builtin.assert:
+            that: "'.' not in e2e_tenant_context.json.tenant.tenantId"
+            fail_msg: >-
+              {{ _e2e_tenant_slug }} resolves to the city tenant
+              {{ e2e_tenant_context.json.tenant.tenantId }}; the browser E2E runs on root
+              workspaces only (#2398).
+
+        - name: Run Playwright E2E tests
+          shell: >-
+            npx playwright test --config=e2e/playwright.config.ts --timeout=60000
+            employee-login employee-logout console-errors pgr-flow citizen-pgr-complaint-api
+          args:
+            chdir: "{{ digit_dir }}/e2e-tests"
+          environment: >-
+            {{ e2e_env | default({}) | combine({
+                 'BASE_URL': _e2e_base_url,
+                 'IDENTITY_TEST_TENANT_SLUG': _e2e_tenant_slug,
+                 'DIGIT_TENANT': e2e_tenant_context.json.tenant.tenantId,
+                 'CI': '1'}) }}
+          register: playwright_result
+          changed_when: false
+          timeout: 900
+      rescue:
+        - name: Record the Playwright E2E failure for the CI summary
+          ansible.builtin.set_fact:
+            playwright_failure: "{{ ansible_failed_task.name }}: {{ ansible_failed_result.msg | default('failed') }}"
+
     - name: Show Playwright test results
       debug:
         var: playwright_result.stdout_lines | default(['(no output - possibly timed out)'])
@@ -9111,8 +9158,10 @@
         # (run_playwright_tests=false). Treat absent as "didn't run" → 0.
         xlsx_rc: "{{ xlsx_dataloader_result.rc | default(-1) }}"
         dl_rc: "{{ dataloader_regression.rc | default(-1) }}"
-        pw_rc: "{{ playwright_result.rc | default(0) }}"
-        pw_label: "{{ 'SKIPPED' if (playwright_result is not defined or playwright_result.rc is not defined) else ('PASS' if pw_rc|int == 0 else 'FAIL (exit ' + pw_rc|string + ')') }}"
+        pw_rc: "{{ playwright_result.rc | default(1 if playwright_failure is defined else 0) }}"
+        pw_label: >-
+          {{ ('FAIL (' ~ playwright_failure ~ ')') if playwright_failure is defined
+             else ('SKIPPED' if (playwright_result is not defined or playwright_result.rc is not defined) else 'PASS') }}
       debug:
         msg:
           - "===== CI TEST RESULTS ====="
@@ -9126,7 +9175,7 @@
       vars:
         xlsx_rc: "{{ xlsx_dataloader_result.rc | default(-1) }}"
         dl_rc: "{{ dataloader_regression.rc | default(-1) }}"
-        pw_rc: "{{ playwright_result.rc | default(0) }}"
+        pw_rc: "{{ playwright_result.rc | default(1 if playwright_failure is defined else 0) }}"
       fail:
         msg: |
           CI tests failed. The infra came up but a functional flow is broken.

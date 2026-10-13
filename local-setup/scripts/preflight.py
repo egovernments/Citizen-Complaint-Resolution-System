@@ -230,7 +230,7 @@ def r_boot_tenant(cfg):
 
 @rule(
     "ci-tests-need-boot-tenant",
-    "run_ci_tests drives the XLSX dataloader + Playwright against boot_tenant; "
+    "run_ci_tests drives the XLSX dataloader against boot_tenant; "
     "it was once silently defaulted to ke.bomet and ran Kenya tests against "
     "the wrong deployment. The playbook now uses `| mandatory` — this gives "
     "the answer in 2 seconds instead of mid-run.",

@@ -10,7 +10,7 @@ docker_registry: ''                     # MCP without a registry
 digit_ui_mode: docker                   # not a valid mode
 run_ci_tests: true                      # no boot_tenant
 state_tenant_id: ke
-boot_tenant: mz.maputo                  # outside the state root
+boot_tenant: mz                         # outside the state root
 core_mobile_configs:
   mobileNumberRegex: '^[17('            # does not compile
 bootstrap_secrets:
