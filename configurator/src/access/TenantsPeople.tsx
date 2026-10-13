@@ -27,9 +27,9 @@ function AreaTree({ nodes, picked, onToggle, depth = 0, cover }: { nodes: AreaNo
         const inherited = cover.has(n.code) && !picked.has(n.code);
         return (
           <div key={n.code}>
-            <label className="flex items-center gap-2 py-1 text-sm" style={{ paddingLeft: depth * 18 }}>
+            <label className="flex min-w-0 flex-wrap items-center gap-x-2 py-1 text-sm" style={{ paddingLeft: depth * 18 }}>
               <input type="checkbox" checked={cover.has(n.code)} disabled={inherited} onChange={() => onToggle(n.code)} aria-label={n.code} />
-              <span>{n.code}</span><span className="text-xs text-muted-foreground">{n.boundaryType}</span>
+              <span className="min-w-0 break-all">{n.code}</span><span className="text-xs text-muted-foreground">{n.boundaryType}</span>
             </label>
             {depth < 2 && n.children.length > 0 && <AreaTree nodes={n.children} picked={picked} cover={cover} onToggle={onToggle} depth={depth + 1} />}
           </div>
@@ -132,15 +132,17 @@ export default function TenantsPeople() {
   };
 
   return (
-    <div className="flex flex-col gap-6 p-6 lg:flex-row" data-testid="tenants-people">
+    <div className="flex flex-col gap-4 p-6" data-testid="tenants-people">
+      <AccessTitle level={1} className="text-2xl">Roles by tenant</AccessTitle>
+      <div className="flex flex-col gap-6 lg:flex-row">
       <Card className="w-full lg:w-72 lg:self-start">
         <CardHeader><AccessTitle level={2} className="text-base">Tenants</AccessTitle></CardHeader>
         <CardContent className="flex max-h-[70vh] flex-col gap-1 overflow-auto">
           {tenants.map((t) => (
             <button key={t.code} type="button" onClick={() => setTenant(t.code)} data-testid={`tenant-${t.code}`}
-              className={`flex justify-between rounded px-2 py-1.5 text-left text-sm ${t.code === tenant ? 'bg-primary/10 font-semibold' : 'hover:bg-muted'}`}
+              className={`flex min-w-0 flex-col items-start rounded px-2 py-1.5 text-left text-sm ${t.code === tenant ? 'bg-primary/10 font-semibold' : 'hover:bg-muted'}`}
               style={{ paddingLeft: 8 + (t.code.split('.').length - 1) * 14 }}>
-              <span className="truncate">{t.name}</span><span className="font-mono text-xs text-muted-foreground">{t.code}</span>
+              <span className="max-w-full truncate">{t.name}</span><span className="max-w-full break-all font-mono text-xs text-muted-foreground">{t.code}</span>
             </button>
           ))}
         </CardContent>
@@ -149,21 +151,21 @@ export default function TenantsPeople() {
       <main className="flex min-w-0 flex-1 flex-col gap-6">
         {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
         <Card>
-          <CardHeader><AccessTitle level={1} className="text-2xl">{tenant}: who can do what</AccessTitle></CardHeader>
+          <CardHeader><AccessTitle level={2} className="text-xl">{tenant}: who can do what</AccessTitle></CardHeader>
           <CardContent className="overflow-x-auto">
             {!people ? <div className="flex items-center gap-2 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading</div> : (
               <>
               <Input aria-label="Filter people" placeholder="Filter by name, code, role or area" value={filter} onChange={(e) => setFilter(e.target.value)} className="mb-3 max-w-sm" />
               <div className="max-h-[480px] overflow-auto">
-              <table className="w-full min-w-[640px] text-sm" data-testid="people-table">
-                <thead><tr className="text-left text-xs uppercase text-muted-foreground"><th className="p-2">Person</th><th className="p-2">Roles (granted at)</th><th className="p-2">Areas</th><th className="p-2">Departments</th></tr></thead>
+              <table className="w-full text-sm md:min-w-[640px]" data-testid="people-table">
+                <thead className="hidden md:table-header-group"><tr className="text-left text-xs uppercase text-muted-foreground"><th className="p-2">Person</th><th className="p-2">Roles (granted at)</th><th className="p-2">Areas</th><th className="p-2">Departments</th></tr></thead>
                 <tbody>
                   {people.filter((p) => !filter.trim() || JSON.stringify(p).toLowerCase().includes(filter.trim().toLowerCase())).map((p) => (
-                    <tr key={p.code} className="border-t" data-testid={`person-${p.code}`}>
-                      <td className="p-2">{p.name}<div className="font-mono text-xs text-muted-foreground">{p.code}</div></td>
-                      <td className="p-2">{p.grants.map((g) => `${g.code} (${g.tenantId})`).join(', ')}</td>
-                      <td className="p-2">{p.areas.length ? p.areas.join(', ') : <span className="text-muted-foreground">none</span>}</td>
-                      <td className="p-2">{p.departments.join(', ') || '–'}</td>
+                    <tr key={p.code} className="flex flex-col border-t md:table-row" data-testid={`person-${p.code}`}>
+                      <td className="block p-2 md:table-cell">{p.name}<div className="font-mono text-xs text-muted-foreground">{p.code}</div></td>
+                      <td className="block break-all p-2 md:table-cell md:break-words"><div className="mb-1 text-xs uppercase text-muted-foreground md:hidden">Roles (granted at)</div>{p.grants.map((g) => `${g.code} (${g.tenantId})`).join(', ')}</td>
+                      <td className="block break-all p-2 md:table-cell md:break-words"><div className="mb-1 text-xs uppercase text-muted-foreground md:hidden">Areas</div>{p.areas.length ? p.areas.join(', ') : <span className="text-muted-foreground">none</span>}</td>
+                      <td className="block p-2 md:table-cell"><div className="mb-1 text-xs uppercase text-muted-foreground md:hidden">Departments</div>{p.departments.join(', ') || '–'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -222,6 +224,7 @@ export default function TenantsPeople() {
           </CardContent>
         </Card>
       </main>
+      </div>
     </div>
   );
 }
