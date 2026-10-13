@@ -124,12 +124,13 @@ export function RolesEditor({
             key={role.code}
             className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-primary/10 text-primary text-xs font-medium"
           >
-            <span className="font-semibold">{role.code}</span>
-            <span className="opacity-80">{role.name}</span>
+            {/* ours (cfgreview F17, #1563): the role's name first, its code after */}
+            <span className="font-semibold">{role.name || role.code}</span>
+            {role.name && role.name !== role.code && <span className="opacity-80">{role.code}</span>}
             <button
               type="button"
               onClick={() => removeRole(role.code)}
-              aria-label={`remove ${role.code}`}
+              aria-label={`remove ${role.name || role.code}`}
               className="hover:text-destructive"
             >
               <X className="w-3 h-3" />
@@ -192,8 +193,8 @@ export function RolesEditor({
                   (idx === activeIdx ? 'bg-accent text-accent-foreground' : '')
                 }
               >
-                <span className="font-medium">{opt.code}</span>
-                <span className="ml-2 text-muted-foreground">{opt.name}</span>
+                <span className="font-medium">{opt.name || opt.code}</span>
+                {opt.name && opt.name !== opt.code && <span className="ml-2 text-muted-foreground">{opt.code}</span>}
               </li>
             ))
           )}
