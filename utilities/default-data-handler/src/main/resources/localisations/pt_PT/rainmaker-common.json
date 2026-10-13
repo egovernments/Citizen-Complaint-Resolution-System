@@ -1,0 +1,1670 @@
+[
+    {
+        "code": "ACTION_TEST_COMPLAINT_TYPES",
+        "message": "Categorias de reclamação",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ACTION_TEST_HOME",
+        "message": "Início",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ACTION_TEST_SEARCH",
+        "message": "Pesquisar",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ACTION_TEST_SEARCH_COMPLAINT",
+        "message": "Pesquisar reclamação",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "BACK",
+        "message": "Voltar",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CALL_CENTER_HELPLINE",
+        "message": "Centro de atendimento / Linha de apoio",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CITIZEN_FEEDBACK_PENDING",
+        "message": "Pendente de comentários do cidadão",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CITIZEN_SERVICE_CENTER",
+        "message": "Centro de Atendimento ao Cidadão",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CMN_NOOPTION",
+        "message": "Sem opções",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "COMMON_BOTTOM_NAVIGATION_HOME",
+        "message": "Início",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "COMMON_CERTIFY_ONE",
+        "message": "Certifico que foi concluída a quantidade de trabalho adequada. A folha de presenças foi verificada com base no livro de medições.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "COMMON_CERTIFY_TWO",
+        "message": ": Após a aprovação, o aviso de pagamento será gerado e enviado para o JIT-FS para processamento do pagamento.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "COMMON_DAY",
+        "message": "dia",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "COMMON_DAYS",
+        "message": "dias",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "COMMON_NA",
+        "message": "N/A",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "COMMON_NO_RESULTS_FOUND",
+        "message": "Nenhum resultado encontrado",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "COMMON_SELECTED",
+        "message": "Selecionado",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "COMMON_TABLE_SEARCH",
+        "message": "Pesquisar",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "COMMON_TABLE_SORT",
+        "message": "Ordenar",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "COMMON_VALIDITY",
+        "message": "Validade",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "COMMON_WORKFLOW_STATES",
+        "message": "Estado do fluxo de trabalho",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_CANCEL",
+        "message": "Cancelar",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_CHANGE_PHOTO",
+        "message": "Alterar fotografia",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_CONTINUE",
+        "message": "Continuar",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_DISABLED",
+        "message": "Desativado",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_EMAIL_NOTIFICATIONS",
+        "message": "Notificações por e-mail",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_ENABLED",
+        "message": "Ativado",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_GENDER_FEMALE",
+        "message": "Feminino",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_GENDER_MALE",
+        "message": "Masculino",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_GENDER_TRANSGENDER",
+        "message": "Transgénero",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_GO_TO_HOME",
+        "message": "Voltar à página inicial",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_HOME",
+        "message": "Início",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_LANGUAGE",
+        "message": "Idioma",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_LOGIN",
+        "message": "Iniciar sessão",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_LOGOUT",
+        "message": "Terminar sessão",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_MOBILE_ERROR",
+        "message": "Indique um número de telemóvel válido",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_MOBILE_NUMBER",
+        "message": "Número de telemóvel",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_NAME",
+        "message": "Nome",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_NOTIFICATION_PREFERENCES",
+        "message": "Notificações",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_PREFERRED_LANGUAGE",
+        "message": "Idioma preferido",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_PROFILE",
+        "message": "Editar perfil",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_PROFILE_CITY",
+        "message": "Cidade",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_PROFILE_EMAIL",
+        "message": "E-mail",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_PROFILE_EMAIL_INVALID",
+        "message": "E-mail inválido",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_PROFILE_FILE_UPLOAD_ERROR",
+        "message": "Ocorreu um erro ao carregar o ficheiro",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_PROFILE_GENDER",
+        "message": "Género",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_PROFILE_INVALID_FILE_INPUT",
+        "message": "Carregue um ficheiro válido",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_PROFILE_MAXIMUM_UPLOAD_SIZE_EXCEEDED",
+        "message": "Carregue um ficheiro com menos de 1 MB",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_PROFILE_MOBILE_NUMBER",
+        "message": "N.º de telemóvel",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_PROFILE_MOBILE_NUMBER_INVALID",
+        "message": "Introduza um número de telemóvel válido",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_PROFILE_MOBILE_READONLY_HELP",
+        "message": "O número de telemóvel é o seu identificador de início de sessão e não pode ser alterado neste ecrã.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_PROFILE_NAME",
+        "message": "Nome",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_PROFILE_NAME_INVALID",
+        "message": "Introduza um nome válido",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_PROFILE_PERSONAL_DETAILS",
+        "message": "Dados pessoais",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_PROFILE_PREFERENCE_UPDATE_ERROR",
+        "message": "Não foi possível guardar as suas preferências de notificação. Tente novamente.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_PROFILE_UPDATE_ERROR",
+        "message": "Não foi possível guardar o seu perfil. Tente novamente.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_PROFILE_UPDATE_SUCCESS",
+        "message": "Perfil atualizado com sucesso",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_REMOVE",
+        "message": "Remover fotografia atual",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_SAVE",
+        "message": "Guardar",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_SELECT_GENDER",
+        "message": "Selecionar género",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_SELECT_LANGUAGE",
+        "message": "Selecionar idioma",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_SMS_NOTIFICATIONS",
+        "message": "Notificações por SMS",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_SUBMIT",
+        "message": "Submeter",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_WHATSAPP_NOTIFICATIONS",
+        "message": "Notificações por WhatsApp",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_ACCEPT_INVITATION",
+        "message": "Aceitar convite",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_ACCOUNT",
+        "message": "Conta e segurança",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_ACCOUNT_DISABLED",
+        "message": "Esta conta está desativada.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_ACCOUNT_LOCKED",
+        "message": "A sua conta está bloqueada. Contacte o seu administrador.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_ACTION_CANCELLED",
+        "message": "A alteração da conta foi cancelada.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_ACTION_COMPLETE",
+        "message": "A sua conta foi atualizada.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_ACTION_FAILED",
+        "message": "Não foi possível concluir a alteração da conta. Tente novamente.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_CHANGE_PHONE",
+        "message": "Alterar número de telefone",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_CHOOSE_ORGANISATION",
+        "message": "Escolha a sua organização",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_CONFIGURE_TOTP",
+        "message": "Configurar uma aplicação de autenticação",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_CONFIRM_DECLINE",
+        "message": "Confirmar recusa",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_CONTEXT_FAILED",
+        "message": "Não foi possível preparar a sua sessão. Tente novamente.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_CURRENT_SESSION",
+        "message": "(esta sessão)",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_DECLINE_INVITATION",
+        "message": "Recusar convite",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_DECLINE_INVITATION_CONFIRM",
+        "message": "Recusar este convite? O seu administrador teria de enviar um novo convite.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_DIGIT_ACCOUNT_INACTIVE",
+        "message": "A sua conta está inativa. Contacte o seu administrador.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_EMPLOYEE_ACCOUNT_NOT_LINKED",
+        "message": "A sua conta não foi associada a este espaço de trabalho. Contacte o seu administrador.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_IDENTITY_EMAIL_CHANGED",
+        "message": "O seu email foi alterado. Inicie sessão novamente.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_INVALID_MOBILE_NUMBER",
+        "message": "Este número de telemóvel não pode ser utilizado aqui.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_INVALID_SESSION",
+        "message": "A conta com sessão iniciada não gerou uma sessão válida para este site.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_INVITATION_DECLINED",
+        "message": "Recusou o convite para este espaço de trabalho.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_INVITATION_STALE",
+        "message": "Este convite expirou ou foi alterado. Peça um novo convite ao seu administrador.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_LAST_SIGNIN_METHOD",
+        "message": "Adicione outro método de início de sessão antes de remover este fornecedor.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_LINK_PROVIDER",
+        "message": "Associar fornecedor",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_LOGOUT_ALL",
+        "message": "Terminar sessão em todos os dispositivos",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_LOGOUT_ALL_FAILED",
+        "message": "Não foi possível confirmar o fim da sessão em todos os dispositivos. Outros dispositivos podem continuar com sessão iniciada. Tente novamente.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_LOGOUT_OTHERS",
+        "message": "Terminar as outras sessões",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_LOGOUT_UNAVAILABLE",
+        "message": "Não foi possível terminar a sessão. Tente novamente.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_NEW_PHONE",
+        "message": "Novo número de telefone",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_OTHER_SESSIONS_ENDED",
+        "message": "As suas outras sessões foram terminadas.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_OTP_CHANGE_NUMBER",
+        "message": "Alterar número",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_OTP_CHANNEL_UNAVAILABLE",
+        "message": "De momento não é possível enviar um código. Tente novamente mais tarde.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_OTP_CODE",
+        "message": "Código de verificação",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_OTP_EXPIRED",
+        "message": "Este código expirou. Peça um novo.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_OTP_INVALID",
+        "message": "O código não está correto. Tentativas restantes: {{attempts}}.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_OTP_INVALID_CODE",
+        "message": "O código não está correto.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_OTP_INVALID_MOBILE",
+        "message": "Este número de telemóvel não pode ser utilizado aqui.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_OTP_LOCKED",
+        "message": "Demasiados códigos errados para este número. Tente novamente dentro de {{seconds}} segundos.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_OTP_NO_ATTEMPTS_LEFT",
+        "message": "Demasiados códigos errados. Peça um novo código.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_OTP_RATE_LIMITED",
+        "message": "Foram pedidos demasiados códigos. Tente novamente dentro de {{seconds}} segundos.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_OTP_RESEND_TOO_SOON",
+        "message": "Aguarde {{seconds}} segundos antes de pedir outro código.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_OTP_TRY_LATER",
+        "message": "Demasiadas tentativas. Tente novamente mais tarde.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_PENDING_INVITATION",
+        "message": "Aceite o convite para continuar para este espaço de trabalho.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_PHONE_CHANGED",
+        "message": "O seu número de telefone foi alterado.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_PHONE_CHANGED_SIGNIN",
+        "message": "Número de telefone alterado. Inicie sessão novamente para atualizar a sua conta.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_PHONE_HELP",
+        "message": "Introduza o novo número sem o indicativo do país. Vamos enviar um código de verificação para esse número.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_PHONE_IN_USE",
+        "message": "Este número de telefone não pode ser utilizado nesta conta.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_PHONE_SESSION_CHANGED",
+        "message": "A conta com sessão iniciada foi alterada. Volte a abrir as definições da conta antes de continuar.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_PROVIDER_NOT_LINKED",
+        "message": "Este fornecedor já não está associado. Atualize os dados da sua conta.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_REMOVE_FACTOR",
+        "message": "Remover segundo fator",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_RESEND",
+        "message": "Reenviar código",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_SEND_CODE",
+        "message": "Enviar código",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_SESSIONS",
+        "message": "Sessões iniciadas",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_SESSION_EXPIRED",
+        "message": "A sua sessão terminou. Inicie sessão novamente.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_SESSION_REQUIRED",
+        "message": "A sua sessão terminou. Inicie sessão novamente.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_SESSION_REVOKED",
+        "message": "A sua sessão terminou. Inicie sessão novamente.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_SIGNIN_FAILED",
+        "message": "Não foi possível iniciar sessão. Tente novamente.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_SIGNIN_UNAVAILABLE",
+        "message": "O início de sessão está temporariamente indisponível. Tente novamente.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_SIGNOUT_INCOMPLETE",
+        "message": "O fim de sessão pode não ter sido concluído, pelo que este navegador ainda pode ter sessão iniciada. Tente terminar sessão novamente ou inicie sessão para continuar.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_SIGN_IN",
+        "message": "Iniciar sessão →",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_SIGN_OUT",
+        "message": "Terminar sessão",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_SIGN_OUT_AGAIN",
+        "message": "Tentar terminar sessão novamente",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_SIGN_OUT_HINT",
+        "message": "Termine sessão se precisar de utilizar outra conta.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_SURFACE_CITIZEN",
+        "message": "Portal do cidadão",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_SURFACE_CONFIGURATOR",
+        "message": "Configurador",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_SURFACE_EMPLOYEE",
+        "message": "Portal dos funcionários",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_TENANT_FORBIDDEN",
+        "message": "A sua conta não tem acesso a {{tenant}}.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_TENANT_SESSION_MISMATCH",
+        "message": "Inicie sessão novamente para continuar para {{tenant}}.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_TENANT_UNAVAILABLE",
+        "message": "Este site não está disponível.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_TRY_AGAIN",
+        "message": "Tentar novamente",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_UNAVAILABLE",
+        "message": "Não foi possível concluir a alteração do número de telefone. Tente novamente.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_UNLINK_PROVIDER",
+        "message": "Desassociar fornecedor",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_UPDATE_EMAIL",
+        "message": "Alterar o endereço de email",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_UPDATE_PASSWORD",
+        "message": "Definir ou alterar a palavra-passe",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_USE_ORGANISATION_LINK",
+        "message": "Inicie sessão através da ligação própria da sua organização, que tem o formato /a-sua-organizacao/digit-ui/. Se não a tiver, peça-a ao seu administrador.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_IDENTITY_VERIFY_PHONE",
+        "message": "Verificar e alterar número",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_LOGOUT_CANCEL",
+        "message": "Cancelar",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_LOGOUT_CONFIRMATION_BODY",
+        "message": "Terá de iniciar sessão novamente para continuar.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_LOGOUT_CONFIRM_ACTION",
+        "message": "Terminar sessão",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_LOGOUT_CONFIRM_HEADING",
+        "message": "Tem a certeza de que pretende terminar sessão?",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_LOGOUT_WEB_CONFIRMATION_MESSAGE",
+        "message": "Tem a certeza de que pretende",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_LOGOUT_WEB_HEADER",
+        "message": "Terminar sessão",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_LOGOUT_WEB_YES",
+        "message": "Sim, terminar sessão",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_PROFILE_CHOOSE_PHOTO",
+        "message": "Escolher da galeria",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_PROFILE_UPLOAD_HINT",
+        "message": "Escolha uma nova imagem (máx. 5 MB) ou remova a atual.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_SIDEBAR_CLOSE",
+        "message": "Fechar barra lateral",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_SIDEBAR_COLLAPSE",
+        "message": "Recolher",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_SIDEBAR_OPEN",
+        "message": "Abrir barra lateral",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_SIDEBAR_PIN",
+        "message": "Manter aberta",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_SIDEBAR_PUBLIC_DASHBOARD",
+        "message": "Painel público",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_SIDEBAR_SECTION_COMPLAINTS",
+        "message": "Reclamações",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_SOMETHING_WENT_WRONG",
+        "message": "Ocorreu um erro",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_UNDER_MAINTENANCE",
+        "message": "Em manutenção!",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMONS_NEXT",
+        "message": "Seguinte",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_CHOOSE_LANGUAGE",
+        "message": "Escolha o seu idioma",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_CHOOSE_LOCATION",
+        "message": "Escolha a sua localização",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_DOWNLOAD",
+        "message": "Transferir",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_EMPLOYEE_FETCH_ERROR",
+        "message": "Não foi possível carregar os funcionários. Tente novamente.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_ERROR_LOADING_TITLE",
+        "message": "Não foi possível carregar as suas reclamações",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_HELP",
+        "message": "Ajuda",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_HELPLINE",
+        "message": "LINHA DE APOIO",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_HOME_COMPLAINTS",
+        "message": "Sistema de Gestão de Reclamações",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_LOCATION_SELECTION_ERROR",
+        "message": "Selecione a sua localização",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PREVIOUS",
+        "message": "Anterior",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_RATE",
+        "message": "Avaliar",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_REOPEN",
+        "message": "Reabrir",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_RETRY",
+        "message": "Tentar novamente",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_ROWS_PER_PAGE",
+        "message": "Linhas por página",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_SEARCH_PLACEHOLDER",
+        "message": "Pesquisar aqui",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_SELECT",
+        "message": "Selecionar",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_SORT_ASC",
+        "message": "Ascendente",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_SORT_BY",
+        "message": "Ordenar por",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_SORT_DESC",
+        "message": "Descendente",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_SORT_ORDER",
+        "message": "Ordem",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FILE_APPLICATION_INFO_LABEL",
+        "message": "Informação",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_HOME_BANNER_PRODUCT",
+        "message": "Sistema de Gestão de Reclamações",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_HOME_BANNER_TAGLINE",
+        "message": "Comunique problemas, acompanhe o progresso e veja o que se passa na sua zona.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_HOME_BANNER_WELCOME",
+        "message": "Bem-vindo ao",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_INBOX_SEARCH",
+        "message": "Pesquisar",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_INFO_DELETE",
+        "message": "Eliminar",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_INVALID_OTP",
+        "message": "OTP inválido",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_LINK_DSO_DASHBOARD",
+        "message": "Início de sessão/ Painel DSO",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_LINK_LOGIN_DSO",
+        "message": "Início de sessão DSO",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_LOADING",
+        "message": "A carregar...",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_LOGIN_OTP",
+        "message": "Verificação por OTP",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_LOGIN_OTP_TEXT",
+        "message": "Introduza o OTP enviado para",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_LOGIN_PROVIDE_MOBILE_NUMBER",
+        "message": "Indique o seu número de telemóvel",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_LOGIN_TEXT",
+        "message": "Todas as comunicações relativas ao pedido serão enviadas para este número de telemóvel.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_MYAPPLICATIONS_NO_APPLICATION",
+        "message": "Nenhum pedido encontrado",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_NA",
+        "message": "N/A",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_RESEND_ANOTHER_OTP",
+        "message": "Reenviar outro OTP",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_RESEND_OTP",
+        "message": "Reenviar OTP",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_RESEND_SECONDS",
+        "message": "seg",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_SKIP_CONTINUE",
+        "message": "Ignorar e continuar",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_SLA_DAY",
+        "message": "dias atrás",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_SLA_NOW",
+        "message": "Agora",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_WORKING_CONTEXT",
+        "message": "Contexto de trabalho",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_WORKING_CONTEXT_CITY",
+        "message": "Cidade",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_WORKING_CONTEXT_DEPARTMENT",
+        "message": "Departamento",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_WORKING_CONTEXT_DEPARTMENT_MANY",
+        "message": "departamentos",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_WORKING_CONTEXT_DEPARTMENT_ONE",
+        "message": "departamento",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_WORKING_CONTEXT_JURISDICTION",
+        "message": "Jurisdição",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_WORKING_CONTEXT_ROLE",
+        "message": "Função",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_WORKING_CONTEXT_ROLE_MANY",
+        "message": "funções",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_WORKING_CONTEXT_ROLE_ONE",
+        "message": "função",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_WORKING_CONTEXT_SUBTITLE",
+        "message": "Estas são as suas atribuições",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_WORKING_CONTEXT_UNAVAILABLE",
+        "message": "Contexto de trabalho indisponível",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "Clear",
+        "message": "Limpar",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "DIGIT_I_ACCEPT",
+        "message": "Aceito",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "DIGIT_I_DO_NOT_ACCEPT",
+        "message": "Não aceito",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "DIGIT_TABLE_OF_CONTENTS",
+        "message": "Política de privacidade",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "DISPOSAL_IN_PROGRESS",
+        "message": "Eliminação em curso",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "EDIT_PROFILE",
+        "message": "Editar perfil",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ERR_HRMS_INVALID_MOB_NO",
+        "message": "Número de telemóvel inválido",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ERR_INVALID_MOBILE_NUMBER",
+        "message": "Introduza um número de telemóvel válido",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_BY_CLICKING",
+        "message": "Concordo com os seguintes documentos do DIGIT:",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_CLEAR_ALL",
+        "message": "Limpar tudo",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_COMMON_APPLY",
+        "message": "Aplicar",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_COMMON_CLEAR_ALL",
+        "message": "LIMPAR TUDO",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_COMMON_CONTACT_DETAILS",
+        "message": "Dados de contacto",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_COMMON_DOC_FILENAME",
+        "message": "Nome do ficheiro",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_COMMON_ENTER_DATE_RANGE",
+        "message": "Introduza um intervalo de datas válido",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_COMMON_INFO",
+        "message": "Informação",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_COMMON_MIN_SEARCH_CRITERIA_MSG",
+        "message": "Introduza pelo menos 1 critério de pesquisa",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_COMMON_NA",
+        "message": "N/A",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_COMMON_NOTE",
+        "message": "Nota",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_COMMON_NO_DATA",
+        "message": "Nenhum dado encontrado",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_COMMON_PLEASE_ENTER_ALL_MANDATORY_FIELDS",
+        "message": "Preencha todos os campos obrigatórios",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_COMMON_SEARCH_BY",
+        "message": "Pesquisar por",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_COMMON_TAKE_ACTION",
+        "message": "Executar ação",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_ERROR_USER_NOT_PERMITTED",
+        "message": "Utilizador sem permissão para iniciar sessão.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_INBOX_LOCALITY",
+        "message": "Localidade",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PRIVACY_POLICY",
+        "message": "Política de privacidade",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_SEARCH_APPLICATION_MOBILE_INVALID",
+        "message": "Indique um número de telemóvel válido",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "EVENTS_DATERANGE_LABEL",
+        "message": "Intervalo de datas",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "EV_SLA_DAY_ONE",
+        "message": "dia atrás",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "EV_SLA_MINUTE",
+        "message": "Minutos atrás",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "EV_SLA_MINUTE_ONE",
+        "message": "minuto atrás",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "EV_SLA_MONTH",
+        "message": "Meses atrás",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "EV_SLA_MONTH_ONE",
+        "message": "mês atrás ",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "EV_SLA_TIME",
+        "message": "h atrás",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "EV_SLA_TIME_ONE",
+        "message": "h atrás",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "EV_SLA_WEEK",
+        "message": "Semanas atrás",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "EV_SLA_WEEK_ONE",
+        "message": "Semana atrás",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "Latitude",
+        "message": "Latitude",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "Longitude",
+        "message": "Longitude",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "MOBILE_VALIDATION_AT_LEAST",
+        "message": "pelo menos",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "MOBILE_VALIDATION_DIGITS",
+        "message": "dígitos",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "MOBILE_VALIDATION_STARTING_WITH",
+        "message": "a começar por",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "MYCITY_STATECODE_LABEL",
+        "message": "Estado",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "Modules",
+        "message": "Módulos",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR",
+        "message": "Sistema de Gestão de Reclamações",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_CREATE_ANOTHER_COMPLAIN",
+        "message": "Criar outra reclamação",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_INBOX",
+        "message": "Caixa de entrada",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_SEARCH_RESULTS_HEADING",
+        "message": "Pesquisar reclamação de cidadão",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PRIVACY_AUDIT_REPORT",
+        "message": "Relatório de auditoria de privacidade",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ROWS_PER_PAGE",
+        "message": "Linhas por página",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "VIEW_ON_MAP",
+        "message": "Ver no mapa",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "WF_ACTION_CANCELLED",
+        "message": "A ação foi cancelada",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "WF_COMMON_COMMENTS",
+        "message": "Comentários",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "WF_INBOX_HEADER_CURRENT_OWNER",
+        "message": "Responsável atual",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "WF_INBOX_HEADER_LOCALITY",
+        "message": "Localidade",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "WF_INBOX_HEADER_SLA_DAYS_REMAINING",
+        "message": "SLA (dias restantes)",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "WF_MODAL_APPROVER",
+        "message": "Nome do responsável",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "WF_MODAL_CANCEL",
+        "message": "Cancelar",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "WF_MODAL_COMMENTS",
+        "message": "Comentários",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "WF_PGR_CLOSEDAFTERRESOLUTION",
+        "message": "Encerrar após resolução",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "WF_PGR_PENDINGATLME",
+        "message": "Pendente no LME",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "WF_PGR_PENDINGATSUPERVISOR",
+        "message": "Pendente no supervisor",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "WF_PGR_PENDINGFORASSIGNMENT",
+        "message": "Pendente de atribuição",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "WF_PGR_PENDINGFORREASSIGNMENT",
+        "message": "Pendente de reatribuição",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "WF_PGR_REJECTED",
+        "message": "Rejeitada",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "WF_PGR_RESOLVED",
+        "message": "Resolvida",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ke.bomet",
+        "message": "Bomet",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    }
+]

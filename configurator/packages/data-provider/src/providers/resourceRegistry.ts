@@ -348,6 +348,8 @@ export function getMdmsResources(): Record<string, ResourceConfig> {
  *  - cron-jobs: no scheduler reads CronJobAPIConfig.
  *  - encryption-policy / decryption-abac / masking-patterns: masking on 3.x is fixed in the compat layer.
  *  - tenant-boundary: egov-location.TenantBoundary is read only by the HRMS UI module, which is not built.
+ *  - sla-config: common-masters.wfSlaConfig is dashboard colour slabs read only by 2.x egov-workflow-v2 (nearing-SLA
+ *    inbox filter); the employee apps fetch it at boot and never read it (cfgreview F06, #1553).
  */
 export const NO_CONSUMER_ON_3X: ReadonlySet<string> = new Set([
   'inbox-config',
@@ -355,6 +357,7 @@ export const NO_CONSUMER_ON_3X: ReadonlySet<string> = new Set([
   'id-formats', 'cron-jobs',
   'encryption-policy', 'decryption-abac', 'masking-patterns',
   'tenant-boundary',
+  'sla-config',
 ]);
 
 export function getGenericMdmsResources(): Record<string, ResourceConfig> {

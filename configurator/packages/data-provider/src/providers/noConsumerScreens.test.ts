@@ -20,6 +20,10 @@ describe('screens without a 3.x consumer', () => {
     }
   });
 
+  it('hides SLA Config: dashboard colour slabs, not complaint SLAs, and nothing on 3.x reads them (#1553)', () => {
+    assert.equal(getGenericMdmsResources()['sla-config'], undefined);
+  });
+
   it('leaves the registry config readable', () => {
     assert.equal(getResourceConfig('inbox-config')?.schema, 'INBOX.InboxQueryConfiguration');
   });
