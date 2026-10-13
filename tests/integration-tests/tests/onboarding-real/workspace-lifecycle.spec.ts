@@ -7,6 +7,9 @@ import {
   unresolvedLabels, workspace, type Hired,
 } from '../utils/workspace-setup';
 
+// Posts real staff passwords (activation, sign-in): never traced, whichever config runs it.
+test.use({ trace: 'off' });
+
 /**
  * #2266: one fresh tenant per run, from signup to a closed complaint and a
  * removed member. Runs leave the tenant behind (no tenant delete API exists);
