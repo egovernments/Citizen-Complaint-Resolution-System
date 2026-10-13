@@ -4578,15 +4578,19 @@
         # runs (every instrumented service depends on it) -- see the comment on
         # the service in docker-compose.egov-digit.yaml.
         #
-        # Every service listed below is gated. tempo/loki/promtail in
-        # docker-compose.egov-digit.yaml; prometheus and grafana likewise;
-        # node-exporter in docker-compose.monitoring.yml; and the three matomo
-        # services in docker-compose.matomo.yml. Those last four live in
+        # Every service listed below is gated. tempo/loki/promtail and
+        # docker-socket-proxy in docker-compose.egov-digit.yaml; prometheus and
+        # grafana likewise; node-exporter and container-stats in
+        # docker-compose.monitoring.yml; and the three matomo services in
+        # docker-compose.matomo.yml. Those last four live in
         # overlays that are always layered as an -f flag yet still carry a
         # `profiles:` key — layered-always and started-always are different
         # things, and that distinction is the whole reason this task exists.
         _profile_tier_services:
-          obs-metrics: [prometheus, grafana, node-exporter]
+          # docker-socket-proxy sits at obs-metrics because container-stats
+          # reads through it; promtail (obs-logs) uses it too, and levels are
+          # cumulative.
+          obs-metrics: [prometheus, grafana, node-exporter, container-stats, docker-socket-proxy]
           obs-logs: [loki, promtail]
           obs-traces: [tempo]
           # Matomo (#1254). All three are gated, so the same

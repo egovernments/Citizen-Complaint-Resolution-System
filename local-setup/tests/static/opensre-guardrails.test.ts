@@ -10,6 +10,12 @@
  * evaluator.py): every match of every rule, overlapping spans merged, capped
  * at 1000 matches. `opensre guardrails test` previews with a simpler loop that
  * garbles overlapping matches, so it is not the reference.
+ *
+ * Every sample is checked three ways: raw, JSON-encoded once and twice. That
+ * is how a log line reaches the rules: OpenSRE masks the conversation as one
+ * text, where a tool result is JSON-encoded and a JSON log line inside it is
+ * encoded again (seen in local-setup/tests/opensre-redaction/run.sh).
+ * The end-to-end check of the real image is that script.
  */
 import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
@@ -111,6 +117,12 @@ const MUST_MASK = [
   'Authorization: Bearer S3CRET',
   '{"password": "S3CRET, with a comma"}',
   'X-Vault-Token: S3CRET',
+  // JSON-formatted service logs, as Loki returns them.
+  '{"level":"ERROR","msg":"login failed","password":"S3CRET","mobileNumber":"0712345678"}',
+  '{"access_token":"S3CRET","token_type":"bearer"}',
+  '{"headers":{"Authorization":"Bearer S3CRET"}}',
+  '{"X-Vault-Token":"S3CRET"}',
+  '{"userName":"S3CRET citizen"}',
 ];
 
 // Infrastructure detail the agent needs, which no rule may touch.
@@ -126,6 +138,12 @@ const LEFT_ALONE = [
   'max_tokens: 4096',
 ];
 
+const ENCODINGS: [string, (text: string) => string][] = [
+  ['raw', (t) => t],
+  ['JSON-encoded once', (t) => JSON.stringify(t)],
+  ['JSON-encoded twice', (t) => JSON.stringify(JSON.stringify(t))],
+];
+
 describe('OpenSRE redaction rules', () => {
   test('every pattern compiles in Python, so OpenSRE does not skip it', () => {
     const rules = parseRules(fs.readFileSync(RULES, 'utf8'));
@@ -134,13 +152,16 @@ describe('OpenSRE redaction rules', () => {
     expect(redact(['nothing to mask here'])).toEqual(['nothing to mask here']);
   });
 
-  test.each(MUST_MASK.map((t) => [JSON.stringify(t), t]))('masks the value in %s', (_label, text) => {
-    const [out] = redact([text]);
-    expect(out).not.toContain('S3CRET');
-    expect(out).toContain('[REDACTED:');
-  });
+  describe.each(ENCODINGS)('%s', (_how, encode) => {
+    test('masks every secret', () => {
+      const out = redact(MUST_MASK.map(encode));
+      const leaked = MUST_MASK.filter((_t, i) => /S3CRET/i.test(out[i]) || !out[i].includes('[REDACTED:'));
+      expect(leaked).toEqual([]);
+    });
 
-  test('leaves infrastructure detail alone', () => {
-    expect(redact(LEFT_ALONE)).toEqual(LEFT_ALONE);
+    test('leaves infrastructure detail alone', () => {
+      const texts = LEFT_ALONE.map(encode);
+      expect(redact(texts)).toEqual(texts);
+    });
   });
 });

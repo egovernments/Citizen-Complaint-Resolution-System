@@ -25,8 +25,16 @@
 # every credential rule comes first, and the broad citizen-contact rules
 # (phone numbers match plenty of counters too) come last.
 #
+# Escaped text: OpenSRE masks the conversation as one text, in which a tool
+# result is JSON-encoded, and a JSON log line inside it is encoded again. A
+# field reads \\\"password\\\":\\\"...\\\" there, and a newline inside a log line is
+# \\n. So the field rules allow any run of backslashes before a quote
+# (\\*["']) and treat an escaped newline or tab as whitespace (\\+[nrt]).
+#
 # Test a change inside the running container before relying on it:
 #   docker exec digit-opensre opensre guardrails test 'GET /user/_details?access_token=abc'
+# and add samples to local-setup/tests/static/opensre-guardrails.test.ts, which
+# checks each one raw and JSON-encoded once and twice.
 rules:
   - name: jwt
     description: JSON Web Tokens
@@ -38,13 +46,13 @@ rules:
     description: access/refresh/auth tokens in query strings, headers and JSON
     action: redact
     patterns:
-      - '(?:access|refresh|auth|id)[_-]?token["'']?\s*[=:]\s*["'']?[^&"''\s,}]+'
+      - '(?:access|refresh|auth|id)[_-]?token(?:\\*["''])?\s*[=:]\s*(?:\\*["''])?[^&"''\s,}]+'
 
   - name: authorization_header
     description: Bearer, Basic, ApiKey (Novu) and Token credentials
     action: redact
     patterns:
-      - 'authorization["'']?\s*[:=]\s*["'']?(?:bearer|basic|apikey|token|digest)\s+[A-Za-z0-9._~+/=-]+'
+      - 'authorization(?:\\*["''])?\s*[:=]\s*(?:\\*["''])?(?:bearer|basic|apikey|token|digest)\s+[A-Za-z0-9._~+/=-]+'
 
   - name: secret_fields
     description: password, secret and API-key fields
@@ -58,7 +66,7 @@ rules:
       # before it and no letter after, so KEYCLOAK_URL= is left alone. Not
       # matched: Kubernetes references that name a Secret rather than hold one
       # (secretKeyRef:, secretRef:, secretName:) and token counts (max_tokens:).
-      - '(?:password|passwd|secret(?!keyref|ref\b|name\b)|salt|api[_-]?key|apikey|private[_-]?key|credential|(?<=[a-z0-9])_token(?!s)|(?<=[a-z0-9])_keys?(?![a-z]))[a-z0-9_]*["'']?\s*[=:]\s*(?:"[^"]*"|''[^'']*''|[^&"''\s,}]+)'
+      - '(?:password|passwd|secret(?!keyref|ref\b|name\b)|salt|api[_-]?key|apikey|private[_-]?key|credential|(?<=[a-z0-9])_token(?!s)|(?<=[a-z0-9])_keys?(?![a-z]))[a-z0-9_]*(?:\\*["''])?\s*[=:]\s*(?:\\*"[^"]*"|\\*''[^'']*''|[^&"''\s,}]+)'
 
   - name: env_secret_pairs
     description: env entries written as a name/value pair whose name says it holds a secret
@@ -72,13 +80,13 @@ rules:
       #     value: s3cr3t
       # The whole pair is masked, name included. valueFrom (a secretKeyRef)
       # carries no value and is left alone.
-      - 'name["'']?\s*[:=]\s*["'']?[a-z0-9_.-]*(?:password|passwd|secret|salt|token|api[_-]?key|private[_-]?key|credential|_keys?(?![a-z]))[a-z0-9_.-]*["'']?\s*,?\s*["'']?value["'']?\s*[:=]\s*(?:"[^"]*"|''[^'']*''|[^\s,}]+)'
+      - 'name(?:\\*["''])?\s*[:=]\s*(?:\\*["''])?[a-z0-9_.-]*(?:password|passwd|secret|salt|token|api[_-]?key|private[_-]?key|credential|_keys?(?![a-z]))[a-z0-9_.-]*(?:\\*["''])?(?:\s|\\+[nrt])*,?(?:\s|\\+[nrt])*(?:\\*["''])?value(?:\\*["''])?\s*[:=]\s*(?:\\*"[^"]*"|\\*''[^'']*''|[^\s,}]+)'
 
   - name: vault_token
     description: OpenBao/Vault tokens, in the X-Vault-Token header or bare
     action: redact
     patterns:
-      - 'x-vault-token["'']?\s*[:=]\s*["'']?[^&"''\s,}]+'
+      - 'x-vault-token(?:\\*["''])?\s*[:=]\s*(?:\\*["''])?[^&"''\s,}]+'
       - '\bhv[sbr]\.[A-Za-z0-9_-]{20,}'
       - '\b[sbr]\.[A-Za-z0-9]{24}\b'
 
@@ -105,7 +113,7 @@ rules:
     action: redact
     patterns:
       # A quoted value is masked whole: "+258 84 123 4567" has spaces in it.
-      - '(?:mobile(?:_?number|no)?|phone(?:_?number)?|recipient(?:_value)?|username|emailid)["'']?\s*[=:]\s*(?:"[^"]*"|''[^'']*''|[^&"''\s,}]+)'
+      - '(?:mobile(?:_?number|no)?|phone(?:_?number)?|recipient(?:_value)?|username|emailid)(?:\\*["''])?\s*[=:]\s*(?:\\*"[^"]*"|\\*''[^'']*''|[^&"''\s,}]+)'
 
   - name: email
     description: email addresses

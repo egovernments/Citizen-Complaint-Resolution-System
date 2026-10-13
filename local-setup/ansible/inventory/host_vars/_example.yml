@@ -383,6 +383,7 @@ enable_search_stack: false
 # opensre_model: claude-opus-5          # model for investigations
 # opensre_sweep_interval_minutes: 15    # how often it checks Gatus (no model call when all green)
 # opensre_dedupe_hours: 6               # don't re-investigate the same failures within this window
+# opensre_max_investigations_per_day: 12  # hard cap on investigations in any 24 h
 
 # Pull + start digit-mcp + mcp-postgres. The MCP server exposes a REST
 # shim on :3000 (POST /v1/tenant/bootstrap, POST /v1/tools/:name) that

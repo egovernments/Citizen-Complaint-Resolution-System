@@ -106,6 +106,68 @@ describe('OpenSRE compose/helm parity', () => {
   });
 
   /**
+   * Review 4255083500: OpenSRE 0.1.2026.9.21 applies guardrails.yml only on its
+   * CLI transport; its Anthropic SDK client sends tool results unmasked. So the
+   * loop fixes the provider to claude-code, the image's `claude` is the locked
+   * wrapper, and neither tier can switch the provider back. The end-to-end
+   * proof (the real image against a capture server) is
+   * local-setup/tests/opensre-redaction/run.sh.
+   */
+  test('the agent reaches the model only through the locked Claude Code CLI', () => {
+    const loop = code(read(COMPOSE_DIR, 'run-sweeps.sh'));
+    expect(loop).toMatch(/^export LLM_PROVIDER=claude-code$/m);
+    expect(loop).toMatch(/^export CLAUDE_CODE_BIN=\/usr\/local\/bin\/claude$/m);
+    expect([...loop.matchAll(/LLM_PROVIDER=/g)]).toHaveLength(1);
+
+    const settings = [
+      read(REPO, 'local-setup', 'docker-compose.opensre.yml'),
+      read(CHART_DIR, 'templates', 'deployment.yaml'),
+      read(CHART_DIR, 'values.yaml'),
+    ].map(code);
+    for (const text of settings) {
+      expect(text).not.toMatch(/LLM_PROVIDER|ANTHROPIC_(REASONING|TOOLCALL)_MODEL|provider:/);
+    }
+
+    const dockerfile = code(read(COMPOSE_DIR, 'Dockerfile'));
+    expect(dockerfile).toMatch(/^COPY --chmod=0755 claude-locked \/usr\/local\/bin\/claude$/m);
+    expect(dockerfile).toMatch(/-o \/opt\/claude-code\/claude /);
+    expect(dockerfile).toMatch(/^ARG CLAUDE_CODE_VERSION=\d+\.\d+\.\d+$/m);
+    for (const arch of ['AMD64', 'ARM64']) {
+      expect(dockerfile).toMatch(new RegExp(`^ARG CLAUDE_CODE_SHA256_${arch}=[0-9a-f]{64}$`, 'm'));
+    }
+    expect(dockerfile).toMatch(/sha256sum -c -; \\\n\s+chmod 0755 \/opt\/claude-code\/claude/);
+
+    // The wrapper switches off everything the CLI could do on its own, and
+    // runs nothing but the three calls OpenSRE makes.
+    const wrapper = code(read(COMPOSE_DIR, 'claude-locked'));
+    expect(wrapper).toMatch(/^REAL=\/opt\/claude-code\/claude$/m);
+    expect(wrapper).toContain(
+      'set -- -p --output-format text --tools "" --strict-mcp-config \\\n      --setting-sources "" --disable-slash-commands',
+    );
+    expect([...wrapper.matchAll(/exec "\$REAL"/g)]).toHaveLength(3);
+    expect(wrapper).toMatch(/\*\) refuse "\$@" ;;/);
+    expect(wrapper.trimEnd().split('\n').pop()).toBe('refuse "$@"');
+  });
+
+  /**
+   * Review 4255083506: `opensre ask` approves execute_python_code without
+   * asking (it declares itself read-only, and the model can turn its network
+   * access on) whenever a Python is on PATH. The image must have none, and the
+   * loop refuses to start if one appears (opensre-sweep-loop.test.ts runs it).
+   */
+  test('the image installs no Python, and the loop refuses to run with one', () => {
+    const dockerfile = code(read(COMPOSE_DIR, 'Dockerfile'));
+    expect(dockerfile).toMatch(/^FROM debian:bookworm-slim$/m);
+    const installs = [...dockerfile.matchAll(/apt-get install[^\n]*?((?:\s+[a-z0-9.+-]+)+)\s*\\?\n/g)];
+    expect(installs.length).toBeGreaterThan(0);
+    for (const m of installs) expect(m[1]).not.toMatch(/python|pip|pypy/);
+    expect(dockerfile).not.toMatch(/\b(pip3?|python3?|uv) (install|-m)\b/);
+
+    const loop = code(read(COMPOSE_DIR, 'run-sweeps.sh'));
+    expect(loop).toMatch(/^for py in python3 python; do\n\s+if found=\$\(command -v "\$py"\); then\n[\s\S]*?exit 1\n/m);
+  });
+
+  /**
    * The container-state page is built from `docker inspect`, whose .Config.Env
    * carries the stack's passwords and tokens. The filter may read state fields
    * only, and the Docker API may only be read.

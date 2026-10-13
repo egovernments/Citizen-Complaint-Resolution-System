@@ -5,7 +5,8 @@ writes down what it thinks is wrong and what a person should do about it. It **c
 and **sends no alerts**: its only output is a log on the box (and the same lines in Loki).
 
 It runs [OpenSRE](https://github.com/Tracer-Cloud/opensre) (Apache-2.0, pinned to release
-`0.1.2026.9.21`) in one container on either tier: `digit-opensre` from
+`0.1.2026.9.21`), which reaches the model through the Claude Code CLI (pinned to `2.1.287`), in
+one container on either tier: `digit-opensre` from
 `local-setup/docker-compose.opensre.yml` on the compose tier, or the `opensre` Deployment from
 `devops/deploy-as-code/charts/monitoring/opensre/` on Kubernetes
 ([details](#the-kubernetes-tier)). Everything below describes the compose tier unless it says
@@ -34,8 +35,10 @@ Dedupe is per check. An investigation covers each check it was given:
   that fails may still have been billed, so it is never simply retried on the next sweep.
 
 So a noisy incident whose set of failing checks keeps changing starts a new investigation only
-when a check appears that no investigation has covered. To force a fresh look, delete
-`/opt/digit/opensre/logs/.dedupe.json`.
+when a check appears that no investigation has covered. On top of that, no investigation starts
+while `opensre_max_investigations_per_day` (default 12) have started in the last 24 hours; the
+sweep logs `capped` and says when the next one can start. To force a fresh look, delete
+`/opt/digit/opensre/logs/.dedupe.json`, which also resets the daily count.
 
 An investigation is a single `opensre ask` run. The agent reads Grafana (Prometheus metrics,
 Loki logs, traces, alert rules and annotations), Tempo, Redpanda consumer-group lag and topic
@@ -70,6 +73,16 @@ limited separately):
 - **Credentials.** The only credentials in the container are a Viewer Grafana token and the model
   API key.
 
+Two things the agent could otherwise do are switched off in the image:
+
+- **Running code.** OpenSRE approves its `execute_python_code` tool without asking (the tool calls
+  itself read-only, and the model can turn its network access on) whenever a Python interpreter is
+  on `PATH`. The image has none, and `run-sweeps.sh` refuses to start if one appears. Keep it that
+  way when changing the Dockerfile; the parity test fails on a Python package.
+- **The CLI's own tools.** Claude Code is an agent too. The image's `claude` is a wrapper
+  (`local-setup/opensre/claude-locked`) that runs it with no built-in tools, MCP servers, settings
+  files or slash commands, and refuses every other way of calling it. It only answers.
+
 ## Turn it on
 
 1. **Store a project-owned Anthropic API key** in the tenant's OpenBao secret. Don't use a
@@ -84,8 +97,8 @@ limited separately):
    ```
 3. **Deploy:** `./deploy.sh <tenant>`.
 
-The deploy builds the image on the box. It downloads the pinned release tarball (~140 MB) and
-checks it against the release checksum. On the first run with Grafana healthy, the deploy also
+The deploy builds the image on the box. It downloads the pinned OpenSRE release (~140 MB) and
+Claude Code CLI (~245 MB) and checks each against its published checksum. On the first run with Grafana healthy, the deploy also
 creates the `opensre` Grafana service account and its token. The token is stored in OpenBao as
 `opensre_grafana_token` and reused on later deploys.
 
@@ -115,7 +128,7 @@ On the box, in `/opt/digit/opensre/logs/`:
 | File | Contents |
 |---|---|
 | `investigations.log` | Human-readable: one block per investigation, newest at the bottom |
-| `sweeps.jsonl` | Every sweep as one JSON object: `all_clear`, `unchanged`, `investigating`, `investigation` (with the full result), `idle`, `paused`, `error` |
+| `sweeps.jsonl` | Every sweep as one JSON object: `all_clear`, `unchanged`, `capped`, `investigating`, `investigation` (with the full result), `idle`, `paused`, `warning`, `error` |
 
 ```bash
 tail -n 60 /opt/digit/opensre/logs/investigations.log
@@ -128,6 +141,12 @@ The same lines are on the container's stdout, so Grafana → Explore → Loki ha
 {compose_service="opensre"} | json | kind="investigation"
 ```
 
+**Treat every suggested command as untrusted.** A report is model output, written partly from log
+lines, request paths and user agents that anyone who can send this deployment a request controls.
+The prompt tells the agent to treat them as data, and each report in `investigations.log` opens
+with the same warning, but neither is a guarantee. Read a command and check it against the
+deployment before running it, especially anything that deletes, restarts or changes access.
+
 ## Pause it, or turn it off
 
 - **Turn it off:** set `enable_opensre: false` and deploy. The container is removed and the logs
@@ -135,7 +154,8 @@ The same lines are on the container's stdout, so Grafana → Explore → Loki ha
 - **Pause it without a deploy:** set `OPENSRE_ENABLED=false` in `/opt/digit/.env`, then recreate
   the container with the full compose stack. The next deploy re-renders `.env` from host_vars, so
   this only lasts until then.
-- **Change the pace:** set `opensre_sweep_interval_minutes` and `opensre_dedupe_hours` in host_vars.
+- **Change the pace:** set `opensre_sweep_interval_minutes`, `opensre_dedupe_hours` and
+  `opensre_max_investigations_per_day` in host_vars.
 
 ## Cost
 
@@ -143,17 +163,43 @@ A sweep with nothing failing costs nothing; the Gatus check is a plain HTTP call
 investigation is a paid model call. For reference, a comparable infrastructure investigation on
 bomet (four failing checks, about 20 tool calls) cost about **$0.65–$1** on Claude Opus 5.
 
-With the defaults (15-minute sweeps, 6-hour dedupe), a problem that persists costs at most four
+With the defaults (15-minute sweeps, 6-hour dedupe), one failing check that persists costs four
 investigations a day. An investigation that keeps failing, for example on the 900-second timeout
 or a rate limit, runs at 0, 30 min, 1 h 30, 3 h 30, 7 h 30 and then every 6 hours: seven on its
-first day, then four a day. `local-setup/tests/static/opensre-sweep-loop.test.ts` pins both
-schedules. Set `opensre_model` to a cheaper model to trade depth for cost.
+first day, then four a day.
+
+Dedupe works per check, so it does not bound a cascade, where each sweep finds a check that no
+investigation has covered yet. Without a ceiling that could be a run every sweep, 96 a day. The
+ceiling is `opensre_max_investigations_per_day` (`sweep.maxInvestigationsPerDay` on Kubernetes;
+default 12, counted over any 24 hours, failed runs included), so the worst case with the defaults
+is twelve investigations a day.
+`local-setup/tests/static/opensre-sweep-loop.test.ts` pins all three schedules. Set
+`opensre_model` to a cheaper model to trade depth for cost.
+
+Also set a monthly spend limit on the Anthropic workspace that owns the key (Console → Limits).
+It is the only ceiling that holds if the loop itself misbehaves.
 
 ## What leaves the box
 
 Everything the agent reads that ends up in a prompt goes to the model provider (Anthropic),
-including log lines and metric values. Before every model call, OpenSRE applies
-`local-setup/opensre/guardrails.yml`, which masks:
+including log lines and metric values. Before it does, OpenSRE masks it with
+`local-setup/opensre/guardrails.yml`.
+
+That happens only because of the route the image uses. OpenSRE 0.1.2026.9.21 applies
+`guardrails.yml` on its CLI transport: there the whole conversation (the instructions, every
+tool result, the attached pages) is flattened into one text and masked before the Claude Code CLI
+is started. Its Anthropic SDK client (`LLM_PROVIDER=anthropic`) has no masking step and sends tool
+results as they came. So `run-sweeps.sh` sets `LLM_PROVIDER=claude-code` itself, and neither tier
+has a setting that changes it. Do not change it on an OpenSRE upgrade without rerunning the check
+below.
+
+`local-setup/tests/opensre-redaction/run.sh` proves this end to end, and CI runs it when the
+agent's files change (`.github/workflows/opensre-redaction.yml`). It builds the image, runs the
+real loop against a stand-in for Gatus, Grafana/Loki and the Anthropic API, lets the scripted
+model read log lines full of secrets, and fails if any request that would have left the box
+carries one. Pointed at the SDK route, the same check fails on the first request.
+
+The rules mask:
 
 - JWTs, and `access_token` / `authToken` / `Authorization` values. Kong's auth call puts the live
   session token in a query string that the proxy's access log carries into Loki.
@@ -171,9 +217,12 @@ offset starting 82–87), so the agent can lose the odd metric value.
 
 **Limits of the mechanism.** OpenSRE stops scanning a message after 1000 matches, and rules it
 has not reached by then are not applied to that message. The credential rules therefore come
-first in the file. It also skips, with only a log warning, any pattern Python cannot compile.
+first in the file. It also skips, with only a log warning, any pattern Python cannot compile. And
+it masks escaped text: a JSON log line inside a tool result reads `\\\"password\\\":\\\"…` by then, so
+the field rules accept any run of backslashes before a quote.
 `local-setup/tests/static/opensre-guardrails.test.ts` compiles every pattern and runs leak samples
-through the same algorithm. Add a sample there with any new rule. To try a string inside the
+through the same algorithm, each raw and JSON-encoded once and twice. Add a sample there with any
+new rule. To try a string inside the
 container:
 
 ```bash
@@ -185,16 +234,28 @@ matches. The redaction applied before a model call merges them, so trust the lis
 that line.
 
 OpenSRE's own product telemetry, Sentry error reporting and local prompt log are switched off
-(`OPENSRE_NO_TELEMETRY`, `OPENSRE_SENTRY_DISABLED`, `OPENSRE_PROMPT_LOG_DISABLED`).
+(`OPENSRE_NO_TELEMETRY`, `OPENSRE_SENTRY_DISABLED`, `OPENSRE_PROMPT_LOG_DISABLED`), and so are
+the Claude Code CLI's telemetry, error reporting and auto-update
+(`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`, set by the wrapper). OpenSRE passes the CLI only
+the Anthropic API key and its own settings, not the Grafana token.
 
 ## Upgrading OpenSRE
 
 Update `OPENSRE_VERSION` and both `OPENSRE_SHA256_*` build args in
 `local-setup/opensre/Dockerfile`. Take the checksums from the release's `.sha256` assets. Also
 update the `image:` tag in `docker-compose.opensre.yml` to match. Check the new release's
-changelog for changes to `opensre ask`, since upstream is still alpha and moves daily. Recheck
-`READ_ONLY_TOOLS` in `run-sweeps.sh` too: a renamed tool makes every investigation fail with
-"unknown registered tool name", and a tool that now writes must come off the list.
+changelog for changes to `opensre ask`, since upstream is still alpha and moves daily. Then:
+
+- Recheck `READ_ONLY_TOOLS` in `run-sweeps.sh`. A renamed tool makes every investigation fail with
+  "unknown registered tool name", and a tool that now writes must come off the list.
+- Run `local-setup/tests/opensre-redaction/run.sh`. It fails if the new release stops masking on
+  the CLI route or changes how the CLI is called.
+- If upstream starts masking in its SDK clients too, the CLI can go; until then it stays.
+
+The Claude Code CLI is pinned the same way: `CLAUDE_CODE_VERSION` and both
+`CLAUDE_CODE_SHA256_*`, from that version's
+`https://downloads.claude.ai/claude-code-releases/<version>/manifest.json`. Run `run.sh` after
+bumping it too: it checks the CLI still sends no tools of its own.
 
 ---
 
@@ -226,7 +287,8 @@ integration, so there are no traces. `endpoints.tempoUrl` is empty on purpose.
 
 ### Turning it on
 
-1. **Build and push the image** — there is no public one carrying this release:
+1. **Build and push the image** — there is no public one carrying this release (it also carries the
+   Claude Code CLI the agent reaches the model through):
    ```bash
    docker build local-setup/opensre -t egovio/opensre:0.1.2026.9.21
    docker push egovio/opensre:0.1.2026.9.21
@@ -274,7 +336,10 @@ nothing to react to and logs that it cannot reach Gatus.
   `docker-socket-proxy` (`GET` only) and attaches a `docker inspect` summary: status, health and
   the last health-check output, exit code, OOM kill, restarts, timestamps, memory limit and
   restart policy. It never copies environment variables, commands or arguments, which hold the
-  stack's secrets; the parity test enforces that. Usage over time comes from `container-stats`
+  stack's secrets; the parity test enforces that. The proxy itself would serve them to anyone who
+  asked (`GET /containers/{id}/json` includes the environment), so it sits on its own
+  `docker-api-network`, which only its three readers join: promtail, `container-stats` and this
+  agent. Usage over time comes from `container-stats`
   (Prometheus `container_*`, labelled `container_name`). Without the proxy (below
   `observability_level: metrics`) the loop logs a warning and investigates without the page. The
   Kubernetes tier reads pod state from the cluster API instead.

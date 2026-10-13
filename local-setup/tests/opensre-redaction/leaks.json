@@ -1,0 +1,16 @@
+{
+  "_comment": "Stand-in secrets for run.sh. Every secret holds the marker S3CRET; the citizen phone number is 712345678 with or without a prefix. None of them may reach the model provider.",
+  "gatus_error": "Get \"http://kong:8000/user/_details?access_token=S3CRET-G01&tenantId=pg\": context deadline exceeded",
+  "log_lines": [
+    "172.18.0.9 - - [13/Oct/2026:05:00:00 +0000] \"POST /user/_details?access_token=S3CRET-L01&tenantId=pg HTTP/1.1\" 401 52 \"-\" \"okhttp/4.9.0\"",
+    "{\"level\":\"ERROR\",\"logger\":\"egov-user\",\"msg\":\"login failed\",\"password\":\"S3CRET-L02\",\"mobileNumber\":\"0712345678\"}",
+    "{\"name\":\"SPRING_DATASOURCE_PASSWORD\",\"value\":\"S3CRET-L03\"}",
+    "org.postgresql.util.PSQLException: connection to postgresql://egov:S3CRET-L04@postgres-db:5432/egov refused",
+    "upstream call failed; request headers: Authorization: Bearer S3CRET-L05",
+    "starting with NOVU_SECRET_KEY=S3CRET-L06 IDENTITY_CONTROL_PLANE_TOKEN=S3CRET-L07",
+    "- name: DB_PASSWORD\n  value: S3CRET-L08",
+    "complaint filed by s3cret-l09.citizen@example.com from +254712345678"
+  ],
+  "secret_marker": "s3cret",
+  "phone_marker": "712345678"
+}

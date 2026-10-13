@@ -8,7 +8,9 @@
  *   - opensre records each investigation and exits with STUB_OPENSRE_RC
  *   - date    reads a fake clock, so no real time passes
  *   - sleep   advances that clock, and ends the loop after STUB_SWEEPS sweeps
- * jq and timeout are the real ones.
+ * jq, timeout and the file tools are the real ones, linked into a PATH of their
+ * own: the loop refuses to start when a Python is on PATH, and CI runners and
+ * dev machines have one.
  */
 import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
@@ -27,11 +29,14 @@ const T0 = 1_800_000_000;
 const tools = spawnSync('sh', ['-c', 'command -v jq && command -v timeout && date -d @0 +%s'], {
   encoding: 'utf8',
 });
-const realDate = spawnSync('sh', ['-c', 'command -v date'], { encoding: 'utf8' }).stdout.trim();
+const which = (tool: string) => spawnSync('sh', ['-c', `command -v ${tool}`], { encoding: 'utf8' }).stdout.trim();
+const realDate = which('date');
+const HOST_TOOLS = ['cat', 'chmod', 'cp', 'jq', 'mkdir', 'mv', 'rm', 'tail', 'tee', 'timeout'];
+const MAX_PER_DAY = 12;
 
 const gatus = (failing: string[]) =>
   JSON.stringify(
-    ['a', 'b', 'c', 'd'].map((key) => ({
+    [...new Set(['a', 'b', 'c', 'd', ...failing])].map((key) => ({
       key,
       group: 'core',
       name: key.toUpperCase(),
@@ -46,12 +51,18 @@ const gatus = (failing: string[]) =>
  * or null for a Gatus that cannot be reached. Returns the clock offset (s)
  * of each investigation and the loop's records.
  */
-function run(sweeps: number, failingAt: (n: number) => string[] | null, opensreRc: number) {
+function run(
+  sweeps: number,
+  failingAt: (n: number) => string[] | null,
+  opensreRc: number,
+  { python = false } = {},
+) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'opensre-loop-'));
   const bin = path.join(dir, 'bin');
   for (const d of [bin, path.join(dir, 'statuses'), path.join(dir, 'logs'), path.join(dir, 'home')]) {
     fs.mkdirSync(d, { recursive: true });
   }
+  for (const tool of HOST_TOOLS) fs.symlinkSync(which(tool), path.join(bin, tool));
   for (let n = 0; n < sweeps; n++) {
     const failing = failingAt(n);
     if (failing) fs.writeFileSync(path.join(dir, 'statuses', `${n}.json`), gatus(failing));
@@ -74,16 +85,18 @@ function run(sweeps: number, failingAt: (n: number) => string[] | null, opensreR
     'echo $(( $(cat "$S/clock") + $1 )) > "$S/clock"',
     '[ "$n" -lt "$STUB_SWEEPS" ] || kill -TERM "$PPID"',
   ].join('\n'));
+  if (python) stub('python3', 'exit 0');
 
-  spawnSync('sh', [LOOP], {
+  spawnSync('/bin/sh', [LOOP], {
     encoding: 'utf8',
     timeout: 120_000,
     env: {
-      PATH: `${bin}:${process.env.PATH}`,
+      PATH: bin,
       HOME: path.join(dir, 'home'),
       OPENSRE_LOG_DIR: path.join(dir, 'logs'),
       OPENSRE_SWEEP_INTERVAL_MINUTES: String(INTERVAL_S / 60),
       OPENSRE_DEDUPE_HOURS: String(DEDUPE_S / 3600),
+      OPENSRE_MAX_INVESTIGATIONS_PER_DAY: String(MAX_PER_DAY),
       OPENSRE_GATUS_URL: 'http://gatus.test',
       OPENSRE_ENABLED: 'true',
       ANTHROPIC_API_KEY: 'stub',
@@ -103,6 +116,11 @@ function run(sweeps: number, failingAt: (n: number) => string[] | null, opensreR
 }
 
 (tools.status === 0 ? describe : describe.skip)('OpenSRE sweep loop cost controls', () => {
+  test('runs with the test PATH', () => {
+    const { records } = run(1, () => [], 0);
+    expect(records.map((r) => r.kind)).toEqual(['started', 'all_clear']);
+  });
+
   test('a completed investigation covers its checks for the dedupe window', () => {
     const { calls, sweepsSeen } = run(DAY, () => ['a'], 0);
     expect(sweepsSeen).toBe(DAY);
@@ -134,6 +152,36 @@ function run(sweeps: number, failingAt: (n: number) => string[] | null, opensreR
     const investigated = records.filter((r) => r.kind === 'investigation').map((r) => r.trigger);
     expect(investigated).toEqual(['a,b', 'a,b,c']);
     expect(records.filter((r) => r.kind === 'unchanged')).toHaveLength(18);
+  });
+
+  /**
+   * Review 4255083510: per-check dedupe does not bound a cascade, where every
+   * sweep finds a check no investigation has covered yet. Without a cap that
+   * is a run every sweep, 96 a day. The cap allows MAX_PER_DAY in any 24 h.
+   */
+  test('a cascade of new failing checks stops at the daily cap, then resumes', () => {
+    const { calls, records } = run(DAY + MAX_PER_DAY, (n) => [`cascade${n}`], 0);
+    const firstDay = Array.from({ length: MAX_PER_DAY }, (_v, i) => i * INTERVAL_S);
+    expect(calls).toEqual([...firstDay, ...firstDay.map((t) => t + 24 * 3600)]);
+    expect(records.filter((r) => r.kind === 'capped')).toHaveLength(DAY - MAX_PER_DAY);
+  });
+
+  test('failed investigations count towards the cap too', () => {
+    const { calls } = run(DAY, (n) => [`cascade${n}`], 1);
+    expect(calls).toHaveLength(MAX_PER_DAY);
+  });
+
+  /**
+   * Review 4255083506: OpenSRE runs execute_python_code (model-written code,
+   * network optional) without approval whenever a Python is on PATH.
+   */
+  test('refuses to start when a Python is on PATH', () => {
+    const { calls, records, sweepsSeen } = run(4, () => ['a'], 0, { python: true });
+    expect(calls).toEqual([]);
+    expect(sweepsSeen).toBe(0);
+    expect(records).toHaveLength(1);
+    expect(records[0].kind).toBe('error');
+    expect(records[0].message).toMatch(/Refusing to start: .*python3 is on PATH/);
   });
 
   // Review 4181060063: an unreachable Gatus used to start a run with no checks.

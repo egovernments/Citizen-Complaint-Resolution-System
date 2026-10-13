@@ -96,6 +96,8 @@ services:
           memory: 128M
     networks:
       - egov-network
+      # docker-socket-proxy is reachable only on docker-api-network.
+      - docker-api-network
 
   # Database metrics (#1615). Postgres is under every complaint, user lookup
   # and workflow transition, and the only thing we knew about it was whether a

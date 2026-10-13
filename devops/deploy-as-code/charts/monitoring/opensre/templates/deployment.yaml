@@ -56,11 +56,9 @@ spec:
               value: {{ .Values.sweep.dedupeHours | quote }}
             - name: OPENSRE_INVESTIGATION_TIMEOUT_SECONDS
               value: {{ .Values.sweep.investigationTimeoutSeconds | quote }}
-            - name: LLM_PROVIDER
-              value: {{ .Values.model.provider | quote }}
-            - name: ANTHROPIC_REASONING_MODEL
-              value: {{ .Values.model.name | quote }}
-            - name: ANTHROPIC_TOOLCALL_MODEL
+            - name: OPENSRE_MAX_INVESTIGATIONS_PER_DAY
+              value: {{ .Values.sweep.maxInvestigationsPerDay | quote }}
+            - name: CLAUDE_CODE_MODEL
               value: {{ .Values.model.name | quote }}
             # Missing or empty secret keys leave these empty: the agent then
             # logs that it is idle (no API key) or simply sees less (no Grafana

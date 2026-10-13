@@ -17,6 +17,10 @@
 # through docker-socket-proxy (GET only; the proxy refuses every write). No
 # Docker socket, no database credentials, no published port.
 #
+# The model is reached through the Claude Code CLI inside the image, the one
+# Anthropic route on which OpenSRE masks what it sends (guardrails.yml). The
+# loop sets that itself; see opensre/claude-locked.
+#
 # No depends_on: grafana, tempo and gatus are profile-gated or optional, and a
 # depends_on on a service excluded by profile makes compose reject the whole
 # project (#1687). The sweep loop tolerates them being down and logs it.
@@ -45,6 +49,7 @@ services:
       OPENSRE_ENABLED: ${OPENSRE_ENABLED:-true}
       OPENSRE_SWEEP_INTERVAL_MINUTES: ${OPENSRE_SWEEP_INTERVAL_MINUTES:-15}
       OPENSRE_DEDUPE_HOURS: ${OPENSRE_DEDUPE_HOURS:-6}
+      OPENSRE_MAX_INVESTIGATIONS_PER_DAY: ${OPENSRE_MAX_INVESTIGATIONS_PER_DAY:-12}
       OPENSRE_GATUS_URL: http://gatus:8080
       # The deployment, as the agent should picture it when it names components
       # and writes the commands a human should run.
@@ -60,10 +65,10 @@ services:
       OPENSRE_DOCKER_API_URL: http://docker-socket-proxy:2375
       OPENSRE_COMPOSE_PROJECT: ${COMPOSE_PROJECT_NAME}
 
-      LLM_PROVIDER: anthropic
+      # Read by the Claude Code CLI. OpenSRE passes only these Anthropic
+      # variables to it, not the Grafana token or anything else here.
       ANTHROPIC_API_KEY: ${OPENSRE_ANTHROPIC_API_KEY:-}
-      ANTHROPIC_REASONING_MODEL: ${OPENSRE_MODEL:-claude-opus-5}
-      ANTHROPIC_TOOLCALL_MODEL: ${OPENSRE_MODEL:-claude-opus-5}
+      CLAUDE_CODE_MODEL: ${OPENSRE_MODEL:-claude-opus-5}
 
       # Grafana answers /api at the root even with serve_from_sub_path on.
       GRAFANA_INSTANCE_URL: http://grafana:3000
@@ -96,3 +101,6 @@ services:
           memory: 1G
     networks:
       - egov-network
+      # docker-socket-proxy, for the container-state page; it is reachable
+      # only on this network.
+      - docker-api-network
