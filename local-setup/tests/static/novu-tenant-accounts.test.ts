@@ -164,8 +164,13 @@ describe('Ansible', () => {
       .toBeLessThan(playbook.indexOf('- name: Start DIGIT stack (Linux/Debian)'));
   });
 
-  test('the published default Novu admin password is refused, and moved off before anything signs in', () => {
-    expect(task('novu tenant accounts — refuse the published default admin password')).toContain("novu_admin_password_effective != 'Digit@12345'");
+  test('the published default Novu admin password never reaches the bridge, and is moved off before anything signs in', () => {
+    // A host_vars pin of the published default is a refused sign-in, never tried (the verify step
+    // then switches the feature off, or stops on explicit true / provisioned workspaces).
+    const verify = read('local-setup/ansible/tasks/novu-tenant-accounts-verify.yml');
+    expect(verify).toContain(`nta_published_default: "{{ novu_admin_password_effective == 'Digit@12345' }}"`);
+    expect(verify).toMatch(/- nta_login_override is not defined\n {4}- not \(nta_published_default \| bool\)/);
+    expect(verify).toContain("'PUBLISHED-DEFAULT not tried' if (nta_published_default | bool)");
     const rotate = playbook.indexOf('- name: "novu tenant accounts — move the Novu admin off the legacy password"');
     const mint1 = playbook.indexOf('- name: "novu-bootstrap — mint Development API key (attempt 1: existing account)"');
     const health = playbook.indexOf('- name: "novu-bootstrap — wait for novu-api health"');
@@ -176,11 +181,47 @@ describe('Ansible', () => {
     expect(t).toContain('NB_NEW: "{{ novu_admin_password_effective }}"');
     expect(t).not.toMatch(/python3 -c|--password/);
     expect(t).toContain('/v1/auth/update-password');
-    // Both mint attempts sign in with the same effective password the bridge gets.
-    const mints = playbook.match(/ NOVU_ADMIN_PASSWORD='/g) ?? [];
-    expect(mints.length).toBe(2);
-    expect(playbook).not.toContain(`NOVU_ADMIN_PASSWORD='{{ novu_admin_password | default("Digit@12345") }}'`);
-    expect(playbook.match(/NOVU_ADMIN_PASSWORD='\{\{ novu_admin_password_effective \}\}'/g)?.length).toBe(2);
+    // Both mint attempts sign in with the same effective password, through the environment
+    // (a shell string is in the task result at -v and in `ps`), and log nothing.
+    expect(playbook).not.toMatch(/NOVU_ADMIN_PASSWORD='/);
+    expect(playbook.match(/ {2}NOVU_ADMIN_PASSWORD: "\{\{ novu_admin_password_effective \}\}"/g)?.length).toBe(2);
+    for (const name of ['novu-bootstrap — mint Development API key (attempt 1: existing account)',
+      'novu-bootstrap — mint Development API key (attempt 2: fresh signup)']) {
+      const mint = playbook.slice(playbook.indexOf(`- name: "${name}"`) + 1);
+      const body = mint.slice(0, mint.search(/\n\s+- name:/));
+      expect(body).toContain('ansible.builtin.shell: bash {{ digit_dir }}/novu-mint-key.sh');
+      expect(body).toContain('no_log: true');
+    }
+    // The script itself keeps the password and the JWT off argv.
+    const mintScript = read('backend/novu-bridge/config/novu-mint-key.sh');
+    expect(mintScript).not.toMatch(/password="\$PASS"|-d "\$\(_jbody|Authorization: Bearer \$jwt"/);
+    expect(mintScript).toContain('NB_PASS="$PASS" python3');
+    expect(mintScript.match(/--data-binary @-/g)?.length).toBe(2);
+    expect(mintScript).toContain('-H @-');
+  });
+
+  test('with per-tenant accounts off, the mint signs in with the admin password Novu accepts', () => {
+    // OpenBao is read whenever Novu runs, so a box the feature already moved keeps its key.
+    expect(task('novu tenant accounts — re-read tenant secrets')).toContain('when: enable_novu | default(false) | bool');
+    const login = task('novu tenant accounts — effective Novu admin login');
+    expect(login).toMatch(/_without: >-\n\s+\{\{ \(novu_admin_password \| default\('', true\)\) or _held\n\s+or \(novu_admin_password_legacy \| default\('', true\)\) or 'Digit@12345' \}\}/);
+    expect(login).toContain('if (novu_tenant_accounts_on | bool) else _without');
+    const candidates = task('novu-bootstrap — the Novu admin passwords to try (per-tenant accounts off)');
+    expect(candidates).toContain("[novu_admin_password_held, novu_admin_password_legacy | default(''), 'Digit@12345']");
+    expect(candidates).toContain("- not (novu_admin_password | default('', true))");
+    expect(candidates).toContain('no_log: true');
+    const probe = task('novu-bootstrap — the Novu admin password the mint signs in with (per-tenant accounts off)');
+    expect(probe).toContain('NB_CANDIDATES: "{{ novu_admin_password_candidates | to_json }}"');
+    expect(probe).toContain('no_log: true');
+    expect(probe).not.toMatch(/python3 -c|--password/);
+    expect(task('novu-bootstrap — sign in with the one Novu accepted (per-tenant accounts off)'))
+      .toContain('novu_admin_password_candidates[novu_admin_pick.stdout | trim | int]');
+    const at = (name: string) => playbook.indexOf(`- name: "${name}`);
+    expect(at('novu-bootstrap — sign in with the one Novu accepted (per-tenant accounts off)'))
+      .toBeLessThan(at('novu-bootstrap — mint Development API key (attempt 1: existing account)'));
+    // The preflight switch-off hands the mint the same fallback.
+    expect(read('local-setup/ansible/tasks/novu-tenant-accounts-verify.yml'))
+      .toContain('novu_admin_password_effective: "{{ novu_admin_password_without_tenant_accounts }}"');
   });
 
   test('the Novu admin sign-in is verified before the bridge relies on it (review S2)', () => {
@@ -198,7 +239,7 @@ describe('Ansible', () => {
       expect(t).toContain('- novu_tenant_accounts_on | bool');
     }
     // Preflight: the password is known, the bridge has not been given it, the stack has not started.
-    expect(preflight).toBeGreaterThan(at('novu tenant accounts — refuse the published default admin password'));
+    expect(preflight).toBeGreaterThan(at('novu tenant accounts — effective Novu admin login'));
     expect(preflight).toBeLessThan(at('novu tenant accounts — write secrets into compose .env'));
     expect(preflight).toBeLessThan(playbook.indexOf('- name: Start DIGIT stack (Linux/Debian)'));
     // Post-start: after the legacy-password move and the mint, before the bridge is recreated
