@@ -204,6 +204,12 @@ function ManagementAdminResources() {
               : <Resource key={name} name={name} list={MdmsResourcePage} show={MdmsResourceShow} edit={MdmsResourceEdit} create={MdmsResourceCreate} />
         ))}
 
+        {/* ours (cfgreview F24, #1570): Members inside the app layout (it rendered bare, with no menu or header); its own
+            CustomRoutes block so the other patches' route hunks keep their anchors */}
+        <CustomRoutes>
+          <Route path="/members" element={<MembersPage />} />
+        </CustomRoutes>
+
         {/* Custom routes */}
         <CustomRoutes>
           <Route path="/notification-configure" element={<NotificationConfigure />} />
@@ -225,8 +231,6 @@ function ManagementAdminResources() {
           <Route path="/departments/bulk" element={<DepartmentBulkImport />} />
           <Route path="/designations/bulk" element={<DesignationBulkImport />} />
           <Route path="/localization/bulk" element={<LocalizationBulkImport />} />
-          {/* ours (cfgreview F24, #1570): Members inside the app layout (it rendered bare, with no menu or header) */}
-          <Route path="/members" element={<MembersPage />} />
         </CustomRoutes>
       </CoreAdminUI>
     </CoreAdminContext>
