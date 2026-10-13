@@ -6,6 +6,12 @@
 
 import { vi } from 'vitest';
 import '@testing-library/jest-dom';
+import { configure } from '@testing-library/react';
+
+// findBy* / waitFor give up after 1 s by default. On a loaded CI host (several test shards at once) a page's first
+// render plus its mocked fetches can take longer, and a correct test then fails at random (WorkspacePage's rename
+// test went red twice on a busy host and passes 10/10 locally). 5 s only lengthens a wait that would otherwise fail.
+configure({ asyncUtilTimeout: 5000 });
 
 // Mock posthog
 vi.mock('posthog-js', () => ({

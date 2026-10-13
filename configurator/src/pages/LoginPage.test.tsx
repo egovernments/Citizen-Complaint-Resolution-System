@@ -94,7 +94,7 @@ describe('configurator sign in', () => {
     fireEvent.click(screen.getByRole('button', { name: /send password setup link/i }));
 
     await waitFor(() => expect(api.requestPasswordSetup).toHaveBeenCalledWith('oauth.only@example.com'));
-    expect(await screen.findByText(/if an eligible account exists/i)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/if an eligible account exists/i)).toBeInTheDocument());
     expect(screen.getByText('Check your email')).toBeInTheDocument();
   });
 
@@ -110,7 +110,7 @@ describe('configurator sign in', () => {
     });
     renderPage('/login?authResult=result-1', true);
 
-    expect(await screen.findByText(/password setup was not completed/i)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/password setup was not completed/i)).toBeInTheDocument());
     expect(api.consumeAuthResult).toHaveBeenCalledTimes(1);
     expect(api.consumeAuthResult).toHaveBeenCalledWith('result-1');
     fireEvent.change(screen.getByLabelText(/email address/i), {
@@ -119,7 +119,7 @@ describe('configurator sign in', () => {
     fireEvent.click(screen.getByRole('button', { name: /send password setup link/i }));
 
     await waitFor(() => expect(api.requestPasswordSetup).toHaveBeenCalledWith('oauth.only@example.com'));
-    expect(await screen.findByText(/if an eligible account exists/i)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/if an eligible account exists/i)).toBeInTheDocument());
     expect(screen.queryByText(/password setup was not completed/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /send password setup link/i })).not.toBeInTheDocument();
   });
