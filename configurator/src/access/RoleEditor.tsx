@@ -183,14 +183,14 @@ export default function RoleEditor() {
         <Card>
           <CardHeader><AccessTitle level={2}>What it may do</AccessTitle></CardHeader>
           <CardContent className="overflow-x-auto">
-            <table className="w-full min-w-[560px] text-sm">
-              <thead><tr className="text-left text-xs uppercase text-muted-foreground"><th className="p-2">Allowed</th><th className="p-2">Capability</th><th className="p-2">APIs it opens</th></tr></thead>
+            <table className="w-full text-sm md:min-w-[560px]">
+              <thead className="hidden md:table-header-group"><tr className="text-left text-xs uppercase text-muted-foreground"><th className="p-2">Allowed</th><th className="p-2">Capability</th><th className="p-2">APIs it opens</th></tr></thead>
               <tbody>
                 {CAPABILITIES.map((c) => {
                   const acts = actionsOf(c.id, loaded.actions);
                   const st = capabilityState(c.id, loaded.actions, held);
                   return (
-                    <tr key={c.id} className="border-t">
+                    <tr key={c.id} className="flex flex-wrap border-t md:table-row">
                       <td className="p-2">
                         <input type="checkbox" aria-label={c.label} checked={capOn(c.id)} disabled={!canEdit || st === 'none'}
                           ref={(el) => { if (el) el.indeterminate = caps[c.id] === undefined && st === 'partial'; }}
@@ -204,8 +204,8 @@ export default function RoleEditor() {
                             }
                           }} />
                       </td>
-                      <td className="p-2">{c.label}{st === 'partial' && caps[c.id] === undefined && <span className="ml-2 text-xs text-amber-700">(some granted)</span>}</td>
-                      <td className="p-2 font-mono text-xs text-muted-foreground">{acts.length ? acts.map((a) => a.url).join(', ') : 'no such action at this install'}</td>
+                      <td className="flex-1 p-2">{c.label}{st === 'partial' && caps[c.id] === undefined && <span className="ml-2 text-xs text-amber-700">(some granted)</span>}</td>
+                      <td className="basis-full break-all p-2 pt-0 font-mono text-xs text-muted-foreground md:pt-2">{acts.length ? acts.map((a) => a.url).join(', ') : 'no such action at this install'}</td>
                     </tr>
                   );
                 })}

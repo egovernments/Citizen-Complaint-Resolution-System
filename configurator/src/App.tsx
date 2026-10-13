@@ -57,6 +57,7 @@ import { EscalationPolicyEditor } from '@/admin/escalation';
 import PgrDashboard from './pages/PgrDashboard';
 import RoleEditor from './access/RoleEditor';
 import PolicyRows from './access/PolicyRows';
+import { RoleCreateRedirect, RoleEditRedirect } from './resources/access-roles/AccessRoleShow';
 import OrgChartPage from './pages/org-chart/OrgChartPage';
 import PublicDashboardConfigure from './resources/public-dashboard/PublicDashboardConfigure';
 import { getGenericMdmsResources, getDataProvider, getAuthProvider, configureDigitClient, i18nProvider, DigitApiClient, isReadOnlyResource } from '@/providers/bridge';
@@ -168,7 +169,7 @@ function ManagementAdminResources() {
 
         {/* Read-only entities with List/Show */}
         {canViewResource('access-roles') && (
-          <Resource name="access-roles" list={AccessRoleList} show={AccessRoleShow} create={MdmsResourceCreate} edit={MdmsResourceEdit} />
+          <Resource name="access-roles" list={AccessRoleList} show={AccessRoleShow} create={RoleCreateRedirect} edit={RoleEditRedirect} />
         )}
         {canViewResource('access-actions') && <Resource name="access-actions" list={AccessActionList} show={AccessActionShow} />}
         {canViewResource('role-actions') && (
