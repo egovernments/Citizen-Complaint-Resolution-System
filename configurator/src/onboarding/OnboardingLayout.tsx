@@ -1,20 +1,22 @@
 import { useEffect, useState } from 'react';
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Check, ChevronRight, House, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { ArrowRight, Check, House, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useApp } from '../App';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import { useMastersCapability } from '@/hooks/useMastersCapability';
 import { NavRow, SectionLabel, RailBackdrop, RailCloseButton, RailMenuButton, RailPoweredBy } from '@/components/layout/rail';
 import { railClasses } from '@/components/layout/railStyles';
 import { useRailDrawer } from '@/components/layout/useRailDrawer';
 import { AccountMenu, HelpButton, LocaleSwitcher, ThemeSwitcher } from '@/components/layout/HeaderControls';
 import { HOME_PATH, ONBOARDING_STEPS } from './steps';
-import { completedCount, resumePath, stepForPath, stepStatus, type StepStatus } from './progress';
+import { completedCount, resumePath, resumeStep, stepForPath, stepStatus, type StepStatus } from './progress';
 import { initialsOf, useOrganisation } from './organisation';
 import { trackEvent } from '@/lib/telemetry';
 import { useOnboardingT } from './i18n';
-import { SectionDocs } from './docs/SectionDocs';
+import { DocsButton, DocsRail } from './docs/DocsRail';
 import type { DocsSection } from './docs/docsLinks';
+import { stepGuide } from './stepGuide';
 
 /**
  * The step marks in place of icons: a tick once a step is done, a filled dot
@@ -65,6 +67,9 @@ export default function OnboardingLayout() {
   // than from a failed submit deep in the step.
   const currentStepEditable = !currentStep || canEditResource(currentStep.master);
   const groups = [...new Set(ONBOARDING_STEPS.map((step) => step.group))];
+  const guide = stepGuide(t);
+  const nextStep = resumeStep(completed);
+  const previousStep = ONBOARDING_STEPS.find((step) => step.number === nextStep.number - 1);
 
   // A step opened, from the rail, a Back or continue, or a resume.
   const openedStep = currentStepLocked ? undefined : currentStep;
@@ -119,30 +124,38 @@ export default function OnboardingLayout() {
             </button>
           </div>
 
+          {/* The step to do next, what it's for and a button into it. Steps unlock in
+              order, so the one before it is the one just finished. */}
           {!collapsed && (
-            <button
-              type="button"
-              onClick={() => navigate(resumePath(completed))}
-              className="w-full text-left rounded border border-border bg-card p-3 transition-colors hover:border-primary/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            >
-              <span className="flex items-center justify-between gap-2">
-                <span className="text-sm font-semibold text-foreground">{t('layout.setup_account', 'Let’s set up your account')}</span>
-                <ChevronRight aria-hidden="true" className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-              </span>
+            <section aria-labelledby="setup-card-next" className="rounded border border-border bg-card p-3">
+              {previousStep && (
+                <p className="mb-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Check aria-hidden="true" className="h-3.5 w-3.5 text-primary" strokeWidth={3} />
+                  {t('layout.card.done', '%{step} done', { step: t(`steps.${previousStep.id}`, previousStep.label) })}
+                </p>
+              )}
+              <h2 id="setup-card-next" className="text-sm font-semibold text-foreground">
+                {t('layout.card.next', 'Next step: %{step}', { step: t(`steps.${nextStep.id}`, nextStep.label) })}
+              </h2>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">{guide[nextStep.id].description}</p>
+              <Button size="sm" onClick={() => navigate(nextStep.path)} className="mt-3 h-8 w-full gap-1.5 text-xs">
+                {guide[nextStep.id].action}
+                <ArrowRight aria-hidden="true" className="h-3.5 w-3.5" />
+              </Button>
               <span
                 role="progressbar"
                 aria-label={t('layout.setup_progress', 'Setup progress')}
                 aria-valuemin={0}
                 aria-valuemax={total}
                 aria-valuenow={done}
-                className="mt-2.5 block h-1.5 rounded-full bg-muted overflow-hidden"
+                className="mt-3 block h-1.5 overflow-hidden rounded-full bg-muted"
               >
                 <span className="block h-full rounded-full bg-primary transition-all" style={{ width: `${(done / total) * 100}%` }} />
               </span>
-              <span className="mt-2 block text-xs text-muted-foreground">
+              <span className="mt-1.5 block text-xs text-muted-foreground">
                 {t('layout.completed_count', '%{done} of %{total} completed', { done, total })}
               </span>
-            </button>
+            </section>
           )}
         </div>
 
@@ -192,6 +205,7 @@ export default function OnboardingLayout() {
             </h1>
           </div>
           <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+            {docsSection && <DocsButton section={docsSection} />}
             <HelpButton label={t('app.header.help', 'Help')} onClick={toggleHelp} />
             <LocaleSwitcher />
             <ThemeSwitcher />
@@ -207,28 +221,25 @@ export default function OnboardingLayout() {
         </header>
 
         <main id="main-content" className="flex-1 overflow-auto min-h-0">
-          {/* The docs go beside the page from 1400px, where the Employees table still
-              fits next to them; narrower, they sit under the page. */}
-          <div className="mx-auto flex max-w-6xl flex-col gap-8 p-4 sm:p-8 min-[1400px]:max-w-[88rem] min-[1400px]:flex-row min-[1400px]:items-start">
-            <div className="min-w-0 flex-1 min-[1400px]:max-w-6xl">
-              {!currentStepEditable && (
-                <Alert className="mb-4">
-                  <AlertDescription>
-                    {t(
-                      'layout.view_only',
-                      'Your role has view-only access to %{step}. You can review this step, but creating or editing records here is restricted to roles with write access (e.g. MDMS_ADMIN).',
-                      { step: currentStep ? t(`steps.${currentStep.id}`, currentStep.label) : '' },
-                    )}
-                  </AlertDescription>
-                </Alert>
-              )}
-              {currentStepLocked ? <Navigate to={resumePath(completed)} replace /> : <Outlet />}
-            </div>
-            {docsSection && <SectionDocs section={docsSection} className="min-[1400px]:sticky min-[1400px]:top-8 min-[1400px]:w-56 min-[1400px]:shrink-0" />}
+          <div className="max-w-6xl mx-auto p-4 sm:p-8">
+            {!currentStepEditable && (
+              <Alert className="mb-4">
+                <AlertDescription>
+                  {t(
+                    'layout.view_only',
+                    'Your role has view-only access to %{step}. You can review this step, but creating or editing records here is restricted to roles with write access (e.g. MDMS_ADMIN).',
+                    { step: currentStep ? t(`steps.${currentStep.id}`, currentStep.label) : '' },
+                  )}
+                </AlertDescription>
+              </Alert>
+            )}
+            {currentStepLocked ? <Navigate to={resumePath(completed)} replace /> : <Outlet />}
           </div>
         </main>
 
       </div>
+
+      {docsSection && <DocsRail section={docsSection} />}
     </div>
   );
 }
