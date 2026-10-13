@@ -354,6 +354,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
                     type="button"
                     onClick={() => toggleGroup(group.labelKey)}
                     aria-expanded={isOpen}
+                    aria-label={translate(group.labelKey)}
                     className="w-full text-left focus-visible:outline-none focus-visible:bg-muted"
                   >
                     <SectionLabel>
