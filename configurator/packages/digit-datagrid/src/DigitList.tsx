@@ -152,7 +152,8 @@ export function DigitList({
             Sync / Add / Refresh at 1280px) an inline subtitle squeezed the
             heading into two lines and left the mono text wedged against the
             buttons. Stacked, the heading keeps the full row width to itself. */}
-        <div className="flex items-start justify-between gap-4">
+        {/* ours (cfgreview F22, #1568): the actions wrap below the title on a phone instead of running over it */}
+        <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="flex items-center gap-3">
               <h1 className="text-2xl sm:text-3xl font-bold font-condensed text-foreground">
@@ -170,7 +171,7 @@ export function DigitList({
               </p>
             )}
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex flex-wrap items-center gap-2">
             {actions}
             {columnConfig && (
               <Popover>

@@ -10,7 +10,7 @@ function subscribe(cb: () => void): () => void {
   return () => m.removeEventListener?.('change', cb);
 }
 
-const snapshot = () => (typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia(QUERY).matches);
+const snapshot = () => typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia(QUERY).matches;
 
 export function useNarrow(): boolean {
   return useSyncExternalStore(subscribe, snapshot, () => false);
