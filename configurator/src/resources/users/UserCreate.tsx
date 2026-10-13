@@ -1,12 +1,7 @@
 import { useTranslate } from 'ra-core';
 import { DigitCreate, DigitFormInput, DigitFormSelect, v } from '@/admin';
 import { useMobileValidator } from '@/admin/hrms/useMobileValidator';
-
-const GENDER_CHOICES = [
-  { value: 'MALE', label: 'Male' },
-  { value: 'FEMALE', label: 'Female' },
-  { value: 'TRANSGENDER', label: 'Transgender' },
-];
+import { GENDER_CHOICES } from '../genderChoices';
 
 const defaultRecord = {
   type: 'CITIZEN',

@@ -176,7 +176,7 @@ function buildPaths(): Record<string, Record<string, unknown>> {
                       userName: { type: 'string', description: 'Defaults to mobileNumber for CITIZEN' },
                       mobileNumber: { type: 'string', pattern: '^[0-9]{10}$' },
                       emailId: { type: 'string', format: 'email' },
-                      gender: { type: 'string', enum: ['MALE', 'FEMALE', 'TRANSGENDER'] },
+                      gender: { type: 'string', enum: ['MALE', 'FEMALE'] },
                       type: { type: 'string', enum: ['CITIZEN', 'EMPLOYEE'], default: 'CITIZEN' },
                       password: { type: 'string', default: 'eGov@123' },
                       tenantId: { type: 'string' },

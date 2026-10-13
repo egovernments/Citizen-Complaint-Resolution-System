@@ -22,7 +22,7 @@ For creating EMPLOYEE users with department assignments, designation, jurisdicti
 | `user_type` | string | no | `"CITIZEN"` | User type: `"CITIZEN"` or `"EMPLOYEE"` |
 | `roles` | object[] | no | -- | Roles to assign. Each object has `code` (string) and `name` (string). `CITIZEN` role is auto-added for citizen users |
 | `email` | string | no | -- | Email address |
-| `gender` | string | no | -- | Gender: `"MALE"`, `"FEMALE"`, or `"TRANSGENDER"` |
+| `gender` | string | no | -- | Gender: `"MALE"` or `"FEMALE"` |
 | `username` | string | no | mobile number (for CITIZEN) | Username for login. Defaults to mobile number for CITIZEN users. Required for EMPLOYEE users |
 | `password` | string | no | `"eGov@123"` | Password for the account |
 

@@ -5,12 +5,7 @@ import { useApp } from '../../App';
 import { RolesEditor } from './RolesEditor';
 import { JurisdictionEditor } from './JurisdictionEditor';
 import { AssignmentEditor } from './AssignmentEditor';
-
-const GENDER_CHOICES = [
-  { value: 'MALE', label: 'Male' },
-  { value: 'FEMALE', label: 'Female' },
-  { value: 'TRANSGENDER', label: 'Transgender' },
-];
+import { GENDER_CHOICES } from '../genderChoices';
 
 const STATUS_CHOICES = [
   { value: 'EMPLOYED', label: 'Employed' },

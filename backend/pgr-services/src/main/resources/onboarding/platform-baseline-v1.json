@@ -1,5 +1,5 @@
 {
-  "version": "3",
+  "version": "4",
   "source": "Repository default-data-handler schemas and platform records; no runtime source tenant",
   "founderRoles": [
     "EMPLOYEE",
@@ -769,8 +769,6 @@
     {"schemaCode": "common-masters.Designation", "uniqueIdentifier": "ONBOARDING_FOUNDER", "data": {"code": "ONBOARDING_FOUNDER", "name": "Workspace administrator", "description": "Initial workspace founder", "active": true}},
     {"schemaCode": "common-masters.GenderType", "uniqueIdentifier": "MALE", "data": {"code": "MALE", "active": true}},
     {"schemaCode": "common-masters.GenderType", "uniqueIdentifier": "FEMALE", "data": {"code": "FEMALE", "active": true}},
-    {"schemaCode": "common-masters.GenderType", "uniqueIdentifier": "TRANSGENDER", "data": {"code": "TRANSGENDER", "active": true}},
-    {"schemaCode": "common-masters.GenderType", "uniqueIdentifier": "OTHERS", "data": {"code": "OTHERS", "active": false}},
     {"schemaCode": "DataSecurity.DecryptionABAC", "uniqueIdentifier": "WnsDefaulterReport", "data": {"key": "WnsDefaulterReport", "roleAttributeAccessList": [{"roleCode": "EMPLOYEE", "attributeAccessList": [{"attribute": {"jsonPath": "*/name"}, "accessType": "PLAIN"}]}]}},
     {"schemaCode": "DataSecurity.DecryptionABAC", "uniqueIdentifier": "BndDetail", "data": {"key": "BndDetail", "roleAttributeAccessList": [{"roleCode": "CITIZEN", "attributeAccessList": [{"attribute": {"jsonPath": "*/mobileno", "maskingTechnique": "mobile"}, "accessType": "PLAIN"}, {"attribute": {"jsonPath": "*/emailid"}, "accessType": "PLAIN"}, {"attribute": {"jsonPath": "*/aadharno"}, "accessType": "PLAIN"}, {"attribute": {"jsonPath": "*/icdcode"}, "accessType": "PLAIN"}]}, {"roleCode": "EMPLOYEE", "attributeAccessList": [{"attribute": {"jsonPath": "*/mobileno", "maskingTechnique": "mobile"}, "accessType": "PLAIN"}, {"attribute": {"jsonPath": "*/emailid"}, "accessType": "PLAIN"}, {"attribute": {"jsonPath": "*/aadharno"}, "accessType": "PLAIN"}, {"attribute": {"jsonPath": "*/icdcode"}, "accessType": "PLAIN"}]}]}},
     {"schemaCode": "DataSecurity.DecryptionABAC", "uniqueIdentifier": "WnsCollectionRegisterReport", "data": {"key": "WnsCollectionRegisterReport", "roleAttributeAccessList": [{"roleCode": "EMPLOYEE", "attributeAccessList": [{"attribute": {"jsonPath": "*/name"}, "accessType": "PLAIN"}]}]}},

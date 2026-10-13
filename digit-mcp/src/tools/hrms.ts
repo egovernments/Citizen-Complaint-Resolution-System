@@ -83,7 +83,7 @@ export function registerHrmsTools(registry: ToolRegistry): void {
         },
         gender: {
           type: 'string',
-          enum: ['MALE', 'FEMALE', 'TRANSGENDER'],
+          enum: ['MALE', 'FEMALE'],
           description: 'Optional gender',
         },
         dry_run: {

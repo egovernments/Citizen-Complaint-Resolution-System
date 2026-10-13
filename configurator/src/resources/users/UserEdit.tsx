@@ -1,12 +1,7 @@
 import { DigitEdit, DigitFormInput, DigitFormSelect, v } from '@/admin';
 import { FieldSection } from '@/admin/fields';
 import { useMobileValidator } from '@/admin/hrms/useMobileValidator';
-
-const GENDER_CHOICES = [
-  { value: 'MALE', label: 'Male' },
-  { value: 'FEMALE', label: 'Female' },
-  { value: 'TRANSGENDER', label: 'Transgender' },
-];
+import { GENDER_CHOICES } from '../genderChoices';
 
 const TYPE_CHOICES = [
   { value: 'CITIZEN', label: 'Citizen' },
