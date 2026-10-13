@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslate } from 'ra-core';
 import { useApp } from '../App';
 import {
@@ -337,6 +337,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
                   active={location.pathname === link.path}
                   collapsed={sidebarCollapsed}
                   onClick={() => navigate(link.path)}
+                  to={link.path}
                 />
               ))}
             </div>
@@ -353,6 +354,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
                     type="button"
                     onClick={() => toggleGroup(group.labelKey)}
                     aria-expanded={isOpen}
+                    aria-label={translate(group.labelKey)}
                     className="w-full text-left focus-visible:outline-none focus-visible:bg-muted"
                   >
                     <SectionLabel>
@@ -373,6 +375,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
                       active={location.pathname === item.path || location.pathname.startsWith(item.path + '/')}
                       collapsed={sidebarCollapsed}
                       onClick={() => navigate(item.path)}
+                      to={item.path}
                     />
                   ))}
               </div>
@@ -405,16 +408,16 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
                 shownAdvanced.map((item) => {
                   const isActive = location.pathname.startsWith(item.path);
                   return (
-                    <button
+                    // ours (cfgreview F27, #1573): a link, like every rail row
+                    <Link
                       key={item.id}
-                      type="button"
-                      onClick={() => navigate(item.path)}
+                      to={item.path}
                       aria-current={isActive ? 'page' : undefined}
                       className={`relative w-full min-h-8 flex items-center pl-11 pr-4 py-1.5 text-xs text-left transition-colors ${rowTone(isActive)}`}
                     >
                       {isActive && <ActiveBar />}
                       <span className="truncate">{advancedLabel(item)}</span>
-                    </button>
+                    </Link>
                   );
                 })}
             </div>

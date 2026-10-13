@@ -1,4 +1,5 @@
-import type { ComponentType, ReactNode } from 'react';
+import type { ComponentType, MouseEvent, ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { ExternalLink, Menu, X } from 'lucide-react';
 import { rowTone } from './railStyles';
 import { DigitFooter } from '@/components/DigitFooter';
@@ -31,6 +32,7 @@ export function NavRow({
   disabled = false,
   onClick,
   trailing,
+  to,
 }: {
   icon?: ComponentType<{ className?: string }>;
   leading?: ReactNode;
@@ -40,23 +42,53 @@ export function NavRow({
   disabled?: boolean;
   onClick: () => void;
   trailing?: ReactNode;
+  /** ours (cfgreview F27, #1573): the row's page; the row is then a link (new tab, URL on hover, copy link). */
+  to?: string;
 }) {
+  const className = `relative w-full min-h-9 flex items-center gap-3 py-2 text-sm text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring ${
+    collapsed ? 'justify-center px-0' : 'px-4'
+  } ${disabled ? 'text-muted-foreground cursor-not-allowed' : rowTone(active)}`;
+  const body = (
+    <>
+      {active && <ActiveBar />}
+      {leading ?? (Icon && <Icon className="w-4 h-4 flex-shrink-0" />)}
+      {!collapsed && <span className="flex-1 min-w-0">{label}</span>}
+      {!collapsed && trailing}
+    </>
+  );
+  // ours (cfgreview F22, #1568): the name is always given, so a row whose label is hidden (collapsed rail, closed
+  // phone drawer) is still announced
+  if (to && !disabled) {
+    return (
+      <Link
+        to={to}
+        onClick={(e: MouseEvent<HTMLAnchorElement>) => {
+          // a modified or middle click opens the page in a new tab, as a link does; a plain click runs the row's own
+          // handler (which navigates and closes the phone drawer)
+          if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+          e.preventDefault();
+          onClick();
+        }}
+        title={collapsed ? label : undefined}
+        aria-label={label}
+        aria-current={active ? 'page' : undefined}
+        className={className}
+      >
+        {body}
+      </Link>
+    );
+  }
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
       title={collapsed ? label : undefined}
-      aria-label={collapsed ? label : undefined}
+      aria-label={label}
       aria-current={active ? 'page' : undefined}
-      className={`relative w-full min-h-9 flex items-center gap-3 py-2 text-sm text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring ${
-        collapsed ? 'justify-center px-0' : 'px-4'
-      } ${disabled ? 'text-muted-foreground cursor-not-allowed' : rowTone(active)}`}
+      className={className}
     >
-      {active && <ActiveBar />}
-      {leading ?? (Icon && <Icon className="w-4 h-4 flex-shrink-0" />)}
-      {!collapsed && <span className="flex-1 min-w-0">{label}</span>}
-      {!collapsed && trailing}
+      {body}
     </button>
   );
 }
