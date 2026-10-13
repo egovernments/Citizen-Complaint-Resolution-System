@@ -3,6 +3,8 @@ import { PgrInboxPage } from '../pages/pgr-inbox.page';
 import { getDigitToken, loginViaApi, appBase } from '../utils/auth';
 import { requiredEnv } from '../utils/identity';
 import { getMobileValidationRule, generateValidMobile } from '../common/mdms-mobile';
+import { pickRandomLeafBoundary, type Boundary } from '../common/mdms-boundary';
+import { pickRandomServiceCode, type ServiceDef } from '../common/mdms-servicedef';
 
 const BASE_URL = requiredEnv('BASE_URL');
 const TENANT = requiredEnv('DIGIT_TENANT');
@@ -18,6 +20,9 @@ test.describe.serial('Full PGR complaint lifecycle', () => {
   let createSucceeded = false;
   // Tenant-aware phone, sourced from MDMS at suite setup.
   let citizenPhone: string;
+  // Seeded complaint type and locality: PGR refuses codes the deployment does not hold.
+  let locality: Boundary;
+  let serviceDef: ServiceDef;
 
   test.beforeAll(async () => {
     const rule = await getMobileValidationRule(TENANT, {
@@ -27,6 +32,10 @@ test.describe.serial('Full PGR complaint lifecycle', () => {
     });
     citizenPhone = generateValidMobile(rule);
     console.log(`[pgr-flow] citizenPhone=${citizenPhone} pattern=${rule.pattern} (tenant=${TENANT})`);
+    const admin = { baseURL: BASE_URL, adminUser: ADMIN_USER, adminPassword: ADMIN_PASS };
+    locality = await pickRandomLeafBoundary(TENANT, admin);
+    serviceDef = await pickRandomServiceCode(TENANT, admin);
+    console.log(`[pgr-flow] locality=${locality.code} serviceCode=${serviceDef.serviceCode}`);
   });
 
   test('login as employee', async ({ page }) => {
@@ -59,15 +68,12 @@ test.describe.serial('Full PGR complaint lifecycle', () => {
       },
       service: {
         tenantId: TENANT,
-        serviceCode: 'StreetLightNotWorking',
+        serviceCode: serviceDef.serviceCode,
         description: `E2E lifecycle test complaint - ${timestamp}`,
         source: 'web',
         address: {
           city: TENANT,
-          locality: {
-            code: 'LOCALITY1',
-            name: 'Test Locality',
-          },
+          locality: { code: locality.code, name: locality.name },
           geoLocation: { latitude: 28.7041, longitude: 77.1025 },
         },
         citizen: {
@@ -91,20 +97,13 @@ test.describe.serial('Full PGR complaint lifecycle', () => {
       },
     );
 
-    if (resp.status === 400) {
-      const body = await resp.text();
-      console.log(`PGR create returned 400: ${body.slice(0, 300)}`);
-      test.skip(true, 'PGR create failed — missing data prerequisites');
-      return;
-    }
-
-    expect(resp.ok).toBe(true);
+    expect(resp.ok, `PGR create failed (${resp.status}): ${(await resp.clone().text()).slice(0, 300)}`).toBe(true);
     const data = await resp.json();
     expect(data.ServiceWrappers).toBeDefined();
     expect(data.ServiceWrappers.length).toBeGreaterThan(0);
 
     serviceRequestId = data.ServiceWrappers[0].service.serviceRequestId;
-    expect(serviceRequestId).toMatch(/^[A-Z]+-PGR-/);
+    expect(serviceRequestId).toMatch(/^[A-Z0-9-]+-PGR-[0-9-]+$/);
     createSucceeded = true;
     console.log(`Created complaint: ${serviceRequestId}`);
   });

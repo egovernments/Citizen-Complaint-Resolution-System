@@ -143,20 +143,13 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
       },
     );
 
-    if (resp.status === 400) {
-      const body = await resp.text();
-      console.log(`PGR create returned 400: ${body.slice(0, 300)}`);
-      test.skip(true, 'PGR create failed — missing data prerequisites');
-      return;
-    }
-
-    expect(resp.ok).toBe(true);
+    expect(resp.ok, `PGR create failed (${resp.status}): ${(await resp.clone().text()).slice(0, 300)}`).toBe(true);
     const data: any = await resp.json();
     expect(data.ServiceWrappers).toBeDefined();
     expect(data.ServiceWrappers.length).toBeGreaterThan(0);
 
     serviceRequestId = data.ServiceWrappers[0].service.serviceRequestId;
-    expect(serviceRequestId).toMatch(/^[A-Z]+-PGR-/);
+    expect(serviceRequestId).toMatch(/^[A-Z0-9-]+-PGR-[0-9-]+$/);
     complaintCreated = true;
     console.log(`Citizen created complaint: ${serviceRequestId}`);
   });

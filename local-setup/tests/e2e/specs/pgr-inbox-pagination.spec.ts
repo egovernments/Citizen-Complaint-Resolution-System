@@ -100,7 +100,7 @@ test.describe('PGR inbox pagination (#916)', () => {
 
     // Collect complaint numbers on page 1
     const page1Rows = await page.locator('table tbody tr, [class*="digit-results-table"] tr').allInnerTexts();
-    const page1Ids: string[] = page1Rows.join('\n').match(/PG-PGR-[0-9-]+/g) ?? [];
+    const page1Ids: string[] = page1Rows.join('\n').match(/[A-Z0-9-]+-PGR-[0-9-]+/g) ?? [];
 
     if (page1Ids.length === 0) {
       test.skip(true, 'No complaints in inbox — seed data required');
@@ -131,7 +131,7 @@ test.describe('PGR inbox pagination (#916)', () => {
 
     // Page 2 should have different complaint IDs
     const page2Rows = await page.locator('table tbody tr, [class*="digit-results-table"] tr').allInnerTexts();
-    const page2Ids: string[] = page2Rows.join('\n').match(/PG-PGR-[0-9-]+/g) ?? [];
+    const page2Ids: string[] = page2Rows.join('\n').match(/[A-Z0-9-]+-PGR-[0-9-]+/g) ?? [];
 
     expect(page2Ids.length).toBeGreaterThan(0);
 

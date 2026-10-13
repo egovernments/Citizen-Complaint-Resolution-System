@@ -404,7 +404,7 @@ test.describe.serial('Full PGR lifecycle — citizen, admin, employee', () => {
     } else {
       // Fallback: extract from page body text using PGR ID pattern
       const bodyText = await page.locator('body').innerText();
-      const match = bodyText.match(/PG-PGR-\d{4}-\d{2}-\d{2}-\d{6}/);
+      const match = bodyText.match(/[A-Z0-9-]+-PGR-[0-9-]+/);
       if (match) {
         serviceRequestId = match[0];
         console.log(`Extracted serviceRequestId from page: ${serviceRequestId}`);

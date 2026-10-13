@@ -21,7 +21,7 @@ export class PgrInboxPage {
 
   async hasComplaintNumbers(): Promise<boolean> {
     const text = await this.getBodyText();
-    return /PG-PGR-/.test(text);
+    return /[A-Z0-9-]+-PGR-[0-9-]+/.test(text);
   }
 
   async hasStatusBadges(): Promise<boolean> {

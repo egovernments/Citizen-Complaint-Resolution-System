@@ -33,7 +33,7 @@ test.describe('PGR Inbox — Bug Fixes', () => {
     await page.waitForTimeout(5000);
 
     const bodyText = await inbox.getBodyText();
-    const hasComplaints = /PG-PGR-/.test(bodyText);
+    const hasComplaints = /[A-Z0-9-]+-PGR-[0-9-]+/.test(bodyText);
     const hasEmptyState = /no result|no complaints|no data|no records/i.test(bodyText);
     const hasTable = await page.locator('table').count() > 0;
     const hasInboxHeader = /inbox/i.test(bodyText);
@@ -93,7 +93,7 @@ test.describe('PGR Inbox — Bug Fixes', () => {
     await page.waitForTimeout(5000);
 
     const bodyText = await inbox.getBodyText();
-    if (/PG-PGR-/.test(bodyText)) {
+    if (/[A-Z0-9-]+-PGR-[0-9-]+/.test(bodyText)) {
       expect(bodyText).not.toMatch(/SERVICEDEFS\./);
     }
   });
