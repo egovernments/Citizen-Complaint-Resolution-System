@@ -1,22 +1,21 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
-import { NavRow } from './rail';
+import { render, screen } from '@testing-library/react';
+import { expect, it } from 'vitest';
+import { Inbox } from 'lucide-react';
+import { NavExternalRow } from './rail';
 
-// cfgreview F27 (#1573) / F22 (#1568): rail rows are links with a URL, and always named.
-describe('NavRow', () => {
-  it('is a link to its page; a plain click runs the row handler, a ctrl-click is left to the browser', () => {
-    const onClick = vi.fn();
-    render(<MemoryRouter><NavRow label="Departments" active={false} collapsed={false} onClick={onClick} to="/manage/departments" /></MemoryRouter>);
-    const a = screen.getByRole('link', { name: 'Departments' });
-    expect(a.getAttribute('href')).toBe('/manage/departments');
-    fireEvent.click(a);
-    expect(onClick).toHaveBeenCalledTimes(1);
-    fireEvent.click(a, { ctrlKey: true });
-    expect(onClick).toHaveBeenCalledTimes(1);
-  });
-  it('keeps its name when collapsed, and stays a button without a page', () => {
-    render(<MemoryRouter><NavRow label="Advanced" active={false} collapsed onClick={() => {}} /></MemoryRouter>);
-    expect(screen.getByRole('button', { name: 'Advanced' })).toBeTruthy();
-  });
+const href = 'https://example.org/acme/digit-ui/employee';
+
+it('opens another app in a new tab, without handing it this window', () => {
+  render(<NavExternalRow icon={Inbox} label="Open complaint desk" href={href} collapsed={false} />);
+  const link = screen.getByRole('link', { name: 'Open complaint desk' });
+  expect(link.getAttribute('href')).toBe(href);
+  expect(link.getAttribute('target')).toBe('_blank');
+  expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+});
+
+it('keeps its name as a tooltip and label when the rail is collapsed', () => {
+  render(<NavExternalRow icon={Inbox} label="Open complaint desk" href={href} collapsed />);
+  const link = screen.getByRole('link', { name: 'Open complaint desk' });
+  expect(link.getAttribute('title')).toBe('Open complaint desk');
+  expect(link.textContent).toBe('');
 });
