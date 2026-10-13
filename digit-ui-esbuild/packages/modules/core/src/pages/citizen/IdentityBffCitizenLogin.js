@@ -171,7 +171,7 @@ const IdentityBffCitizenLogin = ({ t }) => {
       }
       setStatus(result.status === "signed-out" ? "error" : result.status);
       setMessage(result.messageKey
-        ? tr(result.messageKey, result.message)
+        ? tr(result.messageKey, result.message, result.params)
         : tr("CORE_IDENTITY_SIGNIN_FAILED", "Sign-in could not be completed. Please try again."));
     } catch (e) {
       // A dropped request: the challenge is still valid, retry the same code.
