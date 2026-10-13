@@ -93,6 +93,7 @@ export function globalParams(filters) {
       code: filters?.complaintType,
       path: filters?.complaintTypePath,
       leaf: filters?.complaintTypeLeaf,
+      codes: filters?.complaintTypeCodes,
     })
   );
   if (filters?.dateRangeActive && filters?.dateFrom && filters?.dateTo) {
