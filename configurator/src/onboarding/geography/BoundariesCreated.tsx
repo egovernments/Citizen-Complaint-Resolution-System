@@ -1,6 +1,7 @@
 import { AlertTriangle, ArrowLeft, Check, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { useOnboardingT, withNodes } from '../i18n';
 
 /**
  * The end of a boundary import, in the Geography step's own style: what was
@@ -34,12 +35,16 @@ export function BoundariesCreated({
   attribution?: string | null;
   onDone: () => void;
 }) {
+  const t = useOnboardingT();
   // All, some or none of the areas made it: the header must not call a failure a success.
   const outcome = failed === 0 ? 'created' : total > 0 ? 'partial' : 'failed';
   const Icon = outcome === 'created' ? Check : outcome === 'partial' ? AlertTriangle : X;
   const tone =
     outcome === 'created' ? 'bg-success/10 text-success' : outcome === 'partial' ? 'bg-amber-50 text-amber-800' : 'bg-destructive/10 text-destructive';
-  const n = (count: number) => `${count.toLocaleString('en-US')} ${count === 1 ? 'area' : 'areas'}`;
+  const n = (count: number) =>
+    count === 1
+      ? t('geography.created.area_one', '%{count} area', { count: count.toLocaleString('en-US') })
+      : t('geography.created.area_other', '%{count} areas', { count: count.toLocaleString('en-US') });
   return (
     <section className="max-w-3xl space-y-6" data-testid="boundaries-created" data-outcome={outcome}>
       <div className="flex items-start gap-3 rounded-lg border border-border bg-card p-4">
@@ -48,21 +53,28 @@ export function BoundariesCreated({
         </div>
         <div className="min-w-0">
           <h3 className="text-lg font-semibold text-foreground">
-            {outcome === 'created' ? 'Boundaries created' : outcome === 'partial' ? 'Some boundaries were not created' : 'No boundaries were created'}
+            {outcome === 'created'
+              ? t('geography.created.title', 'Boundaries created')
+              : outcome === 'partial'
+                ? t('geography.created.title_partial', 'Some boundaries were not created')
+                : t('geography.created.title_failed', 'No boundaries were created')}
           </h3>
           <p className="text-sm leading-6 text-muted-foreground">
-            {outcome === 'failed' ? (
-              <>
-                All {n(failed)} from {sourceText} were refused by the boundary service. Nothing was added to the{' '}
-                <span className="font-medium text-foreground">{hierarchyType}</span> hierarchy on {workspace}.
-              </>
-            ) : (
-              <>
-                {n(total)} in the <span className="font-medium text-foreground">{hierarchyType}</span> hierarchy on{' '}
-                {workspace}, from {sourceText}.
-                {outcome === 'partial' && ` ${n(failed)} could not be created.`}
-              </>
+            {withNodes(
+              outcome === 'failed'
+                ? t(
+                    'geography.created.body_failed',
+                    'All %{areas} from %{source} were refused by the boundary service. Nothing was added to the %{hierarchy} hierarchy on %{workspace}.',
+                    { areas: n(failed), source: sourceText, workspace },
+                  )
+                : t('geography.created.body', '%{areas} in the %{hierarchy} hierarchy on %{workspace}, from %{source}.', {
+                    areas: n(total),
+                    workspace,
+                    source: sourceText,
+                  }),
+              { hierarchy: <span className="font-medium text-foreground">{hierarchyType}</span> },
             )}
+            {outcome === 'partial' && ` ${t('geography.created.body_partial', '%{areas} could not be created.', { areas: n(failed) })}`}
           </p>
         </div>
       </div>
@@ -71,8 +83,8 @@ export function BoundariesCreated({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Level</TableHead>
-              <TableHead className="text-right">Areas</TableHead>
+              <TableHead>{t('geography.created.level', 'Level')}</TableHead>
+              <TableHead className="text-right">{t('geography.created.areas', 'Areas')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -90,7 +102,7 @@ export function BoundariesCreated({
           </TableBody>
           <TableFooter>
             <TableRow>
-              <TableCell className="font-medium">Total</TableCell>
+              <TableCell className="font-medium">{t('geography.created.total', 'Total')}</TableCell>
               <TableCell className="text-right font-medium tabular-nums">{total.toLocaleString('en-US')}</TableCell>
             </TableRow>
           </TableFooter>
@@ -101,8 +113,17 @@ export function BoundariesCreated({
         <div className="space-y-1 text-sm text-muted-foreground">
           {skipped > 0 && (
             <p>
-              {skipped.toLocaleString('en-US')} {skipped === 1 ? 'area was' : 'areas were'} left out: unnamed, or lying in
-              no area of the level above. The review step listed them.
+              {skipped === 1
+                ? t(
+                    'geography.created.skipped_one',
+                    '%{count} area was left out: unnamed, or lying in no area of the level above. The review step listed them.',
+                    { count: skipped.toLocaleString('en-US') },
+                  )
+                : t(
+                    'geography.created.skipped_other',
+                    '%{count} areas were left out: unnamed, or lying in no area of the level above. The review step listed them.',
+                    { count: skipped.toLocaleString('en-US') },
+                  )}
             </p>
           )}
           {attribution && (
@@ -115,7 +136,7 @@ export function BoundariesCreated({
 
       <Button onClick={onDone} className="h-10 gap-2 px-5">
         <ArrowLeft className="w-4 h-4" />
-        Back to Geography
+        {t('geography.created.back', 'Back to Geography')}
       </Button>
     </section>
   );

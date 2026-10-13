@@ -41,8 +41,8 @@ export function EmployeeCreate() {
   // EmployeeType), not a hardcoded list that disagreed with them; the old lists stay as the fallback when a master
   // is empty or unreadable.
   const genderChoices = useMdmsChoices('gender-types', GENDER_CHOICES);
-  const statusChoices = useMdmsChoices('employee-statuses', STATUS_CHOICES);
-  const typeChoices = useMdmsChoices('employee-types', TYPE_CHOICES);
+  const statusChoices = useMdmsChoices('employee-status', STATUS_CHOICES);
+  const typeChoices = useMdmsChoices('employee-type', TYPE_CHOICES);
   const tenantId = state.tenant;
   const { validator: mobileValidate, rules: mobileRules } = useMobileValidator();
 

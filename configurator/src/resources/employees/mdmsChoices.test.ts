@@ -30,10 +30,10 @@ describe('choicesFromMdms', () => {
       .toEqual(['A', 'B']);
   });
 
-  it('the three masters are registry resources (readable by the form, editable in Advanced)', () => {
+  it('reads the registry resources that already name the three masters', () => {
     const generic = getGenericMdmsResources();
     expect(generic['gender-types']?.schema).toBe('common-masters.GenderType');
-    expect(generic['employee-statuses']?.schema).toBe('egov-hrms.EmployeeStatus');
-    expect(generic['employee-types']?.schema).toBe('egov-hrms.EmployeeType');
+    expect(generic['employee-status']?.schema).toBe('egov-hrms.EmployeeStatus');
+    expect(generic['employee-type']?.schema).toBe('egov-hrms.EmployeeType');
   });
 });
