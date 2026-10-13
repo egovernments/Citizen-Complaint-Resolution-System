@@ -6936,6 +6936,12 @@
         "locale": "en_IN"
     },
     {
+        "code": "CS_VOICE_LISTENING_IN",
+        "message": "Listening in {language}",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
         "code": "CS_VOICE_LANGUAGE_NOT_SUPPORTED",
         "message": "Voice input isn't available in this language. Type your complaint instead.",
         "module": "rainmaker-pgr",

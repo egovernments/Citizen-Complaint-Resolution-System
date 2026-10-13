@@ -40,21 +40,35 @@ function mergeFinal(heard: string, next: string): string {
   return `${heard} ${next}`;
 }
 
-/** Canonical speech recognition regional tags for Web Speech API. */
-const DEFAULT_SPEECH_TAGS: Record<string, string> = {
-  fr: "fr-FR", // French
-  pt: "pt-PT", // Portuguese
-  sw: "sw-KE", // Swahili
-};
+/**
+ * Return the autonym (self-name) of the speech recognition language:
+ * English / Français / Português.
+ *
+ * Only English, French and Portuguese get their own speech recognition language.
+ * Any other language an admin sets (e.g. Swahili sw_KE) must listen in English
+ * (browser's English variant, else en-US) (#2367).
+ */
+export function speechLanguageLabel(explicitLocale?: string): string {
+  const rawLocale =
+    explicitLocale ||
+    (typeof window !== "undefined" && (window as any).Digit?.StoreData?.getCurrentLanguage?.()) ||
+    "en";
+
+  const normalized = String(rawLocale).trim().replace(/_/g, "-");
+  const langPrefix = normalized.split("-")[0].toLowerCase();
+
+  if (langPrefix === "fr") return "Français";
+  if (langPrefix === "pt") return "Português";
+  return "English";
+}
 
 /**
  * Resolve the BCP-47 speech recognition language tag (e.g. "en-US", "fr-FR",
- * "pt-PT", "sw-KE") corresponding to the active application locale (#2367).
+ * "pt-PT") corresponding to the active application locale (#2367).
  *
- * For English, preserves previous behavior: matches the browser's English
- * variant (en-KE, en-IN…), else en-US.
- * For other languages, uses the browser's regional variant if available,
- * else the canonical tag (e.g. pt-BR if explicitly set, else pt-PT, fr-FR, sw-KE).
+ * Only English, French and Portuguese get their own speech recognition.
+ * Any other locale (e.g. Swahili sw_KE) falls back to English (browser's
+ * English variant, else en-US).
  */
 export function speechRecognitionLocale(explicitLocale?: string): string {
   const rawLocale =
@@ -68,34 +82,38 @@ export function speechRecognitionLocale(explicitLocale?: string): string {
   const browserLangs =
     (typeof navigator !== "undefined" && (navigator.languages || [navigator.language])) || [];
 
-  // For English: keep old behavior (browser's English variant, else en-US).
-  // DIGIT's "en_IN" represents generic English across all deployments (e.g. Kenya / Bomet).
-  if (langPrefix === "en") {
-    const browserEn = browserLangs.find(
-      (l) => typeof l === "string" && (l.toLowerCase() === "en" || l.toLowerCase().startsWith("en-"))
+  if (langPrefix === "fr") {
+    // Check if browser has a matching regional dialect (e.g. fr-CA)
+    const browserVariant = browserLangs.find(
+      (l) => typeof l === "string" && (l.toLowerCase() === "fr" || l.toLowerCase().startsWith("fr-"))
     );
-    return browserEn || "en-US";
+    if (browserVariant && browserVariant.length > 2) {
+      return browserVariant as string;
+    }
+    return "fr-FR";
   }
 
-  // Check if browser has a matching regional dialect (e.g. fr-CA, pt-BR)
-  const browserVariant = browserLangs.find(
-    (l) => typeof l === "string" && (l.toLowerCase() === langPrefix || l.toLowerCase().startsWith(`${langPrefix}-`))
+  if (langPrefix === "pt") {
+    // Preserve Brazilian Portuguese if explicitly set
+    if (normalized.toLowerCase() === "pt-br") {
+      return "pt-BR";
+    }
+    // Check if browser has a matching regional dialect (e.g. pt-BR)
+    const browserVariant = browserLangs.find(
+      (l) => typeof l === "string" && (l.toLowerCase() === "pt" || l.toLowerCase().startsWith("pt-"))
+    );
+    if (browserVariant && browserVariant.length > 2) {
+      return browserVariant as string;
+    }
+    return "pt-PT";
+  }
+
+  // English, or any other unhandled language (e.g. Swahili sw_KE):
+  // Browser's English variant, else en-US.
+  const browserEn = browserLangs.find(
+    (l) => typeof l === "string" && (l.toLowerCase() === "en" || l.toLowerCase().startsWith("en-"))
   );
-  if (browserVariant && browserVariant.length > 2) {
-    return browserVariant;
-  }
-
-  // Preserve Brazilian Portuguese if explicitly set
-  if (normalized.toLowerCase() === "pt-br") {
-    return "pt-BR";
-  }
-
-  // Canonical tag fallback for known languages
-  if (DEFAULT_SPEECH_TAGS[langPrefix]) {
-    return DEFAULT_SPEECH_TAGS[langPrefix];
-  }
-
-  return normalized || "en-US";
+  return (browserEn as string) || "en-US";
 }
 
 /**
@@ -381,13 +399,19 @@ export function VoiceSheet({ open, onClose, onUse, tr, locale }: VoiceSheetProps
       ? tr("CS_VOICE_NETWORK", "Voice input needs an internet connection. Check it and try again.")
       : tr("CS_VOICE_FAILED", "Voice input stopped unexpectedly. Try again.");
 
+  const speechLang = speechLanguageLabel(locale);
+  const listeningHint = tr("CS_VOICE_LISTENING_IN", "Listening in {language}").replace(
+    /\{language\}/i,
+    speechLang
+  );
+
   const title = recording
     ? tr("CS_VOICE_RECORDING", "Recording…")
     : ready
     ? tr("CS_VOICE_READY", "Transcription ready")
     : tr("CS_VOICE_TRY_AGAIN", "Couldn't record");
   const hint = recording
-    ? tr("CS_VOICE_LANGUAGE_HINT", "Speak in the language selected at the top of the page.")
+    ? listeningHint
     : ready
     ? tr("CS_VOICE_READY_HINT", "Add it to your description, record again, or delete it.")
     : errorText;

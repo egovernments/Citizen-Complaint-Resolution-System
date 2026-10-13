@@ -30,7 +30,7 @@ process.on("exit", () => {
   }
 });
 
-const { speechRecognitionLocale } = require(OUT);
+const { speechRecognitionLocale, speechLanguageLabel } = require(OUT);
 
 // Node 21+ exposes globalThis.navigator as a configurable, getter-only property.
 // Use Object.defineProperty to safely stub and restore navigator across all Node versions.
@@ -101,11 +101,47 @@ test("maps French and Portuguese to canonical tags, falling back from non-standa
     assert.equal(speechRecognitionLocale("pt_MZ"), "pt-PT");
     // pt_BR explicitly specified
     assert.equal(speechRecognitionLocale("pt_BR"), "pt-BR");
-
-    assert.equal(speechRecognitionLocale("sw_KE"), "sw-KE");
   } finally {
     restoreNavigator();
   }
+});
+
+test("only English, French and Portuguese get their own speech language; others (e.g. Swahili sw_KE) listen in English", () => {
+  stubNavigator({ languages: [] });
+  try {
+    assert.equal(speechRecognitionLocale("sw_KE"), "en-US");
+    assert.equal(speechRecognitionLocale("sw"), "en-US");
+  } finally {
+    restoreNavigator();
+  }
+
+  stubNavigator({ languages: ["en-KE", "sw-KE"] });
+  try {
+    assert.equal(speechRecognitionLocale("sw_KE"), "en-KE");
+    assert.equal(speechRecognitionLocale("sw"), "en-KE");
+  } finally {
+    restoreNavigator();
+  }
+
+  stubNavigator({ languages: ["en-GB"] });
+  try {
+    assert.equal(speechRecognitionLocale("sw_KE"), "en-GB");
+  } finally {
+    restoreNavigator();
+  }
+});
+
+test("speechLanguageLabel returns the autonym: English, Français, Português, and defaults to English for others", () => {
+  assert.equal(speechLanguageLabel("en"), "English");
+  assert.equal(speechLanguageLabel("en_IN"), "English");
+  assert.equal(speechLanguageLabel("en_US"), "English");
+  assert.equal(speechLanguageLabel("fr"), "Français");
+  assert.equal(speechLanguageLabel("fr_FR"), "Français");
+  assert.equal(speechLanguageLabel("pt"), "Português");
+  assert.equal(speechLanguageLabel("pt_PT"), "Português");
+  assert.equal(speechLanguageLabel("pt_BR"), "Português");
+  assert.equal(speechLanguageLabel("sw_KE"), "English");
+  assert.equal(speechLanguageLabel("sw"), "English");
 });
 
 test("respects browser's regional dialect for French and Portuguese", () => {
