@@ -61,6 +61,65 @@ class RedactionAndNormalizationTests(unittest.TestCase):
         )
         self.assertEqual("A documented default is <REDACTED>.\n", clean)
 
+    def test_secret_change_is_blocked_without_exposing_value_or_digest(self):
+        with temp_directory() as name:
+            root = Path(name)
+            current = root / "current"
+            backup = root / "backup"
+            target = root / "target"
+            write(current, ".env", "API_TOKEN=old-secret\n")
+            write(backup, ".env", "API_TOKEN=local-secret\n")
+            write(target, ".env", "API_TOKEN=target-secret\n")
+            key = b"test-only-ephemeral-key"
+            current_state, _ = dry.scan_tree_secrets(current, key)
+            backup_state, _ = dry.scan_tree_secrets(backup, key)
+            target_state, _ = dry.scan_tree_secrets(target, key)
+            result = dry.compare_secret_states(
+                current_state, backup_state, target_state
+            )
+            serialized = json.dumps(result)
+            self.assertTrue(result["blocked"])
+            self.assertEqual("changed", result["findings"][0]["change"])
+            for forbidden in (
+                "old-secret",
+                "local-secret",
+                "target-secret",
+                next(iter(backup_state[".env"].values())),
+            ):
+                self.assertNotIn(forbidden, serialized)
+
+    def test_unverifiable_render_placeholder_warns_without_blocking(self):
+        with temp_directory() as name:
+            root = Path(name)
+            current = root / "current"
+            backup = root / "backup"
+            target = root / "target"
+            write(current, ".env", "API_TOKEN=<REDACTED>\n")
+            write(backup, ".env", "API_TOKEN=runtime-secret\n")
+            write(target, ".env", "API_TOKEN=<REDACTED>\n")
+            key = b"test-only-ephemeral-key"
+            current_state, _ = dry.scan_tree_secrets(current, key)
+            backup_state, _ = dry.scan_tree_secrets(backup, key)
+            target_state, _ = dry.scan_tree_secrets(target, key)
+            result = dry.compare_secret_states(
+                current_state, backup_state, target_state
+            )
+            self.assertFalse(result["blocked"])
+            self.assertEqual("unverifiable", result["findings"][0]["change"])
+            self.assertEqual("warning", result["findings"][0]["severity"])
+
+    def test_scans_nested_yaml_and_json_secret_fields(self):
+        with temp_directory() as name:
+            root = Path(name)
+            write(root, "config.yml", "service:\n  password: yaml-secret\n")
+            write(root, "config.json", '{"auth":{"apiToken":"json-secret"}}')
+            state, values = dry.scan_tree_secrets(root, b"ephemeral")
+            self.assertTrue(
+                any("password" in field for field in state["config.yml"])
+            )
+            self.assertIn("$.auth.apiToken", state["config.json"])
+            self.assertEqual({b"yaml-secret", b"json-secret"}, values)
+
     def test_secret_metadata_keys_are_not_treated_as_secret_values(self):
         values = dry.sensitive_values(
             {"secrets_path": "secret/digit/city", "token_user_type": "EMPLOYEE"}
@@ -308,6 +367,33 @@ class RendererContractTests(unittest.TestCase):
                 '- template:\n    dest: "{{ digit_dir }}/nginx/globalConfigs.js"\n',
             )
             dry.validate_render_contract(root)
+
+    def test_unknown_shell_destination_fails_closed(self):
+        with temp_directory() as name:
+            root = Path(name)
+            write(
+                root,
+                "local-setup/ansible/playbook-deploy.yml",
+                '- shell: echo value > "{{ digit_dir }}/future-generated.conf"\n',
+            )
+            with self.assertRaises(dry.DryRunError):
+                dry.validate_render_contract(root)
+
+    def test_unknown_destination_in_included_tasks_fails_closed(self):
+        with temp_directory() as name:
+            root = Path(name)
+            write(
+                root,
+                "local-setup/ansible/playbook-deploy.yml",
+                "- include_tasks: tasks/generated.yml\n",
+            )
+            write(
+                root,
+                "local-setup/ansible/tasks/generated.yml",
+                '- command: touch "{{ digit_dir }}/future-generated.conf"\n',
+            )
+            with self.assertRaises(dry.DryRunError):
+                dry.validate_render_contract(root)
 
 
 if __name__ == "__main__":

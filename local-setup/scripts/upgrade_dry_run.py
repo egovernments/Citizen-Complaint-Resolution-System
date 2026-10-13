@@ -12,10 +12,12 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import hashlib
+import hmac
 import json
 import os
 import posixpath
 import re
+import secrets
 import shutil
 import stat
 import subprocess
@@ -60,17 +62,22 @@ RENDER_DESTINATION_PREFIXES = (
     "/bootstrap-novu-whatsapp.sh",
     "/ci-tests",
     "/configurator-runtime",
+    "/dataloader",
     "/docker",
     "/docker-compose.",
     "/e2e-tests",
     "/keycloak",
+    "/jupyter",
     "/kong",
     "/matomo-",
     "/nginx",
     "/notification-seed",
     "/novu-mint-key.sh",
+    "/scripts",
     "/test_onboarding_regressions.py",
-    "/{{",
+)
+SECRET_FIELD_ASSIGNMENT = re.compile(
+    r"(?im)^\s*(?P<key>[A-Za-z0-9_.-]*(?:PASSWORD|PASSWD|SECRET|TOKEN|API[_-]?KEY|PRIVATE[_-]?KEY|CREDENTIAL|UNSEAL)[A-Za-z0-9_.-]*)\s*[:=]\s*(?P<value>.*)$"
 )
 TEXT_SECRET_ASSIGNMENT = re.compile(
     r"(?im)^(?P<prefix>\s*(?:[A-Za-z0-9_.-]*"
@@ -239,6 +246,174 @@ def excluded(relative: str) -> bool:
 def is_binary_bytes(data: bytes) -> bool:
     if b"\0" in data[:8192]:
         return True
+
+
+def secret_digest(key: bytes, value: bytes) -> str:
+    """Return an in-memory-only comparison token for a secret value."""
+    return hmac.new(key, value, hashlib.sha256).hexdigest()
+
+
+def _record_secret_value(
+    state: dict[str, dict[str, str | None]],
+    values: set[bytes],
+    relative: str,
+    field: str,
+    value: Any,
+    hmac_key: bytes,
+) -> None:
+    if not isinstance(value, (str, int, float)):
+        return
+    raw = str(value).strip().strip("'\"").encode("utf-8")
+    digest = secret_digest(hmac_key, raw) if is_secret_candidate(raw) else None
+    state.setdefault(relative, {})[field] = digest
+    if digest is not None:
+        values.add(raw)
+
+
+def _walk_secret_fields(
+    value: Any,
+    state: dict[str, dict[str, str | None]],
+    values: set[bytes],
+    relative: str,
+    hmac_key: bytes,
+    prefix: str = "$",
+) -> None:
+    if isinstance(value, dict):
+        for child_key, child_value in value.items():
+            field = f"{prefix}.{child_key}"
+            if is_secret_key(str(child_key)):
+                _record_secret_value(
+                    state, values, relative, field, child_value, hmac_key
+                )
+            else:
+                _walk_secret_fields(
+                    child_value, state, values, relative, hmac_key, field
+                )
+    elif isinstance(value, list):
+        for index, child_value in enumerate(value):
+            _walk_secret_fields(
+                child_value,
+                state,
+                values,
+                relative,
+                hmac_key,
+                f"{prefix}[{index}]",
+            )
+
+
+def scan_tree_secrets(
+    source: Path, hmac_key: bytes
+) -> tuple[dict[str, dict[str, str | None]], set[bytes]]:
+    """Fingerprint sensitive fields without returning or persisting their values."""
+    state: dict[str, dict[str, str | None]] = {}
+    values: set[bytes] = set()
+    for path in sorted(source.rglob("*"), key=lambda item: item.as_posix()):
+        rel = path.relative_to(source).as_posix()
+        if (
+            excluded(rel)
+            or any(
+                excluded(parent.as_posix()) for parent in PurePosixPath(rel).parents
+            )
+            or not path.is_file()
+        ):
+            continue
+        data = path.read_bytes()
+        if is_binary_bytes(data):
+            continue
+        text = data.decode("utf-8")
+
+        parsed: Any = None
+        try:
+            if path.suffix.lower() == ".json":
+                parsed = json.loads(text)
+            elif path.suffix.lower() in {".yml", ".yaml"}:
+                import yaml  # type: ignore
+
+                parsed = yaml.safe_load(text)
+        except Exception:
+            # Deployment files may contain Jinja or other non-standard syntax;
+            # line-oriented assignment detection below still handles them.
+            parsed = None
+        if parsed is not None:
+            _walk_secret_fields(parsed, state, values, rel, hmac_key)
+
+        if parsed is None:
+            for index, match in enumerate(
+                SECRET_FIELD_ASSIGNMENT.finditer(text), 1
+            ):
+                key = match.group("key")
+                _record_secret_value(
+                    state,
+                    values,
+                    rel,
+                    f"line:{key}:{index}",
+                    match.group("value"),
+                    hmac_key,
+                )
+    return state, values
+
+
+def compare_secret_states(
+    current: dict[str, dict[str, str | None]],
+    backup: dict[str, dict[str, str | None]],
+    target: dict[str, dict[str, str | None]],
+) -> dict[str, Any]:
+    """Compare secret metadata while returning no secret-derived material."""
+    findings: list[dict[str, str]] = []
+    locations = {
+        (path, field)
+        for tree in (current, backup, target)
+        for path, fields in tree.items()
+        for field in fields
+    }
+    for path, field in sorted(locations):
+        old = current.get(path, {}).get(field, "missing")
+        local = backup.get(path, {}).get(field, "missing")
+        new = target.get(path, {}).get(field, "missing")
+        finding: dict[str, str] | None = None
+        if old == "missing" and local != "missing":
+            if new != "missing" and local == new:
+                continue
+            finding = {
+                "path": path,
+                "field": field,
+                "change": "unverifiable",
+                "severity": "warning",
+            }
+        elif old != "missing" and local == "missing":
+            finding = {
+                "path": path,
+                "field": field,
+                "change": "removed",
+                "severity": "blocker",
+            }
+        elif old is None or local is None:
+            if old != local:
+                finding = {
+                    "path": path,
+                    "field": field,
+                    "change": "unverifiable",
+                    "severity": "warning",
+                }
+        elif old != local:
+            finding = {
+                "path": path,
+                "field": field,
+                "change": "changed",
+                "severity": "blocker",
+            }
+        if finding is not None:
+            findings.append(finding)
+    return {
+        "blocked": any(item["severity"] == "blocker" for item in findings),
+        "findings": findings,
+        "warning_count": sum(
+            item["severity"] == "warning" for item in findings
+        ),
+        "blocker_count": sum(
+            item["severity"] == "blocker" for item in findings
+        ),
+    }
     try:
         data.decode("utf-8")
         return False
@@ -578,27 +753,65 @@ def profile_for(commit: str, current_commit: str, target_commit: str) -> str:
     raise DryRunError(f"unsupported renderer commit: {commit}")
 
 
+def render_contract_files(playbook: Path) -> list[Path]:
+    """Return the deploy playbook and every statically included task file."""
+    pending = [playbook]
+    result: list[Path] = []
+    include_re = re.compile(
+        r"(?:ansible\.builtin\.)?(?:include_tasks|import_tasks):\s*(?P<path>.+)$"
+    )
+    while pending:
+        current = pending.pop()
+        if current in result:
+            continue
+        if not current.is_file():
+            raise DryRunError(f"included Ansible task file is missing: {current}")
+        result.append(current)
+        for line in current.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            match = include_re.search(stripped)
+            if not match:
+                continue
+            raw = match.group("path").split("#", 1)[0].strip().strip("'\"")
+            raw = raw.replace("{{ playbook_dir }}", str(playbook.parent))
+            if "{{" in raw or "}}" in raw:
+                raise DryRunError(
+                    f"cannot validate dynamic Ansible task include: {raw}"
+                )
+            included = Path(raw)
+            if not included.is_absolute():
+                included = current.parent / included
+            pending.append(included.resolve())
+    return result
+
+
 def validate_render_contract(exported: Path) -> None:
-    """Fail when a deploy playbook writes an unknown top-level DIGIT path."""
+    """Fail when deployment logic references an unknown DIGIT destination."""
     playbook = exported / "local-setup" / "ansible" / "playbook-deploy.yml"
     if not playbook.is_file():
         raise DryRunError(f"deployment playbook is missing: {playbook}")
     unknown: set[str] = set()
     pattern = re.compile(r"\{\{\s*digit_dir\s*\}\}(?P<suffix>/[^\"'\s]*)?")
-    for line in playbook.read_text(encoding="utf-8").splitlines():
-        stripped = line.lstrip()
-        if not (stripped.startswith("dest:") or stripped.startswith("path:")):
-            continue
-        match = pattern.search(line)
-        if not match:
-            continue
-        suffix = match.group("suffix") or ""
-        if (
-            suffix
-            and suffix != "/"
-            and not suffix.startswith(RENDER_DESTINATION_PREFIXES)
-        ):
-            unknown.add(suffix)
+    for contract_file in render_contract_files(playbook):
+        for line in contract_file.read_text(encoding="utf-8").splitlines():
+            stripped = line.lstrip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            for match in pattern.finditer(line):
+                suffix = match.group("suffix") or ""
+                dynamic_config_destination = (
+                    suffix == "/{{" and "{{ item.key }}" in line
+                )
+                if (
+                    suffix
+                    and suffix != "/"
+                    and not dynamic_config_destination
+                    and not suffix.startswith(RENDER_DESTINATION_PREFIXES)
+                ):
+                    relative = contract_file.relative_to(exported).as_posix()
+                    unknown.add(f"{relative}: {suffix}")
     if unknown:
         raise DryRunError(
             "deployment playbook contains unsupported /opt/digit destinations: "
@@ -703,19 +916,6 @@ def is_secret_candidate(raw: bytes) -> bool:
     )
 
 
-def env_sensitive_values(path: Path) -> set[bytes]:
-    if not path.is_file():
-        return set()
-    found: set[bytes] = set()
-    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
-        key, separator, value = line.partition("=")
-        raw = value.strip().strip("'\"")
-        encoded = raw.encode("utf-8")
-        if separator and is_secret_key(key) and is_secret_candidate(encoded):
-            found.add(encoded)
-    return found
-
-
 def find_secret_leaks(root: Path, values: set[bytes]) -> list[str]:
     leaks: list[str] = []
     for path in root.rglob("*"):
@@ -732,6 +932,7 @@ def write_report(output: Path, report: dict[str, Any]) -> None:
         json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
     mdms = report["mdms"]
+    secret_findings = report["secrets"]
     conflicts = report["merge"]["conflicts"]
     changes = report["merge"]["local_changes"]
     lines = [
@@ -744,12 +945,28 @@ def write_report(output: Path, report: dict[str, Any]) -> None:
         f"- Local filesystem changes: **{len(changes)}**",
         f"- Configuration conflicts: **{len(conflicts)}**",
         f"- MDMS changes: **{len(mdms['changes'])}**",
+        f"- Secret blockers: **{secret_findings['blocker_count']}**",
+        f"- Secret warnings: **{secret_findings['warning_count']}**",
         "",
     ]
     if conflicts:
         lines.extend(["## Configuration conflicts", ""])
         lines.extend(f"- `{item['path']}` ({item['kind']})" for item in conflicts)
         lines.append("")
+    if secret_findings["findings"]:
+        lines.extend(["## Secret findings", ""])
+        lines.extend(
+            f"- `{item['path']}` `{item['field']}`: {item['change']} "
+            f"({item['severity']})"
+            for item in secret_findings["findings"]
+        )
+        lines.extend(
+            [
+                "",
+                "Values and comparison fingerprints are intentionally omitted.",
+                "",
+            ]
+        )
     if mdms["changes"]:
         added = sum(item["change"] == "added" for item in mdms["changes"])
         removed = sum(item["change"] == "removed" for item in mdms["changes"])
@@ -841,8 +1058,28 @@ def main(argv: list[str] | None = None) -> int:
 
             backup_extract = temp / "backup-extract"
             backup_root = copy_backup(args.backup.resolve(), backup_extract)
+            hmac_key = secrets.token_bytes(32)
+            current_secret_state, current_secret_values = scan_tree_secrets(
+                rendered_current_raw, hmac_key
+            )
+            backup_secret_state, backup_secret_values = scan_tree_secrets(
+                backup_root, hmac_key
+            )
+            target_secret_state, target_secret_values = scan_tree_secrets(
+                rendered_target_raw, hmac_key
+            )
+            secret_findings = compare_secret_states(
+                current_secret_state, backup_secret_state, target_secret_state
+            )
+            (output / "secret-findings.json").write_text(
+                json.dumps(secret_findings, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
             secrets_to_check = sensitive_values(tenant_values)
-            secrets_to_check.update(env_sensitive_values(backup_root / ".env"))
+            secrets_to_check.update(current_secret_values)
+            secrets_to_check.update(backup_secret_values)
+            secrets_to_check.update(target_secret_values)
             current_tree = temp / "A-current"
             backup_tree = temp / "B-backup"
             target_tree = temp / "C-target"
@@ -870,7 +1107,11 @@ def main(argv: list[str] | None = None) -> int:
                 json.dumps(mdms, indent=2, sort_keys=True) + "\n", encoding="utf-8"
             )
 
-            blocked = bool(merge["conflicts"] or mdms["changed"])
+            blocked = bool(
+                merge["conflicts"]
+                or mdms["changed"]
+                or secret_findings["blocked"]
+            )
             manifest = {
                 "created_at": dt.datetime.now(dt.timezone.utc).isoformat(),
                 "current_ref": args.current_ref,
@@ -905,6 +1146,7 @@ def main(argv: list[str] | None = None) -> int:
                 "target_commit": target_commit,
                 "merge": merge,
                 "mdms": mdms,
+                "secrets": secret_findings,
                 "output": str(output),
             }
             write_report(output, report)
