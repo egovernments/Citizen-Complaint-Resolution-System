@@ -87,6 +87,9 @@ public class NotificationAccountClient {
                 data.path("status").asText(), data.path("organizationCreated").asBoolean(false));
     }
 
+    /** The outcome of every tenant of a call that never got an answer (bridge down, connect or read timeout). */
+    public static final String UNAVAILABLE = "NOTIFICATION_ACCOUNT_UNAVAILABLE";
+
     /** {@code POST /tenants/_backfill}: per-tenant outcomes keyed by tenant id ("PROVISIONED" or an error code). */
     public Map<String, String> backfill(List<String> tenantIds) {
         var out = new java.util.LinkedHashMap<String, String>();
@@ -124,7 +127,7 @@ public class NotificationAccountClient {
             }
             return mapper.createObjectNode().put("__error", code);
         } catch (RestClientException e) {
-            return mapper.createObjectNode().put("__error", "NOTIFICATION_ACCOUNT_UNAVAILABLE");
+            return mapper.createObjectNode().put("__error", UNAVAILABLE);
         } catch (Exception e) {
             return mapper.createObjectNode().put("__error", "NOTIFICATION_ACCOUNT_INVALID_RESPONSE");
         }

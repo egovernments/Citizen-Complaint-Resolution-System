@@ -102,4 +102,82 @@ public class NotificationAccountReconcilerPostgresTest {
         assertEquals("DONE", progressOf("alreadydone"));
         assertEquals(null, progressOf("legacy"));
     }
+
+    private void ageOf(String tenant, long updatedAt) {
+        jdbc.update("UPDATE eg_pgr_onboarding_operation o SET updated_at=? FROM eg_pgr_onboarding_signup s "
+                + "WHERE s.id=o.signup_id AND s.requested_tenant_id=?", updatedAt, tenant);
+    }
+
+    @Test
+    public void theBridgeIsAskedAFewWorkspacesAtATime_notTheWholeBatchInOneCall() {
+        for (int i = 0; i < 7; i++) {
+            finishedWorkspace("ws" + i, "DEFERRED");
+        }
+        NotificationAccountClient client = mock(NotificationAccountClient.class);
+        when(client.configured()).thenReturn(true);
+        List<List<String>> asked = new java.util.ArrayList<>();
+        when(client.backfill(anyList())).thenAnswer(inv -> {
+            List<String> ids = new java.util.ArrayList<>(inv.<List<String>>getArgument(0));
+            asked.add(ids);
+            Map<String, String> out = new java.util.HashMap<>();
+            ids.forEach(id -> out.put(id, "PROVISIONED"));
+            return out;
+        });
+
+        assertEquals(7, new NotificationAccountReconciler(jdbc, client, 60_000).reconcile());
+
+        assertEquals(List.of(5, 2), asked.stream().map(List::size).toList());
+    }
+
+    @Test
+    public void workspacesThatKeepFailing_goToTheBack_soTheOthersAreStillRetried() {
+        finishedWorkspace("first", "DEFERRED");
+        finishedWorkspace("second", "DEFERRED");
+        finishedWorkspace("third", "DEFERRED");
+        ageOf("first", 1_000);
+        ageOf("second", 2_000);
+        ageOf("third", 3_000);
+        NotificationAccountClient client = mock(NotificationAccountClient.class);
+        when(client.configured()).thenReturn(true);
+        List<String> asked = new java.util.ArrayList<>();
+        when(client.backfill(anyList())).thenAnswer(inv -> {
+            List<String> ids = inv.getArgument(0);
+            asked.addAll(ids);
+            Map<String, String> out = new java.util.HashMap<>();
+            ids.forEach(id -> out.put(id, "NB_NOVU_PLATFORM_FAILED"));
+            return out;
+        });
+        NotificationAccountReconciler reconciler = new NotificationAccountReconciler(jdbc, client, 60_000);
+        reconciler.batch = 2;
+
+        reconciler.reconcile();
+        reconciler.reconcile();
+
+        assertEquals(List.of("first", "second"), asked.subList(0, 2));
+        assertEquals("the second run reaches the workspace behind the two that failed", "third", asked.get(2));
+        assertEquals("DEFERRED", progressOf("first"));
+    }
+
+    @Test
+    public void aBridgeThatDoesNotAnswer_endsTheRun_insteadOfWaitingOutEveryCall() {
+        finishedWorkspace("one", "DEFERRED");
+        finishedWorkspace("two", "DEFERRED");
+        finishedWorkspace("three", "DEFERRED");
+        NotificationAccountClient client = mock(NotificationAccountClient.class);
+        when(client.configured()).thenReturn(true);
+        List<List<String>> asked = new java.util.ArrayList<>();
+        when(client.backfill(anyList())).thenAnswer(inv -> {
+            List<String> ids = inv.getArgument(0);
+            asked.add(ids);
+            Map<String, String> out = new java.util.HashMap<>();
+            ids.forEach(id -> out.put(id, NotificationAccountClient.UNAVAILABLE));
+            return out;
+        });
+        NotificationAccountReconciler reconciler = new NotificationAccountReconciler(jdbc, client, 60_000);
+        reconciler.perCall = 1;
+
+        assertEquals(0, reconciler.reconcile());
+
+        assertEquals(1, asked.size());
+    }
 }
