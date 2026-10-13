@@ -39,6 +39,7 @@ import {
   Inbox,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { TenantSwitcher } from './TenantSwitcher';
 import { getGenericMdmsResources, getResourceLabel } from '@/providers/bridge';
 import { useMastersCapability } from '@/hooks/useMastersCapability';
 import { LEGACY_PGR_DASHBOARD_ENABLED } from '@/config/featureFlags';
@@ -458,12 +459,17 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
             >
               {translate('app.header.management_mode')}
             </Badge>
-            <Badge
-              variant="secondary"
-              className="text-xs bg-primary/10 text-primary border-primary/20"
-            >
-              {envName}
-            </Badge>
+            {/* ours (cfgreview F04, #1551): which tenant you work at, and a switcher; the environment badge only where it
+                names a known dev / staging host ("custom" meant nothing to a county admin) */}
+            <TenantSwitcher />
+            {envName !== 'custom' && (
+              <Badge
+                variant="secondary"
+                className="hidden md:inline-flex text-xs bg-primary/10 text-primary border-primary/20"
+              >
+                {envName}
+              </Badge>
+            )}
           </div>
 
           {/* Right: help, locale, theme, and the account */}
