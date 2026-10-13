@@ -207,6 +207,13 @@ analytics_kill_switch: false
 analytics_script_hosts: []
 analytics_custom_enabled: false
 
+# Citizen home banner (#2358). The Configurator's Branding step uploads it to
+# common-masters.StateInfo.bannerUrl; with this on, the citizen home draws it
+# as a hero above All Services. OFF until the banner is ready to go live. Set
+# true in host_vars and re-render globalConfigs.js; no rebuild needed. The
+# Configurator's upload is a separate build flag (configurator_banner_enabled).
+citizen_banner_enabled: false
+
 # ──────────────────────────────────────────────────────────────────────
 # nginx vhost — feature flags + upstream ports
 # ──────────────────────────────────────────────────────────────────────

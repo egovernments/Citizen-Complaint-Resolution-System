@@ -18,6 +18,13 @@ declare global {
 const legacyPgrDashboardRaw = import.meta.env.VITE_ENABLE_LEGACY_PGR_DASHBOARD ?? '';
 export const LEGACY_PGR_DASHBOARD_ENABLED = isEnabledFlag(legacyPgrDashboardRaw);
 
+/**
+ * The citizen-banner upload in the Branding step (#2358). Off until the banner
+ * goes live on the citizen app, which has its own switch (globalConfigs
+ * CITIZEN_BANNER_ENABLED). Absent or malformed fails closed.
+ */
+export const CITIZEN_BANNER_ENABLED = isEnabledFlag(import.meta.env.VITE_ENABLE_CITIZEN_BANNER ?? '');
+
 
 // E2E runs against an already-built image. Publish the baked value so the test
 // can verify its expected build contract instead of guessing from a separate

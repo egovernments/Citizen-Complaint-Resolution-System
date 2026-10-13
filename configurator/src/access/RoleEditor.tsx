@@ -16,6 +16,18 @@ import {
   type Axis, type Clause, type CatalogueRow, type Level, type OnDeny, type RoleScope,
 } from './policyModel';
 import { ConcurrentChangeError, applySave, loadRole, planSave, type Edited, type Loaded, type Write } from './roleEditorData';
+import { whenItApplies, whenItAppliesAll, type ChangeKind } from './effectTimes';
+
+/** Which kinds of change a save plan makes (for "when it applies"). */
+export function planKinds(plan: Write[]): ChangeKind[] {
+  const k: ChangeKind[] = [];
+  for (const w of plan) {
+    if (w.kind === 'grant') k.push('calls');
+    if (w.kind === 'workflow') k.push('workflow');
+    if (w.kind === 'action') for (const c of w.changes) k.push(c.path.includes('.scope.') ? 'scope' : 'fields');
+  }
+  return [...new Set(k)];
+}
 import { AVAILABLE_CONDITION_VARS } from './engineVars';
 import { cellKey, roleGrid, statusLabel, type WfEdit } from './workflowModel';
 
@@ -114,7 +126,7 @@ export default function RoleEditor() {
     setSaving(true);
     try {
       const done = await applySave(digitClient, loaded, plan);
-      toast({ title: 'Role saved', description: `${done.length} change(s) written. Menus change at once; access checks follow within about a minute.` });
+      toast({ title: 'Role saved', description: [`${done.length} change(s) written.`, ...whenItAppliesAll(planKinds(plan))].join(' ') });
       if (isNew) navigate(`/manage/access/roles/${roleCode}`, { replace: true }); else await load();
     } catch (e) {
       const msg = String((e as Error).message ?? e);
@@ -345,6 +357,12 @@ export default function RoleEditor() {
                   ))}
                 </ul>
               )}
+              {plan && plan.length > 0 && planKinds(plan).length > 0 && (
+                <div className="rounded-md border bg-muted/40 p-3" data-testid="role-when">
+                  <div className="mb-1 font-semibold">When it applies to the people who hold {roleCode}</div>
+                  <ul className="list-disc pl-5">{whenItAppliesAll(planKinds(plan)).map((t) => <li key={t}>{t}</li>)}</ul>
+                </div>
+              )}
               <div className="flex gap-2">
                 {plan && plan.length > 0 && <Button onClick={save} disabled={saving} data-testid="role-confirm">{saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}Confirm and save</Button>}
                 <Button variant="outline" onClick={() => { setPlan(null); setPlanError(null); }}>Back</Button>
@@ -361,7 +379,11 @@ export default function RoleEditor() {
         </Card>
         <Card>
           <CardHeader><CardTitle className="text-base">After saving</CardTitle></CardHeader>
-          <CardContent><p className="text-sm text-muted-foreground">Menus change at once. Access checks follow within about a minute; a revoked grant can keep working for up to 5 minutes at the gateway.</p></CardContent>
+          <CardContent>
+            <ul className="list-disc pl-5 text-sm text-muted-foreground" data-testid="role-after-saving">
+              {(['calls', 'scope', 'workflow'] as ChangeKind[]).map((k) => <li key={k}>{whenItApplies(k)}</li>)}
+            </ul>
+          </CardContent>
         </Card>
       </aside>
     </div>
