@@ -1644,7 +1644,7 @@ export default function BoundaryImport({
                   placeholder={
                     preconfigured
                       ? t('geography.search.placeholder_country', 'e.g., a city in %{country}', { country: countryName(preconfigured.country) })
-                      : t('geography.search.placeholder', 'e.g., Maputo')
+                      : t('geography.search.placeholder', 'e.g., a city or region')
                   }
                   value={searchTerm}
                   onChange={(e) => {

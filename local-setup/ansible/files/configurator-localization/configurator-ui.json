@@ -9025,7 +9025,7 @@
   },
   {
     "code": "app.onboarding.geography.search.placeholder",
-    "message": "e.g., Maputo",
+    "message": "e.g., a city or region",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
