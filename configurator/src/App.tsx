@@ -62,7 +62,6 @@ import { MastersCapabilityProvider, useMastersCapability } from '@/hooks/useMast
 import { ThemeProvider } from '@/providers/ThemeProvider';
 import HelpModal from './components/ui/HelpModal';
 import { Toaster } from './components/ui/toaster';
-import AttributesCatalogue from './access/AttributesCatalogue';
 import { apiClient, getApiBaseUrl, getConfiguredRootTenant } from './api';
 import { identifyUser, trackEvent } from './lib/telemetry';
 import { clearLocalSession, SESSION_EXPIRED_KEY, signOutThisDevice } from './lib/session';
@@ -208,8 +207,6 @@ function ManagementAdminResources() {
         {/* Custom routes */}
         <CustomRoutes>
           <Route path="/notification-configure" element={<NotificationConfigure />} />
-          {/* Access: what access can be judged on (ACCESSCONTROL-RESOURCE.attributes) */}
-          <Route path="/access/attributes" element={<AttributesCatalogue />} />
           <Route path="/escalation-policy" element={<EscalationPolicyEditor />} />
           {/* Analytics destinations. A CustomRoute rather than a <Resource>: the
               screen deliberately does not use react-admin's list/edit/delete

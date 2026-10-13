@@ -86,10 +86,12 @@ export function TestSendDialog({
       const status = res.novuStatus ?? (res.ok ? 'accepted' : 'unknown');
       notify(
         res.ok ? t('app.providers.msg_test_sent', { _: 'Test dispatched.' }) : `${t('app.providers.msg_test_failed', { _: 'Test failed' })}: ${res.errorCode ?? ''} ${res.errorMessage ?? ''}`.trim(),
-        `${t('app.providers.status', { _: 'Status' })}: ${status}${res.transactionId ? ` · txn ${res.transactionId}` : ''}`,
+        `${t('app.providers.status', { _: 'Status' })}: ${status}${res.transactionId ? ` · txn ${res.transactionId}` : ''}${res.warning ? ` · ${res.warning}` : ''}`,
         res.ok ? 'default' : 'destructive',
       );
     } catch (err) {
+      // Includes the bridge refusing a test nothing can deliver (409 NB_PROVIDER_UNAVAILABLE):
+      // its message names the provider or channel and what to fix.
       notify(
         t('app.providers.msg_test_failed', { _: 'Test delivery failed.' }),
         (err as Error)?.message,

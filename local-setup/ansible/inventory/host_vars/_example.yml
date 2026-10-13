@@ -268,6 +268,11 @@ enable_digit_ui_v2: false
 # hidden, while the code and /pgr-services/v2/dashboard API remain intact.
 enable_legacy_pgr_dashboard: false
 
+# The banner upload in the Configurator's Branding step (#2358), baked in at
+# build time (VITE_ENABLE_CITIZEN_BANNER), so a change needs a configurator
+# rebuild. The citizen app draws the banner only with citizen_banner_enabled.
+configurator_banner_enabled: false
+
 # Optional external git source for the citizen SPA, for transitional or
 # standalone use. LEAVE UNSET on normal deploys: the default builds the
 # vendored in-tree digit-ui-v2/ (with ui-shared/) so the deployed bundle
@@ -302,11 +307,67 @@ integration_tests_basic_auth_user: "digit-tests"
 # (it's nice'd, but still). Leave off unless you want in-dashboard runs.
 enable_integration_tests_runner: false
 # integration_tests_runner_port: 8181        # loopback port the daemon listens on
-# integration_tests_runner_run_limit: 5      # keep at most N runs on disk
+# integration_tests_runner_run_limit: 5      # runs that keep their full report (videos/traces) on disk; the dashboards keep results for 30.
+#                                             # If a scheduled run on this box passes a larger RUN_LIMIT, the larger one is kept (runner/README.md, Retention).
 # integration_tests_runner_branch: "deployed"
 # Env file the run sources so it targets THIS box's tenant (BASE_URL/DIGIT_TENANT/
 # LOCALITY_CODE/SERVICE_CODE). Point at the deploy env you already maintain.
 # integration_tests_runner_tenant_env: "/opt/integration-tests/deploy/bomet.env"
+
+# Regression email alerts for the integration tests. A systemd timer polls the
+# published catalog.json every test_alerts_poll_minutes; when a NEW run has
+# appeared it compares every test with the run before it and mails
+# test_alerts_to the tests that
+#   regressed        failed or timed out now, passed last time it ran
+#   now skipped      skipped now, passed last time it ran
+#   stopped running  passed in the previous run, no result now (e.g. the run
+#                    was cut short by its global timeout, or setup failed)
+# plus, for context, the ones that were fixed. Only on a change: a test that
+# stays red is not mailed again, and the first poll on a box only records a
+# baseline. At most one mail per poll (several runs to report go out as one
+# digest), and never the same mail twice. Needs enable_integration_tests: true
+# (the timer reads /var/www/integration-tests). The script is plain Node:
+# tests/integration-tests/scripts/regression-alert.mjs. Runbook, dry-run and
+# troubleshooting: tests/integration-tests/runner/README.md.
+#
+# If a required setting is missing or malformed the deploy prints a WARNING
+# and leaves alerts off; a mail misconfiguration never fails the deploy.
+# Alerts off (test_alerts_enabled: false, or that WARNING) stops the timer and
+# deletes the env file, the units, the script copy and the alert state, so
+# turning them back on starts from a fresh baseline (no backlog of old runs).
+test_alerts_enabled: false
+# test_alerts_smtp_host: "smtp.example.org"     # required
+# test_alerts_smtp_port: 587                     # default 587, or 465 with test_alerts_smtp_tls: true;
+#                                                #   465 is blocked outbound on the Hetzner boxes
+# test_alerts_smtp_starttls: true                # require STARTTLS on port 587 (recommended). false: use
+#                                                #   STARTTLS only if the relay offers it; anyone on the path
+#                                                #   can strip that offer, and the login then goes in clear
+# test_alerts_smtp_tls: false                    # true = implicit TLS (smtps://); the port then defaults to 465
+# test_alerts_smtp_user: "test-alerts@example.org"   # omit for an unauthenticated relay
+# test_alerts_from: "CCRS test alerts <test-alerts@example.org>"   # required; must be a sender the SMTP account may use
+# Recipients (required): a list, or one address as a plain string. Each entry
+# is one "addr@domain" or "Name <addr@domain>"; several addresses go in a
+# list, not in one comma-separated string. A single group / mailing-list
+# address is easiest: people join and leave the list without anyone editing
+# the box.
+# test_alerts_to:
+#   - "ccrs-test-alerts@example.org"
+# test_alerts_box_name: "bomet"                  # label in the subject; default: inventory hostname
+# test_alerts_dashboard_url: "https://bomet.example.org/tests/"   # default: https://<domain>/tests/
+# test_alerts_poll_minutes: 5                    # how often the timer checks for a new run (whole minutes, >= 1)
+# test_alerts_max_list: 40                       # max tests listed per group in one mail
+# test_alerts_stale_after_hours: 0               # >0: also mail once when no new run appears for this long
+#                                                #     (e.g. 26 on a daily box, 8 on a 4x/day box); 0 = off
+#
+# SMTP password: test_alerts_smtp_password. Never commit it (this repo is
+# public; scripts/check-committed-secrets.sh enforces that). Either:
+#   - keep it in OpenBao (preferred): on a box that is already set up,
+#       bao kv patch <secrets_path> test_alerts_smtp_password=<value>
+#     (bootstrap_secrets.test_alerts_smtp_password below seeds it on a FRESH
+#     tenant only, because that seed never overwrites an existing secret), or
+#   - set test_alerts_smtp_password in this host_vars file (it wins over OpenBao).
+# The deploy writes it to /etc/ccrs-test-alerts.env (root-only, 0600).
+# test_alerts_smtp_password: ""
 
 # ────────── Optional services (opt-in via flags) ──────────
 
@@ -656,23 +717,28 @@ novu_bridge_smscountry_password: ""
 # migrator, novu-bridge and its novu-bridge-db migrator MUST come from the same
 # build: pgr-services emits thin events only a bridge of the same build resolves
 # (an older bridge dead-letters them, unrecoverably), and each app needs the
-# Flyway migrations its -db image carries. This one tag moves all four.
+# Flyway migrations its -db image carries. digit-user-preferences-service and its
+# -db migrator (the bridge's consent store) ride the same tag: its 2.12 tags are
+# the retired Go service, which the develop definition cannot run. This one tag
+# moves all six.
 # Unset = the compose default, for now "nightly-develop": the rolling tag the develop
-# nightly publishes for all four, a stopgap until a release pins an immutable one
+# nightly publishes for all six, a stopgap until a release pins an immutable one
 # (build/NIGHTLY-BUILDS.md "Release step"). That tag moves PER IMAGE and can briefly
 # point at different commits for different images, so a live deployment pins an
-# immutable tag that exists for all four: a release tag, or a develop-<sha8>. The
+# immutable tag that exists for all six: a release tag, or a develop-<sha8>. The
 # deploy warns while any image it runs resolves to a rolling tag.
 # notification_stack_tag: "develop-<sha8>"
 #
 # Per-image overrides — for a local or VPC-registry build. Each wins over the tag
-# above for ITS image only, so pin all four to the same build or none. The deploy
+# above for ITS image only, so pin all six to the same build or none. The deploy
 # warns when only some are pinned: pgr_services_image + pgr_services_db_image on
-# every box (both run with notifications off too), all four when enable_novu is on.
+# every box (both run with notifications off too), all six when enable_novu is on.
 # pgr_services_image:     "10.0.0.4:5000/egovio/pgr-services:develop-<sha8>"
 # pgr_services_db_image:  "10.0.0.4:5000/egovio/pgr-services-db:develop-<sha8>"
 # novu_bridge_image:      "10.0.0.4:5000/egovio/novu-bridge:develop-<sha8>"
 # novu_bridge_db_image:   "10.0.0.4:5000/egovio/novu-bridge-db:develop-<sha8>"
+# digit_user_preferences_service_image:    "10.0.0.4:5000/egovio/digit-user-preferences-service:develop-<sha8>"
+# digit_user_preferences_service_db_image: "10.0.0.4:5000/egovio/digit-user-preferences-service-db:develop-<sha8>"
 
 # NOTE: `build_novu_bridge` and `build_pgr_services` used to be listed here.
 # Neither has ever had a playbook task behind it — the images come only from
@@ -699,8 +765,14 @@ novu_bridge_smscountry_password: ""
 # novu_bridge_preference_enabled: false
 # novu_bridge_preference_fail_open: true
 
-# Country code prefixed to OTP numbers that arrive without one (core SMS from
-# user-otp / egov-user), e.g. "254". Blank = numbers are sent as received.
+# Deployment-wide LAST-RESORT country code for phone numbers that arrive without
+# one (login OTPs from user-otp / egov-user, complaint notifications), e.g. "+254".
+# The tenant's own common-masters.MobileNumberValidation rule (written at workspace
+# signup from the signup country) and the user's own egov-user countryCode come
+# first, so a deployment with workspaces in several countries sends each its own
+# code; this is used only at a tenant that has no rule. Blank and no rule = the
+# message is NOT sent (SKIPPED / NB_CONTACT_INVALID on Logs), never as "+" + the
+# national number.
 # novu_bridge_core_sms_country_code: ""
 
 # Per-channel Novu workflow ids the bridge triggers (the rendered message travels
@@ -783,6 +855,10 @@ identity_magic_link_request_window_seconds: 1800
 identity_magic_link_request_limit: 3
 identity_signin_methods: [password, google, github]
 identity_signup_methods: [magic_link, google, github]
+# Citizen sign-in methods on the digit-ui citizen client (KEYCLOAK_CITIZEN_SIGNIN_METHODS).
+# Empty (the default) offers none. [phone_otp] needs an OTP channel: enable_otp_services,
+# identity_citizen_otp_sender or, on a development box only, identity_dev_fixed_otp.
+identity_citizen_signin_methods: []
 identity_magic_link_enabled: false
 identity_reconcile_on_startup: true
 identity_reconciliation_interval_seconds: 900
@@ -792,6 +868,9 @@ pgr_onboarding_runner_enabled: true
 # Idle runner ticks bring workspaces onboarded on an older platform seed up to
 # the current one (create-if-absent; founder edits are kept).
 pgr_onboarding_baseline_upgrade_enabled: true
+# A new workspace gets the notification defaults (schemas, access rows, templates,
+# routing) at signup only where the notification stack runs: unset = enable_novu.
+# pgr_onboarding_notification_defaults_enabled: false
 identity_digit_admin_username: "ADMIN"  # use a dedicated ACCOUNT_ADMIN in production
 identity_digit_admin_tenant_id: "pg"
 # Platform provisioner the runner signs in as (PGR only, internal APIs). It must
@@ -946,6 +1025,7 @@ grafana_anonymous_enabled: false
 # digit_config_service_image: ""
 # digit_config_service_db_image: ""
 # digit_user_preferences_service_image: ""
+# digit_user_preferences_service_db_image: ""   # pin with the app image: one build
 
 # ── Ports ──
 # Host port nginx proxies /configurator/ to. The only upstream_*_port that
@@ -1096,6 +1176,13 @@ grafana_anonymous_enabled: false
 # ops opts in — on an environment where any employee token can write MDMS,
 # that write access is effectively script-injection access.
 # analytics_custom_enabled: false
+
+# Citizen home banner (#2358): draw the banner image set in the Configurator's
+# Branding step (common-masters.StateInfo.bannerUrl) as a hero above the
+# citizen's All Services. Off by default. Turning it on shows whatever
+# StateInfo.bannerUrl already holds, so set the banner (and StateInfo's name,
+# which the hero greets with) first. Re-render globalConfigs.js; no rebuild.
+# citizen_banner_enabled: false
 
 # ────────── nginx features (location blocks rendered into the host nginx site) ──────────
 #
@@ -1331,3 +1418,6 @@ bootstrap_secrets:
   pgr_digit_provisioner_password: ""
   pgr_digit_oauth_client_secret: ""
   identity_smtp_password: ""
+  # Integration-test alert mail (test_alerts_*). Seeds a fresh tenant only; on
+  # an existing one use `bao kv patch <secrets_path> test_alerts_smtp_password=…`.
+  test_alerts_smtp_password: ""

@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { AccessTitle } from './AccessChrome';
 import { toast } from '@/hooks/use-toast';
 import { digitClient } from '@/providers/bridge';
 import { useMastersCapability } from '@/hooks/useMastersCapability';
@@ -75,7 +76,7 @@ export default function AttributesCatalogue() {
     <div className="flex flex-col gap-6 p-6 lg:flex-row" data-testid="attributes-catalogue">
       <main className="flex min-w-0 flex-1 flex-col gap-6">
         <Card>
-          <CardHeader><CardTitle className="text-2xl">Complaint attributes</CardTitle></CardHeader>
+          <CardHeader><AccessTitle level={1} className="text-2xl">Complaint attributes</AccessTitle></CardHeader>
           <CardContent className="overflow-x-auto">
             <table className="w-full min-w-[640px] text-sm" data-testid="attr-table">
               <thead><tr className="text-left text-xs uppercase text-muted-foreground"><th className="p-2">Attribute</th><th className="p-2">Values come from</th><th className="p-2">Compare with</th><th className="p-2">Used by</th></tr></thead>
@@ -98,7 +99,7 @@ export default function AttributesCatalogue() {
           </CardContent>
         </Card>
         <Card>
-          <CardHeader><CardTitle>Who asks: person attributes</CardTitle></CardHeader>
+          <CardHeader><AccessTitle level={2}>Who asks: person attributes</AccessTitle></CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {PERSON_ATTRS.map((p) => (
               <div key={p.var} className="rounded-lg border p-3"><div className="text-sm font-semibold">{p.label}</div><div className="text-xs text-muted-foreground">{p.example}</div><div className="mt-1 break-all font-mono text-xs text-muted-foreground">{p.var}</div></div>
@@ -109,7 +110,7 @@ export default function AttributesCatalogue() {
       <aside className="flex w-full flex-col gap-4 lg:w-96">
         {row ? (
           <Card className="border-2 border-primary" data-testid="attr-detail">
-            <CardHeader><CardTitle>{row.label ?? row.attribute}</CardTitle></CardHeader>
+            <CardHeader><AccessTitle level={2}>{row.label ?? row.attribute}</AccessTitle></CardHeader>
             <CardContent className="flex flex-col gap-3 text-sm">
               <div className="flex flex-col gap-1"><Label htmlFor="attr-label">Name in the pickers</Label><Input id="attr-label" value={v('label')} disabled={!canEdit} onChange={(e) => setDraft({ ...draft, label: e.target.value })} /></div>
               <div className="flex flex-col gap-1"><Label htmlFor="attr-source">Values come from</Label>

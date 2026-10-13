@@ -77,28 +77,33 @@
           offer phone sign-in.
 
     # pgr-services, pgr-services-db, novu-bridge and novu-bridge-db must come from ONE
-    # build (see notification_stack_tag in host_vars/_example.yml). They all follow
-    # notification_stack_tag unless a per-image override pins one of them, and a partial
-    # set of pins is the easy way to run a new app on an old schema or a new pgr against
-    # an old bridge. Warn rather than fail: a local build legitimately pins some of them
+    # build (see notification_stack_tag in host_vars/_example.yml), and
+    # digit-user-preferences-service with its -db migrator rides the same tag. All six
+    # follow notification_stack_tag unless a per-image override pins one of them, and a
+    # partial set of pins is the easy way to run a new app on an old schema or a new pgr
+    # against an old bridge. Warn rather than fail: a local build legitimately pins some of them
     # here and the rest in a per-tenant compose overlay, which this cannot see — and a
     # box that pins a consistent set must keep deploying.
     #
     # NOT gated on enable_novu: pgr-services and pgr-services-db run on every box, so
     # pinning one of that pair without the other (an old app under develop-head
-    # migrations, or the reverse) matters with notifications off too. The bridge pair
-    # only counts when the notification stack runs.
+    # migrations, or the reverse) matters with notifications off too. The bridge and
+    # user-preferences pairs only count when the notification stack runs.
     - name: "preflight — notification-stack images: resolve what each one will run"
       vars:
         _stack_tag: "{{ notification_stack_tag | default('', true) or 'nightly-develop' }}"
         _in_use: >-
           {{ ['pgr_services_image', 'pgr_services_db_image']
-             + (['novu_bridge_image', 'novu_bridge_db_image'] if (enable_novu | default(false)) else []) }}
+             + (['novu_bridge_image', 'novu_bridge_db_image',
+                 'digit_user_preferences_service_image', 'digit_user_preferences_service_db_image']
+                if (enable_novu | default(false)) else []) }}
         _repos:
           pgr_services_image: egovio/pgr-services
           pgr_services_db_image: egovio/pgr-services-db
           novu_bridge_image: egovio/novu-bridge
           novu_bridge_db_image: egovio/novu-bridge-db
+          digit_user_preferences_service_image: egovio/digit-user-preferences-service
+          digit_user_preferences_service_db_image: egovio/digit-user-preferences-service-db
         # "" = unpinned, like every *_image var: the compose default
         # <repo>:${NOTIFICATION_STACK_TAG:-nightly-develop}.
         _pins: "{{ q('ansible.builtin.vars', *_in_use, default='') | map('string') | map('trim') | list }}"
@@ -122,10 +127,10 @@
           pinned in host_vars but {{ _unpinned | join(', ') }}
           {{ 'follows' if (_unpinned | length) == 1 else 'follow' }} notification_stack_tag
           ({{ notification_stack_tag | default('', true) or 'nightly-develop' }}).
-          {{ 'pgr-services and pgr-services-db' if not (enable_novu | default(false)) else 'All four' }}
+          {{ 'pgr-services and pgr-services-db' if not (enable_novu | default(false)) else 'All six' }}
           must be the same build (an app needs the migrations its -db image carries{{
           ', and pgr-services thin events need a novu-bridge of the same build' if (enable_novu | default(false)) else '' }}) —
-          pin {{ 'both' if not (enable_novu | default(false)) else 'all four' }} to it, or none and
+          pin {{ 'both' if not (enable_novu | default(false)) else 'all six' }} to it, or none and
           set notification_stack_tag. Ignore this only if a per-tenant compose overlay pins
           the rest to the same build.
 
@@ -379,8 +384,8 @@
         fail_msg: >-
           digit_ui_mode '{{ digit_ui_mode }}' builds the SPA from source on the
           target, but digit_ui_esbuild_repo is empty. Either set
-          digit_ui_bundle_image (static mode — the default,
-          egovio/digit-ui-esbuild:2.12-5137119) and skip the build entirely,
+          digit_ui_bundle_image (static mode — the default) and skip the
+          build entirely,
           or point digit_ui_esbuild_repo at a source tree to clone.
       when:
         - digit_ui_mode in ['static', 'hmr']
@@ -4329,9 +4334,7 @@
       when: enable_mcp | default(false)
 
     # ==================== Verify the read-only MCP actually dropped writes ====================
-    # The digit-mcp image defaults to the pre-read-only tag
-    # (egovio/digit-mcp:2.12-81fc6be, see docker-compose.egov-digit.yaml). An
-    # image that predates MCP_READ_ONLY ignores the env var and serves the FULL
+    # A digit-mcp image that predates MCP_READ_ONLY ignores the env var and serves the FULL
     # write toolset (tenant_destroy, mdms_create, user_create, ...) on the public
     # /mcp + /v1 routes behind nothing but basic auth — a silent full-admin
     # exposure that a passing /healthz and a "healthy" container both hide. The
@@ -4662,6 +4665,9 @@
         # Retained rollback-only UI. Default false hides both navigation and
         # direct route; the underlying legacy implementation remains in source.
         VITE_ENABLE_LEGACY_PGR_DASHBOARD: "{{ enable_legacy_pgr_dashboard | default(false) | bool | ternary('true', 'false') }}"
+        # The citizen-banner upload in the Branding step (#2358). Default false
+        # hides it; the citizen side has its own switch, citizen_banner_enabled.
+        VITE_ENABLE_CITIZEN_BANNER: "{{ configurator_banner_enabled | default(false) | bool | ternary('true', 'false') }}"
       register: configurator_build_run
       changed_when: true
       when:
@@ -5257,6 +5263,193 @@
         - enable_integration_tests_runner | default(false)
         - integration_tests_dir is defined
         - ansible_system != "Darwin"
+
+    # ---- Regression email alerts (opt-in: test_alerts_enabled) ----
+    # A systemd timer runs tests/integration-tests/scripts/regression-alert.mjs
+    # every test_alerts_poll_minutes (default 5). Each poll reads the published
+    # catalog.json; when a NEW run has appeared it compares every test with the
+    # run before it and mails test_alerts_to the tests that regressed, became
+    # skipped or stopped running. Settings are the test_alerts_* host_vars
+    # (documented in inventory/host_vars/_example.yml). The SMTP password is
+    # host_vars test_alerts_smtp_password if set, else this tenant's OpenBao key
+    # of the same name. bootstrap_secrets only seeds a fresh tenant, so on an
+    # existing one put it with `bao kv patch {{ secrets_path }}
+    # test_alerts_smtp_password=…`. A missing required setting leaves alerts OFF
+    # with a warning: a mail misconfiguration must not fail the whole deploy.
+    # The poll runs a root-owned COPY of the script (see "copy the poll
+    # script" below), never the checkout itself. Runbook:
+    # tests/integration-tests/runner/README.md.
+    - name: "integration-tests alerts — resolve the SMTP password (host_vars, else OpenBao)"
+      ansible.builtin.set_fact:
+        _test_alerts_smtp_pw: >-
+          {{ test_alerts_smtp_password | default('', true)
+             or bao_secrets.json.data.data.test_alerts_smtp_password | default('', true) }}
+      no_log: true
+      when: test_alerts_enabled | default(false) | bool
+
+    # test_alerts_to may be one address (a string) or a list. A string used to
+    # reach the env file joined character by character ("t,e,a,m,@,…"), so make
+    # it a one-element list first.
+    - name: "integration-tests alerts — recipients as a list (one address may be a plain string)"
+      ansible.builtin.set_fact:
+        _test_alerts_to_list: >-
+          {{ ([_to] if (_to is string or _to is mapping or _to is not iterable) else _to)
+             | map('string') | map('trim') | select | list }}
+      vars:
+        _to: "{{ test_alerts_to | default('', true) }}"
+      when: test_alerts_enabled | default(false) | bool
+
+    # Every address must be "addr@domain" or "Name <addr@domain>": the script
+    # mails the bare address and keeps the name for the To: header. Several
+    # addresses in ONE string ("a@x.org, b@x.org") are refused, not guessed at:
+    # they go in a YAML list. A bad address is reported like a missing setting
+    # (alerts stay off), instead of the poll failing on every run at RCPT TO.
+    - name: "integration-tests alerts — check required settings"
+      ansible.builtin.set_fact:
+        _test_alerts_missing: "{{ [
+            ('enable_integration_tests' if not (enable_integration_tests | default(false) | bool) else ''),
+            ('test_alerts_smtp_host' if not (test_alerts_smtp_host | default('', true)) else ''),
+            ('test_alerts_from' if not (test_alerts_from | default('', true)) else ''),
+            ('test_alerts_to' if (_test_alerts_to_list | length) == 0 else ''),
+            ('test_alerts_smtp_password' if (test_alerts_smtp_user | default('', true)) and not _test_alerts_smtp_pw else ''),
+          ] | select | list }}"
+        _test_alerts_invalid: >-
+          {{ (['test_alerts_from must be "addr@domain" or "Name <addr@domain>" (got: ' ~ test_alerts_from ~ ')']
+                if (test_alerts_from | default('', true))
+                   and not ((test_alerts_from | string) is match(_addr_re)) else [])
+             + (['test_alerts_to entries must each be one "addr@domain" or "Name <addr@domain>", several go in a YAML list (not valid: '
+                  ~ (_test_alerts_to_list | reject('match', _addr_re) | join(' | ')) ~ ')']
+                if (_test_alerts_to_list | reject('match', _addr_re) | list | length) > 0 else [])
+             + (['test_alerts_poll_minutes must be a whole number of minutes, 1 or more (got: ' ~ test_alerts_poll_minutes ~ ')']
+                if not ((test_alerts_poll_minutes | default(5) | string) is match('^[1-9][0-9]*$')) else []) }}
+      vars:
+        _addr_re: '^\s*(?:[^\s<>@,"]+@[^\s<>@,"]+|(?:"[^"]*"\s*|[^"<>,@]*)<[^\s<>@,"]+@[^\s<>@,"]+>)\s*$'
+      when: test_alerts_enabled | default(false) | bool
+
+    - name: "integration-tests alerts — WARNING: enabled but not configured, alerts stay off"
+      ansible.builtin.debug:
+        msg: >-
+          {{ (['test_alerts_enabled is true, but no alert mail will be sent from this box until these are fixed.']
+              + (['Missing: ' ~ (_test_alerts_missing | join(', ')) ~ '.'] if _test_alerts_missing else [])
+              + (['Invalid: ' ~ (_test_alerts_invalid | join('; ')) ~ '.'] if _test_alerts_invalid else []))
+             | join(' ') }}
+      when:
+        - test_alerts_enabled | default(false) | bool
+        - (_test_alerts_missing + _test_alerts_invalid) | length > 0
+
+    - name: "integration-tests alerts — decide whether the timer runs on this box"
+      ansible.builtin.set_fact:
+        _test_alerts_on: >-
+          {{ (test_alerts_enabled | default(false) | bool)
+             and (_test_alerts_missing | default(['off']) | length == 0)
+             and (_test_alerts_invalid | default(['off']) | length == 0)
+             and (integration_tests_dir is defined)
+             and ansible_system != 'Darwin' }}
+        # Where the poll script runs from: root-owned, outside the checkout.
+        _test_alerts_lib: /usr/local/lib/ccrs-test-alerts
+
+    - name: "integration-tests alerts — env file (root-only; holds the SMTP password)"
+      ansible.builtin.template:
+        src: templates/ccrs-test-alerts.env.j2
+        dest: /etc/ccrs-test-alerts.env
+        owner: root
+        group: root
+        mode: "0600"
+      no_log: true
+      when: _test_alerts_on | bool
+
+    # The poll's environment holds the SMTP password, so the code it runs must
+    # be writable by root only. The checkout is not: "integration-tests runner
+    # — own its checkout and webroot" above hands integration_tests_dir to the
+    # runner account, which also runs the Playwright suite and the RUN-button
+    # daemon. Running the script from there would let anything running as that
+    # account edit it and read the password on the next poll. So the deploy
+    # copies it to a root-owned directory and the unit runs that copy; it is
+    # refreshed on every deploy (nothing to restart: each poll is a fresh
+    # process). This also keeps the poll clear of the checkout's location: the
+    # unit's ProtectHome=true hides /home, where a checkout may live.
+    - name: "integration-tests alerts — root-owned directory for the poll script"
+      ansible.builtin.file:
+        path: "{{ _test_alerts_lib }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      when: _test_alerts_on | bool
+
+    - name: "integration-tests alerts — copy the poll script out of the runner-owned checkout"
+      ansible.builtin.copy:
+        src: "{{ integration_tests_dir }}/scripts/regression-alert.mjs"
+        dest: "{{ _test_alerts_lib }}/regression-alert.mjs"
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0644"
+      # In --check mode (deploy.sh --check) the directory above was not
+      # actually created on a first enable; a real run creates it first.
+      ignore_errors: "{{ ansible_check_mode }}"
+      when: _test_alerts_on | bool
+
+    - name: "integration-tests alerts — install the poll service and its timer"
+      ansible.builtin.template:
+        src: "templates/{{ item }}.j2"
+        dest: "/etc/systemd/system/{{ item }}"
+        mode: "0644"
+      loop:
+        - ccrs-test-alerts.service
+        - ccrs-test-alerts.timer
+      when: _test_alerts_on | bool
+
+    - name: "integration-tests alerts — enable + start the timer"
+      ansible.builtin.systemd:
+        name: ccrs-test-alerts.timer
+        state: started
+        enabled: true
+        daemon_reload: true
+      # In --check mode the unit above was not actually written, so systemd
+      # cannot find it yet; a real run writes it first.
+      ignore_errors: "{{ ansible_check_mode }}"
+      when: _test_alerts_on | bool
+
+    # Turning alerts off (or never having them) must leave no timer running, no
+    # password on disk, nothing of the alerts installed, and no state: turning
+    # them back on then starts from a fresh baseline instead of mailing every
+    # run since they were turned off.
+    - name: "integration-tests alerts — off: stop + disable the timer if present"
+      ansible.builtin.systemd:
+        name: ccrs-test-alerts.timer
+        state: stopped
+        enabled: false
+      failed_when: false
+      when:
+        - not (_test_alerts_on | bool)
+        - ansible_system != "Darwin"
+
+    - name: "integration-tests alerts — off: remove the env file, the units, the script copy and the state"
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/ccrs-test-alerts.env
+        - /etc/systemd/system/ccrs-test-alerts.timer
+        - /etc/systemd/system/ccrs-test-alerts.service
+        - "{{ _test_alerts_lib }}"
+        # With DynamicUser=yes, StateDirectory= lives in /var/lib/private and
+        # /var/lib/ccrs-test-alerts is a symlink to it: remove both.
+        - /var/lib/ccrs-test-alerts
+        - /var/lib/private/ccrs-test-alerts
+      register: _test_alerts_removed
+      when:
+        - not (_test_alerts_on | bool)
+        - ansible_system != "Darwin"
+
+    - name: "integration-tests alerts — off: reload systemd after removing the units"
+      ansible.builtin.systemd:
+        daemon_reload: true
+      when:
+        - not (_test_alerts_on | bool)
+        - ansible_system != "Darwin"
+        - _test_alerts_removed is changed
 
     # Host nginx (Linux) — package install + /etc/nginx site. Skipped on
     # macOS, where nginx runs as a container instead (next block).
@@ -6811,6 +7004,8 @@
         KEYCLOAK_GITHUB_CLIENT_SECRET: "{{ bao_secrets.json.data.data.keycloak_github_client_secret | default('') }}"
         KEYCLOAK_BFF_SIGNIN_METHODS: "{{ identity_signin_methods | default(['password', 'google', 'github']) | join(',') }}"
         KEYCLOAK_BFF_SIGNUP_METHODS: "{{ identity_signup_methods | default(['magic_link', 'google', 'github']) | join(',') }}"
+        # digit-ui citizen client (#2189): empty = no citizen sign-in method, the script's default.
+        KEYCLOAK_CITIZEN_SIGNIN_METHODS: "{{ identity_citizen_signin_methods | default([]) | join(',') }}"
       when: enable_keycloak | default(false)
       no_log: true
       changed_when: true
@@ -7857,12 +8052,51 @@
                   | select('match', '^[^|]+[|][0-9]+$') | map('split', '|') | list)
              if (notif_complaint_roots.rc | default(1)) == 0 else {} }}
 
+    # Self-serve WORKSPACES (signups pgr-services provisioned) are not seeded here. Their roots
+    # have no ADMIN (the deploy's login there failed noisily: "NOT SEEDED — the access-control
+    # rows failed") and their founder signs in through Keycloak only, so has no DIGIT password.
+    # pgr-services seeds a workspace's notification defaults itself when it provisions it
+    # (onboarding step NOTIFICATION_DEFAULTS). Listed with their NOTIFICATIONS.Routing row count,
+    # so one provisioned before that step, or whose step failed, gets an exact ACTION below. A
+    # failed query (no onboarding tables on this box) lists none: every root is seeded as before.
+    - name: "notif-seed — list the self-serve workspaces (pgr-services seeds them at signup)"
+      when: seed_notifications | default(enable_novu | default(false))
+      tags: ['notifications', 'notification-seed']
+      ansible.builtin.shell: |
+        set -o pipefail
+        printf '%s\n' "select w.t, (select count(*) from eg_mdms_data d
+                          where d.tenantid = w.t and d.schemacode = 'NOTIFICATIONS.Routing')
+                        from (select requested_tenant_id as t from eg_pgr_onboarding_signup where status = 'ACTIVE'
+                              union select tenant_id from eg_pgr_onboarding_workspace where seed_version is not null) w
+                        where coalesce(w.t, '') <> '' order by 1;" \
+          | docker exec -i docker-postgres psql -U egov -d egov -v ON_ERROR_STOP=1 -tAq -F '|'
+      args:
+        executable: /bin/bash
+      register: notif_workspace_roots
+      changed_when: false
+      failed_when: false
+
+    - name: "notif-seed — routing rows per self-serve workspace"
+      when: seed_notifications | default(enable_novu | default(false))
+      tags: ['notifications', 'notification-seed']
+      ansible.builtin.set_fact:
+        # workspace root -> its NOTIFICATIONS.Routing row count (state_root is never one).
+        notif_workspace_routing: >-
+          {{ dict(notif_workspace_roots.stdout_lines | default([])
+                  | select('match', '^[A-Za-z][A-Za-z0-9_-]*[|][0-9]+$') | map('split', '|') | list)
+             if (notif_workspace_roots.rc | default(1)) == 0 else {} }}
+
     - name: "notif-seed — the state roots to seed"
       when: seed_notifications | default(enable_novu | default(false))
       tags: ['notifications', 'notification-seed']
       ansible.builtin.set_fact:
+        # notifications_seed_exclude applies here too: test signups (pwt…) are workspaces as well.
+        notif_seed_workspaces: >-
+          {{ notif_workspace_routing.keys() | list | sort | reject('in', [notif_seed_tenant | trim])
+             | reject('match', notifications_seed_exclude | default('(?i)^(PW_|pwt)')) | list }}
         notif_seed_roots: >-
-          {{ ([notif_seed_tenant | trim] + (notif_complaint_counts.keys() | list | sort))
+          {{ ([notif_seed_tenant | trim] + (notif_complaint_counts.keys() | list | sort
+                 | reject('in', notif_workspace_routing.keys() | list | reject('in', [notif_seed_tenant | trim]) | list) | list))
              | select('match', '^[A-Za-z][A-Za-z0-9_-]*$')
              | reject('match', notifications_seed_exclude | default('(?i)^(PW_|pwt)'))
              | unique | list }}
@@ -7927,6 +8161,11 @@
                  ~ ' this run did not see (#1943): re-run --tags notifications once Postgres answers.'])
              + (['Excluded (notifications_seed_exclude): ' ~ (notif_seed_roots_skipped | join(', '))]
                 if notif_seed_roots_skipped else [])
+             + (['Self-serve workspaces, NOT seeded by the deploy (pgr-services seeds them when it provisions them; '
+                 ~ 'no ADMIN exists there): '
+                 ~ (notif_seed_workspaces | zip(notif_seed_workspaces | map('extract', notif_workspace_routing))
+                    | map('join', '=') | join(', ')) ~ ' (=NOTIFICATIONS.Routing rows)']
+                if notif_seed_workspaces else [])
              + (['NOT seeded, not a plain tenant code: ' ~ (notif_seed_roots_invalid | to_json)]
                 if notif_seed_roots_invalid else [])
              + (['notifications_adopt_defaults covers: ' ~ (notif_adopt_roots | join(', '))]
@@ -8223,6 +8462,34 @@
           Demo complaints only (a restored dump): add {{ item }} to `notifications_adopt_defaults`
           in host_vars (e.g. `notifications_adopt_defaults: [{{ item }}]`) and re-run
           `--tags notifications` instead. See docs/releases/2.20/notifications/migration.md.
+
+    # A workspace with no routing: provisioned before pgr-services seeded notification defaults
+    # at signup, or its NOTIFICATION_DEFAULTS step failed (pgr-services logged "notification
+    # defaults were NOT fully seeded"). The deploy cannot log in there, so say exactly how to
+    # finish it with the token of an admin who can (the founder's, from the Configurator).
+    - name: "notif-seed — ACTION: a self-serve workspace has no notification configuration"
+      when:
+        - seed_notifications | default(enable_novu | default(false))
+        - (notif_workspace_routing[item] | default('0') | int) == 0
+      tags: ['notifications', 'notification-seed']
+      loop: "{{ notif_seed_workspaces | default([]) }}"
+      ansible.builtin.debug:
+        msg: >-
+          {{ item }} is a self-serve workspace with no notification configuration
+          ({{ ((notif_complaint_counts[item] | default('0')) ~ ' complaint(s)')
+              if (notif_complaint_counts_known | bool) else 'complaint count unknown' }}): its
+          complaints send NO notifications (SKIPPED / NB_NO_ROUTING). The deploy does not log in at
+          workspaces (no ADMIN there; the founder signs in through Keycloak only). pgr-services seeds a
+          workspace when it provisions it; this one predates that, or its step failed. Seed it once with
+          the DIGIT access token of an admin of {{ item }} (the founder's, from a signed-in Configurator),
+          read without echo so it stays out of the shell history:
+          `cd {{ digit_dir }}/notification-seed && export DIGIT_URL=http://127.0.0.1:{{ upstream_kong_port }}
+          NOTIF_TENANT={{ item }} && read -rs DIGIT_ACCESS_TOKEN && export DIGIT_ACCESS_TOKEN &&
+          NOTIF_SEED_PHASE=access python3 seed-notifications.py` (paste the token after the first line),
+          restart egov-accesscontrol if it printed ACL-CHANGED, then
+          `NOTIF_SEED_PHASE=data NOTIF_ADOPT_DEFAULTS=1 NOTIF_CHANNELS_ALLOWLIST='{{ notif_channels_allowlist | trim }}'
+          SCHEMA_FILE=RAINMAKER-PGR.json NOTIF_SCHEMA_FILE=NOTIFICATIONS.json DATA_DIR=. python3 seed-notifications.py`
+          and `unset DIGIT_ACCESS_TOKEN`. See docs/releases/2.20/notifications/setup-guide.md, "New workspaces".
 
     - name: "notif-seed — WARNING: channel rows were not written"
       when:
