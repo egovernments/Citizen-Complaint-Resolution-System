@@ -25,6 +25,17 @@ export interface LatestRun {
   errorStack: string | null;
 }
 
+/**
+ * Latest-run status, bucketed the way the run summary counts it: the verdict
+ * when it reached one; 'notrun' when the run planned it but produced none
+ * (whether or not an earlier run reached it); 'excluded' when the run never
+ * planned it, so it is outside the total.
+ */
+export type CurrentStatus = TestStatus | 'notrun' | 'excluded';
+
+/** One slot per run in the window, newest first: that run's entry, or a not-run marker. */
+export type RunSlot = HistoryEntry | { runId: string; notRun: true };
+
 export interface CatalogTest {
   id: string;
   title: string;
@@ -34,11 +45,30 @@ export interface CatalogTest {
   tags: string[];
   description: string | null;
   source: string;
+  /** Last KNOWN outcome — may come from an older run. Read currentStatus instead. */
   lastStatus: TestStatus | null;
   lastDurationMs: number | null;
+  /**
+   * False when the test produced no verdict in the latest run. Older catalogs
+   * lack it; dataProvider derives it, so after load it is always set.
+   */
+  ranInLatestRun?: boolean;
+  /**
+   * The builder's call: the latest run never planned this test (Playwright
+   * config or command line), so it is outside that run's total. Older
+   * catalogs lack it; dataProvider derives it, so after load it is always set.
+   */
+  excluded?: boolean;
   history: HistoryEntry[];
   latestRun: LatestRun | null;
   parseError: string | null;
+  // ---- derived by dataProvider on load (not in catalog.json) ----
+  /** What every list/badge/filter/sort reads: correct by default, no flag to remember. */
+  currentStatus?: CurrentStatus;
+  /** currentStatus's place in normalize's STATUS_SEVERITY (0 = most urgent); the Status column sorts on it. */
+  statusRank?: number;
+  /** History aligned to catalog.runs, so a dot means the same run on every row. */
+  runSlots?: RunSlot[];
 }
 
 export interface RunSummary {
@@ -49,6 +79,16 @@ export interface RunSummary {
   failed: number;
   skipped: number;
   timedOut: number;
+  /**
+   * In `total` but no verdict in this run. null or absent = legacy count:
+   * recorded before not-run tracking, may include carried-over results.
+   */
+  notRun?: number | null;
+  /**
+   * Playwright's message when the run stopped early (e.g. global timeout).
+   * null = it ran to the end, except on a legacy count, where it is unknown.
+   */
+  cutShort?: string | null;
   total: number;
   sha: string;
   branch: string;

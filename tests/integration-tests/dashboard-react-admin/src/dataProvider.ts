@@ -1,5 +1,6 @@
 import type { DataProvider } from 'react-admin';
 import type { Catalog, CatalogTest, RunSummary } from './types';
+import { normalize } from './normalize';
 
 /**
  * In-memory dataProvider over /tests/catalog.json.
@@ -26,7 +27,7 @@ function fetchCatalog(): Promise<Catalog> {
     const url = `${import.meta.env.BASE_URL}catalog.json?t=${Date.now()}`;
     const resp = await fetch(url, { credentials: 'include' });
     if (!resp.ok) throw new Error(`catalog.json: HTTP ${resp.status}`);
-    return resp.json() as Promise<Catalog>;
+    return normalize((await resp.json()) as Catalog);
   })();
   return cache;
 }
@@ -76,8 +77,8 @@ function applyFilter<T extends Record<string, unknown>>(
         if (!v.some(want => tags.includes(want as string))) return false;
         continue;
       }
-      // Direct equality on other fields.
-      if (row[k] !== v) return false;
+      // Direct equality on other fields; an array means "any of these".
+      if (Array.isArray(v) ? !v.includes(row[k]) : row[k] !== v) return false;
     }
     return true;
   });
