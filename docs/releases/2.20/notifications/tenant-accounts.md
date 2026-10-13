@@ -49,15 +49,21 @@ signup saga ... BINDING -> NOTIFICATION_ACCOUNT ──> novu-bridge POST /tenant
 
 - **Provision** is idempotent: calling it again for a provisioned tenant changes nothing and
   returns its state. A tenant never gets a second organization: a lease on the tenant's row stops
-  two callers working at once, the organization id is written down the moment Novu creates it,
+  two requests working at once (each takes it with a token of its own, so two requests on one
+  replica are kept apart too), the organization id is written down the moment Novu creates it,
   and after a crash between those two steps the next attempt adopts the organization Novu already
-  has under the tenant's name. Every workflow the bridge triggers is created in the new
-  organization: `complaints-sms`, `complaints-whatsapp`, `complaints-email`, and the OTP workflows
-  `digit-otp-sms` and `digit-otp-email`, whose text is only the code and its expiry.
+  has under the tenant's name. Every write after the lease is fenced by it: a request whose lease
+  ran out (Novu slower than 2 minutes) and was taken over stops with
+  `409 NB_PROVISIONING_IN_PROGRESS` rather than report what it did not store. Every workflow the
+  bridge triggers is created in the new organization: `complaints-sms`, `complaints-whatsapp`,
+  `complaints-email`, and the OTP workflows `digit-otp-sms` and `digit-otp-email`, whose text is
+  only the code and its expiry.
 - **Tenant creation** runs it as the last step of the signup saga (`NOTIFICATION_ACCOUNT` in
   pgr-services). It never fails a signup: if Novu or the bridge is down, the workspace is created
   without its own messaging, the step is recorded as `DEFERRED`, and pgr-services retries it every
-  10 minutes (`PGR_ONBOARDING_NOTIFICATION_ACCOUNT_RECONCILE_INTERVAL_MS`) until it succeeds.
+  10 minutes (`PGR_ONBOARDING_NOTIFICATION_ACCOUNT_RECONCILE_INTERVAL_MS`) until it succeeds:
+  up to 100 workspaces a run, 5 per call to the bridge. One that fails again goes to the back of
+  the queue, and a call the bridge does not answer ends that run.
   The workspace's notification configuration (templates, routing, access rows) comes from the
   earlier step `NOTIFICATION_DEFAULTS` ([setup-guide §8.6](./setup-guide.md#86-new-workspaces));
   the new organization starts with no providers, so its messages are
@@ -142,8 +148,8 @@ job to finish.
 Success body: `{"data": {"status", "transactionId", "tenantId", "channel", "provider", "account"}}`;
 `transactionId` is Novu's. The code is never logged, never stored and never echoed in an error.
 Each send writes one ledger row (module `identity`, event `OTP_SEND`, recipient as a hashed
-subscriber id `otp_<uuid>`, stable per tenant and number; transaction id `otp_<uuid>`) that the
-Logs screen shows with both ids as they are: they are UUID-shaped, which the Logs masking treats
+subscriber id `otp_<uuid>`, stable per tenant and number; transaction id `otp_<uuid>`; status
+`SENT`, `QUEUED` for a 202, or `FAILED`) that the Logs screen shows with both ids as they are: they are UUID-shaped, which the Logs masking treats
 as ids. Rate limits and lockout are the caller's.
 `GET /tenants/{tenant}` with the same token says whether a tenant is provisioned and which
 channels have a usable provider (the capability lookup for hiding `phone_otp`).
@@ -291,7 +297,7 @@ false `SENT`, and a **Test** is refused with the same reason.
 |---|---|
 | Delivery receipts | `/receipts/*` matches rows by transaction id or provider reference, which are unique across organizations, so a receipt is filed under the right tenant whichever account sent it. Reports are configured per sender: a gateway's DR callback or a Novu webhook set up for the shared account does not cover a tenant's own providers. The platform operator configures them (the receipts secret is a deployment secret); until then that tenant's rows stay `SENT` |
 | Logs screen | Unchanged: the ledger is the bridge's own. A row sent through a tenant's organization records `novuAccount: tenant:<root>` in its provider response; OTP sends appear as `OTP_SEND` |
-| Test-send | Goes through the workspace's own organization and its own `complaints-sms` / `complaints-email` workflows; its ledger row is scoped to the workspace. It is checked first against that organization's providers only, as its dispatch is: nothing there to deliver it (the named provider missing, disabled or on another channel, or none named and no active provider for the channel) is `409 NB_PROVIDER_UNAVAILABLE` with the reason, and nothing is sent |
+| Test-send | Goes through the workspace's own organization and its own `complaints-sms` / `complaints-email` workflows; its ledger row is scoped to the workspace (a body `tenantId` of another root is `400 NB_TENANT_MISMATCH`). It is checked first against that organization's providers only, as its dispatch is: nothing there to deliver it (the named provider missing, disabled or on another channel, or none named and no active provider for the channel) is `409 NB_PROVIDER_UNAVAILABLE` with the reason, and nothing is sent |
 | WhatsApp template sync | Reads the Twilio account of the workspace's own organization |
 | `seed-notifications.py` | Unchanged: it seeds MDMS masters, which are per tenant anyway. A seeded channel row that pins no provider sends through the organization's primary provider, and is `SKIPPED / NB_PROVIDER_UNAVAILABLE` while the organization has no active provider for the channel |
 | `migrate-notifications.py` | Unchanged: it migrates 2.12 tenants, which stay on the shared account; `--create-provider` creates providers there. To give a migrated tenant its own organization, backfill it, then add its providers there |
@@ -313,7 +319,10 @@ false `SENT`, and a **Test** is refused with the same reason.
   `/v1/%74enants` needs the token too; a path with `;`, an encoded `/`, `\`, `.` or `%`, `//` or a
   dot segment is refused with `400 NB_REQUEST_REJECTED` before anything else.
 - **The Configurator path** acts on a workspace's organization only for an admin of that
-  workspace, decided in the bridge from the egov-user session, never from the browser.
+  workspace, decided in the bridge from the egov-user session, never from the browser. A write
+  let through as that workspace's admin never falls back to the shared account: if by then the
+  workspace no longer reads as having its own (it is being deprovisioned, or the read failed), it
+  is `503 NB_TENANT_ACCOUNT_UNAVAILABLE` and nothing changes.
 - **Fail closed:** an unreadable account fails the message rather than using the shared account.
 - **The platform admin** is the one credential that reaches every tenant organization. It lives
   in OpenBao (or the Helm Secret) and the bridge's environment.

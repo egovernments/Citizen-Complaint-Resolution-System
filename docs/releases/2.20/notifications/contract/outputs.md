@@ -18,6 +18,7 @@ rejections and decisions taken before any recipient or channel existed. Read it 
 | `SKIPPED` | Well-formed; a deliberate decision not to deliver (gates, resolution decisions). Never DLQ'd | gates, resolver |
 | `RECEIVED` | Validation only (`POST /dispatch/_validate`, or `_dry-run` without `send`) | dry-run path |
 | `SENT` | A transport **accepted** it — not delivered | dispatch path |
+| `QUEUED` | `messages/_send` only: Novu took the sign-in code and the provider had not answered within `NOVU_BRIDGE_MESSAGES_CONFIRM_TIMEOUT_MS` (the API's `202 QUEUED`). Nothing updates it later | `MessageSendService` |
 | `DELIVERED` | A receipt confirmed delivery; stamps `delivered_time` | `ReceiptController` |
 | `BOUNCED` | A receipt reported a bounce | `ReceiptController` |
 | `FAILED` | Transport refused or threw, or a receipt reported failure | dispatch path, `ReceiptController` |
@@ -28,7 +29,7 @@ envelope ─► REJECTED | SKIPPED | RECEIVED | FAILED        (terminal)
 ```
 
 Only `SENT` can change, and only via a receipt (`WHERE status = 'SENT'`), so late or duplicate
-receipts never regress a row. `SKIPPED` never becomes `SENT`: re-enabling a channel does not
+receipts never regress a row; `QUEUED` stays as it is. `SKIPPED` never becomes `SENT`: re-enabling a channel does not
 resend.
 
 ### Channel-less rows
@@ -101,8 +102,8 @@ own test subscriber.
 **OTP rows** (`POST /messages/_send`): module `identity`, `event_name` = `OTP_SEND`,
 `template_key` = `OTP`, `recipient_value` = `otp_<uuid>`, a UUID-shaped SHA-256 of
 `root:recipient` (stable per tenant and number; never the phone or address), `transaction_id`,
-`event_id` and `provider_ref` = Novu's transaction id `otp_<uuid>`, status `SENT` or `FAILED`
-(`NB_PROVIDER_FAILED`, `NB_NOVU_*`). Both ids are UUID-shaped, so the masking on read shows them
+`event_id` and `provider_ref` = Novu's transaction id `otp_<uuid>`, status `SENT`, `QUEUED` (the
+provider had not answered yet: the API's 202) or `FAILED` (`NB_PROVIDER_FAILED`, `NB_NOVU_*`). Both ids are UUID-shaped, so the masking on read shows them
 as they are. The code is never stored.
 
 ## The DLQ

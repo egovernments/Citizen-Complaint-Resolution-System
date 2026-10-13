@@ -103,7 +103,8 @@ Body: `{"ResponseInfo": …, "Errors": [{"code", "message"}]}`.
 | `NB_NOVU_INTEGRATIONS_FAILED` | 400 / 502 | Listing Novu integrations failed; check Novu and the API key |
 | `NB_NOVU_INTEGRATION_CREATE_FAILED` / `NB_NOVU_INTEGRATION_UPDATE_FAILED` / `NB_NOVU_INTEGRATION_DELETE_FAILED` | 400 | Novu refused; read the message (e.g. SMTP port must be text) |
 | `NB_NOVU_WORKFLOWS_FAILED` | 400 | Listing Novu workflows failed |
-| `NB_TENANT_MISMATCH` | 400 | `_delete` / disable on a workspace's own organization with a body `tenantId` of another root |
+| `NB_TENANT_MISMATCH` | 400 | `_delete` / disable / `test-send` on a workspace's own organization with a body `tenantId` of another root (a test's ledger row would land in that tenant's Logs) |
+| `NB_TENANT_ACCOUNT_UNAVAILABLE` | 503 | A provider write let through for a workspace's own organization, when by the time the controller acts the workspace no longer reads as having one (it is being deprovisioned, or the read failed). Nothing changed, and the shared account was not used; retry |
 
 ## Tenant accounts and `messages/_send` (HTTP only, internal)
 
@@ -117,7 +118,7 @@ The internal APIs of [tenant-accounts.md](../tenant-accounts.md): `/tenants/**` 
 | `NB_TENANT_ACCOUNTS_DISABLED` | 409 | Provision or deprovision while `NOVU_BRIDGE_TENANT_ACCOUNTS_ENABLED` is false |
 | `NB_TENANT_ACCOUNTS_MISCONFIGURED` | 503 | No Novu admin login, or an encryption key shorter than 32 characters |
 | `NB_INVALID_TENANT` | 400 | `tenantId` is not a tenant code (lower-case letters, digits, `-`, `_`; a dotted id means its root) |
-| `NB_PROVISIONING_IN_PROGRESS` | 409 | Another request holds the tenant's lease (2 min); retry shortly |
+| `NB_PROVISIONING_IN_PROGRESS` | 409 | Another request holds the tenant's lease (2 min), on this replica or another; or this request's lease ran out before it finished and another request took the tenant over, so nothing more was written. Retry shortly |
 | `NB_PROVISIONING_FAILED` / `NB_DEPROVISIONING_FAILED` | 500 / 502 | Unexpected failure; the row keeps `last_error_code` / `last_error_message`. Retry: provision is idempotent |
 | `NB_NOVU_PLATFORM_LOGIN_FAILED` | 502 | Novu refused the platform admin login: check `NOVU_BRIDGE_NOVU_ADMIN_EMAIL` / `_PASSWORD` (the deploy's `novu_admin_password` in OpenBao) |
 | `NB_NOVU_PLATFORM_FAILED` | 502 | Novu refused or misanswered an organization, environment or key call; read the message |

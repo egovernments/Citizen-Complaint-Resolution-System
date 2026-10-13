@@ -1414,7 +1414,7 @@ components:
 
     DispatchStatus:
       type: string
-      enum: [RECEIVED, SENT, DELIVERED, BOUNCED, FAILED, SKIPPED, REJECTED]
+      enum: [RECEIVED, SENT, QUEUED, DELIVERED, BOUNCED, FAILED, SKIPPED, REJECTED]
       description: See `outputs.md` for the meaning of each and the legal transitions.
 
     DispatchSourcePath:

@@ -384,6 +384,7 @@ row, and re-enabling a channel does not resend what was skipped.
 | Status | Meaning |
 |---|---|
 | Sent (accepted by transport) | The gateway **accepted** it — not proof of delivery |
+| Queued (provider had not answered) | A sign-in code (`messages/_send`) the delivery engine took, whose provider had not answered within a few seconds. It is not updated later |
 | Delivered / Bounced | A delivery receipt reported it ([§8.3](#83-delivery-receipts)) |
 | Failed | Gateway refused it or a receipt reported failure; reason in the Error column |
 | Skipped | A deliberate decision not to send; read the code |
