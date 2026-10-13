@@ -18,6 +18,7 @@ import {
 } from './policyModel';
 import { ConcurrentChangeError, applySave, loadRole, planSave, refreshAccess, type Edited, type Loaded, type Write } from './roleEditorData';
 import { whenItApplies, whenItAppliesAll, type ChangeKind } from './effectTimes';
+import { RolePreview } from './RolePreview';
 
 /** Which kinds of change a save plan makes (for "when it applies"). */
 export function planKinds(plan: Write[]): ChangeKind[] {
@@ -378,6 +379,8 @@ export default function RoleEditor() {
       </main>
 
       <aside className="flex w-full flex-col gap-4 lg:w-80">
+        {/* cfgreview F12 / PM 5 (#1558): what the saved role lets someone see at a tenant */}
+        {!isNew && <RolePreview role={codeParam!} />}
         <Card>
           <CardHeader><AccessTitle level={2} className="text-base">In plain words</AccessTitle></CardHeader>
           <CardContent><p className="text-sm leading-relaxed" data-testid="role-plain-words">{summary}</p></CardContent>

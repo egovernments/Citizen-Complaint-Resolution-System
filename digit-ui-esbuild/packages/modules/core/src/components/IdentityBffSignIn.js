@@ -49,8 +49,8 @@ export const useIdentityBffSignIn = ({ surface, t, onAuthenticated, onSignedOut 
         identityBffSurfaceBase(tenant, surface),
       )
     : null;
-  const tr = (key, fallback) => {
-    const value = t(key);
+  const tr = (key, fallback, params) => {
+    const value = t(key, params);
     return value === key ? fallback : value;
   };
   const unavailable = () => tr("CORE_IDENTITY_SIGNIN_UNAVAILABLE", "Sign-in is temporarily unavailable. Please try again.");
@@ -86,7 +86,7 @@ export const useIdentityBffSignIn = ({ surface, t, onAuthenticated, onSignedOut 
     if (result.status !== "authenticated") {
       setInvitation(result.invitation || null);
       setStatus(result.status);
-      setMessage(result.messageKey ? tr(result.messageKey, result.message) : "");
+      setMessage(result.messageKey ? tr(result.messageKey, result.message, result.params) : "");
       return;
     }
     complete(result.user);

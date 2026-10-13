@@ -216,7 +216,10 @@ test("on a tenant route the employee rows and section stay on the tenant route",
       label: "Complaints",
       items: [{ key: "search", label: "Search", navigationUrl: "/kd/digit-ui/employee/pgr/inbox-v2", icon: "Search" }],
     }) : undefined) },
-    Utils: { rebaseAppUrl: nav.rebaseAppUrl },
+    Utils: {
+      rebaseAppUrl: nav.rebaseAppUrl,
+      locale: { getTransformedLocale: (label) => label.trim().toUpperCase().replace(/[.:-\s\/]/g, "_") },
+    },
   };
   try {
     const { items } = nav.useEmployeeNavItems();

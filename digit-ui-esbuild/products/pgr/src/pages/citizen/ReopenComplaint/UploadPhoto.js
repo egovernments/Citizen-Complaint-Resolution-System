@@ -61,7 +61,7 @@ const UploadPhoto = (props) => {
         </Link> */}
 
         {valid ? null : <CardLabelError>{t(`${LOCALIZATION_KEY.CS_ADDCOMPLAINT}_UPLOAD_ERROR_MESSAGE`)}</CardLabelError>}
-        <SubmitBar label={t(`${LOCALIZATION_KEY.PT_COMMONS}_NEXT`)} onSubmit={save} />
+        <SubmitBar label={t("CS_COMMON_NEXT")} onSubmit={save} />
         {props.skip ? <LinkButton label={t(`${LOCALIZATION_KEY.CORE_COMMON}_SKIP_CONTINUE`)} onClick={skip} /> : null}
       </Card>
     </React.Fragment>
