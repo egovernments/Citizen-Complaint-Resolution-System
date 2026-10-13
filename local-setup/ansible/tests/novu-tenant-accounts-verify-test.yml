@@ -1,7 +1,8 @@
 ---
 # Drives the REAL tasks/novu-tenant-accounts-verify.yml (review S2 of #2343) over every
 # outcome that decides whether per-tenant Novu accounts stay on: the Novu admin sign-in
-# verdict x the phase x explicit `novu_tenant_accounts: true` x workspaces already provisioned.
+# verdict (or a host_vars password that is the published default) x the phase x explicit
+# `novu_tenant_accounts: true` x workspaces already provisioned.
 # The sign-in and the workspace count are stubbed through the file's seams, except in the
 # last rows, which run the real sign-in probe against a port nothing listens on.
 #
@@ -18,6 +19,8 @@
   vars:
     novu_admin_email_effective: admin@digit.local
     novu_admin_password_legacy: Digit@12345
+    # What the playbook signs in with once they are off (host_vars, OpenBao, legacy, default).
+    novu_admin_password_without_tenant_accounts: Shared-only-password-Aa1-
     refused_table: 'ERROR:  relation "nb_tenant_account" does not exist'
     cases:
       # ── preflight: Novu already up (an upgrade) ──────────────────────────
@@ -47,6 +50,13 @@
          count: "0", expect: ABORT, reason: "novu_tenant_accounts is set to true"}
       - {name: "post-start, refused, a workspace already provisioned", phase: post-start, login: "REFUSED 401",
          count: "1", expect: ABORT, reason: "already use their own account"}
+      # ── host_vars pins the published default: never tried, never handed to the bridge ──
+      - {name: "published default, default on", phase: preflight, password: "Digit@12345", login: VERIFIED,
+         count: "0", expect: "OFF", action: ["published default", "novu_tenant_accounts: false"]}
+      - {name: "published default, explicit true", phase: preflight, password: "Digit@12345", login: VERIFIED,
+         explicit: true, count: "0", expect: ABORT, reason: "novu_tenant_accounts is set to true"}
+      - {name: "published default, a workspace already provisioned", phase: preflight, password: "Digit@12345",
+         login: VERIFIED, count: "1", expect: ABORT, reason: "already use their own account"}
       # ── the real sign-in probe, nothing listening ────────────────────────
       - {name: "real probe, preflight, Novu down: decided after start", phase: preflight, real_probe: true, expect: "ON"}
       - {name: "real probe, post-start, Novu down: off", phase: post-start, real_probe: true, count: "0", expect: "OFF"}

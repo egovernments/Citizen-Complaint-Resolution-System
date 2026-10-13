@@ -182,8 +182,9 @@ The deploy then:
 1. generates four secrets into OpenBao the first time (never into host_vars or the repository):
    `novu_bridge_tenant_key_encryption_key`, `novu_bridge_internal_admin_token`,
    `novu_bridge_internal_send_token` and `novu_admin_password`;
-2. refuses to continue if `novu_admin_password` in host_vars is the published default
-   `Digit@12345` (the bridge signs in as that user, and `/novu-api/` is public);
+2. never hands the bridge a `novu_admin_password` from host_vars that is the published default
+   `Digit@12345` (the bridge signs in as that user, and `/novu-api/` is public): it counts as a
+   refused sign-in, see [When the admin sign-in is refused](#when-the-admin-sign-in-is-refused);
 3. on a box whose Novu admin still has its old password (`novu_admin_password_legacy`, default
    `Digit@12345`), changes it to the OpenBao one through Novu's `/v1/auth/update-password`
    before anything signs in. The Novu dashboard login changes with it: read it with
@@ -200,7 +201,8 @@ The deploy then:
 The usual cause is a Novu admin whose password was changed by hand (in the Novu dashboard), so it
 is neither the generated one nor `novu_admin_password_legacy`, and step 3 could not move it. A
 bridge holding a password Novu refuses could never provision a workspace, so the deploy does not
-hand it over:
+hand it over. A host_vars `novu_admin_password` that is the published default is treated the same
+way without being tried, with its own ACTION text (remove it, or set a unique value):
 
 | The box | The deploy |
 |---|---|
@@ -216,6 +218,14 @@ the box on the shared account only and silence the check. When a deploy stops he
 started is still running with the refused password: workspace provisioning fails
 (`NB_NOVU_PLATFORM_LOGIN_FAILED`), and workspaces that already have an organization keep sending
 through it (they use their stored keys, not the admin sign-in). Pin and re-run.
+
+**With per-tenant accounts off** (`novu_tenant_accounts: false`, or switched off as above), the
+deploy still signs in as the Novu admin once, to mint `NOVU_API_KEY` when host_vars pins no
+`novu_api_key`. It uses `novu_admin_password` from host_vars when set; otherwise the first Novu
+accepts of: the password OpenBao holds (an earlier deploy with the feature on moved the admin onto
+it), `novu_admin_password_legacy`, the published default. So turning the feature off after it ran
+keeps the shared account's key, and so does a deploy that stored a generated password but stopped
+before moving the admin onto it.
 
 Registration stays disabled (`DISABLE_USER_REGISTRATION=true`): creating an organization is not a
 registration.

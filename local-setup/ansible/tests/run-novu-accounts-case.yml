@@ -20,7 +20,7 @@
     novu_tenant_accounts_on: true
     novu_tenant_accounts_switched_off: false
     novu_tenant_accounts_switched_off_after_start: false
-    novu_admin_password_effective: Generated-password-Aa1-
+    novu_admin_password_effective: "{{ case.password | default('Generated-password-Aa1-') }}"
     nta_result: ""
     nta_reason: ""
 
@@ -74,13 +74,17 @@
       - case.expect != 'OFF' or ('NOVU TENANT ACCOUNT SECRETS' not in env_text and 'Generated-password' not in env_text)
       - case.expect != 'OFF' or (novu_tenant_accounts_switched_off | bool)
       - case.expect != 'OFF' or ((novu_tenant_accounts_switched_off_after_start | bool) == (case.phase == 'post-start'))
-      - case.expect != 'OFF' or ('novu_admin_password_legacy' in nta_action and 'novu_tenant_accounts: false' in nta_action)
-      # Preflight OFF: the mint signs in as it did before #2203.
-      - case.expect != 'OFF' or case.phase != 'preflight' or novu_admin_password_effective == 'Digit@12345'
+      # The ACTION names what to pin, and the way out.
+      - >-
+        case.expect != 'OFF'
+        or ((case.action | default(['novu_admin_password_legacy', 'novu_tenant_accounts: false']))
+            | reject('in', nta_action) | list | length == 0)
+      # Preflight OFF: the mint signs in with the password it uses without per-tenant accounts.
+      - case.expect != 'OFF' or case.phase != 'preflight' or novu_admin_password_effective == novu_admin_password_without_tenant_accounts
       # ON and ABORT: the .env is exactly as the deploy wrote it.
       - case.expect == 'OFF' or ('NOVU_BRIDGE_TENANT_ACCOUNTS_ENABLED=true' in env_text and 'Generated-password' in env_text)
       - case.expect == 'OFF' or not (novu_tenant_accounts_switched_off | bool)
-      - case.expect == 'OFF' or novu_admin_password_effective == 'Generated-password-Aa1-'
+      - case.expect == 'OFF' or novu_admin_password_effective == (case.password | default('Generated-password-Aa1-'))
       # The other .env lines are never touched.
       - "'NOTIFICATION_STACK_TAG=develop' in env_text and 'NOVU_API_KEY=k' in env_text"
     fail_msg: >-

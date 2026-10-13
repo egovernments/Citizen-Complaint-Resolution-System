@@ -16,6 +16,9 @@
 #   nta_phase=post-start  after the legacy-password move and the API-key mint: the
 #                         authoritative check. VERIFIED keeps them on.
 #
+# A host_vars `novu_admin_password` that is the published default `Digit@12345` counts as not
+# verified without being tried: /novu-api/ is public, so the bridge never holds it.
+#
 # Not verified:
 #   * `novu_tenant_accounts: true` set explicitly in host_vars → the deploy STOPS (the operator
 #     asked for the feature; switching it off would contradict that);
@@ -31,7 +34,9 @@
 #
 # Sets: novu_tenant_accounts_on, novu_tenant_accounts_switched_off,
 # novu_tenant_accounts_switched_off_after_start, and (preflight switch-off only)
-# novu_admin_password_effective back to what the shared account alone uses.
+# novu_admin_password_effective back to novu_admin_password_without_tenant_accounts, which the
+# playbook works out (host_vars, else the password OpenBao already held, else
+# novu_admin_password_legacy, else the published default).
 #
 # Test seams (never set in production; tests/novu-tenant-accounts-verify-test.yml):
 #   nta_login_override            the sign-in verdict instead of calling Novu
@@ -40,6 +45,10 @@
 #   nta_provisioned_stdout_override / _rc_override / _stderr_override
 #                                 the workspace count query's result instead of running it
 #   nta_env_path                  the compose .env (default {{ digit_dir }}/.env)
+
+- name: "novu tenant accounts — is the password the published default ({{ nta_phase }})"
+  ansible.builtin.set_fact:
+    nta_published_default: "{{ novu_admin_password_effective == 'Digit@12345' }}"
 
 - name: "novu tenant accounts — sign in to Novu as the platform admin ({{ nta_phase }})"
   ansible.builtin.command: python3 -
@@ -88,14 +97,17 @@
   failed_when: false
   # The environment carries both passwords; the outcome is printed below.
   no_log: true
-  when: nta_login_override is not defined
+  when:
+    - nta_login_override is not defined
+    - not (nta_published_default | bool)
 
 - name: "novu tenant accounts — read the sign-in outcome ({{ nta_phase }})"
   ansible.builtin.set_fact:
     nta_outcome: >-
-      {{ ((nta_login_override if nta_login_override is defined else (nta_login.stdout | default('')))
-          | trim)
-         or ('UNREACHABLE probe-exited-' ~ (nta_login.rc | default('?'))) }}
+      {{ 'PUBLISHED-DEFAULT not tried' if (nta_published_default | bool)
+         else (((nta_login_override if nta_login_override is defined else (nta_login.stdout | default('')))
+                | trim)
+               or ('UNREACHABLE probe-exited-' ~ (nta_login.rc | default('?')))) }}
 
 - name: "novu tenant accounts — decide ({{ nta_phase }})"
   ansible.builtin.set_fact:
@@ -154,6 +166,19 @@
   when:
     - not (nta_verified | bool)
     - not (nta_deferred | bool)
+    - not (nta_published_default | bool)
+
+- name: "novu tenant accounts — what to do: the published default ({{ nta_phase }})"
+  ansible.builtin.set_fact:
+    nta_action: >-
+      novu_admin_password in host_vars/{{ inventory_hostname }}.yml is the published default `Digit@12345`.
+      novu-bridge signs in as that Novu admin to create and manage every workspace's own Novu
+      organization, and /novu-api/ is public, so per-tenant notification accounts never run with it.
+      Remove novu_admin_password from host_vars (the deploy then generates one in OpenBao and moves the
+      Novu admin onto it) or set a unique value, and re-run the deploy. To run this box on the shared
+      notification account only, set `novu_tenant_accounts: false`.
+      See docs/releases/2.20/notifications/tenant-accounts.md.
+  when: nta_published_default | bool
 
 - name: "novu tenant accounts — stop: novu_tenant_accounts is set to true ({{ nta_phase }})"
   ansible.builtin.fail:
@@ -188,11 +213,12 @@
     - not (nta_verified | bool)
     - not (nta_deferred | bool)
 
-# Before the stack starts, the mint and the workflow bootstrap still sign in as the admin: with
-# the feature off they use what they used before #2203 (host_vars, else the published default).
+# The mint after the stack starts still signs in as the admin: with the feature off it uses the
+# playbook's novu_admin_password_without_tenant_accounts (and, with no host_vars pin, the one of
+# those Novu accepts; see "the Novu admin password the mint signs in with" in the playbook).
 - name: "novu tenant accounts — the Novu admin sign-in without them ({{ nta_phase }})"
   ansible.builtin.set_fact:
-    novu_admin_password_effective: "{{ (novu_admin_password | default('', true)) or 'Digit@12345' }}"
+    novu_admin_password_effective: "{{ novu_admin_password_without_tenant_accounts }}"
   no_log: true
   when:
     - not (nta_verified | bool)

@@ -3493,13 +3493,16 @@
     #   novu_bridge_internal_admin_token       /novu-adapter/v1/tenants/** (pgr-services, operators)
     #   novu_bridge_internal_send_token        POST /messages/_send (the Identity BFF)
     #   novu_admin_password                    the Novu platform admin the bridge signs in as
-    # The admin password is the account the deploy mints NOVU_API_KEY with. While tenant
-    # accounts are off it stays `novu_admin_password` from host_vars or the published default
-    # (unchanged behaviour); with them on, a published default would hand every tenant's
-    # provider credentials to anyone who can reach /novu-api/, so it comes from OpenBao (or an
-    # explicit host_vars value) and the task "move the Novu admin off the legacy password"
-    # below changes it on a box that still has the old one. Read it back with
+    # The admin password is the account the deploy mints NOVU_API_KEY with. With tenant accounts
+    # on, a published default would hand every tenant's provider credentials to anyone who can
+    # reach /novu-api/, so it comes from OpenBao (or an explicit host_vars value) and the task
+    # "move the Novu admin off the legacy password" below changes it on a box that still has
+    # the old one. Read it back with
     #   bao kv get -field=novu_admin_password {{ secrets_path }}
+    # With them off it is `novu_admin_password` from host_vars, else the one OpenBao already holds
+    # (an earlier deploy with them on moved the admin onto it), else `novu_admin_password_legacy`,
+    # else the published default; without a host_vars pin the mint takes the first of those Novu
+    # accepts. So the secrets are read whenever Novu is deployed, not only with the feature on.
     - name: "novu tenant accounts — re-read tenant secrets"
       ansible.builtin.uri:
         url: "http://127.0.0.1:18200/v1/{{ secrets_path | regex_replace('^kv/', 'kv/data/') }}"
@@ -3507,7 +3510,7 @@
           X-Vault-Token: "{{ bao_root_token }}"
         status_code: [200]
       register: bao_secrets_novu_accounts
-      when: novu_tenant_accounts_on | bool
+      when: enable_novu | default(false) | bool
       no_log: true
 
     - name: "novu tenant accounts — resolve secrets (generate any that are absent)"
@@ -3533,27 +3536,25 @@
       no_log: true
 
     # An explicit host_vars novu_admin_password is the operator's to manage (like the status
-    # board's): it wins and is not copied into OpenBao.
+    # board's): it wins and is not copied into OpenBao. One that is the published default turns
+    # the feature off for the deploy (or stops it): the verify step below decides which.
     - name: "novu tenant accounts — effective Novu admin login"
+      vars:
+        # What OpenBao held before this deploy, not a password it generates and stores below.
+        _held: >-
+          {{ (bao_secrets_novu_accounts.json.data.data.novu_admin_password | default('', true))
+             if (bao_secrets_novu_accounts.json is defined) else '' }}
+        _without: >-
+          {{ (novu_admin_password | default('', true)) or _held
+             or (novu_admin_password_legacy | default('', true)) or 'Digit@12345' }}
       ansible.builtin.set_fact:
         novu_admin_email_effective: "{{ novu_admin_email | default('admin@digit.local') }}"
+        novu_admin_password_held: "{{ _held }}"
+        novu_admin_password_without_tenant_accounts: "{{ _without }}"
         novu_admin_password_effective: >-
-          {{ (novu_admin_password | default('', true))
-             or (novu_accounts_secrets.novu_admin_password
-                 if (novu_tenant_accounts_on | bool) else 'Digit@12345') }}
+          {{ ((novu_admin_password | default('', true)) or novu_accounts_secrets.novu_admin_password)
+             if (novu_tenant_accounts_on | bool) else _without }}
       no_log: true
-
-    - name: "novu tenant accounts — refuse the published default admin password"
-      ansible.builtin.assert:
-        that:
-          - novu_admin_password_effective != 'Digit@12345'
-        fail_msg: >-
-          Per-tenant Novu accounts are on, but novu_admin_password in host_vars is the published
-          default `Digit@12345`. novu-bridge signs in as that Novu admin to manage every tenant's
-          organization, and /novu-api/ is public: remove novu_admin_password from host_vars (the
-          deploy then generates one in OpenBao and changes the Novu admin's password to it) or
-          set a unique value.
-      when: novu_tenant_accounts_on | bool
 
     - name: "novu tenant accounts — persist any generated secrets"
       ansible.builtin.uri:
@@ -6659,18 +6660,76 @@
         - enable_novu | default(false)
         - novu_tenant_accounts_on | bool
 
+    # Per-tenant accounts off (set false, or switched off by the verify step): only the mint signs
+    # in as the Novu admin, and which password the admin has depends on the box's history. The
+    # published default (or novu_admin_password_legacy) until a deploy with them on moved it; the
+    # OpenBao one after. A deploy that stored a generated password but stopped before the move
+    # leaves OpenBao ahead of Novu, so neither order is right everywhere: take the first Novu
+    # accepts. None (an empty Novu) keeps the first, which the fresh-Novu mint then registers.
+    # A host_vars novu_admin_password is the operator's pin and is used as it is.
+    - name: "novu-bootstrap — the Novu admin passwords to try (per-tenant accounts off)"
+      ansible.builtin.set_fact:
+        novu_admin_password_candidates: >-
+          {{ [novu_admin_password_held, novu_admin_password_legacy | default(''), 'Digit@12345']
+             | select | unique | list }}
+      no_log: true
+      when:
+        - enable_novu | default(false)
+        - not (novu_tenant_accounts_on | bool)
+        - not (novu_admin_password | default('', true))
+        - (novu_api_key | default('')) | length == 0
+
+    - name: "novu-bootstrap — the Novu admin password the mint signs in with (per-tenant accounts off)"
+      ansible.builtin.command: python3 -
+      args:
+        stdin: |
+          import json, os, sys, urllib.request, urllib.error
+          email = os.environ["NB_EMAIL"]
+          for i, password in enumerate(json.loads(os.environ["NB_CANDIDATES"])):
+              req = urllib.request.Request("http://127.0.0.1:14002/v1/auth/login", method="POST",
+                                           data=json.dumps({"email": email, "password": password}).encode(),
+                                           headers={"Content-Type": "application/json"})
+              try:
+                  with urllib.request.urlopen(req, timeout=20) as r:
+                      raw = r.read()
+                      if ((json.loads(raw) if raw else {}).get("data") or {}).get("token"):
+                          print(i); sys.exit(0)
+              except (urllib.error.URLError, OSError, ValueError):
+                  pass
+          print(-1)
+      environment:
+        NB_EMAIL: "{{ novu_admin_email_effective }}"
+        NB_CANDIDATES: "{{ novu_admin_password_candidates | to_json }}"
+      register: novu_admin_pick
+      changed_when: false
+      failed_when: false
+      # The environment carries every candidate password.
+      no_log: true
+      when: novu_admin_password_candidates is defined
+
+    - name: "novu-bootstrap — sign in with the one Novu accepted (per-tenant accounts off)"
+      ansible.builtin.set_fact:
+        novu_admin_password_effective: "{{ novu_admin_password_candidates[novu_admin_pick.stdout | trim | int] }}"
+      no_log: true
+      when:
+        - novu_admin_pick.stdout is defined
+        - (novu_admin_pick.stdout | trim) is match('^[0-9]+$')
+
+    # The admin password goes in the environment, not the command line: a shell string is in
+    # the task result (printed at -v) and in `ps` while it runs. no_log: stdout is the key.
     - name: "novu-bootstrap — mint Development API key (attempt 1: existing account)"
-      ansible.builtin.shell: |
-        NOVU_API_URL=http://127.0.0.1:14002 \
-        NOVU_ADMIN_EMAIL='{{ novu_admin_email_effective }}' \
-        NOVU_ADMIN_PASSWORD='{{ novu_admin_password_effective }}' \
-        NOVU_ORG_NAME='{{ novu_org_name | default("DIGIT") }}' \
-        bash {{ digit_dir }}/novu-mint-key.sh
+      ansible.builtin.shell: bash {{ digit_dir }}/novu-mint-key.sh
       args:
         chdir: "{{ digit_dir }}"
+      environment:
+        NOVU_API_URL: http://127.0.0.1:14002
+        NOVU_ADMIN_EMAIL: "{{ novu_admin_email_effective }}"
+        NOVU_ADMIN_PASSWORD: "{{ novu_admin_password_effective }}"
+        NOVU_ORG_NAME: "{{ novu_org_name | default('DIGIT') }}"
       register: novu_mint
       changed_when: false
       failed_when: false
+      no_log: true
       when:
         - enable_novu | default(false)
         - (novu_api_key | default('')) | length == 0
@@ -6725,17 +6784,18 @@
           until: novu_api_health_open.status == 200
 
         - name: "novu-bootstrap — mint Development API key (attempt 2: fresh signup)"
-          ansible.builtin.shell: |
-            NOVU_API_URL=http://127.0.0.1:14002 \
-            NOVU_ADMIN_EMAIL='{{ novu_admin_email_effective }}' \
-            NOVU_ADMIN_PASSWORD='{{ novu_admin_password_effective }}' \
-            NOVU_ORG_NAME='{{ novu_org_name | default("DIGIT") }}' \
-            bash {{ digit_dir }}/novu-mint-key.sh
+          ansible.builtin.shell: bash {{ digit_dir }}/novu-mint-key.sh
           args:
             chdir: "{{ digit_dir }}"
+          environment:
+            NOVU_API_URL: http://127.0.0.1:14002
+            NOVU_ADMIN_EMAIL: "{{ novu_admin_email_effective }}"
+            NOVU_ADMIN_PASSWORD: "{{ novu_admin_password_effective }}"
+            NOVU_ORG_NAME: "{{ novu_org_name | default('DIGIT') }}"
           register: novu_mint_fresh
           changed_when: true
           failed_when: false
+          no_log: true
 
       always:
         # Restore the secure default no matter how the block ended. Both tasks run
@@ -6803,6 +6863,12 @@
           Novu API key is EMPTY after bootstrap. novu-bridge will run unauthenticated
           against Novu and nothing will be delivered. Check `docker logs novu-api`,
           then re-run the deploy; or mint by hand and pin `novu_api_key` in host_vars.
+          {{ ('The mint said: ' ~ (_mint_errors | last)) if _mint_errors else '' }}
+      vars:
+        # The mint tasks are no_log (password in, key out); their ERROR lines carry neither.
+        _mint_errors: >-
+          {{ ((novu_mint.stderr | default('')) ~ '\n' ~ (novu_mint_fresh.stderr | default('')))
+             | regex_findall('ERROR: [^\n]*') }}
       when:
         - enable_novu | default(false)
         - (effective_novu_key | default('')) | length == 0
