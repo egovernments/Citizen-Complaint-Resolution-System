@@ -22,6 +22,7 @@
  * specific complaint types.
  */
 import { getDigitToken } from '../utils/auth';
+import { requiredEnv } from '../utils/identity';
 
 export interface ServiceDef {
   serviceCode: string;
@@ -79,15 +80,10 @@ export async function getServiceDefs(
   tenant: string,
   opts: ServiceDefLookupOptions = {},
 ): Promise<ServiceDef[]> {
-  const baseURL = opts.baseURL ?? process.env.BASE_URL ?? 'http://localhost:18080';
+  const baseURL = opts.baseURL ?? requiredEnv('BASE_URL');
   const authTenant = opts.authTenant ?? tenant;
-  const adminUser =
-    opts.adminUser ?? process.env.ADMIN_USER ?? process.env.DIGIT_EMPLOYEE_USER ?? 'ADMIN';
-  const adminPassword =
-    opts.adminPassword ??
-    process.env.ADMIN_PASSWORD ??
-    process.env.DIGIT_EMPLOYEE_PASSWORD ??
-    'eGov@123';
+  const adminUser = opts.adminUser ?? requiredEnv('DIGIT_USERNAME');
+  const adminPassword = opts.adminPassword ?? requiredEnv('DIGIT_PASSWORD');
   const activeOnly = opts.activeOnly ?? true;
 
   const token = await getDigitToken({
@@ -95,7 +91,6 @@ export async function getServiceDefs(
     tenant: authTenant,
     username: adminUser,
     password: adminPassword,
-    userType: 'EMPLOYEE',
   });
 
   const resp = await fetch(`${baseURL}/egov-mdms-service/v1/_search`, {

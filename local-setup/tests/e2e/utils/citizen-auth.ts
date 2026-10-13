@@ -1,67 +1,68 @@
 /**
- * Shared citizen OTP login for the specs/citizen suite.
- *
- * Logs in through the real UI (mobile number → fixed dev OTP) rather
- * than the API so the specs exercise the same session bootstrapping a
- * citizen gets. Credentials are env-overridable; the defaults match
- * the ethiopia dev tenant's seeded citizen (mobile rule ^[17][0-9]{8}$,
- * fixed OTP in non-prod).
+ * Citizen sign-in for the e2e specs: phone OTP through the Identity BFF,
+ * with the deployment's fixed test code (IDENTITY_TEST_OTP_CODE). The BFF
+ * creates the citizen on its first sign-in, so specs do not seed one.
  */
 import { expect, type Page } from '@playwright/test';
-import { appBase } from './auth';
+import { citizenSignIn, configuredOtp, requiredEnv, surfacePath } from './identity';
+import { generateValidMobile, getMobileValidationRule } from '../common/mdms-mobile';
 
-export const CITIZEN_MOBILE = process.env.CITIZEN_MOBILE || '777777777';
-export const CITIZEN_OTP = process.env.CITIZEN_OTP || '123456';
+export interface CitizenSession {
+  token: string;
+  userInfo: Record<string, unknown> & { uuid: string; tenantId: string };
+}
 
-export async function citizenOtpLogin(
-  page: Page,
-  opts: { mobile?: string; otp?: string } = {}
-) {
-  const mobile = opts.mobile ?? CITIZEN_MOBILE;
-  const otp = opts.otp ?? CITIZEN_OTP;
-  await page.goto(`${appBase()}/citizen`);
+let runMobile: Promise<string> | undefined;
 
-  // Language selection screen (first visit only) — continue past it.
-  const continueBtn = page
-    .locator('button:has-text("Continue"), button:has-text("CONTINUE")')
-    .first();
-  if (await continueBtn.isVisible({ timeout: 10_000 }).catch(() => false)) {
-    await continueBtn.click();
+/** One new citizen per run, valid for the tenant's mobile rule. */
+export function runCitizenMobile(): Promise<string> {
+  runMobile ??= getMobileValidationRule(requiredEnv('DIGIT_TENANT')).then(generateValidMobile);
+  return runMobile;
+}
+
+/** Sign in through the real phone and code steps (#login-mobile, then the code box). */
+export async function citizenOtpLogin(page: Page, mobile?: string): Promise<CitizenSession> {
+  const phone = mobile ?? await runCitizenMobile();
+  await page.goto(surfacePath('citizen', 'login'), { waitUntil: 'domcontentloaded' });
+  await page.locator('#login-mobile').fill(phone);
+  const submit = page.locator('form button[type="submit"]');
+  const sendCode = async () => {
+    const sent = page.waitForResponse(r => new URL(r.url()).pathname === '/identity/v1/citizen/otp/_send');
+    await submit.click();
+    return sent;
+  };
+  let sent = await sendCode();
+  // A citizen signed in moments ago is inside the resend cooldown: wait it out once.
+  const retryAfter = Number(sent.headers()['retry-after']);
+  if (sent.status() === 429 && Number.isFinite(retryAfter) && retryAfter <= 60) {
+    await page.waitForTimeout(retryAfter * 1000 + 500);
+    sent = await sendCode();
   }
+  expect(sent.status(), 'OTP send was refused').toBe(202);
+  // The first of the six boxes takes the whole code and fills the rest.
+  await page.locator('input[maxlength="6"]').fill(configuredOtp());
+  await submit.click();
+  return storedCitizenSession(page);
+}
 
-  // The citizen home renders without auth; go straight to the login
-  // route (the nav's Login button doesn't navigate reliably headless).
-  await page.goto(`${appBase()}/citizen/login`);
+/** The same session without the form, for specs where sign-in is only a prerequisite. */
+export async function citizenLoginViaApi(page: Page, mobile?: string): Promise<CitizenSession> {
+  await citizenSignIn(page.request, requiredEnv('BASE_URL'), mobile ?? await runCitizenMobile());
+  // The SPA exchanges the BFF cookie for its own DIGIT session on the login route.
+  await page.goto(surfacePath('citizen', 'login'), { waitUntil: 'domcontentloaded' });
+  return storedCitizenSession(page);
+}
 
-  // Mobile number screen: single tel input.
-  const mobileInput = page.locator('input[type="tel"]').first();
-  await mobileInput.waitFor({ state: 'visible', timeout: 30_000 });
-  await mobileInput.click();
-  await mobileInput.fill(mobile);
-  await expect(mobileInput).toHaveValue(mobile);
-  await page
-    .locator('button[type="submit"], button:has-text("Continue")')
-    .first()
-    .click();
-
-  // OTP screen: 6 boxes with auto-advance (the first also accepts the whole
-  // code); typing into the first box and letting auto-advance route the rest
-  // is how a citizen does it, so do the same.
-  const otpBoxes = page.locator('input.v2-otp-box');
-  await otpBoxes.first().waitFor({ state: 'visible', timeout: 30_000 }).catch(async () => {
-    throw new Error(
-      `OTP boxes never appeared after submitting mobile. URL=${page.url()} BODY=${(
-        await page.locator('body').innerText()
-      ).slice(0, 500)}`
-    );
-  });
-  await otpBoxes.first().click();
-  await page.keyboard.type(otp, { delay: 80 });
-  const otpSubmit = page.locator('button[type="submit"], button:has-text("Continue")').first();
-  if (await otpSubmit.isVisible({ timeout: 3_000 }).catch(() => false)) {
-    await otpSubmit.click().catch(() => {/* may have auto-submitted */});
-  }
-
-  // Genuinely logged in = we leave every /login route.
-  await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 });
+async function storedCitizenSession(page: Page): Promise<CitizenSession> {
+  let session: CitizenSession | null = null;
+  await expect.poll(async () => {
+    if (/\/citizen\/login(?:\/|$)/.test(new URL(page.url()).pathname)) return false;
+    // The SPA may still be navigating to the citizen home; retry until it settles.
+    session = await page.evaluate(() => {
+      const token = localStorage.getItem('Citizen.token');
+      return token ? { token, userInfo: JSON.parse(localStorage.getItem('Citizen.user-info') || '{}') } : null;
+    }).catch(() => null);
+    return session !== null;
+  }, { message: 'citizen sign-in must leave /citizen/login with a stored session', timeout: 30_000 }).toBe(true);
+  return session!;
 }

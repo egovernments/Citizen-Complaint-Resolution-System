@@ -2,12 +2,13 @@ import { test, expect } from '@playwright/test';
 import { HrmsCreatePage } from '../pages/hrms-create.page';
 import { HrmsInboxPage } from '../pages/hrms-inbox.page';
 import { getDigitToken, loginViaApi } from '../utils/auth';
+import { requiredEnv } from '../utils/identity';
 import { getMobileValidationRule, generateValidMobile } from '../common/mdms-mobile';
 
-const BASE_URL = process.env.BASE_URL || 'http://localhost:18080';
-const TENANT = process.env.DIGIT_TENANT || 'uitest.citya';
-const ADMIN_USER = process.env.DIGIT_USERNAME || 'ADMIN';
-const ADMIN_PASS = process.env.DIGIT_PASSWORD || 'eGov@123';
+const BASE_URL = requiredEnv('BASE_URL');
+const TENANT = requiredEnv('DIGIT_TENANT');
+const ADMIN_USER = requiredEnv('DIGIT_USERNAME');
+const ADMIN_PASS = requiredEnv('DIGIT_PASSWORD');
 
 // Tenant-aware phone, sourced from MDMS at suite setup. See
 // common/mdms-mobile.ts — replaces the env-heuristic uniqueMobile().
@@ -213,29 +214,21 @@ test.describe.serial('HRMS employee creation and login', () => {
     expect(employeeCode).toBeTruthy();
 
     // The patched HRMS sets default password to eGov@123 (from env var).
-    // Employee username is the employee code.
-    const tokenResponse = await getDigitToken({
-      baseURL: BASE_URL,
-      tenant: TENANT,
-      username: employeeCode!,
-      password: DEFAULT_PASSWORD,
+    // Employee username is the employee code. A new HRMS employee is not
+    // linked to a Keycloak account, so this is an egov-user check, not a
+    // sign-in: the employee cannot use the hosted sign-in until invited.
+    const resp = await fetch(`${BASE_URL}/user/oauth/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Authorization: 'Basic ZWdvdi11c2VyLWNsaWVudDo=' },
+      body: new URLSearchParams({
+        grant_type: 'password', scope: 'read', userType: 'EMPLOYEE',
+        username: employeeCode!, password: DEFAULT_PASSWORD, tenantId: TENANT,
+      }).toString(),
     });
-
+    expect(resp.ok, `egov-user refused the HRMS default password (${resp.status})`).toBe(true);
+    const tokenResponse = await resp.json();
     expect(tokenResponse.access_token).toBeTruthy();
     expect(tokenResponse.UserRequest).toBeDefined();
     console.log(`Employee ${employeeCode} authenticated successfully via API`);
-  });
-
-  test('verify new employee can log in via UI', async ({ page }) => {
-    test.skip(!createSucceeded, 'Skipped — employee not created');
-    expect(employeeCode).toBeTruthy();
-
-    await loginViaApi(page, { baseURL: BASE_URL, tenant: TENANT, username: employeeCode!, password: DEFAULT_PASSWORD });
-    expect(page.url()).toContain('/employee');
-
-    // Verify session data
-    const employeeToken = await page.evaluate(() => localStorage.getItem('Employee.token'));
-    expect(employeeToken).toBeTruthy();
-    console.log(`Employee ${employeeCode} logged in via UI successfully`);
   });
 });

@@ -18,7 +18,7 @@
  *     bugs where the update went through with the wrong UUID).
  */
 import { test, expect, type Page } from '@playwright/test';
-import { citizenOtpLogin } from '../../utils/citizen-auth';
+import { citizenOtpLogin, runCitizenMobile } from '../../utils/citizen-auth';
 import * as fs from 'fs';
 import * as path from 'path';
 import { appBase } from '../../utils/auth';
@@ -120,7 +120,7 @@ test.describe('Citizen landing page sidebar + profile edit', () => {
     // "My Complaints" lives as a card on the home route, not in the
     // side nav, so we don't assert it here — the inbox test already
     // covers that surface.
-    expect(sbText).toContain(process.env.CITIZEN_MOBILE || '777777777');
+    expect(sbText).toContain(await runCitizenMobile());
     expect(sbText).toMatch(/home/i);
     expect(sbText).toMatch(/edit profile|profile/i);
     expect(sbText).toMatch(/logout|sign out|log out/i);

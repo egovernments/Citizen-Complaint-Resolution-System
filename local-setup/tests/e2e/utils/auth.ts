@@ -1,32 +1,10 @@
 /**
- * DIGIT standard auth utility (username/password via /user/oauth/token).
+ * Employee auth for the e2e specs. Staff sign in through Keycloak and the
+ * Identity BFF (the egov-user password form is gone), so `username` and
+ * `password` are the persona's Keycloak login, as in tests/integration-tests.
  */
-
-interface TokenResponse {
-  access_token: string;
-  refresh_token?: string;
-  token_type: string;
-  expires_in: number;
-  UserRequest?: {
-    uuid: string;
-    name: string;
-    roles: Array<{ code: string; tenantId: string }>;
-  };
-}
-
-/**
- * The tenant route the UI specs run on. Since D26 the app is served only
- * under /<tenant-slug>/digit-ui/; the tenantless /digit-ui/... app routes 404
- * (or redirect to a deployment default). The slug must belong to the tenant
- * the spec signs in to.
- */
-export function tenantSlug(): string {
-  const slug = process.env.E2E_TENANT_SLUG || process.env.IDENTITY_TEST_TENANT_SLUG || '';
-  if (!/^[a-z0-9][a-z0-9-]{1,62}$/.test(slug)) {
-    throw new Error('Set E2E_TENANT_SLUG to the seeded tenant route slug (/<slug>/digit-ui/)');
-  }
-  return slug;
-}
+import { chromium, expect, type Page } from '@playwright/test';
+import { hostedSignIn, resolveTenant, selectContext, surfacePath, tenantSlug, type DigitContext } from './identity';
 
 /** `/<slug>/digit-ui`, the app base every UI navigation goes through. */
 export function appBase(slug = tenantSlug()): string {
@@ -35,85 +13,61 @@ export function appBase(slug = tenantSlug()): string {
 
 export interface AuthConfig {
   baseURL: string;
+  /** DIGIT_TENANT: the root tenant IDENTITY_TEST_TENANT_SLUG resolves to. */
   tenant: string;
   username: string;
   password: string;
-  userType?: 'EMPLOYEE' | 'CITIZEN';
 }
 
-/**
- * Acquire a DIGIT access token via /user/oauth/token (ROPC grant).
- */
-export async function getDigitToken(config: AuthConfig): Promise<TokenResponse> {
-  const tokenUrl = `${config.baseURL}/user/oauth/token`;
+const contexts = new Map<string, Promise<DigitContext>>();
 
-  const body = new URLSearchParams({
-    grant_type: 'password',
-    username: config.username,
-    password: config.password,
-    tenantId: config.tenant,
-    scope: 'read',
-    userType: config.userType || 'EMPLOYEE',
-  });
-
-  const resp = await fetch(tokenUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      Authorization: 'Basic ZWdvdi11c2VyLWNsaWVudDo=',
-    },
-    body: body.toString(),
-  });
-
-  if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(`KC ROPC failed (${resp.status}): ${text}`);
+/** An employee DIGIT token for API calls: hosted sign-in in a throwaway browser, then the BFF context exchange. */
+export function getDigitToken(config: AuthConfig): Promise<DigitContext> {
+  const key = JSON.stringify([config.baseURL, config.tenant, config.username, config.password]);
+  if (!contexts.has(key)) {
+    contexts.set(key, (async () => {
+      const browser = await chromium.launch();
+      try {
+        const page = await browser.newPage();
+        await hostedSignIn(page, { baseURL: config.baseURL, surface: 'employee', username: config.username, password: config.password });
+        return await selectContext(page.request, config.baseURL, 'employee', config.tenant);
+      } finally {
+        await browser.close();
+      }
+    })().catch((error) => {
+      contexts.delete(key);
+      throw error;
+    }));
   }
-
-  return resp.json() as Promise<TokenResponse>;
+  return contexts.get(key)!;
 }
 
 /**
- * Login via API token injection — bypasses the UI login form.
- * Gets a token via ROPC grant, then injects it into localStorage.
- * Use this when login is a prerequisite, not the thing being tested.
+ * Sign an employee in and land on the employee home. Fails unless the home
+ * actually rendered with a session for the route tenant: a session for any
+ * other tenant is wiped on load (clearAuthFromAnotherTenant), which used to
+ * leave specs passing against the sign-in page.
  */
-export async function loginViaApi(
-  page: import('@playwright/test').Page,
-  config: AuthConfig,
-): Promise<TokenResponse> {
-  const tokenResponse = await getDigitToken(config);
+export async function loginViaApi(page: Page, config: AuthConfig): Promise<DigitContext> {
+  const tenant = await resolveTenant(page.request, config.baseURL);
+  if (tenant.tenantId !== config.tenant) {
+    throw new Error(`IDENTITY_TEST_TENANT_SLUG resolves to ${tenant.tenantId}, not DIGIT_TENANT=${config.tenant}; the suite runs on one root workspace`);
+  }
+  await hostedSignIn(page, { baseURL: config.baseURL, surface: 'employee', username: config.username, password: config.password });
+  const context = await selectContext(page.request, config.baseURL, 'employee', tenant.tenantId);
+  await page.goto(`${config.baseURL}${surfacePath('employee')}`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+  await expectEmployeeHome(page, tenant.tenantId);
+  return context;
+}
 
-  // Set the origin (localStorage is origin-scoped) on a static file, so no
-  // login page starts an Identity BFF sign-in before the session is injected.
-  await page.goto(`${config.baseURL}/digit-ui/globalConfigs.js`, {
-    waitUntil: 'domcontentloaded',
-    timeout: 30_000,
-  });
-
-  // Inject session into localStorage (same keys the Login component sets)
-  await page.evaluate(
-    ({ token, userInfo, tenant }) => {
-      localStorage.setItem('Employee.token', token);
-      localStorage.setItem('Employee.tenant-id', tenant);
-      localStorage.setItem('Employee.user-info', JSON.stringify(userInfo));
-      localStorage.setItem('Employee.locale', 'en_IN');
-      localStorage.setItem('token', token);
-      localStorage.setItem('tenant-id', tenant);
-      localStorage.setItem('user-info', JSON.stringify(userInfo));
-    },
-    {
-      token: tokenResponse.access_token,
-      userInfo: tokenResponse.UserRequest || {},
-      tenant: config.tenant,
-    },
-  );
-
-  // Navigate to the employee home page
-  await page.goto(`${config.baseURL}${appBase()}/employee`, {
-    waitUntil: 'domcontentloaded',
-    timeout: 30_000,
-  });
-
-  return tokenResponse;
+export async function expectEmployeeHome(page: Page, tenantId: string): Promise<void> {
+  await expect(page.locator('.employee-app-wrapper'), `employee home did not render (at ${page.url()})`)
+    .toBeVisible({ timeout: 30_000 });
+  expect(new URL(page.url()).pathname).not.toMatch(/\/user\/(login|language-selection)/);
+  const stored = await page.evaluate(() => ({
+    token: localStorage.getItem('Employee.token'),
+    info: JSON.parse(localStorage.getItem('Employee.user-info') || '{}'),
+  }));
+  expect(stored.token, 'employee session missing from storage').toBeTruthy();
+  expect(stored.info.tenantId, 'employee session belongs to another tenant').toBe(tenantId);
 }

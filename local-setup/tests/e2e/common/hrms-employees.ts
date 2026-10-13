@@ -17,6 +17,7 @@
  * exercised over time instead of always landing on the same person.
  */
 import { getDigitToken } from '../utils/auth';
+import { requiredEnv } from '../utils/identity';
 
 export interface HrmsEmployee {
   id?: number;
@@ -48,22 +49,16 @@ export async function getEmployees(
   tenant: string,
   opts: EmployeeLookupOptions = {},
 ): Promise<HrmsEmployee[]> {
-  const baseURL = opts.baseURL ?? process.env.BASE_URL ?? 'http://localhost:18080';
+  const baseURL = opts.baseURL ?? requiredEnv('BASE_URL');
   const authTenant = opts.authTenant ?? tenant;
-  const adminUser =
-    opts.adminUser ?? process.env.ADMIN_USER ?? process.env.DIGIT_EMPLOYEE_USER ?? 'ADMIN';
-  const adminPassword =
-    opts.adminPassword ??
-    process.env.ADMIN_PASSWORD ??
-    process.env.DIGIT_EMPLOYEE_PASSWORD ??
-    'eGov@123';
+  const adminUser = opts.adminUser ?? requiredEnv('DIGIT_USERNAME');
+  const adminPassword = opts.adminPassword ?? requiredEnv('DIGIT_PASSWORD');
 
   const token = await getDigitToken({
     baseURL,
     tenant: authTenant,
     username: adminUser,
     password: adminPassword,
-    userType: 'EMPLOYEE',
   });
 
   const resp = await fetch(

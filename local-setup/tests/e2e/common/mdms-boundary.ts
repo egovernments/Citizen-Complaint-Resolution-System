@@ -19,6 +19,7 @@
  * is only configured for one specific path.
  */
 import { getDigitToken } from '../utils/auth';
+import { requiredEnv } from '../utils/identity';
 
 export interface Boundary {
   code: string;
@@ -47,23 +48,17 @@ export async function getBoundaryTree(
   tenant: string,
   opts: BoundaryLookupOptions = {},
 ): Promise<Boundary[]> {
-  const baseURL = opts.baseURL ?? process.env.BASE_URL ?? 'http://localhost:18080';
+  const baseURL = opts.baseURL ?? requiredEnv('BASE_URL');
   const hierarchyType = opts.hierarchyType ?? 'ADMIN';
   const authTenant = opts.authTenant ?? tenant;
-  const adminUser =
-    opts.adminUser ?? process.env.ADMIN_USER ?? process.env.DIGIT_EMPLOYEE_USER ?? 'ADMIN';
-  const adminPassword =
-    opts.adminPassword ??
-    process.env.ADMIN_PASSWORD ??
-    process.env.DIGIT_EMPLOYEE_PASSWORD ??
-    'eGov@123';
+  const adminUser = opts.adminUser ?? requiredEnv('DIGIT_USERNAME');
+  const adminPassword = opts.adminPassword ?? requiredEnv('DIGIT_PASSWORD');
 
   const token = await getDigitToken({
     baseURL,
     tenant: authTenant,
     username: adminUser,
     password: adminPassword,
-    userType: 'EMPLOYEE',
   });
 
   const url =

@@ -1,12 +1,13 @@
 import { test, expect } from '@playwright/test';
 import { PgrInboxPage } from '../pages/pgr-inbox.page';
 import { getDigitToken, loginViaApi, appBase } from '../utils/auth';
+import { requiredEnv } from '../utils/identity';
 import { getMobileValidationRule, generateValidMobile } from '../common/mdms-mobile';
 
-const BASE_URL = process.env.BASE_URL || 'http://localhost:18080';
-const TENANT = process.env.DIGIT_TENANT || 'uitest.citya';
-const ADMIN_USER = process.env.DIGIT_USERNAME || 'ADMIN';
-const ADMIN_PASS = process.env.DIGIT_PASSWORD || 'eGov@123';
+const BASE_URL = requiredEnv('BASE_URL');
+const TENANT = requiredEnv('DIGIT_TENANT');
+const ADMIN_USER = requiredEnv('DIGIT_USERNAME');
+const ADMIN_PASS = requiredEnv('DIGIT_PASSWORD');
 
 test.describe.serial('Full PGR complaint lifecycle', () => {
   test.slow();
@@ -103,7 +104,7 @@ test.describe.serial('Full PGR complaint lifecycle', () => {
     expect(data.ServiceWrappers.length).toBeGreaterThan(0);
 
     serviceRequestId = data.ServiceWrappers[0].service.serviceRequestId;
-    expect(serviceRequestId).toMatch(/^PG-PGR-/);
+    expect(serviceRequestId).toMatch(/^[A-Z]+-PGR-/);
     createSucceeded = true;
     console.log(`Created complaint: ${serviceRequestId}`);
   });

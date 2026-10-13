@@ -21,11 +21,12 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import { loginViaApi, getDigitToken, appBase } from '../utils/auth';
+import { requiredEnv } from '../utils/identity';
 
-const BASE_URL  = process.env.BASE_URL   || 'http://localhost:18080';
-const TENANT    = process.env.DIGIT_TENANT   || 'pg.citya';
-const USERNAME  = process.env.DIGIT_USERNAME || 'ADMIN';
-const PASSWORD  = process.env.DIGIT_PASSWORD || 'eGov@123';
+const BASE_URL  = requiredEnv('BASE_URL');
+const TENANT    = requiredEnv('DIGIT_TENANT');
+const USERNAME  = requiredEnv('DIGIT_USERNAME');
+const PASSWORD  = requiredEnv('DIGIT_PASSWORD');
 
 // Same default status filter the employee inbox queries on load.
 const INBOX_STATUSES = ['PENDINGFORASSIGNMENT', 'PENDINGFORREASSIGNMENT', 'PENDINGATLME'];

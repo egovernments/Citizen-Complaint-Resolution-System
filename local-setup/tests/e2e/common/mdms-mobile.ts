@@ -17,6 +17,7 @@
  * for new tenants that haven't seeded a rule yet.
  */
 import { getDigitToken } from '../utils/auth';
+import { requiredEnv } from '../utils/identity';
 
 export interface MobileRule {
   prefix?: string;
@@ -77,11 +78,10 @@ export async function getMobileValidationRule(
   tenant: string,
   opts: MobileRuleOptions = {},
 ): Promise<MobileRule> {
-  const baseURL = opts.baseURL ?? process.env.BASE_URL ?? 'http://localhost:18080';
+  const baseURL = opts.baseURL ?? requiredEnv('BASE_URL');
   const rootTenant = opts.rootTenant ?? process.env.ROOT_TENANT ?? tenant;
-  const adminUser = opts.adminUser ?? process.env.ADMIN_USER ?? process.env.DIGIT_EMPLOYEE_USER ?? 'ADMIN';
-  const adminPassword =
-    opts.adminPassword ?? process.env.ADMIN_PASSWORD ?? process.env.DIGIT_EMPLOYEE_PASSWORD ?? 'eGov@123';
+  const adminUser = opts.adminUser ?? requiredEnv('DIGIT_USERNAME');
+  const adminPassword = opts.adminPassword ?? requiredEnv('DIGIT_PASSWORD');
 
   try {
     const token = await getDigitToken({
@@ -89,7 +89,6 @@ export async function getMobileValidationRule(
       tenant: rootTenant,
       username: adminUser,
       password: adminPassword,
-      userType: 'EMPLOYEE',
     });
     const ri = {
       apiId: 'Rainmaker',
