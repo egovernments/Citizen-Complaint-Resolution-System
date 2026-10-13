@@ -7,8 +7,8 @@ on:
   workflow_dispatch: {}
 
 # NOTE: scheduled workflows fire only from the DEFAULT branch (master) and this
-# file must exist there. The reusable build checks out `develop` regardless of
-# which branch this file ran from, so the nightly always builds develop.
+# file must exist there. It calls develop's build-images.yml (not master's copy) and
+# that checks out `develop`, so both the build logic and the source track develop.
 
 concurrency:
   group: nightly-develop
@@ -16,7 +16,10 @@ concurrency:
 
 jobs:
   build:
-    uses: ./.github/workflows/build-images.yml
+    # develop-channel build logic follows develop: a local ./ path would resolve to the DEFAULT
+    # branch's (master's) copy, which drifts behind develop's build pipeline. Same repo, so
+    # secrets: inherit and the repo's vars still apply. release-build.yml stays on its own ref.
+    uses: egovernments/Citizen-Complaint-Resolution-System/.github/workflows/build-images.yml@develop
     with:
       ref: develop
       rolling_tag: nightly-develop        # rolling latest-develop pointer

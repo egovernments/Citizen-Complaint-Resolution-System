@@ -951,7 +951,7 @@ function FlowStrip({ index, t }: { index: number; t: (k: string) => string }) {
 // ---------------------------------------------------------------------------
 
 const CreatePGRFlowV2: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const history = useHistory();
   const dispatch = useDispatch();
   const client = useQueryClient();
@@ -1335,7 +1335,13 @@ const CreatePGRFlowV2: React.FC = () => {
           </div>
         </div>
       </div>
-      <VoiceSheet open={voiceOpen} onClose={() => setVoiceOpen(false)} onUse={appendSpoken} tr={say} />
+      <VoiceSheet
+        open={voiceOpen}
+        onClose={() => setVoiceOpen(false)}
+        onUse={appendSpoken}
+        tr={say}
+        locale={i18n?.language}
+      />
     </ScreenContainer>
   );
 };
