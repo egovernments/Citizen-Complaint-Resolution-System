@@ -162,6 +162,9 @@ const advancedResources = Object.keys(getGenericMdmsResources())
     path: `/manage/${name}`,
   }));
 
+// ours (cfgreview F21, #1567): platform-only masters are not offered below the state
+import { isPlatformOnly } from '@/resources/advanced/advancedGroups';
+
 export function DigitLayout({ children }: { children?: ReactNode }) {
   const { state, logout, toggleHelp } = useApp();
 
@@ -194,9 +197,10 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
         .filter((group) => group.items.length > 0),
     [canViewResource, roleKey],
   );
+  const belowState = state.tenant.includes('.');
   const visibleAdvancedResources = useMemo(
-    () => advancedResources.filter((r) => canViewResource(r.id)),
-    [canViewResource],
+    () => advancedResources.filter((r) => canViewResource(r.id) && !(belowState && isPlatformOnly(r.id))),
+    [canViewResource, belowState],
   );
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
