@@ -63,7 +63,7 @@ before(() => {
     '#!/usr/bin/env bash',
     'if [[ "$1" == "playwright" ]]; then',
     '  if [[ -n "${GATE:-}" ]]; then until [[ -e "$GATE" ]]; do sleep 0.1; done; fi',
-    '  printf "%s|%s" "${PROFILE_PROBE:-}" "${SECRET_PROBE:-}" > seen-env',
+    '  if [[ -n "${PROFILE_PROBE:-}" ]]; then printf "%s|%s" "$PROFILE_PROBE" "${SECRET_PROBE:-}" > seen-env; fi',
     '  cp "$CANNED/$RUN_ID.json" report.json',
     '  mkdir -p test-results/alpha playwright-report',
     '  echo "<h1>$RUN_ID</h1>" > playwright-report/index.html',
