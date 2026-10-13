@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { apiClient } from '@/api/client';
 import { boundaryService } from '@/api/services/boundary';
 import { BoundaryMap } from '@/components/ui/BoundaryMap';
@@ -89,7 +90,9 @@ export function BoundaryOverviewMap() {
       {status === 'error' && <div className="text-sm text-red-600">Could not load boundaries for this tenant.</div>}
       {status === 'empty' && (
         <div className="text-sm text-gray-500">
-          No boundaries with real map geometry yet. Bring them in from the Geography step (Fetch boundaries) to populate them.
+          {/* ours (cfgreview F19, #1565): the step is in the setup wizard, not on this screen; link to it */}
+          No boundaries with map shapes yet. Fetch them in{' '}
+          <Link className="underline" to="/onboarding/geography">Setup &gt; Geography (Fetch boundaries)</Link>.
         </div>
       )}
       {status === 'ready' && (

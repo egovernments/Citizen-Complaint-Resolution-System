@@ -1,13 +1,7 @@
 import { useState } from 'react';
-import { DigitList, DigitDatagrid } from '@/admin';
-import type { DigitColumn } from '@/admin';
+import { DigitList } from '@/admin';
 import { BoundaryOverviewMap } from './BoundaryOverviewMap';
-
-const columns: DigitColumn[] = [
-  { source: 'code', label: 'app.fields.code' },
-  { source: 'boundaryType', label: 'app.fields.boundary_type' },
-  { source: 'tenantId', label: 'app.fields.tenant' },
-];
+import { BoundaryTreeTable } from './BoundaryTreeTable';
 
 export function BoundaryList() {
   // Default the map open — boundaries are inherently spatial and the map is
@@ -32,8 +26,9 @@ export function BoundaryList() {
         </div>
       )}
 
-      <DigitList title="app.resources.boundaries" hasCreate sort={{ field: 'code', order: 'ASC' }}>
-        <DigitDatagrid columns={columns} rowClick="show" />
+      {/* ours (cfgreview F19, #1565): a tree of named boundaries (was a flat list of codes); every row on one page */}
+      <DigitList title="app.resources.boundaries" hasCreate sort={{ field: 'code', order: 'ASC' }} perPage={1000}>
+        <BoundaryTreeTable />
       </DigitList>
     </div>
   );
