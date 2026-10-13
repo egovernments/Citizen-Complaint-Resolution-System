@@ -24,8 +24,12 @@ let cache: Promise<Catalog> | null = null;
 function fetchCatalog(): Promise<Catalog> {
   if (cache) return cache;
   cache = (async () => {
-    const url = `${import.meta.env.BASE_URL}catalog.json?t=${Date.now()}`;
-    const resp = await fetch(url, { credentials: 'include' });
+    // Revalidate instead of cache-busting: the browser asks nginx whether its
+    // copy is current (ETag/Last-Modified) and gets a 304 until a run rewrites
+    // catalog.json. A ?t=<now> URL was a new resource on every load, so the
+    // whole file (about 1.9 MB at 30 runs) came down each time.
+    const url = `${import.meta.env.BASE_URL}catalog.json`;
+    const resp = await fetch(url, { credentials: 'include', cache: 'no-cache' });
     if (!resp.ok) throw new Error(`catalog.json: HTTP ${resp.status}`);
     return normalize((await resp.json()) as Catalog);
   })();
