@@ -23,8 +23,12 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
  * Runs leave their tenant behind (there is no tenant delete API), so the slug
  * carries a recognisable `e2e-` prefix. Tenant ids keep only a-z, so the run
  * stamp is written in letters: slug `e2e-<stamp>` becomes tenant `ee<stamp>`.
+ * ONBOARDING_E2E_SLUG pins the slug instead, to create a box's one stable test
+ * workspace (the tenant id is the slug's letters; signup cannot choose it).
  */
 export function runSlug(now = Date.now()) {
+  const pinned = process.env.ONBOARDING_E2E_SLUG?.trim();
+  if (pinned) return pinned;
   let stamp = '';
   for (let n = now; n > 0; n = Math.floor(n / 26)) stamp = String.fromCharCode(97 + (n % 26)) + stamp;
   return `e2e-${stamp}`;
@@ -181,10 +185,12 @@ export async function activateAccount(request: APIRequestContext, link: string, 
   await sleep(2_000);
 }
 
-/** Staff sign-in on the tenant's employee surface; the BFF session lands in `request`'s cookies. */
-export async function employeeSignIn(request: APIRequestContext, base: string, slug: string, username: string, password: string) {
-  const params = new URLSearchParams({ surface: 'employee', method: 'password', intent: 'signin', tenantSlug: slug,
-    returnTo: `/${slug}/digit-ui/employee/user/login` });
+/** Staff sign-in on the tenant's employee surface (or the Configurator); the BFF session lands in `request`'s cookies. */
+export async function employeeSignIn(request: APIRequestContext, base: string, slug: string, username: string, password: string,
+  surface: 'employee' | 'configurator' = 'employee') {
+  const params = new URLSearchParams(surface === 'employee'
+    ? { surface, method: 'password', intent: 'signin', tenantSlug: slug, returnTo: `/${slug}/digit-ui/employee/user/login` }
+    : { surface, method: 'password', intent: 'signin', returnTo: '/configurator/login' });
   let response = await request.get(`${base}/identity/v1/authorize?${params}`);
   let posted: string | undefined;
   for (let step = 0; step < 3; step++) {
@@ -198,8 +204,8 @@ export async function employeeSignIn(request: APIRequestContext, base: string, s
     response = await request.post(loginAction(html)!, { form: { username, password } });
     posted = id;
   }
-  const session = await identityJson<{ authenticated: boolean }>(await request.get(`${base}/identity/v1/session?surface=employee`));
-  if (session.authenticated !== true) throw new Error('Employee sign-in did not establish a BFF session');
+  const session = await identityJson<{ authenticated: boolean }>(await request.get(`${base}/identity/v1/session?surface=${surface}`));
+  if (session.authenticated !== true) throw new Error(`${surface} sign-in did not establish a BFF session`);
 }
 
 // ---------------------------------------------------------------------------

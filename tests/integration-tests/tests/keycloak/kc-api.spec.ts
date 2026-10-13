@@ -3,6 +3,7 @@ import { test, expect } from '@playwright/test';
 import { BASE_URL, TENANT, ADMIN_USER, ADMIN_PASS, KC_BASE, KC_REALM } from '../utils/env';
 import { staffContext } from '../utils/auth';
 import { authorizeUrl, identityJson } from '../utils/identity-bff';
+import { requires } from '../utils/capabilities';
 
 const issuer = `${KC_BASE}/realms/${encodeURIComponent(KC_REALM)}`;
 test.use({ storageState: { cookies: [], origins: [] } });
@@ -43,6 +44,7 @@ test.describe('Keycloak through identity-bff — API contract', () => {
   });
 
   test('BFF authorize owns PKCE and the configured Google IdP hint', { tag: ['@area:keycloak', '@persona:system'] }, async ({ request }) => {
+    requires(test, 'identity.citizen.google', 'BFF /identity/v1/auth-methods offers google to citizens');
     const response = await request.get(authorizeUrl(BASE_URL, 'citizen', 'google'), { maxRedirects: 0 });
     expect(response.status()).toBe(302);
     const destination = new URL(response.headers().location);
@@ -53,7 +55,8 @@ test.describe('Keycloak through identity-bff — API contract', () => {
     expect(destination.searchParams.get('redirect_uri')).toBe(`${BASE_URL}/identity/v1/callback`);
   });
 
-  test('BFF readiness reports Redis and all identity dependencies', { tag: ['@area:keycloak', '@persona:system'] }, async ({ request }) => {
+  // /readyz is the BFF container's own endpoint; deployed nginx does not route it.
+  test('BFF readiness reports Redis and all identity dependencies', { tag: ['@local-only', '@area:keycloak', '@persona:system'] }, async ({ request }) => {
     const body = await identityJson<{ status: string; checks: Record<string, unknown> }>(await request.get(`${BASE_URL}/readyz`));
     expect(body.status).toBe('ready');
     expect(body.checks.redis).toBe('ok');

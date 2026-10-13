@@ -63,6 +63,7 @@ before(() => {
     '#!/usr/bin/env bash',
     'if [[ "$1" == "playwright" ]]; then',
     '  if [[ -n "${GATE:-}" ]]; then until [[ -e "$GATE" ]]; do sleep 0.1; done; fi',
+    '  printf "%s|%s" "${PROFILE_PROBE:-}" "${SECRET_PROBE:-}" > seen-env',
     '  cp "$CANNED/$RUN_ID.json" report.json',
     '  mkdir -p test-results/alpha playwright-report',
     '  echo "<h1>$RUN_ID</h1>" > playwright-report/index.html',
@@ -127,6 +128,24 @@ test('six cycles with HISTORY_LIMIT=4 RUN_LIMIT=2: four runs of results, two rep
   assert.deepEqual(catalog.tests[0].history.map((h: { runId: string }) => h.runId), newest);
   assert.equal(catalog.tests[0].latestRun.runId, runId(5));
   assert.ok(fs.existsSync(path.join(www, 'runs', runId(5), 'playwright-report', 'index.html')));
+});
+
+test('the env profile, then the box secrets file, reach Playwright; a secrets file that is set but missing stops the cycle', { skip }, () => {
+  const repo = checkout('secrets-repo');
+  const www = webroot('secrets-www');
+  const profile = path.join(tmp, 'box.env');
+  fs.writeFileSync(profile, 'PROFILE_PROBE=from-profile\nSECRET_PROBE=profile-placeholder\n');
+  const secrets = path.join(tmp, 'box-secrets.env');
+  fs.writeFileSync(secrets, 'SECRET_PROBE=from-secrets\n', { mode: 0o600 });
+  const ok = runCycle(50, repo, www, { env: { TENANT_ENV: profile, RUNNER_SECRETS_ENV: secrets } });
+  assert.equal(ok.status, 0, ok.stderr);
+  assert.equal(fs.readFileSync(path.join(repo, 'seen-env'), 'utf8'), 'from-profile|from-secrets');
+  assert.doesNotMatch(`${ok.stdout}${ok.stderr}`, /from-secrets/, 'secret values are never logged');
+
+  const missing = runCycle(51, repo, www, { env: { TENANT_ENV: profile, RUNNER_SECRETS_ENV: path.join(tmp, 'absent.env') } });
+  assert.equal(missing.status, 9, missing.stderr);
+  assert.match(missing.stderr, /RUNNER_SECRETS_ENV=.*absent\.env is not a readable file/);
+  assert.equal(fs.readFileSync(path.join(www, 'runs', runId(51), 'phase'), 'utf8').trim(), 'failed-secrets');
 });
 
 test('one cycle at a time per webroot and per checkout: a second exits 1 and leaves runs/ alone', { skip }, async () => {

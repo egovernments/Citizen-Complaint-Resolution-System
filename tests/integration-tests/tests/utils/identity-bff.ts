@@ -50,6 +50,23 @@ export function authorizeUrl(baseURL: string, surface: Surface, method = 'passwo
   return `${baseURL}/identity/v1/authorize?${params}`;
 }
 
+/**
+ * What Keycloak renders when it refuses a sign-in: the stock theme's
+ * #input-error, the employee theme's toast (keycloak/theme-src
+ * digit/components/Toast.tsx) and field error, and the Configurator theme's
+ * field error and error alert (login/components/Field.tsx, Alert.tsx).
+ */
+export const KEYCLOAK_ERROR =
+  '#input-error, #dg-toast[role="alert"], .dg-field-error, .digit-field-error, .digit-alert--error, .alert-error';
+
+/** Keycloak refused the credentials. Retrying only feeds its brute-force detection. */
+export class KeycloakSignInError extends Error {}
+
+async function refusal(page: Page, username: string): Promise<KeycloakSignInError> {
+  const shown = (await page.locator(KEYCLOAK_ERROR).first().innerText().catch(() => '')).trim();
+  return new KeycloakSignInError(`Keycloak refused the sign-in for ${username}: ${shown || 'error shown'}`);
+}
+
 /** Organizations can split username and password across two stock Keycloak pages. */
 export async function enterHostedUsername(page: Page, value: string): Promise<void> {
   const username = page.locator('#username');
@@ -58,7 +75,8 @@ export async function enterHostedUsername(page: Page, value: string): Promise<vo
   if (!await page.locator('#password').isVisible()) {
     await page.locator('#kc-login, button[type="submit"]').first().click();
   }
-  await expect(page.locator('#password')).toBeVisible();
+  await expect(page.locator('#password').or(page.locator(KEYCLOAK_ERROR)).first()).toBeVisible();
+  if (!await page.locator('#password').isVisible()) throw await refusal(page, value);
 }
 
 /** Credentials go only to the hosted form. The landing app owns one-use auth results. */
@@ -95,8 +113,13 @@ export async function hostedSignIn(page: Page, config: {
       await expect(consent).toBeChecked();
     }
     await page.locator('#kc-login, button[type="submit"]').first().click();
-    await page.waitForURL(url => url.origin === origin &&
-      (url.pathname.startsWith('/configurator/') || url.pathname.includes('/digit-ui/')), { timeout: 30_000 });
+    // Landing or Keycloak's error, whichever comes first: a refused password is
+    // reported at once instead of waiting out the landing timeout.
+    const landed = page.waitForURL(url => url.origin === origin &&
+      (url.pathname.startsWith('/configurator/') || url.pathname.includes('/digit-ui/')), { timeout: 30_000 }).then(() => true);
+    const refused = page.locator(KEYCLOAK_ERROR).first().waitFor({ state: 'visible', timeout: 30_000 }).then(() => false);
+    refused.catch(() => undefined);
+    if (!await Promise.race([landed, refused])) throw await refusal(page, config.username);
     if (resultId) {
       await expect.poll(() => observedResult !== undefined, { message: 'Landing app must consume the one-use auth result', timeout: 30_000 }).toBe(true);
       const result = await observedResult!;
@@ -114,11 +137,6 @@ export async function hostedSignIn(page: Page, config: {
   }
 }
 
-/** The root tenant egov-user keeps a CITIZEN account at (first dotted segment). */
-export function citizenAccountTenantId(tenantId: string) {
-  return tenantId.split('.')[0];
-}
-
 export async function selectContext(request: APIRequestContext, baseURL: string, surface: Surface, tenantId: string) {
   const path = surface === 'citizen' ? 'contexts/citizen/_select' : 'contexts/_select';
   const body = surface === 'citizen' ? { surface } : { surface, tenantId };
@@ -126,10 +144,8 @@ export async function selectContext(request: APIRequestContext, baseURL: string,
     headers: { Origin: new URL(baseURL).origin }, data: body,
   }));
   const userType = surface === 'citizen' ? 'CITIZEN' : 'EMPLOYEE';
-  // egov-user issues CITIZEN tokens at the state root (`ke.bomet` -> `ke`); the
-  // route tenant comes back as `context.tenant`. Employees stay on the tenant.
-  const tokenTenant = surface === 'citizen' ? citizenAccountTenantId(tenantId) : tenantId;
-  if (!context.access_token || !context.UserRequest?.uuid || context.UserRequest.tenantId !== tokenTenant ||
+  // Root tenants only: staff and citizen tokens are both issued at the route's tenant.
+  if (!context.access_token || !context.UserRequest?.uuid || context.UserRequest.tenantId !== tenantId ||
       context.UserRequest.type !== userType || !Number.isFinite(context.expires_in) || context.expires_in <= 0 ||
       context.token_type?.toLowerCase() !== 'bearer' || context.scope !== 'read' || 'refresh_token' in context ||
       (surface === 'citizen' && context.tenant?.tenantId !== tenantId)) {
@@ -140,10 +156,13 @@ export async function selectContext(request: APIRequestContext, baseURL: string,
 
 export type ReadOtp = (challenge: { challengeId: string; mobileNumber: string; tenantId: string; requestedAt: number }) => Promise<string>;
 
-/** Fixed codes are explicitly opted into; this helper never labels them real non-fixed OTP evidence. */
+/**
+ * Fixed codes are explicitly opted into (IDENTITY_TEST_OTP_CODE, or the older
+ * FIXED_OTP); this helper never labels them real non-fixed OTP evidence.
+ */
 export const configuredOtp: ReadOtp = async () => {
-  const code = process.env.IDENTITY_TEST_OTP_CODE;
-  if (!code || !/^\d{6}$/.test(code)) throw new Error('Set IDENTITY_TEST_OTP_CODE for fixed-code fixtures or provide a real delivery reader');
+  const code = process.env.IDENTITY_TEST_OTP_CODE || process.env.FIXED_OTP;
+  if (!code || !/^\d{6}$/.test(code)) throw new Error('Set IDENTITY_TEST_OTP_CODE (or FIXED_OTP) for fixed-code fixtures or provide a real delivery reader');
   return code;
 };
 

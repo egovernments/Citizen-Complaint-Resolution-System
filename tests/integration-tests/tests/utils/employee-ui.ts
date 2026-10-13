@@ -3,53 +3,58 @@
  * lifecycle through the real Take-Action modal).
  *
  * Everything here is tenant-agnostic: service/locality codes are resolved
- * against the live deployment's MDMS/boundary service, personas come from
- * env (EMPLOYEE_USER / GRO_USER / ADMIN_USER), and the login helper auths an
- * employee at whichever tenant (city OR root) actually accepts their
- * credentials — EMP001 on maputo authenticates at the CITY tenant
- * (mz.maputo), ADMIN at the ROOT tenant (mz).
+ * against the live deployment's MDMS/boundary service and personas come from
+ * the env profile (<ROLE>_LOGIN + <ROLE>_PASSWORD). Root tenants only: every
+ * employee signs in and acts at TENANT.
  */
 import { expect, type Page } from '@playwright/test';
 import { getDigitToken, loginViaApi, type TokenResponse } from './auth';
-import { BASE_URL, TENANT, ROOT_TENANT } from './env';
+import { BASE_URL, TENANT } from './env';
+import { KeycloakSignInError } from './identity-bff';
 
 export interface Principal {
   token: string;
   userInfo: Record<string, any>;
   roles: string[];
-  /** The tenant the credentials actually authenticated against. */
+  /** The tenant the context was selected at: always TENANT. */
   authTenant: string;
 }
 
 /**
- * Acquire a DIGIT token for an employee, trying the CITY tenant first and
- * falling back to the ROOT tenant. Returns null when neither accepts the
- * credentials (so callers can self-skip with a clear reason).
+ * A DIGIT token for an employee at TENANT, from their Keycloak login and
+ * password. Null when the login is unset or the sign-in fails, so callers can
+ * self-skip with a clear reason; the reason is logged.
  */
 export async function getPrincipal(username: string, password: string): Promise<Principal | null> {
-  for (const authTenant of [TENANT, ROOT_TENANT]) {
-    try {
-      const resp = await getDigitToken({ tenant: authTenant, authTenant, username, password });
-      const userInfo = (resp.UserRequest || {}) as Record<string, any>;
-      const roles = (userInfo.roles || []).map((r: any) => r.code as string);
-      if (resp.access_token) return { token: resp.access_token, userInfo, roles, authTenant };
-    } catch {
-      // try next tenant
-    }
+  if (!username || !password) return null;
+  try {
+    const resp = await getDigitToken({ tenant: TENANT, username, password });
+    const userInfo = (resp.UserRequest || {}) as Record<string, any>;
+    const roles = (userInfo.roles || []).map((r: any) => r.code as string);
+    return resp.access_token ? { token: resp.access_token, userInfo, roles, authTenant: TENANT } : null;
+  } catch (err) {
+    const why = err instanceof KeycloakSignInError ? err.message : `sign-in for ${username} failed: ${(err as Error).message?.slice(0, 200)}`;
+    console.log(`[employee-ui] ${why}`);
+    return null;
   }
-  return null;
 }
 
-/** Log an employee into the browser (localStorage injection) at the tenant
- *  that accepts them. Returns the token response, or null if login failed. */
+/** Log an employee into the browser (BFF session + localStorage) at TENANT.
+ *  Returns the token response, or null when the credentials are unset or
+ *  Keycloak refuses them; any other failure throws. */
 export async function loginEmployeeBrowser(
   page: Page,
   username: string,
   password: string,
 ): Promise<TokenResponse | null> {
-  const p = await getPrincipal(username, password);
-  if (!p) return null;
-  return loginViaApi(page, { tenant: TENANT, authTenant: p.authTenant, username, password });
+  if (!username || !password) return null;
+  try {
+    return await loginViaApi(page, { tenant: TENANT, username, password });
+  } catch (err) {
+    if (!(err instanceof KeycloakSignInError)) throw err;
+    console.log(`[employee-ui] ${err.message}`);
+    return null;
+  }
 }
 
 /** PGR _search → current applicationStatus for a complaint (or undefined). */

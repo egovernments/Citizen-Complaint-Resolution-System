@@ -1,6 +1,8 @@
 import { defineConfig } from '@playwright/test';
 
-const BASE_URL = process.env.BASE_URL || 'https://naipepea.digit.org';
+// No default host: the env profile (deploy/<env>.env) names the box, and
+// profile-setup fails fast when BASE_URL is unset.
+const BASE_URL = process.env.BASE_URL || undefined;
 const LOCAL_STACK = process.env.LOCAL_STACK === '1';
 const EXCLUDE_LOCAL_ONLY = LOCAL_STACK ? undefined : /@local-only/;
 
@@ -51,6 +53,9 @@ export default defineConfig({
       // silently fall back to the legacy hardcoded defaults.
       name: 'profile-setup',
       testMatch: /tests\/fixtures\/profile\.setup\.ts$/,
+      // A Keycloak sign-in per configured persona (six) plus the probes; a refused
+      // password fails at once, so this only bounds a slow box.
+      timeout: 5 * 60_000,
     },
     {
       // Admin configurator session -> auth.json: walks the login form on form builds,
@@ -87,23 +92,16 @@ export default defineConfig({
         // duplicating every api result in report.json (38 pass/fail/skip rows
         // counted twice) and inflating suite runtime for zero added coverage.
         /tests\/(api|smoke|identity-real)\//,
+        // Dashboard benchmarks have their own config (playwright.dashboard.config.ts).
+        /tests\/dashboard-performance\//,
       ],
       grepInvert: EXCLUDE_LOCAL_ONLY,
     },
     {
       // Token-injection auth — writes auth-api.json storage state.
       // Used by smoke + api projects which do not exercise the UI login form.
-      //
-      // Depends on profile-setup because api.setup.ts imports utils/env.ts, and
-      // env.ts resolves TENANT/ROOT_TENANT at MODULE-IMPORT time from
-      // deployment-profile.json. With no edge here the two setups race, and on
-      // the run where api-setup wins there is no profile on disk yet — so env.ts
-      // silently falls back to its legacy `ke.nairobi`/`ke` literals and this
-      // project authenticates against a tenant that isn't the one under test.
-      // On maputo that surfaces as `ROPC token request failed (400)`; on bomet
-      // it would pass for the worst possible reason — the fallback literal `ke`
-      // happens to BE bomet's real tenant, so the bug is invisible there.
-      // `setup` has the same edge for the same reason.
+      // Depends on profile-setup, which fails fast on an incomplete env profile
+      // and writes the deployment-profile.json env.ts reads at import time.
       name: 'api-setup',
       testMatch: /tests\/fixtures\/api\.setup\.ts$/,
       dependencies: ['profile-setup'],

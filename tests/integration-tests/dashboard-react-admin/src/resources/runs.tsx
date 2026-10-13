@@ -40,7 +40,7 @@ const isLegacyCount = (r: RunSummary) => typeof r.notRun !== 'number';
 const notRunSuffix = (r: RunSummary) =>
   isLegacyCount(r)
     ? ' · legacy count'
-    : `${r.notRun ? ` · ${r.notRun} not run` : ''}${r.cutShort ? ' · cut short' : ''}`;
+    : `${r.notRun ? ` · ${r.notRun} not run` : ''}${r.cutShort ? ' · cut short' : ''}${r.blockedInSetup ? ' · blocked in setup' : ''}`;
 
 /** A legacy count's cutShort is null too, but there it means unknown, not "ran to the end". */
 const cutShortText = (r: RunSummary) =>
@@ -76,6 +76,7 @@ export const RunShow = () => (
       <FunctionField label="Result" render={(r: RunSummary) => `${r.passed} passed · ${r.failed} failed · ${r.skipped} skipped of ${r.total}${notRunSuffix(r)}`} />
       <FunctionField label="Duration" render={(r: RunSummary) => `${(r.durationMs / 60000).toFixed(1)} min`} />
       <FunctionField label="Cut short" render={cutShortText} />
+      <FunctionField label="Blocked in setup" render={(r: RunSummary) => r.blockedInSetup ?? 'no'} />
       <TextField source="startedAt" />
       <PlaywrightReportLink />
     </SimpleShowLayout>

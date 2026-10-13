@@ -9,7 +9,7 @@ let browser: Awaited<ReturnType<typeof chromium.launch>>;
 before(async () => { browser = await chromium.launch(); });
 after(async () => { await browser?.close(); });
 
-type Options = { split?: boolean; result?: 'complete' | 'failed'; existingSession?: boolean; denySession?: boolean; consent?: boolean };
+type Options = { split?: boolean; result?: 'complete' | 'failed'; existingSession?: boolean; denySession?: boolean; consent?: boolean; refuse?: boolean };
 async function fixture(options: Options, run: (page: Page, baseURL: string, state: {
   paths: string[]; submissions: string[][]; resultReads: number;
 }) => Promise<void>) {
@@ -51,6 +51,8 @@ async function fixture(options: Options, run: (page: Page, baseURL: string, stat
         response.end(formPage(true)); return;
       }
       if (form.get('password') !== 'fixture-password' || (!options.split && form.get('username') !== 'fixture-user')) {
+        // Keycloak answers a refused password with the form again plus its error element.
+        if (options.refuse) { response.setHeader('Content-Type', 'text/html'); response.end(`${formPage()}<span id="input-error">Invalid username or password.</span>`); return; }
         response.writeHead(403).end(); return;
       }
       const headers: Record<string, string> = { Location: `/configurator/login${options.result ? '?authResult=fixture-result' : ''}` };
@@ -167,4 +169,15 @@ test('employee consent gates Login and hosted helper checks only the required co
   assert.equal(unrelatedAtSubmission, false);
   assert.equal(state.resultReads, 1);
   assert.equal((await selectContext(page.request, base, 'employee', 'fixture')).UserRequest.uuid, 'fixture-uuid');
+}));
+
+test('a refused password fails at once with Keycloak\'s own error, without retrying', async () => fixture({ refuse: true }, async (page, base, state) => {
+  const started = Date.now();
+  await assert.rejects(
+    hostedSignIn(page, { baseURL: base, surface: 'configurator', username: 'fixture-user', password: 'wrong-password' }),
+    /Keycloak refused the sign-in for fixture-user: Invalid username or password\./,
+  );
+  assert(Date.now() - started < 10_000, 'the error element ends the wait, not the landing timeout');
+  assert.equal(state.submissions.length, 1);
+  assert(!state.paths.includes('/identity/v1/session'));
 }));

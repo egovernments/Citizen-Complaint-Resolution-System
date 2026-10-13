@@ -7,7 +7,7 @@
  */
 import { expect, type Page } from '@playwright/test';
 import { staffContext } from './auth';
-import { BASE_URL, ROOT_TENANT, ADMIN_USER, ADMIN_PASS } from './env';
+import { BASE_URL, TENANT, ADMIN_USER, ADMIN_PASS } from './env';
 
 const CONFIGURATOR_BASE = process.env.CONFIGURATOR_BASE_URL || `${BASE_URL}/configurator`;
 
@@ -52,7 +52,7 @@ export async function detectConfiguratorLogin(page: Page): Promise<ConfiguratorL
  */
 export async function loginConfigurator(page: Page): Promise<void> {
   const tokenResponse = await staffContext(page, {
-    tenant: ROOT_TENANT,
+    tenant: TENANT,
     username: ADMIN_USER,
     password: ADMIN_PASS,
   }, 'configurator');

@@ -19,7 +19,7 @@ import { getPersona } from '../utils/personas';
 import {
   BASE_URL, TENANT, ROOT_TENANT,
   ADMIN_USER, ADMIN_PASS, FIXED_OTP,
-  DEFAULT_PASSWORD, PGR_ID_PREFIX,
+  PGR_ID_PREFIX,
   generateCitizenPhone,
 } from '../utils/env';
 
@@ -69,7 +69,7 @@ async function cityAdmin(): Promise<{ username: string; password: string; authTe
   if (process.env.CITY_ADMIN_USER) {
     return {
       username: process.env.CITY_ADMIN_USER,
-      password: process.env.CITY_ADMIN_PASS || DEFAULT_PASSWORD,
+      password: process.env.CITY_ADMIN_PASS || '',
     };
   }
   const p = await getPersona('gro-with-department');

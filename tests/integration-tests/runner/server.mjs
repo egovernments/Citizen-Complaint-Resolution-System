@@ -25,7 +25,9 @@
  *   RUNNER_PORT        listen port on 127.0.0.1            (default 8181)
  *   RUNNER_REPO_DIR    vendored tests/integration-tests    (default: parent of this file)
  *   RUNNER_WEBROOT     served dir holding catalog.json/runs (default /var/www/integration-tests)
- *   RUNNER_TENANT_ENV  env file sourced by the job (BASE_URL, DIGIT_TENANT, …)  (optional)
+ *   RUNNER_TENANT_ENV  env profile sourced by the job (deploy/<env>.env)  (optional)
+ *   RUNNER_SECRETS_ENV box-local secrets file the job sources after it: persona
+ *                      passwords, the fixed OTP (optional; passed through, read by run-cycle.sh)
  *   RUNNER_RUN_LIMIT   keep the full report for this many runs (default 5;
  *                      results for older runs stay in the catalog, see README)
  *   RUNNER_BRANCH      branch the job reports in the catalog (default "deployed")

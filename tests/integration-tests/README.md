@@ -10,7 +10,10 @@ complaints). Runs against any DIGIT deployment; configured via env vars.
 npm install
 npx playwright install chromium
 
-# Run everything against the default environment (Nairobi)
+# Every run targets one box through two env files (deploy/README.md):
+#   deploy/<env>.env   tracked: BASE_URL, root tenant, workspace slug, persona logins
+#   secrets file       box-local: persona passwords, the fixed OTP
+set -a; source deploy/naipepea.env; source "$RUNNER_SECRETS_ENV"; set +a
 npm test
 
 # Run a single persona's flows
@@ -24,48 +27,50 @@ npm run test:ui
 
 # Sanity-check that all specs parse without running them
 npm run test:list
-
-# Run against a different deployment (bomet is single-tenant `ke`)
-BASE_URL=https://bometfeedbackhub.digit.org \
-DIGIT_TENANT=ke \
-LOCALITY_CODE=BOMET_BOMET_CENTRAL_CHESOEN \
-SERVICE_CODE=RudeBehavior \
-npx playwright test
-
-# …or source a ready-made per-deployment env file (see deploy/bomet.env)
-set -a; source deploy/bomet.env; set +a && npx playwright test
 ```
 
-The first run executes the `setup` project (auth.setup.ts) which logs into
-the configurator UI as `ADMIN/eGov@123` (override via `ADMIN_USER`,
-`ADMIN_PASSWORD`, `TENANT_CODE`) and writes `auth.json`. All other
-projects pick up `storageState: 'auth.json'`. `auth.json` is gitignored.
+`profile-setup` runs first and fails fast, naming every missing variable, when
+the env profile is incomplete, or when `IDENTITY_TEST_TENANT_SLUG` does not
+resolve (`/identity/v1/tenant-contexts/{slug}`) to `DIGIT_TENANT`. The `setup`
+project then signs the admin persona into the Configurator through Keycloak and
+writes `auth.json` (gitignored); it fails with a "Workspace gate" message when
+the Configurator sends the admin to `/onboarding/...` because the workspace
+setup is not DONE.
 
 ## Environment Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `BASE_URL` | `https://naipepea.digit.org` | DIGIT deployment base URL |
-| `DIGIT_TENANT` | `ke.nairobi` | City-level tenant ID |
-| `ROOT_TENANT` | Derived from `DIGIT_TENANT` | State/root tenant ID (e.g. `ke`) |
-| `DIGIT_USERNAME` | `ADMIN` | Employee admin username |
-| `DIGIT_PASSWORD` | `eGov@123` | Employee admin password |
-| `CITY_ADMIN_USER` | `EMP-KE_NAIROBI-000089` | City-level admin username (for UI tests) |
-| `CITY_ADMIN_PASS` | `eGov@123` | City-level admin password |
-| `CITIZEN_PHONE_PREFIX` | `7` | First digit(s) for valid mobile numbers |
-| `FIXED_OTP` | `123456` | OTP value (for mock OTP deployments) |
-| `SERVICE_CODE` | `IllegalConstruction` | PGR service code for complaint tests (must exist on the deployment) |
-| `LOCALITY_CODE` | `NAIROBI_CITY_VIWANDANI` | Boundary locality code for address |
-| `EMPLOYEE_USER` / `EMPLOYEE_PASSWORD` | `BOMET_LME` / `eGov@123` | PGR_LME employee for inbox/resolve flows |
-| `GRO_USER` / `GRO_PASSWORD` | `KE_GRO` / `eGov@123` | GRO employee — required for the PGR `ASSIGN` action |
-| `WARD_CSR_USER` / `WARD_CSR_PASSWORD` | `BOMET_CSR_CHESOEN_…` / `eGov@123` | Ward-scoped CSR (boundary jurisdiction tests) |
-| `WARD_CSR_BOUNDARY` / `FORBIDDEN_WARDS` | bomet wards | Leaf ward the CSR is scoped to / sibling wards that must be hidden |
-| `CITY_TENANT` | `ke.nairobi` | A real city tenant in the configurator list (tenants-search test) |
-| `TENANT_LABEL` | `Bomet County` | Tenant label shown on the login City combobox |
-| `SCREENSHOT_DIR` | `/tmp/full-complaint-lifecycle-ui-screenshots` | Directory for UI test screenshots |
+Root tenants only: every persona, citizen and complaint lives at `DIGIT_TENANT`,
+the root tenant the workspace slug resolves to. Nothing has a box default.
 
-See `.env.example` for a complete template, and `deploy/bomet.env` for a
-worked per-deployment override file.
+| Variable | Where | Description |
+|----------|-------|-------------|
+| `BASE_URL` | profile, **required** | Deployment base URL |
+| `DIGIT_TENANT` | profile, **required** | The workspace's root tenant (no `.`) |
+| `IDENTITY_TEST_TENANT_SLUG` | profile, **required** | Workspace slug: URLs are `/<slug>/digit-ui/...` |
+| `ADMIN_LOGIN` / `ADMIN_PASSWORD` | profile / secrets, **required** | Workspace admin (`ACCOUNT_ADMIN` + the founder's admin roles) |
+| `GRO_LOGIN` / `GRO_PASSWORD` | profile / secrets | GRO with a department: drives `ASSIGN` |
+| `LME_LOGIN` / `LME_PASSWORD` | profile / secrets | `PGR_LME` in that department |
+| `WARD_CSR_LOGIN` / `WARD_CSR_PASSWORD` | profile / secrets | CSR scoped below the hierarchy root (#496) |
+| `INBOX_VIEWER_LOGIN` / `INBOX_VIEWER_PASSWORD` | profile / secrets | GRO whose jurisdiction covers the seed locality |
+| `SUPERVISOR_LOGIN` / `SUPERVISOR_PASSWORD` | profile / secrets | GRO + `PGR_LME` + `SUPERVISOR`; the specs' `EMPLOYEE_USER` |
+| `IDENTITY_TEST_OTP_CODE` | secrets | Fixed citizen OTP on a fixed-OTP box (`FIXED_OTP` still accepted) |
+| `KC_REALM` | profile | Keycloak realm (default `digit`) |
+| `EXPECTATIONS_FILE` | profile | `deploy/expectations/<env>.json`: which capabilities the box must have |
+| `SERVICE_CODE` / `LOCALITY_CODE` | profile | Pin the seed complaint type / locality; discovered when unset |
+| `WARD_CSR_BOUNDARY` / `FORBIDDEN_WARDS` | profile | The ward CSR's ward / sibling wards that must be hidden |
+| `IGNORE_HTTPS_ERRORS` | profile | `1` for self-signed boxes |
+| `RUNNER_SECRETS_ENV` | runner | Path of the box secrets file `runner/run-cycle.sh` sources |
+
+Personas are Keycloak logins (an email) with their own Keycloak password,
+linked to a DIGIT employee at `DIGIT_TENANT`; the DIGIT identity comes back
+from the BFF's `_select`. Nothing guesses a password: an unset persona is not a
+candidate, and a refused sign-in fails at once with Keycloak's own message.
+`scripts/seed-personas.ts` creates and links all six on a workspace. The
+pre-#2398 names (`DIGIT_USERNAME`, `GRO_USER`, `EMPLOYEE_USER`, `ROOT_TENANT`,
+`CITY_TENANT`, `PERSONA_PASSWORD_GUESSES`, …) are rejected by name.
+
+See `.env.example` for a template and `deploy/naipepea.env` / `deploy/bomet.env`
+for the two boxes.
 
 ## Portability
 
@@ -124,9 +129,9 @@ smell: parameterize the value via env, or rewrite it as a behavioural
 - When you genuinely need seeded state (Tier 2), `test.skip()` with a clear
   reason if it's missing — don't fail.
 - Assert *behaviour and shape*, not a specific deployment's *values*.
-- Put per-deployment values in an env file (see `deploy/bomet.env`), not in
-  code defaults — code defaults should track the canonical reference
-  deployment only.
+- Put per-deployment values in the box's env profile (`deploy/<env>.env`) or
+  its expectations file, never in code defaults; gate on capabilities
+  (`requires()`), never on a hostname or env name.
 
 ## Test Suites
 
@@ -215,6 +220,7 @@ It is not part of any CI job. Run it by hand against a dev box:
 | `ONBOARDING_E2E_EMAIL_DOMAIN` | Domain for the run's addresses (default `e2e.test`; Mailpit catches all) |
 | `ONBOARDING_E2E_MOBILE_PREFIX` / `ONBOARDING_E2E_MOBILE_LENGTH` | Shape of generated mobile numbers (default `7`, 9 digits); checked against the tenant's rule |
 | `ONBOARDING_E2E_IGNORE_HTTPS_ERRORS` | `1` for a box with a self-signed certificate |
+| `ONBOARDING_E2E_SLUG` | Optional: pin the workspace slug (default a fresh `e2e-<letters>`) to create a box's stable test workspace. The tenant id is the slug's letters (`nairobi` → `nairobi`); the slug must be unused and not reserved, so a pinned run works once per box reset |
 
 With `IDENTITY_CITIZEN_OTP_SENDER=log`, the OTP command can read the BFF log:
 
@@ -238,16 +244,18 @@ machine can stall at "No mail with a sign-in link".
 ```
 tests/
 ├── fixtures/
-│   └── auth.setup.ts                 # UI login → auth.json (storageState)
+│   ├── profile.setup.ts              # env + slug fail-fast, deployment-profile.json
+│   └── auth.setup.ts                 # Configurator sign-in → auth.json (storageState)
 ├── citizen/                          # citizen persona flows
 ├── employee/                         # employee persona flows
 ├── admin/                            # configurator + manage surface
 ├── lifecycle/                        # cross-persona end-to-end
 └── utils/
-    ├── auth.ts                       # token acquisition (legacy oauth path)
+    ├── auth.ts                       # hosted sign-in + BFF _select, shared browser, token cache
     ├── citizen-login.ts              # citizen OTP login UI helper
     ├── configurator-auth.ts          # configurator localStorage injection
-    ├── env.ts                        # environment config
+    ├── env.ts                        # environment config (no box defaults)
+    ├── personas.ts                   # persona logins checked against roles/HRMS
     ├── manage/                       # admin spec helpers
     │   ├── api.ts                    # reads auth.json, mdms/pgr/hrms calls
     │   ├── codes.ts                  # PW_${hash}_${kind} test codes
@@ -267,16 +275,17 @@ Actions tab once secrets `TEST_BASE_URL` and `ADMIN_PASSWORD` are set.
 ## Prerequisites
 
 - Node.js 18+
-- A running DIGIT deployment with:
-  - PGR services (`pgr-services`)
-  - User service (`egov-user`)
-  - Workflow service (`egov-workflow-v2`)
-  - Mock OTP (Kong `request-termination` plugin) for citizen login
-  - City-level admin employee for UI tests (e.g. `EMP-KE_NAIROBI-000089`)
+- A DIGIT deployment running `develop`'s identity stack (identity-bff + Keycloak)
+  with one root workspace whose onboarding is DONE (create it through
+  Configurator signup), and:
+  - the six personas linked to Keycloak logins (`scripts/seed-personas.ts`)
+  - a fixed citizen OTP (`identity_dev_fixed_otp: true`) for `citizen-setup`
 
 ## Notes
 
 - **API tests** are fast (~2s) and use `fetch()` directly — no browser needed
 - **UI tests** use Playwright headless Chromium, take screenshots at each step
-- The city-level admin (`CITY_ADMIN_USER`) is needed because DIGIT's `getCurrentTenantId()` returns the employee's login tenant — UI workflow actions require this to match the complaint's city tenant
-- Citizen registration uses mock OTP (`FIXED_OTP=123456`) — the Kong gateway returns 200 for `/user-otp` and `/otp` endpoints
+- Staff tokens come from a Keycloak hosted sign-in plus the BFF's `_select`;
+  `getDigitToken()` keeps one browser per worker and caches each token per
+  (user, tenant, surface), so a persona signs in once per worker
+- Citizens sign in by phone OTP through the BFF (`IDENTITY_TEST_OTP_CODE` on a fixed-OTP box)

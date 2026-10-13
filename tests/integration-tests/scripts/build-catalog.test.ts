@@ -86,7 +86,7 @@ describe('run accounting', () => {
   });
 
   /** A Playwright JSON report for `plan`; `empty` = the run aborted before planning anything. */
-  function pwReport(plan: Plan, o: { errors?: string[]; empty?: boolean } = {}): PwReport {
+  function pwReport(plan: Plan, o: { errors?: string[]; empty?: boolean; setupError?: string } = {}): PwReport {
     const byFile = new Map<string, unknown[]>();
     for (const [name, st] of Object.entries(plan)) {
       const { file, line } = LOC[name];
@@ -100,7 +100,9 @@ describe('run accounting', () => {
     // A setup project's entry: in every planned report, never in the catalog.
     byFile.set('fixtures/auth.setup.ts', [{
       title: 'authenticate', file: 'fixtures/auth.setup.ts', line: 3, column: 1,
-      tests: [{ results: [{ status: 'passed', duration: 5 }] }],
+      tests: [{ results: [o.setupError
+        ? { status: 'failed', duration: 5, error: { message: o.setupError } }
+        : { status: 'passed', duration: 5 }] }],
     }]);
     return {
       config: { rootDir: path.join(root, 'tests'), projects: [] },
@@ -283,6 +285,16 @@ describe('run accounting', () => {
     const cut = cycle(webroot('kc-local-cut'), 'r1', pwReport({ ...ALL, kc: 'unreached' }, { errors: [TIMEOUT] }), { localStack: '1' });
     assert.equal(byName(cut, 'kc').excluded, false);
     assert.equal(cut.runs[0].notRun, 1);
+  });
+
+  test('a failed setup project marks the run blocked in setup; a passing one leaves it null', () => {
+    const unreached: Plan = { alpha: 'unreached', beta: 'unreached', gamma: 'unreached', delta: 'unreached' };
+    const setupError = '\u001b[31mError: The env profile is incomplete:\u001b[39m\n  - IDENTITY_TEST_TENANT_SLUG is not set\n\n    at auth.setup.ts:3';
+    const blocked = cycle(webroot('blocked'), 'r1', pwReport(unreached, { setupError }));
+    assert.deepEqual(counts(blocked.runs[0]), { passed: 0, failed: 0, timedOut: 0, skipped: 0, notRun: 4, excluded: 2, total: 4 });
+    assert.equal(blocked.runs[0].blockedInSetup,
+      'auth.setup.ts › authenticate: Error: The env profile is incomplete: - IDENTITY_TEST_TENANT_SLUG is not set at auth.setup.ts:3');
+    assert.equal(cycle(webroot('unblocked'), 'r1', pwReport(ALL)).runs[0].blockedInSetup, null);
   });
 
   test('a run that planned nothing (a spec failed to load) is all not run, never all excluded', () => {

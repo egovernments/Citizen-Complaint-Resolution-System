@@ -1,0 +1,26 @@
+{
+  "name": "naipepea",
+  "_comment": [
+    "What naipepea SHOULD have. It runs plain develop and the suite targets one root workspace created through",
+    "Configurator signup, so its masters come from the platform baseline (backend/pgr-services onboarding",
+    "platform-baseline-v1.json) plus the workspace's onboarding steps, and its personas from scripts/seed-personas.ts."
+  ],
+  "expectations": {
+    "workflow.pgr.actions.ESCALATE": "required",
+    "mdms.rejectionReasons": "required",
+    "pgr.citizenCreate": "required",
+    "ui.citizen.attachmentDetailRender": "required",
+    "personas.gro-with-department": "required",
+    "personas.ward-scoped-csr": "required",
+    "locales.multi": "optional",
+    "identity.citizen.google": "absent"
+  },
+  "_rationale": {
+    "workflow.pgr.actions.ESCALATE": "The platform baseline's PGR businessService defines ESCALATE, so #521 must run here.",
+    "mdms.rejectionReasons": "The platform baseline seeds RAINMAKER-PGR.RejectionReasons; absence is a baseline regression.",
+    "personas.gro-with-department": "seed-personas.ts creates a departmented GRO; without it nothing can be ASSIGNed.",
+    "personas.ward-scoped-csr": "seed-personas.ts creates a ward-scoped CSR, so boundary-jurisdiction-496 must run, not skip.",
+    "locales.multi": "Depends on the languages chosen at signup.",
+    "identity.citizen.google": "Citizens sign in by phone OTP only (identity_citizen_signin_methods: [phone_otp]); the Google cases are N/A."
+  }
+}

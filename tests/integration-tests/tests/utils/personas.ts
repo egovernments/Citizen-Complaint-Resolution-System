@@ -9,23 +9,21 @@
  *
  * pgr-services validates the ASSIGNEE's HRMS departments against the complaint
  * type's department, and egov-workflow-v2 separately rejects an assignee who
- * holds no role able to act on the NEXT state. Both shipped deployments punish
- * the obvious "first employee with GRO and some department" shortcut:
+ * holds no role able to act on the NEXT state. An assignee is only ever a uuid
+ * on the wire, so it is discovered from HRMS with no password. Only the ACTOR
+ * needs credentials.
  *
- *   local  ADMIN satisfies GRO+department, but its departments (CENTER, DEPT_5,
- *          DEPT_36, DEPT_37) match no maputo complaint type, so the ASSIGN it
- *          wins fails INVALID_ASSIGNMENT. Only EMP001 (ambiental,
- *          obras_publicas) lines up with the catalogue.
- *   bomet  RudeBehavior needs WATER_ENV, held only by DEMO_WATER — which has
- *          PGR_LME but no GRO. HS_GRO has the GRO but sits in DEPT_1. The actor
- *          and the assignee are necessarily DIFFERENT PEOPLE there.
- *
- * The asymmetry that makes this tractable: an assignee is only ever a uuid on
- * the wire, so it can be discovered freely from HRMS with no password. Only the
- * ACTOR needs credentials, and those come from env.
+ * Credentials come from the env profile alone: each persona is a Keycloak
+ * login (<ROLE>_LOGIN) and password (<ROLE>_PASSWORD) linked to a DIGIT
+ * employee at TENANT (scripts/seed-personas.ts makes them). Nothing is guessed:
+ * Keycloak has brute-force protection, and an unset persona is simply not a
+ * candidate. Each key below is checked against what the signed-in employee
+ * really holds (roles, HRMS departments and jurisdictions), so a persona
+ * pointed at the wrong person is reported, not trusted.
  */
 import { getDigitToken } from './auth';
-import { ROOT_TENANT, TENANT, DEFAULT_PASSWORD } from './env';
+import { TENANT, PERSONA_ENV, personaLogin, type PersonaLogin, type PersonaRole } from './env';
+import { KeycloakSignInError } from './identity-bff';
 import { fetchEmployees, type DiscoveredEmployee } from './probes';
 import { getProfile, type DeploymentProfile, type PersonaSummary } from './profile';
 
@@ -33,53 +31,12 @@ export type PersonaKey = 'employee' | 'gro' | 'gro-with-department' | 'lme' | 'w
 
 export const PERSONA_KEYS: PersonaKey[] = ['employee', 'gro', 'gro-with-department', 'lme', 'ward-scoped-csr', 'inbox-viewer'];
 
-/**
- * The tenant pair every lookup here is relative to.
- *
- * It comes from the PROFILE, never from env.ts, and that distinction is the
- * whole point. env.ts resolves TENANT/ROOT_TENANT at module-IMPORT time out of
- * deployment-profile.json, so during discovery — the one moment that file does
- * not exist yet — importing it hands back the legacy `ke.nairobi`/`ke`
- * literals. This file is called from inside discoverProfile(), so it used to
- * derive the tenant correctly from globalConfigs and then go looking for that
- * tenant's employees at ke.nairobi: local could not cold-start at all, and
- * survived only because the profile file usually outlives the run. Bomet hid it
- * completely, because the fallback literal `ke` happens to BE bomet's tenant.
- *
- * Every caller already holds the answer — resolvePersonasForProfile() is handed
- * the draft, resolvePersona() does `opts?.profile ?? getProfile()` — so this is
- * only ever a matter of using what is already in hand.
- */
-export interface TenantPair {
-  city: string;
-  root: string;
-}
-
-/** Profile first; env only as the floor for callers that have no profile yet. */
-export function tenantsOf(profile?: DeploymentProfile): TenantPair {
-  if (profile?.tenant?.city) return { city: profile.tenant.city, root: profile.tenant.root };
-  return { city: TENANT, root: ROOT_TENANT };
-}
-
-export interface Candidate {
-  username: string;
-  password: string;
-  /** Provenance, e.g. 'env:GRO_USER' — persisted so a reader can re-derive it. */
-  source: string;
-  /**
-   * Tenants this credential may be authenticated against, in order.
-   *
-   * Part of the lockout budget, not a convenience: every entry here is one more
-   * failed login the account absorbs when the password is wrong, so the list is
-   * only ever longer than one element when we have a positive reason to believe
-   * the user might live at the root (see candidateCredentials).
-   */
-  authTenants: string[];
-}
-
 export interface ResolvedPersona {
+  /** Keycloak login: what loginEmployeeBrowser/getPrincipal sign in with. */
   username: string;
   password: string;
+  /** The linked DIGIT user's userName (the HRMS code for HRMS-created staff). */
+  digitUsername: string;
   tenant: string;
   uuid: string;
   roles: string[];
@@ -87,6 +44,7 @@ export interface ResolvedPersona {
   jurisdictions: string[];
   token: string;
   userInfo: Record<string, unknown>;
+  /** e.g. 'env:GRO_LOGIN'. */
   source: string;
 }
 
@@ -98,93 +56,21 @@ export interface SeedPlan {
   localityCode: string;
 }
 
-/**
- * Password guesses for HRMS-discovered codes that no env var names.
- *
- * Capped and disable-able because a wrong guess is not free: user-service locks
- * an account after repeated failures, and a locked persona breaks the very
- * deployment the suite is meant to test. Set PERSONA_PASSWORD_GUESSES='' to turn
- * discovery-by-guessing off entirely and rely on env pairs alone.
- *
- * The cap is only real if a guess costs exactly ONE failed login. It used not
- * to: login() probed [TENANT, ROOT_TENANT], so on a deployment with a city
- * sub-tenant (mz.maputo under mz) three guesses spent SIX failures against the
- * account — double the budget this constant claims to enforce, and enough to
- * trip a lockout threshold the cap was chosen to stay under. Hence
- * `authTenants` on Candidate: a code we discovered by reading HRMS at TENANT is
- * known to live at TENANT, so probing the root for it buys nothing and costs a
- * failure. See candidateCredentials().
- */
-const MAX_PASSWORD_GUESSES = 3;
+/** The configured persona each key tries first; every other configured persona follows. */
+const PREFERRED: Record<PersonaKey, PersonaRole> = {
+  employee: 'supervisor',
+  gro: 'gro',
+  'gro-with-department': 'gro',
+  lme: 'lme',
+  'ward-scoped-csr': 'wardCsr',
+  'inbox-viewer': 'inboxViewer',
+};
 
-function passwordGuesses(): string[] {
-  const raw = process.env.PERSONA_PASSWORD_GUESSES;
-  if (raw !== undefined && !raw.trim()) return [];
-  return (raw ?? DEFAULT_PASSWORD)
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .slice(0, MAX_PASSWORD_GUESSES);
-}
-
-/**
- * Credentials to try, most-trustworthy first.
- *
- * Sync by contract, so HRMS codes arrive from the caller rather than being
- * fetched here — resolvePersona() does that read once and shares it.
- *
- * Two classes of candidate, and they get different tenant budgets:
- *
- *   explicit (env vars, PERSONA_CANDIDATES)
- *     An operator handed us this pair and did not say where the user lives. It
- *     may be a city employee or a root admin, so both are probed. The cost is
- *     bounded at 2 failures for ONE password, and a wrong env password is an
- *     operator mistake that ought to be loud.
- *
- *   discovered (`hrms:<code>+guess`)
- *     We only know this code because HRMS at TENANT returned it, so TENANT is
- *     where it authenticates; the root probe could only ever fail. Probing it
- *     anyway would multiply MAX_PASSWORD_GUESSES by the tenant count and walk
- *     the account toward a lockout in exchange for no information at all.
- */
-export function candidateCredentials(discoveredCodes: string[] = [], tenants?: TenantPair): Candidate[] {
-  const { city: tenant, root } = tenants ?? tenantsOf();
-  const out: Candidate[] = [];
-  const seen = new Set<string>();
-  // First push wins, so an explicit pair that repeats a discovered code keeps
-  // its wider tenant list instead of being narrowed by the guess loop below.
-  const push = (username: string | undefined, password: string | undefined, source: string, authTenants: string[]): void => {
-    if (!username || !password) return;
-    const key = `${username}\u0000${password}`;
-    if (seen.has(key)) return;
-    seen.add(key);
-    out.push({ username, password, source, authTenants });
-  };
-
-  const explicitTenants = tenant === root ? [tenant] : [tenant, root];
-
-  const envPairs: [string, string, string][] = [
-    ['EMPLOYEE_USER', 'EMPLOYEE_PASSWORD', 'env:EMPLOYEE_USER'],
-    ['GRO_USER', 'GRO_PASSWORD', 'env:GRO_USER'],
-    ['CITY_ADMIN_USER', 'CITY_ADMIN_PASS', 'env:CITY_ADMIN_USER'],
-    ['WARD_CSR_USER', 'WARD_CSR_PASSWORD', 'env:WARD_CSR_USER'],
-    ['FLOW5_EMPLOYEE_USER', 'FLOW5_EMPLOYEE_PASSWORD', 'env:FLOW5_EMPLOYEE_USER'],
-  ];
-  for (const [userVar, passVar, source] of envPairs) {
-    push(process.env[userVar], process.env[passVar] || DEFAULT_PASSWORD, source, explicitTenants);
-  }
-  push(process.env.DIGIT_USERNAME || process.env.ADMIN_USER || 'ADMIN',
-    process.env.DIGIT_PASSWORD || process.env.ADMIN_PASSWORD || DEFAULT_PASSWORD, 'env:ADMIN', explicitTenants);
-
-  for (const pair of (process.env.PERSONA_CANDIDATES || '').split(',')) {
-    const [username, password] = pair.split(':');
-    push(username?.trim(), password?.trim(), 'env:PERSONA_CANDIDATES', explicitTenants);
-  }
-
-  for (const code of discoveredCodes) {
-    for (const guess of passwordGuesses()) push(code, guess, `hrms:${code}+guess`, [tenant]);
-  }
-  return out;
+/** The configured persona logins, `key`'s own first. */
+export function candidateCredentials(key?: PersonaKey): PersonaLogin[] {
+  const roles = Object.keys(PERSONA_ENV) as PersonaRole[];
+  const ordered = key ? [PREFERRED[key], ...roles.filter((r) => r !== PREFERRED[key])] : roles;
+  return ordered.map(personaLogin).filter((p): p is PersonaLogin => p !== null);
 }
 
 // ── login + HRMS join ────────────────────────────────────────────────────────
@@ -193,132 +79,73 @@ interface Principal {
   token: string;
   userInfo: Record<string, any>;
   roles: string[];
-  authTenant: string;
 }
 
-/**
- * All three caches key on the tenant they were filled for.
- *
- * Not defensive plumbing — required. discoverProfile() resolves personas
- * against the DRAFT's tenant, while anything importing env.ts before the
- * profile lands sees the fallback literals. A single-slot cache would let
- * whichever ran first pin its answer for the process: one `[]` cached under the
- * wrong tenant, and every later lookup returns "this deployment has no
- * employees" — the exact silent-wrong-answer this file keeps being bitten by.
- */
+/** Per worker. A refused login is remembered too: it is never retried. */
 const loginCache = new Map<string, Principal | null>();
-const employeeCache = new Map<string, DiscoveredEmployee[]>();
-const adminTokenCache = new Map<string, string>();
-
+let employeeCache: DiscoveredEmployee[] | null = null;
 /** Why the admin token is unavailable, when it is — kept so callers can tell a
- *  broken login apart from a deployment that genuinely has no employees.
- *  Keyed by root tenant for the same reason as the caches above. */
-const adminTokenErrors = new Map<string, string>();
+ *  broken login apart from a deployment that genuinely has no employees. */
+let adminTokenError: string | null = null;
 
-async function adminToken(tenants: TenantPair): Promise<string> {
-  const root = tenants.root;
-  const cached = adminTokenCache.get(root);
-  if (cached !== undefined) return cached;
-  const user = process.env.DIGIT_USERNAME || process.env.ADMIN_USER || 'ADMIN';
-  // The admin login is retried: it is the single point every HRMS read goes
-  // through, and a deployment that has just come up answers the first call
-  // with a 5xx while egov-user is still warming. A one-shot failure here used
-  // to surface as "Employees present: none", which reads as a seed gap and
-  // sends the reader to onboard data that is already there.
+async function adminToken(): Promise<string> {
+  if (adminTokenError !== null) return '';
+  const admin = personaLogin('admin');
+  if (!admin) {
+    adminTokenError = 'ADMIN_LOGIN/ADMIN_PASSWORD are not set';
+    return '';
+  }
+  // Retried only for availability: a deployment that has just come up answers
+  // the first call with a 5xx. A refused password is never retried.
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      const r = await getDigitToken({
-        tenant: root,
-        username: user,
-        password: process.env.DIGIT_PASSWORD || process.env.ADMIN_PASSWORD || DEFAULT_PASSWORD,
-      });
-      adminTokenCache.set(root, r.access_token);
-      adminTokenErrors.delete(root);
-      return r.access_token;
+      return (await getDigitToken({ tenant: TENANT, username: admin.login, password: admin.password })).access_token;
     } catch (err: any) {
-      adminTokenErrors.set(root, `${user}@${root}: ${err?.message?.slice(0, 160) ?? err}`);
+      adminTokenError = `${admin.source}@${TENANT}: ${err?.message?.slice(0, 160) ?? err}`;
+      if (err instanceof KeycloakSignInError) break;
       if (attempt < 3) await new Promise((r) => setTimeout(r, attempt * 2_000));
     }
   }
-  console.log(`[personas] admin token unavailable after 3 attempts — ${adminTokenErrors.get(root)}`);
-  adminTokenCache.set(root, '');
+  console.log(`[personas] admin token unavailable — ${adminTokenError}`);
   return '';
 }
 
 /**
- * Employees at the EXACT complaint tenant.
- *
- * Exact because HRMS has no parent-tenant fallback: bomet's BOMET_ADMIN exists
- * only at ke.bomet and therefore cannot serve a complaint filed at ke, no matter
- * what an env var claims. Unfiltered because the codes=/names= filters are not
- * tenant-scoped at all (asking ke for codes=EMP001 hands back an mz.maputo
- * employee) — see probes.ts fetchEmployees.
+ * Employees at TENANT. Unfiltered because the codes=/names= filters are not
+ * tenant-scoped at all — see probes.ts fetchEmployees.
  */
-async function employeesAtTenant(tenants: TenantPair): Promise<DiscoveredEmployee[]> {
-  const city = tenants.city;
-  const cached = employeeCache.get(city);
-  if (cached) return cached;
-  const token = await adminToken(tenants);
-  const employees = token ? await fetchEmployees(city, token) : [];
-  employeeCache.set(city, employees);
-  return employees;
+async function employeesAtTenant(): Promise<DiscoveredEmployee[]> {
+  if (employeeCache) return employeeCache;
+  const token = await adminToken();
+  employeeCache = token ? await fetchEmployees(TENANT, token) : [];
+  return employeeCache;
 }
 
-/**
- * Log in at each tenant the candidate carries, in order.
- *
- * The tenant list belongs to the CANDIDATE, not to this function, because it is
- * a spend decision and only the credential's provenance can make it: an
- * explicit env pair probes CITY then ROOT (an onboarded employee lives at the
- * city tenant and 400s against the root, while ADMIN is the reverse), whereas
- * an HRMS-discovered code is probed only where HRMS said it lives. Hard-coding
- * [TENANT, ROOT_TENANT] here is what silently doubled the guess budget.
- */
-async function login(c: Candidate): Promise<Principal | null> {
-  // Tenants in the key: the same credential probed at a different tenant is a
-  // different question, and answering it from cache would invent a verdict.
-  const key = `${c.username}\u0000${c.password}\u0000${c.authTenants.join(',')}`;
-  const hit = loginCache.get(key);
-  if (hit !== undefined) return hit;
-
+async function login(c: PersonaLogin): Promise<Principal | null> {
+  if (loginCache.has(c.login)) return loginCache.get(c.login)!;
   let result: Principal | null = null;
-  for (const authTenant of c.authTenants) {
-    try {
-      const resp = await getDigitToken({ tenant: authTenant, authTenant, username: c.username, password: c.password });
-      if (resp.access_token) {
-        const userInfo = (resp.UserRequest || {}) as Record<string, any>;
-        result = {
-          token: resp.access_token,
-          userInfo,
-          roles: ((userInfo.roles || []) as any[]).map((r) => String(r.code)),
-          authTenant,
-        };
-        break;
-      }
-    } catch {
-      // Try the next tenant; a guessed password failing everywhere is normal.
-    }
+  let why = '';
+  try {
+    const resp = await getDigitToken({ tenant: TENANT, username: c.login, password: c.password });
+    const userInfo = (resp.UserRequest || {}) as Record<string, any>;
+    result = { token: resp.access_token, userInfo, roles: ((userInfo.roles || []) as any[]).map((r) => String(r.code)) };
+  } catch (err: any) {
+    why = `: ${err?.message?.slice(0, 200) ?? err}`;
   }
-  // R6: every attempt is logged, so a lockout can be traced to this suite —
-  // which means logging how many failures it cost, not just the verdict.
-  console.log(
-    `[personas] login ${c.username} (${c.source}) -> ${result ? `ok @ ${result.authTenant}` : `no (tried ${c.authTenants.join(', ')})`}`,
-  );
-  loginCache.set(key, result);
+  // Every attempt is logged, so a lockout can be traced to this suite.
+  console.log(`[personas] login ${c.role} (${c.source}) -> ${result ? `ok @ ${TENANT}` : `no${why}`}`);
+  loginCache.set(c.login, result);
   return result;
 }
 
-async function toResolved(c: Candidate, p: Principal, tenants: TenantPair): Promise<ResolvedPersona> {
-  const employees = await employeesAtTenant(tenants);
+async function toResolved(c: PersonaLogin, p: Principal): Promise<ResolvedPersona> {
   const uuid = String(p.userInfo.uuid ?? '');
-  // Joined on uuid, not code: the same ADMIN username exists at both mz and
-  // mz.maputo with DIFFERENT uuids and different departments, and only the
-  // record at the complaint's tenant is the one pgr-services will read.
-  const hrms = employees.find((e) => e.uuid === uuid);
+  const hrms = (await employeesAtTenant()).find((e) => e.uuid === uuid);
   return {
-    username: c.username,
+    username: c.login,
     password: c.password,
-    tenant: p.authTenant,
+    digitUsername: String(p.userInfo.userName ?? ''),
+    tenant: TENANT,
     uuid,
     roles: [...new Set([...p.roles, ...(hrms?.roles ?? [])])].sort(),
     departments: hrms?.departments ?? [],
@@ -349,7 +176,7 @@ function isWardScopedCsr(p: ResolvedPersona, hrms: DiscoveredEmployee | undefine
 }
 
 async function matches(key: PersonaKey, p: ResolvedPersona, profile: DeploymentProfile): Promise<boolean> {
-  const hrms = (await employeesAtTenant(tenantsOf(profile))).find((e) => e.uuid === p.uuid);
+  const hrms = (await employeesAtTenant()).find((e) => e.uuid === p.uuid);
   switch (key) {
     case 'employee':
       return p.roles.includes('EMPLOYEE') || p.roles.includes('SUPERUSER');
@@ -398,7 +225,7 @@ async function matches(key: PersonaKey, p: ResolvedPersona, profile: DeploymentP
   }
 }
 
-function whyUnresolved(key: PersonaKey, tried: ResolvedPersona[], profile?: DeploymentProfile): string {
+function whyUnresolved(key: PersonaKey, tried: ResolvedPersona[]): string {
   const seen = tried.length
     // Jurisdictions are printed because two of the keys below are gated on them
     // — a reader told "needs a jurisdiction at the hierarchy root" cannot act on
@@ -406,11 +233,11 @@ function whyUnresolved(key: PersonaKey, tried: ResolvedPersona[], profile?: Depl
     ? tried
         .map(
           (p) =>
-            `${p.username}[roles=${p.roles.join('|') || 'none'} depts=${p.departments.join('|') || 'none'} ` +
+            `${p.source}=${p.digitUsername}[roles=${p.roles.join('|') || 'none'} depts=${p.departments.join('|') || 'none'} ` +
             `jurisdictions=${p.jurisdictions.join('|') || 'none'}]`,
         )
         .join(', ')
-    : 'nobody — no candidate credential logged in at all';
+    : 'nobody — no configured persona signed in at all';
   const need: Record<PersonaKey, string> = {
     employee: 'the EMPLOYEE or SUPERUSER role',
     gro: 'the GRO role',
@@ -426,10 +253,11 @@ function whyUnresolved(key: PersonaKey, tried: ResolvedPersona[], profile?: Depl
       "jurisdiction covers nothing — AND an HRMS department that owns at least one complaint type (the inbox filters on the " +
       "viewer's department too, so a department owning no service can never show a seeded complaint)",
   };
+  const prefix = PERSONA_ENV[PREFERRED[key]];
   return (
-    `No persona '${key}' on ${tenantsOf(profile).city}: needs ${need[key]}. Logged in and inspected: ${seen}. ` +
-    'Point the matching env var (EMPLOYEE_USER / GRO_USER / WARD_CSR_USER / PERSONA_CANDIDATES) at a real ' +
-    'persona, or seed one — this is a deployment/seed gap, not an app bug.'
+    `No persona '${key}' on ${TENANT}: needs ${need[key]}. Signed in and inspected: ${seen}. ` +
+    `Set ${prefix}_LOGIN (env profile) and ${prefix}_PASSWORD (secrets file) to a linked employee who has it — ` +
+    'scripts/seed-personas.ts creates one. This is a deployment/seed gap, not an app bug.'
   );
 }
 
@@ -442,45 +270,17 @@ export async function resolvePersona(key: PersonaKey, opts?: { profile?: Deploym
   if (resolvedCache.has(key)) return resolvedCache.get(key)!;
   const profile = opts?.profile ?? getProfile();
 
-  const codes = (await employeesAtTenant(tenantsOf(profile))).map((e) => e.code).sort();
+  // profile-setup recorded which persona satisfied this key: try it first.
+  // Logins are cached per worker, but Playwright starts a fresh worker after
+  // every failing test, so the order still saves sign-ins.
+  const recorded = profile.personas?.resolved?.[key]?.source;
+  const candidates = candidateCredentials(key).sort((a, b) => Number(b.source === recorded) - Number(a.source === recorded));
   const inspected: ResolvedPersona[] = [];
   let found: ResolvedPersona | null = null;
-
-  // profile-setup already swept every candidate and recorded who satisfied this
-  // key, so re-deriving it here means ONE login instead of the whole sweep.
-  //
-  // This matters far more than it looks. resolvedCache is per-process, and
-  // Playwright starts a FRESH worker after every failing test — so without this
-  // each failure throws the cache away and the next test re-tries every
-  // candidate credential again. On a deployment with ~50 HRMS employees that is
-  // ~50 auth calls per persona per test; the auth service starts refusing them,
-  // which makes more tests fail, which spawns more workers. One real failure
-  // snowballs into "no candidate credential logged in at all" everywhere. Seen
-  // live on bomet: 23 failures became 46 that way.
-  //
-  // Passwords are deliberately absent from the profile, so match the recorded
-  // username back to a candidate (which carries the credential) rather than
-  // trusting the summary alone. If that one login fails — rotated password,
-  // deactivated user — fall through to the full sweep below.
-  const recorded = profile.personas?.resolved?.[key]?.username;
-  if (recorded) {
-    const candidate = candidateCredentials(codes, tenantsOf(profile)).find((c) => c.username === recorded);
-    if (candidate) {
-      const principal = await login(candidate);
-      if (principal) {
-        const persona = await toResolved(candidate, principal, tenantsOf(profile));
-        if (await matches(key, persona, profile)) {
-          resolvedCache.set(key, persona);
-          return persona;
-        }
-      }
-    }
-  }
-
-  for (const candidate of candidateCredentials(codes, tenantsOf(profile))) {
+  for (const candidate of candidates) {
     const principal = await login(candidate);
     if (!principal) continue;
-    const persona = await toResolved(candidate, principal, tenantsOf(profile));
+    const persona = await toResolved(candidate, principal);
     inspected.push(persona);
     if (await matches(key, persona, profile)) {
       found = persona;
@@ -488,7 +288,7 @@ export async function resolvePersona(key: PersonaKey, opts?: { profile?: Deploym
     }
   }
 
-  if (!found) diagnostics.set(key, whyUnresolved(key, inspected, profile));
+  if (!found) diagnostics.set(key, whyUnresolved(key, inspected));
   resolvedCache.set(key, found);
   return found;
 }
@@ -500,7 +300,7 @@ export async function getPersona(key: PersonaKey, opts?: { profile?: DeploymentP
 }
 
 /** Why `key` could not be resolved. Empty until resolvePersona has tried. */
-export function personaDiagnostic(key: PersonaKey, profile?: DeploymentProfile): string {
+export function personaDiagnostic(key: PersonaKey): string {
   return diagnostics.get(key) ?? '';
 }
 
@@ -524,10 +324,10 @@ export function serviceCodesFor(p: ResolvedPersona, profile?: DeploymentProfile)
 }
 
 function redact(p: ResolvedPersona): PersonaSummary {
-  // Passwords and tokens never reach disk — the profile is an artefact a run
-  // uploads. `source` is enough to re-derive the credential at use time.
+  // Passwords, tokens and logins never reach disk. `source` is enough to
+  // re-derive the credential at use time.
   return {
-    username: p.username,
+    username: p.digitUsername,
     tenant: p.tenant,
     uuid: p.uuid,
     roles: p.roles,
@@ -547,7 +347,7 @@ export async function resolvePersonasForProfile(profile: DeploymentProfile): Pro
   for (const key of PERSONA_KEYS) {
     const p = await resolvePersona(key, { profile });
     resolved[key] = p ? redact(p) : null;
-    if (!p) unresolvedDiagnostics[key] = personaDiagnostic(key, profile);
+    if (!p) unresolvedDiagnostics[key] = personaDiagnostic(key);
   }
   return { resolved, unresolvedDiagnostics };
 }
@@ -573,7 +373,7 @@ function orderedServices(profile: DeploymentProfile): DeploymentProfile['complai
 function localityFor(profile: DeploymentProfile): string | { error: string } {
   const localityCode = profile.pgr.seedLocalityCode ?? profile.boundary.leafCode;
   if (!localityCode) {
-    return { error: `No locality on ${tenantsOf(profile).city}: boundary hierarchy ${profile.boundary.hierarchyType ?? '(none)'} yielded no leaf, so a complaint has nowhere to be filed.` };
+    return { error: `No locality on ${TENANT}: boundary hierarchy ${profile.boundary.hierarchyType ?? '(none)'} yielded no leaf, so a complaint has nowhere to be filed.` };
   }
   return localityCode;
 }
@@ -601,7 +401,7 @@ export async function resolveFilingTarget(opts?: { profile?: DeploymentProfile }
   const profile = opts?.profile ?? getProfile();
   const services = orderedServices(profile);
   if (!services.length) {
-    return { error: `No complaint types on ${tenantsOf(profile).city}: nothing can be filed at all. Seed RAINMAKER-PGR.ComplaintHierarchy or ServiceDefs.` };
+    return { error: `No complaint types on ${TENANT}: nothing can be filed at all. Seed RAINMAKER-PGR.ComplaintHierarchy or ServiceDefs.` };
   }
 
   const locality = localityFor(profile);
@@ -611,7 +411,7 @@ export async function resolveFilingTarget(opts?: { profile?: DeploymentProfile }
   if (!('error' in plan)) return { serviceCode: plan.serviceCode, localityCode: plan.localityCode };
 
   console.log(
-    `[seed] no ASSIGN-viable seed plan on ${tenantsOf(profile).city} (${plan.error.slice(0, 120)}) — filing against ` +
+    `[seed] no ASSIGN-viable seed plan on ${TENANT} (${plan.error.slice(0, 120)}) — filing against ` +
       `${services[0].serviceCode} anyway; a complaint can be created and rejected without an assignee.`,
   );
   return { serviceCode: services[0].serviceCode, localityCode: locality };
@@ -631,14 +431,14 @@ export async function resolveSeedPlan(opts?: { profile?: DeploymentProfile }): P
   const profile = opts?.profile ?? getProfile();
   const services = orderedServices(profile);
   if (!services.length) {
-    return { error: `No complaint types on ${tenantsOf(profile).city}: nothing can be filed, so no ASSIGN is testable. Seed RAINMAKER-PGR.ComplaintHierarchy or ServiceDefs.` };
+    return { error: `No complaint types on ${TENANT}: nothing can be filed, so no ASSIGN is testable. Seed RAINMAKER-PGR.ComplaintHierarchy or ServiceDefs.` };
   }
 
   const assign = profile.workflow.pgr.assign;
   if (!assign) {
     return {
       error:
-        `PGR workflow on ${tenantsOf(profile).city} defines no ASSIGN transition (actions: ${profile.workflow.pgr.actions.join(', ') || 'none'}), ` +
+        `PGR workflow on ${TENANT} defines no ASSIGN transition (actions: ${profile.workflow.pgr.actions.join(', ') || 'none'}), ` +
         'so an assignee cannot be validated. Check the businessService seed.',
     };
   }
@@ -647,7 +447,7 @@ export async function resolveSeedPlan(opts?: { profile?: DeploymentProfile }): P
   // egov-workflow-v2 answers INVALID_ASSIGNEE otherwise. Union of the next
   // state's action roles minus CITIZEN, which no employee carries meaningfully.
   const assigneeRoles = assign.assigneeRoles.filter((r) => r !== 'CITIZEN');
-  const employees = (await employeesAtTenant(tenantsOf(profile))).slice().sort((a, b) => a.code.localeCompare(b.code));
+  const employees = (await employeesAtTenant()).slice().sort((a, b) => a.code.localeCompare(b.code));
   const eligible = employees.filter(
     (e) => e.departments.length > 0 && e.roles.some((r) => assigneeRoles.includes(r)),
   );
@@ -655,21 +455,20 @@ export async function resolveSeedPlan(opts?: { profile?: DeploymentProfile }): P
     // An empty employee list has two very different causes, and saying "no
     // employee can be an assignee" for the second one sends the reader off to
     // onboard data that already exists.
-    const tokenErr = adminTokenErrors.get(tenantsOf(profile).root);
+    const tokenErr = adminTokenError;
     if (!employees.length && tokenErr) {
       return {
         error:
-          `Could not read HRMS at ${tenantsOf(profile).city}: the admin login failed (${tokenErr}), so the employee list came back ` +
+          `Could not read HRMS at ${TENANT}: the admin login failed (${tokenErr}), so the employee list came back ` +
           'empty. This is an auth/availability failure, NOT a seed gap — the deployment may well have a valid assignee. ' +
-          'Check that the service is up and DIGIT_USERNAME/DIGIT_PASSWORD are right, then re-run.',
+          'Check that the service is up and ADMIN_LOGIN/ADMIN_PASSWORD are right, then re-run.',
       };
     }
     return {
       error:
-        `No employee at ${tenantsOf(profile).city} can be an assignee: ASSIGN lands in ${assign.nextState}, which needs one of ` +
+        `No employee at ${TENANT} can be an assignee: ASSIGN lands in ${assign.nextState}, which needs one of ` +
         `[${assigneeRoles.join(', ')}] plus an HRMS department. Employees present: ` +
-        `${employees.map((e) => `${e.code}[roles=${e.roles.join('|')} depts=${e.departments.join('|') || 'none'}]`).join(', ') || 'none'}. ` +
-        'Note HRMS has no parent-tenant fallback — an employee at a sub-tenant cannot serve this one.',
+        `${employees.map((e) => `${e.code}[roles=${e.roles.join('|')} depts=${e.departments.join('|') || 'none'}]`).join(', ') || 'none'}.`,
     };
   }
 
@@ -684,7 +483,7 @@ export async function resolveSeedPlan(opts?: { profile?: DeploymentProfile }): P
   if (!picked) {
     return {
       error:
-        `No (serviceCode, assignee) pair lines up on ${tenantsOf(profile).city}. pgr-services validates the ASSIGNEE's HRMS ` +
+        `No (serviceCode, assignee) pair lines up on ${TENANT}. pgr-services validates the ASSIGNEE's HRMS ` +
         'departments against the complaint type\'s department, and none of the eligible assignees holds one of ' +
         `the catalogue's departments. Complaint types: ${services.map((s) => `${s.serviceCode}->${s.department || 'no-dept'}`).join(', ')}. ` +
         `Eligible assignees: ${eligible.map((e) => `${e.code}->${e.departments.join('|')}`).join(', ')}. ` +
@@ -701,7 +500,7 @@ export async function resolveSeedPlan(opts?: { profile?: DeploymentProfile }): P
   // department-less actors, and preferring one costs nothing.
   const actor = (await resolvePersona('gro-with-department', { profile })) ?? (await resolvePersona('gro', { profile }));
   if (!actor) {
-    return { error: personaDiagnostic('gro-with-department', profile) || whyUnresolved('gro', [], profile) };
+    return { error: personaDiagnostic('gro-with-department') || whyUnresolved('gro', []) };
   }
 
   const localityCode = localityFor(profile);

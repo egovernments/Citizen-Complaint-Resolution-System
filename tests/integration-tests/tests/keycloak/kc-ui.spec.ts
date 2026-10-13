@@ -3,6 +3,7 @@ import { test, expect } from '@playwright/test';
 import { BASE_URL, generateCitizenPhone } from '../utils/env';
 import { citizenOtpLoginViaUI } from '../utils/citizen-login';
 import { authorizeUrl } from '../utils/identity-bff';
+import { requires } from '../utils/capabilities';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 test.describe('Keycloak and citizen BFF browser entry', () => {
@@ -17,6 +18,7 @@ test.describe('Keycloak and citizen BFF browser entry', () => {
   });
 
   test('Google entry uses BFF authorize and server-owned PKCE', { tag: ['@area:keycloak', '@persona:citizen'] }, async ({ page, request }) => {
+    requires(test, 'identity.citizen.google', 'BFF /identity/v1/auth-methods offers google to citizens');
     const methods = await request.get(`${BASE_URL}/identity/v1/auth-methods?surface=citizen&intent=signin`);
     expect(methods.status()).toBe(200);
     expect((await methods.json()).methods).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'google', type: 'idp' })]));

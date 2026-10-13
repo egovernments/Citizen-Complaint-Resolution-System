@@ -169,8 +169,8 @@ function RunTrend() {
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 10 }}>
                   {r.id.split('_').slice(0, 2).join(' ')}
                 </Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: 10 }}>
-                  {r.passed}/{r.total}
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: 10 }} title={r.blockedInSetup ?? undefined}>
+                  {r.blockedInSetup && !(r.passed + r.failed + r.skipped) ? 'blocked in setup' : `${r.passed}/${r.total}`}
                 </Typography>
                 {!!r.notRun && (
                   <Typography variant="caption" sx={{ display: 'block', fontSize: 10, color: r.cutShort ? STATUS_COLOR.failed : 'text.secondary' }}>
@@ -281,6 +281,11 @@ export default function Dashboard() {
       {/* A run that skipped part of the suite must say so up front: the pass
           rate below counts those tests as not passed, and nothing else on the
           page would explain the gap. */}
+      {latest?.blockedInSetup && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          Latest run was blocked in setup: {latest.blockedInSetup}
+        </Alert>
+      )}
       {latest && (latest.cutShort || (latest.notRun ?? 0) > 0) && (
         <Alert severity={latest.cutShort ? 'error' : 'warning'} sx={{ mb: 2 }}>
           {latest.cutShort ? `Latest run was cut short (${latest.cutShort}). ` : ''}

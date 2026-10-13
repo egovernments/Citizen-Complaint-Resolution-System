@@ -147,11 +147,17 @@ function renderRunSummary() {
   const el = document.getElementById('run-summary');
   if (!r) { el.textContent = 'no runs yet'; return; }
   const ago = relTime(r.startedAt);
+  // A failed setup project leaves its dependants without a verdict: say that
+  // instead of "0 passed · 0 failed".
+  const noVerdicts = !(r.passed + r.failed + r.skipped);
   el.innerHTML = [
     `<strong>${escapeHtml(r.id)}</strong>`,
-    `<span class="pill pass">${r.passed} passed</span>`,
-    `<span class="pill fail">${r.failed} failed</span>`,
-    `<span class="pill skip">${r.skipped} skipped</span>`,
+    r.blockedInSetup ? `<span class="pill cut" title="${escapeAttr(r.blockedInSetup)}">⛔ blocked in setup</span>` : '',
+    ...(r.blockedInSetup && noVerdicts ? [] : [
+      `<span class="pill pass">${r.passed} passed</span>`,
+      `<span class="pill fail">${r.failed} failed</span>`,
+      `<span class="pill skip">${r.skipped} skipped</span>`,
+    ]),
     r.notRun ? `<span class="pill notrun" title="Planned by this run but produced no result in it">${r.notRun} not run</span>` : '',
     r.cutShort ? `<span class="pill cut" title="${escapeAttr(r.cutShort)}">⚠ run cut short</span>` : '',
     isLegacyCount(r) ? `<span class="muted" title="${escapeAttr(LEGACY_TEXT)}">legacy count · cut short: unknown</span>` : '',
@@ -202,6 +208,7 @@ function renderRunSwitcher() {
     const chip = RW.runChip(r, latestId); // link or not: decided (and unit-tested) in run-window.js
     const tooltip = `${r.id} · ${relTime(r.startedAt)} · ${r.passed}p ${r.failed}f ${r.skipped}s` +
       (r.notRun ? ` ${r.notRun} not run` : '') + (r.cutShort ? ` · cut short: ${r.cutShort}` : '') +
+      (r.blockedInSetup ? ` · blocked in setup: ${r.blockedInSetup}` : '') +
       (chip.legacy ? ` · ${LEGACY_TEXT}` : '') +
       (chip.pruned ? ` · report pruned: only the newest ${kept} runs keep their report, video and traces` : '');
     const body = `${escapeHtml(chip.label)}

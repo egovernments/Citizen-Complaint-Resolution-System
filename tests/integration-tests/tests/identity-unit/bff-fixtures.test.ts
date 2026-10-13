@@ -85,24 +85,6 @@ for (const [name, context] of [
   });
 }
 
-test('city-level citizen accepts the root-tenant token and the city route tenant', async () => {
-  const city = { tenantId: 'ke.bomet', urlSlug: 'bomet' };
-  const rootToken = { ...token, UserRequest: { ...token.UserRequest, tenantId: 'ke' }, tenant: city };
-  await fixture(async (request, base) => {
-    const result = await citizenSignIn(request, base, '712345678', async () => '654321');
-    assert.equal(result.UserRequest.tenantId, 'ke');
-    assert.equal(result.tenant?.tenantId, 'ke.bomet');
-  }, { tenant: city, context: rootToken });
-  for (const context of [
-    { ...rootToken, UserRequest: { ...rootToken.UserRequest, tenantId: 'ke.bomet' } },
-    { ...rootToken, tenant: { ...city, tenantId: 'ke.other' } },
-  ]) {
-    await fixture(async (request, base) => {
-      await assert.rejects(citizenSignIn(request, base, '712345678', async () => '654321'), /invalid or wrong-tenant/);
-    }, { tenant: city, context });
-  }
-});
-
 test('employee context selection sends surface and exact tenant without deriving a parent', async () => {
   await fixture(async (request, base, calls) => {
     await selectContext(request, base, 'employee', tenant.tenantId);
@@ -110,11 +92,22 @@ test('employee context selection sends surface and exact tenant without deriving
   }, { context: { ...token, UserRequest: { ...token.UserRequest, type: 'EMPLOYEE' } } });
 });
 
-test('fixed-code fixtures require explicit configuration', async () => {
-  const previous = process.env.IDENTITY_TEST_OTP_CODE;
+test('fixed-code fixtures require explicit configuration, IDENTITY_TEST_OTP_CODE first, then FIXED_OTP', async () => {
+  const previous = { code: process.env.IDENTITY_TEST_OTP_CODE, fixed: process.env.FIXED_OTP };
+  const challenge = { challengeId: 'id', mobileNumber: 'phone', tenantId: 'tenant', requestedAt: 0 };
   delete process.env.IDENTITY_TEST_OTP_CODE;
-  try { await assert.rejects(configuredOtp({ challengeId: 'id', mobileNumber: 'phone', tenantId: 'tenant', requestedAt: 0 }), /Set IDENTITY_TEST_OTP_CODE/); }
-  finally { if (previous !== undefined) process.env.IDENTITY_TEST_OTP_CODE = previous; }
+  delete process.env.FIXED_OTP;
+  try {
+    await assert.rejects(configuredOtp(challenge), /Set IDENTITY_TEST_OTP_CODE/);
+    process.env.FIXED_OTP = '135790';
+    assert.equal(await configuredOtp(challenge), '135790');
+    process.env.IDENTITY_TEST_OTP_CODE = '246802';
+    assert.equal(await configuredOtp(challenge), '246802');
+  } finally {
+    for (const [name, value] of [['IDENTITY_TEST_OTP_CODE', previous.code], ['FIXED_OTP', previous.fixed]] as const) {
+      if (value === undefined) delete process.env[name]; else process.env[name] = value;
+    }
+  }
 });
 
 test('authorize is tenant bound for employee and citizen, tenantless for configurator', () => {

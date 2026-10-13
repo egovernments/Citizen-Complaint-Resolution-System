@@ -1,61 +1,42 @@
 /**
- * Environment configuration — all env vars with defaults.
+ * Environment configuration. Every spec reads deployment values from here, not
+ * from process.env directly.
  *
- * Every test reads from here, not from process.env directly.
- * This ensures consistent defaults and documents what's configurable.
+ * Nothing in this file names a tenant, a persona or a box. Everything a run
+ * targets comes from two env files (deploy/README.md):
  *
- * Every DEPLOYMENT-SHAPED value below resolves through one chain:
+ *   deploy/<env>.env     tracked, no secrets: BASE_URL, DIGIT_TENANT, the
+ *                        workspace slug, persona Keycloak logins, codes
+ *   box secrets file     untracked, runner-only (RUNNER_SECRETS_ENV): persona
+ *                        passwords, the fixed OTP
  *
- *     explicit env var  ->  deployment-profile.json  ->  legacy hardcoded default
+ * A value nobody set stays empty, and assertEnv() — the first thing
+ * profile-setup does — fails the run naming every missing variable. Some values
+ * fall back to deployment-profile.json, which profile-setup writes before any
+ * spec imports this file: those are discovered from the live deployment, not
+ * defaults.
  *
- * The middle link is new. deployment-profile.json is written by the
- * `profile-setup` project (which every other project depends on) BEFORE any spec
- * imports this file, so tryGetProfile() is a plain synchronous file read here and
- * the ~11 specs that already `import { SERVICE_CODE, TENANT_LABEL, ... }` became
- * deployment-correct without being touched. The env var stays at the top of the
- * chain so an operator can still pin anything; the legacy default stays at the
- * bottom so a bare `npx playwright test --no-deps`, a lint pass, or any other
- * entry point that never ran profile-setup degrades instead of throwing.
- *
- * Those legacy defaults are the reason the middle link matters: nearly all of
- * them are bomet/nairobi literals that are silently WRONG on any other
- * deployment (TENANT_LABEL='Bomet County' does not exist in mz.maputo's city
- * picker, so the login just spins for 120s and times out). They are kept only as
- * the no-profile floor — do not read them as "the default deployment".
+ * Tenancy is root-only (#2398 decision 2): DIGIT_TENANT is the root tenant the
+ * workspace slug resolves to, and every persona, citizen and complaint lives
+ * there. ROOT_TENANT survives only as an alias of it.
  *
  * WHY THIS FILE PARSES THE PROFILE ITSELF INSTEAD OF CALLING profile.ts's
- * tryGetProfile(): doing the latter deadlocks on an import cycle. profile.ts
- * imports probes.ts/auth.ts/personas.ts, and all of those import BASE_URL from
- * here — so when the entry point is profile.ts (which it is for profile-setup:
- * profile.setup.ts -> profile.ts -> probes.ts -> env.ts), env.ts runs while
- * profile.ts's own module body has not started. Its `let cached` and
- * `const PROFILE_PATH` are still in the temporal dead zone, and the call dies
- * with "Cannot access 'cached' before initialization". Reading the file here is
- * a dozen lines and makes env.ts a leaf module that imports nothing from the
- * suite, which removes the cycle rather than balancing on top of it. The
- * `import type` below is erased at compile time and adds no runtime edge.
- *
- * The cycle invariant profile.ts and personas.ts document still holds and still
- * matters: NEVER read an env.ts binding at MODULE SCOPE in any module env.ts's
- * importers pull in. The CJS emit resolves bindings lazily at the use site, so a
- * top-level `const X = TENANT` in probes/auth/personas would silently be
- * `undefined`.
+ * tryGetProfile(): profile.ts imports probes.ts/auth.ts/personas.ts, which all
+ * import from here, so calling into profile.ts would hit its bindings in the
+ * temporal dead zone. env.ts stays a leaf module; the `import type` below is
+ * erased at compile time. The same cycle is why NO module env.ts's importers
+ * pull in may read an env.ts binding at MODULE SCOPE: the CJS emit resolves
+ * bindings lazily at the use site, so a top-level `const X = TENANT` in
+ * probes/auth/personas would silently be `undefined`.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { DeploymentProfile } from './profile';
 
 /**
- * Read once, at module scope, so every export below stays a plain `const` and no
- * spec has to change shape to get a deployment-correct value. Null on the
- * degraded entry points described above.
- *
- * Mirrors profile.ts's tryGetProfile() and must stay in step with it: the path
- * and the accepted schemaVersion are duplicated here because importing either
- * constant would re-create the cycle this read exists to avoid. A profile from a
- * future schema is treated as no profile at all — the field paths below would
- * read `undefined` off it and quietly answer with bomet literals, which is the
- * exact failure this whole chain exists to prevent.
+ * Read once, at module scope, so every export below stays a plain `const`.
+ * Mirrors profile.ts's tryGetProfile() (path and schemaVersion are duplicated to
+ * avoid the cycle above). A profile from another schema counts as no profile.
  */
 const PROFILE: DeploymentProfile | null = (() => {
   const path = resolve('deployment-profile.json');
@@ -73,163 +54,159 @@ function splitList(raw: string): string[] {
   return raw.split(',').map((s) => s.trim()).filter(Boolean);
 }
 
+const env = (name: string): string => process.env[name]?.trim() || '';
+
 /**
- * Deployment target. Defaults to a local stack — real runs point the suite at
- * a deployment by exporting BASE_URL/DIGIT_TENANT (or sourcing a
- * deploy/<tenant>.env, see runner/run-cycle.sh). The previous default hardcoded
- * a now-dead demo host (naipepea) paired with personas from a *different* dead
- * deployment (bomet), so a bare `npx playwright test` authenticated against
- * neither. Keep the default coherent: localhost + ADMIN, which exists on every
- * freshly-bootstrapped deployment.
- *
- * BASE_URL stays env-only on purpose: it is the input to discovery, not an
- * output of it, and taking it from the profile would let a stale profile
- * silently redirect a run at the wrong host.
+ * Deployment target. BASE_URL stays env-only on purpose: it is the input to
+ * discovery, and taking it from the profile would let a stale profile silently
+ * redirect a run at the wrong host.
  */
-export const BASE_URL = process.env.BASE_URL || 'http://localhost';
-export const TENANT = process.env.DIGIT_TENANT || PROFILE?.tenant.city || 'ke.nairobi';
-// TENANT_CODE / ADMIN_USER / ADMIN_PASSWORD are the names some deploy/*.env files
-// (pg, maputo-local) set; accepting them here keeps one admin identity for every caller.
-export const ROOT_TENANT =
-  process.env.ROOT_TENANT ||
-  process.env.TENANT_CODE ||
-  PROFILE?.tenant.root ||
-  (TENANT.includes('.') ? TENANT.split('.')[0] : TENANT);
-export const ADMIN_USER = process.env.DIGIT_USERNAME || process.env.ADMIN_USER || 'ADMIN';
-export const ADMIN_PASS = process.env.DIGIT_PASSWORD || process.env.ADMIN_PASSWORD || 'eGov@123';
-export const FIXED_OTP = process.env.FIXED_OTP || '123456';
+export const BASE_URL = env('BASE_URL');
+/** The workspace's ROOT tenant. The slug (IDENTITY_TEST_TENANT_SLUG) must resolve to it. */
+export const TENANT = env('DIGIT_TENANT');
+/** @deprecated Root tenants only: an alias of TENANT. */
+export const ROOT_TENANT = TENANT;
+/** Self-signed boxes (local k3s, a bare IP) opt in; secure by default. */
+export const IGNORE_HTTPS_ERRORS = process.env.IGNORE_HTTPS_ERRORS === '1';
+
+// ── Personas ────────────────────────────────────────────────────────────────
+
+/**
+ * Staff personas sign in through Keycloak with an email login and their own
+ * Keycloak password, and are linked to a DIGIT employee at TENANT. The login
+ * goes in the env profile, the password in the secrets file; the DIGIT
+ * identity comes back from `_select`. scripts/seed-personas.ts creates and
+ * links all six on a workspace and prints the lines to set.
+ */
+export const PERSONA_ENV = {
+  admin: 'ADMIN',
+  gro: 'GRO',
+  lme: 'LME',
+  wardCsr: 'WARD_CSR',
+  inboxViewer: 'INBOX_VIEWER',
+  supervisor: 'SUPERVISOR',
+} as const;
+export type PersonaRole = keyof typeof PERSONA_ENV;
+
+export interface PersonaLogin {
+  role: PersonaRole;
+  /** Keycloak login (email). */
+  login: string;
+  /** Keycloak password. Never logged, never written to disk. */
+  password: string;
+  /** Provenance, e.g. 'env:GRO_LOGIN'. */
+  source: string;
+}
+
+/** The configured login for `role`, or null when its env pair is not set. */
+export function personaLogin(role: PersonaRole): PersonaLogin | null {
+  const prefix = PERSONA_ENV[role];
+  const login = env(`${prefix}_LOGIN`);
+  const password = process.env[`${prefix}_PASSWORD`] || '';
+  return login && password ? { role, login, password, source: `env:${prefix}_LOGIN` } : null;
+}
+
+/** Workspace admin: ACCOUNT_ADMIN plus the Configurator admin roles. */
+export const ADMIN_USER = env('ADMIN_LOGIN');
+export const ADMIN_PASS = process.env.ADMIN_PASSWORD || '';
+/** GRO with a department: drives ASSIGN. */
+export const GRO_USER = env('GRO_LOGIN');
+export const GRO_PASS = process.env.GRO_PASSWORD || '';
+/** The general employee persona: SUPERVISOR (GRO + PGR_LME, jurisdiction ALL). */
+export const EMPLOYEE_USER = env('SUPERVISOR_LOGIN');
+export const EMPLOYEE_PASS = process.env.SUPERVISOR_PASSWORD || '';
+/** Ward-scoped CSR for the boundary jurisdiction-filter regression. */
+export const WARD_CSR_USER = env('WARD_CSR_LOGIN');
+export const WARD_CSR_PASS = process.env.WARD_CSR_PASSWORD || '';
+
+/**
+ * Citizen OTP for the fixed-code test box. IDENTITY_TEST_OTP_CODE is the name
+ * the identity helpers read; FIXED_OTP is accepted for older profiles. Lives in
+ * the secrets file: on a fixed-OTP box it signs in as any phone number.
+ */
+export const FIXED_OTP = env('IDENTITY_TEST_OTP_CODE') || env('FIXED_OTP');
+
+// ── Fail fast ───────────────────────────────────────────────────────────────
+
+const REQUIRED = ['BASE_URL', 'DIGIT_TENANT', 'IDENTITY_TEST_TENANT_SLUG', 'ADMIN_LOGIN', 'ADMIN_PASSWORD'] as const;
+
+/** Names the pre-#2398 profiles used, and what replaced them. */
+const RETIRED: Record<string, string> = {
+  DIGIT_USERNAME: 'ADMIN_LOGIN',
+  DIGIT_PASSWORD: 'ADMIN_PASSWORD (the Keycloak password, in the secrets file)',
+  ADMIN_USER: 'ADMIN_LOGIN',
+  GRO_USER: 'GRO_LOGIN',
+  EMPLOYEE_USER: 'SUPERVISOR_LOGIN',
+  EMPLOYEE_PASSWORD: 'SUPERVISOR_PASSWORD',
+  WARD_CSR_USER: 'WARD_CSR_LOGIN',
+  CITY_ADMIN_USER: 'ADMIN_LOGIN',
+  ROOT_TENANT: 'DIGIT_TENANT (root tenants only)',
+  TENANT_CODE: 'DIGIT_TENANT',
+  CITY_TENANT: 'DIGIT_TENANT (root tenants only)',
+  EMPLOYEE_TENANT: 'DIGIT_TENANT (root tenants only)',
+  PERSONA_CANDIDATES: '<ROLE>_LOGIN + <ROLE>_PASSWORD per persona',
+  PERSONA_PASSWORD_GUESSES: 'nothing: persona passwords are never guessed',
+};
+
+/** Everything wrong with this process's env profile, as one line each. */
+export function envProblems(): string[] {
+  const out: string[] = REQUIRED.filter((k) => !env(k)).map((k) => `${k} is not set`);
+  if (TENANT.includes('.')) out.push(`DIGIT_TENANT=${TENANT} is a city tenant; the suite targets root tenants only`);
+  for (const [name, now] of Object.entries(RETIRED)) {
+    if (process.env[name] !== undefined) out.push(`${name} is retired; set ${now}`);
+  }
+  return out;
+}
+
+/** Throw one message naming every problem. Called first by profile-setup and the seed script. */
+export function assertEnv(): void {
+  const problems = envProblems();
+  if (problems.length) {
+    throw new Error(
+      `The env profile is incomplete:\n  - ${problems.join('\n  - ')}\n` +
+        'Source deploy/<env>.env and the box secrets file (RUNNER_SECRETS_ENV); see deploy/README.md.',
+    );
+  }
+}
+
 /**
  * The complaint type + boundary leaf every seeded complaint is filed against.
- * The profile does not just echo a config value here: pgr.seedServiceCode is the
- * one service whose department a real employee on this deployment actually holds
- * (see the persona-triple comment in personas.ts), and pgr.seedLocalityCode is a
- * leaf proven to exist in the live boundary tree. Guessing either wrong fails the
- * create/assign with DEPARTMENT_NOT_FOUND or a silently dropped record, so the
- * nairobi literals below are a floor, never a plan.
+ * Discovered by profile-setup (pgr.seedServiceCode is the one service whose
+ * department a real employee holds; pgr.seedLocalityCode is a leaf proven to
+ * exist). An env value pins it.
  */
-export const SERVICE_CODE = process.env.SERVICE_CODE || PROFILE?.pgr.seedServiceCode || 'IllegalConstruction';
-export const LOCALITY_CODE = process.env.LOCALITY_CODE || PROFILE?.pgr.seedLocalityCode || 'NAIROBI_CITY_VIWANDANI';
-export const DEFAULT_PASSWORD = 'eGov@123';
+export const SERVICE_CODE = env('SERVICE_CODE') || PROFILE?.pgr.seedServiceCode || '';
+export const LOCALITY_CODE = env('LOCALITY_CODE') || PROFILE?.pgr.seedLocalityCode || '';
 
 /**
- * Non-ADMIN persona usernames + boundary codes for the employee / lifecycle
- * specs. Defaults fall back to ADMIN because the bootstrap now grants ADMIN the
- * full PGR bundle (GRO + PGR_LME roles — mdms-tenant.ts), so ADMIN can drive
- * ASSIGN/RESOLVE on a stock deployment. Override with real persona users on
- * tenants that enforce role-separation.
+ * The leaf ward the ward CSR is scoped to, and the sibling wards that MUST NOT
+ * appear in its boundary picker (comma-separated). Empty unless pinned: a spec
+ * reading these must handle empty rather than assume a ward list exists.
  */
-
-/** PGR_LME / GRO employee for digit-ui employee flows (escalate, inbox). */
-export const EMPLOYEE_USER = process.env.EMPLOYEE_USER || ADMIN_USER;
-export const EMPLOYEE_PASS = process.env.EMPLOYEE_PASSWORD || ADMIN_PASS;
-
-/**
- * Tenant the employee personas authenticate against. ADMIN lives at
- * ROOT_TENANT, but a real onboarded employee (e.g. EMP001 on mz.maputo)
- * lives at the CITY tenant and 400s ("Invalid login credentials") when the
- * OAuth call targets the root. Defaults to ROOT_TENANT — correct for the
- * stock case where the employee persona *is* ADMIN. The portable login
- * helpers (employee-ui.ts getPrincipal) probe CITY→ROOT regardless; this var
- * is the explicit override for specs that don't go through that helper.
- *
- * The profile supplies the hint in between: it already logged the employee
- * persona in and recorded which tenant accepted it, so prefer that measured
- * answer over guessing the city. ROOT_TENANT remains the floor — with no profile
- * the persona *is* ADMIN, and ADMIN lives at the root.
- */
-export const EMPLOYEE_TENANT =
-  process.env.EMPLOYEE_TENANT || PROFILE?.personas.resolved.employee?.tenant || PROFILE?.tenant.city || ROOT_TENANT;
-
-/**
- * GRO employee — the role the PGR workflow requires for the ASSIGN action
- * (PENDINGFORASSIGNMENT → PENDINGATLME). The bootstrap grants ADMIN the GRO
- * role, so ADMIN is a valid default; override on role-strict tenants.
- */
-export const GRO_USER = process.env.GRO_USER || ADMIN_USER;
-export const GRO_PASS = process.env.GRO_PASSWORD || ADMIN_PASS;
-
-/** Ward-scoped CSR for boundary jurisdiction-filter regression. */
-export const WARD_CSR_USER = process.env.WARD_CSR_USER || 'BOMET_CSR_CHESOEN_1780282462';
-export const WARD_CSR_PASS = process.env.WARD_CSR_PASSWORD || DEFAULT_PASSWORD;
-
-/**
- * The leaf ward this CSR is scoped to, and the sibling / cross-sub-county wards
- * that MUST NOT appear in its boundary picker (comma-separated).
- *
- * Both used to default to bomet ward codes. That made the jurisdiction spec pass
- * vacuously everywhere else: on a deployment that has never heard of
- * BOMET_BOMET_CENTRAL_MUTARAKWA, "no forbidden ward is visible" is true for the
- * boring reason, and the assertion measured nothing. Empty is the honest floor —
- * Stage 3 derives the real siblings from the profile's boundary tree, which is
- * the only place that knows them. Until then a spec reading these must handle
- * empty rather than assume a ward list exists.
- */
-export const WARD_CSR_BOUNDARY = process.env.WARD_CSR_BOUNDARY || '';
-
+export const WARD_CSR_BOUNDARY = env('WARD_CSR_BOUNDARY');
 export const FORBIDDEN_WARDS = splitList(process.env.FORBIDDEN_WARDS || '');
 
-/**
- * Tenant display label on the digit-ui login City combobox.
- *
- * The single most deployment-specific string in this file: the combobox renders
- * the localized TENANT_TENANTS_<TENANT> value, and picking a city that isn't in
- * the list is not a fast error — the login just waits, then times out at 120s. So
- * the profile discovers the label from localization rather than trusting the
- * chain's floor, and profile-setup warns when it had to fall back
- * (labelSource !== 'localization').
- *
- * 'Bomet County' survives underneath only because it is what a no-profile run has
- * always done. It is wrong on every deployment except bomet.
- */
-export const TENANT_LABEL = process.env.TENANT_LABEL || PROFILE?.tenant.label || 'Bomet County';
+/** The tenant's localized display name (TENANT_TENANTS_<TENANT>), discovered by profile-setup. */
+export const TENANT_LABEL = env('TENANT_LABEL') || PROFILE?.tenant.label || '';
 
-/** Known complaint that is assigned to EMPLOYEE_USER on the deployment. */
-export const ASSIGNED_COMPLAINT_ID = process.env.ASSIGNED_COMPLAINT_ID || 'PG-PGR-2026-04-13-000848';
-
-/**
- * A real CITY tenant code (not the state root) known to exist in the tenants
- * list — used by the configurator tenants search test. naipepea has
- * ke.nairobi; bomet has ke.bomet.
- *
- * On a flat deployment (bomet's `ke`) the profile reports city === root, so this
- * degenerates to the root and the search test asserts against the only tenant
- * there is — correct, and better than searching for a ke.nairobi nobody seeded.
- */
-export const CITY_TENANT = process.env.CITY_TENANT || PROFILE?.tenant.city || 'ke.nairobi';
-
-// ── Keycloak SSO config ────────────────────────────────────────────────────
-// Read by tests/keycloak/*.spec.ts. Each spec self-skips when the realm's
-// OIDC discovery endpoint isn't reachable (deployments without KC enabled).
-export const KC_REALM = process.env.KC_REALM || ROOT_TENANT;
-export const KC_CLIENT_ID = process.env.KC_CLIENT_ID || 'digit-ui';
-export const KC_BASE = process.env.KC_BASE || `${BASE_URL}/auth`;
-export const TOKEN_EXCHANGE_BASE = process.env.TOKEN_EXCHANGE_BASE || `${BASE_URL}/token-exchange`;
-export const CITIZEN_BASENAME = process.env.CITIZEN_BASENAME || '/citizen';
+// ── Keycloak ────────────────────────────────────────────────────────────────
+// Read by tests/keycloak/*.spec.ts. Staff and citizens share one realm.
+export const KC_REALM = env('KC_REALM') || 'digit';
+export const KC_CLIENT_ID = env('KC_CLIENT_ID') || 'digit-ui';
+export const KC_BASE = env('KC_BASE') || `${BASE_URL}/auth`;
+export const CITIZEN_BASENAME = env('CITIZEN_BASENAME') || '/citizen';
 
 // ── Citizen-spec deployment parameters ──────────────────────────────────────
-// Additive vars owned by the citizen suite. Each defaults to a stock value so a
-// bare run stays coherent; a deployment supplies its own via .env. No
-// location-specific literal should live inside a citizen spec — it reads here.
 
 /**
- * Fallback PGR complaint-ID prefix (segment before `-PGR-`). The suite
- * discovers the real prefix live from egov-idgen at setup time (pgr-idgen.ts)
- * and persists it on the provisioned citizen; this only load-bears when that
- * discovery didn't run. The profile asks egov-idgen the same question once per
- * run, so the 'NCCG' (Nairobi) floor is now reached only with no profile at all.
+ * PGR complaint-ID prefix (the segment before `-PGR-`), discovered from
+ * egov-idgen by profile-setup. Empty when neither pinned nor discovered.
  */
-export const PGR_ID_PREFIX = process.env.PGR_ID_PREFIX || PROFILE?.pgr.idPrefix || 'NCCG';
+export const PGR_ID_PREFIX = env('PGR_ID_PREFIX') || PROFILE?.pgr.idPrefix || '';
 
 /**
- * Localization locales seeded on the deployment, comma-separated. The timeline
- * localization-completeness spec unions message codes across these. mz.maputo
- * seeds only en_IN (pt_MZ needs a separate upload); Kenya seeded en_IN + sw_KE.
- *
- * The profile lists only locales that are actually populated, not merely
- * declared: every deployment inherits 205-row stub locales from the pg seed, and
- * unioning message codes across a stub reports a mistranslation that is really
- * just an empty table. An empty profile list therefore means "discovery found
- * nothing usable" and falls through to en_IN, the locale the SPA boots in.
+ * Localization locales seeded on the deployment, comma-separated. The profile
+ * lists only populated locales; en_IN is the locale the SPA boots in.
  */
 export const LOCALES = process.env.LOCALES
   ? splitList(process.env.LOCALES)
@@ -238,25 +215,19 @@ export const LOCALES = process.env.LOCALES
     : ['en_IN'];
 
 /**
- * Postal-code validation pattern + a known-valid sample for this deployment,
- * mirroring the app's globalConfigs CORE_POSTAL_CONFIGS.postalCodePattern.
- * Stock default is the 5-digit rule; mz.maputo runs '^[0-9]{4}(-[0-9]{2})?$'
- * with a '0101-03' sample. The profile reads the pattern out of the SPA's own
- * globalConfigs — the same source the form validates against — so the pure-regex
- * contract test compares the app to itself instead of to a country literal
- * someone typed into a .env. The sample is expanded from the pattern
- * deterministically (profile.ts sampleFromPattern), so it cannot drift from it.
+ * Postal-code validation pattern + a known-valid sample, as the SPA's own
+ * globalConfigs CORE_POSTAL_CONFIGS or MDMS FormValidations define it (read by
+ * profile-setup). The floor is the SPA's built-in 5-digit rule.
  */
-export const POSTAL_CODE_PATTERN = process.env.POSTAL_CODE_PATTERN || PROFILE?.postal.pattern || '^[0-9]{5}$';
-export const POSTAL_CODE_VALID = process.env.POSTAL_CODE_VALID || PROFILE?.postal.validSample || '00100';
+export const POSTAL_CODE_PATTERN = env('POSTAL_CODE_PATTERN') || PROFILE?.postal.pattern || '^[0-9]{5}$';
+export const POSTAL_CODE_VALID = env('POSTAL_CODE_VALID') || PROFILE?.postal.validSample || '00100';
 
 /**
  * Host substring used to match the deployment's own filestore/image URLs in
- * <img src> selectors — derived from BASE_URL so the attachment spec doesn't
- * hardcode dead demo hostnames. e.g. 'localhost' for the local stack.
+ * <img src> selectors — derived from BASE_URL.
  */
 export const BASE_HOST = (() => {
-  try { return new URL(BASE_URL).host; } catch { return 'localhost'; }
+  try { return new URL(BASE_URL).host; } catch { return ''; }
 })();
 
 /**

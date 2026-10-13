@@ -255,6 +255,8 @@ test('v1 run chip: pruned runs are plain text marked "report pruned"; latest and
   assert.equal(latest.stats, '2/3 pass ⚠');
   const legacy = v1.runChip(summary('r', { notRun: null }), 'x');
   assert.deepEqual([legacy.legacy, legacy.cls, legacy.stats], [true, 'run-chip legacy', '≈2/3 pass']);
+  const blocked = v1.runChip(summary('r', { passed: 0, failed: 0, skipped: 0, notRun: 3, blockedInSetup: 'profile.setup.ts › discover: Error' }), 'x');
+  assert.equal(blocked.stats, 'blocked in setup');
   assert.equal(v1.isLegacyCount({ notRun: 0 }), false);
   assert.equal(v1.isLegacyCount({}), true);
 });

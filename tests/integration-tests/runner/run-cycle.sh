@@ -9,7 +9,11 @@
 #   RUN_ID      run id the daemon minted (also the runs/<id>/ dir + log)
 #   REPO_DIR    vendored tests/integration-tests checkout
 #   WEBROOT     served dir (catalog.json/history.json/runs live here)
-#   TENANT_ENV  optional env file to source (BASE_URL/DIGIT_TENANT/LOCALITY_CODE/…)
+#   TENANT_ENV  optional env profile to source (deploy/<env>.env: BASE_URL,
+#               DIGIT_TENANT, the workspace slug, persona logins, …)
+#   RUNNER_SECRETS_ENV  optional box-local secrets file (persona passwords, the
+#               fixed OTP), sourced after TENANT_ENV. Never tracked; readable
+#               only by the runner. Set but missing fails the cycle.
 #   RUN_LIMIT   keep the full report (runs/<id>/: Playwright report, videos,
 #               traces, run.log) for this many runs (default 5), or for more
 #               while a run that still has its report was built with a larger
@@ -44,6 +48,7 @@ set -uo pipefail
 REPO_DIR="${REPO_DIR:?REPO_DIR required}"
 WEBROOT="${WEBROOT:?WEBROOT required}"
 TENANT_ENV="${TENANT_ENV:-}"
+SECRETS_ENV="${RUNNER_SECRETS_ENV:-}"
 RUN_LIMIT="${RUN_LIMIT:-5}"
 BRANCH="${BRANCH:-deployed}"
 LOCK="${RUN_LOCK:-$WEBROOT}"
@@ -104,6 +109,17 @@ if [[ -n "$TENANT_ENV" && -f "$TENANT_ENV" ]]; then
   echo "[run-cycle] sourcing $TENANT_ENV"
   set -a; # shellcheck disable=SC1090
   source "$TENANT_ENV"; set +a
+fi
+# Then the box-local secrets. Only the path is logged, never a value.
+if [[ -n "$SECRETS_ENV" ]]; then
+  if [[ ! -r "$SECRETS_ENV" ]]; then
+    echo "[run-cycle] RUNNER_SECRETS_ENV=$SECRETS_ENV is not a readable file — refusing to run without the persona passwords" >&2
+    phase "failed-secrets"
+    exit 9
+  fi
+  echo "[run-cycle] sourcing secrets from $SECRETS_ENV"
+  set +x; set -a; # shellcheck disable=SC1090
+  source "$SECRETS_ENV"; set +a
 fi
 
 git rev-parse --short HEAD > .git-sha 2>/dev/null || echo unknown > .git-sha

@@ -127,6 +127,15 @@ interface RunSummary {
    */
   cutShort?: string | null;
   /**
+   * The setup projects (tests/fixtures/*.setup.ts) that failed in this run,
+   * each as "<file> › <title>: <first error lines>"; null when none did. Every
+   * spec depends on them, so a failed setup leaves its dependants without a
+   * verdict and the counts read 0 passed / 0 failed / N not run: the
+   * dashboards show "blocked in setup" with this reason instead. Absent in
+   * summaries written before this field existed.
+   */
+  blockedInSetup?: string | null;
+  /**
    * Whether runs/<id>/ (Playwright report, videos, traces, run.log) still
    * exists after this build's prune: true for the newest RUN_LIMIT runs, false
    * for older ones, whose counts and per-test results stay but whose report is
@@ -546,6 +555,21 @@ function cutShortOf(report: PwReport): string | null {
   return runErrors(report).find(m => CUT_SHORT.some(re => re.test(m))) ?? null;
 }
 
+/** The failed setup projects of one report; see RunSummary.blockedInSetup. */
+function blockedInSetupOf(report: PwReport): string | null {
+  const blocked: string[] = [];
+  for (const { spec } of flattenSpecs(report)) {
+    if (!/\.setup\.ts$/.test(spec.file)) continue;
+    const t = (spec.tests || [])[0];
+    const r = t?.results?.[t.results.length - 1];
+    if (r?.status !== 'failed' && r?.status !== 'timedOut') continue;
+    const why = (r.error?.message || r.status).replace(/\x1b\[[0-9;]*m/g, '')
+      .split('\n').map(l => l.trim()).filter(Boolean).slice(0, 4).join(' ').slice(0, 400);
+    blocked.push(`${path.basename(spec.file)} › ${spec.title}: ${why}`);
+  }
+  return blocked.length ? blocked.join('; ') : null;
+}
+
 /** First line of each run-level error, colour codes stripped. */
 function runErrors(report: PwReport): string[] {
   return (report.errors || [])
@@ -792,6 +816,7 @@ function buildCatalog(opts: BuildOptions): { catalog: Catalog; nextHistory: Hist
     }))),
     cutShort: cutShortOf(report)
       ?? (plannedNothing && tests.some(t => !t.excluded) ? firstRunError(report) ?? 'Playwright planned no tests' : null),
+    blockedInSetup: blockedInSetupOf(report),
     hasReport: true,
     runLimit: requestedLimit,
     sha: opts.sha,
@@ -869,7 +894,7 @@ function main(): void {
     console.error('usage: build-catalog.ts <runId>');
     process.exit(1);
   }
-  const baseUrl = process.env.BASE_URL || 'https://naipepea.digit.org';
+  const baseUrl = process.env.BASE_URL || '';
   const branch = process.env.BRANCH || 'main';
   const sha = process.env.GIT_SHA || '';
   const reportPath = process.env.REPORT_JSON || 'report.json';
@@ -897,7 +922,7 @@ if (require.main === module) main();
 export {
   buildCatalog, collectFromAst, extractTags,
   // run accounting, exported for scripts/build-catalog.test.ts
-  indexReport, verdictOf, tally, countReport, recount, cutShortOf,
+  indexReport, verdictOf, tally, countReport, recount, cutShortOf, blockedInSetupOf,
   // retention, exported for scripts/build-catalog-retention.test.ts
   stringifyCatalog, limitFromEnv, DEFAULT_HISTORY_LIMIT, DEFAULT_REPORT_LIMIT,
 };

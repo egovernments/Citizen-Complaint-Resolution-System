@@ -230,6 +230,7 @@ function runLines(a, cfg) {
   lines.push(`Run:       ${run.id}  (${run.branch || '?'}@${run.sha || '?'})`);
   lines.push(`Result:    ${summaryLine(run)}`);
   if (run.cutShort) lines.push(`Cut short: ${run.cutShort}`);
+  if (run.blockedInSetup) lines.push(`Blocked in setup: ${run.blockedInSetup}`);
   if (prev) {
     lines.push(`Previous:  ${prev.id}  (${prev.branch || '?'}@${prev.sha || '?'})`);
     lines.push(`           ${summaryLine(prev)}`);

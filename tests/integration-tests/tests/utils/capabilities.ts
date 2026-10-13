@@ -31,7 +31,7 @@ export const CAPABILITY_KEYS = [
   'personas.gro-with-department',
   'personas.ward-scoped-csr',
   'locales.multi',
-  'tenant.citySubTenant',
+  'identity.citizen.google',
 ] as const;
 
 export type CapabilityKey = (typeof CAPABILITY_KEYS)[number];
@@ -163,8 +163,8 @@ export function isPresent(key: CapabilityKey, profile?: DeploymentProfile): bool
       return p.personas.resolved['ward-scoped-csr'] != null;
     case 'locales.multi':
       return p.locales.length > 1;
-    case 'tenant.citySubTenant':
-      return !p.tenant.flat;
+    case 'identity.citizen.google':
+      return (p.identity?.citizenMethods ?? []).includes('google');
   }
 }
 
@@ -199,8 +199,8 @@ function evidence(key: CapabilityKey, p: DeploymentProfile): string {
     }
     case 'locales.multi':
       return `seeded locales: ${p.locales.join(', ') || 'none'}`;
-    case 'tenant.citySubTenant':
-      return p.tenant.flat ? `flat tenant — city and root are both '${p.tenant.root}'` : `city ${p.tenant.city} under root ${p.tenant.root}`;
+    case 'identity.citizen.google':
+      return `citizen sign-in methods: ${p.identity?.citizenMethods?.join(', ') || 'none offered (or no identity stack)'}`;
   }
 }
 

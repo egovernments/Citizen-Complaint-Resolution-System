@@ -1,9 +1,23 @@
 import { test as setup, expect } from '@playwright/test';
 import path from 'node:path';
-import { BASE_URL } from '../utils/env';
+import { BASE_URL, TENANT } from '../utils/env';
 import { CONFIGURATOR_BASE, loginConfigurator } from '../utils/configurator-auth';
 
 const AUTH_FILE = path.resolve('auth.json');
+
+/**
+ * The Configurator keeps an admin in /onboarding/... until the workspace's
+ * setup steps are DONE (pgr-services onboarding Workspace), and only then
+ * serves /manage. Every admin spec needs /manage, so say which gate held.
+ */
+function assertPastWorkspaceGate(url: string): void {
+  if (!url.includes('/configurator/onboarding/')) return;
+  throw new Error(
+    `Workspace gate: the Configurator sent the admin to ${new URL(url).pathname} instead of /configurator/manage. ` +
+      `Workspace setup for ${TENANT} is not DONE (pgr-services onboarding Workspace _search). Finish its onboarding ` +
+      'steps in the Configurator, or target a workspace created through Configurator signup (#2398).',
+  );
+}
 
 // Save both the hosted BFF session cookie and selected DIGIT context.
 setup('authenticate', async ({ page, baseURL }) => {
@@ -21,10 +35,13 @@ setup('authenticate', async ({ page, baseURL }) => {
   await loginConfigurator(page);
 
   // Logged in, positively: the management layout rendered...
-  await expect(page).toHaveURL(/\/configurator\/manage/, { timeout: 30_000 });
+  await expect(page).toHaveURL(/\/configurator\/(manage|onboarding\/)/, { timeout: 30_000 });
+  assertPastWorkspaceGate(page.url());
   await expect(page.locator('main#main-content')).toBeVisible({ timeout: 30_000 });
-  // ...the session survived the app's first data requests (a 401 there signs it out)...
+  // ...the session survived the app's first data requests (a 401 there signs it
+  // out; the workspace sync can still move it to onboarding)...
   await page.waitForLoadState('networkidle');
+  assertPastWorkspaceGate(page.url());
   await expect(page).toHaveURL(/\/configurator\/manage/);
   // ...and DIGIT accepts the stored token (401 for a dead one). Its value is never printed.
   const session = await page.evaluate(

@@ -106,7 +106,9 @@
       latest,
       cls: `run-chip${latest ? ' latest' : ''}${legacy ? ' legacy' : ''}${pruned ? ' pruned' : ''}`,
       label: `${latest ? '★ ' : ''}${String(run.id).split('_').slice(0, 2).join(' ')}`,
-      stats: `${legacy ? '≈' : ''}${run.passed}/${run.total} pass${run.cutShort ? ' ⚠' : ''}${pruned ? ' · report pruned' : ''}`,
+      stats: run.blockedInSetup && !(run.passed + run.failed + run.skipped)
+        ? `blocked in setup${pruned ? ' · report pruned' : ''}`
+        : `${legacy ? '≈' : ''}${run.passed}/${run.total} pass${run.cutShort ? ' ⚠' : ''}${pruned ? ' · report pruned' : ''}`,
     };
   }
 

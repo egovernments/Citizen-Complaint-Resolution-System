@@ -92,6 +92,8 @@ export interface RunSummary {
    * null = it ran to the end, except on a legacy count, where it is unknown.
    */
   cutShort?: string | null;
+  /** The failed setup projects, when one failed: its dependants never ran. */
+  blockedInSetup?: string | null;
   /**
    * False once runs/<id>/ (Playwright report, videos, traces, run.log) was
    * pruned: only the newest RUN_LIMIT runs keep one. The run's counts and

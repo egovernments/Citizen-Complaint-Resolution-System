@@ -15,7 +15,7 @@
  * UI.
  */
 import { getDigitToken } from './auth';
-import { BASE_URL, ROOT_TENANT } from './env';
+import { BASE_URL, TENANT, ADMIN_USER, ADMIN_PASS } from './env';
 
 export interface MobileRule {
   prefix?: string;
@@ -32,22 +32,6 @@ const FALLBACK: MobileRule = {
   maxLength: 10,
   errorMessage: 'Please enter a valid 10-digit mobile number',
 };
-
-const ADMIN_USER = process.env.ADMIN_USER || 'ADMIN';
-const ADMIN_PASS = process.env.ADMIN_PASSWORD || 'eGov@123';
-
-/**
- * Root tenant, read at the USE SITE rather than module scope.
- *
- * Two reasons it can't be a module-scope `const ROOT = ROOT_TENANT`:
- * profile.ts imports this module, so at import time env.ts's bindings are still
- * in the CJS temporal dead zone and would capture `undefined`; and the previous
- * `process.env.ROOT_TENANT || 'ke'` bypassed env.ts's profile fallback entirely,
- * so an unpinned Mozambique run authenticated against `ke` and 400'd.
- */
-function rootTenant(): string {
-  return ROOT_TENANT;
-}
 
 /**
  * Derive min/max digit counts from a mobile-number regex.
@@ -106,7 +90,9 @@ export function derivedStartingDigits(pattern: string): string[] | null {
  */
 export async function getMobileValidationRule(tenant: string): Promise<MobileRule> {
   try {
-    const token = await getDigitToken({ tenant: rootTenant(), username: ADMIN_USER, password: ADMIN_PASS });
+    // env.ts bindings are read here, at the use site: profile.ts imports this
+    // module, so at import time they are still in the CJS temporal dead zone.
+    const token = await getDigitToken({ tenant: TENANT, username: ADMIN_USER, password: ADMIN_PASS });
     const ri = {
       apiId: 'Rainmaker', ver: '1.0', ts: Date.now(),
       msgId: `${Date.now()}|en_IN`, authToken: token.access_token,

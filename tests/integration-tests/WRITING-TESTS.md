@@ -66,19 +66,19 @@ skip, not fail).
 
 | # | Data | Service / MDMS | Missing → | Guard |
 |---|------|----------------|-----------|-------|
-| 1 | Tenant hierarchy: root + city (e.g. `mz` / `mz.maputo`) | tenant-management | can't resolve TENANT | hard-fail |
-| 2 | City display label `TENANT_TENANTS_<CITY>` in `en_IN` | localization | login combobox spins → 120s timeout | warn (falls back to guess) |
+| 1 | One root workspace, onboarding DONE, whose slug resolves to `DIGIT_TENANT` | identity-bff tenant-contexts, pgr onboarding | profile-setup / auth.setup stop, naming it | hard-fail |
+| 2 | Six personas linked to Keycloak logins (`scripts/seed-personas.ts`) | HRMS + Keycloak + BFF bindings | persona unresolved, named by its env var | hard-fail (admin), else per expectations |
 | 3 | Boundary hierarchy, ≥2 levels, ≥1 leaf node | boundary-service + MDMS boundary | no complaint can be filed | **hard-fail** |
-| 4 | PGR `BusinessService` **at the city tenant**, ≥1 action | egov-workflow-v2 | no workflow to drive | **hard-fail** |
-| 5 | Complaint types (`RAINMAKER-PGR.ServiceDefs` / `ComplaintHierarchy`) at city | MDMS v2 | nothing to file | **hard-fail** |
+| 4 | PGR `BusinessService` at the root tenant, ≥1 action | egov-workflow-v2 | no workflow to drive | **hard-fail** |
+| 5 | Complaint types (`RAINMAKER-PGR.ServiceDefs` / `ComplaintHierarchy`) at the root tenant | MDMS v2 | nothing to file | **hard-fail** |
 | 6 | An **employee persona** the seed plan can use: a GRO actor + a PGR_LME assignee whose HRMS department matches a complaint type's department | egov-hrms | ASSIGN 400s `DEPARTMENT_NOT_FOUND`; setup can't seed | **hard-fail** (employee persona), else lifecycle self-skips |
 | 6b | **Escalation suite only:** ≥2 *more* employees in the seed complaint-type's department (≥3 total incl. the assignee), to build the 2-level `reportingTo` chain | egov-hrms | `pgr-escalation` tests 3–12 self-skip | self-skip |
 | 7 | `MobileNumberValidation` regex | common-masters MDMS | phone gen falls back to `7`-lead (Kenya) | degrades |
 | 8 | Postal config `CORE_POSTAL_CONFIGS.postalCodePattern` in SPA globalConfigs | globalConfigs.js | falls back to 5-digit rule | degrades |
-| 9 | PGR id prefix (segment before `-PGR-`) | egov-idgen | falls back to `NCCG` | degrades |
+| 9 | PGR id prefix (segment before `-PGR-`) | egov-idgen | empty prefix | degrades |
 | 10 | Localization messages for `en_IN` (+ any locale under test), incl. workflow action labels (ESCALATE, …) | localization | label assertions skip/fail | per-spec |
 | 11 | `RejectionReasons`, `Department`, `Designation` masters | MDMS v2 | admin/HRMS specs skip | per-spec |
-| 12 | Citizen self-registration + fixed OTP `123456` | user-service (+ OTP disabled/fixed) | citizen-setup fails | hard-fail (citizen specs) |
+| 12 | Citizen phone-OTP sign-in through the BFF + a fixed OTP (`IDENTITY_TEST_OTP_CODE`) | identity-bff | citizen-setup fails | hard-fail (citizen specs) |
 | 13 | **Optional:** Keycloak realm + OIDC discovery | keycloak | `tests/keycloak/*` self-skip | self-skip |
 
 A deployment's onboarding (XLSX + `deploy.sh`) may not seed all of these — close the
@@ -89,7 +89,7 @@ gaps by hand on the test tenant.
 Every deployment-shaped value resolves through one chain:
 
 ```
-explicit env var  →  deployment-profile.json  →  legacy hardcoded default
+explicit env var (the box's env profile)  →  deployment-profile.json  →  nothing
 ```
 
 Do **not** hardcode: tenant (`ke`, `mz.maputo`), phone prefix (`+254`), a complaint
@@ -98,7 +98,7 @@ id prefix (`NCCG`), a tenant label ("Bomet County"), a specific SRID, a username
 (`EMP001`). Instead, import from `utils/env.ts`:
 
 ```ts
-import { TENANT, ROOT_TENANT, SERVICE_CODE, LOCALITY_CODE, TENANT_LABEL,
+import { TENANT, SERVICE_CODE, LOCALITY_CODE, TENANT_LABEL,
          POSTAL_CODE_PATTERN, LOCALES, PGR_ID_PREFIX, generateCitizenPhone } from '../utils/env';
 ```
 
@@ -166,9 +166,9 @@ configuration live rather than assuming one deployment's behaviour:
 - **Locate custom selects/filters by role + name**, e.g.
   `getByRole('combobox', { name: /^Status$/i })` — `getByLabel` misses controls that
   render without a `<label>` association.
-- **Two-level tenants:** a complaint's boundary, assignee, and workflow live at the
-  **city** tenant (`mz.maputo`), while the citizen lives at the **root** (`mz`). File
-  and validate against the correct one.
+- **Root tenants only (#2398):** the citizen, the complaint, its boundary, assignee
+  and workflow all live at `TENANT`. City tenants are out of scope; don't add
+  city/root fallbacks.
 - **HRMS `employees/_search` needs `offset=0`** (it 500s without it); its
   `roles=`/`codes=` filters are unreliable — search then filter in code.
 - **`@local-only`-tagged specs** are excluded unless `LOCAL_STACK=1`.

@@ -18,7 +18,6 @@ import { resolvePersona, resolveSeedPlan } from '../utils/personas';
 import {
   BASE_URL, TENANT, ROOT_TENANT,
   ADMIN_USER, ADMIN_PASS, FIXED_OTP,
-  DEFAULT_PASSWORD,
   GRO_USER, GRO_PASS, EMPLOYEE_USER, EMPLOYEE_PASS,
   SERVICE_CODE, LOCALITY_CODE,
   generateCitizenPhone,

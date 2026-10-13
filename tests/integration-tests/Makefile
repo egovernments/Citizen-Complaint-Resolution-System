@@ -1,18 +1,21 @@
 # Test catalog dashboard — runner targets
 #
 # Usage:
-#   make test-and-publish              # run main, publish to Nairobi
-#   BRANCH=feature/foo make test-and-publish
+#   make test-and-publish ENV_PROFILE=deploy/naipepea.env RUNNER_SECRETS_ENV=/etc/digit-tests/secrets.env HOST_SSH=<box>
+#   BRANCH=feature/foo make test-and-publish …
 #   make catalog-only                  # rebuild catalog from current report.json without re-running
 #   make publish-only                  # publish current artifacts without re-running
+#
+# Nothing here names a box. The run reads ENV_PROFILE (tracked, deploy/<env>.env)
+# and RUNNER_SECRETS_ENV (box-local persona passwords + fixed OTP), the same two
+# files runner/run-cycle.sh sources; see deploy/README.md.
 
 SHELL := /usr/bin/env bash
 
 BRANCH ?= main
-BASE_URL ?= https://naipepea.digit.org
-DIGIT_TENANT ?= ke.nairobi
-LOCALITY_CODE ?= NAIROBI_CITY_VIWANDANI
-HOST_SSH ?= egov-nairobi
+ENV_PROFILE ?=
+RUNNER_SECRETS_ENV ?=
+HOST_SSH ?=
 HOST_DIR ?= /var/www/tests
 # Runs whose full report (runs/<id>/) stays on the host; build-catalog and
 # publish.sh must agree on it. Results are kept for 30 runs regardless.
@@ -52,8 +55,8 @@ fetch-history:
 
 run:
 	@echo "===== run (RUN_ID=$(RUN_ID), BRANCH=$(BRANCH)) ====="
-	-@timeout 60m env BASE_URL=$(BASE_URL) DIGIT_TENANT=$(DIGIT_TENANT) LOCALITY_CODE=$(LOCALITY_CODE) \
-		npx playwright test || echo "Playwright exited non-zero (some tests failed); continuing to publish."
+	@set -a; for f in "$(ENV_PROFILE)" "$(RUNNER_SECRETS_ENV)"; do [[ -z "$$f" ]] || source "$$f" || exit 1; done; set +a; \
+		timeout 60m npx playwright test || echo "Playwright exited non-zero (some tests failed); continuing to publish."
 
 catalog:
 	@echo "===== catalog ====="
@@ -61,7 +64,8 @@ catalog:
 		echo "No report.json — Playwright may have crashed before producing one." >&2; \
 		exit 6; \
 	fi
-	@env BRANCH=$(BRANCH) BASE_URL=$(BASE_URL) GIT_SHA="$$(cat .git-sha 2>/dev/null || echo '')" RUN_LIMIT=$(RUN_LIMIT) \
+	@set -a; [[ -z "$(ENV_PROFILE)" ]] || source "$(ENV_PROFILE)"; set +a; \
+		env BRANCH=$(BRANCH) GIT_SHA="$$(cat .git-sha 2>/dev/null || echo '')" RUN_LIMIT=$(RUN_LIMIT) \
 		npx tsx scripts/build-catalog.ts "$(RUN_ID)"
 
 publish:
@@ -70,7 +74,8 @@ publish:
 
 catalog-only:
 	@LATEST_RUN_ID=$$(ls -t test-results 2>/dev/null | head -1 || date -u +ad-hoc-%H%M); \
-		env BRANCH=$(BRANCH) BASE_URL=$(BASE_URL) GIT_SHA="$$(git rev-parse --short HEAD)" RUN_LIMIT=$(RUN_LIMIT) \
+		set -a; [[ -z "$(ENV_PROFILE)" ]] || source "$(ENV_PROFILE)"; set +a; \
+		env BRANCH=$(BRANCH) GIT_SHA="$$(git rev-parse --short HEAD)" RUN_LIMIT=$(RUN_LIMIT) \
 		npx tsx scripts/build-catalog.ts "$$LATEST_RUN_ID"
 
 publish-only:

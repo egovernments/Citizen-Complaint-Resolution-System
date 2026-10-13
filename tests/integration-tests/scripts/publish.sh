@@ -7,7 +7,7 @@
 #   scripts/publish.sh <run-id>
 #
 # Env overrides:
-#   HOST_SSH        — ssh target (default: egov-nairobi)
+#   HOST_SSH        — ssh target (required: the box to publish to)
 #   HOST_DIR        — remote directory (default: /var/www/tests)
 #   RUN_LIMIT       — keep the full report (runs/<id>/) for at most this many
 #                     runs on host (default: 5). Pass the same value to
@@ -22,7 +22,7 @@ if [[ -z "$RUN_ID" ]]; then
   exit 2
 fi
 
-HOST_SSH="${HOST_SSH:-egov-nairobi}"
+HOST_SSH="${HOST_SSH:?HOST_SSH required: the box to publish to}"
 HOST_DIR="${HOST_DIR:-/var/www/tests}"
 RUN_LIMIT="${RUN_LIMIT:-5}"
 RSYNC_RETRIES="${RSYNC_RETRIES:-2}"

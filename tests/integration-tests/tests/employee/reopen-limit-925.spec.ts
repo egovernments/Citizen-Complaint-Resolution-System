@@ -1,7 +1,7 @@
 import { tenantSlug } from '../utils/identity-bff';
 import { test, expect, Page } from "@playwright/test";
 import { loginViaApi } from "../utils/auth";
-import { BASE_URL, TENANT, EMPLOYEE_TENANT, EMPLOYEE_USER, EMPLOYEE_PASS } from "../utils/env";
+import { BASE_URL, TENANT, EMPLOYEE_USER, EMPLOYEE_PASS } from "../utils/env";
 
 /**
  * Employee/CSR reopen window (#925).
@@ -148,7 +148,6 @@ async function stubResolvedComplaint(page: Page, resolvedAgoMs: number) {
 async function selectReopen(page: Page) {
   const tokenResponse = await loginViaApi(page, {
     tenant: TENANT,
-    authTenant: EMPLOYEE_TENANT,
     username: EMPLOYEE_USER,
     password: EMPLOYEE_PASS,
     userType: "EMPLOYEE",

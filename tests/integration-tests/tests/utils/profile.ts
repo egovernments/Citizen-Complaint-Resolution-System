@@ -71,9 +71,10 @@ export interface DeploymentProfile {
   generatedAt: string;
   baseUrl: string;
   tenant: {
+    /** Root tenants only (#2398): always equal to `root`. Kept for existing readers. */
     city: string;
     root: string;
-    /** true when the deployment has no city sub-tenant (bomet's flat `ke`). */
+    /** Always true now; kept for existing readers. */
     flat: boolean;
     label: string;
     labelSource: 'localization' | 'env' | 'derived-fallback';
@@ -150,6 +151,8 @@ export interface DeploymentProfile {
    */
   probeFailures?: Record<string, string>;
   locales: string[];
+  /** What identity-bff offers on the citizen surface; null when it could not be read. */
+  identity?: { citizenMethods: string[] | null };
   personas: {
     adminRoles: string[];
     resolved: Record<string, PersonaSummary | null>;
@@ -175,11 +178,10 @@ function normalizeBaseUrl(url: string): string {
 }
 
 /** The deployment THIS process is pointed at, by the same rules discovery uses. */
-export function currentTarget(): { baseUrl: string; tenant?: string; root?: string } {
+export function currentTarget(): { baseUrl: string; tenant?: string } {
   return {
-    baseUrl: normalizeBaseUrl(envOr('BASE_URL') ?? 'http://localhost'),
+    baseUrl: normalizeBaseUrl(envOr('BASE_URL') ?? ''),
     tenant: envOr('DIGIT_TENANT'),
-    root: envOr('ROOT_TENANT'),
   };
 }
 
@@ -207,9 +209,6 @@ export function profileTargetMismatches(p: DeploymentProfile): string[] {
   }
   if (want.tenant && p.tenant?.city !== want.tenant) {
     out.push(`tenant: profile has '${p.tenant?.city}', this run targets '${want.tenant}' (DIGIT_TENANT)`);
-  }
-  if (want.root && p.tenant?.root !== want.root) {
-    out.push(`root tenant: profile has '${p.tenant?.root}', this run targets '${want.root}' (ROOT_TENANT)`);
   }
   return out;
 }
@@ -567,29 +566,37 @@ export async function discoverProfile(opts?: { baseUrl?: string }): Promise<Depl
   const probeFailures: Record<string, string> = {};
   const attempt = makeAttempt(probeFailures);
 
-  // globalConfigs must be read BEFORE anything else: it is the deployment's own
-  // boot config, so it — not an env var — is what tells us which tenant we are
-  // even looking at. Falling back to the legacy 'ke.nairobi' literal here makes
-  // discovery a no-op on every other deployment: with DIGIT_TENANT unset the
-  // whole probe chain aims at a tenant that doesn't exist, every read comes back
-  // empty, and profile.setup's non-emptiness gate fails with "boundary hierarchy
-  // is empty" — pointing at the tenant rather than at this line. Keep the literal
-  // last, as a floor for a deployment that serves no globalConfigs at all.
+  // Root tenants only: DIGIT_TENANT is the workspace's root tenant, and
+  // profile-setup has already checked that the slug resolves to it.
+  const tenant = envOr('DIGIT_TENANT');
+  if (!tenant) throw new Error('DIGIT_TENANT is not set: discovery needs the root tenant the workspace slug resolves to');
+  const city = tenant;
+  const root = tenant;
+  const tenants = [tenant];
   const gc = await attempt('globalConfigs', () => fetchGlobalConfigs(baseUrl), {});
 
-  const city = envOr('DIGIT_TENANT') ?? gc.stateTenantId ?? 'ke.nairobi';
-  const root = envOr('ROOT_TENANT') ?? (city.includes('.') ? city.split('.')[0] : city);
-  const tenants = city === root ? [root] : [city, root];
-
-  const adminUser = envOr('DIGIT_USERNAME') ?? envOr('ADMIN_USER') ?? 'ADMIN';
-  const adminPass = envOr('DIGIT_PASSWORD') ?? envOr('ADMIN_PASSWORD') ?? 'eGov@123';
+  const adminUser = envOr('ADMIN_LOGIN') ?? '';
+  const adminPass = process.env.ADMIN_PASSWORD ?? '';
   const admin = await attempt(
     'admin login',
-    () => getDigitToken({ baseURL: baseUrl, tenant: root, username: adminUser, password: adminPass }),
+    () => getDigitToken({ baseURL: baseUrl, tenant, username: adminUser, password: adminPass }),
     null as Awaited<ReturnType<typeof getDigitToken>> | null,
   );
   const authToken = admin?.access_token ?? '';
   const adminRoles = (((admin?.UserRequest as any)?.roles || []) as any[]).map((r) => String(r.code)).sort();
+
+  // Which sign-in methods the BFF offers citizens (phone_otp, google, …).
+  const citizenMethods = await attempt(
+    'identity auth methods',
+    async () => {
+      const r = await fetch(`${baseUrl}/identity/v1/auth-methods?surface=citizen&intent=signin`);
+      if (r.status === 404) return []; // no identity stack on this deployment (master)
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const body = (await r.json()) as { methods?: Array<{ id?: string }> };
+      return (body.methods ?? []).map((m) => String(m.id)).sort();
+    },
+    null as string[] | null,
+  );
 
   // ── tenant label ──────────────────────────────────────────────────────────
   // Localization outranks TENANT_LABEL here, inverting the usual env-wins rule:
@@ -727,7 +734,7 @@ export async function discoverProfile(opts?: { baseUrl?: string }): Promise<Depl
     schemaVersion: PROFILE_SCHEMA_VERSION,
     generatedAt: new Date().toISOString(),
     baseUrl,
-    tenant: { city, root, flat: city === root, label, labelSource },
+    tenant: { city, root, flat: true, label, labelSource },
     globalConfigs: {
       stateTenantId: gc.stateTenantId ?? null,
       hierarchyType: gc.hierarchyType ?? null,
@@ -745,6 +752,7 @@ export async function discoverProfile(opts?: { baseUrl?: string }): Promise<Depl
     mdms: { rejectionReasonsCount },
     probeFailures,
     locales,
+    identity: { citizenMethods },
     personas: { adminRoles, resolved: {}, unresolvedDiagnostics: {} },
   };
 

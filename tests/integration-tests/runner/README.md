@@ -110,7 +110,8 @@ What each summary covers:
 | `RUNNER_PORT` | `8181` | loopback listen port |
 | `RUNNER_REPO_DIR` | `..` | vendored `tests/integration-tests` |
 | `RUNNER_WEBROOT` | `/var/www/integration-tests` | served dir (catalog.json/runs live here) |
-| `RUNNER_TENANT_ENV` | — | env file sourced by the run (BASE_URL/DIGIT_TENANT/…) |
+| `RUNNER_TENANT_ENV` | — | env profile sourced by the run (`deploy/<env>.env`: BASE_URL, DIGIT_TENANT, slug, persona logins) |
+| `RUNNER_SECRETS_ENV` | — | box-local secrets file sourced after it (persona passwords, `IDENTITY_TEST_OTP_CODE`); mode 0600, owned by the runner user. Set but unreadable fails the run (`failed-secrets`). See `../deploy/README.md` |
 | `RUNNER_RUN_LIMIT` | `5` | keep the full report (`runs/<id>/`) for the newest N runs; results stay for 30 (see Retention) |
 | `RUNNER_BRANCH` | `deployed` | branch label recorded in the catalog |
 | `RUNNER_JOB` | `run-cycle.sh` | the cycle script (override for tests/custom cycles) |
