@@ -5652,6 +5652,60 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.branding.banner",
+    "message": "Citizen home banner",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.branding.banner_hint",
+    "message": "A wide photo shown at the top of the citizen home, behind the welcome.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.branding.banner_no_state_info",
+    "message": "This workspace has no State Info record to save a banner to.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.branding.banner_none",
+    "message": "No banner yet.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.branding.banner_not_wide",
+    "message": "That image is %{width}×%{height}px. Use a wide, landscape image.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.branding.banner_rules",
+    "message": "PNG or JPG, at least %{min}px wide, up to 5 MB.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.branding.banner_too_big",
+    "message": "That image is over 5 MB. Use a smaller file.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.branding.banner_too_narrow",
+    "message": "That image is %{width}px wide. Use one at least %{min}px wide.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.branding.banner_unavailable",
+    "message": "This workspace has no State Info record, so a banner can’t be saved here.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.branding.intro",
     "message": "Your logo, name and colour appear across your workspace and on the services citizens and employees experience.",
     "module": "configurator-ui",
@@ -5774,6 +5828,12 @@
   {
     "code": "app.onboarding.branding.themes.green-gold",
     "message": "Green and Gold",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.branding.upload_banner",
+    "message": "Upload banner",
     "module": "configurator-ui",
     "locale": "en_IN"
   },

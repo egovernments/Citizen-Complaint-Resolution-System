@@ -1,4 +1,32 @@
-import { areaTree, covered, mayGrant, minimalPicks, peopleRows, withGrant, withoutGrant } from './grantModel';
+import { areaTree, covered, grantPreview, mayGrant, minimalPicks, peopleRows, withGrant, withoutGrant } from './grantModel';
+import type { Loaded } from './roleEditorData';
+
+describe('grant preview (before Save)', () => {
+  const rec = (schemaCode: string, uid: string, data: Record<string, unknown>) => ({ id: uid, tenantId: 'ke', schemaCode, uniqueIdentifier: uid, data, isActive: true });
+  const mask = { condition: { or: [{ '==': [{ var: 'user.attributes.tenantWide' }, true] }, { '==': [{ var: 'resource.complaint.accountId' }, { var: 'user.uuid' }] }] }, onDeny: { strategy: 'MASK_SHOW_LAST_N', n: 3, maskChar: 'X' } };
+  const loaded = (levels: Record<string, string>): Loaded => ({
+    root: 'ke', role: rec('ACCESSCONTROL-ROLES.roles', 'R', { code: 'R', name: 'R' }),
+    actions: [{ id: 2008, url: '/pgr-services/v2/request/_search' }, { id: 2009, url: '/pgr-services/v2/request/_count' }, { id: 2031, url: '/pgr-services/v2/request/_update' }],
+    grants: [2008, 2009, 2031].map((id) => rec('ACCESSCONTROL-ROLEACTIONS.roleactions', `R.${id}`, { rolecode: 'R', actionid: id })),
+    searchAction: rec('ACCESSCONTROL-ACTIONS-TEST.actions-test', '2008', { url: '/pgr-services/v2/request/_search', resource: { complaint: {
+      scope: { axes: ['department', 'jurisdiction'], roleScopes: { R: levels }, default: { department: 'OWN', jurisdiction: 'OWN' } },
+      attributes: { 'citizen.mobileNumber': mask, 'citizen.name': { ...mask, onDeny: { strategy: 'REDACT' } } } } } }),
+    catalogue: [], mastersActions: [],
+    workflow: { businessService: 'PGR', tenantId: 'ke', states: [{ state: 'PENDINGFORASSIGNMENT', actions: [{ action: 'ASSIGN', roles: ['R'] }, { action: 'REJECT', roles: ['R'] }] }] },
+  });
+  it('names the complaints, what the role can do, its workflow actions and what is masked', () => {
+    const p = grantPreview(loaded({ jurisdiction: 'OWN', department: 'ALL' }), 'R', 'ke', ['BOMET_SOTIK'], 214);
+    expect(p.complaints).toBe('About 214 complaints in BOMET_SOTIK (every department), plus anything assigned to them.');
+    expect(p.can).toBe('Can search and view complaints, act on complaints (workflow actions).');
+    expect(p.workflow).toBe('In the workflow: Assign (pending for assignment), Reject (pending for assignment).');
+    expect(p.masked).toBe('Masked for them: Citizen mobile (last 3), Citizen name (hidden).');
+  });
+  it('a tenant-wide role is shown the fields the shared rule gives tenant-wide staff; no area = nothing yet', () => {
+    expect(grantPreview(loaded({ jurisdiction: 'ALL', department: 'ALL' }), 'R', 'ke', [], null).masked).toBe('No fields masked for them.');
+    expect(grantPreview(loaded({ jurisdiction: 'OWN', department: 'OWN' }), 'R', 'ke.bomet', [], null).complaints)
+      .toBe("Complaints in no area yet: nothing until areas are picked (only the person's departments), plus anything assigned to them.");
+  });
+});
 
 const TB = [{ hierarchyType: 'ADMIN', boundary: [{ code: 'BOMET', boundaryType: 'County', children: [
   { code: 'BOMET_SOTIK', boundaryType: 'SubCounty', children: [{ code: 'BOMET_SOTIK_KIPSONOI', boundaryType: 'Ward', children: [] }, { code: 'BOMET_SOTIK_RONGENA_MANARET', boundaryType: 'Ward', children: [] }] },

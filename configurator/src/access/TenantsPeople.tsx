@@ -8,7 +8,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from '@/hooks/use-toast';
 import { digitClient } from '@/providers/bridge';
 import { useApp } from '../App';
-import { DENIAL_TEXT, areaTree, covered, mayGrant, peopleRows, withGrant, type AreaNode, type Grant } from './grantModel';
+import { DENIAL_TEXT, areaTree, covered, grantPreview, mayGrant, minimalPicks, peopleRows, withGrant, type AreaNode, type Grant, type GrantPreview } from './grantModel';
+import { loadRole } from './roleEditorData';
+import { whenItApplies } from './effectTimes';
 
 /**
  * Access › Tenants, people and areas (design screen 2): who holds which role where, and granting a role at a tenant
@@ -76,6 +78,26 @@ export default function TenantsPeople() {
   useEffect(() => { void loadTenant(tenant); }, [tenant, loadTenant]);
 
   const cover = useMemo(() => covered(tree, picked), [tree, picked]);
+
+  // what the grant means, before Save: the role's rows + the complaints the chosen areas hold (no simulation)
+  const [preview, setPreview] = useState<GrantPreview | null>(null);
+  useEffect(() => {
+    setPreview(null);
+    if (!employee || !role) return;
+    let stale = false;
+    (async () => {
+      const l = await loadRole(digitClient, root, role);
+      let count: number | null = null;
+      const localities = [...cover];
+      if (localities.length) {
+        const q = new URLSearchParams({ tenantId: tenant, locality: localities.join(',') });
+        const r = await digitClient.request<{ count?: number }>(`${digitClient.endpoint('PGR_COUNT')}?${q}`, { RequestInfo: digitClient.buildRequestInfo() }).catch(() => null);
+        count = typeof r?.count === 'number' ? r.count : null;
+      }
+      if (!stale) setPreview(grantPreview(l, role, tenant, minimalPicks(tree, picked), count));
+    })().catch(() => { if (!stale) setPreview(null); });
+    return () => { stale = true; };
+  }, [employee, role, tenant, cover, picked, tree, root]);
   const myGrants: Grant[] = ((digitClient.getAuthInfo().user as any)?.roles ?? []).map((r: any) => ({ code: r.code, tenantId: r.tenantId }));
   // the session may carry role codes without their tenants: then only the server can decide
   const decision = role && myGrants.length && myGrants.every((g) => g.tenantId) ? mayGrant(myGrants, role, tenant) : null;
@@ -98,7 +120,7 @@ export default function TenantsPeople() {
       const { next, changes } = withGrant(fresh, { role, tenantId: tenant, areas: [...picked], hierarchyType: HIERARCHY }, tree);
       if (!changes.length) { toast({ title: 'Nothing to change' }); return; }
       await digitClient.employeeUpdate(fresh.tenantId, [next]);
-      toast({ title: 'Granted', description: changes.join('; ') });
+      toast({ title: 'Granted', description: `${changes.join('; ')}. ${whenItApplies('grant')}` });
       setEmployee(null); setPersonCode(''); setRole(''); setPicked(new Set());
       await loadTenant(tenant);
     } catch (e) {
@@ -182,6 +204,18 @@ export default function TenantsPeople() {
                 {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}Grant
               </Button>
             </div>
+            {preview && (
+              <div className="rounded-md border bg-muted/40 p-3 text-sm" data-testid="g-preview">
+                <div className="mb-1 font-semibold">What this means for {employee?.user?.name ?? 'the person'}</div>
+                <ul className="list-disc pl-5">
+                  <li data-testid="g-preview-complaints">{preview.complaints}</li>
+                  <li>{preview.can}</li>
+                  <li>{preview.workflow}</li>
+                  <li data-testid="g-preview-masked">{preview.masked}</li>
+                </ul>
+                <div className="mt-2 text-xs text-muted-foreground" data-testid="g-when">{whenItApplies('grant')}</div>
+              </div>
+            )}
             <p className="text-xs text-muted-foreground">You can grant only roles you may grant here (ACCOUNT_ADMIN at this tenant or above; an administrative role only if you hold it). The server checks again.</p>
           </CardContent>
         </Card>

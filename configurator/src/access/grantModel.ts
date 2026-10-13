@@ -6,6 +6,9 @@
  * The link-role rule (CAP-06 #955) is mirrored from identity-bff's membership/link-role-rule.ts so the screen can
  * explain a refusal before sending; the server still decides (user-compat answers 403 ROLE_ESCALATION_FORBIDDEN).
  */
+import { CAPABILITIES, KNOWN_FIELDS, capabilityState, effectiveScope, parseFieldRule, scopeBlockOf } from './policyModel';
+import { roleGrid, statusLabel } from './workflowModel';
+import type { Loaded } from './roleEditorData';
 
 export interface Grant { code: string; tenantId: string }
 export type GrantDenial = 'CROSS_STATE' | 'NOT_MEMBER_ADMIN' | 'ROLE_NOT_HELD';
@@ -131,4 +134,39 @@ export function peopleRows(employees: any[], tenantId: string) {
     areas: ((e.jurisdictions ?? []) as any[]).filter((j) => j.isActive !== false && (isWithin(tenantId, j.tenantId) || isWithin(j.tenantId, tenantId))).map((j) => j.boundary as string),
     departments: [...new Set(((e.assignments ?? []) as any[]).filter((a) => a.isCurrentAssignment !== false).map((a) => a.department as string))],
   })).filter((p) => p.grants.length > 0);
+}
+
+// ------------------------------------------------------------------------------------------------ preview (before Grant)
+
+export interface GrantPreview { complaints: string; can: string; workflow: string; masked: string }
+
+/**
+ * What the grant means for the person, from the rows that decide it (no simulation): the role's capabilities and
+ * workflow actions, its scope levels, the field rules that mask for it, and `count` = the complaints the chosen areas
+ * hold at the node (pgr _count with those localities; null = not counted).
+ */
+export function grantPreview(l: Loaded, role: string, tenantId: string, areaCodes: string[], count: number | null): GrantPreview {
+  const held = new Set(l.grants.filter((g) => g.isActive !== false).map((g) => Number(g.data.actionid)));
+  const caps = CAPABILITIES.filter((c) => capabilityState(c.id, l.actions, held) === 'on').map((c) => c.label.toLowerCase());
+  const g = roleGrid(l.workflow, role);
+  const wf = g.statuses.flatMap((st) => g.actions.filter((a) => g.cell(st, a) === 'on').map((a) => `${a.charAt(0)}${a.slice(1).toLowerCase()} (${statusLabel(st).toLowerCase()})`));
+  const { levels } = effectiveScope(scopeBlockOf(l.searchAction?.data), role);
+  const tenantWide = levels.jurisdiction === 'ALL' && levels.department === 'ALL';
+  const attrs = ((l.searchAction?.data as any)?.resource?.complaint?.attributes ?? {}) as Record<string, any>;
+  const masked = Object.entries(attrs).flatMap(([path, rule]) => {
+    const p = parseFieldRule(rule);
+    if (p.custom || p.perRole[role]?.kind === 'always') return [];
+    // the seeded shared branch "they cover the whole tenant" shows the field to a tenant-wide role
+    if (tenantWide && p.shared.some((c) => c.kind === 'flag' && c.var === 'user.attributes.tenantWide')) return [];
+    const label = KNOWN_FIELDS.find((f) => f.path === path)?.label ?? path;
+    return [`${label} (${p.onDeny.strategy === 'REDACT' ? 'hidden' : `last ${p.onDeny.n}`})`];
+  });
+  const where = levels.jurisdiction === 'ALL' ? `every area of ${tenantId}` : (areaCodes.length ? areaCodes.join(', ') : 'no area yet: nothing until areas are picked');
+  const dept = levels.department === 'ALL' ? 'every department' : "only the person's departments";
+  return {
+    complaints: `${count === null ? 'Complaints' : `About ${count} complaints`} in ${where} (${dept}), plus anything assigned to them.`,
+    can: caps.length ? `Can ${caps.join(', ')}.` : 'Can do nothing yet: the role has no capabilities.',
+    workflow: wf.length ? `In the workflow: ${wf.join(', ')}.` : 'No workflow actions.',
+    masked: masked.length ? `Masked for them: ${masked.join(', ')}.` : 'No fields masked for them.',
+  };
 }
