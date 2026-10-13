@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { homeTenant, subtreeOptions, tenantLabel } from './tenantSwitcher';
+import { adminHome, homeTenant, optionText, subtreeOptions, tenantLabel } from './tenantSwitcher';
 
 // cfgreview F04 (#1551): the header names the working tenant and switches within the admin's subtree.
 describe('tenant switcher', () => {
@@ -27,6 +27,26 @@ describe('tenant switcher', () => {
     const o = subtreeOptions(rows, 'ke');
     expect(tenantLabel(o, 'ke.bomet')).toBe('Bomet County');
     expect(tenantLabel(o, 'ke.unknown')).toBe('ke.unknown');
+  });
+
+  it('marks the depth with em-dashes, not spaces a native select would collapse', () => {
+    expect(optionText({ code: 'ke.bomet.health', name: 'Health', depth: 2 })).toBe('— — Health (ke.bomet.health)');
+    expect(optionText({ code: 'ke', name: 'Kenya', depth: 0 })).toBe('Kenya (ke)');
+  });
+
+  describe('admin home from identity memberships', () => {
+    it('is the highest tenant where the user is ACCOUNT_ADMIN / SUPERUSER', () => {
+      expect(adminHome([
+        { tenantId: 'ke.bomet', roles: ['ACCOUNT_ADMIN'] },
+        { tenantId: 'ke', roles: ['SUPERUSER', 'GRO'] },
+        { tenantId: 'ke.kilima', roles: ['GRO'] },
+      ])).toBe('ke');
+    });
+    it('falls back to the highest tenant they may enter, and to null without memberships', () => {
+      expect(adminHome([{ tenantId: 'ke.bomet.health', roles: ['GRO'] }, { tenantId: 'ke.bomet', roles: ['PGR_LME'] }])).toBe('ke.bomet');
+      expect(adminHome([{ tenantId: 'ke', roles: ['ACCOUNT_ADMIN'], code: 'DIGIT_ACCOUNT_INACTIVE' }])).toBeNull();
+      expect(adminHome([])).toBeNull();
+    });
   });
 
   describe('home tenant', () => {

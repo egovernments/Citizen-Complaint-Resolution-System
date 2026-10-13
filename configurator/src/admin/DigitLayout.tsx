@@ -39,7 +39,6 @@ import {
   Inbox,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { TenantSwitcher } from './TenantSwitcher';
 import { getGenericMdmsResources, getResourceLabel } from '@/providers/bridge';
 import { useMastersCapability } from '@/hooks/useMastersCapability';
 import { LEGACY_PGR_DASHBOARD_ENABLED } from '@/config/featureFlags';
@@ -49,6 +48,7 @@ import { useRailDrawer } from '@/components/layout/useRailDrawer';
 import { AccountMenu, HelpButton, LocaleSwitcher, ThemeSwitcher } from '@/components/layout/HeaderControls';
 import { isOnboardingComplete } from '@/onboarding/progress';
 import { complaintDeskUrl, useWorkspaceSlug } from '@/identity/workspaceSlug';
+import { TenantSwitcher } from './TenantSwitcher';
 
 /** Sidebar navigation groups — names are i18n keys resolved at render time */
 const navGroups = [

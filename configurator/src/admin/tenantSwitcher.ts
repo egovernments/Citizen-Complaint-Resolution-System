@@ -26,6 +26,30 @@ export function tenantLabel(options: TenantOption[], code: string): string {
   return options.find((o) => o.code === code)?.name ?? code;
 }
 
+export interface MembershipRow { tenantId?: unknown; roles?: unknown; code?: unknown }
+const ADMIN_ROLES = new Set(['ACCOUNT_ADMIN', 'SUPERUSER']);
+
+/**
+ * The admin's home tenant from their identity memberships (the tenants they may enter, with roles): the highest tenant
+ * (fewest code segments) where they hold ACCOUNT_ADMIN / SUPERUSER; else the highest tenant they may enter. Null when
+ * the session has no memberships (no identity session) - callers then fall back to homeTenant().
+ */
+export function adminHome(memberships: MembershipRow[]): string | null {
+  const usable = memberships
+    .filter((m) => typeof m.tenantId === 'string' && m.tenantId && m.code !== 'DIGIT_ACCOUNT_INACTIVE')
+    .map((m) => ({ tenant: String(m.tenantId), roles: Array.isArray(m.roles) ? (m.roles as unknown[]).map(String) : [] }));
+  if (!usable.length) return null;
+  const depth = (t: string) => t.split('.').length;
+  const pick = (rows: typeof usable) =>
+    rows.sort((a, b) => depth(a.tenant) - depth(b.tenant) || a.tenant.localeCompare(b.tenant))[0]?.tenant ?? null;
+  return pick(usable.filter((u) => u.roles.some((r) => ADMIN_ROLES.has(r)))) ?? pick(usable);
+}
+
+/** One option's text: an em-dash per level (a native select collapses leading spaces), then name and code. */
+export function optionText(o: TenantOption): string {
+  return `${'— '.repeat(o.depth)}${o.name} (${o.code})`;
+}
+
 const HOME_KEY = (user: string) => `configurator:home-tenant:${user}`;
 
 /** The admin's home tenant: remembered the first time a user works in this browser, so a switch never shrinks the list. */
