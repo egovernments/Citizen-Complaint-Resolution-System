@@ -16,8 +16,8 @@
 import { test, expect } from '@playwright/test';
 import { BASE_URL, TENANT, ADMIN_USER, ADMIN_PASS } from '../utils/env';
 import { loginViaApi } from '../utils/auth';
+import { surfacePath } from '../utils/identity-bff';
 
-const PROFILE_URL = '/digit-ui/employee/user/profile';
 const CRASH_PATTERNS = [
   /Cannot read properties of (undefined|null) \(reading ['"]test['"]\)/i,
   /validationConfig.*(undefined|null)/i,
@@ -55,7 +55,7 @@ test.describe('employee profile — validationConfig null-safety #445', () => {
     pageErrors.length = 0;
 
     // ============ Navigate to Edit Profile ============
-    await page.goto(`${BASE_URL}${PROFILE_URL}?cb=${Date.now()}`);
+    await page.goto(`${BASE_URL}${surfacePath('employee', 'user/profile')}?cb=${Date.now()}`);
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(4_500);
 
@@ -71,21 +71,21 @@ test.describe('employee profile — validationConfig null-safety #445', () => {
     ).toEqual([]);
 
     // ============ Keystroke on a validator-gated field ============
-    const editableField = page
-      .locator('input[name*="mobile" i], input[name*="email" i], input[type="tel"]')
-      .first();
-    if (await editableField.isVisible({ timeout: 5_000 }).catch(() => false)) {
-      await editableField.click();
-      await page.keyboard.type('7', { delay: 80 });
-      await page.waitForTimeout(800);
-      await page.keyboard.press('Backspace');
-      await page.waitForTimeout(500);
+    // Name: for identity-managed staff (#1999) mobile is read-only and email
+    // disabled, so name is the only field whose onChange still runs
+    // validationConfig (UserProfile.js setUserName).
+    const editableField = page.locator('#profile-name');
+    await expect(editableField).toBeEditable({ timeout: 5_000 });
+    await editableField.click();
+    await page.keyboard.type('7', { delay: 80 });
+    await page.waitForTimeout(800);
+    await page.keyboard.press('Backspace');
+    await page.waitForTimeout(500);
 
-      const onChangeRelevant = pageErrors.filter((m) => CRASH_PATTERNS.some((p) => p.test(m)));
-      expect(
-        onChangeRelevant,
-        `keystroke fired a validationConfig crash:\n${onChangeRelevant.join('\n')}`,
-      ).toEqual([]);
-    }
+    const onChangeRelevant = pageErrors.filter((m) => CRASH_PATTERNS.some((p) => p.test(m)));
+    expect(
+      onChangeRelevant,
+      `keystroke fired a validationConfig crash:\n${onChangeRelevant.join('\n')}`,
+    ).toEqual([]);
   });
 });

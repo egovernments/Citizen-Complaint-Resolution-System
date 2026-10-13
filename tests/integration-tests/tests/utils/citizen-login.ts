@@ -39,7 +39,8 @@ export async function citizenOtpLoginViaUI(page: Page, phone: string): Promise<v
     for (let i = 0; i < count; i++) await inputs.nth(i).fill(code[i]);
   }
   const selected = page.waitForResponse(r => new URL(r.url()).pathname === '/identity/v1/contexts/citizen/_select' && r.request().method() === 'POST');
-  await page.getByRole('button', { name: /verify|continue|sign in|login/i }).first().click();
+  // SelectOtp's submit is CS_COMMONS_NEXT ("Next"), falling back to "Continue".
+  await page.getByRole('button', { name: /verify|continue|next|sign in|login/i }).first().click();
   expect((await selected).status()).toBe(200);
   await expect.poll(async () => page.evaluate(() => Boolean(localStorage.getItem('Citizen.token')))).toBe(true);
   await expect(page).not.toHaveURL(/\/login(?:[?#]|$)/);

@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { loginViaApi, staffContext } from '../utils/auth';
-import { authorizeUrl, identityJson } from '../utils/identity-bff';
+import { authorizeUrl, enterHostedUsername, identityJson } from '../utils/identity-bff';
 import { BASE_URL, TENANT, ADMIN_USER, ADMIN_PASS } from '../utils/env';
 
 test.use({ storageState: { cookies: [], origins: [] } });
@@ -15,11 +15,16 @@ test.describe('Employee Login — BFF', () => {
 
   test('bad credentials are rejected', { tag: ['@area:auth', '@persona:employee'] }, async ({ page }) => {
     await page.goto(authorizeUrl(BASE_URL, 'employee'));
-    await page.locator('#username').fill(ADMIN_USER);
+    // An unknown login, not ADMIN with a wrong password: Keycloak answers both
+    // with the same error, and this keeps brute-force protection off the persona.
+    await enterHostedUsername(page, `pw-no-such-user-${Date.now()}`);
     await page.locator('#password').fill('wrong-password');
-    await page.locator('#kc-login, button[type="submit"]').first().click();
-    // A dependency exception is not evidence of wrong-password rejection.
-    await expect(page.locator('#input-error, #input-error-password, .kc-feedback-text, [role="alert"]').first()).toBeVisible();
+    // The digit-employee theme keeps #kc-login disabled until consent is ticked
+    // (Login.tsx canSubmit); hostedSignIn ticks it the same way.
+    await page.locator('#privacy-component-check').check({ force: true });
+    await page.locator('#kc-login').click();
+    // Login.tsx raises INVALID_LOGIN_CREDENTIALS as the theme's error toast.
+    await expect(page.locator('#dg-toast[role="alert"]')).toBeVisible();
     const response = await page.request.get(`${BASE_URL}/identity/v1/session?surface=employee`);
     const session = await identityJson<{ authenticated: boolean; code: string }>(response, 401);
     expect(session.authenticated).toBe(false);

@@ -32,8 +32,11 @@ import { test, expect, type Page } from '@playwright/test';
 
 import { BASE_URL, TENANT, ROOT_TENANT, ADMIN_USER, ADMIN_PASS, LOCALES } from '../utils/env';
 import { loginViaApi } from '../utils/auth';
+import { surfacePath } from '../utils/identity-bff';
 
-const EMPLOYEE_HOME = '/digit-ui/employee';
+// The tenant comes from the URL slug since #1999; tenantless /digit-ui/... 404s.
+// A function, so a missing slug fails the test rather than the file's collection.
+const employeeHome = () => surfacePath('employee');
 
 /*
  * App-level DOM hooks, all emitted by digit-ui-components / core — none of them
@@ -86,7 +89,7 @@ async function localizedLabel(code: string, module: string): Promise<string> {
  */
 async function openEmployeeShell(page: Page): Promise<void> {
   await loginViaApi(page, { tenant: TENANT, username: ADMIN_USER, password: ADMIN_PASS });
-  await page.goto(`${BASE_URL}${EMPLOYEE_HOME}`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+  await page.goto(`${BASE_URL}${employeeHome()}`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
   // Module cards + sidebar render client-side after a tenant/ACL fetch.
   await page.waitForLoadState('networkidle', { timeout: 30_000 }).catch(() => {});
   const bodyText = await page.locator('body').innerText();
@@ -124,7 +127,7 @@ test.describe('employee shell chrome', () => {
       description: `Regression guard for egovernments/CCRS#561 (HRMS) and #560 (Workbench). digit-ui-esbuild/src/App.js deliberately pins enabledModules = ["Utilities","PGR","Dashboard"] because employees/admins manage HRMS and workbench configs from the separate configurator app; the HRMS accesscontrol actions are correspondingly shipped with enabled:false, so the SPA's ACL call (which sends enabled:true) never receives them. This test asserts that observable outcome.
 
 Steps:
-1. Inject an ADMIN employee session (SUPERUSER — sees every enabled module) and open /digit-ui/employee.
+1. Inject an ADMIN employee session (SUPERUSER — sees every enabled module) and open /{slug}/digit-ui/employee.
 2. Positive control: at least one module card renders, and the PGR card is among them (matched on the deployment's own localized ES_PGR_HEADER_COMPLAINT, not an English literal). Without this the negatives below could pass on a blank page.
 3. Expand the collapsible sidebar (SideNav only mounts entry labels while hovered) and assert it lists at least one entry.
 4. Negative: nothing anywhere in the mounted shell — cards or drawer — matches /HRMS/i or /workbench/i.
@@ -179,7 +182,7 @@ Why this test injects instead of observing: the deployment's ACCESSCONTROL-ACTIO
 Steps:
 1. Inject an ADMIN employee session and read EMPLOYEE_MODULE_DENYLIST off the live globalConfigs (the fix's deployment half — an empty/missing list fails here).
 2. Route-intercept POST /access/v1/actions/mdms/_get and append the two synthetic url:"url" actions.
-3. Reload /digit-ui/employee (Digit.RequestCache is in-memory, so a full load re-issues the ACL call) and expand the drawer.
+3. Reload /{slug}/digit-ui/employee (Digit.RequestCache is in-memory, so a full load re-issues the ACL call) and expand the drawer.
 4. Assert the control entry rendered (proves the injection reached the component) and the denylisted entry did not.
 
 Revert the isDeniedModule filter and step 4's first half still passes while the second half goes red — which is what a non-vacuous guard looks like.`,
@@ -221,7 +224,8 @@ Revert the isDeniedModule filter and step 4's first half still passes while the 
       serviceCode: '',
       tenantId: ROOT_TENANT,
       path,
-      navigationURL: EMPLOYEE_HOME,
+      // MDMS actions carry the tenantless app path; the SPA rebases it (rebaseAppUrl).
+      navigationURL: '/digit-ui/employee',
       leftIcon: 'action:home',
       rightIcon: '',
     });
@@ -237,7 +241,7 @@ Revert the isDeniedModule filter and step 4's first half still passes while the 
       await route.fulfill({ response, json });
     });
 
-    await page.goto(`${BASE_URL}${EMPLOYEE_HOME}`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+    await page.goto(`${BASE_URL}${employeeHome()}`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
     await page.waitForLoadState('networkidle', { timeout: 30_000 }).catch(() => {});
     await openSidebarDrawer(page);
 
