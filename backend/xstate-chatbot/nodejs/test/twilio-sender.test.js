@@ -68,3 +68,25 @@ test("REGRESSION: replies go to the address the citizen wrote from, not a re-pre
   await provider.sendMessageToUser({ mobileNumber: "712345678" }, ["hello"], { tenantId: "ke" });
   assert.deepEqual(sent, ["whatsapp:+254712345678"]);
 });
+
+test("REGRESSION: a body over 1600 characters is split at line breaks, not rejected", async () => {
+  // Twilio answers an over-long body with 21617 and delivers nothing, so the citizen's
+  // conversation stalled silently.
+  const provider = loadProvider("whatsapp:+14155238886");
+  provider.toWhatsAppAddress = async () => "whatsapp:+916307817430";
+  const bodies = [];
+  provider.sendTwilioRequest = async (params) => { bodies.push(params.get("Body")); return { sid: "SM" + bodies.length }; };
+
+  const lines = Array.from({ length: 100 }, (_, i) => `*${i + 1}.* complaints.categories.Option${i + 1}`);
+  await provider.sendTextMessage("6307817430", lines.join("\n"), "ke");
+
+  assert.ok(bodies.length > 1, "it went out as more than one message");
+  for (const body of bodies) assert.ok(body.length <= 1600, `a chunk is ${body.length} characters`);
+  assert.equal(bodies.join("\n"), lines.join("\n"), "nothing lost, nothing reordered, no line cut in half");
+
+  // A short body is still a single request, and a single line longer than the limit is hard-split.
+  bodies.length = 0;
+  await provider.sendTextMessage("6307817430", "hello", "ke");
+  assert.deepEqual(bodies, ["hello"]);
+  assert.deepEqual(provider.splitBody("x".repeat(3500)).map((c) => c.length), [1600, 1600, 300]);
+});

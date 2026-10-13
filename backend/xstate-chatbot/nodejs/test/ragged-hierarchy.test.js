@@ -110,3 +110,29 @@ test("a level whose children all bottom out early is a leaf level outright", asy
   assert.equal(step.isLeafLevel, true, "nothing hangs off either option");
   assert.deepEqual(step.leafByCode, {}, "so there is no exception to record");
 });
+
+test("rows on a level the definition does not declare are not offered", async () => {
+  // ke ships CATEGORY -> SUB_TYPE plus ~900 AUTHORITY_TYPE test roots under the same
+  // hierarchyType. Offered at the root they made a 1,092-option menu Twilio refused to send.
+  raggedTree();
+  masters.ComplaintHierarchy.push(
+    { code: "PwauthorityTypeA", parentCode: null, levelCode: "AUTHORITY_TYPE", hierarchyType: "PGR", active: true },
+    // An undeclared child must not turn a real leaf into a branch either.
+    { code: "LIXO_SECTOR", parentCode: "LIXO", levelCode: "SECTOR", hierarchyType: "PGR", active: true },
+  );
+  const step = await pgrService.fetchComplaintHierarchyStep("mz", []);
+
+  assert.deepEqual(step.options, ["LIXO", "SAUDE"]);
+  assert.equal(step.leafByCode.LIXO, true, "LIXO's only child is on an undeclared level");
+});
+
+test("without a definition every row is still offered", async () => {
+  raggedTree();
+  masters.ComplaintHierarchyDefinition = [];
+  masters.ComplaintHierarchy.push(
+    { code: "AUTH", parentCode: null, levelCode: "AUTHORITY_TYPE", hierarchyType: "PGR", active: true },
+  );
+  const step = await pgrService.fetchComplaintHierarchyStep("mz", []);
+
+  assert.deepEqual(step.options, ["AUTH", "LIXO", "SAUDE"]);
+});

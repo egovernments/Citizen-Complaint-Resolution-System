@@ -7,6 +7,12 @@ const { assign } = require('xstate');
 const dialog = require('../util/dialog');
 const State = require('./flow-state');
 
+// Twilio rejects a WhatsApp body over 1600 characters (error 21617) and the citizen
+// hears nothing, so a long level is paged behind "See more". The budget leaves room
+// for the channel's own formatting; the option cap keeps a page readable on a phone.
+const MAX_PAGE_CHARS = 1500;
+const MAX_PAGE_OPTIONS = 20;
+
 // A bare function is shorthand for { set: fn }; a step may have neither.
 function normalizeOutcome(state, options) {
   if (!state) return undefined;
@@ -64,9 +70,31 @@ class WalkState extends State {
   get pathSlot() { return this.key + 'Path'; }
   get stepSlot() { return this.key + 'Step'; }
   get grammerSlot() { return this.key + 'Grammer'; }
+  get offsetSlot() { return this.key + 'Offset'; }
+  get nextOffsetSlot() { return this.key + 'NextOffset'; }
 
   getPath(context) {
     return context[this.pathSlot] || [];
+  }
+
+  // The page of this level starting at `offset`: as many options as fit the budget
+  // (at least one, however long), plus "See more" when any are left over or when
+  // paging back round to the start. Numbering restarts at 1 on every page.
+  renderPage(context, offset) {
+    const { options = [], messageBundle = {} } = context[this.stepSlot] || {};
+    const locale = context.user.locale;
+    const goback = this.getPath(context).length > 0;
+    const preamble = this.renderPreamble(context);
+    const fits = (end) =>
+      end - offset <= MAX_PAGE_OPTIONS &&
+      (preamble + dialog.constructListPromptAndGrammer(options.slice(offset, end), messageBundle, locale, true, goback).prompt).length <= MAX_PAGE_CHARS;
+
+    let end = Math.min(offset + 1, options.length);
+    while (end < options.length && fits(end + 1)) end++;
+
+    const paged = offset > 0 || end < options.length;
+    const list = dialog.constructListPromptAndGrammer(options.slice(offset, end), messageBundle, locale, paged, goback);
+    return { prompt: preamble + list.prompt, grammer: list.grammer, nextOffset: end < options.length ? end : 0 };
   }
 
   renderPreamble(context) {
@@ -92,7 +120,10 @@ class WalkState extends State {
             src: (context) => this.fetch(context, this.getPath(context)),
             onDone: {
               target: 'evaluate',
-              actions: assign((context, event) => { context[this.stepSlot] = event.data; })
+              actions: assign((context, event) => {
+                context[this.stepSlot] = event.data;
+                context[this.offsetSlot] = 0;
+              })
             },
             onError: { target: this.onError ? '#' + this.onError.key : '#system_error' }
           }
@@ -113,11 +144,10 @@ class WalkState extends State {
         question: {
           entry: [
             assign((context) => {
-              const { options, messageBundle } = context[this.stepSlot] || {};
-              const goback = this.getPath(context).length > 0;
-              const list = dialog.constructListPromptAndGrammer(options || [], messageBundle || {}, context.user.locale, false, goback);
-              context[this.grammerSlot] = list.grammer;
-              context.lastPrompt = this.renderPreamble(context) + list.prompt;
+              const page = this.renderPage(context, context[this.offsetSlot] || 0);
+              context[this.grammerSlot] = page.grammer;
+              context[this.nextOffsetSlot] = page.nextOffset;
+              context.lastPrompt = page.prompt;
             }),
             (context) => dialog.sendMessage(context, context.lastPrompt)
           ],
@@ -129,6 +159,13 @@ class WalkState extends State {
             context.intention = dialog.get_intention(context[this.grammerSlot] || [], event, true);
           }),
           always: [
+            // Ahead of the leaf check: 'more' is not in leafByCode, so on a leaf level
+            // it would fall through to isLeafLevel and be filed as the complaint type.
+            {
+              target: 'question',
+              cond: (context) => context.intention === dialog.INTENTION_MORE,
+              actions: assign((context) => { context[this.offsetSlot] = context[this.nextOffsetSlot] || 0; })
+            },
             {
               target: 'fetch',
               cond: (context) => context.intention === dialog.INTENTION_GOBACK,

@@ -169,9 +169,17 @@ class PGRService {
     ]);
 
 
+    // Rows on a level the definition does not declare are someone else's tree sharing the
+    // hierarchyType (ke carries ~900 AUTHORITY_TYPE test roots beside CATEGORY -> SUB_TYPE);
+    // offered as options they swamp the real roots. Without a definition, keep every row.
+    const declaredLevels = new Set(levels.map((level) => level.levelCode));
+    const inHierarchy = (row) =>
+      (!hierarchyType || row.hierarchyType === hierarchyType) &&
+      (declaredLevels.size === 0 || row.levelCode == null || declaredLevels.has(row.levelCode));
+
     const parentCode = hierarchyPath[hierarchyPath.length - 1];
     const children = hierarchyRows
-      .filter((row) => !hierarchyType || row.hierarchyType === hierarchyType)
+      .filter(inHierarchy)
       .filter((row) => (parentCode ? row.parentCode === parentCode : row.parentCode == null))
       .sort(
         (a, b) =>
@@ -185,9 +193,7 @@ class PGRService {
       levels[hierarchyPath.length];
     
     const hasChildren = (code) =>
-      hierarchyRows.some(
-        (row) => (!hierarchyType || row.hierarchyType === hierarchyType) && row.parentCode === code
-      );
+      hierarchyRows.some((row) => inHierarchy(row) && row.parentCode === code);
       
     const isLeaf = (row) => !hasChildren(row.code);
     const isLeafLevel = level

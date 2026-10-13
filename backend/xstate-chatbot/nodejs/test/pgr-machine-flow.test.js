@@ -185,3 +185,69 @@ test("an empty complaint hierarchy reports a system error instead of looping", a
 
   assert.ok(h.outputs.includes("SYSTEM_ERROR"), "the citizen is told, and returned to the menu");
 });
+
+test("a long complaint level is paged under Twilio's 1600-character limit", async () => {
+  // Regression: ke's root level rendered 1,092 options in one message; Twilio refused it
+  // (21617) and the citizen heard nothing after choosing to file a complaint.
+  const codes = Array.from({ length: 120 }, (_, i) => `CAT_${String(i + 1).padStart(3, "0")}`);
+  const messageBundle = Object.fromEntries(
+    codes.map((code) => [code, { pt_PT: `complaints.categories.${code}LongEnoughToMatter` }])
+  );
+  const persisted = [];
+  const service = happyPathService({
+    fetchComplaintHierarchyStep: async () => ({
+      options: codes, messageBundle, trailBundle: {}, levelLabel: "Categoria", isLeafLevel: true,
+    }),
+    persistComplaint: async (user, slots) => {
+      persisted.push(slots);
+      return { complaintNumber: "PGR-42", filedDate: "18/09/2026" };
+    },
+  });
+
+  const h = harness({ service });
+  h.service.start();
+  await settle();
+  h.say("1");
+  await settle();
+
+  const pages = [h.outputs[h.outputs.length - 1]];
+  const optionsOn = (page) => (page.match(/^\*\d+\.\*/gm) || []).length;
+  assert.ok(pages[0].length <= 1500, `page 1 is ${pages[0].length} characters`);
+  assert.match(pages[0], /CAT_001/);
+  assert.match(pages[0], /Ver mais/, "the rest sit behind See more");
+
+  // Page through to the end; "See more" is always the last option on a paged level.
+  let seen = optionsOn(pages[0]) - 1;
+  while (seen < codes.length) {
+    h.say(String(optionsOn(pages[pages.length - 1])));
+    await settle();
+    const page = h.outputs[h.outputs.length - 1];
+    assert.ok(page.length <= 1500, `page ${pages.length + 1} is ${page.length} characters`);
+    pages.push(page);
+    seen += optionsOn(page) - 1;
+  }
+  assert.equal(seen, codes.length, "every option appears exactly once across the pages");
+  assert.match(pages[pages.length - 1], /CAT_120/);
+
+  // From the last page, See more wraps back to the first.
+  h.say(String(optionsOn(pages[pages.length - 1])));
+  await settle();
+  assert.match(h.outputs[h.outputs.length - 1], /\*1\.\*\s+complaints\.categories\.CAT_001/);
+
+  // Numbering restarts per page: "2" on page 2 is the option shown second there.
+  h.say(String(optionsOn(pages[0])));
+  await settle();
+  const second = pages[1].match(/^\*2\.\*\s+complaints\.categories\.(CAT_\d+)/m)[1];
+  h.say("2");
+  await settle();
+  // Through the boundary leaf, institution, description, attachment, consent,
+  // confidentiality and confirmation.
+  for (const reply of ["1", "Hospital Central", "Faltam medicamentos essenciais no hospital.", "1", "1", "2", "1"]) {
+    h.say(reply);
+    await settle();
+  }
+  await settle(20);
+
+  assert.equal(persisted.length, 1);
+  assert.equal(persisted[0].complaint, second, "the option picked on page 2 is the one filed");
+});

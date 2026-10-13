@@ -7,6 +7,9 @@ const mediaTypes = require('../media-types');
 const { maskMobile, summarizeInbound } = require('../privacy');
 const { isValidTwilioSignature } = require('./twilio-signature');
 
+// Twilio's limit on a single message body. See splitBody below.
+const TWILIO_MAX_BODY = 1600;
+
 // The only host inbound media is fetched from, and the only path shape accepted
 // on it. See twilioMediaUrl below.
 const TWILIO_MEDIA_HOST = 'api.twilio.com';
@@ -485,13 +488,40 @@ class TwilioWhatsAppProvider {
         return await this.getUserMessage(rawMessage, tenantId);
     }
 
-    async sendTextMessage(to, body, tenantId = null) {
-        const params = new URLSearchParams();
-        params.append('To', await this.toWhatsAppAddress(to, tenantId));
-        params.append('From', this.senderAddress());
-        params.append('Body', body);
+    // Twilio rejects a body over 1600 characters outright (error 21617), so an over-long
+    // prompt reached nobody and the conversation stalled with no reply. Split it instead,
+    // at line breaks where possible so a numbered option is never cut in half.
+    splitBody(body, limit = TWILIO_MAX_BODY) {
+        const chunks = [];
+        let current = '';
+        for (const line of String(body).split('\n')) {
+            const candidate = current ? current + '\n' + line : line;
+            if (candidate.length <= limit) {
+                current = candidate;
+                continue;
+            }
+            if (current) chunks.push(current);
+            current = line;
+            while (current.length > limit) {
+                chunks.push(current.slice(0, limit));
+                current = current.slice(limit);
+            }
+        }
+        if (current || chunks.length === 0) chunks.push(current);
+        return chunks;
+    }
 
-        return this.sendTwilioRequest(params);
+    async sendTextMessage(to, body, tenantId = null) {
+        const address = await this.toWhatsAppAddress(to, tenantId);
+        let response;
+        for (const chunk of this.splitBody(body)) {
+            const params = new URLSearchParams();
+            params.append('To', address);
+            params.append('From', this.senderAddress());
+            params.append('Body', chunk);
+            response = await this.sendTwilioRequest(params);
+        }
+        return response;
     }
 
     async sendMediaMessage(to, mediaUrl, caption = '', tenantId = null) {
