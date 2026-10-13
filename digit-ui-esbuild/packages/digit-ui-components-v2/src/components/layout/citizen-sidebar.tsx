@@ -669,7 +669,7 @@ export function CitizenSidebar({
       <nav
         className="flex flex-col flex-1 overflow-y-auto"
         style={{ padding: "8px", gap: "1px" }}
-        aria-label={t("CORE_COMMON_NAVIGATION") || "Sidebar navigation"}
+        aria-label={t("CORE_COMMON_NAVIGATION") !== "CORE_COMMON_NAVIGATION" ? t("CORE_COMMON_NAVIGATION") : "Sidebar navigation"}
       >
         <ConfirmDialog
           open={logoutOpen}
