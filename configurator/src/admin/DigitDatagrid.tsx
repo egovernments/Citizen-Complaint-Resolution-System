@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import type { RaRecord } from 'ra-core';
+import { useNarrow } from './useNarrow';
 
 export interface EditableColumnConfig {
   type?: 'text' | 'number' | 'reference';
@@ -168,6 +169,7 @@ export function DigitDatagrid<RecordType extends RaRecord = RaRecord>({
   );
 
   const isClickable = Boolean(rowClick || onRowClick);
+  const narrow = useNarrow();
 
   // Pagination calculations
   const totalPages = total != null ? Math.ceil(total / perPage) : 0;
@@ -181,6 +183,31 @@ export function DigitDatagrid<RecordType extends RaRecord = RaRecord>({
 
   return (
     <div>
+      {narrow ? (
+        // ours (cfgreview F22, #1568): below md each record is a card of label / value lines (the table's columns
+        // clipped and scrolled inside the card on a phone); no inline editing here, the record page edits.
+        <ul className="divide-y divide-border" data-testid="datagrid-cards">
+          {data.map((record) => (
+            <li
+              key={record.id}
+              onClick={isClickable ? () => handleRowClick(record) : undefined}
+              className={`py-3 ${isClickable ? 'cursor-pointer' : ''}`}
+            >
+              <dl className="grid grid-cols-[minmax(6rem,40%)_1fr] gap-x-3 gap-y-1 text-sm">
+                {columns.map((col) => (
+                  <React.Fragment key={col.source}>
+                    <dt className="text-muted-foreground">{translate(fieldKey(col.source), { _: col.label })}</dt>
+                    <dd className="min-w-0 break-words">
+                      {col.render ? col.render(record) : renderCellValue(getNestedValue(record as Record<string, unknown>, col.source))}
+                    </dd>
+                  </React.Fragment>
+                ))}
+              </dl>
+              {actions && <div className="mt-2 flex justify-end" onClick={(e) => e.stopPropagation()}>{actions(record)}</div>}
+            </li>
+          ))}
+        </ul>
+      ) : (
       <Table>
         <TableHeader>
           <TableRow className="bg-muted/30">
@@ -304,6 +331,7 @@ export function DigitDatagrid<RecordType extends RaRecord = RaRecord>({
           ))}
         </TableBody>
       </Table>
+      )}
 
       {/* Pagination footer */}
       {total != null && total > 0 && (
