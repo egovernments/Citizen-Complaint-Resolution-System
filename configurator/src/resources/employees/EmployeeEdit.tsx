@@ -10,6 +10,7 @@ import { useApp } from '../../App';
 import { RolesEditor } from './RolesEditor';
 import { JurisdictionEditor } from './JurisdictionEditor';
 import { AssignmentEditor } from './AssignmentEditor';
+import { useMdmsChoices } from './mdmsChoices';
 
 const GENDER_CHOICES = [
   { value: 'MALE', label: 'Male' },
@@ -113,6 +114,12 @@ function DeactivationReasonSection({ choices }: { choices: { value: string; labe
 
 export function EmployeeEdit() {
   const { state } = useApp();
+  // ours#850: offer the masters the admin maintains (common-masters.GenderType, egov-hrms.EmployeeStatus /
+  // EmployeeType), not a hardcoded list that disagreed with them; the old lists stay as the fallback when a master
+  // is empty or unreadable.
+  const genderChoices = useMdmsChoices('gender-types', GENDER_CHOICES);
+  const statusChoices = useMdmsChoices('employee-statuses', STATUS_CHOICES);
+  const typeChoices = useMdmsChoices('employee-types', TYPE_CHOICES);
   const tenantId = state.tenant;
   const { validator: mobileValidate, rules: mobileRules } = useMobileValidator();
 
@@ -176,7 +183,7 @@ export function EmployeeEdit() {
           <DigitFormSelect
             source="user.gender"
             label="Gender"
-            choices={GENDER_CHOICES}
+            choices={genderChoices}
             placeholder="Select gender..."
           />
           <DateEpochField source="user.dob" label="Date of Birth" />
@@ -184,13 +191,13 @@ export function EmployeeEdit() {
           <DigitFormSelect
             source="employeeType"
             label="Type"
-            choices={TYPE_CHOICES}
+            choices={typeChoices}
             placeholder="Select type..."
           />
           <DigitFormSelect
             source="employeeStatus"
             label="Status"
-            choices={STATUS_CHOICES}
+            choices={statusChoices}
             placeholder="Select status..."
           />
         </div>

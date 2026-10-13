@@ -205,6 +205,10 @@ export const REGISTRY: Record<string, ResourceConfig> = {
   'security-policy': { type: 'mdms', label: 'Security Policy', schema: 'DataSecurity.SecurityPolicy', idField: 'model', nameField: 'model' },
   'inbox-config': { type: 'mdms', label: 'Inbox Config', schema: 'INBOX.InboxQueryConfiguration', idField: 'module', nameField: 'module' },
   'deactivation-reasons': { type: 'mdms', label: 'Deactivation Reasons', schema: 'egov-hrms.DeactivationReason', idField: 'code', nameField: 'code' },
+  // ours#850: the masters the Employee form's gender / status / type selects offer (editable here too).
+  'gender-types': { type: 'mdms', label: 'Gender Types', schema: 'common-masters.GenderType', idField: 'code', nameField: 'code' },
+  'employee-statuses': { type: 'mdms', label: 'Employee Statuses', schema: 'egov-hrms.EmployeeStatus', idField: 'code', nameField: 'code' },
+  'employee-types': { type: 'mdms', label: 'Employee Types', schema: 'egov-hrms.EmployeeType', idField: 'code', nameField: 'code' },
   degrees: { type: 'mdms', label: 'Degrees', schema: 'egov-hrms.Degree', idField: 'code', nameField: 'code' },
   'employment-tests': { type: 'mdms', label: 'Employment Tests', schema: 'egov-hrms.EmploymentTest', idField: 'code', nameField: 'code' },
   specializations: { type: 'mdms', label: 'Specializations', schema: 'egov-hrms.Specalization', idField: 'code', nameField: 'code' },
