@@ -577,13 +577,19 @@ const PGRDetails = () => {
     isCurrentAssignee(currentAssignees, userInfo?.info?.uuid)
     && workingContext?.hasReportingTo !== false;
 
+  // The roles this screen acts on. An employee account can also hold CITIZEN, and the
+  // workflow grants CITIZEN its own actions (COMMENT, RATE) that this screen has no form
+  // for, so picking one did nothing (#2314). Those belong to the citizen app.
+  const employeeRoles = () =>
+    (userInfo?.info?.roles || []).map((role) => role.code).filter((code) => code !== "CITIZEN");
+
   // Get list of valid actions for current user and state
   const getNextActionOptions = (workflowData, businessServiceResponse) => {
     const currentState = workflowData?.ProcessInstances?.[0]?.state;
     const currentAssignees = currentAssigneesInOccupancy(workflowData?.ProcessInstances);
     const matchingState = businessServiceResponse?.states?.find((state) => state.uuid === currentState?.uuid);
     if (!matchingState) return [];
-    const userRoles = userInfo?.info?.roles?.map((role) => role.code) || [];
+    const userRoles = employeeRoles();
     return matchingState.actions
       ? matchingState.actions
         .filter((action) => action.roles.some((role) => userRoles.includes(role)))
@@ -611,7 +617,7 @@ const PGRDetails = () => {
   // are seeded with PGR_LME or GRO but no PGR_VIEWER). PGR_VIEWER is
   // a viewer credential, not a prerequisite to act.
   const shouldShowActionButton = () => {
-    const userRoles = userInfo?.info?.roles?.map((role) => role.code) || [];
+    const userRoles = employeeRoles();
     const currentState = workflowData?.ProcessInstances?.[0]?.state;
     if (!currentState?.actions) return false;
     const allActionRoles = new Set();
