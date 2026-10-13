@@ -10,6 +10,7 @@ import { point as turfPoint } from "@turf/helpers";
 import useMapConfig from "../hooks/pgr/useMapConfig";
 import useTenantBoundaries from "../hooks/pgr/useTenantBoundaries";
 import { hasUsableGeoLocation } from "../utils/geoLocation";
+import { translateOr } from "../utils/selectPlaceholder";
 
 // Fix default icon issue in React builds
 delete L.Icon.Default.prototype._getIconUrl;
@@ -690,7 +691,7 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
               flexDirection: "column"
             }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-                <div style={{ fontSize: "16px", fontWeight: "600", color: "#0B0C0C" }}>{t("Selected Locations")}</div>
+                <div style={{ fontSize: "16px", fontWeight: "600", color: "#0B0C0C" }}>{translateOr(t, "CS_MAP_SELECTED_LOCATIONS", "Selected Locations")}</div>
                 {polygonPoints.length > 0 ? (
                   <div
                     onClick={() => setPolygonPoints([])}
@@ -741,7 +742,7 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
                 </div>
               ) : (
                 <div style={{ fontSize: "14px", color: "#505A5F", fontStyle: "italic" }}>
-                  {t("Click on map to select points")}
+                  {translateOr(t, "CS_MAP_CLICK_TO_SELECT_POINTS", "Click on map to select points")}
                 </div>
               )}
             </div>

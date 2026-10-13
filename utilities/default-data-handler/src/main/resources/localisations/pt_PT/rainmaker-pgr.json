@@ -1,0 +1,1712 @@
+[
+    {
+        "code": "ANOTHER_USER",
+        "message": "Outro utilizador",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ASSIGN",
+        "message": "Atribuir",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ASSIGNED_TO_ALL",
+        "message": "Atribuídas a todos",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ASSIGNED_TO_ME",
+        "message": "Atribuídas a mim",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ASSIGN_SUCCESSFULLY",
+        "message": "Atribuída com sucesso",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "COMPLAINTS_COMPLAINANT_CONTACT_NUMBER",
+        "message": "N.º de telefone do reclamante",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "COMPLAINTS_COMPLAINANT_NAME",
+        "message": "Nome do reclamante",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_CLOSE",
+        "message": "FECHAR",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_PINCODE",
+        "message": "Código postal",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_REQUIRED_ERRMSG",
+        "message": "Obrigatório",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_ACTION_ASSIGN",
+        "message": "Atribuir reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_ACTION_ESCALATE",
+        "message": "Escalar reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_ACTION_REASSIGN",
+        "message": "Reatribuir reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_ADDCOMPLAINT_ADDITIONAL_DETAILS",
+        "message": "Informações adicionais da morada",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_ADDCOMPLAINT_ADDITIONAL_DETAILS_SUBMIT_COMPLAINT",
+        "message": "Submeter reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_ADDCOMPLAINT_COMPLAINT_SUB_TYPE",
+        "message": "Subcategoria da reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_ADDCOMPLAINT_COMPLAINT_TYPE",
+        "message": "Categoria da reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_ADDCOMPLAINT_LANDMARK",
+        "message": "Ponto de referência",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_ADDCOMPLAINT_SELECT_GEOLOCATION_TEXT",
+        "message": "Clique sem soltar para colocar o marcador na localização da reclamação. Se não conseguir marcar a localização, pode ignorar este passo e continuar.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_ADDCOMPLAINT_YOU_RATED",
+        "message": "Avaliou com ",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_CANNOT_REOPEN_COMPLAINT_PAST_DEADLINE",
+        "message": "O prazo para reabrir esta reclamação já terminou",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_CLOSE_POLYGON_MODE",
+        "message": "Parar de desenhar",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_ASSIGN",
+        "message": "Atribuir",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_ATTACHMENTS",
+        "message": "Anexos",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_BACK",
+        "message": "Voltar",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_BREADCRUMB",
+        "message": "Trilho de navegação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_CANCEL",
+        "message": "Cancelar",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_CANCELLED",
+        "message": "Cancelada",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_CHOOSE_FILE",
+        "message": "Escolher ficheiro",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_CLEAR",
+        "message": "Limpar",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_CLOSED",
+        "message": "Encerrada",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_CLOSEDAFTERREJECTION",
+        "message": "Encerrada após rejeição",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_CLOSEDAFTERRESOLUTION",
+        "message": "Encerrada após resolução",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_COMMENTS",
+        "message": "Comentários",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_COMPLAINT_FILED",
+        "message": "Reclamação apresentada",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_COMPLAINT_NO",
+        "message": "N.º da reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_COMPLAINT_NOT_SUBMITTED",
+        "message": "Não foi possível enviar a reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_COMPLAINT_REJECTED",
+        "message": "Rejeitada",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_COMPLAINT_REOPENED",
+        "message": "Reclamação reaberta",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_COMPLAINT_RESOLVED",
+        "message": "Reclamação resolvida",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_COMPLAINT_SUBMITTED",
+        "message": "Reclamação submetida",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_COMPLAINT_SUBMIT_RETRY",
+        "message": "Ocorreu um problema ao enviar a sua reclamação. Tente novamente.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_COPIED",
+        "message": "Copiado",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_COPY",
+        "message": "Copiar",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_EMPLOYEE_COMMENTS",
+        "message": "Comentários",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_EMPLOYEE_NAME",
+        "message": "Nome do funcionário",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_ERROR_LOADING_RESULTS",
+        "message": "Erro ao carregar os resultados",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_FILE_A_COMPLAINT",
+        "message": "Apresentar uma reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_FILTER",
+        "message": "Filtrar",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_HOME",
+        "message": "Início",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_INBOX",
+        "message": "Caixa de entrada",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_LATITUDE_SHORT",
+        "message": "Lat.:",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_LONGITUDE_SHORT",
+        "message": "Long.:",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_MOBILE_NO",
+        "message": "N.º de telemóvel",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_NEXT",
+        "message": "Seguinte",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_OPEN",
+        "message": "Aberta",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PENDINGATLME",
+        "message": "Pendente no LME",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PENDINGATSUPERVISOR",
+        "message": "Pendente no supervisor",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PENDINGFORASSIGNMENT",
+        "message": "Pendente de atribuição",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PENDINGFORASSIGNMENT_AFTERREOPEN",
+        "message": "Pendente de atribuição",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PENDINGFORREASSIGNMENT",
+        "message": "Pendente de reatribuição",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_CANCELLED",
+        "message": "Cancelada",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_CLOSEDAFTERREJECTION",
+        "message": "Encerrada após rejeição",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_CLOSEDAFTERRESOLUTION",
+        "message": "Encerrada após resolução",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_PENDINGATLME",
+        "message": "Pendente no funcionário de proximidade",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_PENDINGATSUPERVISOR",
+        "message": "Pendente no supervisor",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_PENDINGFORASSIGNMENT",
+        "message": "Pendente de atribuição",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_PENDINGFORREASSIGNMENT",
+        "message": "Pendente de reatribuição",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_REJECTED",
+        "message": "Rejeitada",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_RESOLVED",
+        "message": "Resolvida",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_RESOLVEDBYSUPERVISOR",
+        "message": "Resolvida pelo supervisor",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PINCODE_NOT_SERVICABLE",
+        "message": "Lamentamos, não prestamos serviço nesta cidade",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_RATING_SUBMIT_TEXT",
+        "message": "Ao fazer ouvir a sua voz, ajuda-nos a melhorar o mSeva.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_REJECT",
+        "message": "Rejeitar",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_REJECTED",
+        "message": "Rejeitada",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_REMOVE",
+        "message": "Remover",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_REQUIRED_FIELDS_MISSING",
+        "message": "Faltam campos obrigatórios",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_RESOLVE",
+        "message": "Resolver",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_RESOLVED",
+        "message": "Resolvida",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_RESOLVEDBYSUPERVISOR",
+        "message": "Resolvida pelo supervisor",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_SEARCH",
+        "message": "Pesquisar",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_SELECT_EMPLOYEE",
+        "message": "Selecionar funcionário",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_SUBMIT",
+        "message": "SUBMETER",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_THANK_YOU",
+        "message": "Obrigado",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_TRACK_COMPLAINT_TEXT",
+        "message": "A notificação com o número da reclamação é enviada para o seu número de telemóvel registado. Pode acompanhar o estado da reclamação na aplicação móvel ou web.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_TRY_AGAIN",
+        "message": "Tentar novamente",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_VIEW_COMPLAINT",
+        "message": "Ver reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMPLAINT_ADDTIONAL_DETAILS",
+        "message": "Detalhes adicionais",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMPLAINT_BOUNDARY_LEAF_REQUIRED",
+        "message": "Escolha um Bairro — não é possível apresentar reclamações ao nível do Condado ou do Subcondado",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS_DESCRIPTION",
+        "message": "Descrição",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMPLAINT_DETAILS_APPLICATION_STATUS",
+        "message": "Estado do pedido",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMPLAINT_DETAILS_AREA",
+        "message": "Localidade",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMPLAINT_DETAILS_COMPLAINT_DATE",
+        "message": "Data da reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMPLAINT_DETAILS_COMPLAINT_DETAILS",
+        "message": "Detalhes da reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMPLAINT_DETAILS_COMPLAINT_NO",
+        "message": "N.º da reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMPLAINT_DETAILS_COMPLAINT_SUBTYPE",
+        "message": "Subcategoria da reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMPLAINT_DETAILS_COMPLAINT_TIMELINE",
+        "message": "Cronologia da reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMPLAINT_DETAILS_COMPLAINT_TYPE",
+        "message": "Categoria da reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMPLAINT_DETAILS_CURRENT_STATUS",
+        "message": "Estado atual",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMPLAINT_DETAILS_LOAD_ERROR",
+        "message": "Não foi possível carregar esta reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMPLAINT_DETAILS_LOAD_ERROR_DESC",
+        "message": "Neste momento, não é possível aceder aos detalhes da reclamação. Tente atualizar a página daqui a pouco.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMPLAINT_DETAILS_PIN_LOCATION",
+        "message": "Marcar localização",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMPLAINT_DETAILS_SUB_COMPLAINT_TYPE",
+        "message": "Subcategoria da reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMPLAINT_FILED_DATE",
+        "message": "Data de apresentação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMPLAINT_LANDMARK__DETAILS",
+        "message": "Ponto de referência",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMPLAINT_LOCATION",
+        "message": "Localização da reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMPLAINT_LOCATION_DETAILS",
+        "message": "Detalhes da localização",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMPLAINT_PICK_ONE",
+        "message": "Selecionar…",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMPLAINT_PICK_PARENT_FIRST",
+        "message": "Selecione primeiro o nível acima",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMPLAINT_PICK_SUBTYPE",
+        "message": "Selecione uma subcategoria",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMPLAINT_PICK_TYPE",
+        "message": "Selecione uma categoria de reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMPLAINT_POSTALCODE_INVALID_ERROR_GENERIC",
+        "message": "Introduza um código postal válido",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMPLAINT_POSTALCODE_INVALID_ERROR_LEN",
+        "message": "Introduza um código postal válido com {{length}} dígitos",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMPLAINT_POSTALCODE__DETAILS",
+        "message": "Código postal",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMPLAINT_RATE_HELP_TEXT",
+        "message": "Como avalia a sua experiência connosco?",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMPLAINT_RATE_SUBTEXT",
+        "message": "A sua avaliação ajuda-nos a melhorar. Demora apenas um momento.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMPLAINT_RATE_TEXT",
+        "message": "Como avalia a sua experiência connosco?",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMPLAINT_TYPE_OTHERS",
+        "message": "Outros",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_CREATECOMPLAINT_MOHALLA",
+        "message": "Localidade",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FEEDBACK_ENTER_RATING_ERROR",
+        "message": "Avalie a sua experiência de 1 a 5 estrelas",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FEEDBACK_OTHERS",
+        "message": "Outros",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FEEDBACK_QUALITY_OF_WORK",
+        "message": "Qualidade do trabalho",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FEEDBACK_RESOLUTION_TIME",
+        "message": "Tempo de resolução",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FEEDBACK_SERVICES",
+        "message": "Serviços",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FEEDBACK_WHAT_WAS_GOOD",
+        "message": "O que correu bem ?",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FILE_ADDRESS",
+        "message": "Morada",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FILE_ANOTHER",
+        "message": "Apresentar outra reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FILE_ATTACHMENTS",
+        "message": "Anexos",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FILE_CATEGORY",
+        "message": "Natureza do problema",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FILE_CATEGORY_LABEL",
+        "message": "Categoria da reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FILE_CHECK_SUBMIT",
+        "message": "Verificar e submeter",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FILE_COMPLAINANT",
+        "message": "Dados do reclamante",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FILE_COMPLAINT_NUMBER",
+        "message": "Número da reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FILE_DESCRIBE",
+        "message": "Descreva a sua reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FILE_DESCRIBE_PLACEHOLDER",
+        "message": "Partilhe o máximo de informação possível sobre o problema. Quanto mais nos disser, mais depressa poderemos ajudar.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FILE_DESCRIBE_TITLE",
+        "message": "Diga-nos como podemos ajudar",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FILE_FILED_ON",
+        "message": "Apresentada em",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FILE_HINT_CATEGORY",
+        "message": "Selecione uma categoria e uma subcategoria de reclamação para continuar.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FILE_HINT_DESCRIBE",
+        "message": "Descreva o problema para continuar.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FILE_HINT_LETTERS",
+        "message": "Utilize pelo menos três letras para descrever a reclamação.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FILE_HINT_LOCATION",
+        "message": "Selecione todos os níveis da localização para continuar.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FILE_HINT_UPLOADING",
+        "message": "Aguarde que as fotografias terminem de carregar.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FILE_HINT_UPLOAD_FAILED",
+        "message": "Uma fotografia não foi carregada. Tente novamente ou remova-a.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FILE_LOCATION_TITLE",
+        "message": "Diga-nos onde isto aconteceu",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FILE_NEXT_STEP",
+        "message": "Seguinte: {step}",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FILE_NONE",
+        "message": "Nenhum",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FILE_NOT_CAPTURED",
+        "message": "Não registada",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FILE_NOT_PINNED",
+        "message": "Ainda sem localização marcada (Opcional)",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FILE_NOT_PROVIDED",
+        "message": "Não indicado",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FILE_NOT_SELECTED",
+        "message": "Não selecionada",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FILE_NO_PHOTOS",
+        "message": "Nenhuma anexada",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FILE_N_PHOTOS",
+        "message": "{count} fotografias",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FILE_ONE_PHOTO",
+        "message": "1 fotografia",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FILE_PHOTO",
+        "message": "Adicionar uma fotografia",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FILE_PHOTOS",
+        "message": "Fotografias",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FILE_PHOTOS_ATTACHED",
+        "message": "{count} anexada(s)",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FILE_PINNED",
+        "message": "Localização marcada",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FILE_PIN_DROP",
+        "message": "Localização",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FILE_PIN_HINT",
+        "message": "Pesquise, arraste o mapa ou utilize a localização atual",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FILE_PROGRESS",
+        "message": "Progresso",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FILE_REVIEW_HEADING",
+        "message": "Reveja antes de submeter",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FILE_STEP_DETAILS",
+        "message": "Detalhes da reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FILE_STEP_LOCATION",
+        "message": "Localização",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FILE_STEP_OF",
+        "message": "Passo {current} de {total}",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FILE_STEP_REVIEW",
+        "message": "Revisão",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FILE_SUBCATEGORY_LABEL",
+        "message": "Subcategoria da reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FILE_TODAY",
+        "message": "Hoje",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FILE_TOO_LARGE",
+        "message": "Ficheiro demasiado grande. Carregue uma imagem com < 5 MB.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_GEOLOCATION_ERROR",
+        "message": "Não foi possível obter a localização atual.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_GEOLOCATION_NOT_SUPPORTED",
+        "message": "Este navegador não consegue partilhar a sua localização.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_HOME_MY_COMPLAINTS",
+        "message": "As minhas reclamações",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_LANDMARK_PLACEHOLDER",
+        "message": "p. ex. perto da Mesquita Jamia",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_LOADING_ADDRESS",
+        "message": "A carregar a morada...",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_LOCATE_ME",
+        "message": "Utilizar a minha localização atual",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_LOCATION_NOT_FOUND",
+        "message": "Não foi possível encontrar esse local. Experimente outra pesquisa.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_MAP_CLICK_TO_SELECT_POINTS",
+        "message": "Clique no mapa para selecionar pontos",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_MAP_SELECTED_LOCATIONS",
+        "message": "Localizações selecionadas",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_MYCOMPLAINTS_NO_COMPLAINTS",
+        "message": "Ainda não registou nenhuma reclamação. \nComece com uma e faça a diferença.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_MYCOMPLAINTS_NO_COMPLAINTS_EMPLOYEE",
+        "message": "Nenhum registo encontrado",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_MY_COMPLAINTS_CLEAR_SEARCH",
+        "message": "Limpar pesquisa",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_MY_COMPLAINTS_COL_CONCERN",
+        "message": "Assunto",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_MY_COMPLAINTS_COL_FILED_ON",
+        "message": "Apresentada em",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_MY_COMPLAINTS_COL_NUMBER",
+        "message": "N.º da reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_MY_COMPLAINTS_COL_STATUS",
+        "message": "Estado",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_MY_COMPLAINTS_COUNT",
+        "message": "{count} reclamações",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_MY_COMPLAINTS_COUNT_ONE",
+        "message": "1 reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_MY_COMPLAINTS_NO_MATCH_BODY",
+        "message": "Experimente um número de reclamação ou uma palavra da descrição.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_MY_COMPLAINTS_NO_MATCH_TITLE",
+        "message": "Nenhuma reclamação corresponde à sua pesquisa",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_MY_COMPLAINTS_RANGE",
+        "message": "{from}–{to} de {total}",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_MY_COMPLAINTS_SEARCH",
+        "message": "Pesquisar uma reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_NAVIGATE",
+        "message": "Abrir em Mapas",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_NO_COMPLAINTS_TITLE",
+        "message": "Ainda não há reclamações",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_NO_COMPLAINT_HIERARCHY",
+        "message": "Não existe nenhuma hierarquia de reclamações configurada para esta organização.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_NO_FAQ_FOUND",
+        "message": "Não há perguntas frequentes disponíveis.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_OPEN_IN_GOOGLE_MAPS",
+        "message": "Abrir no Google Maps",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_PGR_ASSIGNEE_REQUIRED",
+        "message": "Selecione o funcionário a quem esta reclamação vai ser atribuída.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_PGR_COMPLAINT_NUMBER",
+        "message": "N.º da reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_PHOTO_ADD",
+        "message": "Adicionar uma fotografia",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_PHOTO_DROP",
+        "message": "Clique para carregar ou arraste e largue uma fotografia",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_PHOTO_FAILED",
+        "message": "Falha no carregamento",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_PHOTO_GALLERY",
+        "message": "Escolher da galeria",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_PHOTO_LIMIT",
+        "message": "Pode anexar até 5 fotografias.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_PHOTO_RULES",
+        "message": "Uma fotografia ajuda-nos a compreender melhor o seu problema. Pode carregar um ficheiro JPG ou PNG com até 5 MB",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_PHOTO_SHEET_TITLE",
+        "message": "Adicionar uma fotografia",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_PHOTO_TAKE",
+        "message": "Tirar uma fotografia",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_PHOTO_TOO_LARGE",
+        "message": "Essa fotografia tem mais de 5 MB. Escolha uma mais pequena.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_PHOTO_TYPE",
+        "message": "Só é possível anexar fotografias JPG ou PNG.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_PHOTO_UPLOADING",
+        "message": "A carregar…",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_PIN_LOCATION_HINT",
+        "message": "Coloque um marcador no local exato — vamos utilizá-lo para encaminhar a sua reclamação para o bairro certo.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_RATING_COMMENTS_PLACEHOLDER",
+        "message": "Partilhe mais alguma coisa que gostaria que a equipa soubesse…",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_RATING_LABEL",
+        "message": "Classificação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_RATING_N_STARS",
+        "message": "{count} estrelas",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_RATING_ONE_STAR",
+        "message": "1 estrela",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_REJECTION_DUPLICATE",
+        "message": "Reclamação duplicada",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_REJECTION_INSUFFICIENT_INFO",
+        "message": "Informação insuficiente",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_REJECTION_NOT_PUBLIC_INFRA",
+        "message": "Não se encontra em infraestrutura pública",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_REJECTION_OUTSIDE_JURISDICTION",
+        "message": "Fora da jurisdição do condado de Bomet",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_REJECTION_OUT_OF_SCOPE",
+        "message": "Fora do âmbito deste departamento",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_REJECTION__DUPLICATE",
+        "message": "Reclamação duplicada",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_REJECTION__INSUFFICIENT_INFO",
+        "message": "Informação insuficiente",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_REJECTION__NOT_PUBLIC_INFRA",
+        "message": "Não é infraestrutura pública",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_REJECTION__OUTSIDE_JURISDICTION",
+        "message": "Fora da jurisdição",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_REJECTION__OUT_OF_SCOPE",
+        "message": "Fora do âmbito",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_REJECT_COMPLAINT",
+        "message": "Nome do funcionário",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_SEARCH_ERROR",
+        "message": "A pesquisa não funcionou. Tente novamente.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_SELECT_AREA",
+        "message": "Desenhe uma área no mapa",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_VOICE_FAILED",
+        "message": "A entrada por voz parou inesperadamente. Tente novamente.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_VOICE_LANGUAGE_HINT",
+        "message": "Fale no idioma selecionado no topo da página.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_VOICE_LANGUAGE_NOT_SUPPORTED",
+        "message": "A entrada por voz não está disponível neste idioma. Escreva a sua reclamação.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_VOICE_MIC_BLOCKED",
+        "message": "O acesso ao microfone está bloqueado. Permita-o para este site nas definições do seu navegador e tente novamente.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_VOICE_NETWORK",
+        "message": "A entrada por voz precisa de ligação à Internet. Verifique-a e tente novamente.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_VOICE_NO_MIC",
+        "message": "Não foi encontrado nenhum microfone neste dispositivo.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_VOICE_NO_SPEECH",
+        "message": "Não ouvimos nada. Tente novamente e fale perto do microfone.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_VOICE_READY",
+        "message": "Transcrição pronta",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_VOICE_READY_HINT",
+        "message": "Adicione-a à sua descrição, grave novamente ou elimine-a.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_VOICE_RECORD",
+        "message": "Grave a sua reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_VOICE_RECORDING",
+        "message": "A gravar…",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_VOICE_RETAKE",
+        "message": "Gravar de novo",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_VOICE_RETRY",
+        "message": "Tentar novamente",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_VOICE_SERVICE_OFF",
+        "message": "A entrada por voz está desativada neste dispositivo. Num iPhone ou Mac, ative a Siri nas Definições e tente novamente.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_VOICE_STOP",
+        "message": "Parar",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_VOICE_TRY_AGAIN",
+        "message": "Não foi possível gravar",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_VOICE_USE",
+        "message": "Adicionar",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ESCALATE",
+        "message": "Escalar",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ESCALATE_SUCCESSFULLY",
+        "message": "Escalada com sucesso",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_COMMON_CLEAR_SEARCH",
+        "message": "Limpar pesquisa",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_COMMON_FILED_VIA_MOBILE",
+        "message": "Apresentada via aplicação móvel",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_COMMON_FILED_VIA_WEB",
+        "message": "Apresentada via web",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_COMMON_FILED_VIA_WHATSAPP",
+        "message": "Apresentada via WhatsApp",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_COMMON_FILTER",
+        "message": "Filtrar por",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_COMMON_FILTER_BY",
+        "message": "Filtrar por",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_COMMON_SEARCH",
+        "message": "Pesquisar",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_CREATECOMPLAINT_PROVIDE_COMPLAINANT_DETAILS",
+        "message": "Dados do reclamante",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_CREATECOMPLAINT_SELECT_PLACEHOLDER",
+        "message": "Selecionar",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_FILTER_STATUS",
+        "message": "Estado",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "FAILED_TO_CREATE_COMPLAINT",
+        "message": "Não foi possível apresentar a reclamação. Verifique o formulário e tente novamente.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "FAILED_TO_UPDATE_COMPLAINT",
+        "message": "Não foi possível atualizar a reclamação. Tente novamente mais tarde.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "FAQ_S",
+        "message": "Perguntas frequentes",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "MYCITY_CODE_LABEL",
+        "message": "Cidade",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "NA",
+        "message": "N/A",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "NO_RESULTS_FOUND",
+        "message": "Nenhum resultado encontrado",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_ACTION_REJECT",
+        "message": "Rejeitar reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_ACTION_RESOLVE",
+        "message": "Resolver reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_CATEGORY",
+        "message": "Categoria da reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_INBOX_TAB_ALL",
+        "message": "Todas as reclamações",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_INBOX_TAB_MY",
+        "message": "As minhas reclamações",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_SUB_TYPE",
+        "message": "Subcategoria da reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "REASSIGN",
+        "message": "Reatribuir",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "REASSIGN_SUCCESSFULLY",
+        "message": "Reatribuída com sucesso",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "REJECT",
+        "message": "Rejeitar",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "REJECT_SUCCESSFULLY",
+        "message": "Rejeitada com sucesso",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "REOPEN",
+        "message": "Reabrir",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "REOPEN_SUCCESSFULLY",
+        "message": "Reaberta com sucesso",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "RESOLVE",
+        "message": "Resolver",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "RESOLVE_SUCCESSFULLY",
+        "message": "Resolvida com sucesso",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "WF_PGR_APPLY",
+        "message": "Apresentada",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "WF_PGR_ASSIGN",
+        "message": "Atribuída",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "WF_PGR_ESCALATE",
+        "message": "Escalada",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "WF_PGR_FORWARD",
+        "message": "Encaminhada para o supervisor",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "WF_PGR_RATE",
+        "message": "Encerrada após avaliação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "WF_PGR_REASSIGN",
+        "message": "Reatribuída",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "WF_PGR_REJECT",
+        "message": "Rejeitada",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "WF_PGR_REOPEN",
+        "message": "Reaberta",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "WF_PGR_RESOLVE",
+        "message": "Resolvida",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "WF_PGR_RESOLVEBYSUPERVISOR",
+        "message": "Resolvida pelo supervisor",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    }
+]

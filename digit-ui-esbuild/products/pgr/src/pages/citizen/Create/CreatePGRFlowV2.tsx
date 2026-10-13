@@ -1226,7 +1226,7 @@ const CreatePGRFlowV2: React.FC = () => {
           }}
         >
           <span
-            aria-label="Loading"
+            aria-label={tr(t, "CS_LOADING", "Loading...")}
             style={{
               display: "inline-block",
               height: "2rem",
