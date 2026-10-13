@@ -321,13 +321,20 @@ export default function LoginPage() {
           </Button>
         )}
 
-        <p className="text-center text-sm text-muted-foreground">
-          New to DIGIT?{' '}
-          <Link to="/signup" className="font-medium text-primary underline underline-offset-4">
-            Create an account
-          </Link>
-        </p>
+        {/* ours (cfgreview F31, #1577): self-serve sign-up is not served on 3.x yet (ChakshuGautam/ccrs-digit3#945), so
+            the link is offered only where the deployment says sign-up works (SIGNUP_ENABLED=true in config.js) */}
+        {signupEnabled() && (
+          <p className="text-center text-sm text-muted-foreground">
+            New to DIGIT?{' '}
+            <Link to="/signup" className="font-medium text-primary underline underline-offset-4">
+              Create an account
+            </Link>
+          </p>
+        )}
       </section>
     </AuthShell>
   );
 }
+
+// ours (cfgreview F31, #1577): at the end so the other patches' import hunks keep their anchors
+import { signupEnabled } from './signupEnabled';
