@@ -42,6 +42,20 @@ public class OnboardingProgress {
         }
     }
 
+    /**
+     * Adds one to a counter kept with the record progress and saves it; returns the new count. Its value is never
+     * {@code DONE}, so it is not progress: it does not reset the operation's retry budget.
+     */
+    public int increment(String key) {
+        Object current = operation.getRecordProgress().get(key);
+        int next;
+        try { next = (current == null ? 0 : Integer.parseInt(current.toString().trim())) + 1; }
+        catch (NumberFormatException e) { next = 1; }
+        operation.getRecordProgress().put(key, String.valueOf(next));
+        save();
+        return next;
+    }
+
     public void record(String key, Runnable action) {
         if ("DONE".equals(operation.getRecordProgress().get(key))) return;
         operation.getRecordProgress().put(key, "STARTED");

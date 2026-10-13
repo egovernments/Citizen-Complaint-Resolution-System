@@ -82,8 +82,10 @@ public class ConfigurationSanityCheck {
         }
         if (!Boolean.FALSE.equals(config.getCoreSmsEnabled()) && !StringUtils.hasText(config.getCoreSmsCountryCode())) {
             warn.add("core SMS (login OTPs) is on but novu.bridge.core.sms.country.code is blank — a "
-                    + "number DIGIT sends without a country code (as user-otp does) cannot be made E.164, "
-                    + "so OTPs to it will not be routed. Set NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE, e.g. +254");
+                    + "national number (as user-otp sends) is completed from its tenant's "
+                    + "common-masters.MobileNumberValidation rule only; at a tenant without one it is "
+                    + "not sent (SKIPPED / NB_CONTACT_INVALID). Set NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE, "
+                    + "e.g. +254, as the deployment-wide fallback");
         }
         if (Boolean.FALSE.equals(config.getProxyAuthEnabled())) {
             warn.add("novu.bridge.proxy.auth.enabled=false — the configurator proxy endpoints are unauthenticated");

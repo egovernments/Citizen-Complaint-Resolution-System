@@ -285,13 +285,27 @@ public class ThinEventBuilder {
         return date.format(DateTimeFormatter.ofPattern(DATE_PATTERN));
     }
 
-    /** A number already in E.164 is not prefixed a second time. */
+    /**
+     * The citizen's number in E.164 when their own country code is known ({@code +254}, {@code 254};
+     * one national trunk {@code 0} dropped, a number that already carries the code or a {@code +}
+     * kept), else the national number as stored: novu-bridge completes it with the TENANT's country
+     * code ({@code common-masters.MobileNumberValidation}), never with a bare {@code +}. The same rule
+     * as novu-bridge's {@code PhoneNumbers.toE164}.
+     */
     static String withCountryCode(String mobileNumber, String countryCode) {
         if (mobileNumber == null) return null;
-        if (mobileNumber.startsWith("+")) return mobileNumber;
-        if (StringUtils.hasText(countryCode)) return countryCode + mobileNumber;
-        return mobileNumber;
+        String trimmed = mobileNumber.trim();
+        if (trimmed.startsWith("+")) return trimmed;
+        String cc = countryCode == null ? "" : countryCode.replaceAll("\\D", "").replaceFirst("^0+", "");
+        String digits = trimmed.replaceAll("\\D", "");
+        if (!cc.matches("[1-9][0-9]{0,3}") || digits.isEmpty() || digits.startsWith("00")) return trimmed;
+        if (digits.startsWith("0")) return digits.length() > 1 ? "+" + cc + digits.substring(1) : trimmed;
+        if (digits.startsWith(cc) && digits.length() - cc.length() >= MIN_NATIONAL_DIGITS) return "+" + digits;
+        return "+" + cc + digits;
     }
+
+    /** Shortest national mobile number read as "already carries the country code" (KE/MZ 9, IN 10). */
+    private static final int MIN_NATIONAL_DIGITS = 9;
 
     private static void put(Map<String, Object> map, String key, String value) {
         if (value != null) map.put(key, value);
