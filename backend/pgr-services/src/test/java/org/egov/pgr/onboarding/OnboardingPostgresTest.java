@@ -222,6 +222,18 @@ public class OnboardingPostgresTest {
         op.getCompletedSteps().add("TENANT_FOUNDATION");repository.checkpoint(op,third.getLeaseToken(),now);assertEquals(0,retryCount(op.getId()));
         failRetry(third,now);assertEquals(Long.valueOf(now+1000),retryAt(original.getId()));
     }
+    /** NOTIFICATION_DEFAULTS counts its retryable failures in the progress; the count must never read as progress. */
+    @Test public void aFailureCounterInTheProgressDoesNotResetTheRetryBudget_andSurvivesTheReclaim() {
+        var original=submit();long now=System.currentTimeMillis();var first=repository.claimOperation("first",UUID.randomUUID(),now+120000,now).orElseThrow();failRetry(first,now);
+        now+=1000;var second=repository.claimOperation("second",UUID.randomUUID(),now+120000,now).orElseThrow();var op=second.getOperation();
+        var progress=new OnboardingProgress(repository,op,second.getLeaseToken());
+        assertEquals(1,progress.increment(NotificationDefaultsStep.RETRYABLE_FAILURES));assertEquals(1,retryCount(op.getId()));
+        assertEquals(2,progress.increment(NotificationDefaultsStep.RETRYABLE_FAILURES));assertEquals(1,retryCount(op.getId()));
+        failRetry(second,now);now+=2000;var third=repository.claimOperation("third",UUID.randomUUID(),now+120000,now).orElseThrow();
+        assertEquals("2",third.getOperation().getRecordProgress().get(NotificationDefaultsStep.RETRYABLE_FAILURES));
+        assertEquals(3,new OnboardingProgress(repository,third.getOperation(),third.getLeaseToken()).increment(NotificationDefaultsStep.RETRYABLE_FAILURES));
+        assertEquals(2,retryCount(original.getId()));
+    }
     @Test public void concurrentAutomaticClaimsHaveOneLeaseWinner() throws Exception {
         submit();long now=System.currentTimeMillis();var first=repository.claimOperation("first",UUID.randomUUID(),now+120000,now).orElseThrow();failRetry(first,now);
         var pool=java.util.concurrent.Executors.newFixedThreadPool(2);var start=new java.util.concurrent.CountDownLatch(1);

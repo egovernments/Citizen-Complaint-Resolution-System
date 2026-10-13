@@ -35,7 +35,8 @@ config:
         image-name: "pgr-services-db"
   # pgr-services, novu-bridge and their -db migrator images are one release unit: the
   # deploy moves all four with one tag (NOTIFICATION_STACK_TAG / notification_stack_tag /
-  # global.notificationStackTag). Every run builds all of them from the same commit.
+  # global.notificationStackTag), and digit-user-preferences-service with its -db image
+  # (below) on the same tag. Every run builds all of them from the same commit.
   # (novu-bridge-endpoint and otp-publisher were retired with the thin-event stack.)
   - name: "builds/Citizen-Complaint-Resolution-System/backend/novu-bridge"
     build:

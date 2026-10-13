@@ -3,7 +3,8 @@ import { Link, useParams } from 'react-router-dom';
 import { Copy, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { AccessBreadcrumb, AccessTitle } from './AccessChrome';
 import { toast } from '@/hooks/use-toast';
 import { digitClient } from '@/providers/bridge';
 import { useApp } from '../App';
@@ -37,6 +38,7 @@ export default function PolicyRows() {
   if (!sections) return <div className="flex items-center gap-2 p-6 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading the rows</div>;
   return (
     <div className="flex flex-col gap-4 p-6" data-testid="policy-rows">
+      <AccessBreadcrumb trail={[{ label: 'Roles', to: '/manage/access-roles' }, { label: code!, to: `/manage/access/roles/${encodeURIComponent(code!)}` }, { label: 'Policy rows' }]} />
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-semibold">The rows behind {code}</h1>
         <span className="flex-1" />
@@ -46,7 +48,7 @@ export default function PolicyRows() {
       {sections.map((s) => (
         <Card key={`${s.schema}-${s.title}`} data-testid={`rows-${s.schema}`}>
           <CardHeader className="flex flex-row flex-wrap items-center gap-2">
-            <CardTitle className="text-base">{s.title}</CardTitle>
+            <AccessTitle level={2} className="text-base">{s.title}</AccessTitle>
             <span className="font-mono text-xs text-muted-foreground">{s.schema} · {s.id}</span>
             <span className="flex-1" />
             <Button variant="outline" size="sm" onClick={() => copy(s.json)} aria-label={`Copy ${s.title}`}><Copy className="h-4 w-4" /></Button>

@@ -75,6 +75,7 @@ const customEnglishMessages: TranslationMessages = {
       access_roles: 'Access Roles',
       workflows: 'Workflows',
       processes: 'Processes',
+      access: 'Access',
       mdms_schemas: 'MDMS Schemas',
       boundaries: 'Boundaries',
       advanced: 'Advanced',

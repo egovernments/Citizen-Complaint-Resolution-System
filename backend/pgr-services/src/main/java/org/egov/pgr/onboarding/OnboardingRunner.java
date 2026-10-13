@@ -24,7 +24,8 @@ import java.util.function.LongSupplier;
 @Component
 @ConditionalOnProperty(name = "pgr.onboarding.runner.enabled", havingValue = "true")
 public class OnboardingRunner implements SmartLifecycle {
-    public static final List<String> STEPS = List.of("TENANT_FOUNDATION", "PLATFORM_BASELINE", "FOUNDER_HRMS", "ORGANIZATION", "MEMBERSHIP", "BINDING");
+    public static final List<String> STEPS = List.of("TENANT_FOUNDATION", "PLATFORM_BASELINE", NotificationDefaultsStep.STEP,
+            "FOUNDER_HRMS", "ORGANIZATION", "MEMBERSHIP", "BINDING");
     static final String THREAD_PREFIX = "pgr-onboarding-";
     static final long READY_RECHECK_MS = 60_000, NOT_READY_RECHECK_MS = 30_000, NOT_READY_MAX_RECHECK_MS = 15 * 60_000;
     /**

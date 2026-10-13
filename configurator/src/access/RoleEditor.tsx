@@ -5,17 +5,18 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { toast } from '@/hooks/use-toast';
 import { digitClient } from '@/providers/bridge';
 import { useApp } from '../App';
+import { AccessBreadcrumb, AccessTitle } from './AccessChrome';
 import { useMastersCapability } from '@/hooks/useMastersCapability';
 import {
   AXES, CAPABILITIES, KNOWN_FIELDS, PRESETS, WORKFLOW_CAPABILITIES, actionsOf, capabilityState, describeClause, effectiveScope, maskPreview,
   parseFieldRule, plainWords, scopeBlockOf, unavailableVars, vocabulary,
   type Axis, type Clause, type CatalogueRow, type Level, type OnDeny, type RoleScope,
 } from './policyModel';
-import { ConcurrentChangeError, applySave, loadRole, planSave, type Edited, type Loaded, type Write } from './roleEditorData';
+import { ConcurrentChangeError, applySave, loadRole, planSave, refreshAccess, type Edited, type Loaded, type Write } from './roleEditorData';
 import { whenItApplies, whenItAppliesAll, type ChangeKind } from './effectTimes';
 
 /** Which kinds of change a save plan makes (for "when it applies"). */
@@ -126,7 +127,8 @@ export default function RoleEditor() {
     setSaving(true);
     try {
       const done = await applySave(digitClient, loaded, plan);
-      toast({ title: 'Role saved', description: [`${done.length} change(s) written.`, ...whenItAppliesAll(planKinds(plan))].join(' ') });
+      const refreshed = await refreshAccess(digitClient as never, plan);
+      toast({ title: 'Role saved', description: [`${done.length} change(s) written.`, ...whenItAppliesAll(planKinds(plan), refreshed === 'refreshed')].join(' ') });
       if (isNew) navigate(`/manage/access/roles/${roleCode}`, { replace: true }); else await load();
     } catch (e) {
       const msg = String((e as Error).message ?? e);
@@ -147,10 +149,11 @@ export default function RoleEditor() {
   return (
     <div className="flex flex-col gap-6 p-6 lg:flex-row" data-testid="role-editor">
       <main className="flex min-w-0 flex-1 flex-col gap-6">
+        <AccessBreadcrumb trail={[{ label: 'Roles', to: '/manage/access-roles' }, { label: isNew ? 'New role' : roleCode }]} />
         <Card>
           <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-4">
             <div className="flex flex-col gap-1">
-              <CardTitle className="text-2xl">{isNew ? 'New role' : name || roleCode}</CardTitle>
+              <AccessTitle level={1} className="text-2xl">{isNew ? 'New role' : name || roleCode}</AccessTitle>
               {!isNew && <span className="font-mono text-sm text-muted-foreground">{roleCode}</span>}
             </div>
             <div className="flex gap-2">
@@ -178,7 +181,7 @@ export default function RoleEditor() {
         </Card>
 
         <Card>
-          <CardHeader><CardTitle>What it may do</CardTitle></CardHeader>
+          <CardHeader><AccessTitle level={2}>What it may do</AccessTitle></CardHeader>
           <CardContent className="overflow-x-auto">
             <table className="w-full min-w-[560px] text-sm">
               <thead><tr className="text-left text-xs uppercase text-muted-foreground"><th className="p-2">Allowed</th><th className="p-2">Capability</th><th className="p-2">APIs it opens</th></tr></thead>
@@ -212,7 +215,7 @@ export default function RoleEditor() {
         </Card>
 
         <Card>
-          <CardHeader><CardTitle>Which complaints</CardTitle></CardHeader>
+          <CardHeader><AccessTitle level={2}>Which complaints</AccessTitle></CardHeader>
           <CardContent className="flex flex-col gap-4">
             {!block && <Alert><AlertTriangle className="h-4 w-4" /><AlertDescription>The complaint search action has no scope block at {root}: nobody sees complaints by scope. Adding one changes every role; ask a policy admin.</AlertDescription></Alert>}
             <div className="grid gap-4 md:grid-cols-2">
@@ -238,20 +241,21 @@ export default function RoleEditor() {
         </Card>
 
         <Card>
-          <CardHeader><CardTitle>Which fields they see</CardTitle></CardHeader>
+          <CardHeader><AccessTitle level={2}>Which fields they see</AccessTitle></CardHeader>
           <CardContent className="flex flex-col gap-3 overflow-x-auto">
             {!perRoleRules && <p className="text-sm text-amber-800">A rule for this role alone needs the engines' per-role check, which is not deployed yet. Until then only "Otherwise", which every role shares, can change.</p>}
-            <table className="w-full min-w-[640px] text-sm" data-testid="field-rules">
-              <thead><tr className="text-left text-xs uppercase text-muted-foreground"><th className="p-2">Field</th><th className="p-2">Shown in full to this role when</th><th className="p-2">Otherwise (every role)</th><th className="p-2">They see</th></tr></thead>
+            <table className="w-full text-sm md:min-w-[640px]" data-testid="field-rules">
+              <thead className="hidden md:table-header-group"><tr className="text-left text-xs uppercase text-muted-foreground"><th className="p-2">Field</th><th className="p-2">Shown in full to this role when</th><th className="p-2">Otherwise (every role)</th><th className="p-2">They see</th></tr></thead>
               <tbody>
                 {fieldRows.map((f) => {
                   const set = (patch: Partial<FieldEdit>) => setFields({ ...fields, [f.path]: { clause: f.roleClause, onDeny: f.onDeny, ...patch } });
                   const presetId = f.roleClause ? PRESETS.find((p) => JSON.stringify(p.clause) === JSON.stringify(f.roleClause))?.id ?? 'custom' : '';
                   const shared = f.parsed.shared.map((c) => describeClause(c, vocab)).join(' or ');
                   return (
-                    <tr key={f.path} className="border-t align-top" data-testid={`field-${f.path}`}>
-                      <td className="p-2"><strong>{f.label}</strong><div className="font-mono text-xs text-muted-foreground">{f.path}</div></td>
-                      <td className="p-2">
+                    <tr key={f.path} className="flex flex-col border-t align-top md:table-row" data-testid={`field-${f.path}`}>
+                      <td className="block p-2 md:table-cell"><strong>{f.label}</strong><div className="font-mono text-xs text-muted-foreground">{f.path}</div></td>
+                      <td className="block p-2 md:table-cell">
+                        <div className="mb-1 text-xs uppercase text-muted-foreground md:hidden">Shown in full to this role when</div>
                         {f.parsed.custom ? <span className="text-xs text-amber-700">Custom condition: see Policy rows</span> : (
                           <>
                             <select aria-label={`${f.label}: shown in full when`} className="w-full max-w-[220px] rounded-md border bg-background p-2" value={presetId} disabled={!canEdit || !perRoleRules}
@@ -267,7 +271,8 @@ export default function RoleEditor() {
                           </>
                         )}
                       </td>
-                      <td className="p-2">
+                      <td className="block p-2 md:table-cell">
+                        <div className="mb-1 text-xs uppercase text-muted-foreground md:hidden">Otherwise (every role)</div>
                         <div className="flex flex-wrap items-center gap-3" role="radiogroup" aria-label={`${f.label}: otherwise`}>
                           <label className="flex items-center gap-1"><input type="radio" name={`od-${f.path}`} checked={f.onDeny.strategy === 'REDACT'} disabled={!canEdit || f.parsed.custom} onChange={() => set({ onDeny: { strategy: 'REDACT' } })} />Hide</label>
                           <label className="flex items-center gap-1"><input type="radio" name={`od-${f.path}`} checked={f.onDeny.strategy === 'MASK_SHOW_LAST_N'} disabled={!canEdit || f.parsed.custom} onChange={() => set({ onDeny: { strategy: 'MASK_SHOW_LAST_N', n: 3, maskChar: 'X' } })} />Show last</label>
@@ -280,7 +285,7 @@ export default function RoleEditor() {
                           )}
                         </div>
                       </td>
-                      <td className="p-2 font-mono" data-testid={`preview-${f.path}`}>{maskPreview(f.sample, f.onDeny) ?? '(empty)'}</td>
+                      <td className="block p-2 font-mono md:table-cell"><span className="mr-2 font-sans text-xs uppercase text-muted-foreground md:hidden">They see</span><span data-testid={`preview-${f.path}`}>{maskPreview(f.sample, f.onDeny) ?? '(empty)'}</span></td>
                     </tr>
                   );
                 })}
@@ -294,7 +299,7 @@ export default function RoleEditor() {
         </Card>
 
         <Card>
-          <CardHeader><CardTitle>Workflow actions by complaint status</CardTitle></CardHeader>
+          <CardHeader><AccessTitle level={2}>Workflow actions by complaint status</AccessTitle></CardHeader>
           <CardContent className="flex flex-col gap-3 overflow-x-auto">
             {!loaded.workflow ? <p className="text-sm text-muted-foreground">The PGR workflow is not readable at {root}.</p> : (
               <table className="w-full min-w-[560px] text-sm" data-testid="workflow-grid">
@@ -326,7 +331,7 @@ export default function RoleEditor() {
 
         {(plan || planError) && (
           <Card className="border-2 border-primary" data-testid="role-plan">
-            <CardHeader><CardTitle>You are about to change</CardTitle></CardHeader>
+            <CardHeader><AccessTitle level={2}>You are about to change</AccessTitle></CardHeader>
             <CardContent className="flex flex-col gap-3 text-sm">
               {planError && <Alert variant="destructive"><AlertDescription>{planError}</AlertDescription></Alert>}
               {plan && plan.length === 0 && <p>Nothing: the rows already say this.</p>}
@@ -374,14 +379,15 @@ export default function RoleEditor() {
 
       <aside className="flex w-full flex-col gap-4 lg:w-80">
         <Card>
-          <CardHeader><CardTitle className="text-base">In plain words</CardTitle></CardHeader>
+          <CardHeader><AccessTitle level={2} className="text-base">In plain words</AccessTitle></CardHeader>
           <CardContent><p className="text-sm leading-relaxed" data-testid="role-plain-words">{summary}</p></CardContent>
         </Card>
         <Card>
-          <CardHeader><CardTitle className="text-base">After saving</CardTitle></CardHeader>
+          <CardHeader><AccessTitle level={2} className="text-base">After saving</AccessTitle></CardHeader>
           <CardContent>
             <ul className="list-disc pl-5 text-sm text-muted-foreground" data-testid="role-after-saving">
               {(['calls', 'scope', 'workflow'] as ChangeKind[]).map((k) => <li key={k}>{whenItApplies(k)}</li>)}
+              <li>Someone given this role gets it at their next sign-in (or when their session refreshes); give it in Roles by tenant.</li>
             </ul>
           </CardContent>
         </Card>
