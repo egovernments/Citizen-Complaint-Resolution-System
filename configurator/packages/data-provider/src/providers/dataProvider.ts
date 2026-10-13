@@ -1897,6 +1897,13 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
           ]));
         }
         await Promise.all(writes);
+        // Edit page: a changed Module or Locale MOVES the message (ours#840). The new one is written first, so a
+        // failed write never loses it; only then is the old (module, locale) copy removed.
+        const prevModule = typeof prev.module === 'string' ? prev.module : '';
+        const prevLocale = typeof prev.locale === 'string' ? prev.locale : '';
+        if (writes.length && prevModule && prevLocale && (prevModule !== mod || prevLocale !== localeA)) {
+          await client.localizationDelete(tenantId, prevLocale, [{ code, module: prevModule }]);
+        }
         return { data: { ...data, id: String(data.id ?? `${code}__${mod}`) } as RaRecord };
       }
       if (config.type === 'boundary') {
