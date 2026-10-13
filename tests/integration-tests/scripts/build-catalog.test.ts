@@ -394,7 +394,8 @@ describe('run accounting', () => {
     const stored = oldSummary('r1', { passed: 3, total: 4, excluded: 2 });
     seed(www, { runs: [stored], perTest: {} });
     const r1 = cycle(www, 'r2', pwReport(ALL)).runs[1];
-    assert.deepEqual(r1, { ...stored, notRun: null, cutShort: null });
+    // its folder is there, so it keeps its report (hasReport, from the retention rules)
+    assert.deepEqual(r1, { ...stored, notRun: null, cutShort: null, hasReport: true });
     // Fixed later: still not recomputed, the marker is the answer.
     fs.writeFileSync(path.join(www, 'runs', 'r1', 'report.json'), JSON.stringify(pwReport(ALL)));
     const again = cycle(www, 'r3', pwReport(ALL)).runs.find(r => r.id === 'r1');
@@ -402,14 +403,17 @@ describe('run accounting', () => {
     assert.equal(again?.passed, 3);
   });
 
-  test('recompute: folder without report.json is a legacy count; a missing folder drops the run', () => {
+  test('recompute: folder without report.json is a legacy count; a run whose folder is gone stays, legacy and without a report', () => {
     const www = webroot('recompute-missing');
     fs.mkdirSync(path.join(www, 'runs', 'r1')); // no report.json in it
-    seed(www, { runs: [oldSummary('r1', { total: 4 }), oldSummary('r0', { total: 4 })], perTest: {} }); // no runs/r0/
+    seed(www, { runs: [oldSummary('r1', { passed: 3, total: 4 }), oldSummary('r0', { passed: 2, total: 4 })], perTest: {} }); // no runs/r0/
     const c = cycle(www, 'r2', pwReport(ALL));
-    assert.deepEqual(c.runs.map(r => r.id), ['r2', 'r1']);
-    assert.equal(c.runs[1].notRun, null);
-    assert.equal(c.runs[1].cutShort, null);
+    // results are kept for the whole history window; only the report goes with the folder
+    assert.deepEqual(c.runs.map(r => [r.id, r.hasReport]), [['r2', true], ['r1', true], ['r0', false]]);
+    for (const r of c.runs.slice(1)) {
+      assert.deepEqual([r.notRun, r.cutShort], [null, null], `${r.id}: nothing to recount from, so a legacy count`);
+    }
+    assert.deepEqual(c.runs.slice(1).map(r => r.passed), [3, 2], 'the stored counts stay as they were');
   });
 
   test('recompute: runs published elsewhere (CI rsync model) get the legacy marker', () => {

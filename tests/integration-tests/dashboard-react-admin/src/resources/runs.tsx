@@ -8,6 +8,26 @@ import {
   useRecordContext,
 } from 'react-admin';
 import type { RunSummary } from '../types';
+import { runReportPath } from '../runWindow';
+import { rootedUrl } from '../urls';
+
+/**
+ * Link to the run's standalone Playwright report, or "report pruned" once the
+ * runner deleted runs/<id>/ (only the newest RUN_LIMIT runs keep one; older
+ * runs keep their counts and per-test results only). runReportPath decides.
+ */
+const ReportCell = ({ run, long }: { run: RunSummary; long?: boolean }) => {
+  const path = runReportPath(run);
+  return path ? (
+    <a href={rootedUrl(path)} target="_blank" rel="noopener" onClick={e => e.stopPropagation()}>
+      {long ? 'Open Playwright report for this run →' : 'Report'}
+    </a>
+  ) : (
+    <span style={{ opacity: 0.6 }} title="Only the newest runs keep their report, videos and traces; this run's results are all that is left.">
+      report pruned
+    </span>
+  );
+};
 
 /** Recorded before not-run tracking: counts may include carried-over results, cut short unknown. */
 const isLegacyCount = (r: RunSummary) => typeof r.notRun !== 'number';
@@ -35,6 +55,7 @@ export const RunList = () => (
       <FunctionField label="Result" render={(r: RunSummary) => `${r.passed}p · ${r.failed}f · ${r.skipped}s of ${r.total}${notRunSuffix(r)}`} />
       <FunctionField label="Duration" render={(r: RunSummary) => `${(r.durationMs / 60000).toFixed(1)} min`} />
       <TextField source="startedAt" label="Started" />
+      <FunctionField label="Report" render={(r: RunSummary) => <ReportCell run={r} />} />
     </Datagrid>
   </List>
 );
@@ -42,13 +63,7 @@ export const RunList = () => (
 const PlaywrightReportLink = () => {
   const r = useRecordContext<RunSummary>();
   if (!r) return null;
-  return (
-    <p>
-      <a href={`runs/${r.id}/playwright-report/index.html`} target="_blank" rel="noopener">
-        Open Playwright report for this run →
-      </a>
-    </p>
-  );
+  return <p><ReportCell run={r} long /></p>;
 };
 
 export const RunShow = () => (
