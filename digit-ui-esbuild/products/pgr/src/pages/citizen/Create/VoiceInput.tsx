@@ -82,15 +82,14 @@ export function speechRecognitionLocale(explicitLocale?: string): string {
   const browserLangs =
     (typeof navigator !== "undefined" && (navigator.languages || [navigator.language])) || [];
 
+  const findRegional = (prefix: string) =>
+    browserLangs.find(
+      (l) => typeof l === "string" && l.toLowerCase().startsWith(`${prefix}-`)
+    ) as string | undefined;
+
   if (langPrefix === "fr") {
     // Check if browser has a matching regional dialect (e.g. fr-CA)
-    const browserVariant = browserLangs.find(
-      (l) => typeof l === "string" && (l.toLowerCase() === "fr" || l.toLowerCase().startsWith("fr-"))
-    );
-    if (browserVariant && browserVariant.length > 2) {
-      return browserVariant as string;
-    }
-    return "fr-FR";
+    return findRegional("fr") || "fr-FR";
   }
 
   if (langPrefix === "pt") {
@@ -99,21 +98,12 @@ export function speechRecognitionLocale(explicitLocale?: string): string {
       return "pt-BR";
     }
     // Check if browser has a matching regional dialect (e.g. pt-BR)
-    const browserVariant = browserLangs.find(
-      (l) => typeof l === "string" && (l.toLowerCase() === "pt" || l.toLowerCase().startsWith("pt-"))
-    );
-    if (browserVariant && browserVariant.length > 2) {
-      return browserVariant as string;
-    }
-    return "pt-PT";
+    return findRegional("pt") || "pt-PT";
   }
 
   // English, or any other unhandled language (e.g. Swahili sw_KE):
-  // Browser's English variant, else en-US.
-  const browserEn = browserLangs.find(
-    (l) => typeof l === "string" && (l.toLowerCase() === "en" || l.toLowerCase().startsWith("en-"))
-  );
-  return (browserEn as string) || "en-US";
+  // Browser's English regional variant (e.g. en-KE), else en-US.
+  return findRegional("en") || "en-US";
 }
 
 /**

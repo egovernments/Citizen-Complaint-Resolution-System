@@ -185,3 +185,30 @@ test("dynamically resolves active locale from Digit.StoreData.getCurrentLanguage
     restoreNavigator();
   }
 });
+
+test("prioritises regional dialect over bare language tags (e.g. ['en', 'en-KE'] or ['pt', 'pt-BR'])", () => {
+  stubNavigator({ languages: ["en", "en-KE"] });
+  try {
+    assert.equal(speechRecognitionLocale("en"), "en-KE");
+    assert.equal(speechRecognitionLocale("en_IN"), "en-KE");
+    assert.equal(speechRecognitionLocale("sw_KE"), "en-KE");
+  } finally {
+    restoreNavigator();
+  }
+
+  stubNavigator({ languages: ["pt", "pt-BR"] });
+  try {
+    assert.equal(speechRecognitionLocale("pt"), "pt-BR");
+    assert.equal(speechRecognitionLocale("pt_PT"), "pt-BR");
+  } finally {
+    restoreNavigator();
+  }
+
+  stubNavigator({ languages: ["fr", "fr-CA"] });
+  try {
+    assert.equal(speechRecognitionLocale("fr"), "fr-CA");
+    assert.equal(speechRecognitionLocale("fr_FR"), "fr-CA");
+  } finally {
+    restoreNavigator();
+  }
+});
