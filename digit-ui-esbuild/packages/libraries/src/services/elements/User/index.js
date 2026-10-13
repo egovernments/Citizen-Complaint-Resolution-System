@@ -1,12 +1,19 @@
 import Urls from "../../atoms/urls";
 import { Request, ServiceRequest } from "../../atoms/Utils/Request";
 import { Storage } from "../../atoms/Utils/Storage";
+import idbCache from "../../atoms/Utils/idbCache";
 import { getAuthSurface, isIdentityBffAuth } from "../../auth/authSurface";
 import { identityBffLogout, identityBffLogoutRedirect, markSignOutIncomplete } from "../../auth/identityBffLogin";
 import { currentAppBasePath, tenantContext } from "../../tenant/tenantRoute";
 
 /** Set by the Configurator (same origin) when its own sign-out could not be confirmed. */
 const CONFIGURATOR_SIGN_OUT_INCOMPLETE_KEY = "crs-sign-out-incomplete";
+
+// ours#648: the IndexedDB MDMS cache (idbCache, kept for the MDMS cacheTimeInSecs) belongs to the browser, not the
+// session: logout cleared local/session storage but not it, so the next sign-in on the same browser kept stale master
+// data (a complaint type added in the configurator stayed missing for up to the TTL). Cleared with them now; bounded,
+// so a blocked IndexedDB never holds up the sign-out.
+const clearMdmsCache = () => Promise.race([idbCache.clear(), new Promise((resolve) => setTimeout(resolve, 1000))]);
 
 export const UserService = {
   authenticate: async (details) => {
@@ -55,6 +62,8 @@ export const UserService = {
   logout: async (scope = "current") => {
     // Some buttons pass the click event directly.
     if (typeof scope !== "string") scope = "current";
+    // "others" keeps this session (and its cache)
+    if (scope !== "others") await clearMdmsCache();
     if (isIdentityBffAuth()) {
       // Sign out of the BFF session for this surface only, then land on the
       // same tenant's login page for that surface.
