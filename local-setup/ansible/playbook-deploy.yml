@@ -5261,6 +5261,193 @@
         - integration_tests_dir is defined
         - ansible_system != "Darwin"
 
+    # ---- Regression email alerts (opt-in: test_alerts_enabled) ----
+    # A systemd timer runs tests/integration-tests/scripts/regression-alert.mjs
+    # every test_alerts_poll_minutes (default 5). Each poll reads the published
+    # catalog.json; when a NEW run has appeared it compares every test with the
+    # run before it and mails test_alerts_to the tests that regressed, became
+    # skipped or stopped running. Settings are the test_alerts_* host_vars
+    # (documented in inventory/host_vars/_example.yml). The SMTP password is
+    # host_vars test_alerts_smtp_password if set, else this tenant's OpenBao key
+    # of the same name. bootstrap_secrets only seeds a fresh tenant, so on an
+    # existing one put it with `bao kv patch {{ secrets_path }}
+    # test_alerts_smtp_password=…`. A missing required setting leaves alerts OFF
+    # with a warning: a mail misconfiguration must not fail the whole deploy.
+    # The poll runs a root-owned COPY of the script (see "copy the poll
+    # script" below), never the checkout itself. Runbook:
+    # tests/integration-tests/runner/README.md.
+    - name: "integration-tests alerts — resolve the SMTP password (host_vars, else OpenBao)"
+      ansible.builtin.set_fact:
+        _test_alerts_smtp_pw: >-
+          {{ test_alerts_smtp_password | default('', true)
+             or bao_secrets.json.data.data.test_alerts_smtp_password | default('', true) }}
+      no_log: true
+      when: test_alerts_enabled | default(false) | bool
+
+    # test_alerts_to may be one address (a string) or a list. A string used to
+    # reach the env file joined character by character ("t,e,a,m,@,…"), so make
+    # it a one-element list first.
+    - name: "integration-tests alerts — recipients as a list (one address may be a plain string)"
+      ansible.builtin.set_fact:
+        _test_alerts_to_list: >-
+          {{ ([_to] if (_to is string or _to is mapping or _to is not iterable) else _to)
+             | map('string') | map('trim') | select | list }}
+      vars:
+        _to: "{{ test_alerts_to | default('', true) }}"
+      when: test_alerts_enabled | default(false) | bool
+
+    # Every address must be "addr@domain" or "Name <addr@domain>": the script
+    # mails the bare address and keeps the name for the To: header. Several
+    # addresses in ONE string ("a@x.org, b@x.org") are refused, not guessed at:
+    # they go in a YAML list. A bad address is reported like a missing setting
+    # (alerts stay off), instead of the poll failing on every run at RCPT TO.
+    - name: "integration-tests alerts — check required settings"
+      ansible.builtin.set_fact:
+        _test_alerts_missing: "{{ [
+            ('enable_integration_tests' if not (enable_integration_tests | default(false) | bool) else ''),
+            ('test_alerts_smtp_host' if not (test_alerts_smtp_host | default('', true)) else ''),
+            ('test_alerts_from' if not (test_alerts_from | default('', true)) else ''),
+            ('test_alerts_to' if (_test_alerts_to_list | length) == 0 else ''),
+            ('test_alerts_smtp_password' if (test_alerts_smtp_user | default('', true)) and not _test_alerts_smtp_pw else ''),
+          ] | select | list }}"
+        _test_alerts_invalid: >-
+          {{ (['test_alerts_from must be "addr@domain" or "Name <addr@domain>" (got: ' ~ test_alerts_from ~ ')']
+                if (test_alerts_from | default('', true))
+                   and not ((test_alerts_from | string) is match(_addr_re)) else [])
+             + (['test_alerts_to entries must each be one "addr@domain" or "Name <addr@domain>", several go in a YAML list (not valid: '
+                  ~ (_test_alerts_to_list | reject('match', _addr_re) | join(' | ')) ~ ')']
+                if (_test_alerts_to_list | reject('match', _addr_re) | list | length) > 0 else [])
+             + (['test_alerts_poll_minutes must be a whole number of minutes, 1 or more (got: ' ~ test_alerts_poll_minutes ~ ')']
+                if not ((test_alerts_poll_minutes | default(5) | string) is match('^[1-9][0-9]*$')) else []) }}
+      vars:
+        _addr_re: '^\s*(?:[^\s<>@,"]+@[^\s<>@,"]+|(?:"[^"]*"\s*|[^"<>,@]*)<[^\s<>@,"]+@[^\s<>@,"]+>)\s*$'
+      when: test_alerts_enabled | default(false) | bool
+
+    - name: "integration-tests alerts — WARNING: enabled but not configured, alerts stay off"
+      ansible.builtin.debug:
+        msg: >-
+          {{ (['test_alerts_enabled is true, but no alert mail will be sent from this box until these are fixed.']
+              + (['Missing: ' ~ (_test_alerts_missing | join(', ')) ~ '.'] if _test_alerts_missing else [])
+              + (['Invalid: ' ~ (_test_alerts_invalid | join('; ')) ~ '.'] if _test_alerts_invalid else []))
+             | join(' ') }}
+      when:
+        - test_alerts_enabled | default(false) | bool
+        - (_test_alerts_missing + _test_alerts_invalid) | length > 0
+
+    - name: "integration-tests alerts — decide whether the timer runs on this box"
+      ansible.builtin.set_fact:
+        _test_alerts_on: >-
+          {{ (test_alerts_enabled | default(false) | bool)
+             and (_test_alerts_missing | default(['off']) | length == 0)
+             and (_test_alerts_invalid | default(['off']) | length == 0)
+             and (integration_tests_dir is defined)
+             and ansible_system != 'Darwin' }}
+        # Where the poll script runs from: root-owned, outside the checkout.
+        _test_alerts_lib: /usr/local/lib/ccrs-test-alerts
+
+    - name: "integration-tests alerts — env file (root-only; holds the SMTP password)"
+      ansible.builtin.template:
+        src: templates/ccrs-test-alerts.env.j2
+        dest: /etc/ccrs-test-alerts.env
+        owner: root
+        group: root
+        mode: "0600"
+      no_log: true
+      when: _test_alerts_on | bool
+
+    # The poll's environment holds the SMTP password, so the code it runs must
+    # be writable by root only. The checkout is not: "integration-tests runner
+    # — own its checkout and webroot" above hands integration_tests_dir to the
+    # runner account, which also runs the Playwright suite and the RUN-button
+    # daemon. Running the script from there would let anything running as that
+    # account edit it and read the password on the next poll. So the deploy
+    # copies it to a root-owned directory and the unit runs that copy; it is
+    # refreshed on every deploy (nothing to restart: each poll is a fresh
+    # process). This also keeps the poll clear of the checkout's location: the
+    # unit's ProtectHome=true hides /home, where a checkout may live.
+    - name: "integration-tests alerts — root-owned directory for the poll script"
+      ansible.builtin.file:
+        path: "{{ _test_alerts_lib }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      when: _test_alerts_on | bool
+
+    - name: "integration-tests alerts — copy the poll script out of the runner-owned checkout"
+      ansible.builtin.copy:
+        src: "{{ integration_tests_dir }}/scripts/regression-alert.mjs"
+        dest: "{{ _test_alerts_lib }}/regression-alert.mjs"
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0644"
+      # In --check mode (deploy.sh --check) the directory above was not
+      # actually created on a first enable; a real run creates it first.
+      ignore_errors: "{{ ansible_check_mode }}"
+      when: _test_alerts_on | bool
+
+    - name: "integration-tests alerts — install the poll service and its timer"
+      ansible.builtin.template:
+        src: "templates/{{ item }}.j2"
+        dest: "/etc/systemd/system/{{ item }}"
+        mode: "0644"
+      loop:
+        - ccrs-test-alerts.service
+        - ccrs-test-alerts.timer
+      when: _test_alerts_on | bool
+
+    - name: "integration-tests alerts — enable + start the timer"
+      ansible.builtin.systemd:
+        name: ccrs-test-alerts.timer
+        state: started
+        enabled: true
+        daemon_reload: true
+      # In --check mode the unit above was not actually written, so systemd
+      # cannot find it yet; a real run writes it first.
+      ignore_errors: "{{ ansible_check_mode }}"
+      when: _test_alerts_on | bool
+
+    # Turning alerts off (or never having them) must leave no timer running, no
+    # password on disk, nothing of the alerts installed, and no state: turning
+    # them back on then starts from a fresh baseline instead of mailing every
+    # run since they were turned off.
+    - name: "integration-tests alerts — off: stop + disable the timer if present"
+      ansible.builtin.systemd:
+        name: ccrs-test-alerts.timer
+        state: stopped
+        enabled: false
+      failed_when: false
+      when:
+        - not (_test_alerts_on | bool)
+        - ansible_system != "Darwin"
+
+    - name: "integration-tests alerts — off: remove the env file, the units, the script copy and the state"
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/ccrs-test-alerts.env
+        - /etc/systemd/system/ccrs-test-alerts.timer
+        - /etc/systemd/system/ccrs-test-alerts.service
+        - "{{ _test_alerts_lib }}"
+        # With DynamicUser=yes, StateDirectory= lives in /var/lib/private and
+        # /var/lib/ccrs-test-alerts is a symlink to it: remove both.
+        - /var/lib/ccrs-test-alerts
+        - /var/lib/private/ccrs-test-alerts
+      register: _test_alerts_removed
+      when:
+        - not (_test_alerts_on | bool)
+        - ansible_system != "Darwin"
+
+    - name: "integration-tests alerts — off: reload systemd after removing the units"
+      ansible.builtin.systemd:
+        daemon_reload: true
+      when:
+        - not (_test_alerts_on | bool)
+        - ansible_system != "Darwin"
+        - _test_alerts_removed is changed
+
     # Host nginx (Linux) — package install + /etc/nginx site. Skipped on
     # macOS, where nginx runs as a container instead (next block).
     #
