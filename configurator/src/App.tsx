@@ -225,6 +225,8 @@ function ManagementAdminResources() {
           <Route path="/departments/bulk" element={<DepartmentBulkImport />} />
           <Route path="/designations/bulk" element={<DesignationBulkImport />} />
           <Route path="/localization/bulk" element={<LocalizationBulkImport />} />
+          {/* ours (cfgreview F24, #1570): Members inside the app layout (it rendered bare, with no menu or header) */}
+          <Route path="/members" element={<MembersPage />} />
         </CustomRoutes>
       </CoreAdminUI>
     </CoreAdminContext>
@@ -537,7 +539,7 @@ function App() {
         <a href="#main-content" className="skip-link">Skip to main content</a>
         <Routes>
           <Route path="/account" element={<AccountPage />} />
-          <Route path="/members" element={state.isAuthenticated ? <MembersPage /> : <Navigate to="/login" />} />
+          <Route path="/members" element={state.isAuthenticated ? <Navigate to="/manage/members" replace /> : <Navigate to="/login" />} />
           <Route path="/workspace-settings" element={state.isAuthenticated ? <WorkspacePage /> : <Navigate to="/login" />} />
           <Route path="/login" element={<LoginPage />} />
           {/* Self-serve onboarding (CCRS#1999). Public: the whole point is that
