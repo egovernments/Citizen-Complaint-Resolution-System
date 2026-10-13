@@ -65,7 +65,8 @@ export function TenantSwitcher() {
           value={current}
           onChange={(e) => go(e.target.value)}
         >
-          {options.map((o) => <option key={o.code} value={o.code}>{optionText(o)}</option>)}
+          {/* the closed select shows the current option's text: no indent dash there */}
+          {options.map((o) => <option key={o.code} value={o.code}>{optionText(o.code === current ? { ...o, depth: 0 } : o)}</option>)}
         </select>
       ) : (
         <span className="max-w-[8.5rem] truncate sm:max-w-[16rem]" title={current}>
