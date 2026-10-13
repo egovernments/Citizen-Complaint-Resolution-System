@@ -1,0 +1,85 @@
+name: Configurator CI
+
+# Unit tests for configurator/ and its two local packages. None of them needs a
+# deployment or a browser. ui-shared/ is in the paths because the app imports
+# from it (src/config/featureFlags.ts); the two seed files because a test pins
+# the app's postal-code default to them.
+
+on:
+  pull_request:
+    branches: [develop, master]
+    paths:
+      - 'configurator/**'
+      - 'ui-shared/**'
+      # Seed files src/admin/validation.postalCode.test.ts pins the app to.
+      - 'local-setup/db/full-dump.sql'
+      - 'utilities/default-data-handler/src/main/resources/mdmsData/common-masters/common-masters.FormValidations.json'
+      - '.github/workflows/configurator-ci.yml'
+  push:
+    branches: [develop, master]
+    paths:
+      - 'configurator/**'
+      - 'ui-shared/**'
+      # Seed files src/admin/validation.postalCode.test.ts pins the app to.
+      - 'local-setup/db/full-dump.sql'
+      - 'utilities/default-data-handler/src/main/resources/mdmsData/common-masters/common-masters.FormValidations.json'
+      - '.github/workflows/configurator-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: configurator
+    env:
+      TZ: UTC
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: configurator/package-lock.json
+
+      # Also installs the dependencies of the file: packages
+      # (packages/data-provider, packages/digit-datagrid) into this node_modules.
+      - run: npm ci
+
+      # vitest.config.ts aliases @digit-mcp/data-provider to the package
+      # source, so no data-provider build is needed here.
+      - name: Configurator unit tests (vitest)
+        run: npx vitest run
+
+      - name: digit-datagrid unit tests (vitest)
+        run: npx vitest run --root packages/digit-datagrid
+
+      # The *integration* files need a live DIGIT API; everything else is offline.
+      - name: data-provider unit tests (node --test)
+        working-directory: configurator/packages/data-provider
+        shell: bash
+        run: |
+          shopt -s globstar nullglob
+          files=()
+          for f in src/**/*.test.ts; do
+            [[ "$f" == *integration* ]] || files+=("$f")
+          done
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "::error::no data-provider unit test files found"
+            exit 1
+          fi
+          printf '%s\n' "${files[@]}"
+          node --import tsx --test "${files[@]}"
+
+      # Advisory until the type errors are fixed. The app takes
+      # @digit-mcp/data-provider's types from its dist/, so build that first.
+      - name: Type-check (advisory)
+        continue-on-error: true
+        run: |
+          npx tsc -p packages/data-provider
+          npx tsc --noEmit -p tsconfig.app.json
+          npx tsc --noEmit -p tsconfig.node.json

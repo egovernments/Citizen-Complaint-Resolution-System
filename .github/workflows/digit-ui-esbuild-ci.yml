@@ -1,0 +1,54 @@
+name: digit-ui-esbuild CI
+
+# Offline unit tests for digit-ui-esbuild: `npm test` (tests/ and src/theme/)
+# plus the dashboard and scripts/lib node:test files, which sit outside
+# npm test's file pattern. The files are found by glob, so new ones run without
+# editing this workflow.
+
+on:
+  pull_request:
+    branches: [develop, master]
+    paths:
+      - 'digit-ui-esbuild/**'
+      - '.github/workflows/digit-ui-esbuild-ci.yml'
+  push:
+    branches: [develop, master]
+    paths:
+      - 'digit-ui-esbuild/**'
+      - '.github/workflows/digit-ui-esbuild-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: digit-ui-esbuild
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: digit-ui-esbuild/package-lock.json
+
+      # --legacy-peer-deps as in docker/Dockerfile: without it npm hits ERESOLVE.
+      - run: npm ci --legacy-peer-deps
+
+      - run: npm test
+
+      - name: Dashboard and scripts/lib tests (node --test)
+        shell: bash
+        run: |
+          shopt -s globstar nullglob
+          files=(products/dashboard/**/*.test.js scripts/lib/*.test.js)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "::error::no dashboard or scripts/lib test files found"
+            exit 1
+          fi
+          printf '%s\n' "${files[@]}"
+          node --test "${files[@]}"
