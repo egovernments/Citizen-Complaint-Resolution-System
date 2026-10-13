@@ -237,7 +237,16 @@ class TenantAccountAuthTest {
             MockHttpServletResponse res = asAdminOf("acme", providerWrite(path, "acme"), chain);
             assertEquals(200, res.getStatus(), path);
             assertNotNull(chain.getRequest(), path);
+            assertEquals("acme", chain.getRequest().getAttribute(ProxyAuthFilter.ADMITTED_WORKSPACE_ATTRIBUTE), path);
         }
+    }
+
+    @Test
+    void theOwningStatesAdmin_onTheSharedProviders_isNotMarkedAsAWorkspaceAdmin() throws Exception {
+        MockFilterChain chain = new MockFilterChain();
+        MockHttpServletResponse res = asAdminOf("pg", providerWrite("/novu-adapter/v1/providers", null), chain);
+        assertEquals(200, res.getStatus());
+        assertNull(chain.getRequest().getAttribute(ProxyAuthFilter.ADMITTED_WORKSPACE_ATTRIBUTE));
     }
 
     @Test

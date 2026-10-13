@@ -24,6 +24,10 @@ import java.util.Map;
  *       admin of a state that owns the shared providers included: one workspace's credentials
  *       are not another's to manage.</li>
  * </ul>
+ * The filter and this class each read whether the root has its own account, from a cache, so the
+ * answer can change between the two (the cache entry expires and the workspace is being
+ * deprovisioned, or the read fails and counts as "no"). A write the filter let through as that
+ * workspace's admin therefore never falls back to the shared account: it is refused instead.
  */
 final class AccountSelection {
 
@@ -43,10 +47,22 @@ final class AccountSelection {
 
     static NovuAccount select(TenantAccountService accounts, String selector, ProxyAuthFilter.Caller caller,
                               boolean write) {
-        if (accounts == null || !accounts.enabled() || !StringUtils.hasText(selector)
-                || !accounts.isProvisioned(selector)) {
-            return null;
+        NovuAccount account = null;
+        if (accounts != null && accounts.enabled() && StringUtils.hasText(selector) && accounts.isProvisioned(selector)) {
+            account = workspaceAccount(accounts, selector, caller, write);
         }
+        String admitted = write ? ProxyAuthFilter.admittedWorkspace() : null;
+        if (account == null && admitted != null) {
+            // admitted is a validated root ([a-z0-9_-]): safe to echo.
+            throw new AccountException(HttpStatus.SERVICE_UNAVAILABLE, "NB_TENANT_ACCOUNT_UNAVAILABLE", "Workspace "
+                    + admitted + "'s own notification account could not be confirmed for this change (it may be "
+                    + "being deprovisioned); nothing was changed, and the shared account was not used. Retry");
+        }
+        return account;
+    }
+
+    private static NovuAccount workspaceAccount(TenantAccountService accounts, String selector,
+                                                ProxyAuthFilter.Caller caller, boolean write) {
         String root = TenantAccountService.rootOf(selector);
         if (caller != null) {
             boolean allowed = write ? caller.administersStateOf(root)

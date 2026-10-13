@@ -20,6 +20,7 @@ import org.egov.tracer.model.CustomException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.web.context.request.RequestContextHolder;
@@ -165,6 +166,35 @@ class ProviderControllerWorkspaceTestSendTest {
         verify(novuClient, never()).trigger(any(NovuAccount.class), any(), any(), any(), any(), any(), any(), any());
         verify(novuClient, never()).trigger(anyString(), any(), any(), any(), any(), any(), any());
         verify(dispatchLog, never()).upsert(any());
+    }
+
+    @Test
+    void aBodyTenantOfAnotherWorkspace_isRefused_soTheTestRowNeverLandsInItsLogs() {
+        request("acme", "acme");
+        integration(acmeIntegrations, "a1", "twilio-sms-acme", "twilio", "sms", true);
+        Map<String, Object> body = sms("a1");
+        body.put("tenantId", "globex");
+
+        ProviderController.Refusal refusal = assertThrows(ProviderController.Refusal.class,
+                () -> controller.testSend(body));
+
+        assertEquals(HttpStatus.BAD_REQUEST, refusal.status());
+        assertEquals("NB_TENANT_MISMATCH", refusal.code());
+        assertNothingSent();
+    }
+
+    @Test
+    void aBodyTenantInsideTheWorkspace_isLoggedThere() {
+        request("acme", "acme");
+        integration(acmeIntegrations, "a1", "twilio-sms-acme", "twilio", "sms", true);
+        Map<String, Object> body = sms("a1");
+        body.put("tenantId", "acme.city");
+        ArgumentCaptor<DispatchLogEntry> row = ArgumentCaptor.forClass(DispatchLogEntry.class);
+
+        controller.testSend(body);
+
+        verify(dispatchLog).upsert(row.capture());
+        assertEquals("acme.city", row.getValue().getTenantId());
     }
 
     // ---- a provider named: the workspace's own ---------------------------------------------

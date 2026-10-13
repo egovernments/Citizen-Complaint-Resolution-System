@@ -186,6 +186,25 @@ class ProviderControllerTenantAccountTest {
     }
 
     @Test
+    void aWriteAdmittedForAWorkspace_neverFallsBackToTheSharedAccount() {
+        request("acme", "acme");
+        // The filter let this through as acme's admin, not as an admin of a state owning the shared
+        // providers. By the time the controller asks, acme no longer reads as provisioned (it is
+        // being deprovisioned, or the cached read expired and failed).
+        ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getRequest()
+                .setAttribute(ProxyAuthFilter.ADMITTED_WORKSPACE_ATTRIBUTE, "acme");
+        when(tenantAccounts.isProvisioned("acme")).thenReturn(false);
+
+        AccountException e = assertThrows(AccountException.class, () -> controller.createProvider(jasmin()));
+
+        assertEquals("NB_TENANT_ACCOUNT_UNAVAILABLE", e.code());
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE, e.status());
+        verify(novuClient, never()).createIntegration(anyString(), anyString(), anyString(), anyString(), anyMap(), anyBoolean());
+        verify(novuClient, never()).createIntegration(any(NovuAccount.class), anyString(), anyString(), anyString(),
+                anyString(), anyMap(), anyBoolean());
+    }
+
+    @Test
     void deleting_anUnusedProvider_deletesItInTheWorkspacesOrganization() {
         request("acme", "acme");
         acmeIntegrations.add(new LinkedHashMap<>(Map.of("_id", "j1", "identifier", "jasmin-a", "providerId", "jasmin",

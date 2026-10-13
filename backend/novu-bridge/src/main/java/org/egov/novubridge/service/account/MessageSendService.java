@@ -135,8 +135,11 @@ public class MessageSendService {
                     + " provider (" + ready.identifier() + ") did not accept the message"
                     + (StringUtils.hasText(job.detail()) ? ": " + job.detail() : ""));
         }
-        record(r, novuTransactionId, subscriberId, "SENT", null, null, response.getResponse(), ready);
-        out.put("status", job.completed() ? "SENT" : "QUEUED");
+        // The ledger says what the caller is told: QUEUED when the provider had not answered yet.
+        // Nothing updates the row later (receipts move only SENT rows), so it stays QUEUED.
+        String outcome = job.completed() ? "SENT" : "QUEUED";
+        record(r, novuTransactionId, subscriberId, outcome, null, null, response.getResponse(), ready);
+        out.put("status", outcome);
         log.info("messages/_send: tenant={} channel={} provider={} txn={} status={}", r.root(), r.channel(),
                 ready.identifier(), novuTransactionId, out.get("status"));
         return new Outcome(job.completed() ? HttpStatus.OK : HttpStatus.ACCEPTED, out);

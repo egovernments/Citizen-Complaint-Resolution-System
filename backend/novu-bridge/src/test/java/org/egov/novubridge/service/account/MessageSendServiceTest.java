@@ -190,13 +190,16 @@ class MessageSendServiceTest {
     }
 
     @Test
-    void stillInFlightAtTheConfirmTimeout_is202Queued() {
+    void stillInFlightAtTheConfirmTimeout_is202Queued_andTheLedgerSaysQueuedToo() {
         notification.put("jobs", List.of(Map.of("type", "sms", "status", "queued")));
 
         MessageSendService.Outcome outcome = service.send(request("acme.city", "SMS", "+254712345678"));
 
         assertEquals(HttpStatus.ACCEPTED, outcome.status());
         assertEquals("QUEUED", outcome.body().get("status"));
+        ArgumentCaptor<DispatchLogEntry> row = ArgumentCaptor.forClass(DispatchLogEntry.class);
+        verify(ledger).upsert(row.capture());
+        assertEquals("QUEUED", row.getValue().getStatus(), "the Logs screen must not show SENT for an unconfirmed OTP");
     }
 
     @Test

@@ -400,11 +400,7 @@ public class ProviderController {
     private void requireNotInUseByTenant(NovuAccount account, Map<String, Object> body, Map<String, Object> integration,
                                          List<Map<String, Object>> integrations, String verb) {
         String root = account.tenantRoot();
-        String given = str(body.get("tenantId"));
-        if (StringUtils.hasText(given) && !root.equals(ChannelPolicyClient.stateTenant(given.trim()))) {
-            throw new Refusal(HttpStatus.BAD_REQUEST, "NB_TENANT_MISMATCH", "tenantId " + given.trim()
-                    + " is not workspace " + root + ", whose notification account this request acts on");
-        }
+        requireWorkspaceTenant(account, str(body.get("tenantId")));
         String identifier = str(integration.get("identifier"));
         String id = str(integration.get("_id"));
         String label = StringUtils.hasText(identifier) ? identifier : id;
@@ -663,6 +659,18 @@ public class ProviderController {
     }
 
     /**
+     * A body {@code tenantId} on a workspace's own account must be that workspace or one of its
+     * cities: the filter admitted the caller for the workspace the query names, not for the body's.
+     */
+    private static void requireWorkspaceTenant(NovuAccount account, String given) {
+        String root = account.tenantRoot();
+        if (StringUtils.hasText(given) && !root.equals(ChannelPolicyClient.stateTenant(given.trim()))) {
+            throw new Refusal(HttpStatus.BAD_REQUEST, "NB_TENANT_MISMATCH", "tenantId " + given.trim()
+                    + " is not workspace " + root + ", whose notification account this request acts on");
+        }
+    }
+
+    /**
      * A live test through the same provider seam as dispatch. The subscriberId is derived from the
      * input (no clock/random), so a re-test reuses one test subscriber. The transactionId is new for
      * every test unless the caller supplies one ({@link #freshTestTransactionId}). Writes one masked,
@@ -679,8 +687,12 @@ public class ProviderController {
         String txnInput = str(body.get("transactionId"));
         String tenantId = StringUtils.hasText(str(body.get("tenantId"))) ? str(body.get("tenantId")) : "TEST";
         NovuAccount account = requestAccount(true);
-        if (account != null && !StringUtils.hasText(str(body.get("tenantId")))) {
-            tenantId = account.tenantRoot();
+        if (account != null) {
+            // The ledger row lands in this tenant's Logs: never another workspace's.
+            requireWorkspaceTenant(account, str(body.get("tenantId")));
+            if (!StringUtils.hasText(str(body.get("tenantId")))) {
+                tenantId = account.tenantRoot();
+            }
         }
 
         // `id` pins the trigger to one integration; `type` alone fills in the channel.

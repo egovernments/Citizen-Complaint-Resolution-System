@@ -104,6 +104,14 @@ public class ProxyAuthFilter extends OncePerRequestFilter {
     public static final String CALLER_ATTRIBUTE = ProxyAuthFilter.class.getName() + ".caller";
 
     /**
+     * Request attribute set when a provider write was let through as an admin of a workspace with its
+     * own account (the root), not as an admin of a state that owns the shared providers; read it with
+     * {@link #admittedWorkspace()}. The controller must then act on that workspace's account or on
+     * none: falling back to the shared account would skip the owning-state check.
+     */
+    public static final String ADMITTED_WORKSPACE_ATTRIBUTE = ProxyAuthFilter.class.getName() + ".workspace";
+
+    /**
      * The authenticated employee, from egov-user {@code /user/_details} (whose role objects carry
      * their own {@code tenantId}).
      *
@@ -151,6 +159,14 @@ public class ProxyAuthFilter extends OncePerRequestFilter {
         Object caller = attributes == null ? null
                 : attributes.getAttribute(CALLER_ATTRIBUTE, RequestAttributes.SCOPE_REQUEST);
         return caller instanceof Caller c ? c : null;
+    }
+
+    /** The workspace root this request was admitted for ({@link #ADMITTED_WORKSPACE_ATTRIBUTE}), else null. */
+    public static String admittedWorkspace() {
+        RequestAttributes attributes = RequestContextHolder.getRequestAttributes();
+        Object root = attributes == null ? null
+                : attributes.getAttribute(ADMITTED_WORKSPACE_ATTRIBUTE, RequestAttributes.SCOPE_REQUEST);
+        return root instanceof String r ? r : null;
     }
 
     private record CachedUser(long expiresAt, Caller caller) {
@@ -295,6 +311,7 @@ public class ProxyAuthFilter extends OncePerRequestFilter {
         if (tenantAccounts != null && StringUtils.hasText(selector) && tenantAccounts.isProvisioned(selector)) {
             String root = TenantAccountService.rootOf(selector);
             if (caller.administersStateOf(root)) {
+                request.setAttribute(ADMITTED_WORKSPACE_ATTRIBUTE, root);
                 return true;
             }
             log.warn("Proxy auth: refusing {} {} — workspace {} has its own notification account and the caller "
