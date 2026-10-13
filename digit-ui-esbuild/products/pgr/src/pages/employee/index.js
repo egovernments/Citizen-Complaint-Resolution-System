@@ -17,8 +17,20 @@
 import { AppContainer, PrivateRoute } from "@egovernments/digit-ui-react-components";
 import React from "react";
 import { useTranslation } from "react-i18next";
-import { Switch } from "react-router-dom";
+import { Redirect, Switch } from "react-router-dom";
 import { useLocation } from "react-router-dom";
+
+// ours#615: the create-complaint route follows its menu entry. Only an employee whose access actions offer
+// /employee/pgr/create-complaint (the "File a Complaint" entry, ACCESSCONTROL role-actions) gets the form; anyone
+// else is sent home instead of seeing a form whose submit the API refuses.
+const offersCreateComplaint = (actions) =>
+  (actions || []).some((a) => /\/employee\/pgr\/create-complaint\/?$/.test(a?.navigationURL || ""));
+
+const CreateComplaintGuard = ({ component: Component }) => {
+  const { isLoading, data } = Digit.Hooks.useAccessControl();
+  if (isLoading) return null;
+  return offersCreateComplaint(data?.actions) ? <Component /> : <Redirect to={`/${window?.contextPath}/employee`} />;
+};
 
 const EmployeeApp = ({ path, stateCode, userType, tenants }) => {
   const { t } = useTranslation(); // Hook for translations
@@ -68,7 +80,7 @@ const EmployeeApp = ({ path, stateCode, userType, tenants }) => {
         {/* Route for Create Complaint Form */}
         <PrivateRoute
           path={`${path}/create-complaint`}
-          component={() => <PGRCreateComplaint />}
+          component={() => <CreateComplaintGuard component={PGRCreateComplaint} />}
         />
 
         {/* Routes for Complaint submission success/failure response */}
