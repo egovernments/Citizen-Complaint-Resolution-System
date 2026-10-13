@@ -2,7 +2,7 @@ import { test, expect, request as playwright, type APIRequestContext } from '@pl
 import { citizenSignIn, identityJson, selectContext } from '../utils/identity-bff';
 import {
   BOUNDARIES, COMPLAINT_TYPES, DEPARTMENTS, DESIGNATION, Digit, act, activateAccount, allowing, baseURL, brandingStep, commandOtp,
-  complaint, complaintTypesStep, departmentsStep, emailDomain, employeeSignIn, fileComplaint, geographyStep, hireAndLink, history,
+  complaint, complaintTypesStep, departmentsStep, emailDomain, employeeSignIn, fileComplaint, finishSetup, geographyStep, hireAndLink, history,
   inbox, labelLocales, mailedLink, markDone, missingConfig, removeMember, runSlug, signupFounder, strict, testMobile, testPassword,
   unresolvedLabels, workspace, type Hired,
 } from '../utils/workspace-setup';
@@ -80,9 +80,10 @@ test('signup -> workspace DONE -> complaint lifecycle -> member removal on a fre
       await markDone(founder, 'EMPLOYEES');
     });
 
-    await test.step('3e. Complaint types: 2 leaves routed with SLA; workspace DONE', async () => {
+    await test.step('3e. Complaint types: 2 leaves routed with SLA; Complete onboarding sets the workspace DONE', async () => {
       const final = await complaintTypesStep(founder, locales);
-      expect(final.status).toBe('DONE');
+      expect(final.status, 'every step done is not yet finished').toBe('IN_PROGRESS');
+      expect((await finishSetup(founder)).status).toBe('DONE');
       const { Workspace, Probes } = await workspace(founder);
       expect(Workspace.status).toBe('DONE');
       expect(Object.values(Workspace.steps).map(s => s.state)).toEqual(Array(5).fill('DONE'));

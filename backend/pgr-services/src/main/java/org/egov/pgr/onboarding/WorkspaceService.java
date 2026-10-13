@@ -21,6 +21,7 @@ public class WorkspaceService {
     @SuppressWarnings("unchecked")
     public Map<String,Object> update(Map<String,Object> request) {
         String tenant=tenant(request), actor=gateway.requireAdmin(tenant,request);
+        if(request.containsKey("action"))return finish(tenant,actor,request);
         long version=version(request);String step=text(request,"step"), state=text(request,"state");
         if(!WorkspaceRepository.STEPS.contains(step)||!Set.of("NOT_STARTED","IN_PROGRESS","DONE","SKIPPED").contains(state)
                 ||("SKIPPED".equals(state)&&!"BRANDING".equals(step))) WorkspaceGateway.fail(HttpStatus.BAD_REQUEST,"WORKSPACE_INVALID_STATE");
@@ -33,12 +34,29 @@ public class WorkspaceService {
         if(probes!=null&&!probes.get(step)) WorkspaceRepository.conflict("WORKSPACE_PROBE_INCOMPLETE");
         Map<String,Object> steps=(Map<String,Object>)row.get("steps");
         steps.put(step,new LinkedHashMap<>(Map.of("state",state,"updatedAt",System.currentTimeMillis(),"updatedBy",actor)));
-        boolean done=steps.values().stream().allMatch(v->Set.of("DONE","SKIPPED").contains(((Map<?,?>)v).get("state")));
         boolean unstarted=steps.values().stream().allMatch(v->"NOT_STARTED".equals(((Map<?,?>)v).get("state")));
-        row.put("status",done?"DONE":unstarted?"NOT_STARTED":"IN_PROGRESS");
+        // Only FINISH sets DONE, and step writes never reopen a finished workspace.
+        row.put("status","DONE".equals(row.get("status"))?"DONE":unstarted?"NOT_STARTED":"IN_PROGRESS");
         repository.update(row,version,actor);
         repository.event(tenant,"STEP_UPDATED",version+1,Map.of("step",step,"state",state),actor);
         return response(row,probes,repository.rename(tenant,null).orElse(null));
+    }
+    /** The founder's "Complete onboarding": DONE once every step is DONE (BRANDING may be SKIPPED). Repeating it is a no-op. */
+    @SuppressWarnings("unchecked")
+    private Map<String,Object> finish(String tenant,String actor,Map<String,Object> request) {
+        if(!"FINISH".equals(request.get("action")))WorkspaceGateway.fail(HttpStatus.BAD_REQUEST,"WORKSPACE_INVALID_REQUEST");
+        long version=version(request);
+        Map<String,Object> row=repository.find(tenant,true).orElse(null);
+        if(row==null)return response(tenant,null);
+        if("DONE".equals(row.get("status")))return response(row,null,repository.rename(tenant,null).orElse(null));
+        if(((Number)row.get("version")).longValue()!=version)WorkspaceRepository.conflict("WORKSPACE_VERSION_CONFLICT");
+        // Each step's DONE already passed its probe, so finishing reads only the recorded states.
+        if(!((Map<String,Object>)row.get("steps")).values().stream().allMatch(v->Set.of("DONE","SKIPPED").contains(((Map<?,?>)v).get("state"))))
+            WorkspaceRepository.conflict("WORKSPACE_STEPS_INCOMPLETE");
+        row.put("status","DONE");
+        repository.update(row,version,actor);
+        repository.event(tenant,"FINISHED",version+1,Map.of(),actor);
+        return response(row,null,repository.rename(tenant,null).orElse(null));
     }
     @Transactional
     public Map<String,Object> rename(Map<String,Object> request) {
