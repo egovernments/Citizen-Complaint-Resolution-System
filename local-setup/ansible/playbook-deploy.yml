@@ -77,28 +77,33 @@
           offer phone sign-in.
 
     # pgr-services, pgr-services-db, novu-bridge and novu-bridge-db must come from ONE
-    # build (see notification_stack_tag in host_vars/_example.yml). They all follow
-    # notification_stack_tag unless a per-image override pins one of them, and a partial
-    # set of pins is the easy way to run a new app on an old schema or a new pgr against
-    # an old bridge. Warn rather than fail: a local build legitimately pins some of them
+    # build (see notification_stack_tag in host_vars/_example.yml), and
+    # digit-user-preferences-service with its -db migrator rides the same tag. All six
+    # follow notification_stack_tag unless a per-image override pins one of them, and a
+    # partial set of pins is the easy way to run a new app on an old schema or a new pgr
+    # against an old bridge. Warn rather than fail: a local build legitimately pins some of them
     # here and the rest in a per-tenant compose overlay, which this cannot see — and a
     # box that pins a consistent set must keep deploying.
     #
     # NOT gated on enable_novu: pgr-services and pgr-services-db run on every box, so
     # pinning one of that pair without the other (an old app under develop-head
-    # migrations, or the reverse) matters with notifications off too. The bridge pair
-    # only counts when the notification stack runs.
+    # migrations, or the reverse) matters with notifications off too. The bridge and
+    # user-preferences pairs only count when the notification stack runs.
     - name: "preflight — notification-stack images: resolve what each one will run"
       vars:
         _stack_tag: "{{ notification_stack_tag | default('', true) or 'nightly-develop' }}"
         _in_use: >-
           {{ ['pgr_services_image', 'pgr_services_db_image']
-             + (['novu_bridge_image', 'novu_bridge_db_image'] if (enable_novu | default(false)) else []) }}
+             + (['novu_bridge_image', 'novu_bridge_db_image',
+                 'digit_user_preferences_service_image', 'digit_user_preferences_service_db_image']
+                if (enable_novu | default(false)) else []) }}
         _repos:
           pgr_services_image: egovio/pgr-services
           pgr_services_db_image: egovio/pgr-services-db
           novu_bridge_image: egovio/novu-bridge
           novu_bridge_db_image: egovio/novu-bridge-db
+          digit_user_preferences_service_image: egovio/digit-user-preferences-service
+          digit_user_preferences_service_db_image: egovio/digit-user-preferences-service-db
         # "" = unpinned, like every *_image var: the compose default
         # <repo>:${NOTIFICATION_STACK_TAG:-nightly-develop}.
         _pins: "{{ q('ansible.builtin.vars', *_in_use, default='') | map('string') | map('trim') | list }}"
@@ -122,10 +127,10 @@
           pinned in host_vars but {{ _unpinned | join(', ') }}
           {{ 'follows' if (_unpinned | length) == 1 else 'follow' }} notification_stack_tag
           ({{ notification_stack_tag | default('', true) or 'nightly-develop' }}).
-          {{ 'pgr-services and pgr-services-db' if not (enable_novu | default(false)) else 'All four' }}
+          {{ 'pgr-services and pgr-services-db' if not (enable_novu | default(false)) else 'All six' }}
           must be the same build (an app needs the migrations its -db image carries{{
           ', and pgr-services thin events need a novu-bridge of the same build' if (enable_novu | default(false)) else '' }}) —
-          pin {{ 'both' if not (enable_novu | default(false)) else 'all four' }} to it, or none and
+          pin {{ 'both' if not (enable_novu | default(false)) else 'all six' }} to it, or none and
           set notification_stack_tag. Ignore this only if a per-tenant compose overlay pins
           the rest to the same build.
 

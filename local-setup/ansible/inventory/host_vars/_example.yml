@@ -717,23 +717,28 @@ novu_bridge_smscountry_password: ""
 # migrator, novu-bridge and its novu-bridge-db migrator MUST come from the same
 # build: pgr-services emits thin events only a bridge of the same build resolves
 # (an older bridge dead-letters them, unrecoverably), and each app needs the
-# Flyway migrations its -db image carries. This one tag moves all four.
+# Flyway migrations its -db image carries. digit-user-preferences-service and its
+# -db migrator (the bridge's consent store) ride the same tag: its 2.12 tags are
+# the retired Go service, which the develop definition cannot run. This one tag
+# moves all six.
 # Unset = the compose default, for now "nightly-develop": the rolling tag the develop
-# nightly publishes for all four, a stopgap until a release pins an immutable one
+# nightly publishes for all six, a stopgap until a release pins an immutable one
 # (build/NIGHTLY-BUILDS.md "Release step"). That tag moves PER IMAGE and can briefly
 # point at different commits for different images, so a live deployment pins an
-# immutable tag that exists for all four: a release tag, or a develop-<sha8>. The
+# immutable tag that exists for all six: a release tag, or a develop-<sha8>. The
 # deploy warns while any image it runs resolves to a rolling tag.
 # notification_stack_tag: "develop-<sha8>"
 #
 # Per-image overrides — for a local or VPC-registry build. Each wins over the tag
-# above for ITS image only, so pin all four to the same build or none. The deploy
+# above for ITS image only, so pin all six to the same build or none. The deploy
 # warns when only some are pinned: pgr_services_image + pgr_services_db_image on
-# every box (both run with notifications off too), all four when enable_novu is on.
+# every box (both run with notifications off too), all six when enable_novu is on.
 # pgr_services_image:     "10.0.0.4:5000/egovio/pgr-services:develop-<sha8>"
 # pgr_services_db_image:  "10.0.0.4:5000/egovio/pgr-services-db:develop-<sha8>"
 # novu_bridge_image:      "10.0.0.4:5000/egovio/novu-bridge:develop-<sha8>"
 # novu_bridge_db_image:   "10.0.0.4:5000/egovio/novu-bridge-db:develop-<sha8>"
+# digit_user_preferences_service_image:    "10.0.0.4:5000/egovio/digit-user-preferences-service:develop-<sha8>"
+# digit_user_preferences_service_db_image: "10.0.0.4:5000/egovio/digit-user-preferences-service-db:develop-<sha8>"
 
 # NOTE: `build_novu_bridge` and `build_pgr_services` used to be listed here.
 # Neither has ever had a playbook task behind it — the images come only from
@@ -1011,6 +1016,7 @@ grafana_anonymous_enabled: false
 # digit_config_service_image: ""
 # digit_config_service_db_image: ""
 # digit_user_preferences_service_image: ""
+# digit_user_preferences_service_db_image: ""   # pin with the app image: one build
 
 # ── Ports ──
 # Host port nginx proxies /configurator/ to. The only upstream_*_port that

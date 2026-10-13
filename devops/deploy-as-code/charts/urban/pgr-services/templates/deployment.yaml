@@ -1,7 +1,8 @@
 {{- /*
   One build for the notification stack. global.notificationStackTag (charts/environments/
   env.yaml) sets the image AND the db-migration image of pgr-services and novu-bridge
-  together, so the four cannot drift apart. An explicit per-chart override in env.yaml
+  together, so the four cannot drift apart (digit-user-preferences-service's pair
+  follows it too, in that chart's template). An explicit per-chart override in env.yaml
   (<chart>.image.tag / <chart>.initContainers.dbMigration.image.tag) still wins, because
   common.name merges those over .Values after this runs.
 */ -}}
