@@ -1157,6 +1157,7 @@ def main(argv: list[str] | None = None) -> int:
                 shutil.rmtree(output)
                 raise DryRunError(
                     f"secret safety audit failed for {len(leaks)} output file(s); "
+                    f"affected artifact paths: {', '.join(leaks)}; "
                     "the timestamped output was removed"
                 )
 
