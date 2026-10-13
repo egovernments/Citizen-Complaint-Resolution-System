@@ -30,6 +30,28 @@ export default function CheckAccess() {
   const [error, setError] = useState<string | null>(null);
   const [answer, setAnswer] = useState<ExplainAnswer | null>(null);
   const [resolved, setResolved] = useState<string | null>(null);
+  // cfgreview F12 (#1558): the tenant is picked from the admin's own subtree (active tenants at and below the working
+  // tenant), not typed. Until the list loads, or if it cannot be read, the working tenant alone is offered.
+  const [tenants, setTenants] = useState<{ code: string; name: string }[]>([]);
+  useEffect(() => {
+    let live = true;
+    const home = state.tenant;
+    (async () => {
+      const out: { code: string; name: string }[] = [];
+      for (let offset = 0; offset < 20_000; offset += 500) {
+        const page = await digitClient.mdmsSearch(home.split('.')[0], 'tenant.tenants', { limit: 500, offset, isActive: true });
+        for (const r of page) {
+          const d = r.data as { code?: string; name?: string };
+          const code = String(d.code ?? '').trim();
+          if (code && (code === home || code.startsWith(`${home}.`)) && !out.some((o) => o.code === code)) out.push({ code, name: d.name?.trim() || code });
+        }
+        if (page.length < 500) break;
+      }
+      if (live) setTenants(out.sort((a, b) => a.code.localeCompare(b.code)));
+    })().catch(() => { /* the working tenant stays the one choice */ });
+    return () => { live = false; };
+  }, [state.tenant]);
+  const tenantChoices = tenants.some((t) => t.code === tenantId) ? tenants : [{ code: tenantId, name: tenantId }, ...tenants];
 
   /** An employee code or a user uuid -> the uuid (HRMS by code, at the tenant asked about). */
   const subjectUuid = async (who: string): Promise<string> => {
@@ -77,7 +99,9 @@ export default function CheckAccess() {
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="ca-tenant">Tenant</Label>
-            <Input id="ca-tenant" value={tenantId} onChange={(e) => setTenantId(e.target.value.trim())} />
+            <select id="ca-tenant" className="h-10 rounded-md border bg-background px-3" value={tenantId} onChange={(e) => setTenantId(e.target.value)} data-testid="ca-tenant">
+              {tenantChoices.map((t) => <option key={t.code} value={t.code}>{t.name === t.code ? t.code : `${t.name} (${t.code})`}</option>)}
+            </select>
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="ca-complaint">Complaint number</Label>

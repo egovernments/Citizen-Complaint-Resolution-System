@@ -44,26 +44,28 @@ function pack(locale) {
   return new Map(messages.map(({ code, message }) => [code, message]));
 }
 
-test("every literal dashboard translation call is seeded in en_IN and pt_PT", () => {
+const TRANSLATED = ["pt_PT", "fr_FR"];
+
+test("every literal dashboard translation call is seeded in en_IN, pt_PT and fr_FR", () => {
   const used = literalDashboardKeys();
-  const english = pack("en_IN");
-  const portuguese = pack("pt_PT");
-  const missingEnglish = [...used].filter((key) => !english.has(key));
-  const missingPortuguese = [...used].filter((key) => !portuguese.has(key));
-
-  assert.deepEqual(missingEnglish, [], `missing en_IN keys: ${missingEnglish.join(", ")}`);
-  assert.deepEqual(missingPortuguese, [], `missing pt_PT keys: ${missingPortuguese.join(", ")}`);
-});
-
-test("Portuguese dashboard pack has exact key parity with en_IN", () => {
-  const english = pack("en_IN");
-  const portuguese = pack("pt_PT");
-  assert.deepEqual([...portuguese.keys()].sort(), [...english.keys()].sort());
-  for (const [code, message] of portuguese) {
-    assert.equal(typeof message, "string", `${code} must have a string message`);
-    assert.notEqual(message.trim(), "", `${code} must not have an empty Portuguese message`);
+  for (const locale of ["en_IN", ...TRANSLATED]) {
+    const messages = pack(locale);
+    const missing = [...used].filter((key) => !messages.has(key));
+    assert.deepEqual(missing, [], `missing ${locale} keys: ${missing.join(", ")}`);
   }
 });
+
+for (const locale of TRANSLATED) {
+  test(`${locale} dashboard pack has exact key parity with en_IN`, () => {
+    const english = pack("en_IN");
+    const translated = pack(locale);
+    assert.deepEqual([...translated.keys()].sort(), [...english.keys()].sort());
+    for (const [code, message] of translated) {
+      assert.equal(typeof message, "string", `${code} must have a string message`);
+      assert.notEqual(message.trim(), "", `${code} must not have an empty ${locale} message`);
+    }
+  });
+}
 
 test("literal dashboard translations provide the standalone English fallback", () => {
   assert.deepEqual(literalCallsMissingEnglishFallback(), []);

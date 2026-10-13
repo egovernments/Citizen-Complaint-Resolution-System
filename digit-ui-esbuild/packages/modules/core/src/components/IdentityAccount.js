@@ -69,7 +69,9 @@ export const ChangePhone = ({ t, tenant, onChanged }) => {
   const send = () => run(async () => {
     if (!ownsSession()) return sessionChanged();
     if (Date.now() < resendAt) {
-      return { ok: false, messageKey: "CORE_IDENTITY_OTP_RESEND_TOO_SOON", message: "Please wait before requesting another code." };
+      const seconds = Math.ceil((resendAt - Date.now()) / 1000);
+      return { ok: false, messageKey: "CORE_IDENTITY_OTP_RESEND_TOO_SOON", params: { seconds },
+        message: `Please wait ${seconds} seconds before requesting another code.` };
     }
     const result = await sendCitizenOtp({ mobileNumber, purpose: "change_phone", fetchImpl,
       locale: Digit.StoreData.getCurrentLanguage() });
@@ -142,6 +144,10 @@ const IdentityAccount = ({ surface }) => {
   const [message, setMessage] = useState("");
   const tenant = window.__digitTenantContext;
   const tr = (key, fallback) => t(key, { defaultValue: fallback });
+  // Session times in the language the page is in, not the browser's.
+  const sessionLocale = (() => {
+    try { return Digit.StoreData.getCurrentLanguage().replace("_", "-"); } catch (_) { return undefined; }
+  })();
   const refresh = async () => {
     const data = await api.loadIdentityAccount({ surface, fetchImpl });
     setSession(data);
@@ -221,8 +227,9 @@ const IdentityAccount = ({ surface }) => {
       <Card style={{ padding: "24px", display: "grid", gap: "16px" }}>
         <h2>{tr("CORE_IDENTITY_SESSIONS", "Signed-in sessions")}</h2>
         <ul>{session.sessions?.map((item) => <li key={item.id}>
-          {item.surface} {item.current ? tr("CORE_IDENTITY_CURRENT_SESSION", "(this session)") : ""}
-          {item.lastSeenAt ? ` — ${new Date(item.lastSeenAt).toLocaleString()}` : ""}
+          {item.surface ? tr(`CORE_IDENTITY_SURFACE_${String(item.surface).toUpperCase()}`, item.surface) : ""}{" "}
+          {item.current ? tr("CORE_IDENTITY_CURRENT_SESSION", "(this session)") : ""}
+          {item.lastSeenAt ? ` — ${new Date(item.lastSeenAt).toLocaleString(sessionLocale)}` : ""}
         </li>)}</ul>
         <Button type="button" disabled={busy} onClick={() => logout("others")}>{tr("CORE_IDENTITY_LOGOUT_OTHERS", "Sign out other sessions")}</Button>
         <Button type="button" disabled={busy} onClick={() => logout("all")}>{tr("CORE_IDENTITY_LOGOUT_ALL", "Sign out everywhere")}</Button>
