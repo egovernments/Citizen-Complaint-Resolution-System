@@ -93,8 +93,11 @@ another workspace, or of the state that owns the shared providers, gets
 `NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS`.
 
 A workspace without its own organization keeps today's screens: it reads the shared account's
-providers, and only an admin of a state that owns them may change them. If per-tenant accounts
-are on but the workspace has none yet, the banner says so.
+providers, and only an admin of a state that owns them may change them. Its **Channels** controls
+(switching a channel on or off, choosing its provider) write the workspace's own channel rows, so
+they stay with the workspace's provider-admin roles, as before. If per-tenant accounts are on but
+the workspace has none yet, the banner says so; not on a state that owns the shared providers,
+whose account the shared one is.
 
 The screens send `?tenantId=<workspace>` on every provider call; the bridge decides what it means
 ([providers.md](./providers.md#who-may-manage-providers)).

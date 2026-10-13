@@ -1367,6 +1367,7 @@ components:
         tenantId: { type: string, nullable: true }
         status: { type: string, enum: [PROVISIONED, NOT_PROVISIONED, PROVISIONING, FAILED, DEPROVISIONING, DEPROVISIONED, DISABLED, UNKNOWN] }
         manageable: { type: boolean }
+        owningState: { type: boolean, description: "SHARED only: the tenant is a state that owns the shared providers, so the shared account is its own." }
 
     SendRequest:
       type: object

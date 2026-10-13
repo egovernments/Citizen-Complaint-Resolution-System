@@ -217,6 +217,38 @@ class ProviderControllerTenantAccountTest {
     }
 
     @Test
+    void theIntegrationList_flagsTheStateThatOwnsTheSharedProviders() {
+        when(novuClient.listIntegrations()).thenReturn(NovuClient.NovuResponse.builder().statusCode(200)
+                .response(Map.of("data", List.of())).build());
+        when(tenantAccounts.find(anyString())).thenReturn(java.util.Optional.empty());
+        IntegrationController integrations = new IntegrationController(novuClient);
+        NovuBridgeConfiguration config = new NovuBridgeConfiguration();
+        config.setCoreSmsDefaultTenant("ke");
+        integrations.setTenantAccounts(tenantAccounts, config);
+
+        // A non-admin at the owning state: on the shared account by design, nothing to ask for.
+        callerAt("ke.bomet");
+        Map<String, Object> owning = integrations.integrations().getBody().getAccount();
+        assertEquals("SHARED", owning.get("mode"));
+        assertEquals("ke", owning.get("tenantId"));
+        assertEquals(true, owning.get("owningState"));
+        assertEquals(false, owning.get("manageable"));
+
+        // A workspace without its own account yet is not one.
+        callerAt("globex");
+        assertEquals(false, integrations.integrations().getBody().getAccount().get("owningState"));
+    }
+
+    /** A request for {@code tenantId}'s screen from a caller there with no admin role. */
+    private static void callerAt(String tenantId) {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setParameter("tenantId", tenantId);
+        request.setAttribute(ProxyAuthFilter.CALLER_ATTRIBUTE, new ProxyAuthFilter.Caller(
+                Set.of("EMPLOYEE"), Set.of(tenantId), Set.of()));
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+    }
+
+    @Test
     void testSend_goesThroughTheWorkspacesOrganization_andTwoWorkspacesNeverShareALedgerRow() {
         NovuAccount globex = new NovuAccount("globex", "org-globex", "env-globex", "key-globex");
         when(tenantAccounts.isProvisioned("globex")).thenReturn(true);

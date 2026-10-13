@@ -101,6 +101,10 @@ final class AccountSelection {
             status = "DISABLED";
         }
         out.put("status", status);
+        // A state that owns the shared providers is on the shared account by design: the
+        // Configurator has nothing to ask the operator for there.
+        String sharedRoot = root;
+        out.put("owningState", sharedRoot != null && owningStates.stream().anyMatch(sharedRoot::equalsIgnoreCase));
         out.put("manageable", caller == null || caller.administersAnyOf(owningStates));
         return out;
     }

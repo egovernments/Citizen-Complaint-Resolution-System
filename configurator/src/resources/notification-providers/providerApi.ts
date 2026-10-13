@@ -187,6 +187,8 @@ export interface NotificationAccount {
   status: string;
   /** Whether THIS caller may add, change, test or delete providers there. */
   manageable: boolean;
+  /** SHARED only: the tenant is a state that owns the shared providers, so the shared account is its own. */
+  owningState?: boolean;
 }
 
 /**

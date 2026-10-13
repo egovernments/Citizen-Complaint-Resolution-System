@@ -20,7 +20,7 @@ vi.mock('ra-core', async (importOriginal) => ({
 }));
 
 import { createProvider, deleteProvider, fetchNotificationAccount, testSend, withAccount, type NotificationAccount } from './providerApi';
-import { accountNotice, canManageProviders } from './useNotificationAccount';
+import { accountNotice, canManageChannels, canManageProviders } from './useNotificationAccount';
 import { NotificationAccountBanner } from './NotificationAccountBanner';
 
 const own: NotificationAccount = { tenantAccountsEnabled: true, mode: 'TENANT', tenantId: 'acme', status: 'PROVISIONED', manageable: true };
@@ -67,11 +67,27 @@ describe('who may manage, and what the screen says', () => {
     expect(canManageProviders(true, null)).toBe(true); // an older bridge: today's behaviour
   });
 
+  it('channel controls (the workspace’s own MDMS rows) follow the bridge only on a workspace’s own account', () => {
+    // Feature off, or a workspace not on its own account yet: the shared account's `manageable`
+    // (an admin of the state owning the shared providers) does not decide MDMS channel writes.
+    expect(canManageChannels(true, { ...shared, tenantAccountsEnabled: false, status: 'DISABLED' })).toBe(true);
+    for (const status of ['NOT_PROVISIONED', 'PROVISIONING', 'FAILED']) {
+      expect(canManageChannels(true, { ...shared, status })).toBe(true);
+    }
+    expect(canManageChannels(true, null)).toBe(true);
+    expect(canManageChannels(true, own)).toBe(true);
+    expect(canManageChannels(true, { ...own, manageable: false })).toBe(false);
+    expect(canManageChannels(false, shared)).toBe(false);
+    expect(canManageChannels(false, own)).toBe(false);
+  });
+
   it('says nothing where per-tenant accounts are off or unknown', () => {
     expect(accountNotice(null)).toBeNull();
     expect(accountNotice({ ...own, tenantAccountsEnabled: false })).toBeNull();
     // The deployment's own state admin on the shared account: nothing new to say.
     expect(accountNotice({ ...shared, manageable: true })).toBeNull();
+    // Anyone at the state owning the shared providers: that account is its own, by design.
+    expect(accountNotice({ ...shared, tenantId: 'ke', owningState: true })).toBeNull();
   });
 
   it('a workspace with its own account is told the providers are its own', () => {

@@ -44,6 +44,8 @@ export function accountNotice(account: NotificationAccount | null): AccountNotic
       : { tone: 'info', key: 'app.providers.account_own_readonly',
           english: "This workspace has its own notification account. Managing its providers needs an admin role in this workspace." };
   }
+  // The state that owns the shared providers is on the shared account by design.
+  if (account.owningState) return null;
   switch (account.status) {
     case 'PROVISIONING':
       return { tone: 'info', key: 'app.providers.account_provisioning',
@@ -62,4 +64,13 @@ export function accountNotice(account: NotificationAccount | null): AccountNotic
 /** Whether the provider controls are offered: the role check, narrowed by what the bridge says. */
 export function canManageProviders(hasAdminRole: boolean, account: NotificationAccount | null): boolean {
   return hasAdminRole && (account ? account.manageable : true);
+}
+
+/**
+ * Whether the Channels card offers its controls. They write the workspace's own MDMS channel
+ * rows, not the shared account's providers, so on the shared account (feature off included)
+ * the role check alone decides, as before #2203; only a workspace's own account narrows it.
+ */
+export function canManageChannels(hasAdminRole: boolean, account: NotificationAccount | null): boolean {
+  return hasAdminRole && (account?.mode !== 'TENANT' || account.manageable);
 }
