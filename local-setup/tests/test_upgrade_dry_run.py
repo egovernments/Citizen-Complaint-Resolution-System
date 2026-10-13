@@ -175,6 +175,8 @@ class RedactionAndNormalizationTests(unittest.TestCase):
             write(source, "digit-stack-up.city.progress", "progress")
             write(source, "ci-tests/result.txt", "test output")
             write(source, "e2e-tests/result.txt", "test output")
+            write(source, "configurator/assets/index.js", "built frontend")
+            write(source, "digit-mcp/src/server.py", "locally built component")
             write(source, "custom/operator.conf", "keep=true\n")
             metadata = dry.normalize_tree(source, target)
             self.assertTrue((target / "custom/operator.conf").exists())
@@ -182,6 +184,8 @@ class RedactionAndNormalizationTests(unittest.TestCase):
             self.assertFalse((target / ".build/cache/file").exists())
             self.assertFalse((target / "ci-tests/result.txt").exists())
             self.assertFalse((target / "e2e-tests/result.txt").exists())
+            self.assertFalse((target / "configurator/assets/index.js").exists())
+            self.assertFalse((target / "digit-mcp/src/server.py").exists())
             self.assertNotIn("db/full-dump.sql", metadata)
 
     def test_records_symlink_and_executable_metadata(self):
