@@ -34,6 +34,7 @@ import {
   hrmsService,
   ApiClientError,
 } from '@/api';
+import { pickDefaultHierarchy } from '@/api/services/boundary';
 import { parseExcelFile, parseEmployeeExcel } from '@/utils/excelParser';
 import { downloadEmployeeTemplate } from '@/utils/templateBuilder';
 import { reportStepError, trackStepAction } from '../telemetry';
@@ -109,8 +110,11 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
         // Fetch hierarchy type first so boundaries come back with the correct
         // hierarchyType populated — the boundary-relationships API returns
         // hierarchyType=null in its wrapper unless explicitly filtered by it.
-        const hierarchies = await boundaryService.getHierarchies(targetTenant).catch(() => []);
-        const hierarchyType = hierarchies[0]?.hierarchyType;
+        const [hierarchies, recordedHierarchy] = await Promise.all([
+          boundaryService.getHierarchies(targetTenant).catch(() => []),
+          mdmsService.getRecordedHierarchyType(targetTenant).catch(() => undefined),
+        ]);
+        const hierarchyType = pickDefaultHierarchy(hierarchies, recordedHierarchy)?.hierarchyType;
 
         const [depts, desigs, bounds, fetchedRoles, fetchedMobileRules] = await Promise.all([
           mdmsService.getDepartments(targetTenant),

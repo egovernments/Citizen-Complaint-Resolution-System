@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { BulkImportPanel, triggerDownload, type BulkRow, type BulkColumn } from '@/admin/bulk/BulkImportPanel';
 import { parseEmployeeExcel } from '@/utils/excelParser';
 import { hrmsService, mdmsService, boundaryService } from '@/api';
+import { pickDefaultHierarchy } from '@/api/services/boundary';
 import type {
   EmployeeExcelRow,
   Employee,
@@ -127,8 +128,11 @@ export function EmployeeBulkImport() {
     async function load() {
       setRefsLoading(true);
       try {
-        const hierarchies = await boundaryService.getHierarchies(tenantId).catch(() => []);
-        const hierarchyType = hierarchies[0]?.hierarchyType;
+        const [hierarchies, recordedHierarchy] = await Promise.all([
+          boundaryService.getHierarchies(tenantId).catch(() => []),
+          mdmsService.getRecordedHierarchyType(tenantId).catch(() => undefined),
+        ]);
+        const hierarchyType = pickDefaultHierarchy(hierarchies, recordedHierarchy)?.hierarchyType;
 
         const [depts, desigs, bounds, fetchedRoles, mobile] = await Promise.all([
           mdmsService.getDepartments(tenantId),

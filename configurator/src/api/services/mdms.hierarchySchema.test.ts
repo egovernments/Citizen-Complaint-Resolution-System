@@ -62,3 +62,25 @@ describe('ensureHierarchySchema', () => {
     expect(post).not.toHaveBeenCalled();
   });
 });
+
+describe('getRecordedHierarchyType', () => {
+  it("names the CMS row's hierarchy, including one inherited from the state", async () => {
+    post.mockResolvedValueOnce({
+      mdms: [{ tenantId: 'ke', schemaCode: SCHEMA, isActive: true, data: { moduleName: 'CMS', hierarchy: 'ADMIN' } }],
+    });
+
+    expect(await mdmsService.getRecordedHierarchyType('ke.bomet')).toBe('ADMIN');
+    expect(post.mock.calls[0][1].MdmsCriteria).toMatchObject({ tenantId: 'ke.bomet', schemaCode: SCHEMA });
+  });
+
+  it('ignores HRMS and soft-deleted rows', async () => {
+    post.mockResolvedValueOnce({
+      mdms: [
+        { tenantId: 'newtown', isActive: true, data: { moduleName: 'HRMS', hierarchy: 'HRMS_ONLY' } },
+        { tenantId: 'newtown', isActive: false, data: { moduleName: 'CMS', hierarchy: 'RETIRED' } },
+      ],
+    });
+
+    expect(await mdmsService.getRecordedHierarchyType('newtown')).toBeUndefined();
+  });
+});

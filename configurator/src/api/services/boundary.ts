@@ -6,26 +6,67 @@ import type { Boundary, BoundaryHierarchy, BoundaryLevel } from '../types';
 /** Reserved by the platform baseline for the founder's root jurisdiction. */
 export const WORKSPACE_HIERARCHY_TYPE = 'WORKSPACE';
 
+// boundary-service clamps a hierarchy search to boundary.max.default.limit
+// (300 by default). Ask for less than any plausible clamp: a page cut short by
+// the clamp would read as the last page and silently drop the rest.
+const HIERARCHY_PAGE_SIZE = 100;
+/** A full page this many times over means offset is ignored, not 20,000 hierarchies. */
+const HIERARCHY_MAX_PAGES = 200;
+
+/**
+ * The hierarchy a screen starts on when the operator hasn't chosen one.
+ *
+ * Never `hierarchies[0]`: boundary-service lists newest first, so that is
+ * whatever was created last, which on a tenant the test suite has run against
+ * is a PW_* stub (#1915). The tenant's recorded hierarchy wins (its
+ * CMS-BOUNDARY.HierarchySchema row, the one digit-ui and PGR use), then ADMIN,
+ * then the oldest, which is the one onboarding created.
+ */
+export function pickDefaultHierarchy(
+  hierarchies: BoundaryHierarchy[],
+  recordedHierarchyType?: string,
+): BoundaryHierarchy | undefined {
+  const named = (type?: string) => (type ? hierarchies.find((h) => h.hierarchyType === type) : undefined);
+  const createdTime = (h: BoundaryHierarchy) => h.auditDetails?.createdTime ?? Number.MAX_SAFE_INTEGER;
+  const oldest = [...hierarchies].sort(
+    (a, b) => createdTime(a) - createdTime(b) || a.hierarchyType.localeCompare(b.hierarchyType),
+  )[0];
+  return named(recordedHierarchyType) ?? named('ADMIN') ?? oldest;
+}
+
 export const boundaryService = {
   // ============================================
   // Hierarchy Methods
   // ============================================
 
-  // Get existing boundary hierarchies for a tenant
+  // Every hierarchy defined on the tenant. The search sends no total, so walk
+  // pages until a short one: the first page alone is the 100 newest, and on a
+  // tenant the test suite runs against those are all PW_* stubs with ADMIN
+  // several pages back (#1915).
   async getHierarchies(tenantId: string): Promise<BoundaryHierarchy[]> {
-    const response = await apiClient.post(ENDPOINTS.BOUNDARY_HIERARCHY_SEARCH, {
-      RequestInfo: apiClient.buildRequestInfo(),
-      BoundaryTypeHierarchySearchCriteria: {
-        tenantId,
-        limit: 100,
-        offset: 0,
-      },
-    });
-
-    // WORKSPACE holds only the tenant's root boundary for the founder's
-    // jurisdiction (platform baseline); it is never an operational hierarchy.
-    const hierarchies = (response.BoundaryHierarchy || []) as BoundaryHierarchy[];
-    return hierarchies.filter((h) => h.hierarchyType !== WORKSPACE_HIERARCHY_TYPE);
+    // Keyed by type (unique per tenant): a hierarchy created mid-walk shifts
+    // the newest-first list and repeats a row across two pages.
+    const byType = new Map<string, BoundaryHierarchy>();
+    for (let page = 0; page < HIERARCHY_MAX_PAGES; page++) {
+      const response = await apiClient.post(ENDPOINTS.BOUNDARY_HIERARCHY_SEARCH, {
+        RequestInfo: apiClient.buildRequestInfo(),
+        BoundaryTypeHierarchySearchCriteria: {
+          tenantId,
+          limit: HIERARCHY_PAGE_SIZE,
+          offset: page * HIERARCHY_PAGE_SIZE,
+        },
+      });
+      const batch = (response.BoundaryHierarchy || []) as BoundaryHierarchy[];
+      for (const h of batch) {
+        // WORKSPACE holds only the tenant's root boundary for the founder's
+        // jurisdiction (platform baseline); it is never an operational hierarchy.
+        if (h.hierarchyType !== WORKSPACE_HIERARCHY_TYPE) byType.set(h.hierarchyType, h);
+      }
+      if (batch.length < HIERARCHY_PAGE_SIZE) return Array.from(byType.values());
+    }
+    throw new Error(
+      `Boundary hierarchy search for ${tenantId} was still returning full pages after ${HIERARCHY_MAX_PAGES}; refusing to return a partial list`,
+    );
   },
 
   // Create a new boundary hierarchy.

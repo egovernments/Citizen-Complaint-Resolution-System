@@ -27,7 +27,7 @@ import { Header, SubHeader } from '@/components/digit/Header';
 import { LabelFieldPair, CardLabel, Field } from '@/components/digit/LabelFieldPair';
 import { SubmitBar } from '@/components/digit/SubmitBar';
 import { apiClient, boundaryService, localizationService, mdmsService, ApiClientError } from '@/api';
-import { WORKSPACE_HIERARCHY_TYPE } from '@/api/services/boundary';
+import { WORKSPACE_HIERARCHY_TYPE, pickDefaultHierarchy } from '@/api/services/boundary';
 import { reportStepError, trackStepAction } from '../telemetry';
 import { labelLocales } from '../labelLocales';
 import { parseExcelFile, parseBoundaryExcel } from '@/utils/excelParser';
@@ -454,10 +454,14 @@ export default function BoundaryImport({
   const fetchHierarchies = async () => {
     setLoadingHierarchies(true);
     try {
-      const hierarchies = await boundaryService.getHierarchies(boundaryTenant);
+      const [hierarchies, recordedHierarchy] = await Promise.all([
+        boundaryService.getHierarchies(boundaryTenant),
+        mdmsService.getRecordedHierarchyType(boundaryTenant).catch(() => undefined),
+      ]);
       setExistingHierarchies(hierarchies);
-      if (hierarchies.length > 0) {
-        setSelectedHierarchy(hierarchies[0]);
+      const preselected = pickDefaultHierarchy(hierarchies, recordedHierarchy);
+      if (preselected) {
+        setSelectedHierarchy(preselected);
       }
     } catch (err) {
       console.error('Failed to fetch hierarchies:', err);
