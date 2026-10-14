@@ -11,6 +11,8 @@ import { uniqueBy } from '@/lib/uniqueBy';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { useOrgChartData } from './useOrgChartData';
+import { useApp } from '../../App';
+import { orgChartTenants } from './orgChartTenants';
 import { EmployeeNode } from './EmployeeNode';
 
 const nodeTypes: NodeTypes = { employee: EmployeeNode };
@@ -45,10 +47,11 @@ export default function OrgChartPage() {
   });
   const [selectedTenantId, setSelectedTenantId] = useState<string>('');
   const [query, setQuery] = useState('');
-
-  // Default to the first tenant until the user picks one. Derived during render
-  // (rather than set via an effect) to avoid an extra render.
-  const tenantId = selectedTenantId || tenants?.find((t) => t.code)?.code || '';
+  // ours (digit-3 P0, 2026-10-14): the chart opens at the WORKING tenant and offers its subtree; it opened at the first
+  // tenant code (the state, "Kenya", 2 employees) whichever county the admin worked at.
+  const { state } = useApp();
+  const offered = useMemo(() => orgChartTenants(tenants ?? [], state.tenant), [tenants, state.tenant]);
+  const tenantId = selectedTenantId || offered.find((t) => t.code === state.tenant)?.code || offered[0]?.code || '';
 
   const { data, isLoading, isError, refetch } = useOrgChartData(tenantId || undefined);
 
@@ -99,7 +102,7 @@ export default function OrgChartPage() {
               <SelectValue placeholder={tenantsLoading ? 'Loading tenants…' : 'Select a tenant…'} />
             </SelectTrigger>
             <SelectContent>
-              {uniqueBy((tenants ?? []).filter((t) => t.code), (t) => t.code).map((t) => (
+              {uniqueBy(offered, (t) => t.code).map((t) => (
                 <SelectItem key={t.code} value={t.code}>{t.name ?? t.code}</SelectItem>
               ))}
             </SelectContent>
