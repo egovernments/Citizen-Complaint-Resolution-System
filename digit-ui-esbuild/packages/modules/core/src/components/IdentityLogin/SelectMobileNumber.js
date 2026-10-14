@@ -200,7 +200,10 @@ export const stepText = (text, fallback) => (text && !/^[A-Z][A-Z0-9_.]*$/.test(
 export function V2LoginShell({ children }) {
   return (
     <div
-      className="v2-scope"
+      // citizen-form-wrapper: the full-width navy ground master's citizen
+      // Login wraps its card in (overrides.css). Without it the shell
+      // shrink-wraps and the card sits against the page's left edge.
+      className="v2-scope citizen-form-wrapper"
       style={{
         display: "flex",
         alignItems: "center",
