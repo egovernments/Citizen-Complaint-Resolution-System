@@ -1,6 +1,6 @@
-import { useMemo } from 'react';
-import { useWatch } from 'react-hook-form';
-import { useGetList, useInput, type InputProps } from 'ra-core';
+import { useEffect, useMemo, useRef } from 'react';
+import { useFormContext, useWatch } from 'react-hook-form';
+import { useGetList, useInput, useRecordContext, type InputProps } from 'ra-core';
 import { DigitEdit, DigitFormInput, DigitFormSelect, v } from '@/admin';
 import { FieldSection } from '@/admin/fields';
 import { Input } from '@/components/ui/input';
@@ -10,7 +10,7 @@ import { useApp } from '../../App';
 import { RolesEditor } from './RolesEditor';
 import { JurisdictionEditor } from './JurisdictionEditor';
 import { AssignmentEditor } from './AssignmentEditor';
-import { useMdmsChoices } from './mdmsChoices';
+import { employeeStatusShown, useMdmsChoices } from './mdmsChoices';
 
 const GENDER_CHOICES = [
   { value: 'MALE', label: 'Male' },
@@ -93,6 +93,25 @@ function DateEpochField({ label, help, className, ...inputProps }: DateEpochFiel
   );
 }
 
+/** ours (pE13, nightly 2026-10-14): a deactivated employee's form starts at Status Inactive (see employeeStatusShown). */
+function ShowInactiveStatus() {
+  const record = useRecordContext();
+  const { getValues, setValue } = useFormContext();
+  const done = useRef<unknown>(null);
+  useEffect(() => {
+    const id = record?.id;
+    if (id === undefined || done.current === id) return;
+    const shown = employeeStatusShown(record as { isActive?: unknown; employeeStatus?: unknown } | undefined);
+    // after the form has taken the record (react-admin resets the form in its own effect, which runs after this one)
+    const t = setTimeout(() => {
+      done.current = id;
+      if (shown && shown !== getValues('employeeStatus')) setValue('employeeStatus', shown, { shouldDirty: false });
+    }, 0);
+    return () => clearTimeout(t);
+  }, [record, getValues, setValue]);
+  return null;
+}
+
 function DeactivationReasonSection({ choices }: { choices: { value: string; label: string }[] }) {
   const status = useWatch({ name: 'employeeStatus' }) as string | undefined;
   if (status !== 'INACTIVE' && status !== 'RETIRED') return null;
@@ -171,6 +190,7 @@ export function EmployeeEdit() {
 
   return (
     <DigitEdit title="Edit Employee" transform={transform}>
+      <ShowInactiveStatus />
       <FieldSection title="Employee Info">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <DigitFormInput source="code" label="Employee Code" disabled />

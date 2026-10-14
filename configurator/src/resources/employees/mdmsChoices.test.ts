@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { choicesFromMdms } from './mdmsChoices';
+import { choicesFromMdms, employeeStatusShown } from './mdmsChoices';
 import { getGenericMdmsResources } from '../../../packages/data-provider/src/providers/resourceRegistry';
 
 const FALLBACK = [{ value: 'MALE', label: 'Male' }];
@@ -41,5 +41,11 @@ describe('choicesFromMdms', () => {
     const fb = [{ value: 'EMPLOYED', label: 'Employed' }, { value: 'INACTIVE', label: 'Inactive' }];
     expect(choicesFromMdms([{ code: 'EMPLOYED' }, { code: 'RETIRED' }], fb, ['INACTIVE']).map((c) => c.value)).toEqual(['EMPLOYED', 'RETIRED', 'INACTIVE']);
     expect(choicesFromMdms([{ code: 'INACTIVE', name: 'Deactivated' }], fb, ['INACTIVE'])).toEqual([{ value: 'INACTIVE', label: 'Deactivated' }]);
+  });
+
+  it('a deactivated employee shows Inactive, whatever employeeStatus HRMS kept', () => {
+    expect(employeeStatusShown({ isActive: false, employeeStatus: 'EMPLOYED' })).toBe('INACTIVE');
+    expect(employeeStatusShown({ isActive: false, employeeStatus: 'RETIRED' })).toBe('RETIRED');
+    expect(employeeStatusShown({ isActive: true, employeeStatus: 'EMPLOYED' })).toBe('EMPLOYED');
   });
 });

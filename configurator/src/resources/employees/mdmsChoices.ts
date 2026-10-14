@@ -37,3 +37,14 @@ export function useMdmsChoices(resource: string, fallback: Choice[], always: str
   // eslint-disable-next-line react-hooks/exhaustive-deps
   return useMemo(() => choicesFromMdms(data as Record<string, unknown>[] | undefined, fallback, always), [data, fallback, key]);
 }
+
+/**
+ * The Status an Edit form shows for an employee record: a deactivated employee (isActive false) reads INACTIVE even
+ * when HRMS kept employeeStatus EMPLOYED (the deactivation writes isActive, not the status). Showing EMPLOYED there
+ * also meant any save of the form re-activated the person (pE13, nightly 2026-10-14).
+ */
+export function employeeStatusShown(record: { isActive?: unknown; employeeStatus?: unknown } | undefined): string | undefined {
+  const s = typeof record?.employeeStatus === 'string' ? record.employeeStatus : undefined;
+  if (record?.isActive === false && s !== 'INACTIVE' && s !== 'RETIRED') return 'INACTIVE';
+  return s;
+}
