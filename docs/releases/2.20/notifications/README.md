@@ -6,6 +6,7 @@ text, from the `NOTIFICATIONS.*` MDMS masters that operators edit in the Configu
 
 | You want to | Read |
 |---|---|
+| Understand what changed for users and product (product, PMs) | [whats-new.md](./whats-new.md) |
 | Set notifications up and run them (operators, deployers) | [setup-guide.md](./setup-guide.md) |
 | Give each workspace its own Novu account and provider credentials, send citizen sign-in codes | [tenant-accounts.md](./tenant-accounts.md) |
 | Upgrade a 2.12 deployment | [migration.md](./migration.md) |
