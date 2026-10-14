@@ -90,6 +90,19 @@ public class WorkspacePostgresTest {
         assertEquals(2L, repository.find("example", false).orElseThrow().get("version"));
     }
 
+    @Test public void finishSetsDoneOnceAndAuditsItAgainstTheRealSchema() {
+        activate(signup("finish")); when(gateway.probe(anyString(), anyString())).thenReturn(true);
+        long version = 1;
+        for (String step : WorkspaceRepository.STEPS) service.update(Map.of("tenantId", "finish", "step", step, "state", "DONE", "version", version++));
+        assertEquals("IN_PROGRESS", repository.find("finish", false).orElseThrow().get("status"));
+        service.update(Map.of("tenantId", "finish", "action", "FINISH", "version", version));
+        service.update(Map.of("tenantId", "finish", "action", "FINISH"));
+        var row = repository.find("finish", false).orElseThrow();
+        assertEquals("DONE", row.get("status")); assertEquals(version + 1, row.get("version"));
+        assertEquals(List.of("CREATED", "STEP_UPDATED", "STEP_UPDATED", "STEP_UPDATED", "STEP_UPDATED", "STEP_UPDATED", "FINISHED"),
+                jdbc.queryForList("SELECT event_type FROM eg_pgr_onboarding_workspace_event WHERE tenant_id = 'finish' ORDER BY version", String.class));
+    }
+
     /** Escalation scans every live onboarded tenant, whatever its checklist status (#2269 item 8). */
     @Test public void onboardedTenantsAreEveryActiveSignupAndWorkspaceWhateverItsChecklistStatus() {
         signup("draft");

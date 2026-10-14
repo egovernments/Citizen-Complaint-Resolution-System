@@ -83,7 +83,7 @@ test('signup -> workspace DONE -> complaint lifecycle -> member removal on a fre
     await test.step('3e. Complaint types: 2 leaves routed with SLA; Complete onboarding sets the workspace DONE', async () => {
       const final = await complaintTypesStep(founder, locales);
       expect(final.status, 'every step done is not yet finished').toBe('IN_PROGRESS');
-      expect((await finishSetup(founder)).status).toBe('DONE');
+      expect((await finishSetup(founder, final.version)).status).toBe('DONE');
       const { Workspace, Probes } = await workspace(founder);
       expect(Workspace.status).toBe('DONE');
       expect(Object.values(Workspace.steps).map(s => s.state)).toEqual(Array(5).fill('DONE'));

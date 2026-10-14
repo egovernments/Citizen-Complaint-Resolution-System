@@ -246,9 +246,8 @@ export async function markDone(digit: Digit, step: string): Promise<Workspace> {
   return updated.Workspace;
 }
 /** The founder's "Complete onboarding": the workspace is DONE only after this, not when the last step is. */
-export async function finishSetup(digit: Digit): Promise<Workspace> {
-  const { Workspace: current } = await workspace(digit);
-  return (await digit.post(`${WS}/_update`, { tenantId: digit.tenantId, action: 'FINISH', version: current.version })).Workspace;
+export async function finishSetup(digit: Digit, version: number): Promise<Workspace> {
+  return (await digit.post(`${WS}/_update`, { tenantId: digit.tenantId, action: 'FINISH', version })).Workspace;
 }
 
 /** en_IN plus the root StateInfo languages, as the configurator's labelLocales does. */
