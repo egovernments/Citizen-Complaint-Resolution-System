@@ -823,11 +823,16 @@ class PGRService {
 
     requestBody["service"]["serviceCode"] = complaintType;
     requestBody["service"]["description"] = slots.description ?? "";
-    requestBody["service"]["extendedAttributes"] = {
-      caseRelatedTo: config.caseRelatedTo,
-      instituteName: slots.instituteName,
-      isConfidential: slots.isConfidential === true,
-    };
+    // PGR validates extendedAttributes against the tenant's ComplaintTemplateType row for
+    // caseRelatedTo and rejects the complaint when there is none, so a tenant without that
+    // config (CASE_RELATED_TO set empty) files the plain complaint, as the web UI does.
+    if (config.caseRelatedTo) {
+      requestBody["service"]["extendedAttributes"] = {
+        caseRelatedTo: config.caseRelatedTo,
+        instituteName: slots.instituteName,
+        isConfidential: slots.isConfidential === true,
+      };
+    }
 
     // Handle location coordinates (geocode)
     if (slots.geocode) {

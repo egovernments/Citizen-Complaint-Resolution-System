@@ -13,7 +13,7 @@ const fetchPath = require.resolve("node-fetch", { paths: [projectRoot] });
  * Load egov-pgr with node-fetch replaced by `handler(url, options)`, which returns
  * `{ status, body }`. Every call is recorded so a test can inspect what was sent.
  */
-function load(handler) {
+function load(handler, env = {}) {
   const calls = [];
   delete require.cache[svcPath];
   require.cache[envPath] = {
@@ -29,6 +29,7 @@ function load(handler) {
         egovServicesHost: "http://localhost/",
         pgrCreateEndpoint: "pgr-services/v2/request/_create",
       },
+      ...env,
     },
   };
   require.cache[locPath] = {
@@ -157,4 +158,23 @@ test("a code is filed exactly as the walk picked it, with or without the flag", 
   const { file } = filingHarness();
   assert.equal((await file({ locality: "SUN04" })).sent.service.address.locality.code, "SUN04");
   assert.equal((await file({ locality: "ADMIN_SUN05" })).sent.service.address.locality.code, "ADMIN_SUN05");
+});
+
+test("REGRESSION: an empty CASE_RELATED_TO files the complaint without extendedAttributes", async () => {
+  // ke has no ComplaintTemplateType rows, so PGR rejected every chatbot complaint with
+  // INVALID_CASE_RELATED_TO while the bot stamped caseRelatedTo: IGE on all of them.
+  const user = { authToken: "t", userId: "u", userInfo: {}, locale: "en_IN" };
+  const slots = { complaint: "MissedGarbageCollection", city: "ke.bomet", locality: "W1_ADMIN_WARD",
+    localityIsBoundaryCode: true, instituteName: "Inst", isConfidential: false };
+
+  const plain = load(boundaryAndLocalisation(["W1_ADMIN_WARD"]), { caseRelatedTo: "" });
+  await plain.svc.persistComplaint(user, slots);
+  const sentPlain = JSON.parse(plain.calls.find((c) => c.url.includes("request/_create")).options.body);
+  assert.equal(sentPlain.service.extendedAttributes, undefined);
+
+  // A configured value (mz's IGE) still sends them.
+  const ige = load(boundaryAndLocalisation(["W1_ADMIN_WARD"]), { caseRelatedTo: "IGE" });
+  await ige.svc.persistComplaint(user, slots);
+  const sentIge = JSON.parse(ige.calls.find((c) => c.url.includes("request/_create")).options.body);
+  assert.deepEqual(sentIge.service.extendedAttributes, { caseRelatedTo: "IGE", instituteName: "Inst", isConfidential: false });
 });

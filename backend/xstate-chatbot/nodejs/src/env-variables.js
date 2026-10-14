@@ -60,7 +60,9 @@ const envVariables = {
 
     descriptionMinLength: parseInt(process.env.DESCRIPTION_MIN_LENGTH || '20', 10),
 
-    caseRelatedTo: process.env.CASE_RELATED_TO || 'IGE',
+    // Set but empty means "send no extendedAttributes": PGR rejects them on a tenant with no
+    // ComplaintTemplateType row for this value (INVALID_CASE_RELATED_TO), as on ke.
+    caseRelatedTo: process.env.CASE_RELATED_TO ?? 'IGE',
     instituteNameMaxLength: parseInt(process.env.INSTITUTE_NAME_MAX_LENGTH || '300', 10),
 
     // boundary-service registers many unrelated hierarchy types per tenant
