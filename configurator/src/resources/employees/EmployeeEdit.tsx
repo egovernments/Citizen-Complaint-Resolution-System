@@ -24,6 +24,8 @@ const STATUS_CHOICES = [
   { value: 'RETIRED', label: 'Retired' },
 ];
 
+const STATUS_ALWAYS = ['INACTIVE'];
+
 const TYPE_CHOICES = [
   { value: 'PERMANENT', label: 'Permanent' },
   { value: 'TEMPORARY', label: 'Temporary' },
@@ -118,7 +120,8 @@ export function EmployeeEdit() {
   // EmployeeType), not a hardcoded list that disagreed with them; the old lists stay as the fallback when a master
   // is empty or unreadable.
   const genderChoices = useMdmsChoices('gender-types', GENDER_CHOICES);
-  const statusChoices = useMdmsChoices('employee-status', STATUS_CHOICES);
+  // INACTIVE is what deactivates (transform below): always offered, whatever egov-hrms.EmployeeStatus lists
+  const statusChoices = useMdmsChoices('employee-status', STATUS_CHOICES, STATUS_ALWAYS);
   const typeChoices = useMdmsChoices('employee-type', TYPE_CHOICES);
   const tenantId = state.tenant;
   const { validator: mobileValidate, rules: mobileRules } = useMobileValidator();

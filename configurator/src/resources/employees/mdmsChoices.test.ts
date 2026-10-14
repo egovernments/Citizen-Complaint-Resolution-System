@@ -36,4 +36,10 @@ describe('choicesFromMdms', () => {
     expect(generic['employee-status']?.schema).toBe('egov-hrms.EmployeeStatus');
     expect(generic['employee-type']?.schema).toBe('egov-hrms.EmployeeType');
   });
+
+  it('always offers the values the form acts on, even when the master omits them (nightly 2026-10-14)', () => {
+    const fb = [{ value: 'EMPLOYED', label: 'Employed' }, { value: 'INACTIVE', label: 'Inactive' }];
+    expect(choicesFromMdms([{ code: 'EMPLOYED' }, { code: 'RETIRED' }], fb, ['INACTIVE']).map((c) => c.value)).toEqual(['EMPLOYED', 'RETIRED', 'INACTIVE']);
+    expect(choicesFromMdms([{ code: 'INACTIVE', name: 'Deactivated' }], fb, ['INACTIVE'])).toEqual([{ value: 'INACTIVE', label: 'Deactivated' }]);
+  });
 });
