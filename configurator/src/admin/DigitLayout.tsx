@@ -38,6 +38,7 @@ import {
   CalendarClock,
   Inbox,
 } from 'lucide-react';
+import { ListTree } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { getGenericMdmsResources, getResourceLabel } from '@/providers/bridge';
 import { useMastersCapability } from '@/hooks/useMastersCapability';
@@ -124,6 +125,8 @@ const navGroups = [
       { id: 'workflow-processes', nameKey: 'app.nav.processes', path: '/manage/workflow-processes', icon: History },
       { id: 'mdms-schemas', nameKey: 'app.nav.mdms_schemas', path: '/manage/mdms-schemas', icon: FileCode },
       { id: 'boundaries', nameKey: 'app.nav.boundaries', path: '/manage/boundaries', icon: MapPin },
+      // Access: what access can be judged on (the attribute catalogue)
+      { id: 'access-attributes', nameKey: 'app.nav.access_attributes', path: '/manage/access/attributes', icon: ListTree, requiredRoles: ['SUPERUSER', 'MDMS_ADMIN', 'ACCOUNT_ADMIN'] },
       // Only useful to people who can change destinations; requiredRoles keeps it
       // out of everyone else's sidebar (the route itself renders read-only for
       // them, so this is a tidiness gate, not the security boundary).
