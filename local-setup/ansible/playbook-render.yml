@@ -1,0 +1,316 @@
+---
+# Local-only deterministic renderer used by upgrade_dry_run.py.
+#
+# This deliberately does not import playbook-deploy.yml: that playbook installs
+# packages, starts Docker, reads OpenBao, and writes databases.  Keep this file
+# limited to copy/template/replace operations inside render_dir.  The parity
+# tests in local-setup/tests/test_upgrade_dry_run.py fail when supported deploy
+# playbooks add a new deterministic /opt/digit destination that is not covered.
+- name: Render DIGIT deployment files without deploying
+  hosts: all
+  connection: local
+  gather_facts: false
+  become: false
+  vars:
+    ansible_system: Linux
+    ansible_env:
+      HOME: /tmp
+  pre_tasks:
+    - name: Validate renderer inputs
+      ansible.builtin.assert:
+        that:
+          - render_profile in ['base', 'target']
+          - source_root is defined
+          - render_dir is defined
+          - tenant_vars_file is defined
+        fail_msg: Unsupported or incomplete render request
+
+    # Precedence intentionally matches normal inventory: all < digit < host.
+    - name: Load reference-wide variables
+      ansible.builtin.include_vars:
+        file: "{{ source_root }}/local-setup/ansible/inventory/group_vars/all.yml"
+      no_log: true
+
+    - name: Load DIGIT group variables
+      ansible.builtin.include_vars:
+        file: "{{ source_root }}/local-setup/ansible/inventory/group_vars/digit.yml"
+      no_log: true
+
+    - name: Load supplied tenant variables
+      ansible.builtin.include_vars:
+        file: "{{ tenant_vars_file }}"
+      no_log: true
+
+  tasks:
+    - name: Create isolated render directory
+      ansible.builtin.file:
+        path: "{{ render_dir }}"
+        state: directory
+        mode: "0700"
+
+    - name: Define deterministic Compose inputs
+      ansible.builtin.set_fact:
+        render_compose_files: >-
+          {{
+            ['docker-compose.egov-digit.yaml',
+             'docker-compose.fast-path.yml',
+             'docker-compose.migrations.yml',
+             'docker-compose.monitoring.yml']
+            + (['docker-compose.matomo.yml'] if render_profile == 'target' else [])
+          }}
+
+    - name: Copy deterministic Compose inputs
+      ansible.builtin.copy:
+        src: "{{ source_root }}/local-setup/{{ item }}"
+        dest: "{{ render_dir }}/{{ item }}"
+        mode: preserve
+      loop: "{{ render_compose_files }}"
+
+    - name: Check for tenant-specific Compose overlay
+      ansible.builtin.stat:
+        path: "{{ source_root }}/local-setup/docker-compose.{{ inventory_hostname }}.yml"
+      register: render_tenant_overlay
+
+    - name: Copy tenant-specific Compose overlay
+      ansible.builtin.copy:
+        src: "{{ source_root }}/local-setup/docker-compose.{{ inventory_hostname }}.yml"
+        dest: "{{ render_dir }}/docker-compose.{{ inventory_hostname }}.yml"
+        mode: preserve
+      when: render_tenant_overlay.stat.exists
+
+    - name: Define deterministic directory inputs
+      ansible.builtin.set_fact:
+        render_directories: >-
+          {{
+            ['otel', 'configs', 'nginx', 'kong', 'postman', 'db', 'seeds',
+             'gatus', 'scripts', 'keycloak', 'docker']
+            + (['jupyter'] if render_profile == 'base' else ['dataloader'])
+          }}
+
+    - name: Check deterministic source directories
+      ansible.builtin.stat:
+        path: "{{ source_root }}/local-setup/{{ item }}"
+      loop: "{{ render_directories }}"
+      register: render_directory_stats
+
+    - name: Copy deterministic source directories
+      ansible.builtin.copy:
+        src: "{{ item.stat.path }}/"
+        dest: "{{ render_dir }}/{{ item.item }}/"
+        mode: preserve
+      loop: "{{ render_directory_stats.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+      when: item.stat.exists and item.stat.isdir
+
+    - name: Remove downloaded OTEL agent from render if source checkout contains one
+      ansible.builtin.file:
+        path: "{{ render_dir }}/otel/opentelemetry-javaagent.jar"
+        state: absent
+
+    - name: Resolve image values used by the environment template
+      ansible.builtin.set_fact:
+        mcp_image: >-
+          {{ mcp_image | default('digit-mcp:local' if (build_mcp | default(false)) else '') }}
+        novu_dashboard_image: >-
+          {{ novu_dashboard_image
+             | default('novu-dashboard:local' if (build_novu_dashboard | default(false))
+                       else 'ghcr.io/novuhq/novu/dashboard:' ~ (novu_dashboard_version | default('2.3.0'))) }}
+        otp_publisher_image: >-
+          {{ otp_publisher_image
+             | default('otp-publisher:local' if (build_otp_publisher | default(false))
+                       else 'egovio/otp-publisher:2.12-81fc6be') }}
+
+    - name: Render tenant environment without OpenBao secrets
+      ansible.builtin.template:
+        src: "{{ source_root }}/local-setup/ansible/templates/digit.env.j2"
+        dest: "{{ render_dir }}/.env"
+        mode: "0600"
+
+    - name: Check for configurator runtime template
+      ansible.builtin.stat:
+        path: "{{ source_root }}/local-setup/ansible/templates/configurator-config.js.j2"
+      register: render_configurator_template
+
+    - name: Create configurator runtime directory
+      ansible.builtin.file:
+        path: "{{ render_dir }}/configurator-runtime"
+        state: directory
+        mode: "0755"
+      when: render_configurator_template.stat.exists
+
+    - name: Render configurator runtime configuration
+      ansible.builtin.template:
+        src: "{{ source_root }}/local-setup/ansible/templates/configurator-config.js.j2"
+        dest: "{{ render_dir }}/configurator-runtime/config.js"
+        mode: "0644"
+      when: render_configurator_template.stat.exists
+
+    - name: Render DIGIT UI global configuration
+      ansible.builtin.template:
+        src: "{{ source_root }}/local-setup/ansible/templates/globalConfigs.js.j2"
+        dest: "{{ render_dir }}/nginx/globalConfigs.js"
+        mode: "0644"
+
+    - name: Render container-side DIGIT UI proxy configuration
+      ansible.builtin.copy:
+        dest: "{{ render_dir }}/nginx/digit-ui.conf"
+        mode: "0644"
+        content: |
+          resolver 127.0.0.11 valid=10s;
+
+          server {
+            listen 80;
+            server_name _;
+
+            root /var/web/digit-ui;
+            index index.html;
+
+            location / {
+              try_files $uri $uri/ /index.html;
+            }
+
+            location /api/ {
+              proxy_pass http://kong:8000/;
+              proxy_set_header Host $host;
+              proxy_set_header X-Real-IP $remote_addr;
+              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto $scheme;
+              proxy_read_timeout 120s;
+              proxy_buffering off;
+            }
+          }
+
+    - name: Set tenant domain in Compose
+      ansible.builtin.replace:
+        path: "{{ render_dir }}/docker-compose.egov-digit.yaml"
+        regexp: 'api\.egov\.theflywheel\.in'
+        replace: "{{ domain }}"
+
+    - name: Apply pre-bootstrap tenant replacements
+      ansible.builtin.replace:
+        path: "{{ render_dir }}/docker-compose.egov-digit.yaml"
+        regexp: "{{ item.regexp }}"
+        replace: "{{ item.replace }}"
+      loop:
+        - regexp: '^(\s+)PARENT_LEVEL_TENANT_ID: pg$'
+          replace: '\1PARENT_LEVEL_TENANT_ID: {{ state_root }}'
+        - regexp: '^(\s+)DIGIT_TENANT: pg$'
+          replace: '\1DIGIT_TENANT: {{ state_root }}'
+        - regexp: "^(\\s+)EGOV_MOBILE_VALIDATION_DEFAULT_COUNTRY_CODE: '\\+91'$"
+          replace: "\\1EGOV_MOBILE_VALIDATION_DEFAULT_COUNTRY_CODE: '{{ core_mobile_configs.countryCode | default('+91') }}'"
+        - regexp: "^(\\s+)EGOV_MOBILE_VALIDATION_DEFAULT_REGEX: '\\^\\[6-9\\]\\[0-9\\]\\{9\\}\\$'$"
+          replace: "\\1EGOV_MOBILE_VALIDATION_DEFAULT_REGEX: '{{ core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$') }}'"
+
+    - name: Apply final post-bootstrap tenant replacements
+      ansible.builtin.replace:
+        path: "{{ render_dir }}/docker-compose.egov-digit.yaml"
+        regexp: "{{ item.regexp }}"
+        replace: "{{ item.replace }}"
+      loop:
+        - regexp: '^(\s+)STATE_LEVEL_TENANT_ID: pg$'
+          replace: '\1STATE_LEVEL_TENANT_ID: {{ state_root }}'
+        - regexp: '^(\s+)EGOV_STATE_LEVEL_TENANT_ID: pg$'
+          replace: '\1EGOV_STATE_LEVEL_TENANT_ID: {{ state_root }}'
+        - regexp: '^(\s+)EGOV_STATELEVEL_TENANT: pg$'
+          replace: '\1EGOV_STATELEVEL_TENANT: {{ state_root }}'
+        - regexp: '^(\s+)PGR_STATELEVEL_TENANTID: pg$'
+          replace: '\1PGR_STATELEVEL_TENANTID: {{ state_root }}'
+        - regexp: '^(\s+)EGOV_UI_APP_HOST_MAP: "\{pg:'
+          replace: '\1EGOV_UI_APP_HOST_MAP: "{{ "{" }}{{ state_root }}:'
+        - regexp: '^(\s+)STATE_LEVEL_TENANT_ID: pg\.citya$'
+          replace: '\1STATE_LEVEL_TENANT_ID: {{ tenant_id }}'
+        - regexp: '^(\s+)STATE_LEVEL_TENANT_ID: mz$'
+          replace: '\1STATE_LEVEL_TENANT_ID: {{ state_root }}'
+        - regexp: '("tenantId":")pg(","roleCodes":\["INTERNAL_MICROSERVICE_ROLE"\])'
+          replace: '\1{{ state_root }}\2'
+      when: state_root != 'pg'
+
+    - name: Pin Kong CORS origins for master-compatible renders
+      ansible.builtin.replace:
+        path: "{{ render_dir }}/kong/kong.yml"
+        regexp: "(origins:\\s+# kong-cors-origins-marker\\n)(?:[ \\t]*-[ \\t]*.*\\n)+"
+        replace: "\\1{% for origin in (kong_cors_origins | default([('https://' if (tls_enabled | default(true)) else 'http://') ~ domain])) %}    - '{{ origin }}'\n{% endfor %}"
+      when: render_profile == 'target'
+
+    - name: Check for tenant Keycloak realm template
+      ansible.builtin.stat:
+        path: "{{ source_root }}/local-setup/ansible/templates/keycloak-realm.json.j2"
+      register: render_keycloak_template
+
+    - name: Render tenant Keycloak realm when enabled
+      ansible.builtin.template:
+        src: "{{ source_root }}/local-setup/ansible/templates/keycloak-realm.json.j2"
+        dest: "{{ render_dir }}/keycloak/{{ state_tenant_id }}-realm.json"
+        mode: "0640"
+      when:
+        - enable_keycloak | default(false)
+        - (state_tenant_id | default('')) | length > 0
+        - render_keycloak_template.stat.exists
+
+    - name: Stage deterministic Novu helper scripts when enabled
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "{{ render_dir }}/"
+        mode: "0755"
+      loop:
+        - "{{ source_root }}/backend/novu-bridge/config/bootstrap-novu-whatsapp.sh"
+        - "{{ source_root }}/backend/novu-bridge/config/load-dotenv.sh"
+      when: enable_novu | default(false)
+
+    - name: Stage Novu key helper when enabled without a pinned key
+      ansible.builtin.copy:
+        src: "{{ source_root }}/backend/novu-bridge/config/novu-mint-key.sh"
+        dest: "{{ render_dir }}/novu-mint-key.sh"
+        mode: "0755"
+      when:
+        - enable_novu | default(false)
+        - (novu_api_key | default('')) | length == 0
+
+    - name: Stage deterministic Matomo bootstrap when enabled
+      ansible.builtin.copy:
+        src: "{{ source_root }}/local-setup/ansible/files/matomo-bootstrap.php"
+        dest: "{{ render_dir }}/matomo-bootstrap.php"
+        mode: "0644"
+      when:
+        - render_profile == 'target'
+        - enable_matomo | default(false)
+        - matomo_auto_install | default(true)
+
+    - name: Render redacted Matomo database snippet when enabled
+      ansible.builtin.copy:
+        dest: "{{ render_dir }}/matomo-db.ini"
+        mode: "0600"
+        content: |
+
+          [database]
+          host = "matomo-db"
+          username = "matomo"
+          password = "<REDACTED>"
+          dbname = "matomo"
+          tables_prefix = "matomo_"
+          charset = "utf8mb4"
+      when:
+        - render_profile == 'target'
+        - enable_matomo | default(false)
+        - matomo_auto_install | default(true)
+
+    - name: Create notification seed directory when enabled
+      ansible.builtin.file:
+        path: "{{ render_dir }}/notification-seed"
+        state: directory
+        mode: "0755"
+      when: seed_notifications | default(pgr_notification_config_driven | default(false))
+
+    - name: Stage notification seed inputs when enabled
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "{{ render_dir }}/notification-seed/"
+        mode: preserve
+      loop:
+        - "{{ source_root }}/utilities/default-data-handler/src/main/resources/schema/RAINMAKER-PGR.json"
+        - "{{ source_root }}/utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/RAINMAKER-PGR.NotificationRouting.json"
+        - "{{ source_root }}/utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/RAINMAKER-PGR.NotificationTemplate.json"
+        - "{{ source_root }}/utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/RAINMAKER-PGR.NotificationProviderTemplate.json"
+        - "{{ source_root }}/local-setup/scripts/seed-notifications.py"
+      when: seed_notifications | default(pgr_notification_config_driven | default(false))
