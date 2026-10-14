@@ -9862,5 +9862,23 @@
         "message": "Administrator",
         "module": "rainmaker-common",
         "locale": "en_IN"
+    },
+    {
+        "code": "CS_HOME_HEADER",
+        "message": "All Services",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_HOME_NO_SERVICES_AVAILABLE",
+        "message": "No services available.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_COMMON_NAVIGATION",
+        "message": "Navigation",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
     }
 ]
