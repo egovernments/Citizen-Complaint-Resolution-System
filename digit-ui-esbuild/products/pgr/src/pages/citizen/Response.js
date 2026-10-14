@@ -15,6 +15,7 @@ import { useHistory, useLocation } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { useTranslation } from "react-i18next";
 import { Button } from "@egovernments/digit-ui-components-v2";
+import { formatLocaleParts } from "../../utils/localeDate";
 
 // PGR `_update` returns `ResponseInfo` (capital R); accept either casing.
 const hasUpdatePayload = (complaints) =>
@@ -56,11 +57,11 @@ const EyeGlyph = () => (
 /** "Today, 10:42" for today, else the date and time. */
 function filedOn(ts, tr) {
   const when = new Date(ts);
-  const time = when.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const time = formatLocaleParts(ts, { hour: "2-digit", minute: "2-digit" }, "time");
   if (when.toDateString() === new Date().toDateString()) {
     return `${tr("CS_FILE_TODAY", "Today")}, ${time}`;
   }
-  return `${when.toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" })}, ${time}`;
+  return `${formatLocaleParts(ts, { day: "numeric", month: "short", year: "numeric" })}, ${time}`;
 }
 
 function ComplaintNumber({ id, tr }) {

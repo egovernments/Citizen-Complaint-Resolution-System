@@ -195,6 +195,30 @@ describe('configurator sign in', () => {
     expect(await screen.findByRole('button', { name: /kenya/i })).toBeTruthy();
   });
 
+  // ours (#1778): only KE (the realm / Organization code) is accepted for Kenya; ?tenant=ke was refused 403
+  it('a deep link refused in one case enters the session\'s option of the same name (ke -> KE)', async () => {
+    vi.mocked(api.session).mockResolvedValue(signedIn);
+    const context = {
+      access_token: 'digit-token', token_type: 'bearer', expires_in: 3600, scope: 'read',
+      UserRequest: { id: 1, uuid: 'digit-user-1', userName: 'person', name: 'Demo Person', tenantId: 'KE',
+        roles: [{ code: 'EMPLOYEE', name: 'Employee', tenantId: 'ke' }] },
+    };
+    vi.mocked(api.selectContext).mockImplementation(async (tenant: string) => {
+      if (tenant !== 'KE') throw new Error('Tenant context is not available');
+      return context;
+    });
+    vi.mocked(api.tenants).mockResolvedValue({
+      tenants: [{ tenantId: 'KE', name: 'Kenya', organizationAlias: 'ke', roles: ['ACCOUNT_ADMIN'] }],
+      selectionRequired: false, onboardingRequired: false,
+    });
+    renderPage('/login?tenant=ke');
+
+    await waitFor(() => expect(api.selectContext).toHaveBeenCalledWith('KE'));
+    expect(api.selectContext).toHaveBeenCalledWith('ke');
+    await waitFor(() => expect(localSession.installDigitContext).toHaveBeenCalledWith(context, signedIn.user, [1, 2, 3, 4, 5]));
+    expect(screen.queryByText(/tenant context is not available/i)).toBeNull();
+  });
+
   it('signs out through the fail-open helper and returns to sign-in', async () => {
     vi.mocked(api.session).mockResolvedValueOnce(signedIn).mockResolvedValue({ authenticated: false });
     vi.mocked(api.tenants).mockResolvedValue({

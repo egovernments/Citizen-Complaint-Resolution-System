@@ -218,7 +218,7 @@ describe('wizard', () => {
     await completeAccountStep();
     fireEvent.change(screen.getByLabelText(/account url/i), { target: { value: 'kd4' } });
 
-    expect(await screen.findByText(/maps to tenant ID “kd”.*already in use/i)).toBeInTheDocument();
+    expect(await screen.findByText(/clashes with an existing workspace \(“kd”\)/i)).toBeInTheDocument();
   });
 
   it('creates the draft once Preferences is complete, not before', async () => {
@@ -371,10 +371,10 @@ describe('expired session', () => {
 
 describe('provisioning', () => {
   /** Walks the wizard to "Create account" and submits, the run coming back as `operation`. */
-  async function submitWith(operation: Record<string, unknown>) {
+  async function submitWith(operation: Record<string, unknown>, afterRun: 'DRAFT' | 'FAILED' = 'DRAFT') {
     vi.mocked(api.session).mockResolvedValue(signedIn);
     vi.mocked(api.tenants).mockResolvedValue({ tenants: [], selectionRequired: false, onboardingRequired: true });
-    vi.mocked(api.findSignup).mockResolvedValue({
+    const draft = {
       id: 'signup-1',
       status: 'DRAFT',
       accountName: 'Bomet County',
@@ -385,7 +385,10 @@ describe('provisioning', () => {
       timeZone: 'Africa/Nairobi',
       financialYearPolicy: 'JUL_JUN',
       tenantMetadata: { schemaVersion: 1, tenantAdmin: { mobileNumber: '+254700000199' } },
-    } as never);
+    };
+    // The first read is the resume; later ones are the signup after the run, which a
+    // user-correctable failure hands back as a DRAFT.
+    vi.mocked(api.findSignup).mockResolvedValueOnce(draft as never).mockResolvedValue({ ...draft, status: afterRun } as never);
     vi.mocked(api.updateSignup).mockResolvedValue({ id: 'signup-1' } as never);
     const run = { id: 'op-1', signupId: 'signup-1', errorCode: null, errorMessage: null, attempt: 1, createdAt: 0, updatedAt: 0, ...operation };
     vi.mocked(api.submitSignup).mockResolvedValue(run as never);
@@ -413,8 +416,40 @@ describe('provisioning', () => {
       errorMessage: 'Could not create the organization.',
     });
 
-    expect(await screen.findByText(/could not create the organization/i)).toBeInTheDocument();
+    // In words, with the code kept as a reference; never the run's own message.
+    expect(await screen.findByText(/usually temporary/i)).toBeInTheDocument();
+    expect(screen.getByText('Reference: ONBOARDING_VALIDATION_ERROR')).toBeInTheDocument();
+    expect(screen.queryByText(/could not create the organization/i)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument();
+  });
+
+  it('hands a rejected founder number back to be corrected, rather than closing the signup (#2353)', async () => {
+    await submitWith({
+      status: 'TERMINAL_FAILED',
+      currentStep: 'FOUNDER_HRMS',
+      completedSteps: ['TENANT_FOUNDATION', 'PLATFORM_BASELINE'],
+      errorCode: 'TENANT_ADMIN_ACCOUNT_REJECTED',
+      errorMessage: 'TENANT_ADMIN_ACCOUNT_REJECTED',
+    });
+
+    expect(await screen.findByText(/usually the mobile number/i)).toBeInTheDocument();
+    const change = await screen.findByRole('button', { name: /change my details/i });
+    expect(screen.queryByText(/cannot be retried/i)).not.toBeInTheDocument();
+
+    fireEvent.click(change);
+    expect(await screen.findByLabelText(/mobile number/i)).toHaveValue('+254700000199');
+    expect(screen.getByRole('alert')).toHaveTextContent(/couldn’t be created with it/);
+  });
+
+  it('keeps the closed-signup wording when the run did not hand the draft back', async () => {
+    await submitWith(
+      { status: 'TERMINAL_FAILED', currentStep: 'BINDING', completedSteps: [], errorCode: 'BINDING_CONFLICT', errorMessage: 'BINDING_CONFLICT' },
+      'FAILED',
+    );
+
+    expect(await screen.findByText(/cannot be retried/i)).toBeInTheDocument();
+    expect(screen.getByText('The setup could not be completed.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /change my details/i })).not.toBeInTheDocument();
   });
 
   it("follows PGR's steps, so the step the run is on is the one that spins", async () => {
@@ -432,7 +467,7 @@ describe('provisioning', () => {
 
     expect(await screen.findByText('Creating your workspace')).toBeInTheDocument();
     expect(spinning(/creating your workspace/i)).toBe(true);
-    expect(spinning(/setting up your organisation/i)).toBe(false);
+    expect(spinning(/setting up your account/i)).toBe(false);
   });
 
   it('spins nothing once the run has succeeded, even on a step code it does not know', async () => {
@@ -509,6 +544,82 @@ describe('preferences follow the selected country (CCRS#2098)', () => {
     // international, so copying its shape produced a validation failure.
     expect(mobile).toHaveAttribute('placeholder', '9876543210');
     expect(mobile.getAttribute('placeholder')).not.toMatch(/^\+/);
+  });
+
+  it('says what a mobile number looks like in the selected country (#2353)', async () => {
+    render(<SignupPage />);
+    await reachPreferences();
+
+    fireEvent.change(screen.getByLabelText(/base country/i), { target: { value: 'MZ' } });
+    expect(screen.getByText('+258')).toBeInTheDocument();
+    expect(
+      screen.getByText(/Mobile numbers in Mozambique have 9 digits and start with 82 to 87, for example 841234567\./),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText(/mobile number/i)).toHaveAttribute('placeholder', '841234567');
+  });
+});
+
+describe('a mobile number the rules refuse (#2353)', () => {
+  beforeEach(() => {
+    vi.mocked(api.session).mockResolvedValue(signedIn);
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [], selectionRequired: false, onboardingRequired: true });
+  });
+
+  const preferencesWith = async (country: string, zone: string, mobile: string) => {
+    render(<SignupPage />);
+    await completeAccountStep();
+    fireEvent.change(screen.getByLabelText(/base country/i), { target: { value: country } });
+    fireEvent.change(screen.getByLabelText(/timezone/i), { target: { value: zone } });
+    fireEvent.change(screen.getByLabelText(/financial year/i), { target: { value: 'JAN_DEC' } });
+    fireEvent.change(screen.getByLabelText(/mobile number/i), { target: { value: mobile } });
+    await waitFor(() => expect(screen.getByRole('button', { name: /continue/i })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: /continue/i }));
+  };
+
+  it('is caught under the field before anything is saved', async () => {
+    // The number from the issue's screenshot.
+    await preferencesWith('MZ', 'Africa/Maputo', '77777777777');
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('That isn’t a valid mobile number in Mozambique.');
+    expect(screen.getByLabelText(/mobile number/i)).toHaveAttribute('aria-invalid', 'true');
+    expect(api.createSignup).not.toHaveBeenCalled();
+  });
+
+  it('clears the complaint once the number is edited', async () => {
+    await preferencesWith('MZ', 'Africa/Maputo', '77777777777');
+    await screen.findByRole('alert');
+    fireEvent.change(screen.getByLabelText(/mobile number/i), { target: { value: '841234567' } });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('shows a server refusal under the field, never the field path', async () => {
+    vi.mocked(api.createSignup).mockRejectedValue(
+      new api.OnboardingError(400, 'ONBOARDING_VALIDATION_ERROR', 'Signup.tenantMetadata.tenantAdmin.mobileNumber is invalid'),
+    );
+    // Passes the egov-user rule, so it is the server's parser that refuses it.
+    await preferencesWith('KE', 'Africa/Nairobi', '199999999');
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('That isn’t a valid mobile number in Kenya.');
+    expect(screen.queryByText(/Signup\.tenantMetadata/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/could not continue/i)).not.toBeInTheDocument();
+  });
+
+  it('saves the bare national number, however it was typed', async () => {
+    vi.mocked(api.createSignup).mockResolvedValue({ id: 'signup-1', status: 'DRAFT' } as never);
+    await preferencesWith('KE', 'Africa/Nairobi', '+254 712 345 678');
+
+    await waitFor(() => expect(api.createSignup).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(api.createSignup).mock.calls[0][0].tenantMetadata?.tenantAdmin.mobileNumber).toBe('712345678');
+  });
+
+  it('puts other refusals in words in the banner', async () => {
+    vi.mocked(api.createSignup).mockRejectedValue(
+      new api.OnboardingError(409, 'ONBOARDING_IDENTIFIER_TAKEN', 'URL_SLUG is already reserved'),
+    );
+    await preferencesWith('KE', 'Africa/Nairobi', '712345678');
+
+    expect(await screen.findByText('That account URL is already taken. Choose a different one.')).toBeInTheDocument();
+    expect(screen.queryByText(/URL_SLUG/)).not.toBeInTheDocument();
   });
 
 });
@@ -712,7 +823,8 @@ describe('resuming a run that was already going', () => {
     render(<SignupPage />);
 
     expect(await screen.findByRole('button', { name: /try again/i })).toBeInTheDocument();
-    expect(screen.getByText(/DIGIT is not answering/)).toBeInTheDocument();
+    expect(screen.getByText(/usually temporary/)).toBeInTheDocument();
+    expect(screen.getByText('Reference: DIGIT_UNAVAILABLE')).toBeInTheDocument();
   });
 
   it('invents no step detail when the operation cannot be recovered', async () => {
@@ -796,6 +908,41 @@ describe('a success that is not yet published', () => {
 
   it('opens the workspace once the outcome is published', async () => {
     vi.mocked(api.findOperation).mockResolvedValue({ ...succeeded, lifecyclePublishedAt: 1 } as never);
+    vi.mocked(api.selectContext).mockResolvedValue({
+      access_token: 't',
+      token_type: 'bearer',
+      expires_in: 3600,
+      scope: '',
+      UserRequest: { uuid: 'u', userName: 'kcbff', name: 'Founder', emailId: 'f@x.test', tenantId: 'kisumucounty', roles: [] },
+    });
+
+    render(<SignupPage />);
+    await screen.findByText(/finishing setup/i);
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [kisumu], selectionRequired: true, onboardingRequired: false });
+    await tick(3000);
+
+    // Single workspace enters directly without showing choose a workspace picker
+    await waitFor(() => expect(api.selectContext).toHaveBeenCalledWith('kisumucounty'));
+    expect(screen.queryByText(/choose a workspace/i)).not.toBeInTheDocument();
+  });
+
+  it('shows the workspace picker when multiple workspaces exist after publishing', async () => {
+    vi.mocked(api.findOperation).mockResolvedValue({ ...succeeded, lifecyclePublishedAt: 1 } as never);
+
+    render(<SignupPage />);
+    await screen.findByText(/finishing setup/i);
+    const otherTenant = { organizationAlias: 'nairobi', tenantId: 'nairobi', name: 'Nairobi City', roles: [] };
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [kisumu, otherTenant], selectionRequired: true, onboardingRequired: false });
+    await tick(3000);
+
+    expect(await screen.findByText(/choose a workspace/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /kisumu county/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /nairobi city/i })).toBeInTheDocument();
+  });
+
+  it('falls back to the workspace picker if automatic entry fails for a single workspace', async () => {
+    vi.mocked(api.findOperation).mockResolvedValue({ ...succeeded, lifecyclePublishedAt: 1 } as never);
+    vi.mocked(api.selectContext).mockRejectedValue(new Error('Network failure'));
 
     render(<SignupPage />);
     await screen.findByText(/finishing setup/i);

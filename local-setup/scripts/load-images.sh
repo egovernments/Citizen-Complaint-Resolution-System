@@ -36,7 +36,7 @@ IMAGES=(
   "egovio/egov-url-shortening:v2.9.2-4a60f20"
 
   # App Services
-  "egovio/pgr-services:2.12-5137119"
+  "egovio/pgr-services:2.12.1-7a38661"
   "egovio/digit-ui:dev-ff0db90"
 )
 

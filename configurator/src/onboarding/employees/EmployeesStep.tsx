@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowRight, FileText, LayoutGrid, Network, Plus, Users } from 'lucide-react';
 import { useApp } from '../../App';
 import type { Employee } from '@/api/types';
-import type { Member } from '@/identity/api';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { DeleteConfirmDialog } from '@/components/ui/delete-confirm-dialog';
@@ -15,6 +15,8 @@ import { probeGate, useStepProbe } from '../stepProbe';
 import { describeSaveError } from '../errors';
 import { reportStepError, trackStepAction } from '../telemetry';
 import { useOnboardingT, type OnboardingT } from '../i18n';
+import { blockingError, stepKeys, STEP_QUERY_OPTIONS } from '../stepQueries';
+import { RefreshNotice } from '../RefreshNotice';
 import { EmployeeDialog } from './EmployeeDialog';
 import BulkEmployeeImport from './BulkEmployeeImport';
 import { InviteState } from './InviteState';
@@ -35,7 +37,6 @@ import {
   removeEmployee,
   updateEmployeeDetails,
   suggestEmployeeCode,
-  type EmployeeOptions,
   type EmailOutcome,
   type EmployeeChanges,
   type NewEmployee,
@@ -66,59 +67,59 @@ export default function EmployeesStep() {
   const tenant = state.targetTenant || state.tenant;
   const done = state.completedPhases.includes(STEP.number);
 
-  const [options, setOptions] = useState<EmployeeOptions | null>(null);
-  const [employees, setEmployees] = useState<Employee[] | null>(null);
-  // Every code HRMS holds, removed employees' included.
-  const [codes, setCodes] = useState<string[]>([]);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [reloadKey, setReloadKey] = useState(0);
+  const queryClient = useQueryClient();
   const [bulk, setBulk] = useState(false);
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<Employee | null>(null);
-  // Sign-in state by DIGIT uuid, from the identity BFF. It loads apart from HRMS, so a failure
-  // here only hides the states and the list still works.
-  const [memberIndex, setMemberIndex] = useState<Map<string, Member> | null>(null);
-  const [membersFailed, setMembersFailed] = useState(false);
-  const [membersKey, setMembersKey] = useState(0);
   const [sending, setSending] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    Promise.all([loadEmployeeOptions(tenant), listEmployees(tenant)])
-      .then(([loadedOptions, loadedEmployees]) => {
-        if (cancelled) return;
-        setOptions(loadedOptions);
-        setEmployees(loadedEmployees.active);
-        setCodes(loadedEmployees.codes);
-        setLoadError(null);
-      })
-      .catch((err) => {
-        if (!cancelled) setLoadError(err instanceof Error ? err.message : String(err));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [tenant, reloadKey]);
-
-  useEffect(() => {
-    let cancelled = false;
-    loadMembers(tenant)
-      .then((index) => {
-        if (cancelled) return;
-        setMemberIndex(index);
-        setMembersFailed(false);
-      })
-      .catch((err) => {
-        if (cancelled) return;
+  const optionsQuery = useQuery({
+    queryKey: stepKeys.employeeOptions(tenant),
+    queryFn: () => loadEmployeeOptions(tenant),
+    ...STEP_QUERY_OPTIONS,
+  });
+  const employeesQuery = useQuery({
+    queryKey: stepKeys.employees(tenant),
+    queryFn: () => listEmployees(tenant),
+    ...STEP_QUERY_OPTIONS,
+  });
+  // Sign-in state by DIGIT uuid, from the identity BFF. It loads apart from HRMS, so a failure
+  // here only hides the states and the list still works.
+  const membersQuery = useQuery({
+    queryKey: stepKeys.members(tenant),
+    queryFn: () =>
+      loadMembers(tenant).catch((err: unknown) => {
         reportStepError('employees', 'load_members', err, tenant);
-        setMembersFailed(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [tenant, reloadKey, membersKey]);
+        throw err;
+      }),
+    ...STEP_QUERY_OPTIONS,
+  });
 
-  const reload = () => setReloadKey((key) => key + 1);
+  const options = optionsQuery.data ?? null;
+  const employees = employeesQuery.data?.active ?? null;
+  // Every code HRMS holds, removed employees' included.
+  const codes = employeesQuery.data?.codes ?? [];
+  const loadError = blockingError(optionsQuery) ?? blockingError(employeesQuery);
+  // A refresh failed with the last load still on screen.
+  const refreshFailed = optionsQuery.isRefetchError || employeesQuery.isRefetchError;
+  const memberIndex = membersQuery.data ?? null;
+  // A failed refresh counts too: the statuses shown would be the last load's.
+  const membersFailed = membersQuery.isError;
+  // Options cached before the account had a department, still being refetched. Drawn as they
+  // are, the step would say "create a department first" until the refetch lands, right after
+  // the user added one. (Areas only fill one field of the dialog, which says they're loading.)
+  const optionsOutdated = optionsQuery.isFetching && !!options && options.departments.length === 0;
+
+  // An employee change can't affect departments, designations or areas, so only the employee
+  // list and the invite states reload; the options are the slowest load. The table keeps
+  // showing while the fresh load comes in behind it.
+  const reload = () =>
+    void Promise.all([
+      queryClient.invalidateQueries({ queryKey: stepKeys.employees(tenant) }),
+      queryClient.invalidateQueries({ queryKey: stepKeys.members(tenant) }),
+    ]);
+  const reloadMembers = () => void queryClient.invalidateQueries({ queryKey: stepKeys.members(tenant) });
+  const retryLoads = () => void Promise.all([optionsQuery.refetch(), employeesQuery.refetch()]);
   const uuidOf = (employee: Employee) => employee.user?.uuid || employee.uuid;
   const memberOf = (employee: Employee) => {
     const uuid = uuidOf(employee);
@@ -211,7 +212,7 @@ export default function EmployeesStep() {
             ? t('employees.has_account_sees_invite', '%{name} already has an account, so they’ll see the invitation when they next sign in.', { name })
             : t('employees.link_set_password', 'It has a link to set their password.'),
         });
-        setMembersKey((key) => key + 1);
+        reloadMembers();
       }
     } catch (err) {
       if (resending && activationNotNeeded(err)) {
@@ -248,9 +249,9 @@ export default function EmployeesStep() {
     reload();
   };
 
-  const loaded = options !== null && employees !== null;
+  const loaded = options !== null && employees !== null && !optionsOutdated;
   const header = (
-    <StepHeader eyebrow={t('step.your_organisation', 'Your organisation')} title={t('steps.employees', 'Employees')} done={done}>
+    <StepHeader eyebrow={t('step.your_account', 'Your account')} title={t('steps.employees', 'Employees')} done={done}>
       {t('employees.intro', 'The people who will use your complaint system.')}
     </StepHeader>
   );
@@ -262,7 +263,7 @@ export default function EmployeesStep() {
         <Alert variant="destructive">
           <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
             <span>{t('employees.load_failed', 'Couldn’t load your employees.')} {loadError}</span>
-            <Button variant="outline" size="sm" onClick={reload}>
+            <Button variant="outline" size="sm" onClick={retryLoads}>
               {t('common.try_again', 'Try again')}
             </Button>
           </AlertDescription>
@@ -285,6 +286,7 @@ export default function EmployeesStep() {
     return (
       <div className="space-y-8">
         {header}
+        {refreshFailed && <RefreshNotice onRetry={retryLoads} />}
         <EmptyState icon={Network} title={t('employees.needs_department_title', 'You will have to create a department first')}>
           {t(
             'employees.needs_department_body',
@@ -321,6 +323,7 @@ export default function EmployeesStep() {
   return (
     <div className="space-y-8">
       {header}
+      {refreshFailed && <RefreshNotice onRetry={retryLoads} />}
 
       {others.length === 0 ? (
         <div className="space-y-6">
@@ -456,7 +459,7 @@ export default function EmployeesStep() {
           {membersFailed && (
             <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               {t('employees.invites_load_failed', 'Couldn’t load invitation status.')}
-              <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setMembersKey((key) => key + 1)}>
+              <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={reloadMembers}>
                 {t('common.try_again', 'Try again')}
               </Button>
             </p>
@@ -489,6 +492,7 @@ export default function EmployeesStep() {
         employee={editing ?? undefined}
         emailLocked={!!editing && isSelf(editing)}
         emailNote={editing ? emailNote(statusOf(editing)?.kind ?? 'active', t) : undefined}
+        optionsRefreshing={optionsQuery.isFetching}
         onOpenChange={(open) => {
           if (open) return;
           setAdding(false);

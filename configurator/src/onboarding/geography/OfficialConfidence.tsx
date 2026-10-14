@@ -13,6 +13,7 @@ import {
   type OfficialLevel,
   type OfficialSet,
 } from '@/utils/officialBoundaries';
+import { useOnboardingT } from '../i18n';
 
 const STATUS_STYLE: Record<LevelStatus, string> = {
   confirmed: 'bg-success/10 text-success',
@@ -40,6 +41,7 @@ const CONFIDENCE_STYLE: Record<Confidence, string> = {
  *  `short` drops the word "confidence" ("High") for a row already labelled
  *  "Confidence:", in the Preconfigured card's design style. */
 export function ConfidenceTag({ set, short = false }: { set: OfficialSet; short?: boolean }) {
+  const t = useOnboardingT();
   const level = confidenceLevel(set);
   if (!level) return null;
   return (
@@ -49,16 +51,19 @@ export function ConfidenceTag({ set, short = false }: { set: OfficialSet; short?
           ? `inline-flex items-center rounded-[5px] px-2 py-0.5 text-xs font-semibold ${CONFIDENCE_STYLE[level]}`
           : `inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${CONFIDENCE_STYLE[level]}`
       }
-      title={short ? undefined : CONFIDENCE_HINT[level]}
+      title={short ? undefined : t(`geography.confidence_hint.${level}`, CONFIDENCE_HINT[level])}
       data-testid="confidence-tag"
     >
-      {short ? CONFIDENCE_LABEL[level].replace(/ confidence$/, '') : CONFIDENCE_LABEL[level]}
+      {short
+        ? t(`geography.confidence_short.${level}`, CONFIDENCE_LABEL[level].replace(/ confidence$/, ''))
+        : t(`geography.confidence.${level}`, CONFIDENCE_LABEL[level])}
     </span>
   );
 }
 
 /** "Confirmed" / "Partly confirmed · 83%" / "One source only" pill for one level. */
 export function LevelStatusBadge({ level }: { level: OfficialLevel }) {
+  const t = useOnboardingT();
   const status = levelStatus(level);
   if (status === 'unmeasured') return null;
   const Icon = STATUS_ICON[status];
@@ -69,7 +74,7 @@ export function LevelStatusBadge({ level }: { level: OfficialLevel }) {
       data-testid="level-status"
     >
       <Icon className="w-3 h-3" />
-      {STATUS_LABEL[status]}
+      {t(`geography.level_status.${status}`, STATUS_LABEL[status])}
       {pct}
     </span>
   );
@@ -80,6 +85,7 @@ export function LevelStatusBadge({ level }: { level: OfficialLevel }) {
  * source and date, and what "confirmed" does and doesn't mean.
  */
 export function OfficialSetSummary({ set, place = null }: { set: OfficialSet; place?: string | null }) {
+  const t = useOnboardingT();
   const headline = confidenceHeadline(set);
   return (
     <section className="flex items-start gap-3 rounded-lg border border-border bg-card p-4" data-testid="official-set-summary">
@@ -88,7 +94,7 @@ export function OfficialSetSummary({ set, place = null }: { set: OfficialSet; pl
       </div>
       <div className="min-w-0 space-y-1">
         <p className="flex flex-wrap items-center gap-x-2 gap-y-1 font-medium text-foreground">
-          Official boundaries for {countryName(set.country)}
+          {t('geography.official_for', 'Official boundaries for %{country}', { country: countryName(set.country) })}
           <ConfidenceTag set={set} />
           <span className="text-sm font-normal text-muted-foreground">{sourceLine(set)}</span>
         </p>
@@ -99,16 +105,32 @@ export function OfficialSetSummary({ set, place = null }: { set: OfficialSet; pl
         )}
         {place && headline && (
           <p className="text-xs text-muted-foreground" data-testid="confidence-scope">
-            These figures are for all of {countryName(set.country)}, not just {place}.
+            {t('geography.figures_scope', 'These figures are for all of %{country}, not just %{place}.', {
+              country: countryName(set.country),
+              place,
+            })}
           </p>
         )}
         <p className="text-xs leading-5 text-muted-foreground">
           {set.agreement_measured
-            ? `Confirmed means ${set.other ? 'a second, independently drawn set' : 'another source'} has nearly the same areas. ` +
-              "It doesn't mean your government has endorsed this exact file, and “one source only” means a level couldn't be checked, not that it is wrong."
+            ? set.other
+              ? t(
+                  'geography.confirmed_means_second',
+                  'Confirmed means a second, independently drawn set has nearly the same areas. It doesn\'t mean your government has endorsed this exact file, and “one source only” means a level couldn\'t be checked, not that it is wrong.',
+                )
+              : t(
+                  'geography.confirmed_means_other',
+                  'Confirmed means another source has nearly the same areas. It doesn\'t mean your government has endorsed this exact file, and “one source only” means a level couldn\'t be checked, not that it is wrong.',
+                )
             : set.agreement_failed
-              ? 'The agreement check failed when this boundary data was built, so it can\'t say how far the set is confirmed. Rebuilding the boundary data may fix it.'
-              : "This server's boundary data predates the agreement check, so it can't say how far the set is confirmed."}
+              ? t(
+                  'geography.agreement_failed',
+                  'The agreement check failed when this boundary data was built, so it can\'t say how far the set is confirmed. Rebuilding the boundary data may fix it.',
+                )
+              : t(
+                  'geography.agreement_predates',
+                  'This server\'s boundary data predates the agreement check, so it can\'t say how far the set is confirmed.',
+                )}
         </p>
       </div>
     </section>

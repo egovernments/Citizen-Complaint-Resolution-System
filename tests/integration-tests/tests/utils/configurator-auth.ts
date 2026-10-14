@@ -84,9 +84,8 @@ export async function loginConfigurator(page: Page): Promise<void> {
           environment: apiOrigin,
           tenant,
           targetTenant: tenant,
-          mode: 'management',
-          currentPhase: 1,
-          completedPhases: [],
+          currentPhase: 5,
+          completedPhases: [1, 2, 3, 4, 5],
           authToken: token,
         }),
       );

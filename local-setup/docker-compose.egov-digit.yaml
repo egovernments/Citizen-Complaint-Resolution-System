@@ -1722,19 +1722,21 @@ services:
     # Hardening: no capabilities, no privilege escalation (see file header).
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
-    # ONE BUILD, FOUR IMAGES: pgr-services, pgr-services-db (migrations.yml),
+    # ONE BUILD, ONE TAG: pgr-services, pgr-services-db (migrations.yml),
     # novu-bridge and novu-bridge-db (migrations.yml) all default to
     # ${NOTIFICATION_STACK_TAG}, so they move together. pgr-services emits thin events
     # that only a bridge from the same build resolves (an older bridge dead-letters
     # them), and each app needs the Flyway migrations its -db image carries.
-    # `nightly-develop` is what the develop nightly publishes for all four
+    # digit-user-preferences-service and its -db migrator, which the bridge calls for
+    # consent, follow the same tag, so pinning it never leaves them on a rolling one.
+    # `nightly-develop` is what the develop nightly publishes for all six
     # (build/NIGHTLY-BUILDS.md); it moves per image, so a live deployment pins an
     # immutable develop-<sha8> or release tag via notification_stack_tag in host_vars
     # (the deploy warns while it resolves to a rolling tag). The default itself is a
-    # stopgap: the release pins develop-<sha8> here, in the four image lines at once
+    # stopgap: the release pins develop-<sha8> here, in the six image lines at once
     # (build/NIGHTLY-BUILDS.md "Release step").
     # PGR_SERVICES_IMAGE still overrides this one image (e.g. a local build) — then
-    # pin the other three to the same build yourself.
+    # pin the rest of the stack to the same build yourself.
     image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:${NOTIFICATION_STACK_TAG:-nightly-develop}}
     depends_on:
       pgbouncer:
@@ -1824,11 +1826,20 @@ services:
       PGR_ONBOARDING_RUNNER_ENABLED: ${PGR_ONBOARDING_RUNNER_ENABLED:-true}
       PGR_ONBOARDING_RESERVED_TENANT_IDS: ${PGR_ONBOARDING_RESERVED_TENANT_IDS:-pg}
       PGR_ONBOARDING_BASELINE_UPGRADE_ENABLED: ${PGR_ONBOARDING_BASELINE_UPGRADE_ENABLED:-true}
+      # Notification defaults for a new workspace: Ansible renders it from enable_novu. Off by
+      # default, like the opt-in `notifications` profile it serves.
+      PGR_ONBOARDING_NOTIFICATION_DEFAULTS_ENABLED: ${PGR_ONBOARDING_NOTIFICATION_DEFAULTS_ENABLED:-false}
       DIGIT_PROVISIONER_USERNAME: ${PGR_DIGIT_PROVISIONER_USERNAME:-}
       DIGIT_PROVISIONER_PASSWORD: ${PGR_DIGIT_PROVISIONER_PASSWORD:-}
       DIGIT_PROVISIONER_TENANT_ID: ${PGR_DIGIT_PROVISIONER_TENANT_ID:-}
       DIGIT_OAUTH_CLIENT_ID: ${PGR_DIGIT_OAUTH_CLIENT_ID:-egov-user-client}
       DIGIT_OAUTH_CLIENT_SECRET: ${PGR_DIGIT_OAUTH_CLIENT_SECRET:-}
+      # #2203: tenant creation gives each new workspace its own Novu organization through
+      # novu-bridge's INTERNAL admin API (compose network only; Kong answers 404 for it). The
+      # token is the bridge's NOVU_BRIDGE_INTERNAL_ADMIN_TOKEN; blank (per-tenant accounts off)
+      # makes the NOTIFICATION_ACCOUNT step a no-op. Never fails a signup.
+      PGR_ONBOARDING_NOTIFICATION_ACCOUNT_URL: ${PGR_ONBOARDING_NOTIFICATION_ACCOUNT_URL:-http://novu-bridge:8080/novu-bridge}
+      PGR_ONBOARDING_NOTIFICATION_ACCOUNT_TOKEN: ${NOVU_BRIDGE_INTERNAL_ADMIN_TOKEN:-}
       NEW_COMPLAINT_ENABLED: 'true'
       REASSIGN_COMPLAINT_ENABLED: 'true'
       REOPEN_COMPLAINT_ENABLED: 'true'
@@ -2039,7 +2050,7 @@ services:
     # DIGIT_UI_IMAGE. Default is the modern esbuild bundle image (CI-built by
     # the Container Build Pipeline, multi-arch); the bundle lives at
     # /var/web/digit-ui, matching the mounted digit-ui.conf root.
-    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:2.12-5137119}
+    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:2.12.1-7a38661}
     container_name: digit-ui
     ports:
       - "${PROXY_BIND_IP:-127.0.0.1}:18080:80"
@@ -2073,7 +2084,7 @@ services:
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
     cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE, NET_BIND_SERVICE]
-    image: ${CONFIGURATOR_IMAGE:-egovio/configurator:2.12-5137119}
+    image: ${CONFIGURATOR_IMAGE:-egovio/configurator:2.12.1-6e8adb3}
     container_name: configurator
     # Per-tenant runtime config, rendered by the ansible deploy from host_vars
     # (templates/configurator-config.js.j2) and mounted over the neutral
@@ -2288,16 +2299,27 @@ services:
   # stays off, so a compromised promtail can enumerate containers and nothing
   # else. It is the one component that still holds the socket, runs no
   # user-supplied code, and is not reachable off the compose network.
+  #
+  # Read-only is not harmless here: GET /containers/{id}/json returns the
+  # container's Env, which holds every service's passwords, tokens and keys.
+  # So the proxy is on docker-api-network ONLY, not egov-network, and only its
+  # three readers join that network: promtail, container-stats and opensre.
+  # Nothing else on the stack can reach it. A new reader joins
+  # docker-api-network explicitly; never put the proxy back on egov-network.
   docker-socket-proxy:
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
     image: tecnativa/docker-socket-proxy:0.3.0
     container_name: digit-docker-socket-proxy
-    profiles: [obs-logs]
+    # obs-metrics, not obs-logs: container-stats (docker-compose.monitoring.yml)
+    # reads per-container stats through it at the metrics level too. Levels are
+    # cumulative, so promtail (obs-logs) still finds it.
+    profiles: [obs-metrics]
     restart: unless-stopped
     environment:
       # Read-only container enumeration — exactly what promtail's
-      # docker_sd_configs calls (GET /containers/json, GET /containers/{id}/json).
+      # docker_sd_configs calls (GET /containers/json, GET /containers/{id}/json)
+      # and what container-stats reads (GET /containers/{id}/stats).
       CONTAINERS: "1"
       # Everything else explicitly denied. POST=0 is the important one: it
       # blocks every mutating call, including container create/start/exec.
@@ -2330,7 +2352,7 @@ services:
         limits:
           memory: 32M
     networks:
-      - egov-network
+      - docker-api-network
 
   promtail:
     # Hardening: no capabilities, no privilege escalation (see file header).
@@ -2363,6 +2385,8 @@ services:
           memory: 128M   # log shipper: tails files, small buffers
     networks:
       - egov-network
+      # docker_sd_configs reaches docker-socket-proxy here, and only here.
+      - docker-api-network
 
   # ==================== DIGIT MCP Server ====================
   # The MCP image is built off CCRS. Deploys inside the Hetzner egov VPC
@@ -2408,7 +2432,7 @@ services:
     # pulls the public build published by this repo's own image pipeline
     # (build/build-config.yml -> egovio/digit-mcp). Override MCP_IMAGE to use a
     # different registry/tag.
-    image: ${MCP_IMAGE:-egovio/digit-mcp:2.12-81fc6be}
+    image: ${MCP_IMAGE:-egovio/digit-mcp:2.12.1-7a38661}
     container_name: digit-mcp
     restart: unless-stopped
     depends_on:
@@ -2486,7 +2510,7 @@ services:
     # MCP_IMAGE override to a flag-carrying tag is required; the ansible deploy
     # verifies /v1/version reports readOnly=true after start and fails otherwise
     # (see playbook-deploy.yml, "assert the image honours MCP_READ_ONLY").
-    image: ${MCP_IMAGE:-egovio/digit-mcp:2.12-81fc6be}
+    image: ${MCP_IMAGE:-egovio/digit-mcp:2.12.1-7a38661}
     container_name: digit-mcp-readonly
     restart: unless-stopped
     depends_on:
@@ -2881,7 +2905,17 @@ services:
     # Hardening: no capabilities, no privilege escalation (see file header).
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
-    image: ${DIGIT_USER_PREFERENCES_SERVICE_IMAGE:-egovio/digit-user-preferences-service:2.12-5137119}
+    # The Spring Boot build (backend/digit-user-preferences-service, #1982), which
+    # exists only on develop. Every 2.12 / master tag of this image (2.12-5137119,
+    # v2.12, master-*) is the retired Go binary: it reads DB_HOST/DB_USER only, so
+    # under the environment below it dials localhost:5432, exits, and never turns
+    # healthy, and novu-bridge's depends_on then fails the whole `compose up`.
+    # It follows NOTIFICATION_STACK_TAG with the rest of the notification stack (see
+    # the ONE BUILD, ONE TAG note on pgr-services), and so does its -db migrator in
+    # docker-compose.migrations.yml, so notification_stack_tag pins the pair.
+    # DIGIT_USER_PREFERENCES_SERVICE_IMAGE overrides this one image; pin
+    # DIGIT_USER_PREFERENCES_SERVICE_DB_IMAGE to the same build with it.
+    image: ${DIGIT_USER_PREFERENCES_SERVICE_IMAGE:-egovio/digit-user-preferences-service:${NOTIFICATION_STACK_TAG:-nightly-develop}}
     container_name: digit-user-preferences-service
     restart: unless-stopped
     profiles: ["notifications"]
@@ -2909,9 +2943,9 @@ services:
       interval: 30s
       timeout: 5s
       retries: 5
-      # This service is implemented in Go (see backend/digit-user-preferences-service),
-      # not Spring Boot. Even so, a 30s grace period proved insufficient during a
-      # full-stack cold start and was an outlier among its slow-starting peers.
+      # A 30s grace period proved insufficient during a full-stack cold start and
+      # was an outlier among its slow-starting peers (that was the Go build; the
+      # Spring Boot one starts slower still).
       # novu-bridge is the only service that depends_on this one with
       # condition: service_healthy, so when it flaps the whole `compose up -d`
       # exits non-zero, ansible stops the play, and every task after
@@ -2925,7 +2959,7 @@ services:
     # Hardening: no capabilities, no privilege escalation (see file header).
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
-    # Same build as pgr-services — see the ONE BUILD, FOUR IMAGES note there.
+    # Same build as pgr-services — see the ONE BUILD, ONE TAG note there.
     # NOVU_BRIDGE_IMAGE overrides this one image; novu-bridge-migration then still
     # follows NOTIFICATION_STACK_TAG unless NOVU_BRIDGE_DB_IMAGE is pinned too.
     image: ${NOVU_BRIDGE_IMAGE:-egovio/novu-bridge:${NOTIFICATION_STACK_TAG:-nightly-develop}}
@@ -2980,6 +3014,8 @@ services:
       # variable in .env: it resolved to `pg` on every box, so those OTPs were checked
       # against a tenant with no SMS policy and dropped as SKIPPED / NB_NO_PROVIDER.
       NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT: pg
+      # Last-resort country code for a phone with none; the user's own code and the tenant's
+      # common-masters.MobileNumberValidation rule come first (one deployment, several countries).
       NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE: ${NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE:-}
       NOVU_BRIDGE_KAFKA_DLQ_TOPIC: novu-bridge.dlq
       NOVU_BRIDGE_DEFAULT_LOCALE: en_IN
@@ -3072,6 +3108,21 @@ services:
       # to the compose .env).
       NOVU_BASE_URL: ${NOVU_BASE_URL:-http://novu-api:3000}
       NOVU_API_KEY: ${NOVU_API_KEY:-changeme}
+      # Per-tenant Novu accounts (#2203): one Novu ORGANIZATION per root tenant, created by the
+      # bridge signed in as the Novu platform admin (the account the deploy mints NOVU_API_KEY
+      # with). Off = every tenant uses NOVU_API_KEY above, as before. The secrets come from
+      # OpenBao through .env (the playbook generates them); none has a default here, and the
+      # bridge refuses to start with the feature on and the encryption key or login missing.
+      NOVU_BRIDGE_TENANT_ACCOUNTS_ENABLED: ${NOVU_BRIDGE_TENANT_ACCOUNTS_ENABLED:-false}
+      NOVU_BRIDGE_NOVU_ADMIN_EMAIL: ${NOVU_BRIDGE_NOVU_ADMIN_EMAIL:-}
+      NOVU_BRIDGE_NOVU_ADMIN_PASSWORD: ${NOVU_BRIDGE_NOVU_ADMIN_PASSWORD:-}
+      NOVU_BRIDGE_TENANT_KEY_ENCRYPTION_KEY: ${NOVU_BRIDGE_TENANT_KEY_ENCRYPTION_KEY:-}
+      NOVU_BRIDGE_TENANT_KEY_ENCRYPTION_KEY_PREVIOUS: ${NOVU_BRIDGE_TENANT_KEY_ENCRYPTION_KEY_PREVIOUS:-}
+      # Internal machine APIs, header X-Novu-Bridge-Token; Kong never routes them. Blank = off.
+      #   admin: /novu-adapter/v1/tenants/**   (pgr-services onboarding, operators)
+      #   send:  POST /novu-adapter/v1/messages/_send   (the Identity BFF's OTP sender)
+      NOVU_BRIDGE_INTERNAL_ADMIN_TOKEN: ${NOVU_BRIDGE_INTERNAL_ADMIN_TOKEN:-}
+      NOVU_BRIDGE_INTERNAL_SEND_TOKEN: ${NOVU_BRIDGE_INTERNAL_SEND_TOKEN:-}
       OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-otlp}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
@@ -3275,6 +3326,11 @@ networks:
   # (published port) and from nowhere else.
   openbao-network:
     driver: bridge
+  # docker-socket-proxy and its readers (promtail, container-stats, opensre);
+  # see the proxy for why. internal: the proxy needs no route out.
+  docker-api-network:
+    driver: bridge
+    internal: true
 
 volumes:
   postgres_data: null

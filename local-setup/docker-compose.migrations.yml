@@ -161,8 +161,15 @@ services:
   # Was absent while this service was a Go binary that self-migrated with GORM
   # AutoMigrate. It is now Spring Boot + Flyway, so it joins the same pattern:
   # the migrator owns the schema and the app's embedded Flyway is off.
+  # Same build as digit-user-preferences-service (NOTIFICATION_STACK_TAG — see the
+  # note on that service in docker-compose.egov-digit.yaml). build-config.yml builds
+  # this image from the service's src/main/resources/db in the same run, under the
+  # same tag, as the app. DIGIT_USER_PREFERENCES_SERVICE_DB_IMAGE pins it alone.
+  # A table the Go service created (GORM, no Flyway history) never reaches this
+  # migrator: db-history-normalize drops it when empty and aborts the deploy when it
+  # holds rows (flyway-history-map.yml).
   digit-user-preferences-service-migration:
-    image: ${DIGIT_USER_PREFERENCES_SERVICE_DB_IMAGE:-egovio/digit-user-preferences-service-db:2.12-5137119}
+    image: ${DIGIT_USER_PREFERENCES_SERVICE_DB_IMAGE:-egovio/digit-user-preferences-service-db:${NOTIFICATION_STACK_TAG:-nightly-develop}}
     container_name: digit-user-preferences-service-migration
     profiles: ["notifications"]   # active exactly when digit-user-preferences-service is
     depends_on:

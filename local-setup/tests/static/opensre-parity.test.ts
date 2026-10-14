@@ -1,0 +1,264 @@
+/**
+ * OpenSRE tier parity — the compose tier and the Helm chart must ship the same
+ * agent.
+ *
+ * Same philosophy as the Gatus endpoint-catalogue parity the gatus-coverage
+ * workflow enforces: a Helm chart can only read files inside itself, so the
+ * sweep loop and the redaction rules are duplicated into
+ * charts/monitoring/opensre/files/. Duplication drifts silently — the compose
+ * tier gets a fix and Kubernetes keeps the bug, or the redaction rules stop
+ * matching on one tier only, which is a data-leak difference rather than a
+ * cosmetic one. local-setup/opensre/ is the original; copy it into the chart.
+ */
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+
+const REPO = path.resolve(__dirname, '..', '..', '..'); // repo root
+const COMPOSE_DIR = path.join(REPO, 'local-setup', 'opensre');
+const CHART_DIR = path.join(REPO, 'devops', 'deploy-as-code', 'charts', 'monitoring', 'opensre');
+
+const read = (...parts: string[]) => fs.readFileSync(path.join(...parts), 'utf8');
+
+/**
+ * Drop whole-line comments. Both files below explain in prose exactly what they
+ * must never do ("never passes --dangerously-bypass-approvals", "no secrets"), so a naive scan
+ * of the raw text matches its own documentation.
+ */
+const code = (text: string) =>
+  text
+    .split('\n')
+    .filter((line) => !/^\s*#/.test(line))
+    .join('\n');
+
+describe('OpenSRE compose/helm parity', () => {
+  test.each(['run-sweeps.sh', 'guardrails.yml'])(
+    '%s is byte-identical in both tiers',
+    (file) => {
+      expect(read(CHART_DIR, 'files', file)).toBe(read(COMPOSE_DIR, file));
+    },
+  );
+
+  /**
+   * Three files name the OpenSRE version: the Dockerfile builds it, the compose
+   * overlay tags the image it builds, and the chart pulls a registry image built
+   * from that same Dockerfile. A bump that misses one either rebuilds nothing
+   * (compose reuses the old tag) or deploys a different version on Kubernetes
+   * than the one tested on compose.
+   */
+  test('the pinned OpenSRE version matches across Dockerfile, compose and chart', () => {
+    const dockerfile = read(COMPOSE_DIR, 'Dockerfile');
+    const version = dockerfile.match(/^ARG OPENSRE_VERSION=(\S+)$/m)?.[1];
+    expect(version).toBeDefined();
+
+    const composeTag = read(REPO, 'local-setup', 'docker-compose.opensre.yml')
+      .match(/^\s*image:\s*ccrs-opensre:(\S+)$/m)?.[1];
+    expect(composeTag).toBe(version);
+
+    const chartValues = read(CHART_DIR, 'values.yaml');
+    expect(chartValues.match(/^\s*tag:\s*(\S+)$/m)?.[1]).toBe(version);
+    expect(read(CHART_DIR, 'Chart.yaml').match(/^appVersion:\s*(\S+)$/m)?.[1]).toBe(version);
+  });
+
+  /**
+   * The agent is diagnose-only on both tiers. `opensre ask` denies every tool
+   * that does not declare itself read-only, and in the pinned release that is
+   * almost all of them, so the loop approves a fixed list by name. Each tool
+   * on it was read and only reads. Growing the list must be a reviewed change,
+   * so the expected set lives here too. `--dangerously-bypass-approvals` would
+   * let the model run OpenSRE's mutating tools.
+   */
+  const READ_ONLY_TOOLS = [
+    'get_kafka_consumer_group_lag',
+    'get_kafka_topic_health',
+    'kubernetes_describe_pod',
+    'kubernetes_get_events',
+    'kubernetes_get_pod_logs',
+    'kubernetes_get_resource',
+    'kubernetes_list_daemonsets',
+    'kubernetes_list_deployments',
+    'kubernetes_list_ingresses',
+    'kubernetes_list_nodes',
+    'kubernetes_list_pods',
+    'kubernetes_list_services',
+    'kubernetes_list_statefulsets',
+    'query_grafana_alert_rules',
+    'query_grafana_annotations',
+    'query_grafana_logs',
+    'query_grafana_metrics',
+    'query_grafana_service_names',
+    'query_grafana_traces',
+    'query_tempo',
+  ];
+
+  test('the sweep loop approves only the reviewed read-only tools', () => {
+    const loop = code(read(COMPOSE_DIR, 'run-sweeps.sh'));
+    expect(loop).toMatch(/^\s*set -- --json ask.*$/m);
+    expect(loop).not.toMatch(/--dangerously-bypass-approvals/);
+
+    const list = loop.match(/^READ_ONLY_TOOLS="([^"]*)"/m)?.[1];
+    expect(list).toBeDefined();
+    expect(list!.split(/\s+/).filter(Boolean).sort()).toEqual(READ_ONLY_TOOLS);
+
+    // The list is the only source of approvals: one --allowed-tool, fed by it.
+    const approvals = [...loop.matchAll(/--allowed-tool\s+([^\s;]+)/g)].map((m) => m[1]);
+    expect(approvals).toEqual(['"$tool"']);
+    expect(loop).toMatch(/for tool in \$READ_ONLY_TOOLS; do set -- "\$@" --allowed-tool "\$tool"; done/);
+  });
+
+  /**
+   * Review 4255083500: OpenSRE 0.1.2026.9.21 applies guardrails.yml only on its
+   * CLI transport; its Anthropic SDK client sends tool results unmasked. So the
+   * loop fixes the provider to claude-code, the image's `claude` is the locked
+   * wrapper, and neither tier can switch the provider back. The end-to-end
+   * proof (the real image against a capture server) is
+   * local-setup/tests/opensre-redaction/run.sh.
+   */
+  test('the agent reaches the model only through the locked Claude Code CLI', () => {
+    const loop = code(read(COMPOSE_DIR, 'run-sweeps.sh'));
+    expect(loop).toMatch(/^export LLM_PROVIDER=claude-code$/m);
+    expect(loop).toMatch(/^export CLAUDE_CODE_BIN=\/usr\/local\/bin\/claude$/m);
+    expect([...loop.matchAll(/LLM_PROVIDER=/g)]).toHaveLength(1);
+
+    const settings = [
+      read(REPO, 'local-setup', 'docker-compose.opensre.yml'),
+      read(CHART_DIR, 'templates', 'deployment.yaml'),
+      read(CHART_DIR, 'values.yaml'),
+    ].map(code);
+    for (const text of settings) {
+      expect(text).not.toMatch(/LLM_PROVIDER|ANTHROPIC_(REASONING|TOOLCALL)_MODEL|provider:/);
+    }
+
+    const dockerfile = code(read(COMPOSE_DIR, 'Dockerfile'));
+    expect(dockerfile).toMatch(/^COPY --chmod=0755 claude-locked \/usr\/local\/bin\/claude$/m);
+    expect(dockerfile).toMatch(/-o \/opt\/claude-code\/claude /);
+    expect(dockerfile).toMatch(/^ARG CLAUDE_CODE_VERSION=\d+\.\d+\.\d+$/m);
+    for (const arch of ['AMD64', 'ARM64']) {
+      expect(dockerfile).toMatch(new RegExp(`^ARG CLAUDE_CODE_SHA256_${arch}=[0-9a-f]{64}$`, 'm'));
+    }
+    expect(dockerfile).toMatch(/sha256sum -c -; \\\n\s+chmod 0755 \/opt\/claude-code\/claude/);
+
+    // The wrapper switches off everything the CLI could do on its own, and
+    // runs nothing but the three calls OpenSRE makes.
+    const wrapper = code(read(COMPOSE_DIR, 'claude-locked'));
+    expect(wrapper).toMatch(/^REAL=\/opt\/claude-code\/claude$/m);
+    expect(wrapper).toContain(
+      'set -- -p --output-format text --tools "" --strict-mcp-config \\\n      --setting-sources "" --disable-slash-commands',
+    );
+    expect([...wrapper.matchAll(/exec "\$REAL"/g)]).toHaveLength(3);
+    expect(wrapper).toMatch(/\*\) refuse "\$@" ;;/);
+    expect(wrapper.trimEnd().split('\n').pop()).toBe('refuse "$@"');
+  });
+
+  /**
+   * Review 4255083506: `opensre ask` approves execute_python_code without
+   * asking (it declares itself read-only, and the model can turn its network
+   * access on) whenever a Python is on PATH. The image must have none, and the
+   * loop refuses to start if one appears (opensre-sweep-loop.test.ts runs it).
+   */
+  test('the image installs no Python, and the loop refuses to run with one', () => {
+    const dockerfile = code(read(COMPOSE_DIR, 'Dockerfile'));
+    expect(dockerfile).toMatch(/^FROM debian:bookworm-slim$/m);
+    const installs = [...dockerfile.matchAll(/apt-get install[^\n]*?((?:\s+[a-z0-9.+-]+)+)\s*\\?\n/g)];
+    expect(installs.length).toBeGreaterThan(0);
+    for (const m of installs) expect(m[1]).not.toMatch(/python|pip|pypy/);
+    expect(dockerfile).not.toMatch(/\b(pip3?|python3?|uv) (install|-m)\b/);
+
+    const loop = code(read(COMPOSE_DIR, 'run-sweeps.sh'));
+    expect(loop).toMatch(/^for py in python3 python; do\n\s+if found=\$\(command -v "\$py"\); then\n[\s\S]*?exit 1\n/m);
+  });
+
+  /**
+   * The container-state page is built from `docker inspect`, whose .Config.Env
+   * carries the stack's passwords and tokens. The filter may read state fields
+   * only, and the Docker API may only be read.
+   */
+  test('the container-state page never copies env, command or args, and only reads Docker', () => {
+    const loop = code(read(COMPOSE_DIR, 'run-sweeps.sh'));
+    const filter = loop.match(/^CONTAINER_STATE_FILTER='([^']*)'/m)?.[1];
+    expect(filter).toBeDefined();
+    expect(filter).toMatch(/\.State\b/);
+    for (const forbidden of [/\.Config\b/, /\.Args\b/, /\.Path\b/, /\.Mounts\b/, /\.NetworkSettings\b/, /\bEnv\b/]) {
+      expect(filter).not.toMatch(forbidden);
+    }
+
+    // Join `\`-continued lines first, so a flag on the next line still counts.
+    const dockerCalls = loop
+      .replace(/\\\n\s*/g, ' ')
+      .split('\n')
+      .filter((l) => l.includes('$DOCKER_API_URL/'));
+    expect(dockerCalls.length).toBeGreaterThan(0);
+    for (const line of dockerCalls) {
+      expect(line).not.toMatch(/(^|\s)(-X|--request)\b/);
+      if (/--data/.test(line)) expect(line).toMatch(/\s-G\s/);
+    }
+  });
+
+  /**
+   * Whatever the agent reads goes to the model provider, so the RBAC is about
+   * data as much as writes. get/list only; no secrets, and no configmaps
+   * (OpenSRE returns their data whole). Namespaced resources are granted per
+   * namespace through RoleBindings; the only cluster-wide grant is nodes.
+   */
+  test('the Kubernetes RBAC stays read-only, per namespace, and excludes secrets and configmaps', () => {
+    const rbac = code(read(CHART_DIR, 'templates', 'rbac.yaml'));
+    const verbs = [...rbac.matchAll(/^\s*verbs:\s*\[(.*)\]$/gm)].map((m) => m[1]);
+    expect(verbs.length).toBeGreaterThan(0);
+    for (const v of verbs) {
+      expect(v.replace(/["'\s]/g, '').split(',').sort()).toEqual(['get', 'list']);
+    }
+    expect(rbac).not.toMatch(/\bsecrets\b/);
+    expect(rbac).not.toMatch(/\bconfigmaps\b/);
+    expect(rbac).not.toMatch(/["*]\*["*]/);
+
+    // Each ClusterRoleBinding may only point at a role whose rules are nodes.
+    const docs = rbac.split(/^---$/m);
+    const resourcesOf = (role: string) => {
+      const doc = docs.find((d) => /kind: ClusterRole\n/.test(d) && new RegExp(`name: ${role}\\n`).test(d));
+      expect(doc).toBeDefined();
+      return [...doc!.matchAll(/resources:\s*\[(.*)\]/g)].flatMap((m) => m[1].replace(/["'\s]/g, '').split(','));
+    };
+    const clusterBound = docs
+      .filter((d) => /kind: ClusterRoleBinding/.test(d))
+      .map((d) => d.match(/roleRef:[\s\S]*?name: (\S+)/)![1]);
+    expect(clusterBound.length).toBeGreaterThan(0);
+    for (const role of clusterBound) expect(resourcesOf(role)).toEqual(['nodes']);
+    expect(rbac).toMatch(/\{\{-? range \.Values\.rbac\.namespaces \}\}[\s\S]*?kind: RoleBinding[\s\S]*?namespace: \{\{ \. \}\}/);
+  });
+
+  /**
+   * Review 4181060071: the prompt used to describe every deployment as one
+   * Docker Compose VM, including on Kubernetes. Each tier now describes itself.
+   */
+  test('each tier describes its own deployment to the agent', () => {
+    const loop = code(read(COMPOSE_DIR, 'run-sweeps.sh'));
+    expect(loop).toMatch(/^DEPLOYMENT=\$\{OPENSRE_DEPLOYMENT:-/m);
+    const prompt = loop.match(/^\s*prompt="([\s\S]*?)"$/m)?.[1];
+    expect(prompt).toContain('$DEPLOYMENT');
+    expect(prompt).not.toMatch(/Docker Compose VM|Redpanda/);
+
+    const compose = read(REPO, 'local-setup', 'docker-compose.opensre.yml');
+    expect(compose).toMatch(/^\s+OPENSRE_DEPLOYMENT: >-\n\s+\S/m);
+    expect(read(CHART_DIR, 'templates', 'deployment.yaml')).toMatch(
+      /- name: OPENSRE_DEPLOYMENT\n\s+value: .*\.Values\.deployment\.description/,
+    );
+    expect(read(CHART_DIR, 'values.yaml')).toMatch(/^deployment:\n\s+description: >-\n\s+\S/m);
+  });
+
+  /**
+   * Review 4181060081 and 4181060087: the runbook is mounted as a directory on
+   * compose (a missing bind-mounted file becomes a root-owned directory) and
+   * projected into the one /opt/ccrs volume on Kubernetes (no mount nested in
+   * a ConfigMap volume). Both put it where the loop looks.
+   */
+  test('both tiers mount the runbook where the loop reads it, without a nested mount', () => {
+    const loop = code(read(COMPOSE_DIR, 'run-sweeps.sh'));
+    expect(loop).toMatch(/^RUNBOOK=\/opt\/ccrs\/runbook\/known-issues\.md$/m);
+    expect(read(REPO, 'local-setup', 'docker-compose.opensre.yml')).toMatch(
+      /^\s+- \.\/opensre\/runbook:\/opt\/ccrs\/runbook:ro$/m,
+    );
+    const deployment = read(CHART_DIR, 'templates', 'deployment.yaml');
+    expect(code(deployment)).not.toMatch(/subPath/);
+    expect(deployment).toMatch(/projected:[\s\S]*?key: known-issues\.md\n\s+path: runbook\/known-issues\.md/);
+    expect([...code(deployment).matchAll(/mountPath: \/opt\/ccrs\b/g)]).toHaveLength(1);
+  });
+});

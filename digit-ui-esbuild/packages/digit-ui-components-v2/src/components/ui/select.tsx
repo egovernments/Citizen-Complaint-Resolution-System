@@ -68,6 +68,18 @@ export function Select<TValue extends string = string>({
 }: SelectProps<TValue>) {
   const [open, setOpen] = React.useState(false);
   const [activeIndex, setActiveIndex] = React.useState(-1);
+  /**
+   * Whether the next highlight change should scroll its option into view: yes
+   * for the keyboard, type-ahead, opening and filtering, no for the pointer.
+   * Scrolling to a hovered option that sat half below the list's edge moved the
+   * next option under the still pointer, which highlighted that one and
+   * scrolled again, running the list to its bottom on a plain hover (#2038).
+   */
+  const scrollToActive = React.useRef(false);
+  const highlight = (index: number, scroll = true) => {
+    scrollToActive.current = scroll;
+    setActiveIndex(index);
+  };
   const [query, setQuery] = React.useState("");
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const listRef = React.useRef<HTMLUListElement | null>(null);
@@ -185,7 +197,7 @@ export function Select<TValue extends string = string>({
   // starts from the full list.
   React.useEffect(() => {
     if (open) {
-      setActiveIndex(visibleSelectedIndex >= 0 ? visibleSelectedIndex : 0);
+      highlight(visibleSelectedIndex >= 0 ? visibleSelectedIndex : 0);
       if (enableSearch) {
         // Focus the search box on open so the user can type immediately.
         // rAF so it runs after the popover paints.
@@ -200,13 +212,13 @@ export function Select<TValue extends string = string>({
 
   // Typing in the search box re-filters; keep the highlight on the first match.
   React.useEffect(() => {
-    if (open) setActiveIndex(0);
+    if (open) highlight(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
 
-  // Scroll active option into view.
+  // Scroll the active option into view, unless the pointer put it there.
   React.useEffect(() => {
-    if (!open || activeIndex < 0 || !listRef.current) return;
+    if (!open || activeIndex < 0 || !listRef.current || !scrollToActive.current) return;
     const list = listRef.current;
     const item = list.children[activeIndex] as HTMLElement | undefined;
     if (item) {
@@ -239,7 +251,7 @@ export function Select<TValue extends string = string>({
       if (!visibleOptions[next]?.disabled) break;
       next += delta > 0 ? 1 : -1;
     }
-    setActiveIndex(next);
+    highlight(next);
   }
 
   // Shared list-navigation keys, used by both the trigger (no search box) and
@@ -256,11 +268,11 @@ export function Select<TValue extends string = string>({
         return true;
       case "Home":
         e.preventDefault();
-        setActiveIndex(0);
+        highlight(0);
         return true;
       case "End":
         e.preventDefault();
-        setActiveIndex(visibleOptions.length - 1);
+        highlight(visibleOptions.length - 1);
         return true;
       case "Enter":
         e.preventDefault();
@@ -304,7 +316,7 @@ export function Select<TValue extends string = string>({
         const idx = (start + i) % visibleOptions.length;
         const o = visibleOptions[idx];
         if (!o.disabled && o.label.toLowerCase().startsWith(ch)) {
-          setActiveIndex(idx);
+          highlight(idx);
           break;
         }
       }
@@ -445,7 +457,9 @@ export function Select<TValue extends string = string>({
                   role="option"
                   aria-selected={isSelected}
                   aria-disabled={opt.disabled || undefined}
-                  onMouseEnter={() => !opt.disabled && setActiveIndex(i)}
+                  // Move, not enter: an option scrolled under a still pointer
+                  // (the keyboard moving the list) must not take the highlight.
+                  onMouseMove={() => !opt.disabled && i !== activeIndex && highlight(i, false)}
                   onMouseDown={(e) => {
                     // Prevent the trigger blur/scroll dance — commit selection
                     // before the click fires.

@@ -58,6 +58,8 @@ var globalConfigs = (function () {
   var analyticsKillSwitch = false;   // true => hard off, whatever MDMS says
   var analyticsScriptHosts = [];     // extra allowed script hostnames (ops only)
   var analyticsCustomEnabled = false; // true => allow type:"CUSTOM" records
+  // Citizen home banner (#2358): StateInfo.bannerUrl as a hero above All Services.
+  var citizenBannerEnabled = false;
 
   var getConfig = function (key) {
     if (key === "STATE_LEVEL_TENANT_ID") return stateTenantId;
@@ -85,6 +87,7 @@ var globalConfigs = (function () {
     else if (key === "ANALYTICS_KILL_SWITCH") return analyticsKillSwitch;
     else if (key === "ANALYTICS_SCRIPT_HOSTS") return analyticsScriptHosts;
     else if (key === "ANALYTICS_CUSTOM_ENABLED") return analyticsCustomEnabled;
+    else if (key === "CITIZEN_BANNER_ENABLED") return citizenBannerEnabled;
   };
 
   return {

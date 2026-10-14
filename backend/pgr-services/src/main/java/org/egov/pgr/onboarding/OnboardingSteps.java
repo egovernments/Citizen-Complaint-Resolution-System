@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import java.util.*;
 
+@lombok.extern.slf4j.Slf4j
 @Component
 public class OnboardingSteps {
     /**
@@ -41,6 +42,11 @@ public class OnboardingSteps {
     @org.springframework.beans.factory.annotation.Value("${pgr.onboarding.mdms-visibility-waits-ms:150,300,600,1200}")
     void setVisibilityWaitsMs(long[] waits) { this.visibilityWaitsMs = waits == null ? new long[0] : waits.clone(); }
 
+    /** Null only for directly constructed instances (tests): the step is then a no-op. */
+    private NotificationDefaultsStep notificationDefaults;
+    @Autowired(required = false)
+    void setNotificationDefaults(NotificationDefaultsStep step) { this.notificationDefaults = step; }
+
     /** Reads until {@code visible} holds or the configured pauses run out; returns the last read. */
     private JsonNode awaitVisible(java.util.function.Supplier<JsonNode> read, java.util.function.Predicate<JsonNode> visible) {
         JsonNode result = read.get();
@@ -62,6 +68,7 @@ public class OnboardingSteps {
         switch (step) {
             case "TENANT_FOUNDATION" -> foundation(signup, operation, progress, scope);
             case "PLATFORM_BASELINE" -> baseline(signup, progress, scope);
+            case NotificationDefaultsStep.STEP -> { if (notificationDefaults != null) notificationDefaults.run(this, signup, progress, scope); }
             case "FOUNDER_HRMS" -> founder(signup, operation, progress, scope);
             case "ORGANIZATION" -> {
                 operation.setOrganizationEnsureStarted(true);
@@ -74,8 +81,51 @@ public class OnboardingSteps {
                 body.put("digitUuid", operation.getFounderDigitUuid());
                 client.identity("bindings/_ensure", body);
             }
+            case NOTIFICATION_ACCOUNT -> notificationAccount(signup, operation, progress);
             default -> throw new IllegalArgumentException("Unknown step " + step);
         }
+    }
+
+    /** Saga step (#2203): the workspace's own Novu account, through novu-bridge. Never fails the signup. */
+    public static final String NOTIFICATION_ACCOUNT = "NOTIFICATION_ACCOUNT";
+    /**
+     * record_progress key of the step's outcome: {@value #NOTIFICATION_ACCOUNT_DONE} once the bridge
+     * reports the account PROVISIONED, {@value #NOTIFICATION_ACCOUNT_DEFERRED} when it could not
+     * (NotificationAccountReconciler retries those), absent when the feature is not configured here.
+     */
+    public static final String NOTIFICATION_ACCOUNT_PROGRESS = "notification-account";
+    public static final String NOTIFICATION_ACCOUNT_DONE = "DONE";
+    public static final String NOTIFICATION_ACCOUNT_DEFERRED = "DEFERRED";
+    private NotificationAccountClient notificationAccounts;
+
+    /** Optional: absent (tests, deployments without per-tenant notification accounts) = the step is a no-op. */
+    @Autowired(required = false)
+    void setNotificationAccounts(NotificationAccountClient notificationAccounts) {
+        this.notificationAccounts = notificationAccounts;
+    }
+
+    /**
+     * Gives the new workspace its own Novu organization (novu-bridge, idempotent: a resumed or
+     * retried run never creates a second one). NON-FATAL by design: Novu being down must not stop a
+     * tenant from being created, so a failure is recorded as DEFERRED and the workspace starts
+     * without its own messaging; NotificationAccountReconciler (and the bridge's backfill API)
+     * provision it later. Kept a separate step from the platform baseline: it writes nothing to
+     * DIGIT, only to the notification service.
+     */
+    private void notificationAccount(OnboardingSignup signup, OnboardingOperation operation, OnboardingProgress progress) {
+        if (notificationAccounts == null || !notificationAccounts.configured()) return;
+        if (NOTIFICATION_ACCOUNT_DONE.equals(operation.getRecordProgress().get(NOTIFICATION_ACCOUNT_PROGRESS))) return;
+        String tenant = signup.getRequestedTenantId();
+        NotificationAccountClient.Outcome outcome = notificationAccounts.provision(tenant);
+        if (outcome.ok()) {
+            log.info("Workspace {}: notification account provisioned (organization created: {})", tenant, outcome.organizationCreated());
+        } else {
+            log.warn("Workspace {}: notification account NOT provisioned ({}); the workspace is created without its own "
+                    + "messaging and will be retried in the background", tenant, outcome.code());
+        }
+        operation.getRecordProgress().put(NOTIFICATION_ACCOUNT_PROGRESS,
+                outcome.ok() ? NOTIFICATION_ACCOUNT_DONE : NOTIFICATION_ACCOUNT_DEFERRED);
+        progress.save();
     }
 
     public void ensureOrganization(OnboardingSignup signup, OnboardingOperation operation) {

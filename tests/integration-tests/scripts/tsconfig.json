@@ -1,0 +1,12 @@
+{
+  // Type-checks scripts/ (build-catalog.ts and its tests), which the root
+  // tsconfig.json leaves out: `npx tsc -p scripts/tsconfig.json`, also run by
+  // .github/workflows/integration-tests-unit.yml.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "strict": true,
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": ["**/*.ts"]
+}

@@ -6,13 +6,15 @@
 // "enable with no provider" on a channel routing uses went through silently) and 4079418187
 // (the card's controls were shown to everyone; non-admins learned from a 403).
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { CoreAdminContext, TestMemoryRouter } from 'ra-core';
 import { QueryClient } from '@tanstack/react-query';
 
-const { notifySpy, session } = vi.hoisted(() => ({
+const { notifySpy, session, bridge } = vi.hoisted(() => ({
   notifySpy: vi.fn(),
   session: { roles: ['SUPERUSER'] as string[] },
+  // The bridge's account block; null = an older bridge without one.
+  bridge: { account: null as import('./providerApi').NotificationAccount | null },
 }));
 vi.mock('./providerToast', () => ({ notify: notifySpy }));
 vi.mock('../../App', () => ({
@@ -20,7 +22,11 @@ vi.mock('../../App', () => ({
 }));
 vi.mock('./providerApi', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./providerApi')>();
-  return { ...actual, pullTemplates: vi.fn(async () => ({ data: [] })) };
+  return {
+    ...actual,
+    pullTemplates: vi.fn(async () => ({ data: [] })),
+    fetchNotificationAccount: vi.fn(async () => bridge.account),
+  };
 });
 
 import { ChannelStatusCard } from './ChannelStatusCard';
@@ -97,7 +103,15 @@ async function enableButtons() {
 beforeEach(() => {
   notifySpy.mockClear();
   session.roles = ['SUPERUSER'];
+  bridge.account = null;
 });
+
+/** Once the bridge's account block has reached the card. */
+async function accountLoaded() {
+  const { fetchNotificationAccount } = await import('./providerApi');
+  await waitFor(() => expect(fetchNotificationAccount).toHaveBeenCalled());
+  await act(async () => { await Promise.resolve(); });
+}
 
 describe('ChannelStatusCard', () => {
   it('refuses to switch on a channel routing uses when it has no provider (channel-needs-provider)', async () => {
@@ -148,5 +162,23 @@ describe('ChannelStatusCard', () => {
     expect(screen.queryByRole('button', { name: 'Enable' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Disable' })).toBeNull();
     expect(screen.queryByRole('combobox')).toBeNull();
+  });
+
+  // #2343 review: the controls write this workspace's MDMS channel rows, so the shared account's
+  // `manageable` (an admin of the state owning the shared providers) must not take them away.
+  it('keeps the controls for a workspace admin on the shared account (per-tenant accounts off)', async () => {
+    bridge.account = { tenantAccountsEnabled: false, mode: 'SHARED', tenantId: 'acme', status: 'DISABLED', manageable: false };
+    renderCard(makeDataProvider());
+    await accountLoaded();
+    expect(await enableButtons()).toHaveLength(3);
+    expect(screen.queryByTestId('channels-admin-only')).toBeNull();
+  });
+
+  it('follows the bridge on a workspace with its own account', async () => {
+    bridge.account = { tenantAccountsEnabled: true, mode: 'TENANT', tenantId: 'acme', status: 'PROVISIONED', manageable: false };
+    renderCard(makeDataProvider());
+    await accountLoaded();
+    await screen.findByTestId('channels-admin-only', undefined, { timeout: 5000 });
+    expect(screen.queryByRole('button', { name: 'Enable' })).toBeNull();
   });
 });

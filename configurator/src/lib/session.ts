@@ -115,7 +115,6 @@ export function installDigitContext(
       environment: API_ORIGIN || window.location.origin,
       tenant: user.tenantId,
       targetTenant: user.tenantId,
-      mode: completedPhases.length === 5 ? 'management' : 'onboarding',
       currentPhase: 1,
       completedPhases,
       authToken,

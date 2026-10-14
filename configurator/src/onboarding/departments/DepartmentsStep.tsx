@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { FileText, LayoutGrid, Network, Plus, Search } from 'lucide-react';
 import { useApp } from '../../App';
 import type { MdmsRecord } from '@/api/types';
@@ -15,6 +16,8 @@ import { probeGate, useStepProbe } from '../stepProbe';
 import { describeSaveError } from '../errors';
 import { reportStepError, trackStepAction } from '../telemetry';
 import { useOnboardingT, type OnboardingT } from '../i18n';
+import { blockingError, refreshWorkspace, stepKeys, STEP_QUERY_OPTIONS } from '../stepQueries';
+import { RefreshNotice } from '../RefreshNotice';
 import { MasterDialog } from './MasterDialog';
 import { isSystemRecordCode } from '@/lib/systemRecords';
 import { BulkMastersUpload, type BulkImportSummary } from './BulkMastersUpload';
@@ -197,35 +200,35 @@ export default function DepartmentsStep() {
   const tenant = state.targetTenant || state.tenant;
   const done = state.completedPhases.includes(STEP.number);
 
-  const [departments, setDepartments] = useState<MdmsRecord[] | null>(null);
-  const [designations, setDesignations] = useState<MdmsRecord[] | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [reloadKey, setReloadKey] = useState(0);
+  const queryClient = useQueryClient();
   const [bulk, setBulk] = useState(false);
   const [dialog, setDialog] = useState<{ kind: MasterKind; record?: MdmsRecord } | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    // Only the workspace's own records: this step edits and removes them.
-    Promise.all([listMasters(tenant, 'department', { ownOnly: true }), listMasters(tenant, 'designation', { ownOnly: true })])
-      .then(([loadedDepartments, loadedDesignations]) => {
-        if (cancelled) return;
-        // The founder's Administration department and designation are provisioned, not the
-        // workspace's own: the step check doesn't count them, so neither does the step.
-        setDepartments(loadedDepartments.filter((record) => !isSystemRecordCode(record.uniqueIdentifier)));
-        setDesignations(loadedDesignations.filter((record) => !isSystemRecordCode(record.uniqueIdentifier)));
-        setLoadError(null);
-      })
-      .catch((err) => {
-        if (!cancelled) setLoadError(err instanceof Error ? err.message : String(err));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [tenant, reloadKey]);
+  const masters = useQuery({
+    queryKey: stepKeys.departments(tenant),
+    queryFn: async () => {
+      // Only the workspace's own records: this step edits and removes them.
+      const [loadedDepartments, loadedDesignations] = await Promise.all([
+        listMasters(tenant, 'department', { ownOnly: true }),
+        listMasters(tenant, 'designation', { ownOnly: true }),
+      ]);
+      // The founder's Administration department and designation are provisioned, not the
+      // workspace's own: the step check doesn't count them, so neither does the step.
+      return {
+        departments: loadedDepartments.filter((record) => !isSystemRecordCode(record.uniqueIdentifier)),
+        designations: loadedDesignations.filter((record) => !isSystemRecordCode(record.uniqueIdentifier)),
+      };
+    },
+    ...STEP_QUERY_OPTIONS,
+  });
+  const departments = masters.data?.departments ?? null;
+  const designations = masters.data?.designations ?? null;
+  const loadError = blockingError(masters);
 
-  const reload = () => setReloadKey((key) => key + 1);
+  // The table keeps showing while the fresh load comes in behind it. Employees reads these
+  // records too, so its load is refreshed as well, even though it isn't on screen.
+  const reload = () => void refreshWorkspace(queryClient, tenant);
 
   const departmentNames = useMemo(
     () => new Map((departments ?? []).map((record) => [record.uniqueIdentifier, recordName(record)])),
@@ -278,15 +281,18 @@ export default function DepartmentsStep() {
 
   return (
     <div className="space-y-8">
-      <StepHeader eyebrow={t('step.your_organisation', 'Your organisation')} title={t('steps.departments', 'Departments')} done={done}>
+      <StepHeader eyebrow={t('step.your_account', 'Your account')} title={t('steps.departments', 'Departments')} done={done}>
         {t('departments.intro', 'The departments complaints get routed to, and the designations your employees hold.')}
       </StepHeader>
+
+      {/* Only with a table on screen: a first load that fails shows the error below instead. */}
+      {masters.isRefetchError && <RefreshNotice onRetry={() => void masters.refetch()} />}
 
       {loadError ? (
         <Alert variant="destructive">
           <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
             <span>{t('departments.load_failed', 'Couldn’t load your departments.')} {loadError}</span>
-            <Button variant="outline" size="sm" onClick={reload}>
+            <Button variant="outline" size="sm" onClick={() => void masters.refetch()}>
               {t('common.try_again', 'Try again')}
             </Button>
           </AlertDescription>

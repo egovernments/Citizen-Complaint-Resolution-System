@@ -42,6 +42,13 @@ import { AuthShell } from '@/components/signup/AuthPanel';
 import { useAuthResult } from '@/hooks/useAuthResult';
 import { clearSignOutIncomplete, signOutIncomplete } from '@/lib/session';
 import { useOnboardingT } from '@/onboarding/i18n';
+import { MOBILE_RULES, mobileHint, nationalMobile } from '@/onboarding/signup/mobileRules';
+import {
+  describeProvisioningFailure,
+  describeSignupError,
+  mobileInvalid,
+  type SignupProblem,
+} from '@/onboarding/signup/signupErrors';
 
 const STEPS = [
   { id: 'account', label: 'Account' },
@@ -49,30 +56,22 @@ const STEPS = [
   { id: 'review', label: 'Review' },
 ];
 
-/** Base countries, with the IANA zone each one suggests. */
 /**
- * `dialCode` is shown beside the mobile field so it is obvious the field takes
- * the national number and the prefix is added for you. That distinction is not
- * cosmetic: the value is submitted as `tenantMetadata.tenantAdmin.mobileNumber`
- * and egov-user validates it as a national number, so a founder who copied the
- * old `+254700000199` placeholder was being shown a shape the backend rejects.
+ * Base countries, with the IANA zone each one suggests.
  *
- * Every offered country has a product-owned rule in identity-bff tenant
- * foundation. Foundation persists it for the new tenant before egov-user
- * creates the founder's account; countries without an agreed rule are not
- * offered here.
+ * Only countries with a mobile rule in the platform baseline are offered: the
+ * worker cannot provision any other. The rule (MOBILE_RULES) supplies the dial
+ * code shown beside the mobile field, so it is obvious the field takes the
+ * national number and the prefix is added for you, plus the one-liner and the
+ * example under it. The value is submitted as
+ * `tenantMetadata.tenantAdmin.mobileNumber` and egov-user checks it as a
+ * national number against that same rule.
  */
-const COUNTRIES: {
-  code: string;
-  name: string;
-  timeZone: string;
-  dialCode: string;
-  nationalExample: string;
-}[] = [
-  { code: 'KE', name: 'Kenya', timeZone: 'Africa/Nairobi', dialCode: '+254', nationalExample: '712345678' },
-  { code: 'IN', name: 'India', timeZone: 'Asia/Kolkata', dialCode: '+91', nationalExample: '9876543210' },
-  { code: 'ET', name: 'Ethiopia', timeZone: 'Africa/Addis_Ababa', dialCode: '+251', nationalExample: '911234567' },
-  { code: 'MZ', name: 'Mozambique', timeZone: 'Africa/Maputo', dialCode: '+258', nationalExample: '841234567' },
+const COUNTRIES: { code: string; name: string; timeZone: string }[] = [
+  { code: 'KE', name: 'Kenya', timeZone: 'Africa/Nairobi' },
+  { code: 'IN', name: 'India', timeZone: 'Asia/Kolkata' },
+  { code: 'ET', name: 'Ethiopia', timeZone: 'Africa/Addis_Ababa' },
+  { code: 'MZ', name: 'Mozambique', timeZone: 'Africa/Maputo' },
 ];
 
 const TIME_ZONES = [...new Set(COUNTRIES.map((c) => c.timeZone))].sort();
@@ -157,12 +156,6 @@ type Phase =
   | 'stuck'
   | 'failed';
 
-function errorText(error: unknown): string {
-  if (error instanceof OnboardingError) return error.message;
-  if (error instanceof Error) return error.message;
-  return 'Something went wrong.';
-}
-
 const isExpiredSession = (error: unknown) =>
   error instanceof OnboardingError && error.isUnauthenticated;
 
@@ -190,7 +183,7 @@ function Field({
         {label}
       </label>
       <div className="mt-1">{children}</div>
-      {help && <p className="mt-1 text-xs text-muted-foreground">{help}</p>}
+      {help && <p id={`${id}-help`} className="mt-1 text-xs text-muted-foreground">{help}</p>}
       {status}
     </div>
   );
@@ -206,6 +199,7 @@ function AvailabilityNote({
   checking: boolean;
   invalidReason?: string;
 }) {
+  const t = useOnboardingT();
   if (invalidReason) {
     return (
       <p className="mt-1 flex items-center gap-1 text-xs text-destructive">
@@ -229,7 +223,9 @@ function AvailabilityNote({
     <p className="mt-1 flex items-center gap-1 text-xs text-destructive">
       <AlertCircle className="h-3 w-3" />{' '}
       {state.conflictingType === 'TENANT_ID' && state.derivedTenantId
-        ? `This URL maps to tenant ID “${state.derivedTenantId}”, which is already in use.`
+        ? t('signup.slug_clashes', 'This URL clashes with an existing workspace (“%{tenant}”). Choose a different one.', {
+            tenant: state.derivedTenantId,
+          })
         : 'Already taken.'}
     </p>
   );
@@ -271,6 +267,10 @@ function SignupFlow() {
   const [timeZone, setTimeZone] = useState('');
   const [financialYearPolicy, setFinancialYearPolicy] = useState('');
   const [tenantAdminMobile, setTenantAdminMobile] = useState('');
+  /** Why the mobile number won't do, shown under the field. */
+  const [mobileError, setMobileError] = useState<string | null>(null);
+  /** A failed run whose draft the backend handed back to be corrected. */
+  const [reopened, setReopened] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   const [codeState, setCodeState] = useState<AvailabilityResult | null>(null);
@@ -284,6 +284,14 @@ function SignupFlow() {
   const timeZoneTouched = useRef(false);
   /** Drives the dial-code prefix and the mobile hint on the Preferences step. */
   const selectedCountry = COUNTRIES.find((c) => c.code === countryCode);
+  const mobileRule = MOBILE_RULES[countryCode];
+  /** The number as egov-user will check it, or null when it fails the country's rule. */
+  const mobileNational = mobileRule ? nationalMobile(tenantAdminMobile, mobileRule) : null;
+  const describe = useCallback(
+    (caught: unknown, magicLink = false): SignupProblem =>
+      describeSignupError(caught, t, { countryName: selectedCountry?.name, magicLink }),
+    [t, selectedCountry?.name],
+  );
   // Reused when retrying the *same* action after a network failure, which is
   // the whole point of the header.
   const createKey = useRef<string>(newIdempotencyKey());
@@ -380,10 +388,10 @@ function SignupFlow() {
           setPhase('wizard');
       }
     } catch (caught) {
-      setError(errorText(caught));
+      setError(describeSignupError(caught, t).message);
       setPhase('failed');
     }
-  }, [seedFrom]);
+  }, [seedFrom, t]);
 
   useEffect(() => {
     // Load on mount. Every setState inside `bootstrap` happens after an await,
@@ -467,10 +475,11 @@ function SignupFlow() {
     if (financialYearPolicy) next.financialYearPolicy = financialYearPolicy;
     if (acceptedTerms) next.acceptedTermsVersion = TERMS_VERSION;
     if (tenantAdminMobile.trim()) {
-      next.tenantMetadata = { schemaVersion: 1, tenantAdmin: { mobileNumber: tenantAdminMobile.trim() } };
+      // The bare national number when it passes the rule: the backend's parser and egov-user then see the same digits.
+      next.tenantMetadata = { schemaVersion: 1, tenantAdmin: { mobileNumber: mobileNational ?? tenantAdminMobile.trim() } };
     }
     return next;
-  }, [accountName, accountCode, urlSlug, countryCode, languages, timeZone, financialYearPolicy, acceptedTerms, tenantAdminMobile]);
+  }, [accountName, accountCode, urlSlug, countryCode, languages, timeZone, financialYearPolicy, acceptedTerms, tenantAdminMobile, mobileNational]);
 
   /** Create on first save, update thereafter — one signup per founder. */
   const persist = useCallback(async (): Promise<Signup> => {
@@ -493,7 +502,14 @@ function SignupFlow() {
    */
   const handleFailure = useCallback(async (caught: unknown) => {
     if (!isExpiredSession(caught)) {
-      setError(errorText(caught));
+      const problem = describe(caught);
+      if (problem.field === 'mobile') {
+        // Under the field it is about, on the step that has it.
+        setMobileError(problem.message);
+        setStep('preferences');
+      } else {
+        setError(problem.message);
+      }
       return;
     }
     try {
@@ -502,11 +518,19 @@ function SignupFlow() {
     } catch {
       /* The gate still renders; it just may list nothing. */
     }
-    setError('Your sign-in expired. Sign in again to pick up where you left off.');
+    setError(t('signup.session_expired', 'Your sign-in expired. Sign in again to pick up where you left off.'));
     setPhase('signedOut');
-  }, []);
+  }, [describe, t]);
+
+  /** The mobile number against the country's rule, before the server is asked. */
+  const checkMobile = useCallback((): boolean => {
+    if (!mobileRule || !tenantAdminMobile.trim() || mobileNational) return true;
+    setMobileError(mobileInvalid(selectedCountry?.name, t));
+    return false;
+  }, [mobileRule, tenantAdminMobile, mobileNational, selectedCountry?.name, t]);
 
   const advance = async (next: string) => {
+    if (step === 'preferences' && !checkMobile()) return;
     setSaving(true);
     setError(null);
     try {
@@ -548,7 +572,7 @@ function SignupFlow() {
       });
       setPhase('checkEmail');
     } catch (caught) {
-      setError(errorText(caught));
+      setError(describe(caught, true).message);
     } finally {
       setSaving(false);
     }
@@ -606,6 +630,19 @@ function SignupFlow() {
     };
   }, [phase, seedFrom, restart]);
 
+  const enter = useCallback(async (option: TenantOption): Promise<boolean> => {
+    setSaving(true);
+    setError(null);
+    try {
+      await enterWorkspace(option.tenantId, sessionUser);
+      return true;
+    } catch (caught) {
+      setError(describe(caught).message);
+      setSaving(false);
+      return false;
+    }
+  }, [sessionUser, describe]);
+
   // Provisioning done and published: the new tenant appears without another
   // sign-in. Acting on SUCCEEDED alone reads an empty tenant list (CCRS#2303).
   useEffect(() => {
@@ -616,23 +653,60 @@ function SignupFlow() {
         const view = await tenants();
         if (!live) return;
         setTenantOptions(view.tenants);
+        if (view.tenants.length === 1) {
+          const ok = await enter(view.tenants[0]);
+          if (!live) return;
+          if (!ok) {
+            setPhase('chooseTenant');
+          }
+          return;
+        }
         setPhase('chooseTenant');
       } catch (caught) {
-        if (live) setError(errorText(caught));
+        if (live) setError(describe(caught).message);
       }
     })();
     return () => {
       live = false;
     };
-  }, [ready]);
+  }, [ready, enter, describe]);
 
-  const enter = async (option: TenantOption) => {
+  // A run that failed on the founder's own input hands the draft back (PGR's
+  // user-correctable codes) rather than closing it. The signup, not a list of
+  // codes kept here, says which happened: DRAFT again means it can be corrected.
+  const terminal = phase === 'provisioning' && operation?.status === 'TERMINAL_FAILED';
+  useEffect(() => {
+    if (!terminal) return;
+    let live = true;
+    findSignup()
+      .then((latest) => {
+        if (live && latest?.status === 'DRAFT') setReopened(true);
+      })
+      .catch(() => {
+        /* Not knowing leaves the closed-signup wording in place. */
+      });
+    return () => {
+      live = false;
+    };
+  }, [terminal]);
+
+  /** Back into the wizard on the reopened draft, at the step with the mobile number. */
+  const correctDetails = async () => {
     setSaving(true);
     setError(null);
     try {
-      await enterWorkspace(option.tenantId, sessionUser);
+      const latest = await findSignup();
+      if (latest) seedFrom(latest);
+      if (operation?.errorCode === 'TENANT_ADMIN_ACCOUNT_REJECTED') {
+        setMobileError(t('signup.mobile_rejected', 'Check this number: your user account couldn’t be created with it.'));
+      }
+      setOperation(null);
+      setReopened(false);
+      setStep('preferences');
+      setPhase('wizard');
     } catch (caught) {
-      setError(errorText(caught));
+      await handleFailure(caught);
+    } finally {
       setSaving(false);
     }
   };
@@ -877,7 +951,7 @@ function SignupFlow() {
                   <span className="h-4 w-4 rounded-full border border-muted-foreground/40" />
                 )}
                 <span className={isDone ? 'text-foreground' : 'text-muted-foreground'}>
-                  {t(`provisioning.${name.toLowerCase()}`, PROVISIONING_STEP_LABELS[name])}
+                  {t(`provisioning_step.${name.toLowerCase()}`, PROVISIONING_STEP_LABELS[name])}
                 </span>
               </li>
             );
@@ -888,8 +962,12 @@ function SignupFlow() {
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>{t('signup.setup_failed', 'Setup did not finish')}</AlertTitle>
             <AlertDescription>
-              {operation.errorMessage || t('signup.setup_failed_detail', 'The setup could not be completed.')}
-              {operation.errorCode ? ` (${operation.errorCode})` : ''}
+              {describeProvisioningFailure(operation, t)}
+              {operation.errorCode && (
+                <span className="mt-1 block text-xs opacity-80">
+                  {t('signup.setup_reference', 'Reference: %{code}', { code: operation.errorCode })}
+                </span>
+              )}
             </AlertDescription>
           </Alert>
         )}
@@ -902,7 +980,7 @@ function SignupFlow() {
               try {
                 setOperation(await retryOperation(operation.id));
               } catch (caught) {
-                setError(errorText(caught));
+                setError(describe(caught).message);
               } finally {
                 setSaving(false);
               }
@@ -911,7 +989,12 @@ function SignupFlow() {
             <RefreshCw className="mr-2 h-4 w-4" /> {t('signup.try_again', 'Try again')}
           </Button>
         )}
-        {operation.status === 'TERMINAL_FAILED' && (
+        {operation.status === 'TERMINAL_FAILED' && reopened && (
+          <Button className="mt-4" disabled={saving} onClick={() => void correctDetails()}>
+            {t('signup.correct_details', 'Change my details')}
+          </Button>
+        )}
+        {operation.status === 'TERMINAL_FAILED' && !reopened && (
           <p className="mt-4 text-sm text-muted-foreground">
             {t('signup.cannot_retry', 'This signup cannot be retried. Please contact support to continue.')}
           </p>
@@ -1053,6 +1136,8 @@ function SignupFlow() {
               onChange={(e) => {
                 const next = e.target.value;
                 setCountryCode(next);
+                // The number is checked against the new country's rule from here on.
+                setMobileError(null);
                 // Suggest, never overwrite a zone chosen by hand. "Chosen by
                 // hand" has to be tracked, not inferred from the field being
                 // non-empty: the first country pick fills it, so that test was
@@ -1173,23 +1258,39 @@ function SignupFlow() {
             id="tenantAdminMobile"
             label="Your mobile number"
             help={
-              selectedCountry
-                ? `Used to create your account inside the new workspace. Enter the number without the ${selectedCountry.dialCode} prefix.`
-                : 'Used to create your account inside the new workspace.'
+              <>
+                {t('signup.mobile_purpose', 'Used to create your account inside the new workspace.')}
+                {selectedCountry && mobileRule && <> {mobileHint(selectedCountry.name, mobileRule, t)}</>}
+              </>
+            }
+            status={
+              mobileError ? (
+                <p id="tenantAdminMobile-error" role="alert" className="mt-1 flex items-center gap-1 text-xs text-destructive">
+                  <AlertCircle className="h-3 w-3 shrink-0" /> {mobileError}
+                </p>
+              ) : null
             }
           >
             <div className="flex items-center gap-2">
-              {selectedCountry ? (
+              {mobileRule ? (
                 <span className="shrink-0 rounded border bg-muted px-3 py-2 text-sm text-muted-foreground">
-                  {selectedCountry.dialCode}
+                  {mobileRule.dialCode}
                 </span>
               ) : null}
               <Input
                 id="tenantAdminMobile"
                 className="flex-1"
+                inputMode="tel"
+                autoComplete="tel-national"
                 value={tenantAdminMobile}
-                onChange={(e) => setTenantAdminMobile(e.target.value)}
-                placeholder={selectedCountry?.nationalExample ?? 'National number'}
+                aria-invalid={mobileError ? true : undefined}
+                aria-describedby={mobileError ? 'tenantAdminMobile-help tenantAdminMobile-error' : 'tenantAdminMobile-help'}
+                onChange={(e) => {
+                  setTenantAdminMobile(e.target.value);
+                  setMobileError(null);
+                }}
+                onBlur={() => void checkMobile()}
+                placeholder={mobileRule?.example ?? 'National number'}
               />
             </div>
           </Field>
@@ -1226,7 +1327,7 @@ function SignupFlow() {
               // founder nothing to check against the number they meant.
               [
                 'Mobile number',
-                selectedCountry ? `${selectedCountry.dialCode} ${tenantAdminMobile}` : tenantAdminMobile,
+                mobileRule ? `${mobileRule.dialCode} ${mobileNational ?? tenantAdminMobile}` : tenantAdminMobile,
               ],
             ].map(([label, value], i) => (
               <div

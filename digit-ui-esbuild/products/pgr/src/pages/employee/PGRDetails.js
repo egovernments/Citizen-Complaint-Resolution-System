@@ -16,6 +16,7 @@ import useReopenWindow from "../../hooks/pgr/useReopenWindow";
 import { hasUsableGeoLocation } from "../../utils/geoLocation";
 import { trackEvent } from "../../utils/analytics";
 import { currentAssigneesInOccupancy, isCurrentAssignee } from "./escalationVisibility";
+import { buildWorkflowUpdate, formDataForAction } from "./workflowUpdate";
 import { getTenantHierarchy } from "../../services/tenantHierarchy";
 
 // Action configurations used for handling different workflow actions like ASSIGN, REJECT, RESOLVE
@@ -277,10 +278,6 @@ const PGRDetails = () => {
   const [boundaryRows, setBoundaryRows] = useState([]);
   const userInfo = Digit.UserService.getUser();
 
-  // Persist session data for complaint update
-  const UpdateComplaintSession = Digit.Hooks.useSessionStorage("COMPLAINT_UPDATE", {});
-  const [sessionFormData, setSessionFormData, clearSessionFormData] = UpdateComplaintSession;
-
   // Service definitions (leaf complaint types) adapted from the single
   // RAINMAKER-PGR.ComplaintHierarchy master — drives department + category
   // lookups below. Legacy ServiceDefs shape preserved (serviceCode/menuPath/
@@ -437,13 +434,15 @@ const PGRDetails = () => {
 
     if (!actionConfig) return;
 
+    // Only this action's own fields, whatever else the form state holds (#1967).
+    const fields = formDataForAction(actionConfig, _data);
     const missingFields = [];
 
     actionConfig.formConfig.form.forEach((section) => {
       section.body.forEach((field) => {
         if (field.isMandatory) {
           const fieldKey = field.key;
-          const fieldValue = _data?.[fieldKey];
+          const fieldValue = fields[fieldKey];
 
           // For dropdowns or components, also check if selected value is valid object or string
           const isEmpty =
@@ -467,52 +466,20 @@ const PGRDetails = () => {
       });
       return;
     }
-    // Forward the rejection-reason picker into the workflow comment so
-    // the audit log records *why* a complaint was rejected. The form
-    // collects the reason in `_data.SelectedReason` (RejectionReasons
-    // MDMS lookup) but it was never plumbed into the update payload —
-    // operators only saw whatever free-text comment they typed.
-    const reasonCode =
-      _data?.SelectedReason?.code ||
-      _data?.SelectedReason?.name ||
-      _data?.SelectedReason ||
-      "";
-    const freeComment = _data?.SelectedComments || "";
-    const isReject = selectedAction.action === "REJECT";
-    const composedComment = isReject && reasonCode
-      ? (freeComment ? `[${reasonCode}] ${freeComment}` : `[${reasonCode}]`)
-      : freeComment;
-
-    // Record the routed department: when the officer assigns to an employee,
-    // stamp that employee's department onto additionalDetail so the complaint
-    // reflects WHERE it was routed — instead of the stale type department / "NA"
-    // carried over from filing time. Only applied when an assignee with a
-    // department is picked (REJECT/RESOLVE etc. leave additionalDetail untouched).
     // isMandatory renders the required marker but does not stop a custom component's
     // submit, so the rule is enforced here too. Without it the request went through with
     // assignes: null and the complaint left the unassigned queue owned by nobody.
-    if (ACTIONS_REQUIRING_ASSIGNEE.has(selectedAction.action) && !_data?.SelectedAssignee?.uuid) {
+    if (ACTIONS_REQUIRING_ASSIGNEE.has(selectedAction.action) && !fields.SelectedAssignee?.uuid) {
       setToast({ show: true, label: t("CS_PGR_ASSIGNEE_REQUIRED"), type: "error" });
       return;
     }
 
-    const baseService = pgrData?.ServiceWrappers[0].service;
-    const assigneeDept = _data?.SelectedAssignee?.department;
-    const baseAdditionalDetail =
-      baseService?.additionalDetail && typeof baseService.additionalDetail === "object"
-        ? baseService.additionalDetail
-        : {};
-    const updateRequest = {
-      service: assigneeDept
-        ? { ...baseService, additionalDetail: { ...baseAdditionalDetail, department: assigneeDept } }
-        : { ...baseService },
-      workflow: {
-        action: selectedAction.action,
-        assignes: _data?.SelectedAssignee?.uuid ? [_data?.SelectedAssignee?.uuid] : null,
-        hrmsAssignes: _data?.SelectedAssignee?.uuid ? [_data?.SelectedAssignee?.uuid] : null,
-        comments: composedComment,
-      },
-    };
+    const updateRequest = buildWorkflowUpdate({
+      action: selectedAction.action,
+      actionConfig,
+      data: fields,
+      baseService: pgrData?.ServiceWrappers[0].service,
+    });
     handleResponseForUpdateComplaint(updateRequest);
   };
 
@@ -534,7 +501,6 @@ const PGRDetails = () => {
         } else {
           setToast({ show: true, label: t(`${msg}_SUCCESSFULLY`), type: "success" });
           await refreshData();
-          clearSessionFormData();
         }
       },
     });
@@ -611,13 +577,19 @@ const PGRDetails = () => {
     isCurrentAssignee(currentAssignees, userInfo?.info?.uuid)
     && workingContext?.hasReportingTo !== false;
 
+  // The roles this screen acts on. An employee account can also hold CITIZEN, and the
+  // workflow grants CITIZEN its own actions (COMMENT, RATE) that this screen has no form
+  // for, so picking one did nothing (#2314). Those belong to the citizen app.
+  const employeeRoles = () =>
+    (userInfo?.info?.roles || []).map((role) => role.code).filter((code) => code !== "CITIZEN");
+
   // Get list of valid actions for current user and state
   const getNextActionOptions = (workflowData, businessServiceResponse) => {
     const currentState = workflowData?.ProcessInstances?.[0]?.state;
     const currentAssignees = currentAssigneesInOccupancy(workflowData?.ProcessInstances);
     const matchingState = businessServiceResponse?.states?.find((state) => state.uuid === currentState?.uuid);
     if (!matchingState) return [];
-    const userRoles = userInfo?.info?.roles?.map((role) => role.code) || [];
+    const userRoles = employeeRoles();
     return matchingState.actions
       ? matchingState.actions
         .filter((action) => action.roles.some((role) => userRoles.includes(role)))
@@ -645,7 +617,7 @@ const PGRDetails = () => {
   // are seeded with PGR_LME or GRO but no PGR_VIEWER). PGR_VIEWER is
   // a viewer credential, not a prerequisite to act.
   const shouldShowActionButton = () => {
-    const userRoles = userInfo?.info?.roles?.map((role) => role.code) || [];
+    const userRoles = employeeRoles();
     const currentState = workflowData?.ProcessInstances?.[0]?.state;
     if (!currentState?.actions) return false;
     const allActionRoles = new Set();
@@ -687,7 +659,7 @@ const PGRDetails = () => {
                     inline: true,
                     label: t("CS_COMPLAINT_DETAILS_COMPLAINT_NO"),
                     type: "text",
-                    value: pgrData?.ServiceWrappers[0].service?.serviceRequestId || "NA",
+                    value: pgrData?.ServiceWrappers[0].service?.serviceRequestId || t("ES_COMMON_NA"),
                   },
                   // Hierarchy tenants: one row per level (Main Category › Sector ›
                   // Sub-Type …). Flat tenants: the legacy Type + Sub-Type pair.
@@ -696,7 +668,7 @@ const PGRDetails = () => {
                         inline: true,
                         label: r.label,
                         type: "text",
-                        value: r.value || "NA",
+                        value: r.value || t("ES_COMMON_NA"),
                       }))
                     : [
                         {
@@ -725,7 +697,7 @@ const PGRDetails = () => {
                         inline: true,
                         label: r.label,
                         type: "text",
-                        value: r.value || "NA",
+                        value: r.value || t("ES_COMMON_NA"),
                       }))
                     : [
                         {
@@ -743,7 +715,7 @@ const PGRDetails = () => {
                   {
                     inline: true,
                     label: t("CS_COMPLAINT_LANDMARK__DETAILS"),
-                    value: pgrData?.ServiceWrappers[0].service?.address?.landmark || "NA",
+                    value: pgrData?.ServiceWrappers[0].service?.address?.landmark || t("ES_COMMON_NA"),
                   },
                   // Pincode is optional in this deployment; only show it when set.
                   ...(pgrData?.ServiceWrappers[0].service?.address?.pincode
@@ -759,7 +731,7 @@ const PGRDetails = () => {
                   {
                     inline: true,
                     label: t("CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS_DESCRIPTION"),
-                    value: pgrData?.ServiceWrappers[0].service?.description || "NA",
+                    value: pgrData?.ServiceWrappers[0].service?.description || t("ES_COMMON_NA"),
                   },
                 ],
               },
@@ -897,10 +869,9 @@ const PGRDetails = () => {
       {/* Workflow Modal for Actions */}
       {openModal && selectedAction && (
         <PGRWorkflowModal
+          // A new action starts from an empty form (#1967).
+          key={selectedAction.action}
           selectedAction={selectedAction}
-          sessionFormData={sessionFormData}
-          setSessionFormData={setSessionFormData}
-          clearSessionFormData={clearSessionFormData}
           config={getUpdatedConfig(selectedAction, workflowData, ACTION_CONFIGS, serviceDefs, pgrData)}
           closeModal={() => setOpenModal(false)}
           onSubmit={handleActionSubmit}

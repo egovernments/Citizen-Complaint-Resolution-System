@@ -106,8 +106,9 @@ export const requestJson = async (fetchImpl, url, init) => {
  *   { status: "authenticated", user: { info, ...tokens } }
  *   { status: "signed-out", fromAuthResult, messageKey?, message? }
  *   { status: "pending-invitation", invitation, messageKey, message }
- *   { status: "forbidden" | "error", messageKey, message }
+ *   { status: "forbidden" | "error", messageKey, message, params? }
  * `message` is a local English fallback; BFF display text is never rendered.
+ * `params` fills the translated message's {{placeholders}}.
  */
 export async function establishIdentityBffSession({ surface, tenant, authResultId, fetchImpl }) {
   const config = IDENTITY_BFF_SURFACES[surface];
@@ -149,6 +150,7 @@ export async function establishIdentityBffSession({ surface, tenant, authResultI
         fromAuthResult: true,
         messageKey: "CORE_IDENTITY_TENANT_SESSION_MISMATCH",
         message: `Sign in again to continue to ${tenant.name}.`,
+        params: { tenant: tenant.name },
       }
       : { status: "signed-out", fromAuthResult: false };
   }
@@ -177,6 +179,7 @@ export async function establishIdentityBffSession({ surface, tenant, authResultI
       ...(selected.body?.code ? identityMessage(selected.body.code) : {
         messageKey: "CORE_IDENTITY_TENANT_FORBIDDEN",
         message: `Your account does not have access to ${tenant.name}.`,
+        params: { tenant: tenant.name },
       }),
     };
   }
@@ -200,7 +203,7 @@ export async function establishIdentityBffSession({ surface, tenant, authResultI
     return {
       status: "error",
       messageKey: "CORE_IDENTITY_INVALID_SESSION",
-      message: `The signed-in account did not produce a valid ${surface} session for this tenant.`,
+      message: "The signed-in account did not produce a valid session for this tenant.",
     };
   }
   // Employee roles apply at the route tenant and its ancestors (a state-level

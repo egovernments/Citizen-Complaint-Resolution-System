@@ -91,7 +91,16 @@ export default function LoginPage() {
           forgetDeepLink();
           setPhase('entering');
           try {
-            await enterWorkspace(deepLinkTenant, current.user);
+            try {
+              await enterWorkspace(deepLinkTenant, current.user);
+            } catch (refused) {
+              // ours (#1778): `?tenant=ke` names the state workspace the identity service lists as KE, and only KE is
+              // accepted: retry under the session's own option of the same name in another case, if there is one
+              const wanted = deepLinkTenant.trim().toLowerCase();
+              const own = (await tenants()).tenants.find((option) => option.tenantId.toLowerCase() === wanted && option.tenantId !== deepLinkTenant);
+              if (!own) throw refused;
+              await enterWorkspace(own.tenantId, current.user);
+            }
             return;
           } catch (caught) {
             setError(caught instanceof Error ? caught.message : 'Could not open that workspace.');

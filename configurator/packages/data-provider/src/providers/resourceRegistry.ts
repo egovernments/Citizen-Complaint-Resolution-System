@@ -32,7 +32,8 @@ export interface ResourceConfig {
   customPath?: string;
   /** For `type: 'custom'` resources: when true, the fetcher appends the session
    *  tenantId as a `tenantId` query param (the novu-bridge /logs endpoint
-   *  requires it). Providers/integrations don't take a tenant, so omit it. */
+   *  requires it; the integrations list uses it to pick the workspace's own
+   *  notification account, #2203). */
   customTenantScoped?: boolean;
   /** 2-master complaint hierarchy: when set, the MDMS fetcher keeps only the
    *  LEAF rows of RAINMAKER-PGR.ComplaintHierarchy (rows carrying `department`
@@ -294,10 +295,12 @@ export const REGISTRY: Record<string, ResourceConfig> = {
     descriptionField: 'status', dedicated: true,
     customPath: '/novu-bridge/novu-adapter/v1/logs', customTenantScoped: true,
   },
+  // Tenant-scoped since #2203: on a workspace with its own Novu organization the bridge
+  // lists THAT organization's providers; on any other tenant, the shared account's as before.
   'notification-provider': {
     type: 'custom', label: 'Notification Providers', idField: '_id', nameField: 'providerId',
     descriptionField: 'channel', dedicated: true,
-    customPath: '/novu-bridge/novu-adapter/v1/integrations', customTenantScoped: false,
+    customPath: '/novu-bridge/novu-adapter/v1/integrations', customTenantScoped: true,
   },
   // notification-preference -> GET /novu-bridge/novu-adapter/v1/preferences
   // (per-user consent per channel + preferredLanguage; same {data,total} envelope

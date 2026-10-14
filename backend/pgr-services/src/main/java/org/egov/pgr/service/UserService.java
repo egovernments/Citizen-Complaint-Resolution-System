@@ -101,6 +101,16 @@ public class UserService {
 
         // Enrich the accountId
         request.getService().setAccountId(userServiceResponse.getUuid());
+
+        // The complaint carries the citizen as the employee typed it: a national mobile number and
+        // no country code. The account knows its code, and every later transition (enriched from
+        // egov-user) carries it, so without this only the APPLY notification left without one.
+        if (isBlank(user.getCountryCode()) && !isBlank(userServiceResponse.getCountryCode()))
+            user.setCountryCode(userServiceResponse.getCountryCode().trim());
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
     }
 
 

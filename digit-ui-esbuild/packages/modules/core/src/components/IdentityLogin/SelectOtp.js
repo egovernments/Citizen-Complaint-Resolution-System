@@ -13,7 +13,7 @@ import { SignInCard, V2LoginShell, stepText } from "./SelectMobileNumber";
 
 const OTP_LENGTH = 6;
 
-function OtpBoxes({ value = "", onChange, hasError }) {
+function OtpBoxes({ value = "", onChange, hasError, ariaLabel }) {
   const inputs = useRef([]);
   const chars = (value || "").split("").concat(new Array(OTP_LENGTH).fill("")).slice(0, OTP_LENGTH);
 
@@ -64,7 +64,7 @@ function OtpBoxes({ value = "", onChange, hasError }) {
   return (
     <div
       role="group"
-      aria-label="One-time password"
+      aria-label={ariaLabel}
       onPaste={handlePaste}
       style={{
         display: "grid",
@@ -172,7 +172,7 @@ const SelectOtp = ({
   if (userType === "employee") {
     return (
       <Fragment>
-        <OtpBoxes value={otp} onChange={onOtpChange} hasError={!error} />
+        <OtpBoxes value={otp} onChange={onOtpChange} hasError={!error} ariaLabel={tr("CORE_IDENTITY_OTP_CODE", "One-time password")} />
         {timeLeft > 0 ? (
           <p style={{ marginTop: "12px", fontSize: "0.875rem", color: "var(--color-text-secondary, #6B7280)" }}>
             {`${t("CS_RESEND_ANOTHER_OTP")} ${timeLeft} ${t("CS_RESEND_SECONDS")}`}
@@ -217,7 +217,7 @@ const SelectOtp = ({
           }}
           style={{ display: "flex", flexDirection: "column", gap: "16px" }}
         >
-          <OtpBoxes value={otp} onChange={onOtpChange} hasError={!error} />
+          <OtpBoxes value={otp} onChange={onOtpChange} hasError={!error} ariaLabel={tr("CORE_IDENTITY_OTP_CODE", "One-time password")} />
           {!error ? (
             <p
               role="alert"

@@ -1,19 +1,22 @@
 import { useEffect, useState } from 'react';
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Check, ChevronRight, LayoutGrid, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { ArrowRight, Check, House, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useApp } from '../App';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import { useMastersCapability } from '@/hooks/useMastersCapability';
-import { ONBOARDING_GATE_ENABLED } from '@/config/featureFlags';
 import { NavRow, SectionLabel, RailBackdrop, RailCloseButton, RailMenuButton, RailPoweredBy } from '@/components/layout/rail';
 import { railClasses } from '@/components/layout/railStyles';
 import { useRailDrawer } from '@/components/layout/useRailDrawer';
 import { AccountMenu, HelpButton, LocaleSwitcher, ThemeSwitcher } from '@/components/layout/HeaderControls';
-import { ONBOARDING_STEPS } from './steps';
-import { completedCount, resumePath, stepForPath, stepStatus, type StepStatus } from './progress';
+import { HOME_PATH, ONBOARDING_STEPS } from './steps';
+import { completedCount, resumePath, resumeStep, stepForPath, stepStatus, type StepStatus } from './progress';
 import { initialsOf, useOrganisation } from './organisation';
 import { trackEvent } from '@/lib/telemetry';
 import { useOnboardingT } from './i18n';
+import { DocsButton, DocsRail } from './docs/DocsRail';
+import type { DocsSection } from './docs/docsLinks';
+import { stepGuide } from './stepGuide';
 
 /**
  * The step marks in place of icons: a tick once a step is done, a filled dot
@@ -39,7 +42,7 @@ function StepMark({ status }: { status: StepStatus }) {
 
 
 export default function OnboardingLayout() {
-  const { state, logout, setMode, toggleHelp } = useApp();
+  const { state, logout, toggleHelp } = useApp();
   const t = useOnboardingT();
   const statusWord: Record<StepStatus, string> = {
     done: t('layout.status.done', 'done'),
@@ -64,9 +67,13 @@ export default function OnboardingLayout() {
   // than from a failed submit deep in the step.
   const currentStepEditable = !currentStep || canEditResource(currentStep.master);
   const groups = [...new Set(ONBOARDING_STEPS.map((step) => step.group))];
+  const guide = stepGuide(t);
+  const nextStep = resumeStep(completed);
+  const previousStep = ONBOARDING_STEPS.find((step) => step.number === nextStep.number - 1);
 
   // A step opened, from the rail, a Back or continue, or a resume.
   const openedStep = currentStepLocked ? undefined : currentStep;
+  const docsSection: DocsSection | undefined = location.pathname === HOME_PATH ? 'home' : openedStep?.id;
   useEffect(() => {
     if (openedStep) trackEvent('phase_start', { phase: openedStep.number, step: openedStep.id, tenant: state.tenant });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per step opened, not per tenant re-render
@@ -77,10 +84,6 @@ export default function OnboardingLayout() {
     catch (error) { window.alert(error instanceof Error ? error.message : t('layout.sign_out_failed', 'Sign-out failed. Please retry.')); }
   };
 
-  const handleGoToManagement = () => {
-    setMode('management');
-    navigate('/manage');
-  };
 
   const openMobileNav = () => {
     setCollapsed(false);
@@ -106,7 +109,7 @@ export default function OnboardingLayout() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold leading-5 text-foreground truncate" title={orgName}>{orgName}</p>
-                  <p className="text-xs leading-4 text-muted-foreground truncate">{t('app.header.brand', 'Complaints Management')}</p>
+                  <p className="text-xs leading-4 text-muted-foreground truncate">{t('app.header.product_name', 'Complaint Management System')}</p>
                 </div>
               </>
             )}
@@ -121,35 +124,52 @@ export default function OnboardingLayout() {
             </button>
           </div>
 
+          {/* The step to do next, what it's for and a button into it. Steps unlock in
+              order, so the one before it is the one just finished. */}
           {!collapsed && (
-            <button
-              type="button"
-              onClick={() => navigate(resumePath(completed))}
-              className="w-full text-left rounded border border-border bg-card p-3 transition-colors hover:border-primary/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            >
-              <span className="flex items-center justify-between gap-2">
-                <span className="text-sm font-semibold text-foreground">{t('layout.setup_title', 'Let’s set up your organisation')}</span>
-                <ChevronRight aria-hidden="true" className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-              </span>
+            <section aria-labelledby="setup-card-next" className="rounded border border-border bg-card p-3">
+              {previousStep && (
+                <p className="mb-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Check aria-hidden="true" className="h-3.5 w-3.5 text-primary" strokeWidth={3} />
+                  {t('layout.card.done', '%{step} done', { step: t(`steps.${previousStep.id}`, previousStep.label) })}
+                </p>
+              )}
+              <h2 id="setup-card-next" className="text-sm font-semibold text-foreground">
+                {t('layout.card.next', 'Next step: %{step}', { step: t(`steps.${nextStep.id}`, nextStep.label) })}
+              </h2>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">{guide[nextStep.id].description}</p>
+              <Button size="sm" onClick={() => navigate(nextStep.path)} className="mt-3 h-8 w-full gap-1.5 text-xs">
+                {guide[nextStep.id].action}
+                <ArrowRight aria-hidden="true" className="h-3.5 w-3.5" />
+              </Button>
               <span
                 role="progressbar"
                 aria-label={t('layout.setup_progress', 'Setup progress')}
                 aria-valuemin={0}
                 aria-valuemax={total}
                 aria-valuenow={done}
-                className="mt-2.5 block h-1.5 rounded-full bg-muted overflow-hidden"
+                className="mt-3 block h-1.5 overflow-hidden rounded-full bg-muted"
               >
                 <span className="block h-full rounded-full bg-primary transition-all" style={{ width: `${(done / total) * 100}%` }} />
               </span>
-              <span className="mt-2 block text-xs text-muted-foreground">
+              <span className="mt-1.5 block text-xs text-muted-foreground">
                 {t('layout.completed_count', '%{done} of %{total} completed', { done, total })}
               </span>
-            </button>
+            </section>
           )}
         </div>
 
         {/* Steps */}
         <nav aria-label={t('layout.setup_steps', 'Setup steps')} className="flex-1 py-2 overflow-y-auto">
+          <div className="pb-2">
+            <NavRow
+              icon={House}
+              label={t('layout.home', 'Home')}
+              active={location.pathname === HOME_PATH}
+              collapsed={collapsed}
+              onClick={() => navigate(HOME_PATH)}
+            />
+          </div>
           {groups.map((group) => (
             <div key={group} className="pb-4">
               {!collapsed && <SectionLabel>{t(`groups.${group.toLowerCase()}`, group)}</SectionLabel>}
@@ -172,12 +192,6 @@ export default function OnboardingLayout() {
           ))}
         </nav>
 
-        {/* Footer: the way out while switching is allowed, then "Powered by DIGIT" */}
-        {!ONBOARDING_GATE_ENABLED && (
-          <div className="border-t border-border py-2">
-            <NavRow icon={LayoutGrid} label={t('layout.go_to_management', 'Go to Management')} active={false} collapsed={collapsed} onClick={handleGoToManagement} />
-          </div>
-        )}
         <RailPoweredBy collapsed={collapsed} />
       </aside>
 
@@ -191,6 +205,7 @@ export default function OnboardingLayout() {
             </h1>
           </div>
           <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+            {docsSection && <DocsButton section={docsSection} />}
             <HelpButton label={t('app.header.help', 'Help')} onClick={toggleHelp} />
             <LocaleSwitcher />
             <ThemeSwitcher />
@@ -223,6 +238,8 @@ export default function OnboardingLayout() {
         </main>
 
       </div>
+
+      {docsSection && <DocsRail section={docsSection} />}
     </div>
   );
 }
