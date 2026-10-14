@@ -132,6 +132,20 @@ const navGroups = [
   },
 ];
 
+// The access screens are ONE sidebar group, whichever group each patch put its entry in (Roles is upstream's System
+// entry; Roles by tenant was under People): cfgreview 2026-10-13. Regrouped here, where the menu is built, so every
+// access patch keeps its own anchor on the upstream menu.
+{
+  const ACCESS_ORDER = ['access-roles', 'access-people', 'access-check', 'access-attributes'];
+  const pulled = navGroups.flatMap((g) => g.items.filter((i) => ACCESS_ORDER.includes(i.id)));
+  if (pulled.length > 1) {
+    for (const g of navGroups) g.items = g.items.filter((i) => !ACCESS_ORDER.includes(i.id));
+    pulled.sort((a, b) => ACCESS_ORDER.indexOf(a.id) - ACCESS_ORDER.indexOf(b.id));
+    const at = navGroups.findIndex((g) => g.labelKey === 'app.nav.system');
+    navGroups.splice(at < 0 ? navGroups.length : at, 0, { labelKey: 'app.nav.access', items: pulled });
+  }
+}
+
 /** The links above the groups, always shown first */
 const mainLinks = [
   { path: '/manage', nameKey: 'app.nav.dashboard', icon: LayoutDashboard },

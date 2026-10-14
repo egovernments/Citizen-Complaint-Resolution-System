@@ -55,6 +55,9 @@ import { NotificationConfigure } from '@/resources/notification-configure/Notifi
 import { AnalyticsProvidersEditor } from '@/admin/analytics/AnalyticsProvidersEditor';
 import { EscalationPolicyEditor } from '@/admin/escalation';
 import PgrDashboard from './pages/PgrDashboard';
+import RoleEditor from './access/RoleEditor';
+import PolicyRows from './access/PolicyRows';
+import { RoleCreateRedirect, RoleEditRedirect } from './resources/access-roles/AccessRoleShow';
 import OrgChartPage from './pages/org-chart/OrgChartPage';
 import PublicDashboardConfigure from './resources/public-dashboard/PublicDashboardConfigure';
 import { getGenericMdmsResources, getDataProvider, getAuthProvider, configureDigitClient, i18nProvider, DigitApiClient, isReadOnlyResource } from '@/providers/bridge';
@@ -166,7 +169,7 @@ function ManagementAdminResources() {
 
         {/* Read-only entities with List/Show */}
         {canViewResource('access-roles') && (
-          <Resource name="access-roles" list={AccessRoleList} show={AccessRoleShow} create={MdmsResourceCreate} edit={MdmsResourceEdit} />
+          <Resource name="access-roles" list={AccessRoleList} show={AccessRoleShow} create={RoleCreateRedirect} edit={RoleEditRedirect} />
         )}
         {canViewResource('access-actions') && <Resource name="access-actions" list={AccessActionList} show={AccessActionShow} />}
         {canViewResource('role-actions') && (
@@ -215,6 +218,10 @@ function ManagementAdminResources() {
               the parent tenant. */}
           <Route path="/analytics-providers" element={<AnalyticsProvidersEditor />} />
           <Route path="/advanced" element={<AdvancedPage />} />
+          {/* Access: the Role editor writes the role, its role-actions and its branch of the complaint-search
+              action's scope / field rules; new roles at /access/roles/new */}
+          <Route path="/access/roles/:code" element={<RoleEditor />} />
+          <Route path="/access/roles/:code/rows" element={<PolicyRows />} />
           <Route
             path="/pgr-dashboard"
             element={LEGACY_PGR_DASHBOARD_ENABLED ? <PgrDashboard /> : <Navigate to="/manage" replace />}
