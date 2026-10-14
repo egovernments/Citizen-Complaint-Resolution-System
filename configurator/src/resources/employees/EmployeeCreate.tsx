@@ -5,6 +5,7 @@ import { useApp } from '../../App';
 import { RolesEditor } from './RolesEditor';
 import { JurisdictionEditor } from './JurisdictionEditor';
 import { AssignmentEditor } from './AssignmentEditor';
+import { useMdmsChoices } from './mdmsChoices';
 
 const GENDER_CHOICES = [
   { value: 'MALE', label: 'Male' },
@@ -36,6 +37,12 @@ function toEpochMs(value: unknown): number | undefined {
 
 export function EmployeeCreate() {
   const { state } = useApp();
+  // ours#850: offer the masters the admin maintains (common-masters.GenderType, egov-hrms.EmployeeStatus /
+  // EmployeeType), not a hardcoded list that disagreed with them; the old lists stay as the fallback when a master
+  // is empty or unreadable.
+  const genderChoices = useMdmsChoices('gender-types', GENDER_CHOICES);
+  const statusChoices = useMdmsChoices('employee-status', STATUS_CHOICES);
+  const typeChoices = useMdmsChoices('employee-type', TYPE_CHOICES);
   const tenantId = state.tenant;
   const { validator: mobileValidate, rules: mobileRules } = useMobileValidator();
 
@@ -138,20 +145,20 @@ export function EmployeeCreate() {
           <DigitFormSelect
             source="user.gender"
             label="Gender"
-            choices={GENDER_CHOICES}
+            choices={genderChoices}
             placeholder="Select gender..."
           />
           <DigitFormInput source="dateOfAppointment" label="Date of Appointment" type="date" />
           <DigitFormSelect
             source="employeeStatus"
             label="Employee Status"
-            choices={STATUS_CHOICES}
+            choices={statusChoices}
             placeholder="Select status..."
           />
           <DigitFormSelect
             source="employeeType"
             label="Employee Type"
-            choices={TYPE_CHOICES}
+            choices={typeChoices}
             placeholder="Select type..."
           />
         </div>
