@@ -81,9 +81,17 @@ export default function TenantsPeople() {
       ]);
       setPeople(peopleRows(emps, t));
       // the nearest tree: this tenant's, else the state's
-      setTree(areaTree(tb.length ? tb : await digitClient.boundaryRelationshipSearch(root, HIERARCHY).catch(() => []), HIERARCHY));
+      let trees = tb.length ? tb : await digitClient.boundaryRelationshipSearch(root, HIERARCHY).catch(() => []);
+      // a state whose boundaries live at its child tenants has no tree of its own: offer their areas
+      if (!trees.length && t === root) {
+        const counties = tenants.map((x) => x.code).filter((c) => c.startsWith(`${root}.`) && !c.slice(root.length + 1).includes('.'));
+        const lists = await Promise.all(counties.map((c) => digitClient.boundaryRelationshipSearch(c, HIERARCHY).catch(() => [])));
+        const roots = lists.flatMap((l: any[]) => ((l.find((x) => x?.hierarchyType === HIERARCHY) ?? l[0])?.boundary ?? []));
+        trees = roots.length ? [{ hierarchyType: HIERARCHY, boundary: roots }] : [];
+      }
+      setTree(areaTree(trees, HIERARCHY));
     } catch (e) { setError(String((e as Error).message ?? e)); }
-  }, [root]);
+  }, [root, tenants]);
   useEffect(() => { void loadTenant(tenant); }, [tenant, loadTenant]);
 
   const cover = useMemo(() => covered(tree, picked), [tree, picked]);

@@ -338,22 +338,28 @@ export const ComplaintsList = () => {
                   <span>{range}</span>
                   {shown.pages > 1 ? (
                     <span className="cms-complaints-pager-buttons">
-                      <button
+                      <Button
                         type="button"
+                        variant="outline"
+                        size="icon"
                         onClick={() => setPage(shown.page - 1)}
                         disabled={shown.page <= 1}
                         aria-label={tr("CS_COMMON_PREVIOUS", "Previous")}
+                        title={tr("CS_COMMON_PREVIOUS", "Previous")}
                       >
-                        <ChevronLeft aria-hidden />
-                      </button>
-                      <button
+                        <ChevronLeft aria-hidden className="h-4 w-4" />
+                      </Button>
+                      <Button
                         type="button"
+                        variant="outline"
+                        size="icon"
                         onClick={() => setPage(shown.page + 1)}
                         disabled={shown.page >= shown.pages}
                         aria-label={tr("CS_COMMON_NEXT", "Next")}
+                        title={tr("CS_COMMON_NEXT", "Next")}
                       >
-                        <ChevronRight aria-hidden />
-                      </button>
+                        <ChevronRight aria-hidden className="h-4 w-4" />
+                      </Button>
                     </span>
                   ) : null}
                 </div>

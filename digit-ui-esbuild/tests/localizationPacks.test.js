@@ -16,7 +16,13 @@ const SEED_ROOT = path.resolve(
 );
 const MODULES = ["rainmaker-pgr", "rainmaker-common", "rainmaker-hr"];
 const LOCALES = ["fr_FR", "pt_PT"];
-const SOURCE_DIRS = ["products/pgr/src", "packages/modules/core/src", "packages/libraries/src/services/auth", "src"];
+const SOURCE_DIRS = [
+  "products/pgr/src",
+  "packages/modules/core/src",
+  "packages/libraries/src/services/auth",
+  "packages/digit-ui-components-v2/src",
+  "src",
+];
 
 // Keys from upstream DIGIT screens that CCRS bundles but never routes to
 // (microplan, water and sewerage, audit history, sandbox sign-up).
@@ -58,12 +64,14 @@ function sourceFiles(dir) {
 
 // Ways a key reaches t(): called with it, returned as a `messageKey`, paired
 // with its English in a `[KEY, "English"]` table, or listed as
-// `{ key: KEY, fallback: "English" }` for a later t(step.key, step.fallback).
+// `{ key: KEY, fallback: "English" }` for a later t(step.key, step.fallback),
+// or held as `const key = KEY` for a t(key) === key fallback check.
 const KEY_PATTERNS = [
   /\b(?:t|tr|say|translateOr|translate|tt)\(\s*(?:t\s*,\s*)?["'`]([A-Za-z][A-Za-z0-9_.]*)["'`]/g,
   /\bmessageKey:\s*"([A-Z][A-Z0-9_]+)"/g,
   /\[\s*"([A-Z][A-Z0-9_]+)",\s*"[^"]*[a-z][^"]*"/g,
   /\bkey:\s*"([A-Z][A-Z0-9_]+)",\s*fallback:/g,
+  /\bconst key = "([A-Z][A-Z0-9_]+)";/g,
 ];
 
 // identityMessage(code) builds CORE_IDENTITY_<code> from its MESSAGES table.
