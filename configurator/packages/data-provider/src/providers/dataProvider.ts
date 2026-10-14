@@ -727,8 +727,7 @@ async function boundaryGetList(client: DigitApiClient, config: ResourceConfig, t
     // DigitApiClient.boundaryHierarchySearch paginates every page (not the
     // first 100); we still skip PW_* so we do not issue 200 empty tree
     // queries. Always include ADMIN.
-    // A tenant with NO hierarchy definition (a state whose boundaries live at its child tenants,
-    // e.g. a county layout) answers boundary-relationships with 400 HIERARCHY_DEFINITION_DOES_NOT_EXIST: nothing is asked there. ADMIN
+    // a tenant with NO hierarchy definition (a state whose boundaries live at its child tenants) answers boundary-relationships with 400 HIERARCHY_DEFINITION_DOES_NOT_EXIST: nothing is asked there. ADMIN
     // is still asked when the definitions could not be read (unknown, as before) or include it.
     const hierarchies = await client.boundaryHierarchySearch(t).catch(() => null);
     if (hierarchies !== null && hierarchies.length === 0) return [];

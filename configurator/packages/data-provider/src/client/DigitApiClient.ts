@@ -382,6 +382,8 @@ export class DigitApiClient {
     // tenant's relationships (the search runs unscoped), which surfaced as
     // other tenants' boundaries (B1_ADMIN_BLOCK, CITY_001…) bleeding into a
     // city's boundary list. Same QUERY-only binding boundary.ts relies on.
+    // a tenant with no hierarchy definition (a state whose boundaries live at its child tenants) answers 400 HIERARCHY_DEFINITION_DOES_NOT_EXIST: nothing is asked there, for every caller
+    if (!(await this.hasBoundaryHierarchy(tenantId, hierarchyType))) return [];
     const qs = new URLSearchParams({ tenantId, includeChildren: 'true' });
     if (hierarchyType) qs.set('hierarchyType', hierarchyType);
     const data = await this.request<{ TenantBoundary?: Record<string, unknown>[] }>(
@@ -389,6 +391,23 @@ export class DigitApiClient {
       { RequestInfo: this.buildRequestInfo() },
     );
     return data.TenantBoundary || [];
+  }
+
+  // tenants (and hierarchy types) known to HAVE a definition. A "none" is never cached: onboarding
+  // creates a hierarchy and reads it in the same session.
+  private boundaryHierarchyKnown = new Set<string>();
+
+  /** False only when the tenant's definitions were read and none (of `hierarchyType`) exists; unknown counts as true. */
+  async hasBoundaryHierarchy(tenantId: string, hierarchyType?: string): Promise<boolean> {
+    const key = `${tenantId}|${hierarchyType ?? ''}`;
+    if (this.boundaryHierarchyKnown.has(key)) return true;
+    try {
+      const found = (await this.boundaryHierarchySearch(tenantId, hierarchyType)).length > 0;
+      if (found) this.boundaryHierarchyKnown.add(key);
+      return found;
+    } catch {
+      return true;
+    }
   }
 
   async boundaryHierarchySearch(tenantId: string, hierarchyType?: string): Promise<Record<string, unknown>[]> {

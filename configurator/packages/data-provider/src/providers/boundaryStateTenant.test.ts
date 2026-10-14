@@ -1,5 +1,5 @@
-// A state whose boundaries live at its child tenants (no hierarchy of its own) answered boundary-relationships with
-// 400 HIERARCHY_DEFINITION_DOES_NOT_EXIST.
+// the configurator at a state asked boundary-relationships at the state, which has no
+// hierarchy of its own (the boundaries live at the counties): 400 HIERARCHY_DEFINITION_DOES_NOT_EXIST.
 import { describe, it, beforeEach, afterEach, mock } from 'node:test';
 import * as assert from 'node:assert/strict';
 import { DigitApiClient } from '../client/DigitApiClient.js';
