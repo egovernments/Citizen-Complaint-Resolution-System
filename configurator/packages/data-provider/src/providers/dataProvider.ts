@@ -580,8 +580,12 @@ async function mdmsSearchAllRows(client: DigitApiClient, tenant: string, schema:
     const page = await client.mdmsSearch(tenant, schema, { limit: mdmsSearchAllBatchSize, offset, ...criteria });
     if (page.length === 0) break;
     for (const record of page) {
-      if (seen.has(record.uniqueIdentifier)) continue;
-      seen.add(record.uniqueIdentifier);
+      // ours (nightly 2026-10-14): a union read at a state root (ccrs-compat #941 countyStates) answers the state's row
+      // and a county's row of the same uniqueIdentifier; mdmsCount counts both, so the dedupe key is tenant + id (a
+      // uid-only key dropped one of each and the guard below refused the whole list: "retrieved 31 of 34").
+      const key = `${record.tenantId ?? ''}|${record.uniqueIdentifier}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
       all.push(record);
     }
     offset += page.length;

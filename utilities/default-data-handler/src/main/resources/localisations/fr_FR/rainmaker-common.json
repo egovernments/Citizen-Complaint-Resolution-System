@@ -1666,5 +1666,23 @@
         "message": "Bomet",
         "module": "rainmaker-common",
         "locale": "fr_FR"
+    },
+    {
+        "code": "CS_HOME_HEADER",
+        "message": "Tous les services",
+        "module": "rainmaker-common",
+        "locale": "fr_FR"
+    },
+    {
+        "code": "CS_HOME_NO_SERVICES_AVAILABLE",
+        "message": "Aucun service disponible.",
+        "module": "rainmaker-common",
+        "locale": "fr_FR"
+    },
+    {
+        "code": "CORE_COMMON_NAVIGATION",
+        "message": "Navigation",
+        "module": "rainmaker-common",
+        "locale": "fr_FR"
     }
 ]

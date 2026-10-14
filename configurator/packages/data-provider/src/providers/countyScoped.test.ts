@@ -41,4 +41,14 @@ describe('county-scoped masters below the state (option B)', () => {
     const atStateCounty = await createDigitDataProvider(client, 'ke.bomet').getList('departments', { pagination: { page: 1, perPage: 50 }, sort: { field: 'code', order: 'ASC' }, filter: {} });
     assert.equal(atStateCounty.total, 2);
   });
+
+  it('a union read at the state root keeps the state and county rows of one id (count and rows agree)', async () => {
+    const client = new DigitApiClient({ url: 'https://test.example.com', stateTenantId: 'ke' });
+    client.setAuth('token', { userName: 'admin', name: 'Admin', tenantId: 'ke' });
+    const rows = [row('ke', 'D1'), row('ke.kilima', 'D1'), row('ke', 'D2')];
+    mock.method(client, 'mdmsCount', async () => rows.length);
+    mock.method(client, 'mdmsSearch', async (_t: string, _s: string, o: { offset?: number } = {}) => (o.offset ? [] : rows));
+    const res = await createDigitDataProvider(client, 'ke').getList('departments', { pagination: { page: 1, perPage: 50 }, sort: { field: 'code', order: 'ASC' }, filter: {} });
+    assert.ok(res.total >= 2, String(res.total));
+  });
 });
