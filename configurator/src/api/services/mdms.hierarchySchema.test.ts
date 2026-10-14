@@ -73,6 +73,15 @@ describe('getRecordedHierarchyType', () => {
     expect(post.mock.calls[0][1].MdmsCriteria).toMatchObject({ tenantId: 'ke.bomet', schemaCode: SCHEMA });
   });
 
+  it("prefers the city's own row to the one it inherits from the state, whichever comes first", async () => {
+    const own = { tenantId: 'ke.bomet', schemaCode: SCHEMA, isActive: true, data: { moduleName: 'CMS', hierarchy: 'BOMET-Hierarchy' } };
+    const state = { tenantId: 'ke', schemaCode: SCHEMA, isActive: true, data: { moduleName: 'CMS', hierarchy: 'ADMIN' } };
+    post.mockResolvedValueOnce({ mdms: [state, own] }).mockResolvedValueOnce({ mdms: [own, state] });
+
+    expect(await mdmsService.getRecordedHierarchyType('ke.bomet')).toBe('BOMET-Hierarchy');
+    expect(await mdmsService.getRecordedHierarchyType('ke.bomet')).toBe('BOMET-Hierarchy');
+  });
+
   it('ignores HRMS and soft-deleted rows', async () => {
     post.mockResolvedValueOnce({
       mdms: [

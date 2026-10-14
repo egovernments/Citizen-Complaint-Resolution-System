@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { BulkImportPanel, triggerDownload, type BulkRow, type BulkColumn } from '@/admin/bulk/BulkImportPanel';
 import { parseEmployeeExcel } from '@/utils/excelParser';
 import { hrmsService, mdmsService, boundaryService } from '@/api';
-import { pickDefaultHierarchy } from '@/api/services/boundary';
+import { loadTenantHierarchies } from '@/api/services/tenantHierarchy';
 import type {
   EmployeeExcelRow,
   Employee,
@@ -128,16 +128,15 @@ export function EmployeeBulkImport() {
     async function load() {
       setRefsLoading(true);
       try {
-        const [hierarchies, recordedHierarchy] = await Promise.all([
-          boundaryService.getHierarchies(tenantId).catch(() => []),
-          mdmsService.getRecordedHierarchyType(tenantId).catch(() => undefined),
-        ]);
-        const hierarchyType = pickDefaultHierarchy(hierarchies, recordedHierarchy)?.hierarchyType;
+        // Only the boundaries wait for the hierarchy walk.
+        const boundariesInDefaultHierarchy = loadTenantHierarchies(tenantId).then(({ hierarchyType }) =>
+          boundaryService.searchBoundaries(tenantId, hierarchyType ? { hierarchyType } : undefined),
+        );
 
         const [depts, desigs, bounds, fetchedRoles, mobile] = await Promise.all([
           mdmsService.getDepartments(tenantId),
           mdmsService.getDesignations(tenantId),
-          boundaryService.searchBoundaries(tenantId, hierarchyType ? { hierarchyType } : undefined),
+          boundariesInDefaultHierarchy,
           mdmsService.getRoles(tenantId).catch(() => [] as typeof roles),
           mdmsService.getMobileValidation(tenantId).catch(() => null),
         ]);

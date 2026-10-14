@@ -8,7 +8,7 @@ vi.mock('../client', () => ({
   },
 }));
 
-import { boundaryService, pickDefaultHierarchy } from './boundary';
+import { boundaryService, getConfiguredHierarchyType, pickDefaultHierarchy } from './boundary';
 import type { Boundary, BoundaryHierarchy } from '../types';
 
 describe('boundaryService.flattenBoundaries', () => {
@@ -51,7 +51,11 @@ const searchedOffsets = () =>
   post.mock.calls.map(([, body]) => body.BoundaryTypeHierarchySearchCriteria as { tenantId: string; limit: number; offset: number });
 
 describe('boundaryService.getHierarchies', () => {
-  beforeEach(() => post.mockReset());
+  beforeEach(() => {
+    post.mockReset();
+    // Past the pages a test lays out, the service has nothing more to return.
+    post.mockResolvedValue({ BoundaryHierarchy: [] });
+  });
 
   // #1915: boundary-service lists newest first, so a tenant the test suite has
   // run against has 300+ PW_* stubs ahead of ADMIN. One page never reached it.
@@ -69,16 +73,31 @@ describe('boundaryService.getHierarchies', () => {
       { tenantId: 'ke', limit: 100, offset: 0 },
       { tenantId: 'ke', limit: 100, offset: 100 },
       { tenantId: 'ke', limit: 100, offset: 200 },
+      { tenantId: 'ke', limit: 100, offset: 220 },
     ]);
   });
 
-  it('asks for one more page after an exactly full one and stops on the empty reply', async () => {
-    post
-      .mockResolvedValueOnce({ BoundaryHierarchy: stubs(0, 100) })
-      .mockResolvedValueOnce({ BoundaryHierarchy: [] });
+  it('stops only on an empty reply, after an exactly full page too', async () => {
+    post.mockResolvedValueOnce({ BoundaryHierarchy: stubs(0, 100) });
 
     expect(await boundaryService.getHierarchies('ke')).toHaveLength(100);
     expect(post).toHaveBeenCalledTimes(2);
+  });
+
+  // boundary.max.default.limit can sit below the 100 asked for; a page cut
+  // short by it is not the last page.
+  it('keeps walking when the service clamps each page below the size asked for', async () => {
+    const all = [...stubs(0, 219), hierarchy('ADMIN')];
+    post.mockImplementation(async (_url: string, body: { BoundaryTypeHierarchySearchCriteria: { limit: number; offset: number } }) => {
+      const { limit, offset } = body.BoundaryTypeHierarchySearchCriteria;
+      return { BoundaryHierarchy: all.slice(offset, offset + Math.min(limit, 50)) };
+    });
+
+    const hierarchies = await boundaryService.getHierarchies('ke');
+
+    expect(hierarchies).toHaveLength(220);
+    expect(hierarchies.map((h) => h.hierarchyType)).toContain('ADMIN');
+    expect(searchedOffsets().map((c) => c.offset)).toEqual([0, 50, 100, 150, 200, 220]);
   });
 
   it('lists a hierarchy once when a create during the walk repeats it on the next page', async () => {
@@ -93,7 +112,7 @@ describe('boundaryService.getHierarchies', () => {
     expect(new Set(types).size).toBe(101);
   });
 
-  it('refuses to return a partial list when the service never sends a short page', async () => {
+  it('refuses to return a partial list when the service never sends an empty page', async () => {
     post.mockResolvedValue({ BoundaryHierarchy: stubs(0, 100) });
 
     await expect(boundaryService.getHierarchies('ke')).rejects.toThrow(/partial list/);
@@ -121,6 +140,26 @@ describe('pickDefaultHierarchy', () => {
     expect(pickDefaultHierarchy(listed, 'ZONES')?.hierarchyType).toBe('ZONES');
   });
 
+  // digit-ui and PGR fall back to globalConfigs HIERARCHY_TYPE, not ADMIN.
+  it("falls back to the deployment's HIERARCHY_TYPE before ADMIN", () => {
+    const bomet = [hierarchy('PW_NEW', 3000), hierarchy('BOMET-Hierarchy', 2000), hierarchy('ADMIN', 1000)];
+
+    expect(pickDefaultHierarchy(bomet, undefined, 'BOMET-Hierarchy')?.hierarchyType).toBe('BOMET-Hierarchy');
+    expect(pickDefaultHierarchy(bomet, 'ADMIN', 'BOMET-Hierarchy')?.hierarchyType).toBe('ADMIN');
+    expect(pickDefaultHierarchy(listed, undefined, 'BOMET-Hierarchy')?.hierarchyType).toBe('ADMIN');
+  });
+
+  it('reads HIERARCHY_TYPE from the served globalConfigs when not given one', () => {
+    const bomet = [hierarchy('BOMET-Hierarchy', 2000), hierarchy('ADMIN', 1000)];
+    const w = window as unknown as { globalConfigs?: { getConfig: (k: string) => unknown } };
+    w.globalConfigs = { getConfig: (k) => (k === 'HIERARCHY_TYPE' ? 'BOMET-Hierarchy' : undefined) };
+    try {
+      expect(pickDefaultHierarchy(bomet)?.hierarchyType).toBe('BOMET-Hierarchy');
+    } finally {
+      delete w.globalConfigs;
+    }
+  });
+
   it('falls back to ADMIN, not the newest, when nothing is recorded', () => {
     expect(pickDefaultHierarchy(listed)?.hierarchyType).toBe('ADMIN');
   });
@@ -142,5 +181,25 @@ describe('pickDefaultHierarchy', () => {
 
   it('returns nothing for a tenant with no hierarchies', () => {
     expect(pickDefaultHierarchy([], 'ADMIN')).toBeUndefined();
+  });
+});
+
+describe('getConfiguredHierarchyType', () => {
+  const w = window as unknown as { globalConfigs?: { getConfig: (k: string) => unknown } };
+  beforeEach(() => {
+    delete w.globalConfigs;
+  });
+
+  it("is ADMIN, DIGIT's default, without globalConfigs or with a blank value", () => {
+    expect(getConfiguredHierarchyType()).toBe('ADMIN');
+    w.globalConfigs = { getConfig: () => '' };
+    expect(getConfiguredHierarchyType()).toBe('ADMIN');
+    delete w.globalConfigs;
+  });
+
+  it('is the HIERARCHY_TYPE the deployment configured', () => {
+    w.globalConfigs = { getConfig: (k) => (k === 'HIERARCHY_TYPE' ? 'BOMET-Hierarchy' : undefined) };
+    expect(getConfiguredHierarchyType()).toBe('BOMET-Hierarchy');
+    delete w.globalConfigs;
   });
 });

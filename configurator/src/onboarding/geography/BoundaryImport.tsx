@@ -27,7 +27,8 @@ import { Header, SubHeader } from '@/components/digit/Header';
 import { LabelFieldPair, CardLabel, Field } from '@/components/digit/LabelFieldPair';
 import { SubmitBar } from '@/components/digit/SubmitBar';
 import { apiClient, boundaryService, localizationService, mdmsService, ApiClientError } from '@/api';
-import { WORKSPACE_HIERARCHY_TYPE, pickDefaultHierarchy } from '@/api/services/boundary';
+import { WORKSPACE_HIERARCHY_TYPE, getConfiguredHierarchyType } from '@/api/services/boundary';
+import { loadTenantHierarchies } from '@/api/services/tenantHierarchy';
 import { reportStepError, trackStepAction } from '../telemetry';
 import { labelLocales } from '../labelLocales';
 import { parseExcelFile, parseBoundaryExcel } from '@/utils/excelParser';
@@ -138,24 +139,9 @@ async function serverMessage(res: Response): Promise<string | undefined> {
   return typeof m === 'string' ? m : Array.isArray(m) ? m.join('; ') : undefined;
 }
 
-// Hierarchy type the OSM onboarding path writes. Deployment-agnostic: reads the
-// configured HIERARCHY_TYPE from the served globalConfigs (ansible renders it
-// from host_vars `hierarchy_type`) so the hierarchy created here matches what
-// the citizen/PGR UI later resolves boundaries against — otherwise the citizen
-// complaint form's boundary picker 400s (HIERARCHY_DEFINITION_DOES_NOT_EXIST).
-// Falls back to DIGIT's default 'ADMIN' when globalConfigs isn't present, so a
-// deployment that doesn't override HIERARCHY_TYPE keeps the previous behaviour.
-// globalConfigs.js is injected as a <script> before this bundle, so the read
-// resolves at module-eval time in the built app.
-function getConfiguredHierarchyType(): string {
-  if (typeof window !== 'undefined') {
-    const gc = (
-      window as unknown as { globalConfigs?: { getConfig?: (k: string) => unknown } }
-    ).globalConfigs?.getConfig?.('HIERARCHY_TYPE');
-    if (typeof gc === 'string' && gc) return gc;
-  }
-  return 'ADMIN';
-}
+// Hierarchy type the OSM onboarding path writes: the deployment's configured
+// HIERARCHY_TYPE, so the hierarchy created here matches what the citizen/PGR UI
+// later resolves boundaries against (see getConfiguredHierarchyType).
 const OSM_HIERARCHY_TYPE = getConfiguredHierarchyType();
 
 // Post-create pipeline shared by BOTH paths after createBoundaries succeeds:
@@ -327,6 +313,9 @@ export default function BoundaryImport({
   const [hierarchyLevels, setHierarchyLevels] = useState(['Country', 'State', 'City', 'Ward']);
   const [hierarchyType, setHierarchyType] = useState('ADMIN');
   const [loadingHierarchies, setLoadingHierarchies] = useState(false);
+  // Why the hierarchy list couldn't be read. Kept apart from an empty list so a
+  // failed walk isn't shown as "no hierarchies, create one".
+  const [hierarchiesError, setHierarchiesError] = useState<string | null>(null);
 
   // Boundary data state (Excel path)
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
@@ -454,18 +443,19 @@ export default function BoundaryImport({
   const fetchHierarchies = async () => {
     setLoadingHierarchies(true);
     try {
-      const [hierarchies, recordedHierarchy] = await Promise.all([
-        boundaryService.getHierarchies(boundaryTenant),
-        mdmsService.getRecordedHierarchyType(boundaryTenant).catch(() => undefined),
-      ]);
+      const { hierarchies, hierarchyType: preferred, listError } = await loadTenantHierarchies(boundaryTenant);
+      if (listError) {
+        // Keep whatever was listed before; the select step offers a retry.
+        console.error('Failed to fetch hierarchies:', listError);
+        setHierarchiesError(listError.message);
+        return;
+      }
+      setHierarchiesError(null);
       setExistingHierarchies(hierarchies);
-      const preselected = pickDefaultHierarchy(hierarchies, recordedHierarchy);
+      const preselected = hierarchies.find((h) => h.hierarchyType === preferred);
       if (preselected) {
         setSelectedHierarchy(preselected);
       }
-    } catch (err) {
-      console.error('Failed to fetch hierarchies:', err);
-      // Don't show error - just means no hierarchies exist yet
     } finally {
       setLoadingHierarchies(false);
     }
@@ -1305,8 +1295,24 @@ export default function BoundaryImport({
             </Button>
           </div>
 
+          {hierarchiesError && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
+                <span>
+                  {t('geography.excel.hierarchies_load_failed', 'Couldn’t load your hierarchies. %{reason}', {
+                    reason: hierarchiesError,
+                  })}
+                </span>
+                <Button variant="outline" size="sm" onClick={fetchHierarchies} disabled={loadingHierarchies}>
+                  {t('common.try_again', 'Try again')}
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
+
           {existingHierarchies.length === 0 ? (
-            <div className="text-center py-8">
+            // A list that failed to load is not an empty one: don't steer to "create".
+            !hierarchiesError && <div className="text-center py-8">
               <MapPin className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
               <p className="text-muted-foreground mb-4">{t('geography.excel.none_found', 'No hierarchies found for this tenant.')}</p>
               <Button
