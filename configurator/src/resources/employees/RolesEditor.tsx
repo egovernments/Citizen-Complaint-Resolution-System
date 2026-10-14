@@ -124,13 +124,15 @@ export function RolesEditor({
             key={role.code}
             className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-primary/10 text-primary text-xs font-medium"
           >
-            {/* ours (cfgreview F17, #1563): the role's name first, its code after */}
-            <span className="font-semibold">{role.name || role.code}</span>
-            {role.name && role.name !== role.code && <span className="opacity-80">{role.code}</span>}
+            {/* ours (cfgreview F17, #1563): the role's name shows first, its code after. The code stays first in the DOM
+                (CSS order), so the accessible name still starts with the code that scripts and screen-reader users search. */}
+            {role.name && role.name !== role.code
+              ? <><span className="order-2 opacity-80">{role.code}</span><span className="order-1 font-semibold">{role.name}</span></>
+              : <span className="font-semibold">{role.code}</span>}
             <button
               type="button"
               onClick={() => removeRole(role.code)}
-              aria-label={`remove ${role.name || role.code}`}
+              aria-label={`remove ${role.code}`}
               className="hover:text-destructive"
             >
               <X className="w-3 h-3" />
@@ -193,8 +195,9 @@ export function RolesEditor({
                   (idx === activeIdx ? 'bg-accent text-accent-foreground' : '')
                 }
               >
-                <span className="font-medium">{opt.name || opt.code}</span>
-                {opt.name && opt.name !== opt.code && <span className="ml-2 text-muted-foreground">{opt.code}</span>}
+                {opt.name && opt.name !== opt.code
+                  ? <span className="flex items-baseline gap-2"><span className="order-2 text-muted-foreground">{opt.code}</span><span className="order-1 font-medium">{opt.name}</span></span>
+                  : <span className="font-medium">{opt.code}</span>}
               </li>
             ))
           )}

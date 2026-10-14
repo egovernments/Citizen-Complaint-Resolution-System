@@ -17,17 +17,20 @@ vi.mock('@/admin/hrms/useRolesLookup', () => ({
 import { RolesEditor } from './RolesEditor';
 
 describe('RolesEditor names', () => {
-  it('shows a held role by name, then its code', () => {
+  it('shows a held role by name, then its code (the code stays first for the accessible name)', () => {
     render(<RolesEditor tenantId="ke.bomet" />);
     const chip = screen.getByText('Grievance Routing Officer');
-    expect(chip.className).toContain('font-semibold');
-    expect(screen.getByLabelText('remove Grievance Routing Officer')).toBeInTheDocument();
+    expect(chip.className).toContain('order-1');
+    expect(screen.getByText('GRO').className).toContain('order-2');
+    expect(screen.getByLabelText('remove GRO')).toBeInTheDocument();
   });
   it('offers roles by name (code muted), a role without a name once', () => {
     render(<RolesEditor tenantId="ke.bomet" />);
     fireEvent.focus(screen.getByRole('combobox'));
-    expect(screen.getByText('Last Mile Employee').className).toContain('font-medium');
-    expect(screen.getByText('PGR_LME').className).toContain('text-muted-foreground');
+    expect(screen.getByText('Last Mile Employee').className).toContain('order-1');
+    expect(screen.getByText('PGR_LME').className).toContain('order-2');
+    // scripts and screen readers find an option by its code: the accessible name starts with it
+    expect(screen.getByRole('option', { name: /^PGR_LME/ })).toBeTruthy();
     expect(screen.getAllByText('X_ROLE')).toHaveLength(1);
   });
 });
