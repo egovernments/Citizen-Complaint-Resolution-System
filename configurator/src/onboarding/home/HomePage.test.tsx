@@ -60,7 +60,7 @@ describe('the Start here card', () => {
 describe('the welcome', () => {
   it('opens by itself the first time, and not again once closed', () => {
     const { unmount } = page();
-    expect(screen.getByRole('dialog')).toHaveTextContent('Welcome to the Complaint Management System');
+    expect(screen.getByRole('dialog')).toHaveTextContent('Complaint Management System');
     fireEvent.click(screen.getByRole('button', { name: /close/i }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     unmount();
@@ -68,14 +68,26 @@ describe('the welcome', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it("opens from What's onboarding? and steps through every section", () => {
+  it('opens from Take a tour and steps through all six pages, in product\'s order', () => {
     window.localStorage.setItem('ccrs-onboarding-welcome-seen:acme', '1');
     page();
-    fireEvent.click(screen.getByRole('button', { name: /what.s onboarding/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Take a tour' }));
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByRole('button', { name: /previous/i })).toBeDisabled();
-    for (let i = 0; i < 5; i++) fireEvent.click(within(dialog).getByRole('button', { name: /^next$/i }));
-    expect(dialog).toHaveTextContent('What people can report');
+    const titles = [within(dialog).getByRole('heading').textContent];
+    for (let i = 0; i < 5; i++) {
+      fireEvent.click(within(dialog).getByRole('button', { name: /^next$/i }));
+      titles.push(within(dialog).getByRole('heading').textContent);
+    }
+    expect(titles).toEqual([
+      'Complaint Management System',
+      'Complaints Template',
+      'Branding',
+      'Geography',
+      'Departments and Employees',
+      'You can come back to this',
+    ]);
+    expect(dialog).toHaveTextContent('The ‘Take a tour’ button sits at the top-right of your Home screen.');
     fireEvent.click(within(dialog).getByRole('button', { name: /get started/i }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
