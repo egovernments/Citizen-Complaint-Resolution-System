@@ -1,4 +1,5 @@
 import AccountPage from '@/identity/AccountPage';
+import CheckAccess from './access/CheckAccess';
 import MembersPage from '@/identity/MembersPage';
 import WorkspacePage from '@/identity/WorkspacePage';
 import { completedSteps, searchWorkspace, updateWorkspace, WORKSPACE_STEPS } from '@/identity/workspace';
@@ -55,6 +56,8 @@ import { NotificationConfigure } from '@/resources/notification-configure/Notifi
 import { AnalyticsProvidersEditor } from '@/admin/analytics/AnalyticsProvidersEditor';
 import { EscalationPolicyEditor } from '@/admin/escalation';
 import PgrDashboard from './pages/PgrDashboard';
+import RoleEditor from './access/RoleEditor';
+import PolicyRows from './access/PolicyRows';
 import OrgChartPage from './pages/org-chart/OrgChartPage';
 import PublicDashboardConfigure from './resources/public-dashboard/PublicDashboardConfigure';
 import { getGenericMdmsResources, getDataProvider, getAuthProvider, configureDigitClient, i18nProvider, DigitApiClient, isReadOnlyResource } from '@/providers/bridge';
@@ -215,12 +218,18 @@ function ManagementAdminResources() {
               the parent tenant. */}
           <Route path="/analytics-providers" element={<AnalyticsProvidersEditor />} />
           <Route path="/advanced" element={<AdvancedPage />} />
+          {/* Access: the Role editor writes the role, its role-actions and its branch of the complaint-search
+              action's scope / field rules; new roles at /access/roles/new */}
+          <Route path="/access/roles/:code" element={<RoleEditor />} />
+          <Route path="/access/roles/:code/rows" element={<PolicyRows />} />
           <Route
             path="/pgr-dashboard"
             element={LEGACY_PGR_DASHBOARD_ENABLED ? <PgrDashboard /> : <Navigate to="/manage" replace />}
           />
           <Route path="/public-dashboard" element={<PublicDashboardConfigure />} />
           <Route path="/org-chart" element={<OrgChartPage />} />
+          {/* Access: may this person do this, and why (read-only explain) */}
+          <Route path="/access/check" element={<CheckAccess />} />
           <Route path="/employees/bulk" element={<EmployeeBulkImport />} />
           <Route path="/departments/bulk" element={<DepartmentBulkImport />} />
           <Route path="/designations/bulk" element={<DesignationBulkImport />} />

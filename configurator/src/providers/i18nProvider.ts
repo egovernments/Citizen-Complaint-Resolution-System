@@ -61,6 +61,7 @@ const customEnglishMessages: TranslationMessages = {
       hierarchies: 'Hierarchies',
       map_config: 'Map Configuration',
       analytics_providers: 'Analytics Providers',
+      access_check: 'Check access',
       complaint_management: 'Complaint Management',
       complaint_hierarchies: 'Complaint Hierarchies',
       complaint_types: 'Complaint Categories',
