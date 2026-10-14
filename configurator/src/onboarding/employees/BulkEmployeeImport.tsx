@@ -34,6 +34,7 @@ import {
   hrmsService,
   ApiClientError,
 } from '@/api';
+import { loadTenantHierarchies } from '@/api/services/tenantHierarchy';
 import { parseExcelFile, parseEmployeeExcel } from '@/utils/excelParser';
 import { downloadEmployeeTemplate } from '@/utils/templateBuilder';
 import { reportStepError, trackStepAction } from '../telemetry';
@@ -106,18 +107,20 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
       setLoadingRefs(true);
       setRefsError(null);
       try {
-        // Fetch hierarchy type first so boundaries come back with the correct
-        // hierarchyType populated — the boundary-relationships API returns
+        // Boundaries need the hierarchy type first so they come back with the
+        // correct hierarchyType populated — the boundary-relationships API returns
         // hierarchyType=null in its wrapper unless explicitly filtered by it.
-        const hierarchies = await boundaryService.getHierarchies(targetTenant).catch(() => []);
-        const hierarchyType = hierarchies[0]?.hierarchyType;
+        // Nothing else waits for the hierarchy walk.
+        const boundariesInDefaultHierarchy = loadTenantHierarchies(targetTenant).then(({ hierarchyType }) =>
+          // No operational hierarchy yet: an unfiltered search would return the
+          // reserved WORKSPACE root, so treat it as no boundaries.
+          hierarchyType ? boundaryService.searchBoundaries(targetTenant, { hierarchyType }) : ([] as Boundary[]),
+        );
 
         const [depts, desigs, bounds, fetchedRoles, fetchedMobileRules] = await Promise.all([
           mdmsService.getDepartments(targetTenant),
           mdmsService.getDesignations(targetTenant),
-          // No operational hierarchy yet: an unfiltered search would return the
-          // reserved WORKSPACE root, so treat it as no boundaries.
-          hierarchyType ? boundaryService.searchBoundaries(targetTenant, { hierarchyType }) : Promise.resolve([]),
+          boundariesInDefaultHierarchy,
           mdmsService.getRoles(targetTenant).catch(() => [] as typeof roles),
           mdmsService.getMobileValidation(targetTenant).catch(() => null),
         ]);

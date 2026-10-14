@@ -193,6 +193,7 @@ export interface BoundaryHierarchy {
   tenantId: string;
   hierarchyType: string;
   boundaryHierarchy: BoundaryLevel[];
+  auditDetails?: { createdBy: string; createdTime: number; lastModifiedBy: string; lastModifiedTime: number };
 }
 
 export interface BoundaryLevel {

@@ -8286,6 +8286,12 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.geography.excel.hierarchies_load_failed",
+    "message": "Couldn’t load your hierarchies. %{reason}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.geography.excel.hierarchy_and_levels",
     "message": "Hierarchy: %{hierarchy} • Levels: %{levels}",
     "module": "configurator-ui",
