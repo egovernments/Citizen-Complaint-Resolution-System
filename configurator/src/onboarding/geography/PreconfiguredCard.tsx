@@ -11,9 +11,11 @@ import {
   type OfficialSet,
 } from '@/utils/officialBoundaries';
 import { ConfidenceTag } from './OfficialConfidence';
+import { useOnboardingT } from '../i18n';
 
 /** "Confidence: Medium (i)" — the (i) opens what the label measures and why this set got it. */
 function Confidence({ set }: { set: OfficialSet }) {
+  const t = useOnboardingT();
   const [open, setOpen] = useState(false);
   const tipId = useId();
   const level = confidenceLevel(set);
@@ -21,11 +23,11 @@ function Confidence({ set }: { set: OfficialSet }) {
   const headline = confidenceHeadline(set);
   return (
     <div className="relative flex items-center gap-2" data-testid="preconfigured-confidence">
-      <span className="text-[13px] text-muted-foreground">Confidence:</span>
+      <span className="text-[13px] text-muted-foreground">{t('geography.confidence_prefix', 'Confidence:')}</span>
       <ConfidenceTag set={set} short />
       <button
         type="button"
-        aria-label="What confidence means"
+        aria-label={t('geography.confidence_explain', 'What confidence means')}
         aria-describedby={open ? tipId : undefined}
         aria-expanded={open}
         // A click or tap only ever opens it: a tap fires mouseenter, focus and
@@ -49,12 +51,19 @@ function Confidence({ set }: { set: OfficialSet }) {
           role="tooltip"
           className="absolute bottom-[calc(100%+8px)] left-0 z-10 w-[min(310px,80vw)] space-y-2 rounded-lg bg-foreground px-3 py-3 text-xs leading-[1.55] text-background shadow-lg"
         >
-          <p>Confidence shows how far a second, independently drawn boundary set confirms these boundaries.</p>
-          <p>{CONFIDENCE_HINT[level]}</p>
+          <p>
+            {t(
+              'geography.confidence_tip',
+              'Confidence shows how far a second, independently drawn boundary set confirms these boundaries.',
+            )}
+          </p>
+          <p>{t(`geography.confidence_hint.${level}`, CONFIDENCE_HINT[level])}</p>
           {headline && <p data-testid="preconfigured-headline">{headline}</p>}
           <p>
-            If you find that key boundaries are not present in the preconfigured set, kindly upload them using the
-            “Upload from Excel” option.
+            {t(
+              'geography.confidence_missing',
+              'If you find that key boundaries are not present in the preconfigured set, kindly upload them using the “Upload from Excel” option.',
+            )}
           </p>
         </div>
       )}
@@ -79,50 +88,58 @@ export function PreconfiguredCard({
   onUse: () => void;
   onRetry: () => void;
 }) {
+  const t = useOnboardingT();
   return (
     <div className="flex flex-col rounded-lg border border-border bg-card p-4" data-testid="preconfigured-card">
       <div className="w-10 h-10 rounded-md bg-primary/10 text-primary flex items-center justify-center">
         <LayoutGrid className="w-5 h-5" />
       </div>
-      <h4 className="mt-3 text-base font-medium text-foreground">Preconfigured boundaries</h4>
+      <h4 className="mt-3 text-base font-medium text-foreground">{t('geography.preconfigured_title', 'Preconfigured boundaries')}</h4>
 
       <div className="mt-3 flex flex-1 flex-col gap-3">
         {state.status === 'loading' && (
           <p className="text-sm leading-5 text-muted-foreground" aria-busy="true">
-            Checking which boundaries we hold for your country…
+            {t('geography.preconfigured_checking', 'Checking which boundaries we hold for your country…')}
           </p>
         )}
         {state.status === 'unavailable' && (
           <p className="text-xs leading-5 text-muted-foreground" data-testid="option-unavailable">
-            Preconfigured boundaries aren't available on this deployment. Fetch or upload them instead.
+            {t('geography.preconfigured_unavailable', 'Preconfigured boundaries aren\'t available on this deployment. Fetch or upload them instead.')}
           </p>
         )}
         {state.status === 'unknown-country' && (
           <p className="text-xs leading-5 text-muted-foreground" data-testid="option-unavailable">
-            This workspace has no country recorded from signup, so we can't tell which boundaries to offer. Fetch or upload
-            them instead.
+            {t(
+              'geography.preconfigured_no_country',
+              'This workspace has no country recorded from signup, so we can\'t tell which boundaries to offer. Fetch or upload them instead.',
+            )}
           </p>
         )}
         {state.status === 'none' && (
           <p className="text-xs leading-5 text-muted-foreground" data-testid="option-unavailable">
-            We don't hold preconfigured boundaries for {countryName(state.country)} yet. Fetch or upload them
-            instead.
+            {t('geography.preconfigured_none', 'We don\'t hold preconfigured boundaries for %{country} yet. Fetch or upload them instead.', {
+              country: countryName(state.country),
+            })}
           </p>
         )}
         {state.status === 'error' && (
           <div className="space-y-2" data-testid="preconfigured-error">
             <p className="text-xs leading-5 text-muted-foreground">
-              We hold official boundaries for {countryName(state.country)}, but couldn't load them just now.
+              {t('geography.preconfigured_error', 'We hold official boundaries for %{country}, but couldn\'t load them just now.', {
+                country: countryName(state.country),
+              })}
             </p>
             <Button variant="outline" size="sm" onClick={onRetry} className="h-8 px-3">
-              Try again
+              {t('common.try_again', 'Try again')}
             </Button>
           </div>
         )}
         {state.status === 'ready' && (
           <>
             <div className="rounded-md border border-border bg-muted/40 px-3.5 py-3">
-              <p className="mb-1.5 text-xs font-bold uppercase tracking-[0.04em] text-muted-foreground">Boundaries detected</p>
+              <p className="mb-1.5 text-xs font-bold uppercase tracking-[0.04em] text-muted-foreground">
+                {t('geography.preconfigured_detected', 'Boundaries detected')}
+              </p>
               <p className="mb-1 text-sm font-bold text-foreground" data-testid="preconfigured-country">
                 {countryName(state.set.country)}
               </p>
@@ -131,7 +148,7 @@ export function PreconfiguredCard({
               </p>
             </div>
             <Confidence set={state.set} />
-            <p className="text-xs text-muted-foreground">Source: {sourceLine(state.set)}</p>
+            <p className="text-xs text-muted-foreground">{t('geography.source_line', 'Source: %{source}', { source: sourceLine(state.set) })}</p>
           </>
         )}
       </div>
@@ -139,7 +156,7 @@ export function PreconfiguredCard({
       {state.status === 'ready' && (
         <div className="mt-4">
           <Button variant="outline" size="sm" onClick={onUse} className="h-9 gap-1.5 px-3">
-            Use these boundaries
+            {t('geography.preconfigured_use', 'Use these boundaries')}
             <ArrowRight className="w-4 h-4" />
           </Button>
         </div>

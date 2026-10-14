@@ -32,7 +32,9 @@ export function withIdentityMembers(base: DataProvider, tenantId: string): DataP
       const user = { ...params.data.user };
       for (const key of ['emailId', 'userName', 'uuid', 'id', 'tenantId']) user[key] = current.user?.[key];
       delete user.password;
-      if (params.data.isActive === false) {
+      // only a deactivation goes through deactivateAndRemove; editing an employee who is already inactive is an ordinary
+      // update (it skipped the write, or - the form showing Employed - re-activated the person)
+      if (params.data.isActive === false && current.isActive !== false) {
         // The Edit form appends the picked reason to deactivationDetails; record that one, not OTHERS.
         const details = params.data.deactivationDetails as Array<{ reasonForDeactivation?: unknown }> | undefined;
         const picked = Array.isArray(details) ? details[details.length - 1]?.reasonForDeactivation : undefined;

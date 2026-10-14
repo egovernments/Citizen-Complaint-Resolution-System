@@ -78,11 +78,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - id: tag
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REPOSITORY_ID: ${{ github.repository_id }}
         run: |
           BRANCH=$(printf '%s' "${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}" | tr '/:@' '-' | sed 's/[^A-Za-z0-9_.-]/-/g')
           echo "tag=${BRANCH}-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
-          # Pull requests (including forks, which get no registry secrets) never push.
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
+          # Pull requests (including forks, which get no registry secrets) never push, and
+          # neither does any repository but egovernments/Citizen-Complaint-Resolution-System
+          # (numeric id, which survives a rename): a fork holding egovio credentials would
+          # otherwise publish its own master as egovio/turbopass-*:latest. Forks still
+          # build and test.
+          if [ "$EVENT_NAME" = "pull_request" ] || [ "$REPOSITORY_ID" != "1009464192" ]; then
             echo "push=false" >> "$GITHUB_OUTPUT"
           else
             echo "push=true" >> "$GITHUB_OUTPUT"

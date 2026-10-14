@@ -18,7 +18,6 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Search,
-  Settings,
   Database,
   Shield,
   GitBranch,
@@ -42,12 +41,12 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { getGenericMdmsResources, getResourceLabel } from '@/providers/bridge';
 import { useMastersCapability } from '@/hooks/useMastersCapability';
-import { LEGACY_PGR_DASHBOARD_ENABLED, ONBOARDING_GATE_ENABLED } from '@/config/featureFlags';
+import { LEGACY_PGR_DASHBOARD_ENABLED } from '@/config/featureFlags';
 import { NavRow, NavExternalRow, SectionLabel, ActiveBar, RailBackdrop, RailCloseButton, RailMenuButton, RailPoweredBy } from '@/components/layout/rail';
 import { railClasses, rowTone } from '@/components/layout/railStyles';
 import { useRailDrawer } from '@/components/layout/useRailDrawer';
 import { AccountMenu, HelpButton, LocaleSwitcher, ThemeSwitcher } from '@/components/layout/HeaderControls';
-import { isOnboardingComplete, resumePath } from '@/onboarding/progress';
+import { isOnboardingComplete } from '@/onboarding/progress';
 import { complaintDeskUrl, useWorkspaceSlug } from '@/identity/workspaceSlug';
 
 /** Sidebar navigation groups — names are i18n keys resolved at render time */
@@ -105,6 +104,7 @@ const navGroups = [
       { id: 'complaint-hierarchies', nameKey: 'app.nav.complaint_hierarchies', path: '/manage/complaint-hierarchies', icon: GitBranch },
       { id: 'complaint-hierarchy', nameKey: 'app.nav.complaint_types', path: '/manage/complaint-hierarchy', icon: AlertTriangle },
       { id: 'complaints', nameKey: 'app.nav.complaints', path: '/manage/complaints', icon: MessageSquare },
+      { id: 'pgr-escalation', nameKey: 'app.nav.escalation_policy', path: '/manage/escalation-policy', icon: SlidersHorizontal },
       { id: 'localization', nameKey: 'app.nav.localization', path: '/manage/localization', icon: Globe },
     ],
   },
@@ -163,7 +163,7 @@ const advancedResources = Object.keys(getGenericMdmsResources())
   }));
 
 export function DigitLayout({ children }: { children?: ReactNode }) {
-  const { state, logout, setMode, toggleHelp } = useApp();
+  const { state, logout, toggleHelp } = useApp();
 
   const userRoles = state.user?.roles ?? [];
   const navigate = useNavigate();
@@ -230,10 +230,6 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
   const slug = useWorkspaceSlug(state.tenant);
   const deskUrl = isOnboardingComplete(state.completedPhases) ? complaintDeskUrl(state.environment, slug) : null;
 
-  const handleSwitchToOnboarding = () => {
-    setMode('onboarding');
-    navigate(resumePath(state.completedPhases));
-  };
 
   const envName = state.environment.includes('api.egov.theflywheel') || state.environment.includes('chakshu')
     ? 'chakshu-dev'
@@ -431,28 +427,15 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
           )}
         </nav>
 
-        {/* Sidebar footer: the complaint desk once setup is done, the way back
-            to onboarding while switching is allowed (with onboarding compulsory
-            there is nothing to go back to), then "Powered by DIGIT" */}
-        {(deskUrl || !ONBOARDING_GATE_ENABLED) && (
+        {/* Sidebar footer: the complaint desk once setup is done, then "Powered by DIGIT" */}
+        {deskUrl && (
           <div className="border-t border-border py-2">
-            {deskUrl && (
-              <NavExternalRow
-                icon={Inbox}
-                label={translate('app.nav.open_complaint_desk', { _: 'Open complaint desk' })}
-                href={deskUrl}
-                collapsed={sidebarCollapsed}
-              />
-            )}
-            {!ONBOARDING_GATE_ENABLED && (
-              <NavRow
-                icon={Settings}
-                label={translate('app.nav.switch_to_onboarding')}
-                active={false}
-                collapsed={sidebarCollapsed}
-                onClick={handleSwitchToOnboarding}
-              />
-            )}
+            <NavExternalRow
+              icon={Inbox}
+              label={translate('app.nav.open_complaint_desk', { _: 'Open complaint desk' })}
+              href={deskUrl}
+              collapsed={sidebarCollapsed}
+            />
           </div>
         )}
         <RailPoweredBy collapsed={sidebarCollapsed} />

@@ -1,0 +1,26 @@
+[
+    {
+        "code": "HR_DESG_LABEL",
+        "message": "Cargo",
+        "module": "rainmaker-hr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "HR_EMP_ID_LABEL",
+        "message": "ID do funcionário",
+        "module": "rainmaker-hr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "HR_EMP_NAME_LABEL",
+        "message": "Nome do funcionário",
+        "module": "rainmaker-hr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "HR_ROLE_NO_LABEL",
+        "message": "N.º de funções",
+        "module": "rainmaker-hr",
+        "locale": "pt_PT"
+    }
+]

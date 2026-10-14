@@ -6906,6 +6906,18 @@
         "locale": "en_IN"
     },
     {
+        "code": "CS_VOICE_LANGUAGE_HINT",
+        "message": "Speak in the language selected at the top of the page.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_VOICE_LANGUAGE_NOT_SUPPORTED",
+        "message": "Voice input isn't available in this language. Type your complaint instead.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
         "code": "CS_VOICE_FAILED",
         "message": "Voice input stopped unexpectedly. Try again.",
         "module": "rainmaker-pgr",
@@ -7016,6 +7028,348 @@
     {
         "code": "CS_PHOTO_ADD",
         "message": "Add a photo",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_ACTION_ESCALATE",
+        "message": "Escalate Complaint",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_CANNOT_REOPEN_COMPLAINT_PAST_DEADLINE",
+        "message": "The window for reopening this complaint has closed",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_CLOSE_POLYGON_MODE",
+        "message": "Stop drawing",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMMON_COMPLAINT_NOT_SUBMITTED",
+        "message": "Complaint couldn't be submitted",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_CANCELLED",
+        "message": "Cancelled",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_PENDINGATSUPERVISOR",
+        "message": "Pending at Supervisor",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_RESOLVEDBYSUPERVISOR",
+        "message": "Resolved by Supervisor",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMPLAINT_BOUNDARY_LEAF_REQUIRED",
+        "message": "Please pick a Ward — complaints cannot be filed at the County or Sub-County level",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMPLAINT_DETAILS_PIN_LOCATION",
+        "message": "Pin Location",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMPLAINT_RATE_SUBTEXT",
+        "message": "Your rating helps us improve. It only takes a moment.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_FILE_TOO_LARGE",
+        "message": "File size too large, please upload < 5 MB image.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_GEOLOCATION_ERROR",
+        "message": "Unable to fetch current location.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_GEOLOCATION_NOT_SUPPORTED",
+        "message": "This browser can't share your location.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_LOCATE_ME",
+        "message": "Use my current location",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_LOCATION_NOT_FOUND",
+        "message": "Couldn't find that place. Try a different search.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_NO_COMPLAINTS_TITLE",
+        "message": "No complaints yet",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_NO_COMPLAINT_HIERARCHY",
+        "message": "No complaint hierarchy configured for this tenant.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_NO_FAQ_FOUND",
+        "message": "No FAQs available.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_OPEN_IN_GOOGLE_MAPS",
+        "message": "Open in Google Maps",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_RATING_COMMENTS_PLACEHOLDER",
+        "message": "Share anything else you'd like the team to know…",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_REJECTION_DUPLICATE",
+        "message": "Duplicate complaint",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_REJECTION_INSUFFICIENT_INFO",
+        "message": "Insufficient information",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_REJECTION_NOT_PUBLIC_INFRA",
+        "message": "Not on public infrastructure",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_REJECTION_OUTSIDE_JURISDICTION",
+        "message": "Outside Bomet County jurisdiction",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_REJECTION_OUT_OF_SCOPE",
+        "message": "Out of scope for this department",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_REJECTION__DUPLICATE",
+        "message": "Duplicate complaint",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_REJECTION__INSUFFICIENT_INFO",
+        "message": "Insufficient information",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_REJECTION__NOT_PUBLIC_INFRA",
+        "message": "Not public infrastructure",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_REJECTION__OUTSIDE_JURISDICTION",
+        "message": "Outside jurisdiction",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_REJECTION__OUT_OF_SCOPE",
+        "message": "Out of scope",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_SEARCH_ERROR",
+        "message": "Search didn't work. Please try again.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_SELECT_AREA",
+        "message": "Draw an area on the map",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "FAILED_TO_CREATE_COMPLAINT",
+        "message": "Could not file the complaint. Please check the form and try again.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "FAQ_S",
+        "message": "FAQs",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "MYCITY_CODE_LABEL",
+        "message": "City",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "NA",
+        "message": "NA",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_INBOX_TAB_ALL",
+        "message": "All Complaints",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_INBOX_TAB_MY",
+        "message": "My Complaints",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "WF_PGR_ESCALATE",
+        "message": "Escalated",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "WF_PGR_FORWARD",
+        "message": "Forwarded to Supervisor",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "WF_PGR_RESOLVEBYSUPERVISOR",
+        "message": "Resolved by Supervisor",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_FILE_STEP_DETAILS",
+        "message": "Complaint Details",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_FILE_STEP_REVIEW",
+        "message": "Review",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMMON_COMPLAINT_SUBMIT_RETRY",
+        "message": "Something went wrong while submitting your complaint. Please try again.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMMON_LATITUDE_SHORT",
+        "message": "Lat:",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMMON_LONGITUDE_SHORT",
+        "message": "Lng:",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMMON_PENDINGFORASSIGNMENT_AFTERREOPEN",
+        "message": "Pending for assignment",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_FILE_N_PHOTOS",
+        "message": "{count} photos",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_FILE_ONE_PHOTO",
+        "message": "1 photo",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_LOADING_ADDRESS",
+        "message": "Loading address...",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_MAP_CLICK_TO_SELECT_POINTS",
+        "message": "Click on map to select points",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_MAP_SELECTED_LOCATIONS",
+        "message": "Selected Locations",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_RATING_LABEL",
+        "message": "Rating",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_RATING_N_STARS",
+        "message": "{count} stars",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_RATING_ONE_STAR",
+        "message": "1 star",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ESCALATE",
+        "message": "Escalate",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ESCALATE_SUCCESSFULLY",
+        "message": "Escalated Successfully",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     }

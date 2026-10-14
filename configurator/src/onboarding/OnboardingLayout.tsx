@@ -1,19 +1,20 @@
 import { useEffect, useState } from 'react';
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Check, ChevronRight, LayoutGrid, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Check, ChevronRight, House, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useApp } from '../App';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useMastersCapability } from '@/hooks/useMastersCapability';
-import { ONBOARDING_GATE_ENABLED } from '@/config/featureFlags';
 import { NavRow, SectionLabel, RailBackdrop, RailCloseButton, RailMenuButton, RailPoweredBy } from '@/components/layout/rail';
 import { railClasses } from '@/components/layout/railStyles';
 import { useRailDrawer } from '@/components/layout/useRailDrawer';
 import { AccountMenu, HelpButton, LocaleSwitcher, ThemeSwitcher } from '@/components/layout/HeaderControls';
-import { ONBOARDING_STEPS } from './steps';
+import { HOME_PATH, ONBOARDING_STEPS } from './steps';
 import { completedCount, resumePath, stepForPath, stepStatus, type StepStatus } from './progress';
 import { initialsOf, useOrganisation } from './organisation';
 import { trackEvent } from '@/lib/telemetry';
 import { useOnboardingT } from './i18n';
+import { SectionDocs } from './docs/SectionDocs';
+import type { DocsSection } from './docs/docsLinks';
 
 /**
  * The step marks in place of icons: a tick once a step is done, a filled dot
@@ -39,7 +40,7 @@ function StepMark({ status }: { status: StepStatus }) {
 
 
 export default function OnboardingLayout() {
-  const { state, logout, setMode, toggleHelp } = useApp();
+  const { state, logout, toggleHelp } = useApp();
   const t = useOnboardingT();
   const statusWord: Record<StepStatus, string> = {
     done: t('layout.status.done', 'done'),
@@ -67,6 +68,7 @@ export default function OnboardingLayout() {
 
   // A step opened, from the rail, a Back or continue, or a resume.
   const openedStep = currentStepLocked ? undefined : currentStep;
+  const docsSection: DocsSection | undefined = location.pathname === HOME_PATH ? 'home' : openedStep?.id;
   useEffect(() => {
     if (openedStep) trackEvent('phase_start', { phase: openedStep.number, step: openedStep.id, tenant: state.tenant });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per step opened, not per tenant re-render
@@ -77,10 +79,6 @@ export default function OnboardingLayout() {
     catch (error) { window.alert(error instanceof Error ? error.message : t('layout.sign_out_failed', 'Sign-out failed. Please retry.')); }
   };
 
-  const handleGoToManagement = () => {
-    setMode('management');
-    navigate('/manage');
-  };
 
   const openMobileNav = () => {
     setCollapsed(false);
@@ -128,7 +126,7 @@ export default function OnboardingLayout() {
               className="w-full text-left rounded border border-border bg-card p-3 transition-colors hover:border-primary/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
               <span className="flex items-center justify-between gap-2">
-                <span className="text-sm font-semibold text-foreground">{t('layout.setup_title', 'Let’s set up your organisation')}</span>
+                <span className="text-sm font-semibold text-foreground">{t('layout.setup_account', 'Let’s set up your account')}</span>
                 <ChevronRight aria-hidden="true" className="w-4 h-4 text-muted-foreground flex-shrink-0" />
               </span>
               <span
@@ -150,6 +148,15 @@ export default function OnboardingLayout() {
 
         {/* Steps */}
         <nav aria-label={t('layout.setup_steps', 'Setup steps')} className="flex-1 py-2 overflow-y-auto">
+          <div className="pb-2">
+            <NavRow
+              icon={House}
+              label={t('layout.home', 'Home')}
+              active={location.pathname === HOME_PATH}
+              collapsed={collapsed}
+              onClick={() => navigate(HOME_PATH)}
+            />
+          </div>
           {groups.map((group) => (
             <div key={group} className="pb-4">
               {!collapsed && <SectionLabel>{t(`groups.${group.toLowerCase()}`, group)}</SectionLabel>}
@@ -172,12 +179,6 @@ export default function OnboardingLayout() {
           ))}
         </nav>
 
-        {/* Footer: the way out while switching is allowed, then "Powered by DIGIT" */}
-        {!ONBOARDING_GATE_ENABLED && (
-          <div className="border-t border-border py-2">
-            <NavRow icon={LayoutGrid} label={t('layout.go_to_management', 'Go to Management')} active={false} collapsed={collapsed} onClick={handleGoToManagement} />
-          </div>
-        )}
         <RailPoweredBy collapsed={collapsed} />
       </aside>
 
@@ -206,19 +207,24 @@ export default function OnboardingLayout() {
         </header>
 
         <main id="main-content" className="flex-1 overflow-auto min-h-0">
-          <div className="max-w-6xl mx-auto p-4 sm:p-8">
-            {!currentStepEditable && (
-              <Alert className="mb-4">
-                <AlertDescription>
-                  {t(
-                    'layout.view_only',
-                    'Your role has view-only access to %{step}. You can review this step, but creating or editing records here is restricted to roles with write access (e.g. MDMS_ADMIN).',
-                    { step: currentStep ? t(`steps.${currentStep.id}`, currentStep.label) : '' },
-                  )}
-                </AlertDescription>
-              </Alert>
-            )}
-            {currentStepLocked ? <Navigate to={resumePath(completed)} replace /> : <Outlet />}
+          {/* The docs go beside the page from 1400px, where the Employees table still
+              fits next to them; narrower, they sit under the page. */}
+          <div className="mx-auto flex max-w-6xl flex-col gap-8 p-4 sm:p-8 min-[1400px]:max-w-[88rem] min-[1400px]:flex-row min-[1400px]:items-start">
+            <div className="min-w-0 flex-1 min-[1400px]:max-w-6xl">
+              {!currentStepEditable && (
+                <Alert className="mb-4">
+                  <AlertDescription>
+                    {t(
+                      'layout.view_only',
+                      'Your role has view-only access to %{step}. You can review this step, but creating or editing records here is restricted to roles with write access (e.g. MDMS_ADMIN).',
+                      { step: currentStep ? t(`steps.${currentStep.id}`, currentStep.label) : '' },
+                    )}
+                  </AlertDescription>
+                </Alert>
+              )}
+              {currentStepLocked ? <Navigate to={resumePath(completed)} replace /> : <Outlet />}
+            </div>
+            {docsSection && <SectionDocs section={docsSection} className="min-[1400px]:sticky min-[1400px]:top-8 min-[1400px]:w-56 min-[1400px]:shrink-0" />}
           </div>
         </main>
 

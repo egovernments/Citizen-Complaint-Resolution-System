@@ -107,6 +107,18 @@ describe('Kong declarative route syntax', () => {
       '~/pgr-services/v2/analytics/public/_options$',
     ]);
   });
+
+  /**
+   * Keycloak runs at its root context, while /auth is the public gateway
+   * prefix. Preserving that prefix sends /auth/realms/... upstream and
+   * Keycloak returns 404 instead of serving /realms/....
+   */
+  test('Keycloak route strips the public /auth prefix', () => {
+    expect(KONG).toMatch(
+      // Comment lines may sit between the path and strip_path (develop documents KC_HOSTNAME there).
+      /^  - name: keycloak-route\n    paths:\n    - \/auth\n(?:    #[^\n]*\n)*    strip_path: true$/m,
+    );
+  });
 });
 
 describe("Keycloak's privileged surface is not published", () => {

@@ -49,38 +49,49 @@ export interface NewEmployee {
 /** Used when the workspace has no mobile rule of its own. */
 const FALLBACK_MOBILE = /^\d{9,10}$/;
 
+/**
+ * Every boundary the workspace's hierarchies hold, named, shallowest level
+ * first. Each hierarchy's boundaries and labels load at the same time as the
+ * others'.
+ */
+async function loadBoundaryChoices(tenantId: string): Promise<BoundaryChoice[]> {
+  const hierarchies = await boundaryService.getHierarchies(tenantId).catch(() => []);
+  const perHierarchy = await Promise.all(
+    hierarchies.map(async (hierarchy) => {
+      const levels = (hierarchy.boundaryHierarchy ?? []).map((level) => level.boundaryType);
+      // Relationship search returns codes only; a boundary's name is its label in
+      // rainmaker-boundary-<hierarchy>, keyed by the code, as Geography writes it.
+      // Active UI locale first, en_IN as the fallback.
+      const labelModule = `rainmaker-boundary-${hierarchy.hierarchyType.toLowerCase()}`;
+      const [found, ...labelSets] = await Promise.all([
+        boundaryService.searchBoundaries(tenantId, { hierarchyType: hierarchy.hierarchyType }).catch(() => []),
+        ...readLocales().map((locale) => localizationService.searchMessages(tenantId, locale, labelModule).catch(() => [])),
+      ]);
+      const nameOf = new Map(labelSets.reverse().flat().map((label) => [label.code, label.message]));
+      return found.map(
+        (boundary): BoundaryChoice => ({
+          code: boundary.code,
+          name: boundary.name || nameOf.get(boundary.code) || boundary.code,
+          boundaryType: boundary.boundaryType,
+          hierarchyType: hierarchy.hierarchyType,
+          depth: Math.max(0, levels.indexOf(boundary.boundaryType)),
+        }),
+      );
+    }),
+  );
+  return perHierarchy.flat().sort((a, b) => a.depth - b.depth || a.name.localeCompare(b.name));
+}
+
 export async function loadEmployeeOptions(tenantId: string): Promise<EmployeeOptions> {
-  const [departments, designations, roles, hierarchies, mobileRule] = await Promise.all([
+  // The boundaries need the hierarchies first. That chain runs beside the other
+  // lookups rather than after all of them.
+  const [departments, designations, roles, boundaries, mobileRule] = await Promise.all([
     listMasters(tenantId, 'department'),
     listMasters(tenantId, 'designation'),
     mdmsService.getRoles(tenantId).catch(() => []),
-    boundaryService.getHierarchies(tenantId).catch(() => []),
+    loadBoundaryChoices(tenantId),
     mdmsService.getMobileValidation(tenantId).catch(() => null),
   ]);
-
-  const boundaries: BoundaryChoice[] = [];
-  for (const hierarchy of hierarchies) {
-    const levels = (hierarchy.boundaryHierarchy ?? []).map((level) => level.boundaryType);
-    // Relationship search returns codes only; a boundary's name is its label in
-    // rainmaker-boundary-<hierarchy>, keyed by the code, as Geography writes it.
-    // Active UI locale first, en_IN as the fallback.
-    const labelModule = `rainmaker-boundary-${hierarchy.hierarchyType.toLowerCase()}`;
-    const [found, ...labelSets] = await Promise.all([
-      boundaryService.searchBoundaries(tenantId, { hierarchyType: hierarchy.hierarchyType }).catch(() => []),
-      ...readLocales().map((locale) => localizationService.searchMessages(tenantId, locale, labelModule).catch(() => [])),
-    ]);
-    const nameOf = new Map(labelSets.reverse().flat().map((label) => [label.code, label.message]));
-    for (const boundary of found) {
-      boundaries.push({
-        code: boundary.code,
-        name: boundary.name || nameOf.get(boundary.code) || boundary.code,
-        boundaryType: boundary.boundaryType,
-        hierarchyType: hierarchy.hierarchyType,
-        depth: Math.max(0, levels.indexOf(boundary.boundaryType)),
-      });
-    }
-  }
-  boundaries.sort((a, b) => a.depth - b.depth || a.name.localeCompare(b.name));
 
   let mobilePattern = FALLBACK_MOBILE;
   if (mobileRule?.mobileNumberRegex) {

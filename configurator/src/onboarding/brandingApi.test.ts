@@ -40,10 +40,17 @@ const branding = (over: Partial<Branding> = {}): Branding => ({
   tenantId: 'acme',
   tenantRecord,
   themeRecord: null,
+  stateInfoRecord: null,
   name: 'acme',
   logoUrl: null,
+  bannerUrl: null,
   themeId: null,
   ...over,
+});
+
+const stateInfoRecord = record({
+  schemaCode: 'common-masters.StateInfo',
+  data: { code: 'acme', name: 'Acme Council', bannerUrl: '', languages: [{ label: 'ENGLISH', value: 'en_IN' }] },
 });
 
 beforeEach(() => {
@@ -155,5 +162,74 @@ describe('saveBranding when only the theme fails', () => {
     expect(failure.saved.name).toBe('acme');
     expect(failure.saved.logoUrl).toBeNull(); // The returned search record wins over the write echo.
     expect(failure.saved.themeId).toBeNull();
+  });
+});
+
+describe('the citizen banner', () => {
+  it('reads the banner from the state root\'s StateInfo, treating "" as none', async () => {
+    search.mockImplementation(async (_tenant, schema) =>
+      schema === 'tenant.tenants' ? [tenantRecord] : schema === 'common-masters.StateInfo' ? [stateInfoRecord] : [],
+    );
+    expect((await loadBranding('acme')).bannerUrl).toBeNull();
+
+    const withBanner = record({ ...stateInfoRecord, data: { ...stateInfoRecord.data, bannerUrl: 'https://img/banner.jpg' } });
+    search.mockImplementation(async (_tenant, schema) =>
+      schema === 'tenant.tenants' ? [tenantRecord] : schema === 'common-masters.StateInfo' ? [withBanner] : [],
+    );
+    const loaded = await loadBranding('acme');
+    expect(loaded.bannerUrl).toBe('https://img/banner.jpg');
+    expect(loaded.stateInfoRecord).toBe(withBanner);
+  });
+
+  it('still loads the step when StateInfo cannot be read; the banner is just unavailable', async () => {
+    search.mockImplementation(async (_tenant, schema) => {
+      if (schema === 'common-masters.StateInfo') throw new Error('503');
+      return schema === 'tenant.tenants' ? [tenantRecord] : [];
+    });
+    const loaded = await loadBranding('acme');
+    expect(loaded.stateInfoRecord).toBeNull();
+    expect(loaded.bannerUrl).toBeNull();
+  });
+
+  it('uploads the banner and points StateInfo at a lasting link, keeping its other fields', async () => {
+    search.mockImplementation(async (_tenant, schema) =>
+      schema === 'tenant.tenants' ? [tenantRecord] : schema === 'common-masters.StateInfo' ? [stateInfoRecord] : [],
+    );
+    upload.mockResolvedValue({ fileStoreId: 'banner-1', fileName: 'banner.jpg' });
+    const file = new File(['x'], 'banner.jpg', { type: 'image/jpeg' });
+
+    await saveBranding(branding({ stateInfoRecord }), { name: 'acme', logo: null, theme: null, banner: { kind: 'upload', file } });
+
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(update).toHaveBeenCalledWith(stateInfoRecord, {
+      ...stateInfoRecord.data,
+      bannerUrl: 'https://digit.example/filestore/v1/files/id?tenantId=acme&fileStoreId=banner-1',
+    });
+  });
+
+  it('clears the banner to "" when it is removed', async () => {
+    const withBanner = record({ ...stateInfoRecord, data: { ...stateInfoRecord.data, bannerUrl: 'https://img/banner.jpg' } });
+    search.mockImplementation(async (_tenant, schema) =>
+      schema === 'tenant.tenants' ? [tenantRecord] : schema === 'common-masters.StateInfo' ? [withBanner] : [],
+    );
+    await saveBranding(branding({ stateInfoRecord: withBanner, bannerUrl: 'https://img/banner.jpg' }), {
+      name: 'acme',
+      logo: null,
+      theme: null,
+      banner: { kind: 'remove' },
+    });
+    expect(update.mock.calls[0][1]).toEqual(expect.objectContaining({ bannerUrl: '', name: 'Acme Council' }));
+  });
+
+  it('refuses a banner when the workspace has no StateInfo, before writing anything', async () => {
+    upload.mockResolvedValue({ fileStoreId: 'logo-1', fileName: 'logo.png' });
+    const banner = new File(['x'], 'banner.jpg', { type: 'image/jpeg' });
+    const logo = new File(['x'], 'logo.png', { type: 'image/png' });
+
+    await expect(
+      saveBranding(branding(), { name: 'acme', logo: { kind: 'upload', file: logo }, theme: null, banner: { kind: 'upload', file: banner } }),
+    ).rejects.toThrow(/no State Info record/);
+    expect(upload).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
   });
 });

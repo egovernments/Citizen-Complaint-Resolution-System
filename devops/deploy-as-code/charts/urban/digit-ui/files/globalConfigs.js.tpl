@@ -33,6 +33,7 @@ var globalConfigs = (function () {
   var coreMobileConfigs = {{ .Values.globalConfigs.coreMobileConfigs | toJson }};
   var corePostalConfigs = {{ .Values.globalConfigs.corePostalConfigs | toJson }};
   var dashboardMetricsEnabled = {{ .Values.globalConfigs.dashboardMetricsEnabled }};
+  var citizenBannerEnabled = {{ .Values.globalConfigs.citizenBannerEnabled | default false }};
 
   var getConfig = function (key) {
     if (key === "STATE_LEVEL_TENANT_ID") { return stateTenantId; }
@@ -61,6 +62,7 @@ var globalConfigs = (function () {
     else if (key === "CORE_MOBILE_CONFIGS") { return coreMobileConfigs; }
     else if (key === "CORE_POSTAL_CONFIGS") { return corePostalConfigs; }
     else if (key === "DASHBOARD_METRICS_ENABLED") { return dashboardMetricsEnabled; }
+    else if (key === "CITIZEN_BANNER_ENABLED") { return citizenBannerEnabled; }
   };
 
   return { getConfig };

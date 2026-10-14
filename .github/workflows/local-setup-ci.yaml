@@ -87,6 +87,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # The static suite runs Python tests that render playbook tasks and templates with
+      # jinja2 + PyYAML (static/notification-defaults.test.ts). The runner's system python3
+      # is not guaranteed to have them, and those cases would skip; the tests refuse to skip
+      # under CI, so install them here.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Python test dependencies
+        run: python3 -m pip install jinja2 PyYAML
+
       # Incident-derived combination rules (rules-as-code, each cites the
       # incident it encodes). Real tenant host_vars are gitignored, so CI
       # proves the RULES (self-test + fixtures + the tracked example);
