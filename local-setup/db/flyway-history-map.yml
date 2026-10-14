@@ -116,7 +116,7 @@ pgr-services:
 novu-bridge:
   canonical: novu_bridge_schema
   aliases: []
-  data_tables: [nb_dispatch_log]
+  data_tables: [nb_dispatch_log, nb_tenant_account]
   baseline_fresh: true
 
 xstate-chatbot:

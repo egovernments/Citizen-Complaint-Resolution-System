@@ -1120,6 +1120,30 @@ services:
       status_code: 404
       content_type: application/json
       body: '{"ResponseInfo":null,"Errors":[{"code":"NotFound","message":"NotFound","description":"No Route matched with those values"}]}'
+# ── INTERNAL-ONLY: /novu-bridge/novu-adapter/v1/tenants/** and /messages/** (#2203) ─────
+# The per-tenant Novu account admin API (provision, provider credentials, deprovision) and the
+# synchronous OTP send. Their callers are pgr-services' onboarding worker, operators and the
+# Identity BFF, all on the compose network; no person and no browser calls them. novu-bridge
+# authenticates them with internal tokens (X-Novu-Bridge-Token) and never with a DIGIT session,
+# so they must not be reachable from outside at all. No route above matches these prefixes,
+# and this one terminates them explicitly (404, dead upstream, same pattern as the gateways
+# deny above), so a later broad /novu-bridge route cannot expose them by accident.
+- name: novu-bridge-internal-tenant-api-deny
+  url: http://localhost:9999
+  tags:
+  - internal
+  routes:
+  - name: novu-bridge-internal-tenant-api-deny-route
+    paths:
+    - /novu-bridge/novu-adapter/v1/tenants
+    - /novu-bridge/novu-adapter/v1/messages
+    strip_path: false
+  plugins:
+  - name: request-termination
+    config:
+      status_code: 404
+      content_type: application/json
+      body: '{"ResponseInfo":null,"Errors":[{"code":"NotFound","message":"NotFound","description":"No Route matched with those values"}]}'
 # digit-user-preferences-service: per-user notification consent + preferredLanguage.
 # Read/written by the citizen profile screen; read in-cluster (not via Kong) by
 # pgr-services and novu-bridge. Only up under the `notifications` compose profile.
