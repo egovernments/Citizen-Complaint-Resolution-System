@@ -3,7 +3,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import OnboardingLayout from './OnboardingLayout';
 import { ONBOARDING_STEPS } from './steps';
-import { DIGIT_DOCS, DOCS_HOME, docsFor } from './docs/docsLinks';
+import { DIGIT_DOCS, DOCS_HOME, ONBOARDING_GUIDE, docsFor } from './docs/docsLinks';
 import { englishT } from './i18n';
 
 const trackEvent = vi.fn();
@@ -64,11 +64,26 @@ describe('the docs content', () => {
       const groups = docsFor(section, englishT);
       expect(groups.length).toBeGreaterThan(0);
       for (const link of groups.flatMap((group) => group.links)) {
-        expect(link.url).toBe(DOCS_HOME);
+        expect(link.url.startsWith(DOCS_HOME)).toBe(true);
         expect(link.title).not.toBe('');
         expect(link.description).not.toBe('');
       }
     }
+  });
+
+  it('carries the onboarding guide on every page, and each step its own page of it', () => {
+    const page = { branding: 'branding', geography: 'geography', departments: 'departments', employees: 'employees', complaints: 'complaint-template' };
+    for (const section of ['home', ...ONBOARDING_STEPS.map((step) => step.id)] as const) {
+      const urls = docsFor(section, englishT).flatMap((group) => group.links.map((link) => link.url));
+      expect(urls).toContain(ONBOARDING_GUIDE);
+      if (section !== 'home') expect(docsFor(section, englishT)[0].links[0].url).toBe(`${ONBOARDING_GUIDE}/${page[section]}`);
+    }
+    expect(docsFor('home', englishT)[0].links.map((link) => link.url)).toEqual([
+      `${ONBOARDING_GUIDE}/get-started`,
+      `${ONBOARDING_GUIDE}/onboarding`,
+      `${ONBOARDING_GUIDE}/create-account`,
+      `${ONBOARDING_GUIDE}/glossary`,
+    ]);
   });
 });
 
@@ -78,7 +93,7 @@ describe('the Documentation rail', () => {
     app.state.completedPhases = [1, 2, 3];
     layoutAt('/onboarding/employees');
     const link = within(rail()).getByRole('link', { name: 'Employees guide (opens in a new tab)' });
-    expect(link).toHaveAttribute('href', DOCS_HOME);
+    expect(link).toHaveAttribute('href', `${ONBOARDING_GUIDE}/employees`);
     expect(link).toHaveAttribute('target', '_blank');
     expect(link).toHaveAttribute('rel', 'noopener noreferrer');
     expect(within(rail()).getByRole('link', { name: 'Open DIGIT Docs' })).toHaveAttribute('href', DIGIT_DOCS);
