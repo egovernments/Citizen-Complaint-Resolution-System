@@ -3,7 +3,7 @@ import { EFFECT, whenItApplies, whenItAppliesAll } from './effectTimes';
 describe('when it applies (one config, measured values)', () => {
   it('says each kind plainly, from the config', () => {
     expect(whenItApplies('areas')).toBe("Area changes apply to the person's searches about 30 seconds.");
-    expect(whenItApplies('calls')).toMatch(/^What the role may do applies within 6 minutes .* Menus and buttons update when the person reloads the page; no sign-out needed\.$/);
+    expect(whenItApplies('calls')).toMatch(/^What the role may do applies within 2 minutes .* Menus and buttons update when the person reloads the page; no sign-out needed\.$/);
     expect(whenItApplies('scope')).toMatch(/about 60 seconds \(the complaint service refreshes its copy of the rules\)/); // pgr's 60 s policy cache (#1504)
     expect(whenItApplies('grant')).toMatch(/next sign-in, or within 15 minutes when their session refreshes/);
   });

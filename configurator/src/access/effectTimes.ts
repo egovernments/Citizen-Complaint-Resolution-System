@@ -7,10 +7,10 @@
 export const EFFECT = {
   /** HRMS areas: pgr reads the person's jurisdictions from HRMS on each search. Measured 21 s (run ACBSV, area move). */
   areasSeconds: 30,
-  /** Role-actions (what a role may call): keycloak-rbac caches each decision per gateway worker for 300 s
-   *  (kong.v3.compat.yml keycloak-rbac cache_ttl) after gateway-rules-sync (~30 s). Measured: refused from 302 s,
-   *  consistently from 310 s (ACBSV (a)); a new role's first inbox view 355 s (a denial cached before the sync). */
-  gatewaySeconds: 330,
+  /** Role-actions (what a role may call): keycloak-rbac caches each decision per gateway worker for 60 s since #1644
+   *  (kong.v3.compat.yml keycloak-rbac cache_ttl; was 300 s, measured refused from 302-310 s, ACBSV (a)) after
+   *  gateway-rules-sync (~30 s): about 90 s in all. */
+  gatewaySeconds: 90,
   /** Which complaints / which fields (action 2008's scope and field rules): pgr's AccessPolicyRegistry caches the rows
    *  60 s (pgr.access-policy-actions / -urls, cfgprop class 4, #1504; was 15 min). Measured before #1504: Hide reached
    *  pgr's answer after 249 s (ACBSV (c)) under the 15-min TTL. */
