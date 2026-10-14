@@ -238,6 +238,8 @@ function normalizeMdmsRecord(mdms: MdmsRecord, config: ResourceConfig): RaRecord
     _auditDetails: mdms.auditDetails,
     _schemaCode: mdms.schemaCode,
     _mdmsId: mdms.id,
+    // ours (cfgreview F03, #1550): the tenant the row lives at (an inherited row is an ancestor's)
+    _tenantId: mdms.tenantId,
   } as RaRecord;
 }
 
@@ -559,6 +561,15 @@ export function __setMdmsSearchAllLimitsForTesting(batchSize = DEFAULT_MDMS_SEAR
  * can't produce gaps or duplicates.
  */
 async function mdmsSearchAll(client: DigitApiClient, tenant: string, schema: string, criteria?: { isActive?: boolean }): Promise<MdmsRecord[]> {
+  // ours (#1550, option B, owner 2026-10-12): a county never shows the STATE's rows of a county-scoped master
+  // (departments, designations, complaint categories, ...); it has its own or none. Every list, card and picker
+  // reads through here, so they agree; the state's own county (stateCounty) keeps them.
+  return withoutStateRows(tenant, schema, await mdmsSearchAllRows(client, tenant, schema, criteria));
+}
+
+import { withoutStateRows } from './countyScoped.js';
+
+async function mdmsSearchAllRows(client: DigitApiClient, tenant: string, schema: string, criteria?: { isActive?: boolean }): Promise<MdmsRecord[]> {
   const expectedTotal = await client.mdmsCount(tenant, schema, criteria);
   const all: MdmsRecord[] = [];
   const seen = new Set<string>();
@@ -569,8 +580,12 @@ async function mdmsSearchAll(client: DigitApiClient, tenant: string, schema: str
     const page = await client.mdmsSearch(tenant, schema, { limit: mdmsSearchAllBatchSize, offset, ...criteria });
     if (page.length === 0) break;
     for (const record of page) {
-      if (seen.has(record.uniqueIdentifier)) continue;
-      seen.add(record.uniqueIdentifier);
+      // ours (nightly 2026-10-14): a union read at a state root (ccrs-compat #941 countyStates) answers the state's row
+      // and a county's row of the same uniqueIdentifier; mdmsCount counts both, so the dedupe key is tenant + id (a
+      // uid-only key dropped one of each and the guard below refused the whole list: "retrieved 31 of 34").
+      const key = `${record.tenantId ?? ''}|${record.uniqueIdentifier}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
       all.push(record);
     }
     offset += page.length;

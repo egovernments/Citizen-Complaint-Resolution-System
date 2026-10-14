@@ -52,8 +52,14 @@ const columns: DigitColumn[] = [
 
 export function UserList() {
   return (
-    <DigitList title="app.resources.users" hasCreate sort={{ field: 'userName', order: 'ASC' }} filters={filters}>
-      <DigitDatagrid columns={columns} rowClick="show" />
-    </DigitList>
+    <>
+      {/* ours (cfgreview F03, #1550): user search answers one page of 100; say so instead of looking like a total */}
+      <p className="mb-2 text-sm text-muted-foreground" data-testid="users-cap-note">
+        Shows the first 100 matching users. Search by name or mobile number, or filter by type, to find others.
+      </p>
+      <DigitList title="app.resources.users" hasCreate sort={{ field: 'userName', order: 'ASC' }} filters={filters}>
+        <DigitDatagrid columns={columns} rowClick="show" />
+      </DigitList>
+    </>
   );
 }
