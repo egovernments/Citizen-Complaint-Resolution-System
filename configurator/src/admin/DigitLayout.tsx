@@ -114,6 +114,8 @@ const navGroups = [
       { id: 'employees', nameKey: 'app.nav.employees', path: '/manage/employees', icon: Users },
       { id: 'org-chart', nameKey: 'app.nav.org_chart', path: '/manage/org-chart', icon: Network },
       { id: 'users', nameKey: 'app.nav.users', path: '/manage/users', icon: User },
+      // Access: who holds which role where; grant a role at a tenant with areas
+      { id: 'access-people', nameKey: 'app.nav.access_people', path: '/manage/access/people', icon: UserCog, requiredRoles: ['SUPERUSER', 'ACCOUNT_ADMIN', 'HRMS_ADMIN'] },
     ],
   },
   {
@@ -286,7 +288,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold leading-5 text-foreground truncate">DIGIT</p>
                   <p className="text-xs leading-4 text-muted-foreground truncate">
-                    {translate('app.header.product_name', { _: 'Complaint Management System' })}
+                    {translate('app.header.brand', { _: 'Complaints Management' })}
                   </p>
                 </div>
               </>

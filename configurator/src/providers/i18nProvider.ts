@@ -70,6 +70,7 @@ const customEnglishMessages: TranslationMessages = {
       people: 'People',
       employees: 'Employees',
       users: 'Users',
+      access_people: 'Roles by tenant',
       org_chart: 'Org Chart',
       system: 'System',
       access_roles: 'Access Roles',
@@ -92,7 +93,7 @@ const customEnglishMessages: TranslationMessages = {
     header: {
       management_mode: 'Management Mode',
       title: 'DIGIT Management Studio',
-      product_name: 'Complaint Management System',
+      brand: 'Complaints Management',
       help: 'Help',
       account: 'Account',
       sign_out: 'Sign out',

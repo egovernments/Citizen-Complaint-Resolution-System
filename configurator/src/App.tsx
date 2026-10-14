@@ -21,6 +21,7 @@ import { ALL_STEP_QUERIES } from './onboarding/stepQueries';
 import { finishesOnboarding, isOnboardingComplete } from './onboarding/progress';
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
+import TenantsPeople from './access/TenantsPeople';
 import RootLanding from './pages/RootLanding';
 import { CoreAdminContext, CoreAdminUI, Resource, CustomRoutes } from 'ra-core';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -225,6 +226,8 @@ function ManagementAdminResources() {
           <Route path="/departments/bulk" element={<DepartmentBulkImport />} />
           <Route path="/designations/bulk" element={<DesignationBulkImport />} />
           <Route path="/localization/bulk" element={<LocalizationBulkImport />} />
+          {/* Access: who holds which role where; grant a role at a tenant with areas */}
+          <Route path="/access/people" element={<TenantsPeople />} />
         </CustomRoutes>
       </CoreAdminUI>
     </CoreAdminContext>
