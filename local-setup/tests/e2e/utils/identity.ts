@@ -210,11 +210,6 @@ export async function hostedSignIn(page: Page, config: {
   }
 }
 
-/** The root tenant egov-user keeps a CITIZEN account at (first dotted segment). */
-export function citizenAccountTenantId(tenantId: string) {
-  return tenantId.split('.')[0];
-}
-
 export async function selectContext(request: APIRequestContext, baseURL: string, surface: Surface, tenantId: string) {
   const path = surface === 'citizen' ? 'contexts/citizen/_select' : 'contexts/_select';
   const body = surface === 'citizen' ? { surface } : { surface, tenantId };
@@ -222,10 +217,8 @@ export async function selectContext(request: APIRequestContext, baseURL: string,
     headers: { Origin: new URL(baseURL).origin }, data: body,
   }));
   const userType = surface === 'citizen' ? 'CITIZEN' : 'EMPLOYEE';
-  // egov-user issues CITIZEN tokens at the state root (`ke.bomet` -> `ke`); the
-  // route tenant comes back as `context.tenant`. Employees stay on the tenant.
-  const tokenTenant = surface === 'citizen' ? citizenAccountTenantId(tenantId) : tenantId;
-  if (!context.access_token || !context.UserRequest?.uuid || context.UserRequest.tenantId !== tokenTenant ||
+  // Root tenants only: staff and citizen tokens are both issued at the route's tenant.
+  if (!context.access_token || !context.UserRequest?.uuid || context.UserRequest.tenantId !== tenantId ||
       context.UserRequest.type !== userType || !Number.isFinite(context.expires_in) || context.expires_in <= 0 ||
       context.token_type?.toLowerCase() !== 'bearer' || context.scope !== 'read' || 'refresh_token' in context ||
       (surface === 'citizen' && context.tenant?.tenantId !== tenantId)) {

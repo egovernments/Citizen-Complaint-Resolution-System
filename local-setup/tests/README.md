@@ -41,6 +41,12 @@ npx playwright test --config=e2e/playwright.config.ts e2e/specs/pgr-inbox-pagina
 `loginViaApi` signs the persona in through the hosted Keycloak form and fails
 unless the employee home renders with a session for `DIGIT_TENANT`.
 `getDigitToken` posts the same form with Node's `fetch` (no browser) for API tokens.
+A worker reuses each persona's BFF session after its first sign-in, while
+`/identity/v1/session` reports it live.
+
+The suite targets develop-shaped deployments only: root workspaces, boundary-service,
+a seeded `common-masters.MobileNumberValidation` rule. Older deployments run their own
+branch's suite, so nothing here falls back to a default or a city tenant.
 
 Citizen OTP sends count against the Identity BFF's hourly limits (5 per phone
 and 20 per IP by default). A worker signs each phone in once and later specs

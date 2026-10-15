@@ -12,10 +12,10 @@
  *   generateValidMobile(rule)            -> string
  *   generateInvalidMobile(rule, kind)    -> string
  *
- * Only when MDMS holds no rule for the tenant does it fall back to a
- * 10-digit numeric default — the same shape the configurator's UI uses
- * for new tenants that haven't seeded a rule yet. Sign-in and lookup
- * errors are thrown, so they are not reported as a refused OTP later.
+ * Every develop deployment seeds a rule (the deploy for its roots,
+ * onboarding for each signup workspace), and the Identity BFF refuses
+ * citizen sign-in without one, so a missing rule throws like a failed
+ * sign-in or lookup does; nothing falls back to a default.
  */
 import { getDigitToken } from '../utils/auth';
 import { requiredEnv } from '../utils/identity';
@@ -29,16 +29,8 @@ export interface MobileRule {
   allowedStartingDigits?: string[];
 }
 
-const FALLBACK: MobileRule = {
-  pattern: '^\\d{10}$',
-  minLength: 10,
-  maxLength: 10,
-  errorMessage: 'Please enter a valid 10-digit mobile number',
-};
-
 export interface MobileRuleOptions {
   baseURL?: string;
-  rootTenant?: string;
   adminUser?: string;
   adminPassword?: string;
 }
@@ -69,25 +61,23 @@ function deriveMobileLengths(regex: string): { min: number; max: number } {
 /**
  * Fetch the live mobile-validation rule for `tenant` from MDMS.
  *
- * Authenticates against `rootTenant` (defaults to env ROOT_TENANT or the
- * supplied tenant) with admin credentials, then queries MDMS v2 for the
+ * Signs the admin persona in at `tenant`, then queries MDMS v2 for the
  * `common-masters.MobileNumberValidation` schema scoped to `tenant`.
  * Returns the record whose `data.default === true` if present, otherwise
- * the first record. Falls back to a 10-digit numeric rule only when MDMS
- * returns no rule; a failed sign-in or lookup throws.
+ * the first record. Throws when MDMS has no rule, or the sign-in or lookup
+ * fails.
  */
 export async function getMobileValidationRule(
   tenant: string,
   opts: MobileRuleOptions = {},
 ): Promise<MobileRule> {
   const baseURL = opts.baseURL ?? requiredEnv('BASE_URL');
-  const rootTenant = opts.rootTenant ?? process.env.ROOT_TENANT ?? tenant;
   const adminUser = opts.adminUser ?? requiredEnv('DIGIT_USERNAME');
   const adminPassword = opts.adminPassword ?? requiredEnv('DIGIT_PASSWORD');
 
   const token = await getDigitToken({
     baseURL,
-    tenant: rootTenant,
+    tenant,
     username: adminUser,
     password: adminPassword,
   });
@@ -116,7 +106,7 @@ export async function getMobileValidationRule(
   const records = json.mdms ?? [];
   const preferred = records.find((r) => r.data?.default === true) ?? records[0];
   const data = preferred?.data;
-  if (!data?.mobileNumberRegex) return FALLBACK;
+  if (!data?.mobileNumberRegex) throw new Error(`No common-masters.MobileNumberValidation rule on ${tenant}`);
   const lengths = deriveMobileLengths(data.mobileNumberRegex);
   return {
     prefix: typeof data.countryCode === 'string' ? data.countryCode : undefined,

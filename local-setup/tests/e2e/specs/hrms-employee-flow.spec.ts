@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { getDigitToken, loginViaApi } from '../utils/auth';
 import { requiredEnv } from '../utils/identity';
 import { getMobileValidationRule, generateValidMobile } from '../common/mdms-mobile';
+import { getEmployees } from '../common/hrms-employees';
 
 const BASE_URL = requiredEnv('BASE_URL');
 const TENANT = requiredEnv('DIGIT_TENANT');
@@ -50,7 +51,13 @@ test.describe.serial('HRMS employee creation and login', () => {
     const accessToken = tokenResponse.access_token;
     const userInfo = tokenResponse.UserRequest;
 
-    const now = Date.now();
+    // Department, designation and jurisdiction come from the admin persona's
+    // own HRMS record: a workspace has no fixed codes to hardcode.
+    const [admin] = await getEmployees(TENANT, { baseURL: BASE_URL, adminUser: ADMIN_USER, adminPassword: ADMIN_PASS, uuids: [userInfo.uuid] });
+    const adminAssignment = admin?.assignments?.[0] as { department?: string; designation?: string } | undefined;
+    const adminJurisdiction = admin?.jurisdictions?.[0] as { hierarchy?: string; boundaryType?: string; boundary?: string } | undefined;
+    expect(adminAssignment?.department && adminJurisdiction?.boundary, 'the admin persona has no HRMS assignment and jurisdiction to copy').toBeTruthy();
+
     const dob = new Date('1990-01-15').getTime();
     const appointmentDate = new Date('2024-01-01').getTime();
 
@@ -80,9 +87,9 @@ test.describe.serial('HRMS employee creation and login', () => {
           },
           jurisdictions: [
             {
-              hierarchy: 'ADMIN',
-              boundaryType: 'City',
-              boundary: TENANT,
+              hierarchy: adminJurisdiction!.hierarchy,
+              boundaryType: adminJurisdiction!.boundaryType,
+              boundary: adminJurisdiction!.boundary,
               tenantId: TENANT,
               roles: [
                 { code: 'EMPLOYEE', name: 'Employee', tenantId: TENANT },
@@ -92,8 +99,8 @@ test.describe.serial('HRMS employee creation and login', () => {
           ],
           assignments: [
             {
-              department: 'DEPT_1',
-              designation: 'DESIG_01',
+              department: adminAssignment!.department,
+              designation: adminAssignment!.designation,
               fromDate: appointmentDate,
               isCurrentAssignment: true,
             },
@@ -117,16 +124,7 @@ test.describe.serial('HRMS employee creation and login', () => {
       },
     );
 
-    if (!resp.ok) {
-      const body = await resp.text();
-      console.log(`HRMS create returned ${resp.status}: ${body.slice(0, 500)}`);
-      // Known HRMS bug: egov-hrms sends userName=null on employee create
-      if (body.includes('userName') || resp.status === 400) {
-        test.skip(true, 'HRMS create failed — known userName=null bug in egov-hrms');
-        return;
-      }
-    }
-    expect(resp.ok).toBe(true);
+    expect(resp.ok, `HRMS create failed (${resp.status}): ${(await resp.clone().text()).slice(0, 300)}`).toBe(true);
 
     const data = await resp.json();
     expect(data.Employees).toBeDefined();
