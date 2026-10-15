@@ -49,10 +49,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          # 22, not the Dockerfile's 20: under Node 20, LoginPage.test.tsx
-          # fails intermittently (findByText returns a node a re-render then
-          # replaces).
-          node-version: 22
+          node-version: 20 # as in Dockerfile (node:20-bookworm-slim)
           cache: npm
           cache-dependency-path: configurator/package-lock.json
 
