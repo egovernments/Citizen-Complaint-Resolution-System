@@ -87,16 +87,16 @@ jobs:
         working-directory: configurator/packages/data-provider
         run: npm test
 
-      # Advisory until it is made blocking. tsconfig.app.json maps
-      # @digit-mcp/data-provider to the package source (as vite and vitest
-      # do), so no dist/ build is needed. Every check runs even if one fails.
+      # Advisory until it is made blocking. The app takes
+      # @digit-mcp/data-provider's types from its dist/, so build that first.
+      # Every check runs even if an earlier one fails.
       - name: Type-check (advisory)
         if: ${{ !cancelled() }}
         continue-on-error: true
         shell: bash
         run: |
           status=0
+          npx tsc -p packages/data-provider || status=1
           npx tsc --noEmit -p tsconfig.app.json || status=1
           npx tsc --noEmit -p tsconfig.node.json || status=1
-          npx tsc --noEmit -p packages/data-provider || status=1
           exit $status
