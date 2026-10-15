@@ -241,6 +241,16 @@ export function configuredOtp(): string {
   return code;
 }
 
+/**
+ * An OTP send the BFF still refuses after one short wait: its per-phone or
+ * per-IP hourly send limit (5 and 20 by default), not a resend cooldown.
+ */
+export function otpRateLimitError(body: { code?: unknown } | null, retryAfter: string | undefined): Error {
+  const code = typeof body?.code === 'string' && /^[A-Z_]+$/.test(body.code) ? body.code : 'HTTP 429';
+  return new Error(`Identity BFF refused the OTP send (${code}, Retry-After ${retryAfter ?? 'unset'} s): `
+    + 'the hourly OTP send limit per phone or per IP is used up. Wait out Retry-After or run from another address.');
+}
+
 export async function citizenSignIn(request: APIRequestContext, baseURL: string, mobileNumber: string, slug?: string) {
   const tenant = await resolveTenant(request, baseURL, slug);
   const headers = { Origin: new URL(baseURL).origin };
@@ -258,6 +268,7 @@ export async function citizenSignIn(request: APIRequestContext, baseURL: string,
       sent = await send();
     }
   }
+  if (sent.status() === 429) throw otpRateLimitError(await sent.json().catch(() => null), sent.headers()['retry-after']);
   const challenge = await identityJson<{ challengeId: string }>(sent, 202);
   if (!challenge.challengeId) throw new Error('BFF did not return an OTP challenge');
   const verified = await identityJson<{ authenticated: boolean; tenant: typeof tenant }>(

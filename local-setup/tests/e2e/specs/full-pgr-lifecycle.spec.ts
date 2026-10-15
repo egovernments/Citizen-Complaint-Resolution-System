@@ -165,9 +165,9 @@ test.describe.serial('Full PGR lifecycle — citizen, admin, employee', () => {
 
   test('4 — citizen creates PGR complaint via UI wizard', async ({ page }) => {
     test.skip(!citizenLoggedIn, 'citizen not logged in');
-    test.setTimeout(120_000);
 
-    // Fresh page context: sign in again (the SPA builds its own session).
+    // Fresh page context: reuse step 3's BFF session (no new OTP); the SPA
+    // builds its own DIGIT session from it.
     await citizenLoginViaApi(page, CITIZEN_PHONE);
 
     // ── Intercept PGR _create API to capture serviceRequestId ─────────
@@ -658,7 +658,7 @@ test.describe.serial('Full PGR lifecycle — citizen, admin, employee', () => {
   test('12 — citizen rates complaint via UI', async ({ page }) => {
     test.skip(!complaintResolved, 'complaint not resolved');
 
-    // Fresh page context needs a citizen session
+    // Fresh page context: reuse step 3's BFF session (no new OTP)
     await citizenLoginViaApi(page, CITIZEN_PHONE);
 
     // Navigate to the rating page for this complaint

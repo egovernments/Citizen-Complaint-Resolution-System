@@ -7,14 +7,14 @@
  * problem but a locale/module mismatch between what the SPA requests
  * and what the localization service holds for the tenant.
  *
- * The test logs in as a citizen via OTP (fixed dev OTP), walks to the
+ * The test signs in as a citizen (phone OTP via the BFF), walks to the
  * complaint-type step, and fails if any visible text still looks like a
  * SERVICEDEFS key. Every /localization/messages/v1/_search request the
  * SPA makes is captured and printed on failure so the offending
  * locale/module/tenant combination is visible in the report.
  */
 import { test, expect, type Page } from '@playwright/test';
-import { citizenOtpLogin } from '../../utils/citizen-auth';
+import { citizenLoginViaApi } from '../../utils/citizen-auth';
 import { appBase } from '../../utils/auth';
 
 type LocFetch = { url: string; messageCount: number; servicedefsDotCount: number };
@@ -45,7 +45,7 @@ test.describe('Citizen complaint-type localization', () => {
     const locFetches: LocFetch[] = [];
     captureLocalizationTraffic(page, locFetches);
 
-    await citizenOtpLogin(page);
+    await citizenLoginViaApi(page);
 
     await page.goto(`${appBase()}/citizen/pgr/create-complaint/complaint-type`);
 

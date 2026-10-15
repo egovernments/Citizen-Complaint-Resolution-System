@@ -42,6 +42,11 @@ npx playwright test --config=e2e/playwright.config.ts e2e/specs/pgr-inbox-pagina
 unless the employee home renders with a session for `DIGIT_TENANT`.
 `getDigitToken` posts the same form with Node's `fetch` (no browser) for API tokens.
 
+Citizen OTP sends count against the Identity BFF's hourly limits (5 per phone
+and 20 per IP by default). A worker signs each phone in once and later specs
+reuse that session, so a run sends about three codes. A refused send with a
+`Retry-After` over 60 s fails with a rate-limit message instead of waiting.
+
 ## `pgr-inbox-pagination.spec.ts` (issue #916)
 
 Location: `e2e/specs/pgr-inbox-pagination.spec.ts`.

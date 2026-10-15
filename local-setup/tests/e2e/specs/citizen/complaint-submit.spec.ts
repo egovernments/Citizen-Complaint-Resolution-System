@@ -21,7 +21,7 @@
  * whose location chip is unreadable. One real complaint is created per
  * run, consistent with the other lifecycle suites.
  *
- * A second test in the same describe.serial block re-logs in fresh and
+ * A second test in the same describe.serial block opens a fresh page and
  * clicks "My Complaints" on the citizen home, verifying that the
  * complaint we just filed shows up in the list. The citizen-side
  * inbox is the citizen's only confirmation surface — if filing succeeds
@@ -29,7 +29,7 @@
  * broken from the user's POV even though pgr-services holds the row.
  */
 import { test, expect, type Page } from '@playwright/test';
-import { citizenOtpLogin } from '../../utils/citizen-auth';
+import { citizenLoginViaApi } from '../../utils/citizen-auth';
 import { appBase } from '../../utils/auth';
 
 // Visible text that looks like a raw localization key: uppercase
@@ -93,7 +93,7 @@ test.describe.serial('Citizen complaint submit + view', () => {
       })
     );
 
-    await citizenOtpLogin(page);
+    await citizenLoginViaApi(page);
     await page.goto(`${appBase()}/citizen/pgr/create-complaint/complaint-type`);
 
     const nextBtn = page.getByRole('button', { name: /^next$/i });
@@ -235,11 +235,11 @@ test.describe.serial('Citizen complaint submit + view', () => {
     const locFetches: LocFetch[] = [];
     captureLoc(page, locFetches);
 
-    // Fresh login on a new page context — the inbox is server-driven
-    // (tied to the citizen's DIGIT user UUID), so the just-filed
-    // reference must be retrievable from a clean session, not just the
-    // one that submitted it.
-    await citizenOtpLogin(page);
+    // New page context: the SPA builds a fresh DIGIT session from the
+    // worker's citizen sign-in. The inbox is server-driven (tied to the
+    // citizen's DIGIT user UUID), so the just-filed reference must be
+    // retrievable from a clean session, not just the one that submitted it.
+    await citizenLoginViaApi(page);
     await page.goto(`${appBase()}/citizen`);
 
     // "My Complaints" on the V2 citizen home is a card / link / button

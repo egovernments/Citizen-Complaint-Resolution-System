@@ -18,7 +18,7 @@
  *     bugs where the update went through with the wrong UUID).
  */
 import { test, expect, type Page } from '@playwright/test';
-import { citizenOtpLogin, runCitizenMobile } from '../../utils/citizen-auth';
+import { citizenLoginViaApi, runCitizenMobile } from '../../utils/citizen-auth';
 import * as fs from 'fs';
 import * as path from 'path';
 import { appBase } from '../../utils/auth';
@@ -82,7 +82,7 @@ test.describe('Citizen landing page sidebar + profile edit', () => {
     const locFetches: LocFetch[] = [];
     captureLoc(page, locFetches);
 
-    await citizenOtpLogin(page);
+    await citizenLoginViaApi(page);
     await page.goto(`${appBase()}/citizen`);
 
     await openSidebar(page);
@@ -145,7 +145,7 @@ test.describe('Citizen landing page sidebar + profile edit', () => {
   test('Edit Profile: name + photo round-trip, reflect in sidebar', async ({
     page,
   }) => {
-    await citizenOtpLogin(page);
+    await citizenLoginViaApi(page);
     await page.goto(`${appBase()}/citizen`);
 
     await openSidebar(page);
