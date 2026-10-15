@@ -1,13 +1,15 @@
-import { tenantSlug } from '../utils/identity-bff';
 /**
- * Employee digit-ui shell — login + chrome + decrypted inbox bundle.
+ * Employee digit-ui shell — hosted sign-in chrome + shell + decrypted inbox bundle.
  *
  * Covers in one run:
  *   #592       /digit-ui/globalConfigs.js served + parseable
- *   #505 sub-1 login background brand-dark, not white
+ *   #505 sub-1 sign-in background brand-dark, not white — now asserted on
+ *              the Keycloak digit-employee theme (.dg-banner), which replaced
+ *              the digit-ui login form in #1999
  *   #505 sub-2 header surfaces the logged-in user's initial (post-fix
  *              circle removal)
- *   #505 sub-3 banner/header logo actually loads and lays out
+ *   #505 sub-3 sign-in header logo (.dg-banner-header__logo) actually loads
+ *              and lays out
  *   #505 sub-4 dropdown icons render with dark fill (not white-on-white)
  *   #344       PGR SecurityPolicy lets PGR roles read decrypted
  *              name/mobile (not hex blobs) on complaint detail page
@@ -17,17 +19,11 @@ import { tenantSlug } from '../utils/identity-bff';
  *   #622       Post-login shell mounts (no 503/something-went-wrong)
  */
 import { test, expect } from '@playwright/test';
-import {
-  BASE_URL,
-  EMPLOYEE_USER,
-  EMPLOYEE_PASS,
-  TENANT_LABEL,
-} from '../utils/env';
+import { BASE_URL, EMPLOYEE_USER, EMPLOYEE_PASS, TENANT } from '../utils/env';
 import { readLifecycleFixtures } from '../utils/lifecycle-fixtures';
-import { getPrincipal } from '../utils/employee-ui';
+import { loginViaApi } from '../utils/auth';
+import { authorizeUrl, surfacePath, tenantSlug } from '../utils/identity-bff';
 
-const LOGIN_URL = '/digit-ui/employee/user/login';
-const INBOX_URL = '/digit-ui/employee/pgr/inbox-v2';
 const GLOBAL_CONFIGS_URL = '/digit-ui/globalConfigs.js';
 
 const _fixtures = readLifecycleFixtures();
@@ -51,17 +47,15 @@ const ASSIGNED_COMPLAINT_ID =
 test.describe('employee digit-ui shell bundle', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
-  test('login + chrome + visible decrypt + inbox honest drives', { tag: ['@persona:employee'] }, async ({ page }) => {
+  test('hosted sign-in + chrome + visible decrypt + inbox honest drives', { tag: ['@persona:employee'] }, async ({ page }) => {
     // This test used to carry an unconditional `test.fixme(true, …)` blaming
     // two onboarding-data gaps. Both claims were false and are now retired:
     //   * "#344 needs a seeded ASSIGNED_COMPLAINT_ID" — lifecycle.setup.ts DOES
     //     seed one (lifecycle-fixtures.json -> complaints.assigned_to_employee),
     //     which is exactly what the resolution chain above reads.
-    //   * "#505 brand chrome needs tenant branding onboarded" — the login
+    //   * "#505 brand chrome needs tenant branding onboarded" — the sign-in
     //     banner renders its brand colour from the shipped stylesheet with zero
-    //     branding seeded, and no stylesheet rule anywhere produces the 96x96
-    //     logo the old assertion demanded (see the sizing comment below).
-    // The three assertions that were genuinely stale are fixed in place instead.
+    //     branding seeded.
     //
     // No skip guard here on purpose: an unresolved SRID is a broken
     // lifecycle-setup, not a legitimate "nothing to test" — fail loudly with the
@@ -76,77 +70,49 @@ test.describe('employee digit-ui shell bundle', () => {
     expect(gcResp.status()).toBe(200);
     expect(await gcResp.text()).toMatch(/STATE_LEVEL_TENANT_ID|stateTenantId/);
 
-    // ============ #505 sub-1 + sub-3 — login page UI ============
-    await page.goto(`${BASE_URL}${LOGIN_URL}?cb=${Date.now()}`);
-    await page.waitForLoadState('domcontentloaded');
-    await page.waitForTimeout(2_500);
-
-    const bannerBg = await page.evaluate(() => {
-      const el = document.querySelector('.banner') as HTMLElement | null;
-      return el ? getComputedStyle(el).backgroundColor : null;
-    });
-    expect(bannerBg, 'login banner must render with a brand color, not white').not.toMatch(
-      /rgba?\(\s*255\s*,\s*255\s*,\s*255/,
-    );
-
-    const logoBox = await page.evaluate(() => {
-      const img = document.querySelector('.bannerLogo') as HTMLImageElement | null;
-      return img
-        ? { w: img.offsetWidth, h: img.offsetHeight, natW: img.naturalWidth, natH: img.naturalHeight }
-        : null;
-    });
-    expect(logoBox, '#505 sub-3 — .bannerLogo must be present in the login banner').not.toBeNull();
-    /*
-     * The asset must genuinely decode. A broken/404 <img> still lays out a box,
-     * so a size-only check cannot tell "logo rendered" from "logo missing" —
-     * naturalWidth is 0 for anything the browser failed to load.
-     */
-    expect(logoBox!.natW, '#505 sub-3 — bannerLogo image must actually load').toBeGreaterThan(0);
-    expect(logoBox!.natH, '#505 sub-3 — bannerLogo image must actually load').toBeGreaterThan(0);
-    /*
-     * Size floor, deliberately NOT the old >= 96x96.
-     *
-     * The served digit-ui-css.css declares exactly two .bannerLogo rules:
-     * `width:80px;height:40px`, and the `.login-container .bannerHeader
-     * .bannerLogo{width:50%}` override that makes the rendered height
-     * aspect-driven from the banner width. Nothing anywhere declares 96px, so
-     * `h >= 96` demanded a size the shipped stylesheet cannot produce on ANY
-     * deployment (it measures 246x56 here — width passed, height failed).
-     *
-     * 40x20 is half the only box the stylesheet actually declares: far below
-     * what any real tenant logo renders at (so it does not re-pin a magic
-     * number), and far above the 0x0 / 1px collapse that a hidden, unstyled or
-     * detached logo produces — which is the regression #505 sub-3 is about.
-     */
-    expect(logoBox!.w, '#505 sub-3 bannerLogo laid-out width').toBeGreaterThanOrEqual(40);
-    expect(logoBox!.h, '#505 sub-3 bannerLogo laid-out height').toBeGreaterThanOrEqual(20);
-
-    // ============ #622 — Login completes ============
-    await page.locator('input[type="text"]').first().pressSequentially(EMPLOYEE_USER, { delay: 60 });
-    await page.locator('input[type="password"]').first().pressSequentially(EMPLOYEE_PASS, { delay: 60 });
-
-    /*
-     * The city picker's visible label is the LOCALIZED CORE_COMMON_CITY. On this
-     * deployment rainmaker-common sets it to 'County', so the old
-     * `getByRole('combobox', { name: /City/i })` matched nothing and burned the
-     * full 120s test timeout. Swapping in /County/i would just move the
-     * hardcoded English literal, so the label is kept out of the locator
-     * entirely: core's employee login page renders the picker as
-     * `<Select id="emp-city">` (pages/employee/Login/login.js), and that id is
-     * set by the app, not by any localization or tenant config. The
-     * [role="combobox"] arm is the structural fallback if the id is ever
-     * renamed — the login form has exactly one combobox.
-     */
-    const cityCombo = page.locator('#emp-city, [role="combobox"]').first();
-    if (!(await cityCombo.textContent())?.includes(TENANT_LABEL)) {
-      await cityCombo.click();
-      await page.waitForTimeout(700);
-      await page.getByRole('option', { name: new RegExp(TENANT_LABEL, 'i') }).first().click();
-      await page.waitForTimeout(700);
+    // ============ #505 sub-1 + sub-3 — hosted sign-in page (Keycloak theme) ============
+    // Since #1999 the employee signs in on Keycloak's digit-employee theme
+    // (keycloak/theme-src EmployeeTemplate.tsx); the digit-ui form with its
+    // .banner / City picker is gone. Without carousel images the card sits on
+    // .dg-banner (--color-digitv2-header-sidenav), with them on .dg-carousel-shell.
+    await page.goto(authorizeUrl(BASE_URL, 'employee'));
+    await expect(page.locator('#username')).toBeVisible({ timeout: 30_000 });
+    const shell = page.locator('.dg-root.dg-employee').locator('.dg-banner, .dg-carousel-shell').first();
+    await expect(shell, '#505 — the digit-employee theme must render its sign-in shell').toBeVisible();
+    if (await page.locator('.dg-banner').count()) {
+      const bannerBg = await page.locator('.dg-banner').first().evaluate((el) => getComputedStyle(el).backgroundColor);
+      expect(bannerBg, '#505 sub-1 — sign-in banner must render with a brand color, not white').not.toMatch(
+        /rgba?\(\s*255\s*,\s*255\s*,\s*255/,
+      );
     }
-    await page.getByText(/I agree to the DIGIT/i).click();
-    await page.waitForTimeout(700);
-    await page.getByRole('button', { name: /^Login$/i }).click();
+
+    /*
+     * #505 sub-3: TenantHeader's logo (Chrome.tsx). SafeImage renders nothing
+     * for an unset or failed src, so a broken logo shows up here as a missing
+     * element; naturalWidth guards against a decoded-but-empty box too. The
+     * stylesheet pins height 56px; 20px is the collapse floor, not a size pin.
+     */
+    const logo = page.locator('.dg-banner-header__logo').first();
+    await expect(logo, '#505 sub-3 — the sign-in header logo must render').toBeVisible();
+    // The CSS gives the <img> its box before the request lands: wait for the decode.
+    await expect
+      .poll(() => logo.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0), {
+        message: '#505 sub-3 — logo image must actually load',
+        timeout: 15_000,
+      })
+      .toBe(true);
+    const logoBox = await logo.evaluate((img: HTMLImageElement) => ({
+      w: img.offsetWidth, h: img.offsetHeight, natW: img.naturalWidth, natH: img.naturalHeight,
+    }));
+    expect(logoBox.natW, '#505 sub-3 — logo image must actually load').toBeGreaterThan(0);
+    expect(logoBox.natH, '#505 sub-3 — logo image must actually load').toBeGreaterThan(0);
+    expect(logoBox.w, '#505 sub-3 logo laid-out width').toBeGreaterThanOrEqual(20);
+    expect(logoBox.h, '#505 sub-3 logo laid-out height').toBeGreaterThanOrEqual(20);
+
+    // ============ #622 — sign-in completes and the shell mounts ============
+    // The persona signs in without the page (loginViaApi), so its password is
+    // never typed into a traced browser; the hosted form above is only looked at.
+    await loginViaApi(page, { tenant: TENANT, username: EMPLOYEE_USER, password: EMPLOYEE_PASS });
     await page.waitForURL(/\/digit-ui\/employee(?!\/user\/login)/, { timeout: 30_000 });
     await page.waitForTimeout(3_000);
 
@@ -155,20 +121,23 @@ test.describe('employee digit-ui shell bundle', () => {
      * The header renders the initial of the user's DISPLAY NAME, not of their
      * username: TopBar.js passes `userDetails.info.name` to the Dropdown's
      * `profilePic` prop, and Dropdown renders a string prop as
-     * `profilePic[0].toUpperCase()`. The old expectation read
-     * EMPLOYEE_USER.charAt(0) — the wrong source field, and wrong on every
-     * deployment whose employee login differs from their display name
-     * ('EMP001' -> 'E' vs "Jane Doe" -> 'J' here; 'ADMIN' -> 'A' vs
-     * "System Administrator" -> 'S' on a stock bootstrap).
-     *
-     * Resolve the display name live from the deployment's own user record
-     * rather than deriving it from any env literal.
+     * `profilePic[0].toUpperCase()`. The expectation comes from egov-user's
+     * own record, not from the session the header reads: if the context
+     * exchange put the username in info.name, both would agree on the wrong
+     * initial.
      */
-    const principal = await getPrincipal(EMPLOYEE_USER, EMPLOYEE_PASS);
-    const displayName = String(principal?.userInfo?.name ?? '').trim();
+    const session = await page.evaluate(() => {
+      const user = (window as any).Digit?.UserService?.getUser?.();
+      return { token: user?.access_token as string, uuid: user?.info?.uuid as string, tenantId: user?.info?.tenantId as string };
+    });
+    const userSearch = await page.request.post(`${BASE_URL}/user/_search`, {
+      data: { RequestInfo: { authToken: session.token }, tenantId: session.tenantId || TENANT, uuid: [session.uuid] },
+    });
+    expect(userSearch.status(), '#505 sub-2 — egov-user must return the signed-in employee').toBe(200);
+    const displayName = String((await userSearch.json()).user?.[0]?.name ?? '').trim();
     expect(
       displayName,
-      `#505 sub-2 — could not resolve a display name for ${EMPLOYEE_USER}; the header initial has no expectation to compare against`,
+      `#505 sub-2 — no display name in the session for ${EMPLOYEE_USER}; the header initial has no expectation to compare against`,
     ).not.toBe('');
     const expectedInitial = displayName.charAt(0).toUpperCase();
     const headerInitial = await page.evaluate((expected) => {
@@ -235,7 +204,7 @@ test.describe('employee digit-ui shell bundle', () => {
     ).toBeVisible({ timeout: 15_000 });
 
     // ============ #432 sub-1/2/3 — inbox honest drives ============
-    await page.goto(`${BASE_URL}${INBOX_URL}?cb=${Date.now()}`);
+    await page.goto(`${BASE_URL}${surfacePath('employee', 'pgr/inbox-v2')}?cb=${Date.now()}`);
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(4_000);
 

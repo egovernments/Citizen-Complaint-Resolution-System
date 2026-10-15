@@ -22,10 +22,12 @@ export function WelcomeDialog({ open, onOpenChange }: { open: boolean; onOpenCha
 
   return (
     <Dialog open={open} onOpenChange={change}>
-      <DialogContent className="max-w-3xl gap-0 overflow-hidden p-0 sm:rounded-xl">
-        {/* A fixed minimum height so the dialog doesn't jump as slides change length. */}
-        <div className="grid md:min-h-[27rem] md:grid-cols-[5fr_6fr]">
-          <div className="flex h-40 items-center justify-center bg-primary/10 md:h-auto" aria-hidden="true">
+      <DialogContent className="max-w-4xl gap-0 overflow-hidden p-0 sm:rounded-xl">
+        {/* A fixed minimum height so the dialog doesn't jump as slides change length. The
+            illustrations are square, so from md the picture column is as wide as that
+            height and shows each one whole instead of cropping its sides. */}
+        <div className="grid md:min-h-[26rem] md:grid-cols-[26rem_1fr]">
+          <div className="flex h-48 items-center justify-center bg-primary/10 md:h-auto" aria-hidden="true">
             {slide.image ? (
               <img src={slide.image} alt="" className="h-full w-full object-cover" />
             ) : (

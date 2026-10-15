@@ -172,7 +172,7 @@ Pairs with create test #1 — together they cover all three mutation paths (crea
     });
 
     await page.goto(LIST_PATH);
-    await page.getByPlaceholder(/search/i).first().fill(code);
+    await page.locator('#main-content').getByPlaceholder(/search/i).first().fill(code);
     await page.waitForLoadState('networkidle').catch(() => {});
     await page.getByRole('row').filter({ hasText: code }).click();
 
@@ -203,7 +203,7 @@ Pairs with create test #1 — together they cover all three mutation paths (crea
     // search filter — so re-open the record before the second edit rather
     // than assuming we're still on its show view.
     await page.goto(LIST_PATH);
-    await page.getByPlaceholder(/search/i).first().fill(code);
+    await page.locator('#main-content').getByPlaceholder(/search/i).first().fill(code);
     await page.waitForLoadState('networkidle').catch(() => {});
     await page.getByRole('row').filter({ hasText: code }).click();
     await page.getByRole('button', { name: /^Edit$/i }).click();
@@ -295,7 +295,7 @@ Filter-by-array logic — confirms the dataProvider sends the right query for ch
     await option.click();
 
     // codeA should appear; codeOther should not. Scope to the seeded rows.
-    await page.getByPlaceholder(/search/i).first().fill('PW_');
+    await page.locator('#main-content').getByPlaceholder(/search/i).first().fill('PW_');
     // The grid debounces (setFilters(..., undefined, true)) and neither the
     // option click nor the keystrokes navigate, so waitForLoadState('networkidle')
     // resolves in ~0.2 ms. Auto-retrying expect is the honest wait.
@@ -336,7 +336,7 @@ Cancel path is the contract: clicking Cancel must NOT silently persist the deact
     });
 
     await page.goto(LIST_PATH);
-    await page.getByPlaceholder(/search/i).first().fill(code);
+    await page.locator('#main-content').getByPlaceholder(/search/i).first().fill(code);
     await page.waitForLoadState('networkidle').catch(() => {});
     await page.getByRole('row').filter({ hasText: code }).click();
     await page.getByRole('button', { name: /^Edit$/i }).click();
@@ -463,10 +463,12 @@ If the soft-delete persists but the UI still shows the row, the dataProvider's i
     // The dataProvider.mdmsGetList filters out isActive=false rows, so
     // the default list view should no longer show this code.
     await page.goto(LIST_PATH);
-    await page.getByPlaceholder(/search/i).first().fill(code);
-    await page.waitForLoadState('networkidle').catch(() => {});
+    await page.locator('#main-content').getByPlaceholder(/search/i).first().fill(code);
+    // The list shows active and inactive records alike (its Status filter narrows
+    // them), so the soft-deleted row stays, marked Inactive.
     const rows = page.getByRole('row').filter({ hasText: code });
-    expect(await rows.count()).toBe(0);
+    await expect(rows).toHaveCount(1);
+    await expect(rows.first()).toContainText(/Inactive/i);
   });
 
   test('5d. HRMS probe returns assignments.designation for guard counter', {
