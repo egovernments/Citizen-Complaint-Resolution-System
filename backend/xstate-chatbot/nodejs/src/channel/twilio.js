@@ -8,7 +8,7 @@ const { maskMobile, summarizeInbound } = require('../privacy');
 const { isValidTwilioSignature } = require('./twilio-signature');
 
 // Twilio's limit on a single message body. See splitBody below.
-const TWILIO_MAX_BODY = 1600;
+const TWILIO_MAX_BODY = require('./limits').MAX_BODY_LENGTH.Twilio;
 
 // The only host inbound media is fetched from, and the only path shape accepted
 // on it. See twilioMediaUrl below.
@@ -31,6 +31,9 @@ class TwilioWhatsAppProvider {
         this.authToken = config.twilio.authToken;
         this.whatsappNumber = config.twilio.whatsappNumber;
         this.baseUrl = config.twilio.baseUrl || `https://api.twilio.com/2010-04-01/Accounts/${this.accountSid}/Messages.json`;
+        // Pause between the parts of a split body: Twilio does not guarantee WhatsApp
+        // delivery order, and back-to-back sends can arrive shuffled.
+        this.chunkDelayMs = 1000;
     }
 
     getAuthHeader() {
@@ -490,12 +493,18 @@ class TwilioWhatsAppProvider {
 
     // Twilio rejects a body over 1600 characters outright (error 21617), so an over-long
     // prompt reached nobody and the conversation stalled with no reply. Split it instead,
-    // at line breaks where possible so a numbered option is never cut in half.
+    // at line breaks where possible so a numbered option is never cut in half. A body
+    // within the limit is returned untouched, leading blank lines included.
     splitBody(body, limit = TWILIO_MAX_BODY) {
+        const text = String(body);
+        if (text.length <= limit) return [text];
+
         const chunks = [];
         let current = '';
-        for (const line of String(body).split('\n')) {
-            const candidate = current ? current + '\n' + line : line;
+        let started = false;
+        for (const line of text.split('\n')) {
+            const candidate = started ? current + '\n' + line : line;
+            started = true;
             if (candidate.length <= limit) {
                 current = candidate;
                 continue;
@@ -503,23 +512,43 @@ class TwilioWhatsAppProvider {
             if (current) chunks.push(current);
             current = line;
             while (current.length > limit) {
-                chunks.push(current.slice(0, limit));
-                current = current.slice(limit);
+                const cut = this.cutPoint(current, limit);
+                chunks.push(current.slice(0, cut));
+                current = current.slice(cut).replace(/^\s+/, '');
             }
         }
-        if (current || chunks.length === 0) chunks.push(current);
+        if (current) chunks.push(current);
         return chunks;
     }
 
+    // Where to cut a single line longer than the limit: at the last whitespace before it
+    // (so a word or *bold* marker stays whole), else at the limit, never between the two
+    // halves of a surrogate pair (an emoji).
+    cutPoint(line, limit) {
+        const space = line.lastIndexOf(' ', limit);
+        let cut = space > 0 ? space : limit;
+        const code = line.charCodeAt(cut - 1);
+        if (code >= 0xD800 && code <= 0xDBFF) cut -= 1;
+        return cut;
+    }
+
+    // Sends each part in order and stops at the first that fails: carrying on would show
+    // the citizen a menu starting partway through. Resolves to undefined on any failure.
     async sendTextMessage(to, body, tenantId = null) {
         const address = await this.toWhatsAppAddress(to, tenantId);
+        const chunks = this.splitBody(body);
         let response;
-        for (const chunk of this.splitBody(body)) {
+        for (let i = 0; i < chunks.length; i++) {
+            if (i > 0 && this.chunkDelayMs > 0) await new Promise((resolve) => setTimeout(resolve, this.chunkDelayMs));
             const params = new URLSearchParams();
             params.append('To', address);
             params.append('From', this.senderAddress());
-            params.append('Body', chunk);
+            params.append('Body', chunks[i]);
             response = await this.sendTwilioRequest(params);
+            if (!response) {
+                console.error(`Twilio - part ${i + 1} of ${chunks.length} failed; not sending the rest`);
+                return undefined;
+            }
         }
         return response;
     }

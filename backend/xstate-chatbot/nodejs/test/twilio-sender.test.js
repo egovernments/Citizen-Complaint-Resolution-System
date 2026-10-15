@@ -74,6 +74,7 @@ test("REGRESSION: a body over 1600 characters is split at line breaks, not rejec
   // conversation stalled silently.
   const provider = loadProvider("whatsapp:+14155238886");
   provider.toWhatsAppAddress = async () => "whatsapp:+916307817430";
+  provider.chunkDelayMs = 0;
   const bodies = [];
   provider.sendTwilioRequest = async (params) => { bodies.push(params.get("Body")); return { sid: "SM" + bodies.length }; };
 
@@ -89,4 +90,47 @@ test("REGRESSION: a body over 1600 characters is split at line breaks, not rejec
   await provider.sendTextMessage("6307817430", "hello", "ke");
   assert.deepEqual(bodies, ["hello"]);
   assert.deepEqual(provider.splitBody("x".repeat(3500)).map((c) => c.length), [1600, 1600, 300]);
+});
+
+test("REVIEW: a body within the limit goes out untouched, leading blank line included", () => {
+  const provider = loadProvider("whatsapp:+14155238886");
+  // List prompts start with "\n*1.*"; trimming it changed every existing message.
+  assert.deepEqual(provider.splitBody("\n*1.*  Garbage\n*2.*  Water"), ["\n*1.*  Garbage\n*2.*  Water"]);
+});
+
+test("REVIEW: a failed part stops the rest and the send reports failure", async () => {
+  const provider = loadProvider("whatsapp:+14155238886");
+  provider.toWhatsAppAddress = async () => "whatsapp:+916307817430";
+  provider.chunkDelayMs = 0;
+  const sent = [];
+  // Part 1 fails (rate limit / 5xx): sendTwilioRequest returns undefined.
+  provider.sendTwilioRequest = async (params) => { sent.push(params.get("Body")); return sent.length === 1 ? undefined : { sid: "SM" }; };
+  const lines = Array.from({ length: 100 }, (_, i) => `*${i + 1}.* complaints.categories.Option${i + 1}`);
+
+  const result = await provider.sendTextMessage("6307817430", lines.join("\n"), "ke");
+  assert.equal(sent.length, 1, "the menu is not shown starting partway through");
+  assert.equal(result, undefined);
+});
+
+test("REVIEW: a hard split cuts at whitespace and never inside an emoji", () => {
+  const provider = loadProvider("whatsapp:+14155238886");
+  const words = provider.splitBody("word ".repeat(400).trim(), 1600);
+  for (const chunk of words) assert.match(chunk, /^(word )*word$/, "no word cut in half");
+
+  // An emoji whose surrogate pair straddles the limit moves whole to the next part.
+  const emoji = "x".repeat(1599) + "\u{1F449}" + "y";
+  const parts = provider.splitBody(emoji, 1600);
+  assert.deepEqual(parts.map((p) => p.length), [1599, 3]);
+  assert.equal(parts[1].codePointAt(0), 0x1F449);
+});
+
+test("REVIEW: parts of a split body are spaced out to keep their order", async () => {
+  const provider = loadProvider("whatsapp:+14155238886");
+  provider.toWhatsAppAddress = async () => "whatsapp:+916307817430";
+  provider.chunkDelayMs = 30;
+  const at = [];
+  provider.sendTwilioRequest = async () => { at.push(Date.now()); return { sid: "SM" }; };
+  await provider.sendTextMessage("6307817430", "a\n".repeat(1000) + "b".repeat(1000), "ke");
+  assert.ok(at.length >= 2);
+  for (let i = 1; i < at.length; i++) assert.ok(at[i] - at[i - 1] >= 25, `gap ${at[i] - at[i - 1]}ms`);
 });

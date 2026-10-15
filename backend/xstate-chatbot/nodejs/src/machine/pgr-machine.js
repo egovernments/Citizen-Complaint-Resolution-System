@@ -25,6 +25,11 @@ const { yesNoOptions } = require('./flow/yes-no-options');
 const localisationService = require('./util/localisation-service');
 const { pgrService } = require('./service/service-loader');
 
+// Institution and confidentiality reach PGR only inside extendedAttributes, which
+// persistComplaint omits when CASE_RELATED_TO is empty (no ComplaintTemplateType row on
+// the tenant). Asking for them then would promise a confidentiality PGR never records.
+const collectsExtendedAttributes = Boolean(config.caseRelatedTo);
+
 const consentStatements = (context) =>
   [messages.fileComplaint.consent.dataProcessing, messages.fileComplaint.consent.truthfulness]
     .map((bundle) => dialog.get_message(bundle, context.user.locale))
@@ -65,7 +70,7 @@ const confirmationSummary = (context) => {
     [fields.location, labelForCode(context, context.slots.pgr.locality)],
     [fields.institution, context.slots.pgr.instituteName],
     [fields.description, context.slots.pgr.description],
-    [fields.confidentiality, text(context.slots.pgr.isConfidential ? fields.yes : fields.no)]
+    [fields.confidentiality, collectsExtendedAttributes && text(context.slots.pgr.isConfidential ? fields.yes : fields.no)]
   ]
     .filter(([, value]) => value)
     .map(([bundle, value]) => `*${text(bundle)}:* ${value}`)
@@ -95,7 +100,8 @@ const system_error = new State('system_error');
 
 const typeGroup = new Group('type').setStates([walkComplaintTypes]).setStart('complaintType2Step');
 const locationGroup = new Group('location').setStates([walkBoundaries]).setStart('boundary');
-const otherGroup = new Group('other').setStates([askIntitution, askDescription, askForAttachments]).setStart('institution');
+const otherGroup = new Group('other').setStates([askIntitution, askDescription, askForAttachments])
+  .setStart(collectsExtendedAttributes ? 'institution' : 'description');
 
 const fileComplaintGroup = new Group('fileComplaint')
   .setStates([typeGroup, locationGroup, otherGroup, askConsent, consentDeclined, askConfidentiality, confirmSubmission, persistComplaint])
@@ -166,7 +172,7 @@ askConsent
   .setPrompt(messages.fileComplaint.consent.question)
   .setFill({ statements: consentStatements })
   .setOptions(yesNoOptions(choices.accept, choices.decline))
-  .setConditionalNext(askConfidentiality, (context) => context.intention === 'Yes')
+  .setConditionalNext(collectsExtendedAttributes ? askConfidentiality : confirmSubmission, (context) => context.intention === 'Yes')
   .setNext(consentDeclined);
 
 consentDeclined

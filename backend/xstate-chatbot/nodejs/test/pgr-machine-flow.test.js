@@ -20,7 +20,7 @@ function stub(file, exports) {
 // The live filing machine, with only its I/O collaborators replaced. Unlike the
 // old pgr-flow.test.js -- which drove the table-generated pgr.js that nothing in
 // the production require chain loads -- this is the machine citizens actually hit.
-function loadLiveMachine({ service, localisation }) {
+function loadLiveMachine({ service, localisation, env = {} }) {
   for (const f of [p("src/machine/pgr-machine.js"), p("src/machine/flow/pgr-messages.js")]) delete require.cache[f];
 
   stub(p("src/env-variables.js"), {
@@ -36,6 +36,8 @@ function loadLiveMachine({ service, localisation }) {
     descriptionMinLength: 20,
     caseRelatedTo: "IGE",
     maxMediaSizeMb: 5,
+    whatsAppProvider: "Twilio",
+    ...env,
   });
   stub(p("src/machine/service/service-loader.js"), { pgrService: service });
   stub(p("src/machine/util/localisation-service.js"), localisation);
@@ -43,9 +45,9 @@ function loadLiveMachine({ service, localisation }) {
   return require(p("src/machine/pgr-machine.js"));
 }
 
-function harness({ service, localisation = { getMessageBundleForCode: () => undefined, getLocales: () => [] } }) {
+function harness({ service, localisation = { getMessageBundleForCode: () => undefined, getLocales: () => [] }, env }) {
   const outputs = [];
-  const pgr = loadLiveMachine({ service, localisation });
+  const pgr = loadLiveMachine({ service, localisation, env });
 
   const machine = Machine({
     id: "root",
@@ -250,4 +252,76 @@ test("a long complaint level is paged under Twilio's 1600-character limit", asyn
 
   assert.equal(persisted.length, 1);
   assert.equal(persisted[0].complaint, second, "the option picked on page 2 is the one filed");
+});
+
+test("REVIEW: with CASE_RELATED_TO empty, institution and confidentiality are not asked", async () => {
+  // PGR gets no extendedAttributes then, so a "keep me confidential" answer would be
+  // silently dropped while the citizen believed it was honoured.
+  const persisted = [];
+  const service = happyPathService({
+    persistComplaint: async (user, slots) => {
+      persisted.push(slots);
+      return { complaintNumber: "PGR-42", filedDate: "18/09/2026" };
+    },
+  });
+  const h = harness({ service, env: { caseRelatedTo: "" } });
+  h.service.start();
+  await settle();
+
+  // menu -> file, category, sub-type (leaf), district (leaf): straight to the description
+  for (const reply of ["1", "1", "1", "1"]) {
+    h.say(reply);
+    await settle();
+  }
+  h.say("Faltam medicamentos essenciais no hospital desde a semana passada.");
+  await settle();
+  // skip attachment, accept consent: straight to the confirmation
+  for (const reply of ["1", "1"]) {
+    h.say(reply);
+    await settle();
+  }
+  const summary = h.outputs[h.outputs.length - 1];
+  assert.doesNotMatch(summary, /Confidencial/i, "no confidentiality line in the summary");
+  assert.doesNotMatch(summary, /Institui/i, "no institution line in the summary");
+  h.say("1");
+  await settle(20);
+
+  assert.equal(persisted.length, 1, "filed after description, attachment and consent only");
+  assert.match(persisted[0].description, /medicamentos/);
+  assert.equal(persisted[0].instituteName, undefined);
+  assert.equal(persisted[0].isConfidential, undefined);
+  assert.ok(!h.outputs.some((m) => /confidencial/i.test(m) && /\*1\*/.test(m)), "the confidentiality question was never sent");
+});
+
+test("REVIEW: Go Back returns to the page the citizen left", async () => {
+  const codes = Array.from({ length: 60 }, (_, i) => `CAT_${String(i + 1).padStart(3, "0")}`);
+  const bundle = Object.fromEntries(codes.map((c) => [c, { pt_PT: `complaints.categories.${c}LongEnoughToPage` }]));
+  const service = happyPathService({
+    fetchComplaintHierarchyStep: async (tenantId, path = []) =>
+      path.length === 0
+        ? { options: codes, messageBundle: bundle, trailBundle: {}, levelLabel: "Categoria", isLeafLevel: false }
+        : { options: ["SUB"], messageBundle: { SUB: { pt_PT: "Subtipo" } }, trailBundle: bundle, levelLabel: "Subtipo", isLeafLevel: true },
+  });
+  const h = harness({ service });
+  h.service.start();
+  await settle();
+  h.say("1");
+  await settle();
+
+  const page1 = h.outputs[h.outputs.length - 1];
+  const count = (page) => (page.match(/^\*\d+\.\*/gm) || []).length;
+  h.say(String(count(page1))); // See more
+  await settle();
+  const page2 = h.outputs[h.outputs.length - 1];
+  const firstOnPage2 = page2.match(/^\*1\.\*\s+complaints\.categories\.(CAT_\d+)/m)[1];
+  assert.notEqual(firstOnPage2, "CAT_001");
+
+  h.say("1"); // descend into the first option on page 2
+  await settle();
+  const child = h.outputs[h.outputs.length - 1];
+  h.say(String(count(child))); // Go Back is the last option
+  await settle();
+
+  assert.match(h.outputs[h.outputs.length - 1], new RegExp(`^\\*1\\.\\*\\s+complaints\\.categories\\.${firstOnPage2}`, "m"),
+    "back on page 2, not page 1");
 });

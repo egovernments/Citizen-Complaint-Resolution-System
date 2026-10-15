@@ -6,11 +6,13 @@
 const { assign } = require('xstate');
 const dialog = require('../util/dialog');
 const State = require('./flow-state');
+const config = require('../../env-variables');
+const { maxBodyLength } = require('../../channel/limits');
 
-// Twilio rejects a WhatsApp body over 1600 characters (error 21617) and the citizen
-// hears nothing, so a long level is paged behind "See more". The budget leaves room
-// for the channel's own formatting; the option cap keeps a page readable on a phone.
-const MAX_PAGE_CHARS = 1500;
+// A channel rejects a body over its limit (Twilio: 21617) and the citizen hears nothing,
+// so a long level is paged behind "See more". The margin leaves room for the channel's
+// own formatting; the option cap keeps a page readable on a phone.
+const PAGE_MARGIN_CHARS = 100;
 const MAX_PAGE_OPTIONS = 20;
 
 // A bare function is shorthand for { set: fn }; a step may have neither.
@@ -72,28 +74,45 @@ class WalkState extends State {
   get grammerSlot() { return this.key + 'Grammer'; }
   get offsetSlot() { return this.key + 'Offset'; }
   get nextOffsetSlot() { return this.key + 'NextOffset'; }
+  // the page each level above this one was on, so Go Back returns to it
+  get offsetStackSlot() { return this.key + 'OffsetStack'; }
+  get restoreOffsetSlot() { return this.key + 'RestoreOffset'; }
 
   getPath(context) {
     return context[this.pathSlot] || [];
   }
 
-  // The page of this level starting at `offset`: as many options as fit the budget
-  // (at least one, however long), plus "See more" when any are left over or when
+  // The page of this level starting at `offset`: as many options as fit the channel's
+  // limit (at least one, however long), plus "See more" when any are left over or when
   // paging back round to the start. Numbering restarts at 1 on every page.
   renderPage(context, offset) {
     const { options = [], messageBundle = {} } = context[this.stepSlot] || {};
     const locale = context.user.locale;
     const goback = this.getPath(context).length > 0;
     const preamble = this.renderPreamble(context);
-    const fits = (end) =>
-      end - offset <= MAX_PAGE_OPTIONS &&
-      (preamble + dialog.constructListPromptAndGrammer(options.slice(offset, end), messageBundle, locale, true, goback).prompt).length <= MAX_PAGE_CHARS;
+    const maxChars = maxBodyLength(config.whatsAppProvider) - PAGE_MARGIN_CHARS;
+    const build = (end, paged) =>
+      dialog.constructListPromptAndGrammer(options.slice(offset, end), messageBundle, locale, paged, goback);
 
-    let end = Math.min(offset + 1, options.length);
-    while (end < options.length && fits(end + 1)) end++;
+    // One render of the largest candidate page, measured line by line: rebuilding the
+    // whole page for every candidate size cost up to 20 renders per entry.
+    let end = Math.min(offset + MAX_PAGE_OPTIONS, options.length);
+    const lines = build(end, true).prompt.split(/\n(?=\*\d+\.\*)/).slice(1).map((line) => line.length + 1);
+    const tail = lines.slice(end - offset).reduce((sum, n) => sum + n, 0);
+    let length = preamble.length + tail;
+    let fitted = 0;
+    while (offset + fitted < end && (fitted === 0 || length + lines[fitted] <= maxChars)) {
+      length += lines[fitted];
+      fitted++;
+    }
+    end = offset + fitted;
 
-    const paged = offset > 0 || end < options.length;
-    const list = dialog.constructListPromptAndGrammer(options.slice(offset, end), messageBundle, locale, paged, goback);
+    let list = build(end, offset > 0 || end < options.length);
+    // The estimate used the widest numbering; if a page still overflows, shed options.
+    while ((preamble + list.prompt).length > maxChars && end - offset > 1) {
+      end--;
+      list = build(end, true);
+    }
     return { prompt: preamble + list.prompt, grammer: list.grammer, nextOffset: end < options.length ? end : 0 };
   }
 
@@ -122,7 +141,10 @@ class WalkState extends State {
               target: 'evaluate',
               actions: assign((context, event) => {
                 context[this.stepSlot] = event.data;
-                context[this.offsetSlot] = 0;
+                const restore = context[this.restoreOffsetSlot];
+                const count = ((event.data || {}).options || []).length;
+                context[this.offsetSlot] = restore > 0 && restore < count ? restore : 0;
+                context[this.restoreOffsetSlot] = undefined;
               })
             },
             onError: { target: this.onError ? '#' + this.onError.key : '#system_error' }
@@ -169,7 +191,12 @@ class WalkState extends State {
             {
               target: 'fetch',
               cond: (context) => context.intention === dialog.INTENTION_GOBACK,
-              actions: assign((context) => { context[this.pathSlot] = this.getPath(context).slice(0, -1); })
+              actions: assign((context) => {
+                context[this.pathSlot] = this.getPath(context).slice(0, -1);
+                const stack = [...(context[this.offsetStackSlot] || [])];
+                context[this.restoreOffsetSlot] = stack.pop();
+                context[this.offsetStackSlot] = stack;
+              })
             },
             {
               target: '#' + this.onLeaf.state.key,
@@ -189,7 +216,10 @@ class WalkState extends State {
             {
               target: 'fetch',
               cond: (context) => context.intention !== dialog.INTENTION_UNKOWN,
-              actions: assign((context) => { context[this.pathSlot] = [...this.getPath(context), context.intention]; })
+              actions: assign((context) => {
+                context[this.pathSlot] = [...this.getPath(context), context.intention];
+                context[this.offsetStackSlot] = [...(context[this.offsetStackSlot] || []), context[this.offsetSlot] || 0];
+              })
             },
             { target: 'retry' }
           ]
