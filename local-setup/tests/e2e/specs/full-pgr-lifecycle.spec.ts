@@ -23,6 +23,7 @@ import { PgrInboxPage } from '../pages/pgr-inbox.page';
 import { getDigitToken, loginViaApi, appBase } from '../utils/auth';
 import { requiredEnv } from '../utils/identity';
 import { citizenLoginViaApi, citizenOtpLogin, runCitizenMobile } from '../utils/citizen-auth';
+import { pickSelectOption } from '../utils/select';
 import { getLmeByUuid } from '../common/hrms-employees';
 import { complaintTypePath, pickServiceDefInDepartments } from '../common/mdms-servicedef';
 
@@ -210,12 +211,7 @@ test.describe.serial('Full PGR lifecycle — citizen, admin, employee', () => {
     await description.waitFor({ state: 'visible', timeout: 30_000 });
     await description.fill(`Full lifecycle E2E test via UI wizard - ${Date.now()}`);
     for (const [level, node] of typePath.entries()) {
-      const combo = page.locator(`#lvl-${level}`);
-      await expect(combo).toBeEnabled({ timeout: 15_000 });
-      await combo.click();
-      const option = page.getByRole('option', { name: new RegExp(`^${escapeRegExp(node.name)}$`, 'i') });
-      await expect(option, `complaint type "${node.name}" (${node.code}) is not offered at level ${level}`).toHaveCount(1, { timeout: 20_000 });
-      await option.click();
+      await pickSelectOption(page, page.locator(`#lvl-${level}`), node.name);
     }
     await snap(page, '04a-complaint-details');
     await expect(nextBtn).toBeEnabled({ timeout: 10_000 });
@@ -226,11 +222,7 @@ test.describe.serial('Full PGR lifecycle — citizen, admin, employee', () => {
     for (; levels < 6; levels++) {
       const combo = page.locator('[id^="boundary-"]').nth(levels);
       if (!await combo.waitFor({ state: 'visible', timeout: levels === 0 ? 30_000 : 15_000 }).then(() => true, () => false)) break;
-      await expect(combo).toBeEnabled({ timeout: 15_000 });
-      await combo.click();
-      const options = page.getByRole('option');
-      await expect.poll(() => options.count(), { timeout: 20_000 }).toBeGreaterThan(0);
-      await options.first().click();
+      await pickSelectOption(page, combo);
     }
     expect(levels, 'no boundary dropdowns rendered on the location step').toBeGreaterThan(0);
     await snap(page, '04b-location');
@@ -404,7 +396,7 @@ test.describe.serial('Full PGR lifecycle — citizen, admin, employee', () => {
 
     const bodyText = await page.locator('body').innerText();
     expect(bodyText).toContain(serviceRequestId);
-    expect(bodyText).toMatch(/PENDINGATLME|Pending at LME|Pending for resolution/i);
+    expect(bodyText).toMatch(/PENDINGATLME|Pending at (LME|last mile employee)/i);
     await snap(page, '08-employee-sees-pendingatlme');
     console.log(`Employee ${EMPLOYEE_USER} sees ${serviceRequestId} as PENDINGATLME`);
   });

@@ -31,6 +31,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { citizenLoginViaApi } from '../../utils/citizen-auth';
 import { appBase } from '../../utils/auth';
+import { pickSelectOption } from '../../utils/select';
 
 // Visible text that looks like a raw localization key: uppercase
 // letter/digit run with at least one `.`/`_` separator. Matches
@@ -60,14 +61,6 @@ function captureLoc(page: Page, sink: LocFetch[]) {
 // stale bootstrap could have copied.
 const POSTAL_CODE = process.env.CITIZEN_POSTAL_CODE || '1000';
 
-async function pickFirstOption(page: Page, combo: ReturnType<Page['locator']>) {
-  await combo.click();
-  const options = page.getByRole('option');
-  await expect.poll(async () => options.count(), { timeout: 20_000 }).toBeGreaterThan(0);
-  const label = (await options.first().innerText()).trim();
-  await options.first().click();
-  return label;
-}
 
 test.describe.serial('Citizen complaint submit + view', () => {
   test.slow();
@@ -109,7 +102,7 @@ test.describe.serial('Citizen complaint submit + view', () => {
       const typeCombo = page.locator(`#lvl-${level}`);
       if (!await typeCombo.isVisible().catch(() => false)) break;
       await expect(typeCombo).toBeEnabled({ timeout: 15_000 });
-      console.log(`COMPLAINT TYPE level ${level}:`, await pickFirstOption(page, typeCombo));
+      console.log(`COMPLAINT TYPE level ${level}:`, await pickSelectOption(page, typeCombo));
     }
     await expect(nextBtn).toBeEnabled({ timeout: 10_000 });
     await nextBtn.click();
@@ -169,8 +162,10 @@ test.describe.serial('Citizen complaint submit + view', () => {
           .join(', ')} (sample: ${optionLabels.slice(0, 5).join(' | ')})`
       ).toHaveLength(0);
 
+      // Commit by keyboard: the popover can sit outside the viewport (see utils/select.ts).
       const pickedLabel = (await options.first().innerText()).trim();
-      await options.first().click();
+      await page.keyboard.press('Enter');
+      await expect(combo).toContainText(pickedLabel);
       pickedLevels.push(`${comboId}=${pickedLabel}`);
       console.log(`BOUNDARY ${comboId}: ${pickedLabel}`);
     }

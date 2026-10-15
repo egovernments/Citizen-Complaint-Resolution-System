@@ -295,7 +295,7 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
 
     const bodyText = await page.locator('body').innerText();
     expect(bodyText).toContain(serviceRequestId);
-    expect(bodyText).toMatch(/PENDINGATLME|Pending at LME|Pending for resolution/i);
+    expect(bodyText).toMatch(/PENDINGATLME|Pending at (LME|last mile employee)/i);
     console.log(`Details page confirms PENDINGATLME status`);
   });
 
