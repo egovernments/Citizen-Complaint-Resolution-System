@@ -1,0 +1,52 @@
+#!/bin/sh
+# `claude` in this image: the Claude Code CLI as OpenSRE's model transport
+# (LLM_PROVIDER=claude-code, set by run-sweeps.sh), with every capability of
+# its own switched off.
+#
+# Why this route: OpenSRE 0.1.2026.9.21 applies guardrails.yml only on its CLI
+# transport. There the whole conversation (the prompt, every tool result, the
+# attached pages) is flattened into one text and masked before the CLI starts
+# (integrations/llm_cli/runner.py). Its Anthropic SDK client (LLM_PROVIDER=
+# anthropic) sends tool results to the API unmasked.
+#
+# Claude Code is an agent in its own right: by default it could read files and
+# run commands in this container. Here it only answers. OpenSRE calls it three
+# ways, and anything else is refused:
+#   claude --version
+#   claude auth status
+#   claude -p --output-format text [--model <model>]   (prompt on stdin)
+# The last runs with no built-in tools, no MCP servers, no settings files, no
+# slash commands or skills, and no telemetry, error reporting or auto-update.
+REAL=/opt/claude-code/claude
+
+export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 DISABLE_AUTOUPDATER=1 \
+  DISABLE_TELEMETRY=1 DISABLE_ERROR_REPORTING=1
+
+refuse() {
+  echo "claude (locked, see /usr/local/bin/claude): refusing: $*" >&2
+  exit 2
+}
+
+case "${1:-}" in
+  --version)
+    [ $# -eq 1 ] || refuse "$@"
+    exec "$REAL" --version ;;
+  auth)
+    [ $# -eq 2 ] && [ "$2" = status ] || refuse "$@"
+    exec "$REAL" auth status ;;
+  -p)
+    shift
+    model=
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --output-format) [ "${2:-}" = text ] || refuse "$@"; shift 2 ;;
+        --model) [ -n "${2:-}" ] || refuse "$@"; model=$2; shift 2 ;;
+        *) refuse "$@" ;;
+      esac
+    done
+    set -- -p --output-format text --tools "" --strict-mcp-config \
+      --setting-sources "" --disable-slash-commands
+    if [ -n "$model" ]; then set -- "$@" --model "$model"; fi
+    exec "$REAL" "$@" ;;
+esac
+refuse "$@"

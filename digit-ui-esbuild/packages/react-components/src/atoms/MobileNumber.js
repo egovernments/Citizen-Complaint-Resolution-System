@@ -1,5 +1,6 @@
 import React from "react";
 import PropTypes from "prop-types";
+import { mobilePrefix } from "./mobilePrefix"; // ours (#1929)
 
 const MobileNumber = (props) => {
   const user_type = Digit.SessionStorage.get("userType");
@@ -16,9 +17,8 @@ const MobileNumber = (props) => {
   // historical `+91` default. Letting callers override the prefix prop
   // lets Nai Pepea surface `+254` instead of the hardcoded India prefix
   // without changing every callsite (closes egovernments/CCRS#444 sub-1).
-  const configuredPrefix =
-    window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS")?.countryCode;
-  const displayPrefix = props.prefix || configuredPrefix || "+91";
+  // ours (#1929): MDMS (useMobileValidation) first, then globalConfigs, then "+91" - one rule with the phone atoms
+  const displayPrefix = props.prefix || mobilePrefix();
 
   return (
     <React.Fragment>

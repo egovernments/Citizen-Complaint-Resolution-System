@@ -135,7 +135,7 @@ test.describe('Configurator RCA — Round 2 regressions', () => {
   // #483 — Boolean field rendered as checkbox in MdmsResourceEdit
   // -------------------------------------------------------------------------
   test('#483: Gender-types Edit renders boolean `active` as a checkbox, not text', async () => {
-    await page.goto(`${BASE_URL}/manage/gender-types/TRANSGENDER/edit`);
+    await page.goto(`${BASE_URL}/manage/gender-types/FEMALE/edit`);
     await page.waitForLoadState('domcontentloaded');
 
     if (page.url().includes('/manage/gender-types') === false || page.url().endsWith('/manage/gender-types')) {

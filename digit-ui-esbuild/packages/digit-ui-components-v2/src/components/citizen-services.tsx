@@ -267,7 +267,7 @@ export function CitizenServices({ modules, renderIcon, title }: CitizenServicesP
       >
         {codes.length === 0 ? (
           <p style={{ fontSize: "0.875rem", color: "var(--color-text-secondary, #6B7280)" }}>
-            {t("CS_HOME_NO_SERVICES_AVAILABLE") || "No services available."}
+            {t("CS_HOME_NO_SERVICES_AVAILABLE") !== "CS_HOME_NO_SERVICES_AVAILABLE" ? t("CS_HOME_NO_SERVICES_AVAILABLE") : "No services available."}
           </p>
         ) : (
           <div

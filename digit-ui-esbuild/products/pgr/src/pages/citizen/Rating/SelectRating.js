@@ -36,12 +36,13 @@ const FEEDBACK_KEYS = [
  * shipped its own non-themed glyphs.
  */
 function StarRow({ value, onChange }) {
+  const { t } = useTranslation();
   const [hover, setHover] = useState(0);
   const active = hover || value;
   return (
     <div
       role="radiogroup"
-      aria-label="rating"
+      aria-label={tr(t, "CS_RATING_LABEL", "Rating")}
       style={{ display: "flex", gap: "8px" }}
     >
       {[1, 2, 3, 4, 5].map((i) => {
@@ -52,7 +53,7 @@ function StarRow({ value, onChange }) {
             type="button"
             role="radio"
             aria-checked={value === i}
-            aria-label={`${i} star${i === 1 ? "" : "s"}`}
+            aria-label={(i === 1 ? tr(t, "CS_RATING_ONE_STAR", "1 star") : tr(t, "CS_RATING_N_STARS", "{count} stars")).replace("{count}", String(i))}
             onClick={() => onChange(i)}
             onMouseEnter={() => setHover(i)}
             onMouseLeave={() => setHover(0)}

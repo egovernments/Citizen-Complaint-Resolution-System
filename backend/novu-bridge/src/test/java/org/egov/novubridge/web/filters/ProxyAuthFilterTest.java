@@ -422,4 +422,64 @@ class ProxyAuthFilterTest {
         when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(), eq(Map.class)))
                 .thenReturn((ResponseEntity) ResponseEntity.ok(body));
     }
+
+    // ---------------------------------------------------------------- review B1: the path it decides on
+
+    private static MockHttpServletRequest rawRequest(String method, String requestUri) {
+        MockHttpServletRequest req = new MockHttpServletRequest();
+        req.setMethod(method);
+        req.setRequestURI(requestUri);
+        req.setContextPath("/novu-bridge");
+        return req;
+    }
+
+    @Test
+    void aPathAddedLaterToTheNamespace_isAuthenticated_untilSomeoneDecidesOtherwise() throws Exception {
+        for (String uri : new String[] {"/novu-bridge/novu-adapter/v1/something-new",
+                "/novu-bridge/novu-adapter/v1", "/novu-bridge/novu-adapter/v1/Providers"}) {
+            MockFilterChain chain = new MockFilterChain();
+            MockHttpServletResponse res = new MockHttpServletResponse();
+            filter.doFilter(rawRequest("GET", uri), res, chain);
+            assertEquals(401, res.getStatus(), uri);
+            assertNull(chain.getRequest(), uri);
+        }
+        // What it leaves to others: receipts and the internal APIs authenticate themselves, the
+        // contract documents are public, and paths outside the namespace are not its business.
+        for (String uri : new String[] {"/novu-bridge/novu-adapter/v1/receipts/jasmin",
+                "/novu-bridge/novu-adapter/v1/contract/openapi", "/novu-bridge/novu-adapter/v1/tenants/acme",
+                "/novu-bridge/novu-adapter/v1/messages/_send", "/novu-bridge/health"}) {
+            MockFilterChain chain = new MockFilterChain();
+            filter.doFilter(rawRequest("GET", uri), new MockHttpServletResponse(), chain);
+            assertNotNull(chain.getRequest(), uri);
+        }
+    }
+
+    @Test
+    void aSpellingThatIsNotPlain_isRefusedWith400() throws Exception {
+        MockFilterChain chain = new MockFilterChain();
+        MockHttpServletResponse res = new MockHttpServletResponse();
+        filter.doFilter(rawRequest("POST", "/novu-bridge/novu-adapter/v1/providers/_update;x"), res, chain);
+        assertEquals(400, res.getStatus());
+        assertNull(chain.getRequest());
+    }
+
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void theAdminTiers_areJudgedOnTheCanonicalPath_notTheRawUri() throws Exception {
+        // An admin at `ke`, which does not own the providers (pg does): refused however the path is spelt.
+        when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(), eq(Map.class)))
+                .thenReturn((ResponseEntity) ResponseEntity.ok(Map.of("type", "EMPLOYEE", "tenantId", "ke",
+                        "roles", List.of(Map.of("code", "MDMS_ADMIN", "tenantId", "ke")))));
+        for (String uri : new String[] {"/novu-bridge/novu-adapter/v1/provider%73/_update",
+                "/novu-bridge/novu-adapter/v1/providers/_update/", "/novu-bridge/novu-adapter/v1/providers/Test-Send",
+                "/novu-bridge/novu-adapter/v1/providers/_delet%65"}) {
+            MockHttpServletRequest req = rawRequest("POST", uri);
+            req.addHeader("Authorization", "Bearer admin-of-ke");
+            MockFilterChain chain = new MockFilterChain();
+            MockHttpServletResponse res = new MockHttpServletResponse();
+            filter.doFilter(req, res, chain);
+            assertEquals(403, res.getStatus(), uri);
+            assertNull(chain.getRequest(), uri);
+        }
+    }
 }

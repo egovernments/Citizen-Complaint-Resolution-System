@@ -6,6 +6,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.novubridge.config.NovuBridgeConfiguration;
+import org.egov.novubridge.service.account.TenantAccountService;
 import org.egov.novubridge.util.Values;
 import org.egov.novubridge.util.ServiceUrl;
 import org.springframework.http.HttpEntity;
@@ -44,6 +45,19 @@ import java.util.concurrent.ConcurrentHashMap;
  * ({@code /logs}, {@code /config/source}) are limited to the caller's tenants (403
  * {@code NB_TENANT_NOT_ALLOWED}). The resolved {@link Caller} is cached 60s keyed by SHA-256 of
  * the token, never the raw token, and handed to the controllers as a request attribute.
+ *
+ * <p>Per-tenant accounts (#2203): a provider write or test-send whose {@code tenantId} query
+ * parameter names a workspace with its OWN Novu organization is decided on that workspace alone:
+ * an admin role held at its root passes (no owning-state listing needed), anyone else is refused,
+ * the owning state's admins included. Without such a selector nothing changes.
+ *
+ * <p>Paths: every decision (whether to authenticate at all, the admin tier, the owning-state and
+ * tenant-scoped sets) is made on {@link RequestPaths#canonical the canonical path}, never the raw
+ * URI, so a variant Spring MVC maps the same way ({@code ;x} parameters, a trailing slash, another
+ * case) cannot slip out of a tier. The filter authenticates EVERY path in the namespace except the
+ * ones with their own authentication (receipts, the #2203 machine APIs) and the public contract
+ * documents: a path added later is protected until someone decides otherwise. A request whose raw
+ * path is not plain ({@link RequestPaths#rejection}) is refused with 400.
  */
 @Slf4j
 public class ProxyAuthFilter extends OncePerRequestFilter {
@@ -88,6 +102,14 @@ public class ProxyAuthFilter extends OncePerRequestFilter {
 
     /** Request attribute carrying the {@link Caller}; read it with {@link #currentCaller()}. */
     public static final String CALLER_ATTRIBUTE = ProxyAuthFilter.class.getName() + ".caller";
+
+    /**
+     * Request attribute set when a provider write was let through as an admin of a workspace with its
+     * own account (the root), not as an admin of a state that owns the shared providers; read it with
+     * {@link #admittedWorkspace()}. The controller must then act on that workspace's account or on
+     * none: falling back to the shared account would skip the owning-state check.
+     */
+    public static final String ADMITTED_WORKSPACE_ATTRIBUTE = ProxyAuthFilter.class.getName() + ".workspace";
 
     /**
      * The authenticated employee, from egov-user {@code /user/_details} (whose role objects carry
@@ -139,17 +161,44 @@ public class ProxyAuthFilter extends OncePerRequestFilter {
         return caller instanceof Caller c ? c : null;
     }
 
+    /** The workspace root this request was admitted for ({@link #ADMITTED_WORKSPACE_ATTRIBUTE}), else null. */
+    public static String admittedWorkspace() {
+        RequestAttributes attributes = RequestContextHolder.getRequestAttributes();
+        Object root = attributes == null ? null
+                : attributes.getAttribute(ADMITTED_WORKSPACE_ATTRIBUTE, RequestAttributes.SCOPE_REQUEST);
+        return root instanceof String r ? r : null;
+    }
+
     private record CachedUser(long expiresAt, Caller caller) {
     }
 
     private final RestTemplate restTemplate;
     private final NovuBridgeConfiguration config;
+    /** Per-tenant Novu accounts (#2203); null = none, every provider path is the shared account's. */
+    private final TenantAccountService tenantAccounts;
     private final ConcurrentHashMap<String, CachedUser> validTokenCache = new ConcurrentHashMap<>();
 
     public ProxyAuthFilter(RestTemplate restTemplate, NovuBridgeConfiguration config) {
+        this(restTemplate, config, null);
+    }
+
+    public ProxyAuthFilter(RestTemplate restTemplate, NovuBridgeConfiguration config,
+                           TenantAccountService tenantAccounts) {
         this.restTemplate = restTemplate;
         this.config = config;
+        this.tenantAccounts = tenantAccounts;
     }
+
+    /**
+     * The namespace's paths this filter leaves to others: machine callers with their own
+     * authentication (the receipt secret; InternalAuthFilter's tokens) and the public contract
+     * documents (no tenant data). Everything else in the namespace is authenticated.
+     */
+    private static final List<String> NOT_AUTHENTICATED_HERE = List.of(
+            NAMESPACE + "/receipts",
+            NAMESPACE + "/contract",
+            NAMESPACE + "/tenants",
+            NAMESPACE + "/messages");
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
@@ -157,24 +206,27 @@ public class ProxyAuthFilter extends OncePerRequestFilter {
         if (HttpMethod.OPTIONS.matches(request.getMethod())) {
             return true;
         }
-        String path = pathOf(request);
-        // Machine callers with their own authentication (receipt secret), and the public contract
-        // documents (no tenant data).
-        if (path.startsWith("/novu-adapter/v1/receipts")
-                || path.startsWith("/novu-adapter/v1/contract")) {
-            return true;
+        String path = RequestPaths.inNamespace(request);
+        if (path.isEmpty()) {
+            return true; // Not an API path: health, the error page.
         }
-        return !(path.startsWith("/novu-adapter/v1/config")
-                || path.startsWith("/novu-adapter/v1/logs")
-                || path.startsWith("/novu-adapter/v1/integrations")
-                || path.startsWith("/novu-adapter/v1/preferences")
-                || path.startsWith("/novu-adapter/v1/providers")
-                || path.startsWith("/novu-adapter/v1/dispatch"));
+        for (String prefix : NOT_AUTHENTICATED_HERE) {
+            if (RequestPaths.isAtOrUnder(path, prefix)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
+        String why = RequestPaths.rejection(request);
+        if (why != null) {
+            log.warn("Proxy auth: refusing {} with {} in its path", request.getMethod(), why);
+            RequestFirewallFilter.reject(response, why);
+            return;
+        }
         // Escape hatch for local dev.
         if (config.getProxyAuthEnabled() == null || !config.getProxyAuthEnabled()) {
             chain.doFilter(request, response);
@@ -249,9 +301,25 @@ public class ProxyAuthFilter extends OncePerRequestFilter {
                             + String.join(", ", config.getProxyAdminRoles()));
             return false;
         }
-        if (!OWNING_STATE_PATHS.contains(normalize(pathOf(request)))) {
+        if (!OWNING_STATE_PATHS.contains(pathOf(request))) {
             // Tenant-scoped: the controller checks the event's tenant against the caller's states.
             return true;
+        }
+        // #2203: a workspace with its own Novu organization is managed by ITS admins, and only by
+        // them. The selector is the same `tenantId` query parameter the controllers act on.
+        String selector = request.getParameter("tenantId");
+        if (tenantAccounts != null && StringUtils.hasText(selector) && tenantAccounts.isProvisioned(selector)) {
+            String root = TenantAccountService.rootOf(selector);
+            if (caller.administersStateOf(root)) {
+                request.setAttribute(ADMITTED_WORKSPACE_ATTRIBUTE, root);
+                return true;
+            }
+            log.warn("Proxy auth: refusing {} {} — workspace {} has its own notification account and the caller "
+                    + "is an admin at {}, not there", request.getMethod(), pathOf(request), root, caller.adminStateTenants());
+            // root is validated ([a-z0-9_-]): safe to echo.
+            writeError(response, HttpStatus.FORBIDDEN, "NB_TENANT_NOT_ALLOWED", "Workspace " + root
+                    + " has its own notification account; managing it needs an admin role held at " + root);
+            return false;
         }
         Set<String> owning = config.providerAdminStateTenants();
         if (caller.administersAnyOf(owning)) {
@@ -272,7 +340,7 @@ public class ProxyAuthFilter extends OncePerRequestFilter {
     /** Every {@code tenantId} value must be the caller's; a missing one is the controller's 400. */
     private boolean tenantCheckPasses(HttpServletRequest request, HttpServletResponse response,
                                       Caller caller) throws IOException {
-        if (!TENANT_SCOPED_READS.contains(normalize(pathOf(request)))) {
+        if (!TENANT_SCOPED_READS.contains(pathOf(request))) {
             return true;
         }
         String[] tenantIds = request.getParameterValues("tenantId");
@@ -310,22 +378,16 @@ public class ProxyAuthFilter extends OncePerRequestFilter {
         return ADMIN_ONLY_PATHS.contains(normalize(path));
     }
 
-    /** With or without the {@code /novu-bridge} context prefix, depending on the container. */
+    /** The canonical path from the namespace on, with or without the {@code /novu-bridge} context. */
     private static String pathOf(HttpServletRequest request) {
-        String path = request.getServletPath();
-        if (!StringUtils.hasText(path)) {
-            path = request.getRequestURI();
-        }
-        return path == null ? "" : path;
+        return RequestPaths.inNamespace(request);
     }
 
+    /** A path as given (a test's, a log's) in the form the sets above are written in. */
     private static String normalize(String path) {
-        int at = path.indexOf(NAMESPACE);
-        String p = at < 0 ? path : path.substring(at);
-        while (p.length() > 1 && p.endsWith("/")) {
-            p = p.substring(0, p.length() - 1);
-        }
-        return p;
+        String p = RequestPaths.canonical(path);
+        int at = p.indexOf(NAMESPACE);
+        return at < 0 ? p : p.substring(at);
     }
 
     private static boolean containsAny(Set<String> roles, List<String> allowed) {
