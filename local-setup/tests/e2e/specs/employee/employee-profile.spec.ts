@@ -9,11 +9,12 @@
 
 import { test, expect } from '@playwright/test';
 import { loginViaApi, appBase } from '../../utils/auth';
+import { requiredEnv } from '../../utils/identity';
 
-const BASE_URL = process.env.BASE_URL || 'http://localhost:18080';
-const TENANT    = process.env.DIGIT_TENANT    || 'uitest.citya';
-const USERNAME  = process.env.DIGIT_USERNAME  || 'ADMIN';
-const PASSWORD  = process.env.DIGIT_PASSWORD  || 'eGov@123';
+const BASE_URL = requiredEnv('BASE_URL');
+const TENANT    = requiredEnv('DIGIT_TENANT');
+const USERNAME  = requiredEnv('DIGIT_USERNAME');
+const PASSWORD  = requiredEnv('DIGIT_PASSWORD');
 
 const profilePath = () => `${appBase()}/employee/user/profile`;
 

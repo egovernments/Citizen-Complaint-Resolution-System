@@ -15,6 +15,8 @@
  * Public API (keep stable across ports — see memory feedback_test_data_from_deployment):
  *   getServiceDefs(tenant, opts)        -> Promise<ServiceDef[]>
  *   pickRandomServiceCode(tenant, opts) -> Promise<ServiceDef>
+ *   pickServiceDefInDepartments(tenant, departments, opts) -> Promise<ServiceDef>
+ *   complaintTypePath(tenant, serviceCode, opts) -> Promise<{ code, name }[]>
  *
  * Random picking is the default for `pickRandomServiceCode` — same
  * rationale as the boundary helper. Pinning to one serviceCode hides
@@ -22,6 +24,7 @@
  * specific complaint types.
  */
 import { getDigitToken } from '../utils/auth';
+import { requiredEnv } from '../utils/identity';
 
 export interface ServiceDef {
   serviceCode: string;
@@ -67,35 +70,23 @@ export interface ServiceDefLookupOptions {
   baseURL?: string;
   adminUser?: string;
   adminPassword?: string;
-  authTenant?: string;
   activeOnly?: boolean;
 }
 
-/**
- * Fetch ServiceDefs for `tenant` from MDMS v1. Filters to active rows by
- * default. Falls through unfiltered if `activeOnly: false`.
- */
-export async function getServiceDefs(
+/** The raw RAINMAKER-PGR.ComplaintHierarchy rows (interior nodes and leaves) for `tenant`. */
+async function getComplaintHierarchy(
   tenant: string,
   opts: ServiceDefLookupOptions = {},
-): Promise<ServiceDef[]> {
-  const baseURL = opts.baseURL ?? process.env.BASE_URL ?? 'http://localhost:18080';
-  const authTenant = opts.authTenant ?? tenant;
-  const adminUser =
-    opts.adminUser ?? process.env.ADMIN_USER ?? process.env.DIGIT_EMPLOYEE_USER ?? 'ADMIN';
-  const adminPassword =
-    opts.adminPassword ??
-    process.env.ADMIN_PASSWORD ??
-    process.env.DIGIT_EMPLOYEE_PASSWORD ??
-    'eGov@123';
-  const activeOnly = opts.activeOnly ?? true;
+): Promise<ComplaintHierarchyRow[]> {
+  const baseURL = opts.baseURL ?? requiredEnv('BASE_URL');
+  const adminUser = opts.adminUser ?? requiredEnv('DIGIT_USERNAME');
+  const adminPassword = opts.adminPassword ?? requiredEnv('DIGIT_PASSWORD');
 
   const token = await getDigitToken({
     baseURL,
-    tenant: authTenant,
+    tenant,
     username: adminUser,
     password: adminPassword,
-    userType: 'EMPLOYEE',
   });
 
   const resp = await fetch(`${baseURL}/egov-mdms-service/v1/_search`, {
@@ -117,9 +108,53 @@ export async function getServiceDefs(
   const json = (await resp.json()) as {
     MdmsRes?: { 'RAINMAKER-PGR'?: { ComplaintHierarchy?: ComplaintHierarchyRow[] } };
   };
-  const rows = json.MdmsRes?.['RAINMAKER-PGR']?.ComplaintHierarchy ?? [];
-  const all = hierarchyToServiceDefs(rows);
-  return activeOnly ? all.filter((s) => s.active !== false) : all;
+  return json.MdmsRes?.['RAINMAKER-PGR']?.ComplaintHierarchy ?? [];
+}
+
+/**
+ * Fetch ServiceDefs for `tenant` from MDMS v1. Filters to active rows by
+ * default. Falls through unfiltered if `activeOnly: false`.
+ */
+export async function getServiceDefs(
+  tenant: string,
+  opts: ServiceDefLookupOptions = {},
+): Promise<ServiceDef[]> {
+  const all = hierarchyToServiceDefs(await getComplaintHierarchy(tenant, opts));
+  return (opts.activeOnly ?? true) ? all.filter((s) => s.active !== false) : all;
+}
+
+/**
+ * A random active complaint type in one of `departments`. pgr-services refuses
+ * an assignee outside the type's department (INVALID_ASSIGNMENT), and the
+ * employee Assign dialog lists only that department's employees, so a spec
+ * that assigns to a persona files its complaint under the persona's department.
+ */
+export async function pickServiceDefInDepartments(
+  tenant: string,
+  departments: string[],
+  opts: ServiceDefLookupOptions = {},
+): Promise<ServiceDef> {
+  const types = (await getServiceDefs(tenant, opts)).filter((d) => d.department && departments.includes(d.department));
+  if (types.length === 0) {
+    throw new Error(`No active complaint type on ${tenant} belongs to department ${departments.join(', ') || '(none)'}`);
+  }
+  return types[Math.floor(Math.random() * types.length)];
+}
+
+/** The hierarchy rows from the top level down to the leaf `serviceCode`, as the citizen wizard shows them. */
+export async function complaintTypePath(
+  tenant: string,
+  serviceCode: string,
+  opts: ServiceDefLookupOptions = {},
+): Promise<Array<{ code: string; name: string }>> {
+  const rows = await getComplaintHierarchy(tenant, opts);
+  const byCode = new Map(rows.map((r) => [r.code, r]));
+  const path: Array<{ code: string; name: string }> = [];
+  for (let row = byCode.get(serviceCode); row; row = row.parentCode ? byCode.get(row.parentCode) : undefined) {
+    path.unshift({ code: row.code, name: row.name ?? row.code });
+  }
+  if (path.length === 0) throw new Error(`Complaint type ${serviceCode} is not in ${tenant}'s ComplaintHierarchy`);
+  return path;
 }
 
 /**

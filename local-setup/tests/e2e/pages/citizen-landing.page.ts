@@ -31,7 +31,7 @@ export class CitizenLandingPage {
     this.allServicesMarker = page
       .getByText(/All Services|ACTION_TEST_ALL_SERVICES_HEADER/i)
       .first();
-    this.loginMobileInput = page.locator('input[name="mobileNumber"]').first();
+    this.loginMobileInput = page.locator('#login-mobile');
   }
 
   async goto() {

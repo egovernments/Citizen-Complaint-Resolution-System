@@ -25,7 +25,6 @@ const TENANT_LABEL = TENANT.split('.').pop()!.toUpperCase();
 const timestamp = Date.now();
 
 const cityPart = TENANT.includes('.') ? TENANT.split('.').pop()! : TENANT;
-const LOCALITY_CODE = `LOC_${cityPart.toUpperCase()}_1`;
 
 const PGR_ROLES = [
   { code: 'EMPLOYEE', name: 'Employee' },
@@ -235,6 +234,7 @@ describe(`PGR E2E — ${TENANT}`, () => {
   describe('Step 4: Create PGR Complaint', () => {
     test('should create complaint', async () => {
       const serviceCode = (global as any).__testServiceCode || 'StreetLightNotWorking';
+      const LOCALITY_CODE = await db.leafBoundaryCode(TENANT);
       const r = await api.post(ports.pgr, `/pgr-services/v2/request/_create?tenantId=${TENANT}`, {
         RequestInfo: reqInfo(accessToken, userUuid),
         service: {
