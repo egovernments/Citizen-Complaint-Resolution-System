@@ -85,18 +85,19 @@ Catalog test — if a label gets renamed legitimately, update this spec and Stor
     // Sidebar inventory — Story 2.x note.
     // Matched case-insensitively: these render from localization, so the label
     // is the translated value, not the raw key.
-    await expect(body, 'sidebar item "Home" missing').toContainText(/\bHome\b/i);
+    // The rail's own row: body text runs labels together ("…1HomeComplaints…").
+    await expect(page.getByText(/^Home$/i).first(), 'sidebar item "Home" missing').toBeVisible({ timeout: 15_000 });
 
     // Edit Profile and Logout are no longer sidebar rows on develop: like the
     // employee shell, they live in the top bar's account menu
     // (TopBarSideBar/index.js userOptions; SideBar/citizenNavItems.js).
-    const accountMenu = page.locator('.header-dropdown-profile').first();
+    // (The rail also carries a Logout button of its own.)
+    const accountMenu = page.locator('.header-dropdown-label:has(.header-dropdown-profile)').first();
     await expect(accountMenu, 'top bar account menu missing').toBeVisible({ timeout: 10_000 });
-    const trigger = accountMenu.locator('xpath=ancestor::button[1]');
-    if (await trigger.isVisible().catch(() => false)) await trigger.click();
-    else await accountMenu.click();
-    await expect(page.getByText(/Edit Profile/i).first(), 'account menu item "Edit Profile" missing').toBeVisible({ timeout: 8_000 });
-    await expect(page.getByText(/Logout/i).first(), 'account menu item "Logout" missing').toBeVisible({ timeout: 8_000 });
+    await accountMenu.click();
+    const options = page.locator('.header-dropdown-option');
+    await expect(options.filter({ hasText: /Edit Profile/i }), 'account menu item "Edit Profile" missing').toBeVisible({ timeout: 8_000 });
+    await expect(options.filter({ hasText: /Logout/i }), 'account menu item "Logout" missing').toBeVisible({ timeout: 8_000 });
     await page.keyboard.press('Escape').catch(() => {});
 
     // Helpline is shown only when the citizen's tenant or the state has a

@@ -71,7 +71,10 @@ export async function fillLocationStep(page: Page, opts: { onAfterStep?: (label:
 /** Click the enabled primary button (Next, or Submit on the review). */
 export async function continueFiling(page: Page): Promise<void> {
   const button = primaryButton(page);
-  await expect(button, `Next stays disabled: ${await page.locator('.cms-hint').innerText().catch(() => '')}`).toBeEnabled({ timeout: 15_000 });
+  // The hint renders only while the step is invalid, so read it without waiting for it.
+  await expect(button).toBeEnabled({ timeout: 15_000 }).catch(async (err: Error) => {
+    throw new Error(`Next stays disabled: ${(await page.locator('.cms-hint').allInnerTexts()).join(' ')}\n${err.message}`);
+  });
   await button.scrollIntoViewIfNeeded();
   await button.click();
   await page.waitForTimeout(1_500);
