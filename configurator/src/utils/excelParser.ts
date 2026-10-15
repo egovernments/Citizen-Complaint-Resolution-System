@@ -341,6 +341,9 @@ export function parseBoundaryExcel(workbook: XLSX.WorkBook): {
 
   // Track seen boundary types for hierarchy
   const seenTypes = new Set<string>();
+  // The sheet rows each code is on. boundary-service keeps one boundary per code, so a repeated
+  // code would become one boundary, named by whichever row's label was written last (#2456).
+  const rowsByCode = new Map<string, number[]>();
 
   jsonData.forEach((row, index) => {
     const code = String(row['code'] || row['Code'] || row['boundaryCode'] || '').trim();
@@ -365,6 +368,9 @@ export function parseBoundaryExcel(workbook: XLSX.WorkBook): {
       });
       return;
     }
+    // Blank rows aren't in jsonData, so the sheet's own row number comes from xlsx.
+    const sheetRow = ((row as { __rowNum__?: number }).__rowNum__ ?? index + 1) + 1;
+    rowsByCode.set(code, [...(rowsByCode.get(code) ?? []), sheetRow]);
 
     if (!name) {
       errors.push({
@@ -401,6 +407,18 @@ export function parseBoundaryExcel(workbook: XLSX.WorkBook): {
       longitude,
     });
   });
+
+  for (const [code, rows] of rowsByCode) {
+    if (rows.length < 2) continue;
+    errors.push({
+      row: rows[0],
+      rows,
+      field: 'code',
+      value: code,
+      message: `The code "${code}" is used on rows ${rows.join(', ')}. Each boundary needs its own code.`,
+      code: 'DUPLICATE_CODE',
+    });
+  }
 
   return {
     data: boundaries,

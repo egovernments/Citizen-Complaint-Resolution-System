@@ -446,6 +446,8 @@ export interface ValidationResult {
 
 export interface ValidationError {
   row?: number;
+  /** Every row involved, when the error is about more than one (a repeated code). */
+  rows?: number[];
   field: string;
   value?: string;
   message: string;

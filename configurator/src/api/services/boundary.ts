@@ -481,6 +481,15 @@ export const boundaryService = {
     const total = boundaries.length;
     if (total === 0) return { success, failed };
 
+    // One code is one boundary: a batch that repeats a code would fold two rows into one
+    // boundary, with whichever name was written last. Refuse before writing anything (#2456).
+    const seen = new Set<string>();
+    const repeated = new Set<string>();
+    for (const { code } of boundaries) (seen.has(code) ? repeated : seen).add(code);
+    if (repeated.size > 0) {
+      throw new Error(`Each boundary needs its own code. Used more than once: ${[...repeated].join(', ')}`);
+    }
+
     const tenantId = boundaries[0].tenantId;
     const byLevel = this.groupByLevel(boundaries);
 

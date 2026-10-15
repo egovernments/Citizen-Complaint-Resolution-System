@@ -586,7 +586,18 @@ export default function BoundaryImport({
         validateBoundaries(result.data);
         setStep('verify');
       } else {
-        setError(result.validation.errors.map(e => e.message).join(', '));
+        // A repeated code blocks the whole sheet, so nothing is written until each row has its own.
+        const { errors } = result.validation;
+        const repeated = errors
+          .filter(e => e.code === 'DUPLICATE_CODE')
+          .map(e =>
+            t('geography.excel.duplicate_code', 'The code "%{code}" is used on rows %{rows}. Each boundary needs its own code.', {
+              code: e.value ?? '',
+              rows: (e.rows ?? []).join(', '),
+            }),
+          );
+        const others = errors.filter(e => e.code !== 'DUPLICATE_CODE').map(e => e.message).join(', ');
+        setError([...repeated, others].filter(Boolean).join(' '));
       }
     } catch (err) {
       console.error('Excel parse error:', err);

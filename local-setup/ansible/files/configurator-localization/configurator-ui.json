@@ -8412,6 +8412,12 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.geography.excel.duplicate_code",
+    "message": "The code \"%{code}\" is used on rows %{rows}. Each boundary needs its own code.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.geography.excel.file",
     "message": "File: %{name}",
     "module": "configurator-ui",

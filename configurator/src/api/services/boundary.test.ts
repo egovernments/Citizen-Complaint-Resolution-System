@@ -203,3 +203,17 @@ describe('getConfiguredHierarchyType', () => {
     delete w.globalConfigs;
   });
 });
+
+describe('boundaryService.createBoundaries', () => {
+  beforeEach(() => post.mockReset());
+
+  it('writes nothing when two boundaries share a code (#2456)', async () => {
+    const row = (code: string, name: string): Boundary =>
+      ({ tenantId: 'ke', code, name, boundaryType: 'Emirate', hierarchyType: 'ADMIN', parent: 'COUNTRY_001' }) as Boundary;
+
+    await expect(boundaryService.createBoundaries([row('EMIRATE_001', 'Dubai'), row('EMIRATE_001', 'Abudhabi')])).rejects.toThrow(
+      'Each boundary needs its own code. Used more than once: EMIRATE_001',
+    );
+    expect(post).not.toHaveBeenCalled();
+  });
+});
