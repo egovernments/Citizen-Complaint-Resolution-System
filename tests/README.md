@@ -1,6 +1,6 @@
 # CCRS test infrastructure
 
-Two subtrees, intentionally separate:
+One suite, plus its catalog viewer:
 
 | Path | What it holds | Status |
 |---|---|---|
@@ -40,9 +40,9 @@ npm run dev    # → http://localhost:5173/tests-v2/
 npm run build  # → dist/ for static serving
 ```
 
-## Why two subtrees
+## Layout
 
 - **`integration-tests/`** is the canonical home — env-driven, tenant-agnostic, organised by persona. New work lands here.
-- **`dashboard-react-admin/`** is part of integration-tests (its catalog viewer) — kept as a sibling so it can build/serve independently.
+- **`integration-tests/dashboard-react-admin/`** is the suite's catalog viewer — it has its own `package.json` so it can build/serve independently.
 
 The vendoring follows the same pattern as `configurator/` and `digit-ui-esbuild/` — the canonical source-of-truth is the upstream repo (`ChakshuGautam/digit-integration-tests`), CCRS holds a vendored copy so all testing infra lives under one tree and ships with the monorepo.
