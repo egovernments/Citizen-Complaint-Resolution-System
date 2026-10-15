@@ -315,7 +315,7 @@ Steps:
 3. Assert the complaint ID appears in the body (correct page loaded).
 4. Click the "Take Action" button.
 5. Click the "Assign" header dropdown option.
-6. Wait for the modal, fill its first textarea with "Assigned via E2E UI test".
+6. Wait for the modal, pick the employee to assign (the step-5 resolver when listed, else the first), fill its first textarea with "Assigned via E2E UI test".
 7. Click SUBMIT inside the modal.
 8. fetchComplaintStatus(srid) and assert applicationStatus === 'PENDINGATLME'.
 
@@ -367,6 +367,16 @@ Status verification is API-only because there's no good DOM signal that the assi
     const modal = page.locator('[class*="modal"], [class*="Modal"], .popup-module');
     await expect(modal.first()).toBeVisible({ timeout: 5_000 });
     console.log('Assign modal opened');
+
+    // Employee Name is required (AssigneeComponent): pick the step-5 resolver
+    // when the list shows its name, else the first employee. The list nests
+    // employees ("<name> (<department>)") under department rows.
+    const resolverName = String((await resolverPersona()).userInfo?.name ?? '').trim();
+    await modal.locator('.assignee-dropdown-container input[type="text"]').first().click();
+    const employees = page.locator('.digit-dropdown-options-card .digit-dropdown-item').filter({ hasText: /\(.+\)\s*$/ });
+    await expect(employees.first(), 'the Assign modal must list an employee to assign').toBeVisible({ timeout: 10_000 });
+    const preferred = resolverName ? employees.filter({ hasText: resolverName }).first() : employees.first();
+    await ((await preferred.count()) ? preferred : employees.first()).click();
 
     // Fill in comments
     const commentsField = modal.locator('textarea').first();
