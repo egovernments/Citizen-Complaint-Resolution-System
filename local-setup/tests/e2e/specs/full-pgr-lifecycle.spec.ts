@@ -70,9 +70,10 @@ async function assertLocalized(page: Page, context: string): Promise<string[]> {
 let CITIZEN_PHONE: string;
 
 /**
- * Fetch the full PGR service object (needed for _update calls).
+ * Fetch the PGR service wrapper: the service plus its latest workflow
+ * (action and assignees).
  */
-async function fetchComplaint(
+async function searchComplaint(
   token: string,
   userInfo: Record<string, unknown>,
   serviceRequestId: string,
@@ -91,8 +92,15 @@ async function fetchComplaint(
     },
   );
   const data: any = await resp.json();
-  return data.ServiceWrappers[0].service;
+  return data.ServiceWrappers[0];
 }
+
+/** The full PGR service object (needed for _update calls). */
+async function fetchComplaint(token: string, userInfo: Record<string, unknown>, serviceRequestId: string): Promise<any> {
+  return (await searchComplaint(token, userInfo, serviceRequestId)).service;
+}
+
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 test.describe.serial('Full PGR lifecycle — citizen, admin, employee', () => {
   test.slow();
@@ -104,6 +112,7 @@ test.describe.serial('Full PGR lifecycle — citizen, admin, employee', () => {
   let citizenUserInfo: Record<string, unknown>;
   let serviceRequestId: string;
   let employeeName: string;
+  let employeeUuid: string;
 
   // Gate flags — each test skips if its prerequisite failed
   let citizenLoggedIn = false;
@@ -139,6 +148,7 @@ test.describe.serial('Full PGR lifecycle — citizen, admin, employee', () => {
     // The assignee the admin picks in step 7 is the employee persona.
     const employee = await getDigitToken({ baseURL: BASE_URL, tenant: TENANT, username: EMPLOYEE_USER, password: EMPLOYEE_PASS });
     employeeName = String(employee.UserRequest.name || '');
+    employeeUuid = employee.UserRequest.uuid;
     expect(employeeName, 'employee persona has no DIGIT name to pick in the assignee list').toBeTruthy();
   });
 
@@ -505,15 +515,17 @@ test.describe.serial('Full PGR lifecycle — citizen, admin, employee', () => {
 
     // Select employee from the nested dropdown (AssigneeComponent)
     const assigneeContainer = modal.locator('.assignee-dropdown-container');
-    if (await assigneeContainer.isVisible({ timeout: 5_000 }).catch(() => false)) {
-      const dropdownInput = assigneeContainer.locator('input');
-      await dropdownInput.click();
-      await page.waitForTimeout(2000);
+    await expect(assigneeContainer, 'ASSIGN modal has no assignee dropdown').toBeVisible({ timeout: 10_000 });
+    await assigneeContainer.locator('input').click();
 
-      // Pick the employee persona, who signs in for the next steps
-      await assigneeContainer.locator('.digit-dropdown-item').filter({ hasText: employeeName }).first().click();
-      await page.waitForTimeout(1000);
-    }
+    // Pick the employee persona, who signs in for the next steps. Options read
+    // "<name> (<department>)", so match the whole name: "PGR Employee" must
+    // not pick "PGR Employee 2".
+    const assigneeOption = assigneeContainer.locator('.digit-dropdown-item')
+      .filter({ hasText: new RegExp(`^\\s*${escapeRegExp(employeeName)} \\(`) });
+    await expect(assigneeOption, `employee persona "${employeeName}" is not in the assignee list`).toHaveCount(1, { timeout: 10_000 });
+    await assigneeOption.click();
+    await page.waitForTimeout(1000);
 
     // Fill comments textarea (mandatory)
     const commentsTextarea = modal.locator('textarea').first();
@@ -528,9 +540,10 @@ test.describe.serial('Full PGR lifecycle — citizen, admin, employee', () => {
     // Wait for the update to process
     await page.waitForTimeout(8000);
 
-    // Verify the complaint status changed to PENDINGATLME via API
-    const updatedService = await fetchComplaint(adminToken, adminUserInfo, serviceRequestId);
-    expect(updatedService.applicationStatus).toBe('PENDINGATLME');
+    // Verify via API: PENDINGATLME, assigned to the employee persona
+    const updated = await searchComplaint(adminToken, adminUserInfo, serviceRequestId);
+    expect(updated.service.applicationStatus).toBe('PENDINGATLME');
+    expect(updated.workflow?.assignes, 'complaint was assigned to someone other than the employee persona').toEqual([employeeUuid]);
     complaintAssigned = true;
     await snap(page, '07-complaint-assigned');
     console.log(`Complaint ${serviceRequestId} assigned to ${employeeName} via UI → PENDINGATLME`);
