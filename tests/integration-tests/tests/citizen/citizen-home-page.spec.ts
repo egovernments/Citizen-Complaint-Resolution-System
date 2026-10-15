@@ -57,7 +57,9 @@ Steps:
 2. Navigate to /digit-ui/citizen/all-services, wait 3s for hydration.
 3. Assert body does NOT contain "Something went wrong".
 4. Assert body contains "Complaint Management System", "File a Complaint", and "My Complaints".
-5. For each sidebar item ['Home', 'Edit Profile', 'Logout', 'HELPLINE'], assert body contains it.
+5. Assert the Home row renders.
+6. Open the top bar's account menu and assert it offers Edit Profile and Logout (develop moved both out of the citizen sidebar into that menu, as for employees).
+7. Helpline: develop shows the row only when the citizen's tenant (or the state) has a contactNumber. When one is set, assert the row is there with that number.
 
 Catalog test — if a label gets renamed legitimately, update this spec and Story 2.1 in the same PR.`,
     },
@@ -76,18 +78,43 @@ Catalog test — if a label gets renamed legitimately, update this spec and Stor
 
     const body = page.locator('body');
     await expect(body).not.toContainText('Something went wrong');
-    await expect(body).toContainText('Complaint Management System');
+    await expect(body).toContainText(/Complaints? Management System/); // tenant-localized module title
     await expect(body).toContainText('File a Complaint');
     await expect(body).toContainText('My Complaints');
 
     // Sidebar inventory — Story 2.x note.
     // Matched case-insensitively: these render from localization, so the label
-    // is the translated value ("Helpline"), not the raw key ("HELPLINE"). Pinning
-    // the upper-case form only passed while the bundle was unseeded and the UI
-    // was echoing raw keys back.
-    for (const item of ['Home', 'Edit Profile', 'Logout', 'Helpline']) {
-      await expect(body, `sidebar item "${item}" missing`).toContainText(
-        new RegExp(item.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'),
+    // is the translated value, not the raw key.
+    // The rail's own row: body text runs labels together ("…1HomeComplaints…").
+    await expect(page.getByText(/^Home$/i).first(), 'sidebar item "Home" missing').toBeVisible({ timeout: 15_000 });
+
+    // Edit Profile and Logout are no longer sidebar rows on develop: like the
+    // employee shell, they live in the top bar's account menu
+    // (TopBarSideBar/index.js userOptions; SideBar/citizenNavItems.js).
+    // (The rail also carries a Logout button of its own.)
+    const accountMenu = page.locator('.header-dropdown-label:has(.header-dropdown-profile)').first();
+    await expect(accountMenu, 'top bar account menu missing').toBeVisible({ timeout: 10_000 });
+    await accountMenu.click();
+    const options = page.locator('.header-dropdown-option');
+    await expect(options.filter({ hasText: /Edit Profile/i }), 'account menu item "Edit Profile" missing').toBeVisible({ timeout: 8_000 });
+    await expect(options.filter({ hasText: /Logout/i }), 'account menu item "Logout" missing').toBeVisible({ timeout: 8_000 });
+    await page.keyboard.press('Escape').catch(() => {});
+
+    // Helpline is shown only when the citizen's tenant or the state has a
+    // contactNumber; without one, develop leaves the row out rather than
+    // dialling a placeholder (citizenNavItems.js).
+    const helpline = await page
+      .evaluate(() => {
+        const digit = (window as unknown as { Digit?: any }).Digit;
+        const tenants: Array<{ code?: string; contactNumber?: string }> =
+          digit?.SessionStorage?.get?.('initData')?.tenants || [];
+        const codes = [digit?.ULBService?.getCurrentTenantId?.(), digit?.ULBService?.getStateId?.()];
+        return codes.map((code) => tenants.find((t) => t.code === code)?.contactNumber).find(Boolean) || null;
+      })
+      .catch(() => null);
+    if (helpline) {
+      await expect(body, `sidebar Helpline row missing although the tenant's helpline is ${helpline}`).toContainText(
+        new RegExp(`Helpline\\s*${helpline.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i'),
       );
     }
   });
@@ -125,7 +152,7 @@ If the brand assets ever land as real DOM text, extend this spec — leaving the
     // hero, not DOM text. The "PGR" badge is also absent on digit-ui v2
     // builds (Ethiopia) — asserting only on the actionable content which
     // is stable across both v1 and v2 layouts.
-    await expect(body).toContainText('Complaint Management System');
+    await expect(body).toContainText(/Complaints? Management System/); // tenant-localized module title
     await expect(body).toContainText('My Complaints');
     await expect(body).toContainText('File a Complaint');
   });

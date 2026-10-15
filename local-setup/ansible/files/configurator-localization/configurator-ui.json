@@ -5586,6 +5586,36 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.providers.account_own",
+    "message": "This workspace has its own notification account. The providers below are yours alone: add your own SMS, WhatsApp and email accounts here.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.providers.account_own_readonly",
+    "message": "This workspace has its own notification account. Managing its providers needs an admin role in this workspace.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.providers.account_provisioning",
+    "message": "This workspace's notification account is being set up. Reload in a minute.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.providers.account_missing",
+    "message": "This workspace does not have its own notification account yet, so it cannot add providers. Ask the platform operator to set one up.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.providers.admin_only_workspace",
+    "message": "Read-only: adding, changing or testing a provider needs the SUPERUSER, MDMS_ADMIN or ACCOUNT_ADMIN role in this workspace.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.notification_validate.loading",
     "message": "Loading the notification configuration…",
     "module": "configurator-ui",
@@ -5624,6 +5654,12 @@
   {
     "code": "app.nav.open_digit_docs",
     "message": "Open DIGIT Docs",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.header.product_name",
+    "message": "Complaint Management System",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -5706,6 +5742,12 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.branding.continue_anyway",
+    "message": "Continue anyway",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.branding.intro",
     "message": "Your logo, name and colour appear across your workspace and on the services citizens and employees experience.",
     "module": "configurator-ui",
@@ -5760,12 +5802,6 @@
     "locale": "en_IN"
   },
   {
-    "code": "app.onboarding.branding.name_too_long",
-    "message": "Keep the name under %{max} characters.",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
     "code": "app.onboarding.branding.no_tenant_record",
     "message": "The workspace %{tenant} has no tenant record to brand.",
     "module": "configurator-ui",
@@ -5786,12 +5822,6 @@
   {
     "code": "app.onboarding.branding.save_failed",
     "message": "Saving your branding failed. Try again.",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
-    "code": "app.onboarding.branding.skip",
-    "message": "Skip branding",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -7332,14 +7362,14 @@
     "locale": "en_IN"
   },
   {
-    "code": "app.onboarding.docs.all",
-    "message": "All documentation",
+    "code": "app.onboarding.docs.group.getting_started",
+    "message": "Getting started",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
   {
-    "code": "app.onboarding.docs.getting_started",
-    "message": "Getting started guide",
+    "code": "app.onboarding.docs.group.this_section",
+    "message": "This section",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -7350,14 +7380,152 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.docs.hide",
+    "message": "Hide documentation",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.docs.link.branding.description",
+    "message": "Logo, name and theme",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.docs.link.branding.title",
+    "message": "Branding guide",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.docs.link.complaints.description",
+    "message": "Complaint types, routing and resolution time",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.docs.link.complaints.title",
+    "message": "Complaints template guide",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.docs.link.create_account.description",
+    "message": "Signing up and verifying your details",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.docs.link.create_account.title",
+    "message": "Creating your account",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.docs.link.departments.description",
+    "message": "Departments and the designations in them",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.docs.link.departments.title",
+    "message": "Departments guide",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.docs.link.employees.description",
+    "message": "Staff, their roles and the areas they serve",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.docs.link.employees.title",
+    "message": "Employees guide",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.docs.link.geography.description",
+    "message": "Areas and the levels they break down into",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.docs.link.geography.title",
+    "message": "Geography guide",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.docs.link.get_started.description",
+    "message": "What you need before you begin",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.docs.link.get_started.title",
+    "message": "Get started",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.docs.link.glossary.description",
+    "message": "The terms used during setup",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.docs.link.glossary.title",
+    "message": "Glossary",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.docs.link.onboarding_steps.description",
+    "message": "Branding, geography, departments, employees and complaints",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.docs.link.onboarding_steps.title",
+    "message": "The onboarding steps",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.docs.link.onboarding.description",
+    "message": "What each onboarding section is for",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.docs.link.onboarding.title",
+    "message": "Setting up your account",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.docs.link.overview.description",
+    "message": "How a complaint moves from report to resolution",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.docs.link.overview.title",
+    "message": "Complaint Management overview",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.docs.new_tab",
     "message": "(opens in a new tab)",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
   {
-    "code": "app.onboarding.docs.section_guide",
-    "message": "%{section} guide",
+    "code": "app.onboarding.docs.show",
+    "message": "Show documentation",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -8256,6 +8424,12 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.geography.excel.hierarchies_load_failed",
+    "message": "Couldn’t load your hierarchies. %{reason}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.geography.excel.hierarchy_and_levels",
     "message": "Hierarchy: %{hierarchy} • Levels: %{levels}",
     "module": "configurator-ui",
@@ -9120,38 +9294,68 @@
     "locale": "en_IN"
   },
   {
-    "code": "app.onboarding.home.after",
-    "message": "After this: %{step} — %{what}.",
+    "code": "app.onboarding.guide.branding.action",
+    "message": "Set Up Branding",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
   {
-    "code": "app.onboarding.home.intro.branding",
+    "code": "app.onboarding.guide.branding.description",
     "message": "Set up your account logo, name and appearance that will show up on the citizen and employee experience.",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
   {
-    "code": "app.onboarding.home.intro.complaints",
-    "message": "Set up the kinds of complaints people can raise, which department handles each, and how long they should take.",
+    "code": "app.onboarding.guide.complaints.action",
+    "message": "Choose Template",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
   {
-    "code": "app.onboarding.home.intro.departments",
-    "message": "Add the departments complaints are routed to, and the designations your employees hold.",
+    "code": "app.onboarding.guide.complaints.description",
+    "message": "Choose the template that defines what citizens can report.",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
   {
-    "code": "app.onboarding.home.intro.employees",
-    "message": "Add the people who will handle complaints, with their roles and the areas they cover.",
+    "code": "app.onboarding.guide.departments.action",
+    "message": "Add Departments",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
   {
-    "code": "app.onboarding.home.intro.geography",
-    "message": "Define the areas you cover, from the largest down to the smallest, so every complaint can be placed and routed.",
+    "code": "app.onboarding.guide.departments.description",
+    "message": "The departments complaints get routed to, and the designations your employees hold.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.guide.employees.action",
+    "message": "Add Employees",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.guide.employees.description",
+    "message": "Add the staff who will actually resolve complaints, and assign them to departments and geographic jurisdictions.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.guide.geography.action",
+    "message": "Define Geography",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.guide.geography.description",
+    "message": "Define the geographic areas your account covers and their hierarchies (e.g. County → Sub-county).",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.home.after",
+    "message": "After this: %{step} — %{what}.",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -9228,14 +9432,134 @@
     "locale": "en_IN"
   },
   {
-    "code": "app.onboarding.home.set_up",
-    "message": "Set up %{step}",
+    "code": "app.onboarding.home.start_here",
+    "message": "Start here",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
   {
-    "code": "app.onboarding.home.start_here",
-    "message": "Start here",
+    "code": "app.onboarding.home.take_tour",
+    "message": "Take a tour",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.home.tour.branding.body",
+    "message": "Establish your account’s identity by adding a logo, name and appearance that will be reflected in the citizen and employee experience.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.home.tour.branding.title",
+    "message": "Branding",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.home.tour.cms.body",
+    "message": "One modular system connecting citizen voices to responsive institutions and efficient services.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.home.tour.cms.body_flow",
+    "message": "A citizen reports a burst pipe, an unlit street or uncollected waste, and the staff responsible pick up the complaints assigned to them, resolve them, and keep the citizen informed.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.home.tour.cms.body_onboarding",
+    "message": "Onboarding is where you set up your account to make this system possible.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.home.tour.cms.eyebrow",
+    "message": "Welcome",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.home.tour.cms.title",
+    "message": "Complaint Management System",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.home.tour.complaints.body",
+    "message": "Pick from our template offerings with pre-loaded setup for issues ranging from Electricity-related complaints to Local Governance Complaints.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.home.tour.complaints.title",
+    "message": "Complaints Template",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.home.tour.eyebrow_setup",
+    "message": "Setting up your account",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.home.tour.geography.body",
+    "message": "Add the areas your account covers and the levels they break down into, such as county, sub-county and ward. Complaints are raised at the lowest level of this hierarchy and reported at every level above.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.home.tour.geography.body_use",
+    "message": "These define the area a complaint is raised in, and the jurisdictions an employee is assigned to serve.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.home.tour.geography.title",
+    "message": "Geography",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.home.tour.people.body",
+    "message": "Define the Departments associated with your account and the employees working in these departments.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.home.tour.people.body_routing",
+    "message": "Each employee is assigned to a department and to the geographic areas they serve, which is what lets a complaint reach the right person.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.home.tour.people.title",
+    "message": "Departments and Employees",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.home.tour.return.body",
+    "message": "The ‘Take a tour’ button sits at the top-right of your Home screen. It reopens this tour whenever you want it.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.home.tour.return.body_docs",
+    "message": "Every section during account setup also has a “Documentation” section on the right side, with guidance for how to fill each field on that page.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.home.tour.return.eyebrow",
+    "message": "Anytime",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.home.tour.return.title",
+    "message": "You can come back to this",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -9342,96 +9666,6 @@
     "locale": "en_IN"
   },
   {
-    "code": "app.onboarding.home.welcome.branding.body",
-    "message": "Your logo, name and colours appear on every page citizens and employees see, so they know whose service they are using.",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
-    "code": "app.onboarding.home.welcome.branding.eyebrow",
-    "message": "Step 1 · Branding",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
-    "code": "app.onboarding.home.welcome.branding.title",
-    "message": "Make it yours",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
-    "code": "app.onboarding.home.welcome.complaints.body",
-    "message": "The kinds of complaints citizens can raise, the department each goes to, and how long it should take to resolve.",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
-    "code": "app.onboarding.home.welcome.complaints.eyebrow",
-    "message": "Step 5 · Complaints",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
-    "code": "app.onboarding.home.welcome.complaints.title",
-    "message": "What people can report",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
-    "code": "app.onboarding.home.welcome.departments.body",
-    "message": "Departments are the teams complaints are sent to, and designations are the roles people hold in them.",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
-    "code": "app.onboarding.home.welcome.departments.eyebrow",
-    "message": "Step 3 · Departments",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
-    "code": "app.onboarding.home.welcome.departments.title",
-    "message": "Who handles what",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
-    "code": "app.onboarding.home.welcome.employees.body",
-    "message": "The people who assign, work on and resolve complaints. Each one gets an invitation to sign in.",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
-    "code": "app.onboarding.home.welcome.employees.eyebrow",
-    "message": "Step 4 · Employees",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
-    "code": "app.onboarding.home.welcome.employees.title",
-    "message": "Your team",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
-    "code": "app.onboarding.home.welcome.geography.body",
-    "message": "The areas you cover, and how they nest inside each other. Every complaint is placed in one of them, and employees are given the areas they look after.",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
-    "code": "app.onboarding.home.welcome.geography.eyebrow",
-    "message": "Step 2 · Geography",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
-    "code": "app.onboarding.home.welcome.geography.title",
-    "message": "Where you work",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
     "code": "app.onboarding.home.welcome.position",
     "message": "Slide %{n} of %{total}",
     "module": "configurator-ui",
@@ -9440,36 +9674,6 @@
   {
     "code": "app.onboarding.home.welcome.start",
     "message": "Get started",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
-    "code": "app.onboarding.home.welcome.welcome.body",
-    "message": "Citizens report a problem — a burst pipe, an unlit street, uncollected waste — and the system routes it to the team responsible, tracks it until it is resolved, and keeps the citizen informed.",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
-    "code": "app.onboarding.home.welcome.welcome.eyebrow",
-    "message": "Welcome",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
-    "code": "app.onboarding.home.welcome.welcome.note",
-    "message": "Onboarding is where you describe your account so that routing can work. There are five sections, one after another, and you can come back to any of them.",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
-    "code": "app.onboarding.home.welcome.welcome.title",
-    "message": "Welcome to the Complaint Management System",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
-    "code": "app.onboarding.home.whats_onboarding",
-    "message": "What’s onboarding?",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -9626,6 +9830,12 @@
   {
     "code": "app.onboarding.invite.until",
     "message": "until %{date}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.layout.card.next",
+    "message": "Next step: %{step}",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -9823,7 +10033,7 @@
   },
   {
     "code": "app.onboarding.requirements.branding",
-    "message": "Add a logo to finish branding, or skip the step.",
+    "message": "Branding finishes once the workspace has a saved logo. Save again, or choose Continue anyway.",
     "module": "configurator-ui",
     "locale": "en_IN"
   },

@@ -286,7 +286,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold leading-5 text-foreground truncate">DIGIT</p>
                   <p className="text-xs leading-4 text-muted-foreground truncate">
-                    {translate('app.header.brand', { _: 'Complaints Management' })}
+                    {translate('app.header.product_name', { _: 'Complaint Management System' })}
                   </p>
                 </div>
               </>

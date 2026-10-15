@@ -9,11 +9,11 @@ import { railClasses } from '@/components/layout/railStyles';
 import { useRailDrawer } from '@/components/layout/useRailDrawer';
 import { AccountMenu, HelpButton, LocaleSwitcher, ThemeSwitcher } from '@/components/layout/HeaderControls';
 import { HOME_PATH, ONBOARDING_STEPS } from './steps';
-import { completedCount, resumePath, stepForPath, stepStatus, type StepStatus } from './progress';
+import { completedCount, resumePath, resumeStep, stepForPath, stepStatus, type StepStatus } from './progress';
 import { initialsOf, useOrganisation } from './organisation';
 import { trackEvent } from '@/lib/telemetry';
 import { useOnboardingT } from './i18n';
-import { SectionDocs } from './docs/SectionDocs';
+import { DocsButton, DocsRail } from './docs/DocsRail';
 import type { DocsSection } from './docs/docsLinks';
 
 /**
@@ -65,6 +65,7 @@ export default function OnboardingLayout() {
   // than from a failed submit deep in the step.
   const currentStepEditable = !currentStep || canEditResource(currentStep.master);
   const groups = [...new Set(ONBOARDING_STEPS.map((step) => step.group))];
+  const nextStep = resumeStep(completed);
 
   // A step opened, from the rail, a Back or continue, or a resume.
   const openedStep = currentStepLocked ? undefined : currentStep;
@@ -104,7 +105,7 @@ export default function OnboardingLayout() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold leading-5 text-foreground truncate" title={orgName}>{orgName}</p>
-                  <p className="text-xs leading-4 text-muted-foreground truncate">{t('app.header.brand', 'Complaints Management')}</p>
+                  <p className="text-xs leading-4 text-muted-foreground truncate">{t('app.header.product_name', 'Complaint Management System')}</p>
                 </div>
               </>
             )}
@@ -119,30 +120,40 @@ export default function OnboardingLayout() {
             </button>
           </div>
 
+          {/* Where setup stands, as one compact card (the #2358 mock-up): what to do
+              next, how far along, and a click anywhere into that step. The title button
+              stretches over the card, so the progressbar stays outside it and keeps its role. */}
           {!collapsed && (
-            <button
-              type="button"
-              onClick={() => navigate(resumePath(completed))}
-              className="w-full text-left rounded border border-border bg-card p-3 transition-colors hover:border-primary/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            <section
+              aria-labelledby="setup-card-next"
+              className="relative rounded-lg border border-primary/20 bg-primary/5 p-3 transition-colors hover:bg-primary/10 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring"
             >
-              <span className="flex items-center justify-between gap-2">
-                <span className="text-sm font-semibold text-foreground">{t('layout.setup_account', 'Let’s set up your account')}</span>
-                <ChevronRight aria-hidden="true" className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-              </span>
+              <button
+                type="button"
+                onClick={() => navigate(nextStep.path)}
+                className="flex w-full items-center justify-between gap-2 text-left focus-visible:outline-none before:absolute before:inset-0 before:rounded-lg"
+              >
+                <span id="setup-card-next" className="text-sm font-semibold text-primary">
+                  {done === 0
+                    ? t('layout.setup_account', 'Let’s set up your account')
+                    : t('layout.card.next', 'Next step: %{step}', { step: t(`steps.${nextStep.id}`, nextStep.label) })}
+                </span>
+                <ChevronRight aria-hidden="true" className="h-4 w-4 shrink-0 text-primary" />
+              </button>
               <span
                 role="progressbar"
                 aria-label={t('layout.setup_progress', 'Setup progress')}
                 aria-valuemin={0}
                 aria-valuemax={total}
                 aria-valuenow={done}
-                className="mt-2.5 block h-1.5 rounded-full bg-muted overflow-hidden"
+                className="mt-3 block h-1.5 overflow-hidden rounded-full bg-primary/15"
               >
                 <span className="block h-full rounded-full bg-primary transition-all" style={{ width: `${(done / total) * 100}%` }} />
               </span>
-              <span className="mt-2 block text-xs text-muted-foreground">
+              <span className="mt-2 block text-xs text-primary/80">
                 {t('layout.completed_count', '%{done} of %{total} completed', { done, total })}
               </span>
-            </button>
+            </section>
           )}
         </div>
 
@@ -192,6 +203,7 @@ export default function OnboardingLayout() {
             </h1>
           </div>
           <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+            {docsSection && <DocsButton section={docsSection} />}
             <HelpButton label={t('app.header.help', 'Help')} onClick={toggleHelp} />
             <LocaleSwitcher />
             <ThemeSwitcher />
@@ -207,28 +219,25 @@ export default function OnboardingLayout() {
         </header>
 
         <main id="main-content" className="flex-1 overflow-auto min-h-0">
-          {/* The docs go beside the page from 1400px, where the Employees table still
-              fits next to them; narrower, they sit under the page. */}
-          <div className="mx-auto flex max-w-6xl flex-col gap-8 p-4 sm:p-8 min-[1400px]:max-w-[88rem] min-[1400px]:flex-row min-[1400px]:items-start">
-            <div className="min-w-0 flex-1 min-[1400px]:max-w-6xl">
-              {!currentStepEditable && (
-                <Alert className="mb-4">
-                  <AlertDescription>
-                    {t(
-                      'layout.view_only',
-                      'Your role has view-only access to %{step}. You can review this step, but creating or editing records here is restricted to roles with write access (e.g. MDMS_ADMIN).',
-                      { step: currentStep ? t(`steps.${currentStep.id}`, currentStep.label) : '' },
-                    )}
-                  </AlertDescription>
-                </Alert>
-              )}
-              {currentStepLocked ? <Navigate to={resumePath(completed)} replace /> : <Outlet />}
-            </div>
-            {docsSection && <SectionDocs section={docsSection} className="min-[1400px]:sticky min-[1400px]:top-8 min-[1400px]:w-56 min-[1400px]:shrink-0" />}
+          <div className="max-w-6xl mx-auto p-4 sm:p-8">
+            {!currentStepEditable && (
+              <Alert className="mb-4">
+                <AlertDescription>
+                  {t(
+                    'layout.view_only',
+                    'Your role has view-only access to %{step}. You can review this step, but creating or editing records here is restricted to roles with write access (e.g. MDMS_ADMIN).',
+                    { step: currentStep ? t(`steps.${currentStep.id}`, currentStep.label) : '' },
+                  )}
+                </AlertDescription>
+              </Alert>
+            )}
+            {currentStepLocked ? <Navigate to={resumePath(completed)} replace /> : <Outlet />}
           </div>
         </main>
 
       </div>
+
+      {docsSection && <DocsRail section={docsSection} />}
     </div>
   );
 }

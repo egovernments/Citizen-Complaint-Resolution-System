@@ -872,17 +872,19 @@ step5() {
     done < <(jq -c "[_nwise($L10N_BATCH)][]" "$pack" 2>/dev/null || jq -c "[.] | .[]" "$pack")
     ok "$loc — upserted $sent/$n rainmaker-dashboard messages"
 
-    # The two nav labels: module rainmaker-common, NOT rainmaker-dashboard.
+    # The two nav labels: module rainmaker-common, NOT rainmaker-dashboard,
+    # in the locale's own word (English for a locale without one).
     local body resp; body="$(mktemp)"
     jq -n --argjson ri "$REQUEST_INFO" --arg t "$DASHBOARD_TENANT" --arg l "$loc" \
-      '{RequestInfo:$ri, tenantId:$t, messages:[
-        {code:"ACTION_TEST_DASHBOARD", message:"Dashboard", module:"rainmaker-common", locale:$l},
-        {code:"DASHBOARD_CARD_HEADER",  message:"Dashboard", module:"rainmaker-common", locale:$l}]}' > "$body"
+      '({fr_FR:"Tableau de bord", pt_PT:"Painel"}[$l] // "Dashboard") as $label |
+      {RequestInfo:$ri, tenantId:$t, messages:[
+        {code:"ACTION_TEST_DASHBOARD", message:$label, module:"rainmaker-common", locale:$l},
+        {code:"DASHBOARD_CARD_HEADER",  message:$label, module:"rainmaker-common", locale:$l}]}' > "$body"
     resp="$(curl -s -X POST "$LOCALIZATION_URL/localization/messages/v1/_upsert" \
       -H 'Content-Type: application/json' --data-binary "@$body")"; rm -f "$body"
     printf '%s' "$resp" | grep -qi 'messages' && ok "$loc — nav labels seeded (rainmaker-common)" \
       || warn "$loc nav labels: $(printf '%s' "$resp" | head -c 160)"
-    note "$loc nav labels are seeded in English — translate them for non-English locales."
+    case "$loc" in en_*|fr_FR|pt_PT) ;; *) note "$loc nav labels are seeded in English — translate them for this locale." ;; esac
   done
 
   # Cache-bust. The redis DEL alone is NOT enough; the service holds its own

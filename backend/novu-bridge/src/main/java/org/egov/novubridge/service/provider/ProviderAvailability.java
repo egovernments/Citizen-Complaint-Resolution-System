@@ -3,7 +3,9 @@ package org.egov.novubridge.service.provider;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.novubridge.config.NovuBridgeConfiguration;
 import org.egov.novubridge.service.NovuClient;
+import org.egov.novubridge.service.account.NovuAccount;
 import org.egov.novubridge.util.Values;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -69,6 +71,8 @@ public class ProviderAvailability {
 
     private final NovuClient novuClient;
     private final NovuBridgeConfiguration config;
+    /** Whose integrations this instance answers for; null = the shared account (the Spring bean). */
+    private final NovuAccount account;
 
     private volatile Snapshot snapshot;
     /** Epoch millis of the last failed list call; 0 = none since the last success/invalidate. */
@@ -76,9 +80,19 @@ public class ProviderAvailability {
     /** The API key's Novu environment ({@code _id}), once Novu has named it; it never changes for a key. */
     private volatile String environmentId;
 
+    @Autowired
     public ProviderAvailability(NovuClient novuClient, NovuBridgeConfiguration config) {
+        this(novuClient, config, null);
+    }
+
+    /**
+     * The same checks over one tenant's own Novu account (#2203): {@link ProviderAvailabilities}
+     * keeps one instance per provisioned tenant, so each has its own snapshot and TTL.
+     */
+    public ProviderAvailability(NovuClient novuClient, NovuBridgeConfiguration config, NovuAccount account) {
         this.novuClient = novuClient;
         this.config = config;
+        this.account = account;
     }
 
     /**
@@ -168,7 +182,10 @@ public class ProviderAvailability {
      * </ul>
      *
      * <p>An env pin Novu cannot use (no such integration, inactive, or on another Novu channel) is
-     * judged like no pin: Novu falls back to its default for the channel.
+     * judged like no pin: Novu falls back to its default for the channel. In a tenant's own account
+     * (#2203) the env pin is not looked at at all: it names an integration of the shared account,
+     * and a trigger through the tenant's organization never carries it
+     * ({@code NovuClient#identifyThenTrigger(NovuAccount, ...)}), so Novu's default there decides.
      *
      * <p>Uses the same cached snapshot as {@link #check}, so the cost is one Novu list per TTL, not
      * per event, whatever the flag.
@@ -199,7 +216,8 @@ public class ProviderAvailability {
             return new Result(Status.UNKNOWN,
                     "Novu integrations could not be listed; delivering " + channel + " without checking", null);
         }
-        String envPin = "WHATSAPP".equalsIgnoreCase(channel) && StringUtils.hasText(config.getWhatsappIntegrationId())
+        String envPin = account == null && "WHATSAPP".equalsIgnoreCase(channel)
+                && StringUtils.hasText(config.getWhatsappIntegrationId())
                 ? config.getWhatsappIntegrationId().trim() : null;
         if (envPin != null) {
             Integration pinned = current.byKey().get(key(envPin));
@@ -318,7 +336,8 @@ public class ProviderAvailability {
     }
 
     private Map<String, Integration> fetch(List<Integration> all) {
-        NovuClient.NovuResponse response = novuClient.listIntegrations();
+        NovuClient.NovuResponse response = account == null
+                ? novuClient.listIntegrations() : novuClient.listIntegrations(account);
         Map<String, Object> body = response == null ? null : response.getResponse();
         List<Object> data = Values.asList(body == null ? null : body.get("data"));
         if (data == null) {
@@ -356,14 +375,19 @@ public class ProviderAvailability {
         return out;
     }
 
-    /** The key's environment, asked once; null while Novu has not named it (then nothing is filtered). */
+    /**
+     * The key's environment, asked once; null while Novu has not named it (then nothing is filtered).
+     * In a tenant's own account (#2203) it is THAT account's key's environment: the shared key's would
+     * match none of the tenant organization's integrations and drop them all.
+     */
     private String environmentId() {
         String known = environmentId;
         if (known != null) {
             return known;
         }
         try {
-            NovuClient.NovuResponse response = novuClient.currentEnvironment();
+            NovuClient.NovuResponse response = account == null
+                    ? novuClient.currentEnvironment() : novuClient.currentEnvironment(account);
             Map<String, Object> body = response == null ? null : response.getResponse();
             Map<String, Object> environment = Values.asMap(body == null ? null : body.get("data"));
             String id = environment == null ? null : Values.str(environment.get("_id"));

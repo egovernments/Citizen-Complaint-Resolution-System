@@ -12,14 +12,14 @@ test.use({ trace: 'off', video: 'off' });
 test('complaint details page loads without crashing for a freshly-filed complaint', {
   annotation: {
     type: 'description',
-    description: `Robustness check for the citizen complaint detail page. API-seeds a complaint for the suite-wide provisioned citizen (so the test is tenant-agnostic and never depends on a specific seeded ID or a hardcoded phone), navigates to its detail page, and asserts both that the Complaint Summary renders and that no "Cannot read properties of undefined" JS errors fire.
+    description: `Robustness check for the citizen complaint detail page. API-seeds a complaint for the suite-wide provisioned citizen (so the test is tenant-agnostic and never depends on a specific seeded ID or a hardcoded phone), navigates to its detail page, and asserts both that the complaint's details grid renders and that no "Cannot read properties of undefined" JS errors fire.
 
 Steps:
 1. setTimeout 120s; attach a pageerror listener to capture uncaught JS errors.
 2. API-seed a complaint for the provisioned citizen via seedComplaintAsCitizen() (the seed plan's deployment-correct serviceCode/localityCode — see personas.ts). Skip cleanly if create is blocked (e.g. no viable (serviceCode, assignee) pair exists on this deployment).
 3. citizenOtpLogin as the provisioned citizen.
 4. Navigate to /digit-ui/citizen/pgr/complaints/{id}, wait 12s for hydration.
-5. Assert "Complaint Summary" heading is visible and the complaint ID appears in the body.
+5. Assert the "Complaint Details" heading and the details grid are visible and the complaint ID appears in the body.
 6. Filter pageErrors for "Cannot read properties of undefined" matches and assert length === 0.
 
 Catches the class of regressions where a service code has missing fields and the detail page deref-crashes.`,
@@ -63,9 +63,11 @@ Catches the class of regressions where a service code has missing fields and the
   });
   await page.waitForTimeout(12000);
 
-  // Page should render complaint details, not be stuck on spinner
-  const heading = page.locator('text=Complaint Summary');
-  await expect(heading).toBeVisible({ timeout: 5_000 });
+  // Page should render complaint details, not be stuck on spinner. Develop's
+  // page (#2038) has no separate "Complaint Summary" card: the loaded complaint
+  // is the details grid under the "Complaint Details" heading.
+  await expect(page.locator('h1.cms-details-head')).toBeVisible({ timeout: 5_000 });
+  await expect(page.locator('.cms-details-grid')).toBeVisible({ timeout: 5_000 });
 
   const complaintNo = page.locator(`text=${complaintId}`);
   await expect(complaintNo).toBeVisible({ timeout: 5_000 });
@@ -130,14 +132,14 @@ test('complaint location section is hidden when absent and supports valid zero-a
   );
 
   const locationHeading = () =>
-    page.getByText(/^(Complaint Location|CS_COMPLAINT_LOCATION)$/i, { exact: true });
+    page.getByText(/^(Complaint(?:'s)? Location|CS_COMPLAINT_LOCATION)$/i, { exact: true });
   const locationMarker = () => page.locator('.leaflet-container .leaflet-marker-icon');
   const openComplaint = async (srid: string) => {
     await page.goto(`${BASE_URL}/${tenantSlug()}/digit-ui/citizen/pgr/complaints/${srid}`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });
-    await expect(page.getByText('Complaint Summary', { exact: true })).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator('.cms-details-grid')).toBeVisible({ timeout: 30_000 });
   };
 
   await openComplaint(ids.missing);

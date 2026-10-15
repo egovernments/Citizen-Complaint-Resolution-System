@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, Info } from 'lucide-react';
+import { ArrowRight, Compass } from 'lucide-react';
 import { useApp } from '../../App';
 import { Button } from '@/components/ui/button';
 import { ONBOARDING_STEPS } from '../steps';
 import { completedCount, resumeStep } from '../progress';
 import { useOnboardingT } from '../i18n';
-import { learnVideos, stepIntros } from './homeContent';
+import { learnVideos } from './homeContent';
+import { stepGuide } from '../stepGuide';
 import { LearnTheBasics } from './LearnTheBasics';
 import { VideoDialog } from './VideoDialog';
 import { WelcomeDialog } from './WelcomeDialog';
@@ -31,8 +32,8 @@ function rememberWelcomeSeen(tenant: string) {
 
 /**
  * Onboarding's Home: what onboarding is, where this account has got to, the
- * step to do next, and short videos on each step. The welcome opens by itself
- * the first time an account lands here, and from "What's onboarding?" after.
+ * step to do next, and short videos on each step. The tour opens by itself the
+ * first time an account lands here, and from "Take a tour" after.
  */
 export default function HomePage() {
   const { state } = useApp();
@@ -44,7 +45,7 @@ export default function HomePage() {
   const total = ONBOARDING_STEPS.length;
   const next = resumeStep(completed);
   const after = ONBOARDING_STEPS.find((step) => step.number > next.number && !completed.includes(step.number));
-  const intros = stepIntros(t);
+  const guide = stepGuide(t);
   const videos = learnVideos(t);
   const stepName = (step: (typeof ONBOARDING_STEPS)[number]) => t(`steps.${step.id}`, step.label);
 
@@ -64,8 +65,8 @@ export default function HomePage() {
           <h2 className="text-3xl font-bold font-condensed text-foreground">{t('layout.setup_account', 'Let’s set up your account')}</h2>
         </div>
         <Button variant="outline" onClick={() => setWelcomeOpen(true)} className="h-10 gap-2 text-primary hover:text-primary">
-          <Info className="h-4 w-4" />
-          {t('home.whats_onboarding', 'What’s onboarding?')}
+          <Compass className="h-4 w-4" />
+          {t('home.take_tour', 'Take a tour')}
         </Button>
       </header>
 
@@ -84,16 +85,16 @@ export default function HomePage() {
             {stepName(next)}
           </h3>
           <p className="max-w-2xl text-[15px] leading-6 text-foreground/80">
-            {intros[next.id].description}
+            {guide[next.id].description}
           </p>
           {after && (
             <p className="text-sm text-muted-foreground">
-              {t('home.after', 'After this: %{step} — %{what}.', { step: stepName(after), what: intros[after.id].next })}
+              {t('home.after', 'After this: %{step} — %{what}.', { step: stepName(after), what: guide[after.id].next })}
             </p>
           )}
         </div>
         <Button onClick={() => navigate(next.path)} className="h-11 w-full gap-2 px-6 text-[15px] sm:w-auto">
-          {t('home.set_up', 'Set up %{step}', { step: stepName(next) })}
+          {guide[next.id].action}
           <ArrowRight className="h-4 w-4" />
         </Button>
       </section>

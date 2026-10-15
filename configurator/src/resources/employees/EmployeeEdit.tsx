@@ -10,12 +10,7 @@ import { useApp } from '../../App';
 import { RolesEditor } from './RolesEditor';
 import { JurisdictionEditor } from './JurisdictionEditor';
 import { AssignmentEditor } from './AssignmentEditor';
-
-const GENDER_CHOICES = [
-  { value: 'MALE', label: 'Male' },
-  { value: 'FEMALE', label: 'Female' },
-  { value: 'TRANSGENDER', label: 'Transgender' },
-];
+import { useGenderChoices } from '../useGenderChoices';
 
 const STATUS_CHOICES = [
   { value: 'EMPLOYED', label: 'Employed' },
@@ -115,6 +110,7 @@ export function EmployeeEdit() {
   const { state } = useApp();
   const tenantId = state.tenant;
   const { validator: mobileValidate, rules: mobileRules } = useMobileValidator();
+  const genderChoices = useGenderChoices();
 
   const { data: reasonsList } = useGetList('deactivation-reasons', {
     pagination: { page: 1, perPage: 100 },
@@ -176,7 +172,7 @@ export function EmployeeEdit() {
           <DigitFormSelect
             source="user.gender"
             label="Gender"
-            choices={GENDER_CHOICES}
+            choices={genderChoices}
             placeholder="Select gender..."
           />
           <DateEpochField source="user.dob" label="Date of Birth" />
