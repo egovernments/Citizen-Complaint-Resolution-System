@@ -13,7 +13,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { loginEmployeeBrowser } from '../utils/employee-ui';
 import {
   BASE_URL, ADMIN_USER, ADMIN_PASS, POSTAL_CODE_VALID, POSTAL_CODE_PATTERN,
-  ROOT_TENANT, TENANT, LOCALES,
+  TENANT, LOCALES,
 } from '../utils/env';
 
 
@@ -103,9 +103,8 @@ async function resolvePostalErrorText(page: Page): Promise<string> {
     (await page.evaluate(() => localStorage.getItem('Employee.locale')).catch(() => null)) ||
     LOCALES[0];
 
-  // Search the root tenant first (localization is seeded state-wide), then the
-  // city tenant for deployments that scope messages per city.
-  for (const tenantId of Array.from(new Set([ROOT_TENANT, TENANT]))) {
+  // The workspace's root tenant holds its localization.
+  for (const tenantId of [TENANT]) {
     try {
       const url =
         `${BASE_URL}/localization/messages/v1/_search` +

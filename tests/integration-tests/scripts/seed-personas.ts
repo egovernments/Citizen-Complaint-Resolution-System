@@ -101,7 +101,7 @@ async function planFor(digit: Digit): Promise<Plan> {
   const departments = new Set((await digit.mdms('common-masters.Department')).filter(active).map((r) => String(r.data.code)));
   const designation = (await digit.mdms('common-masters.Designation')).find(active)?.data.code;
   // A complaint type whose department exists: the GRO/LME/viewer serve it.
-  const types = [...(await digit.mdms('RAINMAKER-PGR.ComplaintHierarchy')), ...(await digit.mdms('RAINMAKER-PGR.ServiceDefs'))]
+  const types = (await digit.mdms('RAINMAKER-PGR.ComplaintHierarchy'))
     .filter(active)
     .map((r) => ({ serviceCode: String(r.data.serviceCode ?? r.data.code ?? ''), department: String(r.data.department ?? r.data.departments?.[0] ?? '') }))
     .filter((t) => t.serviceCode && departments.has(t.department))

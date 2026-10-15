@@ -2,7 +2,7 @@ import { expect, type BrowserContext, type CDPSession, type Page, type Request, 
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { getDigitToken } from '../utils/auth';
-import { ADMIN_USER, ADMIN_PASS } from '../utils/env';
+import { surfacePath, tenantSlug } from '../utils/identity-bff';
 
 export type Principal = 'full' | 'department' | 'public';
 
@@ -71,8 +71,8 @@ const ANALYTICS_QUERY = /\/(?:api|pgr-services\/v2|pgr-analytics)(?:\/v2)?\/anal
 const DASHBOARD_API = /\/(?:api|pgr-services\/v2|pgr-analytics)(?:\/v2)?\/analytics|\/boundary-service\/|\/egov-mdms-service\/|\/mdms-v2\//;
 
 export function dashboardUrl(baseURL: string, principal: Principal): string {
-  const employeePath = process.env.DASHBOARD_EMPLOYEE_PATH || '/digit-ui/employee/dashboard';
-  const publicPath = process.env.DASHBOARD_PUBLIC_PATH || '/digit-ui/public-dashboard';
+  const employeePath = process.env.DASHBOARD_EMPLOYEE_PATH || surfacePath('employee', 'dashboard');
+  const publicPath = process.env.DASHBOARD_PUBLIC_PATH || `/${tenantSlug()}/digit-ui/public-dashboard`;
   return new URL(principal === 'public' ? publicPath : employeePath, baseURL).toString();
 }
 
@@ -89,32 +89,31 @@ export async function installSession(context: BrowserContext, principal: Princip
 
   const baseURL = required('BASE_URL');
   const tenant = required('DIGIT_TENANT');
-  // Fall back to env.ts defaults only for the 'full' principal (ADMIN-capable).
-  // Department benchmarks need a real employee account — silently logging in as
-  // ADMIN and labelling results "department" corrupts benchmark data.
-  const username = process.env.DIGIT_USERNAME ?? (principal === 'full' ? ADMIN_USER : required('DIGIT_USERNAME'));
-  const password = process.env.DIGIT_PASSWORD ?? (principal === 'full' ? ADMIN_PASS : required('DIGIT_PASSWORD'));
-  const authTenant = process.env.DASHBOARD_AUTH_TENANT || rootTenant(tenant);
+  // 'full' is the ADMIN persona. 'department' needs its own department-scoped
+  // employee and has no default: ADMIN's numbers labelled "department" would
+  // corrupt the benchmark.
+  const username = required(principal === 'full' ? 'ADMIN_LOGIN' : 'DASHBOARD_DEPARTMENT_LOGIN');
+  const password = required(principal === 'full' ? 'ADMIN_PASSWORD' : 'DASHBOARD_DEPARTMENT_PASSWORD');
   const token = await getDigitToken({
     baseURL,
-    tenant: authTenant,
+    tenant,
     username,
     password,
     userType: 'EMPLOYEE',
   });
 
-  await context.addInitScript(({ accessToken, userInfo, cityTenant }) => {
+  await context.addInitScript(({ accessToken, userInfo, tenantId }) => {
     localStorage.setItem('Employee.token', accessToken);
-    localStorage.setItem('Employee.tenant-id', cityTenant);
+    localStorage.setItem('Employee.tenant-id', tenantId);
     localStorage.setItem('Employee.user-info', JSON.stringify(userInfo));
     localStorage.setItem('Employee.locale', 'en_IN');
     localStorage.setItem('token', accessToken);
-    localStorage.setItem('tenant-id', cityTenant);
+    localStorage.setItem('tenant-id', tenantId);
     localStorage.setItem('user-info', JSON.stringify(userInfo));
   }, {
     accessToken: token.access_token,
     userInfo: token.UserRequest || {},
-    cityTenant: tenant,
+    tenantId: tenant,
   });
 }
 
@@ -122,10 +121,6 @@ function required(name: string): string {
   const value = process.env[name];
   if (!value) throw new Error(`${name} is required`);
   return value;
-}
-
-function rootTenant(tenant: string): string {
-  return tenant.includes('.') ? tenant.split('.')[0] : tenant;
 }
 
 export class NetworkRecorder {

@@ -1,9 +1,11 @@
 # Integration tests — how they work & how to add them
 
 End-to-end Playwright tests that run against a **live DIGIT deployment** (no mocking).
-The same suite must pass on **any** deployment — local Maputo (`mz.maputo`), bomet
-Kenya (`ke`), etc. That "deployment-agnostic" rule is the single most important thing
-to understand before writing a test.
+The same suite must pass on **any develop-shaped** deployment: one root workspace
+created through Configurator signup, staff signing in through the Identity BFF. That
+"deployment-agnostic" rule is the single most important thing to understand before
+writing a test. Older deployments (Bomet on `master`, the `pg` playground, city
+tenants) are out of scope: they run the suite from the branch they deploy.
 
 ---
 

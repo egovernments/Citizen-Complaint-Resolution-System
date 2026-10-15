@@ -242,7 +242,7 @@ export async function markDone(digit: Digit, step: string): Promise<Workspace> {
 
 /** en_IN plus the root StateInfo languages, as the configurator's labelLocales does. */
 export async function labelLocales(digit: Digit) {
-  const rows = await digit.mdms('common-masters.StateInfo', digit.tenantId.split('.')[0]);
+  const rows = await digit.mdms('common-masters.StateInfo', digit.tenantId);
   const languages = rows.map(row => row.data).find(data => Array.isArray(data.languages))?.languages ?? [];
   return [...new Set(['en_IN', ...languages.map((l: { value?: string }) => l.value).filter(Boolean)])] as string[];
 }

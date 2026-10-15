@@ -124,11 +124,11 @@ export const WARD_CSR_USER = env('WARD_CSR_LOGIN');
 export const WARD_CSR_PASS = process.env.WARD_CSR_PASSWORD || '';
 
 /**
- * Citizen OTP for the fixed-code test box. IDENTITY_TEST_OTP_CODE is the name
- * the identity helpers read; FIXED_OTP is accepted for older profiles. Lives in
- * the secrets file: on a fixed-OTP box it signs in as any phone number.
+ * The box's fixed citizen OTP (IDENTITY_TEST_OTP_CODE, in the secrets file): on
+ * a fixed-OTP box it signs in as any phone number. citizen-setup stops the run
+ * when it is missing (assertCitizenEnv).
  */
-export const FIXED_OTP = env('IDENTITY_TEST_OTP_CODE') || env('FIXED_OTP');
+export const FIXED_OTP = env('IDENTITY_TEST_OTP_CODE');
 
 // ── Fail fast ───────────────────────────────────────────────────────────────
 
@@ -150,6 +150,7 @@ const RETIRED: Record<string, string> = {
   EMPLOYEE_TENANT: 'DIGIT_TENANT (root tenants only)',
   PERSONA_CANDIDATES: '<ROLE>_LOGIN + <ROLE>_PASSWORD per persona',
   PERSONA_PASSWORD_GUESSES: 'nothing: persona passwords are never guessed',
+  FIXED_OTP: 'IDENTITY_TEST_OTP_CODE (in the secrets file)',
 };
 
 /** Everything wrong with this process's env profile, as one line each. */
@@ -160,6 +161,16 @@ export function envProblems(): string[] {
     if (process.env[name] !== undefined) out.push(`${name} is retired; set ${now}`);
   }
   return out;
+}
+
+/** Citizen specs sign in with the box's fixed OTP; called first by citizen-setup. */
+export function assertCitizenEnv(): void {
+  if (!/^\d{6}$/.test(FIXED_OTP)) {
+    throw new Error(
+      'IDENTITY_TEST_OTP_CODE is not set to the box\'s six-digit fixed citizen OTP; citizen specs cannot sign in. ' +
+        'Put it in the box secrets file (RUNNER_SECRETS_ENV); see deploy/README.md.',
+    );
+  }
 }
 
 /** Throw one message naming every problem. Called first by profile-setup and the seed script. */

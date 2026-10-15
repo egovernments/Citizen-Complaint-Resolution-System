@@ -66,19 +66,16 @@ Each spec that needs the citizen identity calls `readProvisionedCitizen()` from 
 
 ## Environment variables
 
-The suite is deployment-agnostic. All tenant-specific values come from env. Common ones:
+The suite targets develop-shaped deployments; every tenant-specific value comes from the env profile and the box secrets file, and no variable has a default that names a box. The citizen specs need:
 
-| Var | Default | Purpose |
+| Var | Where | Purpose |
 |---|---|---|
-| `BASE_URL` | `https://naipepea.digit.org` | Deployment URL |
-| `DIGIT_TENANT` | `ke.nairobi` | City-scoped tenant |
-| `ROOT_TENANT` | `ke` | State-level root tenant |
-| `ADMIN_USER` / `ADMIN_PASS` | `ADMIN` / `eGov@123` | Admin credentials |
-| `TENANT_CODE` | `ke` | Tenant code shown on configurator login page |
-| `FIXED_OTP` | `123456` | Deployment's mock OTP |
-| `TENANT_LABEL` | `Bomet County` | Tenant display name for the city picker |
+| `BASE_URL` | profile | Deployment URL |
+| `IDENTITY_TEST_TENANT_SLUG` | profile | Workspace slug; citizen pages live under `/<slug>/digit-ui/citizen/` |
+| `DIGIT_TENANT` | profile | The workspace's root tenant |
+| `IDENTITY_TEST_OTP_CODE` | secrets | The box's fixed citizen OTP; citizen-setup stops the run without it |
 
-Full list in `tests/utils/env.ts`.
+Full list in `tests/utils/env.ts` and `.env.example`.
 
 ## Adding a new test
 
@@ -113,7 +110,7 @@ Only pass an explicit phone to `citizenOtpLogin(page, phone)` when the test genu
 
 ### 3. Use MDMS-derived values, not env constants, where possible
 
-If the test constructs a PGR complaint, use `resolveServiceCode()` and `resolveLocalityCode()` from `../utils/launch-fixes/api` — they query MDMS at runtime and pick a code valid for the current deployment. Don't hardcode `SERVICE_CODE` or `LOCALITY_CODE` unless the test is specifically asserting on a known value.
+If the test constructs a PGR complaint, use `resolveServiceCode()` from `../utils/launch-fixes/api` (it queries `RAINMAKER-PGR.ComplaintHierarchy` at runtime) and the profile's `LOCALITY_CODE`, which profile-setup discovers. Don't hardcode codes unless the test is specifically asserting on a known value.
 
 For the complaint-ID prefix (e.g. `NCCG-PGR-…` vs `PG-PGR-…`), read it from `readProvisionedCitizen()?.pgrIdPrefix` — set by `citizen-setup` via egov-idgen.
 

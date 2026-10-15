@@ -41,7 +41,7 @@ import { ROOT_TENANT } from '../utils/env';
  * default the app invented instead of reading its own configuration.
  */
 function isOwnTenant(tenantId: string): boolean {
-  return tenantId === ROOT_TENANT || tenantId.startsWith(`${ROOT_TENANT}.`);
+  return tenantId === ROOT_TENANT;
 }
 
 /** Every distinct `"tenantId": "..."` value in a JSON request body. */

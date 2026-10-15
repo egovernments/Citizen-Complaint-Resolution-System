@@ -15,8 +15,10 @@
 import { test as setup, expect } from '@playwright/test';
 import { writeFileSync } from 'node:fs';
 import { provisionFreshCitizen, CITIZEN_FIXTURE_PATH } from '../utils/citizen-provision';
+import { assertCitizenEnv } from '../utils/env';
 
 setup('provision a fresh citizen (suite-wide)', async () => {
+  assertCitizenEnv();
   const citizen = await provisionFreshCitizen();
   expect(citizen.mobile, 'provisioned citizen must have a mobile').toBeTruthy();
   expect(citizen.token, 'provisioned citizen must have a token').toBeTruthy();

@@ -50,7 +50,7 @@ export async function citizenOtpLogin(page: Page, phone?: string): Promise<void>
 export async function citizenOtpLoginViaUI(page: Page, phone: string): Promise<void> {
   const tenant = await resolveTenant(page.request, BASE_URL);
   await page.goto(`${BASE_URL}${surfacePath('citizen', 'login')}`, { waitUntil: 'domcontentloaded' });
-  await page.locator('input#login-mobile, input[name="mobileNumber"], input[type="tel"]').first().fill(phone);
+  await page.locator('input#login-mobile').fill(phone);
   const requestedAt = Date.now();
   const sent = page.waitForResponse(r => new URL(r.url()).pathname === '/identity/v1/citizen/otp/_send' && r.request().method() === 'POST');
   await page.getByRole('button', { name: /continue|next|send.*(?:otp|code)/i }).first().click();

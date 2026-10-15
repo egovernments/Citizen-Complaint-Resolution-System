@@ -38,7 +38,7 @@ test.describe('citizen login mobile validation — #429', () => {
 Steps:
 1. Drop admin storageState (citizen login is public).
 2. Navigate to /digit-ui/citizen/login.
-3. Wait for input[name="mobileNumber"] up to 20s.
+3. Wait for input#login-mobile up to 20s.
 4. Assert a helper hint matching /\\d+-digit mobile number/i is visible before touching the field.
 5. Click the mobile input and type a too-short number with 30ms key delay.
 6. Assert the Continue button remains disabled (wizard refuses known-bad input).
@@ -78,7 +78,7 @@ Catches a regression where the citizen login regresses to the hardcoded Indian v
     });
 
     const mobileInput = page.locator(
-      'input#login-mobile, input[name="mobileNumber"], input[type="tel"]',
+      'input#login-mobile',
     ).first();
     await mobileInput.waitFor({ state: 'visible', timeout: 20_000 });
 

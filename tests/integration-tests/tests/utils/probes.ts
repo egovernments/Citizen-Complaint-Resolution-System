@@ -125,7 +125,6 @@ export interface GlobalConfigs {
 export async function fetchGlobalConfigs(baseUrl = BASE_URL): Promise<GlobalConfigs> {
   const url = `${baseUrl}/digit-ui/globalConfigs.js`;
   const r = await probeFetch(url);
-  if (r.status === 404) return {};
   if (!r.ok) {
     const text = await r.text().catch(() => '');
     throw new ProbeHttpError(r.status, text, `${url} — HTTP ${r.status}: ${text.slice(0, ERROR_BODY_CHARS)}`);
@@ -175,10 +174,10 @@ export function tenantLabelKey(tenantId: string): string {
 
 export async function fetchTenantLabel(
   tenantId: string,
-  opts?: { rootTenant?: string; locale?: string; authToken?: string; baseUrl?: string },
+  opts?: { locale?: string; authToken?: string; baseUrl?: string },
 ): Promise<string | undefined> {
   const baseUrl = opts?.baseUrl ?? BASE_URL;
-  const searchTenant = opts?.rootTenant ?? tenantId.split('.')[0];
+  const searchTenant = tenantId;
   const locale = opts?.locale ?? 'en_IN';
   const data = await postJson<{ messages?: { code: string; message: string }[] }>(
     `${baseUrl}/localization/messages/v1/_search` +

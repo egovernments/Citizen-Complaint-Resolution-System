@@ -19,7 +19,7 @@ import { continueFiling, fileComplaintUrl, fillDetailsStep, fillLocationStep, pr
 import { getPersona } from '../utils/personas';
 import {
   BASE_URL, TENANT, ROOT_TENANT,
-  ADMIN_USER, ADMIN_PASS, FIXED_OTP,
+  ADMIN_USER, ADMIN_PASS,
   PGR_ID_PREFIX,
   generateCitizenPhone,
 } from '../utils/env';

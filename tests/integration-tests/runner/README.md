@@ -50,7 +50,7 @@ This is the smallest thing that can: Node core only, no extra deps.
 Two tiers, so the dashboards can show 30 runs of results without keeping 30
 runs of videos. How long 30 runs last depends on how often the box runs the
 suite: about a week at naipepea's four runs a day, about a month on a box that
-runs it once a night (bomet).
+runs it once a night.
 
 | What | Kept for | Set by |
 |------|----------|--------|

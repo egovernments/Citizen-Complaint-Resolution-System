@@ -1,14 +1,18 @@
 # Per-box env profiles, secrets and personas
 
-One harness runs on every box (#2398): `develop` is tested on **naipepea**,
-`master` on **Bomet**. The runner, `runner/run-cycle.sh`, the catalog and the
-dashboards are the same everywhere. A box differs only in three files:
+This suite targets develop-shaped deployments only (#2398): one root workspace
+created through Configurator signup, staff signing in through the Identity BFF
+and Keycloak. `develop` is tested on **naipepea**. Older deployments (Bomet on
+`master`, the `pg` playground, city tenants) run the suite from the branch they
+deploy; nothing here keeps them working. The runner, `runner/run-cycle.sh`, the
+catalog and the dashboards are the same on every box, which differs only in
+three files:
 
 | File | Tracked | Holds |
 |---|---|---|
 | `deploy/<env>.env` | yes, no secrets | `BASE_URL`, `DIGIT_TENANT` (a root tenant), `IDENTITY_TEST_TENANT_SLUG`, `KC_REALM`, persona `<ROLE>_LOGIN`s, optional seed codes, `EXPECTATIONS_FILE` |
 | `deploy/expectations/<env>.json` | yes | which capabilities the box must have (`required` fails when absent, `absent` skips) |
-| box secrets file | **no** | persona `<ROLE>_PASSWORD`s and `IDENTITY_TEST_OTP_CODE` |
+| box secrets file | **no** | persona `<ROLE>_PASSWORD`s, `LOGIN_PROBE_PASSWORD` and `IDENTITY_TEST_OTP_CODE` |
 
 Specs gate on capabilities (`requires()` in `tests/utils/capabilities.ts`),
 never on a hostname or env name. Nothing in the suite defaults to a box: an
@@ -21,13 +25,17 @@ variable.
 sudo install -o digit-tests -g digit-tests -m 0600 /dev/null /etc/digit-tests/secrets.env
 ```
 
-Plain `KEY=value` lines: `ADMIN_PASSWORD`, `GRO_PASSWORD`, `LME_PASSWORD`,
-`WARD_CSR_PASSWORD`, `INBOX_VIEWER_PASSWORD`, `SUPERVISOR_PASSWORD` and, on a
-fixed-OTP box, `IDENTITY_TEST_OTP_CODE`. `run-cycle.sh` sources it after the
-env profile when `RUNNER_SECRETS_ENV` names it (add
-`Environment=RUNNER_SECRETS_ENV=/etc/digit-tests/secrets.env` to the runner's
-systemd unit, or export it for a nightly wrapper). Set but unreadable fails the
-run with phase `failed-secrets`. Only its path is ever logged.
+`KEY=value` lines (`seed-personas.ts` writes them single-quoted):
+`ADMIN_PASSWORD`, `GRO_PASSWORD`, `LME_PASSWORD`, `WARD_CSR_PASSWORD`,
+`INBOX_VIEWER_PASSWORD`, `SUPERVISOR_PASSWORD`, `LOGIN_PROBE_PASSWORD` and the
+box's fixed citizen OTP, `IDENTITY_TEST_OTP_CODE` (citizen-setup stops the run
+naming it when it is missing). `run-cycle.sh` sources it after the env profile
+when `RUNNER_SECRETS_ENV` names it. The runner's systemd unit
+(`local-setup/ansible/templates/integration-tests-runner.service.j2`) sets
+`RUNNER_SECRETS_ENV=/etc/digit-tests/secrets.env`, or
+`integration_tests_runner_secrets_env`; export it yourself for a nightly
+wrapper. Set but unreadable fails the run with phase `failed-secrets`. Only its
+path is ever logged.
 
 ## Personas
 
@@ -43,6 +51,11 @@ each a `<ROLE>_LOGIN` in the profile plus `<ROLE>_PASSWORD` in the secrets file:
 | `WARD_CSR` | EMPLOYEE, CSR, ward jurisdiction | boundary jurisdiction #496 |
 | `INBOX_VIEWER` | EMPLOYEE, GRO, PGR_LME, seed-locality jurisdiction | inbox specs (they assign their seed complaint to it) |
 | `SUPERVISOR` | EMPLOYEE, GRO, PGR_LME, SUPERVISOR | the specs' `EMPLOYEE_USER` |
+
+`LOGIN_PROBE_LOGIN` (with `LOGIN_PROBE_PASSWORD`) is a seventh login, in
+Keycloak only, with no DIGIT user or roles: `employee/login.spec.ts` posts wrong
+passwords to it, so brute-force lockout never lands on a persona. That spec
+fails when it is unset.
 
 `scripts/seed-personas.ts` creates and links all six, idempotently, through
 public contracts only (HRMS `_create`, the Keycloak admin API, BFF
@@ -61,8 +74,9 @@ IDENTITY_TEST_KEYCLOAK_ADMIN_USER=<admin> IDENTITY_TEST_KEYCLOAK_ADMIN_PASSWORD=
   npx tsx scripts/seed-personas.ts --secrets-out /etc/digit-tests/secrets.env
 ```
 
-Passwords already in the env are kept; missing ones are generated and written to
-`--secrets-out` (mode 0600), never printed. stdout carries the `SERVICE_CODE`,
+Passwords already in the env are kept; missing ones are generated, and each is
+written to `--secrets-out` (mode 0600) once its Keycloak login holds it, never
+printed, so a run that stops part-way can simply be run again. stdout carries the `SERVICE_CODE`,
 `LOCALITY_CODE` and `WARD_CSR_BOUNDARY` lines to pin in the profile, then one
 verified line per persona (each signs in and selects its own employee).
 
@@ -71,47 +85,3 @@ verified line per persona (each signs in and selects its own employee).
 The suite targets one root workspace whose onboarding is DONE (create it through
 Configurator signup). On a tenant that predates onboarding the Configurator
 sends the admin to `/onboarding/...`, and `auth.setup` fails naming that gate.
-
-## Bomet layout
-
-Bomet (`https://bometfeedbackhub.digit.org`) serves the same two dashboards as
-naipepea. The suite runs as a black-box client against the live API.
-
-> Read `BOMET-AGENT-BRIEFING.md` first. Never `docker compose up/down -v` or
-> `--force-recreate` on the box; only additive files + a new nginx location.
-
-```
-/opt/integration-tests/
-├── dist/          # vanilla dashboard + catalog.json + history.json + runs/   → /tests/
-└── dist-v2/       # react-admin build; catalog.json/history.json/runs symlinked to ../dist/ → /tests-v2/
-```
-
-One-time setup:
-
-```bash
-ssh bomet 'sudo mkdir -p /opt/integration-tests/dist /opt/integration-tests/dist-v2'
-ssh bomet 'sudo htpasswd -c /etc/nginx/.htpasswd-tests digit-tests'   # set a password
-# add deploy/nginx-integration-tests.conf into the bomet vhost, then:
-ssh bomet 'sudo nginx -t && sudo nginx -s reload'
-```
-
-Each run, from a runner that can `ssh bomet` (not yet: bomet runs master, which
-has no identity-bff, so `deploy/bomet.env` refuses to load until master takes #1999):
-
-```bash
-make test-and-publish ENV_PROFILE=deploy/bomet.env RUNNER_SECRETS_ENV=<secrets file> HOST_SSH=bomet
-
-# build + push the react-admin dashboard (v2)
-( cd dashboard-react-admin && npm ci && npm run build )   # DASHBOARD_BASE from bomet.env
-rsync -avh --delete dashboard-react-admin/dist/ bomet:/opt/integration-tests/dist-v2/
-ssh bomet '
-  cd /opt/integration-tests/dist-v2
-  ln -sfn ../dist/catalog.json catalog.json
-  ln -sfn ../dist/history.json history.json
-  ln -sfn ../dist/runs runs
-'
-```
-
-Specs `enc-key-drift-622` (skipped), `boundary-jurisdiction-496`, and the
-`complaint-attachment` detail half are **red by design** on bomet — they
-are open-bug regression catchers, not failures to "fix".

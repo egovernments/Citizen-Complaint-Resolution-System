@@ -14,8 +14,7 @@
 // Import the resolved values; never re-derive deployment shape locally.
 import { BASE_URL, ROOT_TENANT, ADMIN_USER, ADMIN_PASS } from '../env';
 
-// NAIPEPEA_BASE remains an explicit override for the (now-legacy) naipepea host.
-const BASE = process.env.NAIPEPEA_BASE ?? BASE_URL;
+const BASE = BASE_URL;
 import { getDigitToken } from '../auth';
 
 export type EmployeeAuth = {
@@ -246,52 +245,6 @@ export async function pgrCreate(params: PgrCreateParams): Promise<PgrCreateResul
   };
 }
 
-/**
- * Resolve a locality (boundary) code against the deployment's
- * boundary-service. Returns `preferred` if it exists in the boundary list for
- * `tenantId`; otherwise returns the first ward-level boundary code found.
- *
- * Ward-level codes are identified by having three or more underscore-separated
- * segments (e.g. `BOMET_BOMET_CENTRAL_CHESOEN`) and not starting with `ZZ_`
- * (test-only boundaries). Falls back to `preferred` on any network error so
- * the _create call surfaces the original error.
- *
- * Useful when `LOCALITY_CODE` env var holds a Nairobi code
- * (`NAIROBI_CITY_VIWANDANI`) but the deployment is Bomet ke.
- */
-export async function resolveLocalityCode(
-  baseUrl: string,
-  authToken: string,
-  tenantId: string,
-  preferred: string,
-): Promise<string> {
-  try {
-    const r = await fetch(
-      `${baseUrl}/boundary-service/boundary/_search?tenantId=${encodeURIComponent(tenantId)}&hierarchyType=REVENUE&offset=0&limit=100`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ RequestInfo: { authToken } }),
-      },
-    );
-    const data = (await r.json()) as { Boundary?: Array<{ code: string }> };
-    const codes = (data.Boundary || []).map((b) => b.code);
-
-    // Return preferred if the deployment knows about it
-    if (codes.includes(preferred)) return preferred;
-
-    // Pick the first ward-level code: 3+ underscore-delimited segments,
-    // not a synthetic test boundary (ZZ_ prefix), not WARD_ORD.
-    const wardCode = codes.find(
-      (c) => c.split('_').length >= 4 && !c.startsWith('ZZ_') && c !== 'WARD_ORD',
-    );
-    if (wardCode) return wardCode;
-  } catch {
-    // Network or parse failure — return preferred and let _create surface the error
-  }
-  return preferred;
-}
-
 interface MdmsCodeRow {
   uniqueIdentifier?: string;
   isActive?: boolean;
@@ -382,9 +335,8 @@ async function activeComplaintCodes(
  *     `$.MdmsRes.RAINMAKER-PGR.ComplaintHierarchy[?(@.code=='<CODE>')]`, read
  *     by ServiceRequestValidator.validateMDMS. `pg` carries 33 ServiceDefs
  *     against 8 ComplaintHierarchy codes, so 25 of the codes this helper could
- *     hand back were unfileable by construction. ServiceDefs stays as the
- *     FALLBACK master, for deployments that keep the catalogue there instead
- *     (profile.ts's discoverComplaintTypes unions both for the same reason).
+ *     hand back were unfileable by construction. Develop keeps the catalogue
+ *     in ComplaintHierarchy only, so that is the one master read.
  *
  *  2. WHERE THE CODE LIVES IN A ROW. mdms-v2's `uniqueIdentifier` is not the
  *     serviceCode everywhere: pg keys ServiceDefs rows by a sha256 hash and
@@ -398,7 +350,7 @@ export async function resolveServiceCode(
   tenantId: string,
   preferred: string,
 ): Promise<string> {
-  for (const schemaCode of ['RAINMAKER-PGR.ComplaintHierarchy', 'RAINMAKER-PGR.ServiceDefs']) {
+  for (const schemaCode of ['RAINMAKER-PGR.ComplaintHierarchy']) {
     let codes: string[] = [];
     try {
       codes = await activeComplaintCodes(baseUrl, authToken, tenantId, schemaCode);

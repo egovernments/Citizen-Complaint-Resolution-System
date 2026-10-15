@@ -183,7 +183,7 @@ Cleanup is API-only — soft-deletes via cleanupMdms in afterAll because there's
     // `source="name"` and which no copy change touches. Its label was renamed
     // "Name" → "Complaint Sub-Type" → "Complaint Subcategory" (#2243); the
     // label match is only a fallback. Its id is React's useId, so not #name.
-    await page.locator('input[name="name"]').or(page.getByLabel(/^Complaint (Sub-Type|Subcategory)/i)).first().fill(name);
+    await page.locator('input[name="name"]').or(page.getByLabel(/^Complaint Subcategory/i)).first().fill(name);
 
     const codeInput = page.getByLabel(/Service Code/i);
     await codeInput.fill('');

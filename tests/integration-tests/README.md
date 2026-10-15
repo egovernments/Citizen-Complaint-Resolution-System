@@ -53,7 +53,7 @@ the root tenant the workspace slug resolves to. Nothing has a box default.
 | `WARD_CSR_LOGIN` / `WARD_CSR_PASSWORD` | profile / secrets | CSR scoped below the hierarchy root (#496) |
 | `INBOX_VIEWER_LOGIN` / `INBOX_VIEWER_PASSWORD` | profile / secrets | GRO whose jurisdiction covers the seed locality |
 | `SUPERVISOR_LOGIN` / `SUPERVISOR_PASSWORD` | profile / secrets | GRO + `PGR_LME` + `SUPERVISOR`; the specs' `EMPLOYEE_USER` |
-| `IDENTITY_TEST_OTP_CODE` | secrets | Fixed citizen OTP on a fixed-OTP box (`FIXED_OTP` still accepted) |
+| `IDENTITY_TEST_OTP_CODE` | secrets | The box's fixed citizen OTP; citizen-setup stops the run without it |
 | `KC_REALM` | profile | Keycloak realm (default `digit`) |
 | `EXPECTATIONS_FILE` | profile | `deploy/expectations/<env>.json`: which capabilities the box must have |
 | `SERVICE_CODE` / `LOCALITY_CODE` | profile | Pin the seed complaint type / locality; discovered when unset |
@@ -69,8 +69,10 @@ candidate, and a refused sign-in fails at once with Keycloak's own message.
 pre-#2398 names (`DIGIT_USERNAME`, `GRO_USER`, `EMPLOYEE_USER`, `ROOT_TENANT`,
 `CITY_TENANT`, `PERSONA_PASSWORD_GUESSES`, …) are rejected by name.
 
-See `.env.example` for a template and `deploy/naipepea.env` / `deploy/bomet.env`
-for the two boxes.
+See `.env.example` for a template and `deploy/naipepea.env` for the box this
+branch is tested on. The suite targets develop-shaped deployments only; older
+ones (Bomet on `master`, the `pg` playground, city tenants) run the suite from
+the branch they deploy.
 
 ## Portability
 

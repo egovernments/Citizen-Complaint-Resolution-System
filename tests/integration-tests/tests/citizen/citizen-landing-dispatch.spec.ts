@@ -185,7 +185,7 @@ Never skips — the branch is a function of the profile, and both branches have 
     // builds may land on city-select or all-services instead; accept any
     // citizen sub-path except the bare language-selection page itself.
     await page.waitForURL(
-      /\/(citizen\/(login|select-city|home|all-services)|user\/login)/,
+      /\/(citizen\/(login|home|all-services)|user\/login)/,
       { timeout: 15_000 },
     );
   });

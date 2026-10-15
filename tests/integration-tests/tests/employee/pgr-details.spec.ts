@@ -70,12 +70,10 @@ const _complaints = _fixtureTenantMismatch ? undefined : _fixtures?.complaints;
 // load-time TypeError and took the whole file down.
 const TERMINAL_COMPLAINT_ID =
   process.env.TERMINAL_COMPLAINT_SRID
-  || process.env.FLOW5_TERMINAL_SRID
   || _complaints?.terminal_rated
   || '';
 const NONTERMINAL_COMPLAINT_ID =
   process.env.NONTERMINAL_COMPLAINT_SRID
-  || process.env.FLOW5_NONTERMINAL_SRID
   || _complaints?.non_terminal
   || '';
 

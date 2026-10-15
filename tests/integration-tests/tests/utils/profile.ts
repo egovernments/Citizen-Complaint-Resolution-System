@@ -506,12 +506,6 @@ async function discoverComplaintTypes(
       if (!dept) continue;
       byCode.set(d.code, String(dept));
     }
-    for (const row of await fetchMdms(tenantId, 'RAINMAKER-PGR.ServiceDefs', authToken, { baseUrl })) {
-      const d = row?.data;
-      const code = d?.serviceCode ?? row?.uniqueIdentifier;
-      if (!code || row.isActive === false || d?.active === false) continue;
-      if (!byCode.get(code)) byCode.set(code, String(d?.department ?? ''));
-    }
     if (byCode.size) break; // exact tenant wins; only fall through to root when bare
   }
 
@@ -596,7 +590,6 @@ export async function discoverProfile(opts?: { baseUrl?: string }): Promise<Depl
     'identity auth methods',
     async () => {
       const r = await fetch(`${baseUrl}/identity/v1/auth-methods?surface=citizen&intent=signin`);
-      if (r.status === 404) return []; // no identity stack on this deployment (master)
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const body = (await r.json()) as { methods?: Array<{ id?: string }> };
       return (body.methods ?? []).map((m) => String(m.id)).sort();
@@ -611,7 +604,7 @@ export async function discoverProfile(opts?: { baseUrl?: string }): Promise<Depl
   // override — and the smoke test warns whenever we fall back to one.
   const discoveredLabel = await attempt(
     'tenant label',
-    () => fetchTenantLabel(city, { rootTenant: root, authToken, baseUrl }),
+    () => fetchTenantLabel(city, { authToken, baseUrl }),
     undefined as string | undefined,
   );
   const envLabel = envOr('TENANT_LABEL');

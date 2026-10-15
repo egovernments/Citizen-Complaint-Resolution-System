@@ -48,11 +48,11 @@ const LIST_PATH = '/configurator/manage/employees';
 // tenant's real boundary / department / designation masters, so they must be
 // live codes. We derive them from an EXISTING employee on the deployment
 // (resolveSeedFks, called in beforeAll) so the API-seed tests are portable to
-// any tenant. An explicit env override still wins; the final fallback is the
-// Kenya seed, used only when neither a live employee nor an override exists.
-let SEED_BOUNDARY = process.env.SEED_BOUNDARY || 'NAIROBI_CITY';
-let SEED_DEPT = process.env.SEED_DEPT || 'DEPT_7';
-let SEED_DESIG = process.env.SEED_DESIG || 'DESIG_58';
+// any tenant. An explicit env override still wins; with neither, the seeding
+// tests skip (seedFksResolved) rather than seed a guessed code.
+let SEED_BOUNDARY = process.env.SEED_BOUNDARY || '';
+let SEED_DEPT = process.env.SEED_DEPT || '';
+let SEED_DESIG = process.env.SEED_DESIG || '';
 // SEED_BOUNDARY's own hierarchy + boundaryType. These used to be hardcoded
 // 'ADMIN' / 'County' alongside a live-derived SEED_BOUNDARY code — silently
 // wrong the moment the boundary itself was discovered on a non-Kenya
@@ -62,8 +62,8 @@ let SEED_DESIG = process.env.SEED_DESIG || 'DESIG_58';
 // A mismatched hierarchy/boundaryType paired with a real SEED_BOUNDARY code
 // is a jurisdiction HRMS would be right to reject, or worse, silently store
 // as an unscoped/unusable row.
-let SEED_HIERARCHY = process.env.SEED_HIERARCHY || 'ADMIN';
-let SEED_BOUNDARY_TYPE = process.env.SEED_BOUNDARY_TYPE || 'County';
+let SEED_HIERARCHY = process.env.SEED_HIERARCHY || '';
+let SEED_BOUNDARY_TYPE = process.env.SEED_BOUNDARY_TYPE || '';
 
 // Tracks whether resolveSeedFks() found a live employee to derive FKs from.
 // Tests that API-seed employees (4a/5) need a real boundary/dept/designation

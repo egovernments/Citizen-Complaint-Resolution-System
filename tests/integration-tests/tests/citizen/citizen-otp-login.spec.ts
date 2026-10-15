@@ -18,11 +18,11 @@ test.describe('Citizen Login', () => {
   test('login page renders with mobile input', {
     annotation: {
       type: 'description',
-      description: `Smoke check that the citizen login page actually serves an input[name="mobileNumber"] field. Catches the most basic class of regression — the page errors during render and no input appears at all.
+      description: `Smoke check that the citizen login page actually serves its mobile-number field (input#login-mobile). Catches the most basic class of regression — the page errors during render and no input appears at all.
 
 Steps:
 1. Navigate to /digit-ui/citizen/login.
-2. Wait up to 20s for input[name="mobileNumber"] to be visible.
+2. Wait up to 20s for input#login-mobile to be visible.
 3. Assert isVisible() === true.
 
 If this fails, every other citizen test will fail downstream — pairs with the OTP-login test below.`,
@@ -36,7 +36,7 @@ If this fails, every other citizen test will fail downstream — pairs with the 
     // Match current digit-ui (input#login-mobile, type=tel, no name) and
     // older revisions that still set name="mobileNumber".
     const mobileInput = page.locator(
-      'input#login-mobile, input[name="mobileNumber"], input[type="tel"]',
+      'input#login-mobile',
     ).first();
     await mobileInput.waitFor({ state: 'visible', timeout: 20_000 });
     expect(await mobileInput.isVisible()).toBe(true);

@@ -75,7 +75,7 @@ test.describe('lifecycle — enc-key drift after STATE_LEVEL_TENANT_ID flip #622
 
 Steps:
 1. Resolve a non-ADMIN employee persona from the deployment itself; self-skip if it has none.
-2. POST /user/oauth/token as that employee and assert 2xx + access_token — a drifted key makes username lookup miss the row and returns "Invalid login credentials".
+2. Sign that employee in (Keycloak, then the BFF's DIGIT context exchange) and assert an access_token — a drifted key makes the DIGIT user lookup miss the row.
 3. Assert the returned UserRequest.name is non-empty and does NOT match egov-enc-service's ciphertext shape /^\\d+\\|/ — a name still carrying its key-id prefix is a value the service could not decrypt.
 
 Runs unconditionally: no flag, no redeploy, no destructive flip.`,
