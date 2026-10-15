@@ -68,7 +68,8 @@ const SPECS: Spec[] = [
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const fail = (why: string): never => { throw new Error(why); };
 const envName = (role: PersonaRole, suffix: 'LOGIN' | 'PASSWORD') => `${PERSONA_ENV[role]}_${suffix}`;
-const codeOf = (role: PersonaRole) => `IT_${PERSONA_ENV[role]}`;
+/** SEED_CODE_PREFIX seeds a fresh set (new codes) next to an old one, e.g. after a role change. */
+const codeOf = (role: PersonaRole) => `${process.env.SEED_CODE_PREFIX || 'IT'}_${PERSONA_ENV[role]}`;
 const newPassword = () => `It-${randomBytes(12).toString('base64url')}-9a`;
 const active = (r: { isActive?: boolean; data?: { active?: boolean } }) => r.isActive !== false && r.data?.active !== false;
 
@@ -138,7 +139,8 @@ async function ensureEmployee(digit: Digit, plan: Plan, spec: Spec, login: strin
     const held = new Set((found.user?.roles ?? []).map((r: { code: string }) => r.code));
     const lacking = spec.roles.filter((r) => !held.has(r));
     if (lacking.length) {
-      // Role changes reach a DIGIT token only when it is next minted; a fresh workspace never needs this.
+      // DIGIT keeps serving a live token with the old roles (see the WARN below); to use the
+      // new roles at once, seed a fresh set with SEED_CODE_PREFIX and new <ROLE>_LOGINs.
       const roles = [...found.user.roles, ...lacking.map((r) => ({ code: r, name: plan.roleNames.get(r) ?? r, tenantId: TENANT }))];
       await digit.post('/egov-hrms/employees/_update', { Employees: [{ ...found, user: { ...found.user, roles } }] }, digit.ri({ action: '_update' }));
       console.error(`[seed-personas] ${code}: added ${lacking.join(', ')}`);
