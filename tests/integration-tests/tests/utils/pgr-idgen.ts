@@ -33,7 +33,8 @@ export async function getPgrIdPrefix(opts?: { tenant?: string }): Promise<string
   });
   if (!resp.ok) throw new Error(`egov-idgen answered HTTP ${resp.status} for pgr.servicerequestid at ${tenant}`);
   const id = ((await resp.json()) as { idResponses?: Array<{ id?: string }> }).idResponses?.[0]?.id ?? '';
-  const match = id.match(/^([A-Z0-9]+)-PGR-/);
+  // The prefix can itself hold hyphens: a signup workspace's is `<COUNTRY>-<TENANT>` (KE-QA).
+  const match = id.match(/^([A-Z0-9]+(?:-[A-Z0-9]+)*)-PGR-/);
   if (!match) throw new Error(`egov-idgen returned no PGR id at ${tenant} (got '${id}')`);
   return match[1];
 }

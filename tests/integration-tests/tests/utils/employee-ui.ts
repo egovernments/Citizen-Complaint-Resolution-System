@@ -124,8 +124,8 @@ export async function readInboxRows(page: Page): Promise<{ srid: string; localit
     for (const r of rows) {
       const cells = Array.from(r.querySelectorAll('[role="cell"], [role="gridcell"]')) as HTMLElement[];
       if (cells.length < 3) continue; // header row has no data cells
-      // Prefix-agnostic SRID: Maputo emits PG-PGR-…, Kenya emits NCCG-PGR-…, etc.
-      const m = (cells[0].innerText || '').match(/[A-Z]+-PGR-\d{4}-\d{2}-\d{2}-\d+/);
+      // Prefix-agnostic SRID: PG-PGR-…, NCCG-PGR-…, and a signup workspace's KE-QA-PGR-….
+      const m = (cells[0].innerText || '').match(/[A-Z0-9]+(?:-[A-Z0-9]+)*-PGR-\d{4}-\d{2}-\d{2}-\d+/);
       if (!m) continue;
       out.push({ srid: m[0], locality: (cells[1].innerText || '').trim(), status: (cells[2].innerText || '').trim() });
     }
