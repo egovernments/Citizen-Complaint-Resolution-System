@@ -26,6 +26,7 @@ vi.mock('@/api/onboarding', async () => {
     checkIdentifier: vi.fn(),
     submitSignup: vi.fn(),
     findOperation: vi.fn(),
+    findSignupOperation: vi.fn(),
     selectContext: vi.fn(),
     startSignIn: vi.fn(),
     requestMagicLinkSignup: vi.fn(),
@@ -40,6 +41,7 @@ const signedIn = { authenticated: true, user: { id: 'u', email: 'f@x.test', name
 beforeEach(() => {
   vi.mocked(api.checkIdentifier).mockResolvedValue({ type: 'URL_SLUG', value: 'x', available: true });
   vi.mocked(api.findSignup).mockResolvedValue(null);
+  vi.mocked(api.findSignupOperation).mockResolvedValue(null);
 });
 
 afterEach(() => vi.clearAllMocks());
@@ -465,6 +467,55 @@ describe('provisioning', () => {
     fireEvent.click(screen.getByRole('button', { name: /back/i }));
     fireEvent.change(await screen.findByLabelText(/account name/i), { target: { value: 'Bomet County Government' } });
     expect(screen.getByLabelText(/account code/i)).toHaveValue('KE-BOMET-COUNTY');
+  });
+
+  /** A reload onto a draft whose run failed on the founder's own details and handed it back. */
+  function reloadOntoReopened(errorCode: string, countryCode: string) {
+    vi.mocked(api.session).mockResolvedValue(signedIn);
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [], selectionRequired: false, onboardingRequired: true });
+    vi.mocked(api.findSignup).mockResolvedValue({
+      id: 'signup-1',
+      status: 'DRAFT',
+      accountName: 'Bomet County',
+      // What the name and country derive, so only the reopened run keeps it from following them.
+      accountCode: `${countryCode}-BOMET-COUNTY`,
+      urlSlug: 'bomet-county',
+      countryCode,
+      languages: ['en'],
+      timeZone: 'Africa/Nairobi',
+      financialYearPolicy: 'JUL_JUN',
+      tenantMetadata: { schemaVersion: 1, tenantAdmin: { mobileNumber: '700000199' } },
+    } as never);
+    vi.mocked(api.findSignupOperation).mockResolvedValue({
+      id: 'op-1', signupId: 'signup-1', status: 'TERMINAL_FAILED', currentStep: 'FOUNDER_HRMS',
+      completedSteps: ['TENANT_FOUNDATION', 'PLATFORM_BASELINE'], errorCode, errorMessage: errorCode,
+      attempt: 1, createdAt: 0, updatedAt: 0,
+    } as never);
+    render(<SignupPage />);
+  }
+
+  it('explains a reopened draft after a reload instead of dropping into the wizard (#2353)', async () => {
+    reloadOntoReopened('TENANT_ADMIN_ACCOUNT_REJECTED', 'KE');
+
+    expect(await screen.findByText(/usually the mobile number/i)).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: /change my details/i }));
+    expect(await screen.findByLabelText(/mobile number/i)).toHaveValue('700000199');
+    expect(api.findSignupOperation).toHaveBeenCalledWith('signup-1');
+  });
+
+  it('lets a run refused for its country change the country, keeping the account code (#2353)', async () => {
+    reloadOntoReopened('COUNTRY_NOT_SUPPORTED', 'FR');
+    vi.mocked(api.updateSignup).mockResolvedValue({ id: 'signup-1' } as never);
+
+    expect(await screen.findByText(/can’t be set up in this country/i)).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: /change my details/i }));
+    expect(await screen.findByLabelText(/base country/i)).toHaveValue('');
+
+    fireEvent.change(screen.getByLabelText(/base country/i), { target: { value: 'KE' } });
+    await waitFor(() => expect(screen.getByRole('button', { name: /continue/i })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: /continue/i }));
+    await waitFor(() => expect(api.updateSignup).toHaveBeenCalledWith(
+      'signup-1', expect.objectContaining({ countryCode: 'KE', accountCode: 'FR-BOMET-COUNTY' })));
   });
 
   it('keeps the closed-signup wording when the run did not hand the draft back', async () => {

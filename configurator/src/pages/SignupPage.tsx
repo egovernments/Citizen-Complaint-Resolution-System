@@ -16,6 +16,7 @@ import {
   createSignup,
   deriveAccountCode,
   findOperation,
+  findSignupOperation,
   findSignup,
   isOperationReady,
   isOperationSettled,
@@ -388,8 +389,17 @@ function SignupFlow() {
         case 'ACTIVE':
           setPhase('resuming');
           return;
-        default:
+        default: {
+          // A DRAFT with a failed run was handed back after the run refused the founder's own
+          // details. Show that run, as before the reload, so the wizard isn't entered unexplained.
+          const run = existing ? await findSignupOperation(existing.id).catch(() => null) : null;
+          if (run?.status === 'TERMINAL_FAILED') {
+            setOperation(run);
+            setPhase('provisioning');
+            return;
+          }
           setPhase('wizard');
+        }
       }
     } catch (caught) {
       setError(describeSignupError(caught, t).message);
@@ -747,6 +757,8 @@ function SignupFlow() {
       if (operation?.errorCode === 'TENANT_ADMIN_ACCOUNT_REJECTED') {
         setMobileError(t('signup.mobile_rejected', 'Check this number: your user account couldn’t be created with it.'));
       }
+      // The one case where the country may change: it is what the run refused.
+      if (operation?.errorCode === 'COUNTRY_NOT_SUPPORTED') setCountryCode('');
       setOperation(null);
       setReopened(false);
       setStep('preferences');

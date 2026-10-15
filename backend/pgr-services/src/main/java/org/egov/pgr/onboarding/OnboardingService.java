@@ -1,9 +1,6 @@
 package org.egov.pgr.onboarding;
 
-import com.google.i18n.phonenumbers.NumberParseException;
-import com.google.i18n.phonenumbers.PhoneNumberUtil;
-import com.google.i18n.phonenumbers.PhoneNumberUtil.PhoneNumberType;
-import com.google.i18n.phonenumbers.Phonenumber.PhoneNumber;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.egov.tracer.model.CustomException;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,6 +20,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 @Service
 public class OnboardingService {
@@ -30,17 +28,13 @@ public class OnboardingService {
     private static final int TENANT_METADATA_SCHEMA_VERSION = 1;
     private static final Set<String> TENANT_METADATA_FIELDS = Set.of("schemaVersion", "tenantAdmin");
     private static final Set<String> TENANT_ADMIN_FIELDS = Set.of("mobileNumber", "countryCode");
-    private static final PhoneNumberUtil PHONE_NUMBERS = PhoneNumberUtil.getInstance();
-    // Mobile lines only. Fixed-line, toll-free and VoIP numbers are valid for a
-    // region but egov-user rejects them at FOUNDER_HRMS, well after submit.
-    private static final Set<PhoneNumberType> MOBILE_TYPES =
-            Set.of(PhoneNumberType.MOBILE, PhoneNumberType.FIXED_LINE_OR_MOBILE);
 
     private final OnboardingRepository repository;
     private final OnboardingIdentifierService identifiers;
+    private final PlatformBaseline baseline;
     // Countries the platform baseline carries a mobile rule for. The worker cannot provision
-    // any other country (COUNTRY_NOT_SUPPORTED), and by then the reopened draft has locked
-    // the country, so an unsupported one is refused here, before anything runs.
+    // any other country (COUNTRY_NOT_SUPPORTED), so an unsupported one is refused here,
+    // before anything runs.
     private final Set<String> supportedCountries;
 
     @Autowired
@@ -48,6 +42,7 @@ public class OnboardingService {
                              PlatformBaseline baseline) {
         this.repository = repository;
         this.identifiers = identifiers;
+        this.baseline = baseline;
         this.supportedCountries = baseline.supportedCountries();
     }
 
@@ -99,7 +94,7 @@ public class OnboardingService {
             // A reopened draft (see OnboardingWorkerService) already has a tenant and
             // organization materialized under these names. Only the field the worker
             // rejected may change; anything else would orphan that provisioned state.
-            applyKeepingProvisionedIdentifiers(signup, values);
+            applyKeepingProvisionedIdentifiers(signup, values, prior.get());
         } else {
             apply(signup, values);
         }
@@ -197,6 +192,14 @@ public class OnboardingService {
     }
 
     public List<OnboardingOperation> searchOperations(OnboardingPrincipal principal, Map<String, Object> values) {
+        // By signup: after a reload the page knows only its signup, and a reopened draft's
+        // failed run is what explains why it is back in the founder's hands.
+        if (values.get("id") == null && values.get("signupId") != null) {
+            return repository.findOwnedSignup(requiredUuid(values.get("signupId"), "Operation.signupId"),
+                            principal.getIssuer(), principal.getSubject())
+                    .flatMap(signup -> repository.findOperationBySignup(signup.getId()))
+                    .map(Collections::singletonList).orElseGet(Collections::emptyList);
+        }
         UUID id = requiredUuid(values.get("id"), "Operation.id");
         return repository.findOwnedOperation(id, principal.getIssuer(), principal.getSubject())
                 .map(Collections::singletonList).orElseGet(Collections::emptyList);
@@ -282,15 +285,20 @@ public class OnboardingService {
                 : identifiers.tenantIdForSlug(signup.getUrlSlug()));
     }
 
-    private void applyKeepingProvisionedIdentifiers(OnboardingSignup signup, Map<String, Object> values) {
+    private void applyKeepingProvisionedIdentifiers(OnboardingSignup signup, Map<String, Object> values,
+                                                    OnboardingOperation failed) {
         String tenantId = signup.getRequestedTenantId();
         String accountCode = signup.getAccountCode();
 
         String countryCode = signup.getCountryCode();
         apply(signup, values);
         signup.setRequestedTenantId(tenantId);
+        // A run refused for its country stopped at the mobile rule, before anything that depends on
+        // the country was written, and the re-submitted run rewrites the tenant record's country.
+        // So that is the one case where the country may change: it is what the founder must fix.
+        boolean countryRefused = "COUNTRY_NOT_SUPPORTED".equals(failed.getErrorCode());
         if (!Objects.equals(accountCode, signup.getAccountCode())
-                || !Objects.equals(countryCode, signup.getCountryCode())) {
+                || !countryRefused && !Objects.equals(countryCode, signup.getCountryCode())) {
             throw new CustomException("ONBOARDING_PROVISIONED_FIELD_LOCKED",
                     "Provisioned identifiers cannot change after a failed submission");
         }
@@ -346,28 +354,44 @@ public class OnboardingService {
                     "tenantAdmin", new LinkedHashMap<>()));
         }
         String region = requiredString(countryCode, "Signup.countryCode").toUpperCase(Locale.ROOT);
-        try {
-            PhoneNumber number = PHONE_NUMBERS.parse(mobile, region);
-            if (!PHONE_NUMBERS.isValidNumberForRegion(number, region)
-                    || !MOBILE_TYPES.contains(PHONE_NUMBERS.getNumberType(number))) {
-                invalid("Signup.tenantMetadata.tenantAdmin.mobileNumber");
-            }
-            String dialCode = "+" + number.getCountryCode();
-            String suppliedDialCode = clean(tenantAdmin.get("countryCode"));
-            if (suppliedDialCode != null && !dialCode.equals(suppliedDialCode)) {
-                invalid("Signup.tenantMetadata.tenantAdmin.countryCode");
-            }
-            Map<String, Object> normalizedAdmin = new LinkedHashMap<>();
-            normalizedAdmin.put("mobileNumber", PHONE_NUMBERS.getNationalSignificantNumber(number));
-            normalizedAdmin.put("countryCode", dialCode);
-            Map<String, Object> normalized = new LinkedHashMap<>();
-            normalized.put("schemaVersion", TENANT_METADATA_SCHEMA_VERSION);
-            normalized.put("tenantAdmin", normalizedAdmin);
-            return normalized;
-        } catch (NumberParseException exception) {
-            invalid("Signup.tenantMetadata.tenantAdmin.mobileNumber");
-            return Collections.emptyMap(); // unreachable: invalid always throws
+        // The country's rule in the platform baseline is the only mobile check. PLATFORM_BASELINE
+        // writes it as the workspace's common-masters.MobileNumberValidation and egov-user enforces
+        // it at FOUNDER_HRMS, so a number saved here is never refused there, nor the other way round.
+        JsonNode rule = baseline.countryMobileRule(region);
+        if (rule.isMissingNode()) requireSupportedCountry(region);
+        String dialCode = rule.path("countryCode").asText();
+        String national = nationalMobile(mobile, dialCode, Pattern.compile(rule.path("mobileNumberRegex").asText()));
+        if (national == null) invalid("Signup.tenantMetadata.tenantAdmin.mobileNumber");
+        String suppliedDialCode = clean(tenantAdmin.get("countryCode"));
+        if (suppliedDialCode != null && !dialCode.equals(suppliedDialCode)) {
+            invalid("Signup.tenantMetadata.tenantAdmin.countryCode");
         }
+        Map<String, Object> normalizedAdmin = new LinkedHashMap<>();
+        normalizedAdmin.put("mobileNumber", national);
+        normalizedAdmin.put("countryCode", dialCode);
+        Map<String, Object> normalized = new LinkedHashMap<>();
+        normalized.put("schemaVersion", TENANT_METADATA_SCHEMA_VERSION);
+        normalized.put("tenantAdmin", normalizedAdmin);
+        return normalized;
+    }
+
+    /**
+     * The national number in what was typed, or null when it fails the rule. Spaces, dashes and
+     * brackets, the dial code with or without its "+", and a leading trunk 0 are accepted. The
+     * configurator's nationalMobile (onboarding/signup/mobileRules.ts) reads a number the same way.
+     */
+    static String nationalMobile(String input, String dialCode, Pattern rule) {
+        String dial = dialCode.replaceFirst("^\\+", "");
+        String digits = input.replaceAll("[\\s().-]", "");
+        if (digits.startsWith("+")) {
+            if (!digits.startsWith("+" + dial)) return null;
+            digits = digits.substring(dial.length() + 1);
+        }
+        if (!digits.matches("\\d+")) return null;
+        List<String> candidates = new ArrayList<>(List.of(digits));
+        if (digits.startsWith(dial)) candidates.add(digits.substring(dial.length()));
+        if (digits.startsWith("0")) candidates.add(digits.substring(1));
+        return candidates.stream().filter(candidate -> rule.matcher(candidate).matches()).findFirst().orElse(null);
     }
 
     private void requireSupportedCountry(String country) {

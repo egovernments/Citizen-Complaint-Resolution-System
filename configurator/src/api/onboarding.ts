@@ -554,6 +554,18 @@ export async function findOperation(id: string, signal?: AbortSignal): Promise<O
   return Operations?.[0] ?? null;
 }
 
+/** The signup's own run, if it has had one: after a reload the page knows only the signup. */
+export async function findSignupOperation(signupId: string): Promise<Operation | null> {
+  const { Operations } = await call<{ Operations: Operation[] }>(
+    `${ONBOARDING_BASE}/operations/_search`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ Operation: { signupId } }),
+    }
+  );
+  return Operations?.[0] ?? null;
+}
+
 /** Only a RETRYABLE_FAILED operation may be retried; TERMINAL_FAILED is a dead end. */
 export async function retryOperation(id: string): Promise<Operation> {
   const { Operation: operation } = await call<{ Operation: Operation }>(

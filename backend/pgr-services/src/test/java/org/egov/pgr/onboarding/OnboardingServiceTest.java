@@ -270,10 +270,80 @@ public class OnboardingServiceTest {
     }
 
     @Test
+    public void theMobileCheckIsTheCountryRuleEgovUserEnforces() {
+        when(repository.findSignupByOwner("https://issuer", "subject-1")).thenReturn(Optional.empty());
+        when(repository.insertSignup(any(OnboardingSignup.class), any())).thenReturn(true);
+
+        // KE ^[17][0-9]{8}$ takes 19xxxxxxx, which libphonenumber refused (#2353).
+        OnboardingSignup kenya = service.create(principal, completeRequest(tenantAdminMetadata("0191 234 567")), "create-ke");
+        assertEquals("191234567", tenantAdmin(kenya).get("mobileNumber"));
+        assertEquals("+254", tenantAdmin(kenya).get("countryCode"));
+
+        // ET ^9[0-9]{8}$ refuses 7xxxxxxxx, which libphonenumber took and egov-user then rejected at FOUNDER_HRMS.
+        Map<String, Object> ethiopia = completeRequest(tenantAdminMetadata("711234567"));
+        ethiopia.put("countryCode", "ET");
+        CustomException error = assertThrows(CustomException.class,
+                () -> service.create(principal, ethiopia, "create-et"));
+        assertEquals("Signup.tenantMetadata.tenantAdmin.mobileNumber is invalid", error.getMessage());
+    }
+
+    @Test
+    public void aRunRefusedForItsCountryHandsTheCountryBackToChange() {
+        UUID signupId = UUID.randomUUID();
+        OnboardingSignup signup = signup(signupId);
+        signup.setCountryCode("FR"); // saved before the country check existed
+        when(repository.findOwnedSignup(signupId, "https://issuer", "subject-1")).thenReturn(Optional.of(signup));
+        when(repository.findOperationBySignup(signupId)).thenReturn(Optional.of(
+                OnboardingOperation.builder().id(UUID.randomUUID()).signupId(signupId)
+                        .status("TERMINAL_FAILED").errorCode("COUNTRY_NOT_SUPPORTED").attempt(1).build()));
+        when(repository.updateSignup(signup)).thenReturn(signup);
+        Map<String, Object> values = new LinkedHashMap<>();
+        values.put("id", signupId.toString());
+        values.put("countryCode", "KE");
+
+        assertEquals("KE", service.update(principal, values).getCountryCode());
+        assertEquals("bometcounty", signup.getRequestedTenantId());
+    }
+
+    @Test
+    public void anyOtherReopenedRunKeepsTheCountryLocked() {
+        UUID signupId = UUID.randomUUID();
+        when(repository.findOwnedSignup(signupId, "https://issuer", "subject-1"))
+                .thenReturn(Optional.of(signup(signupId)));
+        when(repository.findOperationBySignup(signupId)).thenReturn(Optional.of(
+                OnboardingOperation.builder().id(UUID.randomUUID()).signupId(signupId)
+                        .status("TERMINAL_FAILED").errorCode("TENANT_ADMIN_ACCOUNT_REJECTED").attempt(1).build()));
+        Map<String, Object> values = new LinkedHashMap<>();
+        values.put("id", signupId.toString());
+        values.put("countryCode", "IN");
+        values.put("tenantMetadata", tenantAdminMetadata("9876543210"));
+
+        CustomException error = assertThrows(CustomException.class, () -> service.update(principal, values));
+        assertEquals("ONBOARDING_PROVISIONED_FIELD_LOCKED", error.getCode());
+    }
+
+    @Test
+    public void aSignupsOperationCanBeFoundByTheSignupAfterAReload() {
+        UUID signupId = UUID.randomUUID();
+        OnboardingOperation failed = OnboardingOperation.builder().id(UUID.randomUUID()).signupId(signupId)
+                .status("TERMINAL_FAILED").errorCode("TENANT_ADMIN_ACCOUNT_REJECTED").attempt(1).build();
+        when(repository.findOwnedSignup(signupId, "https://issuer", "subject-1")).thenReturn(Optional.of(signup(signupId)));
+        when(repository.findOperationBySignup(signupId)).thenReturn(Optional.of(failed));
+
+        assertEquals(Collections.singletonList(failed), service.searchOperations(
+                principal, Collections.singletonMap("signupId", signupId.toString())));
+
+        UUID someoneElses = UUID.randomUUID();
+        when(repository.findOwnedSignup(someoneElses, "https://issuer", "subject-1")).thenReturn(Optional.empty());
+        assertEquals(Collections.emptyList(), service.searchOperations(
+                principal, Collections.singletonMap("signupId", someoneElses.toString())));
+    }
+
+    @Test
     public void rejectsAFixedLineOfferedAsTheTenantAdminMobile() {
         when(repository.findSignupByOwner("https://issuer", "subject-1")).thenReturn(Optional.empty());
 
-        // A valid Nairobi landline: isValidNumberForRegion passes it, egov-user does not.
+        // A Nairobi landline: a valid Kenyan number, but not one the KE mobile rule takes.
         assertThrows(CustomException.class, () -> service.create(
                 principal, completeRequest(tenantAdminMetadata("020 2223333")), "create-7"));
     }
