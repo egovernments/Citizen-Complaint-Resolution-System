@@ -34,8 +34,8 @@ npx playwright test --config=e2e/playwright.config.ts e2e/specs/pgr-inbox-pagina
 | `BASE_URL` | Origin of the deployed host |
 | `IDENTITY_TEST_TENANT_SLUG` | Workspace URL slug; every spec opens `/<slug>/digit-ui/` |
 | `DIGIT_TENANT` | The root tenant that slug resolves to via `/identity/v1/tenant-contexts/<slug>`; `loginViaApi` fails fast on a mismatch |
-| `DIGIT_USERNAME` / `DIGIT_PASSWORD` | Admin persona's Keycloak login (staff sign in through Keycloak and the Identity BFF) |
-| `EMPLOYEE_USER` / `EMPLOYEE_PASSWORD` | PGR employee persona's Keycloak login (`full-pgr-lifecycle`, `citizen-pgr-complaint-api`) |
+| `DIGIT_USERNAME` / `DIGIT_PASSWORD` | Admin persona's Keycloak login (staff sign in through Keycloak and the Identity BFF). It must hold GRO: it assigns complaints and runs the HRMS lookups |
+| `EMPLOYEE_USER` / `EMPLOYEE_PASSWORD` | PGR employee persona's Keycloak login (`full-pgr-lifecycle`, `citizen-pgr-complaint-api`): an HRMS employee with `PGR_LME` that complaints are assigned to and resolved by |
 | `IDENTITY_TEST_OTP_CODE` | The host's fixed citizen OTP (`identity_dev_fixed_otp: true`); citizen specs sign in a new phone number each run |
 
 `loginViaApi` signs the persona in through the hosted Keycloak form and fails

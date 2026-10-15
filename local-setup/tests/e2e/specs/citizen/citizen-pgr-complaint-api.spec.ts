@@ -5,8 +5,8 @@
  *   1. Citizen signs in through the phone OTP form (the BFF creates the citizen)
  *   2. Citizen creates PGR complaint (API, as citizen)
  *   3. Citizen searches own complaint (API)
- *   4. Employee sees complaint in PGR inbox (UI)
- *   5. Employee assigns complaint to another employee (API — UI assign action is broken)
+ *   4. GRO sees complaint in PGR inbox (UI)
+ *   5. GRO (DIGIT_USERNAME) assigns it to the EMPLOYEE_USER persona, an LME (API — UI assign action is broken)
  *   6. Assigned employee resolves complaint (API)
  *   7. Employee verifies RESOLVED status on complaint details page (UI)
  *
@@ -21,13 +21,18 @@ import { citizenOtpLogin } from '../../utils/citizen-auth';
 import { requiredEnv } from '../../utils/identity';
 import { getMobileValidationRule, generateValidMobile } from '../../common/mdms-mobile';
 import { pickRandomLeafBoundary, type Boundary } from '../../common/mdms-boundary';
-import { pickRandomServiceCode, type ServiceDef } from '../../common/mdms-servicedef';
-import { pickRandomEmployeeWithRole, type HrmsEmployee } from '../../common/hrms-employees';
+import { getServiceDefs, type ServiceDef } from '../../common/mdms-servicedef';
+import { getEmployees } from '../../common/hrms-employees';
 
 const BASE_URL = requiredEnv('BASE_URL');
 const TENANT = requiredEnv('DIGIT_TENANT');
+// Lookups, the GRO views and ASSIGN run as DIGIT_USERNAME (a GRO). EMPLOYEE_USER
+// is the LME who receives the complaint, and may hold neither GRO nor HRMS search.
+const ADMIN_USER = requiredEnv('DIGIT_USERNAME');
+const ADMIN_PASS = requiredEnv('DIGIT_PASSWORD');
 const EMPLOYEE_USER = requiredEnv('EMPLOYEE_USER');
 const EMPLOYEE_PASS = requiredEnv('EMPLOYEE_PASSWORD');
+const ADMIN = { baseURL: BASE_URL, adminUser: ADMIN_USER, adminPassword: ADMIN_PASS };
 
 const CITIZEN_NAME = 'Playwright Test Citizen';
 
@@ -36,6 +41,8 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
 
   let adminToken: string;
   let adminUserInfo: Record<string, unknown>;
+  let employeeToken: string;
+  let employeeUserInfo: Record<string, unknown>;
   let citizenToken: string;
   let citizenUserInfo: Record<string, unknown>;
   let serviceRequestId: string;
@@ -53,46 +60,53 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
   let SERVICE_DEF: ServiceDef;
 
   test.beforeAll(async () => {
-    const rule = await getMobileValidationRule(TENANT, {
-      baseURL: BASE_URL,
-      adminUser: EMPLOYEE_USER,
-      adminPassword: EMPLOYEE_PASS,
-    });
+    const rule = await getMobileValidationRule(TENANT, ADMIN);
     CITIZEN_PHONE = generateValidMobile(rule);
     console.log(
       `[citizen-lifecycle] phone=${CITIZEN_PHONE} pattern=${rule.pattern} (tenant=${TENANT})`,
     );
 
-    LOCALITY = await pickRandomLeafBoundary(TENANT, {
-      baseURL: BASE_URL,
-      adminUser: EMPLOYEE_USER,
-      adminPassword: EMPLOYEE_PASS,
-    });
+    LOCALITY = await pickRandomLeafBoundary(TENANT, ADMIN);
     console.log(
       `[citizen-lifecycle] locality=${LOCALITY.code} (${LOCALITY.name}) type=${LOCALITY.boundaryType ?? '?'} — picked random leaf`,
     );
 
-    SERVICE_DEF = await pickRandomServiceCode(TENANT, {
-      baseURL: BASE_URL,
-      adminUser: EMPLOYEE_USER,
-      adminPassword: EMPLOYEE_PASS,
-    });
+    // The complaint goes to the EMPLOYEE_USER persona, who then resolves it.
+    // pgr-services refuses an assignee outside the complaint type's department
+    // (INVALID_ASSIGNMENT), so pick a type that persona's department takes.
+    const persona = await getDigitToken({ baseURL: BASE_URL, tenant: TENANT, username: EMPLOYEE_USER, password: EMPLOYEE_PASS });
+    const lme = (await getEmployees(TENANT, ADMIN)).find((e) => e.user.uuid === persona.UserRequest.uuid);
+    if (!lme?.user.roles?.some((r) => r.code === 'PGR_LME')) {
+      throw new Error(`EMPLOYEE_USER is not an HRMS employee with PGR_LME on ${TENANT}; ASSIGN needs an LME to hand the complaint to`);
+    }
+    assigneeUuid = lme.user.uuid;
+    const departments = new Set((lme.assignments ?? []).map((a) => a.department));
+    const types = (await getServiceDefs(TENANT, ADMIN))
+      .filter((d) => !d.department || d.department === 'NA' || departments.has(d.department));
+    if (types.length === 0) {
+      throw new Error(`No active complaint type on ${TENANT} takes EMPLOYEE_USER's department (${[...departments].join(', ')})`);
+    }
+    SERVICE_DEF = types[Math.floor(Math.random() * types.length)];
     console.log(
-      `[citizen-lifecycle] serviceCode=${SERVICE_DEF.serviceCode} menuPath=${SERVICE_DEF.menuPath ?? '?'} — picked random active ServiceDef`,
+      `[citizen-lifecycle] serviceCode=${SERVICE_DEF.serviceCode} department=${SERVICE_DEF.department ?? '-'} — picked random active ServiceDef for EMPLOYEE_USER's department`,
     );
   });
 
-  test('acquire admin API token', async () => {
+  test('acquire admin and employee API tokens', async () => {
     const tokenResponse = await getDigitToken({
       baseURL: BASE_URL,
       tenant: TENANT,
-      username: EMPLOYEE_USER,
-      password: EMPLOYEE_PASS,
+      username: ADMIN_USER,
+      password: ADMIN_PASS,
     });
 
     expect(tokenResponse.access_token).toBeTruthy();
     adminToken = tokenResponse.access_token;
     adminUserInfo = tokenResponse.UserRequest as Record<string, unknown>;
+
+    const employee = await getDigitToken({ baseURL: BASE_URL, tenant: TENANT, username: EMPLOYEE_USER, password: EMPLOYEE_PASS });
+    employeeToken = employee.access_token;
+    employeeUserInfo = employee.UserRequest as Record<string, unknown>;
   });
 
   test('citizen logs in through the UI with fixed OTP', async ({ page }) => {
@@ -184,10 +198,10 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
     console.log(`Citizen found own complaint: ${serviceRequestId}`);
   });
 
-  test('complaint appears in employee PGR inbox (UI)', async ({ page }) => {
+  test('complaint appears in the GRO PGR inbox (UI)', async ({ page }) => {
     test.skip(!complaintCreated, 'Skipped — complaint not created');
 
-    await loginViaApi(page, { baseURL: BASE_URL, tenant: TENANT, username: EMPLOYEE_USER, password: EMPLOYEE_PASS });
+    await loginViaApi(page, { baseURL: BASE_URL, tenant: TENANT, username: ADMIN_USER, password: ADMIN_PASS });
 
     const inbox = new PgrInboxPage(page);
     await inbox.goto();
@@ -204,10 +218,11 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
     }
   });
 
-  test('employee complaint details page shows PENDINGFORASSIGNMENT (UI)', async ({ page }) => {
+  test('GRO complaint details page shows PENDINGFORASSIGNMENT (UI)', async ({ page }) => {
     test.skip(!complaintCreated, 'Skipped — complaint not created');
 
-    await loginViaApi(page, { baseURL: BASE_URL, tenant: TENANT, username: EMPLOYEE_USER, password: EMPLOYEE_PASS });
+    // The GRO acts on an unassigned complaint, so it is the GRO who sees Take Action.
+    await loginViaApi(page, { baseURL: BASE_URL, tenant: TENANT, username: ADMIN_USER, password: ADMIN_PASS });
 
     await page.goto(`${appBase()}/employee/pgr/complaint/details/${serviceRequestId}`, {
       waitUntil: 'domcontentloaded',
@@ -226,34 +241,9 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
     console.log(`Details page shows ${serviceRequestId} as pending for assignment`);
   });
 
-  test('ADMIN assigns complaint to employee via API', async () => {
+  test('ADMIN assigns complaint to the employee persona via API', async () => {
     test.skip(!complaintCreated, 'Skipped — complaint not created');
-
-    // Find a PGR_LME employee to assign to. Workflow `PENDINGFORASSIGNMENT.ASSIGN`
-    // requires the assignee to carry PGR_LME (or PGR_VIEWER). Picking blindly
-    // would silently produce a workflow-side rejection later.
-    let assignee: HrmsEmployee;
-    try {
-      assignee = await pickRandomEmployeeWithRole(TENANT, 'PGR_LME', {
-        baseURL: BASE_URL,
-        adminUser: EMPLOYEE_USER,
-        adminPassword: EMPLOYEE_PASS,
-      });
-    } catch (err) {
-      // Real ops finding — the deployment has no PGR_LME-bearing employee.
-      // Skip gracefully instead of failing or assigning to someone the
-      // workflow can't move to.
-      test.skip(
-        true,
-        `No PGR_LME employee on tenant=${TENANT} — assign step cannot proceed (${(err as Error).message})`,
-      );
-      return;
-    }
-    assigneeUuid = assignee.user.uuid;
-    const assigneeName = assignee.user.name ?? assignee.user.userName ?? '(unnamed)';
-    console.log(
-      `Assigning to: ${assigneeName} (${assigneeUuid}) — random PGR_LME on ${TENANT}`,
-    );
+    console.log(`Assigning to EMPLOYEE_USER (${assigneeUuid}), a PGR_LME on ${TENANT}`);
 
     // Fetch full service object (PGR _update requires it)
     const searchResp = await fetch(
@@ -298,12 +288,7 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
       },
     );
 
-    if (!resp.ok) {
-      const body = await resp.text();
-      console.log(`PGR assign returned ${resp.status}: ${body.slice(0, 500)}`);
-      test.skip(true, `PGR assign API failed (${resp.status})`);
-      return;
-    }
+    expect(resp.ok, `PGR assign was refused (${resp.status}): ${(await resp.clone().text()).slice(0, 300)}`).toBe(true);
     const data: any = await resp.json();
     expect(data.ServiceWrappers).toBeDefined();
     expect(data.ServiceWrappers[0].service.applicationStatus).toBe('PENDINGATLME');
@@ -337,11 +322,11 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
       {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${adminToken}`,
+          Authorization: `Bearer ${employeeToken}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          RequestInfo: { apiId: 'Rainmaker', authToken: adminToken, userInfo: adminUserInfo },
+          RequestInfo: { apiId: 'Rainmaker', authToken: employeeToken, userInfo: employeeUserInfo },
         }),
       },
     );
@@ -354,14 +339,14 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
       {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${adminToken}`,
+          Authorization: `Bearer ${employeeToken}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           RequestInfo: {
             apiId: 'Rainmaker',
-            authToken: adminToken,
-            userInfo: adminUserInfo,
+            authToken: employeeToken,
+            userInfo: employeeUserInfo,
           },
           service: fullService,
           workflow: {
