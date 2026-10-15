@@ -9,8 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "test:e2e": "node e2e/run-all.mjs"
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@digit-mcp/data-provider": "file:packages/data-provider",
@@ -69,7 +68,6 @@
     "globals": "^16.5.0",
     "jsdom": "^27.4.0",
     "postcss": "^8.5.6",
-    "puppeteer": "^24.40.0",
     "tailwindcss": "^3.4.19",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",

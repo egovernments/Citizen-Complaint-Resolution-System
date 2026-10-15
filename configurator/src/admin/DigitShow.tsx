@@ -5,7 +5,7 @@ import { ArrowLeft, Pencil, RefreshCw } from 'lucide-react';
 import { DigitCard } from '@/components/digit/DigitCard';
 import { Button } from '@/components/ui/button';
 import { MASTER_SCREEN_META } from './masterScreens';
-import { CountyOverrideNotice } from './countyOverride/CountyOverrideNotice'; // ours (#1945)
+import { CountyOverrideNotice } from './countyOverride'; // ours (#1945)
 
 export interface DigitShowProps extends ShowControllerProps {
   /** Page title (defaults to the record's defaultTitle from ra-core) */

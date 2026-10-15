@@ -2,7 +2,7 @@
 import { test, expect } from '@playwright/test';
 import { loginEmployee, pgrSearch } from '../utils/launch-fixes/api.js';
 import { readLifecycleFixtures } from '../utils/lifecycle-fixtures';
-import { BASE_URL, ROOT_TENANT, CITY_TENANT, LOCALES } from '../utils/env';
+import { BASE_URL, ROOT_TENANT, TENANT, LOCALES } from '../utils/env';
 
 // SRID precedence — no hardcoded location fallback:
 //   1. PINNED_COMPLAINT_SRID env (operator-supplied)
@@ -24,7 +24,7 @@ test.describe('04-citizen-timeline (#473 follow-up)', () => {
 Steps:
 1. Skip if no rated complaint is available for this deployment (PINNED_COMPLAINT_SRID unset AND lifecycle terminal_rated not seeded).
 2. Log in as the test employee.
-3. pgrSearch(auth, CITY_TENANT, SR_ID).
+3. pgrSearch(auth, TENANT, SR_ID).
 4. Pull sw = response.ServiceWrappers[0].
 5. Assert sw.service.rating === 4.
 6. Assert sw.workflow.action === 'RATE'.
@@ -36,7 +36,7 @@ Steps:
       'no rated complaint available (PINNED_COMPLAINT_SRID unset and lifecycle terminal_rated not seeded — onboarding-data prerequisite)',
     );
     const auth = await loginEmployee();
-    const r = await pgrSearch(auth, CITY_TENANT, SR_ID);
+    const r = await pgrSearch(auth, TENANT, SR_ID);
     const sw = r.ServiceWrappers?.[0];
     expect(sw?.service?.rating).toBe(4);
     expect(sw?.workflow?.action).toBe('RATE');

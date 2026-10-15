@@ -6,8 +6,7 @@
     "test": "tsx run.ts",
     "test:smoke": "tsx run.ts --flow smoke",
     "test:pgr": "tsx run.ts --flow pgr-lifecycle",
-    "test:employee": "tsx run.ts --flow employee-mgmt",
-    "test:guided": "tsx run.ts --flow guided-setup"
+    "test:employee": "tsx run.ts --flow employee-mgmt"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "latest"

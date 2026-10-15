@@ -18,18 +18,19 @@ import { test, expect } from '@playwright/test';
 import { BASE_URL, BASE_HOST } from '../utils/env';
 import { citizenOtpLogin } from '../utils/citizen-login';
 import { requires } from '../utils/capabilities';
+import { fileComplaintUrl, fileComplaintViaWizard } from '../utils/citizen-filing';
 
 // Match an uploaded image by the generic filestore path or the deployment's own
 // host (BASE_HOST, derived from BASE_URL) — never a hardcoded demo hostname.
+// Develop's PhotoPicker previews the picked file from a local object URL
+// (img.cms-photo-thumb) while it uploads; the filestore URL is the detail half's.
 const previewImgSelector =
-  `img[src*="filestore"], img[src*="file-store"], img[src*="${BASE_HOST}"], ` +
+  `img.cms-photo-thumb, img[src*="filestore"], img[src*="file-store"], img[src*="${BASE_HOST}"], ` +
   'img[alt*="upload" i], img[alt*="thumbnail" i], img[alt*="issue" i]';
 const detailImgSelector =
   `img[src*="filestore"], img[src*="file-store"], img[src*="${BASE_HOST}"], ` +
   'img[alt*="thumbnail" i], img[alt*="attachment" i], img[alt*="issue" i]';
 
-const CITIZEN_HOME_URL = '/digit-ui/citizen/pgr-home';
-const COMPLAINT_TYPE_URL = '/digit-ui/citizen/pgr/complaint-type';
 
 test.describe('citizen complaint — attachment lifecycle #555', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
@@ -40,80 +41,13 @@ test.describe('citizen complaint — attachment lifecycle #555', () => {
     await page.waitForTimeout(3_000);
 
     // ============ Open new-complaint wizard ============
-    await page.goto(`${BASE_URL}${CITIZEN_HOME_URL}?cb=${Date.now()}`);
-    await page.waitForLoadState('domcontentloaded');
-    await page.waitForTimeout(3_000);
-    const newComplaintTile = page
-      .getByRole('button', { name: /new complaint|file.*complaint|create.*complaint|register.*complaint/i })
-      .or(page.getByRole('link', { name: /new complaint|file.*complaint|create.*complaint|register.*complaint/i }))
-      .first();
-    if (await newComplaintTile.isVisible({ timeout: 8_000 }).catch(() => false)) {
-      await newComplaintTile.click();
-      await page.waitForTimeout(2_500);
-    } else {
-      await page.goto(`${BASE_URL}${COMPLAINT_TYPE_URL}?cb=${Date.now()}`);
-      await page.waitForLoadState('domcontentloaded');
-      await page.waitForTimeout(2_500);
-    }
-
-    // ============ Walk wizard until a file input surfaces ============
+    // Develop's filing flow (utils/citizen-filing.ts): the photo picker sits on
+    // step 1, next to the description and category.
+    await page.goto(fileComplaintUrl(), { waitUntil: 'domcontentloaded' });
     const FILE_INPUT = 'input[type="file"]';
-    let fileInputReached = false;
-    for (let step = 0; step < 8; step++) {
-      await page.waitForTimeout(2_000);
-      if ((await page.locator(FILE_INPUT).count()) > 0) {
-        fileInputReached = true;
-        break;
-      }
-      const comboCount = await page.getByRole('combobox').count();
-      for (let i = 0; i < comboCount; i++) {
-        const combo = page.getByRole('combobox').nth(i);
-        const txt = (await combo.textContent().catch(() => '')) || '';
-        if (!/^Select/i.test(txt.trim())) continue;
-        if (!(await combo.isVisible().catch(() => false))) continue;
-        // On ke (CRS digit-ui) child-level comboboxes render immediately but
-        // start disabled; skip them — they will be enabled after the parent
-        // level is selected and this loop picks them on the next outer iteration.
-        if (!(await combo.isEnabled().catch(() => false))) continue;
-        await combo.scrollIntoViewIfNeeded();
-        await combo.click();
-        await page.waitForTimeout(700);
-        const opt = page
-          .locator('[role="listbox"][data-state="open"] [role="option"], [role="option"]:visible, .digit-dropdown-item:visible')
-          .first();
-        if (await opt.isVisible({ timeout: 1_500 }).catch(() => false)) {
-          await opt.click();
-          await page.waitForTimeout(700);
-        }
-      }
-      const requiredText = page.locator('textarea, input[type="text"]');
-      const reqCount = await requiredText.count();
-      for (let i = 0; i < reqCount; i++) {
-        const inp = requiredText.nth(i);
-        if (!(await inp.isVisible().catch(() => false))) continue;
-        if (((await inp.inputValue().catch(() => '')) || '').length > 0) continue;
-        await inp.click();
-        await inp.fill('Integration test description for #555 attachment.');
-        break;
-      }
-      const radio = page.locator('input[type="radio"]').first();
-      if (await radio.isVisible({ timeout: 800 }).catch(() => false)) {
-        await radio.evaluate((el: HTMLInputElement) => {
-          const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'checked')!.set!;
-          setter.call(el, true);
-          el.dispatchEvent(new Event('change', { bubbles: true }));
-          el.dispatchEvent(new Event('click', { bubbles: true }));
-        });
-      }
-      const nextBtn = page.getByRole('button', { name: /^next$|continue/i }).first();
-      if (await nextBtn.isEnabled({ timeout: 1_500 }).catch(() => false)) {
-        await nextBtn.click();
-        await page.waitForTimeout(2_000);
-      }
-    }
-    expect(fileInputReached, 'wizard must reach the upload step within 8 wizard transitions').toBeTruthy();
+    await expect(page.locator('#complaint-description'), 'the details step must render').toBeVisible({ timeout: 20_000 });
+    expect(await page.locator(FILE_INPUT).count(), 'the details step must offer a photo input').toBeGreaterThan(0);
 
-    // ============ Upload + preview img naturalWidth > 0 ============
     await page
       .locator(FILE_INPUT)
       .first()
@@ -123,7 +57,7 @@ test.describe('citizen complaint — attachment lifecycle #555', () => {
     const previewImgs = page.locator(previewImgSelector);
     expect(
       await previewImgs.count(),
-      '#555 — preview <img> must appear with a filestore/public URL after upload',
+      '#555 — the picked photo must show a preview <img>',
     ).toBeGreaterThan(0);
     const previewNaturalWidth = await previewImgs
       .first()
@@ -137,22 +71,11 @@ test.describe('citizen complaint — attachment lifecycle #555', () => {
     const createPromise = page
       .waitForResponse(
         (r) => /\/pgr-services\/.*\/_create/.test(r.url()) && r.status() < 500,
-        { timeout: 30_000 },
+        { timeout: 60_000 },
       )
       .catch(() => null);
-    for (let i = 0; i < 6; i++) {
-      const submitBtn = page
-        .getByRole('button', { name: /^submit$|^send$|file complaint|raise complaint/i })
-        .first();
-      const nextBtn = page.getByRole('button', { name: /^next$|continue/i }).first();
-      const btn = (await submitBtn.isVisible({ timeout: 800 }).catch(() => false)) ? submitBtn : nextBtn;
-      if (await btn.isEnabled({ timeout: 1_500 }).catch(() => false)) {
-        await btn.click();
-        await page.waitForTimeout(2_500);
-      } else {
-        break;
-      }
-    }
+    // Next stays disabled until the photo has uploaded.
+    await fileComplaintViaWizard(page, { description: 'Integration test description for #555 attachment.' });
     const createResp = await createPromise;
     if (!createResp) {
       test.info().annotations.push({

@@ -1,6 +1,6 @@
 import React from 'react';
 import { MASTER_SCREEN_META } from './masterScreens';
-import { CountyOverrideNotice } from './countyOverride/CountyOverrideNotice'; // ours (#1945)
+import { CountyOverrideNotice } from './countyOverride'; // ours (#1945)
 import { EditBase, useEditContext, Form, useResourceContext, useRedirect, type TransformData, type RaRecord } from 'ra-core';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Save, RefreshCw } from 'lucide-react';

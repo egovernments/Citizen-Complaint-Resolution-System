@@ -29,58 +29,19 @@ import { test, expect, type Page } from '@playwright/test';
 import { citizenOtpLogin } from '../utils/citizen-login';
 import { BASE_URL, ROOT_TENANT, LOCALES } from '../utils/env';
 import { fetchLocalizedMessage } from '../utils/probes';
+import { continueFiling, fillDetailsStep } from '../utils/citizen-filing';
 
 test.describe('Citizen v2 postal-code input — alnum/dash regression (PR #1315)', () => {
   test.slow();
 
   /**
-   * Navigate from the wizard's landing step through Step 1 (Complaint
-   * Details) and Step 2 (Pin Location) to Step 3 (Location Details), where
-   * the postal-code input lives. Mirrors the same generic, hierarchy-depth-
-   * agnostic walk used by file-complaint-wizard.spec.ts and
-   * wizard-pin-and-boundary-cascade.spec.ts.
+   * Reach the Location step, where the postal-code input lives: develop's
+   * flow (utils/citizen-filing.ts) has the description and category levels on
+   * step 1, and the pin, boundary cascade and postal code together on step 2.
    */
   async function reachLocationDetailsStep(page: Page): Promise<void> {
-    const clickNext = async () => {
-      const btn = page.locator('button:visible').filter({ hasText: /^next$/i }).first();
-      await btn.waitFor({ state: 'visible', timeout: 10_000 });
-      await btn.scrollIntoViewIfNeeded();
-      await btn.click();
-      await page.waitForTimeout(2500);
-    };
-
-    const dropdowns = page.locator(
-      'button[role="combobox"], input.digit-dropdown-employee-select-wrap--elipses',
-    );
-
-    // ── Step 1: Complaint Details — walk every hierarchy level ──────
-    await dropdowns.first().waitFor({ state: 'visible', timeout: 15_000 });
-    for (let level = 0; level < 8; level++) {
-      const combobox = dropdowns.nth(level);
-      const visible = await combobox
-        .isVisible({ timeout: level === 0 ? 5000 : 3000 })
-        .catch(() => false);
-      if (!visible) break;
-      await expect(combobox).toBeEnabled({ timeout: 8000 }).catch(() => {});
-      if (!(await combobox.isEnabled().catch(() => false))) break;
-      const hasPlaceholder = await combobox
-        .evaluate((el) => /^Select/i.test((el as HTMLElement).innerText.trim()))
-        .catch(() => true);
-      if (!hasPlaceholder) continue;
-      await combobox.click();
-      await page.waitForTimeout(800);
-      const option = page
-        .locator('[role="listbox"][data-state="open"] [role="option"], [role="option"]:visible, .digit-dropdown-item:visible')
-        .first();
-      if (!(await option.isVisible({ timeout: 5000 }).catch(() => false))) break;
-      await option.click();
-      await page.waitForTimeout(1500);
-    }
-    await clickNext();
-
-    // ── Step 2: optional Pin Location — continue without a pin ──────
-    await page.waitForTimeout(2500);
-    await clickNext();
+    await fillDetailsStep(page);
+    await continueFiling(page);
   }
 
   test('postal-code field retains alnum + dash characters instead of stripping them', {
@@ -90,8 +51,8 @@ test.describe('Citizen v2 postal-code input — alnum/dash regression (PR #1315)
 
 Steps:
 1. OTP-login as the provisioned citizen.
-2. Navigate to /digit-ui/citizen/pgr/create-complaint/complaint-type and walk Steps 1-2 (complaint type, then continue without the optional pin).
-3. On Step 3 (Location Details), locate #postal-code and type an alnum probe with a space ("SW1A 1AA", the UK example from _example.yml).
+2. Navigate to /{slug}/digit-ui/citizen/pgr/create-complaint/complaint-type and complete step 1 (description and complaint category).
+3. On step 2 (Location), locate #postal-code and type an alnum probe with a space ("SW1A 1AA", the UK example from _example.yml).
 4. Assert the input's value is exactly "SW1A 1AA" — not stripped to only its digits ("11").
 5. Clear and type a dash-suffixed 10-char probe ("12345-6789", the US example from _example.yml).
 6. Assert the input's value is exactly "12345-6789" — not truncated at 7 chars nor stripped of the dash.
@@ -141,7 +102,7 @@ The app has two branches and this exercises whichever one applies here:
   • anything else (India's ^[1-9][0-9]{5}$, MZ's dash shape, UK alnum) -> CS_COMPLAINT_POSTALCODE_INVALID_ERROR_GENERIC, no count.
 
 Steps:
-1. OTP-login as the provisioned citizen and walk to Step 3 (Location Details).
+1. OTP-login as the provisioned citizen and walk to step 2 (Location).
 2. Read the tenant's effective postalCodePattern from the page (same resolution order as utils/postalCode.js).
 3. Derive the app's own branch from it, and derive an invalid probe value the pattern is guaranteed to reject.
 4. Ask the localization service whether the branch's key is seeded here, so the expected copy is the seeded translation where there is one and the code's English fallback where there is not.

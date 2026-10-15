@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useListContext, useResourceContext } from 'ra-core';
-import { CountyOverrideNotice } from './countyOverride/CountyOverrideNotice'; // ours (#1945)
+import { CountyOverrideNotice } from './countyOverride'; // ours (#1945)
 import type { RaRecord } from 'ra-core';
 import {
   DigitList as BaseDigitList,
