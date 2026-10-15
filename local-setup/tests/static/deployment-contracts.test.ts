@@ -2187,8 +2187,31 @@ describe('D26 legacy identity paths are retired', () => {
   // turns into a 404 or a redirect to the deployment default. They go through
   // appBase() or surfacePath() (/<IDENTITY_TEST_TENANT_SLUG>/digit-ui) now.
   // #2398 deleted the city-tenant specs and the HRMS UI checks (HRMS is not
-  // enabled in digit-ui), and loginViaApi no longer navigates after sign-in,
-  // so fewer navigations remain.
+  // enabled in digit-ui), so fewer navigations remain.
+  // A navigation is either a string/template argument (`goto(`${appBase()}/x`)`)
+  // or a bare surfacePath() call (`goto(surfacePath('citizen', 'login'))`).
+  const scanNavigations = (body: string) => {
+    let scoped = 0;
+    const tenantless: string[] = [];
+    for (const m of body.matchAll(/goto\(\s*([`'"])([^`'"]*)/g)) {
+      if (m[2].includes('${appBase()}') || m[2].includes('${surfacePath(')) scoped += 1;
+      if (/^(?:\$\{[A-Za-z_.]+\})?\/digit-ui\//.test(m[2]) && !m[2].endsWith('/digit-ui/globalConfigs.js')) {
+        tenantless.push(m[2]);
+      }
+    }
+    scoped += [...body.matchAll(/goto\(\s*surfacePath\(/g)].length;
+    return { scoped, tenantless };
+  };
+
+  test('the navigation scan counts both argument forms and flags tenantless routes', () => {
+    expect(scanNavigations([
+      "await page.goto(surfacePath('citizen', 'login'), { waitUntil: 'domcontentloaded' });",
+      'await page.goto(`${appBase()}/citizen`);',
+      'await page.goto(`${BASE_URL}${surfacePath(\'employee\', \'user/login\')}`);',
+      "await page.goto('/digit-ui/employee/pgr/inbox');",
+    ].join('\n'))).toEqual({ scoped: 3, tenantless: ['/digit-ui/employee/pgr/inbox'] });
+  });
+
   test('Playwright specs navigate only to tenant-scoped digit-ui routes', () => {
     const e2eDir = path.join(REPO_ROOT, 'local-setup/tests/e2e');
     const files = (fs.readdirSync(e2eDir, { recursive: true }) as string[])
@@ -2197,16 +2220,13 @@ describe('D26 legacy identity paths are retired', () => {
     let scoped = 0;
     for (const file of files) {
       const body = fs.readFileSync(path.join(e2eDir, file), 'utf8');
-      for (const m of body.matchAll(/goto\(\s*([`'"])([^`'"]*)/g)) {
-        if (m[2].includes('${appBase()}') || m[2].includes('${surfacePath(')) scoped += 1;
-        if (/^(?:\$\{[A-Za-z_.]+\})?\/digit-ui\//.test(m[2]) && !m[2].endsWith('/digit-ui/globalConfigs.js')) {
-          tenantless.push(`${file}: ${m[2]}`);
-        }
-      }
+      const found = scanNavigations(body);
+      scoped += found.scoped;
+      tenantless.push(...found.tenantless.map((route) => `${file}: ${route}`));
       expect([file, /^const \w+ = '\/digit-ui\//m.test(body)]).toEqual([file, false]);
     }
     expect(tenantless).toEqual([]);
-    expect(scoped).toBeGreaterThanOrEqual(20);
+    expect(scoped).toBeGreaterThanOrEqual(23);
   });
 
   test('digit-ui-v2 cannot be deployed after its citizen identity removal', () => {
