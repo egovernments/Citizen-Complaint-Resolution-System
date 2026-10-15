@@ -1056,3 +1056,47 @@ describe('polling while the worker runs', () => {
     expect(api.findOperation).toHaveBeenCalledTimes(4);
   });
 });
+
+describe('required marks', () => {
+  /** The control a label names, and whether that label carries the red asterisk. */
+  const field = (label: RegExp) => {
+    const control = screen.getByLabelText(label);
+    const tag = document.querySelector(`label[for="${control.id}"]`);
+    return { control, marked: !!tag?.querySelector('[data-required-mark]') };
+  };
+
+  it('marks the identity a sign-up link needs', async () => {
+    vi.mocked(api.session).mockResolvedValue({ authenticated: false });
+    vi.mocked(api.authMethods).mockResolvedValue({
+      methods: [{ id: 'magic-link', label: 'Email me a sign-in link', type: 'magic_link' }],
+    });
+    render(<SignupPage />);
+    await screen.findByLabelText(/first name/i);
+    for (const label of [/first name/i, /last name/i, /email address/i]) {
+      const { control, marked } = field(label);
+      expect(marked, String(label)).toBe(true);
+      expect(control, String(label)).toBeRequired();
+    }
+  });
+
+  it('marks every account and preference field, each one required to continue', async () => {
+    vi.mocked(api.session).mockResolvedValue(signedIn);
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [], selectionRequired: false, onboardingRequired: true });
+    render(<SignupPage />);
+    await screen.findByLabelText(/account name/i);
+    for (const label of [/account name/i, /account code/i]) {
+      const { control, marked } = field(label);
+      expect(marked, String(label)).toBe(true);
+      expect(control, String(label)).toHaveAttribute('aria-required', 'true');
+    }
+
+    await completeAccountStep();
+    for (const label of [/base country/i, /timezone/i, /financial year/i, /account url/i, /mobile number/i]) {
+      const { control, marked } = field(label);
+      expect(marked, String(label)).toBe(true);
+      expect(control, String(label)).toHaveAttribute('aria-required', 'true');
+    }
+    // Languages is a row of toggles under a heading, not a labelled control.
+    expect(screen.getByText('Languages').querySelector('[data-required-mark]')).not.toBeNull();
+  });
+});

@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { RequiredMark } from '@/components/ui/required-mark';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { DigitCard } from '@/components/digit/DigitCard';
@@ -1203,6 +1204,7 @@ export default function BoundaryImport({
               <Field>
                 <Input
                   id="hierarchyType"
+                  aria-required="true"
                   value={hierarchyType}
                   onChange={(e) => setHierarchyType(e.target.value)}
                   placeholder="ADMIN"
@@ -1213,7 +1215,8 @@ export default function BoundaryImport({
             </LabelFieldPair>
 
             <div className="mb-4 sm:mb-6">
-              <CardLabel className="mb-2">{t('geography.excel.define_levels', 'Define Levels (top to bottom)')}</CardLabel>
+              {/* At least two named levels. */}
+              <CardLabel className="mb-2" required>{t('geography.excel.define_levels', 'Define Levels (top to bottom)')}</CardLabel>
               <div className="border border-border rounded p-3 sm:p-4 mt-2 bg-muted/30">
                 {hierarchyLevels.map((level, idx) => (
                   <div key={idx} className="flex items-center gap-2 sm:gap-3 mb-3 last:mb-0">
@@ -1876,8 +1879,14 @@ export default function BoundaryImport({
 
                   {lvl.selected && (
                     <div className="pt-2">
-                      <label className="text-sm font-medium mb-1.5 block">{t('geography.levels.name_label', 'Hierarchy Name')}</label>
+                      {/* A chosen level must be named before the hierarchy can be created. */}
+                      <label htmlFor={`level-name-${lvl.level}`} className="text-sm font-medium mb-1.5 block">
+                        {t('geography.levels.name_label', 'Hierarchy Name')}
+                        <RequiredMark />
+                      </label>
                       <Input
+                        id={`level-name-${lvl.level}`}
+                        aria-required="true"
                         placeholder={t('geography.levels.name_placeholder', 'e.g., District')}
                         value={lvl.mappedName}
                         onChange={(e) => {
