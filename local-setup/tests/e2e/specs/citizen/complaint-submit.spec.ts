@@ -57,9 +57,24 @@ function captureLoc(page: Page, sink: LocFetch[]) {
   });
 }
 
-// Addis Ababa central postal code; deliberately NOT in any allowlist a
-// stale bootstrap could have copied.
-const POSTAL_CODE = process.env.CITIZEN_POSTAL_CODE || '1000';
+/**
+ * A postal code that passes the tenant's postal rule, read the way the
+ * wizard reads it (products/pgr utils/postalCode.js: the MDMS FormValidations
+ * row, then globalConfigs CORE_POSTAL_CONFIGS). Built from the rule, so it is
+ * in no allowlist a stale bootstrap could have copied.
+ */
+async function validPostalCode(page: Page): Promise<string> {
+  const pattern = await page.evaluate(() => {
+    const w = window as any;
+    const getConfig = w.globalConfigs?.getConfig;
+    return w.__DIGIT_FORM_VALIDATIONS?.postalCode?.pattern
+      || [getConfig?.('CORE_POSTAL_CONFIGS'), getConfig?.('CORE_POSTAL_CODE_CONFIGS')].find((c: any) => c?.postalCodePattern)?.postalCodePattern
+      || '^[0-9]{5}$';
+  });
+  const digits = String(pattern).match(/^\^?\[0-9\]\{\s*(\d+)\s*\}\$?$/)?.[1];
+  if (!digits) throw new Error(`Postal rule ${pattern} is not an N-digit rule; extend validPostalCode for it`);
+  return '1'.padEnd(Number(digits), '0');
+}
 
 
 test.describe.serial('Citizen complaint submit + view', () => {
@@ -95,9 +110,7 @@ test.describe.serial('Citizen complaint submit + view', () => {
     // level (#lvl-0, #lvl-1, …) until the chosen branch ends ──
     const description = page.locator('#complaint-description');
     await description.waitFor({ state: 'visible', timeout: 30_000 });
-    await description.fill(
-      `e2e submit regression — typed postal ${POSTAL_CODE}, manual ward selection`
-    );
+    await description.fill('e2e submit regression — typed postal code, manual ward selection');
     for (let level = 0; level < 6; level++) {
       const typeCombo = page.locator(`#lvl-${level}`);
       if (!await typeCombo.isVisible().catch(() => false)) break;
@@ -176,12 +189,13 @@ test.describe.serial('Citizen complaint submit + view', () => {
     ).toBeGreaterThan(0);
 
     const postal = page.locator('#postal-code');
+    const postalCode = await validPostalCode(page);
     await expect(postal).toBeEnabled();
     await postal.click();
     // Type key-by-key — the field once disabled itself after the first
     // keystroke (fixed in d3caecb1), which fill() would mask.
-    await page.keyboard.type(POSTAL_CODE, { delay: 60 });
-    await expect(postal).toHaveValue(POSTAL_CODE);
+    await page.keyboard.type(postalCode, { delay: 60 });
+    await expect(postal).toHaveValue(postalCode);
 
     await expect(nextBtn).toBeEnabled({ timeout: 10_000 });
     await nextBtn.click();
