@@ -20,9 +20,9 @@
   ],
   "scripts": {
     "build": "tsc",
-    "test": "node --import tsx --test $(find src -name '*.test.ts' ! -name '*integration*' | sort)",
+    "test": "node scripts/run-tests.mjs",
     "test:integration": "node --import tsx --test src/providers/dataProvider.integration.test.ts",
-    "test:watch": "node --import tsx --test --watch src/**/*.test.ts"
+    "test:watch": "node scripts/run-tests.mjs --watch"
   },
   "dependencies": {
     "@digit-mcp/data-provider": "^0.1.0",

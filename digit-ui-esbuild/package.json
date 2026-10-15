@@ -10,7 +10,7 @@
     "build:docker": "docker build -f docker/Dockerfile -t digit-ui:esbuild .",
     "build:dashboard-css": "tailwindcss -c products/dashboard/src/tailwind.config.js -i products/dashboard/src/styles/input.css -o products/dashboard/src/styles/dashboard.css",
     "check-aliases": "node scripts/check-aliases.js",
-    "test": "node --test $(find tests src/theme scripts/lib products/dashboard -name node_modules -prune -o -type f \\( -name '*.test.js' -o -name '*.test.mjs' -o -name '*.test.cjs' -o -name '*.test.jsx' \\) -print | sort)"
+    "test": "node scripts/run-tests.mjs"
   },
   "dependencies": {
     "@googlemaps/js-api-loader": "^1.13.10",

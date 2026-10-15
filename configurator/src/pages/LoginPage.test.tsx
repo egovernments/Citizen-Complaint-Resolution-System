@@ -94,8 +94,13 @@ describe('configurator sign in', () => {
     fireEvent.click(screen.getByRole('button', { name: /send password setup link/i }));
 
     await waitFor(() => expect(api.requestPasswordSetup).toHaveBeenCalledWith('oauth.only@example.com'));
-    expect(await screen.findByText(/if an eligible account exists/i)).toBeInTheDocument();
-    expect(screen.getByText('Check your email')).toBeInTheDocument();
+    // The form's hint also starts "If an eligible account exists", and the form
+    // unmounts once the request settles, so match the notice's own text and
+    // re-query until it is there.
+    await waitFor(() => {
+      expect(screen.getByText(/a password setup email has been sent/i)).toBeInTheDocument();
+      expect(screen.getByText('Check your email')).toBeInTheDocument();
+    });
   });
 
   it('consumes a recovery result once under StrictMode and shows its action', async () => {
@@ -119,7 +124,7 @@ describe('configurator sign in', () => {
     fireEvent.click(screen.getByRole('button', { name: /send password setup link/i }));
 
     await waitFor(() => expect(api.requestPasswordSetup).toHaveBeenCalledWith('oauth.only@example.com'));
-    expect(await screen.findByText(/if an eligible account exists/i)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/a password setup email has been sent/i)).toBeInTheDocument());
     expect(screen.queryByText(/password setup was not completed/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /send password setup link/i })).not.toBeInTheDocument();
   });

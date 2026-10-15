@@ -151,9 +151,10 @@ describe('DDH seed contract — common-masters.FormValidations', () => {
   // rows so dump-booted stacks get them without DDH tenant-setup. Two copies
   // of one dataset = a drift vector; pin them to each other. COPY text
   // format doubles backslashes, so unescape before parsing.
-  // eg_mdms_data columns: id, tenantid, uniqueidentifier, schemacode, data, …
-  // (matching on the schemacode POSITION also excludes the schema-definition
-  // row in eg_mdms_schema_definition, whose code sits at index 2).
+  // eg_mdms_data columns: id, tenantid, uniqueidentifier, schemacode, data,
+  // isactive, … (matching on the schemacode POSITION also excludes the
+  // schema-definition row in eg_mdms_schema_definition, whose code sits at
+  // index 2). Only active rows count: a dump-booted stack serves no others.
   // Parsed on first use inside the dump tests, so a missing dump or an
   // unparseable row fails only those tests, not the DDH-seed ones above.
   let dumpLines: string[][] | undefined;
@@ -162,7 +163,7 @@ describe('DDH seed contract — common-masters.FormValidations', () => {
       .split('\n')
       .map((l) => l.split('\t'));
     const byTenant = new Map<string, { uniqueidentifier: string; data: Record<string, unknown> }[]>();
-    for (const cols of dumpLines.filter((c) => c[3] === schema)) {
+    for (const cols of dumpLines.filter((c) => c[3] === schema && c[5] === 't')) {
       const row = { uniqueidentifier: cols[2], data: JSON.parse(cols[4].replace(/\\\\/g, '\\')) };
       byTenant.set(cols[1], [...(byTenant.get(cols[1]) ?? []), row]);
     }
