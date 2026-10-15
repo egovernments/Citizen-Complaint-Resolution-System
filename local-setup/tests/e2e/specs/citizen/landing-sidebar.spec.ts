@@ -17,6 +17,8 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import { citizenLoginViaApi } from '../../utils/citizen-auth';
+import { requiredEnv } from '../../utils/identity';
+import { generateValidMobile, getMobileValidationRule } from '../../common/mdms-mobile';
 import * as fs from 'fs';
 import * as path from 'path';
 import { appBase } from '../../utils/auth';
@@ -126,7 +128,9 @@ test.describe('Citizen landing page sidebar + profile edit', () => {
   test('Edit Profile: name + photo round-trip', async ({
     page,
   }) => {
-    await citizenLoginViaApi(page);
+    // Its own citizen: this test rewrites the profile, and the run's citizen
+    // is shared with the specs that follow.
+    await citizenLoginViaApi(page, generateValidMobile(await getMobileValidationRule(requiredEnv('DIGIT_TENANT'))));
     // The avatar menu's Edit Profile entry opens this route.
     await page.goto(`${appBase()}/citizen/user/profile`);
 

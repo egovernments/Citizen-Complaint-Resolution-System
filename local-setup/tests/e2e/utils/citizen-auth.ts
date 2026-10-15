@@ -7,7 +7,7 @@
  * 20 per IP by default), so a worker signs each phone in once and later specs
  * reuse that BFF session, as the integration suite's citizen fixture does.
  */
-import { expect, type BrowserContext, type Page } from '@playwright/test';
+import { expect, type BrowserContext, type Page, type Response } from '@playwright/test';
 import { citizenSignIn, configuredOtp, otpRateLimitError, requiredEnv, surfacePath } from './identity';
 import { generateValidMobile, getMobileValidationRule } from '../common/mdms-mobile';
 
@@ -49,8 +49,9 @@ export async function citizenOtpLogin(page: Page, mobile?: string): Promise<Citi
   expect(sent.status(), 'OTP send was refused').toBe(202);
   // The first of the six boxes takes the whole code and fills the rest.
   await page.locator('input[maxlength="6"]').fill(configuredOtp());
+  const refusal = watchContextRefusal(page);
   await submit.click();
-  const session = await storedCitizenSession(page);
+  const session = await storedCitizenSession(page, refusal);
   bffSessions.set(phone, await page.context().cookies());
   return session;
 }
@@ -72,11 +73,23 @@ export async function citizenLoginViaApi(page: Page, mobile?: string): Promise<C
     bffSessions.set(phone, await page.context().cookies());
   }
   // The SPA exchanges the BFF cookie for its own DIGIT session on the login route.
+  const refusal = watchContextRefusal(page);
   await page.goto(surfacePath('citizen', 'login'), { waitUntil: 'domcontentloaded' });
-  return storedCitizenSession(page);
+  return storedCitizenSession(page, refusal);
 }
 
-async function storedCitizenSession(page: Page): Promise<CitizenSession> {
+/** Records the SPA's refused citizen context exchange, so a failed sign-in names the BFF's code. */
+function watchContextRefusal(page: Page): () => string {
+  let refusal = '';
+  page.on('response', async (r: Response) => {
+    if (new URL(r.url()).pathname !== '/identity/v1/contexts/citizen/_select' || r.status() === 200) return;
+    const code = await r.json().then((b) => (typeof b?.code === 'string' ? b.code : ''), () => '');
+    refusal = `: contexts/citizen/_select answered ${r.status()} ${code}`;
+  });
+  return () => refusal;
+}
+
+async function storedCitizenSession(page: Page, refusal: () => string): Promise<CitizenSession> {
   let session: CitizenSession | null = null;
   await expect.poll(async () => {
     if (/\/citizen\/login(?:\/|$)/.test(new URL(page.url()).pathname)) return false;
@@ -86,6 +99,8 @@ async function storedCitizenSession(page: Page): Promise<CitizenSession> {
       return token ? { token, userInfo: JSON.parse(localStorage.getItem('Citizen.user-info') || '{}') } : null;
     }).catch(() => null);
     return session !== null;
-  }, { message: 'citizen sign-in must leave /citizen/login with a stored session', timeout: 30_000 }).toBe(true);
+  }, { timeout: 30_000 }).toBe(true).catch(() => {
+    throw new Error(`citizen sign-in must leave /citizen/login with a stored session${refusal()}`);
+  });
   return session!;
 }
