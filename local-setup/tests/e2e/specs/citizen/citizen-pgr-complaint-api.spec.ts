@@ -210,7 +210,7 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
     // The GRO acts on an unassigned complaint, so it is the GRO who sees Take Action.
     await loginViaApi(page, { baseURL: BASE_URL, tenant: TENANT, username: ADMIN_USER, password: ADMIN_PASS });
 
-    await page.goto(`${appBase()}/employee/pgr/complaint/details/${serviceRequestId}`, {
+    await page.goto(`${appBase()}/employee/pgr/complaint-details/${serviceRequestId}`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });
@@ -287,7 +287,7 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
 
     await loginViaApi(page, { baseURL: BASE_URL, tenant: TENANT, username: EMPLOYEE_USER, password: EMPLOYEE_PASS });
 
-    await page.goto(`${appBase()}/employee/pgr/complaint/details/${serviceRequestId}`, {
+    await page.goto(`${appBase()}/employee/pgr/complaint-details/${serviceRequestId}`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });
@@ -355,7 +355,7 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
 
     await loginViaApi(page, { baseURL: BASE_URL, tenant: TENANT, username: EMPLOYEE_USER, password: EMPLOYEE_PASS });
 
-    await page.goto(`${appBase()}/employee/pgr/complaint/details/${serviceRequestId}`, {
+    await page.goto(`${appBase()}/employee/pgr/complaint-details/${serviceRequestId}`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });

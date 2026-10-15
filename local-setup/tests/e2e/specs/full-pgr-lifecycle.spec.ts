@@ -205,47 +205,40 @@ test.describe.serial('Full PGR lifecycle — citizen, admin, employee', () => {
     await page.goto(`${appBase()}/citizen/pgr/create-complaint/complaint-type`, { waitUntil: 'domcontentloaded' });
     const nextBtn = page.getByRole('button', { name: /^next$/i });
 
-    // ── Complaint type: one level at a time, down to the chosen leaf ──
+    // ── Step 1, Complaint Details: description, then the type level by level ──
+    const description = page.locator('#complaint-description');
+    await description.waitFor({ state: 'visible', timeout: 30_000 });
+    await description.fill(`Full lifecycle E2E test via UI wizard - ${Date.now()}`);
     for (const [level, node] of typePath.entries()) {
       const combo = page.locator(`#lvl-${level}`);
-      await combo.waitFor({ state: 'visible', timeout: level === 0 ? 30_000 : 15_000 });
+      await expect(combo).toBeEnabled({ timeout: 15_000 });
       await combo.click();
       const option = page.getByRole('option', { name: new RegExp(`^${escapeRegExp(node.name)}$`, 'i') });
       await expect(option, `complaint type "${node.name}" (${node.code}) is not offered at level ${level}`).toHaveCount(1, { timeout: 20_000 });
       await option.click();
     }
-    await snap(page, '04a-complaint-type-selected');
+    await snap(page, '04a-complaint-details');
     await expect(nextBtn).toBeEnabled({ timeout: 10_000 });
     await nextBtn.click();
 
-    // ── Map pin: auto-seeded from the map centre, just confirm ──
-    await expect(nextBtn).toBeEnabled({ timeout: 30_000 });
-    await nextBtn.click();
-
-    // ── Location: the boundary cascade, whatever depth the tenant has ──
+    // ── Step 2, Location: the boundary cascade, whatever depth the tenant has (the map pin is optional) ──
     let levels = 0;
     for (; levels < 6; levels++) {
       const combo = page.locator('[id^="boundary-"]').nth(levels);
       if (!await combo.waitFor({ state: 'visible', timeout: levels === 0 ? 30_000 : 15_000 }).then(() => true, () => false)) break;
+      await expect(combo).toBeEnabled({ timeout: 15_000 });
       await combo.click();
       const options = page.getByRole('option');
       await expect.poll(() => options.count(), { timeout: 20_000 }).toBeGreaterThan(0);
       await options.first().click();
     }
     expect(levels, 'no boundary dropdowns rendered on the location step').toBeGreaterThan(0);
-    await snap(page, '04b-address-selected');
+    await snap(page, '04b-location');
     await expect(nextBtn).toBeEnabled({ timeout: 10_000 });
     await nextBtn.click();
 
-    // ── Description ──
-    const description = page.locator('#complaint-description');
-    await description.waitFor({ state: 'visible', timeout: 15_000 });
-    await description.fill(`Full lifecycle E2E test via UI wizard - ${Date.now()}`);
-    await expect(nextBtn).toBeEnabled({ timeout: 10_000 });
-    await nextBtn.click();
-
-    // ── Photos (optional) → SUBMIT ──
-    const submitBtn = page.getByRole('button', { name: /^submit$/i });
+    // ── Step 3, Review → Submit complaint ──
+    const submitBtn = page.getByRole('button', { name: /submit complaint/i });
     await expect(submitBtn).toBeEnabled({ timeout: 15_000 });
     await submitBtn.click();
     await page.waitForURL((url) => url.pathname.includes('/pgr/response'), { timeout: 30_000 });
@@ -317,7 +310,7 @@ test.describe.serial('Full PGR lifecycle — citizen, admin, employee', () => {
     await loginViaApi(page, { baseURL: BASE_URL, tenant: TENANT, username: ADMIN_USER, password: ADMIN_PASS });
 
     // Navigate to complaint details page
-    await page.goto(`${appBase()}/employee/pgr/complaint/details/${serviceRequestId}`, {
+    await page.goto(`${appBase()}/employee/pgr/complaint-details/${serviceRequestId}`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });
@@ -403,7 +396,7 @@ test.describe.serial('Full PGR lifecycle — citizen, admin, employee', () => {
     await loginViaApi(page, { baseURL: BASE_URL, tenant: TENANT, username: EMPLOYEE_USER, password: EMPLOYEE_PASS });
 
     // Navigate to complaint details
-    await page.goto(`${appBase()}/employee/pgr/complaint/details/${serviceRequestId}`, {
+    await page.goto(`${appBase()}/employee/pgr/complaint-details/${serviceRequestId}`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });
@@ -425,7 +418,7 @@ test.describe.serial('Full PGR lifecycle — citizen, admin, employee', () => {
     await loginViaApi(page, { baseURL: BASE_URL, tenant: TENANT, username: EMPLOYEE_USER, password: EMPLOYEE_PASS });
 
     // Navigate to complaint details page
-    await page.goto(`${appBase()}/employee/pgr/complaint/details/${serviceRequestId}`, {
+    await page.goto(`${appBase()}/employee/pgr/complaint-details/${serviceRequestId}`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });
@@ -479,7 +472,7 @@ test.describe.serial('Full PGR lifecycle — citizen, admin, employee', () => {
 
     await loginViaApi(page, { baseURL: BASE_URL, tenant: TENANT, username: EMPLOYEE_USER, password: EMPLOYEE_PASS });
 
-    await page.goto(`${appBase()}/employee/pgr/complaint/details/${serviceRequestId}`, {
+    await page.goto(`${appBase()}/employee/pgr/complaint-details/${serviceRequestId}`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });
@@ -527,21 +520,12 @@ test.describe.serial('Full PGR lifecycle — citizen, admin, employee', () => {
     });
     await page.waitForTimeout(5000);
 
-    // Click the 4th star (index 3) for a rating of 4
-    const stars = page.locator('svg.rating-star');
-    await stars.first().waitFor({ state: 'visible', timeout: 10_000 });
-    await stars.nth(3).click();
-    await page.waitForTimeout(500);
+    // Rate 4 of 5: the stars are a radio group ("1 star" … "5 stars").
+    await page.getByRole('radio', { name: /^4 stars$/i }).click();
+    await page.locator('#comments').fill('Issue resolved satisfactorily. Thank you.');
 
-    // Optional: add a comment
-    const commentsTextarea = page.locator('textarea[name="comments"]');
-    if (await commentsTextarea.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await commentsTextarea.fill('Issue resolved satisfactorily. Thank you.');
-    }
-
-    // Submit the rating
-    const submitButton = page.locator('button.submit-bar').first();
-    await submitButton.waitFor({ state: 'visible', timeout: 5_000 });
+    const submitButton = page.getByRole('button', { name: /^submit$/i });
+    await expect(submitButton).toBeEnabled({ timeout: 10_000 });
     await submitButton.click();
 
     // Wait for redirect to response/success page
@@ -565,7 +549,7 @@ test.describe.serial('Full PGR lifecycle — citizen, admin, employee', () => {
 
     await loginViaApi(page, { baseURL: BASE_URL, tenant: TENANT, username: EMPLOYEE_USER, password: EMPLOYEE_PASS });
 
-    await page.goto(`${appBase()}/employee/pgr/complaint/details/${serviceRequestId}`, {
+    await page.goto(`${appBase()}/employee/pgr/complaint-details/${serviceRequestId}`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });

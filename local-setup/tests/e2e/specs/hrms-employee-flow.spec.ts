@@ -13,7 +13,6 @@ const ADMIN_PASS = requiredEnv('DIGIT_PASSWORD');
 // common/mdms-mobile.ts — replaces the env-heuristic uniqueMobile().
 let PHONE: string;
 const EMPLOYEE_NAME = 'Playwright Test Employee';
-const DEFAULT_PASSWORD = 'eGov@123';
 
 test.describe.serial('HRMS employee creation and login', () => {
   test.slow();
@@ -178,7 +177,8 @@ test.describe.serial('HRMS employee creation and login', () => {
     test.skip(!createSucceeded, 'Skipped — employee not created');
     expect(employeeCode).toBeTruthy();
 
-    // The patched HRMS sets default password to eGov@123 (from env var).
+    // HRMS gives every new employee the deployment's default password
+    // (egov_hrms_default_password, a deploy secret: no fixed value to assume).
     // Employee username is the employee code. A new HRMS employee is not
     // linked to a Keycloak account, so this is an egov-user check, not a
     // sign-in: the employee cannot use the hosted sign-in until invited.
@@ -187,7 +187,7 @@ test.describe.serial('HRMS employee creation and login', () => {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded', Authorization: 'Basic ZWdvdi11c2VyLWNsaWVudDo=' },
       body: new URLSearchParams({
         grant_type: 'password', scope: 'read', userType: 'EMPLOYEE',
-        username: employeeCode!, password: DEFAULT_PASSWORD, tenantId: TENANT,
+        username: employeeCode!, password: requiredEnv('EGOV_HRMS_DEFAULT_PASSWORD'), tenantId: TENANT,
       }).toString(),
     });
     expect(resp.ok, `egov-user refused the HRMS default password (${resp.status})`).toBe(true);

@@ -37,6 +37,7 @@ npx playwright test --config=e2e/playwright.config.ts e2e/specs/pgr-inbox-pagina
 | `DIGIT_USERNAME` / `DIGIT_PASSWORD` | Admin persona's Keycloak login (staff sign in through Keycloak and the Identity BFF). It must hold GRO: it assigns complaints and runs the HRMS lookups |
 | `EMPLOYEE_USER` / `EMPLOYEE_PASSWORD` | PGR employee persona's Keycloak login (`full-pgr-lifecycle`, `citizen-pgr-complaint-api`): an HRMS employee with `PGR_LME` that complaints are assigned to and resolved by |
 | `IDENTITY_TEST_OTP_CODE` | The host's fixed citizen OTP (`identity_dev_fixed_otp: true`); citizen specs sign in a new phone number each run |
+| `EGOV_HRMS_DEFAULT_PASSWORD` | The deployment's `egov_hrms_default_password` (a deploy secret); only `hrms-employee-flow`'s egov-user check reads it, and fails without it |
 
 `loginViaApi` signs the persona in through the hosted Keycloak form and fails
 unless the employee home renders with a session for `DIGIT_TENANT`.

@@ -87,14 +87,14 @@ test.describe('PGR Inbox — Bug Fixes', () => {
     expect(failedRequests).toHaveLength(0);
   });
 
-  test('no raw SERVICEDEFS keys in rendered page', async ({ page }) => {
+  test('no raw COMPLAINT_HIERARCHY keys in rendered page', async ({ page }) => {
     const inbox = new PgrInboxPage(page);
     await inbox.goto();
     await page.waitForTimeout(5000);
 
     const bodyText = await inbox.getBodyText();
     if (/[A-Z0-9-]+-PGR-[0-9-]+/.test(bodyText)) {
-      expect(bodyText).not.toMatch(/SERVICEDEFS\./);
+      expect(bodyText).not.toMatch(/COMPLAINT_HIERARCHY\./);
     }
   });
 });

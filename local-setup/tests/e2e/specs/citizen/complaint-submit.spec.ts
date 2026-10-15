@@ -98,24 +98,23 @@ test.describe.serial('Citizen complaint submit + view', () => {
 
     const nextBtn = page.getByRole('button', { name: /^next$/i });
 
-    // ── Step 0: complaint type (+ subtype when the type has any) ──
-    const typeCombo = page.getByRole('combobox', { name: /complaint type/i }).first();
-    await typeCombo.waitFor({ state: 'visible', timeout: 30_000 });
-    const typeLabel = await pickFirstOption(page, typeCombo);
-    console.log('COMPLAINT TYPE:', typeLabel);
-
-    const subCombo = page.getByRole('combobox', { name: /sub\s?-?\s?type/i }).first();
-    if (await subCombo.isVisible({ timeout: 3_000 }).catch(() => false)) {
-      console.log('SUBTYPE:', await pickFirstOption(page, subCombo));
+    // ── Step 1, Complaint Details: description, then each complaint-type
+    // level (#lvl-0, #lvl-1, …) until the chosen branch ends ──
+    const description = page.locator('#complaint-description');
+    await description.waitFor({ state: 'visible', timeout: 30_000 });
+    await description.fill(
+      `e2e submit regression — typed postal ${POSTAL_CODE}, manual ward selection`
+    );
+    for (let level = 0; level < 6; level++) {
+      const typeCombo = page.locator(`#lvl-${level}`);
+      if (!await typeCombo.isVisible().catch(() => false)) break;
+      await expect(typeCombo).toBeEnabled({ timeout: 15_000 });
+      console.log(`COMPLAINT TYPE level ${level}:`, await pickFirstOption(page, typeCombo));
     }
     await expect(nextBtn).toBeEnabled({ timeout: 10_000 });
     await nextBtn.click();
 
-    // ── Step 1: map pin — auto-seeded from MAP_CENTER, just confirm ──
-    await expect(nextBtn).toBeEnabled({ timeout: 30_000 });
-    await nextBtn.click();
-
-    // ── Step 2: location — service-driven boundary cascade + typed
+    // ── Step 2, Location: service-driven boundary cascade + typed
     // postal code. The hierarchy is fetched from boundary-service per
     // tenant, so walk every `[id^="boundary-"]` dropdown in DOM order
     // rather than hardcoding level names. At each level assert (a) the
@@ -192,17 +191,8 @@ test.describe.serial('Citizen complaint submit + view', () => {
     await expect(nextBtn).toBeEnabled({ timeout: 10_000 });
     await nextBtn.click();
 
-    // ── Step 3: description ──
-    const description = page.locator('#complaint-description');
-    await description.waitFor({ state: 'visible', timeout: 15_000 });
-    await description.fill(
-      `e2e submit regression — typed postal ${POSTAL_CODE}, manual ward selection`
-    );
-    await expect(nextBtn).toBeEnabled({ timeout: 10_000 });
-    await nextBtn.click();
-
-    // ── Step 4: photos (optional) → SUBMIT ──
-    const submitBtn = page.getByRole('button', { name: /^submit$/i });
+    // ── Step 3, Review → Submit complaint ──
+    const submitBtn = page.getByRole('button', { name: /submit complaint/i });
     await expect(submitBtn).toBeEnabled({ timeout: 15_000 });
     await submitBtn.click();
 

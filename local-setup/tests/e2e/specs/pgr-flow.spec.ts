@@ -133,7 +133,7 @@ test.describe.serial('Full PGR complaint lifecycle', () => {
 
     await loginViaApi(page, { baseURL: BASE_URL, tenant: TENANT, username: ADMIN_USER, password: ADMIN_PASS });
 
-    await page.goto(`${appBase()}/employee/pgr/complaint/details/${serviceRequestId}`, {
+    await page.goto(`${appBase()}/employee/pgr/complaint-details/${serviceRequestId}`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });
