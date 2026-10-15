@@ -38,7 +38,10 @@ export async function pickEveryLevel(page: Page, scope: Locator, onPick?: (level
     await empty.click();
     const option = page.locator('[role="listbox"] [role="option"]:visible').first();
     await expect(option, 'an open level must offer options').toBeVisible({ timeout: 10_000 });
-    await option.click();
+    // The list is a fixed popover; when Playwright cannot land a pointer click on
+    // it ("element is outside of the viewport", seen on the lifecycle spec),
+    // send the mousedown the option commits on (v2 select.tsx) instead.
+    await option.click({ timeout: 5_000 }).catch(() => option.dispatchEvent('mousedown'));
     await page.waitForTimeout(1_000);
     await onPick?.(level);
   }
