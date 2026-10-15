@@ -20,10 +20,11 @@ public class PlatformBaselineSeedTest {
      * Existing workspaces are upgraded (BaselineUpgrader) only when the seed's version rises, so a content change
      * under an unchanged version never reaches them. v2 changed in place until #2269 merged; from then on, changing
      * the seed means bumping "version" and recording both here. v3 carries the onboarding Geography step's labels;
-     * v4 drops the TRANSGENDER and OTHERS genders (#2397); v5 the docs rail, tour and next-step card labels (#2439).
+     * v4 drops the TRANSGENDER and OTHERS genders (#2397); v5 the docs rail, tour and next-step card labels (#2439);
+     * v6 lets the founder save the dashboard settings (dss.DashboardConfig writes, #2221).
      */
-    private static final String VERSION = "5";
-    private static final String SHA256 = "c1ed7d8d8677b01884f668ea12ad8c2bc78ae7305e61301ed0e1be474e70b943";
+    private static final String VERSION = "6";
+    private static final String SHA256 = "dc26c8126de39783e1915f4d0aef5c1a95a4a718f8297ea94c81ea230c39777d";
     @Test public void contentChangesComeWithAVersionBump() throws Exception {
         byte[] bytes;
         try (var in = PlatformBaselineSeedTest.class.getResourceAsStream("/onboarding/platform-baseline-v1.json")) { bytes = in.readAllBytes(); }
