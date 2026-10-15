@@ -9,9 +9,10 @@
  *
  * This packs whole spec files into N lists of about equal TIME instead, the
  * longest file first into the emptiest list. A test's time is what it cost on
- * the develop baseline run (report.json, every attempt added up). A test the
- * baseline has no time for (new, or not run) counts as the baseline's median;
- * with no baseline every test counts the same. Files are never split: a serial
+ * an earlier run (its report.json, every attempt added up): the develop run
+ * Verdict compares with or, before develop has one, the newest run on any
+ * branch. A test that run has no time for (new, or not run) counts as its
+ * median; with no earlier run every test counts the same. Files are never split: a serial
  * describe or a beforeAll belongs to one run.
  *
  * Setup files (*.setup.ts) are left out: Playwright runs a project's setup
@@ -67,10 +68,10 @@ export function split(list, baseline, shards) {
 
 export function summary(bins, { timed, baselineLabel }) {
   const basis = timed
-    ? `Spec files packed by their time on ${baselineLabel || 'the develop baseline'}.`
-    : 'No develop baseline yet: spec files packed by test count.';
+    ? `Spec files packed by their time on ${baselineLabel || 'an earlier run'}.`
+    : 'No earlier run to time the specs by: spec files packed by test count.';
   const rows = bins.map(b => `| ${b.shard} | ${b.files.length} | ${b.tests} | ${timed ? `${(b.ms / 60000).toFixed(1)} min` : '–'} |`);
-  return ['### Shards', '', basis, '', '| Shard | Spec files | Tests | Time on the baseline |', '|---|---|---|---|', ...rows, ''].join('\n') + '\n';
+  return ['### Shards', '', basis, '', '| Shard | Spec files | Tests | Time on that run |', '|---|---|---|---|', ...rows, ''].join('\n') + '\n';
 }
 
 function arg(name) {

@@ -135,8 +135,8 @@ jobs:
   # over shards, each on its own runner with its own fresh stack: a deploy
   # costs ~10 minutes, far less than the suite. This job (it runs while the
   # images build) picks the develop baseline the whole run uses and packs the
-  # spec files into SHARDS lists of about equal time on it
-  # (scripts/ci-shards.mjs). Playwright's own --shard splits by test count in
+  # spec files into SHARDS lists of about equal time on it, or on the newest
+  # run of any branch before develop has one (scripts/ci-shards.mjs). Playwright's own --shard splits by test count in
   # file order, and the slow specs sit together: on develop it gave shards of
   # 14, 32, 45+ and 9 minutes.
   split:
@@ -191,15 +191,43 @@ jobs:
           done
           echo "No develop run with a report yet."
 
+      # For timing only. Until develop has a run, the newest earlier run of
+      # this workflow on any branch (a PR's) times the specs well enough to
+      # balance the shards; Verdict still compares only with develop.
+      - name: Find spec timings
+        id: timing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          BASELINE_LABEL: ${{ steps.baseline.outputs.label }}
+        run: |
+          set -euo pipefail
+          if [ -n "$BASELINE_LABEL" ]; then
+            { echo "file=$RUNNER_TEMP/baseline/report.json"; echo "label=$BASELINE_LABEL"; } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          for id in $(gh run list --repo "$REPO" --workflow integration-tests.yml --status completed \
+                        --limit 20 --json databaseId --jq '.[].databaseId'); do
+            [ "$id" = "$RUN_ID" ] && continue
+            if gh run download "$id" --repo "$REPO" --name "$REPORT_ARTIFACT" --dir "$RUNNER_TEMP/timing" 2>/dev/null; then
+              { echo "file=$RUNNER_TEMP/timing/report.json"; echo "label=run $id"; } >> "$GITHUB_OUTPUT"
+              echo "Timings from run $id"
+              exit 0
+            fi
+          done
+          echo "No earlier run with a report: splitting by test count."
+
       - name: Split
         id: split
         env:
-          LABEL: ${{ steps.baseline.outputs.label }}
+          TIMING_FILE: ${{ steps.timing.outputs.file }}
+          TIMING_LABEL: ${{ steps.timing.outputs.label }}
         run: |
           set -euo pipefail
           npx playwright test --config playwright.ci.config.ts --list --reporter=json > "$RUNNER_TEMP/list.json"
           node scripts/ci-shards.mjs --list "$RUNNER_TEMP/list.json" --shards "$SHARDS" \
-            --baseline "$RUNNER_TEMP/baseline/report.json" --baseline-label "$LABEL" --github
+            --baseline "${TIMING_FILE:-none}" --baseline-label "$TIMING_LABEL" --github
 
   integration:
     name: Deploy and test ${{ matrix.shard }}/${{ strategy.job-total }}

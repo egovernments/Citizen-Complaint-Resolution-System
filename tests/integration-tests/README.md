@@ -272,8 +272,8 @@ shared server: each shard deploys a fresh stack on its own GitHub runner.
    from the checkout, in parallel, with a layer cache; digit-mcp is built by
    the deploy (`build_mcp`).
 3. **Split.** While the images build, `scripts/ci-shards.mjs` packs the spec
-   files into 4 lists of about equal time on the latest develop run (by test
-   count before one exists). Playwright's own `--shard` splits by count in
+   files into 4 lists of about equal time on the latest develop run (the
+   newest run on any branch before develop has one; test count before any). Playwright's own `--shard` splits by count in
    file order, and the slow specs sit together.
 4. **Deploy and test, in 4 shards.** Each shard runs
    `local-setup/ansible/deploy.sh ci` (~10 min) with

@@ -71,5 +71,5 @@ test('with no baseline every test counts the same', () => {
   // c 3 → 1; a 2 → 2; b 1 → 2 (3); d 1 → a tie, so the first list.
   assert.deepEqual(files(bins), [['citizen/c.spec.ts', 'employee/d.spec.ts'], ['admin/a.spec.ts', 'citizen/b.spec.ts']]);
   assert.deepEqual(bins.map(b => b.tests), [4, 3]);
-  assert.match(summary(bins, { timed: false }), /No develop baseline yet[\s\S]*\| 1 \| 2 \| 4 \| – \|/);
+  assert.match(summary(bins, { timed: false }), /No earlier run to time the specs by[\s\S]*\| 1 \| 2 \| 4 \| – \|/);
 });
