@@ -13,9 +13,6 @@ Citizens file and track complaints by messaging your WhatsApp number. Twilio cal
 - The tenant has `ComplaintHierarchy` and boundaries. The bot offers the state's city tenants
   (`tenant.tenants`); to offer only some, add a `tenant.citymodule` row with
   `module: PGR.WHATSAPP` listing them.
-- **Only registered citizens can use the bot.** The bot tries to create an account for a new
-  number, but egov-user rejects it while registration requires an OTP (the default). Register
-  the number once through the citizen web UI.
 
 ## 1. Get the Account SID and Auth Token
 
@@ -154,4 +151,4 @@ the table below.
 | Bot goes silent after a menu, Twilio log shows error `21617` | A message was over 1,600 characters. Upgrade the chatbot: long menus are paged and long messages are split |
 | Bot says *our system has a problem* at Submit; logs show `INVALID_CASE_RELATED_TO` | The tenant has no `RAINMAKER-PGR.ComplaintTemplateType` row for the bot's `caseRelatedTo` (default `IGE`). Set `CASE_RELATED_TO=` (empty) on the `xstate-chatbot` container; it is not in `host_vars` yet |
 | *Your previous session timed out* after a redeploy | Reply **2** to start fresh. Resuming replays the last prompt saved by the old version |
-| Bot replies *Sorry, there was an error processing your request* | The number has no citizen account (register it once via the web UI), or it does not match the state's `MobileNumberValidation` rule |
+| Bot replies *Sorry, there was an error processing your request* | The number does not match the state's `MobileNumberValidation` rule |
