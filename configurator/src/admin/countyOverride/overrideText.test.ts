@@ -1,10 +1,8 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { listNotice, namesText, recordNotice, recordPath, rememberLanding, takeLanding, treeNotice } from './overrideText';
+import { describe, it, expect } from 'vitest';
+import { listNotice, namesText, recordNotice, recordPath, treeNotice } from './overrideText';
 
 // ours #1945: a state-root record that a county overrides says so, in words a person reads once.
 describe('county override notice words', () => {
-  beforeEach(() => sessionStorage.clear());
-
   it('names the counties', () => {
     expect(namesText([{ tenantId: 'ke.bomet', name: 'Bomet' }])).toBe('Bomet');
     expect(namesText([{ tenantId: 'ke.bomet', name: 'Bomet' }, { tenantId: 'ke.nairobi', name: 'Nairobi' }])).toBe('Bomet and Nairobi');
@@ -18,12 +16,7 @@ describe('county override notice words', () => {
     expect(listNotice(2, 16)).toBe("2 of the 16 records shown are overridden in a county: those values aren't used there.");
   });
 
-  it('opens the county record after the switch, once, and only a /manage path', () => {
+  it('opens the county\'s own record', () => {
     expect(recordPath('pgr-escalation', { tenantId: 'ke.bomet', name: 'Bomet', uniqueIdentifier: 'DEFAULT' })).toBe('/manage/pgr-escalation/DEFAULT/show');
-    rememberLanding('/manage/pgr-escalation/DEFAULT/show');
-    expect(takeLanding()).toBe('/manage/pgr-escalation/DEFAULT/show');
-    expect(takeLanding()).toBeNull();
-    rememberLanding('https://evil.example/');
-    expect(takeLanding()).toBeNull();
   });
 });

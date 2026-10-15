@@ -4,8 +4,8 @@ import { Layers } from 'lucide-react';
 import { useApp } from '../../App';
 import { digitClient, getResourceConfig } from '@/providers/bridge';
 import { countyOverrides, boundaryTreeOverrides, countyScopedKey, isCountyScoped } from '@digit-mcp/data-provider';
-import { enterWorkspace } from '@/identity/entry';
-import { listNotice, recordNotice, recordPath, rememberLanding, takeLanding, treeNotice, type OverrideTenant } from './overrideText';
+import { openAtTenant } from '@/admin/afterSwitch';
+import { listNotice, recordNotice, recordPath, treeNotice, type OverrideTenant } from './overrideText';
 
 /**
  * ours (#1945): at a STATE ROOT, a county-scoped master's row (or the boundary tree) that a county overrides with its
@@ -48,10 +48,8 @@ export function CountyOverrideNotice({ resource, record, rows }: { resource?: st
 
   if (!wanted) return null;
 
-  const open = (t: OverrideTenant) => {
-    if (resource && t.uniqueIdentifier) rememberLanding(recordPath(resource, t));
-    enterWorkspace(t.tenantId).catch(() => switchTenant(t.tenantId));
-  };
+  const open = (t: OverrideTenant) =>
+    openAtTenant(t.tenantId, resource && t.uniqueIdentifier ? recordPath(resource, t) : `/manage/${resource ?? ''}`, switchTenant);
   const box = (body: ReactNode) => (
     <div className="mb-4 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100"
       role="status" data-testid="county-override-notice">
@@ -106,14 +104,4 @@ export function CountyOverrideNotice({ resource, record, rows }: { resource?: st
       </ul>
     </>,
   );
-}
-
-/** Mounted once in the layout: after a switch to a county from the notice, open the county's record. */
-export function AfterSwitchLanding() {
-  const navigate = useNavigate();
-  useEffect(() => {
-    const p = takeLanding();
-    if (p) navigate(p, { replace: true });
-  }, [navigate]);
-  return null;
 }

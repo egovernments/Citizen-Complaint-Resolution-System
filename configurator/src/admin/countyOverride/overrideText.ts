@@ -31,19 +31,3 @@ export function listNotice(overridden: number, total: number): string {
 export function recordPath(resource: string, t: OverrideTenant): string {
   return `/manage/${resource}/${encodeURIComponent(t.uniqueIdentifier ?? '')}/show`;
 }
-
-const AFTER_SWITCH_KEY = 'configurator:after-switch';
-
-/** Remember where to land once the tenant switch has reloaded /manage (one shot). */
-export function rememberLanding(path: string): void {
-  try { sessionStorage.setItem(AFTER_SWITCH_KEY, path); } catch { /* storage blocked: the switch lands on /manage */ }
-}
-
-/** The remembered landing, consumed; only a /manage path is honoured. */
-export function takeLanding(): string | null {
-  try {
-    const p = sessionStorage.getItem(AFTER_SWITCH_KEY);
-    sessionStorage.removeItem(AFTER_SWITCH_KEY);
-    return p && /^\/manage\//.test(p) ? p : null;
-  } catch { return null; }
-}

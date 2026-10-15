@@ -93,6 +93,12 @@ async function tenantsBelow(client: OverrideClient, root: string): Promise<{ cod
   return out.sort((a, b) => a.code.localeCompare(b.code));
 }
 
+/** ours (#1954): the counties of a state root (one level below it), with their names, in code order. */
+export async function countiesOf(client: OverrideClient, root: string): Promise<{ code: string; name: string }[]> {
+  if (!root || root.includes('.')) return [];
+  return tenantsBelow(client, root);
+}
+
 /** A tenant's OWN active rows of a schema (a read may also answer an ancestor's rows: those are not its own). */
 async function ownActiveRows(client: OverrideClient, tenant: string, schema: string): Promise<MdmsRecord[]> {
   const out: MdmsRecord[] = [];
