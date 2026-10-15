@@ -9840,12 +9840,6 @@
     "locale": "en_IN"
   },
   {
-    "code": "app.onboarding.layout.card.done",
-    "message": "%{step} done",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
     "code": "app.onboarding.layout.card.next",
     "message": "Next step: %{step}",
     "module": "configurator-ui",
