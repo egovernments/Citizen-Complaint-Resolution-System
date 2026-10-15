@@ -130,7 +130,7 @@ test('complaint location section is hidden when absent and supports valid zero-a
   );
 
   const locationHeading = () =>
-    page.getByText(/^(Complaint Location|CS_COMPLAINT_LOCATION)$/i, { exact: true });
+    page.getByText(/^(Complaint(?:'s)? Location|CS_COMPLAINT_LOCATION)$/i, { exact: true });
   const locationMarker = () => page.locator('.leaflet-container .leaflet-marker-icon');
   const openComplaint = async (srid: string) => {
     await page.goto(`${BASE_URL}/${tenantSlug()}/digit-ui/citizen/pgr/complaints/${srid}`, {

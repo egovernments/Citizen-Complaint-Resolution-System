@@ -464,9 +464,11 @@ If the soft-delete persists but the UI still shows the row, the dataProvider's i
     // the default list view should no longer show this code.
     await page.goto(LIST_PATH);
     await page.locator('#main-content').getByPlaceholder(/search/i).first().fill(code);
-    await page.waitForLoadState('networkidle').catch(() => {});
+    // The list shows active and inactive records alike (its Status filter narrows
+    // them), so the soft-deleted row stays, marked Inactive.
     const rows = page.getByRole('row').filter({ hasText: code });
-    expect(await rows.count()).toBe(0);
+    await expect(rows).toHaveCount(1);
+    await expect(rows.first()).toContainText(/Inactive/i);
   });
 
   test('5d. HRMS probe returns assignments.designation for guard counter', {
