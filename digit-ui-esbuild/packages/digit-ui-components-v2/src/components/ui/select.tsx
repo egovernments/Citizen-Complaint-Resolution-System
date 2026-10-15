@@ -11,8 +11,13 @@ const MIN_LIST_HEIGHT = 120;
 const ONE_OPTION_HEIGHT = 36;
 /** Breathing room so the popover never sits flush against the edge. */
 const VIEWPORT_MARGIN = 12;
+/** The widest the list grows past its field; longer options wrap inside it. */
+const MAX_POPOVER_WIDTH = 480;
+/** The gap between the field and its list. */
+const POPOVER_GAP = 4;
 import { cn } from "../../lib/cn";
 import { Check, ChevronDown, Search } from "lucide-react";
+import { popoverLeft } from "./selectPopover";
 
 export interface SelectOption<TValue extends string = string> {
   value: TValue;
@@ -86,6 +91,8 @@ export function Select<TValue extends string = string>({
   const popoverRef = React.useRef<HTMLDivElement | null>(null);
   const triggerRef = React.useRef<HTMLButtonElement | null>(null);
   const searchRef = React.useRef<HTMLInputElement | null>(null);
+  /** A zero-size `fixed` box at 0,0: where the popover's coordinates are measured from. */
+  const originRef = React.useRef<HTMLDivElement | null>(null);
   /**
    * The popover is absolutely positioned under the trigger with a fixed list
    * height, so on a short viewport, or with the trigger low on the page, its
@@ -95,11 +102,19 @@ export function Select<TValue extends string = string>({
    *
    * Measure the room the popover actually has and cap it, flipping above the
    * trigger when there is meaningfully more space up there.
+   *
+   * The popover is `position: fixed` at the trigger's measured place rather
+   * than absolute inside it. A narrow column that clips or scrolls its overflow
+   * (the inbox filter) cut off a list wider than the field, and long options
+   * there were cut to a few identical words ("Ambulance breakd…" twice).
    */
-  const [placement, setPlacement] = React.useState<{ above: boolean; maxListHeight: number }>({
-    above: false,
-    maxListHeight: MAX_LIST_HEIGHT,
-  });
+  const [placement, setPlacement] = React.useState<{
+    above: boolean;
+    maxListHeight: number;
+    left: number;
+    top: number;
+    minWidth: number;
+  }>({ above: false, maxListHeight: MAX_LIST_HEIGHT, left: 0, top: 0, minWidth: 0 });
 
   const enableSearch =
     searchable === true || (searchable !== false && options.length > SEARCH_THRESHOLD);
@@ -123,8 +138,9 @@ export function Select<TValue extends string = string>({
     [visibleOptions, value]
   );
 
-  // Click-outside.
-  React.useEffect(() => {
+  // Placement. A layout effect, so the first position lands before the popover
+  // is painted anywhere else.
+  React.useLayoutEffect(() => {
     if (!open) return undefined;
     const measure = () => {
       const trigger = triggerRef.current;
@@ -161,11 +177,28 @@ export function Select<TValue extends string = string>({
       // row than to show a control that cannot be used.
       const available = Math.max(ONE_OPTION_HEIGHT, room - chrome);
       const next = Math.min(MAX_LIST_HEIGHT, available);
+      // `fixed` is relative to the viewport unless an ancestor is transformed
+      // (a sheet that slides in, say), when it is relative to that ancestor
+      // instead. The origin probe sits at 0,0 of whichever applies.
+      const origin = originRef.current?.getBoundingClientRect();
+      const width = Math.max(popover ? popover.offsetWidth : 0, rect.width);
+      const left = Math.round(
+        popoverLeft(rect.left, width, document.documentElement.clientWidth, VIEWPORT_MARGIN) - (origin?.left ?? 0)
+      );
+      // Above the trigger, `top` is the popover's bottom edge (see `translate` below).
+      const top = Math.round((flip ? rect.top - POPOVER_GAP : rect.bottom + POPOVER_GAP) - (origin?.top ?? 0));
+      const minWidth = Math.round(rect.width);
       // Bail when nothing moved: this runs on capture-phase scroll, so it also
       // fires while scrolling the list itself, and a fresh object every time
       // re-rendered the Select on every scroll event.
       setPlacement((prev) =>
-        prev.above === flip && prev.maxListHeight === next ? prev : { above: flip, maxListHeight: next }
+        prev.above === flip &&
+        prev.maxListHeight === next &&
+        prev.left === left &&
+        prev.top === top &&
+        prev.minWidth === minWidth
+          ? prev
+          : { above: flip, maxListHeight: next, left, top, minWidth }
       );
     };
     measure();
@@ -346,6 +379,11 @@ export function Select<TValue extends string = string>({
       >
         <span
           className="truncate"
+          // The field stays one line; when its text is cut, hovering shows all of it.
+          onMouseEnter={(e) => {
+            const el = e.currentTarget;
+            el.title = el.scrollWidth > el.clientWidth ? el.textContent ?? "" : "";
+          }}
           style={{
             // Inline placeholder color so the unselected trigger reads at the
             // same tone as <input>'s ::placeholder (which the rest of the
@@ -372,21 +410,34 @@ export function Select<TValue extends string = string>({
 
       {open ? (
         <div
+          ref={originRef}
+          aria-hidden
+          style={{ position: "fixed", left: 0, top: 0, width: 0, height: 0, pointerEvents: "none" }}
+        />
+      ) : null}
+
+      {open ? (
+        <div
           // Inline width / bg / max-height / z-index as safety net so this
           // works even when Tailwind utilities haven't recompiled and so the
           // popover always sits above legacy buttons (NEXT/SUBMIT) which can
           // have higher z-index from vendor CSS. bg uses theme vars so a
           // tenant can retint the popover surface without forking this file.
+          // At least as wide as the field, and as wide as its longest option up
+          // to MAX_POPOVER_WIDTH; anything longer wraps.
           style={{
-            position: "absolute",
-            left: 0,
-            width: "100%",
-            ...(placement.above ? { bottom: "100%" } : { top: "100%" }),
+            position: "fixed",
+            left: placement.left,
+            top: placement.top,
+            translate: placement.above ? "0 -100%" : undefined,
+            minWidth: placement.minWidth,
+            width: "max-content",
+            maxWidth: `min(${MAX_POPOVER_WIDTH}px, calc(100vw - ${VIEWPORT_MARGIN * 2}px))`,
             backgroundColor: "var(--v2-surface-color, var(--color-surface, #ffffff))",
             zIndex: 9999,
           }}
           ref={popoverRef}
-          className={cn(placement.above ? "mb-1" : "mt-1", "rounded-md border border-border shadow-lg animate-fade-in")}
+          className="rounded-md border border-border shadow-lg animate-fade-in"
         >
           {enableSearch ? (
             <div
@@ -421,6 +472,9 @@ export function Select<TValue extends string = string>({
                   // narrow list (the inbox filter column) the box overflowed it
                   // and scrolled the card sideways while it had focus.
                   minWidth: 0,
+                  // Nor should it size the list: it grows from zero, so the
+                  // options alone decide how wide the list is.
+                  width: 0,
                   border: "none",
                   outline: "none",
                   background: "transparent",
@@ -446,6 +500,9 @@ export function Select<TValue extends string = string>({
               margin: 0,
               padding: "0.25rem 0",
               listStyle: "none",
+              // A classic scrollbar appearing would otherwise take its width out
+              // of a list sized to its longest option and wrap that option.
+              scrollbarGutter: "stable",
             }}
           >
             {visibleOptions.map((opt, i) => {
@@ -508,7 +565,9 @@ export function Select<TValue extends string = string>({
                       }}
                     />
                   ) : null}
-                  <span className="truncate flex-1" style={{ paddingLeft: "1.25rem" }}>
+                  {/* Wraps rather than truncates: a cut label can hide the very
+                      words that tell two options apart. */}
+                  <span className="flex-1" style={{ paddingLeft: "1.25rem", whiteSpace: "normal", overflowWrap: "anywhere" }}>
                     {opt.label}
                   </span>
                 </li>
