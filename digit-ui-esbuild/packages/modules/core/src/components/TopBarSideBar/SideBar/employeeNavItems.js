@@ -143,11 +143,20 @@ export const useEmployeeNavItems = () => {
     return configEmployeeSideBar;
   };
 
+  // MDMS display names are English ("Home"). Translate them the way the
+  // citizen side bar does, by ACTION_TEST_<NAME>, keeping the name itself
+  // when no key is seeded.
+  const navLabel = (name) => {
+    const key = `ACTION_TEST_${Digit.Utils.locale.getTransformedLocale(name)}`;
+    const value = t(key);
+    return value && value !== key ? value : t(name);
+  };
+
   function transformData(data) {
     const transformItem = (key, value) => {
       if (value.item) {
         return {
-          label: t(value.item.displayName),
+          label: navLabel(value.item.displayName),
           icon: { icon: value.item.leftIcon, width: "1.5rem", height: "1.5rem" },
           // MDMS seeds `/digit-ui/employee/...`; keep it on the tenant route.
           navigationUrl: Digit.Utils.rebaseAppUrl(value.item.navigationURL),
@@ -157,7 +166,7 @@ export const useEmployeeNavItems = () => {
       const children = Object.keys(value).map((childKey) => transformItem(childKey, value[childKey]));
       const iconKey = extractLeftIcon(value);
       return {
-        label: t(key),
+        label: navLabel(key),
         icon: { icon: iconKey, width: "1.5rem", height: "1.5rem" },
         children: children,
       };

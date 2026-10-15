@@ -467,3 +467,42 @@ describe('observability ports are loopback-bound in every compose file', () => {
     expect(offenders).toEqual([]);
   });
 });
+
+describe('the profile teardown names every service of its tiers', () => {
+  /**
+   * Review on #2213 (4255083513): container-stats and docker-socket-proxy carry
+   * `profiles: [obs-metrics]` but were missing from _profile_tier_services in
+   * playbook-deploy.yml. Lowering observability_level below metrics then left
+   * both running, the proxy still serving every container's Env. Every tier the
+   * map knows must list exactly the services that carry that profile.
+   */
+  const block = PLAYBOOK.match(/^\s+_profile_tier_services:\n((?:\s+(?:#.*|[a-z-]+: \[.*\])\n)+)/m);
+  const map = new Map(
+    [...(block?.[1] ?? '').matchAll(/^\s+([a-z-]+): \[(.*)\]$/gm)].map((m) => [
+      m[1],
+      m[2].split(',').map((s) => s.trim()).sort(),
+    ]),
+  );
+
+  const composeFiles = fs.readdirSync(ROOT).filter((f) => /^docker-compose.*\.ya?ml$/.test(f));
+  const gated = new Map<string, string[]>();
+  for (const file of composeFiles) {
+    const text = fs.readFileSync(path.join(ROOT, file), 'utf8');
+    const headers = [...text.matchAll(/^ {2}([a-z0-9][a-z0-9_-]*):\s*$/gm)];
+    headers.forEach((header, i) => {
+      const body = text.slice(header.index, headers[i + 1]?.index ?? text.length);
+      const profiles = body.match(/^ {4}profiles:\s*\[(.*)\]/m)?.[1];
+      for (const profile of (profiles ?? '').split(',').map((p) => p.trim().replace(/["']/g, '')).filter(Boolean)) {
+        gated.set(profile, [...(gated.get(profile) ?? []), header[1]]);
+      }
+    });
+  }
+
+  test('the map parses', () => {
+    expect([...map.keys()]).toEqual(expect.arrayContaining(['obs-metrics', 'obs-logs', 'obs-traces', 'matomo', 'opensre']));
+  });
+
+  test.each(['obs-metrics', 'obs-logs', 'obs-traces', 'matomo', 'opensre'])('%s', (tier) => {
+    expect(map.get(tier)).toEqual([...new Set(gated.get(tier) ?? [])].sort());
+  });
+});

@@ -52,10 +52,12 @@ export interface CellText {
 const EMPTY: CellText = { text: '--', muted: true };
 
 /** Terminal states novu-bridge writes. SENT = the transport accepted the message;
- *  DELIVERED / BOUNCED arrive later via provider receipts (when wired); REJECTED =
- *  the event failed validation and was DLQ'd. */
+ *  QUEUED = a sign-in code the delivery engine took whose provider had not answered
+ *  yet; DELIVERED / BOUNCED arrive later via provider receipts (when wired);
+ *  REJECTED = the event failed validation and was DLQ'd. */
 export const STATUS_CHOICES = [
   { id: 'SENT', name: 'Sent (accepted by transport)' },
+  { id: 'QUEUED', name: 'Queued (provider had not answered)' },
   { id: 'DELIVERED', name: 'Delivered' },
   { id: 'BOUNCED', name: 'Bounced' },
   { id: 'FAILED', name: 'Failed' },

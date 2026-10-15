@@ -9,7 +9,7 @@ Read this before deploying 2.20 over a 2.12 deployment. First-time setup is
 |---|---|---|
 | Configuration masters | `RAINMAKER-PGR.NotificationRouting` / `.NotificationTemplate` / `.NotificationProviderTemplate` / `.NotificationChannel`, keyed `(businessService, action, toState)`, bare audiences | `NOTIFICATIONS.EventCatalogue` / `.Routing` / `.Template` / `.ProviderTemplate` / `.Channel` at the state tenant, keyed on `eventName`, audiences `ACTOR:` / `ROLE:` / `EVENT_RECIPIENTS` / `A\|B` |
 | What pgr-services publishes | Pre-rendered envelopes, one per recipient × channel, behind `pgr.notification.config.driven` | One thin event per workflow transition on `complaints.domain.events`; novu-bridge routes, resolves and renders. No flag |
-| Login OTP SMS | `egov-notification-sms` (or `otp-publisher`) | novu-bridge consumes `egov.core.notification.sms`; same channel policy, provider and log as other SMS |
+| Login OTP SMS | `egov-notification-sms` (or `otp-publisher`) | Citizen sign-in moved to the Identity BFF, whose codes do not go through notifications yet ([§4](#4-digits-older-otp-service-sends-through-novu-bridge)). Where a deployment still uses DIGIT's older OTP service, novu-bridge consumes `egov.core.notification.sms`: same channel policy, provider and log as other SMS |
 | Providers | Novu dashboard / deploy-time env | Configurator → Notifications → Providers (credentials stored in Novu) |
 | Channel on/off | `novu_bridge_channels_enabled` | Channel rows (Configurator → Notifications → Channels). The env list is a fallback for a tenant with no rows; the upgrade turns it into rows ([step 3](#channel-rows-what-happens-to-an-existing-tenant)) |
 | Images | pgr-services and novu-bridge pinned separately | pgr-services, pgr-services-db, novu-bridge and novu-bridge-db share one tag, and digit-user-preferences-service with its -db image follows it ([step 1](#1-take-all-four-images-from-one-build)) |
@@ -24,8 +24,10 @@ Read this before deploying 2.20 over a 2.12 deployment. First-time setup is
 - [ ] Remove the flags and properties listed under [Removed settings](#removed-settings) from
       your host_vars, Compose overlays and Helm values. Move any bridge setting you added to
       `/opt/digit/.env` by hand into host_vars ([step 5](#5-bridge-settings-now-come-from-host_vars)).
-- [ ] If you use real OTP login, confirm `enable_novu: true` (the deploy refuses
-      `enable_otp_services: true` without it).
+- [ ] If the deployment still uses DIGIT's older OTP service (`enable_otp_services: true`),
+      confirm `enable_novu: true` (the deploy refuses it without).
+- [ ] If the Novu admin's password was ever changed by hand (in the Novu dashboard), pin it
+      before upgrading: see [Per-tenant notification accounts](#per-tenant-notification-accounts).
 - [ ] Kubernetes: keep `deploymentStrategy.type: Recreate` on `pgr-services` and upgrade
       novu-bridge first ([step 2](#2-new-novu-bridge-before-new-pgr-services)).
 - [ ] Book a quiet period per tenant for moving its notification configuration
@@ -124,7 +126,8 @@ the same as a fresh install. The deploy tells them apart by the complaints filed
 counted in the database: with any (or when they cannot be counted) it writes nothing, reports
 `NOTIFICATIONS-STATE: … state=none` and `notif-seed — ACTION: this tenant has no notification
 configuration`, and **the tenant sends no complaint notifications** (`SKIPPED / NB_NO_ROUTING`;
-login OTPs are not affected) until you review and install the defaults:
+codes from DIGIT's older OTP service, where a deployment still uses it, are not affected) until you
+review and install the defaults:
 
 ```bash
 python3 migrate-notifications.py plan  --tenant mycity --adopt-defaults
@@ -405,7 +408,15 @@ There is no setting that chooses old or new — the data does. Check with any of
   filter on Logs): `PRERENDERED` = a finished envelope from a producer, `RESOLVED` = a thin event
   resolved by the bridge. After the cutover, complaint rows should read `RESOLVED`.
 
-## 4. OTP moves to novu-bridge
+## 4. DIGIT's older OTP service sends through novu-bridge
+
+Citizen sign-in in 2.20 goes through the Identity BFF: the deploy refuses `enable_keycloak: false`,
+and Kong answers 404 for the older OTP endpoints (`/user-otp/v1/_send` and the rest) unless
+`identity_legacy_user_endpoints` reopens them. The BFF sends its codes with its own sender (`http`
+or `log`), not through notifications; sending them through novu-bridge
+([`messages/_send`](./tenant-accounts.md#sending-a-code-messages_send)) is a follow-up. This
+section is about **DIGIT's older OTP service** (`egov-otp` + `user-otp`), where a deployment still
+uses it: its SMS moves from the retired senders to novu-bridge.
 
 - `egov-notification-sms`, `otp-publisher` and `novu-bridge-endpoint` are gone from Compose.
   `up -d` does not stop containers of services it no longer knows, and a leftover
@@ -438,7 +449,7 @@ There is no setting that chooses old or new — the data does. Check with any of
   subscribed (above), so none published meanwhile is lost. An OTP whose
   `expiryTime` has passed is dropped with an INFO log (no phone, no text) — no ledger row, no
   DLQ message.
-- A login OTP's national number now gets the country code of the OTP's tenant
+- An OTP's national number now gets the country code of the OTP's tenant
   (`common-masters.MobileNumberValidation`), which outranks `NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE`; the
   latter applies only at a tenant with no rule. A tenant whose seeded rule differs from the
   deployment code — `pg`'s `+91` on a Kenyan box — sends its OTPs with the rule's code: fix the
@@ -450,7 +461,7 @@ There is no setting that chooses old or new — the data does. Check with any of
   under `pg` and drop it as `SKIPPED / NB_NO_PROVIDER`, with the old sender already gone). The
   deploy fails at the end if the running bridge has anything other than `state_root`. Helm reads
   `state-level-tenant-id` from the `egov-config` ConfigMap. **SMS must be switched on, with a provider, at that tenant**
-  or every OTP is `SKIPPED / NB_NO_PROVIDER` and phone login stops.
+  or every OTP is `SKIPPED / NB_NO_PROVIDER` and phone login through this service stops.
 
 ## 5. Bridge settings now come from host_vars
 
@@ -497,6 +508,29 @@ Changed defaults worth checking: `NOVU_BRIDGE_CHANNEL_POLICY_SCHEMA` is `NOTIFIC
 `notifications.events`; `NOVU_BRIDGE_PROXY_ALLOWED_ROLES` adds `MDMS_ADMIN`; the new
 `NOVU_BRIDGE_PROXY_ADMIN_ROLES` gates provider create/rotate/delete.
 
+## Per-tenant notification accounts
+
+New in this release ([tenant-accounts.md](./tenant-accounts.md)): each signup workspace gets its
+own Novu organization at tenant creation. On a box with `enable_novu` and `enable_keycloak` it is
+on by default (Helm: off unless `tenant-accounts.enabled: true`); the upgrade deploy then
+generates its secrets into OpenBao and moves the Novu admin off its old password (dashboard login
+included: read the new one with `bao kv get -field=novu_admin_password <secrets_path>`). Nothing
+moves by itself: every existing tenant, migrated or not, keeps the shared account until you list
+it in `novu_tenant_accounts_backfill` (then add its providers in its own organization). To stay
+exactly as before, set `novu_tenant_accounts: false`.
+
+**A Novu admin with a custom password: pin it before upgrading.** The deploy can move the admin
+only off a password it knows (`novu_admin_password_legacy`, default the published `Digit@12345`),
+and it signs in with the result before novu-bridge gets it. If your admin's password was changed
+by hand, put the current one in host_vars as `novu_admin_password_legacy` (the deploy moves it to
+a generated one) or as `novu_admin_password` (kept as it is), plus `novu_admin_email` if the admin
+is another account. Unpinned, Novu refuses the sign-in and the deploy switches per-tenant accounts
+**off for that deploy** and continues on the shared account, printing
+`novu tenant accounts — ACTION: per-tenant notification accounts are OFF on this box for this deploy`
+with what to pin; the next deploy checks again. It stops instead when host_vars sets
+`novu_tenant_accounts: true` or when workspaces already have their own organization
+([tenant-accounts.md](./tenant-accounts.md#when-the-admin-sign-in-is-refused)).
+
 ## After the upgrade
 
 - [ ] `docker ps` (or `kubectl get pods -o wide`) shows pgr-services and novu-bridge on the tag
@@ -514,6 +548,7 @@ Changed defaults worth checking: `NOVU_BRIDGE_CHANNEL_POLICY_SCHEMA` is `NOTIFIC
 - [ ] Each channel you use is on with a provider selected (**Notifications → Channels**).
 - [ ] **Validate** on Configure reports zero errors.
 - [ ] One real complaint transition produced `RESOLVED` rows on Logs and arrived on a handset.
-- [ ] With OTP login: a phone login works and left a `CORE.SMS.OTP` row.
+- [ ] Where DIGIT's older OTP service is still used: a phone login through it works and left a
+      `CORE.SMS.OTP` row.
 - [ ] `novu-bridge.dlq` has no new messages
       (`rpk topic consume novu-bridge.dlq -o start`; see [kafka-events.md](./kafka-events.md#verify-delivery)).

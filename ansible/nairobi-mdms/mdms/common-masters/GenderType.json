@@ -14,20 +14,6 @@
     }
   },
   {
-    "tenantId": "ciboot",
-    "data": {
-      "code": "OTHERS",
-      "active": false
-    }
-  },
-  {
-    "tenantId": "ciboot",
-    "data": {
-      "code": "TRANSGENDER",
-      "active": true
-    }
-  },
-  {
     "tenantId": "cids14576",
     "data": {
       "code": "FEMALE",
@@ -38,20 +24,6 @@
     "tenantId": "cids14576",
     "data": {
       "code": "MALE",
-      "active": true
-    }
-  },
-  {
-    "tenantId": "cids14576",
-    "data": {
-      "code": "OTHERS",
-      "active": false
-    }
-  },
-  {
-    "tenantId": "cids14576",
-    "data": {
-      "code": "TRANSGENDER",
       "active": true
     }
   },
@@ -70,20 +42,6 @@
     }
   },
   {
-    "tenantId": "cids30947",
-    "data": {
-      "code": "OTHERS",
-      "active": false
-    }
-  },
-  {
-    "tenantId": "cids30947",
-    "data": {
-      "code": "TRANSGENDER",
-      "active": true
-    }
-  },
-  {
     "tenantId": "ciregtest",
     "data": {
       "code": "FEMALE",
@@ -94,20 +52,6 @@
     "tenantId": "ciregtest",
     "data": {
       "code": "MALE",
-      "active": true
-    }
-  },
-  {
-    "tenantId": "ciregtest",
-    "data": {
-      "code": "OTHERS",
-      "active": false
-    }
-  },
-  {
-    "tenantId": "ciregtest",
-    "data": {
-      "code": "TRANSGENDER",
       "active": true
     }
   },
@@ -126,20 +70,6 @@
     }
   },
   {
-    "tenantId": "ciwf14536",
-    "data": {
-      "code": "OTHERS",
-      "active": false
-    }
-  },
-  {
-    "tenantId": "ciwf14536",
-    "data": {
-      "code": "TRANSGENDER",
-      "active": true
-    }
-  },
-  {
     "tenantId": "ciwf30832",
     "data": {
       "code": "FEMALE",
@@ -150,20 +80,6 @@
     "tenantId": "ciwf30832",
     "data": {
       "code": "MALE",
-      "active": true
-    }
-  },
-  {
-    "tenantId": "ciwf30832",
-    "data": {
-      "code": "OTHERS",
-      "active": false
-    }
-  },
-  {
-    "tenantId": "ciwf30832",
-    "data": {
-      "code": "TRANSGENDER",
       "active": true
     }
   },
@@ -182,20 +98,6 @@
     }
   },
   {
-    "tenantId": "ciwfi14638",
-    "data": {
-      "code": "OTHERS",
-      "active": false
-    }
-  },
-  {
-    "tenantId": "ciwfi14638",
-    "data": {
-      "code": "TRANSGENDER",
-      "active": true
-    }
-  },
-  {
     "tenantId": "ciwfi31083",
     "data": {
       "code": "FEMALE",
@@ -206,20 +108,6 @@
     "tenantId": "ciwfi31083",
     "data": {
       "code": "MALE",
-      "active": true
-    }
-  },
-  {
-    "tenantId": "ciwfi31083",
-    "data": {
-      "code": "OTHERS",
-      "active": false
-    }
-  },
-  {
-    "tenantId": "ciwfi31083",
-    "data": {
-      "code": "TRANSGENDER",
       "active": true
     }
   },
@@ -238,20 +126,6 @@
     }
   },
   {
-    "tenantId": "ke",
-    "data": {
-      "code": "OTHERS",
-      "active": false
-    }
-  },
-  {
-    "tenantId": "ke",
-    "data": {
-      "code": "TRANSGENDER",
-      "active": true
-    }
-  },
-  {
     "tenantId": "pg",
     "data": {
       "code": "FEMALE",
@@ -261,22 +135,8 @@
   {
     "tenantId": "pg",
     "data": {
-      "code": "TRANSGENDER",
-      "active": true
-    }
-  },
-  {
-    "tenantId": "pg",
-    "data": {
       "code": "MALE",
       "active": true
-    }
-  },
-  {
-    "tenantId": "pg",
-    "data": {
-      "code": "OTHERS",
-      "active": false
     }
   },
   {
@@ -290,20 +150,6 @@
     "tenantId": "statea",
     "data": {
       "code": "MALE",
-      "active": true
-    }
-  },
-  {
-    "tenantId": "statea",
-    "data": {
-      "code": "OTHERS",
-      "active": false
-    }
-  },
-  {
-    "tenantId": "statea",
-    "data": {
-      "code": "TRANSGENDER",
       "active": true
     }
   }
