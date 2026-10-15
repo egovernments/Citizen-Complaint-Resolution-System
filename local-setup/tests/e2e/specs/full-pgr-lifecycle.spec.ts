@@ -311,31 +311,16 @@ test.describe.serial('Full PGR lifecycle — citizen, admin, employee', () => {
     const bodyText = await page.locator('body').innerText();
     expect(bodyText).toContain(serviceRequestId);
 
-    // Click "Take Action" button — retry up to 3 times (dropdown can be flaky)
-    let takeActionClicked = false;
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      try {
-        const takeActionBtn = page.locator('button').filter({
-          hasText: /ES_COMMON_TAKE_ACTION|Take Action/i,
-        }).first();
-        await takeActionBtn.waitFor({ state: 'visible', timeout: 10_000 });
-        await takeActionBtn.click();
-        await page.waitForTimeout(1000);
-
-        const dropdown = page.locator('.header-dropdown-container');
-        await dropdown.waitFor({ state: 'visible', timeout: 5_000 });
-        takeActionClicked = true;
-        break;
-      } catch {
-        console.log(`Take Action click attempt ${attempt} failed, retrying...`);
-        await page.waitForTimeout(2000);
-      }
+    // Open Take Action until the menu offers Assign (exactly: not Reassign).
+    // The menu is the action button's own option list; wait for the option.
+    const takeActionBtn = page.locator('button').filter({ hasText: /ES_COMMON_TAKE_ACTION|Take Action/i }).first();
+    const assignOption = page.locator('.header-dropdown-option').filter({ hasText: /^\s*assign\s*$/i });
+    for (let attempt = 0; attempt < 3 && !await assignOption.isVisible(); attempt++) {
+      await takeActionBtn.waitFor({ state: 'visible', timeout: 10_000 });
+      await takeActionBtn.click();
+      await page.waitForTimeout(1000);
     }
-    expect(takeActionClicked).toBe(true);
-
-    // Click "ASSIGN" option in the dropdown menu
-    const assignOption = page.locator('.header-dropdown-option').filter({ hasText: /ASSIGN/i });
-    await assignOption.waitFor({ state: 'visible', timeout: 5_000 });
+    await expect(assignOption, 'Take Action offers no Assign for the GRO').toBeVisible({ timeout: 5_000 });
     await assignOption.click();
     await page.waitForTimeout(2000);
 
