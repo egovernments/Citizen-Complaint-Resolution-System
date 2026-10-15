@@ -5742,6 +5742,12 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.branding.continue_anyway",
+    "message": "Continue anyway",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.branding.intro",
     "message": "Your logo, name and colour appear across your workspace and on the services citizens and employees experience.",
     "module": "configurator-ui",
@@ -5796,12 +5802,6 @@
     "locale": "en_IN"
   },
   {
-    "code": "app.onboarding.branding.name_too_long",
-    "message": "Keep the name under %{max} characters.",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
     "code": "app.onboarding.branding.no_tenant_record",
     "message": "The workspace %{tenant} has no tenant record to brand.",
     "module": "configurator-ui",
@@ -5822,12 +5822,6 @@
   {
     "code": "app.onboarding.branding.save_failed",
     "message": "Saving your branding failed. Try again.",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
-    "code": "app.onboarding.branding.skip",
-    "message": "Skip branding",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -10039,7 +10033,7 @@
   },
   {
     "code": "app.onboarding.requirements.branding",
-    "message": "Add a logo to finish branding, or skip the step.",
+    "message": "Branding finishes once the workspace has a saved logo. Save again, or choose Continue anyway.",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
