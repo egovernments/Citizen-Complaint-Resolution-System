@@ -4,11 +4,13 @@
  * a known password. Idempotent: a re-run finds what exists, repairs what does
  * not, and re-verifies every sign-in.
  *
- *   admin         EMPLOYEE + the founder's admin roles, incl. ACCOUNT_ADMIN
+ *   admin         EMPLOYEE + the founder's admin roles, incl. ACCOUNT_ADMIN, plus
+ *                 the PGR bundle (CSR, GRO, PGR_LME, SUPERVISOR) the admin-surface
+ *                 specs file, assign and resolve complaints with
  *   gro           GRO in a department that owns a complaint type
  *   lme           PGR_LME in that department (the ASSIGN target)
  *   wardCsr       CSR scoped to the ward that holds the seed locality
- *   inboxViewer   GRO in that department
+ *   inboxViewer   GRO + PGR_LME in that department
  *   supervisor    GRO + PGR_LME + SUPERVISOR (the suite's EMPLOYEE_USER)
  *
  * The PGR personas' jurisdiction is the seed locality itself: PGR matches
@@ -49,14 +51,16 @@ import { deriveMobileLengths, derivedStartingDigits, generateValidMobile, type M
 import { fetchBoundaryTree, fetchGlobalConfigs, type BoundaryNode } from '../tests/utils/probes';
 import { Digit, employeeSignIn, ok } from '../tests/utils/workspace-setup';
 
-const ADMIN_ROLES = ['EMPLOYEE', 'SUPERUSER', 'ACCOUNT_ADMIN', 'MDMS_ADMIN', 'LOC_ADMIN', 'HRMS_ADMIN', 'WORKFLOW_ADMIN'];
+const ADMIN_ROLES = ['EMPLOYEE', 'SUPERUSER', 'ACCOUNT_ADMIN', 'MDMS_ADMIN', 'LOC_ADMIN', 'HRMS_ADMIN', 'WORKFLOW_ADMIN',
+  'CSR', 'GRO', 'PGR_LME', 'SUPERVISOR'];
 interface Spec { role: PersonaRole; roles: string[]; scope: 'root' | 'leaf' | 'ward' }
 /** Admin last: when it is also the actor, re-setting its password ends the actor's session. */
 const SPECS: Spec[] = [
   { role: 'gro', roles: ['EMPLOYEE', 'GRO'], scope: 'leaf' },
   { role: 'lme', roles: ['EMPLOYEE', 'PGR_LME'], scope: 'leaf' },
   { role: 'wardCsr', roles: ['EMPLOYEE', 'CSR'], scope: 'ward' },
-  { role: 'inboxViewer', roles: ['EMPLOYEE', 'GRO'], scope: 'leaf' },
+  // PGR_LME too: inbox specs assign their seed complaint to the viewer, which needs a PGR_LME holder.
+  { role: 'inboxViewer', roles: ['EMPLOYEE', 'GRO', 'PGR_LME'], scope: 'leaf' },
   { role: 'supervisor', roles: ['EMPLOYEE', 'GRO', 'PGR_LME', 'SUPERVISOR'], scope: 'leaf' },
   { role: 'admin', roles: ADMIN_ROLES, scope: 'root' },
 ];
@@ -125,7 +129,7 @@ async function planFor(digit: Digit): Promise<Plan> {
   };
 }
 
-/** The persona's HRMS employee, created when missing; an existing one must already hold the roles. */
+/** The persona's HRMS employee: created when missing, given any role it lacks when it exists. */
 async function ensureEmployee(digit: Digit, plan: Plan, spec: Spec, login: string): Promise<{ code: string; uuid: string }> {
   const code = codeOf(spec.role);
   const found = ((await digit.post(`/egov-hrms/employees/_search?tenantId=${TENANT}&codes=${code}`, {}, digit.ri({ action: '_search' }))).Employees ?? [])
@@ -133,7 +137,12 @@ async function ensureEmployee(digit: Digit, plan: Plan, spec: Spec, login: strin
   if (found) {
     const held = new Set((found.user?.roles ?? []).map((r: { code: string }) => r.code));
     const lacking = spec.roles.filter((r) => !held.has(r));
-    if (lacking.length) fail(`${code} exists at ${TENANT} without ${lacking.join(', ')}: fix it in the Configurator, then re-run`);
+    if (lacking.length) {
+      // Role changes reach a DIGIT token only when it is next minted; a fresh workspace never needs this.
+      const roles = [...found.user.roles, ...lacking.map((r) => ({ code: r, name: plan.roleNames.get(r) ?? r, tenantId: TENANT }))];
+      await digit.post('/egov-hrms/employees/_update', { Employees: [{ ...found, user: { ...found.user, roles } }] }, digit.ri({ action: '_update' }));
+      console.error(`[seed-personas] ${code}: added ${lacking.join(', ')}`);
+    }
     return { code, uuid: found.user?.uuid ?? found.uuid };
   }
   const boundary = plan.boundaries[spec.scope];
@@ -289,6 +298,9 @@ async function main(): Promise<void> {
         await employeeSignIn(persona, BASE_URL, tenantSlug(), login, passwords.get(spec.role)!, 'configurator');
         const context = await selectContext(persona, BASE_URL, 'configurator', TENANT);
         if (context.UserRequest.uuid !== uuid) fail(`${envName(spec.role, 'LOGIN')} selects ${context.UserRequest.uuid}, not ${code} (${uuid})`);
+        const held = new Set(((context.UserRequest.roles ?? []) as Array<{ code: string }>).map((r) => r.code));
+        const stale = spec.roles.filter((r) => !held.has(r));
+        if (stale.length) console.log(`# WARN ${envName(spec.role, 'LOGIN')}: the selected token still lacks ${stale.join(' ')} (DIGIT reuses a live token)`);
         console.log(`# ok ${envName(spec.role, 'LOGIN')} -> ${code} [${spec.roles.join(' ')}] @ ${plan.boundaries[spec.scope].code}`);
       } finally {
         await persona.dispose();

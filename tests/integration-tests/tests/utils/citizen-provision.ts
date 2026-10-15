@@ -17,6 +17,11 @@ export interface ProvisionedCitizen {
   tenantId: string;
   /** PGR service-request ID prefix discovered via egov-idgen. Deployment-specific. */
   pgrIdPrefix: string;
+  /**
+   * The citizen's BFF session cookies, so UI specs can reuse this sign-in: each
+   * OTP send counts against the BFF's per-phone (5/h) and per-IP (20/h) limits.
+   */
+  sessionCookies?: Awaited<ReturnType<import('@playwright/test').APIRequestContext['storageState']>>['cookies'];
 }
 
 const CITIZEN_FIXTURE_FILE = resolve('citizen-fixture.json');
@@ -84,6 +89,7 @@ export async function provisionFreshCitizen(opts?: { tenant?: string }): Promise
       mobile, prefix: rule.prefix, name, token: context.access_token,
       uuid: context.UserRequest.uuid, tenantId: context.UserRequest.tenantId,
       pgrIdPrefix: tryGetProfile()?.pgr.idPrefix || await getPgrIdPrefix(),
+      sessionCookies: (await request.storageState()).cookies,
     };
   } finally {
     await request.dispose();

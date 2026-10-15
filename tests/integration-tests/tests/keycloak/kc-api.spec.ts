@@ -37,10 +37,11 @@ test.describe('Keycloak through identity-bff — API contract', () => {
     const context = await staffContext(page, { tenant: TENANT, username: ADMIN_USER, password: ADMIN_PASS }, 'employee');
     const response = await page.request.post(`${BASE_URL}/mdms-v2/v2/_search`, {
       data: { RequestInfo: { authToken: context.access_token }, MdmsCriteria: { tenantId: TENANT,
-        moduleDetails: [{ moduleName: 'common-masters', masterDetails: [{ name: 'StateInfo' }] }] } },
+        schemaCode: 'common-masters.StateInfo', limit: 1, offset: 0 } },
     });
     expect(response.status()).toBe(200);
-    expect(await response.json()).toHaveProperty('MdmsRes');
+    // mdms-v2's v2 search answers `mdms` (MdmsRes is the v1 shape).
+    expect(Array.isArray((await response.json()).mdms)).toBe(true);
   });
 
   test('BFF authorize owns PKCE and the configured Google IdP hint', { tag: ['@area:keycloak', '@persona:system'] }, async ({ request }) => {

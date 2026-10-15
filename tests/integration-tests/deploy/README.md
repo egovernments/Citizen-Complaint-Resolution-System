@@ -37,11 +37,11 @@ each a `<ROLE>_LOGIN` in the profile plus `<ROLE>_PASSWORD` in the secrets file:
 
 | Role prefix | DIGIT roles | Used for |
 |---|---|---|
-| `ADMIN` | EMPLOYEE, SUPERUSER, ACCOUNT_ADMIN, MDMS_ADMIN, LOC_ADMIN, HRMS_ADMIN, WORKFLOW_ADMIN | Configurator specs, HRMS reads, employee invites |
+| `ADMIN` | EMPLOYEE, SUPERUSER, ACCOUNT_ADMIN, MDMS_ADMIN, LOC_ADMIN, HRMS_ADMIN, WORKFLOW_ADMIN, CSR, GRO, PGR_LME, SUPERVISOR | Configurator specs, HRMS reads, employee invites, complaints filed and assigned from admin surfaces |
 | `GRO` | EMPLOYEE, GRO (+ department) | ASSIGN |
 | `LME` | EMPLOYEE, PGR_LME (same department) | RESOLVE, escalate |
 | `WARD_CSR` | EMPLOYEE, CSR, ward jurisdiction | boundary jurisdiction #496 |
-| `INBOX_VIEWER` | EMPLOYEE, GRO, seed-locality jurisdiction | inbox specs |
+| `INBOX_VIEWER` | EMPLOYEE, GRO, PGR_LME, seed-locality jurisdiction | inbox specs (they assign their seed complaint to it) |
 | `SUPERVISOR` | EMPLOYEE, GRO, PGR_LME, SUPERVISOR | the specs' `EMPLOYEE_USER` |
 
 `scripts/seed-personas.ts` creates and links all six, idempotently, through
