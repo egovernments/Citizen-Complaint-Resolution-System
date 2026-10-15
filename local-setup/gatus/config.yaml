@@ -457,14 +457,9 @@ endpoints:
     alerts:
       - type: slack
 
-  - name: Kong Admin API
-    group: API Gateway
-    url: "http://kong:8001/"
-    interval: 30s
-    conditions:
-      - "[STATUS] == 200"
-    alerts:
-      - type: slack
+  # No Kong Admin API check: the tenant stack binds the Admin API to the
+  # container's own loopback (KONG_ADMIN_LISTEN 127.0.0.1:8001), so no other
+  # container can reach kong:8001. Kong Status below covers Kong's health (#2458).
 
   - name: Kong Status
     group: API Gateway
