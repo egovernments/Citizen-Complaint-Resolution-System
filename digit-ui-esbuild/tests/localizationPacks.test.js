@@ -1,7 +1,8 @@
 // Every key the citizen and employee UI asks for by name must ship in the
 // en_IN seed (so admins can find and override it from the localisation
-// screen) and in the fr_FR and pt_PT packs (so switching language doesn't
-// leave English behind, #2445).
+// screen) and in every translated pack (so switching language doesn't
+// leave English behind, #2445). The onboarding packs are the ones new
+// workspaces receive, so they are held to the same rule.
 // Run from digit-ui-esbuild/:  node --test tests/localizationPacks.test.js
 
 const { test } = require("node:test");
@@ -14,8 +15,15 @@ const SEED_ROOT = path.resolve(
   UI_ROOT,
   "../utilities/default-data-handler/src/main/resources/localisations",
 );
+const ONBOARDING_ROOT = path.resolve(
+  UI_ROOT,
+  "../backend/pgr-services/src/main/resources/onboarding/l10n",
+);
 const MODULES = ["rainmaker-pgr", "rainmaker-common", "rainmaker-hr"];
-const LOCALES = ["fr_FR", "pt_PT"];
+const PACK_SETS = [
+  { name: "default-data-handler", root: SEED_ROOT, locales: ["fr_FR", "pt_PT"] },
+  { name: "onboarding", root: ONBOARDING_ROOT, locales: ["fr_FR", "pt_BR"] },
+];
 const SOURCE_DIRS = [
   "products/pgr/src",
   "packages/modules/core/src",
@@ -100,10 +108,10 @@ function literalKeys() {
   return keys;
 }
 
-function pack(locale) {
+function pack(locale, root = SEED_ROOT) {
   const messages = new Map();
   for (const module of MODULES) {
-    const file = path.join(SEED_ROOT, locale, `${module}.json`);
+    const file = path.join(root, locale, `${module}.json`);
     if (!fs.existsSync(file)) continue;
     for (const m of JSON.parse(fs.readFileSync(file, "utf8"))) {
       assert.equal(m.locale, locale, `${locale}/${module}.json: ${m.code} has locale ${m.locale}`);
@@ -116,27 +124,70 @@ function pack(locale) {
 
 const placeholders = (text) => (String(text).match(/\{[^{}]*\}|%s|<\/?[a-z]+>/g) || []).sort();
 
-test("every key the UI asks for by name is seeded in en_IN", () => {
-  const english = pack("en_IN");
-  const missing = [...literalKeys()].filter(([key]) => !english.has(key)).map(([key, file]) => `${key} (${file})`);
-  assert.deepEqual(missing, [], `missing en_IN keys:\n${missing.join("\n")}`);
-});
-
-for (const locale of LOCALES) {
-  test(`every key the UI asks for by name is translated in ${locale}`, () => {
-    const translated = pack(locale);
-    const missing = [...literalKeys()].filter(([key]) => !translated.has(key)).map(([key, file]) => `${key} (${file})`);
-    assert.deepEqual(missing, [], `missing ${locale} keys:\n${missing.join("\n")}`);
+for (const { name, root, locales } of PACK_SETS) {
+  test(`every key the UI asks for by name is seeded in ${name} en_IN`, () => {
+    const english = pack("en_IN", root);
+    const missing = [...literalKeys()].filter(([key]) => !english.has(key)).map(([key, file]) => `${key} (${file})`);
+    assert.deepEqual(missing, [], `missing en_IN keys:\n${missing.join("\n")}`);
   });
 
-  test(`${locale} messages are non-empty and keep the English placeholders`, () => {
-    const english = pack("en_IN");
+  for (const locale of locales) {
+    test(`every key the UI asks for by name is translated in ${name} ${locale}`, () => {
+      const translated = pack(locale, root);
+      const missing = [...literalKeys()].filter(([key]) => !translated.has(key)).map(([key, file]) => `${key} (${file})`);
+      assert.deepEqual(missing, [], `missing ${locale} keys:\n${missing.join("\n")}`);
+    });
+
+    test(`${name} ${locale} messages are non-empty and keep the English placeholders`, () => {
+      const english = pack("en_IN", root);
+      const problems = [];
+      for (const [code, message] of pack(locale, root)) {
+        if (!english.has(code)) problems.push(`${code}: not in en_IN`);
+        else if (typeof message !== "string" || !message.trim()) problems.push(`${code}: empty`);
+        else if (placeholders(message).join() !== placeholders(english.get(code)).join()) problems.push(`${code}: placeholders differ`);
+      }
+      assert.deepEqual(problems, []);
+    });
+  }
+}
+
+// A deployment's root and city get pg's packs for every locale in pg's
+// StateInfo (tenant_bootstrap), so the pg seed must carry the onboarding packs
+// those locales ship to new workspaces, word for word.
+const DUMP = path.resolve(UI_ROOT, "../local-setup/db/full-dump.sql");
+const unescapeCopy = (value) =>
+  value.replace(/\\(.)/g, (_, c) => ({ n: "\n", t: "\t", r: "\r" })[c] ?? c);
+
+function pgSeed() {
+  const lines = fs.readFileSync(DUMP, "utf8").split("\n");
+  const start = lines.findIndex((line) => line.startsWith("COPY public.message "));
+  const messages = new Map();
+  for (const line of lines.slice(start + 1)) {
+    if (line === "\\.") break;
+    const [, locale, code, message, tenantId, module] = line.split("\t");
+    if (tenantId === "pg") messages.set(`${locale}|${module}|${unescapeCopy(code)}`, unescapeCopy(message));
+  }
+  const stateInfo = lines.find((line) => line.split("\t")[1] === "pg" && line.includes("\tcommon-masters.StateInfo\t{"));
+  const languages = JSON.parse(stateInfo.split("\t")[4]).languages.map((language) => language.value);
+  return { messages, languages };
+}
+
+const onboarding = PACK_SETS.find((set) => set.name === "onboarding");
+for (const locale of onboarding.locales) {
+  test(`the pg seed lists ${locale} and carries the onboarding ${locale} packs`, () => {
+    const { messages, languages } = pgSeed();
+    assert.ok(languages.includes(locale), `pg StateInfo languages are ${languages.join(", ")}`);
     const problems = [];
-    for (const [code, message] of pack(locale)) {
-      if (!english.has(code)) problems.push(`${code}: not in en_IN`);
-      else if (typeof message !== "string" || !message.trim()) problems.push(`${code}: empty`);
-      else if (placeholders(message).join() !== placeholders(english.get(code)).join()) problems.push(`${code}: placeholders differ`);
+    let packed = 0;
+    for (const module of MODULES) {
+      for (const m of JSON.parse(fs.readFileSync(path.join(ONBOARDING_ROOT, locale, `${module}.json`), "utf8"))) {
+        packed++;
+        const seeded = messages.get(`${locale}|${module}|${m.code}`);
+        if (seeded !== m.message) problems.push(`${module} ${m.code}: seed ${JSON.stringify(seeded)}`);
+      }
     }
+    const extra = [...messages.keys()].filter((key) => key.startsWith(`${locale}|`)).length - packed;
     assert.deepEqual(problems, []);
+    assert.equal(extra, 0, `pg carries ${extra} ${locale} messages the onboarding packs do not`);
   });
 }
