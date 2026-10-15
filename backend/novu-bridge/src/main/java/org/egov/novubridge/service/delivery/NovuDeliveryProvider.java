@@ -1,6 +1,7 @@
 package org.egov.novubridge.service.delivery;
 
 import org.egov.novubridge.service.NovuClient;
+import org.egov.novubridge.service.account.NovuAccount;
 import org.egov.novubridge.util.Values;
 import org.egov.novubridge.web.models.Contact;
 import org.springframework.stereotype.Component;
@@ -12,7 +13,8 @@ import java.util.Map;
 /**
  * Delivery through Novu. Owns the Novu/Twilio specifics: WhatsApp rides the Twilio {@code sms}
  * integration with a {@code whatsapp:+E164} recipient, an integration override and an approved
- * Content-template envelope.
+ * Content-template envelope. A {@link Dispatch#getNovuAccount() tenant account} sends through that
+ * tenant's own Novu organization; none, through the shared account exactly as before #2203.
  */
 @Component
 public class NovuDeliveryProvider implements DeliveryProvider {
@@ -40,12 +42,18 @@ public class NovuDeliveryProvider implements DeliveryProvider {
         if (isWhatsapp(d.getChannel()) && contact != null && StringUtils.hasText(contact.getPhone())) {
             contact = contact.toBuilder().phone(whatsappAddress(contact.getPhone())).build();
         }
-        NovuClient.NovuResponse r = novuClient.identifyThenTrigger(
-                d.getSubscriberId(), contact, d.getChannel(),
-                d.getBody(), d.getSubject(), d.getTransactionId(), d.getData(),
-                d.getTemplateId(), d.getContentVariables(),
-                d.getIntegrationIdentifier());
-        return toResult(r, d.getIntegrationIdentifier());
+        NovuClient.NovuResponse r = d.getNovuAccount() == null
+                ? novuClient.identifyThenTrigger(
+                        d.getSubscriberId(), contact, d.getChannel(),
+                        d.getBody(), d.getSubject(), d.getTransactionId(), d.getData(),
+                        d.getTemplateId(), d.getContentVariables(),
+                        d.getIntegrationIdentifier())
+                : novuClient.identifyThenTrigger(d.getNovuAccount(),
+                        d.getSubscriberId(), contact, d.getChannel(),
+                        d.getBody(), d.getSubject(), d.getTransactionId(), d.getData(),
+                        d.getTemplateId(), d.getContentVariables(),
+                        d.getIntegrationIdentifier());
+        return toResult(r, d.getIntegrationIdentifier(), d.getNovuAccount());
     }
 
     /** Operator test-send: no subscriber upsert, caller-chosen workflow, otherwise the live route. */
@@ -62,23 +70,35 @@ public class NovuDeliveryProvider implements DeliveryProvider {
         Map<String, Object> overrides = whatsapp && StringUtils.hasText(d.getTemplateId())
                 ? NovuClient.buildProviderTemplateOverrides(d.getTemplateId(), d.getContentVariables())
                 : null;
-        overrides = novuClient.applyWhatsappIntegrationOverride(overrides, d.getChannel());
+        if (d.getNovuAccount() == null) {
+            // The deployment-wide WhatsApp pin names an integration of the shared account only.
+            overrides = novuClient.applyWhatsappIntegrationOverride(overrides, d.getChannel());
+        }
         overrides = NovuClient.applyIntegrationOverride(overrides, d.getChannel(), d.getIntegrationIdentifier());
-        NovuClient.NovuResponse r = novuClient.trigger(d.getWorkflowOverride(), d.getSubscriberId(),
-                whatsapp ? whatsappAddress(phone) : phone, email, payload, d.getTransactionId(), overrides);
-        return toResult(r, d.getIntegrationIdentifier());
+        String to = whatsapp ? whatsappAddress(phone) : phone;
+        NovuClient.NovuResponse r = d.getNovuAccount() == null
+                ? novuClient.trigger(d.getWorkflowOverride(), d.getSubscriberId(), to, email, payload,
+                        d.getTransactionId(), overrides)
+                : novuClient.trigger(d.getNovuAccount(), d.getWorkflowOverride(), d.getSubscriberId(), to, email,
+                        payload, d.getTransactionId(), overrides);
+        return toResult(r, d.getIntegrationIdentifier(), d.getNovuAccount());
     }
 
     /**
      * The pinned integration is recorded on the result so the dispatch-log row says which provider
      * carried the message; it rides in the already-persisted provider response.
      */
-    private static DeliveryResult toResult(NovuClient.NovuResponse r, String integrationIdentifier) {
+    private static DeliveryResult toResult(NovuClient.NovuResponse r, String integrationIdentifier, NovuAccount account) {
         Integer sc = r != null ? r.getStatusCode() : null;
         Map<String, Object> raw = r != null ? r.getResponse() : null;
         if (StringUtils.hasText(integrationIdentifier)) {
             raw = raw == null ? new HashMap<>() : new HashMap<>(raw);
             raw.put("integrationIdentifier", integrationIdentifier);
+        }
+        if (account != null) {
+            // The Logs screen shows which Novu account carried it; absent = the shared one.
+            raw = raw == null ? new HashMap<>() : new HashMap<>(raw);
+            raw.put("novuAccount", NovuAccount.label(account));
         }
         boolean accepted = sc != null && sc >= 200 && sc < 300;
         if (!accepted) {

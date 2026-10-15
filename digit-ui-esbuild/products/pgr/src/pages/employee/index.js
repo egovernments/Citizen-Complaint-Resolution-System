@@ -19,6 +19,7 @@ import React from "react";
 import { useTranslation } from "react-i18next";
 import { Redirect, Switch } from "react-router-dom";
 import { useLocation } from "react-router-dom";
+import CountyFirst from "./CreateComplaint/CountyFirst";
 
 // ours#615: the create-complaint route follows its menu entry. Only an employee whose access actions offer
 // /employee/pgr/create-complaint (the "File a Complaint" entry, ACCESSCONTROL role-actions) gets the form; anyone
@@ -29,7 +30,8 @@ const offersCreateComplaint = (actions) =>
 const CreateComplaintGuard = ({ component: Component }) => {
   const { isLoading, data } = Digit.Hooks.useAccessControl();
   if (isLoading) return null;
-  return offersCreateComplaint(data?.actions) ? <Component /> : <Redirect to={`/${window?.contextPath}/employee`} />;
+ 
+  return offersCreateComplaint(data?.actions) ? <CountyFirst component={Component} /> : <Redirect to={`/${window?.contextPath}/employee`} />;
 };
 
 const EmployeeApp = ({ path, stateCode, userType, tenants }) => {

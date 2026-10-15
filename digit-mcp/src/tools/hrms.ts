@@ -2,7 +2,8 @@ import type { ToolMetadata } from '../types/index.js';
 import type { ToolRegistry } from './registry.js';
 import { digitApi } from '../services/digit-api.js';
 import { ensureAuthenticated, defaultProvisioningPassword } from '../services/auth.js';
-import { validateTenantId, validateMobileNumber, rejectControlChars, validateStringLength, validateResourceId } from '../utils/validation.js';
+import { validateTenantId, validateMobileNumber, rejectControlChars, validateStringLength, validateResourceId, ValidationError } from '../utils/validation.js';
+import { validateGender } from '../utils/gender.js';
 
 export function registerHrmsTools(registry: ToolRegistry): void {
   registry.register({
@@ -83,8 +84,7 @@ export function registerHrmsTools(registry: ToolRegistry): void {
         },
         gender: {
           type: 'string',
-          enum: ['MALE', 'FEMALE', 'TRANSGENDER'],
-          description: 'Optional gender',
+          description: 'Optional gender: an active code of the tenant\'s common-masters.GenderType master (list them with mdms_search).',
         },
         dry_run: {
           type: 'boolean',
@@ -131,6 +131,11 @@ export function registerHrmsTools(registry: ToolRegistry): void {
               issues.push(`Department "${department}" not found. Available: ${deptCodes.slice(0, 10).join(', ')}`);
             }
           } catch { /* skip */ }
+          try {
+            await validateGender(args.gender, tenantId, (t, s) => digitApi.mdmsV2SearchRaw(t, s));
+          } catch (e) {
+            if (e instanceof ValidationError) issues.push(e.message);
+          }
         }
 
         return JSON.stringify({
@@ -151,6 +156,7 @@ export function registerHrmsTools(registry: ToolRegistry): void {
       }
 
       await ensureAuthenticated();
+      const gender = await validateGender(args.gender, tenantId, (t, s) => digitApi.mdmsV2SearchRaw(t, s));
 
       const now = Date.now();
 
@@ -175,7 +181,7 @@ export function registerHrmsTools(registry: ToolRegistry): void {
         userName: args.mobile_number as string,
         mobileNumber: args.mobile_number as string,
         emailId: (args.email as string) || null,
-        gender: (args.gender as string) || null,
+        gender,
         type: 'EMPLOYEE',
         active: true,
         // Roles must be tagged with the state root — that's where

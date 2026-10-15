@@ -8,6 +8,7 @@ import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import { point as turfPoint } from "@turf/helpers";
 import useMapConfig from "../hooks/pgr/useMapConfig";
 import useTenantBoundaries from "../hooks/pgr/useTenantBoundaries";
+import { translateOr } from "../utils/selectPlaceholder";
 import { hasUsableGeoLocation } from "../utils/geoLocation";
 
 // Fix default icon issue in React builds
@@ -212,7 +213,7 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
                     minWidth: "150px",
                     maxWidth: "300px"
                   }}>
-                    {isLoadingAddress ? "Loading address..." : displayAddress}
+                    {isLoadingAddress ? translateOr(t, "CS_LOADING_ADDRESS", "Loading address...") : displayAddress}
                   </div>
                 </Tooltip>
               )}
@@ -268,8 +269,8 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
             fontSize: "12px",
             color: "#505A5F"
           }}>
-            <div><strong>Lat:</strong> {latitude.toFixed(6)}</div>
-            <div><strong>Lng:</strong> {longitude.toFixed(6)}</div>
+            <div><strong>{translateOr(t, "CS_COMMON_LATITUDE_SHORT", "Lat:")}</strong> {latitude.toFixed(6)}</div>
+            <div><strong>{translateOr(t, "CS_COMMON_LONGITUDE_SHORT", "Lng:")}</strong> {longitude.toFixed(6)}</div>
           </div>
         </div>
       </div>

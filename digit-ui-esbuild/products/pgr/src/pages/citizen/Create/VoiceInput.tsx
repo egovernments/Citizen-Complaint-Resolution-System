@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // Speak-to-type for the complaint description: the browser's own speech
-// recognition (Web Speech API), English only, as in the #2038 design.
+// recognition (Web Speech API), aligned with the active language selected
+// in the header (English, French, Portuguese, etc.), as in #2367.
 //
 // Chrome and Edge send the audio to their vendor's speech service to
 // transcribe it; Safari does the same through Apple's. Firefox has no
@@ -39,17 +40,69 @@ function mergeFinal(heard: string, next: string): string {
   return `${heard} ${next}`;
 }
 
-/** The browser's own English variant (en-KE, en-IN…) if it has one, else en-US. */
-function englishLocale(): string {
-  const langs = (typeof navigator !== "undefined" && (navigator.languages || [navigator.language])) || [];
-  return langs.find((l) => /^en(-|$)/i.test(l || "")) || "en-US";
+/** Canonical speech recognition regional tags for Web Speech API. */
+const DEFAULT_SPEECH_TAGS: Record<string, string> = {
+  fr: "fr-FR", // French
+  pt: "pt-PT", // Portuguese
+  sw: "sw-KE", // Swahili
+};
+
+/**
+ * Resolve the BCP-47 speech recognition language tag (e.g. "en-US", "fr-FR",
+ * "pt-PT", "sw-KE") corresponding to the active application locale (#2367).
+ *
+ * For English, preserves previous behavior: matches the browser's English
+ * variant (en-KE, en-IN…), else en-US.
+ * For other languages, uses the browser's regional variant if available,
+ * else the canonical tag (e.g. pt-BR if explicitly set, else pt-PT, fr-FR, sw-KE).
+ */
+export function speechRecognitionLocale(explicitLocale?: string): string {
+  const rawLocale =
+    explicitLocale ||
+    (typeof window !== "undefined" && (window as any).Digit?.StoreData?.getCurrentLanguage?.()) ||
+    "en";
+
+  const normalized = String(rawLocale).trim().replace(/_/g, "-");
+  const langPrefix = normalized.split("-")[0].toLowerCase();
+
+  const browserLangs =
+    (typeof navigator !== "undefined" && (navigator.languages || [navigator.language])) || [];
+
+  // For English: keep old behavior (browser's English variant, else en-US).
+  // DIGIT's "en_IN" represents generic English across all deployments (e.g. Kenya / Bomet).
+  if (langPrefix === "en") {
+    const browserEn = browserLangs.find(
+      (l) => typeof l === "string" && (l.toLowerCase() === "en" || l.toLowerCase().startsWith("en-"))
+    );
+    return browserEn || "en-US";
+  }
+
+  // Check if browser has a matching regional dialect (e.g. fr-CA, pt-BR)
+  const browserVariant = browserLangs.find(
+    (l) => typeof l === "string" && (l.toLowerCase() === langPrefix || l.toLowerCase().startsWith(`${langPrefix}-`))
+  );
+  if (browserVariant && browserVariant.length > 2) {
+    return browserVariant;
+  }
+
+  // Preserve Brazilian Portuguese if explicitly set
+  if (normalized.toLowerCase() === "pt-br") {
+    return "pt-BR";
+  }
+
+  // Canonical tag fallback for known languages
+  if (DEFAULT_SPEECH_TAGS[langPrefix]) {
+    return DEFAULT_SPEECH_TAGS[langPrefix];
+  }
+
+  return normalized || "en-US";
 }
 
 /**
  * One recording session at a time: start, stop, and the transcript so far.
  * `interim` is what the recogniser is still unsure of; `transcript` is final.
  */
-export function useSpeechToText() {
+export function useSpeechToText(preferredLocale?: string) {
   const [state, setState] = React.useState<SpeechState>("idle");
   const [transcript, setTranscript] = React.useState("");
   const [interim, setInterim] = React.useState("");
@@ -61,6 +114,11 @@ export function useSpeechToText() {
   const interimRef = React.useRef("");
   const stateRef = React.useRef<SpeechState>("idle");
   const timerRef = React.useRef<number | null>(null);
+  const localeRef = React.useRef(preferredLocale);
+
+  React.useEffect(() => {
+    localeRef.current = preferredLocale;
+  }, [preferredLocale]);
 
   const setBoth = (next: SpeechState) => {
     stateRef.current = next;
@@ -104,7 +162,7 @@ export function useSpeechToText() {
     setErrorCode(null);
 
     const rec = new Recognition();
-    rec.lang = englishLocale();
+    rec.lang = speechRecognitionLocale(localeRef.current);
     rec.continuous = true;
     rec.interimResults = true;
     rec.maxAlternatives = 1;
@@ -258,6 +316,7 @@ interface VoiceSheetProps {
   /** Called with the finished transcript when the citizen keeps it. */
   onUse: (text: string) => void;
   tr: (key: string, fallback: string) => string;
+  locale?: string;
 }
 
 /**
@@ -265,8 +324,8 @@ interface VoiceSheetProps {
  * desktop. Opening it starts listening; Stop gives the transcript, which the
  * citizen can add to the description, record again, or throw away.
  */
-export function VoiceSheet({ open, onClose, onUse, tr }: VoiceSheetProps) {
-  const speech = useSpeechToText();
+export function VoiceSheet({ open, onClose, onUse, tr, locale }: VoiceSheetProps) {
+  const speech = useSpeechToText(locale);
   const { state, transcript, interim, seconds, errorCode, start, stop, reset } = speech;
   const sheetRef = React.useRef<HTMLDivElement>(null);
   useDialogFocus(open, sheetRef, state);
@@ -312,6 +371,8 @@ export function VoiceSheet({ open, onClose, onUse, tr }: VoiceSheetProps) {
       : errorCode === "service-not-allowed"
       ? // Safari refuses speech recognition while Siri is switched off.
         tr("CS_VOICE_SERVICE_OFF", "Voice input is turned off on this device. On an iPhone or Mac, turn on Siri in Settings, then try again.")
+      : errorCode === "language-not-supported"
+      ? tr("CS_VOICE_LANGUAGE_NOT_SUPPORTED", "Voice input isn't available in this language. Type your complaint instead.")
       : errorCode === "no-speech"
       ? tr("CS_VOICE_NO_SPEECH", "We didn't hear anything. Try again and speak close to the microphone.")
       : errorCode === "audio-capture"
@@ -326,7 +387,7 @@ export function VoiceSheet({ open, onClose, onUse, tr }: VoiceSheetProps) {
     ? tr("CS_VOICE_READY", "Transcription ready")
     : tr("CS_VOICE_TRY_AGAIN", "Couldn't record");
   const hint = recording
-    ? tr("CS_VOICE_ENGLISH_ONLY", "Voice input currently works in English only.")
+    ? tr("CS_VOICE_LANGUAGE_HINT", "Speak in the language selected at the top of the page.")
     : ready
     ? tr("CS_VOICE_READY_HINT", "Add it to your description, record again, or delete it.")
     : errorText;

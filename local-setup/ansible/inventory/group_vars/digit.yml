@@ -94,6 +94,20 @@ matomo_admin_user: admin
 # and the site URL to this deployment's own origin. Override in host_vars if
 # the reports should carry different labels.
 
+# Diagnose-only AI SRE agent (OpenSRE; docker-compose.opensre.yml). Off by
+# default. When on, it checks Gatus every opensre_sweep_interval_minutes and,
+# only when checks are failing, runs one read-only investigation and writes the
+# diagnosis to <digit_dir>/opensre/logs/ — no alerts, no changes. Needs a
+# project-owned Anthropic API key in OpenBao (opensre_anthropic_api_key);
+# without one the container idles. See docs/operations/monitoring/opensre.md.
+enable_opensre: false
+opensre_model: claude-opus-5
+opensre_sweep_interval_minutes: 15
+opensre_dedupe_hours: 6
+# Hard ceiling on paid runs: no investigation starts while this many started
+# in the last 24 hours, whatever is failing.
+opensre_max_investigations_per_day: 12
+
 # ──────────────────────────────────────────────────────────────────────
 # How much observability to deploy (#1657)
 # ──────────────────────────────────────────────────────────────────────
@@ -386,7 +400,7 @@ digit_ui_esbuild_branch: main
 #
 # This is the multi-arch egovio Docker Hub build of THIS repo's
 # digit-ui-esbuild/ tree (build/build-config.yml → image-name:
-# digit-ui-esbuild). Pinned to the 2.12 release build, so an Ansible deploy
+# digit-ui-esbuild). Pinned to the 2.12.1 release build, so an Ansible deploy
 # serves the SAME bundle as local-setup/docker-compose.egov-digit.yaml — a
 # rolling `nightly-develop` here meant the two paths could diverge silently.
 # Follows `image_tag` (below) when that is set, so `--image-tag=develop-<sha>`
@@ -395,7 +409,7 @@ digit_ui_esbuild_branch: main
 # instead, which then needs digit_ui_esbuild_repo pointed at a source tree.
 digit_ui_bundle_image: >-
   {{ (ccrs_tagged_images | default({})).get('digit-ui-esbuild')
-     or 'egovio/digit-ui-esbuild:2.12-5137119' }}
+     or 'egovio/digit-ui-esbuild:2.12.1-7a38661' }}
 
 # ──────────────────────────────────────────────────────────────────────
 # One-tag deploys (#1729)

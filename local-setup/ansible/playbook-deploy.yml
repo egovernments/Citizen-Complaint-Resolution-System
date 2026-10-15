@@ -384,8 +384,8 @@
         fail_msg: >-
           digit_ui_mode '{{ digit_ui_mode }}' builds the SPA from source on the
           target, but digit_ui_esbuild_repo is empty. Either set
-          digit_ui_bundle_image (static mode — the default,
-          egovio/digit-ui-esbuild:2.12-5137119) and skip the build entirely,
+          digit_ui_bundle_image (static mode — the default) and skip the
+          build entirely,
           or point digit_ui_esbuild_repo at a source tree to clone.
       when:
         - digit_ui_mode in ['static', 'hmr']
@@ -1591,6 +1591,50 @@
         src: ../docker-compose.matomo.yml
         dest: "{{ digit_dir }}/docker-compose.matomo.yml"
 
+    # OpenSRE overlay + build context (diagnose-only SRE agent). Copied and
+    # layered ALWAYS, like the two overlays above: the service carries
+    # `profiles: [opensre]`, so nothing starts until `enable_opensre: true`.
+    # opensre/runbook/ holds known-issues.md, which the agent attaches to every
+    # investigation as its runbook (mounted as a directory; .dockerignore keeps
+    # it out of the image). logs/ is the agent's output, owned by the container
+    # user (uid 10001) so it can write there.
+    - name: Copy OpenSRE overlay
+      copy:
+        src: ../docker-compose.opensre.yml
+        dest: "{{ digit_dir }}/docker-compose.opensre.yml"
+
+    - name: Copy OpenSRE build context
+      copy:
+        src: ../opensre/
+        dest: "{{ digit_dir }}/opensre/"
+
+    # Where the runbook used to be mounted from, as a single file. Removed so
+    # the build context does not carry a stale copy.
+    - name: Remove the old OpenSRE runbook location
+      file:
+        path: "{{ digit_dir }}/opensre/known-issues.md"
+        state: absent
+
+    - name: Create the OpenSRE runbook directory
+      file:
+        path: "{{ digit_dir }}/opensre/runbook"
+        state: directory
+        mode: "0755"
+
+    - name: Copy the known-issues runbook OpenSRE attaches to investigations
+      copy:
+        src: ../../docs/releases/2.12/operations/known-issues.md
+        dest: "{{ digit_dir }}/opensre/runbook/known-issues.md"
+        mode: "0644"
+
+    - name: Create the OpenSRE log directory (owned by the container user)
+      file:
+        path: "{{ digit_dir }}/opensre/logs"
+        state: directory
+        owner: "{{ omit if ansible_system == 'Darwin' else '10001' }}"
+        group: "{{ omit if ansible_system == 'Darwin' else '10001' }}"
+        mode: "0750"
+
     # Per-tenant compose overlay convention. If a file named
     # local-setup/docker-compose.<inventory_hostname>.yml exists on the
     # controller, copy it to the target and include it in every compose
@@ -1914,6 +1958,7 @@
               + (['keycloak']      if enable_keycloak      | default(false) else [])
               + (['otp']           if enable_otp_services  | default(false) else [])
               + (['matomo']        if enable_matomo        | default(false) else [])
+              + (['opensre']       if enable_opensre       | default(false) else [])
               + _obs_profiles
             ) | join(',')
           }}
@@ -2180,6 +2225,20 @@
         - ccrs_prev_image_tag != (ccrs_image_tag or '(none)')
           or ccrs_prev_services != (ccrs_image_tag_services | join(','))
 
+    # Per-tenant Novu accounts (#2203). One switch for every task below and for the .env
+    # line: on by default wherever self-serve signup and Novu both run, because that is
+    # where workspaces need their own provider credentials; host_vars `novu_tenant_accounts`
+    # overrides either way. Meaningless (forced off) without Novu. "On" is then VERIFIED:
+    # tasks/novu-tenant-accounts-verify.yml (included twice below) signs in to Novu as the
+    # platform admin with the password the bridge would get, and switches the feature off for
+    # this deploy (default) or stops it (explicit `true`, or workspaces already provisioned)
+    # when Novu refuses it.
+    - name: "novu tenant accounts — resolve the switch"
+      ansible.builtin.set_fact:
+        novu_tenant_accounts_on: >-
+          {{ (enable_novu | default(false) | bool)
+             and (novu_tenant_accounts | default(enable_keycloak | default(false)) | bool) }}
+
     - name: Write per-tenant compose .env
       template:
         src: templates/digit.env.j2
@@ -2276,6 +2335,7 @@
       loop:
         - TENANT SECRETS
         - KEYCLOAK SECRETS
+        - NOVU TENANT ACCOUNT SECRETS
       when:
         - prev_env.content is defined
         - ('# BEGIN ' + item) in (prev_env.content | b64decode)
@@ -2492,7 +2552,7 @@
     # The migration overlay is layered ALWAYS (see "Copy DB-migration overlay"):
     # it is the migration model, not an opt-in extra. It must come BEFORE the
     # per-tenant overlay so a tenant can still override a migrator if it has to.
-    - name: "Compute compose -f flags (fast-path + migrations + monitoring + matomo + per-tenant overlay)"
+    - name: "Compute compose -f flags (fast-path + migrations + monitoring + matomo + opensre + per-tenant overlay)"
       tags: ['always']   # tagged runs restart services with these; see the overlay stat above
       ansible.builtin.set_fact:
         compose_files: >-
@@ -2502,6 +2562,7 @@
             ' -f docker-compose.migrations.yml' +
             ' -f docker-compose.monitoring.yml' +
             ' -f docker-compose.matomo.yml' +
+            ' -f docker-compose.opensre.yml' +
             (' -f docker-compose.' ~ inventory_hostname ~ '.yml' if per_tenant_overlay.stat.exists else '')
           }}
 
@@ -3065,10 +3126,28 @@
           NOVU_STORE_ENCRYPTION_KEY={{ bao_secrets.json.data.data.novu_store_encryption_key | default('', true) }}
           NOVU_SECRET_KEY={{ bao_secrets.json.data.data.novu_secret_key | default('', true) }}
           NOVU_MONGO_PASSWORD={{ bao_secrets.json.data.data.novu_mongo_password | default('', true) }}
+          {# OpenSRE (enable_opensre). The API key is operator-supplied; the
+             Grafana token is minted by this deploy the first time Grafana is
+             healthy (see "OpenSRE — mint a read-only Grafana token"). Either
+             missing just makes the agent idle or see less — never a failure. #}
+          OPENSRE_ANTHROPIC_API_KEY={{ bao_secrets.json.data.data.opensre_anthropic_api_key | default('', true) }}
+          OPENSRE_GRAFANA_TOKEN={{ bao_secrets.json.data.data.opensre_grafana_token | default('', true) }}
         marker: "# {mark} TENANT SECRETS"
         create: false           # .env was already written by the digit.env.j2 template earlier
         mode: '0600'            # tighten — was 0644 from the template; secrets bump to 0600
       no_log: true
+
+    - name: "OpenSRE — warn when enabled without an Anthropic API key"
+      ansible.builtin.debug:
+        msg: >-
+          WARNING: enable_opensre is true but `opensre_anthropic_api_key` is not
+          in OpenBao, so the agent will start and idle without investigating.
+          Store a project-owned key with
+          `bao kv patch {{ secrets_path }} opensre_anthropic_api_key=<key>`
+          and redeploy.
+      when:
+        - enable_opensre | default(false)
+        - (bao_secrets.json.data.data.opensre_anthropic_api_key | default('', true)) | length == 0
 
     # No earlier task writes a placeholder GF_ADMIN_PASSWORD= line any more —
     # this IS the first writer now that Secrets prep runs before any compose-up
@@ -3476,6 +3555,134 @@
         - enable_novu | default(false)
         - (novu_api_key | default('')) | length > 0
 
+    # ── Per-tenant Novu accounts (#2203): secrets ──────────────────────────────
+    # Four secrets, generated on first use and kept in OpenBao like the identity ones (same
+    # `or`-short-circuit and one cas-guarded merge write; see the Grafana note above):
+    #   novu_bridge_tenant_key_encryption_key  AES key material for the stored tenant API keys
+    #   novu_bridge_internal_admin_token       /novu-adapter/v1/tenants/** (pgr-services, operators)
+    #   novu_bridge_internal_send_token        POST /messages/_send (the Identity BFF)
+    #   novu_admin_password                    the Novu platform admin the bridge signs in as
+    # The admin password is the account the deploy mints NOVU_API_KEY with. With tenant accounts
+    # on, a published default would hand every tenant's provider credentials to anyone who can
+    # reach /novu-api/, so it comes from OpenBao (or an explicit host_vars value) and the task
+    # "move the Novu admin off the legacy password" below changes it on a box that still has
+    # the old one. Read it back with
+    #   bao kv get -field=novu_admin_password {{ secrets_path }}
+    # With them off it is `novu_admin_password` from host_vars, else the one OpenBao already holds
+    # (an earlier deploy with them on moved the admin onto it), else `novu_admin_password_legacy`,
+    # else the published default; without a host_vars pin the mint takes the first of those Novu
+    # accepts. So the secrets are read whenever Novu is deployed, not only with the feature on.
+    - name: "novu tenant accounts — re-read tenant secrets"
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:18200/v1/{{ secrets_path | regex_replace('^kv/', 'kv/data/') }}"
+        headers:
+          X-Vault-Token: "{{ bao_root_token }}"
+        status_code: [200]
+      register: bao_secrets_novu_accounts
+      when: enable_novu | default(false) | bool
+      no_log: true
+
+    - name: "novu tenant accounts — resolve secrets (generate any that are absent)"
+      vars:
+        _stored: "{{ bao_secrets_novu_accounts.json.data.data }}"
+      ansible.builtin.set_fact:
+        novu_accounts_secrets:
+          novu_bridge_tenant_key_encryption_key: >-
+            {{ _stored.novu_bridge_tenant_key_encryption_key | default('', true)
+               or lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
+          novu_bridge_internal_admin_token: >-
+            {{ _stored.novu_bridge_internal_admin_token | default('', true)
+               or lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
+          novu_bridge_internal_send_token: >-
+            {{ _stored.novu_bridge_internal_send_token | default('', true)
+               or lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
+          # Novu's password policy: 8-64 chars with upper, lower, digit and one of #?!@$%^&*()-
+          # ('-' because '$' would be interpolated by compose and '#' starts a .env comment).
+          novu_admin_password: >-
+            {{ _stored.novu_admin_password | default('', true)
+               or (lookup('password', '/dev/null length=24 chars=ascii_letters,digits') ~ 'Aa1-') }}
+      when: novu_tenant_accounts_on | bool
+      no_log: true
+
+    # An explicit host_vars novu_admin_password is the operator's to manage (like the status
+    # board's): it wins and is not copied into OpenBao. One that is the published default turns
+    # the feature off for the deploy (or stops it): the verify step below decides which.
+    - name: "novu tenant accounts — effective Novu admin login"
+      vars:
+        # What OpenBao held before this deploy, not a password it generates and stores below.
+        _held: >-
+          {{ (bao_secrets_novu_accounts.json.data.data.novu_admin_password | default('', true))
+             if (bao_secrets_novu_accounts.json is defined) else '' }}
+        _without: >-
+          {{ (novu_admin_password | default('', true)) or _held
+             or (novu_admin_password_legacy | default('', true)) or 'Digit@12345' }}
+      ansible.builtin.set_fact:
+        novu_admin_email_effective: "{{ novu_admin_email | default('admin@digit.local') }}"
+        novu_admin_password_held: "{{ _held }}"
+        novu_admin_password_without_tenant_accounts: "{{ _without }}"
+        novu_admin_password_effective: >-
+          {{ ((novu_admin_password | default('', true)) or novu_accounts_secrets.novu_admin_password)
+             if (novu_tenant_accounts_on | bool) else _without }}
+      no_log: true
+
+    - name: "novu tenant accounts — persist any generated secrets"
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:18200/v1/{{ secrets_path | regex_replace('^kv/', 'kv/data/') }}"
+        method: POST
+        headers:
+          X-Vault-Token: "{{ bao_root_token }}"
+        body_format: json
+        body: >-
+          {{ {'options': {'cas': bao_secrets_novu_accounts.json.data.metadata.version | int},
+              'data': bao_secrets_novu_accounts.json.data.data | combine(_novu_accounts_to_store)} }}
+        status_code: [200]
+      vars:
+        _novu_accounts_to_store: >-
+          {{ novu_accounts_secrets
+             | dict2items
+             | rejectattr('key', 'equalto', 'novu_admin_password' if (novu_admin_password | default('', true)) else '')
+             | items2dict }}
+      when:
+        - novu_tenant_accounts_on | bool
+        - (bao_secrets_novu_accounts.json.data.data | combine(_novu_accounts_to_store))
+          != bao_secrets_novu_accounts.json.data.data
+      no_log: true
+
+    # Before the bridge is given the admin password: on a box whose Novu already runs (an
+    # upgrade), sign in with it now. Refused → off for this deploy (or stop); see the file.
+    - name: "novu tenant accounts — verify the Novu admin sign-in (preflight)"
+      ansible.builtin.include_tasks: tasks/novu-tenant-accounts-verify.yml
+      vars:
+        nta_phase: preflight
+      when:
+        - enable_novu | default(false) | bool
+        - novu_tenant_accounts_on | bool
+
+    - name: "novu tenant accounts — write secrets into compose .env"
+      ansible.builtin.blockinfile:
+        path: "{{ digit_dir }}/.env"
+        marker: "# {mark} NOVU TENANT ACCOUNT SECRETS"
+        block: |
+          NOVU_BRIDGE_NOVU_ADMIN_EMAIL={{ novu_admin_email_effective }}
+          NOVU_BRIDGE_NOVU_ADMIN_PASSWORD={{ novu_admin_password_effective }}
+          NOVU_BRIDGE_TENANT_KEY_ENCRYPTION_KEY={{ novu_accounts_secrets.novu_bridge_tenant_key_encryption_key }}
+          NOVU_BRIDGE_INTERNAL_ADMIN_TOKEN={{ novu_accounts_secrets.novu_bridge_internal_admin_token }}
+          NOVU_BRIDGE_INTERNAL_SEND_TOKEN={{ novu_accounts_secrets.novu_bridge_internal_send_token }}
+        create: false
+        mode: '0600'
+      when: novu_tenant_accounts_on | bool
+      no_log: true
+
+    # Switched off: the block goes, so no stale token keeps the internal APIs open and the
+    # bridge (NOVU_BRIDGE_TENANT_ACCOUNTS_ENABLED=false) sends every tenant through the shared
+    # account. Tenant organizations and their rows are kept; switching back on resumes them.
+    - name: "novu tenant accounts — remove the secrets block when switched off"
+      ansible.builtin.blockinfile:
+        path: "{{ digit_dir }}/.env"
+        marker: "# {mark} NOVU TENANT ACCOUNT SECRETS"
+        state: absent
+      when: not (novu_tenant_accounts_on | bool)
+
     # The next two steps are the deploy's long, silent stretch — the image
     # pull (tens of GB on a first run) and the ~40-container up (~10 min on
     # a cold box). Ansible buffers a task's output until it finishes, so
@@ -3510,6 +3717,24 @@
       shell: |
         set -o pipefail
         COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} pull --ignore-pull-failures 2>&1 | tee {{ compose_progress_file }}
+      args:
+        chdir: "{{ digit_dir }}"
+        executable: /bin/bash
+      changed_when: false
+
+    # OpenSRE's image is built on the box (opensre/Dockerfile) and carries
+    # `pull_policy: never`, so the pull above skips it and the several `up -d`
+    # below do not rebuild it. It is built once here instead: a cache hit
+    # (seconds) when nothing changed, and when run-sweeps.sh or guardrails.yml
+    # did change, the new image makes the next `up -d` recreate the container.
+    # Every deploy, not only when the build context changed: a build that failed
+    # on one deploy is then retried on the next, instead of the old image
+    # running on unnoticed.
+    - name: "OpenSRE — build the agent image"
+      when: enable_opensre | default(false)
+      shell: |
+        set -o pipefail
+        COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} build opensre 2>&1 | tee -a {{ compose_progress_file }}
       args:
         chdir: "{{ digit_dir }}"
         executable: /bin/bash
@@ -3900,6 +4125,26 @@
         | selectattr('item.key', 'equalto', 'otel')
         | map(attribute='stdout_lines') | flatten
         | select('search', 'otel-collector-config')
+        | list | length > 0
+    # container-stats is the same collector binary with the same no-watch, no-
+    # reload behaviour, so it gets the same narrow gate on its own config file.
+    - name: "Container stats — restart when its config changed"
+      ansible.builtin.shell: |
+        set -e
+        if [ -z "$(docker ps -q -f name='^digit-container-stats$')" ]; then
+          echo "NOCHANGE container-stats not running"
+          exit 0
+        fi
+        docker restart digit-container-stats
+      args:
+        executable: /bin/bash
+      register: container_stats_restart
+      changed_when: "'NOCHANGE' not in container_stats_restart.stdout"
+      when: >-
+        config_sync.results | default([])
+        | selectattr('item.key', 'equalto', 'otel')
+        | map(attribute='stdout_lines') | flatten
+        | select('search', 'container-stats-config')
         | list | length > 0
 
     # novu-worker loads its mounted providers once, at boot, and compose recreates it
@@ -4334,9 +4579,7 @@
       when: enable_mcp | default(false)
 
     # ==================== Verify the read-only MCP actually dropped writes ====================
-    # The digit-mcp image defaults to the pre-read-only tag
-    # (egovio/digit-mcp:2.12-81fc6be, see docker-compose.egov-digit.yaml). An
-    # image that predates MCP_READ_ONLY ignores the env var and serves the FULL
+    # A digit-mcp image that predates MCP_READ_ONLY ignores the env var and serves the FULL
     # write toolset (tenant_destroy, mdms_create, user_create, ...) on the public
     # /mcp + /v1 routes behind nothing but basic auth — a silent full-admin
     # exposure that a passing /healthz and a "healthy" container both hide. The
@@ -4481,15 +4724,19 @@
         # runs (every instrumented service depends on it) -- see the comment on
         # the service in docker-compose.egov-digit.yaml.
         #
-        # Every service listed below is gated. tempo/loki/promtail in
-        # docker-compose.egov-digit.yaml; prometheus and grafana likewise;
-        # node-exporter in docker-compose.monitoring.yml; and the three matomo
-        # services in docker-compose.matomo.yml. Those last four live in
+        # Every service listed below is gated. tempo/loki/promtail and
+        # docker-socket-proxy in docker-compose.egov-digit.yaml; prometheus and
+        # grafana likewise; node-exporter and container-stats in
+        # docker-compose.monitoring.yml; and the three matomo services in
+        # docker-compose.matomo.yml. Those last four live in
         # overlays that are always layered as an -f flag yet still carry a
         # `profiles:` key — layered-always and started-always are different
         # things, and that distinction is the whole reason this task exists.
         _profile_tier_services:
-          obs-metrics: [prometheus, grafana, node-exporter]
+          # docker-socket-proxy sits at obs-metrics because container-stats
+          # reads through it; promtail (obs-logs) uses it too, and levels are
+          # cumulative.
+          obs-metrics: [prometheus, grafana, node-exporter, container-stats, docker-socket-proxy]
           obs-logs: [loki, promtail]
           obs-traces: [tempo]
           # Matomo (#1254). All three are gated, so the same
@@ -4499,6 +4746,9 @@
           # `enable_matomo: false` and come back when it is turned on again.
           # Removing the data is a deliberate, separate `docker volume rm`.
           matomo: [matomo, matomo-db, matomo-archiver]
+          # OpenSRE: one gated service. Its output lives in the opensre/logs
+          # bind mount, so the diagnoses survive `enable_opensre: false`.
+          opensre: [opensre]
         # Derived from compose_profiles, not _obs_profiles: the latter is a
         # task-scoped `vars:` entry on the set_fact above, so it does not exist
         # by the time this task runs. compose_profiles IS a fact and already
@@ -6667,18 +6917,121 @@
     # bootstrapped the admin user exists, so the script's login fallback returns
     # the key and we never touch DISABLE_USER_REGISTRATION at all. That keeps the
     # steady state of every existing deployment byte-identical to before.
+    # Per-tenant accounts (#2203): the Novu admin moves off the legacy password (host_vars
+    # `novu_admin_password_legacy`, else the published default) to the OpenBao one BEFORE
+    # anything signs in with it. Runs whether or not a key is pinned: novu-bridge signs in as
+    # this user. NOCHANGE when the new password already works, NOUSER on an empty Novu (the
+    # mint below registers the first user with the new password), ROTATED when it changed it.
+    - name: "novu tenant accounts — move the Novu admin off the legacy password"
+      ansible.builtin.command: python3 -
+      args:
+        stdin: |
+          import json, os, sys, urllib.request, urllib.error
+          api = "http://127.0.0.1:14002"
+          def call(path, body, token=None):
+              req = urllib.request.Request(api + path, data=json.dumps(body).encode(), method="POST",
+                                           headers={"Content-Type": "application/json"})
+              if token:
+                  req.add_header("Authorization", "Bearer " + token)
+              try:
+                  with urllib.request.urlopen(req, timeout=20) as r:
+                      raw = r.read()
+                      return r.status, (json.loads(raw) if raw else {})
+              except urllib.error.HTTPError as e:
+                  return e.code, {}
+          email, new, old = os.environ["NB_EMAIL"], os.environ["NB_NEW"], os.environ["NB_OLD"]
+          status, _ = call("/v1/auth/login", {"email": email, "password": new})
+          if status in (200, 201):
+              print("NOCHANGE"); sys.exit(0)
+          status, body = call("/v1/auth/login", {"email": email, "password": old})
+          if status not in (200, 201):
+              print("NOUSER"); sys.exit(0)
+          token = (body.get("data") or {}).get("token")
+          status, _ = call("/v1/auth/update-password",
+                           {"currentPassword": old, "newPassword": new, "confirmPassword": new}, token)
+          if status not in (200, 204):
+              print("FAILED %s" % status); sys.exit(1)
+          print("ROTATED")
+      environment:
+        NB_EMAIL: "{{ novu_admin_email_effective }}"
+        NB_NEW: "{{ novu_admin_password_effective }}"
+        NB_OLD: "{{ novu_admin_password_legacy | default('Digit@12345') }}"
+      register: novu_admin_rotation
+      changed_when: "'ROTATED' in novu_admin_rotation.stdout"
+      when:
+        - enable_novu | default(false)
+        - novu_tenant_accounts_on | bool
+
+    # Per-tenant accounts off (set false, or switched off by the verify step): only the mint signs
+    # in as the Novu admin, and which password the admin has depends on the box's history. The
+    # published default (or novu_admin_password_legacy) until a deploy with them on moved it; the
+    # OpenBao one after. A deploy that stored a generated password but stopped before the move
+    # leaves OpenBao ahead of Novu, so neither order is right everywhere: take the first Novu
+    # accepts. None (an empty Novu) keeps the first, which the fresh-Novu mint then registers.
+    # A host_vars novu_admin_password is the operator's pin and is used as it is.
+    - name: "novu-bootstrap — the Novu admin passwords to try (per-tenant accounts off)"
+      ansible.builtin.set_fact:
+        novu_admin_password_candidates: >-
+          {{ [novu_admin_password_held, novu_admin_password_legacy | default(''), 'Digit@12345']
+             | select | unique | list }}
+      no_log: true
+      when:
+        - enable_novu | default(false)
+        - not (novu_tenant_accounts_on | bool)
+        - not (novu_admin_password | default('', true))
+        - (novu_api_key | default('')) | length == 0
+
+    - name: "novu-bootstrap — the Novu admin password the mint signs in with (per-tenant accounts off)"
+      ansible.builtin.command: python3 -
+      args:
+        stdin: |
+          import json, os, sys, urllib.request, urllib.error
+          email = os.environ["NB_EMAIL"]
+          for i, password in enumerate(json.loads(os.environ["NB_CANDIDATES"])):
+              req = urllib.request.Request("http://127.0.0.1:14002/v1/auth/login", method="POST",
+                                           data=json.dumps({"email": email, "password": password}).encode(),
+                                           headers={"Content-Type": "application/json"})
+              try:
+                  with urllib.request.urlopen(req, timeout=20) as r:
+                      raw = r.read()
+                      if ((json.loads(raw) if raw else {}).get("data") or {}).get("token"):
+                          print(i); sys.exit(0)
+              except (urllib.error.URLError, OSError, ValueError):
+                  pass
+          print(-1)
+      environment:
+        NB_EMAIL: "{{ novu_admin_email_effective }}"
+        NB_CANDIDATES: "{{ novu_admin_password_candidates | to_json }}"
+      register: novu_admin_pick
+      changed_when: false
+      failed_when: false
+      # The environment carries every candidate password.
+      no_log: true
+      when: novu_admin_password_candidates is defined
+
+    - name: "novu-bootstrap — sign in with the one Novu accepted (per-tenant accounts off)"
+      ansible.builtin.set_fact:
+        novu_admin_password_effective: "{{ novu_admin_password_candidates[novu_admin_pick.stdout | trim | int] }}"
+      no_log: true
+      when:
+        - novu_admin_pick.stdout is defined
+        - (novu_admin_pick.stdout | trim) is match('^[0-9]+$')
+
+    # The admin password goes in the environment, not the command line: a shell string is in
+    # the task result (printed at -v) and in `ps` while it runs. no_log: stdout is the key.
     - name: "novu-bootstrap — mint Development API key (attempt 1: existing account)"
-      ansible.builtin.shell: |
-        NOVU_API_URL=http://127.0.0.1:14002 \
-        NOVU_ADMIN_EMAIL='{{ novu_admin_email | default("admin@digit.local") }}' \
-        NOVU_ADMIN_PASSWORD='{{ novu_admin_password | default("Digit@12345") }}' \
-        NOVU_ORG_NAME='{{ novu_org_name | default("DIGIT") }}' \
-        bash {{ digit_dir }}/novu-mint-key.sh
+      ansible.builtin.shell: bash {{ digit_dir }}/novu-mint-key.sh
       args:
         chdir: "{{ digit_dir }}"
+      environment:
+        NOVU_API_URL: http://127.0.0.1:14002
+        NOVU_ADMIN_EMAIL: "{{ novu_admin_email_effective }}"
+        NOVU_ADMIN_PASSWORD: "{{ novu_admin_password_effective }}"
+        NOVU_ORG_NAME: "{{ novu_org_name | default('DIGIT') }}"
       register: novu_mint
       changed_when: false
       failed_when: false
+      no_log: true
       when:
         - enable_novu | default(false)
         - (novu_api_key | default('')) | length == 0
@@ -6733,17 +7086,18 @@
           until: novu_api_health_open.status == 200
 
         - name: "novu-bootstrap — mint Development API key (attempt 2: fresh signup)"
-          ansible.builtin.shell: |
-            NOVU_API_URL=http://127.0.0.1:14002 \
-            NOVU_ADMIN_EMAIL='{{ novu_admin_email | default("admin@digit.local") }}' \
-            NOVU_ADMIN_PASSWORD='{{ novu_admin_password | default("Digit@12345") }}' \
-            NOVU_ORG_NAME='{{ novu_org_name | default("DIGIT") }}' \
-            bash {{ digit_dir }}/novu-mint-key.sh
+          ansible.builtin.shell: bash {{ digit_dir }}/novu-mint-key.sh
           args:
             chdir: "{{ digit_dir }}"
+          environment:
+            NOVU_API_URL: http://127.0.0.1:14002
+            NOVU_ADMIN_EMAIL: "{{ novu_admin_email_effective }}"
+            NOVU_ADMIN_PASSWORD: "{{ novu_admin_password_effective }}"
+            NOVU_ORG_NAME: "{{ novu_org_name | default('DIGIT') }}"
           register: novu_mint_fresh
           changed_when: true
           failed_when: false
+          no_log: true
 
       always:
         # Restore the secure default no matter how the block ended. Both tasks run
@@ -6793,12 +7147,30 @@
       when:
         - enable_novu | default(false)
 
+    # The authoritative check: after the legacy-password move and the mint (which registers the
+    # admin on an empty Novu), sign in with the password the bridge holds. Refused → off for
+    # this deploy, and the two recreates below give novu-bridge and pgr-services the .env
+    # without the secrets block (or stop; see the file).
+    - name: "novu tenant accounts — verify the Novu admin sign-in (post-start)"
+      ansible.builtin.include_tasks: tasks/novu-tenant-accounts-verify.yml
+      vars:
+        nta_phase: post-start
+      when:
+        - enable_novu | default(false) | bool
+        - novu_tenant_accounts_on | bool
+
     - name: "novu-bootstrap — warn when no Novu key could be minted"
       ansible.builtin.debug:
         msg: >-
           Novu API key is EMPTY after bootstrap. novu-bridge will run unauthenticated
           against Novu and nothing will be delivered. Check `docker logs novu-api`,
           then re-run the deploy; or mint by hand and pin `novu_api_key` in host_vars.
+          {{ ('The mint said: ' ~ (_mint_errors | last)) if _mint_errors else '' }}
+      vars:
+        # The mint tasks are no_log (password in, key out); their ERROR lines carry neither.
+        _mint_errors: >-
+          {{ ((novu_mint.stderr | default('')) ~ '\n' ~ (novu_mint_fresh.stderr | default('')))
+             | regex_findall('ERROR: [^\n]*') }}
       when:
         - enable_novu | default(false)
         - (effective_novu_key | default('')) | length == 0
@@ -6882,7 +7254,18 @@
       when:
         - enable_novu | default(false)
         - ((effective_novu_key | default('')) | length > 0) or ((core_sms_tenant_rewrite | default({})) is changed)
+          or (novu_tenant_accounts_switched_off_after_start | default(false) | bool)
       changed_when: false
+
+    # Per-tenant accounts switched off after the stack started (the post-start check above):
+    # pgr-services still holds the bridge admin token it got at start. Recreated, it reads the
+    # .env without it and skips the notification-account step of tenant creation.
+    - name: "novu tenant accounts — recreate pgr-services without the bridge admin token"
+      ansible.builtin.shell: |
+        cd {{ digit_dir }}
+        COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} up -d --no-deps --force-recreate pgr-services
+      when: novu_tenant_accounts_switched_off_after_start | default(false) | bool
+      changed_when: true
 
     # The OTP default tenant now also decides WHO may manage providers: novu-bridge lets
     # only admins of that tenant's state (plus NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS) create,
@@ -6920,6 +7303,41 @@
           local-setup/docker-compose.egov-digit.yaml still has the literal line
           `NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT: pg` that task rewrites, then re-run the deploy.
 
+
+    # Per-tenant accounts (#2203): give the tenants listed in `novu_tenant_accounts_backfill`
+    # their own Novu organization (idempotent: provisioned ones are no-ops). New signup
+    # workspaces need no listing: tenant creation provisions them, and pgr-services retries
+    # the ones a Novu outage deferred. This is for tenants that predate the feature, which an
+    # operator moves deliberately: their messages then go through their own (initially empty)
+    # organization, so add their providers right after. Non-fatal, like the rest of this block.
+    - name: "novu tenant accounts — provision the tenants listed in novu_tenant_accounts_backfill"
+      ansible.builtin.shell: |
+        set -o pipefail
+        for i in $(seq 1 30); do
+          docker exec novu-bridge wget -qO- http://127.0.0.1:8080/novu-bridge/health >/dev/null 2>&1 && break
+          sleep 5
+        done
+        docker exec -e NB_TOKEN -e NB_BODY novu-bridge sh -c \
+          'wget -qO- --header="Content-Type: application/json" --header="X-Novu-Bridge-Token: $NB_TOKEN" \
+             --post-data="$NB_BODY" http://127.0.0.1:8080/novu-bridge/novu-adapter/v1/tenants/_backfill'
+      args:
+        executable: /bin/bash
+      environment:
+        NB_TOKEN: "{{ novu_accounts_secrets.novu_bridge_internal_admin_token }}"
+        NB_BODY: "{{ {'tenantIds': novu_tenant_accounts_backfill} | to_json }}"
+      register: novu_accounts_backfill
+      changed_when: "'organizationCreated\":true' in (novu_accounts_backfill.stdout | default(''))"
+      failed_when: false
+      when:
+        - novu_tenant_accounts_on | bool
+        - (novu_tenant_accounts_backfill | default([])) | length > 0
+
+    - name: "novu tenant accounts — backfill result"
+      ansible.builtin.debug:
+        msg: "{{ novu_accounts_backfill.stdout | default('') | from_json if (novu_accounts_backfill.rc | default(1)) == 0 else ('backfill call failed (rc=' ~ (novu_accounts_backfill.rc | default('n/a')) ~ '): ' ~ (novu_accounts_backfill.stderr | default(''))) }}"
+      when:
+        - novu_accounts_backfill is defined
+        - novu_accounts_backfill is not skipped
 
     - name: "novu-bootstrap — provider setup hint (Novu key auto-minted; no provider yet)"
       ansible.builtin.debug:
@@ -7328,6 +7746,149 @@
                             bao kv get -field=grafana_admin_password '
                            ~ secrets_path ~
                            ' | docker exec -i digit-grafana grafana cli admin reset-admin-password --password-from-stdin' }}
+
+    # ==================== OpenSRE Grafana read token ====================
+    #
+    # OpenSRE reads Prometheus and Loki through Grafana's datasource proxy, so it
+    # needs a Grafana API token. Minted here once as a Viewer-role service
+    # account — it can query datasources, not change dashboards, alerting or
+    # users — then kept in OpenBao like every other tenant secret and reused on
+    # every later deploy. To rotate: delete the `opensre` service account in
+    # Grafana, `bao kv patch <secrets_path> opensre_grafana_token=`, redeploy.
+    #
+    # A stored token is checked against Grafana first (GET /api/user). One that
+    # Grafana rejects with 401 is replaced: the grafana_data volume was wiped
+    # (`down -v`, a reinstall) or the service account or token was deleted, and
+    # rendering it into .env again would leave the agent without metrics or
+    # logs and nothing saying so.
+    #
+    # Non-fatal by design (block/rescue): the agent is optional, and a box whose
+    # Grafana or OpenBao is unhappy must still finish its deploy. Without the
+    # token the agent keeps running on Tempo, Kafka lag and Gatus alone.
+    - name: "OpenSRE — mint a read-only Grafana token (when none is stored, or Grafana rejects it)"
+      when:
+        - enable_opensre | default(false)
+        - grafana_health.rc == 0
+      block:
+        - name: "OpenSRE — read tenant secrets (current version for the CAS write)"
+          ansible.builtin.uri:
+            url: "http://127.0.0.1:18200/v1/{{ secrets_path | regex_replace('^kv/', 'kv/data/') }}"
+            headers:
+              X-Vault-Token: "{{ bao_root_token }}"
+            status_code: [200]
+          register: bao_secrets_opensre
+          no_log: true
+
+        - name: "OpenSRE — check the stored Grafana token"
+          ansible.builtin.uri:
+            url: "http://127.0.0.1:13000/api/user"
+            headers:
+              Authorization: "Bearer {{ bao_secrets_opensre.json.data.data.opensre_grafana_token }}"
+            status_code: [200, 401]
+          register: _opensre_token_check
+          when: (bao_secrets_opensre.json.data.data.opensre_grafana_token | default('', true)) | length > 0
+          no_log: true
+
+        - name: "OpenSRE — note whether a token is needed"
+          ansible.builtin.set_fact:
+            _opensre_needs_token: >-
+              {{ (bao_secrets_opensre.json.data.data.opensre_grafana_token | default('', true)) | length == 0
+                 or (_opensre_token_check.status | default(200)) == 401 }}
+
+        - name: "OpenSRE — the stored Grafana token is rejected; minting a new one"
+          ansible.builtin.debug:
+            msg: >-
+              Grafana answered 401 to the stored OpenSRE token (its data was
+              wiped, or the service account or token was deleted). Minting a
+              new token and replacing the stored one.
+          when: (_opensre_token_check.status | default(200)) == 401
+
+        - name: "OpenSRE — look up the opensre service account"
+          ansible.builtin.uri:
+            url: "http://127.0.0.1:13000/api/serviceaccounts/search?query=opensre"
+            user: "{{ grafana_admin_user | default('admin') }}"
+            password: "{{ grafana_admin_pw }}"
+            force_basic_auth: true
+            status_code: [200]
+          register: _opensre_sa_search
+          when: _opensre_needs_token | bool
+          no_log: true
+
+        - name: "OpenSRE — create the service account (Viewer role)"
+          ansible.builtin.uri:
+            url: "http://127.0.0.1:13000/api/serviceaccounts"
+            method: POST
+            user: "{{ grafana_admin_user | default('admin') }}"
+            password: "{{ grafana_admin_pw }}"
+            force_basic_auth: true
+            body_format: json
+            body: { name: opensre, role: Viewer, isDisabled: false }
+            status_code: [201]
+          register: _opensre_sa_created
+          when:
+            - _opensre_needs_token | bool
+            - (_opensre_sa_search.json.serviceAccounts | selectattr('name', 'equalto', 'opensre') | list | length) == 0
+          no_log: true
+
+        - name: "OpenSRE — issue a token for the service account"
+          ansible.builtin.uri:
+            url: >-
+              http://127.0.0.1:13000/api/serviceaccounts/{{
+                _opensre_sa_created.json.id if (_opensre_sa_created is not skipped)
+                else (_opensre_sa_search.json.serviceAccounts | selectattr('name', 'equalto', 'opensre') | first).id
+              }}/tokens
+            method: POST
+            user: "{{ grafana_admin_user | default('admin') }}"
+            password: "{{ grafana_admin_pw }}"
+            force_basic_auth: true
+            body_format: json
+            body: { name: "opensre-{{ now(utc=true).strftime('%Y%m%d%H%M%S') }}" }
+            status_code: [200]
+          register: _opensre_sa_token
+          when: _opensre_needs_token | bool
+          no_log: true
+
+        # Same CAS + merge discipline as the Grafana admin password write above:
+        # cas = the version just read, and `data` is merged, never replaced.
+        - name: "OpenSRE — store the token in OpenBao"
+          ansible.builtin.uri:
+            url: "http://127.0.0.1:18200/v1/{{ secrets_path | regex_replace('^kv/', 'kv/data/') }}"
+            method: POST
+            headers:
+              X-Vault-Token: "{{ bao_root_token }}"
+            body_format: json
+            body: >-
+              {{ {'options': {'cas': bao_secrets_opensre.json.data.metadata.version | int},
+                  'data': bao_secrets_opensre.json.data.data
+                          | combine({'opensre_grafana_token': _opensre_sa_token.json.key})} }}
+            status_code: [200]
+          when: _opensre_needs_token | bool
+          no_log: true
+
+        # The TENANT SECRETS block rendered this line earlier in the run, empty
+        # or with the rejected token; the next deploy renders it from OpenBao,
+        # which now has the new value.
+        - name: "OpenSRE — write the token into .env"
+          ansible.builtin.lineinfile:
+            path: "{{ digit_dir }}/.env"
+            regexp: '^OPENSRE_GRAFANA_TOKEN='
+            line: "OPENSRE_GRAFANA_TOKEN={{ _opensre_sa_token.json.key }}"
+          when: _opensre_needs_token | bool
+          no_log: true
+
+        - name: "OpenSRE — recreate the agent so it picks up the token"
+          ansible.builtin.shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} up -d opensre
+          args:
+            chdir: "{{ digit_dir }}"
+          when: _opensre_needs_token | bool
+      rescue:
+        - name: "OpenSRE — token not minted (non-fatal)"
+          ansible.builtin.debug:
+            msg: >-
+              WARNING: could not mint the OpenSRE Grafana token (failed task:
+              {{ ansible_failed_task.name | default('?') }}). The agent runs
+              without Prometheus/Loki access until the next deploy succeeds at
+              this step. The deploy continues.
 
     # ==================== Matomo headless install (#1254) ====================
     #

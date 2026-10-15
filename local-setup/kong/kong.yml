@@ -463,6 +463,11 @@ plugins:
         -- returned above, so this reaches only DIGIT API routes.)
         if kong.request.get_method() ~= "POST" then
           if not is_protected then return end          -- auth-optional GETs (boundary, filestore dl, ...) pass
+          -- A CORS preflight never carries credentials, and this pre-function runs
+          -- before the global cors plugin, so a 401 here fails the browser's preflight
+          -- for every protected path. Let a real preflight through: the cors plugin
+          -- answers it itself (preflight_continue is off), so it never reaches the backend.
+          if kong.request.get_method() == "OPTIONS" and kong.request.get_header("Access-Control-Request-Method") then return end
           local hdr = kong.request.get_header("auth-token")
           local q = kong.request.get_query()
           local qtok = q and q["access_token"]
@@ -1113,6 +1118,30 @@ services:
   - name: novu-bridge-internal-gateways-deny-route
     paths:
     - /novu-bridge/novu-adapter/v1/gateways
+    strip_path: false
+  plugins:
+  - name: request-termination
+    config:
+      status_code: 404
+      content_type: application/json
+      body: '{"ResponseInfo":null,"Errors":[{"code":"NotFound","message":"NotFound","description":"No Route matched with those values"}]}'
+# ── INTERNAL-ONLY: /novu-bridge/novu-adapter/v1/tenants/** and /messages/** (#2203) ─────
+# The per-tenant Novu account admin API (provision, provider credentials, deprovision) and the
+# synchronous OTP send. Their callers are pgr-services' onboarding worker, operators and the
+# Identity BFF, all on the compose network; no person and no browser calls them. novu-bridge
+# authenticates them with internal tokens (X-Novu-Bridge-Token) and never with a DIGIT session,
+# so they must not be reachable from outside at all. No route above matches these prefixes,
+# and this one terminates them explicitly (404, dead upstream, same pattern as the gateways
+# deny above), so a later broad /novu-bridge route cannot expose them by accident.
+- name: novu-bridge-internal-tenant-api-deny
+  url: http://localhost:9999
+  tags:
+  - internal
+  routes:
+  - name: novu-bridge-internal-tenant-api-deny-route
+    paths:
+    - /novu-bridge/novu-adapter/v1/tenants
+    - /novu-bridge/novu-adapter/v1/messages
     strip_path: false
   plugins:
   - name: request-termination

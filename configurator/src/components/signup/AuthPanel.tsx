@@ -205,7 +205,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
           </div>
 
           <p className="relative z-[1] mt-10 text-xs text-white/50">
-            © 2026 eGovernments Foundation · DIGIT
+            © 2026 eGovernments Foundation · Powered by DIGIT
           </p>
         </div>
 

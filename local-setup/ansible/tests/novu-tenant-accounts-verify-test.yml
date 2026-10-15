@@ -1,0 +1,80 @@
+---
+# Drives the REAL tasks/novu-tenant-accounts-verify.yml (review S2 of #2343) over every
+# outcome that decides whether per-tenant Novu accounts stay on: the Novu admin sign-in
+# verdict (or a host_vars password that is the published default) x the phase x explicit
+# `novu_tenant_accounts: true` x workspaces already provisioned.
+# The sign-in and the workspace count are stubbed through the file's seams, except in the
+# last rows, which run the real sign-in probe against a port nothing listens on.
+#
+# For every row it checks the facts the playbook acts on AND the compose .env the bridge
+# reads: OFF must leave NOVU_BRIDGE_TENANT_ACCOUNTS_ENABLED=false and no secrets block (the
+# bridge never holds the refused password); ON must leave the .env untouched; ABORT must stop
+# for the reason the row names.
+#
+# Runs offline, no Docker, no target host:
+#   ansible-playbook -i localhost, -c local tests/novu-tenant-accounts-verify-test.yml
+- name: novu tenant accounts — verify decision matrix
+  hosts: localhost
+  gather_facts: false
+  vars:
+    novu_admin_email_effective: admin@digit.local
+    novu_admin_password_legacy: Digit@12345
+    # What the playbook signs in with once they are off (host_vars, OpenBao, legacy, default).
+    novu_admin_password_without_tenant_accounts: Shared-only-password-Aa1-
+    refused_table: 'ERROR:  relation "nb_tenant_account" does not exist'
+    cases:
+      # ── preflight: Novu already up (an upgrade) ──────────────────────────
+      - {name: "preflight, the generated password works", phase: preflight, login: VERIFIED, expect: "ON"}
+      - {name: "preflight, the legacy password works (moved after start)", phase: preflight, login: ROTATABLE, expect: "ON"}
+      - {name: "preflight, Novu not up yet: decided after start", phase: preflight, login: "UNREACHABLE unreachable", expect: "ON"}
+      - {name: "preflight, refused, default on, no workspace provisioned", phase: preflight, login: "REFUSED 400",
+         count: "0", expect: "OFF"}
+      - {name: "preflight, refused, the table does not exist yet", phase: preflight, login: "REFUSED 401",
+         count: "", count_rc: 1, count_err: "{{ refused_table }}", expect: "OFF"}
+      - {name: "preflight, refused, explicit true", phase: preflight, login: "REFUSED 400", explicit: true,
+         count: "0", expect: ABORT, reason: "novu_tenant_accounts is set to true"}
+      - {name: "preflight, refused, explicit 'yes'", phase: preflight, login: "REFUSED 400", explicit: "yes",
+         count: "0", expect: ABORT, reason: "novu_tenant_accounts is set to true"}
+      - {name: "preflight, refused, two workspaces already provisioned", phase: preflight, login: "REFUSED 400",
+         count: "2", expect: ABORT, reason: "already use their own account"}
+      - {name: "preflight, refused, the workspaces cannot be counted", phase: preflight, login: "REFUSED 400",
+         count: "", count_rc: 1, count_err: "Error response from daemon: No such container: docker-postgres",
+         expect: ABORT, reason: "already use their own account"}
+      # ── post-start: the authoritative check ──────────────────────────────
+      - {name: "post-start, verified", phase: post-start, login: VERIFIED, expect: "ON"}
+      - {name: "post-start, refused, default on", phase: post-start, login: "REFUSED 401", count: "0", expect: "OFF"}
+      - {name: "post-start, Novu unreachable is NOT verified", phase: post-start, login: "UNREACHABLE 502",
+         count: "0", expect: "OFF"}
+      - {name: "post-start, the probe printed nothing", phase: post-start, login: "", count: "0", expect: "OFF"}
+      - {name: "post-start, refused, explicit true", phase: post-start, login: "REFUSED 401", explicit: "true",
+         count: "0", expect: ABORT, reason: "novu_tenant_accounts is set to true"}
+      - {name: "post-start, refused, a workspace already provisioned", phase: post-start, login: "REFUSED 401",
+         count: "1", expect: ABORT, reason: "already use their own account"}
+      # ── host_vars pins the published default: never tried, never handed to the bridge ──
+      - {name: "published default, default on", phase: preflight, password: "Digit@12345", login: VERIFIED,
+         count: "0", expect: "OFF", action: ["published default", "novu_tenant_accounts: false"]}
+      - {name: "published default, explicit true", phase: preflight, password: "Digit@12345", login: VERIFIED,
+         explicit: true, count: "0", expect: ABORT, reason: "novu_tenant_accounts is set to true"}
+      - {name: "published default, a workspace already provisioned", phase: preflight, password: "Digit@12345",
+         login: VERIFIED, count: "1", expect: ABORT, reason: "already use their own account"}
+      # ── the real sign-in probe, nothing listening ────────────────────────
+      - {name: "real probe, preflight, Novu down: decided after start", phase: preflight, real_probe: true, expect: "ON"}
+      - {name: "real probe, post-start, Novu down: off", phase: post-start, real_probe: true, count: "0", expect: "OFF"}
+  tasks:
+    # Outside the repository, so an aborted run leaves nothing in the work tree.
+    - name: "a scratch directory for each row's .env"
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: nta-verify
+      register: nta_scratch
+
+    - name: "run every case"
+      ansible.builtin.include_tasks: run-novu-accounts-case.yml
+      loop: "{{ cases }}"
+      loop_control:
+        loop_var: case
+
+    - name: "remove the scratch directory"
+      ansible.builtin.file:
+        path: "{{ nta_scratch.path }}"
+        state: absent
