@@ -131,7 +131,7 @@ export const IGNORED = [
 /** Runtime even though a broader IGNORED rule matches: the CI's own files. */
 export const RUNTIME_FIRST = [
   /^\.github\/workflows\/integration-tests\.yml$/,
-  /^tests\/integration-tests\/scripts\/ci-(plan|compare)\.mjs$/,
+  /^tests\/integration-tests\/scripts\/ci-(plan|compare|shards)\.mjs$/,
   /^tests\/integration-tests\/scripts\/ci-identities\.sh$/,
 ];
 

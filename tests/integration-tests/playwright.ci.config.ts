@@ -7,9 +7,11 @@
 //   - one retry, so a flaky test shows as `flaky` and does not fail a PR
 //     (scripts/ci-compare.mjs counts flaky as a pass);
 //   - traces, video and screenshots only for tests that fail;
-//   - the blob reporter: the workflow shards the suite over several runners,
-//     each with its own stack, and merges the blobs with
-//     playwright.ci-merge.config.ts into report.json + the HTML report;
+//   - the blob reporter: the workflow splits the suite over several runners,
+//     each with its own stack and its own --test-list (scripts/ci-shards.mjs),
+//     and merges the blobs with playwright.ci-merge.config.ts into
+//     report.json + the HTML report. CI_SHARD names each runner's blob so the
+//     merge gets one file per shard;
 //   - the GitHub reporter, which puts each failure on the PR's Files tab.
 import { defineConfig } from '@playwright/test';
 import base from './playwright.config';
@@ -18,7 +20,11 @@ export default defineConfig({
   ...base,
   timeout: 60_000,
   retries: 1,
-  reporter: [['list'], ['github'], ['blob', { outputDir: 'blob-report' }]],
+  reporter: [
+    ['list'],
+    ['github'],
+    ['blob', { outputDir: 'blob-report', fileName: process.env.CI_SHARD ? `report-${process.env.CI_SHARD}.zip` : undefined }],
+  ],
   use: {
     ...base.use,
     screenshot: 'only-on-failure',

@@ -42,6 +42,7 @@ test('the suite itself and this workflow run it', () => {
   assert.equal(kind('tests/integration-tests/scripts/ci-plan.mjs'), 'runtime');
   assert.equal(kind('tests/integration-tests/scripts/ci-plan.test.mjs'), 'ignored');
   assert.equal(kind('tests/integration-tests/scripts/ci-identities.sh'), 'runtime');
+  assert.equal(kind('tests/integration-tests/scripts/ci-shards.mjs'), 'runtime');
   assert.equal(kind('local-setup/docker-compose.ci.yml'), 'runtime');
   assert.equal(kind('local-setup/ansible/inventory/host_vars/ci.yml.example'), 'runtime');
   assert.equal(kind('local-setup/ansible/inventory/host_vars/bomet.yml.example'), 'ignored');

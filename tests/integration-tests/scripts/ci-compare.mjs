@@ -60,7 +60,11 @@ export function verdict(test) {
   return 'pass';
 }
 
-/** Map of test key → { verdict, error, title } for a Playwright JSON report. */
+/**
+ * Map of test key → { verdict, error, title, file, duration } for a Playwright
+ * JSON report. `duration` is every attempt's time added up (ms): what the test
+ * cost the run, retries included. scripts/ci-shards.mjs packs shards by it.
+ */
 export function index(report) {
   const rootDir = report.config?.rootDir || '';
   const out = new Map();
@@ -76,6 +80,8 @@ export function index(report) {
         const err = results.map(r => r.error?.message).filter(Boolean).pop();
         out.set(key, {
           verdict: verdict(t),
+          file,
+          duration: results.reduce((ms, r) => ms + (r.duration || 0), 0),
           title: `${file} › ${title}${t.projectName ? ` [${t.projectName}]` : ''}`,
           error: err ? stripAnsi(err).split('\n').find(l => l.trim())?.trim().slice(0, 200) : '',
         });

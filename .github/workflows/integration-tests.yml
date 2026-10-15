@@ -133,14 +133,77 @@ jobs:
 
   # The suite is serial by design (it mutates tenant state), so it is split
   # over shards, each on its own runner with its own fresh stack: a deploy
-  # costs ~10 minutes, far less than the suite. Playwright runs the setup
-  # projects in every shard. Change the matrix to change the count.
-  # Playwright cuts shards by file order, not by time, and the slow citizen UI
-  # files sit together: with 3 shards one shard needed ~50 min while the other
-  # two needed ~15; with 4 the longest is ~30 (measured on develop, 2026-10).
+  # costs ~10 minutes, far less than the suite. This job (it runs while the
+  # images build) picks the develop baseline the whole run uses and packs the
+  # spec files into SHARDS lists of about equal time on it
+  # (scripts/ci-shards.mjs). Playwright's own --shard splits by test count in
+  # file order, and the slow specs sit together: on develop it gave shards of
+  # 14, 32, 45+ and 9 minutes.
+  split:
+    name: Split the suite
+    needs: plan
+    if: needs.plan.outputs.run == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      SHARDS: 4
+      REPORT_ARTIFACT: integration-report
+    outputs:
+      matrix: ${{ steps.split.outputs.matrix }}
+      lists: ${{ steps.split.outputs.lists }}
+      baseline-run: ${{ steps.baseline.outputs.run }}
+      baseline-label: ${{ steps.baseline.outputs.label }}
+    defaults:
+      run:
+        working-directory: tests/integration-tests
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tests/integration-tests/package-lock.json
+
+      - run: npm ci
+
+      - name: Find the develop baseline
+        id: baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          # The newest completed develop push run of this workflow that left a
+          # report. For a develop run that is the merge before it.
+          for id in $(gh run list --repo "$REPO" --workflow integration-tests.yml --branch develop \
+                        --event push --status completed --limit 20 --json databaseId --jq '.[].databaseId'); do
+            [ "$id" = "$RUN_ID" ] && continue
+            if gh run download "$id" --repo "$REPO" --name "$REPORT_ARTIFACT" --dir "$RUNNER_TEMP/baseline" 2>/dev/null; then
+              sha=$(gh run view "$id" --repo "$REPO" --json headSha --jq '.headSha[0:8]')
+              { echo "run=$id"; echo "label=develop @ $sha (run $id)"; } >> "$GITHUB_OUTPUT"
+              echo "Baseline: run $id (develop @ $sha)"
+              exit 0
+            fi
+          done
+          echo "No develop run with a report yet."
+
+      - name: Split
+        id: split
+        env:
+          LABEL: ${{ steps.baseline.outputs.label }}
+        run: |
+          set -euo pipefail
+          npx playwright test --config playwright.ci.config.ts --list --reporter=json > "$RUNNER_TEMP/list.json"
+          node scripts/ci-shards.mjs --list "$RUNNER_TEMP/list.json" --shards "$SHARDS" \
+            --baseline "$RUNNER_TEMP/baseline/report.json" --baseline-label "$LABEL" --github
+
   integration:
     name: Deploy and test ${{ matrix.shard }}/${{ strategy.job-total }}
-    needs: [plan, build]
+    needs: [plan, build, split]
     if: needs.plan.outputs.run == 'true'
     # Pinned, not ubuntu-latest (Ubuntu 26 from 2026-10-19): the playbook
     # installs Docker and packages for the release it finds, and 24.04 is the
@@ -152,7 +215,7 @@ jobs:
       # A shard that fails keeps the others going: their results still count.
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        shard: ${{ fromJson(needs.split.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -232,15 +295,20 @@ jobs:
         id: suite
         working-directory: tests/integration-tests
         env:
-          SHARD: ${{ matrix.shard }}/${{ strategy.job-total }}
+          CI_SHARD: ${{ matrix.shard }} # names the blob report (playwright.ci.config.ts)
+          LISTS: ${{ needs.split.outputs.lists }}
         run: |
+          jq -r --arg s "$CI_SHARD" '.[$s][]' <<< "$LISTS" > "$RUNNER_TEMP/tests.txt"
+          # An empty list would run nothing and look like a quiet shard.
+          [ -s "$RUNNER_TEMP/tests.txt" ] || { echo "::error::No spec files for shard $CI_SHARD."; exit 1; }
+          echo "$(wc -l < "$RUNNER_TEMP/tests.txt") spec file(s) in this shard"
           set -a
           source deploy/pg.env
           source "$RUNNER_TEMP/identities.env"
           set +a
           # --global-timeout fires before the job timeout, so the blob report
           # is still written with what finished.
-          npx playwright test --config playwright.ci.config.ts --shard="$SHARD" --global-timeout=2700000 \
+          npx playwright test --config playwright.ci.config.ts --test-list "$RUNNER_TEMP/tests.txt" --global-timeout=2700000 \
             || echo "Playwright exited $?; the Verdict job decides."
           ls blob-report/*.zip
 
@@ -275,7 +343,7 @@ jobs:
   # The one check to require: merges the shards and judges the run.
   verdict:
     name: Verdict
-    needs: [plan, build, integration]
+    needs: [plan, build, split, integration]
     if: always() && needs.plan.outputs.run == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -313,28 +381,14 @@ jobs:
           npx playwright merge-reports --config playwright.ci-merge.config.ts all-blob-reports
           test -f report.json
 
-      - name: Find the develop baseline
-        id: baseline
-        if: steps.merge.outcome == 'success'
+      # The one the split job picked, so the shards were timed by the same run.
+      - name: Download the develop baseline
+        if: steps.merge.outcome == 'success' && needs.split.outputs.baseline-run != ''
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          RUN_ID: ${{ github.run_id }}
-        run: |
-          set -euo pipefail
-          # The newest completed develop push run of this workflow that left a
-          # report. For a develop run that is the merge before it.
-          for id in $(gh run list --repo "$REPO" --workflow integration-tests.yml --branch develop \
-                        --event push --status completed --limit 20 --json databaseId --jq '.[].databaseId'); do
-            [ "$id" = "$RUN_ID" ] && continue
-            if gh run download "$id" --repo "$REPO" --name "$REPORT_ARTIFACT" --dir "$RUNNER_TEMP/baseline" 2>/dev/null; then
-              sha=$(gh run view "$id" --repo "$REPO" --json headSha --jq '.headSha[0:8]')
-              echo "label=develop @ $sha (run $id)" >> "$GITHUB_OUTPUT"
-              echo "Baseline: run $id (develop @ $sha)"
-              exit 0
-            fi
-          done
-          echo "No develop run with a report yet."
+          BASELINE_RUN: ${{ needs.split.outputs.baseline-run }}
+        run: gh run download "$BASELINE_RUN" --repo "$REPO" --name "$REPORT_ARTIFACT" --dir "$RUNNER_TEMP/baseline"
 
       - name: Upload the report (baseline for later runs)
         if: steps.merge.outcome == 'success'
@@ -357,9 +411,10 @@ jobs:
         if: always()
         env:
           BUILD: ${{ needs.build.result }}
+          SPLIT: ${{ needs.split.result }}
           SHARDS: ${{ needs.integration.result }}
           MERGED: ${{ steps.merge.outcome }}
-          LABEL: ${{ steps.baseline.outputs.label }}
+          LABEL: ${{ needs.split.outputs.baseline-label }}
         run: |
           status=0
           if [ "$MERGED" = success ]; then
@@ -370,6 +425,9 @@ jobs:
           if [ "$BUILD" != success ]; then
             echo "::error::An image did not build (build: $BUILD), so there was no stack to test."
             echo "**An image did not build: no stack to test.**" >> "$GITHUB_STEP_SUMMARY"; status=1
+          elif [ "$SPLIT" != success ]; then
+            echo "::error::The suite could not be listed or split (split: $SPLIT), so no shard ran."
+            echo "**The suite could not be split: no shard ran.**" >> "$GITHUB_STEP_SUMMARY"; status=1
           elif [ "$SHARDS" != success ]; then
             echo "::error::A shard did not deploy or did not finish (integration: $SHARDS); see its log and stack-diagnostics artifact."
             echo "**A shard did not deploy or did not finish; its tests are missing above.**" >> "$GITHUB_STEP_SUMMARY"; status=1

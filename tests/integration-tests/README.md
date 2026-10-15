@@ -271,18 +271,22 @@ shared server: each shard deploys a fresh stack on its own GitHub runner.
    identity-bff, identity-keycloak, digit-ui-esbuild, configurator) is built
    from the checkout, in parallel, with a layer cache; digit-mcp is built by
    the deploy (`build_mcp`).
-3. **Deploy and test, in 4 shards.** Each shard runs
+3. **Split.** While the images build, `scripts/ci-shards.mjs` packs the spec
+   files into 4 lists of about equal time on the latest develop run (by test
+   count before one exists). Playwright's own `--shard` splits by count in
+   file order, and the slow specs sit together.
+4. **Deploy and test, in 4 shards.** Each shard runs
    `local-setup/ansible/deploy.sh ci` (~10 min) with
    `host_vars/ci.yml.example` (the localhost-slim profile: dump-seeded `pg`
    tenants, Keycloak, MCP; no notifications or search) and
    `local-setup/docker-compose.ci.yml` (Mailpit; relaxed citizen OTP limits),
    then `scripts/ci-identities.sh` (workspace `pg`, admin `ci-suite-admin`,
    a Keycloak login per seeded HRMS employee: a fresh stack has none), then
-   its quarter of the suite with `playwright.ci.config.ts` (60 s test timeout,
+   its list (`--test-list`) with `playwright.ci.config.ts` (60 s test timeout,
    one retry, traces/video only on failure) and `deploy/pg.env`.
-4. **Verdict** (the check to require). Merges the shards
-   (`playwright.ci-merge.config.ts`) and compares the run with the latest
-   `develop` run (`scripts/ci-compare.mjs`). It fails when a test that passed
+5. **Verdict** (the check to require). Merges the shards
+   (`playwright.ci-merge.config.ts`) and compares the run with the same
+   `develop` run the split used (`scripts/ci-compare.mjs`). It fails when a test that passed
    on develop fails here (a pass on retry counts as a pass), or when an image
    does not build or a shard does not finish. Tests that also fail on develop
    are listed in the summary but do not block. Until a develop run exists,
