@@ -105,16 +105,40 @@ on the **Sandbox** tab) to the Sandbox number.
 **Webhook URL for incoming messages**, click **Update WhatsApp Sender**. If the form asks for
 **Profile about**, fill it in — it is public on your WhatsApp profile.
 
-## 5. Verify
+## 5. Verify and test
 
-```bash
-curl -s https://<domain>/xstate-chatbot/health                 # OK
-curl -s -o /dev/null -w '%{http_code}\n' -X POST \
-  https://<domain>/xstate-chatbot/message                      # 403 — unsigned requests are refused
-```
+Run on the server; replace `<domain>`. Each step says what you should see.
 
-From a registered citizen's phone, send **Hi** to the sender. The bot replies with the menu;
-follow it to file a complaint, then find it in the employee inbox.
+1. **The service is up.**
+   ```bash
+   docker ps --filter name=xstate-chatbot --format '{{.Names}} {{.Status}}'   # xstate-chatbot ... (healthy)
+   docker logs xstate-chatbot 2>&1 | grep 'Configuration check'              # Configuration check: OK
+   ```
+2. **Kong routes to it.**
+   ```bash
+   curl -s https://<domain>/xstate-chatbot/health                            # OK
+   curl -s -o /dev/null -w '%{http_code}\n' -X POST \
+     https://<domain>/xstate-chatbot/message                                 # 403: unsigned requests are refused
+   ```
+3. **Twilio reaches it.** Keep the logs open, then send **Hi** to the sender from a test phone.
+   ```bash
+   docker logs -f xstate-chatbot 2>&1 | grep -E 'Inbound|Rejected|Message sent|Error'
+   ```
+   You should see `Inbound /xstate-chatbot/message` followed by `Message sent successfully`,
+   and the phone gets the language menu.
+4. **File a test complaint.** On the phone, reply in order:
+   - pick a language, confirm the name, then **1** to file a complaint;
+   - pick a category and sub-category (**See more** shows the next page), then the location;
+   - the institution name, if asked, then a description of 20+ characters;
+   - **1** to skip the attachment, **1** to accept, the confidentiality choice if asked,
+     and **1** to submit.
+
+   The bot replies with a reference such as `PG-PGR-2026-10-14-315975`.
+5. **Find it in PGR.** Log in as an employee, search the inbox for the reference. It shows
+   source **WhatsApp** and status **Pending for assignment**.
+
+Done: the deployment receives WhatsApp messages and files complaints. If a step fails, see
+the table below.
 
 ## Troubleshooting
 
@@ -125,4 +149,9 @@ follow it to file a complaint, then find it in the employee inbox.
 | Chatbot logs `Rejected inbound webhook` | Auth Token wrong, or the Twilio URL differs from `https://<domain>` |
 | *Invalid mobile number format* | Add the country's row to `common-masters.MobileNumberValidation` for the state tenant |
 | Too many cities offered, or the wrong ones | Add a `PGR.WHATSAPP` row to `tenant.citymodule` listing the cities to offer |
+| `/xstate-chatbot/health` returns 404 | Kong has no chatbot route: re-run step 3 (Deploy). A redeploy from a branch without this feature removes it again |
+| 502, or Kong logs `No route to host`, right after the chatbot container is recreated | Kong still has the old container address: `docker exec kong-gateway kong reload` |
+| Bot goes silent after a menu, Twilio log shows error `21617` | A message was over 1,600 characters. Upgrade the chatbot: long menus are paged and long messages are split |
+| Bot says *our system has a problem* at Submit; logs show `INVALID_CASE_RELATED_TO` | The tenant has no `RAINMAKER-PGR.ComplaintTemplateType` row for the bot's `caseRelatedTo` (default `IGE`). Set `CASE_RELATED_TO=` (empty) on the `xstate-chatbot` container; it is not in `host_vars` yet |
+| *Your previous session timed out* after a redeploy | Reply **2** to start fresh. Resuming replays the last prompt saved by the old version |
 | Bot replies *Sorry, there was an error processing your request* | The number has no citizen account (register it once via the web UI), or it does not match the state's `MobileNumberValidation` rule |
