@@ -875,7 +875,8 @@ identity_digit_admin_username: "ADMIN"  # use a dedicated ACCOUNT_ADMIN in produ
 identity_digit_admin_tenant_id: "pg"
 # Root tenants this deploy seeds, comma-separated. Each gets an Identity BFF
 # Organization route (alias and URL slug = the tenant id) when nothing maps it
-# yet; an existing route is never renamed. Unset = state_root; "" skips it.
+# yet; an existing route is never renamed. Unset = state_root; "" = none. `pg`
+# never gets one, so a host with state_root: pg routes no root.
 # identity_tenant_route_backfill_roots: ke
 # Platform provisioner the runner signs in as (PGR only, internal APIs). It must
 # be an EMPLOYEE of a ROOT tenant (no dot) holding MDMS_ADMIN, ACCOUNT_ADMIN,
