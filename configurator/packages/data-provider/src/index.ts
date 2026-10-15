@@ -1,5 +1,5 @@
 // Client
-export { DigitApiClient, ApiClientError } from './client/index.js';
+export { DigitApiClient, ApiClientError, withCsrRole } from './client/index.js';
 export type { DigitApiClientConfig } from './client/index.js';
 export { ENDPOINTS, OAUTH_CONFIG, MDMS_SCHEMAS } from './client/index.js';
 export type {

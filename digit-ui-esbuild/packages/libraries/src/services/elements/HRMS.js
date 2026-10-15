@@ -3,12 +3,18 @@ import Urls from "../atoms/urls";
 import { Request } from "../atoms/Utils/Request";
 
 // Every new employee gets CSR so they can file a complaint on a citizen's
-// behalf (#2239), whichever roles the admin picked.
+// behalf (#2239), whichever roles the admin picked. CSR goes on each tenant the
+// other roles are tagged with: the create form tags them per jurisdiction, and
+// the edit form keeps only roles on a jurisdiction tenant. With no roles, the
+// employee's own tenant.
 const withCsrRole = (employee) => {
-  const roles = employee?.user?.roles || [];
-  if (!employee?.user || roles.some((role) => role?.code === "CSR")) return employee;
-  const tenantId = employee.user.tenantId || employee.tenantId;
-  return { ...employee, user: { ...employee.user, roles: [...roles, { code: "CSR", name: "Complainant", tenantId }] } };
+  if (!employee?.user) return employee;
+  const roles = employee.user.roles || [];
+  const tenants = [...new Set(roles.map((role) => role?.tenantId).filter(Boolean))];
+  if (!tenants.length) tenants.push(employee.user.tenantId || employee.tenantId);
+  const missing = tenants.filter((tenantId) => !roles.some((role) => role?.code === "CSR" && role?.tenantId === tenantId));
+  if (!missing.length) return employee;
+  return { ...employee, user: { ...employee.user, roles: [...roles, ...missing.map((tenantId) => ({ code: "CSR", name: "Complainant", tenantId }))] } };
 };
 
 const HrmsService = {

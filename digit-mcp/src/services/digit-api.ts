@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { ENDPOINTS, OAUTH_CONFIG } from '../config/endpoints.js';
 import { getEnvironment } from '../config/environments.js';
 import type { RequestInfo, UserInfo, MdmsRecord, ApiError, Environment, ErrorCategory } from '../types/index.js';
+import { withCsrRole } from '@digit-mcp/data-provider/client';
 
 function deriveErrorCategory(statusCode: number): ErrorCategory {
   if (statusCode === 401 || statusCode === 403) return 'auth';
@@ -44,15 +45,6 @@ export class ApiClientError extends Error {
     this.statusCode = statusCode;
     this.category = deriveErrorCategory(statusCode);
   }
-}
-
-// Every new employee gets CSR so they can file a complaint on a citizen's
-// behalf (#2239), whichever roles the caller picked.
-export function withCsrRole(employee: Record<string, unknown>, tenantId: string): Record<string, unknown> {
-  const user = employee.user as Record<string, unknown> | undefined;
-  const roles = (user?.roles as Array<Record<string, unknown>> | undefined) ?? [];
-  if (!user || roles.some((role) => role?.code === 'CSR')) return employee;
-  return { ...employee, user: { ...user, roles: [...roles, { code: 'CSR', name: 'Complainant', tenantId: (user.tenantId as string) || tenantId }] } };
 }
 
 class DigitApiClient {

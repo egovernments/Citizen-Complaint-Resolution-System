@@ -78,18 +78,29 @@ describe('DigitApiClient', () => {
 });
 
 describe('withCsrRole — every new employee can file complaints (#2239)', () => {
-  const roleCodes = (employee: Record<string, unknown>) =>
-    ((employee.user as Record<string, unknown>).roles as Array<{ code: string }>).map((r) => r.code);
+  const roles = (employee: Record<string, unknown>) =>
+    ((employee.user as Record<string, unknown>).roles as Array<{ code: string; tenantId?: string }>).map((r) => `${r.code}@${r.tenantId}`);
 
-  it('adds CSR on the employee tenant to the roles the caller picked', () => {
+  it('adds CSR on the tenant the other roles are tagged with', () => {
     const out = withCsrRole({ code: 'E1', user: { tenantId: 'ke', roles: [{ code: 'GRO', name: 'GRO', tenantId: 'ke' }] } }, 'pg');
-    assert.deepEqual(roleCodes(out), ['GRO', 'CSR']);
-    assert.equal(((out.user as Record<string, unknown>).roles as Array<{ tenantId: string }>)[1].tenantId, 'ke');
+    assert.deepEqual(roles(out), ['GRO@ke', 'CSR@ke']);
   });
 
-  it('falls back to the request tenant and leaves an existing CSR alone', () => {
-    assert.deepEqual(roleCodes(withCsrRole({ user: {} }, 'ke')), ['CSR']);
-    assert.deepEqual(roleCodes(withCsrRole({ user: { roles: [{ code: 'CSR' }] } }, 'ke')), ['CSR']);
+  it('follows a state-root tag rather than the city tenant', () => {
+    const out = withCsrRole({ user: { tenantId: 'pg.citya', roles: [{ code: 'EMPLOYEE', tenantId: 'pg' }] } }, 'pg.citya');
+    assert.deepEqual(roles(out), ['EMPLOYEE@pg', 'CSR@pg']);
+  });
+
+  it('adds CSR on every role tenant, and CSR on another tenant does not count', () => {
+    const out = withCsrRole({ user: { tenantId: 'pg.citya', roles: [{ code: 'CSR', tenantId: 'pg.cityb' }, { code: 'GRO', tenantId: 'pg.citya' }] } }, 'pg.citya');
+    assert.deepEqual(roles(out), ['CSR@pg.cityb', 'GRO@pg.citya', 'CSR@pg.citya']);
+  });
+
+  it('falls back to the employee tenant and leaves an existing CSR alone', () => {
+    assert.deepEqual(roles(withCsrRole({ user: { tenantId: 'ke' } }, 'pg')), ['CSR@ke']);
+    assert.deepEqual(roles(withCsrRole({ user: {} }, 'ke')), ['CSR@ke']);
+    const has = { user: { roles: [{ code: 'CSR', tenantId: 'ke' }] } };
+    assert.equal(withCsrRole(has, 'ke'), has);
   });
 
   it('leaves an employee without a user untouched', () => {

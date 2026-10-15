@@ -112,4 +112,9 @@ describe('hrmsService.createEmployeeRecord — every new employee can file compl
     const roles = await sentRoles([{ code: 'CSR', name: 'Complainant', tenantId: 'ke' }]);
     expect(roles.map((r) => r.code)).toEqual(['CSR']);
   });
+
+  it('adds CSR on each tenant the roles use, matching code and tenant', async () => {
+    const roles = await sentRoles([{ code: 'CSR', name: 'Complainant', tenantId: 'ke.cityb' }, { code: 'GRO', name: 'GRO', tenantId: 'ke.citya' }]);
+    expect(roles.map((r) => `${r.code}@${r.tenantId}`)).toEqual(['CSR@ke.cityb', 'GRO@ke.citya', 'CSR@ke.citya']);
+  });
 });

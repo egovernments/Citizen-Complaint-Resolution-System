@@ -335,6 +335,9 @@ public class OnboardingSteps {
             JsonNode contact = mapper.valueToTree(signup.getTenantMetadata().get("tenantAdmin"));
             List<Map<String, String>> roles = new ArrayList<>();
             seed.founderRoles().forEach(r -> roles.add(Map.of("code", r.asText(), "name", r.asText(), "tenantId", tenant)));
+            // Every employee can file a complaint on a citizen's behalf (#2239). CSR is added here, not to the seed's
+            // founderRoles: BaselineUpgrader cannot change an existing founder's roles, so a seed bump would claim it did.
+            if (roles.stream().noneMatch(r -> "CSR".equals(r.get("code")))) roles.add(Map.of("code", "CSR", "name", "Complainant", "tenantId", tenant));
             var user = new LinkedHashMap<String, Object>();
             user.put("name", signup.getFounderName()); user.put("userName", code);
             String phone = contact.path("mobileNumber").asText().replaceAll("[\\s()-]", "");

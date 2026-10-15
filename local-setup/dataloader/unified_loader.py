@@ -564,6 +564,9 @@ class UnifiedExcelReader:
         # Fetch roles and create name->code mapping
         roles_list = uploader.fetch_roles(tenant_id)
         role_name_to_code = {r.get('name'): r.get('code') for r in roles_list}
+        csr_known = any(r.get('code') == 'CSR' for r in roles_list)
+        if not csr_known:
+            print("   ⚠️  CSR is not in this tenant's ACCESSCONTROL-ROLES: employees will not get it")
 
         employees = []
         for idx, row in df.iterrows():
@@ -644,8 +647,9 @@ class UnifiedExcelReader:
                 })
 
             # Every employee gets CSR so they can file a complaint on a
-            # citizen's behalf (#2239), whichever roles the sheet lists.
-            if not any(r['code'] == 'CSR' for r in roles):
+            # citizen's behalf (#2239), whichever roles the sheet lists, when
+            # the tenant has the role (HRMS rejects an unknown one).
+            if csr_known and not any(r['code'] == 'CSR' for r in roles):
                 roles.append({'code': 'CSR', 'name': 'Complainant', 'tenantId': tenant_id})
 
             # Get boundary info (defaults to City level)

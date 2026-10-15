@@ -561,7 +561,6 @@
     {"schemaCode": "ACCESSCONTROL-ROLEACTIONS.roleactions", "uniqueIdentifier": "GRO.1557", "data": {"id": 163, "actionid": 1557, "rolecode": "GRO", "tenantId": "{tenantid}", "actioncode": ""}},
     {"schemaCode": "ACCESSCONTROL-ROLEACTIONS.roleactions", "uniqueIdentifier": "CSR.698", "data": {"id": 158, "actionid": 698, "rolecode": "CSR", "tenantId": "{tenantid}", "actioncode": ""}},
     {"schemaCode": "ACCESSCONTROL-ROLEACTIONS.roleactions", "uniqueIdentifier": "CSR.695", "data": {"id": 157, "actionid": 695, "rolecode": "CSR", "tenantId": "{tenantid}", "actioncode": ""}},
-    {"schemaCode": "ACCESSCONTROL-ROLEACTIONS.roleactions", "uniqueIdentifier": "CSR.605", "data": {"id": 155, "actionid": 605, "rolecode": "CSR", "tenantId": "{tenantid}", "actioncode": ""}},
     {"schemaCode": "ACCESSCONTROL-ROLEACTIONS.roleactions", "uniqueIdentifier": "GRO.700", "data": {"id": 153, "actionid": 700, "rolecode": "GRO", "tenantId": "{tenantid}", "actioncode": ""}},
     {"schemaCode": "ACCESSCONTROL-ROLEACTIONS.roleactions", "uniqueIdentifier": "EMPLOYEE.700", "data": {"id": 152, "actionid": 700, "rolecode": "EMPLOYEE", "tenantId": "{tenantid}", "actioncode": ""}},
     {"schemaCode": "ACCESSCONTROL-ROLEACTIONS.roleactions", "uniqueIdentifier": "CITIZEN.700", "data": {"id": 151, "actionid": 700, "rolecode": "CITIZEN", "tenantId": "{tenantid}", "actioncode": ""}},
