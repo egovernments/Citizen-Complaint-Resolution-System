@@ -46,6 +46,11 @@ Environment=RUNNER_BRANCH={{ integration_tests_runner_branch | default('deployed
 {% if integration_tests_runner_tenant_env is defined %}
 Environment=RUNNER_TENANT_ENV={{ integration_tests_runner_tenant_env }}
 {% endif %}
+# The box secrets file (persona passwords, the fixed citizen OTP), sourced
+# after the tenant env. Root-owned directory, file mode 0600 owned by the runner
+# user, values never in the checkout (tests/integration-tests/deploy/README.md).
+# Set but unreadable fails the run with phase failed-secrets.
+Environment=RUNNER_SECRETS_ENV={{ integration_tests_runner_secrets_env | default('/etc/digit-tests/secrets.env') }}
 Restart=on-failure
 RestartSec=5
 # A run is CPU/RAM heavy and shares the box with the live DIGIT stack — keep it

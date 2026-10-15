@@ -92,7 +92,7 @@ test('employee context selection sends surface and exact tenant without deriving
   }, { context: { ...token, UserRequest: { ...token.UserRequest, type: 'EMPLOYEE' } } });
 });
 
-test('fixed-code fixtures require explicit configuration, IDENTITY_TEST_OTP_CODE first, then FIXED_OTP', async () => {
+test('fixed-code fixtures require IDENTITY_TEST_OTP_CODE and accept no other name', async () => {
   const previous = { code: process.env.IDENTITY_TEST_OTP_CODE, fixed: process.env.FIXED_OTP };
   const challenge = { challengeId: 'id', mobileNumber: 'phone', tenantId: 'tenant', requestedAt: 0 };
   delete process.env.IDENTITY_TEST_OTP_CODE;
@@ -100,7 +100,7 @@ test('fixed-code fixtures require explicit configuration, IDENTITY_TEST_OTP_CODE
   try {
     await assert.rejects(configuredOtp(challenge), /Set IDENTITY_TEST_OTP_CODE/);
     process.env.FIXED_OTP = '135790';
-    assert.equal(await configuredOtp(challenge), '135790');
+    await assert.rejects(configuredOtp(challenge), /Set IDENTITY_TEST_OTP_CODE/);
     process.env.IDENTITY_TEST_OTP_CODE = '246802';
     assert.equal(await configuredOtp(challenge), '246802');
   } finally {

@@ -312,7 +312,11 @@ enable_integration_tests_runner: false
 # integration_tests_runner_branch: "deployed"
 # Env file the run sources so it targets THIS box's tenant (BASE_URL/DIGIT_TENANT/
 # LOCALITY_CODE/SERVICE_CODE). Point at the deploy env you already maintain.
-# integration_tests_runner_tenant_env: "/opt/integration-tests/deploy/bomet.env"
+# integration_tests_runner_tenant_env: "/opt/integration-tests/deploy/naipepea.env"
+# Box secrets file the run sources after it (persona passwords, the fixed OTP):
+# mode 0600, owned by the runner user, never in the checkout. Default below;
+# a run fails (failed-secrets) while it is missing.
+# integration_tests_runner_secrets_env: "/etc/digit-tests/secrets.env"
 
 # Regression email alerts for the integration tests. A systemd timer polls the
 # published catalog.json every test_alerts_poll_minutes; when a NEW run has

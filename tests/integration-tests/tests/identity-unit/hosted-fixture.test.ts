@@ -2,7 +2,7 @@ import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { chromium, type Page } from '@playwright/test';
-import { enterHostedUsername, hostedSignIn, KeycloakSignInError, selectContext } from '../utils/identity-bff';
+import { enterHostedUsername, hostedSignIn, KeycloakSessionExpiredError, KeycloakSignInError, selectContext } from '../utils/identity-bff';
 import { getDigitToken } from '../utils/auth';
 import { makeAttempt } from '../utils/profile';
 
@@ -11,7 +11,7 @@ let browser: Awaited<ReturnType<typeof chromium.launch>>;
 before(async () => { browser = await chromium.launch(); });
 after(async () => { await browser?.close(); });
 
-type Options = { split?: boolean; result?: 'complete' | 'failed'; existingSession?: boolean; denySession?: boolean; consent?: boolean; refuse?: boolean };
+type Options = { split?: boolean; result?: 'complete' | 'failed'; existingSession?: boolean; denySession?: boolean; consent?: boolean; refuse?: boolean; expire?: number };
 async function fixture(options: Options, run: (page: Page, baseURL: string, state: {
   paths: string[]; submissions: string[][]; resultReads: number;
 }) => Promise<void>) {
@@ -48,6 +48,11 @@ async function fixture(options: Options, run: (page: Page, baseURL: string, stat
       for await (const chunk of request) chunks.push(chunk);
       const form = new URLSearchParams(Buffer.concat(chunks).toString());
       state.submissions.push([...form.keys()]);
+      // Keycloak's timed-out sign-in: the form again, with its loginTimeout message.
+      if (options.expire && state.submissions.length <= options.expire) {
+        response.setHeader('Content-Type', 'text/html');
+        response.end(`${formPage()}<span id="input-error">Your login attempt timed out. Login will start from the beginning.</span>`); return;
+      }
       if (options.split && path.endsWith('/login') && form.get('username') === 'fixture-user') {
         response.setHeader('Content-Type', 'text/html');
         response.end(formPage(true)); return;
@@ -204,6 +209,26 @@ test('a refused password costs one Keycloak post; the next caller fails from the
   }
   assert.equal(state.submissions.length, 1);
 }));
+
+test('a sign-in Keycloak timed out is retried once, and is not cached as a refusal', async () => fixture({ expire: 1, result: 'complete' }, async (_page, base, state) => {
+  await token(base, 'fixture-password');
+  assert.equal(state.submissions.length, 2);
+}));
+
+test('a sign-in that times out twice fails as an ended session, not a refusal', async () => fixture({ expire: 2, result: 'complete' }, async (_page, base, state) => {
+  await assert.rejects(token(base, 'fixture-password'), KeycloakSessionExpiredError);
+  assert.equal(state.submissions.length, 2);
+}));
+
+test('profile discovery retries a timed-out Keycloak sign-in like any blip', async () => {
+  let calls = 0;
+  const value = await makeAttempt({})('admin login', async () => {
+    if (++calls === 1) throw new KeycloakSessionExpiredError('timed out');
+    return 'ok';
+  }, null);
+  assert.equal(value, 'ok');
+  assert.equal(calls, 2);
+});
 
 test('profile discovery rethrows a refused password at once instead of retrying it', async () => {
   const failures: Record<string, string> = {};

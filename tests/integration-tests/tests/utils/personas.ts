@@ -96,7 +96,8 @@ async function adminToken(): Promise<string> {
     return '';
   }
   // Retried only for availability: a deployment that has just come up answers
-  // the first call with a 5xx. A refused password is never retried.
+  // the first call with a 5xx, or Keycloak times a sign-in out
+  // (KeycloakSessionExpiredError). A refused password is never retried.
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const token = (await getDigitToken({ tenant: TENANT, username: admin.login, password: admin.password })).access_token;

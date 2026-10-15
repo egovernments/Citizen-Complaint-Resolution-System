@@ -37,8 +37,10 @@
  *
  * Reads BASE_URL, DIGIT_TENANT, IDENTITY_TEST_TENANT_SLUG and the six
  * <ROLE>_LOGIN from the env profile. A <ROLE>_PASSWORD already set is kept;
- * a missing one is generated. With --secrets-out every persona password is
- * written to that file, single-quoted for `source` (mode 0600, other lines kept). Passwords never reach
+ * a missing one is generated. With --secrets-out each persona password is
+ * written to that file once its Keycloak login holds it, single-quoted for
+ * `source` (mode 0600, other lines kept), so a run that stops part-way can
+ * simply be run again. Passwords never reach
  * stdout. The actor (SEED_ACTOR_*) is any ACCOUNT_ADMIN of the workspace: the
  * signup founder the first time (without SEED_ACTOR_PASSWORD, a founder with
  * no password credential — magic-link only — gets a one-off one through the
@@ -293,13 +295,14 @@ async function main(): Promise<void> {
     await employeeSignIn(actor, BASE_URL, tenantSlug(), actorLogin, actorPassword, 'configurator');
     const digit = new Digit(actor, BASE_URL, await selectContext(actor, BASE_URL, 'configurator', TENANT), TENANT);
     const plan = await planFor(digit);
-    // Before Keycloak holds any new password, so a failure later cannot lose one.
-    if (secretsOut) {
-      const written = new Map([...passwords].map(([role, value]) => [envName(role, 'PASSWORD'), value]));
-      if (probeLogin) written.set(PROBE.password, probePassword);
-      writeSecrets(secretsOut, written);
-      console.error(`[seed-personas] wrote ${written.size} passwords to ${secretsOut} (mode 0600)`);
-    }
+    // Each password is kept only once its Keycloak login holds it. One that
+    // never got there stays unset, so a re-run generates and sets it again
+    // instead of trusting a value Keycloak never received.
+    const keep = (name: string, value: string) => {
+      if (!secretsOut) return;
+      writeSecrets(secretsOut, new Map([[name, value]]));
+      console.error(`[seed-personas] wrote ${name} to ${secretsOut} (mode 0600)`);
+    };
     console.log(`# env profile lines for ${tenantSlug()} (${TENANT})`);
     console.log(`SERVICE_CODE=${plan.serviceCode}\nLOCALITY_CODE=${plan.boundaries.leaf.code}\nWARD_CSR_BOUNDARY=${plan.boundaries.ward.code}`);
 
@@ -312,10 +315,14 @@ async function main(): Promise<void> {
       const password = passwords.get(spec.role)!;
       const { code, uuid } = await ensureEmployee(digit, plan, spec, login);
       await ensureLogin(login, password, generated.includes(envName(spec.role, 'PASSWORD')));
+      keep(envName(spec.role, 'PASSWORD'), password);
       await ensureLinked(actor, members, uuid, login, password);
       seeded.push({ spec, login, code, uuid });
     }
-    if (probeLogin) await ensureLogin(probeLogin, probePassword, generated.includes(PROBE.password));
+    if (probeLogin) {
+      await ensureLogin(probeLogin, probePassword, generated.includes(PROBE.password));
+      keep(PROBE.password, probePassword);
+    }
 
     // Proof, not assumption: each persona signs in and selects its own employee.
     await sleep(2_000);

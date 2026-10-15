@@ -438,6 +438,8 @@ export function makeAttempt(failures: Record<string, string>) {
       } catch (err) {
         // A refused password is not a blip: retrying it only feeds Keycloak's
         // brute-force detection, and nothing downstream can run without it.
+        // A sign-in Keycloak timed out or restarted is a different error
+        // (KeycloakSessionExpiredError) and goes round again like any blip.
         if (err instanceof KeycloakSignInError) throw err;
         last = err instanceof Error ? err.message : String(err);
         console.log(`[profile] ${label} attempt ${round}/${PROBE_ROUNDS} failed: ${last.slice(0, 200)}`);

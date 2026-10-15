@@ -64,9 +64,25 @@ export const KEYCLOAK_ERROR =
 /** Keycloak refused the credentials. Retrying only feeds its brute-force detection. */
 export class KeycloakSignInError extends Error {}
 
-async function refusal(page: Page, username: string): Promise<KeycloakSignInError> {
+/**
+ * Keycloak ended the sign-in itself: the login timed out, the auth session
+ * expired or restarted, or its cookie was lost. Nothing was wrong with the
+ * credentials, so one fresh attempt is safe.
+ */
+export class KeycloakSessionExpiredError extends Error {}
+
+const SESSION_ENDED = /timed out|expired|start from the beginning|restart|cookie not found/i;
+
+/** The error for a sign-in Keycloak sent back to its form, by what the page says. */
+function refusedWith(username: string, shown: string): KeycloakSignInError | KeycloakSessionExpiredError {
+  return SESSION_ENDED.test(shown)
+    ? new KeycloakSessionExpiredError(`Keycloak ended the sign-in for ${username}: ${shown}`)
+    : new KeycloakSignInError(`Keycloak refused the sign-in for ${username}: ${shown}`);
+}
+
+async function refusal(page: Page, username: string): Promise<KeycloakSignInError | KeycloakSessionExpiredError> {
   const shown = (await page.locator(KEYCLOAK_ERROR).first().innerText().catch(() => '')).trim();
-  return new KeycloakSignInError(`Keycloak refused the sign-in for ${username}: ${shown || 'error shown'}`);
+  return refusedWith(username, shown || 'error shown');
 }
 
 /** Organizations can split username and password across two stock Keycloak pages. */
@@ -108,7 +124,8 @@ export const keycloakError = (html: string) =>
  * a password typed or posted there lands in the trace, the step titles and
  * report.json, all of which a run publishes. Returns the BFF session cookies
  * for a context to adopt. A refused password throws KeycloakSignInError after
- * ONE post.
+ * ONE post; a sign-in Keycloak timed out or restarted throws
+ * KeycloakSessionExpiredError, which a caller may retry.
  */
 export async function passwordSignIn(config: { baseURL: string; surface: Surface; username: string; password: string }): Promise<SignInCookie[]> {
   const jar = new Map<string, SignInCookie>();
@@ -152,6 +169,7 @@ export async function passwordSignIn(config: { baseURL: string; surface: Surface
   const formOf = (html: string) => {
     const pageId = keycloakPageId(html);
     const action = keycloakLoginAction(html);
+    if (pageId && /expired|timeout/i.test(pageId)) throw new KeycloakSessionExpiredError(`Keycloak ended the sign-in for ${config.username} (${pageId})`);
     if (pageId && !KEYCLOAK_LOGIN_PAGES.has(pageId)) throw new Error(`Hosted sign-in stopped on Keycloak page ${pageId}`);
     return action ? { action, kind: pageId ?? `form${/id="username"/.test(html) ? '+user' : ''}${/id="password"/.test(html) ? '+password' : ''}` } : null;
   };
@@ -162,7 +180,7 @@ export async function passwordSignIn(config: { baseURL: string; surface: Surface
     const form = formOf(page.html);
     if (!form) break;
     // The same login page again after a post means Keycloak refused the credentials.
-    if (form.kind === posted) throw new KeycloakSignInError(`Keycloak refused the sign-in for ${config.username}: ${keycloakError(page.html)}`);
+    if (form.kind === posted) throw refusedWith(config.username, keycloakError(page.html));
     page = await go(new URL(form.action, page.url).href, { username: config.username, password: config.password });
     posted = form.kind;
   }
@@ -185,16 +203,23 @@ export async function passwordSignIn(config: { baseURL: string; surface: Surface
  * carries its value, and the trace's network log keeps the form post's fields
  * whether or not a chunk is recording. Runs that do not trace (the identity-real
  * config) may type them.
+ *
+ * "Traced" is this test's own setting: the `trace` option after every
+ * test.use() override, as the runner resolved it for this test. Playwright
+ * exposes that only on testInfo's internal tracing state, so when that state
+ * cannot be read the test counts as traced and the password is refused.
  */
 function assertUntracedOrThrowaway(password: string): void {
-  let mode: unknown;
+  let info: ReturnType<typeof test.info>;
   try {
-    const trace = test.info().project.use.trace as unknown;
-    mode = typeof trace === 'object' && trace !== null ? (trace as { mode?: string }).mode : trace;
+    info = test.info();
   } catch {
     return; // outside the Playwright runner: nothing records the page
   }
-  if (!mode || mode === 'off' || !password) return;
+  if (!password) return;
+  const tracing = (info as unknown as { _tracing?: { traceOptions?: () => unknown } })._tracing;
+  const traced = typeof tracing?.traceOptions === 'function' ? tracing.traceOptions() !== undefined : true;
+  if (!traced) return;
   const configured = Object.entries(process.env).some(([name, value]) => /_PASS(WORD)?$/.test(name) && value === password);
   if (configured) {
     throw new Error('hostedSignIn types the password into a traced page; sign personas in with passwordSignIn() (auth.ts staffContext/loginViaApi)');
@@ -289,12 +314,12 @@ export async function selectContext(request: APIRequestContext, baseURL: string,
 export type ReadOtp = (challenge: { challengeId: string; mobileNumber: string; tenantId: string; requestedAt: number }) => Promise<string>;
 
 /**
- * Fixed codes are explicitly opted into (IDENTITY_TEST_OTP_CODE, or the older
- * FIXED_OTP); this helper never labels them real non-fixed OTP evidence.
+ * Fixed codes are explicitly opted into (IDENTITY_TEST_OTP_CODE); this helper
+ * never labels them real non-fixed OTP evidence.
  */
 export const configuredOtp: ReadOtp = async () => {
-  const code = process.env.IDENTITY_TEST_OTP_CODE || process.env.FIXED_OTP;
-  if (!code || !/^\d{6}$/.test(code)) throw new Error('Set IDENTITY_TEST_OTP_CODE (or FIXED_OTP) for fixed-code fixtures or provide a real delivery reader');
+  const code = process.env.IDENTITY_TEST_OTP_CODE;
+  if (!code || !/^\d{6}$/.test(code)) throw new Error('Set IDENTITY_TEST_OTP_CODE for fixed-code fixtures or provide a real delivery reader');
   return code;
 };
 

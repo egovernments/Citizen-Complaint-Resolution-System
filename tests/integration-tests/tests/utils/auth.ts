@@ -15,7 +15,7 @@
 import { createHash } from 'node:crypto';
 import { BASE_URL, IGNORE_HTTPS_ERRORS } from './env';
 import { request as playwrightRequest, type Page } from '@playwright/test';
-import { KeycloakSignInError, passwordSignIn, selectContext, surfacePath, type SignInCookie } from './identity-bff';
+import { KeycloakSessionExpiredError, KeycloakSignInError, passwordSignIn, selectContext, surfacePath, type SignInCookie } from './identity-bff';
 
 export interface TokenResponse {
   access_token: string;
@@ -46,12 +46,11 @@ const tokens = new Map<string, { token: TokenResponse; expiresAt: number }>();
 /**
  * Keycloak refusals, per (user, surface, password), kept for a while rather
  * than for the worker's life: "temporarily disabled" clears itself, a wrong
- * password does not. Only credential refusals are kept: a sign-in page that
- * expired or restarted says nothing about the password.
+ * password does not. A sign-in Keycloak timed out or restarted is not a
+ * refusal (KeycloakSessionExpiredError): it is retried once, never cached.
  */
 const REFUSAL_MS = 2 * 60_000;
 const refusals = new Map<string, { error: KeycloakSignInError; at: number }>();
-const CREDENTIAL_REFUSAL = /invalid|incorrect|credential|disabled|locked/i;
 /** BFF sessions per (user, surface, password); a dead one is replaced on the next 401. */
 const SESSION_MS = 15 * 60_000;
 const sessions = new Map<string, { cookies: SignInCookie[]; at: number }>();
@@ -68,13 +67,16 @@ export async function signIn(baseURL: string, surface: StaffSurface, username: s
   if (refused && Date.now() - refused.at < REFUSAL_MS) throw refused.error;
   const session = sessions.get(key);
   if (!opts.fresh && session && Date.now() - session.at < SESSION_MS) return session.cookies;
+  const post = () => passwordSignIn({ baseURL, surface, username, password });
   try {
-    const cookies = await passwordSignIn({ baseURL, surface, username, password });
+    const cookies = await post().catch((err) => {
+      if (err instanceof KeycloakSessionExpiredError) return post();
+      throw err;
+    });
     sessions.set(key, { cookies, at: Date.now() });
     return cookies;
   } catch (err) {
-    const shown = err instanceof KeycloakSignInError ? err.message.slice(err.message.indexOf(': ') + 2) : '';
-    if (CREDENTIAL_REFUSAL.test(shown)) refusals.set(key, { error: err as KeycloakSignInError, at: Date.now() });
+    if (err instanceof KeycloakSignInError) refusals.set(key, { error: err, at: Date.now() });
     throw err;
   }
 }
