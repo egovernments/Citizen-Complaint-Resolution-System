@@ -61,11 +61,22 @@ export async function enterHostedUsername(page: Page, value: string): Promise<vo
   await expect(page.locator('#password')).toBeVisible();
 }
 
+/**
+ * Keycloak's SSO cookies. A context restored from a project's storageState
+ * (auth.json / auth-api.json are saved after the admin signs in), or one a
+ * test already signed someone into, still holds them, and Keycloak then skips
+ * the form and signs THAT user in again. Even `chromium.launch()` inside a
+ * test inherits the project's storageState. Dropped before every hosted
+ * sign-in, so the credentials passed in are the ones used.
+ */
+const KEYCLOAK_SSO_COOKIES = /^(KEYCLOAK_(IDENTITY|SESSION)(_LEGACY)?|AUTH_SESSION_ID(_LEGACY)?|KC_RESTART)$/;
+
 /** Credentials go only to the hosted form. The landing app owns one-use auth results. */
 export async function hostedSignIn(page: Page, config: {
   baseURL: string; surface: Surface; username: string; password: string;
 }): Promise<void> {
   const origin = new URL(config.baseURL).origin;
+  await page.context().clearCookies({ name: KEYCLOAK_SSO_COOKIES });
   let resultId: string | null = null;
   let observedResult: Promise<{ httpStatus: number; body: { status?: string } | null }> | undefined;
   const navigation = (request: Request) => {

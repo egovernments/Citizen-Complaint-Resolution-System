@@ -9,11 +9,11 @@ let browser: Awaited<ReturnType<typeof chromium.launch>>;
 before(async () => { browser = await chromium.launch(); });
 after(async () => { await browser?.close(); });
 
-type Options = { split?: boolean; result?: 'complete' | 'failed'; existingSession?: boolean; denySession?: boolean; consent?: boolean };
+type Options = { split?: boolean; result?: 'complete' | 'failed'; existingSession?: boolean; denySession?: boolean; consent?: boolean; keycloakSso?: boolean };
 async function fixture(options: Options, run: (page: Page, baseURL: string, state: {
-  paths: string[]; submissions: string[][]; resultReads: number;
+  paths: string[]; submissions: string[][]; resultReads: number; ssoReuses: number;
 }) => Promise<void>) {
-  const state = { paths: [] as string[], submissions: [] as string[][], resultReads: 0 };
+  const state = { paths: [] as string[], submissions: [] as string[][], resultReads: 0, ssoReuses: 0 };
   const formPage = (passwordOnly = false) => `<form method="post" action="${passwordOnly ? '/auth/realms/test/password' : '/auth/realms/test/login'}">
     ${passwordOnly ? '' : '<input id="username" name="username">'}
     ${passwordOnly || !options.split ? '<input id="password" name="password" type="password" autocomplete="current-password">' : ''}
@@ -39,6 +39,13 @@ async function fixture(options: Options, run: (page: Page, baseURL: string, stat
     if (path === '/identity/v1/authorize') {
       response.writeHead(302, { Location: '/auth/realms/test/login' }).end();
     } else if (path === '/auth/realms/test/login' && request.method === 'GET') {
+      // Keycloak with a live SSO session skips the form and signs that
+      // session's user in again, whoever the caller meant to sign in.
+      if (/(^|;\s*)KEYCLOAK_IDENTITY=/.test(request.headers.cookie ?? '')) {
+        state.ssoReuses++;
+        response.writeHead(302, { Location: '/configurator/login', 'Set-Cookie': 'identity=fixture-session; HttpOnly; Path=/' }).end();
+        return;
+      }
       response.setHeader('Content-Type', 'text/html');
       response.end(formPage());
     } else if (path.startsWith('/auth/realms/test/') && request.method === 'POST') {
@@ -88,6 +95,8 @@ async function fixture(options: Options, run: (page: Page, baseURL: string, stat
   const context = await browser.newContext();
   try {
     if (options.existingSession) await context.addCookies([{ name: 'identity', value: 'fixture-session', url: baseURL, httpOnly: true }]);
+    // What a project's storageState carries after its setup signed the admin in.
+    if (options.keycloakSso) await context.addCookies([{ name: 'KEYCLOAK_IDENTITY', value: 'admin-sso', url: `${baseURL}/auth/realms/test/`, httpOnly: true }]);
     await run(await context.newPage(), baseURL, state);
   } finally {
     await context.close();
@@ -137,6 +146,17 @@ for (const split of [false, true]) {
 
 test('successful landing without an authenticated session is rejected', async () => fixture({ denySession: true }, async (page, base) => {
   await assert.rejects(signIn(page, base), /did not establish a BFF session/);
+}));
+
+// A context restored from a project's storageState (or one a test already
+// signed someone into) holds Keycloak's SSO cookie. Keycloak would then skip
+// the form and sign the stored user in instead of the requested one; the
+// helper drops that session so the credentials it was given are the ones used.
+test('a Keycloak SSO session left in the context is not reused', async () => fixture({ keycloakSso: true }, async (page, base, state) => {
+  page.setDefaultTimeout(3_000);
+  await signIn(page, base);
+  assert.equal(state.ssoReuses, 0);
+  assert.deepEqual(state.submissions, [['username', 'password']]);
 }));
 
 // Mirrors employee Login.tsx's canSubmit gate and Privacy.tsx's styled checkbox.
