@@ -259,10 +259,39 @@ tests/
 
 ## CI
 
-`.github/workflows/e2e.yml` is `workflow_dispatch`-only for now — the
-manage-surface specs are still being stabilized and we don't want every
-PR to wake the suite against the live tenant. Trigger manually from the
-Actions tab once secrets `TEST_BASE_URL` and `ADMIN_PASSWORD` are set.
+`.github/workflows/integration-tests.yml` ("Integration tests") runs the
+suite on every PR to `develop` and on every merge to it. It never touches a
+shared server: each shard deploys a fresh stack on its own GitHub runner.
+
+1. **Plan.** `scripts/ci-plan.mjs` classifies the changed files. If every
+   one is docs, a unit test, other CI, or code the CI stack does not deploy
+   (k8s/Helm, notifications, chatbot, …), nothing else runs. Unknown paths
+   always run. Draft PRs wait until they are marked ready.
+2. **Build.** Every CCRS image in the stack (pgr-services and its `-db`,
+   identity-bff, identity-keycloak, digit-ui-esbuild, configurator) is built
+   from the checkout, in parallel, with a layer cache; digit-mcp is built by
+   the deploy (`build_mcp`).
+3. **Deploy and test, in 4 shards.** Each shard runs
+   `local-setup/ansible/deploy.sh ci` (~10 min) with
+   `host_vars/ci.yml.example` (the localhost-slim profile: dump-seeded `pg`
+   tenants, Keycloak, MCP; no notifications or search) and
+   `local-setup/docker-compose.ci.yml` (Mailpit; relaxed citizen OTP limits),
+   then `scripts/ci-identities.sh` (workspace `pg`, admin `ci-suite-admin`,
+   a Keycloak login per seeded HRMS employee: a fresh stack has none), then
+   its quarter of the suite with `playwright.ci.config.ts` (60 s test timeout,
+   one retry, traces/video only on failure) and `deploy/pg.env`.
+4. **Verdict** (the check to require). Merges the shards
+   (`playwright.ci-merge.config.ts`) and compares the run with the latest
+   `develop` run (`scripts/ci-compare.mjs`). It fails when a test that passed
+   on develop fails here (a pass on retry counts as a pass), or when an image
+   does not build or a shard does not finish. Tests that also fail on develop
+   are listed in the summary but do not block. Until a develop run exists,
+   it only reports.
+
+Artifacts: `integration-report` (merged report.json, kept 30 days as later
+runs' baseline), `playwright-report` (HTML report with traces of failures),
+`stack-diagnostics-<shard>` (container status and logs). Run it by hand from
+the Actions tab (workflow_dispatch) on any branch.
 
 ## Prerequisites
 

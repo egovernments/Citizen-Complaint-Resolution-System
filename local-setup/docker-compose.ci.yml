@@ -1,0 +1,29 @@
+# Per-tenant compose overlay for the `ci` tenant: the throwaway stack the
+# "Integration tests" workflow (.github/workflows/integration-tests.yml)
+# deploys on a GitHub runner. The per-tenant overlay step in playbook-deploy.yml
+# copies it to /opt/digit and layers it on every compose call.
+#
+# Mailpit is the SMTP server Keycloak needs (identity_smtp_host in
+# host_vars/ci.yml.example; the deploy refuses Keycloak without one). Nothing
+# leaves the runner: mail is kept in Mailpit (127.0.0.1:18025).
+services:
+  # The citizen OTP limits protect real phones from SMS floods. On the runner
+  # the suite signs one fixture citizen in dozens of times from one IP, and the
+  # defaults (5 codes per phone and 20 per IP an hour, 30 s between codes)
+  # failed 10 citizen specs with OTP_RATE_LIMITED / OTP_RESEND_TOO_SOON. Codes
+  # are the fixed development code and go nowhere (identity_dev_fixed_otp).
+  identity-bff:
+    environment:
+      IDENTITY_CITIZEN_OTP_PHONE_SEND_LIMIT: "10000"
+      IDENTITY_CITIZEN_OTP_IP_SEND_LIMIT: "100000"
+      IDENTITY_CITIZEN_OTP_RESEND_SECONDS: "1"
+  mailpit:
+    image: axllent/mailpit:v1.31.2
+    container_name: mailpit
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+    ports:
+      - "127.0.0.1:18025:8025"
+    networks:
+      - egov-network
