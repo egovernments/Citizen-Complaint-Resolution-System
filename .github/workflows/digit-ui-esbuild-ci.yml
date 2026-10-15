@@ -1,20 +1,48 @@
 name: digit-ui-esbuild CI
 
-# Offline unit tests for digit-ui-esbuild: `npm test` (tests/ and src/theme/)
-# plus the dashboard and scripts/lib node:test files, which sit outside
-# npm test's file pattern. The files are found by glob, so new ones run without
-# editing this workflow.
+# Offline unit tests for digit-ui-esbuild: `npm test` runs every
+# *.test.{js,mjs,cjs,jsx} file under tests/, src/theme/, scripts/lib/ and
+# products/dashboard/, so local runs match CI and new files need no workflow
+# edit. Besides digit-ui-esbuild/**, the paths list the files outside it that
+# those tests read. Without them, a PR that changes only one of those files
+# would merge without this job running.
 
 on:
   pull_request:
     branches: [develop, master]
     paths:
       - 'digit-ui-esbuild/**'
+      # tests/tenant-route.test.js
+      - 'backend/identity-bff/docs/identity-bff.md'
+      # tests/localizationPacks.test.js
+      - 'utilities/default-data-handler/src/main/resources/localisations/**'
+      # products/dashboard/src/i18n/localizationContract.test.js,
+      # products/dashboard/src/services/publicRuntimeIsolation.test.js
+      - 'local-setup/db/dss-mdms-seed/l10n/**'
+      # products/dashboard/src/services/{dashboardCapabilityGate,analyticsBatchCatalog,publicRuntimeIsolation}.test.js
+      - 'ansible/nairobi-mdms/mdms/dss/KpiDefinition.json'
+      - 'ansible/nairobi-mdms/mdms/dss/DashboardPack.json'
+      - 'ansible/nairobi-mdms/mdms/ACCESSCONTROL-ACTIONS-TEST/actions-test.json'
+      - 'utilities/default-data-handler/src/main/resources/mdmsData/ACCESSCONTROL-ACTIONS-TEST/ACCESSCONTROL-ACTIONS-TEST.actions-test.json'
+      - 'digit-mcp/src/tools/dashboard-catalog-seed.ts'
       - '.github/workflows/digit-ui-esbuild-ci.yml'
   push:
     branches: [develop, master]
     paths:
       - 'digit-ui-esbuild/**'
+      # tests/tenant-route.test.js
+      - 'backend/identity-bff/docs/identity-bff.md'
+      # tests/localizationPacks.test.js
+      - 'utilities/default-data-handler/src/main/resources/localisations/**'
+      # products/dashboard/src/i18n/localizationContract.test.js,
+      # products/dashboard/src/services/publicRuntimeIsolation.test.js
+      - 'local-setup/db/dss-mdms-seed/l10n/**'
+      # products/dashboard/src/services/{dashboardCapabilityGate,analyticsBatchCatalog,publicRuntimeIsolation}.test.js
+      - 'ansible/nairobi-mdms/mdms/dss/KpiDefinition.json'
+      - 'ansible/nairobi-mdms/mdms/dss/DashboardPack.json'
+      - 'ansible/nairobi-mdms/mdms/ACCESSCONTROL-ACTIONS-TEST/actions-test.json'
+      - 'utilities/default-data-handler/src/main/resources/mdmsData/ACCESSCONTROL-ACTIONS-TEST/ACCESSCONTROL-ACTIONS-TEST.actions-test.json'
+      - 'digit-mcp/src/tools/dashboard-catalog-seed.ts'
       - '.github/workflows/digit-ui-esbuild-ci.yml'
 
 permissions:
@@ -32,23 +60,12 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 20 # as in docker/Dockerfile (node:20-slim)
           cache: npm
           cache-dependency-path: digit-ui-esbuild/package-lock.json
 
-      # --legacy-peer-deps as in docker/Dockerfile: without it npm hits ERESOLVE.
+      # --legacy-peer-deps as docker/Dockerfile uses (with npm install there):
+      # without it npm hits ERESOLVE.
       - run: npm ci --legacy-peer-deps
 
       - run: npm test
-
-      - name: Dashboard and scripts/lib tests (node --test)
-        shell: bash
-        run: |
-          shopt -s globstar nullglob
-          files=(products/dashboard/**/*.test.js scripts/lib/*.test.js)
-          if [ "${#files[@]}" -eq 0 ]; then
-            echo "::error::no dashboard or scripts/lib test files found"
-            exit 1
-          fi
-          printf '%s\n' "${files[@]}"
-          node --test "${files[@]}"

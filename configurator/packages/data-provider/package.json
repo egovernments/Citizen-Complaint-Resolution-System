@@ -20,7 +20,7 @@
   ],
   "scripts": {
     "build": "tsc",
-    "test": "node --import tsx --test src/**/*.test.ts",
+    "test": "node --import tsx --test $(find src -name '*.test.ts' ! -name '*integration*' | sort)",
     "test:integration": "node --import tsx --test src/providers/dataProvider.integration.test.ts",
     "test:watch": "node --import tsx --test --watch src/**/*.test.ts"
   },

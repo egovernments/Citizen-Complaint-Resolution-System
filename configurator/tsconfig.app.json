@@ -27,7 +27,8 @@
     /* Path aliases */
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@digit-mcp/data-provider": ["./packages/data-provider/src/index.ts"]
     }
   },
   "include": ["src"]

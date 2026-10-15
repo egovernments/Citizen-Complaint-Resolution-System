@@ -1,9 +1,10 @@
 name: Configurator CI
 
 # Unit tests for configurator/ and its two local packages. None of them needs a
-# deployment or a browser. ui-shared/ is in the paths because the app imports
-# from it (src/config/featureFlags.ts); the two seed files because a test pins
-# the app's postal-code default to them.
+# deployment or a browser. Besides configurator/**, the paths list everything
+# outside it that the tests read: ui-shared/ (imported by
+# src/config/featureFlags.ts) and the seed/doc files below. Without them, a PR
+# that changes only one of those files would merge without this job running.
 
 on:
   pull_request:
@@ -11,18 +12,36 @@ on:
     paths:
       - 'configurator/**'
       - 'ui-shared/**'
-      # Seed files src/admin/validation.postalCode.test.ts pins the app to.
+      # src/admin/validation.postalCode.test.ts
       - 'local-setup/db/full-dump.sql'
       - 'utilities/default-data-handler/src/main/resources/mdmsData/common-masters/common-masters.FormValidations.json'
+      # src/api/onboarding.test.ts
+      - 'backend/identity-bff/docs/identity-bff.md'
+      # src/onboarding/signup/mobileRules.test.ts
+      - 'backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json'
+      # src/onboarding/labels.test.ts
+      - 'backend/pgr-services/src/main/resources/onboarding/l10n/en_IN/configurator-ui.json'
+      - 'local-setup/ansible/files/configurator-localization/configurator-ui.json'
+      # src/resources/workflow-services/shippedNotificationDefaults.test.ts
+      - 'utilities/default-data-handler/src/main/resources/mdmsData-dev/NOTIFICATIONS/**'
       - '.github/workflows/configurator-ci.yml'
   push:
     branches: [develop, master]
     paths:
       - 'configurator/**'
       - 'ui-shared/**'
-      # Seed files src/admin/validation.postalCode.test.ts pins the app to.
+      # src/admin/validation.postalCode.test.ts
       - 'local-setup/db/full-dump.sql'
       - 'utilities/default-data-handler/src/main/resources/mdmsData/common-masters/common-masters.FormValidations.json'
+      # src/api/onboarding.test.ts
+      - 'backend/identity-bff/docs/identity-bff.md'
+      # src/onboarding/signup/mobileRules.test.ts
+      - 'backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json'
+      # src/onboarding/labels.test.ts
+      - 'backend/pgr-services/src/main/resources/onboarding/l10n/en_IN/configurator-ui.json'
+      - 'local-setup/ansible/files/configurator-localization/configurator-ui.json'
+      # src/resources/workflow-services/shippedNotificationDefaults.test.ts
+      - 'utilities/default-data-handler/src/main/resources/mdmsData-dev/NOTIFICATIONS/**'
       - '.github/workflows/configurator-ci.yml'
 
 permissions:
@@ -42,7 +61,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 20 # as in Dockerfile (node:20-bookworm-slim)
           cache: npm
           cache-dependency-path: configurator/package-lock.json
 
@@ -55,31 +74,29 @@ jobs:
       - name: Configurator unit tests (vitest)
         run: npx vitest run
 
+      # The later steps run even if an earlier suite failed, so one push
+      # reports every failing suite.
       - name: digit-datagrid unit tests (vitest)
+        if: ${{ !cancelled() }}
         run: npx vitest run --root packages/digit-datagrid
 
-      # The *integration* files need a live DIGIT API; everything else is offline.
+      # data-provider's npm test leaves out the *integration* files, which
+      # need a live DIGIT API.
       - name: data-provider unit tests (node --test)
+        if: ${{ !cancelled() }}
         working-directory: configurator/packages/data-provider
+        run: npm test
+
+      # Advisory until it is made blocking. tsconfig.app.json maps
+      # @digit-mcp/data-provider to the package source (as vite and vitest
+      # do), so no dist/ build is needed. Every check runs even if one fails.
+      - name: Type-check (advisory)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
         shell: bash
         run: |
-          shopt -s globstar nullglob
-          files=()
-          for f in src/**/*.test.ts; do
-            [[ "$f" == *integration* ]] || files+=("$f")
-          done
-          if [ "${#files[@]}" -eq 0 ]; then
-            echo "::error::no data-provider unit test files found"
-            exit 1
-          fi
-          printf '%s\n' "${files[@]}"
-          node --import tsx --test "${files[@]}"
-
-      # Advisory until the type errors are fixed. The app takes
-      # @digit-mcp/data-provider's types from its dist/, so build that first.
-      - name: Type-check (advisory)
-        continue-on-error: true
-        run: |
-          npx tsc -p packages/data-provider
-          npx tsc --noEmit -p tsconfig.app.json
-          npx tsc --noEmit -p tsconfig.node.json
+          status=0
+          npx tsc --noEmit -p tsconfig.app.json || status=1
+          npx tsc --noEmit -p tsconfig.node.json || status=1
+          npx tsc --noEmit -p packages/data-provider || status=1
+          exit $status
