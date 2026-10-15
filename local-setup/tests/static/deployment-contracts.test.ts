@@ -2186,7 +2186,8 @@ describe('D26 legacy identity paths are retired', () => {
   // and page files still opened tenantless /digit-ui/<route> URLs, which D26
   // turns into a 404 or a redirect to the deployment default. They go through
   // appBase() or surfacePath() (/<IDENTITY_TEST_TENANT_SLUG>/digit-ui) now.
-  // #2398 deleted the city-tenant specs, so fewer navigations remain.
+  // #2398 deleted the city-tenant specs, and loginViaApi no longer navigates
+  // after sign-in, so fewer navigations remain.
   test('Playwright specs navigate only to tenant-scoped digit-ui routes', () => {
     const e2eDir = path.join(REPO_ROOT, 'local-setup/tests/e2e');
     const files = (fs.readdirSync(e2eDir, { recursive: true }) as string[])
@@ -2204,7 +2205,7 @@ describe('D26 legacy identity paths are retired', () => {
       expect([file, /^const \w+ = '\/digit-ui\//m.test(body)]).toEqual([file, false]);
     }
     expect(tenantless).toEqual([]);
-    expect(scoped).toBeGreaterThanOrEqual(23);
+    expect(scoped).toBeGreaterThanOrEqual(22);
   });
 
   test('digit-ui-v2 cannot be deployed after its citizen identity removal', () => {

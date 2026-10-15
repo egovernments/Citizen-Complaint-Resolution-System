@@ -3,8 +3,8 @@
  * Identity BFF (the egov-user password form is gone), so `username` and
  * `password` are the persona's Keycloak login, as in tests/integration-tests.
  */
-import { chromium, expect, type Page } from '@playwright/test';
-import { hostedSignIn, resolveTenant, selectContext, surfacePath, tenantSlug, type DigitContext } from './identity';
+import { expect, request, type Page } from '@playwright/test';
+import { hostedSignIn, passwordSignIn, resolveTenant, selectContext, tenantSlug, type DigitContext } from './identity';
 
 /** `/<slug>/digit-ui`, the app base every UI navigation goes through. */
 export function appBase(slug = tenantSlug()): string {
@@ -19,20 +19,22 @@ export interface AuthConfig {
   password: string;
 }
 
+/** The DIGIT session the employee app stored after its own sign-in. */
+export type EmployeeSession = Pick<DigitContext, 'access_token' | 'UserRequest'>;
+
 const contexts = new Map<string, Promise<DigitContext>>();
 
-/** An employee DIGIT token for API calls: hosted sign-in in a throwaway browser, then the BFF context exchange. */
+/** An employee DIGIT token for API calls: a browserless hosted sign-in, then the BFF context exchange. */
 export function getDigitToken(config: AuthConfig): Promise<DigitContext> {
   const key = JSON.stringify([config.baseURL, config.tenant, config.username, config.password]);
   if (!contexts.has(key)) {
     contexts.set(key, (async () => {
-      const browser = await chromium.launch();
+      const cookies = await passwordSignIn({ baseURL: config.baseURL, surface: 'employee', username: config.username, password: config.password });
+      const api = await request.newContext({ storageState: { cookies, origins: [] } });
       try {
-        const page = await browser.newPage();
-        await hostedSignIn(page, { baseURL: config.baseURL, surface: 'employee', username: config.username, password: config.password });
-        return await selectContext(page.request, config.baseURL, 'employee', config.tenant);
+        return await selectContext(api, config.baseURL, 'employee', config.tenant);
       } finally {
-        await browser.close();
+        await api.dispose();
       }
     })().catch((error) => {
       contexts.delete(key);
@@ -48,19 +50,20 @@ export function getDigitToken(config: AuthConfig): Promise<DigitContext> {
  * other tenant is wiped on load (clearAuthFromAnotherTenant), which used to
  * leave specs passing against the sign-in page.
  */
-export async function loginViaApi(page: Page, config: AuthConfig): Promise<DigitContext> {
+export async function loginViaApi(page: Page, config: AuthConfig): Promise<EmployeeSession> {
   const tenant = await resolveTenant(page.request, config.baseURL);
   if (tenant.tenantId !== config.tenant) {
     throw new Error(`IDENTITY_TEST_TENANT_SLUG resolves to ${tenant.tenantId}, not DIGIT_TENANT=${config.tenant}; the suite runs on one root workspace`);
   }
   await hostedSignIn(page, { baseURL: config.baseURL, surface: 'employee', username: config.username, password: config.password });
-  const context = await selectContext(page.request, config.baseURL, 'employee', tenant.tenantId);
-  await page.goto(`${config.baseURL}${surfacePath('employee')}`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
-  await expectEmployeeHome(page, tenant.tenantId);
-  return context;
+  // The landing app selects the context, stores Employee.* and moves to the
+  // employee home itself; navigating here would abort that write.
+  await expect.poll(() => new URL(page.url()).pathname, { message: 'the employee app did not leave its sign-in route', timeout: 30_000 })
+    .not.toMatch(/\/user\/(login|language-selection)/);
+  return expectEmployeeHome(page, tenant.tenantId);
 }
 
-export async function expectEmployeeHome(page: Page, tenantId: string): Promise<void> {
+export async function expectEmployeeHome(page: Page, tenantId: string): Promise<EmployeeSession> {
   await expect(page.locator('.employee-app-wrapper'), `employee home did not render (at ${page.url()})`)
     .toBeVisible({ timeout: 30_000 });
   expect(new URL(page.url()).pathname).not.toMatch(/\/user\/(login|language-selection)/);
@@ -70,4 +73,5 @@ export async function expectEmployeeHome(page: Page, tenantId: string): Promise<
   }));
   expect(stored.token, 'employee session missing from storage').toBeTruthy();
   expect(stored.info.tenantId, 'employee session belongs to another tenant').toBe(tenantId);
+  return { access_token: stored.token!, UserRequest: stored.info };
 }

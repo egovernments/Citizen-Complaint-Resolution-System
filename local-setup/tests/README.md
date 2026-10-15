@@ -40,6 +40,7 @@ npx playwright test --config=e2e/playwright.config.ts e2e/specs/pgr-inbox-pagina
 
 `loginViaApi` signs the persona in through the hosted Keycloak form and fails
 unless the employee home renders with a session for `DIGIT_TENANT`.
+`getDigitToken` posts the same form with Node's `fetch` (no browser) for API tokens.
 
 ## `pgr-inbox-pagination.spec.ts` (issue #916)
 

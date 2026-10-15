@@ -12,9 +12,10 @@
  *   generateValidMobile(rule)            -> string
  *   generateInvalidMobile(rule, kind)    -> string
  *
- * If the MDMS lookup fails (auth, schema missing, network), falls back to
- * a 10-digit numeric default — the same shape the configurator's UI uses
- * for new tenants that haven't seeded a rule yet.
+ * Only when MDMS holds no rule for the tenant does it fall back to a
+ * 10-digit numeric default — the same shape the configurator's UI uses
+ * for new tenants that haven't seeded a rule yet. Sign-in and lookup
+ * errors are thrown, so they are not reported as a refused OTP later.
  */
 import { getDigitToken } from '../utils/auth';
 import { requiredEnv } from '../utils/identity';
@@ -72,7 +73,8 @@ function deriveMobileLengths(regex: string): { min: number; max: number } {
  * supplied tenant) with admin credentials, then queries MDMS v2 for the
  * `common-masters.MobileNumberValidation` schema scoped to `tenant`.
  * Returns the record whose `data.default === true` if present, otherwise
- * the first record. Falls back to a 10-digit numeric rule on any failure.
+ * the first record. Falls back to a 10-digit numeric rule only when MDMS
+ * returns no rule; a failed sign-in or lookup throws.
  */
 export async function getMobileValidationRule(
   tenant: string,
@@ -83,51 +85,47 @@ export async function getMobileValidationRule(
   const adminUser = opts.adminUser ?? requiredEnv('DIGIT_USERNAME');
   const adminPassword = opts.adminPassword ?? requiredEnv('DIGIT_PASSWORD');
 
-  try {
-    const token = await getDigitToken({
-      baseURL,
-      tenant: rootTenant,
-      username: adminUser,
-      password: adminPassword,
-    });
-    const ri = {
-      apiId: 'Rainmaker',
-      ver: '1.0',
-      ts: Date.now(),
-      msgId: `${Date.now()}|en_IN`,
-      authToken: token.access_token,
-    };
-    const resp = await fetch(`${baseURL}/mdms-v2/v2/_search`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        RequestInfo: ri,
-        MdmsCriteria: {
-          tenantId: tenant,
-          schemaCode: 'common-masters.MobileNumberValidation',
-        },
-      }),
-    });
-    if (!resp.ok) return FALLBACK;
-    const json = (await resp.json()) as {
-      mdms?: Array<{ data?: { countryCode?: string; mobileNumberRegex?: string; default?: boolean } }>;
-    };
-    const records = json.mdms ?? [];
-    const preferred = records.find((r) => r.data?.default === true) ?? records[0];
-    const data = preferred?.data;
-    if (!data?.mobileNumberRegex) return FALLBACK;
-    const lengths = deriveMobileLengths(data.mobileNumberRegex);
-    return {
-      prefix: typeof data.countryCode === 'string' ? data.countryCode : undefined,
-      pattern: data.mobileNumberRegex,
-      minLength: lengths.min,
-      maxLength: lengths.max,
-      errorMessage: `Please enter a valid ${lengths.max}-digit mobile number`,
-      allowedStartingDigits: derivedStartingDigits(data.mobileNumberRegex) ?? undefined,
-    };
-  } catch {
-    return FALLBACK;
-  }
+  const token = await getDigitToken({
+    baseURL,
+    tenant: rootTenant,
+    username: adminUser,
+    password: adminPassword,
+  });
+  const ri = {
+    apiId: 'Rainmaker',
+    ver: '1.0',
+    ts: Date.now(),
+    msgId: `${Date.now()}|en_IN`,
+    authToken: token.access_token,
+  };
+  const resp = await fetch(`${baseURL}/mdms-v2/v2/_search`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      RequestInfo: ri,
+      MdmsCriteria: {
+        tenantId: tenant,
+        schemaCode: 'common-masters.MobileNumberValidation',
+      },
+    }),
+  });
+  if (!resp.ok) throw new Error(`MobileNumberValidation lookup failed: HTTP ${resp.status}`);
+  const json = (await resp.json()) as {
+    mdms?: Array<{ data?: { countryCode?: string; mobileNumberRegex?: string; default?: boolean } }>;
+  };
+  const records = json.mdms ?? [];
+  const preferred = records.find((r) => r.data?.default === true) ?? records[0];
+  const data = preferred?.data;
+  if (!data?.mobileNumberRegex) return FALLBACK;
+  const lengths = deriveMobileLengths(data.mobileNumberRegex);
+  return {
+    prefix: typeof data.countryCode === 'string' ? data.countryCode : undefined,
+    pattern: data.mobileNumberRegex,
+    minLength: lengths.min,
+    maxLength: lengths.max,
+    errorMessage: `Please enter a valid ${lengths.max}-digit mobile number`,
+    allowedStartingDigits: derivedStartingDigits(data.mobileNumberRegex) ?? undefined,
+  };
 }
 
 function randomDigit(): string {
