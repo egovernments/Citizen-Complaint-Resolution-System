@@ -4,6 +4,7 @@ import { Storage } from "../../atoms/Utils/Storage";
 import { getAuthSurface, isIdentityBffAuth } from "../../auth/authSurface";
 import { identityBffLogout, identityBffLogoutRedirect, markSignOutIncomplete } from "../../auth/identityBffLogin";
 import { currentAppBasePath, tenantContext } from "../../tenant/tenantRoute";
+import { keepRememberedLanguage } from "../Localization/rememberedLanguage";
 
 /** Set by the Configurator (same origin) when its own sign-out could not be confirmed. */
 const CONFIGURATOR_SIGN_OUT_INCOMPLETE_KEY = "crs-sign-out-incomplete";
@@ -71,7 +72,7 @@ export const UserService = {
       // state first, then revoke the BFF session best-effort.
       // The Configurator shares this origin; keep its unconfirmed-sign-out flag.
       const configuratorSignOut = window.localStorage.getItem(CONFIGURATOR_SIGN_OUT_INCOMPLETE_KEY);
-      window.localStorage.clear();
+      keepRememberedLanguage(() => window.localStorage.clear());
       if (configuratorSignOut !== null) window.localStorage.setItem(CONFIGURATOR_SIGN_OUT_INCOMPLETE_KEY, configuratorSignOut);
       window.sessionStorage.clear();
       let failure = null;
@@ -110,7 +111,7 @@ export const UserService = {
     } catch (e) {
     }
     finally {
-      window.localStorage.clear();
+      keepRememberedLanguage(() => window.localStorage.clear());
       window.sessionStorage.clear();
       window.location.replace(`${window.location.origin}${logoutRedirectURL}`);
     }

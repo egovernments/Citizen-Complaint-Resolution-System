@@ -3,7 +3,7 @@ export const setCitizenDetail = (userObject, token, tenantId) => {
   if (Digit.Utils.getMultiRootTenant()) {
     return;
   }
-  let locale = JSON.parse(sessionStorage.getItem("Digit.initData"))?.value?.selectedLanguage;
+  let locale = Digit.StoreData.getCurrentLanguage();
   localStorage.setItem("Citizen.tenant-id", tenantId);
   localStorage.setItem("tenant-id", tenantId);
   localStorage.setItem("citizen.userRequestObject", JSON.stringify(userObject));

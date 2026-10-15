@@ -3,6 +3,7 @@ import { PersistantStorage } from "../../atoms/Utils/Storage";
 import i18next from "i18next";
 import { Request } from "../../atoms/Utils/Request";
 import { ApiCacheService } from "../../atoms/ApiCacheService";
+import { rememberLanguage } from "./rememberedLanguage";
 
 const LOCALE_LIST = (locale) => `Locale.${locale}.List`;
 const LOCALE_ALL_LIST = () => `Locale.List`;
@@ -117,8 +118,7 @@ export const LocalizationService = {
     const allModules = LocalizationStore.getAllList();
     const uniqueModules = allModules.filter((module) => !modules.includes(module));
     LocalizationService.getLocale({ modules: uniqueModules, locale, tenantId });
-    localStorage.setItem("Employee.locale", locale);
-    localStorage.setItem("Citizen.locale", locale);
+    rememberLanguage(locale);
     Digit.SessionStorage.set("locale", locale);
     i18next.changeLanguage(locale);
   },
