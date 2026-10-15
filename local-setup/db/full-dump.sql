@@ -5109,7 +5109,7 @@ ebbbdcd2-0ba4-4b58-b87f-4151ffe18c02	en_IN	CS_PGR_COMPLAINT_NUMBER	Complaint No.
 1395873f-dd0e-4d31-bd16-729f3bf85f67	en_IN	CS_PGR_RESPONSE	Response	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 a861a9ba-55ac-4d0f-86ab-3e2a0144c631	en_IN	CS_PGR_SEND_COMMENT	Send	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 116a58c5-fae1-4535-a905-2d9743b030d9	en_IN	CS_PROFILE_EMAIL_ERRORMSG	Invalid Email Id	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
-f14f2de8-330c-46ec-acc3-eb82bb64d036	en_IN	CS_REJECT_COMPLAINT	Employee Name	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f14f2de8-330c-46ec-acc3-eb82bb64d036	en_IN	CS_REJECT_COMPLAINT	Rejection Reason	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 fc73a3d3-185f-4cfa-b189-0e1167b5d246	en_IN	CS_REOPEN_COMPLAINT	Choose Reason to Re-open the Complaint	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 5edbb7e6-f877-4816-9876-163bfdbf60f5	en_IN	CS_REOPEN_OPTION_FOUR	No permanent solution	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 705d5d74-c02d-4471-8188-21797a98faf4	en_IN	CS_REOPEN_OPTION_ONE	No work was done	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
