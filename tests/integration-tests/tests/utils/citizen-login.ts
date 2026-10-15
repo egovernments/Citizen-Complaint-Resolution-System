@@ -8,6 +8,15 @@ import { citizenSignIn, configuredOtp, identityJson, resolveTenant, selectContex
 const hasCitizenToken = (page: Page) =>
   page.evaluate(() => Boolean(localStorage.getItem('Citizen.token'))).catch(() => false);
 
+type SessionCookies = Parameters<BrowserContext['addCookies']>[0];
+/**
+ * BFF sessions of the phones this worker has signed in. Signing the same phone
+ * in again (a serial spec's next test gets a fresh page) reuses its session
+ * instead of sending a new code, which the BFF refuses inside its per-phone
+ * cooldown (429 OTP_RESEND_TOO_SOON).
+ */
+const phoneSessions = new Map<string, SessionCookies>();
+
 export async function citizenLoginViaApi(page: Page, phone?: string): Promise<void> {
   const fixture = readProvisionedCitizen();
   const mobile = phone || fixture?.mobile;
@@ -15,14 +24,16 @@ export async function citizenLoginViaApi(page: Page, phone?: string): Promise<vo
   // Reuse the fixture citizen's BFF session when it is still live: every OTP
   // send counts against the BFF's per-phone (5/h) and per-IP (20/h) limits.
   // citizen-setup records them as `sessionCookies` (#2454; absent before it).
-  const cookies = (fixture as unknown as { sessionCookies?: Parameters<BrowserContext['addCookies']>[0] } | null)?.sessionCookies;
+  const fixtureCookies = (fixture as unknown as { sessionCookies?: SessionCookies } | null)?.sessionCookies;
+  const cookies = phoneSessions.get(mobile) ?? (mobile === fixture?.mobile ? fixtureCookies : undefined);
   let context: DigitContext | null = null;
-  if (mobile === fixture?.mobile && cookies?.length) {
+  if (cookies?.length) {
     await page.context().addCookies(cookies);
     const tenant = await resolveTenant(page.request, BASE_URL);
     context = await selectContext(page.request, BASE_URL, 'citizen', tenant.tenantId).catch(() => null);
   }
   context ??= await citizenSignIn(page.request, BASE_URL, mobile);
+  phoneSessions.set(mobile, await page.context().cookies());
   // The real SPA completes its session/context bootstrap and writes its own storage.
   await page.goto(`${BASE_URL}${surfacePath('citizen', 'login')}`, { waitUntil: 'domcontentloaded' });
   await expect.poll(() => hasCitizenToken(page)).toBe(true);
