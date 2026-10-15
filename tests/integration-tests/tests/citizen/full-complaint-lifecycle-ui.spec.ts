@@ -213,7 +213,7 @@ Long timeout (180s) because of multiple boundary lookups and DOM settles. Catche
       const row = rows.find((d: any) => d.code === code);
       if (!row) break;
       path.unshift({ code: row.code, name: row.name });
-      code = row.parent || undefined;
+      code = row.parent || row.parentCode || undefined;
     }
     const categories = path.flatMap((n) => (n.name ? [n.name, n.code] : [n.code]));
     console.log(`Step 1: description + complaint category (${path.map((n) => n.code).join(' > ') || 'first options'})...`);
