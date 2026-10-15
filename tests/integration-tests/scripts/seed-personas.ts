@@ -168,12 +168,16 @@ async function ensureEmployee(digit: Digit, plan: Plan, spec: Spec, login: strin
   return { code, uuid: created.user?.uuid ?? created.uuid ?? fail(`HRMS created ${code} without a user uuid`) };
 }
 
-/** One admin grant per run, renewed shortly before it expires (master tokens live about a minute). */
-let admin: { base: string; token: string; until: number } | undefined;
+/**
+ * One admin grant per Keycloak, renewed shortly before it expires (master
+ * tokens live about a minute); a different admin URL or login starts over.
+ */
+let admin: { source: string; base: string; token: string; until: number } | undefined;
 async function kc(path: string, init: RequestInit = {}, expect = [200, 201, 204]): Promise<Response> {
-  if (!admin || Date.now() > admin.until) {
+  const source = ['URL', 'TOKEN', 'USER'].map((k) => process.env[`IDENTITY_TEST_KEYCLOAK_ADMIN_${k}`] ?? '').join('|');
+  if (!admin || admin.source !== source || Date.now() > admin.until) {
     const fresh = await keycloakAdminFresh();
-    admin = { base: fresh.base, token: fresh.token, until: fresh.expiresIn ? Date.now() + (fresh.expiresIn - 15) * 1000 : Infinity };
+    admin = { source, base: fresh.base, token: fresh.token, until: fresh.expiresIn ? Date.now() + (fresh.expiresIn - 15) * 1000 : Infinity };
   }
   const { base, token } = admin;
   const r = await fetch(`${base}/admin/realms/${KC_REALM}${path}`, { ...init,
