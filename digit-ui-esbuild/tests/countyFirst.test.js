@@ -1,4 +1,4 @@
-// File a Complaint at a county-layout state asks "in which county?" first and lists only the counties
+// ours (#1857): File a Complaint at a county-layout state asks "in which county?" first and lists only the counties
 // the user can enter (coordinator 2026-10-15). Run from digit-ui-esbuild/:  node --test tests/countyFirst.test.js
 // Needs patch 07 (Digit.Utils.tenantScope) applied for the scope rule; the stubs below stand in for React.
 
@@ -39,7 +39,8 @@ test("the picker lists only the counties the user can enter", { skip: !fs.exists
 test("the create-complaint route goes through CountyFirst after the access guard", () => {
   const src = fs.readFileSync(path.join(__dirname, "../products/pgr/src/pages/employee/index.js"), "utf8");
   assert.match(src, /import CountyFirst from "\.\/CreateComplaint\/CountyFirst"/);
-  assert.match(src, /offersCreateComplaint\(data\?\.actions\) \? <CountyFirst component=\{Component\} \/>/);
+  assert.match(src, /offersCreateComplaint\(data\?\.actions\) \|\| menuOffersCreate\(t\)\s*\? <CountyFirst component=\{Component\} \/>/);
+  assert.match(src, /getPGREmployeeLinks\(t\)\.some\(\(link\) => link\.key === "create"\)/, "the same rule as the menu's File a Complaint");
   const cf = fs.readFileSync(path.join(__dirname, "../products/pgr/src/pages/employee/CreateComplaint/CountyFirst.js"), "utf8");
   assert.match(cf, /boundary-hierarchy-definition\/_search/, "a tenant with its own hierarchy keeps the form");
   assert.match(cf, /\/digit-ui\/employee\/pgr\/create-complaint/);
