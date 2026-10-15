@@ -4,6 +4,10 @@
 // the locality cascade and the complaint's tenant are the county's. Only the counties the user can enter are listed
 // (Digit.Utils.tenantScope, the identity service's rule). A tenant with its own hierarchy (a county; a flat-layout
 // state) gets the form as before; so does any tenant whose definitions cannot be read.
+// Also (#1857 follow-up, staging-2): a STATE ROOT with counties asks even when it keeps a boundary tree of its own - an
+// installer that copies the state's tree down to each county leaves it at the state, unused by any county app, and a
+// complaint filed there reached no county's GRO. Below the root, a tenant with children (a county with sub-tenants)
+// still keeps the form when it has its own hierarchy.
 import React, { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -11,6 +15,9 @@ const say = (t, key, fallback) => {
   const v = t(key);
   return v && v !== key ? v : fallback;
 };
+
+/** A state root (no dot in its code) with counties asks first, whatever it keeps of its own. */
+export const asksAtRoot = (tenantId, counties) => !String(tenantId || "").includes(".") && counties.length > 0;
 
 export const stateCounties = (tenantId) =>
   Digit?.Utils?.tenantScope?.enterableChildTenants?.(
@@ -24,10 +31,11 @@ const CountyFirst = ({ component: Component }) => {
   const tenantId = Digit.ULBService.getCurrentTenantId();
   const counties = useMemo(() => stateCounties(tenantId), [tenantId]);
   // null = checking; true = the tenant has its own hierarchy (or we cannot tell): the form as before
-  const [own, setOwn] = useState(counties.length ? null : true);
+  const atRoot = asksAtRoot(tenantId, counties);
+  const [own, setOwn] = useState(atRoot ? false : counties.length ? null : true);
 
   useEffect(() => {
-    if (!counties.length) return undefined;
+    if (!counties.length || atRoot) return undefined;
     let live = true;
     Digit.CustomService.getResponse({
       url: "/boundary-service/boundary-hierarchy-definition/_search",
@@ -40,7 +48,7 @@ const CountyFirst = ({ component: Component }) => {
     return () => {
       live = false;
     };
-  }, [tenantId, counties.length]);
+  }, [tenantId, counties.length, atRoot]);
 
   if (own === null) return null;
   if (own) return <Component />;

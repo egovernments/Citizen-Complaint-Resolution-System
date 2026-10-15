@@ -268,9 +268,8 @@ describe('JurisdictionEditor — #1957 revoking an assigned jurisdiction', () =>
   it('numbers the remove buttons by VISIBLE position, not payload index', async () => {
     // The revoked row stays in the form value, so labelling by its index left
     // the lone surviving row called "Remove jurisdiction 2" with no "…1" on
-    // screen — misleading for screen readers, and it breaks label-based
-    // locators (tests/integration-tests/.../employee-create-tenant-459.spec.ts
-    // pins /^Remove jurisdiction 1$/).
+    // screen — misleading for screen readers, and it breaks any label-based
+    // locator such as /^Remove jurisdiction 1$/.
     renderEditor({ jurisdictions: SAVED_JURISDICTIONS });
 
     // Revoke the FIRST row; the second one must renumber to 1.

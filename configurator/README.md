@@ -107,5 +107,4 @@ src/
 | `npm run build` | TypeScript check + Vite production build |
 | `npm run preview` | Preview production build locally |
 | `npm run test` | Run unit tests (vitest) |
-| `npm run test:e2e` | Run end-to-end tests (Playwright) |
 | `npm run lint` | Run ESLint |

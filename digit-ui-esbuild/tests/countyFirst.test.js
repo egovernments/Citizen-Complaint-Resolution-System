@@ -28,12 +28,16 @@ test("the picker lists only the counties the user can enter", { skip: !fs.exists
   const tenants = ["ke", "ke.bomet", "ke.nairobi", "pg.citya"].map((code) => ({ code }));
   let roles = [{ code: "SUPERUSER", tenantId: "ke" }];
   global.Digit = { Utils: { tenantScope }, SessionStorage: { get: (k) => (k === "initData" ? { tenants } : null) }, UserService: { getUser: () => ({ info: { roles } }) } };
-  const { stateCounties } = load(path.join(__dirname, "../products/pgr/src/pages/employee/CreateComplaint/CountyFirst.js"));
+  const { stateCounties, asksAtRoot } = load(path.join(__dirname, "../products/pgr/src/pages/employee/CreateComplaint/CountyFirst.js"));
   assert.deepEqual(stateCounties("ke").map((c) => c.code), ["ke.bomet", "ke.nairobi"]);
   roles = [{ code: "GRO", tenantId: "ke.nairobi" }];
   assert.deepEqual(stateCounties("ke").map((c) => c.code), ["ke.nairobi"], "a county user: their county only");
   roles = [];
   assert.deepEqual(stateCounties("ke"), []);
+  // #1857 follow-up: a state root with counties asks even with a tree of its own (staging-2); below the root it does not
+  assert.equal(asksAtRoot("ke", [{ code: "ke.bomet" }]), true);
+  assert.equal(asksAtRoot("ke", []), false);
+  assert.equal(asksAtRoot("ke.bomet", [{ code: "ke.bomet.x" }]), false);
 });
 
 test("the create-complaint route goes through CountyFirst after the access guard", () => {

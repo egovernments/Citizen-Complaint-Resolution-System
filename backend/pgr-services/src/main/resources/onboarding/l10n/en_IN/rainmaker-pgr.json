@@ -466,7 +466,7 @@
 {"code": "CS_PROFILE_EMAIL_ERRORMSG", "message": "Invalid Email Id", "module": "rainmaker-pgr", "locale": "en_IN"},
 {"code": "CS_PROFILE_EMAIL_PLACEHOLDER", "message": "Enter Your Email Id", "module": "rainmaker-pgr", "locale": "en_IN"},
 {"code": "CS_PROFILE_SAVE", "message": "Save", "module": "rainmaker-pgr", "locale": "en_IN"},
-{"code": "CS_REJECT_COMPLAINT", "message": "Employee Name", "module": "rainmaker-pgr", "locale": "en_IN"},
+{"code": "CS_REJECT_COMPLAINT", "message": "Rejection Reason", "module": "rainmaker-pgr", "locale": "en_IN"},
 {"code": "CS_REOPEN_COMPLAINT", "message": "Choose Reason to Re-open the Complaint", "module": "rainmaker-pgr", "locale": "en_IN"},
 {"code": "CS_REOPEN_COMPLAINT_WHY", "message": "Why do you want to Re-Open your Complaint?", "module": "rainmaker-pgr", "locale": "en_IN"},
 {"code": "CS_REOPEN_OPTION_FOUR", "message": "No permanent solution", "module": "rainmaker-pgr", "locale": "en_IN"},

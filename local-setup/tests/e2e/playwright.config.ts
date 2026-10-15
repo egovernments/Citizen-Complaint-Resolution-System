@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import { requiredEnv } from './utils/identity';
 
 export default defineConfig({
   testDir: './specs',
@@ -11,7 +12,8 @@ export default defineConfig({
     ? [['github'], ['html', { outputFolder: './playwright-report', open: 'never' }]]
     : [['list']],
   use: {
-    baseURL: process.env.BASE_URL || 'http://localhost:18080',
+    // A deployed host (the integration suite's BASE_URL); there is no local default.
+    baseURL: requiredEnv('BASE_URL'),
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
