@@ -4,7 +4,7 @@
  * Tests the complete PGR complaint lifecycle across citizen, admin, and employee:
  *   1.  Acquire admin API token
  *   3.  Citizen signs in via the phone OTP form (the BFF creates the citizen)
- *   4.  Citizen creates PGR complaint via UI wizard (6-step FormComposerV2)
+ *   4.  Citizen creates PGR complaint via the UI wizard, under a type in the employee persona's department
  *   5.  Admin sees complaint in PGR inbox (UI)
  *   7.  Admin assigns complaint to the employee persona (UI — Take Action → Assign)
  *   8.  Employee signs in, sees assigned complaint (UI)
@@ -22,8 +22,9 @@ import { test, expect, type Page } from '@playwright/test';
 import { PgrInboxPage } from '../pages/pgr-inbox.page';
 import { getDigitToken, loginViaApi, appBase } from '../utils/auth';
 import { requiredEnv } from '../utils/identity';
-import { getMobileValidationRule, generateValidMobile } from '../common/mdms-mobile';
-import { citizenLoginViaApi, citizenOtpLogin } from '../utils/citizen-auth';
+import { citizenLoginViaApi, citizenOtpLogin, runCitizenMobile } from '../utils/citizen-auth';
+import { getLmeByUuid } from '../common/hrms-employees';
+import { complaintTypePath, pickServiceDefInDepartments } from '../common/mdms-servicedef';
 
 import * as path from 'path';
 import * as fs from 'fs';
@@ -64,9 +65,7 @@ async function assertLocalized(page: Page, context: string): Promise<string[]> {
   return rawKeys;
 }
 
-// Tenant-aware phones, sourced from MDMS at suite setup (see
-// common/mdms-mobile.ts). The init runs in test.beforeAll inside the
-// top-level describe.serial near the bottom of the file.
+// The run's citizen (runCitizenMobile), set in test.beforeAll below.
 let CITIZEN_PHONE: string;
 
 /**
@@ -121,14 +120,18 @@ test.describe.serial('Full PGR lifecycle — citizen, admin, employee', () => {
   let complaintResolved = false;
   let complaintRated = false;
 
+  // The complaint type the citizen files under, top level first: one in the
+  // employee persona's department, so the Assign dialog offers the persona.
+  let typePath: Array<{ code: string; name: string }>;
+
   test.beforeAll(async () => {
-    const rule = await getMobileValidationRule(TENANT, {
-      baseURL: BASE_URL,
-      adminUser: ADMIN_USER,
-      adminPassword: ADMIN_PASS,
-    });
-    CITIZEN_PHONE = generateValidMobile(rule);
-    console.log(`[full-lifecycle] citizen=${CITIZEN_PHONE} pattern=${rule.pattern} (tenant=${TENANT})`);
+    CITIZEN_PHONE = await runCitizenMobile();
+    const persona = await getDigitToken({ baseURL: BASE_URL, tenant: TENANT, username: EMPLOYEE_USER, password: EMPLOYEE_PASS });
+    const admin = { baseURL: BASE_URL, adminUser: ADMIN_USER, adminPassword: ADMIN_PASS };
+    const { departments } = await getLmeByUuid(TENANT, persona.UserRequest.uuid, admin);
+    const type = await pickServiceDefInDepartments(TENANT, departments, admin);
+    typePath = await complaintTypePath(TENANT, type.serviceCode, admin);
+    console.log(`[full-lifecycle] citizen=${CITIZEN_PHONE} type=${typePath.map((n) => n.code).join(' > ')} department=${type.department} (tenant=${TENANT})`);
   });
 
   // ─── 1. Acquire admin API token ───────────────────────────────────────
@@ -194,216 +197,58 @@ test.describe.serial('Full PGR lifecycle — citizen, admin, employee', () => {
       await route.fulfill({ response });
     });
 
-    // ── Capture console errors and BoundaryFilter logs for debugging ──
-    const consoleErrors: string[] = [];
-    page.on('console', (msg) => {
-      const text = msg.text();
-      if (msg.type() === 'error') consoleErrors.push(text);
-      if (text.includes('[BF-')) console.log(`[BROWSER] ${text}`);
-    });
-    page.on('pageerror', (err) => consoleErrors.push(`PAGE ERROR: ${err.message}`));
+    // Pin the map's reverse-geocode to an answer without a postcode, so the
+    // run does not depend on OSM and no map-filled postcode is gated.
+    await page.route('**nominatim.openstreetmap.org/reverse*', (route) =>
+      route.fulfill({ contentType: 'application/json', body: JSON.stringify({ display_name: 'E2E pin', address: {} }) }));
 
-    // ── Navigate to the complaint creation wizard ─────────────────────
-    await page.goto(`${BASE_URL}${appBase()}/citizen/pgr/create-complaint`, {
-      waitUntil: 'domcontentloaded',
-      timeout: 30_000,
-    });
-    // Wait for the FormComposerV2 wizard to render (loads MDMS data async)
-    await page.waitForTimeout(8000);
+    await page.goto(`${appBase()}/citizen/pgr/create-complaint/complaint-type`, { waitUntil: 'domcontentloaded' });
+    const nextBtn = page.getByRole('button', { name: /^next$/i });
 
-    // Helper: click the NEXT or SUBMIT button for the FormComposerV2.
-    // After clicking, waits for a step-transition indicator if provided,
-    // otherwise falls back to a generous 5s wait.
-    const clickNextOrSubmit = async (
-      label: string = 'NEXT',
-      waitForAfter?: () => Promise<void>,
-    ) => {
-      // FormComposerV2 renders a button with the label from t("NEXT") or t("SUBMIT")
-      const btn = page
-        .locator('button[type="button"], button[type="submit"]')
-        .filter({ hasText: new RegExp(label, 'i') })
-        .first();
-      await btn.waitFor({ state: 'visible', timeout: 10_000 });
-      await btn.scrollIntoViewIfNeeded();
-      await page.waitForTimeout(300);
-      await btn.click();
-      if (waitForAfter) {
-        await waitForAfter();
-      } else {
-        await page.waitForTimeout(5000);
-      }
-    };
-
-    // Helper: select an option in a DIGIT dropdown by index or text match.
-    // Uses only .digit-dropdown-employee-select-wrap--elipses (form inputs) to
-    // avoid matching the header language dropdown (.digit-dropdown-select-wrap.language-dropdown).
-    const selectDropdownOption = async (
-      dropdownIndex: number,
-      optionMatch?: string | RegExp,
-    ) => {
-      const dropdowns = page.locator(
-        'input.digit-dropdown-employee-select-wrap--elipses',
-      );
-      const dropdown = dropdowns.nth(dropdownIndex);
-      await dropdown.waitFor({ state: 'visible', timeout: 10_000 });
-      await dropdown.click();
-      await page.waitForTimeout(1000);
-
-      const items = page.locator('.digit-dropdown-item');
-      const itemCount = await items.count();
-      if (itemCount === 0) {
-        console.log(`No dropdown items found for dropdown index ${dropdownIndex}`);
-        return;
-      }
-
-      console.log(`Found ${itemCount} dropdown items for dropdown index ${dropdownIndex}`);
-      if (optionMatch) {
-        for (let i = 0; i < itemCount; i++) {
-          const text = (await items.nth(i).innerText()).trim();
-          const matches =
-            typeof optionMatch === 'string'
-              ? text.toLowerCase().includes(optionMatch.toLowerCase())
-              : optionMatch.test(text);
-          if (matches) {
-            await items.nth(i).click();
-            await page.waitForTimeout(500);
-            return;
-          }
-        }
-      }
-      // Fallback: click the first option
-      await items.first().click();
-      await page.waitForTimeout(500);
-    };
-
-    // ── Step 0: Select complaint type + subtype ───────────────────────
-    console.log('Step 0: Selecting complaint type...');
-    // The complaint type dropdown is the first one on this step
-    await selectDropdownOption(0); // Select first available complaint type
-    await page.waitForTimeout(2000); // Wait for subtype dropdown to appear
-
-    // Select subtype if it appeared (dynamic field injected by FormExplorer)
-    const subtypeDropdowns = page.locator(
-      'input.digit-dropdown-employee-select-wrap--elipses',
-    );
-    const subtypeCount = await subtypeDropdowns.count();
-    if (subtypeCount > 1) {
-      console.log('Selecting complaint subtype...');
-      await selectDropdownOption(1); // Select first available subtype
-      await page.waitForTimeout(1000);
+    // ── Complaint type: one level at a time, down to the chosen leaf ──
+    for (const [level, node] of typePath.entries()) {
+      const combo = page.locator(`#lvl-${level}`);
+      await combo.waitFor({ state: 'visible', timeout: level === 0 ? 30_000 : 15_000 });
+      await combo.click();
+      const option = page.getByRole('option', { name: new RegExp(`^${escapeRegExp(node.name)}$`, 'i') });
+      await expect(option, `complaint type "${node.name}" (${node.code}) is not offered at level ${level}`).toHaveCount(1, { timeout: 20_000 });
+      await option.click();
     }
-
     await snap(page, '04a-complaint-type-selected');
-    // After clicking NEXT, wait for the map/geolocation step to render
-    await clickNextOrSubmit('NEXT', async () => {
-      // The map step renders a leaflet/OpenStreetMap container or a "Pin Complaint" heading.
-      // Wait up to 15s for the map or for the NEXT button to re-stabilize.
-      await page.waitForTimeout(5000);
-      // Take a screenshot to confirm we're on the map step
-      await snap(page, '04a1-map-step');
-    });
-    console.log('Step 0 complete — complaint type selected, now on map step');
+    await expect(nextBtn).toBeEnabled({ timeout: 10_000 });
+    await nextBtn.click();
 
-    // ── Step 1: Geolocation (optional — skip) ─────────────────────────
-    console.log('Step 1: Geolocation — clicking NEXT to skip...');
-    // After clicking NEXT on map, wait for the Location Details step (landmark + postal code inputs)
-    await clickNextOrSubmit('NEXT', async () => {
-      // Wait for input fields (landmark or postal code) to appear
-      const landmarkOrPostal = page.locator(
-        'input[type="text"], input[type="number"]',
-      );
-      await landmarkOrPostal.first().waitFor({ state: 'visible', timeout: 15_000 }).catch(async () => {
-        // Fallback: just wait generously if no inputs found (step may render differently)
-        console.log('Step 2 inputs not found yet, waiting...');
-        await page.waitForTimeout(5000);
-      });
-      await snap(page, '04a2-location-details-step');
-    });
-    console.log('Step 1 complete — geolocation skipped, now on location details');
+    // ── Map pin: auto-seeded from the map centre, just confirm ──
+    await expect(nextBtn).toBeEnabled({ timeout: 30_000 });
+    await nextBtn.click();
 
-    // ── Step 2: Location details — landmark + postal code (optional) ──
-    console.log('Step 2: Location details — clicking NEXT to skip...');
-    // After clicking NEXT, wait for the address step (city radio/dropdown or locality)
-    await clickNextOrSubmit('NEXT', async () => {
-      // Wait for radio buttons or dropdown inputs to appear (city selection)
-      const cityIndicator = page.locator(
-        'input[type="radio"], input.digit-dropdown-employee-select-wrap--elipses',
-      );
-      await cityIndicator.first().waitFor({ state: 'visible', timeout: 15_000 }).catch(async () => {
-        console.log('City selector not found yet, waiting...');
-        await page.waitForTimeout(5000);
-      });
-      await snap(page, '04a3-address-step');
-    });
-    console.log('Step 2 complete — location details skipped, now on address step');
-
-    // ── Step 3: Address — select city, ward, locality (REQUIRED) ──────
-    // BoundaryFilter renders 3 single-select nesteddropdowns: City → Ward → Locality.
-    // Each must be selected in order for the next level to populate its options.
-    console.log('Step 3: Selecting city, ward, and locality...');
-    await page.waitForTimeout(2000);
-
-    const boundaryDropdowns = page.locator(
-      'input.digit-dropdown-employee-select-wrap--elipses',
-    );
-
-    // Wait for at least the City dropdown to appear
-    await boundaryDropdowns.first().waitFor({ state: 'visible', timeout: 15_000 });
-    const dropdownCount = await boundaryDropdowns.count();
-    console.log(`Found ${dropdownCount} boundary dropdowns`);
-
-    // Select City (first dropdown) — click first selectable item
-    console.log('Selecting city...');
-    await selectDropdownOption(0);
-    await page.waitForTimeout(2000);
-
-    // Select Ward (second dropdown) — now populated after city selection
-    if (dropdownCount >= 2) {
-      console.log('Selecting ward...');
-      await selectDropdownOption(1);
-      await page.waitForTimeout(2000);
+    // ── Location: the boundary cascade, whatever depth the tenant has ──
+    let levels = 0;
+    for (; levels < 6; levels++) {
+      const combo = page.locator('[id^="boundary-"]').nth(levels);
+      if (!await combo.waitFor({ state: 'visible', timeout: levels === 0 ? 30_000 : 15_000 }).then(() => true, () => false)) break;
+      await combo.click();
+      const options = page.getByRole('option');
+      await expect.poll(() => options.count(), { timeout: 20_000 }).toBeGreaterThan(0);
+      await options.first().click();
     }
-
-    // Select Locality (third dropdown) — now populated after ward selection
-    if (dropdownCount >= 3) {
-      console.log('Selecting locality...');
-      await selectDropdownOption(2);
-      await page.waitForTimeout(1000);
-    }
-
+    expect(levels, 'no boundary dropdowns rendered on the location step').toBeGreaterThan(0);
     await snap(page, '04b-address-selected');
-    // After clicking NEXT, wait for the description textarea to appear
-    await clickNextOrSubmit('NEXT', async () => {
-      const ta = page.locator('textarea').first();
-      await ta.waitFor({ state: 'visible', timeout: 15_000 }).catch(async () => {
-        console.log('Textarea not found yet, waiting...');
-        await page.waitForTimeout(5000);
-      });
-      await snap(page, '04b1-description-step');
-    });
-    console.log('Step 3 complete — address selected, now on description step');
+    await expect(nextBtn).toBeEnabled({ timeout: 10_000 });
+    await nextBtn.click();
 
-    // ── Step 4: Additional details — description (REQUIRED) ───────────
-    console.log('Step 4: Filling in description...');
-    const textarea = page.locator('textarea').first();
-    await textarea.waitFor({ state: 'visible', timeout: 15_000 });
-    const description = `Full lifecycle E2E test via UI wizard - ${Date.now()}`;
-    await textarea.fill(description);
-    await page.waitForTimeout(500);
+    // ── Description ──
+    const description = page.locator('#complaint-description');
+    await description.waitFor({ state: 'visible', timeout: 15_000 });
+    await description.fill(`Full lifecycle E2E test via UI wizard - ${Date.now()}`);
+    await expect(nextBtn).toBeEnabled({ timeout: 10_000 });
+    await nextBtn.click();
 
-    await clickNextOrSubmit('NEXT');
-    console.log('Step 4 complete — description entered');
-
-    // ── Step 5: Upload photos (optional — submit) ─────────────────────
-    console.log('Step 5: Skipping photo upload, clicking SUBMIT...');
-    await clickNextOrSubmit('SUBMIT');
-    console.log('Step 5 complete — form submitted');
-
-    // ── Wait for redirect to /pgr/response and extract complaint ID ───
-    await page.waitForURL('**/pgr/response**', { timeout: 30_000 }).catch(() => {
-      console.log('Did not redirect to /pgr/response, current URL:', page.url());
-    });
-    await page.waitForTimeout(5000);
+    // ── Photos (optional) → SUBMIT ──
+    const submitBtn = page.getByRole('button', { name: /^submit$/i });
+    await expect(submitBtn).toBeEnabled({ timeout: 15_000 });
+    await submitBtn.click();
+    await page.waitForURL((url) => url.pathname.includes('/pgr/response'), { timeout: 30_000 });
 
     // Try to extract serviceRequestId from:
     // 1. Intercepted API response (most reliable)
@@ -519,10 +364,11 @@ test.describe.serial('Full PGR lifecycle — citizen, admin, employee', () => {
     await assigneeContainer.locator('input').click();
 
     // Pick the employee persona, who signs in for the next steps. Options read
-    // "<name> (<department>)", so match the whole name: "PGR Employee" must
-    // not pick "PGR Employee 2".
+    // "<name> (<department>)" in sentence case (the Dropdown renders labels
+    // TOSENTENCECASE), so match the whole name, ignoring case: "PGR Employee"
+    // must not pick "PGR Employee 2".
     const assigneeOption = assigneeContainer.locator('.digit-dropdown-item')
-      .filter({ hasText: new RegExp(`^\\s*${escapeRegExp(employeeName)} \\(`) });
+      .filter({ hasText: new RegExp(`^\\s*${escapeRegExp(employeeName)} \\(`, 'i') });
     await expect(assigneeOption, `employee persona "${employeeName}" is not in the assignee list`).toHaveCount(1, { timeout: 10_000 });
     await assigneeOption.click();
     await page.waitForTimeout(1000);

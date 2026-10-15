@@ -2,7 +2,7 @@
  * Citizen PGR Complaint — Full Lifecycle E2E
  *
  * Tests the complete complaint flow from citizen filing through employee resolution:
- *   1. Citizen signs in through the phone OTP form (the BFF creates the citizen)
+ *   1. The run's citizen signs in (phone OTP via the BFF; full-pgr-lifecycle drives the form)
  *   2. Citizen creates PGR complaint (API, as citizen)
  *   3. Citizen searches own complaint (API)
  *   4. GRO sees complaint in PGR inbox (UI)
@@ -17,12 +17,11 @@
 import { test, expect } from '@playwright/test';
 import { PgrInboxPage } from '../../pages/pgr-inbox.page';
 import { getDigitToken, loginViaApi, appBase } from '../../utils/auth';
-import { citizenOtpLogin } from '../../utils/citizen-auth';
+import { citizenLoginViaApi, runCitizenMobile } from '../../utils/citizen-auth';
 import { requiredEnv } from '../../utils/identity';
-import { getMobileValidationRule, generateValidMobile } from '../../common/mdms-mobile';
 import { pickRandomLeafBoundary, type Boundary } from '../../common/mdms-boundary';
-import { getServiceDefs, type ServiceDef } from '../../common/mdms-servicedef';
-import { getEmployees } from '../../common/hrms-employees';
+import { pickServiceDefInDepartments, type ServiceDef } from '../../common/mdms-servicedef';
+import { getLmeByUuid } from '../../common/hrms-employees';
 
 const BASE_URL = requiredEnv('BASE_URL');
 const TENANT = requiredEnv('DIGIT_TENANT');
@@ -51,8 +50,8 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
   let complaintCreated = false;
   let complaintAssigned = false;
   // Tenant-aware fixtures sourced from the live deployment at setup time.
-  // - mobile rule comes from MDMS common-masters.MobileNumberValidation
-  // - locality is a RANDOMLY-picked leaf from the boundary tree (egov-location)
+  // - the citizen is the run's (runCitizenMobile), so no extra OTP sends
+  // - locality is a RANDOMLY-picked leaf from the boundary tree (boundary-service)
   // Random picking is deliberate: it forces the test to exercise different
   // wards across runs instead of pinning a single happy path.
   let CITIZEN_PHONE: string;
@@ -60,33 +59,20 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
   let SERVICE_DEF: ServiceDef;
 
   test.beforeAll(async () => {
-    const rule = await getMobileValidationRule(TENANT, ADMIN);
-    CITIZEN_PHONE = generateValidMobile(rule);
-    console.log(
-      `[citizen-lifecycle] phone=${CITIZEN_PHONE} pattern=${rule.pattern} (tenant=${TENANT})`,
-    );
+    CITIZEN_PHONE = await runCitizenMobile();
+    console.log(`[citizen-lifecycle] phone=${CITIZEN_PHONE} (tenant=${TENANT})`);
 
     LOCALITY = await pickRandomLeafBoundary(TENANT, ADMIN);
     console.log(
       `[citizen-lifecycle] locality=${LOCALITY.code} (${LOCALITY.name}) type=${LOCALITY.boundaryType ?? '?'} — picked random leaf`,
     );
 
-    // The complaint goes to the EMPLOYEE_USER persona, who then resolves it.
-    // pgr-services refuses an assignee outside the complaint type's department
-    // (INVALID_ASSIGNMENT), so pick a type that persona's department takes.
+    // The complaint goes to the EMPLOYEE_USER persona, who then resolves it,
+    // so it is filed under a type in that persona's department.
     const persona = await getDigitToken({ baseURL: BASE_URL, tenant: TENANT, username: EMPLOYEE_USER, password: EMPLOYEE_PASS });
-    const lme = (await getEmployees(TENANT, ADMIN)).find((e) => e.user.uuid === persona.UserRequest.uuid);
-    if (!lme?.user.roles?.some((r) => r.code === 'PGR_LME')) {
-      throw new Error(`EMPLOYEE_USER is not an HRMS employee with PGR_LME on ${TENANT}; ASSIGN needs an LME to hand the complaint to`);
-    }
-    assigneeUuid = lme.user.uuid;
-    const departments = new Set((lme.assignments ?? []).map((a) => a.department));
-    const types = (await getServiceDefs(TENANT, ADMIN))
-      .filter((d) => !d.department || d.department === 'NA' || departments.has(d.department));
-    if (types.length === 0) {
-      throw new Error(`No active complaint type on ${TENANT} takes EMPLOYEE_USER's department (${[...departments].join(', ')})`);
-    }
-    SERVICE_DEF = types[Math.floor(Math.random() * types.length)];
+    const { employee, departments } = await getLmeByUuid(TENANT, persona.UserRequest.uuid, ADMIN);
+    assigneeUuid = employee.user.uuid;
+    SERVICE_DEF = await pickServiceDefInDepartments(TENANT, departments, ADMIN);
     console.log(
       `[citizen-lifecycle] serviceCode=${SERVICE_DEF.serviceCode} department=${SERVICE_DEF.department ?? '-'} — picked random active ServiceDef for EMPLOYEE_USER's department`,
     );
@@ -109,13 +95,13 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
     employeeUserInfo = employee.UserRequest as Record<string, unknown>;
   });
 
-  test('citizen logs in through the UI with fixed OTP', async ({ page }) => {
-    const session = await citizenOtpLogin(page, CITIZEN_PHONE);
+  test('citizen signs in with the fixed OTP', async ({ page }) => {
+    const session = await citizenLoginViaApi(page, CITIZEN_PHONE);
     // The SPA's own DIGIT session doubles as the citizen API token.
     citizenToken = session.token;
     citizenUserInfo = session.userInfo;
     citizenLoggedIn = true;
-    console.log('Citizen logged in through UI, URL:', page.url());
+    console.log('Citizen signed in, URL:', page.url());
   });
 
   test('citizen creates PGR complaint via API', async () => {
