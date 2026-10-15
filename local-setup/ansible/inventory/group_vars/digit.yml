@@ -504,10 +504,12 @@ pgr_provisioner_username: "{{ pgr_digit_provisioner_username | default('', true)
 pgr_provisioner_tenant_id: "{{ pgr_digit_provisioner_tenant_id | default('', true) or identity_digit_provisioner_tenant_id | default('', true) or state_root | default('', true) or 'pg' }}"
 
 # Root tenants the deploy gives an Identity BFF Organization route (#2398):
-# identity_tenant_route_backfill_roots (comma-separated string or list; unset =
-# state_root, "" = none), never `pg`. A host rooted at `pg` gets none: that
-# layout predates #1999 and has no deploy-seeded root to route.
+# identity_tenant_route_backfill_roots (comma-separated string or list; unset or
+# a bare key = state_root, "" = none), never `pg`. A host rooted at `pg` is a
+# legacy (pre-#1999) layout and gets none, whatever the variable says. The only
+# `pg` rule is here: the playbook routes exactly these roots.
 identity_route_backfill_roots: >-
   {{ '' if (state_root | default('')) == 'pg' else
-     ([identity_tenant_route_backfill_roots | default(state_root | default(''))] | flatten | map('string') | join(',')).split(',')
+     ([identity_tenant_route_backfill_roots if (identity_tenant_route_backfill_roots | default(none)) is not none
+       else state_root | default('')] | flatten | map('string') | join(',')).split(',')
      | map('trim') | reject('equalto', '') | reject('equalto', 'pg') | unique | join(',') }}

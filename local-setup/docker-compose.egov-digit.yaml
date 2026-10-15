@@ -3265,8 +3265,8 @@ services:
       DIGIT_ADMIN_USERNAME: ${IDENTITY_DIGIT_ADMIN_USERNAME:-ADMIN}
       DIGIT_ADMIN_PASSWORD: ${IDENTITY_DIGIT_ADMIN_PASSWORD:-eGov@123}
       DIGIT_ADMIN_TENANT_ID: ${IDENTITY_DIGIT_ADMIN_TENANT_ID:-pg}
-      # Roots tenant-routes/_backfill may give an Organization. Unset or empty = the root of
-      # DIGIT_ADMIN_TENANT_ID; Ansible renders "," (no roots) when the deploy routes none.
+      # Roots tenant-routes/_backfill may give an Organization; empty = none. (identity-bff uses the
+      # root of DIGIT_ADMIN_TENANT_ID only when the variable is unset, which it never is here.)
       IDENTITY_TENANT_ROUTE_BACKFILL_ROOTS: ${IDENTITY_TENANT_ROUTE_BACKFILL_ROOTS:-}
       DIGIT_ADMIN_USER_TYPE: EMPLOYEE
       DIGIT_MANAGED_BASE_ROLES: EMPLOYEE

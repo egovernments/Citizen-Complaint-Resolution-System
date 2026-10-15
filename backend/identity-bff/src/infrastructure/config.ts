@@ -134,9 +134,10 @@ export const config = {
   // Existing-tenant routes (#2167): when true, startup gives every active
   // DIGIT ROOT tenant in IDENTITY_TENANT_ROUTE_BACKFILL_ROOTS that has no
   // Organization one whose URL slug is the tenant id. Never renames a slug.
+  // Roots unset: the root of DIGIT_ADMIN_TENANT_ID. Set but empty: none.
   identityTenantRouteBackfill: process.env.IDENTITY_TENANT_ROUTE_BACKFILL === "true",
   identityTenantRouteBackfillRoots: csv(
-    process.env.IDENTITY_TENANT_ROUTE_BACKFILL_ROOTS ||
+    process.env.IDENTITY_TENANT_ROUTE_BACKFILL_ROOTS ??
       (process.env.DIGIT_ADMIN_TENANT_ID || "").split(".")[0],
   ),
   identityAuditStreamMaxLength: parseInt(process.env.IDENTITY_AUDIT_STREAM_MAXLEN || "100000"),

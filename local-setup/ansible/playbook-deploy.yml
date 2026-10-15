@@ -7080,8 +7080,8 @@
     # onboarding workspace needs no write: a tenant with no workspace row already
     # reads DONE, so its admin lands on /manage. The control plane is not routed
     # through Kong, so this calls the BFF's loopback port. The roots are
-    # identity_route_backfill_roots (group_vars), never `pg`: like every other
-    # root step this skips a host rooted at `pg`.
+    # identity_route_backfill_roots (group_vars), never `pg`, and empty on a host
+    # rooted at `pg`.
     - name: "identity-bootstrap — Organization route for the deploy-seeded root"
       ansible.builtin.uri:
         url: http://127.0.0.1:18400/internal/identity/v1/tenant-routes/_backfill
@@ -7107,7 +7107,6 @@
       no_log: true
       when:
         - enable_keycloak | default(false)
-        - state_root != 'pg'
         - identity_route_backfill_roots | length > 0
 
     - name: "identity-bootstrap — fail: identity-bff rejected the control-plane token"
