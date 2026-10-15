@@ -1,6 +1,6 @@
-// No boundary-relationships read at a tenant WITHOUT a boundary hierarchy.
+// no boundary-relationships read at a tenant WITHOUT a boundary hierarchy.
 //
-// A state whose boundaries live at its child tenants has no hierarchy of its own, and
+// In the county layout the state (ke) has no hierarchy of its own - the boundaries live at its counties - and
 // boundary-relationships/_search there answers 400 HIERARCHY_DEFINITION_DOES_NOT_EXIST. Several readers ask it at the
 // session tenant (pgr PGRInitialization and BoundaryService, useTenantBoundaries, PGRDetails, useComplaintDetails,
 // Location.js, BoundaryFilter, HRMS jurisdiction), so the state admin's File a Complaint and inbox logged a 400 each
@@ -44,6 +44,23 @@ export async function hierarchyMissing(url, params, search) {
 }
 
 export const emptyTenantBoundary = () => ({ ResponseInfo: { status: "successful" }, TenantBoundary: [] });
+
+/**
+ * The state's answer: ONE TenantBoundary whose roots are the counties' trees (each root keeps its own tenantId), so a
+ * reader walking TenantBoundary[0].boundary offers county -> sub-county -> ward. `answers` are the counties' own
+ * relationships responses; an empty list gives the empty tree.
+ */
+export function unionTenantBoundary(tenantId, hierarchyType, answers) {
+  const boundary = [];
+  for (const a of answers || []) {
+    for (const tb of a?.TenantBoundary || []) {
+      for (const node of (Array.isArray(tb?.boundary) ? tb.boundary : tb?.boundary ? [tb.boundary] : [])) {
+        boundary.push({ ...node, tenantId: node.tenantId || tb.tenantId });
+      }
+    }
+  }
+  return { ResponseInfo: { status: "successful" }, TenantBoundary: boundary.length ? [{ tenantId, hierarchyType, boundary }] : [] };
+}
 
 /** tests only */
 export const _resetBoundaryGuard = () => known.clear();

@@ -1,4 +1,4 @@
-// No boundary-relationships read at a tenant without a hierarchy (a state whose boundaries live at its child tenants answered 400
+// no boundary-relationships read at a tenant without a hierarchy (digit-3's state ke answered 400
 // HIERARCHY_DEFINITION_DOES_NOT_EXIST to the state admin's File a Complaint and inbox).
 // Run from digit-ui-esbuild/:  node --test tests/boundaryGuard.test.js
 
@@ -62,6 +62,18 @@ test("only a positive answer is cached; unknown and other URLs are sent as befor
 
 test("Request asks the guard before every send", () => {
   const src = fs.readFileSync(path.join(__dirname, "../packages/libraries/src/services/atoms/Utils/Request.js"), "utf8");
-  assert.match(src, /import \{ hierarchyMissing, emptyTenantBoundary \} from "\.\/boundaryGuard"/);
+  assert.match(src, /import \{ hierarchyMissing, emptyTenantBoundary, unionTenantBoundary \} from "\.\/boundaryGuard"/);
+  assert.match(src, /enterableChildTenants\(params\.tenantId/, "only the counties the user can enter");
   assert.ok(src.indexOf("hierarchyMissing(url, params") < src.indexOf("await Axios({ method, url: _url, data, params, headers, paramsSerializer"));
+});
+
+test("the state's answer is one tree whose roots are the counties' trees (each root keeps its tenant)", () => {
+  const g = load();
+  const bomet = { TenantBoundary: [{ tenantId: "ke.bomet", hierarchyType: "ADMIN", boundary: [{ code: "BOMET", boundaryType: "County", children: [{ code: "BOMET_W1" }] }] }] };
+  const nairobi = { TenantBoundary: [{ tenantId: "ke.nairobi", hierarchyType: "ADMIN", boundary: [{ code: "NAIROBI", boundaryType: "County", children: [] }] }] };
+  const u = g.unionTenantBoundary("ke", "ADMIN", [bomet, null, nairobi]);
+  assert.equal(u.TenantBoundary.length, 1);
+  assert.equal(u.TenantBoundary[0].tenantId, "ke");
+  assert.deepEqual(u.TenantBoundary[0].boundary.map((b) => [b.code, b.tenantId]), [["BOMET", "ke.bomet"], ["NAIROBI", "ke.nairobi"]]);
+  assert.deepEqual(g.unionTenantBoundary("ke", "ADMIN", []).TenantBoundary, [], "no county: the empty tree");
 });
