@@ -6,7 +6,7 @@ import { resolve } from 'node:path';
 describe('react-admin telemetry', () => {
   it('the management app turns it off', () => {
     const app = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
-    const tags = app.match(/<CoreAdminUI\b[^>]*>/g) ?? [];
+    const tags = app.match(/<CoreAdminUI\s[^>]*>/g) ?? []; // the JSX element, not a "<CoreAdminUI>" in a comment
     expect(tags.length).toBeGreaterThan(0);
     for (const t of tags) expect(t).toMatch(/\bdisableTelemetry\b/);
   });
