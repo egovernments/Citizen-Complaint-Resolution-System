@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useApp } from '../../App';
 import { apiClient } from '@/api/client';
 import { boundaryService } from '@/api/services/boundary';
 import { BoundaryMap } from '@/components/ui/BoundaryMap';
@@ -40,6 +42,8 @@ function hasRealGeometry(g?: { type: string; coordinates: unknown }): boolean {
 // incomplete or inconsistent — geometry lives on the entity, not the tree.
 export function BoundaryOverviewMap() {
   const tenantId = apiClient.getAuth().tenantId;
+  const { setMode } = useApp();
+  const navigate = useNavigate();
   const mapProvider = useMapProviderConfig(tenantId);
   const [features, setFeatures] = useState<Feature[]>([]);
   const [status, setStatus] = useState<'idle' | 'loading' | 'empty' | 'ready' | 'error'>('idle');
@@ -89,7 +93,11 @@ export function BoundaryOverviewMap() {
       {status === 'error' && <div className="text-sm text-red-600">Could not load boundaries for this tenant.</div>}
       {status === 'empty' && (
         <div className="text-sm text-gray-500">
-          No boundaries with real map geometry yet. Bring them in from the Geography step (Fetch boundaries) to populate them.
+          {/* ours (cfgreview F19, #1565): the step is in the setup wizard, not on this screen; link to it */}
+          No boundaries with map shapes yet. Fetch them in{' '}
+          <button type="button" className="underline" onClick={() => { setMode('onboarding'); navigate('/onboarding/geography'); }}>
+            Setup &gt; Geography (Fetch boundaries)
+          </button>.
         </div>
       )}
       {status === 'ready' && (

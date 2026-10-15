@@ -141,6 +141,17 @@ const mainLinks = [
   { path: '/manage/public-dashboard', nameKey: 'app.nav.public_dashboard', icon: Globe2 },
 ];
 
+// ours (cfgreview F19, #1565): Boundaries sits next to Hierarchies (they are one subject), not under System
+{
+  const from = navGroups.find((g) => g.items.some((i) => i.id === 'boundaries'));
+  const to = navGroups.find((g) => g.items.some((i) => i.id === 'boundary-hierarchies'));
+  const item = from?.items.find((i) => i.id === 'boundaries');
+  if (from && to && item && from !== to) {
+    from.items = from.items.filter((i) => i.id !== 'boundaries');
+    to.items.splice(to.items.findIndex((i) => i.id === 'boundary-hierarchies') + 1, 0, item);
+  }
+}
+
 /** Every resource id that already has its own entry in a primary nav group. */
 const primaryNavIds = new Set(navGroups.flatMap((group) => group.items.map((item) => item.id)));
 
@@ -488,6 +499,8 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
         {/* Main content */}
         <main id="main-content" className="flex-1 p-4 sm:p-6 overflow-auto min-h-0">
           {children}
+          {/* ours (#1954): after a switch made for a screen (a county's boundaries), open it */}
+          <AfterSwitchLanding />
         </main>
 
         {/* Powered by DIGIT (CCRS#1841) + Open DIGIT Docs */}
@@ -497,3 +510,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
     </div>
   );
 }
+
+// ours (#1954): an ES import is hoisted wherever it is written; kept at the end so the import block other layers
+// edit is untouched
+import { AfterSwitchLanding } from './afterSwitch';
