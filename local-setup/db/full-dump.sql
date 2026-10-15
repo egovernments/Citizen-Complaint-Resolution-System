@@ -7078,7 +7078,7 @@ a87d06b2-26a9-5ee1-8cc2-72a66c66ab10	fr_FR	CS_REJECTION__INSUFFICIENT_INFO	Infor
 acfa4f67-aedf-5aad-b7e8-ee4dec28a6b2	fr_FR	CS_REJECTION__NOT_PUBLIC_INFRA	Pas une infrastructure publique	pg	rainmaker-pgr	1	2026-10-14 00:00:00	\N	\N
 aea9ac46-64f6-5b91-b856-b0676baef380	fr_FR	CS_REJECTION__OUTSIDE_JURISDICTION	Hors juridiction	pg	rainmaker-pgr	1	2026-10-14 00:00:00	\N	\N
 1ef5abc3-9fa4-5f1e-a163-b4c5ab82b748	fr_FR	CS_REJECTION__OUT_OF_SCOPE	Hors périmètre	pg	rainmaker-pgr	1	2026-10-14 00:00:00	\N	\N
-604b89f9-2c43-5f9d-a3ff-2dc29a68b49a	fr_FR	CS_REJECT_COMPLAINT	Nom de l'employé	pg	rainmaker-pgr	1	2026-10-14 00:00:00	\N	\N
+604b89f9-2c43-5f9d-a3ff-2dc29a68b49a	fr_FR	CS_REJECT_COMPLAINT	Motif du rejet	pg	rainmaker-pgr	1	2026-10-14 00:00:00	\N	\N
 86493c25-7f51-58bb-81e2-503467d865bb	fr_FR	CS_SEARCH_ERROR	La recherche a échoué. Veuillez réessayer.	pg	rainmaker-pgr	1	2026-10-14 00:00:00	\N	\N
 08cf7f13-858e-597c-a699-ff1018f3c4bd	fr_FR	CS_SELECT_AREA	Tracer une zone sur la carte	pg	rainmaker-pgr	1	2026-10-14 00:00:00	\N	\N
 51b986f0-074d-5b0a-8812-bbdab4394f2f	fr_FR	CS_VOICE_FAILED	La saisie vocale s'est arrêtée de façon inattendue. Réessayez.	pg	rainmaker-pgr	1	2026-10-14 00:00:00	\N	\N
@@ -7647,7 +7647,7 @@ f67fd3f5-9dad-5a2a-b408-87d9cafe9177	pt_BR	CS_REJECTION_OUT_OF_SCOPE	Fora do esc
 d0d56c2f-4990-5ea7-991f-01e9c95302b5	pt_BR	CS_REJECTION__NOT_PUBLIC_INFRA	Não é infraestrutura pública	pg	rainmaker-pgr	1	2026-10-14 00:00:00	\N	\N
 71c38261-97f2-573a-87c8-3bd41e7465a4	pt_BR	CS_REJECTION__OUTSIDE_JURISDICTION	Fora da jurisdição	pg	rainmaker-pgr	1	2026-10-14 00:00:00	\N	\N
 97187afb-3348-5cf8-bb2b-7721755b518e	pt_BR	CS_REJECTION__OUT_OF_SCOPE	Fora do escopo	pg	rainmaker-pgr	1	2026-10-14 00:00:00	\N	\N
-eafe724a-aabb-5a48-aeaf-11d3d7541281	pt_BR	CS_REJECT_COMPLAINT	Nome do funcionário	pg	rainmaker-pgr	1	2026-10-14 00:00:00	\N	\N
+eafe724a-aabb-5a48-aeaf-11d3d7541281	pt_BR	CS_REJECT_COMPLAINT	Motivo da rejeição	pg	rainmaker-pgr	1	2026-10-14 00:00:00	\N	\N
 ce6a83e8-f0bb-53fd-bd1c-710b018e9c9f	pt_BR	CS_SEARCH_ERROR	A pesquisa não funcionou. Tente novamente.	pg	rainmaker-pgr	1	2026-10-14 00:00:00	\N	\N
 03183fcb-ce35-55a1-b3d6-b59a24b592bd	pt_BR	CS_SELECT_AREA	Desenhe uma área no mapa	pg	rainmaker-pgr	1	2026-10-14 00:00:00	\N	\N
 3c9067bf-894f-529a-8e32-9b5e9cf27fbf	pt_BR	CS_VOICE_FAILED	A entrada de voz parou inesperadamente. Tente novamente.	pg	rainmaker-pgr	1	2026-10-14 00:00:00	\N	\N

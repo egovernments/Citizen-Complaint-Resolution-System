@@ -222,7 +222,7 @@
 {"code": "CS_REJECTION__NOT_PUBLIC_INFRA", "message": "Pas une infrastructure publique", "module": "rainmaker-pgr", "locale": "fr_FR"},
 {"code": "CS_REJECTION__OUTSIDE_JURISDICTION", "message": "Hors juridiction", "module": "rainmaker-pgr", "locale": "fr_FR"},
 {"code": "CS_REJECTION__OUT_OF_SCOPE", "message": "Hors périmètre", "module": "rainmaker-pgr", "locale": "fr_FR"},
-{"code": "CS_REJECT_COMPLAINT", "message": "Nom de l'employé", "module": "rainmaker-pgr", "locale": "fr_FR"},
+{"code": "CS_REJECT_COMPLAINT", "message": "Motif du rejet", "module": "rainmaker-pgr", "locale": "fr_FR"},
 {"code": "CS_SEARCH_ERROR", "message": "La recherche a échoué. Veuillez réessayer.", "module": "rainmaker-pgr", "locale": "fr_FR"},
 {"code": "CS_SELECT_AREA", "message": "Tracer une zone sur la carte", "module": "rainmaker-pgr", "locale": "fr_FR"},
 {"code": "CS_VOICE_FAILED", "message": "La saisie vocale s'est arrêtée de façon inattendue. Réessayez.", "module": "rainmaker-pgr", "locale": "fr_FR"},
