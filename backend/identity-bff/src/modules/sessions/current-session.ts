@@ -91,15 +91,14 @@ export async function currentSession(
           Math.floor((session.refreshExpiresAt - Date.now()) / 1000),
         );
       }
-      const sessionExpiresAt = session.sessionExpiresAt ||
-        Date.now() + config.identitySessionTtlSeconds * 1000;
+      // A refresh is use, so the session's end moves to the new refresh token's (saveIdentitySession).
       await saveIdentitySession(
         sessionId,
         tokens,
         claims,
-        Math.max(1, Math.floor((sessionExpiresAt - Date.now()) / 1000)),
+        undefined,
         oidcClientId,
-        sessionExpiresAt,
+        undefined,
         { surface: session.surface, boundTenant: session.boundTenant },
       );
       session = await getIdentitySession(sessionId);
