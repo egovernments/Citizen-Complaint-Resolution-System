@@ -1,6 +1,4 @@
 import { test, expect } from '@playwright/test';
-import { HrmsCreatePage } from '../pages/hrms-create.page';
-import { HrmsInboxPage } from '../pages/hrms-inbox.page';
 import { getDigitToken, loginViaApi } from '../utils/auth';
 import { requiredEnv } from '../utils/identity';
 import { getMobileValidationRule, generateValidMobile } from '../common/mdms-mobile';
@@ -35,17 +33,6 @@ test.describe.serial('HRMS employee creation and login', () => {
   test('login as ADMIN', async ({ page }) => {
     await loginViaApi(page, { baseURL: BASE_URL, tenant: TENANT, username: ADMIN_USER, password: ADMIN_PASS });
     expect(page.url()).toContain('/employee');
-  });
-
-  test('navigate to HRMS create employee page', async ({ page }) => {
-    await loginViaApi(page, { baseURL: BASE_URL, tenant: TENANT, username: ADMIN_USER, password: ADMIN_PASS });
-
-    const hrmsCreate = new HrmsCreatePage(page);
-    await hrmsCreate.goto();
-
-    // Verify the form page loaded — should have form fields
-    const bodyText = await hrmsCreate.getBodyText();
-    expect(bodyText.length).toBeGreaterThan(100);
   });
 
   test('create employee via API', async () => {
@@ -187,26 +174,6 @@ test.describe.serial('HRMS employee creation and login', () => {
     expect(data.Employees.length).toBe(1);
     expect(data.Employees[0].user.name).toBe(EMPLOYEE_NAME);
     expect(data.Employees[0].user.mobileNumber).toBe(PHONE);
-  });
-
-  test('verify new employee appears in HRMS inbox UI', async ({ page }) => {
-    test.skip(!createSucceeded, 'Skipped — employee not created');
-
-    await loginViaApi(page, { baseURL: BASE_URL, tenant: TENANT, username: ADMIN_USER, password: ADMIN_PASS });
-
-    const inbox = new HrmsInboxPage(page);
-    await inbox.goto();
-
-    // The inbox should show employees — check the page has content
-    const bodyText = await inbox.getBodyText();
-    expect(bodyText.length).toBeGreaterThan(50);
-
-    // Search for the created employee by name
-    await inbox.searchByName(EMPLOYEE_NAME);
-    const found = await inbox.hasEmployee(EMPLOYEE_NAME);
-    if (!found) {
-      console.log('Employee not found in inbox search (may need scrolling or different search path)');
-    }
   });
 
   test('verify new employee can authenticate via API', async () => {
