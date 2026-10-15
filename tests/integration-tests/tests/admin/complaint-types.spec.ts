@@ -162,7 +162,7 @@ Steps:
 3. Navigate to /complaint-types/create; fill the name field (input[name="name"]; labelled "Complaint Subcategory", "Complaint Sub-Type" before #2243, "Name" before that), Service Code, pick Department option, set SLA=24.
 4. Click Create; wait for navigation back to LIST_PATH.
 5. Search for the code in the list; click the row to open detail.
-6. Click Edit; set SLA to 72; click Save.
+6. Click Edit; set SLA to 72; click Save and wait for the MDMS _update response.
 7. mdmsSearch at TENANT_CODE for [code]; assert data.slaHours === 72.
 
 Cleanup is API-only — soft-deletes via cleanupMdms in afterAll because there's no UI delete affordance for complaint types.`,
@@ -220,7 +220,13 @@ Cleanup is API-only — soft-deletes via cleanupMdms in afterAll because there's
     await page.getByRole('button', { name: /^Edit$/i }).click();
     const sla = page.getByLabel(/SLA/i);
     await sla.fill('72');
+    // The click resolves when it is dispatched; search only after MDMS has the update.
+    const saved = page.waitForResponse(
+      (r) => r.request().method() === 'POST' && new URL(r.url()).pathname.includes('/_update'),
+      { timeout: 30_000 },
+    );
     await page.getByRole('button', { name: /^Save$/i }).click();
+    expect((await saved).ok(), 'the configurator MDMS _update for the SLA edit').toBe(true);
 
     // --- Verify SLA persisted via MDMS ---
     const afterEdit = await mdmsSearch(auth, TENANT_CODE, SCHEMA, {

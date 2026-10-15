@@ -4,9 +4,7 @@ import { enterHostedUsername } from '../utils/identity-bff';
 import { detectConfiguratorLogin } from '../utils/configurator-auth';
 
 // Replaces the three legacy/form-conditional cases without conditional skips.
-// Traces record values typed with fill, and this spec types the admin login
-// into the hosted form; keep it out of the published trace.
-test.use({ storageState: { cookies: [], origins: [] }, trace: 'off' });
+test.use({ storageState: { cookies: [], origins: [] } });
 test.describe('Configurator hosted sign-in', () => {
   test('fresh configurator contains no credential or tenant inputs', { tag: ['@area:auth', '@area:configurator-manage', '@persona:admin'] }, async ({ page }) => {
     expect(await detectConfiguratorLogin(page)).toBe('hosted');

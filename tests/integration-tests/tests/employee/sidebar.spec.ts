@@ -34,9 +34,6 @@ import { BASE_URL, TENANT, ROOT_TENANT, ADMIN_USER, ADMIN_PASS, LOCALES } from '
 import { loginViaApi } from '../utils/auth';
 import { surfacePath } from '../utils/identity-bff';
 
-// Signs in through the browser (loginViaApi types the persona password into
-// the hosted form), and traces record filled values: keep it out of the trace.
-test.use({ trace: 'off' });
 
 // The tenant comes from the URL slug since #1999; tenantless /digit-ui/... 404s.
 // A function, so a missing slug fails the test rather than the file's collection.

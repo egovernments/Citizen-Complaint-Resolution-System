@@ -19,15 +19,12 @@
  *   #622       Post-login shell mounts (no 503/something-went-wrong)
  */
 import { test, expect } from '@playwright/test';
-import { BASE_URL, EMPLOYEE_USER, EMPLOYEE_PASS } from '../utils/env';
+import { BASE_URL, EMPLOYEE_USER, EMPLOYEE_PASS, TENANT } from '../utils/env';
 import { readLifecycleFixtures } from '../utils/lifecycle-fixtures';
-import { authorizeUrl, hostedSignIn, surfacePath, tenantSlug } from '../utils/identity-bff';
+import { loginViaApi } from '../utils/auth';
+import { authorizeUrl, surfacePath, tenantSlug } from '../utils/identity-bff';
 
 const GLOBAL_CONFIGS_URL = '/digit-ui/globalConfigs.js';
-
-// hostedSignIn types the persona password into the hosted form, and traces
-// record filled values: keep this spec out of the published trace.
-test.use({ trace: 'off' });
 
 const _fixtures = readLifecycleFixtures();
 /**
@@ -97,6 +94,13 @@ test.describe('employee digit-ui shell bundle', () => {
      */
     const logo = page.locator('.dg-banner-header__logo').first();
     await expect(logo, '#505 sub-3 — the sign-in header logo must render').toBeVisible();
+    // The CSS gives the <img> its box before the request lands: wait for the decode.
+    await expect
+      .poll(() => logo.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0), {
+        message: '#505 sub-3 — logo image must actually load',
+        timeout: 15_000,
+      })
+      .toBe(true);
     const logoBox = await logo.evaluate((img: HTMLImageElement) => ({
       w: img.offsetWidth, h: img.offsetHeight, natW: img.naturalWidth, natH: img.naturalHeight,
     }));
@@ -106,7 +110,9 @@ test.describe('employee digit-ui shell bundle', () => {
     expect(logoBox.h, '#505 sub-3 logo laid-out height').toBeGreaterThanOrEqual(20);
 
     // ============ #622 — sign-in completes and the shell mounts ============
-    await hostedSignIn(page, { baseURL: BASE_URL, surface: 'employee', username: EMPLOYEE_USER, password: EMPLOYEE_PASS });
+    // The persona signs in without the page (loginViaApi), so its password is
+    // never typed into a traced browser; the hosted form above is only looked at.
+    await loginViaApi(page, { tenant: TENANT, username: EMPLOYEE_USER, password: EMPLOYEE_PASS });
     await page.waitForURL(/\/digit-ui\/employee(?!\/user\/login)/, { timeout: 30_000 });
     await page.waitForTimeout(3_000);
 
@@ -115,13 +121,20 @@ test.describe('employee digit-ui shell bundle', () => {
      * The header renders the initial of the user's DISPLAY NAME, not of their
      * username: TopBar.js passes `userDetails.info.name` to the Dropdown's
      * `profilePic` prop, and Dropdown renders a string prop as
-     * `profilePic[0].toUpperCase()`. Read the name from the same session
-     * object the header reads (Digit.UserService.getUser()), instead of a
-     * second hosted sign-in.
+     * `profilePic[0].toUpperCase()`. The expectation comes from egov-user's
+     * own record, not from the session the header reads: if the context
+     * exchange put the username in info.name, both would agree on the wrong
+     * initial.
      */
-    const displayName = String(
-      (await page.evaluate(() => (window as any).Digit?.UserService?.getUser?.()?.info?.name)) ?? '',
-    ).trim();
+    const session = await page.evaluate(() => {
+      const user = (window as any).Digit?.UserService?.getUser?.();
+      return { token: user?.access_token as string, uuid: user?.info?.uuid as string, tenantId: user?.info?.tenantId as string };
+    });
+    const userSearch = await page.request.post(`${BASE_URL}/user/_search`, {
+      data: { RequestInfo: { authToken: session.token }, tenantId: session.tenantId || TENANT, uuid: [session.uuid] },
+    });
+    expect(userSearch.status(), '#505 sub-2 — egov-user must return the signed-in employee').toBe(200);
+    const displayName = String((await userSearch.json()).user?.[0]?.name ?? '').trim();
     expect(
       displayName,
       `#505 sub-2 — no display name in the session for ${EMPLOYEE_USER}; the header initial has no expectation to compare against`,

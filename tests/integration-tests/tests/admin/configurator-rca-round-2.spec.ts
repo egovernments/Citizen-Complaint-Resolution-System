@@ -2,8 +2,10 @@
  * Configurator RCA round 2: the two checks kept from
  * configurator/e2e-onboarding/configurator-rca-round-2.spec.ts when that
  * suite was retired (#2398 D). Its other checks have counterparts here:
- * #417 in admin/recently-shipped-fixes, #461/#462 in
- * specs/configurator/user-create, and #459 was city-tenant only (decision 2).
+ * #417 in admin/recently-shipped-fixes, #461/#462 in admin/users (test 2)
+ * and specs/configurator/user-create, and #459 was city-tenant only
+ * (decision 2). The configurator copy is deleted by #2448, which merges after
+ * this port.
  *
  * The configurator session comes from the chromium project's storageState.
  */
