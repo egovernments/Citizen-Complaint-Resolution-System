@@ -488,6 +488,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
         {/* Main content */}
         <main id="main-content" className="flex-1 p-4 sm:p-6 overflow-auto min-h-0">
           {children}
+          <AfterSwitchLanding />
         </main>
 
         {/* Powered by DIGIT (CCRS#1841) + Open DIGIT Docs */}
@@ -497,3 +498,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
     </div>
   );
 }
+
+// ours (#1945): mounted under the page content (an ES import is hoisted wherever it is written; kept at the end so
+// the import block other layers edit is untouched)
+import { AfterSwitchLanding } from './countyOverride/CountyOverrideNotice';

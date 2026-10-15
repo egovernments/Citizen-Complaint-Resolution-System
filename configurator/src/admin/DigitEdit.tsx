@@ -1,5 +1,6 @@
 import React from 'react';
 import { MASTER_SCREEN_META } from './masterScreens';
+import { CountyOverrideNotice } from './countyOverride/CountyOverrideNotice'; // ours (#1945)
 import { EditBase, useEditContext, Form, useResourceContext, useRedirect, type TransformData, type RaRecord } from 'ra-core';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Save, RefreshCw } from 'lucide-react';
@@ -160,6 +161,8 @@ function DigitEditContent({
       {/* Form card */}
       <DigitCard className="max-w-none">
         <MutationErrorBanner info={errorInfo} onDismiss={onDismissError} />
+        {/* ours (#1945): at the state, a county that keeps its own copy of this record does not use this one */}
+        <CountyOverrideNotice resource={resource} record={record as Record<string, unknown> | undefined} />
         {!canEdit && (
           <div className="mb-4 rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
             Your role has view-only access to this master.
