@@ -191,7 +191,7 @@ def r_mcp_registry(cfg):
     "common-masters.MobileNumberValidation (the playbook's own preflight "
     "hard-fail, playbook-deploy.yml) only accepts countryCode + "
     "mobileNumberRegex — length and allowed starting digits are derived from "
-    "the regex at runtime (filter_plugins/mobile.py, tests/global-setup.ts), "
+    "the regex at runtime (filter_plugins/mobile.py, tests/e2e/common/mdms-mobile.ts), "
     "not carried as separate fields. A regex that fails to compile breaks "
     "that derivation everywhere it's used, and citizens/tests mint numbers "
     "the server rejects with INVALID_MOBILE_FORMAT (PR #841 discussion).",

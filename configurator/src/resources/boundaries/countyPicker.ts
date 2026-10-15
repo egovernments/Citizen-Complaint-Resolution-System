@@ -26,3 +26,13 @@ export function enterableCounties(counties: County[], memberships: Membership[] 
 export function asksForCounty(tenant: string, counties: County[]): boolean {
   return !!tenant && !tenant.includes('.') && counties.length > 0;
 }
+
+/**
+ * Still deciding whether to ask: only at a state root, until its counties and the admin's memberships are read.
+ * Below the root there is nothing to wait for (#1954: a county's Create waited for a membership read it never started,
+ * and rendered nothing).
+ */
+export function pickerLoading(tenant: string, counties: County[] | null, memberships: unknown[] | null | undefined): boolean {
+  if (!tenant || tenant.includes('.')) return false;
+  return counties === null || memberships === undefined;
+}

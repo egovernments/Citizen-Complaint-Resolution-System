@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { asksForCounty, enterableCounties } from './countyPicker';
+import { asksForCounty, enterableCounties, pickerLoading } from './countyPicker';
 
 // ours #1954: Boundaries at a county-layout state asks "which county?" and offers only counties the admin can enter
 const COUNTIES = [{ code: 'ke.bomet', name: 'Bomet' }, { code: 'ke.nairobi', name: 'Nairobi' }];
@@ -25,5 +25,12 @@ describe('which county (boundaries at the state)', () => {
 
   it('without an identity session every county is offered (the server decides on entry)', () => {
     expect(enterableCounties(COUNTIES, null)).toEqual(COUNTIES);
+  });
+
+  it('a county never waits (its Create rendered nothing while waiting for a read it never started)', () => {
+    expect(pickerLoading('ke.bomet', [], undefined)).toBe(false);
+    expect(pickerLoading('ke', null, undefined)).toBe(true);
+    expect(pickerLoading('ke', COUNTIES, undefined)).toBe(true);
+    expect(pickerLoading('ke', COUNTIES, null)).toBe(false);
   });
 });

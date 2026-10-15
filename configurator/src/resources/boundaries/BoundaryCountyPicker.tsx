@@ -5,7 +5,7 @@ import { digitClient } from '@/providers/bridge';
 import { countiesOf } from '@digit-mcp/data-provider';
 import { tenants as identityTenants } from '@/api/onboarding';
 import { openAtTenant } from '@/admin/afterSwitch';
-import { asksForCounty, enterableCounties, type County } from './countyPicker';
+import { asksForCounty, enterableCounties, pickerLoading, type County } from './countyPicker';
 
 /**
  * ours (#1954, owner 2026-10-15): at a state whose boundaries live in its counties, "Which county's boundaries?".
@@ -27,8 +27,8 @@ export function useStateCounties(): { asks: boolean; counties: County[]; loading
       .catch(() => { if (live) setMemberships(null); });
     return () => { live = false; };
   }, [tenant]);
-  const loading = all === null || memberships === undefined;
-  const counties = loading ? [] : enterableCounties(all!, memberships as never);
+  const loading = pickerLoading(tenant, all, memberships);
+  const counties = loading || all === null ? [] : enterableCounties(all, (memberships ?? null) as never);
   return { asks: !loading && asksForCounty(tenant, all ?? []), counties, loading };
 }
 
