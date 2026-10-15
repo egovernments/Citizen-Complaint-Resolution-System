@@ -224,7 +224,7 @@ Every step is a hard assertion: the previous version had three test.skip guards 
 
     // Search for our seeded code — the list's `q` filter is a full-record
     // substring match (dataProvider.clientFilter), so the code finds the row.
-    const search = page.getByPlaceholder(/search/i).first();
+    const search = page.locator('#main-content').getByPlaceholder(/search/i).first();
     await expect(search).toBeVisible();
     await search.fill(code);
 
@@ -308,7 +308,7 @@ Step 5 used to be a one-shot isVisible() check that self-skipped the assertion; 
     await page.goto(LIST_PATH);
     await page.waitForLoadState('networkidle').catch(() => {});
 
-    const search = page.getByPlaceholder(/search/i).first();
+    const search = page.locator('#main-content').getByPlaceholder(/search/i).first();
     await expect(search).toBeVisible();
     await search.fill(code);
 

@@ -76,7 +76,7 @@ Catalog test — if a label gets renamed legitimately, update this spec and Stor
 
     const body = page.locator('body');
     await expect(body).not.toContainText('Something went wrong');
-    await expect(body).toContainText('Complaint Management System');
+    await expect(body).toContainText(/Complaints? Management System/); // tenant-localized module title
     await expect(body).toContainText('File a Complaint');
     await expect(body).toContainText('My Complaints');
 
@@ -125,7 +125,7 @@ If the brand assets ever land as real DOM text, extend this spec — leaving the
     // hero, not DOM text. The "PGR" badge is also absent on digit-ui v2
     // builds (Ethiopia) — asserting only on the actionable content which
     // is stable across both v1 and v2 layouts.
-    await expect(body).toContainText('Complaint Management System');
+    await expect(body).toContainText(/Complaints? Management System/); // tenant-localized module title
     await expect(body).toContainText('My Complaints');
     await expect(body).toContainText('File a Complaint');
   });

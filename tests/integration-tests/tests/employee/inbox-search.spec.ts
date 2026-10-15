@@ -87,6 +87,9 @@ async function openInbox(page: Page): Promise<void> {
     page.waitForResponse((r) => SEARCH_RE.test(r.url()) && r.request().method() === 'POST', { timeout: 30_000 }).catch(() => null),
     page.goto(identityInboxUrl(), { waitUntil: 'domcontentloaded', timeout: 30_000 }),
   ]);
+  // The inbox opens on "My Complaints", which is honestly empty (no table at all)
+  // for a viewer nobody assigned anything to: widen to "All Complaints" first.
+  await showAllInboxRows(page);
   await page.locator('[role="row"]').first().waitFor({ state: 'visible', timeout: 20_000 });
   await page.waitForTimeout(1_500);
 }

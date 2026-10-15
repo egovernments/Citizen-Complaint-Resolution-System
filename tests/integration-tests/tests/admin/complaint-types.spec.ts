@@ -211,7 +211,7 @@ Cleanup is API-only — soft-deletes via cleanupMdms in afterAll because there's
     const auth = loadAuth();
 
     // --- Edit SLA ---
-    await page.getByPlaceholder(/search/i).first().fill(code);
+    await page.locator('#main-content').getByPlaceholder(/search/i).first().fill(code);
     await page.waitForLoadState('networkidle').catch(() => {});
     const row = page.getByRole('row').filter({ hasText: code });
     await expect(row).toBeVisible();

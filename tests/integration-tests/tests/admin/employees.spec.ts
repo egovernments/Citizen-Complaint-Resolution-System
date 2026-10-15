@@ -280,7 +280,7 @@ Mutation-tested: deleting the \`search.fill(needle)\` line turns step 4 red
     );
 
     // ── search narrows to exactly the matching row ──────────────────────────
-    const search = page.getByPlaceholder(/search/i).first();
+    const search = page.locator('#main-content').getByPlaceholder(/search/i).first();
     await expect(search).toBeVisible();
     await search.fill(needle!);
     // expect.poll, not a bare read: the grid debounces the filter, so an
@@ -561,7 +561,7 @@ Code and Username are write-once because HRMS doesn't allow mutating either afte
     ]);
 
     // Navigate into the row → edit.
-    await page.getByPlaceholder(/search/i).first().fill(code);
+    await page.locator('#main-content').getByPlaceholder(/search/i).first().fill(code);
     await page.waitForLoadState('networkidle').catch(() => {});
     const row = page.getByRole('row').filter({ hasText: code });
     await expect(row).toBeVisible();
@@ -668,7 +668,7 @@ Hermetic: doesn't rely on tenant content — seeds and verifies its own employee
 
     // Open Edit via list-row click (same entry-point as test 4).
     await page.goto(LIST_PATH);
-    await page.getByPlaceholder(/search/i).first().fill(code);
+    await page.locator('#main-content').getByPlaceholder(/search/i).first().fill(code);
     await page.waitForLoadState('networkidle').catch(() => {});
     await page.getByRole('row').filter({ hasText: code }).click();
     await page.getByRole('button', { name: /^Edit$/i }).click();
@@ -782,7 +782,7 @@ The MDMS reason source is asserted indirectly — if the dropdown has no options
 
     // Edit via UI → flip Status to Inactive → reason renders → save.
     await page.goto(LIST_PATH);
-    await page.getByPlaceholder(/search/i).first().fill(code);
+    await page.locator('#main-content').getByPlaceholder(/search/i).first().fill(code);
     await page.waitForLoadState('networkidle').catch(() => {});
     await page.getByRole('row').filter({ hasText: code }).click();
     await page.getByRole('button', { name: /^Edit$/i }).click();

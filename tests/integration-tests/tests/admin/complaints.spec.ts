@@ -287,6 +287,8 @@ Catches a regression where description doesn't ride along with the workflow tran
     // never matches them — locate by role + accessible name (same pattern the
     // Status/Department filters needed).
     const assigneeSelect = page.getByRole('combobox').filter({ hasText: /select employee/i }).first();
+    // The picker renders after ASSIGN is chosen and its employee reference loads.
+    await assigneeSelect.waitFor({ state: 'visible', timeout: 15_000 }).catch(() => {});
     if (await assigneeSelect.isVisible().catch(() => false)) {
       await assigneeSelect.click();
       // Click the first available employee option — we already validated
@@ -990,6 +992,8 @@ Both client-side (single XHR count) and server-side (persistence) checks — tog
     await actionSelect.click({ timeout: 20_000, force: true });
     await chooseAssignAction(page);
     const assigneeSelect = page.getByRole('combobox').filter({ hasText: /select employee/i }).first();
+    // The picker renders after ASSIGN is chosen and its employee reference loads.
+    await assigneeSelect.waitFor({ state: 'visible', timeout: 15_000 }).catch(() => {});
     if (await assigneeSelect.isVisible().catch(() => false)) {
       await assigneeSelect.click();
       // Pick the department-valid assignee resolved in beforeAll. The dropdown is
@@ -1143,23 +1147,6 @@ Mutation-proven: flipping the status to a nonsense state drops 'queue' to 0 and 
 
 // --- Local helpers ---
 
-/** Locate a radix Select trigger sitting in the same wrapper <div> as a
- *  given field <Label> text. These cascade selects don't associate their
- *  label via htmlFor, so getByLabel can't reach them — anchor on the label
- *  text and take the combobox in the innermost enclosing div. */
-function triggerNearLabel(
-  page: import('@playwright/test').Page,
-  labelText: RegExp,
-): import('@playwright/test').Locator {
-  return page
-    .locator('div')
-    .filter({ has: page.getByText(labelText) })
-    .filter({ has: page.getByRole('combobox') })
-    .last()
-    .getByRole('combobox')
-    .first();
-}
-
 async function pickComplaintType(
   page: import('@playwright/test').Page,
 ): Promise<void> {
@@ -1168,8 +1155,11 @@ async function pickComplaintType(
   // at each level until the deepest (terminal) level is chosen, which is what
   // sets the form's serviceCode. Deeper levels are hidden once a branch is
   // terminal, so a missing/disabled next level just ends the walk.
-  for (const lbl of [/^Category$/i, /^Sub-?Type$/i]) {
-    const sel = triggerNearLabel(page, lbl);
+  // Level labels are tenant data (RAINMAKER-PGR.ComplaintHierarchyDefinition:
+  // "Category", "Complaint Category", …), so find each level by its own empty
+  // placeholder instead: the next unpicked level is the first "Select…" trigger.
+  for (let level = 0; level < 4; level++) {
+    const sel = page.getByRole('combobox').filter({ hasText: /^Select…$/ }).first();
     if (!(await sel.isVisible({ timeout: 8_000 }).catch(() => false))) break;
     if (!(await sel.isEnabled().catch(() => false))) break;
     await sel.click();
