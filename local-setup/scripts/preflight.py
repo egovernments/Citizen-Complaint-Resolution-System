@@ -241,6 +241,29 @@ def r_ci_tests(cfg):
 
 
 @rule(
+    "playwright-needs-workspace-and-logins",
+    "run_playwright_tests opens /<slug>/digit-ui/ on one root workspace and signs in "
+    "with the personas in e2e_env (local-setup/tests/README.md). A missing one "
+    "surfaced only when a spec ran, after the npm and Chromium installs (#2398 "
+    "review). The playbook asserts the same before installing.",
+)
+def r_playwright(cfg):
+    if not (as_bool(get(cfg, "run_ci_tests", False)) and as_bool(get(cfg, "run_playwright_tests", False))):
+        return
+    if not (get(cfg, "e2e_tenant_slug") or get(cfg, "digit_ui_default_tenant_slug")):
+        yield (FAIL, "run_playwright_tests: true needs e2e_tenant_slug or digit_ui_default_tenant_slug "
+                     "(the workspace's URL slug).")
+    env = get(cfg, "e2e_env") or {}
+    required = ["DIGIT_USERNAME", "DIGIT_PASSWORD"]
+    if as_bool(get(cfg, "identity_dev_fixed_otp", False)):
+        # citizen-pgr-complaint-api runs only here: the LME persona and the fixed OTP.
+        required += ["EMPLOYEE_USER", "EMPLOYEE_PASSWORD", "IDENTITY_TEST_OTP_CODE"]
+    missing = [key for key in required if not (isinstance(env, dict) and env.get(key))]
+    if missing:
+        yield (FAIL, f"run_playwright_tests: true needs e2e_env {', '.join(missing)}.")
+
+
+@rule(
     "digit-ui-mode-enum",
     "digit_ui_mode drives a three-way converge (static|hmr|container) — both "
     "static and hmr bind port 18080, so a typo'd mode skips the kill-the-other-"
@@ -478,6 +501,20 @@ SELF_TEST_CASES = [
      set()),
     ("ci tests without boot tenant fires", {"run_ci_tests": True},
      {"ci-tests-need-boot-tenant"}),
+    ("playwright without slug or logins fires",
+     {"run_ci_tests": True, "boot_tenant": "ke", "run_playwright_tests": True},
+     {"playwright-needs-workspace-and-logins"}),
+    ("playwright with fixed OTP needs the LME persona and the OTP",
+     {"run_ci_tests": True, "boot_tenant": "ke", "run_playwright_tests": True,
+      "digit_ui_default_tenant_slug": "ke", "identity_dev_fixed_otp": True,
+      "e2e_env": {"DIGIT_USERNAME": "a", "DIGIT_PASSWORD": "b"}},
+     {"playwright-needs-workspace-and-logins"}),
+    ("playwright with slug and logins is clean",
+     {"run_ci_tests": True, "boot_tenant": "ke", "run_playwright_tests": True,
+      "e2e_tenant_slug": "ke", "e2e_env": {"DIGIT_USERNAME": "a", "DIGIT_PASSWORD": "b"}},
+     set()),
+    ("playwright without run_ci_tests is clean (the stage never runs)",
+     {"run_playwright_tests": True}, set()),
     ("bad ui mode fires", {"digit_ui_mode": "docker"},
      {"digit-ui-mode-enum"}),
     ("configurator without build warns", {"nginx_features": {"configurator": True}},

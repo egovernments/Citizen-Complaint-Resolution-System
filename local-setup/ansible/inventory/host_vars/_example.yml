@@ -63,36 +63,30 @@ docker_data_root: ""
 
 # ────────── DIGIT tenancy ──────────
 
-# REQUIRED. Four-tier tenant slug:
-#   state_root       — top-level country/state tenant. DIGIT services
-#                       use this for STATE_LEVEL_TENANT_ID env vars
-#                       (auth lookup encryption, MDMS state defaults,
-#                       boundary root). One per country; "ke", "pb", "mz".
-#                       NOT the same as state_tenant_id below — see the
-#                       digit-ui notes for why those diverge.
-#   state_tenant_id  — root tenant the citizen UI binds to. Usually the
-#                       city tenant (e.g. ke.nairobi) when the SPA is
-#                       pinned to a single city.
-#   boot_tenant      — the tenant the opt-in CI dataloader runs against. It
-#                       is exported as BOOT_TENANT for that script and
-#                       nothing else reads it, so it is inert unless
-#                       run_ci_tests: true. preflight still checks it is
-#                       state_root or sits under it. (The browser E2E uses
-#                       the root tenant its workspace slug resolves to.)
-#   tenant_id        — city/operating tenant used in templates that
-#                       need a single value (e.g. ke.nairobi). This is
-#                       ALSO the city tenant the deploy bootstraps when
-#                       state_root is not `pg`.
+# REQUIRED. The deploy's tenants. Sign-in maps ROOT tenants only (no dot), and
+# the test suites target root workspaces only (#2398), so all four name the
+# same root, the shape Bomet runs with `ke`:
+#   state_root       — the root tenant this deploy seeds. DIGIT services use
+#                       it for STATE_LEVEL_TENANT_ID (auth lookup encryption,
+#                       MDMS state defaults, boundary root), and the deploy
+#                       gives it the Identity BFF route /<root>/digit-ui/.
+#                       One per country: "ke", "pb", "mz". Not `pg`, the
+#                       dump's demo tenant.
+#   state_tenant_id  — the tenant the citizen UI binds to: the same root.
+#   boot_tenant      — the tenant the opt-in CI dataloader runs against
+#                       (exported as BOOT_TENANT; inert unless
+#                       run_ci_tests: true): the same root. preflight checks
+#                       it is state_root or sits under it. The browser E2E
+#                       uses the root its workspace slug resolves to.
+#   tenant_id        — the operating tenant for templates that need a single
+#                       value: the same root. A city here (e.g. ke.nairobi)
+#                       makes the deploy bootstrap that city as well, but
+#                       cities are out of scope for sign-in and the suites.
 #
-# The MCP tenant bootstrap that creates these from scratch only runs when
-# state_root is something other than `pg`, and it targets state_root and
-# tenant_id — NOT state_tenant_id. Setting state_tenant_id to a root the
-# deploy never creates leaves it without an ADMIN user; the playbook
+# The MCP tenant bootstrap runs only when state_root is not `pg`. It seeds
+# state_root, then tenant_id if that differs. Setting state_tenant_id to a
+# tenant the deploy never creates leaves it without an ADMIN user; the playbook
 # detects that and points the SPA at `pg` instead, printing why.
-#
-# This example is a single-level root: all four name state_root, the shape
-# Bomet runs with `ke`. Sign-in maps root tenants only, and the test suites
-# target root workspaces only (#2398), so start from this shape.
 state_root: ke
 state_tenant_id: ke
 boot_tenant: ke
@@ -1082,11 +1076,17 @@ grafana_anonymous_enabled: false
 #                                       # workspace the slug resolves to; a failure fails the CI summary
 # e2e_tenant_slug: ""                  # URL slug the browser E2E opens (/<slug>/digit-ui/); defaults to
 #                                       # digit_ui_default_tenant_slug; the stage fails if both are empty
-# e2e_env: {}                           # the suite's persona logins, by tests/integration-tests' env
-#                                       # names: DIGIT_USERNAME/DIGIT_PASSWORD (admin) and
-#                                       # EMPLOYEE_USER/EMPLOYEE_PASSWORD (PGR employee), Keycloak logins
-#                                       # linked to that workspace, plus IDENTITY_TEST_OTP_CODE when
-#                                       # identity_dev_fixed_otp is on. A missing one fails the run.
+# e2e_env: {}                           # the suite's personas (local-setup/tests/README.md), Keycloak
+#                                       # logins linked to that workspace:
+#                                       #   DIGIT_USERNAME/DIGIT_PASSWORD: must hold GRO (it assigns
+#                                       #   complaints and runs the HRMS lookups).
+#                                       # With identity_dev_fixed_otp, the only case the citizen spec
+#                                       # runs, also:
+#                                       #   EMPLOYEE_USER/EMPLOYEE_PASSWORD: an HRMS employee with PGR_LME,
+#                                       #   who is assigned the complaint and resolves it;
+#                                       #   IDENTITY_TEST_OTP_CODE: the host's fixed citizen OTP (123456).
+#                                       # preflight and the stage fail before installing anything if a
+#                                       # key is missing; each spec checks its persona's roles.
 # seed_notifications: false             # OVERRIDE. Unset, it follows enable_novu:
 #                                       # the notification masters are seeded
 #                                       # whenever the notification stack runs.
