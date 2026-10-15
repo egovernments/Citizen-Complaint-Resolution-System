@@ -23,6 +23,8 @@ import {
   DEFAULT_PASSWORD, PGR_ID_PREFIX,
   generateCitizenPhone,
 } from '../utils/env';
+import { SERVICE_CODE, LOCALITY_CODE } from '../utils/env';
+import { fetchMdms } from '../utils/probes';
 
 import * as fs from 'fs';
 import * as path from 'path';
@@ -199,13 +201,28 @@ Long timeout (180s) because of multiple boundary lookups and DOM settles. Catche
     // Develop's three-step flow (utils/citizen-filing.ts). The old separate
     // geolocation, address and description steps are gone: the description is
     // on step 1 and the boundary cascade on step 2.
-    console.log('Step 1: description + complaint category...');
-    await fillDetailsStep(page, { description: `E2E UI lifecycle test — ${new Date().toISOString()}` });
+    // File the profile's complaint type at its locality: the GRO and LME that
+    // tests 4-5 act as only see complaints in their department and ward, so
+    // the walker's default first category (another department) would leave
+    // them "No Results Found". The category path, root first, from MDMS.
+    const admin = await getDigitToken({ tenant: TENANT, username: ADMIN_USER, password: ADMIN_PASS });
+    const rows = (await fetchMdms(TENANT, 'RAINMAKER-PGR.ComplaintHierarchy', admin.access_token))
+      .map((r: any) => r?.data).filter((d: any) => d?.code);
+    const path: Array<{ code: string; name?: string }> = [];
+    for (let code: string | undefined = SERVICE_CODE; code && path.length < 8; ) {
+      const row = rows.find((d: any) => d.code === code);
+      if (!row) break;
+      path.unshift({ code: row.code, name: row.name });
+      code = row.parent || undefined;
+    }
+    const categories = path.flatMap((n) => (n.name ? [n.name, n.code] : [n.code]));
+    console.log(`Step 1: description + complaint category (${path.map((n) => n.code).join(' > ') || 'first options'})...`);
+    await fillDetailsStep(page, { description: `E2E UI lifecycle test — ${new Date().toISOString()}`, categories });
     await snap(page, '02a-complaint-type');
     await continueFiling(page);
 
     console.log('Step 2: location — boundary cascade, no pin...');
-    await fillLocationStep(page);
+    await fillLocationStep(page, { boundaries: [LOCALITY_CODE] });
     await snap(page, '02b-address');
     await continueFiling(page);
 
