@@ -1,4 +1,5 @@
 import Axios from "axios";
+import { hierarchyMissing, emptyTenantBoundary } from "./boundaryGuard";
 
 /**
  * Custom Request to make all api calls
@@ -179,6 +180,14 @@ export const Request = async ({
     }
     return out.join("&");
   };
+
+  // a boundary-relationships search at a tenant without a hierarchy (a county-layout state) answers 400;
+  // answer it with an empty tree instead of sending it (boundaryGuard.js)
+  if (!userDownload && (await hierarchyMissing(url, params, (criteria) =>
+    Request({ url: "/boundary-service/boundary-hierarchy-definition/_search", method: "POST", useCache: false, auth, userService,
+      data: { BoundaryTypeHierarchySearchCriteria: criteria } })))) {
+    return emptyTenantBoundary();
+  }
 
   const res = userDownload
     ? await Axios({ method, url: _url, data, params, headers, paramsSerializer, responseType: "arraybuffer" })
