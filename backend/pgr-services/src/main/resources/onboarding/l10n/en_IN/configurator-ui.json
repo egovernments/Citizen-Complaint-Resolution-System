@@ -938,7 +938,6 @@
 {"code": "app.onboarding.invite.send", "message": "Send invite", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.invite.sending", "message": "Sending…", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.invite.until", "message": "until %{date}", "module": "configurator-ui", "locale": "en_IN"},
-{"code": "app.onboarding.layout.card.done", "message": "%{step} done", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.layout.card.next", "message": "Next step: %{step}", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.layout.completed_count", "message": "%{done} of %{total} completed", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.layout.home", "message": "Home", "module": "configurator-ui", "locale": "en_IN"},
