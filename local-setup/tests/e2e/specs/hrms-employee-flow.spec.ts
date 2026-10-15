@@ -18,6 +18,7 @@ test.describe.serial('HRMS employee creation and login', () => {
   test.slow();
 
   let employeeCode: string | undefined;
+  let employeeUuid: string | undefined;
   let createSucceeded = false;
 
   test.beforeAll(async () => {
@@ -130,6 +131,7 @@ test.describe.serial('HRMS employee creation and login', () => {
     expect(data.Employees.length).toBeGreaterThan(0);
 
     employeeCode = data.Employees[0].code;
+    employeeUuid = data.Employees[0].user?.uuid;
     console.log(`Created employee: ${employeeCode} (phone: ${PHONE})`);
     createSucceeded = true;
 
@@ -173,27 +175,28 @@ test.describe.serial('HRMS employee creation and login', () => {
     expect(data.Employees[0].user.mobileNumber).toBe(PHONE);
   });
 
-  test('verify new employee can authenticate via API', async () => {
+  test('verify new employee exists in egov-user', async () => {
     test.skip(!createSucceeded, 'Skipped — employee not created');
-    expect(employeeCode).toBeTruthy();
+    expect(employeeUuid, 'HRMS returned no user uuid').toBeTruthy();
 
-    // HRMS gives every new employee the deployment's default password
-    // (egov_hrms_default_password, a deploy secret: no fixed value to assume).
-    // Employee username is the employee code. A new HRMS employee is not
-    // linked to a Keycloak account, so this is an egov-user check, not a
-    // sign-in: the employee cannot use the hosted sign-in until invited.
-    const resp = await fetch(`${BASE_URL}/user/oauth/token`, {
+    // Staff sign in through Keycloak, so there is no egov-user password to
+    // check; HRMS must still have created the egov-user account it links to.
+    const token = await getDigitToken({ baseURL: BASE_URL, tenant: TENANT, username: ADMIN_USER, password: ADMIN_PASS });
+    const resp = await fetch(`${BASE_URL}/user/_search`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Authorization: 'Basic ZWdvdi11c2VyLWNsaWVudDo=' },
-      body: new URLSearchParams({
-        grant_type: 'password', scope: 'read', userType: 'EMPLOYEE',
-        username: employeeCode!, password: requiredEnv('EGOV_HRMS_DEFAULT_PASSWORD'), tenantId: TENANT,
-      }).toString(),
+      headers: { Authorization: `Bearer ${token.access_token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        RequestInfo: { apiId: 'Rainmaker', authToken: token.access_token, userInfo: token.UserRequest },
+        tenantId: TENANT,
+        uuid: [employeeUuid],
+      }),
     });
-    expect(resp.ok, `egov-user refused the HRMS default password (${resp.status})`).toBe(true);
-    const tokenResponse = await resp.json();
-    expect(tokenResponse.access_token).toBeTruthy();
-    expect(tokenResponse.UserRequest).toBeDefined();
-    console.log(`Employee ${employeeCode} authenticated successfully via API`);
+    expect(resp.ok, `egov-user search failed (${resp.status})`).toBe(true);
+    const users: Array<{ userName?: string; type?: string; active?: boolean }> = (await resp.json()).user ?? [];
+    expect(users, 'egov-user has no account for the new employee').toHaveLength(1);
+    expect(users[0].userName).toBe(employeeCode);
+    expect(users[0].type).toBe('EMPLOYEE');
+    expect(users[0].active).toBe(true);
+    console.log(`Employee ${employeeCode} exists in egov-user`);
   });
 });
