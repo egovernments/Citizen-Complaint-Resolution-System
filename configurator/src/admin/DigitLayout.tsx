@@ -297,7 +297,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold leading-5 text-foreground truncate">DIGIT</p>
                   <p className="text-xs leading-4 text-muted-foreground truncate">
-                    {translate('app.header.brand', { _: 'Complaints Management' })}
+                    {translate('app.header.product_name', { _: 'Complaint Management System' })}
                   </p>
                 </div>
               </>
@@ -499,6 +499,8 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
         {/* Main content */}
         <main id="main-content" className="flex-1 p-4 sm:p-6 overflow-auto min-h-0">
           {children}
+          {/* ours (#1954): after a switch made for a screen (a county's boundaries), open it */}
+          <AfterSwitchLanding />
         </main>
 
         {/* Powered by DIGIT (CCRS#1841) + Open DIGIT Docs */}
@@ -508,3 +510,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
     </div>
   );
 }
+
+// ours (#1954): an ES import is hoisted wherever it is written; kept at the end so the import block other layers
+// edit is untouched
+import { AfterSwitchLanding } from './afterSwitch';

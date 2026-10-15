@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import { useOnboardingT } from '../i18n';
 import { welcomeSlides } from './homeContent';
 
-/** "What's onboarding?": what the system does and what each section is for, one slide at a time. */
+/** The tour ("Take a tour" on Home): what the system does and what each section is for, one page at a time. */
 export function WelcomeDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const t = useOnboardingT();
   const slides = welcomeSlides(t);
@@ -22,10 +22,12 @@ export function WelcomeDialog({ open, onOpenChange }: { open: boolean; onOpenCha
 
   return (
     <Dialog open={open} onOpenChange={change}>
-      <DialogContent className="max-w-3xl gap-0 overflow-hidden p-0 sm:rounded-xl">
-        {/* A fixed minimum height so the dialog doesn't jump as slides change length. */}
-        <div className="grid md:min-h-[26rem] md:grid-cols-[5fr_6fr]">
-          <div className="flex h-40 items-center justify-center bg-primary/10 md:h-auto" aria-hidden="true">
+      <DialogContent className="max-w-4xl gap-0 overflow-hidden p-0 sm:rounded-xl">
+        {/* A fixed minimum height so the dialog doesn't jump as slides change length. The
+            illustrations are square, so from md the picture column is as wide as that
+            height and shows each one whole instead of cropping its sides. */}
+        <div className="grid md:min-h-[26rem] md:grid-cols-[26rem_1fr]">
+          <div className="flex h-48 items-center justify-center bg-primary/10 md:h-auto" aria-hidden="true">
             {slide.image ? (
               <img src={slide.image} alt="" className="h-full w-full object-cover" />
             ) : (
@@ -35,8 +37,13 @@ export function WelcomeDialog({ open, onOpenChange }: { open: boolean; onOpenCha
           <div className="flex flex-col p-6 sm:p-8">
             <p className="text-xs font-semibold uppercase tracking-[0.08em] text-primary">{slide.eyebrow}</p>
             <DialogTitle className="mt-3 text-2xl font-bold leading-tight text-foreground">{slide.title}</DialogTitle>
-            <DialogDescription className="mt-3 text-[15px] leading-6 text-foreground/80">{slide.body}</DialogDescription>
-            {slide.note && <p className="mt-3 text-sm leading-6 text-muted-foreground">{slide.note}</p>}
+            {/* The first paragraph describes the dialog for screen readers; the rest follow it. */}
+            <DialogDescription className="mt-3 text-[15px] leading-6 text-foreground/80">{slide.paragraphs[0]}</DialogDescription>
+            {slide.paragraphs.slice(1).map((paragraph) => (
+              <p key={paragraph} className="mt-3 text-[15px] leading-6 text-foreground/80">
+                {paragraph}
+              </p>
+            ))}
             <div className="mt-auto flex items-center justify-between gap-3 pt-8">
               <div className="flex items-center gap-1.5" aria-label={t('home.welcome.position', 'Slide %{n} of %{total}', { n: index + 1, total: slides.length })}>
                 {slides.map((item, i) => (

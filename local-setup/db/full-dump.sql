@@ -3023,8 +3023,6 @@ acd76f05-53d8-4591-8fbf-0c0c7c88ca6c	pg	2215b79651c369c9c941a0fd58ebebd6a14c2596
 8a6b9737-9c20-4213-909c-6dd162d1afca	pg	702f50156ef6805e5b3bfb0fb6674f857fa0989c49a9ad53c9fc671dbe0d5a67	common-masters.Designation	{"code": "COMM", "name": "Commissioner", "active": true, "description": "Commissioner"}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
 ebe9c7d6-8b94-470f-8e4a-60f02158a402	pg	cd109a200d8b97e0de3855e8128ffe1e7ffeccb8ab6b1f9f0225a997ba295f49	common-masters.GenderType	{"code": "MALE", "active": true}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
 8a4eb565-fb52-4a76-a050-72d8a6fab681	pg	25f1014a1655b088fefdf9243db06ea4cdf35afe8a57023fd9b7015af0331e58	common-masters.GenderType	{"code": "FEMALE", "active": true}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
-0d646692-c356-4e1b-a31c-2ff44043b13c	pg	31cc7c129034c3f79d01aa2b202382087810c43fafa06dfe0e810b80cfd1dcd8	common-masters.GenderType	{"code": "TRANSGENDER", "active": true}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
-58fae0c2-1491-4814-bd9b-47f4ce1c4abd	pg	f6734ad57526435f866e443ea1b3f2a7464b8a5544b71106237893313a4bd272	common-masters.GenderType	{"code": "OTHERS", "active": false}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
 67bac536-5402-4871-a8f0-be5360200cf3	pg	99ca5739ac392cbd869fbbc0d24c8b8240e3f89b13233fc545cca81cbaf47101	common-masters.IdFormat	{"format": "PG-PGR-[cy:yyyy-MM-dd]-[SEQ_EG_PGR_ID]", "idname": "pgr.servicerequestid"}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
 e71837f1-b810-4fcc-ad15-d14df78c9735	pg	7b478258536577d39e5db64bce94ca34c40d25f19a1eee0402afdfa32ad42821	egov-hrms.Specalization	{"code": "ARTS", "active": true}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
 33ad5e8c-4599-403d-9efe-d1ec3b039f85	pg	526bf7290e8e640c695326eac7e244445f71ca423d14e8b4a79a19e7db74a22c	egov-hrms.Specalization	{"code": "SCIENCE", "active": true}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
@@ -5111,7 +5109,7 @@ ebbbdcd2-0ba4-4b58-b87f-4151ffe18c02	en_IN	CS_PGR_COMPLAINT_NUMBER	Complaint No.
 1395873f-dd0e-4d31-bd16-729f3bf85f67	en_IN	CS_PGR_RESPONSE	Response	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 a861a9ba-55ac-4d0f-86ab-3e2a0144c631	en_IN	CS_PGR_SEND_COMMENT	Send	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 116a58c5-fae1-4535-a905-2d9743b030d9	en_IN	CS_PROFILE_EMAIL_ERRORMSG	Invalid Email Id	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
-f14f2de8-330c-46ec-acc3-eb82bb64d036	en_IN	CS_REJECT_COMPLAINT	Employee Name	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f14f2de8-330c-46ec-acc3-eb82bb64d036	en_IN	CS_REJECT_COMPLAINT	Rejection Reason	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 fc73a3d3-185f-4cfa-b189-0e1167b5d246	en_IN	CS_REOPEN_COMPLAINT	Choose Reason to Re-open the Complaint	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 5edbb7e6-f877-4816-9876-163bfdbf60f5	en_IN	CS_REOPEN_OPTION_FOUR	No permanent solution	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 705d5d74-c02d-4471-8188-21797a98faf4	en_IN	CS_REOPEN_OPTION_ONE	No work was done	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00

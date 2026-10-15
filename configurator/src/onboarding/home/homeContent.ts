@@ -1,59 +1,19 @@
 import type { ComponentType } from 'react';
-import { Building2, MapPin, MessageSquareText, Network, Sparkles, Users } from 'lucide-react';
+import { Building2, MapPin, MessageSquareText, RotateCcw, Sparkles, Users } from 'lucide-react';
 import type { OnboardingT } from '../i18n';
-import type { OnboardingStepId } from '../steps';
+import brandingImage from './tour/branding.webp';
+import cmsImage from './tour/cms.webp';
+import complaintsImage from './tour/complaints.webp';
+import geographyImage from './tour/geography.webp';
+import peopleImage from './tour/people.webp';
 
 /**
- * What the onboarding Home page says: each step's introduction, the
- * "Learn the basics" videos and the welcome slides. Product owns the wording,
- * images and video links, so they live here, apart from the components; a
- * video with no `youtubeId` yet shows as coming soon, and a slide with no
- * `image` falls back to an illustration of its step.
+ * What the onboarding Home page says: the "Learn the basics" videos and the
+ * tour. Product owns the wording, images and video links, so they live here,
+ * apart from the components; a video with no `youtubeId` yet shows as coming
+ * soon, and a tour page with no `image` shows its step's icon. Each step's
+ * description and button are in ../stepGuide.
  */
-
-export interface StepIntro {
-  /** What the step is for, on the Start here card. */
-  description: string;
-  /** The short phrase "After this: <step> — <next>" uses. */
-  next: string;
-}
-
-export function stepIntros(t: OnboardingT): Record<OnboardingStepId, StepIntro> {
-  return {
-    branding: {
-      description: t(
-        'home.intro.branding',
-        'Set up your account logo, name and appearance that will show up on the citizen and employee experience.',
-      ),
-      next: t('home.next.branding', 'set your logo, name and theme'),
-    },
-    geography: {
-      description: t(
-        'home.intro.geography',
-        'Define the areas you cover, from the largest down to the smallest, so every complaint can be placed and routed.',
-      ),
-      next: t('home.next.geography', 'define the areas you cover'),
-    },
-    departments: {
-      description: t(
-        'home.intro.departments',
-        'Add the departments complaints are routed to, and the designations your employees hold.',
-      ),
-      next: t('home.next.departments', 'add the teams complaints go to'),
-    },
-    employees: {
-      description: t('home.intro.employees', 'Add the people who will handle complaints, with their roles and the areas they cover.'),
-      next: t('home.next.employees', 'add the people who handle complaints'),
-    },
-    complaints: {
-      description: t(
-        'home.intro.complaints',
-        'Set up the kinds of complaints people can raise, which department handles each, and how long they should take.',
-      ),
-      next: t('home.next.complaints', 'set up what people can report'),
-    },
-  };
-}
 
 export interface LearnVideo {
   id: string;
@@ -70,11 +30,11 @@ export interface LearnVideo {
 export function learnVideos(t: OnboardingT): LearnVideo[] {
   return [
     { id: 'cms', title: t('home.videos.cms.title', 'What is CMS?'), summary: t('home.videos.cms.summary', 'How complaints flow end to end'), tint: 'bg-blue-50' },
-    { id: 'branding', title: t('home.videos.branding.title', 'Setting up your branding'), summary: t('home.videos.branding.summary', 'Logo, name and theme'), tint: 'bg-amber-50' },
-    { id: 'geography', title: t('home.videos.geography.title', 'Defining your geography'), summary: t('home.videos.geography.summary', 'Areas and their hierarchy'), tint: 'bg-emerald-50' },
-    { id: 'departments', title: t('home.videos.departments.title', 'Adding departments'), summary: t('home.videos.departments.summary', 'Who complaints route to'), tint: 'bg-violet-50' },
-    { id: 'employees', title: t('home.videos.employees.title', 'Adding employees'), summary: t('home.videos.employees.summary', 'Roles and the areas they cover'), tint: 'bg-sky-50' },
-    { id: 'complaints', title: t('home.videos.complaints.title', 'Setting up complaints'), summary: t('home.videos.complaints.summary', 'Categories, routing and resolution time'), tint: 'bg-rose-50' },
+    { id: 'branding', title: t('home.videos.branding.title', 'Setting up your branding'), summary: t('home.videos.branding.summary', 'Logo, name and theme'), youtubeId: 'ZdkVdTviiY8', duration: '0:59', tint: 'bg-amber-50' },
+    { id: 'geography', title: t('home.videos.geography.title', 'Defining your geography'), summary: t('home.videos.geography.summary', 'Areas and their hierarchy'), youtubeId: 'nA8sNGnCzxc', duration: '4:30', tint: 'bg-emerald-50' },
+    { id: 'departments', title: t('home.videos.departments.title', 'Adding departments'), summary: t('home.videos.departments.summary', 'Who complaints route to'), youtubeId: '-akBHQQbJz0', duration: '2:11', tint: 'bg-violet-50' },
+    { id: 'employees', title: t('home.videos.employees.title', 'Adding employees'), summary: t('home.videos.employees.summary', 'Roles and the areas they cover'), youtubeId: 'SuI3lzRpdI4', duration: '2:20', tint: 'bg-sky-50' },
+    { id: 'complaints', title: t('home.videos.complaints.title', 'Setting up complaints'), summary: t('home.videos.complaints.summary', 'Categories, routing and resolution time'), youtubeId: 'gG2WKsV2H18', duration: '2:20', tint: 'bg-rose-50' },
   ];
 }
 
@@ -82,78 +42,107 @@ export interface WelcomeSlide {
   id: string;
   eyebrow: string;
   title: string;
-  body: string;
-  note?: string;
-  /** An illustration URL; until product supplies one, the slide shows its icon. */
+  /** The page's text, one paragraph each. */
+  paragraphs: string[];
+  /** A square illustration; a page without one shows its icon. */
   image?: string;
   icon: ComponentType<{ className?: string }>;
 }
 
+/** The tour ("Take a tour" on Home), in product's order and wording from #2358. */
 export function welcomeSlides(t: OnboardingT): WelcomeSlide[] {
+  const setup = t('home.tour.eyebrow_setup', 'Setting up your account');
   return [
     {
-      id: 'welcome',
-      eyebrow: t('home.welcome.welcome.eyebrow', 'Welcome'),
-      title: t('home.welcome.welcome.title', 'Welcome to the Complaint Management System'),
-      body: t(
-        'home.welcome.welcome.body',
-        'Citizens report a problem — a burst pipe, an unlit street, uncollected waste — and the system routes it to the team responsible, tracks it until it is resolved, and keeps the citizen informed.',
-      ),
-      note: t(
-        'home.welcome.welcome.note',
-        'Onboarding is where you describe your account so that routing can work. There are five sections, one after another, and you can come back to any of them.',
-      ),
+      id: 'cms',
+      eyebrow: t('home.tour.cms.eyebrow', 'Welcome'),
+      title: t('home.tour.cms.title', 'Complaint Management System'),
+      paragraphs: [
+        t('home.tour.cms.body', 'One modular system connecting citizen voices to responsive institutions and efficient services.'),
+        t(
+          'home.tour.cms.body_flow',
+          'A citizen reports a burst pipe, an unlit street or uncollected waste, and the staff responsible pick up the complaints assigned to them, resolve them, and keep the citizen informed.',
+        ),
+        t('home.tour.cms.body_onboarding', 'Onboarding is where you set up your account to make this system possible.'),
+      ],
+      image: cmsImage,
       icon: Sparkles,
     },
     {
+      id: 'complaints',
+      eyebrow: setup,
+      title: t('home.tour.complaints.title', 'Complaints Template'),
+      paragraphs: [
+        t(
+          'home.tour.complaints.body',
+          'Pick from our template offerings with pre-loaded setup for issues ranging from Electricity-related complaints to Local Governance Complaints.',
+        ),
+      ],
+      image: complaintsImage,
+      icon: MessageSquareText,
+    },
+    {
       id: 'branding',
-      eyebrow: t('home.welcome.branding.eyebrow', 'Step 1 · Branding'),
-      title: t('home.welcome.branding.title', 'Make it yours'),
-      body: t(
-        'home.welcome.branding.body',
-        'Your logo, name and colours appear on every page citizens and employees see, so they know whose service they are using.',
-      ),
+      eyebrow: setup,
+      title: t('home.tour.branding.title', 'Branding'),
+      paragraphs: [
+        t(
+          'home.tour.branding.body',
+          'Establish your account’s identity by adding a logo, name and appearance that will be reflected in the citizen and employee experience.',
+        ),
+      ],
+      image: brandingImage,
       icon: Building2,
     },
     {
       id: 'geography',
-      eyebrow: t('home.welcome.geography.eyebrow', 'Step 2 · Geography'),
-      title: t('home.welcome.geography.title', 'Where you work'),
-      body: t(
-        'home.welcome.geography.body',
-        'The areas you cover, and how they nest inside each other. Every complaint is placed in one of them, and employees are given the areas they look after.',
-      ),
+      eyebrow: setup,
+      title: t('home.tour.geography.title', 'Geography'),
+      paragraphs: [
+        t(
+          'home.tour.geography.body',
+          'Add the areas your account covers and the levels they break down into, such as county, sub-county and ward. Complaints are raised at the lowest level of this hierarchy and reported at every level above.',
+        ),
+        t(
+          'home.tour.geography.body_use',
+          'These define the area a complaint is raised in, and the jurisdictions an employee is assigned to serve.',
+        ),
+      ],
+      image: geographyImage,
       icon: MapPin,
     },
     {
-      id: 'departments',
-      eyebrow: t('home.welcome.departments.eyebrow', 'Step 3 · Departments'),
-      title: t('home.welcome.departments.title', 'Who handles what'),
-      body: t(
-        'home.welcome.departments.body',
-        'Departments are the teams complaints are sent to, and designations are the roles people hold in them.',
-      ),
-      icon: Network,
-    },
-    {
-      id: 'employees',
-      eyebrow: t('home.welcome.employees.eyebrow', 'Step 4 · Employees'),
-      title: t('home.welcome.employees.title', 'Your team'),
-      body: t(
-        'home.welcome.employees.body',
-        'The people who assign, work on and resolve complaints. Each one gets an invitation to sign in.',
-      ),
+      id: 'people',
+      eyebrow: setup,
+      title: t('home.tour.people.title', 'Departments and Employees'),
+      paragraphs: [
+        t(
+          'home.tour.people.body',
+          'Define the Departments associated with your account and the employees working in these departments.',
+        ),
+        t(
+          'home.tour.people.body_routing',
+          'Each employee is assigned to a department and to the geographic areas they serve, which is what lets a complaint reach the right person.',
+        ),
+      ],
+      image: peopleImage,
       icon: Users,
     },
     {
-      id: 'complaints',
-      eyebrow: t('home.welcome.complaints.eyebrow', 'Step 5 · Complaints'),
-      title: t('home.welcome.complaints.title', 'What people can report'),
-      body: t(
-        'home.welcome.complaints.body',
-        'The kinds of complaints citizens can raise, the department each goes to, and how long it should take to resolve.',
-      ),
-      icon: MessageSquareText,
+      id: 'return',
+      eyebrow: t('home.tour.return.eyebrow', 'Anytime'),
+      title: t('home.tour.return.title', 'You can come back to this'),
+      paragraphs: [
+        t(
+          'home.tour.return.body',
+          'The ‘Take a tour’ button sits at the top-right of your Home screen. It reopens this tour whenever you want it.',
+        ),
+        t(
+          'home.tour.return.body_docs',
+          'Every section during account setup also has a “Documentation” section on the right side, with guidance for how to fill each field on that page.',
+        ),
+      ],
+      icon: RotateCcw,
     },
   ];
 }

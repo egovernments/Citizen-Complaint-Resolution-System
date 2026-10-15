@@ -35,6 +35,18 @@ function writtenRecord(response: Record<string, unknown>): MdmsRecord {
   return (Array.isArray(written) ? written[0] : written) as MdmsRecord;
 }
 
+/**
+ * The tenant's active "CMS" HierarchySchema row; HRMS rows don't count. A city
+ * search returns its own rows and its state's in no set order, so the city's
+ * own row wins over the one it inherits.
+ */
+function visibleCmsHierarchyRow(rows: MdmsRecord[], tenantId: string): MdmsRecord | undefined {
+  const cms = rows.filter(
+    (r) => r.isActive !== false && (r.data as { moduleName?: string } | undefined)?.moduleName === 'CMS',
+  );
+  return cms.find((r) => r.tenantId === tenantId) ?? cms[0];
+}
+
 export const mdmsService = {
   /**
    * Generic MDMS search. **Returns ACTIVE records only** unless
@@ -219,15 +231,19 @@ export const mdmsService = {
       );
     }
     const rows = await this.searchRecords(tenantId, MDMS_SCHEMAS.HIERARCHY_SCHEMA);
-    const visible = rows.find(
-      (r) => r.isActive !== false && (r.data as { moduleName?: string } | undefined)?.moduleName === 'CMS',
-    );
-    if (visible) return null;
+    if (visibleCmsHierarchyRow(rows, tenantId)) return null;
     return this.create(tenantId, MDMS_SCHEMAS.HIERARCHY_SCHEMA, 'CMS.All', {
       moduleName: 'CMS',
       department: 'All',
       ...hierarchy,
     });
+  },
+
+  /** The hierarchy type the tenant's CMS HierarchySchema row names, if it has one. */
+  async getRecordedHierarchyType(tenantId: string): Promise<string | undefined> {
+    const rows = await this.searchRecords(tenantId, MDMS_SCHEMAS.HIERARCHY_SCHEMA);
+    const hierarchy = (visibleCmsHierarchyRow(rows, tenantId)?.data as { hierarchy?: string } | undefined)?.hierarchy;
+    return hierarchy || undefined;
   },
 
   /** Load the active DashboardConfig owned by the state root (never an inherited row). */
