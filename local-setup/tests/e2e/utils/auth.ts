@@ -3,8 +3,8 @@
  * Identity BFF (the egov-user password form is gone), so `username` and
  * `password` are the persona's Keycloak login, as in tests/integration-tests.
  */
-import { expect, request, type Page } from '@playwright/test';
-import { hostedSignIn, passwordSignIn, resolveTenant, selectContext, tenantSlug, type DigitContext } from './identity';
+import { expect, request, type BrowserContext, type Page } from '@playwright/test';
+import { hostedSignIn, passwordSignIn, resolveTenant, selectContext, surfacePath, tenantSlug, type DigitContext } from './identity';
 
 /** `/<slug>/digit-ui`, the app base every UI navigation goes through. */
 export function appBase(slug = tenantSlug()): string {
@@ -44,23 +44,43 @@ export function getDigitToken(config: AuthConfig): Promise<DigitContext> {
   return contexts.get(key)!;
 }
 
+/** Employee BFF sessions this worker signed in, per persona. */
+const staffSessions = new Map<string, Awaited<ReturnType<BrowserContext['cookies']>>>();
+
 /**
  * Sign an employee in and land on the employee home. Fails unless the home
  * actually rendered with a session for the route tenant: a session for any
  * other tenant is wiped on load (clearAuthFromAnotherTenant), which used to
  * leave specs passing against the sign-in page.
+ *
+ * The first call per persona in a worker goes through the hosted Keycloak
+ * form; later calls reuse that BFF session while it is live, as citizen
+ * sign-in does. `fresh` always uses the form.
  */
-export async function loginViaApi(page: Page, config: AuthConfig): Promise<EmployeeSession> {
+export async function loginViaApi(page: Page, config: AuthConfig, opts: { fresh?: boolean } = {}): Promise<EmployeeSession> {
   const tenant = await resolveTenant(page.request, config.baseURL);
   if (tenant.tenantId !== config.tenant) {
     throw new Error(`IDENTITY_TEST_TENANT_SLUG resolves to ${tenant.tenantId}, not DIGIT_TENANT=${config.tenant}; the suite runs on one root workspace`);
   }
-  await hostedSignIn(page, { baseURL: config.baseURL, surface: 'employee', username: config.username, password: config.password });
+  const key = JSON.stringify([config.baseURL, config.username]);
+  const saved = opts.fresh ? undefined : staffSessions.get(key);
+  if (saved) await page.context().addCookies(saved);
+  const live = saved && await page.request.get(`${config.baseURL}/identity/v1/session?surface=employee`)
+    .then(async r => r.ok() && (await r.json()).authenticated === true).catch(() => false);
+  if (live) {
+    // The sign-in route exchanges the live BFF session for the app's own DIGIT session.
+    await page.goto(`${config.baseURL}${surfacePath('employee', 'user/login')}`, { waitUntil: 'domcontentloaded' });
+  } else {
+    await page.context().clearCookies();
+    await hostedSignIn(page, { baseURL: config.baseURL, surface: 'employee', username: config.username, password: config.password });
+  }
   // The landing app selects the context, stores Employee.* and moves to the
   // employee home itself; navigating here would abort that write.
   await expect.poll(() => new URL(page.url()).pathname, { message: 'the employee app did not leave its sign-in route', timeout: 30_000 })
     .not.toMatch(/\/user\/(login|language-selection)/);
-  return expectEmployeeHome(page, tenant.tenantId);
+  const session = await expectEmployeeHome(page, tenant.tenantId);
+  staffSessions.set(key, await page.context().cookies());
+  return session;
 }
 
 export async function expectEmployeeHome(page: Page, tenantId: string): Promise<EmployeeSession> {

@@ -9,7 +9,8 @@ const ADMIN_PASS = requiredEnv('DIGIT_PASSWORD');
 
 test.describe('Employee sign-in (Keycloak + Identity BFF)', () => {
   test('hosted sign-in lands on the employee home with a route-tenant session', async ({ page }) => {
-    const context = await loginViaApi(page, { baseURL: BASE_URL, tenant: TENANT, username: ADMIN_USER, password: ADMIN_PASS });
+    // fresh: this test is about the hosted form, so never reuse a session.
+    const context = await loginViaApi(page, { baseURL: BASE_URL, tenant: TENANT, username: ADMIN_USER, password: ADMIN_PASS }, { fresh: true });
     expect(context.UserRequest.tenantId).toBe(TENANT);
     expect(context.UserRequest.type).toBe('EMPLOYEE');
   });
