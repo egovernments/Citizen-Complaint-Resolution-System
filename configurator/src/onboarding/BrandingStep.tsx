@@ -23,9 +23,10 @@ const NEXT = ONBOARDING_STEPS.find((step) => step.number === STEP.number + 1)!;
 // as a 400. It takes no SVG, and serving an uploaded SVG from our own origin
 // would open a stored-XSS path anyway.
 const LOGO_TYPES = ['image/png', 'image/jpeg'];
+// Some JPEGs are saved as .jfif or .jpe; the picker should offer them too.
+const IMAGE_ACCEPT = [...LOGO_TYPES, '.jfif', '.jpe'].join(',');
 const LOGO_MAX_BYTES = 2 * 1024 * 1024;
 const LOGO_MIN_PX = 128;
-const NAME_MAX = 100;
 
 // The citizen home draws the banner full width behind its welcome, cropped to a
 // wide strip (about 4:1 on a desktop). Below 1200px it goes soft on a laptop
@@ -54,22 +55,28 @@ function imageSize(file: File): Promise<{ width: number; height: number } | null
 }
 
 /**
- * Whether the file's bytes are the PNG or JPEG its name says. The picker's file.type
- * comes from the name alone, while egov-filestore checks the bytes against the
- * extension and turns a mismatch (a WebP saved as .png) away with its whole format list.
+ * The file as egov-filestore will take it, or null when its bytes aren't the PNG or
+ * JPEG its name says. The picker's file.type comes from the name alone, while
+ * egov-filestore checks the bytes against the extension and turns a mismatch (a
+ * WebP saved as .png) away with its whole format list. Filestore knows JPEG only as
+ * .jpg or .jpeg, so a .jfif or .jpe JPEG is renamed .jpg.
  */
-function matchesItsName(file: File): Promise<boolean> {
-  const named = /\.png$/i.test(file.name) ? 'png' : /\.jpe?g$/i.test(file.name) ? 'jpeg' : null;
-  if (!named) return Promise.resolve(false);
+function asUploadableImage(file: File): Promise<File | null> {
+  const extension = /\.([a-z]+)$/i.exec(file.name)?.[1].toLowerCase() ?? '';
+  const named = extension === 'png' ? 'png' : ['jpg', 'jpeg', 'jpe', 'jfif'].includes(extension) ? 'jpeg' : null;
+  if (!named) return Promise.resolve(null);
   return new Promise((resolve) => {
     const reader = new FileReader();
     reader.onload = () => {
       const head = new Uint8Array(reader.result as ArrayBuffer);
       const png = head[0] === 0x89 && head[1] === 0x50 && head[2] === 0x4e && head[3] === 0x47;
       const jpeg = head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff;
-      resolve(named === 'png' ? png : jpeg);
+      if (!(named === 'png' ? png : jpeg)) resolve(null);
+      else if (extension === 'jpe' || extension === 'jfif') {
+        resolve(new File([file], file.name.replace(/\.[a-z]+$/i, '.jpg'), { type: 'image/jpeg', lastModified: file.lastModified }));
+      } else resolve(file);
     };
-    reader.onerror = () => resolve(false);
+    reader.onerror = () => resolve(null);
     reader.readAsArrayBuffer(file.slice(0, 4));
   });
 }
@@ -95,6 +102,12 @@ export default function BrandingStep() {
   const [themeId, setThemeId] = useState(DEFAULT_BRAND_THEME_ID);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // Once a save has failed, Continue anyway records the step skipped, so a save
+  // that keeps failing never leaves onboarding stuck here.
+  const [saveFailed, setSaveFailed] = useState(false);
+  // Only the latest pick counts: an earlier, slower file's checks must not replace it.
+  const logoPick = useRef(0);
+  const bannerPick = useRef(0);
 
   const done = state.completedPhases.includes(STEP.number);
 
@@ -137,11 +150,14 @@ export default function BrandingStep() {
 
   const shownBanner = banner?.kind === 'remove' ? null : bannerPreview ?? branding?.bannerUrl ?? null;
 
-  const pickLogo = async (file: File | undefined) => {
+  const pickLogo = async (picked: File | undefined) => {
     if (fileInput.current) fileInput.current.value = '';
-    if (!file) return;
+    if (!picked) return;
+    const pick = ++logoPick.current;
     setLogoError(null);
-    if (!LOGO_TYPES.includes(file.type) || !(await matchesItsName(file))) {
+    const file = await asUploadableImage(picked);
+    if (pick !== logoPick.current) return;
+    if (!file) {
       setLogoError(t('branding.logo_type', 'Use a PNG or JPG image.'));
       return;
     }
@@ -150,6 +166,7 @@ export default function BrandingStep() {
       return;
     }
     const size = await imageSize(file);
+    if (pick !== logoPick.current) return;
     if (size && (size.width < LOGO_MIN_PX || size.height < LOGO_MIN_PX)) {
       setLogoError(
         t('branding.logo_too_small', 'That image is %{width}×%{height}px. Use one at least %{min}px on each side.', {
@@ -164,16 +181,20 @@ export default function BrandingStep() {
   };
 
   const removeLogo = () => {
+    logoPick.current++;
     setLogoError(null);
     // A logo picked but never saved just goes; a saved one is removed on save.
     setLogo(branding?.logoUrl ? { kind: 'remove' } : null);
   };
 
-  const pickBanner = async (file: File | undefined) => {
+  const pickBanner = async (picked: File | undefined) => {
     if (bannerInput.current) bannerInput.current.value = '';
-    if (!file) return;
+    if (!picked) return;
+    const pick = ++bannerPick.current;
     setBannerError(null);
-    if (!LOGO_TYPES.includes(file.type) || !(await matchesItsName(file))) {
+    const file = await asUploadableImage(picked);
+    if (pick !== bannerPick.current) return;
+    if (!file) {
       setBannerError(t('branding.logo_type', 'Use a PNG or JPG image.'));
       return;
     }
@@ -182,6 +203,7 @@ export default function BrandingStep() {
       return;
     }
     const size = await imageSize(file);
+    if (pick !== bannerPick.current) return;
     if (size && size.width < BANNER_MIN_WIDTH) {
       setBannerError(
         t('branding.banner_too_narrow', 'That image is %{width}px wide. Use one at least %{min}px wide.', {
@@ -204,6 +226,7 @@ export default function BrandingStep() {
   };
 
   const removeBanner = () => {
+    bannerPick.current++;
     setBannerError(null);
     setBanner(branding?.bannerUrl ? { kind: 'remove' } : null);
   };
@@ -215,10 +238,8 @@ export default function BrandingStep() {
       setNameError(t('branding.account_name_required', 'Enter your account’s name.'));
       return;
     }
-    if (trimmed.length > NAME_MAX) {
-      setNameError(t('branding.name_too_long', 'Keep the name under %{max} characters.', { max: NAME_MAX }));
-      return;
-    }
+    // No length check: the name is read-only here, and the server checks its length
+    // when Workspace settings renames it (up to 200 characters).
     setNameError(null);
     setSaveError(null);
     setSaving(true);
@@ -238,10 +259,17 @@ export default function BrandingStep() {
       setBanner(null);
       announceOrganisation({ name: saved.name, logoUrl: saved.logoUrl });
       // PGR marks Branding done only once the tenant has a logo (imageId); without
-      // one the step is recorded as skipped, which completes it all the same.
-      if (!await completePhase(STEP.number, !saved.tenantRecord.data.imageId)) return;
+      // one the step is recorded as skipped, which completes it all the same. A logo
+      // this save uploaded or removed decides it rather than the re-read, which
+      // mdms-v2's persister may not have caught up with yet.
+      const hasLogo = logo ? logo.kind === 'upload' : !!saved.tenantRecord.data.imageId;
+      if (!await completePhase(STEP.number, !hasLogo)) {
+        setSaveFailed(true);
+        return;
+      }
       navigate(NEXT.path);
     } catch (err) {
+      setSaveFailed(true);
       if (err instanceof ThemeSaveError) reportStepError('branding', 'save_theme', err.cause, state.tenant);
       else reportStepError('branding', 'save', err, state.tenant);
       if (err instanceof ThemeSaveError) {
@@ -256,6 +284,16 @@ export default function BrandingStep() {
       } else {
         setSaveError(describeSaveError(err, t('branding.save_failed', 'Saving your branding failed. Try again.'), t));
       }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // SKIPPED needs no logo and no server check, so it completes the step whatever failed.
+  const continueAnyway = async () => {
+    setSaving(true);
+    try {
+      if (await completePhase(STEP.number, true)) navigate(NEXT.path);
     } finally {
       setSaving(false);
     }
@@ -322,8 +360,9 @@ export default function BrandingStep() {
               <input
                 ref={fileInput}
                 type="file"
-                accept={LOGO_TYPES.join(',')}
+                accept={IMAGE_ACCEPT}
                 className="hidden"
+                data-testid="logo-input"
                 onChange={(event) => pickLogo(event.target.files?.[0])}
               />
             </div>
@@ -342,7 +381,7 @@ export default function BrandingStep() {
                 <input
                   ref={bannerInput}
                   type="file"
-                  accept={LOGO_TYPES.join(',')}
+                  accept={IMAGE_ACCEPT}
                   className="hidden"
                   data-testid="banner-input"
                   onChange={(event) => pickBanner(event.target.files?.[0])}
@@ -360,7 +399,6 @@ export default function BrandingStep() {
               id={nameId}
               readOnly
               value={name}
-              maxLength={NAME_MAX + 20}
               onChange={(event) => {
                 setName(event.target.value);
                 if (nameError) setNameError(null);
@@ -414,11 +452,16 @@ export default function BrandingStep() {
             </Alert>
           )}
 
-          <div className="pt-2">
+          <div className="flex flex-wrap gap-2 pt-2">
             <Button onClick={save} disabled={saving} className="h-10 gap-2 px-5">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
               {t('step.save_continue', 'Save and continue')}
             </Button>
+            {saveFailed && (
+              <Button variant="ghost" onClick={continueAnyway} disabled={saving} className="h-10">
+                {t('branding.continue_anyway', 'Continue anyway')}
+              </Button>
+            )}
           </div>
         </div>
       )}
