@@ -68,6 +68,10 @@ export const TENANT = env('DIGIT_TENANT');
 export const ROOT_TENANT = TENANT;
 /** Self-signed boxes (local k3s, a bare IP) opt in; secure by default. */
 export const IGNORE_HTTPS_ERRORS = process.env.IGNORE_HTTPS_ERRORS === '1';
+// Node's own fetch (passwordSignIn, the Keycloak admin API, profile probes)
+// follows the same switch, set once when the profile loads rather than as a
+// side effect of whichever call happens to run first.
+if (IGNORE_HTTPS_ERRORS) process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
 // ── Personas ────────────────────────────────────────────────────────────────
 

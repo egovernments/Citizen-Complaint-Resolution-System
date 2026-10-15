@@ -95,7 +95,8 @@ ssh bomet 'sudo htpasswd -c /etc/nginx/.htpasswd-tests digit-tests'   # set a pa
 ssh bomet 'sudo nginx -t && sudo nginx -s reload'
 ```
 
-Each run, from a runner that can `ssh bomet`:
+Each run, from a runner that can `ssh bomet` (not yet: bomet runs master, which
+has no identity-bff, so `deploy/bomet.env` refuses to load until master takes #1999):
 
 ```bash
 make test-and-publish ENV_PROFILE=deploy/bomet.env RUNNER_SECRETS_ENV=<secrets file> HOST_SSH=bomet

@@ -13,6 +13,11 @@
  *   inboxViewer   GRO + PGR_LME in that department
  *   supervisor    GRO + PGR_LME + SUPERVISOR (the suite's EMPLOYEE_USER)
  *
+ * With LOGIN_PROBE_LOGIN set, also a Keycloak login with no DIGIT user and no
+ * roles, for the wrong-password checks (employee/login.spec.ts): Keycloak's
+ * brute-force protection then counts those failures against it, never against
+ * a persona.
+ *
  * The PGR personas' jurisdiction is the seed locality itself: PGR matches
  * jurisdictions EXACTLY against a complaint's locality (see personas.ts).
  *
@@ -33,7 +38,7 @@
  * Reads BASE_URL, DIGIT_TENANT, IDENTITY_TEST_TENANT_SLUG and the six
  * <ROLE>_LOGIN from the env profile. A <ROLE>_PASSWORD already set is kept;
  * a missing one is generated. With --secrets-out every persona password is
- * written to that file (mode 0600, other lines kept). Passwords never reach
+ * written to that file, single-quoted for `source` (mode 0600, other lines kept). Passwords never reach
  * stdout. The actor (SEED_ACTOR_*) is any ACCOUNT_ADMIN of the workspace: the
  * signup founder the first time (without SEED_ACTOR_PASSWORD, a founder with
  * no password credential — magic-link only — gets a one-off one through the
@@ -45,7 +50,7 @@ import { randomBytes } from 'node:crypto';
 import { chmodSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { request as playwrightRequest, type APIRequestContext } from '@playwright/test';
 import { BASE_URL, IGNORE_HTTPS_ERRORS, KC_REALM, PERSONA_ENV, TENANT, type PersonaRole } from '../tests/utils/env';
-import { identityJson, resolveTenant, selectContext, tenantSlug } from '../tests/utils/identity-bff';
+import { identityJson, KeycloakSignInError, passwordSignIn, resolveTenant, selectContext, tenantSlug } from '../tests/utils/identity-bff';
 import { keycloakAdminFresh } from '../tests/utils/keycloak-admin';
 import { deriveMobileLengths, derivedStartingDigits, generateValidMobile, type MobileRule } from '../tests/utils/mdms-mobile';
 import { fetchBoundaryTree, fetchGlobalConfigs, type BoundaryNode } from '../tests/utils/probes';
@@ -68,6 +73,8 @@ const SPECS: Spec[] = [
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const fail = (why: string): never => { throw new Error(why); };
 const envName = (role: PersonaRole, suffix: 'LOGIN' | 'PASSWORD') => `${PERSONA_ENV[role]}_${suffix}`;
+/** The wrong-password target: a Keycloak login only. */
+const PROBE = { login: 'LOGIN_PROBE_LOGIN', password: 'LOGIN_PROBE_PASSWORD' } as const;
 /** SEED_CODE_PREFIX seeds a fresh set (new codes) next to an old one, e.g. after a role change. */
 const codeOf = (role: PersonaRole) => `${process.env.SEED_CODE_PREFIX || 'IT'}_${PERSONA_ENV[role]}`;
 const newPassword = () => `It-${randomBytes(12).toString('base64url')}-9a`;
@@ -161,8 +168,14 @@ async function ensureEmployee(digit: Digit, plan: Plan, spec: Spec, login: strin
   return { code, uuid: created.user?.uuid ?? created.uuid ?? fail(`HRMS created ${code} without a user uuid`) };
 }
 
+/** One admin grant per run, renewed shortly before it expires (master tokens live about a minute). */
+let admin: { base: string; token: string; until: number } | undefined;
 async function kc(path: string, init: RequestInit = {}, expect = [200, 201, 204]): Promise<Response> {
-  const { base, token } = await keycloakAdminFresh();
+  if (!admin || Date.now() > admin.until) {
+    const fresh = await keycloakAdminFresh();
+    admin = { base: fresh.base, token: fresh.token, until: fresh.expiresIn ? Date.now() + (fresh.expiresIn - 15) * 1000 : Infinity };
+  }
+  const { base, token } = admin;
   const r = await fetch(`${base}/admin/realms/${KC_REALM}${path}`, { ...init,
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
   if (!expect.includes(r.status)) fail(`Keycloak admin ${init.method ?? 'GET'} ${path.split('?')[0]} -> HTTP ${r.status}`);
@@ -236,13 +249,15 @@ async function ensureLinked(actor: APIRequestContext, members: Member[], uuid: s
   }
 }
 
-/** Keep every line but the persona passwords, then write them; 0600 either way. */
-function writeSecrets(file: string, passwords: Map<PersonaRole, string>): void {
-  const keys = new Set([...passwords.keys()].map((role) => envName(role, 'PASSWORD')));
+/** Single-quoted for `source`: `$`, spaces and `#` in a password stay literal. */
+const shellQuote = (value: string) => `'${value.replace(/'/g, `'\\''`)}'`;
+
+/** Keep every line but these passwords (env name -> value), then write them; 0600 either way. */
+function writeSecrets(file: string, passwords: Map<string, string>): void {
   const kept = existsSync(file)
-    ? readFileSync(file, 'utf8').split('\n').filter((l) => l && !keys.has(l.replace(/^export\s+/, '').split('=')[0]))
+    ? readFileSync(file, 'utf8').split('\n').filter((l) => l && !passwords.has(l.replace(/^export\s+/, '').split('=')[0]))
     : [];
-  writeFileSync(file, [...kept, ...[...passwords].map(([role, value]) => `${envName(role, 'PASSWORD')}=${value}`), ''].join('\n'), { mode: 0o600 });
+  writeFileSync(file, [...kept, ...[...passwords].map(([name, value]) => `${name}=${shellQuote(value)}`), ''].join('\n'), { mode: 0o600 });
   chmodSync(file, 0o600);
 }
 
@@ -258,6 +273,9 @@ async function main(): Promise<void> {
 
   const passwords = new Map<PersonaRole, string>(SPECS.map((s) => [s.role, process.env[envName(s.role, 'PASSWORD')] || newPassword()]));
   const generated = SPECS.filter((s) => !process.env[envName(s.role, 'PASSWORD')]).map((s) => envName(s.role, 'PASSWORD'));
+  const probeLogin = process.env[PROBE.login]?.trim().toLowerCase() || '';
+  const probePassword = process.env[PROBE.password] || newPassword();
+  if (probeLogin && !process.env[PROBE.password]) generated.push(PROBE.password);
   if (generated.length && !secretsOut) fail(`${generated.join(', ')} not set: pass --secrets-out <file> to generate and keep them`);
 
   if (!actorPassword) {
@@ -273,8 +291,10 @@ async function main(): Promise<void> {
     const plan = await planFor(digit);
     // Before Keycloak holds any new password, so a failure later cannot lose one.
     if (secretsOut) {
-      writeSecrets(secretsOut, passwords);
-      console.error(`[seed-personas] wrote ${passwords.size} persona passwords to ${secretsOut} (mode 0600)`);
+      const written = new Map([...passwords].map(([role, value]) => [envName(role, 'PASSWORD'), value]));
+      if (probeLogin) written.set(PROBE.password, probePassword);
+      writeSecrets(secretsOut, written);
+      console.error(`[seed-personas] wrote ${written.size} passwords to ${secretsOut} (mode 0600)`);
     }
     console.log(`# env profile lines for ${tenantSlug()} (${TENANT})`);
     console.log(`SERVICE_CODE=${plan.serviceCode}\nLOCALITY_CODE=${plan.boundaries.leaf.code}\nWARD_CSR_BOUNDARY=${plan.boundaries.ward.code}`);
@@ -291,6 +311,7 @@ async function main(): Promise<void> {
       await ensureLinked(actor, members, uuid, login, password);
       seeded.push({ spec, login, code, uuid });
     }
+    if (probeLogin) await ensureLogin(probeLogin, probePassword, generated.includes(PROBE.password));
 
     // Proof, not assumption: each persona signs in and selects its own employee.
     await sleep(2_000);
@@ -307,6 +328,15 @@ async function main(): Promise<void> {
       } finally {
         await persona.dispose();
       }
+    }
+    if (probeLogin) {
+      // Keycloak must accept the probe's own password; what the BFF does with a
+      // login that holds no DIGIT user is not the point.
+      await passwordSignIn({ baseURL: BASE_URL, surface: 'configurator', username: probeLogin, password: probePassword })
+        .catch((err) => { if (err instanceof KeycloakSignInError) throw err; });
+      console.log(`# ok ${PROBE.login} -> Keycloak login only (no DIGIT user, no roles)`);
+    } else {
+      console.log(`# WARN ${PROBE.login} not set: employee/login.spec.ts needs it for its wrong-password check`);
     }
   } finally {
     await actor.dispose();

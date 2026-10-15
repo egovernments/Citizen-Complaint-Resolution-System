@@ -43,15 +43,11 @@ const CITIZEN_NAME = 'E2E UI Citizen';
  * by name: the requirement is "can act on this complaint's workflow", which
  * means the GRO role plus an HRMS department at the complaint's own tenant.
  *
- * A pinned name cannot express that and gets it wrong in both directions:
- * bomet's deploy/bomet.env pins CITY_ADMIN_USER=BOMET_LME, which has NO HRMS
- * employee record on `ke` at all — so it logs in fine, never gets a Take Action
- * button, and step 4 fails 10s later on a missing locator that says nothing
- * about the cause. The bare ADMIN default fares no better there (also no HRMS
- * record). getPersona('gro-with-department') finds HS_GRO on bomet and EMP001 on
- * mz.maputo without either deployment declaring anything.
- *
- * CITY_ADMIN_USER still wins when set, so an operator can pin a specific actor.
+ * A pinned name cannot express that and gets it wrong in both directions: a
+ * login with NO HRMS employee record at the tenant signs in fine, never gets a
+ * Take Action button, and step 4 fails 10s later on a missing locator that says
+ * nothing about the cause. getPersona('gro-with-department') resolves the
+ * profile's GRO persona and proves it has a department.
  *
  * `authTenant` is part of the answer, not an afterthought. personas.ts probes
  * each credential at the city tenant and at the root, and reports the one it
@@ -61,17 +57,8 @@ const CITIZEN_NAME = 'E2E UI Citizen';
  * anyway); a GRO that authenticates only at the root would fail both the inbox
  * and the Assign login for a reason no locator error would explain. Step 5
  * already threads `resolver.tenant` through — this is the same fact.
- *
- * Undefined for the CITY_ADMIN_USER branch: nobody proved anything about a
- * pinned credential, so the caller keeps its existing default.
  */
 async function cityAdmin(): Promise<{ username: string; password: string; authTenant?: string }> {
-  if (process.env.CITY_ADMIN_USER) {
-    return {
-      username: process.env.CITY_ADMIN_USER,
-      password: process.env.CITY_ADMIN_PASS || '',
-    };
-  }
   const p = await getPersona('gro-with-department');
   return { username: p.username, password: p.password, authTenant: p.tenant };
 }
@@ -429,7 +416,7 @@ Long timeout (180s) because of multiple boundary lookups and DOM settles. Catche
 
 Steps:
 1. test.skip if !complaintCreated.
-2. loginViaApi as CITY_ADMIN_USER on tenant = TENANT env.
+2. loginViaApi as the GRO persona (cityAdmin()) on tenant = TENANT env.
 3. Navigate to /digit-ui/employee/pgr/inbox and wait 15s for hydration.
 4. Snap screenshot 03-pgr-inbox.
 5. Assert the "Inbox" breadcrumb is visible (page rendered).

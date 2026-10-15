@@ -108,7 +108,12 @@ cd "$REPO_DIR" || { echo "[run-cycle] cannot cd $REPO_DIR" >&2; exit 2; }
 if [[ -n "$TENANT_ENV" && -f "$TENANT_ENV" ]]; then
   echo "[run-cycle] sourcing $TENANT_ENV"
   set -a; # shellcheck disable=SC1090
-  source "$TENANT_ENV"; set +a
+  if ! source "$TENANT_ENV"; then
+    echo "[run-cycle] $TENANT_ENV refused to load — not running against it" >&2
+    phase "failed-env"
+    exit 9
+  fi
+  set +a
 fi
 # Then the box-local secrets. Only the path is logged, never a value.
 if [[ -n "$SECRETS_ENV" ]]; then

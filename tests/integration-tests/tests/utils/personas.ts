@@ -99,7 +99,9 @@ async function adminToken(): Promise<string> {
   // the first call with a 5xx. A refused password is never retried.
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      return (await getDigitToken({ tenant: TENANT, username: admin.login, password: admin.password })).access_token;
+      const token = (await getDigitToken({ tenant: TENANT, username: admin.login, password: admin.password })).access_token;
+      adminTokenError = null; // an earlier attempt's 5xx no longer applies
+      return token;
     } catch (err: any) {
       adminTokenError = `${admin.source}@${TENANT}: ${err?.message?.slice(0, 160) ?? err}`;
       if (err instanceof KeycloakSignInError) break;

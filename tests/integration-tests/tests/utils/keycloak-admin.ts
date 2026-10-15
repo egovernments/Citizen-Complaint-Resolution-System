@@ -11,7 +11,7 @@ export function keycloakAdmin() {
  * fixture token when one is set, else a master-realm `admin-cli` password grant
  * from IDENTITY_TEST_KEYCLOAK_ADMIN_USER/_PASSWORD. Still no default credentials.
  */
-export async function keycloakAdminFresh(): Promise<{ base: string; token: string }> {
+export async function keycloakAdminFresh(): Promise<{ base: string; token: string; expiresIn?: number }> {
   if (process.env.IDENTITY_TEST_KEYCLOAK_ADMIN_TOKEN) return keycloakAdmin();
   const base = process.env.IDENTITY_TEST_KEYCLOAK_ADMIN_URL?.replace(/\/$/, '');
   const username = process.env.IDENTITY_TEST_KEYCLOAK_ADMIN_USER;
@@ -25,5 +25,6 @@ export async function keycloakAdminFresh(): Promise<{ base: string; token: strin
     body: new URLSearchParams({ grant_type: 'password', client_id: 'admin-cli', username, password }),
   });
   if (!response.ok) throw new Error(`Keycloak admin sign-in failed: HTTP ${response.status}`);
-  return { base, token: ((await response.json()) as { access_token: string }).access_token };
+  const grant = (await response.json()) as { access_token: string; expires_in?: number };
+  return { base, token: grant.access_token, expiresIn: grant.expires_in };
 }

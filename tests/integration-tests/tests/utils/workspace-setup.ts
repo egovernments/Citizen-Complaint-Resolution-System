@@ -2,7 +2,10 @@ import { execFile } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { deflateSync } from 'node:zlib';
 import { expect, type APIRequestContext, type APIResponse } from '@playwright/test';
-import { identityJson, type DigitContext, type ReadOtp } from './identity-bff';
+import {
+  authorizeUrl, identityJson, KEYCLOAK_LOGIN_PAGES, keycloakError, keycloakLoginAction as loginAction,
+  keycloakPageId as pageId, unescapeHtml, type DigitContext, type ReadOtp,
+} from './identity-bff';
 
 /**
  * Real-stack onboarding journey (#2266): self-service signup, workspace setup
@@ -143,21 +146,9 @@ export const commandOtp: ReadOtp = async challenge => {
 };
 
 // ---------------------------------------------------------------------------
-// Keycloak pages. The theme renders forms with JS, so there are no inputs in
-// the HTML: posts go straight to the page's login action.
+// Keycloak pages (parsed by identity-bff.ts). The theme renders forms with JS,
+// so there are no inputs in the HTML: posts go straight to the page's login action.
 // ---------------------------------------------------------------------------
-
-function unescapeHtml(value: string) {
-  return value.replace(/\\u0026/g, '&').replace(/\\\//g, '/').replace(/&amp;/g, '&').replace(/&#x3D;/gi, '=').replace(/&#61;/g, '=');
-}
-const pageId = (html: string) => html.match(/pageId"\s*:\s*"([^"]+)"/)?.[1];
-function loginAction(html: string) {
-  const match = html.match(/loginAction"\s*:\s*"([^"]+)"/) ?? html.match(/action="([^"]+)"/);
-  return match ? unescapeHtml(match[1]) : undefined;
-}
-const LOGIN_PAGES = new Set(['login', 'login.ftl', 'login-username', 'login-password']);
-/** The error Keycloak rendered on the page, if any. */
-const keycloakError = (html: string) => unescapeHtml(html.match(/"summary"\s*:\s*"([^"]+)"/)?.[1] ?? 'no message');
 
 /** Follows an activation mail through Keycloak's required actions and sets the password. */
 export async function activateAccount(request: APIRequestContext, link: string, password: string): Promise<void> {
@@ -188,16 +179,13 @@ export async function activateAccount(request: APIRequestContext, link: string, 
 /** Staff sign-in on the tenant's employee surface (or the Configurator); the BFF session lands in `request`'s cookies. */
 export async function employeeSignIn(request: APIRequestContext, base: string, slug: string, username: string, password: string,
   surface: 'employee' | 'configurator' = 'employee') {
-  const params = new URLSearchParams(surface === 'employee'
-    ? { surface, method: 'password', intent: 'signin', tenantSlug: slug, returnTo: `/${slug}/digit-ui/employee/user/login` }
-    : { surface, method: 'password', intent: 'signin', returnTo: '/configurator/login' });
-  let response = await request.get(`${base}/identity/v1/authorize?${params}`);
+  let response = await request.get(authorizeUrl(base, surface, 'password', slug));
   let posted: string | undefined;
   for (let step = 0; step < 3; step++) {
     const html = await response.text();
     const id = pageId(html);
     if (!id) break;
-    if (!LOGIN_PAGES.has(id)) throw new Error(`Sign-in stopped on Keycloak page ${id}`);
+    if (!KEYCLOAK_LOGIN_PAGES.has(id)) throw new Error(`Sign-in stopped on Keycloak page ${id}`);
     // Identity-first login moves login-username -> login-password; the same page again means the
     // credentials were rejected. Re-posting them would only feed brute-force detection.
     if (id === posted) throw new Error(`Keycloak rejected the sign-in for ${username}: ${keycloakError(html)}`);

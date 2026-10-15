@@ -6,12 +6,13 @@
  * through a Playwright page or request context: Playwright traces every context
  * a test creates, and a run publishes its traces, step titles and report.json.
  * Tokens are cached per (user, tenant, surface) until shortly before they
- * expire, and a refusal per (user, surface) for a while, so one wrong password
+ * expire, and a refusal per (user, surface, password) for a while, so one wrong password
  * costs ONE failed login against a realm with brute-force protection, not one
  * per caller. A session is reused per (user, surface) the same way: signing the
  * same person in every few seconds is what tripped Keycloak's temporary
  * lockout on a live run.
  */
+import { createHash } from 'node:crypto';
 import { BASE_URL, IGNORE_HTTPS_ERRORS } from './env';
 import { request as playwrightRequest, type Page } from '@playwright/test';
 import { KeycloakSignInError, passwordSignIn, selectContext, surfacePath, type SignInCookie } from './identity-bff';
@@ -43,12 +44,15 @@ type StaffSurface = 'configurator' | 'employee';
 const EXPIRY_MARGIN_MS = 2 * 60_000;
 const tokens = new Map<string, { token: TokenResponse; expiresAt: number }>();
 /**
- * Keycloak refusals, per (user, surface), kept for a while rather than for the
- * worker's life: "temporarily disabled" clears itself, a wrong password does not.
+ * Keycloak refusals, per (user, surface, password), kept for a while rather
+ * than for the worker's life: "temporarily disabled" clears itself, a wrong
+ * password does not. Only credential refusals are kept: a sign-in page that
+ * expired or restarted says nothing about the password.
  */
 const REFUSAL_MS = 2 * 60_000;
 const refusals = new Map<string, { error: KeycloakSignInError; at: number }>();
-/** BFF sessions per (user, surface); a dead one is replaced on the next 401. */
+const CREDENTIAL_REFUSAL = /invalid|incorrect|credential|disabled|locked/i;
+/** BFF sessions per (user, surface, password); a dead one is replaced on the next 401. */
 const SESSION_MS = 15 * 60_000;
 const sessions = new Map<string, { cookies: SignInCookie[]; at: number }>();
 
@@ -58,7 +62,8 @@ export async function signIn(baseURL: string, surface: StaffSurface, username: s
   if (!username || !password) {
     throw new Error('No persona credentials: set <ROLE>_LOGIN in the env profile and <ROLE>_PASSWORD in the secrets file');
   }
-  const key = JSON.stringify([baseURL, surface, username]);
+  // A digest, not the password: the key is only compared, never shown.
+  const key = JSON.stringify([baseURL, surface, username, createHash('sha256').update(password).digest('hex').slice(0, 16)]);
   const refused = refusals.get(key);
   if (refused && Date.now() - refused.at < REFUSAL_MS) throw refused.error;
   const session = sessions.get(key);
@@ -68,7 +73,8 @@ export async function signIn(baseURL: string, surface: StaffSurface, username: s
     sessions.set(key, { cookies, at: Date.now() });
     return cookies;
   } catch (err) {
-    if (err instanceof KeycloakSignInError) refusals.set(key, { error: err, at: Date.now() });
+    const shown = err instanceof KeycloakSignInError ? err.message.slice(err.message.indexOf(': ') + 2) : '';
+    if (CREDENTIAL_REFUSAL.test(shown)) refusals.set(key, { error: err as KeycloakSignInError, at: Date.now() });
     throw err;
   }
 }

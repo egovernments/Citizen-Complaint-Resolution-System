@@ -16,13 +16,6 @@ import {
   ROOT_TENANT, TENANT, LOCALES,
 } from '../utils/env';
 
-// Default to the deployment ADMIN. The previous default
-// (EMP-KE_NAIROBI-000089) is a known-dead principal — its password broke
-// during the encryption-key rotation, so every run authenticated as a
-// user that can't log in. ADMIN is the resilient employee on a stock
-// deployment; override CITY_ADMIN_USER/PASS for a role-strict tenant.
-const CITY_ADMIN_USER = process.env.CITY_ADMIN_USER || ADMIN_USER;
-const CITY_ADMIN_PASS = process.env.CITY_ADMIN_PASS || ADMIN_PASS;
 
 // NOTE: postal-code validation is config-driven per tenant (MDMS
 // FormValidations postalCode row first, then the CORE_POSTAL_CONFIGS global
@@ -207,8 +200,8 @@ test.describe('PGR Postal Code Validation (#478)', () => {
     // credentials: a real city employee (EMP001 on mz.maputo) authenticates at
     // the CITY tenant, ADMIN at the ROOT tenant. It injects the token into the
     // Employee.* localStorage keys and lands on /employee.
-    const tok = await loginEmployeeBrowser(page, CITY_ADMIN_USER, CITY_ADMIN_PASS);
-    expect(tok, `city admin ${CITY_ADMIN_USER} must authenticate (tried CITY + ROOT tenants)`).toBeTruthy();
+    const tok = await loginEmployeeBrowser(page, ADMIN_USER, ADMIN_PASS);
+    expect(tok, `admin ${ADMIN_USER} must authenticate at ${TENANT}`).toBeTruthy();
   });
 
   test('postal code field is not required — form proceeds without it', {
