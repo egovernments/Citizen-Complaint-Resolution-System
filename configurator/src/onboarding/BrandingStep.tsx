@@ -15,6 +15,7 @@ import { announceOrganisation, initialsOf } from './organisation';
 import { describeSaveError } from './errors';
 import { reportStepError, trackStepAction } from './telemetry';
 import { useOnboardingT, type OnboardingT } from './i18n';
+import { useMastersCapability } from '@/hooks/useMastersCapability';
 
 const STEP = ONBOARDING_STEPS.find((step) => step.id === 'branding')!;
 const NEXT = ONBOARDING_STEPS.find((step) => step.number === STEP.number + 1)!;
@@ -81,8 +82,24 @@ function asUploadableImage(file: File): Promise<File | null> {
   });
 }
 
+/** Onboarding's Branding step. */
 export default function BrandingStep() {
+  return <BrandingEditor mode="onboarding" />;
+}
+
+/**
+ * The Branding screen. Onboarding shows it as a step: Save and continue records
+ * the step and moves on. The management console shows the same screen as a page
+ * of its own (`mode="console"`), so branding can still be changed once onboarding
+ * is over: Save changes saves and stays, and a role without write access to the
+ * tenant sees it read-only.
+ */
+export function BrandingEditor({ mode }: { mode: 'onboarding' | 'console' }) {
+  const inConsole = mode === 'console';
   const { state, completePhase } = useApp();
+  const { canEditResource } = useMastersCapability();
+  // Onboarding's layout already says when a role is view-only; the console page says it here.
+  const editable = !inConsole || canEditResource('tenants');
   const t = useOnboardingT();
   const navigate = useNavigate();
   const nameId = useId();
@@ -105,6 +122,8 @@ export default function BrandingStep() {
   // Once a save has failed, Continue anyway records the step skipped, so a save
   // that keeps failing never leaves onboarding stuck here.
   const [saveFailed, setSaveFailed] = useState(false);
+  // The console's "Branding saved.", until the next change.
+  const [justSaved, setJustSaved] = useState(false);
   // Only the latest pick counts: an earlier, slower file's checks must not replace it.
   const logoPick = useRef(0);
   const bannerPick = useRef(0);
@@ -178,6 +197,7 @@ export default function BrandingStep() {
       return;
     }
     setLogo({ kind: 'upload', file });
+    setJustSaved(false);
   };
 
   const removeLogo = () => {
@@ -185,6 +205,7 @@ export default function BrandingStep() {
     setLogoError(null);
     // A logo picked but never saved just goes; a saved one is removed on save.
     setLogo(branding?.logoUrl ? { kind: 'remove' } : null);
+    setJustSaved(false);
   };
 
   const pickBanner = async (picked: File | undefined) => {
@@ -223,13 +244,19 @@ export default function BrandingStep() {
       return;
     }
     setBanner({ kind: 'upload', file });
+    setJustSaved(false);
   };
 
   const removeBanner = () => {
     bannerPick.current++;
     setBannerError(null);
     setBanner(branding?.bannerUrl ? { kind: 'remove' } : null);
+    setJustSaved(false);
   };
+
+  // In the console there is nothing to save until something changes; the name is read-only.
+  const savedThemeId = branding?.themeId ?? DEFAULT_BRAND_THEME_ID;
+  const changed = logo !== null || banner !== null || themeId !== savedThemeId;
 
   const save = async () => {
     if (!branding) return;
@@ -247,6 +274,15 @@ export default function BrandingStep() {
       const theme = BRAND_THEMES.find((candidate) => candidate.id === themeId) ?? null;
       const bannerChange = CITIZEN_BANNER_ENABLED ? banner : null;
       const saved = await saveBranding(branding, { name: trimmed, logo, theme, banner: bannerChange });
+      if (inConsole) {
+        // The theme just written is the saved one, even if mdms-v2's re-read hasn't caught up yet.
+        setBranding({ ...saved, themeId: theme?.id ?? saved.themeId });
+        setLogo(null);
+        setBanner(null);
+        announceOrganisation({ name: saved.name, logoUrl: saved.logoUrl });
+        setJustSaved(true);
+        return;
+      }
       trackStepAction('branding', 'entity_update', 'branding', {
         tenant: state.tenant,
         theme: theme?.id ?? 'none',
@@ -269,7 +305,7 @@ export default function BrandingStep() {
       }
       navigate(NEXT.path);
     } catch (err) {
-      setSaveFailed(true);
+      if (!inConsole) setSaveFailed(true);
       if (err instanceof ThemeSaveError) reportStepError('branding', 'save_theme', err.cause, state.tenant);
       else reportStepError('branding', 'save', err, state.tenant);
       if (err instanceof ThemeSaveError) {
@@ -299,10 +335,22 @@ export default function BrandingStep() {
     }
   };
 
+  const header = (intro?: ReactNode) =>
+    inConsole ? (
+      <div className="space-y-2">
+        <h1 className="text-2xl sm:text-3xl font-bold font-condensed text-foreground">{t('steps.branding', 'Branding')}</h1>
+        {intro && <p className="text-sm leading-6 text-muted-foreground">{intro}</p>}
+      </div>
+    ) : (
+      <StepHeader eyebrow={t('branding.account_eyebrow', 'Account setup')} title={t('steps.branding', 'Branding')} done={done}>
+        {intro}
+      </StepHeader>
+    );
+
   if (loadError) {
     return (
       <div className="space-y-6">
-        <StepHeader eyebrow={t('branding.account_eyebrow', 'Account setup')} title={t('steps.branding', 'Branding')} done={done} />
+        {header()}
         <Alert variant="destructive">
           <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
             <span>{t('branding.load_failed', 'Couldn’t load your workspace’s branding.')} {loadError}</span>
@@ -317,9 +365,15 @@ export default function BrandingStep() {
 
   return (
     <div className="max-w-xl space-y-8">
-      <StepHeader eyebrow={t('branding.account_eyebrow', 'Account setup')} title={t('steps.branding', 'Branding')} done={done}>
-        {t('branding.intro', 'Your logo, name and colour appear across your workspace and on the services citizens and employees experience.')}
-      </StepHeader>
+      {header(t('branding.intro', 'Your logo, name and colour appear across your workspace and on the services citizens and employees experience.'))}
+
+      {!editable && (
+        <Alert>
+          <AlertDescription>
+            {t('branding.view_only', 'Your role can see the branding but not change it. Changing it needs write access, for example MDMS_ADMIN.')}
+          </AlertDescription>
+        </Alert>
+      )}
 
       {!branding ? (
         <div className="space-y-6" aria-busy="true" aria-label={t('branding.loading', 'Loading branding')}>
@@ -347,10 +401,10 @@ export default function BrandingStep() {
                     : t('branding.logo_rules', 'PNG or JPG, at least %{min}px square.', { min: LOGO_MIN_PX })}
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  <Button variant="outline" size="sm" onClick={() => fileInput.current?.click()}>
+                  <Button variant="outline" size="sm" disabled={!editable} onClick={() => fileInput.current?.click()}>
                     {shownLogo ? t('branding.replace', 'Replace') : t('branding.upload_logo', 'Upload logo')}
                   </Button>
-                  {shownLogo && (
+                  {shownLogo && editable && (
                     <Button variant="ghost" size="sm" onClick={removeLogo}>
                       {t('common.remove', 'Remove')}
                     </Button>
@@ -374,6 +428,7 @@ export default function BrandingStep() {
               t={t}
               shown={shownBanner}
               available={!!branding.stateInfoRecord}
+              editable={editable}
               error={bannerError}
               onPick={() => bannerInput.current?.click()}
               onRemove={removeBanner}
@@ -427,8 +482,12 @@ export default function BrandingStep() {
                           type="button"
                           aria-label={t(`branding.themes.${theme.id}`, theme.label)}
                           aria-pressed={selected}
-                          onClick={() => setThemeId(theme.id)}
-                          className="w-11 h-11 rounded-md flex items-center justify-center text-white transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          disabled={!editable}
+                          onClick={() => {
+                            setThemeId(theme.id);
+                            setJustSaved(false);
+                          }}
+                          className="w-11 h-11 rounded-md flex items-center justify-center text-white transition-transform enabled:hover:scale-105 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                           style={{
                             backgroundColor: theme.swatch,
                             outline: selected ? `2px solid ${theme.swatch}` : undefined,
@@ -452,6 +511,22 @@ export default function BrandingStep() {
             </Alert>
           )}
 
+          {inConsole ? (
+            editable && (
+              <div className="flex flex-wrap items-center gap-3 pt-2">
+                <Button onClick={save} disabled={saving || !changed} className="h-10 gap-2 px-5">
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                  {t('common.save_changes', 'Save changes')}
+                </Button>
+                {justSaved && (
+                  <p role="status" className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                    <Check className="w-4 h-4 text-primary" />
+                    {t('branding.saved', 'Branding saved.')}
+                  </p>
+                )}
+              </div>
+            )
+          ) : (
           <div className="flex flex-wrap gap-2 pt-2">
             <Button onClick={save} disabled={saving} className="h-10 gap-2 px-5">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
@@ -463,6 +538,7 @@ export default function BrandingStep() {
               </Button>
             )}
           </div>
+          )}
         </div>
       )}
     </div>
@@ -478,6 +554,7 @@ function BannerField({
   t,
   shown,
   available,
+  editable,
   error,
   onPick,
   onRemove,
@@ -486,6 +563,7 @@ function BannerField({
   t: OnboardingT;
   shown: string | null;
   available: boolean;
+  editable: boolean;
   error: string | null;
   onPick: () => void;
   onRemove: () => void;
@@ -509,7 +587,7 @@ function BannerField({
             </p>
           )}
         </div>
-        {available && (
+        {available && editable && (
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-dashed border-border p-3">
             <p className="text-xs text-muted-foreground">
               {t('branding.banner_rules', 'PNG or JPG, at least %{min}px wide, up to 5 MB.', { min: BANNER_MIN_WIDTH })}
