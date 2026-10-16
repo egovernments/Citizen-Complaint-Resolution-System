@@ -116,6 +116,8 @@ else
   result = redis.call('set', KEYS[2], ARGV[2], ARGV[5], 'PXAT', ARGV[4])
 end
 if not result then return 0 end
+-- A session whose end moves takes its selected context with it (a no-op when there is none).
+if ARGV[4] ~= 'KEEP' then redis.call('pexpireat', KEYS[6], ARGV[4]) end
 redis.call('sadd', KEYS[4], ARGV[6])
 local ttl = redis.call('pttl', KEYS[2])
 if redis.call('pttl', KEYS[4]) < ttl then redis.call('pexpire', KEYS[4], ttl) end
@@ -127,8 +129,8 @@ return 1`;
 
 async function writeSessionRecord(lease: PersonLease, sessionId: string, session: IdentitySession, expiry: number | "KEEP", mode: "NX" | "XX"): Promise<void> {
   // Without a Keycloak sid the index argument is empty and its key is a never-written placeholder.
-  const result = await getRedis().eval(WRITE_SESSION, 5, personLeaseKey(lease.subject), sessionKey(sessionId),
-    revocationGenerationKey(lease.subject), personSessionsKey(lease.subject), kcSessionSubjectKey(session.kcSessionId || ""), lease.token,
+  const result = await getRedis().eval(WRITE_SESSION, 6, personLeaseKey(lease.subject), sessionKey(sessionId),
+    revocationGenerationKey(lease.subject), personSessionsKey(lease.subject), kcSessionSubjectKey(session.kcSessionId || ""), contextKey(sessionId), lease.token,
     JSON.stringify(session), session.revocationGeneration ?? 0, expiry, mode, sessionId, session.kcSessionId ? lease.subject : "");
   if (result === -1) throw new LeaseLostError();
   if (result !== 1) throw new SessionRevokedError();
@@ -238,6 +240,7 @@ export function consumePasswordSetupAttempt(id: string): Promise<PasswordSetupAt
   return load(passwordSetupKey(id), true, validPasswordSetupAttempt);
 }
 
+/** How long the session lasts unused: Keycloak's refresh lifetime, its idle limit. */
 function sessionTtl(tokens: IdentityTokenSet): number {
   const tokenTtl = tokens.refreshExpiresIn || tokens.accessExpiresIn;
   return Math.max(1, Math.min(config.identitySessionTtlSeconds, tokenTtl));
@@ -250,11 +253,9 @@ export async function createIdentitySession(
   binding: SessionBinding = {},
 ): Promise<{ sessionId: string; maxAge: number }> {
   const sessionId = randomId();
-  const maxAge = sessionTtl(tokens);
-  await saveIdentitySession(
-    sessionId, tokens, claims, maxAge, oidcClientId, undefined, binding, true,
-  );
-  return { sessionId, maxAge };
+  await saveIdentitySession(sessionId, tokens, claims, { oidcClientId, binding, create: true });
+  // The cookie lasts as long as the session can; the record ends an idle one sooner.
+  return { sessionId, maxAge: config.identitySessionTtlSeconds };
 }
 
 /** A token's `auth_time` (s) as ms; a refresh without the claim keeps the stored value. */
@@ -262,16 +263,23 @@ function authTimeOf(claims: KeycloakClaims, previous: IdentitySession | null): n
   return typeof claims.auth_time === "number" && Number.isFinite(claims.auth_time) ? claims.auth_time * 1000 : previous?.authTime;
 }
 
-/** Refresh is update-only: only createIdentitySession/createPhoneOtpSession pass `create`. */
+export interface SaveSessionOptions {
+  oidcClientId?: string;
+  binding?: SessionBinding;
+  /** Only createIdentitySession/createPhoneOtpSession create; every other write updates. */
+  create?: boolean;
+}
+
+/**
+ * Every write slides the session: it now ends the token set's refresh lifetime from this write, never later
+ * than IDENTITY_SESSION_TTL_SECONDS after sign-in. Keycloak also shortens the refresh lifetime towards its own
+ * SSO max lifespan and then refuses the refresh, so that limit holds as well.
+ */
 export async function saveIdentitySession(
   sessionId: string,
   tokens: IdentityTokenSet,
   claims: KeycloakClaims,
-  ttl = sessionTtl(tokens),
-  oidcClientId?: string,
-  sessionExpiresAt = Date.now() + ttl * 1000,
-  binding: SessionBinding = {},
-  create = false,
+  { oidcClientId, binding = {}, create = false }: SaveSessionOptions = {},
 ): Promise<void> {
   return withPersonLease(claims.sub, async (lease) => {
     const previous = create ? null : await requireCurrentSession(lease, sessionId);
@@ -279,11 +287,15 @@ export async function saveIdentitySession(
       throw new Error("Invalid identity session surface binding");
     }
     const now = Date.now();
+    // A record written before createdAt existed counts from its sign-in, not from this write.
+    const createdAt = previous?.createdAt ?? previous?.authTime ?? now;
+    const expiresAt = Math.min(createdAt + config.identitySessionTtlSeconds * 1000, now + sessionTtl(tokens) * 1000);
+    if (expiresAt <= now) throw new SessionRevokedError();
     const session: IdentitySession = {
       claims,
       schemaVersion: 2,
       revocationGeneration: previous?.revocationGeneration ?? Number(await getRedis().get(revocationGenerationKey(claims.sub)) || 0),
-      createdAt: previous?.createdAt ?? now,
+      createdAt,
       lastSeenAt: now,
       ...(authTimeOf(claims, previous) !== undefined && { authTime: authTimeOf(claims, previous) }),
       kcSessionId: claims.sid ?? previous?.kcSessionId,
@@ -301,9 +313,9 @@ export async function saveIdentitySession(
       refreshExpiresAt: tokens.refreshExpiresIn
         ? now + tokens.refreshExpiresIn * 1000
         : undefined,
-      sessionExpiresAt,
+      sessionExpiresAt: expiresAt,
     };
-    await writeSessionRecord(lease, sessionId, session, Math.min(sessionExpiresAt, now + ttl * 1000), create ? "NX" : "XX");
+    await writeSessionRecord(lease, sessionId, session, expiresAt, create ? "NX" : "XX");
   });
 }
 
@@ -331,11 +343,11 @@ export async function createPhoneOtpSession(input: {
       phone_number_verified: true,
       azp: config.keycloakCitizenClientId,
     },
-    maxAge,
-    config.keycloakCitizenClientId,
-    undefined,
-    { surface: "citizen", boundTenant: input.boundTenant, authMethod: "phone_otp" },
-    true,
+    {
+      oidcClientId: config.keycloakCitizenClientId,
+      binding: { surface: "citizen", boundTenant: input.boundTenant, authMethod: "phone_otp" },
+      create: true,
+    },
   );
   return { sessionId, maxAge };
 }

@@ -25,7 +25,7 @@ export interface IdentitySession {
   refreshToken?: string;
   accessExpiresAt: number;
   refreshExpiresAt?: number;
-  /** Absolute lifetime of the opaque browser session. */
+  /** When the session ends unless used: each refresh moves it, up to IDENTITY_SESSION_TTL_SECONDS after sign-in. */
   sessionExpiresAt: number;
   /** Surface that created the session; absent means `configurator`. */
   surface?: IdentitySurface;

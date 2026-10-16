@@ -413,6 +413,7 @@ Query: `surface`; `include=account` (optional).
 - `include=account` costs Keycloak Admin reads, so only the account menu asks for it (§1: the BFF is not called on a signed-in page load).
 - Phone-only citizens get empty `account` arrays.
 - A refresh failure caused by Keycloak being **unavailable** keeps the session. Only `invalid_grant` ends it (item 15).
+- `expiresAt` is when the session ends if it goes unused (§6). Each token refresh moves it.
 - Errors: `UNSUPPORTED_SURFACE` 400, `IDENTITY_UNAVAILABLE` 503.
 
 #### 3.3.2 `POST /identity/v1/logout` (items 4, 10)
@@ -902,7 +903,7 @@ A pending binding past `expiresAt` counts as `removed` everywhere, even before a
 
 **Write rules:**
 - create: `SET … NX EX`;
-- refresh: `SET … XX EX`, keeping the generation it **re-read**;
+- refresh: `SET … XX PXAT`, keeping the generation it **re-read**. The session slides: its end (`sessionExpiresAt`, and the record's and selected context's expiry) moves to the new refresh token's expiry, which is Keycloak's idle limit, but never past `IDENTITY_SESSION_TTL_SECONDS` after sign-in (`createdAt`). Keycloak also shortens the refresh lifetime towards its SSO max lifespan and then refuses the refresh. A finished Keycloak account action slides the session the same way; one that finishes after the session ended still reports its outcome, and the person signs in again. A record written before `createdAt` existed counts from its `authTime`. The cookie's `Max-Age` is `IDENTITY_SESSION_TTL_SECONDS`, so an idle session ends at the record, not at the browser, and `GET /identity/v1/session` clears the cookie of a session that has ended;
 - touch: `SET … XX KEEPTTL`.
 
 A `nil` reply means the session was revoked: answer 401 and never recreate it. A record without `schemaVersion` counts as version 1 and gets generation 0.
@@ -936,11 +937,11 @@ A `nil` reply means the session was revoked: answer 401 and never recreate it. A
 | Pattern | Value | TTL | Tag |
 |---|---|---|---|
 | `{p}:identity:login:{state}` | login attempt JSON (+ `action`, `actionParam`, `initiatingSessionId`) | `IDENTITY_LOGIN_TTL_SECONDS` (1800) | S |
-| `{p}:identity:session:{sid}` | session record (§6) | ≤ `IDENTITY_SESSION_TTL_SECONDS` | S |
+| `{p}:identity:session:{sid}` | session record (§6) | the refresh token's lifetime, moved on each refresh; ≤ `IDENTITY_SESSION_TTL_SECONDS` from sign-in | S |
 | `{p}:identity:person-sessions:{sub}` | SET of sid | the longest session TTL, refreshed on add | S |
 | `{p}:identity:kc-session:{kcSessionId}` | the subject whose session carries this Keycloak `sid`; written with the session record. A Keycloak session event (`USER_SESSION` DELETE) resolves its person here, then from the event's `userId`, and only then by scanning the realm | at least the session's TTL, extended on write | S |
 | `{p}:identity:revgen:{sub}` | integer | none. A few bytes per person who ever had logout-all | S |
-| `{p}:identity:context:{sid}` | the selected context, + `digitUuid` | the session's remaining TTL; `XX`-guarded | S |
+| `{p}:identity:context:{sid}` | the selected context, + `digitUuid` | the session's remaining TTL, moved with it; `XX`-guarded | S |
 | `{p}:identity:auth-result:{id}` | result JSON | 300 s | S |
 | `{p}:identity:password-setup:{id}` | setup attempt JSON (`returnTo` already holds the surface's path) | 2700 s | S |
 | `{p}:identity:magic-link-signup-limit:{ip\|email}:{ref}` | counter | 1800 s | S |

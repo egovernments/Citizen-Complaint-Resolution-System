@@ -46,7 +46,11 @@ export function registerSessionRoutes(app: express.Application): void {
     const surface = parseSurface(request.query.surface);
     if (!surface) return response.status(400).json({ error: "Unsupported sign-in surface", code: "UNSUPPORTED_SURFACE" });
     const current = await currentSession(request.headers.cookie, surface);
-    if (!current) return response.status(401).json({ authenticated: false, code: "SESSION_REQUIRED", error: "A signed-in session is required" });
+    if (!current) {
+      // The cookie outlives an idle session; drop a dead one so the browser stops sending it.
+      if (sessionIdFromCookie(request.headers.cookie, surface)) response.setHeader("Set-Cookie", clearedSessionCookie(surface));
+      return response.status(401).json({ authenticated: false, code: "SESSION_REQUIRED", error: "A signed-in session is required" });
+    }
     const { claims, boundTenant } = current.session;
     const context = await getSelectedIdentityContext(current.sessionId);
     const account = request.query.include === "account" ? await accountMetadata(current.session, surface) : undefined;
