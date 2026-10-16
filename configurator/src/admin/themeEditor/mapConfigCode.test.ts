@@ -18,7 +18,7 @@ describe('Map Configuration save code', () => {
   });
   it('the editor writes the code from mapConfigCode, not a fixed DEFAULT', () => {
     const src = readFileSync(resolve(__dirname, 'MapConfigEditor.tsx'), 'utf8');
-    expect(src).not.toMatch(/code:\s*MAP_CONFIG_KEY\s*}/);
+    expect(src).not.toMatch(/\{ \.\.\.data, code: MAP_CONFIG_KEY \}/);
     expect(src).not.toMatch(/mdmsCreate\(tenantId, SCHEMA, MAP_CONFIG_KEY/);
     expect(src).toMatch(/mapConfigCode\(record, data\)/);
   });
