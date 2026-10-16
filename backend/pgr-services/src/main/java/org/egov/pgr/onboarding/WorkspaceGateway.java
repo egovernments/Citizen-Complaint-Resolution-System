@@ -44,13 +44,14 @@ public class WorkspaceGateway {
         } catch(RestClientException e){fail(HttpStatus.SERVICE_UNAVAILABLE,"WORKSPACE_DEPENDENCY_UNAVAILABLE");return null;}
     }
     /** Advisory readout for _search: a probe whose dependency fails reads null instead of failing the call. */
-    public Map<String,Boolean> probes(String tenant) {
-        Map<String,Boolean> probes=new LinkedHashMap<>(); Reads reads=new Reads(tenant);
+    /** `founder` is the founder's DIGIT uuid (null if unknown): the EMPLOYEES probe never counts them. */
+    public Map<String,Boolean> probes(String tenant,String founder) {
+        Map<String,Boolean> probes=new LinkedHashMap<>(); Reads reads=new Reads(tenant,founder);
         for(String step:WorkspaceRepository.STEPS) try{probes.put(step,probe(reads,step));}catch(RuntimeException e){probes.put(step,null);}
         return probes;
     }
     /** One step's live check; dependency failures propagate so DONE is never granted on an unreadable probe. */
-    public boolean probe(String tenant,String step){return probe(new Reads(tenant),step);}
+    public boolean probe(String tenant,String step,String founder){return probe(new Reads(tenant,founder),step);}
     private boolean probe(Reads reads,String step) {
         String tenant=reads.tenant;
         switch(step) {
@@ -89,7 +90,7 @@ public class WorkspaceGateway {
                 return false;
             }
             case "EMPLOYEES": {
-                for(JsonNode row:reads.employees()) if(!row.path("code").asText().isBlank() && !OnboardingSteps.isFounder(row) && row.path("isActive").asBoolean(true) && row.path("user").path("active").asBoolean(true))return true;
+                for(JsonNode row:reads.employees()) if(!row.path("code").asText().isBlank() && !founder(row,reads.founder) && row.path("isActive").asBoolean(true) && row.path("user").path("active").asBoolean(true))return true;
                 return false;
             }
             default: throw new IllegalArgumentException(step);
@@ -97,8 +98,8 @@ public class WorkspaceGateway {
     }
     /** Dependency reads shared by the probes of one call, so EMPLOYEES and COMPLAINT_TYPES read HRMS once. */
     private final class Reads {
-        final String tenant; private JsonNode employees; private RuntimeException employeesFailure;
-        Reads(String tenant){this.tenant=tenant;}
+        final String tenant,founder; private JsonNode employees; private RuntimeException employeesFailure;
+        Reads(String tenant,String founder){this.tenant=tenant;this.founder=founder;}
         JsonNode employees() {
             if(employeesFailure!=null)throw employeesFailure;
             if(employees==null) try {
@@ -107,6 +108,10 @@ public class WorkspaceGateway {
             } catch(RuntimeException e){employeesFailure=e;throw e;}
             return employees;
         }
+    }
+    /** The founder's row: their uuid, which never changes, or the code founders had before #2456. */
+    private static boolean founder(JsonNode employee,String founderUuid) {
+        return founderUuid!=null && founderUuid.equals(employee.path("user").path("uuid").asText()) || employee.path("code").asText().startsWith("FOUNDER_");
     }
     private static boolean hasRole(JsonNode employee,String role,String tenant) {
         for(JsonNode r:employee.path("user").path("roles")) if(role.equals(r.path("code").asText()) && tenant.equals(r.path("tenantId").asText()))return true;

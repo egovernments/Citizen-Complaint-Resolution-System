@@ -110,9 +110,10 @@ public class OnboardingProvisionerClientTest {
         assertThrows(OnboardingFailure.class,()->client.write(scope("FOUNDER_HRMS"),"hrms","/egov-hrms/employees/_create",Map.of("Employees",List.of(employee))));
         assertThrows(OnboardingFailure.class,()->client.write(scope("FOUNDER_HRMS"),"hrms","/egov-hrms/employees/_create",Map.of("Employees",List.of(Map.of("tenantId","newtown","code","other","user",Map.of("tenantId","newtown","userName","other"))))));
         // #2456: no more FOUNDER_ codes, and only a username of the founder's shape.
-        String old="FOUNDER_"+signup.getId().toString().replace("-","");
+        String old=OnboardingSteps.legacyFounderCode(signup.getId());
         assertThrows(OnboardingFailure.class,()->client.write(scope("FOUNDER_HRMS"),"hrms","/egov-hrms/employees/_create",Map.of("Employees",List.of(Map.of("tenantId","newtown","code",old,"user",Map.of("tenantId","newtown","userName",old))))));
         assertThrows(OnboardingFailure.class,()->client.write(scope("FOUNDER_HRMS"),"hrms","/egov-hrms/employees/_create",Map.of("Employees",List.of(Map.of("tenantId","newtown","code","EMP_0001","user",Map.of("tenantId","newtown","userName","Admin@x"))))));
+        assertThrows(OnboardingFailure.class,()->client.write(scope("FOUNDER_HRMS"),"hrms","/egov-hrms/employees/_create",Map.of("Employees",List.of(Map.of("tenantId","newtown","code","EMP_0001","user",Map.of("tenantId","newtown","userName","a".repeat(65))))))));
         assertEquals(0,writes);assertEquals(0,details);
     }
     @Test public void seedUpgradeMayDeleteOnlyTheTenantNameKeyAndBustTheCacheButNeverWriteBoundaries(){
