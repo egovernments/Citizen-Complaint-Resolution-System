@@ -149,6 +149,6 @@ the table below.
 | `/xstate-chatbot/health` returns 404 | Kong has no chatbot route: re-run step 3 (Deploy). A redeploy from a branch without this feature removes it again |
 | 502, or Kong logs `No route to host`, right after the chatbot container is recreated | Kong still has the old container address: `docker exec kong-gateway kong reload` |
 | Bot goes silent after a menu, Twilio log shows error `21617` | A message was over 1,600 characters. Upgrade the chatbot: long menus are paged and long messages are split |
-| Bot says *our system has a problem* at Submit; logs show `INVALID_CASE_RELATED_TO` | The tenant has no `RAINMAKER-PGR.ComplaintTemplateType` row for the bot's `caseRelatedTo` (default `IGE`). Set `CASE_RELATED_TO=` (empty) on the `xstate-chatbot` container; it is not in `host_vars` yet |
+| Bot says *our system has a problem* at Submit; logs show `INVALID_CASE_RELATED_TO` | The bot sends the institution and confidentiality fields only to tenants with an active `RAINMAKER-PGR.ComplaintTemplateType` row for its `caseRelatedTo` (default `IGE`). This error means such a row exists but PGR still rejects it: check the row, or set `CASE_RELATED_TO=` (empty) on the `xstate-chatbot` container to turn the fields off |
 | *Your previous session timed out* after a redeploy | Reply **2** to start fresh. Resuming replays the last prompt saved by the old version |
 | Bot replies *Sorry, there was an error processing your request* | The number does not match the state's `MobileNumberValidation` rule |

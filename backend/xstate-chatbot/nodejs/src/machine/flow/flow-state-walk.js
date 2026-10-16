@@ -77,6 +77,8 @@ class WalkState extends State {
   // the page each level above this one was on, so Go Back returns to it
   get offsetStackSlot() { return this.key + 'OffsetStack'; }
   get restoreOffsetSlot() { return this.key + 'RestoreOffset'; }
+  // every slot paging writes; the flow's entry reset clears them with path/step/grammar
+  get pagingSlots() { return [this.offsetSlot, this.nextOffsetSlot, this.offsetStackSlot, this.restoreOffsetSlot]; }
 
   getPath(context) {
     return context[this.pathSlot] || [];
@@ -93,6 +95,15 @@ class WalkState extends State {
     const maxChars = maxBodyLength(config.whatsAppProvider) - PAGE_MARGIN_CHARS;
     const build = (end, paged) =>
       dialog.constructListPromptAndGrammer(options.slice(offset, end), messageBundle, locale, paged, goback);
+
+    // A level that fits on one page whole needs no "See more" line, so check that first
+    // rather than reserving room for one.
+    if (offset === 0 && options.length <= MAX_PAGE_OPTIONS) {
+      const whole = build(options.length, false);
+      if ((preamble + whole.prompt).length <= maxChars) {
+        return { prompt: preamble + whole.prompt, grammer: whole.grammer, nextOffset: 0 };
+      }
+    }
 
     // One render of the largest candidate page, measured line by line: rebuilding the
     // whole page for every candidate size cost up to 20 renders per entry.
@@ -114,6 +125,19 @@ class WalkState extends State {
       list = build(end, true);
     }
     return { prompt: preamble + list.prompt, grammer: list.grammer, nextOffset: end < options.length ? end : 0 };
+  }
+
+  // Names of the level's options that are not on the shown page: typing "Garbage" still
+  // picks it from page 2. Numbers stay page-local; the page's own entries come first, so
+  // a number always means the option shown under it.
+  nameGrammer(context, pageGrammer) {
+    const { options = [], messageBundle = {} } = context[this.stepSlot] || {};
+    const shown = new Set(pageGrammer.map((entry) => entry.intention));
+    const offPage = options.filter((code) => !shown.has(code));
+    if (offPage.length === 0) return [];
+    return dialog.constructListPromptAndGrammer(offPage, messageBundle, context.user.locale).grammer
+      .map((entry) => ({ intention: entry.intention, recognize: entry.recognize.slice(1) }))
+      .filter((entry) => entry.recognize.length > 0);
   }
 
   renderPreamble(context) {
@@ -167,7 +191,7 @@ class WalkState extends State {
           entry: [
             assign((context) => {
               const page = this.renderPage(context, context[this.offsetSlot] || 0);
-              context[this.grammerSlot] = page.grammer;
+              context[this.grammerSlot] = [...page.grammer, ...this.nameGrammer(context, page.grammer)];
               context[this.nextOffsetSlot] = page.nextOffset;
               context.lastPrompt = page.prompt;
             }),
@@ -210,6 +234,7 @@ class WalkState extends State {
               actions: assign((context) => {
                 if (this.onLeaf.slot) context.slots.pgr[this.onLeaf.slot] = context.intention;
                 context[this.pathSlot] = [...this.getPath(context), context.intention];
+                context[this.offsetStackSlot] = [];
                 if (this.onLeaf.set) this.onLeaf.set(context);
               })
             },

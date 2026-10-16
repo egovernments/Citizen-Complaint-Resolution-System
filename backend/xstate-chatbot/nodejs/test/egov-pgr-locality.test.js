@@ -160,21 +160,21 @@ test("a code is filed exactly as the walk picked it, with or without the flag", 
   assert.equal((await file({ locality: "ADMIN_SUN05" })).sent.service.address.locality.code, "ADMIN_SUN05");
 });
 
-test("REGRESSION: an empty CASE_RELATED_TO files the complaint without extendedAttributes", async () => {
+test("REGRESSION: a complaint the tenant can't take attributes for is filed without them", async () => {
   // ke has no ComplaintTemplateType rows, so PGR rejected every chatbot complaint with
   // INVALID_CASE_RELATED_TO while the bot stamped caseRelatedTo: IGE on all of them.
   const user = { authToken: "t", userId: "u", userInfo: {}, locale: "en_IN" };
-  const slots = { complaint: "MissedGarbageCollection", city: "ke.bomet", locality: "W1_ADMIN_WARD",
+  const base = { complaint: "MissedGarbageCollection", city: "ke.bomet", locality: "W1_ADMIN_WARD",
     localityIsBoundaryCode: true, instituteName: "Inst", isConfidential: false };
 
-  const plain = load(boundaryAndLocalisation(["W1_ADMIN_WARD"]), { caseRelatedTo: "" });
-  await plain.svc.persistComplaint(user, slots);
+  const plain = load(boundaryAndLocalisation(["W1_ADMIN_WARD"]), { caseRelatedTo: "IGE" });
+  await plain.svc.persistComplaint(user, { ...base, extendedAttributes: false });
   const sentPlain = JSON.parse(plain.calls.find((c) => c.url.includes("request/_create")).options.body);
   assert.equal(sentPlain.service.extendedAttributes, undefined);
 
-  // A configured value (mz's IGE) still sends them.
+  // A tenant with the template (mz's IGE) still gets them.
   const ige = load(boundaryAndLocalisation(["W1_ADMIN_WARD"]), { caseRelatedTo: "IGE" });
-  await ige.svc.persistComplaint(user, slots);
+  await ige.svc.persistComplaint(user, { ...base, extendedAttributes: true });
   const sentIge = JSON.parse(ige.calls.find((c) => c.url.includes("request/_create")).options.body);
   assert.deepEqual(sentIge.service.extendedAttributes, { caseRelatedTo: "IGE", instituteName: "Inst", isConfidential: false });
 });

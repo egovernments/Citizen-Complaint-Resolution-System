@@ -10,6 +10,13 @@ const { isValidTwilioSignature } = require('./twilio-signature');
 // Twilio's limit on a single message body. See splitBody below.
 const TWILIO_MAX_BODY = require('./limits').MAX_BODY_LENGTH.Twilio;
 
+// Sent when a split message stops partway: the citizen holds the first part of a menu and
+// would otherwise wait on options they never saw. Reset words (hi) restart the flow.
+const PARTIAL_DELIVERY_NOTICE = {
+    en_IN: 'Sorry, the rest of this message could not be delivered. Please send *hi* to start again.',
+    pt_PT: 'Desculpe, o resto desta mensagem não pôde ser entregue. Envie *olá* para recomeçar.',
+};
+
 // The only host inbound media is fetched from, and the only path shape accepted
 // on it. See twilioMediaUrl below.
 const TWILIO_MEDIA_HOST = 'api.twilio.com';
@@ -518,7 +525,11 @@ class TwilioWhatsAppProvider {
             }
         }
         if (current) chunks.push(current);
-        return chunks;
+        // A part never opens on blank lines: a cut just before a separator line, or an empty
+        // hard-cut remainder, would otherwise start the next message with an empty line.
+        return chunks
+            .map((chunk, i) => (i === 0 ? chunk : chunk.replace(/^\s*\n/, '')))
+            .filter((chunk) => chunk.trim().length > 0);
     }
 
     // Where to cut a single line longer than the limit: at the last whitespace before it
@@ -532,21 +543,32 @@ class TwilioWhatsAppProvider {
         return cut;
     }
 
-    // Sends each part in order and stops at the first that fails: carrying on would show
-    // the citizen a menu starting partway through. Resolves to undefined on any failure.
-    async sendTextMessage(to, body, tenantId = null) {
+    // Sends each part in order, retrying a failed part once, and stops at the first that
+    // still fails: carrying on would show a menu starting partway through. If some parts
+    // were delivered, tells the citizen how to recover. Resolves to undefined on failure.
+    async sendTextMessage(to, body, tenantId = null, locale = null) {
         const address = await this.toWhatsAppAddress(to, tenantId);
-        const chunks = this.splitBody(body);
-        let response;
-        for (let i = 0; i < chunks.length; i++) {
-            if (i > 0 && this.chunkDelayMs > 0) await new Promise((resolve) => setTimeout(resolve, this.chunkDelayMs));
+        const send = (text) => {
             const params = new URLSearchParams();
             params.append('To', address);
             params.append('From', this.senderAddress());
-            params.append('Body', chunks[i]);
-            response = await this.sendTwilioRequest(params);
+            params.append('Body', text);
+            return this.sendTwilioRequest(params);
+        };
+        const pause = () => (this.chunkDelayMs > 0 ? new Promise((resolve) => setTimeout(resolve, this.chunkDelayMs)) : null);
+
+        const chunks = this.splitBody(body);
+        let response;
+        for (let i = 0; i < chunks.length; i++) {
+            if (i > 0) await pause();
+            response = await send(chunks[i]);
             if (!response) {
-                console.error(`Twilio - part ${i + 1} of ${chunks.length} failed; not sending the rest`);
+                await pause();
+                response = await send(chunks[i]);
+            }
+            if (!response) {
+                console.error(`Twilio - part ${i + 1} of ${chunks.length} failed twice; not sending the rest`);
+                if (i > 0) await send(PARTIAL_DELIVERY_NOTICE[locale] || PARTIAL_DELIVERY_NOTICE.en_IN);
                 return undefined;
             }
         }
@@ -626,7 +648,7 @@ class TwilioWhatsAppProvider {
 
             try {
                 if (type === 'text') {
-                    await this.sendTextMessage(userMobile, content, tenantId);
+                    await this.sendTextMessage(userMobile, content, tenantId, user.locale);
                 }
                 else if (type === 'template') {
                     // For Twilio templates, we use ContentSid

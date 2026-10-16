@@ -104,11 +104,12 @@ test("REVIEW: a failed part stops the rest and the send reports failure", async 
   provider.chunkDelayMs = 0;
   const sent = [];
   // Part 1 fails (rate limit / 5xx): sendTwilioRequest returns undefined.
-  provider.sendTwilioRequest = async (params) => { sent.push(params.get("Body")); return sent.length === 1 ? undefined : { sid: "SM" }; };
+  provider.sendTwilioRequest = async (params) => { sent.push(params.get("Body")); return undefined; };
   const lines = Array.from({ length: 100 }, (_, i) => `*${i + 1}.* complaints.categories.Option${i + 1}`);
 
   const result = await provider.sendTextMessage("6307817430", lines.join("\n"), "ke");
-  assert.equal(sent.length, 1, "the menu is not shown starting partway through");
+  assert.equal(sent.length, 2, "part 1 is retried once, and the rest is not sent");
+  assert.equal(sent[0], sent[1]);
   assert.equal(result, undefined);
 });
 
@@ -133,4 +134,28 @@ test("REVIEW: parts of a split body are spaced out to keep their order", async (
   await provider.sendTextMessage("6307817430", "a\n".repeat(1000) + "b".repeat(1000), "ke");
   assert.ok(at.length >= 2);
   for (let i = 1; i < at.length; i++) assert.ok(at[i] - at[i - 1] >= 25, `gap ${at[i] - at[i - 1]}ms`);
+});
+
+test("REVIEW: when a later part fails twice the citizen is told how to recover", async () => {
+  // Part 1 arrived, part 2 did not: without a word the citizen waits on options never shown.
+  const provider = loadProvider("whatsapp:+14155238886");
+  provider.toWhatsAppAddress = async () => "whatsapp:+916307817430";
+  provider.chunkDelayMs = 0;
+  const sent = [];
+  provider.sendTwilioRequest = async (params) => { sent.push(params.get("Body")); return sent.length === 1 ? { sid: "SM1" } : undefined; };
+  const lines = Array.from({ length: 100 }, (_, i) => `*${i + 1}.* complaints.categories.Option${i + 1}`);
+
+  const result = await provider.sendTextMessage("6307817430", lines.join("\n"), "mz", "pt_PT");
+  assert.equal(result, undefined);
+  assert.equal(sent.length, 4, "part 1, part 2 and its retry, then the notice");
+  assert.match(sent[3], /Envie \*olá\* para recomeçar/);
+});
+
+test("REVIEW: a later part never opens on a blank line", () => {
+  const provider = loadProvider("whatsapp:+14155238886");
+  // Part 1 is exactly full, so the blank separator line after it starts part 2.
+  const body = "a".repeat(1600) + "\n\n" + "*12.* next option";
+  const parts = provider.splitBody(body, 1600);
+  assert.equal(parts.length, 2);
+  assert.equal(parts[1], "*12.* next option");
 });

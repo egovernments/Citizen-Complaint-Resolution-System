@@ -162,3 +162,27 @@ test("without a definition every row is still offered", async () => {
 
   assert.deepEqual(step.options, ["AUTH", "LIXO", "SAUDE"]);
 });
+
+test("REVIEW: the level of a step is matched loosely too", async () => {
+  // Definition says L3 is the leaf level; rows under SAUDE jump straight to it and spell it
+  // "l_3". An exact match missed and fell back to levels[1] (L2): wrong label, not a leaf.
+  masters = {
+    ComplaintHierarchyDefinition: [{
+      active: true,
+      hierarchyType: "PGR",
+      levels: [
+        { levelCode: "L1", order: 1, label: "Categoria", isLeafServiceCode: false },
+        { levelCode: "L2", order: 2, label: "Subtipo", isLeafServiceCode: false },
+        { levelCode: "L3", order: 3, label: "Assunto", isLeafServiceCode: true },
+      ],
+    }],
+    ComplaintHierarchy: [
+      { code: "SAUDE", parentCode: null, levelCode: "L1", hierarchyType: "PGR", active: true },
+      { code: "SAUDE_X", parentCode: "SAUDE", levelCode: "l_3", hierarchyType: "PGR", active: true },
+      { code: "SAUDE_X_CHILD", parentCode: "SAUDE_X", levelCode: "L4", hierarchyType: "PGR", active: true },
+    ],
+  };
+  const step = await pgrService.fetchComplaintHierarchyStep("mz", ["SAUDE"]);
+  assert.equal(step.levelLabel, "Assunto");
+  assert.equal(step.isLeafLevel, true);
+});

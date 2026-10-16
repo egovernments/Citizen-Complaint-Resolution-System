@@ -100,6 +100,8 @@ function happyPathService(overrides = {}) {
       isLeafLevel: true,
     }),
     persistComplaint: async () => ({ complaintNumber: "PGR-42", filedDate: "18/09/2026" }),
+    // mz has an IGE ComplaintTemplateType row, so institution and confidentiality are asked
+    acceptsExtendedAttributes: async () => true,
     ...overrides,
   };
 }
@@ -254,17 +256,18 @@ test("a long complaint level is paged under Twilio's 1600-character limit", asyn
   assert.equal(persisted[0].complaint, second, "the option picked on page 2 is the one filed");
 });
 
-test("REVIEW: with CASE_RELATED_TO empty, institution and confidentiality are not asked", async () => {
+test("REVIEW: on a tenant without the template, institution and confidentiality are not asked", async () => {
   // PGR gets no extendedAttributes then, so a "keep me confidential" answer would be
-  // silently dropped while the citizen believed it was honoured.
+  // silently dropped while the citizen believed it was honoured. Decided per tenant (ke).
   const persisted = [];
   const service = happyPathService({
     persistComplaint: async (user, slots) => {
       persisted.push(slots);
       return { complaintNumber: "PGR-42", filedDate: "18/09/2026" };
     },
+    acceptsExtendedAttributes: async (tenantId) => tenantId !== "mz",
   });
-  const h = harness({ service, env: { caseRelatedTo: "" } });
+  const h = harness({ service });
   h.service.start();
   await settle();
 
@@ -290,6 +293,7 @@ test("REVIEW: with CASE_RELATED_TO empty, institution and confidentiality are no
   assert.match(persisted[0].description, /medicamentos/);
   assert.equal(persisted[0].instituteName, undefined);
   assert.equal(persisted[0].isConfidential, undefined);
+  assert.equal(persisted[0].extendedAttributes, false, "persist is told not to send them");
   assert.ok(!h.outputs.some((m) => /confidencial/i.test(m) && /\*1\*/.test(m)), "the confidentiality question was never sent");
 });
 
@@ -324,4 +328,85 @@ test("REVIEW: Go Back returns to the page the citizen left", async () => {
 
   assert.match(h.outputs[h.outputs.length - 1], new RegExp(`^\\*1\\.\\*\\s+complaints\\.categories\\.${firstOnPage2}`, "m"),
     "back on page 2, not page 1");
+});
+
+/** 60 categories over three pages, each with one leaf sub-type. */
+function pagedService(overrides = {}) {
+  const codes = Array.from({ length: 60 }, (_, i) => `CAT_${String(i + 1).padStart(3, "0")}`);
+  const bundle = Object.fromEntries(codes.map((c) => [c, { pt_PT: `complaints.categories.${c}LongEnoughToPage` }]));
+  return {
+    codes,
+    service: happyPathService({
+      fetchComplaintHierarchyStep: async (tenantId, path = []) =>
+        path.length === 0
+          ? { options: codes, messageBundle: bundle, trailBundle: {}, levelLabel: "Categoria", isLeafLevel: false }
+          : { options: ["SUB"], messageBundle: { SUB: { pt_PT: "Subtipo" } }, trailBundle: bundle, levelLabel: "Subtipo", isLeafLevel: true },
+      ...overrides,
+    }),
+  };
+}
+
+test("REVIEW: restarting the complaint flow clears the paging state", async () => {
+  // A Go Back whose fetch failed left RestoreOffset set; the next complaint's category
+  // menu then opened partway through the list.
+  const { config } = loadLiveMachine({ service: happyPathService() });
+  const context = { slots: { pgr: {} }, pgr: {} };
+  for (const walk of ["complaintType2Step", "boundary"]) {
+    Object.assign(context, {
+      [`${walk}Offset`]: 40, [`${walk}NextOffset`]: 60, [`${walk}OffsetStack`]: [20, 40], [`${walk}RestoreOffset`]: 40,
+    });
+  }
+  config.entry.assignment(context);
+  for (const key of Object.keys(context)) assert.doesNotMatch(key, /Offset/, `${key} survived the reset`);
+});
+
+test("REVIEW: picking a leaf empties the Go Back stack", async () => {
+  const { service } = pagedService();
+  const h = harness({ service });
+  h.service.start();
+  await settle();
+  h.say("1");          // file a complaint
+  await settle();
+  h.say("1");          // category 1 (descends, pushes its page)
+  await settle();
+  h.say("1");          // its leaf sub-type
+  await settle();
+  assert.deepEqual(h.service.state.context.complaintType2StepOffsetStack, []);
+});
+
+test("REVIEW: a name from another page is still recognised", async () => {
+  const persisted = [];
+  const { service } = pagedService({
+    persistComplaint: async (user, slots) => { persisted.push(slots); return { complaintNumber: "PGR-42", filedDate: "18/09/2026" }; },
+  });
+  const h = harness({ service });
+  h.service.start();
+  await settle();
+  h.say("1");
+  await settle();
+  const page1 = h.outputs[h.outputs.length - 1];
+  h.say(String((page1.match(/^\*\d+\.\*/gm) || []).length)); // See more: now on page 2
+  await settle();
+  assert.doesNotMatch(h.outputs[h.outputs.length - 1], /CAT_005/, "CAT_005 is not on page 2");
+
+  h.say("complaints.categories.CAT_005LongEnoughToPage");
+  await settle();
+  assert.match(h.outputs[h.outputs.length - 1], /Subtipo/, "the typed name descended into CAT_005");
+  assert.deepEqual(h.service.state.context.complaintType2StepPath, ["CAT_005"]);
+});
+
+test("REVIEW: a level that fits whole is not split just to fit a See more line", async () => {
+  // 18 options of 83 characters a line: 1,494 characters, under the 1,500 page budget,
+  // but over it once a "See more" line is reserved. They belong on one page.
+  const codes = Array.from({ length: 18 }, (_, i) => `C${String(i + 1).padStart(2, "0")}`);
+  const bundle = Object.fromEntries(codes.map((c) => [c, { pt_PT: c + "x".repeat(73) }]));
+  loadLiveMachine({ service: happyPathService() }); // stubs env-variables (Twilio's limit) for the walk
+  const WalkState = require(p("src/machine/flow/flow-state-walk.js"));
+  const walk = new WalkState("probe");
+  const context = { user: { locale: "pt_PT" }, probeStep: { options: codes, messageBundle: bundle } };
+  const page = walk.renderPage(context, 0);
+
+  assert.equal((page.prompt.match(/^\*\d+\.\*/gm) || []).length, 18, "all 18, no See more");
+  assert.ok(page.prompt.length <= 1500, `${page.prompt.length} characters`);
+  assert.equal(page.nextOffset, 0);
 });

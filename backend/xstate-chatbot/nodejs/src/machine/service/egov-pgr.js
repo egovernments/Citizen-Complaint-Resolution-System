@@ -135,6 +135,29 @@ class PGRService {
     return data.MdmsRes || data.mdms || {};
   }
 
+  /**
+   * Whether complaints on this tenant may carry extendedAttributes. PGR accepts them only
+   * when the tenant (or its state tenant, the same fallback PGR uses) has an active
+   * RAINMAKER-PGR.ComplaintTemplateType row for caseRelatedTo; ke has none and rejects them
+   * with INVALID_CASE_RELATED_TO. A master or module MDMS doesn't return means no row.
+   */
+  async acceptsExtendedAttributes(tenantId) {
+    const caseRelatedTo = config.caseRelatedTo;
+    if (!caseRelatedTo || !tenantId) return false;
+    const filter = `$.[?(@.active == true && @.caseRelatedTo == '${caseRelatedTo.replace(/'/g, "")}')]`;
+    const rowsFor = (tenant) =>
+      referenceCache.get(`template:${tenant}:${caseRelatedTo}`, () =>
+        this.fetchMdmsData(tenant, "RAINMAKER-PGR", "ComplaintTemplateType", filter).catch((error) => {
+          if (/not found/.test(error.message)) return [];
+          throw error;
+        })
+      );
+
+    if ((await rowsFor(tenantId)).length > 0) return true;
+    const stateTenant = String(tenantId).split(".")[0];
+    return stateTenant !== tenantId && (await rowsFor(stateTenant)).length > 0;
+  }
+
   async fetchComplaintHierarchyLevels(tenantId) {
     const rows = await referenceCache.get(`definition:${tenantId}`, () =>
       this.fetchMdmsData(
@@ -179,9 +202,9 @@ class PGRService {
     // CATEGORY -> SUB_TYPE); offered as options they swamp the real roots. Only the root is
     // filtered: anything under a real root is the real tree, declared or not. Level codes
     // are compared loosely (Sub_Type = SUBTYPE), and if none match, every root is kept.
+    const loose = (code) => String(code ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
     const rootLevel = !parentCode && levels[0]?.levelCode;
     if (rootLevel) {
-      const loose = (code) => String(code ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
       const declared = children.filter((row) => row.levelCode == null || loose(row.levelCode) === loose(rootLevel));
       if (declared.length > 0) {
         children = declared;
@@ -198,7 +221,7 @@ class PGRService {
     );
 
     const level =
-      levels.find((candidate) => candidate.levelCode === children[0]?.levelCode) ??
+      levels.find((candidate) => children.length > 0 && loose(candidate.levelCode) === loose(children[0].levelCode)) ??
       levels[hierarchyPath.length];
 
     // Built once: a per-child scan of every row was ~200k checks per step on ke.
@@ -833,10 +856,10 @@ class PGRService {
 
     requestBody["service"]["serviceCode"] = complaintType;
     requestBody["service"]["description"] = slots.description ?? "";
-    // PGR validates extendedAttributes against the tenant's ComplaintTemplateType row for
-    // caseRelatedTo and rejects the complaint when there is none, so a tenant without that
-    // config (CASE_RELATED_TO set empty) files the plain complaint, as the web UI does.
-    if (config.caseRelatedTo) {
+    // Decided per tenant before the institution/confidentiality questions were asked
+    // (acceptsExtendedAttributes), so what the citizen answered is exactly what is sent.
+    // Without that template PGR rejects them, and the plain complaint is filed instead.
+    if (slots.extendedAttributes === true) {
       requestBody["service"]["extendedAttributes"] = {
         caseRelatedTo: config.caseRelatedTo,
         instituteName: slots.instituteName,
