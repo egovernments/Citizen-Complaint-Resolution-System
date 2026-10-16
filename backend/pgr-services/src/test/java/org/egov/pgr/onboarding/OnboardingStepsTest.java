@@ -17,6 +17,9 @@ public class OnboardingStepsTest {
     private List<Object> workflows=new ArrayList<>();
     private OnboardingFailure createFailure;
     private int lagReads; private final Map<String,Integer> lagging=new HashMap<>();
+    /** Inline mocks keep every call they record, platform-baseline payloads included, until cleared:
+     *  without this the onboarding package outgrows a 512 MB test heap. */
+    @After public void releaseMocks() { framework().clearInlineMocks(); }
     @Before @SuppressWarnings("unchecked") public void setup() throws Exception {
         client=mock(OnboardingProvisionerClient.class);when(client.mdmsSchemaSearchPath()).thenReturn("/egov-mdms-service/schema/v1/_search");when(client.mdmsSearchPath()).thenReturn("/egov-mdms-service/v2/_search");steps=new OnboardingSteps(client,new PlatformBaseline(mapper),mapper);
         signup=OnboardingSignup.builder().id(UUID.randomUUID()).requestedTenantId("newtown").accountName("New Town").accountCode("NEW-TOWN").urlSlug("newtown").countryCode("IN").timeZone("Asia/Kolkata").financialYearPolicy("APRIL_MARCH")
@@ -90,7 +93,7 @@ public class OnboardingStepsTest {
         assertEquals("New Town",rows.get("newtown|tenant.tenants|newtown").path("data").path("name").asText());
         assertEquals(2,rows.get("newtown|common-masters.StateInfo|newtown").path("data").path("languages").size());
         assertEquals(336,rows.get("newtown|identity.invitationPolicy|default").path("data").path("invitationExpiryHours").asInt());
-        // Only en_IN carries the whole rainmaker-common pack, so only en_IN gets the tenant-name key.
+        // hi_IN carries no rainmaker-common pack, so of en and hi only en_IN gets the tenant-name key.
         verify(client,times(1)).write(any(),eq("localization"),eq("/localization/messages/v1/_upsert"),argThat(b->b.toString().contains("New Town")));
         verify(client,never()).read(eq("mdms"),anyString(),argThat(b->!b.toString().contains("tenantId=newtown")));
         var order=inOrder(client);order.verify(client).read(eq("hrms"),contains("_search"),anyMap());order.verify(client).write(any(),eq("hrms"),contains("_create"),anyMap());
@@ -393,15 +396,16 @@ public class OnboardingStepsTest {
         // Kenya: en is en_IN, not en_KE; Swahili has no pack, keeps the country code and is served from default.
         assertEquals(Map.of("stateInfo",List.of("en_IN=en","sw_KE=sw"),"packs",Set.of("en_IN"),"names",Set.of("en_IN")),localeOutcome("KE",List.of("en","sw")));
         // Mozambique: pt is pt_BR (the committed pack), not pt_MZ; en_IN still leads although pt was chosen first.
-        assertEquals(Map.of("stateInfo",List.of("en_IN=en","pt_BR=pt"),"packs",Set.of("en_IN","pt_BR"),"names",Set.of("en_IN")),localeOutcome("MZ",List.of("pt","en")));
-        // Ethiopia without English: en_IN is still added first; fr_FR gets its configurator pack but no name key.
-        assertEquals(Map.of("stateInfo",List.of("en_IN=en","fr_FR=fr","am_ET=am"),"packs",Set.of("en_IN","fr_FR"),"names",Set.of("en_IN")),localeOutcome("ET",List.of("fr","am")));
+        // pt_BR carries the whole rainmaker-common pack, so it gets the name key too.
+        assertEquals(Map.of("stateInfo",List.of("en_IN=en","pt_BR=pt"),"packs",Set.of("en_IN","pt_BR"),"names",Set.of("en_IN","pt_BR")),localeOutcome("MZ",List.of("pt","en")));
+        // Ethiopia without English: en_IN is still added first; fr_FR gets its packs and the name key, Amharic neither.
+        assertEquals(Map.of("stateInfo",List.of("en_IN=en","fr_FR=fr","am_ET=am"),"packs",Set.of("en_IN","fr_FR"),"names",Set.of("en_IN","fr_FR")),localeOutcome("ET",List.of("fr","am")));
     }
     @Test public void explicitRegionIsKeptAndNormalized() {
         assertEquals("pt_BR",steps.locale("pt-br","MZ"));assertEquals("en_KE",steps.locale("en-ke","KE"));
         assertEquals("en_IN",steps.locale("en","KE"));assertEquals("sw_KE",steps.locale("sw","ke"));
-        assertTrue(steps.seedsTenantNameModule("en_IN"));
-        for(String locale:List.of("hi_IN","fr_FR","pt_BR","en_KE","sw_KE"))assertFalse(locale,steps.seedsTenantNameModule(locale));
+        for(String locale:List.of("en_IN","fr_FR","pt_BR"))assertTrue(locale,steps.seedsTenantNameModule(locale));
+        for(String locale:List.of("hi_IN","en_KE","sw_KE"))assertFalse(locale,steps.seedsTenantNameModule(locale));
     }
     @Test public void localizationPacksAreTenantNeutral() throws Exception {
         var forbidden=java.util.regex.Pattern.compile("(^|_)(PG|PB|STATEA|CITYA)(_|$)|^TENANT_TENANTS_|^CS_SELECT_CITY_(?!CHOOSE_CITY$)|^SUN\\d+_|^DDR_",java.util.regex.Pattern.CASE_INSENSITIVE);
@@ -416,6 +420,8 @@ public class OnboardingStepsTest {
                 assertTrue("duplicate "+code,codes.add(code));
             }
         }
-        assertEquals(7,new PlatformBaseline(mapper).localizationPacks("en_IN").get("rainmaker-common").findValuesAsText("code").stream().filter(c->c.startsWith("CORE_IDENTITY_OTP_")).count());
+        // Every OTP message the sign-in screens use (identityMessages.js; digit-ui-esbuild/tests/localizationPacks.test.js
+        // holds the packs to the UI): the 7 the deployment used to upsert at its root only, and 5 added by #2445.
+        assertEquals(12,new PlatformBaseline(mapper).localizationPacks("en_IN").get("rainmaker-common").findValuesAsText("code").stream().filter(c->c.startsWith("CORE_IDENTITY_OTP_")).count());
     }
 }

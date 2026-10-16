@@ -33,6 +33,9 @@ public class WorkspaceGatewayTest {
     private final Map<String,String> labels = new LinkedHashMap<>();
     private boolean cacheBusted;
 
+    /** Inline mocks keep every call they record, platform-baseline payloads included, until cleared:
+     *  without this the onboarding package outgrows a 512 MB test heap. */
+    @After public void releaseMocks() { framework().clearInlineMocks(); }
     @Before public void setup() throws Exception {
         tenantName="Old Name"; nameStatus=200;
         nameCheck=mapper.valueToTree(Map.of("results",List.of(Map.of("type","ORGANIZATION_NAME","value","new name","available",true))));

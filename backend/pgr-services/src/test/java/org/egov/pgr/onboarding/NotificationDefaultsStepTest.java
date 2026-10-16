@@ -28,6 +28,9 @@ public class NotificationDefaultsStepTest {
     private OnboardingFailure failOn;
     private String failSchema;
 
+    /** Inline mocks keep every call they record, platform-baseline payloads included, until cleared:
+     *  without this the onboarding package outgrows a 512 MB test heap. */
+    @After public void releaseMocks() { framework().clearInlineMocks(); }
     @Before @SuppressWarnings("unchecked")
     public void setup() throws Exception {
         client = mock(OnboardingProvisionerClient.class);

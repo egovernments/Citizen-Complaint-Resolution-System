@@ -60,6 +60,12 @@
         "locale": "fr_FR"
     },
     {
+        "code": "CORE_COMMON_SKIP_CONTINUE",
+        "message": "Ignorer et continuer",
+        "module": "rainmaker-pgr",
+        "locale": "fr_FR"
+    },
+    {
         "code": "CS_ACTION_ASSIGN",
         "message": "Attribuer la réclamation",
         "module": "rainmaker-pgr",
@@ -90,6 +96,12 @@
         "locale": "fr_FR"
     },
     {
+        "code": "CS_ADDCOMPLAINT_ADDITIONAL_DETAILS_TEXT",
+        "message": "Si, en plus des informations déjà fournies, d'autres détails sont nécessaires pour résoudre la réclamation, indiquez-les ci-dessous :",
+        "module": "rainmaker-pgr",
+        "locale": "fr_FR"
+    },
+    {
         "code": "CS_ADDCOMPLAINT_COMPLAINT_SUB_TYPE",
         "message": "Sous-catégorie de réclamation",
         "module": "rainmaker-pgr",
@@ -102,14 +114,38 @@
         "locale": "fr_FR"
     },
     {
+        "code": "CS_ADDCOMPLAINT_ERROR_REOPEN_REASON",
+        "message": "Sélectionnez le motif de réouverture de la réclamation",
+        "module": "rainmaker-pgr",
+        "locale": "fr_FR"
+    },
+    {
         "code": "CS_ADDCOMPLAINT_LANDMARK",
         "message": "Point de repère",
         "module": "rainmaker-pgr",
         "locale": "fr_FR"
     },
     {
+        "code": "CS_ADDCOMPLAINT_PROVIDE_ADDITIONAL_DETAILS",
+        "message": "Fournir des informations complémentaires",
+        "module": "rainmaker-pgr",
+        "locale": "fr_FR"
+    },
+    {
         "code": "CS_ADDCOMPLAINT_SELECT_GEOLOCATION_TEXT",
         "message": "Cliquez et maintenez pour placer l'épingle sur le lieu de la réclamation. Si vous ne parvenez pas à épingler le lieu, vous pouvez ignorer cette étape et passer à la suivante.",
+        "module": "rainmaker-pgr",
+        "locale": "fr_FR"
+    },
+    {
+        "code": "CS_ADDCOMPLAINT_UPLOAD_ERROR_MESSAGE",
+        "message": "Téléverser une image",
+        "module": "rainmaker-pgr",
+        "locale": "fr_FR"
+    },
+    {
+        "code": "CS_ADDCOMPLAINT_UPLOAD_PHOTO",
+        "message": "Ajouter des photos de la réclamation",
         "module": "rainmaker-pgr",
         "locale": "fr_FR"
     },
@@ -1020,6 +1056,12 @@
         "locale": "fr_FR"
     },
     {
+        "code": "CS_HEADER_REOPEN_COMPLAINT",
+        "message": "Rouvrir la réclamation",
+        "module": "rainmaker-pgr",
+        "locale": "fr_FR"
+    },
+    {
         "code": "CS_HOME_MY_COMPLAINTS",
         "message": "Mes réclamations",
         "module": "rainmaker-pgr",
@@ -1340,6 +1382,36 @@
     {
         "code": "CS_REJECT_COMPLAINT",
         "message": "Nom de l'employé",
+        "module": "rainmaker-pgr",
+        "locale": "fr_FR"
+    },
+    {
+        "code": "CS_REOPEN_COMPLAINT",
+        "message": "Choisissez le motif de réouverture de la réclamation",
+        "module": "rainmaker-pgr",
+        "locale": "fr_FR"
+    },
+    {
+        "code": "CS_REOPEN_OPTION_FOUR",
+        "message": "Pas de solution durable",
+        "module": "rainmaker-pgr",
+        "locale": "fr_FR"
+    },
+    {
+        "code": "CS_REOPEN_OPTION_ONE",
+        "message": "Aucun travail n'a été effectué",
+        "module": "rainmaker-pgr",
+        "locale": "fr_FR"
+    },
+    {
+        "code": "CS_REOPEN_OPTION_THREE",
+        "message": "L'employé ne s'est pas présenté",
+        "module": "rainmaker-pgr",
+        "locale": "fr_FR"
+    },
+    {
+        "code": "CS_REOPEN_OPTION_TWO",
+        "message": "Le travail n'a été effectué que partiellement",
         "module": "rainmaker-pgr",
         "locale": "fr_FR"
     },
