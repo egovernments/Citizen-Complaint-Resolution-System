@@ -15,8 +15,6 @@ import {
   checkIdentifier,
   createSignup,
   deriveAccountCode,
-  findOperation,
-  findSignupOperation,
   findSignup,
   isOperationReady,
   isOperationSettled,
@@ -25,6 +23,7 @@ import {
   newIdempotencyKey,
   retryOperation,
   requestMagicLinkSignup,
+  searchOperation,
   session,
   slugifyAccountName,
   startSignIn,
@@ -392,7 +391,7 @@ function SignupFlow() {
         default: {
           // A DRAFT with a failed run was handed back after the run refused the founder's own
           // details. Show that run, as before the reload, so the wizard isn't entered unexplained.
-          const run = existing ? await findSignupOperation(existing.id).catch(() => null) : null;
+          const run = existing ? await searchOperation({ signupId: existing.id }).catch(() => null) : null;
           if (run?.status === 'TERMINAL_FAILED') {
             setOperation(run);
             setPhase('provisioning');
@@ -626,7 +625,7 @@ function SignupFlow() {
       inFlight = controller;
       const timeout = window.setTimeout(() => controller.abort(), POLL_TIMEOUT_MS);
       try {
-        const latest = await findOperation(operationId, controller.signal);
+        const latest = await searchOperation({ id: operationId }, controller.signal);
         if (!live) return;
         failures = 0;
         if (shownError) {

@@ -25,8 +25,7 @@ vi.mock('@/api/onboarding', async () => {
     updateSignup: vi.fn(),
     checkIdentifier: vi.fn(),
     submitSignup: vi.fn(),
-    findOperation: vi.fn(),
-    findSignupOperation: vi.fn(),
+    searchOperation: vi.fn(),
     selectContext: vi.fn(),
     startSignIn: vi.fn(),
     requestMagicLinkSignup: vi.fn(),
@@ -38,10 +37,16 @@ import * as api from '@/api/onboarding';
 
 const signedIn = { authenticated: true, user: { id: 'u', email: 'f@x.test', name: 'F', preferredUsername: 'f' } };
 
+/** `searchOperation`, by what it is asked for: the run's own id (the poll) or its signup's id (after a reload). */
+const findOperation = vi.fn();
+const findSignupOperation = vi.fn();
+
 beforeEach(() => {
   vi.mocked(api.checkIdentifier).mockResolvedValue({ type: 'URL_SLUG', value: 'x', available: true });
   vi.mocked(api.findSignup).mockResolvedValue(null);
-  vi.mocked(api.findSignupOperation).mockResolvedValue(null);
+  findSignupOperation.mockResolvedValue(null);
+  vi.mocked(api.searchOperation).mockImplementation(async (criteria, signal) =>
+    'signupId' in criteria ? findSignupOperation(criteria.signupId) : findOperation(criteria.id, signal));
 });
 
 afterEach(() => vi.clearAllMocks());
@@ -399,7 +404,7 @@ describe('provisioning', () => {
     vi.mocked(api.updateSignup).mockResolvedValue({ id: 'signup-1' } as never);
     const run = { id: 'op-1', signupId: 'signup-1', errorCode: null, errorMessage: null, attempt: 1, createdAt: 0, updatedAt: 0, ...operation };
     vi.mocked(api.submitSignup).mockResolvedValue(run as never);
-    vi.mocked(api.findOperation).mockResolvedValue(run as never);
+    vi.mocked(findOperation).mockResolvedValue(run as never);
 
     render(<SignupPage />);
 
@@ -486,7 +491,7 @@ describe('provisioning', () => {
       financialYearPolicy: 'JUL_JUN',
       tenantMetadata: { schemaVersion: 1, tenantAdmin: { mobileNumber: '700000199' } },
     } as never);
-    vi.mocked(api.findSignupOperation).mockResolvedValue({
+    vi.mocked(findSignupOperation).mockResolvedValue({
       id: 'op-1', signupId: 'signup-1', status: 'TERMINAL_FAILED', currentStep: 'FOUNDER_HRMS',
       completedSteps: ['TENANT_FOUNDATION', 'PLATFORM_BASELINE'], errorCode, errorMessage: errorCode,
       attempt: 1, createdAt: 0, updatedAt: 0,
@@ -500,7 +505,7 @@ describe('provisioning', () => {
     expect(await screen.findByText(/usually the mobile number/i)).toBeInTheDocument();
     fireEvent.click(await screen.findByRole('button', { name: /change my details/i }));
     expect(await screen.findByLabelText(/mobile number/i)).toHaveValue('700000199');
-    expect(api.findSignupOperation).toHaveBeenCalledWith('signup-1');
+    expect(findSignupOperation).toHaveBeenCalledWith('signup-1');
   });
 
   it('lets a run refused for its country change the country, keeping the account code (#2353)', async () => {
@@ -970,21 +975,21 @@ describe('a success that is not yet published', () => {
 
   it('keeps polling instead of reading a tenant list that is not there yet', async () => {
     // A fresh object per read, as the network gives; the poll re-arms on change.
-    vi.mocked(api.findOperation).mockImplementation(async () => ({ ...succeeded }) as never);
+    vi.mocked(findOperation).mockImplementation(async () => ({ ...succeeded }) as never);
 
     render(<SignupPage />);
     expect(await screen.findByText(/finishing setup/i)).toBeInTheDocument();
     await tick(3000);
     await tick(3000);
 
-    expect(api.findOperation).toHaveBeenCalledTimes(2);
+    expect(findOperation).toHaveBeenCalledTimes(2);
     // Only bootstrap's own read; nothing treated SUCCEEDED as ready.
     expect(api.tenants).toHaveBeenCalledTimes(1);
     expect(screen.queryByText(/choose a workspace/i)).not.toBeInTheDocument();
   });
 
   it('opens the workspace once the outcome is published', async () => {
-    vi.mocked(api.findOperation).mockResolvedValue({ ...succeeded, lifecyclePublishedAt: 1 } as never);
+    vi.mocked(findOperation).mockResolvedValue({ ...succeeded, lifecyclePublishedAt: 1 } as never);
     vi.mocked(api.selectContext).mockResolvedValue({
       access_token: 't',
       token_type: 'bearer',
@@ -1004,7 +1009,7 @@ describe('a success that is not yet published', () => {
   });
 
   it('shows the workspace picker when multiple workspaces exist after publishing', async () => {
-    vi.mocked(api.findOperation).mockResolvedValue({ ...succeeded, lifecyclePublishedAt: 1 } as never);
+    vi.mocked(findOperation).mockResolvedValue({ ...succeeded, lifecyclePublishedAt: 1 } as never);
 
     render(<SignupPage />);
     await screen.findByText(/finishing setup/i);
@@ -1018,7 +1023,7 @@ describe('a success that is not yet published', () => {
   });
 
   it('falls back to the workspace picker if automatic entry fails for a single workspace', async () => {
-    vi.mocked(api.findOperation).mockResolvedValue({ ...succeeded, lifecyclePublishedAt: 1 } as never);
+    vi.mocked(findOperation).mockResolvedValue({ ...succeeded, lifecyclePublishedAt: 1 } as never);
     vi.mocked(api.selectContext).mockRejectedValue(new Error('Network failure'));
 
     render(<SignupPage />);
@@ -1032,16 +1037,16 @@ describe('a success that is not yet published', () => {
 
   it('says it is almost ready after a long wait, and slows down without giving up', async () => {
     // A fresh object per read, as the network gives; the poll re-arms on change.
-    vi.mocked(api.findOperation).mockImplementation(async () => ({ ...succeeded }) as never);
+    vi.mocked(findOperation).mockImplementation(async () => ({ ...succeeded }) as never);
 
     render(<SignupPage />);
     await screen.findByText(/finishing setup/i);
     await tick(120_000);
 
     expect(await screen.findByText(/almost ready/i)).toBeInTheDocument();
-    const calls = vi.mocked(api.findOperation).mock.calls.length;
+    const calls = vi.mocked(findOperation).mock.calls.length;
     await tick(15_000);
-    expect(api.findOperation).toHaveBeenCalledTimes(calls + 1);
+    expect(findOperation).toHaveBeenCalledTimes(calls + 1);
     expect(screen.queryByText(/choose a workspace/i)).not.toBeInTheDocument();
   });
 });
@@ -1094,30 +1099,30 @@ describe('polling while the worker runs', () => {
 
   it('keeps polling when an answer changes nothing or comes back empty', async () => {
     // The same object every time: a poll re-armed only on change would stop after the first.
-    vi.mocked(api.findOperation).mockResolvedValueOnce(null).mockResolvedValue(running as never);
+    vi.mocked(findOperation).mockResolvedValueOnce(null).mockResolvedValue(running as never);
     await start();
     await tick(3000);
     await tick(3000);
     await tick(3000);
-    expect(api.findOperation).toHaveBeenCalledTimes(3);
+    expect(findOperation).toHaveBeenCalledTimes(3);
   });
 
   it('abandons a check that never answers and asks again', async () => {
-    vi.mocked(api.findOperation).mockImplementationOnce(
+    vi.mocked(findOperation).mockImplementationOnce(
       (_id: string, signal?: AbortSignal) =>
         new Promise((_resolve, reject) => signal?.addEventListener('abort', () => reject(new Error('aborted')))) as never,
     ).mockResolvedValue(running as never);
     await start();
     await tick(3000);
-    expect(api.findOperation).toHaveBeenCalledTimes(1);
+    expect(findOperation).toHaveBeenCalledTimes(1);
     await tick(10_000);
     await tick(3000);
-    expect(api.findOperation).toHaveBeenCalledTimes(2);
+    expect(findOperation).toHaveBeenCalledTimes(2);
     expect(screen.queryByText(/aborted/i)).not.toBeInTheDocument();
   });
 
   it('shows an error only after three failed checks in a row, and clears it once one succeeds', async () => {
-    vi.mocked(api.findOperation)
+    vi.mocked(findOperation)
       .mockRejectedValueOnce(new Error('Status check failed'))
       .mockRejectedValueOnce(new Error('Status check failed'))
       .mockRejectedValueOnce(new Error('Status check failed'))
@@ -1130,6 +1135,6 @@ describe('polling while the worker runs', () => {
     expect(await screen.findByText(/status check failed/i)).toBeInTheDocument();
     await tick(3000);
     await waitFor(() => expect(screen.queryByText(/status check failed/i)).not.toBeInTheDocument());
-    expect(api.findOperation).toHaveBeenCalledTimes(4);
+    expect(findOperation).toHaveBeenCalledTimes(4);
   });
 });
