@@ -22,7 +22,6 @@ type EmployeeBulkRow = EmployeeExcelRow & BulkRow;
 const TEMPLATE_COLUMNS = [
   'employeeCode',
   'name',
-  'userName',
   'mobileNumber',
   'emailId',
   'gender',
@@ -37,7 +36,6 @@ const TEMPLATE_COLUMNS = [
 const TEMPLATE_SAMPLE = {
   employeeCode: 'EMP_001',
   name: 'Jane Kamau',
-  userName: '',
   mobileNumber: '0712345678',
   emailId: 'jane.kamau@example.com',
   gender: 'FEMALE',
@@ -87,11 +85,12 @@ function buildTemplate(
     ['Required columns: name, mobileNumber (per the tenant mobile rule),'],
     ['department (from Codes), designation (from Codes).'],
     ['Required: emailId. Optional: employeeCode (blank = the next free EMP_ code),'],
-    ['userName (auto-derives), gender, dob (YYYY-MM-DD),'],
+    ['gender, dob (YYYY-MM-DD),'],
     ['roles (comma-separated), jurisdictions (comma-separated boundary codes),'],
     ['dateOfAppointment (YYYY-MM-DD).'],
     [''],
     ['Email is required. New employees receive a secure password setup email.'],
+    ['Each employee signs in with their employee code as username.'],
   ]);
   notes['!cols'] = [{ wch: 80 }];
   XLSX.utils.book_append_sheet(wb, notes, 'Instructions');

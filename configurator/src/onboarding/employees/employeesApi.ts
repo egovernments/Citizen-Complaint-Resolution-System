@@ -327,11 +327,14 @@ export async function updateEmployeeDetails(
 
 /** Deactivate, as management's delete does: HRMS keeps the record, marked inactive. */
 export async function removeEmployee(employee: Employee): Promise<void> {
+  // By uuid, never by code: another workspace's employee can share the code (#2456). A uuid search keeps
+  // HRMS's tenant filter.
+  const uuid = employee.user?.uuid || employee.uuid;
+  if (!uuid) throw new MessageError('members.no_account_id', 'HRMS did not return the employee account identifier. Reload and retry.');
   await deactivateAndRemove(
     async () => {
-      const rows = await hrmsService.searchEmployees(employee.tenantId, { codes: [employee.code] });
-      // By uuid only: another workspace's employee can share the code (#2456).
-      const fresh = rows.find(row => row.uuid === employee.uuid && row.tenantId === employee.tenantId);
+      const rows = await hrmsService.searchEmployees(employee.tenantId, { uuids: [uuid] });
+      const fresh = rows.find(row => (row.user?.uuid || row.uuid) === uuid && row.tenantId === employee.tenantId);
       if (!fresh) throw new MessageError('employees.gone_from_hrms', 'Employee no longer exists in HRMS.');
       return fresh as unknown as MemberEmployee;
     },

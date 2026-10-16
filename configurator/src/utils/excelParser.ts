@@ -779,9 +779,9 @@ export function parseEmployeeExcel(workbook: XLSX.WorkBook): {
       return;
     }
 
-    // userName is optional at parse time — callers (Phase 4, bulk import) derive
-    // `firstname.lastname` from `name` when the Excel cell is blank. Keeping it
-    // required here forced operators to duplicate the name column unnecessarily.
+    // userName is not used: HRMS makes every employee's username their code
+    // (#2456), so the templates no longer have the column and an older sheet's
+    // value is ignored.
 
     if (!mobileNumber) {
       errors.push({

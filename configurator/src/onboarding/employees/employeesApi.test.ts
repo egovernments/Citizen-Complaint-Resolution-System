@@ -170,8 +170,23 @@ describe('removeEmployee', () => {
   it('never deactivates another workspace\'s employee with the same code (#2456)', async () => {
     hrms.searchEmployees.mockResolvedValue([employee('A', { tenantId: 'other', uuid: 'theirs' }), employee('A')]);
     await removeEmployee(employee('A'));
+    expect(hrms.searchEmployees).toHaveBeenCalledWith('acme', { uuids: ['A'] });
     expect(hrms.updateEmployee).toHaveBeenCalledTimes(1);
     expect(hrms.updateEmployee).toHaveBeenCalledWith(expect.objectContaining({ tenantId: 'acme', uuid: 'A' }));
+  });
+
+  it('removes an employee that carries only the user\'s uuid', async () => {
+    const userOnly = { code: 'A', tenantId: 'acme', user: { uuid: 'u-1' } } as Employee;
+    hrms.searchEmployees.mockResolvedValue([userOnly]);
+    await removeEmployee(userOnly);
+    expect(hrms.searchEmployees).toHaveBeenCalledWith('acme', { uuids: ['u-1'] });
+    expect(hrms.updateEmployee).toHaveBeenCalledWith(expect.objectContaining({ code: 'A', isActive: false }));
+  });
+
+  it('says so, and asks HRMS nothing, for an employee with no uuid', async () => {
+    await expect(removeEmployee({ code: 'A', tenantId: 'acme', user: {} } as Employee)).rejects.toThrow(/account identifier/);
+    expect(hrms.searchEmployees).not.toHaveBeenCalled();
+    expect(hrms.updateEmployee).not.toHaveBeenCalled();
   });
 
   it('refuses when only another workspace has the code (#2456)', async () => {

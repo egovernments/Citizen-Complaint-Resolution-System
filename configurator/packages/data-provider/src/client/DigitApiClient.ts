@@ -26,6 +26,47 @@ export function withCsrRole(employee: Record<string, unknown>, tenantId: string)
   if (!missing.length) return employee;
   return { ...employee, user: { ...user, roles: [...roles, ...missing.map((t) => ({ code: 'CSR', name: 'Complainant', tenantId: t }))] } };
 }
+
+/**
+ * Whether an employee row belongs to `tenantId` or one of its cities. A code search in egov-hrms drops the
+ * tenant filter unless someone in the tenant has the code as their username, so it also answers with other
+ * workspaces' employees that share the code (#2456).
+ */
+export function inTenant(rowTenantId: unknown, tenantId: string): boolean {
+  return typeof rowTenantId === 'string' && (rowTenantId === tenantId || rowTenantId.startsWith(`${tenantId}.`));
+}
+
+/**
+ * A code search's rows for `tenantId` and its cities. Other workspaces' rows can fill whole pages (inTenant), so
+ * every page is read, up to SEARCH_MAX_PAGES. `limit` and `offset` apply to the rows kept, as on any other search.
+ */
+export async function employeesByCodeInTenant<T extends { tenantId?: unknown }>(
+  tenantId: string,
+  fetchPage: (limit: number, offset: number) => Promise<T[]>,
+  options?: { limit?: number; offset?: number },
+): Promise<T[]> {
+  const pageSize = DigitApiClient.SEARCH_PAGE_SIZE;
+  const start = options?.offset || 0;
+  const end = options?.limit ? start + options.limit : Infinity;
+  const own: T[] = [];
+  for (let page = 0; page < DigitApiClient.SEARCH_MAX_PAGES; page++) {
+    const rows = await fetchPage(pageSize, page * pageSize);
+    own.push(...rows.filter((row) => inTenant(row.tenantId, tenantId)));
+    if (own.length >= end || rows.length < pageSize) return own.slice(start, end);
+  }
+  throw new Error(`HRMS code search truncated after ${DigitApiClient.SEARCH_MAX_PAGES} pages; refusing to report a partial result`);
+}
+
+/**
+ * The row whose tenantId is exactly `tenantId`, or undefined when there is none. Codes are unique only per tenant,
+ * so a code search can also return a city's employee with the same code; more than one match is an error, never a guess.
+ */
+export function exactTenantRow<T extends { tenantId?: unknown }>(rows: T[], tenantId: string, id: string): T | undefined {
+  const matches = rows.filter((row) => row.tenantId === tenantId);
+  if (matches.length > 1) throw new Error(`More than one employee ${id} in ${tenantId}`);
+  return matches[0];
+}
+
 export class DigitApiClient {
   private baseUrl: string;
   private _stateTenantId: string;
@@ -355,18 +396,8 @@ export class DigitApiClient {
       );
       return data.Employees || [];
     };
-    const limit = options?.limit || 100;
-    if (!options?.codes?.length) return page(limit, options?.offset || 0);
-    // A code search drops HRMS's tenant filter unless someone in the tenant has the code as their username, so
-    // other workspaces' employees with the code come back too, and can fill whole pages: keep this tenant's
-    // (and its cities') rows from every page.
-    const own: Record<string, unknown>[] = [];
-    for (let offset = options?.offset || 0; ; offset += limit) {
-      const rows = await page(limit, offset);
-      own.push(...rows.filter((row) => typeof row.tenantId === 'string' &&
-        (row.tenantId === tenantId || row.tenantId.startsWith(`${tenantId}.`))));
-      if (rows.length < limit) return own;
-    }
+    if (options?.codes?.length) return employeesByCodeInTenant(tenantId, page, options);
+    return page(options?.limit || 100, options?.offset || 0);
   }
 
   async employeeCreate(tenantId: string, employees: Record<string, unknown>[]): Promise<Record<string, unknown>[]> {

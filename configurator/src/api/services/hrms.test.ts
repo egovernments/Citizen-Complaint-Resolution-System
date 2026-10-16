@@ -36,14 +36,21 @@ describe('hrmsService.searchEmployees', () => {
   it('keeps only this tenant\'s rows (and its cities\') from a code search, reading every page', async () => {
     const row = (tenantId: string) => ({ code: 'EMP_0002', tenantId });
     const postSpy = vi.spyOn(apiClient, 'post')
-      .mockResolvedValueOnce({ Employees: [row('other'), row('acme.city'), row('acmeco')] } as never)
+      .mockResolvedValueOnce({ Employees: [...Array(98).fill(row('other')), row('acme.city'), row('acmeco')] } as never)
       .mockResolvedValueOnce({ Employees: [row('acme')] } as never);
 
-    const rows = await hrmsService.searchEmployees('acme', { codes: ['EMP_0002'], limit: 3 });
+    const rows = await hrmsService.searchEmployees('acme', { codes: ['EMP_0002'] });
 
     expect(rows.map((r) => r.tenantId)).toEqual(['acme.city', 'acme']);
     expect(postSpy).toHaveBeenCalledTimes(2);
-    expect(postSpy.mock.calls[1][0]).toContain('offset=3');
+    expect(postSpy.mock.calls[1][0]).toContain('offset=100');
+  });
+
+  it('a code search\'s limit caps the rows kept, not the page size', async () => {
+    const postSpy = vi.spyOn(apiClient, 'post')
+      .mockResolvedValue({ Employees: [{ code: 'EMP_0002', tenantId: 'other' }, { code: 'EMP_0002', tenantId: 'acme' }] } as never);
+    expect(await hrmsService.searchEmployees('acme', { codes: ['EMP_0002'], limit: 1 })).toEqual([{ code: 'EMP_0002', tenantId: 'acme' }]);
+    expect(postSpy.mock.calls[0][0]).toContain('limit=100');
   });
 
   it('reads one page when there is no code', async () => {

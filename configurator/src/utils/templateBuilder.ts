@@ -103,7 +103,6 @@ export function downloadEmployeeTemplate() {
   const header = [
     'employeeCode',
     'name',
-    'userName',
     'mobileNumber',
     'emailId',
     'gender',
@@ -121,7 +120,6 @@ export function downloadEmployeeTemplate() {
     [
       'EMP001',
       'Jane Doe',
-      'jane.doe',
       '777777701',
       'jane@example.com',
       'FEMALE',
@@ -135,7 +133,6 @@ export function downloadEmployeeTemplate() {
     [
       'EMP002',
       'John Admin',
-      'john.admin',
       '777777702',
       'john.admin@example.com',
       'MALE',

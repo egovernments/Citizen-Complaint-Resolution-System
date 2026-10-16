@@ -2,22 +2,13 @@ import { createAndLink, type MemberEmployee } from '@/identity/memberActions';
 // HRMS Service - Employee Management
 import { apiClient } from '../client';
 import { ENDPOINTS } from '../config';
-import { withCsrRole as addCsrRole } from '@digit-mcp/data-provider';
+import { withCsrRole as addCsrRole, employeesByCodeInTenant } from '@digit-mcp/data-provider';
 import type { Employee, EmployeeUser, Role } from '../types';
 
 // Every new employee gets CSR so they can file a complaint on a citizen's
 // behalf (#2239); the rule lives in the data provider.
 export function withCsrRole(employee: Employee): Employee {
   return addCsrRole(employee as unknown as Record<string, unknown>, employee.tenantId) as unknown as Employee;
-}
-
-/**
- * Whether an employee row belongs to `tenantId` or one of its cities. A code search in egov-hrms drops the
- * tenant filter unless someone in the tenant has the code as their username, so it also answers with other
- * workspaces' employees that share the code (#2456).
- */
-export function inTenant(rowTenantId: unknown, tenantId: string): boolean {
-  return typeof rowTenantId === 'string' && (rowTenantId === tenantId || rowTenantId.startsWith(`${tenantId}.`));
 }
 
 export const hrmsService = {
@@ -55,15 +46,9 @@ export const hrmsService = {
       });
       return (response.Employees || []) as Employee[];
     };
-    const limit = options?.limit || 100;
-    if (!options?.codes?.length) return page(limit, options?.offset || 0);
-    // Other workspaces' rows can come back (inTenant), and fill whole pages, so read them all and keep ours.
-    const own: Employee[] = [];
-    for (let offset = options?.offset || 0; ; offset += limit) {
-      const rows = await page(limit, offset);
-      own.push(...rows.filter((row) => inTenant(row.tenantId, tenantId)));
-      if (rows.length < limit) return own;
-    }
+    // Other workspaces' employees with the code come back too (#2456).
+    if (options?.codes?.length) return employeesByCodeInTenant(tenantId, page, options);
+    return page(options?.limit || 100, options?.offset || 0);
   },
 
   // Check if employee code exists

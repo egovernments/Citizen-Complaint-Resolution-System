@@ -724,6 +724,24 @@ describe('createDigitDataProvider', () => {
     assert.equal((captured as { reActivateEmployee: unknown }).reActivateEmployee, false);
   });
 
+  it('opens and deletes the workspace\'s own employee by code, never a city\'s with the same code (#2456)', async () => {
+    // A code search also keeps the workspace's cities' rows, and here the city's comes first.
+    mock.method(client, 'employeeSearch', async (_t: string, options?: { uuids?: string[] }) => options?.uuids ? [] : [
+      { uuid: 'city-uuid', code: 'EMP_0002', tenantId: 'acme.city', user: { uuid: 'city-uuid' } },
+      { uuid: 'ws-uuid', code: 'EMP_0002', tenantId: 'acme', user: { uuid: 'ws-uuid' } },
+    ]);
+    const updated: Record<string, unknown>[] = [];
+    mock.method(client, 'employeeUpdate', async (_t: string, employees: Record<string, unknown>[]) => {
+      updated.push(...employees);
+      return employees;
+    });
+
+    const dp = createDigitDataProvider(client, 'acme');
+    assert.equal((await dp.getOne('employees', { id: 'EMP_0002' })).data.uuid, 'ws-uuid');
+    await dp.delete('employees', { id: 'EMP_0002', previousData: {} as never });
+    assert.deepEqual(updated.map((e) => [e.uuid, e.isActive]), [['ws-uuid', false]]);
+  });
+
   it('getList(localization) does not drop rows when the list pins locales[]', async () => {
     // LocalizationList writes `{ locales: ['en_IN', 'hi_IN', …] }` as a fetcher
     // control. Matching that array against a record field stringifies it to
