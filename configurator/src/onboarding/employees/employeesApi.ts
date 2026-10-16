@@ -115,7 +115,7 @@ export async function loadEmployeeOptions(tenantId: string): Promise<EmployeeOpt
   };
 }
 
-type EmployeeRecord = Employee & { isActive?: boolean };
+export type EmployeeRecord = Employee & { isActive?: boolean };
 
 export interface EmployeeList {
   /** The employees who can sign in: what the step lists. */
@@ -132,31 +132,41 @@ export async function listEmployees(tenantId: string): Promise<EmployeeList> {
   };
 }
 
-/** The highest number among EMP_0001-style codes, or 0. */
-function highestEmployeeNumber(codes: (string | undefined)[]): number {
-  return codes.reduce((max: number, code) => {
-    const match = /^EMP_(\d+)$/.exec(code ?? '');
-    return match ? Math.max(max, Number(match[1])) : max;
-  }, 0);
-}
-
 /**
  * One past the highest EMP_0001-style code HRMS holds, removed employees'
  * included, so a removed employee's code is never offered again.
  */
 export function suggestEmployeeCode(codes: string[]): string {
-  return hrmsService.generateEmployeeCode('EMP', highestEmployeeNumber(codes) + 1);
+  const highest = codes.reduce((max, code) => {
+    const match = /^EMP_(\d+)$/.exec(code);
+    return match ? Math.max(max, Number(match[1])) : max;
+  }, 0);
+  return hrmsService.generateEmployeeCode('EMP', highest + 1);
+}
+
+/** Every employee HRMS holds, removed ones included, by code: what a bulk upload's codes are checked against. */
+export async function employeesByCode(tenantId: string): Promise<Map<string, EmployeeRecord>> {
+  const employees = (await hrmsService.searchEmployees(tenantId, { limit: 500 })) as EmployeeRecord[];
+  return new Map(employees.filter((employee) => employee.code).map((employee): [string, EmployeeRecord] => [employee.code, employee]));
 }
 
 /**
- * Codes for a bulk upload's rows: a row's own code as given, the rest numbered
- * on from the highest EMP_ code HRMS holds or the sheet gives. Numbering from
- * the row index took codes already in use, the founder's EMP_0001 among them
- * (#2456).
+ * Why a bulk row's code can't be used, or null (#2456). A code HRMS holds is fine
+ * for the same active person (same email): createAndLink then finishes their
+ * invite. Anyone else's, a removed employee's, or one on two rows fails at create
+ * or folds two people into one; the founder holds EMP_0001.
  */
-export function planEmployeeCodes(existing: string[], given: (string | undefined)[]): string[] {
-  let next = highestEmployeeNumber([...existing, ...given]);
-  return given.map((code) => code || hrmsService.generateEmployeeCode('EMP', ++next));
+export function codeProblem(
+  row: { employeeCode: string; emailId?: string },
+  sheet: { employeeCode: string }[],
+  existing: Map<string, EmployeeRecord>,
+): { repeated: true } | { takenBy: string } | null {
+  if (sheet.filter((other) => other.employeeCode === row.employeeCode).length > 1) return { repeated: true };
+  const holder = existing.get(row.employeeCode);
+  if (!holder) return null;
+  const email = (value: unknown) => (typeof value === 'string' ? value.trim().toLowerCase() : '');
+  const same = holder.isActive !== false && email(row.emailId) !== '' && email(row.emailId) === email(holder.user?.emailId);
+  return same ? null : { takenBy: holder.user?.name || row.employeeCode };
 }
 
 export async function addEmployee(tenantId: string, input: NewEmployee, options: EmployeeOptions): Promise<Employee> {

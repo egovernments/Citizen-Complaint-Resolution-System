@@ -10,8 +10,8 @@ import { linkMember, removeMember, updateMemberEmail } from '@/identity/api';
 import {
   addEmployee,
   applyEmployeeChanges,
+  codeProblem,
   listEmployees,
-  planEmployeeCodes,
   removeEmployee,
   suggestEmployeeCode,
   updateEmployeeDetails,
@@ -64,18 +64,27 @@ describe('suggestEmployeeCode', () => {
   });
 });
 
-describe('planEmployeeCodes (bulk import, #2456)', () => {
-  it('numbers past the highest code HRMS holds, not from the row', () => {
-    // The founder is EMP_0001; EMP_0007 may be someone removed.
-    expect(planEmployeeCodes(['EMP_0001', 'EMP_0007'], ['', ''])).toEqual(['EMP_0008', 'EMP_0009']);
+describe('codeProblem (bulk import preview, #2456)', () => {
+  const founder = { ...employee('EMP_0001'), user: { name: 'Anita Wanjiru', emailId: 'Anita@Example.org' } } as unknown as Employee;
+  const existing = new Map([['EMP_0001', founder]]);
+
+  it("flags a code HRMS holds for someone else", () => {
+    const row = { employeeCode: 'EMP_0001', emailId: 'joseph@example.org' };
+    expect(codeProblem(row, [row], existing)).toEqual({ takenBy: 'Anita Wanjiru' });
   });
 
-  it("keeps a row's own code and never repeats one the sheet gives", () => {
-    expect(planEmployeeCodes(['EMP_0001'], ['', 'EMP_0010', 'HR_7', ''])).toEqual(['EMP_0011', 'EMP_0010', 'HR_7', 'EMP_0012']);
+  it('lets the same person through, matching the email trimmed and in any case', () => {
+    const row = { employeeCode: 'EMP_0001', emailId: ' anita@example.ORG ' };
+    expect(codeProblem(row, [row], existing)).toBeNull();
+    // A removed employee's code is never reused, even by the same email.
+    const removed = new Map([['EMP_0001', { ...founder, isActive: false }]]);
+    expect(codeProblem(row, [row], removed)).toEqual({ takenBy: 'Anita Wanjiru' });
   });
 
-  it('starts at EMP_0001 on an empty workspace', () => {
-    expect(planEmployeeCodes([], [''])).toEqual(['EMP_0001']);
+  it('flags a code on two rows of the sheet', () => {
+    const rows = [{ employeeCode: 'EMP_0002', emailId: 'a@example.org' }, { employeeCode: 'EMP_0002', emailId: 'b@example.org' }];
+    expect(codeProblem(rows[0], rows, existing)).toEqual({ repeated: true });
+    expect(codeProblem({ employeeCode: 'EMP_0003', emailId: 'c@example.org' }, rows, existing)).toBeNull();
   });
 });
 

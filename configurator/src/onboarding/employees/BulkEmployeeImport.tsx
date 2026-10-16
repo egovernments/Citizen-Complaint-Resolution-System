@@ -37,7 +37,7 @@ import {
 import { loadTenantHierarchies } from '@/api/services/tenantHierarchy';
 import { parseExcelFile, parseEmployeeExcel } from '@/utils/excelParser';
 import { downloadEmployeeTemplate } from '@/utils/templateBuilder';
-import { listEmployees, planEmployeeCodes } from './employeesApi';
+import { codeProblem, employeesByCode, type EmployeeRecord } from './employeesApi';
 import { reportStepError, trackStepAction } from '../telemetry';
 import { useOnboardingT } from '../i18n';
 import { allowedEmployeeRoles, pickerChoices } from '@/lib/systemRecords';
@@ -183,8 +183,10 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
         return;
       }
 
-      // Validate employees against reference data
-      const validatedEmployees = validateEmployees(result.data);
+      // Validate employees against reference data and the codes HRMS holds now.
+      // The code check is advisory: creating still refuses a code that's taken.
+      const existing = await employeesByCode(targetTenant).catch(() => new Map<string, EmployeeRecord>());
+      const validatedEmployees = validateEmployees(result.data, existing);
       setEmployees(validatedEmployees);
       setUploadedFile(file);
       setStep('preview');
@@ -214,7 +216,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
     return { match: null, reason: byName.length > 1 ? 'ambiguous' : 'not_found' };
   };
 
-  const validateEmployees = (rawEmployees: EmployeeExcelRow[]): ParsedEmployee[] => {
+  const validateEmployees = (rawEmployees: EmployeeExcelRow[], existing: Map<string, EmployeeRecord>): ParsedEmployee[] => {
     const deptCodes = departments.map((d) => d.code);
     const desigCodes = designations.map((d) => d.code);
     const validRoles = roles.map((r) => r.code);
@@ -222,6 +224,12 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
     return rawEmployees.map((emp) => {
       const errors: string[] = [];
       if (!emp.emailId || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emp.emailId)) errors.push(t('bulk_employees.email_required', 'A valid email is required to invite an employee.'));
+      const clash = codeProblem(emp, rawEmployees, existing);
+      if (clash) {
+        errors.push('repeated' in clash
+          ? t('bulk_employees.code_repeated', '%{code} is on more than one row', { code: emp.employeeCode })
+          : t('bulk_employees.code_taken', '%{code} is already used by %{name}', { code: emp.employeeCode, name: clash.takenBy }));
+      }
 
       // Validate department(s) — comma-separated list supported; every code
       // must exist (each becomes an HRMS assignment in buildEmployee)
@@ -313,8 +321,6 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
     let failedTotal = 0;
 
     try {
-      // Read now, not when the sheet was picked: codes HRMS holds at upload time.
-      const codes = planEmployeeCodes((await listEmployees(targetTenant)).codes, validEmployees.map((e) => e.employeeCode));
       for (let i = 0; i < validEmployees.length; i++) {
         const emp = validEmployees[i];
         setProgressMessage(t('bulk_employees.creating_named', 'Creating %{name}...', { name: emp.name }));
@@ -368,7 +374,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
           // Build employee object
           const employee = hrmsService.buildEmployee({
             tenantId: targetTenant,
-            code: codes[i],
+            code: emp.employeeCode,
             name: emp.name,
             userName: emp.userName || hrmsService.generateUsername(emp.name),
             mobileNumber: emp.mobileNumber,

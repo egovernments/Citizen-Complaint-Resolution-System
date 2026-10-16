@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useGetList } from 'ra-core';
 import { Download } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -14,7 +14,7 @@ import type {
   Designation,
   Boundary,
 } from '@/api/types';
-import { listEmployees, planEmployeeCodes } from '@/onboarding/employees/employeesApi';
+import { codeProblem, employeesByCode, type EmployeeRecord } from '@/onboarding/employees/employeesApi';
 import { useApp } from '../../App';
 
 type EmployeeBulkRow = EmployeeExcelRow & BulkRow;
@@ -116,6 +116,7 @@ export function EmployeeBulkImport() {
     pattern: string;
     errorMessage: string;
   } | null>(null);
+  const [existingEmployees, setExistingEmployees] = useState<Map<string, EmployeeRecord>>(new Map());
   const [refsLoading, setRefsLoading] = useState(false);
   const [createdEmployees, setCreatedEmployees] = useState<Employee[]>([]);
 
@@ -134,12 +135,14 @@ export function EmployeeBulkImport() {
           boundaryService.searchBoundaries(tenantId, hierarchyType ? { hierarchyType } : undefined),
         );
 
-        const [depts, desigs, bounds, fetchedRoles, mobile] = await Promise.all([
+        const [depts, desigs, bounds, fetchedRoles, mobile, employees] = await Promise.all([
           mdmsService.getDepartments(tenantId),
           mdmsService.getDesignations(tenantId),
           boundariesInDefaultHierarchy,
           mdmsService.getRoles(tenantId).catch(() => [] as typeof roles),
           mdmsService.getMobileValidation(tenantId).catch(() => null),
+          // The code check is advisory: creating still refuses a code that's taken.
+          employeesByCode(tenantId).catch(() => new Map<string, EmployeeRecord>()),
         ]);
         if (cancelled) return;
         setDepartments(depts);
@@ -147,6 +150,7 @@ export function EmployeeBulkImport() {
         setBoundaries(bounds);
         setRoles(fetchedRoles);
         setMobileRules(mobile);
+        setExistingEmployees(employees);
       } finally {
         if (!cancelled) setRefsLoading(false);
       }
@@ -181,7 +185,7 @@ export function EmployeeBulkImport() {
   }, []);
 
   const validateRow = useCallback(
-    (row: EmployeeBulkRow): string[] => {
+    (row: EmployeeBulkRow, rows: EmployeeBulkRow[]): string[] => {
       const deptCodes = new Set(departments.map((d) => d.code));
       const desigCodes = new Set(designations.map((d) => d.code));
       const boundaryCodes = new Set(templateBoundaries.map((b) => b.code));
@@ -194,6 +198,8 @@ export function EmployeeBulkImport() {
 
       const errors: string[] = [];
       if (!row.emailId || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.emailId)) errors.push('A valid email is required to invite an employee.');
+      const clash = codeProblem(row, rows, existingEmployees);
+      if (clash) errors.push('repeated' in clash ? `${row.employeeCode} is on more than one row` : `${row.employeeCode} is already used by ${clash.takenBy}`);
       if (row.department && !deptCodes.has(row.department)) errors.push(`Department "${row.department}" not found`);
       if (row.designation && !desigCodes.has(row.designation)) errors.push(`Designation "${row.designation}" not found`);
       if (row.roles) {
@@ -236,20 +242,11 @@ export function EmployeeBulkImport() {
       }
       return errors;
     },
-    [departments, designations, templateBoundaries, roles, mobileRules],
+    [departments, designations, templateBoundaries, roles, mobileRules, existingEmployees],
   );
 
-  // One code plan per run, read from HRMS when the upload starts (the panel passes a new rows array each run).
-  const codePlan = useRef<{ rows: EmployeeBulkRow[]; codes: Promise<string[]> } | null>(null);
   const createOne = useCallback(
-    async (row: EmployeeBulkRow, index: number, rows: EmployeeBulkRow[]) => {
-      if (codePlan.current?.rows !== rows) {
-        codePlan.current = {
-          rows,
-          codes: listEmployees(tenantId).then(({ codes }) => planEmployeeCodes(codes, rows.map((r) => r.employeeCode))),
-        };
-      }
-      const code = (await codePlan.current.codes)[index];
+    async (row: EmployeeBulkRow) => {
       const empRoles = row.roles
         ? row.roles
             .split(',')
@@ -278,7 +275,7 @@ export function EmployeeBulkImport() {
 
       const built = hrmsService.buildEmployee({
         tenantId,
-        code,
+        code: row.employeeCode,
         name: row.name,
         userName: (row.userName && row.userName.trim()) || hrmsService.generateUsername(row.name),
         mobileNumber: row.mobileNumber,
