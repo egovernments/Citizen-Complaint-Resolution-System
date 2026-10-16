@@ -55,9 +55,14 @@ export interface WritePathInput {
 /** react-admin mutation option that turns the callable into an awaitable promise. */
 const RETURN_PROMISE = { returnPromise: true };
 
-/** MDMS phantom-200 duplicate marker raised by DigitApiClient.mdmsCreate. */
+/**
+ * A create MDMS refused because the uniqueIdentifier exists (possibly inactive): the phantom-200 marker raised by
+ * DigitApiClient.mdmsCreate (MDMS_DUPLICATE), or DIGIT 3.0's 400 DUPLICATE_RECORD ("Duplicate record").
+ */
 export function isMdmsDuplicate(err: unknown): boolean {
-  return String((err as Error)?.message ?? '').includes('MDMS_DUPLICATE');
+  const e = err as { message?: unknown; errors?: Array<{ code?: string }> } | undefined;
+  if ((e?.errors ?? []).some((x) => x?.code === 'DUPLICATE_RECORD')) return true;
+  return /MDMS_DUPLICATE|DUPLICATE_RECORD|duplicate record/i.test(String(e?.message ?? ''));
 }
 
 /** create -> on MDMS_DUPLICATE fall back to update-with-reactivation. */

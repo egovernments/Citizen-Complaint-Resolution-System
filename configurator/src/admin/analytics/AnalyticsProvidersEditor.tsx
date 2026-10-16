@@ -356,7 +356,7 @@ export function AnalyticsProvidersEditor() {
     } catch (e) {
       const msg = (e as Error)?.message || 'Failed to save.';
       setSaveError(
-        msg.includes('MDMS_DUPLICATE')
+        /MDMS_DUPLICATE|DUPLICATE_RECORD|duplicate record/i.test(msg)
           ? `A destination with the code "${code}" already exists at this tenant (it may be switched off). Edit that row instead of creating a second one — MDMS has no delete.`
           : msg
       );

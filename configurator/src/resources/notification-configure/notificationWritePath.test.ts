@@ -34,6 +34,10 @@ describe('isMdmsDuplicate', () => {
     expect(isMdmsDuplicate(new Error('SERVER_DOWN'))).toBe(false);
     expect(isMdmsDuplicate(undefined)).toBe(false);
   });
+  it("detects DIGIT 3.0's 400 DUPLICATE_RECORD", () => {
+    expect(isMdmsDuplicate(new Error('Duplicate record'))).toBe(true);
+    expect(isMdmsDuplicate(Object.assign(new Error('x'), { errors: [{ code: 'DUPLICATE_RECORD' }] }))).toBe(true);
+  });
 });
 
 describe('saveNotificationPair', () => {
