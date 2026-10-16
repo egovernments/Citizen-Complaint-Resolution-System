@@ -54,6 +54,13 @@ const sessions = new Map<string, { cookies: SignInCookie[]; at: number }>();
 /** A digest, not the password: cache keys are only compared, never shown. */
 const digest = (password: string) => createHash('sha256').update(password).digest('hex').slice(0, 16);
 
+/**
+ * The last Keycloak sign-in queued per user. Two in flight at once (two seeds in
+ * a Promise.all, say) trip Keycloak's quick-login check, which disables the user
+ * for a minute, so each sign-in waits for the one ahead and reuses its outcome.
+ */
+const signInQueue = new Map<string, Promise<unknown>>();
+
 /** The BFF session cookies for this persona; a known refusal throws without contacting Keycloak. */
 export async function signIn(baseURL: string, surface: StaffSurface, username: string, password: string,
   opts: { fresh?: boolean } = {}): Promise<SignInCookie[]> {
@@ -64,18 +71,29 @@ export async function signIn(baseURL: string, surface: StaffSurface, username: s
   const key = JSON.stringify([baseURL, surface, username, digest(password)]);
   const session = sessions.get(key);
   if (!opts.fresh && session && Date.now() - session.at < SESSION_MS) return session.cookies;
-  const post = () => passwordSignIn({ baseURL, surface, username, password });
-  try {
-    const cookies = await post().catch((err) => {
-      if (err instanceof KeycloakSessionExpiredError) return post();
+  const asked = Date.now();
+  const userKey = JSON.stringify([baseURL, username]);
+  const turn = (signInQueue.get(userKey) ?? Promise.resolve()).catch(() => undefined).then(async () => {
+    // The sign-in ahead may have answered this one already.
+    const refusedAhead = refusals.get(refusalKey);
+    if (refusedAhead && refusedAhead.at >= asked) throw refusedAhead.error;
+    const signedInAhead = sessions.get(key);
+    if (signedInAhead && signedInAhead.at >= asked) return signedInAhead.cookies;
+    const post = () => passwordSignIn({ baseURL, surface, username, password });
+    try {
+      const cookies = await post().catch((err) => {
+        if (err instanceof KeycloakSessionExpiredError) return post();
+        throw err;
+      });
+      sessions.set(key, { cookies, at: Date.now() });
+      return cookies;
+    } catch (err) {
+      if (err instanceof KeycloakSignInError) refusals.set(refusalKey, { error: err, at: Date.now() });
       throw err;
-    });
-    sessions.set(key, { cookies, at: Date.now() });
-    return cookies;
-  } catch (err) {
-    if (err instanceof KeycloakSignInError) refusals.set(refusalKey, { error: err, at: Date.now() });
-    throw err;
-  }
+    }
+  });
+  signInQueue.set(userKey, turn);
+  return turn;
 }
 
 /** Retry `run` once on a fresh sign-in when the reused BFF session is gone (401). */
