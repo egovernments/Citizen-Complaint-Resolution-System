@@ -293,6 +293,10 @@ def main():
         mobile=CI_MOBILE,
         roles=CI_ROLES,
         department=dept_code,
+        # PGR scopes employee search to the jurisdiction, so it must cover the locality the
+        # complaints-demo collection files under (same as ci-dataloader.py's CI-ADMIN).
+        jurisdiction_boundary=LOCALITY_CODE,
+        jurisdiction_boundary_type="Locality",
     ):
         print("FATAL: Failed to create HRMS employee")
         return 1
