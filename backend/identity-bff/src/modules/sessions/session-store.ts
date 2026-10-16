@@ -116,8 +116,8 @@ else
   result = redis.call('set', KEYS[2], ARGV[2], ARGV[5], 'PXAT', ARGV[4])
 end
 if not result then return 0 end
--- A session whose end moves takes its selected context with it.
-if ARGV[4] ~= 'KEEP' and redis.call('exists', KEYS[6]) == 1 then redis.call('pexpireat', KEYS[6], ARGV[4]) end
+-- A session whose end moves takes its selected context with it (a no-op when there is none).
+if ARGV[4] ~= 'KEEP' then redis.call('pexpireat', KEYS[6], ARGV[4]) end
 redis.call('sadd', KEYS[4], ARGV[6])
 local ttl = redis.call('pttl', KEYS[2])
 if redis.call('pttl', KEYS[4]) < ttl then redis.call('pexpire', KEYS[4], ttl) end
@@ -253,9 +253,7 @@ export async function createIdentitySession(
   binding: SessionBinding = {},
 ): Promise<{ sessionId: string; maxAge: number }> {
   const sessionId = randomId();
-  await saveIdentitySession(
-    sessionId, tokens, claims, sessionTtl(tokens), oidcClientId, undefined, binding, true,
-  );
+  await saveIdentitySession(sessionId, tokens, claims, { oidcClientId, binding, create: true });
   // The cookie lasts as long as the session can; the record ends an idle one sooner.
   return { sessionId, maxAge: config.identitySessionTtlSeconds };
 }
@@ -265,22 +263,23 @@ function authTimeOf(claims: KeycloakClaims, previous: IdentitySession | null): n
   return typeof claims.auth_time === "number" && Number.isFinite(claims.auth_time) ? claims.auth_time * 1000 : previous?.authTime;
 }
 
+export interface SaveSessionOptions {
+  oidcClientId?: string;
+  binding?: SessionBinding;
+  /** Only createIdentitySession/createPhoneOtpSession create; every other write updates. */
+  create?: boolean;
+}
+
 /**
- * Refresh is update-only: only createIdentitySession/createPhoneOtpSession pass `create`.
- *
- * Without `sessionExpiresAt` the session slides: it now ends `ttl` from this write, never later than
- * IDENTITY_SESSION_TTL_SECONDS after sign-in. Keycloak also shortens the refresh lifetime towards its own
+ * Every write slides the session: it now ends the token set's refresh lifetime from this write, never later
+ * than IDENTITY_SESSION_TTL_SECONDS after sign-in. Keycloak also shortens the refresh lifetime towards its own
  * SSO max lifespan and then refuses the refresh, so that limit holds as well.
  */
 export async function saveIdentitySession(
   sessionId: string,
   tokens: IdentityTokenSet,
   claims: KeycloakClaims,
-  ttl = sessionTtl(tokens),
-  oidcClientId?: string,
-  sessionExpiresAt?: number,
-  binding: SessionBinding = {},
-  create = false,
+  { oidcClientId, binding = {}, create = false }: SaveSessionOptions = {},
 ): Promise<void> {
   return withPersonLease(claims.sub, async (lease) => {
     const previous = create ? null : await requireCurrentSession(lease, sessionId);
@@ -288,13 +287,15 @@ export async function saveIdentitySession(
       throw new Error("Invalid identity session surface binding");
     }
     const now = Date.now();
-    const expiresAt = sessionExpiresAt ??
-      Math.min((previous?.createdAt ?? now) + config.identitySessionTtlSeconds * 1000, now + ttl * 1000);
+    // A record written before createdAt existed counts from its sign-in, not from this write.
+    const createdAt = previous?.createdAt ?? previous?.authTime ?? now;
+    const expiresAt = Math.min(createdAt + config.identitySessionTtlSeconds * 1000, now + sessionTtl(tokens) * 1000);
+    if (expiresAt <= now) throw new SessionRevokedError();
     const session: IdentitySession = {
       claims,
       schemaVersion: 2,
       revocationGeneration: previous?.revocationGeneration ?? Number(await getRedis().get(revocationGenerationKey(claims.sub)) || 0),
-      createdAt: previous?.createdAt ?? now,
+      createdAt,
       lastSeenAt: now,
       ...(authTimeOf(claims, previous) !== undefined && { authTime: authTimeOf(claims, previous) }),
       kcSessionId: claims.sid ?? previous?.kcSessionId,
@@ -314,7 +315,7 @@ export async function saveIdentitySession(
         : undefined,
       sessionExpiresAt: expiresAt,
     };
-    await writeSessionRecord(lease, sessionId, session, Math.min(expiresAt, now + ttl * 1000), create ? "NX" : "XX");
+    await writeSessionRecord(lease, sessionId, session, expiresAt, create ? "NX" : "XX");
   });
 }
 
@@ -342,11 +343,11 @@ export async function createPhoneOtpSession(input: {
       phone_number_verified: true,
       azp: config.keycloakCitizenClientId,
     },
-    maxAge,
-    config.keycloakCitizenClientId,
-    undefined,
-    { surface: "citizen", boundTenant: input.boundTenant, authMethod: "phone_otp" },
-    true,
+    {
+      oidcClientId: config.keycloakCitizenClientId,
+      binding: { surface: "citizen", boundTenant: input.boundTenant, authMethod: "phone_otp" },
+      create: true,
+    },
   );
   return { sessionId, maxAge };
 }

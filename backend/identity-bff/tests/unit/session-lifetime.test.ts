@@ -66,4 +66,15 @@ describe("session lifetime", () => {
     expect(current!.session.sessionExpiresAt).toBe(signedInAt + config.identitySessionTtlSeconds * 1000);
     expect(await getRedis().pttl(sessionKey(sessionId))).toBeLessThanOrEqual(5_000);
   });
+
+  it("caps a record written before createdAt existed from its sign-in, not from the refresh", async () => {
+    const { sessionId } = await createIdentitySession(tokens, claims, "client");
+    const signedInAt = Date.now() - config.identitySessionTtlSeconds * 1000 + 5_000;
+    const { createdAt: _createdAt, ...legacy } = (await getIdentitySession(sessionId))!;
+    await getRedis().set(sessionKey(sessionId), JSON.stringify({ ...legacy, authTime: signedInAt }), "KEEPTTL");
+
+    const current = await currentSession(sessionCookie(sessionId, 600));
+    expect(current!.session.sessionExpiresAt).toBe(signedInAt + config.identitySessionTtlSeconds * 1000);
+    expect(current!.session.createdAt).toBe(signedInAt);
+  });
 });

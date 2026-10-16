@@ -903,7 +903,7 @@ A pending binding past `expiresAt` counts as `removed` everywhere, even before a
 
 **Write rules:**
 - create: `SET … NX EX`;
-- refresh: `SET … XX PXAT`, keeping the generation it **re-read**. The session slides: its end (`sessionExpiresAt`, and the record's and selected context's expiry) moves to the new refresh token's expiry, which is Keycloak's idle limit, but never past `IDENTITY_SESSION_TTL_SECONDS` after sign-in (`createdAt`). Keycloak also shortens the refresh lifetime towards its SSO max lifespan and then refuses the refresh. The cookie's `Max-Age` is `IDENTITY_SESSION_TTL_SECONDS`, so an idle session ends at the record, not at the browser;
+- refresh: `SET … XX PXAT`, keeping the generation it **re-read**. The session slides: its end (`sessionExpiresAt`, and the record's and selected context's expiry) moves to the new refresh token's expiry, which is Keycloak's idle limit, but never past `IDENTITY_SESSION_TTL_SECONDS` after sign-in (`createdAt`). Keycloak also shortens the refresh lifetime towards its SSO max lifespan and then refuses the refresh. A finished Keycloak account action slides the session the same way; one that finishes after the session ended still reports its outcome, and the person signs in again. A record written before `createdAt` existed counts from its `authTime`. The cookie's `Max-Age` is `IDENTITY_SESSION_TTL_SECONDS`, so an idle session ends at the record, not at the browser, and `GET /identity/v1/session` clears the cookie of a session that has ended;
 - touch: `SET … XX KEEPTTL`.
 
 A `nil` reply means the session was revoked: answer 401 and never recreate it. A record without `schemaVersion` counts as version 1 and gets generation 0.

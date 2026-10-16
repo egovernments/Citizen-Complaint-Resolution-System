@@ -25,6 +25,7 @@ import {
   sessionIdFromCookie,
   requireCurrentSession,
   saveIdentitySession,
+  SessionRevokedError,
 } from "../sessions/session-store.js";
 import { enabledIdentityMethods } from "./methods.js";
 import {
@@ -343,11 +344,15 @@ export function registerAuthenticationRoutes(app: express.Application): void {
         const binding = attempt.accountAction;
         if (claims.sub !== binding.sub || sessionIdFromCookie(request.headers.cookie, surface) !== binding.sid) throw new Error("Account action changed the initiating person or session");
         await withPersonLease(binding.sub, async lease => {
-          const session = await requireCurrentSession(lease, binding.sid);
+          // An action finished after the session ended still happened in Keycloak: report its outcome, and
+          // the person signs in again.
+          const session = await requireCurrentSession(lease, binding.sid)
+            .catch(error => { if (error instanceof SessionRevokedError) return null; throw error; });
+          if (!session) return;
           if (session.surface && session.surface !== surface) throw new Error("Account action changed surface");
+          // A finished action is use, so the session slides as on a refresh (#2456).
           await saveIdentitySession(binding.sid, tokens, claims,
-            Math.max(1, Math.floor((session.sessionExpiresAt - Date.now()) / 1000)), attempt.oidcClientId,
-            session.sessionExpiresAt, { surface, boundTenant: session.boundTenant });
+            { oidcClientId: attempt.oidcClientId, binding: { surface, boundTenant: session.boundTenant } });
         });
         const outcome = request.query.kc_action_status === "success" ? "ACTION_COMPLETE"
           : request.query.kc_action_status === "cancelled" ? "ACTION_CANCELLED" : "ACTION_FAILED";

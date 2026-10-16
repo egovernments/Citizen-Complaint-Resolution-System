@@ -92,15 +92,10 @@ export async function currentSession(
         );
       }
       // A refresh is use, so the session's end moves to the new refresh token's (saveIdentitySession).
-      await saveIdentitySession(
-        sessionId,
-        tokens,
-        claims,
-        undefined,
+      await saveIdentitySession(sessionId, tokens, claims, {
         oidcClientId,
-        undefined,
-        { surface: session.surface, boundTenant: session.boundTenant },
-      );
+        binding: { surface: session.surface, boundTenant: session.boundTenant },
+      });
       session = await getIdentitySession(sessionId);
       return session ? { sessionId, session } : null;
     } catch (error) {
