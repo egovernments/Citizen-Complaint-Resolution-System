@@ -391,7 +391,7 @@ local-setup/
 │                                   # deploy — that uses docker-compose.egov-digit.yaml)
 ├── docker-compose.deploy.yaml      # Deploy variant (no resource limits)
 ├── docker-compose.db-migrations.yml # DB migrations variant
-├── docker-compose.tilt.yml         # Overlay: points pgr-services/digit-ui at Tilt's locally built images
+├── docker-compose.tilt.yml         # Overlay: points pgr-services and its migration job at Tilt's locally built images
 ├── Tiltfile                        # Tilt with PGR hot reload + ui-dev server (requires Maven, Node)
 ├── Tiltfile.db-dump                # Tilt with pre-built images (recommended)
 ├── ansible/                        # Config-driven remote deploy — see ansible/README.md

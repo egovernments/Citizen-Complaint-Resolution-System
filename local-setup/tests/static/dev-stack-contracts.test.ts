@@ -78,6 +78,20 @@ describe('Tilt builds the UI and PGR that Compose runs', () => {
     expect(overridden.sort()).toEqual(built.sort());
   });
 
+  test('dev mode runs PGR and its migrations from the same source tree', () => {
+    // The overlay swapped only pgr-services, so source-built PGR started against the
+    // released migration image's schema, missing the source tree's newer V*.sql tables.
+    const overlay = services(TILT_OVERRIDE);
+    expect(overlay.get('pgr-services')).toMatch(/image:\s*pgr-services-dev\s*$/m);
+    expect(overlay.get('pgr-services-migration')).toMatch(/image:\s*pgr-services-db-dev\s*$/m);
+    const tiltfile = code('Tiltfile');
+    expect(tiltfile).toMatch(
+      /docker_build\(\s*'pgr-services-db-dev',\s*context=PGR_PATH \+ '\/src\/main\/resources\/db'/,
+    );
+    const dbDir = path.join(ROOT, '..', 'backend', 'pgr-services', 'src', 'main', 'resources', 'db');
+    expect(fs.readFileSync(path.join(dbDir, 'Dockerfile'), 'utf8')).toMatch(/COPY \.\/migration\/main /);
+  });
+
   test('CI mode runs the compose pins as-is (no retagged copies to drift)', () => {
     // CI used to pull egovio/digit-ui:dev-ff0db90 while compose pinned digit-ui-esbuild.
     const tiltfile = read('Tiltfile');
@@ -119,6 +133,16 @@ describe('PGR works end-to-end on the dev stack', () => {
     );
   });
 
+  for (const tiltfile of TILTFILES) {
+    test(`${tiltfile} starts pgr-services only after its migration`, () => {
+      // Tilt runs `docker compose up --no-deps`, so compose's own depends_on gate is not
+      // applied. Tilt 0.36 also derives this edge from depends_on, but keep it explicit in
+      // both Tiltfiles rather than rely on that.
+      const block = code(tiltfile).match(/dc_resource\('pgr-services',[\s\S]*?\n\s*(?:links=|\))/)![0];
+      expect(block).toMatch(/resource_deps=\[[^\]]*'pgr-services-migration'/);
+    });
+  }
+
   test('egov-accesscontrol declares no in-container healthcheck', () => {
     // Its image is distroless (no /bin/sh), so a CMD-SHELL check stays "starting" forever.
     expect(service('egov-accesscontrol')).not.toMatch(/^\s+healthcheck:/m);
@@ -127,8 +151,12 @@ describe('PGR works end-to-end on the dev stack', () => {
 
 describe('full-dump.sql seed users can log in', () => {
   /**
-   * The dump is loaded as-is by Compose, Tilt, Ansible fast-path and the k8s
-   * db-seed chart, so a bad seed user breaks every one of them at once.
+   * The dump is loaded as-is by Compose, Tilt and the Ansible fast-path, so a
+   * bad seed user breaks every one of them at once. The k8s db-seed chart
+   * ships the same dump, but the per-tenant key checks below do not cover it:
+   * the Helm common chart runs egov-user with IS_ENVIRONMENT_CENTRAL_INSTANCE
+   * =false and STATE_LEVEL_TENANTID_LENGTH=1, so there a city user is looked
+   * up under the state tenant's key, not the city's.
    */
   const dump = read('db/full-dump.sql').split('\n');
   const copyBlock = (table: string) => {

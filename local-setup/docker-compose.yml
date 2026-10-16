@@ -946,7 +946,8 @@ services:
   # history stops at 2020, but the pinned app image writes columns added since
   # (e.g. eg_pgr_service_v2.extended_attributes); without this the persister's
   # INSERT fails and every complaint is lost after PGR has already answered 200.
-  # Keep the tag in lockstep with the pgr-services image below.
+  # Keep the tag in lockstep with the pgr-services image below. Under `tilt up` (dev mode),
+  # docker-compose.tilt.yml swaps both for images built from the local source tree.
   # Connects to postgres-db directly: pgbouncer's transaction mode breaks Flyway.
   pgr-services-migration:
     image: egovio/pgr-services-db:2.12.1-7a38661

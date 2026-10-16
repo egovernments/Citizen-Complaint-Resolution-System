@@ -78,6 +78,15 @@ ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -cp .:BOOT-INF/lib/*:BOOT-INF/clas
         ],
     )
 
+    # PGR's Flyway migrations from the same source tree. The registry migration image stops at
+    # its release's schema, so source-built PGR would start against missing tables. Tilt rebuilds
+    # this image and re-runs the one-shot job when a V*.sql changes.
+    docker_build(
+        'pgr-services-db-dev',
+        context=PGR_PATH + '/src/main/resources/db',
+        dockerfile=PGR_PATH + '/src/main/resources/db/Dockerfile',
+    )
+
 # ==================== DIGIT UI ====================
 # The digit-ui container always runs the pinned registry image (:18080, behind Kong on :18000).
 # For UI work, start 'ui-dev': the repo's esbuild dev server with live reload, on :18180. It
@@ -103,8 +112,8 @@ if not CI_MODE:
 # Note: wait=True blocks until ALL containers are healthy, which is too slow
 # Instead, rely on docker-compose depends_on with service_healthy conditions
 #
-# docker-compose.tilt.yml repoints pgr-services at the pgr-services-dev image built above.
-# Without it that docker_build binds to nothing and Tilt runs the registry image instead —
+# docker-compose.tilt.yml repoints pgr-services and pgr-services-migration at the -dev images
+# built above. Without it those docker_builds bind to nothing and Tilt runs the registry images,
 # silently, with no warning. See the comments in that file. CI mode builds nothing, so it
 # runs docker-compose.yml alone.
 if CI_MODE:

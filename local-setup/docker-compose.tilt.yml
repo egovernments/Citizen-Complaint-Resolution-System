@@ -1,17 +1,20 @@
-# Image override for the hot-reload Tiltfile (Option B, `tilt up`).
+# Image overrides for the hot-reload Tiltfile (Option B, `tilt up`).
 #
 # Why this file exists:
-#   docker-compose.yml pins pgr-services to a published registry image so that Option A
-#   (`docker compose up`) works with no local toolchain. The default Tiltfile, however, builds
-#   pgr-services from source via docker_build('pgr-services-dev').
+#   docker-compose.yml pins pgr-services and its pgr-services-migration job to published registry
+#   images so that Option A (`docker compose up`) works with no local toolchain. The default
+#   Tiltfile, however, builds both from source: docker_build('pgr-services-dev') for the app and
+#   docker_build('pgr-services-db-dev') for its Flyway migrations.
 #
 #   Tilt binds a docker_build to a Compose service by matching the built image name against the
-#   service's `image:` field. The registry pin never matches the -dev name, so Tilt built the image
-#   and then silently ran the registry image instead — hot reload appeared to work and did not.
+#   service's `image:` field. A registry pin never matches a -dev name, so Tilt built the image
+#   and then silently ran the registry image instead: hot reload appeared to work and did not.
 #   Tilt reports no warning for this (the resource simply ends up with zero image targets).
 #
-#   Loading this override alongside docker-compose.yml makes the names match, so the image Tilt
-#   builds is the image that actually runs.
+#   Loading this override alongside docker-compose.yml makes the names match, so the images Tilt
+#   builds are the images that actually run. Both are overridden together: source-built PGR
+#   against the released migration image would start on a schema missing the source tree's
+#   newer V*.sql tables.
 #
 # digit-ui is deliberately NOT overridden: the container keeps the registry image, and UI work
 # goes through the Tiltfile's 'ui-dev' resource (esbuild dev server with live reload).
@@ -22,3 +25,6 @@
 services:
   pgr-services:
     image: pgr-services-dev
+
+  pgr-services-migration:
+    image: pgr-services-db-dev
