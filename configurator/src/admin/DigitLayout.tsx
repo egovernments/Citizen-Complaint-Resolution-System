@@ -37,6 +37,7 @@ import {
   Globe2,
   CalendarClock,
   Inbox,
+  Palette,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { getGenericMdmsResources, getResourceLabel } from '@/providers/bridge';
@@ -92,6 +93,8 @@ const navGroups = [
     labelKey: 'app.nav.tenant_management',
     items: [
       { id: 'tenants', nameKey: 'app.nav.tenants', path: '/manage/tenants', icon: Building2 },
+      // Shown to whoever can see the tenant: branding is the tenant's logo, banner and theme.
+      { id: 'branding', gate: 'tenants', nameKey: 'app.nav.branding', path: '/manage/branding', icon: Palette },
       { id: 'departments', nameKey: 'app.nav.departments', path: '/manage/departments', icon: Briefcase },
       { id: 'designations', nameKey: 'app.nav.designations', path: '/manage/designations', icon: Award },
       { id: 'boundary-hierarchies', nameKey: 'app.nav.hierarchies', path: '/manage/boundary-hierarchies', icon: GitBranch },
@@ -186,7 +189,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
           ...group,
           items: group.items.filter(
             (item) =>
-              canViewResource(item.id) &&
+              canViewResource((item as { gate?: string }).gate ?? item.id) &&
               (!('requiredRoles' in item) ||
                 !!(item as { requiredRoles?: string[] }).requiredRoles?.some((r) => roleKey.split(',').includes(r))),
           ),

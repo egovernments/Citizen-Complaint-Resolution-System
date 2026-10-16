@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MdmsRecord } from '@/api/types';
-import BrandingStep from './BrandingStep';
+import BrandingStep, { BrandingEditor } from './BrandingStep';
 import { loadBranding, saveBranding, type Branding } from './brandingApi';
 
 const flags = vi.hoisted(() => ({ banner: false }));
@@ -14,6 +14,11 @@ vi.mock('@/config/featureFlags', () => ({
 
 const app = { state: { tenant: 'acme', completedPhases: [] as number[] }, completePhase: vi.fn(async () => true) };
 vi.mock('@/App', () => ({ useApp: () => app }));
+
+const access = vi.hoisted(() => ({ canEdit: true }));
+vi.mock('@/hooks/useMastersCapability', () => ({
+  useMastersCapability: () => ({ canEditResource: () => access.canEdit }),
+}));
 
 vi.mock('./brandingApi', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./brandingApi')>()),
@@ -80,6 +85,7 @@ const saveAndContinue = () => fireEvent.click(screen.getByRole('button', { name:
 beforeEach(() => {
   vi.clearAllMocks();
   flags.banner = true;
+  access.canEdit = true;
   Object.assign(nextImage, { width: 2400, height: 800 });
   (globalThis as unknown as { Image: unknown }).Image = TestImage;
   URL.createObjectURL = vi.fn(() => 'blob:banner');
@@ -258,5 +264,55 @@ describe('Save and continue', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Continue anyway' }));
     await waitFor(() => expect(app.completePhase).toHaveBeenLastCalledWith(expect.any(Number), true));
     expect(app.completePhase.mock.calls[0]).toEqual([expect.any(Number), false]);
+  });
+});
+
+describe('Branding in the management console', () => {
+  const consolePage = () =>
+    render(
+      <MemoryRouter>
+        <BrandingEditor mode="console" />
+      </MemoryRouter>,
+    );
+  const saveChanges = () => screen.getByRole('button', { name: 'Save changes' });
+
+  it('saves a change and stays, without touching onboarding', async () => {
+    // The re-read after saving may not show the new theme yet; the page still counts it saved.
+    save.mockImplementation(async (current) => current);
+    consolePage();
+    await screen.findByRole('heading', { name: 'Branding' });
+    expect(saveChanges()).toBeDisabled();
+    expect(screen.queryByRole('button', { name: /save and continue/i })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Green and Gold' }));
+    expect(saveChanges()).toBeEnabled();
+    fireEvent.click(saveChanges());
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Branding saved.');
+    expect(save).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ theme: expect.objectContaining({ id: 'green-gold' }) }));
+    expect(app.completePhase).not.toHaveBeenCalled();
+    expect(saveChanges()).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'CMS Blue' }));
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('offers the banner upload there too', async () => {
+    consolePage();
+    await screen.findByRole('button', { name: 'Upload banner' });
+    pick();
+    await waitFor(() => expect(saveChanges()).toBeEnabled());
+    fireEvent.click(saveChanges());
+    await waitFor(() => expect(save).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ banner: expect.objectContaining({ kind: 'upload' }) })));
+  });
+
+  it('is read-only for a role that cannot edit the tenant', async () => {
+    access.canEdit = false;
+    consolePage();
+    expect(await screen.findByText(/can see the branding but not change it/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Save changes' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Upload logo' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Green and Gold' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Upload banner' })).not.toBeInTheDocument();
   });
 });
