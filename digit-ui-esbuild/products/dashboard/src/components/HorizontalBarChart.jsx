@@ -11,7 +11,7 @@ import {
   buildHorizontalCategoryYAxis,
 } from "../config/stackedBarPresentation";
 import { useScrollableChartSize } from "../hooks/useScrollableChartSize";
-import { resolveBarChartColumnWidth } from "../config/barChartPresentation";
+import { formatFlowRatio, resolveBarChartColumnWidth } from "../config/barChartPresentation";
 import { VISUALIZATION_STYLES, VIZ_TYPE } from "../config/visualizationStyles";
 import useDashboardT from "../i18n/useDashboardT";
 import ChartScrollViewport from "./ChartScrollViewport";
@@ -19,11 +19,7 @@ import { formatNumber, getNumberFormatStamp } from "../utils/numberFormat";
 
 // Numeric part goes through the tenant mask (formatNumber, null when
 // unconfigured -> pre-#1213 expression).
-function formatRatio(value) {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return formatNumber(0, { decimals: 2 }) ?? "0.00";
-  return formatNumber(n, { decimals: 2 }) ?? n.toFixed(2);
-}
+const formatRatio = formatFlowRatio;
 
 function breakEvenSeriesValues(value, breakEven) {
   const v = Math.max(0, Number(value) || 0);
