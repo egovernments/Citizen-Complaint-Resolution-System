@@ -106,14 +106,14 @@ public class OnboardingProvisionerClientTest {
         assertEquals(0,writes);assertEquals(0,details);
     }
     @Test public void nestedTenantMismatchAndDifferentFounderCannotEscapeScope(){
-        var employee=Map.of("tenantId","newtown","code","EMP_0001","user",Map.of("tenantId","newtown","userName","founder","roles",List.of(Map.of("code","SUPERUSER","tenantId","other"))));
+        var employee=Map.of("tenantId","newtown","code","EMP_0001","user",Map.of("tenantId","newtown","userName","EMP_0001","roles",List.of(Map.of("code","SUPERUSER","tenantId","other"))));
         assertThrows(OnboardingFailure.class,()->client.write(scope("FOUNDER_HRMS"),"hrms","/egov-hrms/employees/_create",Map.of("Employees",List.of(employee))));
         assertThrows(OnboardingFailure.class,()->client.write(scope("FOUNDER_HRMS"),"hrms","/egov-hrms/employees/_create",Map.of("Employees",List.of(Map.of("tenantId","newtown","code","other","user",Map.of("tenantId","newtown","userName","other"))))));
-        // #2456: no more FOUNDER_ codes, and only a username of the founder's shape.
+        // #2456: no more FOUNDER_ codes, and the username is the code.
         String old=OnboardingSteps.legacyFounderCode(signup.getId());
         assertThrows(OnboardingFailure.class,()->client.write(scope("FOUNDER_HRMS"),"hrms","/egov-hrms/employees/_create",Map.of("Employees",List.of(Map.of("tenantId","newtown","code",old,"user",Map.of("tenantId","newtown","userName",old))))));
-        assertThrows(OnboardingFailure.class,()->client.write(scope("FOUNDER_HRMS"),"hrms","/egov-hrms/employees/_create",Map.of("Employees",List.of(Map.of("tenantId","newtown","code","EMP_0001","user",Map.of("tenantId","newtown","userName","Admin@x"))))));
-        assertThrows(OnboardingFailure.class,()->client.write(scope("FOUNDER_HRMS"),"hrms","/egov-hrms/employees/_create",Map.of("Employees",List.of(Map.of("tenantId","newtown","code","EMP_0001","user",Map.of("tenantId","newtown","userName","a".repeat(65)))))));
+        for(String userName:List.of("anita.wanjiru","emp_0001","Admin@x"))
+            assertThrows(OnboardingFailure.class,()->client.write(scope("FOUNDER_HRMS"),"hrms","/egov-hrms/employees/_create",Map.of("Employees",List.of(Map.of("tenantId","newtown","code","EMP_0001","user",Map.of("tenantId","newtown","userName",userName))))));
         assertEquals(0,writes);assertEquals(0,details);
     }
     @Test public void seedUpgradeMayDeleteOnlyTheTenantNameKeyAndBustTheCacheButNeverWriteBoundaries(){
@@ -185,7 +185,7 @@ public class OnboardingProvisionerClientTest {
         client.write(scope("PLATFORM_BASELINE"),"boundary","/boundary-service/boundary-hierarchy-definition/_create",Map.of("BoundaryHierarchy",Map.of("tenantId","newtown","hierarchyType",OnboardingSteps.WORKSPACE_HIERARCHY)));
         client.write(scope("PLATFORM_BASELINE"),"boundary","/boundary-service/boundary/_create",Map.of("Boundary",List.of(Map.of("tenantId","newtown","code","newtown"))));
         client.write(scope("PLATFORM_BASELINE"),"boundary","/boundary-service/boundary-relationships/_create",Map.of("BoundaryRelationship",Map.of("tenantId","newtown","code","newtown","hierarchyType",OnboardingSteps.WORKSPACE_HIERARCHY,"boundaryType","ROOT")));
-        client.write(scope("FOUNDER_HRMS"),"hrms","/egov-hrms/employees/_create",Map.of("Employees",List.of(Map.of("tenantId","newtown","code","EMP_0001","user",Map.of("tenantId","newtown","userName","anita.wanjiru")))));
+        client.write(scope("FOUNDER_HRMS"),"hrms","/egov-hrms/employees/_create",Map.of("Employees",List.of(Map.of("tenantId","newtown","code","EMP_0001","user",Map.of("tenantId","newtown","userName","EMP_0001")))));
         assertEquals(10,writes);assertEquals(writes,details);assertEquals(1,logins);
     }
 

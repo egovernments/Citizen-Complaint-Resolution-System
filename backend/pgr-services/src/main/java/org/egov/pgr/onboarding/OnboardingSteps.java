@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-import java.text.Normalizer;
 import java.util.*;
 
 @lombok.extern.slf4j.Slf4j
@@ -353,7 +352,8 @@ public class OnboardingSteps {
             // founderRoles: BaselineUpgrader cannot change an existing founder's roles, so a seed bump would claim it did.
             if (roles.stream().noneMatch(r -> "CSR".equals(r.get("code")))) roles.add(Map.of("code", "CSR", "name", "Complainant", "tenantId", tenant));
             var user = new LinkedHashMap<String, Object>();
-            user.put("name", signup.getFounderName()); user.put("userName", founderUserName(signup, false));
+            // HRMS gives every employee their code as username (enrichUser), whatever is sent, so send that.
+            user.put("name", signup.getFounderName()); user.put("userName", FOUNDER_CODE);
             String phone = contact.path("mobileNumber").asText().replaceAll("[\\s()-]", "");
             String countryCode = contact.path("countryCode").asText().trim();
             if (!countryCode.isBlank() && phone.startsWith(countryCode)) phone = phone.substring(countryCode.length());
@@ -370,21 +370,16 @@ public class OnboardingSteps {
                     "fromDate", signup.getCreatedAt(), "isCurrentAssignment", true)));
             employee.put("jurisdictions", List.of(Map.of("tenantId", tenant, "hierarchy", WORKSPACE_HIERARCHY, "boundaryType", "ROOT", "boundary", tenant, "roles", roles)));
             try {
-                try {
-                    client.write(scope, "hrms", "/egov-hrms/employees/_create", Map.of("Employees", List.of(employee)));
-                } catch (OnboardingFailure taken) {
-                    // As in the Employees step, a taken username gets the code added. HRMS reports only its first
-                    // problem, so a taken mobile behind this one still comes back from the second create.
-                    if (!"ERR_HRMS_USER_EXIST_USERNAME".equals(taken.getCode())) throw taken;
-                    user.put("userName", founderUserName(signup, true));
-                    client.write(scope, "hrms", "/egov-hrms/employees/_create", Map.of("Employees", List.of(employee)));
-                }
+                client.write(scope, "hrms", "/egov-hrms/employees/_create", Map.of("Employees", List.of(employee)));
             } catch (OnboardingFailure failure) {
                 // Search on the next claim after uncertain/duplicate writes; never create
                 // a different founder to work around an asynchronous HRMS projection.
                 if (failure.isRetryable()) throw failure;
                 String error = failure.getCode().toUpperCase(Locale.ROOT);
-                if (error.contains("DUPLICATE") || error.contains("ALREADY_EXIST") || error.equals("PROVISIONING_HTTP_409"))
+                // HRMS refuses a code that some user in the tenant already has as username. In a new workspace that is
+                // this step's own founder, whose user HRMS made at once while the employee row is still being saved.
+                if (error.contains("DUPLICATE") || error.contains("ALREADY_EXIST") || error.equals("PROVISIONING_HTTP_409")
+                        || error.equals("ERR_HRMS_USER_EXIST_USERNAME"))
                     throw new OnboardingFailure("FOUNDER_NOT_VISIBLE", true);
                 throw new OnboardingFailure("TENANT_ADMIN_ACCOUNT_REJECTED", false);
             }
@@ -443,27 +438,6 @@ public class OnboardingSteps {
         if (employee.path("code").asText().startsWith("FOUNDER_")) return true;
         for (JsonNode assignment : employee.path("assignments")) if (FOUNDER_DESIGNATION.equals(assignment.path("designation").asText())) return true;
         return false;
-    }
-
-    /**
-     * The username the Employees step would give the founder: their name in lower case, accents
-     * dropped, every other character a dot (hrmsService.generateUsername). egov-user keeps usernames
-     * unique per tenant and type, so in a new workspace it is free unless something else already holds
-     * it; then `taken` adds the code, as the Employees step does. A name with no Latin letters or digits
-     * falls back to the email's local part, then to the code.
-     */
-    static String founderUserName(OnboardingSignup signup, boolean taken) {
-        String email = signup.getFounderEmail() == null ? "" : signup.getFounderEmail();
-        String name = userName(signup.getFounderName(), 64), code = FOUNDER_CODE.toLowerCase(Locale.ROOT);
-        if (name.isEmpty()) name = userName(email.contains("@") ? email.substring(0, email.indexOf('@')) : email, 64);
-        if (name.isEmpty()) return code;
-        return taken ? userName(name, 64 - code.length() - 1) + "." + code : name;
-    }
-    /** At most `max` characters: egov-user takes 64. */
-    private static String userName(String text, int max) {
-        String name = Normalizer.normalize((text == null ? "" : text).toLowerCase(Locale.ROOT), Normalizer.Form.NFD).replaceAll("\\p{M}", "")
-                .replaceAll("[^a-z0-9]", ".").replaceAll("\\.+", ".").replaceAll("^\\.|\\.$", "");
-        return name.length() > max ? name.substring(0, max).replaceAll("\\.$", "") : name;
     }
 
     private JsonNode schema(String code) {
