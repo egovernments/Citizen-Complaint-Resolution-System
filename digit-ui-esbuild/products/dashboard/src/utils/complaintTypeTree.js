@@ -33,6 +33,39 @@ export function clearedSelection() {
 }
 
 /**
+ * #637: the backend's serviceCodes cap. A subtree with more codes keeps the
+ * complaintPath param (unchanged behaviour).
+ */
+export const MAX_SERVICE_CODES = 200;
+
+/**
+ * #637: codes of an interior node's subtree (the node itself included, like
+ * the complaintPath subtree match) when complaintPath cannot match it: the
+ * dashboard grains leave complaint_node_path NULL for every leaf whose chain
+ * holds a dotted code (e.g. "complaints.categories.NoStreetlight"), so a
+ * subtree filter there empties every tile. null when complaintPath works (no
+ * dotted code on the node's ancestor chain or in its subtree), for a leaf, or
+ * over MAX_SERVICE_CODES.
+ */
+export function subtreeCodesIfPathless(tree, code) {
+  const node = nodeOf(tree, code);
+  if (!node || node.isLeaf) return null;
+  const codes = [];
+  const seen = new Set();
+  const stack = [node];
+  while (stack.length) {
+    const cur = stack.pop();
+    if (seen.has(cur.code)) continue;
+    seen.add(cur.code);
+    codes.push(cur.code);
+    for (const child of cur.children || []) stack.push(child);
+  }
+  const dotted = (c) => String(c).includes(".");
+  if (!codes.some(dotted) && !ancestorsOf(tree, code).some(dotted)) return null;
+  return codes.length <= MAX_SERVICE_CODES ? codes.sort() : null;
+}
+
+/**
  * Build the complaint-type tree from RAINMAKER-PGR.ComplaintHierarchy records
  * ({ code, name, path (dot-delimited), parentCode, active, ... }).
  *
@@ -226,7 +259,10 @@ export function selectionFromCode(tree, code) {
   if (code == null || code === ALL) return clearedSelection();
   const node = nodeOf(tree, code);
   if (!node) return clearedSelection();
-  return { code: node.code, path: node.path, leaf: node.isLeaf };
+  const codes = subtreeCodesIfPathless(tree, node.code);
+  return codes
+    ? { code: node.code, path: node.path, leaf: node.isLeaf, codes }
+    : { code: node.code, path: node.path, leaf: node.isLeaf };
 }
 
 /**
@@ -246,6 +282,9 @@ export function isValidComplaintPath(path) {
  *   root     → {}                      (filter cleared — neither param)
  *   leaf     → { serviceCode }         (exact match, works on ALL grains —
  *                required-change #4; complaintPath is interior-only)
+ *   interior with codes → { serviceCodes } (#637: the subtree's codes, for
+ *                subtrees complaint_node_path cannot match — see
+ *                subtreeCodesIfPathless)
  *   interior → { complaintPath }       (the node's dot-path; #1282 matches the
  *                node itself + dot-descendants on complaint_node_path.
  *                Pre-#1282 backends silently ignore unknown params, so this
@@ -260,6 +299,9 @@ export function isValidComplaintPath(path) {
 export function complaintTypeParams(selection) {
   const code = selection?.code;
   if (!code || code === ALL) return {};
+  if (selection.leaf === false && Array.isArray(selection.codes) && selection.codes.length) {
+    return { serviceCodes: selection.codes.map(String) };
+  }
   if (selection.leaf === false && selection.path) {
     const path = String(selection.path);
     return isValidComplaintPath(path) ? { complaintPath: path } : {};
@@ -308,11 +350,13 @@ export function normalizeComplaintTypeValue(value) {
   if (value && typeof value === "object") {
     const code = String(value.code ?? "").trim() || ALL;
     if (code === ALL) return clearedSelection();
-    return {
+    const out = {
       code,
       path: value.path != null ? String(value.path) : null,
       leaf: value.leaf !== false,
     };
+    if (!out.leaf && Array.isArray(value.codes) && value.codes.length) out.codes = value.codes.map(String);
+    return out;
   }
   const code = String(value ?? "").trim();
   if (!code || code === ALL) return clearedSelection();
