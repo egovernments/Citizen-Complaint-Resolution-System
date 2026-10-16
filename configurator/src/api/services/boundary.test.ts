@@ -217,3 +217,24 @@ describe('boundaryService.createBoundaries', () => {
     expect(post).not.toHaveBeenCalled();
   });
 });
+
+describe('boundaryService.existingBoundaries', () => {
+  beforeEach(() => post.mockReset());
+
+  it('reads each parent from the tree and the en_IN name under either key an upload writes (#2456)', async () => {
+    post.mockImplementation(async (url: string) =>
+      url.startsWith('/boundary-service/boundary-relationships/_search')
+        ? { TenantBoundary: [{ tenantId: 'ke', hierarchyType: 'ADMIN', boundary: [{ code: 'C1', boundaryType: 'Country', children: [{ code: 'E1', boundaryType: 'Emirate' }, { code: 'E2', boundaryType: 'Emirate' }] }] }] }
+        : { messages: [{ code: 'C1', message: 'UAE' }, { code: 'KE_ADMIN_E1', message: 'Dubai' }] },
+    );
+
+    expect(await boundaryService.existingBoundaries('ke', 'ADMIN')).toEqual([
+      { code: 'C1', parent: undefined, name: 'UAE' },
+      { code: 'E1', parent: 'C1', name: 'Dubai' },
+      { code: 'E2', parent: 'C1', name: undefined },
+    ]);
+    const localization = post.mock.calls.map(([url]) => String(url)).find((url) => url.startsWith('/localization/'));
+    expect(localization).toContain('locale=en_IN');
+    expect(localization).toContain('module=rainmaker-boundary-admin');
+  });
+});

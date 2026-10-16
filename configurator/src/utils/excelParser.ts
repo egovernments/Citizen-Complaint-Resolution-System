@@ -405,6 +405,7 @@ export function parseBoundaryExcel(workbook: XLSX.WorkBook): {
       parentCode,
       latitude,
       longitude,
+      row: sheetRow,
     });
   });
 

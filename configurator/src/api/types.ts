@@ -387,6 +387,8 @@ export interface BoundaryExcelRow {
   parentCode?: string;
   latitude?: number;
   longitude?: number;
+  /** The sheet row it came from. */
+  row?: number;
 }
 
 export interface DepartmentExcelRow {

@@ -34,6 +34,7 @@ import { labelLocales } from '../labelLocales';
 import { parseExcelFile, parseBoundaryExcel } from '@/utils/excelParser';
 import { downloadBoundaryTemplate } from '@/utils/templateBuilder';
 import { parseGeoJsonSidecar, geometryForBoundary, type ParsedGeoJsonSidecar } from '@/utils/boundaryGeoJson';
+import { compareWithExisting } from '@/utils/boundaryReconcile';
 import { TURBOPASS_BASE } from '@/hooks/useTurbopassSources';
 import { buildOsmBoundaries, computeContainingParents, groupFetchedLevels, type OsmAdminLevel, type SkippedOsmFeature } from '@/utils/osmBoundaries';
 import {
@@ -434,6 +435,7 @@ export default function BoundaryImport({
   const [createdCounts, setCreatedCounts] = useState<Record<string, number>>({});
   const [totalCreated, setTotalCreated] = useState(0);
   const [failedCount, setFailedCount] = useState(0);
+  const [alreadyThereCount, setAlreadyThereCount] = useState(0);
 
   // Fetch existing hierarchies on mount
   useEffect(() => {
@@ -680,10 +682,35 @@ export default function BoundaryImport({
     setError(null);
 
     try {
+      // An upload never renames or moves an area (#2456): a code already in the hierarchy under
+      // another name or parent stops the whole sheet before any write, and an exact match is left alone.
+      const existing = await boundaryService.existingBoundaries(boundaryTenant, selectedHierarchy.hierarchyType);
+      const { toCreate, alreadyThere, conflicts } = compareWithExisting(validBoundaries, existing);
+      if (conflicts.length > 0) {
+        const none = t('geography.excel.no_parent', 'none');
+        setError([
+          t(
+            'geography.excel.existing_conflicts',
+            'Nothing was uploaded. These codes are already in this hierarchy with a different name or parent, and an upload can’t rename or move an area. Use the current name and parent, or a new code.',
+          ),
+          ...conflicts.map(c =>
+            t('geography.excel.existing_conflict', 'Row %{row}: %{code} is %{currentName} (parent: %{currentParent}) in the hierarchy, but %{sheetName} (parent: %{sheetParent}) in the sheet.', {
+              row: c.row ?? '?',
+              code: c.code,
+              currentName: c.current.name ?? t('geography.excel.unnamed', 'unnamed'),
+              currentParent: c.current.parent ?? none,
+              sheetName: c.sheet.name,
+              sheetParent: c.sheet.parent ?? none,
+            }),
+          ),
+        ].join(' '));
+        return;
+      }
+
       // Convert Excel rows to Boundary objects, attaching real geometry
       // (polygon sidecar > lat/long > undefined → service defaults to the
       // unit-square placeholder for unmatched rows).
-      const boundariesToCreate: Boundary[] = validBoundaries.map(row => ({
+      const boundariesToCreate: Boundary[] = toCreate.map(row => ({
         tenantId: boundaryTenant,
         code: row.code,
         name: row.name,
@@ -710,6 +737,7 @@ export default function BoundaryImport({
       setCreatedCounts(counts);
       setTotalCreated(result.success.length);
       setFailedCount(result.failed.length);
+      setAlreadyThereCount(alreadyThere.length);
 
       // Localizations + cache-bust + boundary-path repair (shared with OSM path)
       const schemaError = await runPostCreatePipeline(
@@ -2007,6 +2035,7 @@ export default function BoundaryImport({
           hierarchyType={selectedHierarchy.hierarchyType}
           workspace={workspaceName ?? boundaryTenant}
           sourceText={t('geography.source_excel', 'your Excel upload')}
+          alreadyThere={alreadyThereCount}
           failed={failedCount}
           onDone={onDone}
         />
