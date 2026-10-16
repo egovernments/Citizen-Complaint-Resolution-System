@@ -240,10 +240,23 @@ export function consumePasswordSetupAttempt(id: string): Promise<PasswordSetupAt
   return load(passwordSetupKey(id), true, validPasswordSetupAttempt);
 }
 
-/** How long the session lasts unused: Keycloak's refresh lifetime, its idle limit. */
+/**
+ * When the session started: `createdAt`, or `now` for a new one. A record written before createdAt existed counts
+ * from its sign-in, `authTime` (Keycloak's auth_time, earlier when the sign-in reused a Keycloak SSO session;
+ * Keycloak's own 7-day max lifespan bounds that anyway).
+ */
+function sessionStartedAt(session: IdentitySession | null, now: number): number {
+  return session?.createdAt ?? session?.authTime ?? now;
+}
+
+/** However much it is used, a session ends IDENTITY_SESSION_TTL_SECONDS after it started. */
+function sessionCapAt(session: IdentitySession | null, now: number): number {
+  return sessionStartedAt(session, now) + config.identitySessionTtlSeconds * 1000;
+}
+
+/** How long the session lasts unused: Keycloak's refresh lifetime, its idle limit. saveIdentitySession applies the absolute cap. */
 function sessionTtl(tokens: IdentityTokenSet): number {
-  const tokenTtl = tokens.refreshExpiresIn || tokens.accessExpiresIn;
-  return Math.max(1, Math.min(config.identitySessionTtlSeconds, tokenTtl));
+  return Math.max(1, tokens.refreshExpiresIn || tokens.accessExpiresIn);
 }
 
 export async function createIdentitySession(
@@ -287,9 +300,8 @@ export async function saveIdentitySession(
       throw new Error("Invalid identity session surface binding");
     }
     const now = Date.now();
-    // A record written before createdAt existed counts from its sign-in, not from this write.
-    const createdAt = previous?.createdAt ?? previous?.authTime ?? now;
-    const expiresAt = Math.min(createdAt + config.identitySessionTtlSeconds * 1000, now + sessionTtl(tokens) * 1000);
+    const createdAt = sessionStartedAt(previous, now);
+    const expiresAt = Math.min(sessionCapAt(previous, now), now + sessionTtl(tokens) * 1000);
     if (expiresAt <= now) throw new SessionRevokedError();
     const session: IdentitySession = {
       claims,
@@ -392,6 +404,9 @@ export async function getIdentitySession(
         !validBinding(session.surface, session.boundTenant)) return null;
     const generation = Number(await getRedis().get(revocationGenerationKey(session.claims.sub)) || 0);
     if ((session.revocationGeneration ?? 0) !== generation) return null;
+    // Every write keeps sessionExpiresAt within the cap, but a record written before createdAt existed may not be,
+    // so every reader sees the capped end.
+    session.sessionExpiresAt = Math.min(session.sessionExpiresAt, sessionCapAt(session, Date.now()));
     return session;
   } catch {
     return null;

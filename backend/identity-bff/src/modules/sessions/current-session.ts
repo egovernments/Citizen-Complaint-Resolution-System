@@ -100,9 +100,9 @@ export async function currentSession(
       return session ? { sessionId, session } : null;
     } catch (error) {
       console.warn("Identity session refresh failed:", (error as Error).message);
-      if (error instanceof SessionRevokedError) return null;
       if (error instanceof LeaseBusyError || error instanceof LeaseLostError) throw error;
-      if (error instanceof InvalidGrantError) {
+      // The session ended (revoked, or reached its cap) during the refresh, or Keycloak ended it.
+      if (error instanceof SessionRevokedError || error instanceof InvalidGrantError) {
         await deleteIdentitySession(sessionId);
         return null;
       }
