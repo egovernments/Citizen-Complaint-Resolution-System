@@ -156,6 +156,20 @@ public class OnboardingStepsTest {
         assertEquals("founder-uuid",op.getFounderDigitUuid());verify(client,times(2)).write(any(),eq("hrms"),contains("_create"),anyMap());
         verify(client,never()).read(eq("hrms"),contains("codes="),anyMap());
     }
+    /** A workspace from before #2456 can hold its old FOUNDER_ row and an EMP_0001 its admin added: the founder's row wins, not ambiguity. */
+    @Test public void theBoundOrOldFounderRowWinsOverAnAdminAddedEmp0001(){
+        prerequisites();
+        employees.add(employee("newtown","EMP_0001","CLERK","admin-added"));
+        employees.add(employee("newtown",OnboardingSteps.legacyFounderCode(signup.getId()),"CLERK","legacy-uuid"));
+        steps.perform("FOUNDER_HRMS",signup,op,progress);
+        assertEquals("legacy-uuid",op.getFounderDigitUuid());
+        employees.add(0,employee("newtown","EMP_0001",OnboardingSteps.FOUNDER_DESIGNATION,"bound-uuid"));op.setFounderDigitUuid("bound-uuid");
+        steps.perform("FOUNDER_HRMS",signup,op,progress);
+        assertEquals("bound-uuid",op.getFounderDigitUuid());verify(client,never()).write(any(),eq("hrms"),contains("_create"),anyMap());
+        employees.removeIf(e->"legacy-uuid".equals(e.path("user").path("uuid").asText())||"bound-uuid".equals(e.path("user").path("uuid").asText()));
+        employees.add(employee("newtown","EMP_0001","CLERK","second-admin-added"));op.setFounderDigitUuid(null);
+        assertEquals("two rows and neither the founder's","FOUNDER_AMBIGUOUS",assertThrows(OnboardingFailure.class,()->steps.perform("FOUNDER_HRMS",signup,op,progress)).getCode());
+    }
     /** The workspace's employees are read a page at a time, so a founder past the first page is still found. */
     @Test public void theFoundersRowIsFoundOnALaterPage(){
         prerequisites();

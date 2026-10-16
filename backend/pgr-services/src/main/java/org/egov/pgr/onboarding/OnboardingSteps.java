@@ -339,7 +339,8 @@ public class OnboardingSteps {
         // The old code too, so a run that created its founder under it before an upgrade finds them. If that
         // founder's HRMS row is still not visible after the upgrade, the create below is refused for the
         // taken mobile and the signup goes back to its founder; by their resubmit the row is visible.
-        JsonNode employees = ownEmployees(tenant, FOUNDER_CODE, legacyFounderCode(signup.getId()));
+        JsonNode employees = preferFounder(ownEmployees(tenant, FOUNDER_CODE, legacyFounderCode(signup.getId())),
+                operation.getFounderDigitUuid(), legacyFounderCode(signup.getId()));
         // Until the step has seen its founder nobody else can edit the row it made; after that the uuid decides (below).
         if (employees.size() > 1 || employees.size() == 1 && operation.getFounderDigitUuid() == null && !isFounder(employees.get(0)))
             throw new OnboardingFailure("FOUNDER_AMBIGUOUS", false);
@@ -421,6 +422,17 @@ public class OnboardingSteps {
             if (page.size() < HRMS_PAGE) return matches;
         }
         throw new OnboardingFailure("HRMS_INVALID_RESPONSE", true);
+    }
+
+    /**
+     * Where several rows match, the founder's own: the row with the uuid the step already bound, else the
+     * old FOUNDER_ row. A workspace from before #2456 can hold both that row and an EMP_0001 its admin added.
+     */
+    private JsonNode preferFounder(JsonNode rows, String founderUuid, String legacyCode) {
+        if (rows.size() < 2) return rows;
+        for (JsonNode row : rows) if (founderUuid != null && founderUuid.equals(row.path("user").path("uuid").asText())) return mapper.createArrayNode().add(row);
+        for (JsonNode row : rows) if (legacyCode.equalsIgnoreCase(row.path("code").asText())) return mapper.createArrayNode().add(row);
+        return rows;
     }
 
     /** The code founders had before #2456. */
