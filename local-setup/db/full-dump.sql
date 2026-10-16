@@ -6588,7 +6588,7 @@ cde89f84-4434-5466-91f5-78b342f14897	fr_FR	CMN_NOOPTION	Aucune option	pg	rainmak
 0971260d-a9d7-5c3e-8c6f-e928d1c06e30	fr_FR	COMMON_CERTIFY_TWO	: Une fois approuvé, l'avis de paiement sera généré et envoyé à JIT-FS pour le traitement du paiement.	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
 656337bd-fa76-57c3-b032-fb8671e69e66	fr_FR	COMMON_DAY	jour	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
 83a3ecf9-2c8f-53b5-b50e-17ecbb218e6b	fr_FR	COMMON_DAYS	jours	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
-c9c83d3b-070e-5173-a0fc-9701a79da808	fr_FR	COMMON_NA	NA	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
+c9c83d3b-070e-5173-a0fc-9701a79da808	fr_FR	COMMON_NA	N/D	pg	rainmaker-common	1	2026-10-14 00:00:00	1	2026-10-16 00:00:00
 90984067-f0bb-561b-922a-25fe571f88a0	fr_FR	COMMON_NO_RESULTS_FOUND	Aucun résultat trouvé	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
 41598f22-808c-5329-a726-ef015ddd6df6	fr_FR	COMMON_SELECTED	Sélectionné	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
 c7817410-fc9a-5653-9b0b-7c5bf580ac55	fr_FR	COMMON_TABLE_SEARCH	Rechercher	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
@@ -6767,10 +6767,10 @@ c33a462b-2018-500e-b50f-f81a09730f7e	fr_FR	CS_LOGIN_OTP	Vérification OTP	pg	rai
 f8dbe4ce-8906-5d65-974b-902eb3ff9a59	fr_FR	CS_LOGIN_PROVIDE_MOBILE_NUMBER	Indiquez votre numéro de téléphone mobile.	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
 aa57d6cb-ec9c-5d7c-a296-c08504fdc014	fr_FR	CS_LOGIN_TEXT	Toutes les communications concernant la demande seront envoyées à ce numéro de mobile.	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
 30216e51-d224-56a2-9dc7-d5da8b020f16	fr_FR	CS_MYAPPLICATIONS_NO_APPLICATION	Aucune demande trouvée	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
-bf4152e9-94ac-55bb-8146-fc0086049e6e	fr_FR	CS_NA	NA	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
+bf4152e9-94ac-55bb-8146-fc0086049e6e	fr_FR	CS_NA	N/D	pg	rainmaker-common	1	2026-10-14 00:00:00	1	2026-10-16 00:00:00
 8df5daa7-ebab-5ad3-bff9-f81664b19fb8	fr_FR	CS_RESEND_ANOTHER_OTP	Renvoyer un autre OTP	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
 efbf144d-d8cd-50f1-8fe5-920553f5ec6c	fr_FR	CS_RESEND_OTP	Renvoyer l'OTP	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
-e7177bef-ba5e-592f-88ca-bf05d3a1f47a	fr_FR	CS_RESEND_SECONDS	secs	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
+e7177bef-ba5e-592f-88ca-bf05d3a1f47a	fr_FR	CS_RESEND_SECONDS	s	pg	rainmaker-common	1	2026-10-14 00:00:00	1	2026-10-16 00:00:00
 0ccd4029-231c-51c8-9bb0-586851e2274f	fr_FR	CS_SKIP_CONTINUE	Ignorer et continuer	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
 71878576-fa1b-5a41-96d6-2c3158f64972	fr_FR	CS_SLA_DAY	jours auparavant	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
 5b3c41da-5036-5bcd-9329-48012382fbb6	fr_FR	CS_SLA_NOW	Maintenant	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
@@ -7145,7 +7145,7 @@ c573e981-d861-5bdb-9d25-a7d9d1d127b0	fr_FR	HR_EMP_NAME_LABEL	Nom de l'employé	p
 522e8bcc-d191-5f71-b819-946726857d4c	fr_FR	HR_ROLE_NO_LABEL	Nombre de rôles	pg	rainmaker-hr	1	2026-10-14 00:00:00	\N	\N
 d8d9f558-b459-5005-a24b-b67bfb24de3b	pt_BR	ACTION_TEST_COMPLAINT_TYPES	Categorias de reclamação	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
 a4e55d5d-d334-559b-b2a7-ef4a6a658d89	pt_BR	ACTION_TEST_HOME	Início	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
-4c57ee6b-31bf-5669-a7f9-7113372b9357	pt_BR	ACTION_TEST_SEARCH	Procurar	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
+4c57ee6b-31bf-5669-a7f9-7113372b9357	pt_BR	ACTION_TEST_SEARCH	Pesquisar	pg	rainmaker-common	1	2026-10-14 00:00:00	1	2026-10-16 00:00:00
 58a6a9ef-c071-52a0-908c-b12ed21ed47f	pt_BR	ACTION_TEST_SEARCH_COMPLAINT	Pesquisar reclamação	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
 31985c67-80c9-5a69-b27c-8fc9f904b7de	pt_BR	BACK	Voltar	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
 ce217416-88b1-5a77-8a54-05c6620524bb	pt_BR	CALL_CENTER_HELPLINE	Central de Atendimento / Linha de Ajuda	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
@@ -7157,10 +7157,10 @@ cbeac1cc-60ac-518b-adee-8628e5f476c0	pt_BR	COMMON_BOTTOM_NAVIGATION_HOME	Início
 091aa82e-0032-5709-9729-2986c8f595d7	pt_BR	COMMON_CERTIFY_TWO	: Após a aprovação, o aviso de pagamento será gerado e enviado ao JIT-FS para processamento do pagamento.	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
 a18a4a9a-9833-5c14-bca8-755869623f0f	pt_BR	COMMON_DAY	dia	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
 81970003-caa6-5611-bff8-b1af5f330043	pt_BR	COMMON_DAYS	dias	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
-5b33918d-bcbc-579f-980e-b12257149d8a	pt_BR	COMMON_NA	N / D	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
+5b33918d-bcbc-579f-980e-b12257149d8a	pt_BR	COMMON_NA	N/D	pg	rainmaker-common	1	2026-10-14 00:00:00	1	2026-10-16 00:00:00
 84c98f70-1dc8-5056-8a53-1d2d73a00762	pt_BR	COMMON_NO_RESULTS_FOUND	Nenhum resultado encontrado	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
 e5b4cbdd-e502-5a12-bb0e-713c4495c895	pt_BR	COMMON_SELECTED	Selecionado	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
-e9e94da3-4609-522a-a05e-549079390d01	pt_BR	COMMON_TABLE_SEARCH	Procurar	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
+e9e94da3-4609-522a-a05e-549079390d01	pt_BR	COMMON_TABLE_SEARCH	Pesquisar	pg	rainmaker-common	1	2026-10-14 00:00:00	1	2026-10-16 00:00:00
 e5148815-3b0f-51cc-be00-2bdf53e14c66	pt_BR	COMMON_TABLE_SORT	Organizar	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
 e2729709-25da-501b-af31-2ef451be91c4	pt_BR	COMMON_VALIDITY	Validade	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
 baefa8a0-5871-58e1-8f04-4d48449be90f	pt_BR	COMMON_WORKFLOW_STATES	Status do fluxo de trabalho	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
@@ -7176,7 +7176,7 @@ bcb9fa37-5054-54b9-90bc-eedb43fb189a	pt_BR	CORE_COMMON_ENABLED	Ativado	pg	rainma
 8db6e44a-f18d-5104-99b5-c8cbb2c7e5f5	pt_BR	CORE_COMMON_GO_TO_HOME	Voltar à página inicial	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
 ce47de80-e1ae-5d7f-b848-a0e650cbb653	pt_BR	CORE_COMMON_HOME	Início	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
 ec9669e5-262e-5943-8be0-7c85c1f0ff57	pt_BR	CORE_COMMON_LANGUAGE	Idioma	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
-56273b68-9279-59b4-b626-f439115e41a1	pt_BR	CORE_COMMON_LOGIN	Conecte-se	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
+56273b68-9279-59b4-b626-f439115e41a1	pt_BR	CORE_COMMON_LOGIN	Entrar	pg	rainmaker-common	1	2026-10-14 00:00:00	1	2026-10-16 00:00:00
 a21e92d0-f48d-5399-a9d1-15f500bb3146	pt_BR	CORE_COMMON_LOGOUT	Sair	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
 665e106a-23e1-5368-9523-51ebc675b987	pt_BR	CORE_COMMON_MOBILE_ERROR	Por favor, forneça um número de celular válido.	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
 a3aaa761-eadf-5265-854c-bec82da2b96a	pt_BR	CORE_COMMON_MOBILE_NUMBER	Número de celular	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
@@ -7325,7 +7325,7 @@ f4876696-3c05-50cf-96a3-aeffd5e5c967	pt_BR	CS_COMMON_SELECT	Selecionar	pg	rainma
 d64515ac-6329-5427-98da-5623bca4a7cc	pt_BR	CS_HOME_BANNER_PRODUCT	Sistema de Gestão de Reclamações	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
 a56f19f1-7108-5cd7-95ca-ec6caccc7fa5	pt_BR	CS_HOME_BANNER_TAGLINE	Relate problemas, acompanhe o andamento e veja o que está acontecendo na sua região.	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
 670e62cd-023d-5610-b39d-98395c6b4fac	pt_BR	CS_HOME_BANNER_WELCOME	Bem-vindo ao	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
-6999051b-2053-57b3-8c9d-5b8b99e20c51	pt_BR	CS_INBOX_SEARCH	Procurar	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
+6999051b-2053-57b3-8c9d-5b8b99e20c51	pt_BR	CS_INBOX_SEARCH	Pesquisar	pg	rainmaker-common	1	2026-10-14 00:00:00	1	2026-10-16 00:00:00
 0a0d4f66-5c1c-53d3-97f2-c9f96a371d9d	pt_BR	CS_INFO_DELETE	Excluir	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
 9bc64460-0621-555b-b482-e64d2e29f8cf	pt_BR	CS_INVALID_OTP	OTP inválido	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
 da378d1e-77ac-514c-9085-b21a24c995dc	pt_BR	CS_LINK_DSO_DASHBOARD	Login/Painel de Controle do DSO	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
@@ -7335,8 +7335,8 @@ dc135f08-e93b-57b2-b364-9653edf08d9b	pt_BR	CS_LOGIN_OTP	Verificação OTP	pg	rai
 ced28ae5-b8eb-5f4a-9b05-5db083fad398	pt_BR	CS_LOGIN_OTP_TEXT	Digite o OTP enviado para	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
 e0ce9a79-4d21-53ca-8c1d-bafb72f21011	pt_BR	CS_LOGIN_PROVIDE_MOBILE_NUMBER	Forneça seu número de celular	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
 ee143f25-0fd7-529b-8d2f-5fabf28ec273	pt_BR	CS_LOGIN_TEXT	Todas as comunicações sobre a solicitação serão enviadas para este número de celular.	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
-06bcebf3-d022-57b1-b4af-2d0231b7df1b	pt_BR	CS_MYAPPLICATIONS_NO_APPLICATION	Nenhuma candidatura encontrada	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
-61f4c487-a41d-5801-b3d6-fa143fba5495	pt_BR	CS_NA	N / D	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
+06bcebf3-d022-57b1-b4af-2d0231b7df1b	pt_BR	CS_MYAPPLICATIONS_NO_APPLICATION	Nenhuma solicitação encontrada	pg	rainmaker-common	1	2026-10-14 00:00:00	1	2026-10-16 00:00:00
+61f4c487-a41d-5801-b3d6-fa143fba5495	pt_BR	CS_NA	N/D	pg	rainmaker-common	1	2026-10-14 00:00:00	1	2026-10-16 00:00:00
 8f3931d3-7aab-5af4-af02-626362030d88	pt_BR	CS_RESEND_ANOTHER_OTP	Reenviar outro OTP	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
 cc313e32-cf32-5ccd-b50d-1c23692f1c47	pt_BR	CS_RESEND_OTP	Reenviar OTP	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
 fdf07407-d287-50f5-90cf-1e6645c90448	pt_BR	CS_RESEND_SECONDS	segundos	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
@@ -7371,7 +7371,7 @@ c7b28328-53f4-57d9-b94d-279cf3bac51f	pt_BR	ES_COMMON_DOC_FILENAME	Nome do arquiv
 1d605e33-079a-5be1-8713-a522c9cf668b	pt_BR	ES_COMMON_ENTER_DATE_RANGE	Informe um intervalo de datas válido	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
 b1204084-6444-5eec-ac58-011da03f8e94	pt_BR	ES_COMMON_INFO	Informações	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
 0cbc461e-c683-5f04-85db-4f7b33989f0b	pt_BR	ES_COMMON_MIN_SEARCH_CRITERIA_MSG	Informe pelo menos 1 critério de pesquisa	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
-0aa4b7e5-0bb4-5735-9d3a-24d01cf12766	pt_BR	ES_COMMON_NA	N/A	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
+0aa4b7e5-0bb4-5735-9d3a-24d01cf12766	pt_BR	ES_COMMON_NA	N/D	pg	rainmaker-common	1	2026-10-14 00:00:00	1	2026-10-16 00:00:00
 6c91285f-1ad6-5851-b467-99401d1e083d	pt_BR	ES_COMMON_NOTE	Observação	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
 31631118-2ee9-5bb4-b2a5-78bb57ae2e9a	pt_BR	ES_COMMON_NO_DATA	Nenhum dado encontrado	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
 9767e2ac-1a93-5b60-bd24-657c740f7e83	pt_BR	ES_COMMON_PLEASE_ENTER_ALL_MANDATORY_FIELDS	Preencha todos os campos obrigatórios	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
@@ -7712,6 +7712,333 @@ e3ac4dc0-27a5-54cc-b263-52b01ced5db7	pt_BR	HR_DESG_LABEL	Cargo	pg	rainmaker-hr	1
 3d20c1dd-df41-5aea-841b-f0daebb44f7b	pt_BR	HR_EMP_ID_LABEL	ID do funcionário	pg	rainmaker-hr	1	2026-10-14 00:00:00	\N	\N
 f4700cbb-6777-5178-a967-93c37cfb8623	pt_BR	HR_EMP_NAME_LABEL	Nome do funcionário	pg	rainmaker-hr	1	2026-10-14 00:00:00	\N	\N
 c5bd7856-7003-54ee-bdcd-8f02282c3bb1	pt_BR	HR_ROLE_NO_LABEL	Nº de funções	pg	rainmaker-hr	1	2026-10-14 00:00:00	\N	\N
+77e8d546-cf2a-5093-9b55-13ad9c78d772	fr_FR	CORE_COMMON_SKIP_CONTINUE	Ignorer et continuer	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+bb9d9113-abc3-5d49-9d94-bf7dea4e863e	fr_FR	CS_ADDCOMPLAINT_ADDITIONAL_DETAILS_TEXT	Si, en plus des informations déjà fournies, d'autres détails sont nécessaires pour résoudre la réclamation, indiquez-les ci-dessous :	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+f09fbefd-4704-5995-a41a-b1097451faf1	fr_FR	CS_ADDCOMPLAINT_ERROR_REOPEN_REASON	Sélectionnez le motif de réouverture de la réclamation	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+bf706e42-7797-5622-bf03-1fd08b234515	fr_FR	CS_ADDCOMPLAINT_PROVIDE_ADDITIONAL_DETAILS	Fournir des informations complémentaires	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+dc9f3c34-4f19-538b-a837-f54d2c715a01	fr_FR	CS_ADDCOMPLAINT_UPLOAD_ERROR_MESSAGE	Téléverser une image	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+f4e5601c-7713-5572-907e-7884e32b3fcb	fr_FR	CS_ADDCOMPLAINT_UPLOAD_PHOTO	Ajouter des photos de la réclamation	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+4bcb3914-04c8-5f1b-b368-d4c4da0b7032	fr_FR	CS_HEADER_REOPEN_COMPLAINT	Rouvrir la réclamation	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+08e9c1d1-9f39-5f2c-80e0-35e64e2b6f5f	fr_FR	CS_REOPEN_COMPLAINT	Choisissez le motif de réouverture de la réclamation	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+a3e1bd2c-7c45-5ab1-88f4-85f8d3963e1d	fr_FR	CS_REOPEN_OPTION_FOUR	Pas de solution durable	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+0069bc06-8f8a-591c-9615-cb8e8d4874cf	fr_FR	CS_REOPEN_OPTION_ONE	Aucun travail n'a été effectué	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+0656cd31-14a2-5855-8253-cbea44996448	fr_FR	CS_REOPEN_OPTION_THREE	L'employé ne s'est pas présenté	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+7d92c51a-8e4f-5991-aad2-f80879da3789	fr_FR	CS_REOPEN_OPTION_TWO	Le travail n'a été effectué que partiellement	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+f732ac8f-ee2e-5552-85b6-e0660e66fe8f	pt_BR	CORE_COMMON_SKIP_CONTINUE	Pular e continuar	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+436c5f6c-5629-5199-b549-38e654899e94	pt_BR	CS_ADDCOMPLAINT_ADDITIONAL_DETAILS_TEXT	Se você acha que, além das informações fornecidas até agora, são necessários mais detalhes para resolver a reclamação, informe-os abaixo:	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+276dc016-0a78-5941-8386-b76d495bad94	pt_BR	CS_ADDCOMPLAINT_ERROR_REOPEN_REASON	Selecione o motivo para reabrir a reclamação	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+bae0b2d5-8735-5da8-adcc-d41ce0553934	pt_BR	CS_ADDCOMPLAINT_PROVIDE_ADDITIONAL_DETAILS	Fornecer detalhes adicionais	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+07f27225-a575-55fb-a2f6-d106976b41dc	pt_BR	CS_ADDCOMPLAINT_UPLOAD_ERROR_MESSAGE	Enviar imagem	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+e4bce6b0-532e-53fa-9b5a-52fc16f927db	pt_BR	CS_ADDCOMPLAINT_UPLOAD_PHOTO	Adicionar fotos da reclamação	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+29381092-027e-5be2-8912-c3f93220769c	pt_BR	CS_HEADER_REOPEN_COMPLAINT	Reabrir reclamação	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+adab20b5-a74f-59e9-a4ea-74de152a1858	pt_BR	CS_REOPEN_COMPLAINT	Escolha o motivo para reabrir a reclamação	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+c902cb09-f3e5-54ec-91d2-e8d309fc05f2	pt_BR	CS_REOPEN_OPTION_FOUR	Nenhuma solução definitiva	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+6d7c6055-1797-54ab-8668-3f3121abbe00	pt_BR	CS_REOPEN_OPTION_ONE	Nenhum trabalho foi feito	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+d9c8b758-5602-5a10-89b7-3cf4cbd9aea2	pt_BR	CS_REOPEN_OPTION_THREE	O funcionário não compareceu	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+bf6caf65-ac0f-528e-b9b6-1e2526baf8b3	pt_BR	CS_REOPEN_OPTION_TWO	O trabalho foi feito apenas parcialmente	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+eed751cf-824a-55df-bfba-7178f30912fb	fr_FR	COMPLAINT_HIERARCHY.GARBAGE	Déchets	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+c4e951b1-732b-5953-bec9-aa6c617aabe2	pt_BR	COMPLAINT_HIERARCHY.GARBAGE	Lixo	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+00e34f65-bb4d-5ddb-9e88-7686b3fd0fef	fr_FR	COMPLAINT_HIERARCHY.STREETLIGHTS	Éclairage public	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+04cc8d6a-94c2-58d2-a558-691853cc77ff	pt_BR	COMPLAINT_HIERARCHY.STREETLIGHTS	Iluminação pública	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+defbf7bf-3266-53ce-aab2-290a7080ab78	en_IN	BACK	Back	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+3f078cc9-e135-536a-a8f0-5570f87c3969	en_IN	CORE_COMMON_CHANGE_PHOTO	Change photo	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+6ea7cc70-24c4-5a8c-9a9f-be303a928ce1	en_IN	CORE_COMMON_DISABLED	Off	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+d0d63884-34d0-523f-8baf-0868c47d3067	en_IN	CORE_COMMON_EMAIL_NOTIFICATIONS	Email notifications	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+d4bc6ec9-9786-5639-9f79-b6c8e8c83c6b	en_IN	CORE_COMMON_ENABLED	On	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+835fe3b4-0e05-5ccc-9c6a-01f7e742cd8f	en_IN	CORE_COMMON_GENDER_FEMALE	Female	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+ca20aab3-2484-5ef0-831f-f4371056197a	en_IN	CORE_COMMON_GENDER_MALE	Male	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+fb5a3b62-79cc-572c-986d-f18bbaa20bd0	en_IN	CORE_COMMON_GENDER_TRANSGENDER	Transgender	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+d631788e-ae88-5905-a227-ae6fc3ac27cd	en_IN	CORE_COMMON_HOME	Home	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+7aa2ebe0-9eb0-5fbe-9a82-7c60a2d58dad	en_IN	CORE_COMMON_LANGUAGE	Language	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+7a464130-db4e-50b4-b80e-3980e8859ae0	en_IN	CORE_COMMON_NOTIFICATION_PREFERENCES	Notifications	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+fd2c8a45-2213-588c-b177-6c88fd2a4ba0	en_IN	CORE_COMMON_PREFERRED_LANGUAGE	Preferred language	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+f1cb712d-dad8-51e2-8e19-9bcbcc7dd45c	en_IN	CORE_COMMON_PROFILE	Edit Profile	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+8801b4e6-ebde-50e3-8aa6-ff140eb1e4ce	en_IN	CORE_COMMON_PROFILE_MOBILE_READONLY_HELP	Mobile number is your login identifier and cannot be changed from this screen.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+8e7d041a-b06d-5ee1-b214-3efd0a83e100	en_IN	CORE_COMMON_PROFILE_PERSONAL_DETAILS	Personal details	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+4d139a56-10ff-5fdc-bf04-5663aa0377c3	en_IN	CORE_COMMON_PROFILE_PREFERENCE_UPDATE_ERROR	We couldn't save your notification preferences. Please try again.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+033e544f-c91c-51ca-b027-5c7bdc1cecf0	en_IN	CORE_COMMON_PROFILE_UPDATE_ERROR	We couldn't save your profile. Please try again.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+d4f90c90-df5d-5d83-b2d2-5e04acc3cd79	en_IN	CORE_COMMON_REMOVE	Remove current photo	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+edb92b58-dd51-55e2-b3a4-7db82fe7a3f0	en_IN	CORE_COMMON_SELECT_GENDER	Select gender	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+64f8395f-a7ba-523e-92c2-3fc8e33cc238	en_IN	CORE_COMMON_SELECT_LANGUAGE	Select language	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+6888f1e3-4e1a-5a2a-9f69-1dba103b4ab8	en_IN	CORE_COMMON_SMS_NOTIFICATIONS	SMS notifications	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+d26e69d9-5f30-5c31-9d8c-181fd8761454	en_IN	CORE_COMMON_WHATSAPP_NOTIFICATIONS	WhatsApp notifications	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+1a676efa-488f-508a-b043-e0ad1011440d	en_IN	CORE_IDENTITY_ACCEPT_INVITATION	Accept invitation	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+83f12dbb-b57d-512f-943e-882a57588d9e	en_IN	CORE_IDENTITY_ACCOUNT	Account and security	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+a523d4a3-779b-50fe-ba20-9ee0c7b53d4d	en_IN	CORE_IDENTITY_ACCOUNT_DISABLED	This account is disabled.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+30c02099-f40c-50c4-a70c-5e7e16ee8258	en_IN	CORE_IDENTITY_ACCOUNT_LOCKED	Your account is locked. Contact your administrator.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+adfa21e2-834a-56fb-bcd8-4376bef9ce09	en_IN	CORE_IDENTITY_ACTION_CANCELLED	The account change was cancelled.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+f972724f-b58b-537c-8465-bee62c659e5f	en_IN	CORE_IDENTITY_ACTION_COMPLETE	Your account has been updated.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+df4b6588-80a8-5529-bb5a-d3bbee483dc6	en_IN	CORE_IDENTITY_ACTION_FAILED	The account change could not be completed. Please try again.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+bdb438c1-aac8-5c46-ac51-9f17e71795f7	en_IN	CORE_IDENTITY_CHANGE_PHONE	Change phone number	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+8c59d893-23be-547e-960d-4262ee574c36	en_IN	CORE_IDENTITY_CHOOSE_ORGANISATION	Choose your organisation	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+6421f10e-0516-581c-a09d-0b866430588c	en_IN	CORE_IDENTITY_CONFIGURE_TOTP	Set up an authenticator	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+f35ec9cf-7a91-5f1d-a41d-29eb606e1574	en_IN	CORE_IDENTITY_CONFIRM_DECLINE	Confirm decline	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+57072f46-77ca-5385-bca0-15aa4730ffba	en_IN	CORE_IDENTITY_CONTEXT_FAILED	Your tenant session could not be prepared. Please try again.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+3c0078ca-e369-58e3-a077-d4169627166e	en_IN	CORE_IDENTITY_CURRENT_SESSION	(this session)	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+2bbcbf0f-6048-589e-9f12-24e7270075cc	en_IN	CORE_IDENTITY_DECLINE_INVITATION	Decline invitation	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+f0aa557c-6cdc-514f-82cb-f70e45a03ad4	en_IN	CORE_IDENTITY_DECLINE_INVITATION_CONFIRM	Decline this invitation? Your administrator would need to invite you again.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+1dfa90e1-e41f-5909-9d13-43d2897d5e6d	en_IN	CORE_IDENTITY_DIGIT_ACCOUNT_INACTIVE	Your account is inactive. Contact your administrator.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+31a2876d-0882-5d4f-bcad-18cf028e85d9	en_IN	CORE_IDENTITY_EMPLOYEE_ACCOUNT_NOT_LINKED	Your account has not been linked to this workspace. Contact your administrator.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+15108e36-d1bf-5595-b88e-a87aeb4026ff	en_IN	CORE_IDENTITY_IDENTITY_EMAIL_CHANGED	Your email has changed. Sign in again.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+2d4f4c25-742f-5c88-aee9-957e7b682639	en_IN	CORE_IDENTITY_INVALID_MOBILE_NUMBER	This mobile number cannot be used here.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+21286d2e-d277-5808-9cfc-7bc61380a395	en_IN	CORE_IDENTITY_INVALID_SESSION	The signed-in account did not produce a valid session for this tenant.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+b3ea1b9a-ceca-59e9-bca1-180674184f55	en_IN	CORE_IDENTITY_INVITATION_DECLINED	You declined the invitation to this workspace.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+c795ebf6-32a0-556f-8632-c5ec0d9a2e4c	en_IN	CORE_IDENTITY_INVITATION_STALE	This invitation has expired or changed. Ask your administrator for a new invitation.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+7d76c553-1e2a-537a-b818-1912920f8668	en_IN	CORE_IDENTITY_LAST_SIGNIN_METHOD	Add another sign-in method before removing this provider.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+b65ea6af-8202-50a1-a9ed-ab3c8a72710a	en_IN	CORE_IDENTITY_LINK_PROVIDER	Link provider	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+b7aab491-a373-52af-a11b-49bd1e330947	en_IN	CORE_IDENTITY_LOGOUT_ALL	Sign out everywhere	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+f704b66a-cbed-55f3-ba37-4975957693f3	en_IN	CORE_IDENTITY_LOGOUT_ALL_FAILED	Signing out everywhere could not be confirmed. Other devices may still be signed in. Try again.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+5b3abe1a-d80f-55da-baac-4b49dc416910	en_IN	CORE_IDENTITY_LOGOUT_OTHERS	Sign out other sessions	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+fe8f3a1b-c50e-5893-9d49-f2dfcca6292b	en_IN	CORE_IDENTITY_LOGOUT_UNAVAILABLE	Sign-out could not be completed. Please try again.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+e8ac213a-8f56-5255-bb3c-df494e3d6475	en_IN	CORE_IDENTITY_NEW_PHONE	New phone number	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+23ff4c70-f11b-52d4-b9ea-cb7f1179d32d	en_IN	CORE_IDENTITY_OTHER_SESSIONS_ENDED	Your other sessions have been signed out.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+bf7baa79-fd63-5f64-bad6-95f585162727	en_IN	CORE_IDENTITY_OTP_CHANGE_NUMBER	Change number	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+2a863030-a84c-5db4-aa14-4938e1cd0334	en_IN	CORE_IDENTITY_OTP_CHANNEL_UNAVAILABLE	We can't send a code right now. Please try again later.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+8a20f59e-9766-5b94-bafd-2e0607d0731a	en_IN	CORE_IDENTITY_OTP_CODE	Verification code	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+5feaa9a5-0f1a-539a-8e69-6b1c2c733c37	en_IN	CORE_IDENTITY_OTP_EXPIRED	This code has expired. Request a new one.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+e9b8e8ea-15eb-5a36-acf9-cda30537646e	en_IN	CORE_IDENTITY_OTP_INVALID	That code is not correct. {{attempts}} attempts left.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+a93af00e-f6c5-52ad-a0f5-25ef197b2c1f	en_IN	CORE_IDENTITY_OTP_INVALID_CODE	That code is not correct.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+d84a22b7-bf56-5139-9352-d6a406a8d05d	en_IN	CORE_IDENTITY_OTP_INVALID_MOBILE	This mobile number cannot be used here.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+8d970cc4-dc89-5186-a15c-9f75b46b449c	en_IN	CORE_IDENTITY_OTP_LOCKED	Too many wrong codes for this number. Try again in {{seconds}} seconds.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+7e1dc3e9-1eed-5630-9c6d-3d411e06e82d	en_IN	CORE_IDENTITY_OTP_NO_ATTEMPTS_LEFT	Too many wrong codes. Request a new code.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+eae3bfb8-d0d6-5c7a-91f0-20cb0aa41a59	en_IN	CORE_IDENTITY_OTP_RATE_LIMITED	Too many codes requested. Try again in {{seconds}} seconds.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+b348a2c9-534a-5a81-b58c-d80b3209fdfb	en_IN	CORE_IDENTITY_OTP_RESEND_TOO_SOON	Please wait {{seconds}} seconds before requesting another code.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+cfedab78-9d9c-591d-9044-9fe28b7b4a54	en_IN	CORE_IDENTITY_OTP_TRY_LATER	Too many attempts. Please try again later.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+0dc9082a-00df-5ded-b700-039a30bb4837	en_IN	CORE_IDENTITY_PENDING_INVITATION	Accept the invitation to continue to this workspace.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+52314577-8452-57e9-a57d-116c2c838cb0	en_IN	CORE_IDENTITY_PHONE_CHANGED	Your phone number has been changed.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+e05b8e3d-9600-558b-85db-4dbef5c53c3a	en_IN	CORE_IDENTITY_PHONE_CHANGED_SIGNIN	Phone changed. Sign in again to refresh your account.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+043c8d8e-42d8-51a1-ac55-76cd1095af43	en_IN	CORE_IDENTITY_PHONE_HELP	Enter the new number without the country code. We will send a verification code to it.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+98cdd24b-64b5-5429-8431-58bf213fdaba	en_IN	CORE_IDENTITY_PHONE_IN_USE	This phone number cannot be used for this account.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+450ed149-18ed-50ad-a16a-07eb6e524783	en_IN	CORE_IDENTITY_PHONE_SESSION_CHANGED	Your signed-in account has changed. Reopen account settings before continuing.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+d23a71af-27c8-5ac2-9b2a-6f7194977d5a	en_IN	CORE_IDENTITY_PROVIDER_NOT_LINKED	This provider is no longer linked. Refresh your account details.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+89e10db9-5531-5a0a-9c06-a1d010e7f952	en_IN	CORE_IDENTITY_REMOVE_FACTOR	Remove second factor	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+323c2fd0-7775-59e5-b9f9-2c1afe2d6f1f	en_IN	CORE_IDENTITY_RESEND	Resend code	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+7f3b9a31-d1ee-500e-b8c8-73d5656b5a6e	en_IN	CORE_IDENTITY_SEND_CODE	Send code	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+ab02391f-90d8-53c2-806b-82a41ccfb7b9	en_IN	CORE_IDENTITY_SESSIONS	Signed-in sessions	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+ed0abee4-2d72-52de-8874-0f48e669a426	en_IN	CORE_IDENTITY_SESSION_EXPIRED	Your session has ended. Sign in again.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+8f85caee-0a2e-5232-93ea-76e7a4e606a3	en_IN	CORE_IDENTITY_SESSION_REQUIRED	Your session has ended. Sign in again.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+2c02968c-c40e-5f82-a99e-4b1b9480d244	en_IN	CORE_IDENTITY_SESSION_REVOKED	Your session has ended. Sign in again.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+9d8fd039-350d-503c-943b-a93a2d301a92	en_IN	CORE_IDENTITY_SIGNIN_FAILED	Sign-in could not be completed. Please try again.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+b906b0ca-6538-55bf-8be2-fe1f4d431398	en_IN	CORE_IDENTITY_SIGNIN_UNAVAILABLE	Sign-in is temporarily unavailable. Please try again.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+3ec75375-2fd0-5095-9577-00c98c7aaf19	en_IN	CORE_IDENTITY_SIGNOUT_INCOMPLETE	Sign-out may not have finished, so this browser can still be signed in. Try signing out again, or sign in to continue.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+619d1f94-b10f-54c6-9401-b73f5cf01de3	en_IN	CORE_IDENTITY_SIGN_IN	Sign in →	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+d23b495f-264c-572a-a64b-d70dc049d41f	en_IN	CORE_IDENTITY_SIGN_OUT	Sign out	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+a4e441fa-412e-5e49-84a8-78945663f5c2	en_IN	CORE_IDENTITY_SIGN_OUT_AGAIN	Try signing out again	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+3a9955d9-ed23-56e2-a43c-284b557a713d	en_IN	CORE_IDENTITY_SIGN_OUT_HINT	Sign out if you need to use a different account.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+e1ca5977-cd46-5694-acea-49ea004d2799	en_IN	CORE_IDENTITY_SURFACE_CITIZEN	Citizen portal	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+1af54306-8431-5338-8ec4-906cb86e7765	en_IN	CORE_IDENTITY_SURFACE_CONFIGURATOR	Configurator	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+aa67f4a3-e617-5840-9bb2-5917e2ff578d	en_IN	CORE_IDENTITY_SURFACE_EMPLOYEE	Employee portal	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+4ad89a74-1aec-5b7d-83f6-9a1f5e998aa0	en_IN	CORE_IDENTITY_TENANT_FORBIDDEN	Your account does not have access to {{tenant}}.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+73f0e9ed-78b1-5de5-8797-297ce997e103	en_IN	CORE_IDENTITY_TENANT_SESSION_MISMATCH	Sign in again to continue to {{tenant}}.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+57996690-5b0e-54ed-b734-555a00f36086	en_IN	CORE_IDENTITY_TENANT_UNAVAILABLE	This site is not available.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+3e9c2f55-acd2-5c84-b7fe-e57d5d7f9305	en_IN	CORE_IDENTITY_TRY_AGAIN	Try again	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+ebccecee-8992-577b-841c-01aa36aeeb04	en_IN	CORE_IDENTITY_UNAVAILABLE	The phone change could not be completed. Please try again.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+ad02cc3a-7d07-5062-bf0e-b874b844cf28	en_IN	CORE_IDENTITY_UNLINK_PROVIDER	Unlink provider	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+40c174a6-654a-541e-aa59-9ed451eb082d	en_IN	CORE_IDENTITY_UPDATE_EMAIL	Change email address	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+1ee730d9-a2ed-54c4-9727-2bbaac5bfc86	en_IN	CORE_IDENTITY_UPDATE_PASSWORD	Set or update password	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+cb315414-f560-5e1c-ad6d-0a6ab86611c7	en_IN	CORE_IDENTITY_USE_ORGANISATION_LINK	Sign in from your organisation's own link. It looks like /your-organisation/digit-ui/. Ask your administrator if you do not have it.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+e5c2b59b-a004-5374-8492-9aa5ae207e89	en_IN	CORE_IDENTITY_VERIFY_PHONE	Verify and change phone	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+b6d05818-b627-5393-986a-c0de40ffdcf4	en_IN	CORE_LOGOUT_CONFIRMATION_BODY	You will need to sign in again to continue.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+8f1468ab-b8e5-5461-bd33-219cfcc051da	en_IN	CORE_LOGOUT_CONFIRM_ACTION	Log out	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+2ce66d5e-34ca-56e8-860d-71330c23d2ca	en_IN	CORE_LOGOUT_CONFIRM_HEADING	Are you sure you want to log out?	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+39c15475-0bed-53eb-8b58-dde55c4e79d7	en_IN	CORE_PROFILE_CHOOSE_PHOTO	Choose from gallery	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+900a1656-2142-51ab-9921-a511910c38d5	en_IN	CORE_PROFILE_UPLOAD_HINT	Pick a new image (max 5 MB) or remove the current one.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+abf0f118-0d09-52bc-b2ff-9854e49eb2a5	en_IN	CORE_SIDEBAR_CLOSE	Close sidebar	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+8985f274-3c24-5fc1-a4c1-52c929fd1cfe	en_IN	CORE_SIDEBAR_COLLAPSE	Collapse	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+bd3380d3-cdfa-5d3f-adf8-603cb8a8b516	en_IN	CORE_SIDEBAR_OPEN	Open sidebar	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+d21c3748-321e-5d8f-a5d4-38dcc82ff0f0	en_IN	CORE_SIDEBAR_PIN	Keep open	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+22cad4fd-b50e-5b4d-a7ae-169a62bdadb5	en_IN	CORE_SIDEBAR_PUBLIC_DASHBOARD	Public Dashboard	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+863f2187-d4ed-580a-aee8-0b5e89845c5b	en_IN	CORE_SIDEBAR_SECTION_COMPLAINTS	Complaints	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+d680f4bf-0fb9-5ded-9118-58833db5a358	en_IN	CS_COMMON_EMPLOYEE_FETCH_ERROR	Couldn't load employees. Please try again.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+ca4611ce-2fd5-5b9c-a46d-8d3e99839d2c	en_IN	CS_COMMON_ERROR_LOADING_TITLE	Couldn't load your complaints	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+dec2e5eb-a107-5b5e-95d3-f97615bfe09f	en_IN	CS_COMMON_PREVIOUS	Previous	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+f9d4945a-ddb2-5aaa-9e7b-c845b7af9910	en_IN	CS_COMMON_RATE	Rate	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+8964f4cb-0048-573c-b09e-d2858b8bf8f3	en_IN	CS_COMMON_SELECT	Select	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+dca61a17-2b82-5583-9a08-b03866ce8160	en_IN	CS_COMMON_SORT_ASC	Ascending	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+b4655472-43b5-5f25-9d59-004fa3fa6c3e	en_IN	CS_COMMON_SORT_BY	Sort by	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+254bd1a0-bd15-5bcb-8980-1831383035bb	en_IN	CS_COMMON_SORT_DESC	Descending	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+cac34827-d95b-5049-ba75-ab2ac2ed2e26	en_IN	CS_COMMON_SORT_ORDER	Order	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+1eed0f32-4e79-5f64-9d62-b29aa34da54d	en_IN	CS_HOME_BANNER_PRODUCT	Complaint Management System	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+e7c8d0b5-1ce9-53bb-ac83-0ecb8661bfe7	en_IN	CS_HOME_BANNER_TAGLINE	Report issues, track progress and see what is happening in your area.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+b9ba07db-629b-5e16-bf89-b7532d0eca52	en_IN	CS_HOME_BANNER_WELCOME	Welcome to	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+6401fcc1-6c09-5793-8a09-bab683f0dddd	en_IN	CS_INBOX_SEARCH	Search	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+61fd0db8-1837-51e6-85e0-53710b27d103	en_IN	CS_LOADING	Loading...	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+62c81001-423d-5c5a-8fe6-9bf5e3c18edf	en_IN	CS_WORKING_CONTEXT	Working context	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+66eb2c22-184e-5ad1-a913-e13c9e18a917	en_IN	CS_WORKING_CONTEXT_CITY	City	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+ddec99ad-b500-5e5f-abd6-e61d7646bea5	en_IN	CS_WORKING_CONTEXT_DEPARTMENT	Department	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+e70d4137-2fa5-5d76-9404-e3e904158ed8	en_IN	CS_WORKING_CONTEXT_DEPARTMENT_MANY	departments	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+756ac277-48a3-5deb-a716-aa0c650ae5a4	en_IN	CS_WORKING_CONTEXT_DEPARTMENT_ONE	department	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+b8a18a9c-1234-52bc-8a93-3a014c4b15a5	en_IN	CS_WORKING_CONTEXT_JURISDICTION	Jurisdiction	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+812328dc-d265-524d-8e64-e555ffd09cc4	en_IN	CS_WORKING_CONTEXT_ROLE	Role	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+2f1d1951-e4c6-5ca5-be88-815b2ec1d63f	en_IN	CS_WORKING_CONTEXT_ROLE_MANY	roles	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+d0b63373-1885-5fe6-8633-a85e00263064	en_IN	CS_WORKING_CONTEXT_ROLE_ONE	role	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+73b9dc65-1740-5aca-9105-cb17dbf8b8f5	en_IN	CS_WORKING_CONTEXT_SUBTITLE	These are your assignments	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+594eb08c-3ffd-5198-99aa-0900c3066610	en_IN	CS_WORKING_CONTEXT_UNAVAILABLE	Working context unavailable	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+6d9c3d7d-b11c-53db-b755-f3e1cbc3213a	en_IN	Clear	Clear	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+d5f71bf1-4804-5355-9e79-860fe129b9ff	en_IN	ES_ERROR_USER_NOT_PERMITTED	User not permitted to log in.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+a87cdb6a-2b0d-5e94-b257-487ab924a7a5	en_IN	Latitude	Latitude	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+f13368ff-4436-5e8d-ae93-69efaf031f2f	en_IN	Longitude	Longitude	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+3cdd0d95-d333-5d2c-9875-0b9fb9c07563	en_IN	MYCITY_STATECODE_LABEL	State	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+0137ce03-a288-5fed-97d2-d36ae8a9c94c	en_IN	Modules	Modules	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+27c9f32c-9be9-5258-928a-65883b53c34f	en_IN	ROWS_PER_PAGE	Rows per page	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+cb2caeda-dbe2-5b65-a3c1-87dad88dc5f8	en_IN	CS_HOME_HEADER	All Services	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+31db0a2b-5100-5550-ba33-5b34db695447	en_IN	CS_HOME_NO_SERVICES_AVAILABLE	No services available.	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+5a78be89-7c61-5226-9357-a23a4458eda4	en_IN	CORE_COMMON_NAVIGATION	Navigation	pg	rainmaker-common	1	2026-10-16 00:00:00	\N	\N
+b9c6a93f-8f13-54d6-9514-b334cc633705	en_IN	CS_ACTION_ESCALATE	Escalate Complaint	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+2922d7ee-83d4-59e9-9589-4d9f4dc7c0b1	en_IN	CS_CLOSE_POLYGON_MODE	Stop drawing	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+6339c4b1-ea3b-5507-937a-93c455b54bff	en_IN	CS_COMMON_BREADCRUMB	Breadcrumb	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+083e8ff8-8849-5dad-ada0-0fc4ef27896a	en_IN	CS_COMMON_CANCELLED	Cancelled	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+69fd11ba-d383-5d20-abef-b4c4cac2263e	en_IN	CS_COMMON_CLEAR	Clear	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+bb75b4e2-11a1-5348-b095-99a581d6ae5b	en_IN	CS_COMMON_COMPLAINT_NOT_SUBMITTED	Complaint couldn't be submitted	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+b8fecaff-199a-5efa-bdfc-ceeadcf03608	en_IN	CS_COMMON_COMPLAINT_SUBMIT_RETRY	Something went wrong while submitting your complaint. Please try again.	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+57031953-e64d-5caf-9109-08b3ab154f22	en_IN	CS_COMMON_COPIED	Copied	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+595b425c-9f9e-54f1-8e63-4507e9eb5233	en_IN	CS_COMMON_COPY	Copy	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+a4fcae31-f144-52d1-9ad8-38b2c5aea7cf	en_IN	CS_COMMON_LATITUDE_SHORT	Lat:	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+40ac7a4e-e4c7-58fd-82c6-324537fdb2ac	en_IN	CS_COMMON_LONGITUDE_SHORT	Lng:	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+487f3550-79bb-5596-8830-ff4294207843	en_IN	CS_COMMON_PENDINGFORASSIGNMENT_AFTERREOPEN	Pending for assignment	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+114fd5b5-03d3-530b-a89b-32bf471662d1	en_IN	CS_COMMON_PGR_STATE_CANCELLED	Cancelled	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+a71e0fbc-98ec-575a-8e72-aa637d7729e2	en_IN	CS_COMMON_PGR_STATE_PENDINGATSUPERVISOR	Pending at Supervisor	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+5826ba9a-5ff2-5c50-bff5-def20346985d	en_IN	CS_COMMON_PGR_STATE_RESOLVEDBYSUPERVISOR	Resolved by Supervisor	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+ef854889-f7de-5081-bf63-664029294624	en_IN	CS_COMMON_REMOVE	Remove	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+da09afea-18ee-5ba2-b8c1-dc51886d8f10	en_IN	CS_COMMON_RESOLVEDBYSUPERVISOR	Resolved By Supervisor	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+2c59c498-8128-523b-aa87-d176c94a26ee	en_IN	CS_COMMON_SEARCH	Search	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+60e8c163-536d-5788-bc1a-313e6f30df25	en_IN	CS_COMMON_TRY_AGAIN	Try Again	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+bb5c973b-706d-5ade-b581-e850d28f9d9c	en_IN	CS_COMMON_VIEW_COMPLAINT	View Complaint	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+92900829-cb3a-57b0-bc34-4b8a1660c842	en_IN	CS_COMPLAINT_BOUNDARY_LEAF_REQUIRED	Please pick a Ward — complaints cannot be filed at the County or Sub-County level	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+77d46236-837a-56f0-99c4-d6d78260ad07	en_IN	CS_COMPLAINT_DETAILS_LOAD_ERROR	Couldn't load this complaint	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+dab04d66-5379-5b6c-8253-e154ef209bae	en_IN	CS_COMPLAINT_DETAILS_LOAD_ERROR_DESC	The complaint details aren't reachable right now. Please try refreshing in a moment.	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+0bb5f1e5-2a65-5cb8-8195-d7a3fef77ec2	en_IN	CS_COMPLAINT_PICK_ONE	Select…	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+17a2e50a-3340-53cc-97a8-294d4395544a	en_IN	CS_COMPLAINT_PICK_PARENT_FIRST	Select the level above first	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+d9607ce3-7868-510a-b2f1-c52f5987dafc	en_IN	CS_COMPLAINT_PICK_SUBTYPE	Select a subcategory	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+b962b4ad-bd01-5f54-a84a-1188209650ca	en_IN	CS_COMPLAINT_PICK_TYPE	Select a complaint category	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+9a298438-88ae-5bce-9c9c-105f1f7396f5	en_IN	CS_COMPLAINT_POSTALCODE_INVALID_ERROR_GENERIC	Please enter a valid postal code	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+bc2dd2e9-09e6-5f2e-9d74-e3419f51b736	en_IN	CS_COMPLAINT_POSTALCODE_INVALID_ERROR_LEN	Please enter a valid {{length}}-digit postal code	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+6ea17791-6730-5948-8052-2d03d35c993f	en_IN	CS_COMPLAINT_RATE_SUBTEXT	Your rating helps us improve. It only takes a moment.	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+1707609a-10c3-5523-ac7a-8ada24777ab2	en_IN	CS_FILE_ADDRESS	Address	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+34dfbfcd-08a3-549f-83e7-e04c7fad2e7d	en_IN	CS_FILE_ANOTHER	File another complaint	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+59269664-cfae-5e83-9559-e81f028526e4	en_IN	CS_FILE_ATTACHMENTS	Attachments	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+a17499f5-9366-5a13-9a1a-9e904f96e76a	en_IN	CS_FILE_CATEGORY	Complaint category	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+58adab0f-94da-5724-ab0c-49b58fdb623a	en_IN	CS_FILE_CATEGORY_LABEL	Complaint Category	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+d4f4f53d-9a9d-50d2-ab53-8fe670e220e6	en_IN	CS_FILE_CHECK_SUBMIT	Check and submit	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+dfdbcbbf-8953-59e6-ac9e-5f80f9bedea9	en_IN	CS_FILE_COMPLAINANT	Complainant details	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+ddf8d064-e3a0-5741-9342-9290206299c2	en_IN	CS_FILE_COMPLAINT_NUMBER	Complaint number	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+2ccdbd03-1086-5124-9abd-bda9a3c2c279	en_IN	CS_FILE_DESCRIBE	Describe your complaint	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+a9e47e4f-4426-5199-b112-e01665fefa7f	en_IN	CS_FILE_DESCRIBE_PLACEHOLDER	Type your complaint here…	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+90ba61af-c3e0-5b78-bd6e-e8ef1d59e3d7	en_IN	CS_FILE_DESCRIBE_TITLE	Tell us how we can help	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+d01dd4e0-455c-5f0f-9672-c052fcc372d4	en_IN	CS_FILE_FILED_ON	Filed on	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+70ae56b1-eaa5-572b-a662-ece587b7f2e2	en_IN	CS_FILE_HINT_CATEGORY	Select a complaint category and subcategory to continue.	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+47583e14-81c0-5512-a704-f790910b3f43	en_IN	CS_FILE_HINT_DESCRIBE	Describe your complaint to continue.	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+a5da1b42-1b93-5371-83eb-085444a1725f	en_IN	CS_FILE_HINT_LETTERS	Use at least three letters to describe the complaint.	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+19384023-c2c3-51cd-8764-79bf275a799e	en_IN	CS_FILE_HINT_LOCATION	Select every level of the location to continue.	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+61d5e922-6291-5e95-ac19-8b15b0a465a6	en_IN	CS_FILE_HINT_UPLOADING	Wait for your photos to finish uploading.	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+3057619c-a0f5-53cc-adf1-8bfb5b2a3d79	en_IN	CS_FILE_HINT_UPLOAD_FAILED	A photo didn't upload. Retry it or remove it.	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+cc98e441-95ac-5a1c-9538-e4f65db115d9	en_IN	CS_FILE_LOCATION_TITLE	Tell us where this happened	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+4a75b953-a8d2-5507-8e3d-884ec30bf8fc	en_IN	CS_FILE_NEXT_STEP	Next: {step}	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+33db315f-21af-5872-8761-6252106ff1d1	en_IN	CS_FILE_NONE	None	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+a75c52bd-2b1f-59ed-aec9-b4da3c359660	en_IN	CS_FILE_NOT_CAPTURED	Not captured	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+adeeb498-e0cd-5f19-b905-3920d1c25293	en_IN	CS_FILE_NOT_PINNED	No location pinned yet (Optional)	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+7094d661-0b61-558b-93f5-36a278e6e8b5	en_IN	CS_FILE_NOT_PROVIDED	Not provided	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+80e12133-d40f-5b1a-ad1e-f3f8c7d871db	en_IN	CS_FILE_NOT_SELECTED	Not selected	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+fab31dcb-f690-5f52-8178-6875ca992320	en_IN	CS_FILE_NO_PHOTOS	None attached	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+c7d8869a-de8b-5f69-85d4-3d0ccb35c460	en_IN	CS_FILE_N_PHOTOS	{count} photos	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+5c8f5e4e-85b1-5766-ab8b-d7b6e5a9d16e	en_IN	CS_FILE_ONE_PHOTO	1 photo	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+516fbc76-b1ff-5179-ac52-61875a83deec	en_IN	CS_FILE_PHOTO	Upload a photo	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+f3f0a00d-0a45-5864-bdfe-4b48184f3db2	en_IN	CS_FILE_PHOTOS	Photos	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+4a2fc376-64c1-5a63-a0db-8e22b1c38a9f	en_IN	CS_FILE_PHOTOS_ATTACHED	{count} attached	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+9d396a34-dafb-5657-a67f-2312ab365fd5	en_IN	CS_FILE_PINNED	Pinned location	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+07d48a83-4fc7-5363-98a0-9a69008993ee	en_IN	CS_FILE_PIN_DROP	Location	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+3924f87c-8671-5e47-80bc-ed9014960e1c	en_IN	CS_FILE_PIN_HINT	Search, drag the map, or use current location	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+769c909a-6137-5c8d-9db8-0613a45e913e	en_IN	CS_FILE_PROGRESS	Progress	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+2254803a-860d-57df-9997-671c25f16846	en_IN	CS_FILE_REVIEW_HEADING	Review before you submit	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+a5e63d52-060d-52c7-ad40-6e740c6c2ade	en_IN	CS_FILE_STEP_DETAILS	Complaint Details	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+5738eb54-ee60-5c49-9357-bd52b0dcceb5	en_IN	CS_FILE_STEP_LOCATION	Location	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+bb02170c-c155-5d1c-b924-64897a17d40c	en_IN	CS_FILE_STEP_OF	Step {current} of {total}	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+de7ee629-4f1a-5c4d-b783-3d79faa98be0	en_IN	CS_FILE_STEP_REVIEW	Review	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+dcf98e21-b072-5c6b-8fc0-7de9e37535a8	en_IN	CS_FILE_SUBCATEGORY_LABEL	Complaint Subcategory	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+00275f24-e47b-5037-b582-adbf1ab5bca6	en_IN	CS_FILE_TODAY	Today	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+109399ab-33ef-5544-81b3-13d6175bce82	en_IN	CS_FILE_TOO_LARGE	File size too large, please upload < 5 MB image.	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+778f2ad2-8956-5d3c-812b-e28bfb80c9ba	en_IN	CS_GEOLOCATION_ERROR	Unable to fetch current location.	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+a6d9bcc9-806c-552f-a48b-b361f880f5a9	en_IN	CS_GEOLOCATION_NOT_SUPPORTED	This browser can't share your location.	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+077ed07d-55fa-5689-ac73-948b8e0d98d6	en_IN	CS_LANDMARK_PLACEHOLDER	e.g. Near Jamia Mosque	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+44a72c0e-df36-55e6-bbb1-0fa8f71a5807	en_IN	CS_LOADING_ADDRESS	Loading address...	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+67bc24a5-9ca3-5427-a802-efd6af408461	en_IN	CS_LOCATE_ME	Use my current location	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+76f7547d-9d94-568d-832f-9c7beb575fe9	en_IN	CS_LOCATION_NOT_FOUND	Couldn't find that place. Try a different search.	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+8cf7c3d9-ce2c-5ba1-aca5-44c748cae6f8	en_IN	CS_MAP_CLICK_TO_SELECT_POINTS	Click on map to select points	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+34646297-28b7-5ce1-b28e-367ab971375c	en_IN	CS_MAP_SELECTED_LOCATIONS	Selected Locations	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+3007c192-da42-5d8f-ac44-c33a9ee0ff18	en_IN	CS_MY_COMPLAINTS_CLEAR_SEARCH	Clear search	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+1f7daff8-9ac5-5307-91db-97f618c22172	en_IN	CS_MY_COMPLAINTS_COL_CONCERN	Concern	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+daa38a3a-a5d9-5bf0-aaae-e0dcc9a9b8d2	en_IN	CS_MY_COMPLAINTS_COL_FILED_ON	Filed on	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+ff33fc79-6bd7-584c-8fc5-8a6faa9b368b	en_IN	CS_MY_COMPLAINTS_COL_NUMBER	Complaint No.	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+fe0c156f-95d8-5a1a-947f-ec9dd687a53d	en_IN	CS_MY_COMPLAINTS_COL_STATUS	Status	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+0c358d14-3a96-5257-9c39-a58549d63140	en_IN	CS_MY_COMPLAINTS_COUNT	{count} complaints	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+c0c068cc-7495-55e9-8888-97c54fcee5d5	en_IN	CS_MY_COMPLAINTS_COUNT_ONE	1 complaint	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+2c58c9d8-f3aa-5c5d-ac09-36df33b15900	en_IN	CS_MY_COMPLAINTS_NO_MATCH_BODY	Try a complaint number, or a word from the description.	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+aa327a7e-46cd-5a88-af4c-e667c459cd67	en_IN	CS_MY_COMPLAINTS_NO_MATCH_TITLE	No complaints match your search	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+be43ef0a-7690-57af-a108-b29c02a5dfbe	en_IN	CS_MY_COMPLAINTS_RANGE	{from}–{to} of {total}	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+f0706101-cbf7-5392-8741-5b9ce299bf96	en_IN	CS_MY_COMPLAINTS_SEARCH	Search by complaint no. or text	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+69503b49-6823-54df-812a-d5bf1adde6f1	en_IN	CS_NO_COMPLAINTS_TITLE	No complaints yet	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+402aaa6d-ffbe-5d98-80bb-ee8dbb2528d4	en_IN	CS_NO_COMPLAINT_HIERARCHY	No complaint hierarchy configured for this tenant.	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+0f0e5ec2-2de2-5828-a374-f736c0016397	en_IN	CS_NO_FAQ_FOUND	No FAQs available.	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+dc99fb58-6db2-5289-9294-85f34c4f65b5	en_IN	CS_OPEN_IN_GOOGLE_MAPS	Open in Google Maps	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+a66366b8-7603-5d72-9a82-77e27cb48506	en_IN	CS_PGR_ASSIGNEE_REQUIRED	Select the employee this complaint is being assigned to.	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+d0ac2bc7-d1d5-56f9-aac4-a39b5e68edb3	en_IN	CS_PHOTO_ADD	Add a photo	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+bd34debd-9e07-5dae-94ba-6e63df22384d	en_IN	CS_PHOTO_DROP	Click to upload or drag and drop a photo	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+0b1152ba-1a71-5daa-9dea-100f8781aadf	en_IN	CS_PHOTO_FAILED	Upload failed	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+428be8cd-e8bc-5422-9e07-00f4f9b13a07	en_IN	CS_PHOTO_GALLERY	Choose from gallery	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+6b22abb0-a22f-5e90-a385-f85d965ca3e3	en_IN	CS_PHOTO_LIMIT	You can attach up to 5 photos.	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+c5bdeca5-ccd3-5b9a-85ed-5199c74477a1	en_IN	CS_PHOTO_RULES	JPG or PNG, up to 5 MB each	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+d19b850a-223f-576f-a7ce-717263606ad7	en_IN	CS_PHOTO_SHEET_TITLE	Upload a photo	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+cb3aadea-6764-5d21-8170-b9e69030db69	en_IN	CS_PHOTO_TAKE	Take a photo	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+322743c7-39b1-515d-bae9-072ad43376d3	en_IN	CS_PHOTO_TOO_LARGE	That photo is over 5 MB. Choose a smaller one.	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+8a264658-ac9a-5ddc-8e2a-bf21ed987f7d	en_IN	CS_PHOTO_TYPE	Only JPG or PNG photos can be attached.	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+c955a495-c471-5d17-ac60-1ef39856db33	en_IN	CS_PHOTO_UPLOADING	Uploading…	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+36e07508-77b2-5ee9-bd15-835fd02997fd	en_IN	CS_PIN_LOCATION_HINT	Drop a pin on the exact spot — we'll use it to route your complaint to the right ward.	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+4b8b3540-f293-5a1c-964d-05e28f1fc79b	en_IN	CS_RATING_COMMENTS_PLACEHOLDER	Share anything else you'd like the team to know…	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+85b0e0c9-4642-52c8-b058-f08cd0d0250f	en_IN	CS_RATING_LABEL	Rating	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+5b1e9454-e907-5927-a799-43278f5c7262	en_IN	CS_RATING_N_STARS	{count} stars	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+d3868db1-ff9c-5119-9abb-f827d23d9b9d	en_IN	CS_RATING_ONE_STAR	1 star	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+b9cda1dd-a997-56e3-97d1-7a7c2f95b2dd	en_IN	CS_REJECTION_DUPLICATE	Duplicate complaint	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+d8d9b297-db34-5a32-8b4a-e1de23a2876d	en_IN	CS_REJECTION_INSUFFICIENT_INFO	Insufficient information	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+b4697420-79c0-58d8-8079-68d4b07ecd15	en_IN	CS_REJECTION_NOT_PUBLIC_INFRA	Not on public infrastructure	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+7c252264-0876-5fc2-9790-d3b4b116e22d	en_IN	CS_REJECTION_OUTSIDE_JURISDICTION	Outside our jurisdiction	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+bbfde2fb-6548-58ab-a32d-3853b995023f	en_IN	CS_REJECTION_OUT_OF_SCOPE	Out of scope for this department	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+686076b7-3828-5a17-96f5-1c13223ed21d	en_IN	CS_REJECTION__DUPLICATE	Duplicate complaint	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+ed5545a5-40b1-5b90-8c27-d150079e656a	en_IN	CS_REJECTION__INSUFFICIENT_INFO	Insufficient information	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+60a83581-0246-5fdd-b15d-05bcb9edd861	en_IN	CS_REJECTION__NOT_PUBLIC_INFRA	Not public infrastructure	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+2037a83d-135d-5746-8dd1-b1eb377a4ec9	en_IN	CS_REJECTION__OUTSIDE_JURISDICTION	Outside jurisdiction	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+597edaf3-f8a4-57dc-b82f-6481fb3bc615	en_IN	CS_REJECTION__OUT_OF_SCOPE	Out of scope	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+64941e5b-c99c-521f-9c42-811cd6ae77ef	en_IN	CS_SEARCH_ERROR	Search didn't work. Please try again.	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+d60f7c9e-72d0-5cfe-baed-361561c2e2d6	en_IN	CS_SELECT_AREA	Draw an area on the map	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+e1e81d90-ffe8-5278-b935-2afa0681b537	en_IN	CS_VOICE_FAILED	Voice input stopped unexpectedly. Try again.	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+72141465-706f-5a57-85db-f6cacb1c6d34	en_IN	CS_VOICE_LANGUAGE_HINT	Speak in the language selected at the top of the page.	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+eded9527-1edd-5a27-a388-578dc5dfaa5f	en_IN	CS_VOICE_LANGUAGE_NOT_SUPPORTED	Voice input isn't available in this language. Type your complaint instead.	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+a0f8742a-b930-5bc5-8802-7c9528aff5e0	en_IN	CS_VOICE_MIC_BLOCKED	Microphone access is blocked. Allow it for this site in your browser settings, then try again.	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+a530400f-d877-5f01-a230-5ac552711f0b	en_IN	CS_VOICE_NETWORK	Voice input needs an internet connection. Check it and try again.	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+17f0da1f-dde7-5622-bc6f-48de5855baad	en_IN	CS_VOICE_NO_MIC	No microphone was found on this device.	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+02e1e4b8-98c4-5fec-9f31-c0909815e4e3	en_IN	CS_VOICE_NO_SPEECH	We didn't hear anything. Try again and speak close to the microphone.	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+11fc77ba-a9e9-5b4b-a5cd-4edca3287645	en_IN	CS_VOICE_READY	Transcription ready	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+ab7945d0-b22b-5cbd-bba4-7bd0d64e9e58	en_IN	CS_VOICE_READY_HINT	Add it to your description, record again, or delete it.	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+e5b07649-ddda-5a71-b257-4449b299b37b	en_IN	CS_VOICE_RECORD	Record your complaint	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+2d56a2d4-606d-5dc8-b1a1-ebf6b1a2958d	en_IN	CS_VOICE_RECORDING	Recording…	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+9131461b-e0a4-5c52-96e0-0cff212f2922	en_IN	CS_VOICE_RETAKE	Retake	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+632ea7b0-61b4-5697-9d00-232c1693b011	en_IN	CS_VOICE_RETRY	Try again	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+4107b89e-eb86-51f9-9f2f-6af2d6f29b52	en_IN	CS_VOICE_SERVICE_OFF	Voice input is turned off on this device. On an iPhone or Mac, turn on Siri in Settings, then try again.	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+0277bdb6-e4e2-598a-b56d-3e53dfb81c17	en_IN	CS_VOICE_STOP	Stop	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+8f69e30e-cca2-5d09-ae84-a04c8d9cd283	en_IN	CS_VOICE_TRY_AGAIN	Couldn't record	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+3150606a-19ae-5e06-b6e8-a2d0458b9e92	en_IN	CS_VOICE_USE	Upload	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+d7610b55-5216-5fa3-8f86-00d107090c6c	en_IN	ESCALATE_SUCCESSFULLY	Escalated Successfully	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+830f31a7-6b15-59a3-b5d3-e8d324826169	en_IN	ES_COMMON_FILED_VIA_MOBILE	Filed Via Mobile App	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+664b6c38-7b05-52a4-b15a-3972a01382be	en_IN	ES_COMMON_FILED_VIA_WEB	Filed Via Web	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+51c24603-886d-5bff-8a28-95bbcd2c0044	en_IN	ES_COMMON_FILED_VIA_WHATSAPP	Filed via Whatsapp	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+2a869c57-bf66-5f8c-8ae3-ffc6ec5e1711	en_IN	FAILED_TO_CREATE_COMPLAINT	Could not file the complaint. Please check the form and try again.	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+21e94f56-8711-51d1-8efa-75a5da5927f9	en_IN	FAQ_S	FAQs	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+ecf850bf-d3a8-5fdb-bdd0-09ebf3374977	en_IN	MYCITY_CODE_LABEL	City	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+591ca22e-e3a1-55a9-8ac2-54eaa6ba4e38	en_IN	NA	NA	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+fab843d1-3a28-572f-8337-782797f26578	en_IN	PGR_CATEGORY	Complaint Category	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+474348f9-47b9-5e2b-a8a8-941c06155a18	en_IN	PGR_SUB_TYPE	Complaint Subcategory	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+73502114-6c23-5996-ba62-20f47575d5ad	en_IN	WF_PGR_ESCALATE	Escalated	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+88ca0d46-72ab-57e1-acc5-85d9b077392e	en_IN	WF_PGR_FORWARD	Forwarded to Supervisor	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+bf1858ca-4a73-572a-bd80-93bc1aedbf09	en_IN	WF_PGR_RESOLVEBYSUPERVISOR	Resolved by Supervisor	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
 \.
 
 

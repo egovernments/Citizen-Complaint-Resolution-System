@@ -89,6 +89,32 @@ function identityMessageKeys() {
   return [...table.matchAll(/^\s+([A-Z_]+):/gm)].map((m) => `CORE_IDENTITY_${m[1]}`).concat("CORE_IDENTITY_UNAVAILABLE");
 }
 
+// Keys built from the PGR constants: t(`${LOCALIZATION_KEY.CS_REOPEN}_OPTION_ONE`),
+// t(LOCALE.MY_COMPLAINTS). Resolved through constants/Localization.js, so a new
+// template-built key is held to the same rules as a literal one.
+const CONSTANTS = path.join(UI_ROOT, "products/pgr/src/constants/Localization.js");
+function constantTable(name) {
+  const body = fs.readFileSync(CONSTANTS, "utf8").split(`export const ${name} = {`)[1].split("};")[0];
+  return new Map([...body.matchAll(/^\s+([A-Z_]+):\s*"([A-Z0-9_]+)"/gm)].map((m) => [m[1], m[2]]));
+}
+function templateKeys() {
+  const prefixes = constantTable("LOCALIZATION_KEY");
+  const named = constantTable("LOCALE");
+  const keys = new Map();
+  for (const dir of SOURCE_DIRS) {
+    for (const file of sourceFiles(path.join(UI_ROOT, dir))) {
+      const source = fs.readFileSync(file, "utf8");
+      const where = path.relative(UI_ROOT, file);
+      for (const m of source.matchAll(/`\$\{LOCALIZATION_KEY\.([A-Z_]+)\}([A-Z0-9_]+)`/g)) {
+        assert.ok(prefixes.has(m[1]), `${where}: LOCALIZATION_KEY.${m[1]} is not in constants/Localization.js`);
+        keys.set(prefixes.get(m[1]) + m[2], where);
+      }
+      for (const m of source.matchAll(/\bLOCALE\.([A-Z_]+)\b/g)) if (named.has(m[1])) keys.set(named.get(m[1]), where);
+    }
+  }
+  return keys;
+}
+
 function literalKeys() {
   const keys = new Map();
   for (const dir of SOURCE_DIRS) {
@@ -103,6 +129,7 @@ function literalKeys() {
       }
     }
   }
+  for (const [key, file] of templateKeys()) if (!keys.has(key)) keys.set(key, file);
   for (const key of identityMessageKeys()) if (!keys.has(key)) keys.set(key, "identityMessages.js");
   for (const key of RUNTIME_KEYS) if (!keys.has(key)) keys.set(key, "built at runtime");
   return keys;
@@ -172,6 +199,9 @@ function pgSeed() {
   return { messages, languages };
 }
 
+// Complaint-type labels belong to each workspace's own hierarchy, not to the
+// platform packs; pg seeds its demo categories itself.
+const WORKSPACE_OWNED = /^COMPLAINT_HIERARCHY\./;
 const onboarding = PACK_SETS.find((set) => set.name === "onboarding");
 for (const locale of onboarding.locales) {
   test(`the pg seed lists ${locale} and carries the onboarding ${locale} packs`, () => {
@@ -186,8 +216,28 @@ for (const locale of onboarding.locales) {
         if (seeded !== m.message) problems.push(`${module} ${m.code}: seed ${JSON.stringify(seeded)}`);
       }
     }
-    const extra = [...messages.keys()].filter((key) => key.startsWith(`${locale}|`)).length - packed;
+    const extra = [...messages.keys()].filter((key) => key.startsWith(`${locale}|`) && !WORKSPACE_OWNED.test(key.split("|")[2])).length - packed;
     assert.deepEqual(problems, []);
     assert.equal(extra, 0, `pg carries ${extra} ${locale} messages the onboarding packs do not`);
+  });
+
+  // Without an en_IN row at pg, an English screen shows the raw code where the
+  // French or Portuguese one is translated (the onboarding en_IN pack is not what
+  // seeds pg's English).
+  test(`every ${locale} code at pg has an en_IN row at pg`, () => {
+    const { messages } = pgSeed();
+    const english = new Set([...messages.keys()].filter((key) => key.startsWith("en_IN|")).map((key) => key.split("|")[2]));
+    const missing = [...messages.keys()].filter((key) => key.startsWith(`${locale}|`)).map((key) => key.split("|")[2]).filter((code) => !english.has(code));
+    assert.deepEqual(missing, [], `${missing.length} ${locale} codes at pg have no en_IN row`);
+  });
+
+  // The integration suite counts pg as multi-locale now, and its CCRS#42 spec wants a
+  // label for every complaint category in every advertised locale.
+  test(`every complaint category label at pg is translated into ${locale}`, () => {
+    const { messages } = pgSeed();
+    const categories = [...messages.keys()].filter((key) => key.startsWith("en_IN|") && key.split("|")[2].startsWith("COMPLAINT_HIERARCHY."));
+    assert.ok(categories.length > 0, "pg seeds no COMPLAINT_HIERARCHY.* labels");
+    const missing = categories.map((key) => key.replace(/^en_IN\|/, `${locale}|`)).filter((key) => !messages.get(key));
+    assert.deepEqual(missing, []);
   });
 }
