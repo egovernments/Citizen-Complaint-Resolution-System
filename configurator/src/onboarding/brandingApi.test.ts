@@ -140,6 +140,16 @@ describe('saveBranding', () => {
     );
   });
 
+  // creating 'themeconfig' over the state's soft-deleted row is refused DUPLICATE_RECORD
+  it('brings the state\'s soft-deleted theme back instead of creating over it', async () => {
+    const gone = record({ schemaCode: 'common-masters.ThemeConfig', uniqueIdentifier: 'themeconfig', isActive: false, data: { code: 'themeconfig' } });
+    search.mockImplementation(async (_tenant, schema) => schema === 'tenant.tenants' ? [tenantRecord] : [gone]);
+    await saveBranding(branding(), { name: 'acme', logo: null, theme: digitOrange });
+
+    expect(create).not.toHaveBeenCalled();
+    expect(update).toHaveBeenCalledWith(gone, expect.objectContaining({ code: 'themeconfig', colors: digitOrange.colors }));
+  });
+
   it('writes nothing when nothing changed', async () => {
     await saveBranding(branding({ themeId: 'cms-blue' }), { name: 'acme', logo: null, theme: cmsBlue });
     expect(update).not.toHaveBeenCalled();

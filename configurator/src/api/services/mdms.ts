@@ -206,6 +206,11 @@ export const mdmsService = {
     // drop a colour or basemap the operator set further up the tree.
     const inherited = existing.find((r) => r.isActive !== false)?.data as Record<string, unknown> | undefined;
     const data = { ...(inherited || {}), ...patch, code: MAP_CONFIG_KEY };
+    // A DEFAULT this tenant soft-deleted still holds the uniqueIdentifier, so a create is refused
+    // DUPLICATE_RECORD; the row is brought back instead (update() writes isActive: true) with the same data a create
+    // would have written.
+    const deleted = existing.find((r) => r.tenantId === tenantId && r.uniqueIdentifier === MAP_CONFIG_KEY && r.isActive === false);
+    if (deleted) return this.update(deleted, data);
     return this.create(tenantId, MDMS_SCHEMAS.MAP_CONFIG, MAP_CONFIG_KEY, data);
   },
 
