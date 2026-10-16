@@ -1,4 +1,5 @@
 import React, { useMemo, useRef, useState, useEffect, useLayoutEffect } from "react";
+import { heldRoleCodes, workingContexts } from "./workingContextRoles";
 import { workingContextPanelLeft } from "./workingContextPosition";
 
 /**
@@ -50,69 +51,17 @@ const roleContextLabel = (t, ctx) => {
     .replace(/(^|[\s\-_])(\p{L})/gu, (_, sep, ch) => (sep === "_" ? " " : sep) + ch.toUpperCase());
 };
 
-/** CITIZEN is the citizen-side counterpart, not an employee assignment. */
-const isAssignedContext = (ctx) => String(ctx || "").toUpperCase() !== "CITIZEN";
-
-/**
- * Platform roles, not job descriptions. Every employee carries several of these
- * because of how access control is seeded, and listing them tells the person
- * nothing about what they are here to do — "Internal Microservice Role" is not
- * an assignment (#2038).
- *
- * A denylist rather than an allowlist on purpose: tenants add their own
- * business roles over time, and an allowlist would silently swallow each new
- * one. Anything not named here is assumed to be a real assignment.
- */
-const INFRASTRUCTURE_ROLES = new Set([
-  "INTERNAL_MICROSERVICE_ROLE",
-  "SUPERUSER",
-  "MDMS_ADMIN",
-  "LOC_ADMIN",
-  "ACCOUNT_ADMIN",
-  "EMPLOYEE", // every employee has it; it distinguishes nobody
-  "CITIZEN", // the citizen-side counterpart, same reasoning
-]);
-
-const isAssignedRole = (role) => !INFRASTRUCTURE_ROLES.has(String(role?.code || "").toUpperCase());
-
-/**
- * The subset of the denylist that is never an employee assignment under any
- * reading, as opposed to the ones that are merely too generic to be useful.
- * Used as the floor when filtering would otherwise leave an account with no
- * roles at all.
- */
-const NEVER_AN_ASSIGNMENT = new Set(["CITIZEN", "INTERNAL_MICROSERVICE_ROLE"]);
-const isNeverAnAssignment = (role) =>
-  !NEVER_AN_ASSIGNMENT.has(String(role?.code || "").toUpperCase());
-
 /**
  * The one answer to "what roles does this person hold here", so the pill's
- * count and the panel's chips can never disagree. Role contexts are the
- * higher-level story ("Resolver") and win when the payload carries them;
- * otherwise fall back to the raw roles, minus the platform ones.
+ * count and the panel's chips can never disagree: the roles held, minus the
+ * three that are never a staff assignment (workingContextRoles.js). Role
+ * contexts ("Resolver") are a separate row, never counted as roles.
  */
-const assignedRoleLabels = (t, context) => {
-  const contexts = (context?.roleContexts || [])
-    .filter(isAssignedContext)
-    .map((c) => roleContextLabel(t, c))
-    .filter(Boolean);
-  if (contexts.length) return contexts;
-  const roles = context?.roles || [];
-  const assigned = roles.filter(isAssignedRole);
-  if (assigned.length) return assigned.map((r) => roleLabel(t, r)).filter(Boolean);
-  // A workbench or admin account can hold nothing *but* denylisted roles —
-  // SUPERUSER, MDMS_ADMIN, LOC_ADMIN and EMPLOYEE is a complete, real role set
-  // under multi-root-tenant, and answering "what am I here to do" with nothing
-  // is worse than answering it with platform roles.
-  //
-  // A floor rather than no filter, though: pgr's `tenantRoles` keeps every role
-  // stamped for the tenant, CITIZEN included, so an account carrying
-  // [EMPLOYEE, CITIZEN] reaches here with `roleContexts: [CITIZEN]` already
-  // discarded by `isAssignedContext`. Falling back to the raw list would put a
-  // "Citizen" chip in the panel two lines after this file argues that CITIZEN
-  // is not an employee assignment. Keep the two we are certain about out.
-  return roles.filter(isNeverAnAssignment).map((r) => roleLabel(t, r)).filter(Boolean);
-};
+const assignedRoleLabels = (t, context) =>
+  heldRoleCodes(context).map((code) => roleLabel(t, { code })).filter(Boolean);
+
+/** The role contexts ("Resolver", "Admin"), labelled; shown as their own row in the panel, never counted as roles. */
+const contextLabels = (t, context) => workingContexts(context).map((c) => roleContextLabel(t, c)).filter(Boolean);
 
 /** "3 departments" / "1 department" — the count is the point, not the list. */
 const countLabel = (t, n, singularKey, pluralKey, singular, plural) =>
@@ -290,6 +239,7 @@ export function EmployeeWorkingContextPanel({ t, context, cityDetails, tenantId,
       departments: (context.departments || []).map((d) => departmentLabel(t, d)).filter(Boolean),
       // Same list the pill counts — see assignedRoleLabels (#2038).
       roles: assignedRoleLabels(t, context),
+      contexts: contextLabels(t, context),
       jurisdictions: (context.jurisdictions || [])
         .map((j) => ({ name: jurisdictionLabel(t, j, cityDetails, context.tenantId || tenantId), type: j?.boundaryType }))
         .filter((j) => j.name),
@@ -334,6 +284,11 @@ export function EmployeeWorkingContextPanel({ t, context, cityDetails, tenantId,
       <ChipGroup
         title={label(t, "CS_WORKING_CONTEXT_ROLE", "Roles")}
         values={rows.roles}
+      />
+
+      <ChipGroup
+        title={label(t, "CS_WORKING_CONTEXT_WORKS_AS", "Works as")}
+        values={rows.contexts}
       />
 
       <ChipGroup
