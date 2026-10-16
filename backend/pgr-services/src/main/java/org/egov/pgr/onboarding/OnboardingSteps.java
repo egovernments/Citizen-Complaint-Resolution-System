@@ -339,9 +339,7 @@ public class OnboardingSteps {
         // The old code too, so a run that created its founder under it before an upgrade finds them. If that
         // founder's HRMS row is still not visible after the upgrade, the create below is refused for the
         // taken mobile and the signup goes back to its founder; by their resubmit the row is visible.
-        String codes = FOUNDER_CODE + "," + legacyFounderCode(signup.getId());
-        JsonNode employees = client.read("hrms", "/egov-hrms/employees/_search?tenantId=" + tenant + "&codes=" + codes + "&offset=0&limit=2", Map.of()).path("Employees");
-        if (!employees.isArray()) throw new OnboardingFailure("HRMS_INVALID_RESPONSE", true);
+        JsonNode employees = ownEmployees(tenant, FOUNDER_CODE, legacyFounderCode(signup.getId()));
         // Until the step has seen its founder nobody else can edit the row it made; after that the uuid decides (below).
         if (employees.size() > 1 || employees.size() == 1 && operation.getFounderDigitUuid() == null && !isFounder(employees.get(0)))
             throw new OnboardingFailure("FOUNDER_AMBIGUOUS", false);
@@ -390,13 +388,38 @@ public class OnboardingSteps {
                 throw new OnboardingFailure("TENANT_ADMIN_ACCOUNT_REJECTED", false);
             }
             // HRMS/egov-user persist asynchronously. A later claim searches again before create.
-            employees = client.read("hrms", "/egov-hrms/employees/_search?tenantId=" + tenant + "&codes=" + FOUNDER_CODE + "&offset=0&limit=2", Map.of()).path("Employees");
+            employees = ownEmployees(tenant, FOUNDER_CODE);
         }
         String uuid = employees.path(0).path("user").path("uuid").asText();
         if (uuid.isBlank()) throw new OnboardingFailure("FOUNDER_NOT_VISIBLE", true);
         if (operation.getFounderDigitUuid() != null && !operation.getFounderDigitUuid().equals(uuid))
             throw new OnboardingFailure("BINDING_CONFLICT", false);
         operation.setFounderDigitUuid(uuid); progress.save();
+    }
+
+    private static final int HRMS_PAGE = 100;
+
+    /**
+     * The tenant's employees holding one of these codes. HRMS can't be asked by code: a `codes` search
+     * looks the first code up as a username in the tenant and then drops the tenant filter, so where no
+     * user has that username (a new workspace has no users at all) it answers with every tenant's row
+     * for the code. So the tenant's own employees are read, a page at a time, and matched here.
+     */
+    private JsonNode ownEmployees(String tenant, String... codes) {
+        com.fasterxml.jackson.databind.node.ArrayNode matches = mapper.createArrayNode();
+        // A new workspace has a handful of employees here; the bound only stops an HRMS that ignores offset.
+        for (int offset = 0; offset < 100 * HRMS_PAGE; offset += HRMS_PAGE) {
+            JsonNode page = client.read("hrms", "/egov-hrms/employees/_search?tenantId=" + tenant
+                    + "&offset=" + offset + "&limit=" + HRMS_PAGE, Map.of()).path("Employees");
+            if (!page.isArray()) throw new OnboardingFailure("HRMS_INVALID_RESPONSE", true);
+            for (JsonNode employee : page) {
+                // HRMS states every row's tenant; another tenant's row is never this workspace's founder.
+                if (employee.hasNonNull("tenantId") && !tenant.equals(employee.path("tenantId").asText())) continue;
+                for (String code : codes) if (code.equalsIgnoreCase(employee.path("code").asText())) { matches.add(employee); break; }
+            }
+            if (page.size() < HRMS_PAGE) return matches;
+        }
+        throw new OnboardingFailure("HRMS_INVALID_RESPONSE", true);
     }
 
     /** The code founders had before #2456. */
