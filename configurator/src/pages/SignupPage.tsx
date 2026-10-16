@@ -742,6 +742,8 @@ function SignupFlow() {
     try {
       const latest = await findSignup();
       if (latest) seedFrom(latest);
+      // The run already created the workspace under this account code, so it no longer follows the name or country.
+      codeTouched.current = true;
       if (operation?.errorCode === 'TENANT_ADMIN_ACCOUNT_REJECTED') {
         setMobileError(t('signup.mobile_rejected', 'Check this number: your user account couldn’t be created with it.'));
       }

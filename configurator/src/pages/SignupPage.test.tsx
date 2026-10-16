@@ -371,7 +371,11 @@ describe('expired session', () => {
 
 describe('provisioning', () => {
   /** Walks the wizard to "Create account" and submits, the run coming back as `operation`. */
-  async function submitWith(operation: Record<string, unknown>, afterRun: 'DRAFT' | 'FAILED' = 'DRAFT') {
+  async function submitWith(
+    operation: Record<string, unknown>,
+    afterRun: 'DRAFT' | 'FAILED' = 'DRAFT',
+    draftFields: Record<string, unknown> = {}
+  ) {
     vi.mocked(api.session).mockResolvedValue(signedIn);
     vi.mocked(api.tenants).mockResolvedValue({ tenants: [], selectionRequired: false, onboardingRequired: true });
     const draft = {
@@ -385,6 +389,7 @@ describe('provisioning', () => {
       timeZone: 'Africa/Nairobi',
       financialYearPolicy: 'JUL_JUN',
       tenantMetadata: { schemaVersion: 1, tenantAdmin: { mobileNumber: '+254700000199' } },
+      ...draftFields,
     };
     // The first read is the resume; later ones are the signup after the run, which a
     // user-correctable failure hands back as a DRAFT.
@@ -439,6 +444,27 @@ describe('provisioning', () => {
     fireEvent.click(change);
     expect(await screen.findByLabelText(/mobile number/i)).toHaveValue('+254700000199');
     expect(screen.getByRole('alert')).toHaveTextContent(/couldn’t be created with it/);
+  });
+
+  it('keeps the account code of a reopened draft when its name changes (#2353)', async () => {
+    await submitWith(
+      {
+        status: 'TERMINAL_FAILED',
+        currentStep: 'FOUNDER_HRMS',
+        completedSteps: ['TENANT_FOUNDATION', 'PLATFORM_BASELINE'],
+        errorCode: 'TENANT_ADMIN_ACCOUNT_REJECTED',
+        errorMessage: 'TENANT_ADMIN_ACCOUNT_REJECTED',
+      },
+      'DRAFT',
+      // What the name and country derive, so only the reopened run keeps it from following them.
+      { accountCode: 'KE-BOMET-COUNTY' }
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: /change my details/i }));
+    await screen.findByLabelText(/mobile number/i);
+    fireEvent.click(screen.getByRole('button', { name: /back/i }));
+    fireEvent.change(await screen.findByLabelText(/account name/i), { target: { value: 'Bomet County Government' } });
+    expect(screen.getByLabelText(/account code/i)).toHaveValue('KE-BOMET-COUNTY');
   });
 
   it('keeps the closed-signup wording when the run did not hand the draft back', async () => {
