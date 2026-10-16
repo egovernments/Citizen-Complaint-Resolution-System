@@ -1,4 +1,4 @@
-import { DigitShow } from '@/admin';
+import { DigitShow, MASTER_SCREEN_META } from '@/admin';
 import { FieldSection, FieldRow, DateField } from '@/admin/fields';
 import { Badge } from '@/components/ui/badge';
 import { ArrowDown } from 'lucide-react';
@@ -25,7 +25,7 @@ interface HierarchyNode {
 const isLeafNode = (n: HierarchyNode) => n.department != null || n.slaHours != null;
 
 export function ComplaintHierarchyShow() {
-  const { record } = useShowController();
+  const { record } = useShowController({ queryOptions: { meta: MASTER_SCREEN_META } });
   const { state } = useApp();
   // ComplaintHierarchy data is scoped PER TENANT — in some deployments it lives at
   // the state root, in others at the sub-tenant the user operates under (prod: the
@@ -101,7 +101,7 @@ export function ComplaintHierarchyShow() {
               <FieldRow label="Hierarchy Type">{String(rec.hierarchyType ?? '')}</FieldRow>
               <FieldRow label="Levels">{String(ordered.length)}</FieldRow>
               <FieldRow label="Total nodes">{isLoading ? '…' : String(nodes.length)}</FieldRow>
-              <FieldRow label="Leaf complaint types">{isLoading ? '…' : String(leafCount)}</FieldRow>
+              <FieldRow label="Complaint subcategories">{isLoading ? '…' : String(leafCount)}</FieldRow>
             </FieldSection>
 
             {ordered.length > 0 && (

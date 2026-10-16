@@ -33,6 +33,7 @@ const AREAS = [
   { letter: 'D', file: 'cases/area-d-preferences.js', name: 'User preferences' },
   { letter: 'E', file: 'cases/area-e-delivery.js', name: 'Delivery + resilience' },
   { letter: 'F', file: 'cases/area-f-mdms.js', name: 'MDMS master lifecycle' },
+  { letter: 'G', file: 'cases/area-g-otp.js', name: 'Login OTP through the bridge' },
 ];
 
 function parseArgs(argv) {

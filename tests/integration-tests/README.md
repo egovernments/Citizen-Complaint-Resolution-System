@@ -177,6 +177,62 @@ Cross-persona end-to-end flows:
 - `api-smoke-2026-04-29.spec.ts` — API helpers reach the deployment
 - `filestore-fixes-2026-04-29.spec.ts` — JPEG upload regression
 
+### `tests/onboarding-real/`
+
+`workspace-lifecycle.spec.ts` (#2266) drives the whole self-service journey
+against a real stack, at API level through the public origin:
+
+1. Magic-link signup (link read from Mailpit), PGR signup draft, `_submit`,
+   then `operations/_search` until `SUCCEEDED`.
+2. Founder `_select`; the workspace starts `NOT_STARTED`.
+3. The configurator's step calls, in order: Branding (logo upload,
+   ThemeConfig), Geography (2-level hierarchy), Departments (2 departments,
+   1 designation), Employees (two GROs and an LME via HRMS `_create` then BFF
+   `_link`; the water GRO and the LME follow their activation mail and set a
+   password; the roads GRO exists only so every routed department has a GRO,
+   and is never activated), Complaint types (2 leaves
+   with department and SLA). Every step is marked DONE and the workspace ends
+   `DONE` with every probe true. The labels the steps wrote resolve for `en_IN`.
+4. GRO and LME sign in through Keycloak; a citizen signs in by OTP at `/{slug}/`
+   and files a complaint.
+5. The GRO sees it in the TEAM inbox and assigns it, the LME sees it in the MINE
+   inbox and resolves it, the citizen rates and closes it, and the workflow
+   history reads APPLY, ASSIGN, RESOLVE, RATE.
+6. The founder removes the LME: HRMS marks the employee inactive, the BFF drops
+   the binding, and the LME's session and DIGIT token stop working.
+
+Any 403, 404 or 5xx on any request fails the run at that call. Each run
+creates one new tenant and leaves it behind (there is no tenant delete API);
+its slug is `e2e-<letters>` and its tenant id `ee<letters>`.
+
+It is not part of any CI job. Run it by hand against a dev box:
+
+| Variable | Description |
+|----------|-------------|
+| `ONBOARDING_E2E_BASE_URL` | Public origin of the stack (nginx in front of Kong, the BFF and Keycloak) |
+| `ONBOARDING_E2E_MAILPIT_URL` | Mailpit API base, e.g. `http://127.0.0.1:18025/mailpit/api/v1` through an SSH tunnel |
+| `ONBOARDING_E2E_OTP_COMMAND` | Shell command that prints the citizen OTP. It gets `OTP_PHONE`, `OTP_TENANT_ID`, `OTP_CHALLENGE_ID` and `OTP_SINCE_MS` |
+| `ONBOARDING_E2E_EMAIL_DOMAIN` | Domain for the run's addresses (default `e2e.test`; Mailpit catches all) |
+| `ONBOARDING_E2E_MOBILE_PREFIX` / `ONBOARDING_E2E_MOBILE_LENGTH` | Shape of generated mobile numbers (default `7`, 9 digits); checked against the tenant's rule |
+| `ONBOARDING_E2E_IGNORE_HTTPS_ERRORS` | `1` for a box with a self-signed certificate |
+
+With `IDENTITY_CITIZEN_OTP_SENDER=log`, the OTP command can read the BFF log:
+
+```bash
+ssh -f -N -L 18025:127.0.0.1:18025 <box>
+export ONBOARDING_E2E_BASE_URL=https://<box-domain>
+export ONBOARDING_E2E_MAILPIT_URL=http://127.0.0.1:18025/mailpit/api/v1
+export ONBOARDING_E2E_OTP_COMMAND='ssh <box> "sudo docker logs --since $((OTP_SINCE_MS/1000-5)) digit-identity-bff 2>&1" \
+  | grep identity.citizen_otp.log_sender | sed "s/^[^{]*//" \
+  | jq -r --arg t "$OTP_TENANT_ID" --arg p "$OTP_PHONE" "select(.tenantId==\$t and (.phoneNumber|tostring|endswith(\$p))) | .code" | tail -1'
+npm run test:onboarding-real
+```
+
+A run takes about 2–5 minutes; most of it is tenant provisioning (measured: 4.0 min, then 2.0 min once #2310 removed the provisioning retries). Each run uses
+one magic-link request, and the BFF allows 3 per client IP per 30 minutes by
+default (`IDENTITY_MAGIC_LINK_REQUEST_LIMIT`), so back-to-back runs from one
+machine can stall at "No mail with a sign-in link".
+
 ## Project Structure
 
 ```

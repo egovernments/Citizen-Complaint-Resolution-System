@@ -5,8 +5,9 @@ import type { SchemaDescriptor } from './types';
 /**
  * Descriptor for `RAINMAKER-PGR.UIConstants` — PGR UI-facing constants.
  *
- * Currently holds a single knob, `REOPENSLA`: the millisecond window during
- * which a resolved or rejected complaint can still be reopened. Shipped default
+ * Holds two knobs. `REOPENSLA` is the millisecond window during which a
+ * resolved or rejected complaint can still be reopened. `VOICE_INPUT` turns the
+ * voice input on File a Complaint off for the tenant when false. Shipped default
  * is 259200000 (72 hours) as of #1252; tenants seeded before that carry the old
  * 432000000 (5 days) until an operator edits them here.
  *
@@ -23,7 +24,7 @@ import type { SchemaDescriptor } from './types';
 export const pgrUiConstantsDescriptor: SchemaDescriptor = {
   schema: 'RAINMAKER-PGR.UIConstants',
   groups: [
-    { title: 'Constants', fields: ['code', 'REOPENSLA'] },
+    { title: 'Constants', fields: ['code', 'REOPENSLA', 'VOICE_INPUT'] },
   ],
   fields: [
     {
@@ -47,6 +48,14 @@ export const pgrUiConstantsDescriptor: SchemaDescriptor = {
       max: 2592000000,
       label: 'Reopen window (ms)',
       help: 'How long after a complaint is resolved or rejected it can still be reopened, by the citizen or by a CSR on their behalf. Stored as milliseconds. Shipped default is 72 hours (259200000). Applies immediately to both the citizen and employee screens and to server-side enforcement.',
+    },
+    {
+      path: 'VOICE_INPUT',
+      widget: 'boolean',
+      // File a Complaint treats an unset flag as on.
+      whenUnset: true,
+      label: 'Voice input on File a Complaint',
+      help: 'Offers a mic on the complaint description, in browsers that support speech recognition. Leave it on unless the tenant should not offer voice; turning it off hides the mic for every citizen.',
     },
   ],
 };

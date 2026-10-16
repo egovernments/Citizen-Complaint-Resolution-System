@@ -18,7 +18,7 @@ For a detailed walkthrough, see [docs/reference/architecture/HLD.md](docs/refere
 │   ├── pgr-services/                   # Core complaint service (Java/Spring Boot)
 │   ├── digit-config-service/           # Tenant configuration API
 │   ├── digit-user-preferences-service/
-│   ├── novu-bridge/ & novu-bridge-endpoint/  # Notification pipeline bridges
+│   ├── novu-bridge/                    # Notification service (thin events, providers via Novu)
 │   └── xstate-chatbot/                 # WhatsApp / chatbot integration
 │
 ├── frontend/

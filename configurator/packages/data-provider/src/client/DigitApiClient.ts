@@ -660,15 +660,6 @@ export class DigitApiClient {
 
   // --- Access Control ---
 
-  async accessRolesSearch(tenantId: string): Promise<Record<string, unknown>[]> {
-    const params = new URLSearchParams({ tenantId });
-    const data = await this.request<{ roles?: Record<string, unknown>[] }>(
-      `${this.endpoint('ACCESS_ROLES_SEARCH')}?${params.toString()}`,
-      { RequestInfo: this.buildRequestInfo() },
-    );
-    return data.roles || [];
-  }
-
   async accessActionsSearch(tenantId: string, roleCodes: string[], actionMaster = 'actions-test'): Promise<Record<string, unknown>[]> {
     const data = await this.request<{ actions?: Record<string, unknown>[] }>(this.endpoint('ACCESS_ACTIONS_SEARCH'), {
       RequestInfo: this.buildRequestInfo(),

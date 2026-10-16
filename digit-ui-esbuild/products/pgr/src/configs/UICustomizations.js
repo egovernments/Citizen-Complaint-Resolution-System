@@ -1,6 +1,7 @@
 import _ from "lodash";
 import Urls from "../utils/urls";
 import { complaintLabel } from "../utils/complaintLabel";
+import { serviceCodesForFilter } from "../utils/complaintCategories";
 import { useLocation, useHistory, Link, useParams } from "react-router-dom";
 import React, { useState, Fragment } from "react";
 import { DeleteIconv2, DownloadIcon, FileIcon, Button, Card, CardSubHeader, EditIcon, ArrowForward, Modal, CloseSvg, Close, } from "@egovernments/digit-ui-react-components";
@@ -1621,10 +1622,11 @@ export const UICustomizations = {
         params.toDate = new Date(requestDate.endDate).getTime();
       }
 
-      // Filter: complaint type (dropdown returns {serviceCode, code, i18nKey})
-      const serviceCodeObj = filterForm.serviceCode;
-      if (serviceCodeObj?.serviceCode) {
-        params.serviceCode = [serviceCodeObj.serviceCode];
+      // Filter: complaint subcategory, or with only a category picked, every
+      // subcategory under it (see ComplaintCategoryFilter).
+      const serviceCodes = serviceCodesForFilter(filterForm.serviceCode, filterForm.complaintType);
+      if (serviceCodes.length > 0) {
+        params.serviceCode = serviceCodes;
       }
 
       // Filter: locality (BoundaryComponent returns array or single object)

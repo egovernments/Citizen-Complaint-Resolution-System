@@ -1,0 +1,14 @@
+# Poll for a newly published integration-test run every
+# {{ test_alerts_poll_minutes | default(5) | int }} minutes (ccrs-test-alerts.service does the work).
+# The playbook only renders this when test_alerts_poll_minutes is a whole
+# number >= 1: 0 would make OnUnitActiveSec=0min.
+[Unit]
+Description=Poll for integration-test regressions every {{ test_alerts_poll_minutes | default(5) | int }} minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec={{ test_alerts_poll_minutes | default(5) | int }}min
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

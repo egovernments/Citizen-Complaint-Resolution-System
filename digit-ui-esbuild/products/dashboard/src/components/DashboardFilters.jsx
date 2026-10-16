@@ -170,7 +170,7 @@ const DashboardFilters = ({
           />
         ) : (
           <FlatFilterMenu
-            ariaLabel={t("DASHBOARD_FILTERS_COMPLAINT_TYPE_FILTER", "Complaint type filter")}
+            ariaLabel={t("DASHBOARD_FILTERS_COMPLAINT_TYPE_FILTER", "Complaint category filter")}
             options={complaintTypeOptions}
             value={complaintType}
             loading={filterOptionsLoading && complaintTypeOptions.length <= 1}
@@ -185,6 +185,7 @@ const DashboardFilters = ({
           disabled={!canClear}
           className="dashboard-filters-clear-inline"
           aria-disabled={!canClear}
+          data-analytics-event="dashboard.filters.clear"
         >
           {t("DASHBOARD_FILTERS_CLEAR", "Clear")}
         </button>

@@ -58,14 +58,15 @@ function ResourceCard({ resource }: { resource: string }) {
   return (
     <button
       onClick={() => navigate(`/manage/${resource}`)}
-      className="text-left w-full"
+      className="text-left w-full h-full rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 group"
     >
-      <DigitCard>
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
-            <Icon className="w-6 h-6 text-primary" />
+      {/* The DIGIT console's stat card: a brand-tinted hairline that lifts on hover. */}
+      <DigitCard className="h-full mb-0 p-5 sm:p-5 min-h-[88px] flex items-center border-primary/10 transition duration-200 group-hover:shadow-md group-hover:-translate-y-0.5">
+        <div className="flex items-center gap-4 w-full">
+          <div className="w-11 h-11 bg-primary/10 rounded-xl flex items-center justify-center flex-shrink-0">
+            <Icon className="w-5 h-5 text-primary" />
           </div>
-          <div>
+          <div className="min-w-0 flex-1">
             <p className="text-2xl font-bold text-foreground">
               {isPending ? '...' : error ? '—' : (total ?? 0)}
             </p>
@@ -74,7 +75,9 @@ function ResourceCard({ resource }: { resource: string }) {
                 {error instanceof Error ? error.message : 'Error loading data'}
               </p>
             ) : null}
-            <p className="text-sm text-muted-foreground">{label}</p>
+            <p className="text-xs text-muted-foreground mt-1 truncate" title={label}>
+              {label}
+            </p>
           </div>
         </div>
       </DigitCard>
@@ -87,7 +90,7 @@ export function DigitDashboard() {
   const { canViewResource } = useMastersCapability();
   const dedicatedMap = getDedicatedResources();
   const resources = Object.keys(dedicatedMap).filter(
-    (r) => ICONS[r] && canViewResource(r) // only show resources that have icons and the role can see
+    (r) => ICONS[r] && canViewResource(r)
   );
 
   return (
@@ -95,7 +98,7 @@ export function DigitDashboard() {
       <h1 className="text-2xl sm:text-3xl font-bold font-condensed text-foreground">
         {translate('app.header.title')}
       </h1>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">
         {resources.map((resource) => (
           <ResourceCard key={resource} resource={resource} />
         ))}

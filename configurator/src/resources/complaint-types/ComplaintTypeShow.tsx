@@ -11,7 +11,7 @@ export function ComplaintTypeShow() {
   const { canEditResource } = useMastersCapability();
 
   return (
-    <DigitShow title={record ? `Complaint Type: ${record.name ?? record.id}` : 'Complaint Type'} hasEdit={canEditResource('complaint-hierarchy')}>
+    <DigitShow title={record ? `Complaint Category: ${record.name ?? record.id}` : 'Complaint Category'} hasEdit={canEditResource('complaint-hierarchy')}>
       {(rec: Record<string, unknown>) => {
         const keywords = rec.keywords as string[] | string | undefined;
         const keywordList = Array.isArray(keywords) ? keywords : (typeof keywords === 'string' ? keywords.split(',').map(k => k.trim()) : []);
@@ -51,7 +51,7 @@ export function ComplaintTypeShow() {
                   </div>
                 </FieldRow>
               )}
-              <FieldRow label="Complaint Sub-Type">{String(rec.name ?? '')}</FieldRow>
+              <FieldRow label="Complaint Subcategory">{String(rec.name ?? '')}</FieldRow>
               <FieldRow label="Service Code">{String(rec.serviceCode ?? '')}</FieldRow>
             </FieldSection>
 

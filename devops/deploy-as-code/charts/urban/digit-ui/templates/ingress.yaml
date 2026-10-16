@@ -1,2 +1,4 @@
 # ingress.yaml
+{{- if .Values.ingress.legacyPathEnabled -}}
 {{- template "common.ingress" . -}}
+{{- end -}}

@@ -17,11 +17,7 @@ const Urls = {
   pgr_count: `/pgr-services/v2/request/_count`,
   employee_context: `/pgr-services/v2/employee/_context`,
 
-  OTP_Send: "/user-otp/v1/_send",
   Authenticate: "/user/oauth/token",
-  RegisterUser: "/user/citizen/_create",
-  ChangePassword: "/user/password/nologin/_update",
-  ChangePassword1: "/user/password/_update",
   UserProfileUpdate: "/user/profile/_update",
   EmployeeSearch: "/egov-hrms/employees/_search",
 

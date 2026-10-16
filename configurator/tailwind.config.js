@@ -48,6 +48,7 @@ export default {
   				DEFAULT: 'hsl(var(--card))',
   				foreground: 'hsl(var(--card-foreground))'
   			},
+  			sidebar: 'hsl(var(--sidebar))',
   			success: '#00703C',
   			link: '#1D70B8',
   			chart: {

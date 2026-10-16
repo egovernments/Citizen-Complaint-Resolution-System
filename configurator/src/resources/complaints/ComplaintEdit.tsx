@@ -40,7 +40,7 @@ export function ComplaintEdit() {
 
       <FieldSection title="Details">
         <div className="space-y-4">
-          <ComplaintHierarchyCascade source="serviceCode" label="Complaint Type" />
+          <ComplaintHierarchyCascade source="serviceCode" label="Complaint Category" />
           <DigitFormInput source="description" label="Description" />
           <DigitFormSelect
             source="source"

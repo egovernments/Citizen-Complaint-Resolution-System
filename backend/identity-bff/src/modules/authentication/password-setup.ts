@@ -1,9 +1,10 @@
-import { createHmac } from "node:crypto";
 import type express from "express";
 import { asyncRoute } from "../../app/async-route.js";
 import { hasTrustedWriteOrigin } from "../../app/request-security.js";
 import { config } from "../../infrastructure/config.js";
-import { getRedis } from "../../infrastructure/redis.js";
+import { privateRateKey, withinLimit as withinRateLimit } from "../../infrastructure/rate-limit.js";
+import { errorBody } from "../../contract/error-codes.js";
+import { routeForSlug } from "../access-context/tenant-route.js";
 import {
   hasPasswordCredential,
   inspectPasswordSetupAccount,
@@ -17,13 +18,16 @@ import {
   createPasswordSetupAttempt,
   getPasswordSetupAttempt,
 } from "../sessions/session-store.js";
-import { safeIdentityReturnTo, withAuthResult } from "./redirects.js";
+import { oidcClientForSurface } from "./oidc.js";
+import { returnDestination, withAuthResult } from "./redirects.js";
+import { result } from "./routes.js";
+import { isTenantBoundSurface, parseSurface, surfaceReturnPrefix } from "./surfaces.js";
 
 const ACCEPTED = {
   message: "If an eligible account exists, a password setup email has been sent.",
 };
 
-function normalizedEmail(value: unknown): string | null {
+export function normalizedEmail(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const email = value.trim().toLowerCase();
   return email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
@@ -40,31 +44,32 @@ function completionRedirectUri(state: string): string {
   return callback.toString();
 }
 
-async function withinLimit(bucket: string): Promise<boolean> {
-  const count = await getRedis().eval(
-    `local current = redis.call('INCR', KEYS[1])
-     if current == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
-     return current`,
-    1,
-    bucket,
-    config.identityPasswordSetupTtlSeconds,
-  );
-  return Number(count) <= config.identityPasswordSetupLimit;
+function withinLimit(bucket: string): Promise<boolean> {
+  return withinRateLimit(bucket, config.identityPasswordSetupLimit, config.identityPasswordSetupTtlSeconds);
 }
 
-function privateRateLimitKey(identifier: string): string {
-  const rateLimitKey = createHmac("sha256", config.keycloakBffClientSecret)
-    .update("digit.identity.password-setup.rate-limit.v1")
-    .digest();
-  return createHmac("sha256", rateLimitKey)
-    .update(identifier)
-    .digest("hex");
+/** Records the attempt, then has Keycloak email the password (and, if needed, email) actions. */
+export async function sendPasswordSetup(input: {
+  userId: string;
+  hadPassword: boolean;
+  emailVerified: boolean;
+  returnTo: string;
+  clientId: string;
+}): Promise<void> {
+  const state = await createPasswordSetupAttempt({
+    returnTo: input.returnTo, userId: input.userId, hadPassword: input.hadPassword,
+  });
+  await sendPasswordSetupEmail({
+    userId: input.userId, emailVerified: input.emailVerified,
+    redirectUri: completionRedirectUri(state), clientId: input.clientId,
+  });
 }
 
 async function processPasswordSetup(input: {
   email: string | null;
   authenticatedUserId: string | null;
   returnTo: string;
+  clientId: string;
 }): Promise<void> {
   try {
     const account = input.authenticatedUserId
@@ -83,15 +88,9 @@ async function processPasswordSetup(input: {
       console.info("Password setup request processed", { outcome: "ineligible" });
       return;
     }
-    const state = await createPasswordSetupAttempt({
-      returnTo: input.returnTo,
-      userId: account.userId,
-      hadPassword: account.hasPassword,
-    });
-    await sendPasswordSetupEmail({
-      userId: account.userId,
-      emailVerified: account.emailVerified,
-      redirectUri: completionRedirectUri(state),
+    await sendPasswordSetup({
+      userId: account.userId, hadPassword: account.hasPassword, emailVerified: account.emailVerified,
+      returnTo: input.returnTo, clientId: input.clientId,
     });
     console.info("Password setup request processed", {
       outcome: "sent",
@@ -107,25 +106,36 @@ async function processPasswordSetup(input: {
 export function registerPasswordSetupRoutes(app: express.Application): void {
   app.post("/identity/v1/password/setup-requests", asyncRoute(async (request, response) => {
     if (!hasTrustedWriteOrigin(request)) {
-      return response.status(403).json({ error: "Untrusted request origin" });
+      return response.status(403).json(errorBody("UNTRUSTED_ORIGIN", "Untrusted request origin"));
+    }
+    // The surface picks the Keycloak client of the email (item 5), so the
+    // action pages use that surface's theme, and the return path.
+    const surface = parseSurface(request.body?.surface);
+    const client = surface && oidcClientForSurface(surface, "password");
+    if (!surface || !client) {
+      return response.status(400).json(errorBody("UNSUPPORTED_SURFACE", "Unsupported sign-in surface"));
+    }
+    let returnTo: string | null;
+    if (isTenantBoundSurface(surface)) {
+      const tenant = await routeForSlug(request.body?.tenantSlug);
+      if ("status" in tenant) return response.status(tenant.status).json(errorBody(tenant.code, tenant.error));
+      returnTo = returnDestination(request.body?.returnTo, surfaceReturnPrefix(surface, tenant.urlSlug));
+    } else {
+      returnTo = returnDestination(request.body?.returnTo);
+    }
+    if (!returnTo) {
+      return response.status(400).json(errorBody("UNSUPPORTED_RETURN_TO", "Unsupported return destination"));
     }
 
-    const signedIn = await currentSession(request.headers.cookie);
+    const signedIn = await currentSession(request.headers.cookie, surface);
     const email = normalizedEmail(request.body?.email);
-    const requestedReturnTo = request.body?.returnTo === undefined
-      ? null
-      : safeIdentityReturnTo(request.body.returnTo);
-    if (request.body?.returnTo !== undefined && !requestedReturnTo) {
-      return response.status(400).json({ error: "Unsupported return destination" });
-    }
-    const returnTo = requestedReturnTo || config.identityPostLoginRedirect;
     if (!email && !signedIn) return response.status(202).json(ACCEPTED);
 
     const prefix = `${config.cachePrefix}:identity:password-setup-limit`;
     const accountRateKey = signedIn?.session.claims.sub || email!;
     const [ipAllowed, accountAllowed] = await Promise.all([
       withinLimit(`${prefix}:ip:${request.ip}`),
-      withinLimit(`${prefix}:account:${privateRateLimitKey(accountRateKey)}`),
+      withinLimit(`${prefix}:account:${privateRateKey("password-setup", accountRateKey)}`),
     ]);
     if (!ipAllowed || !accountAllowed) {
       console.info("Password setup request suppressed", { reason: "rate_limited" });
@@ -140,6 +150,7 @@ export function registerPasswordSetupRoutes(app: express.Application): void {
       email,
       authenticatedUserId: signedIn?.session.claims.sub || null,
       returnTo,
+      clientId: client.clientId,
     }));
   }));
 
@@ -154,17 +165,7 @@ export function registerPasswordSetupRoutes(app: express.Application): void {
       ? preview.hadPassword || await hasPasswordCredential(preview.userId)
       : false;
     const attempt = preview ? await consumePasswordSetupAttempt(state) : null;
-    const authResult = await createAuthResult(attempt && passwordReady ? {
-      status: "complete",
-      code: "PASSWORD_SETUP_COMPLETE",
-      message: "Your password is ready. You can now sign in with email and password.",
-      actions: ["TRY_AGAIN"],
-    } : attempt ? {
-      status: "failed",
-      code: "PASSWORD_SETUP_FAILED",
-      message: "Password setup was not completed. Request another link when you are ready.",
-      actions: ["SETUP_PASSWORD"],
-    } : {
+    const authResult = await createAuthResult(attempt ? result(passwordReady ? "PASSWORD_SETUP_COMPLETE" : "PASSWORD_SETUP_FAILED") : {
       status: "failed",
       code: "AUTH_ATTEMPT_EXPIRED",
       message: "That password setup link expired or was already used. Please request another.",

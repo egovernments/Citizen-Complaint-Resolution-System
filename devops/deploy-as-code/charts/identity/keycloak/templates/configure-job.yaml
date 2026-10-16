@@ -1,0 +1,187 @@
+{{- /*
+Realm reconcile, the Helm counterpart of the Ansible task "identity-bootstrap —
+reconcile Organizations realm and BFF clients" (local-setup/ansible/
+playbook-deploy.yml). It runs keycloak/configure-keycloak.sh with
+keycloak/realm.json after every install and upgrade; the script is idempotent.
+
+It runs in the Keycloak image itself (bash, kcadm.sh and jq), which carries
+the script and realm.json at /opt/identity/ (keycloak/Dockerfile), so the
+reconcile always matches the image. KEYCLOAK_KCADM_SERVER makes the script run
+kcadm locally, against the Service, instead of through `docker exec`. The
+master admin is the bootstrap admin from the Secret, so the script never
+creates a temporary one.
+
+The client secrets come from the same Secret (or the same env-secrets.yaml
+values) as the identity-bff chart's, so Keycloak's clients and the BFF cannot
+disagree about one.
+
+Helm runs post-install/post-upgrade hooks only after the release's resources
+are ready (the helmfile installs it with wait: true), so Keycloak is already
+serving when the Job starts; the script retries its first kcadm login a few
+times (configure.loginAttempts) for a Service that has only just turned Ready.
+*/ -}}
+{{- $_ := include "common.name" . }}
+{{- if .Values.configure.enabled }}
+{{- $secret := include "keycloak.secretName" . }}
+{{- $public := include "common.identity.publicUrl" . }}
+{{- $identity := .Values.identity }}
+{{- $quickstart := eq (toString .Values.global.setup) "quickstart" }}
+{{- $smtp := .Values.configure.smtp }}
+{{- $smtpAuth := eq (toString $smtp.auth) "true" }}
+{{- /* SMTP auth with no credentials stores smtpServer.auth=true with an empty
+       login: every Keycloak mail then fails at SMTP login while the install
+       reports success. The password is checked where the render can see it:
+       secret.values, or existingSecret when lookup reaches the cluster (helm
+       template and client-side dry runs cannot; the non-optional secretKeyRef
+       below then stops the pod instead). */ -}}
+{{- if $smtpAuth }}
+{{-   if not $smtp.user }}
+{{-     fail "keycloak: configure.smtp.auth is true but configure.smtp.user is empty. Set the SMTP login, or auth: false for a relay that takes none." }}
+{{-   end }}
+{{-   $noPassword := "keycloak: configure.smtp.auth is true but the Secret has no keycloak-smtp-password." }}
+{{-   if .Values.secret.existingSecret }}
+{{-     $found := lookup "v1" "Secret" .Release.Namespace .Values.secret.existingSecret }}
+{{-     if and $found (not (index ($found.data | default dict) "keycloak-smtp-password")) }}
+{{-       fail $noPassword }}
+{{-     end }}
+{{-   else if not (index (.Values.secret.values | default dict) "keycloak-smtp-password") }}
+{{-     fail $noPassword }}
+{{-   end }}
+{{- end }}
+{{- /* Secret rotation. The hook runs only when the release is upgraded, and
+       with existingSecret a rotated client secret changes nothing in the
+       chart, so Keycloak would keep the old value while the BFF, on its next
+       restart, presents the new one. The checksum of the Secret's data, read
+       with lookup, makes a rotation a change to this (hook) manifest and so a
+       release diff. lookup returns nothing without a cluster (helm template,
+       client-side dry runs and diffs): the value is then "unavailable", which
+       renders fine and differs from the stored checksum, so such a diff always
+       shows this annotation and an apply always upgrades and reruns the
+       idempotent Job. docs/setup/deployment/helm-identity.md, "Rotating a
+       secret", has the forced rerun. With secret.values the chart renders the
+       Secret itself, and a changed value is a diff without this. */ -}}
+{{- $secretChecksum := "" }}
+{{- if .Values.secret.existingSecret }}
+{{-   $existing := lookup "v1" "Secret" .Release.Namespace .Values.secret.existingSecret }}
+{{-   $secretChecksum = "unavailable" }}
+{{-   if $existing }}
+{{-     $secretChecksum = $existing.data | default dict | toJson | sha256sum }}
+{{-   end }}
+{{- end }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ template "common.name" . }}-realm-configure
+  labels:
+{{- include "common.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "0"
+    # Keep a failed run for `kubectl logs`; replace it on the next upgrade.
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+    {{- if $secretChecksum }}
+    checksum/existing-secret: {{ $secretChecksum | quote }}
+    {{- end }}
+spec:
+  backoffLimit: {{ .Values.configure.backoffLimit }}
+  activeDeadlineSeconds: {{ .Values.configure.activeDeadlineSeconds }}
+  template:
+    metadata:
+      labels:
+        app: {{ template "common.name" . }}-realm-configure
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsUser: 1000
+        runAsNonRoot: true
+      containers:
+        - name: realm-configure
+          image: {{ template "common.image" (dict "Values" $.Values "repository" .Values.image.repository "tag" .Values.image.tag) }}
+          imagePullPolicy: {{ include "common.pullPolicy" . }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          command: ["/bin/bash", "/opt/identity/configure-keycloak.sh"]
+          env:
+            - name: KEYCLOAK_KCADM_SERVER
+              value: {{ include "keycloak.serviceUrl" . | quote }}
+            - name: KEYCLOAK_LOGIN_ATTEMPTS
+              value: {{ .Values.configure.loginAttempts | toString | quote }}
+            - name: KEYCLOAK_REALM_CONFIG
+              value: /opt/identity/realm.json
+            - name: KEYCLOAK_ORGANIZATION_REALM
+              value: {{ $identity.realm | quote }}
+            - name: KEYCLOAK_SSL_REQUIRED
+              value: {{ .Values.configure.sslRequired | default (ternary "none" "external" $quickstart) | quote }}
+            - name: KEYCLOAK_EVENTS_EXPIRATION_SECONDS
+              value: {{ .Values.configure.eventsExpirationSeconds | toString | quote }}
+            - name: KEYCLOAK_MAGIC_LINK_ENABLED
+              value: {{ .Values.configure.magicLinkEnabled | toString | quote }}
+            - name: IDENTITY_REDIRECT_URI
+              value: {{ printf "%s/identity/v1/callback" $public | quote }}
+            - name: IDENTITY_POST_LOGIN_REDIRECT
+              value: {{ $identity.postLoginRedirect | default (printf "%s/configurator/login" $public) | quote }}
+            - name: IDENTITY_ALLOWED_ORIGINS
+              value: {{ $identity.allowedOrigins | default $public | quote }}
+            - name: KC_BOOTSTRAP_ADMIN_USERNAME
+              value: {{ .Values.admin.username | quote }}
+            - name: KC_BOOTSTRAP_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secret }}
+                  key: keycloak-admin-password
+            {{- range $env, $key := dict "KEYCLOAK_BFF_CLIENT_SECRET" "keycloak-bff-client-secret" "KEYCLOAK_ADMIN_CLIENT_SECRET" "keycloak-admin-client-secret" "KEYCLOAK_EMPLOYEE_CLIENT_SECRET" "keycloak-employee-client-secret" "KEYCLOAK_CITIZEN_CLIENT_SECRET" "keycloak-citizen-client-secret" }}
+            - name: {{ $env }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secret }}
+                  key: {{ $key }}
+            {{- end }}
+            {{- range $env, $key := dict "KEYCLOAK_MAGIC_LINK_CLIENT_SECRET" "keycloak-magic-link-client-secret" "KEYCLOAK_GOOGLE_CLIENT_SECRET" "keycloak-google-client-secret" "KEYCLOAK_GITHUB_CLIENT_SECRET" "keycloak-github-client-secret" }}
+            - name: {{ $env }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secret }}
+                  key: {{ $key }}
+                  optional: true
+            {{- end }}
+            - name: KEYCLOAK_SMTP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secret }}
+                  key: keycloak-smtp-password
+                  optional: {{ not $smtpAuth }}
+            - name: KEYCLOAK_SMTP_HOST
+              value: {{ required "configure.smtp.host is required: Keycloak sends password recovery, invitation and verification mail" $smtp.host | quote }}
+            - name: KEYCLOAK_SMTP_PORT
+              value: {{ $smtp.port | toString | quote }}
+            - name: KEYCLOAK_SMTP_FROM
+              value: {{ required "configure.smtp.from is required" $smtp.from | quote }}
+            - name: KEYCLOAK_SMTP_FROM_DISPLAY_NAME
+              value: {{ $smtp.fromDisplayName | quote }}
+            - name: KEYCLOAK_SMTP_AUTH
+              value: {{ $smtpAuth | toString | quote }}
+            - name: KEYCLOAK_SMTP_USER
+              value: {{ $smtp.user | quote }}
+            - name: KEYCLOAK_SMTP_SSL
+              value: {{ $smtp.ssl | toString | quote }}
+            - name: KEYCLOAK_SMTP_STARTTLS
+              value: {{ $smtp.starttls | toString | quote }}
+            - name: KEYCLOAK_GOOGLE_CLIENT_ID
+              value: {{ .Values.configure.googleClientId | quote }}
+            - name: KEYCLOAK_GITHUB_CLIENT_ID
+              value: {{ .Values.configure.githubClientId | quote }}
+            - name: KEYCLOAK_BFF_SIGNIN_METHODS
+              value: {{ .Values.configure.signinMethods | quote }}
+            - name: KEYCLOAK_BFF_SIGNUP_METHODS
+              value: {{ .Values.configure.signupMethods | quote }}
+            - name: KEYCLOAK_CITIZEN_SIGNIN_METHODS
+              value: {{ .Values.configure.citizenSigninMethods | quote }}
+            {{- range $name, $value := .Values.configure.extraEnv }}
+            - name: {{ $name }}
+              value: {{ $value | toString | quote }}
+            {{- end }}
+          resources:
+            {{- tpl .Values.configure.resources . | nindent 12 }}
+{{- end }}

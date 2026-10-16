@@ -19,7 +19,7 @@ import {
  * The complaint-type filter as ONE compact chip + ONE traversal panel (owner
  * design pass: "tree traversing clean widget", no native <select>).
  *
- * CHIP (filter bar anchor): shows the applied selection — "All types" at
+ * CHIP (filter bar anchor): shows the applied selection — "All categories" at
  * root, the node's label at depth 1, "Parent › Node" deeper (prefixed with
  * "… ›" when more ancestors are elided). Clicking opens the panel.
  *
@@ -29,7 +29,7 @@ import {
  *   - the current node's CHILDREN as a scrollable list — an interior child
  *     (chevron) DESCENDS within the panel, a leaf click APPLIES + closes;
  *   - an explicit "All in <current>" first row applies the subtree + closes;
- *   - an "All types" reset row pinned at the bottom.
+ *   - an "All categories" reset row pinned at the bottom.
  *
  * Interaction choice — BROWSE-THEN-APPLY for interior traversal: descending
  * is navigation-in-progress, and applying every intermediate hop would fire
@@ -54,7 +54,7 @@ export function nodeDisplayLabel(tree, code) {
 }
 
 /** Max rendered trail entries (root + ellipsis + 2 nearest) — ke's PGR_TEST
- *  4-level tree browses at depth 4 as: All types › … › <parent> › <node>. */
+ *  4-level tree browses at depth 4 as: All categories › … › <parent> › <node>. */
 const TRAIL_MAX = 4;
 
 /**
@@ -83,7 +83,7 @@ export function ComplaintTypeTreePanel({ tree, appliedCode, onApply, t }) {
     target?.focus();
   }, [browseCode]);
 
-  const allTypesLabel = t("DASHBOARD_FILTERS_ALL_TYPES", "All types");
+  const allTypesLabel = t("DASHBOARD_FILTERS_ALL_TYPES", "All categories");
   const label = (c) => (c === ALL ? allTypesLabel : nodeDisplayLabel(tree, c));
 
   const atRoot = browseCode === ALL || !nodeOf(tree, browseCode);
@@ -198,7 +198,7 @@ const ComplaintTypeTreeFilter = ({ tree, filters, onFilterChange, t: tProp }) =>
   const t = tProp || tHook;
 
   const code = filters?.complaintType ?? ALL;
-  const allTypesLabel = t("DASHBOARD_FILTERS_ALL_TYPES", "All types");
+  const allTypesLabel = t("DASHBOARD_FILTERS_ALL_TYPES", "All categories");
   const { segments, elided, title } = chipModel(tree, code, allTypesLabel);
 
   // UNCHANGED wire/persistence contract: applies emit the selection trio
@@ -243,7 +243,7 @@ const ComplaintTypeTreeFilter = ({ tree, filters, onFilterChange, t: tProp }) =>
 
   return (
     <PopoverMenu
-      ariaLabel={t("DASHBOARD_FILTERS_COMPLAINT_TYPE_FILTER", "Complaint type filter")}
+      ariaLabel={t("DASHBOARD_FILTERS_COMPLAINT_TYPE_FILTER", "Complaint category filter")}
       chipTitle={title}
       chip={chip}
       panelWidth={288}

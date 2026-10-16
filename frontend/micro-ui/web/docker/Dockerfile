@@ -4,7 +4,14 @@ FROM node:14-bullseye-slim AS build
 # build-essential (gcc/g++/make), git and ca-certificates.
 # Note: we intentionally DO NOT npm install -g yarn because the base image
 # already provides a yarn binary which caused the EEXIST symlink error.
-RUN apt-get update && \
+#
+# Debian 11 (bullseye) left LTS on 2026-08-31: its packages moved to
+# archive.debian.org, and deb.debian.org's bullseye-security index still lists
+# files it no longer serves (404), which fails this step. Install from the
+# archived final release instead (no security/updates suites there).
+RUN sed -i -e 's|http://deb.debian.org/debian |http://archive.debian.org/debian |' \
+           -e '/bullseye-updates/d' -e '/debian-security/d' /etc/apt/sources.list && \
+    apt-get -o Acquire::Check-Valid-Until=false update && \
     apt-get install -y --no-install-recommends \
       python2 \
       build-essential \

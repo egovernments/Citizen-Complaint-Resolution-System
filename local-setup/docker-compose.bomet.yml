@@ -19,20 +19,17 @@ services:
     environment:
       SPRING_FLYWAY_ENABLED: "false"
 
-  # Config-driven notifications cutover (design D1/D4/D8). Bomet is the FIRST
-  # tenant on the new path: PGR reads PGR.NotificationRouting +
-  # PGR.NotificationTemplate from MDMS, renders + localizes per recipient, and
-  # publishes one pre-rendered event per (recipient × channel) to
-  # complaints.domain.events. The shared egov-digit default stays 'false', so
-  # only Bomet flips here. This per-tenant overlay survives Ansible re-runs.
-  # Requires the pass-through novu-bridge (notifications
-  # profile, enable_novu: true) and the seeded MDMS masters.
+  # (Notifications: nothing to pin here any more. pgr-services emits one thin
+  # event per workflow transition and novu-bridge does the routing, rendering
+  # and delivery, so there is no path to choose between and no notification
+  # setting in this overlay. That also closed the old overlay-drop failure mode,
+  # where a `compose up pgr-services` without this file silently flipped bomet
+  # back to a legacy path.)
+  # Bomet carries the canonical state-level EscalationConfig and workflow
+  # self-loop. Keep the shared default disabled; this tenant is explicitly
+  # preflighted and opted in through its overlay.
   pgr-services:
     environment:
-      PGR_NOTIFICATION_CONFIG_DRIVEN: "true"
-      # Bomet carries the canonical state-level EscalationConfig and workflow
-      # self-loop. Keep the shared default disabled; this tenant is explicitly
-      # preflighted and opted in through its overlay.
       PGR_ESCALATION_ENABLED: "true"
       PGR_ESCALATION_INTERVAL_MS: "300000"
       KAFKA_TOPICS_COMPLAINTS_DOMAIN_EVENTS: complaints.domain.events

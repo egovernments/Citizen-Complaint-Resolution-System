@@ -1,4 +1,5 @@
 import { type Page, type Locator } from '@playwright/test';
+import { appBase } from '../utils/auth';
 
 export type CitizenLanding = 'language-selection' | 'home' | 'login' | 'unknown';
 
@@ -30,11 +31,11 @@ export class CitizenLandingPage {
     this.allServicesMarker = page
       .getByText(/All Services|ACTION_TEST_ALL_SERVICES_HEADER/i)
       .first();
-    this.loginMobileInput = page.locator('input[name="mobileNumber"]').first();
+    this.loginMobileInput = page.locator('#login-mobile');
   }
 
   async goto() {
-    await this.page.goto('/digit-ui/citizen', { waitUntil: 'domcontentloaded' });
+    await this.page.goto(`${appBase()}/citizen`, { waitUntil: 'domcontentloaded' });
   }
 
   async detectLanding(timeout = 15_000): Promise<CitizenLanding> {

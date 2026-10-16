@@ -193,6 +193,7 @@ export interface BoundaryHierarchy {
   tenantId: string;
   hierarchyType: string;
   boundaryHierarchy: BoundaryLevel[];
+  auditDetails?: { createdBy: string; createdTime: number; lastModifiedBy: string; lastModifiedTime: number };
 }
 
 export interface BoundaryLevel {
@@ -202,10 +203,10 @@ export interface BoundaryLevel {
 }
 
 // GeoJSON-shaped geometry the boundary-service accepts. Today that's just
-// Point + Polygon — MultiPolygon is rejected at /boundary/_create even
-// though jsonb storage would hold it, so callers should collapse
-// MultiPolygon to its largest Polygon before sending (see
-// coerceForBoundaryService in utils/boundaryGeoJson.ts).
+// Point + single-ring Polygon — MultiPolygon and polygons with holes are
+// rejected at /boundary/_create even though jsonb storage would hold them, so
+// callers send the largest part, with enclave holes joined in by a keyhole cut
+// (see coerceForBoundaryService in utils/boundaryGeoJson.ts).
 export interface BoundaryGeometry {
   type: 'Point' | 'Polygon';
   coordinates: number[] | number[][][];
@@ -250,6 +251,7 @@ export interface BoundarySearchResponse {
 // ============================================
 
 export interface Employee {
+  isActive?: boolean;
   id?: string;
   uuid?: string;
   code: string;
@@ -483,3 +485,25 @@ export interface SetupProgress {
   totalComplaintTypes?: number;
   totalEmployees?: number;
 }
+
+// ============================================
+// Escalation Policy Types (RAINMAKER-PGR.EscalationConfig)
+// ============================================
+
+export interface EscalationLevelOverride {
+  slaPercentageByLevel?: number[];
+  slaByLevel?: number[];
+  enabledByLevel: boolean[];
+}
+
+export interface EscalationConfigData {
+  code: string;
+  maxDepth: number;
+  eligibleStatuses: string[];
+  defaultSlaPercentageByLevel?: number[];
+  defaultSlaByLevel?: number[];
+  enabledByLevel?: boolean[];
+  overrides: Record<string, EscalationLevelOverride>;
+  [key: string]: unknown;
+}
+

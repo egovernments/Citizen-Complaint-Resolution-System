@@ -9,7 +9,7 @@ This rollout implements #2048. It must be performed per supported state-level te
 - `ESCALATE` is a self-loop. The backend resolves the current workflow assignee's HRMS `reportingTo`; callers do not choose the target.
 - No assignee, no `reportingTo`, disabled level, or `maxDepth` reached means no automatic escalation. Manual requests receive an explicit error.
 - Both triggers enter `PGRService.update` and write `escalationLevel`, `lastEscalatedAt`, `assignmentChangedAt`, `escalatedFrom`, `escalatedTo`, and `escalationTrigger`.
-- Automatic thresholds are cumulative from `auditDetails.createdTime`; updates and reassignments do not reset this clock. `REOPEN` starts a fresh cycle in `additionalDetails.escalationWindowStartedAt` and resets `escalationLevel` to zero.
+- Automatic thresholds are cumulative from `auditDetails.createdTime`; updates, reassignments and `REOPEN` do not reset this clock or `escalationLevel`. A stale `additionalDetails.escalationWindowStartedAt` written by older builds is ignored.
 - `auditDetails.lastModifiedTime` is not an SLA clock: every accepted complaint `_update` regenerates it, including `COMMENT`, `ASSIGN`, `REASSIGN`, `ESCALATE`, `RESOLVE`, `REJECT`, `REOPEN`, `RATE`, and edits to complaint fields, documents, or contact details. Using it postpones escalation whenever unrelated work touches the complaint.
 - `createdTime` and `now` are epoch milliseconds, so elapsed-time triggering is UTC/time-zone independent; tenant time zones affect display and reporting, not the threshold calculation.
 - `defaultSlaPercentageByLevel` is applied to the complaint type's existing `ComplaintHierarchy.slaHours`. Shipped `[80,120,200]` means a 10-hour complaint escalates at hours 8, 12, and 20—not after 8+12+20 hours. Percentages must increase and are capped at 200.
@@ -100,7 +100,7 @@ Deploy the backend and UI before re-enabling the scheduler. Then verify:
 7. Update, inbox, domain/notification, analytics, and `pgr-escalation-events` consumers receive the same escalation event shape, differing only by `escalationTrigger`.
 8. A city with its own complete `EscalationConfig` uses that policy; a city without one uses the state policy.
 9. Concurrent scheduler/manual attempts return `ESCALATION_IN_PROGRESS`; a dedicated-pool PostgreSQL advisory lock covers the complete update, releases in `finally`, and is released by PostgreSQL on connection/process failure. History/metadata reconciliation checks the next rung on a later attempt.
-10. `REOPEN` resets the level and begins a fresh cumulative clock; earlier workflow `ESCALATE` events do not consume rungs in the new cycle.
+10. `REOPEN` keeps the level and the clock; earlier workflow `ESCALATE` events still count, so a reopened complaint that exhausted its ladder does not escalate again.
 
 Re-enable `PGR_ESCALATION_ENABLED` only after these checks pass. `PGR_ESCALATION_BATCH_SIZE` is a page size; one scheduler run continues through all pages rather than stopping after the first batch.
 

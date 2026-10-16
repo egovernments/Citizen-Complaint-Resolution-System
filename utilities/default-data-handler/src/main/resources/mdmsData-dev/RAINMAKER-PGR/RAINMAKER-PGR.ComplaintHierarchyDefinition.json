@@ -3,8 +3,8 @@
     "hierarchyType": "PGR",
     "active": true,
     "levels": [
-      { "levelCode": "CATEGORY", "order": 1, "parentLevel": null, "isFreeText": false, "isLeafServiceCode": false, "label": "Category" },
-      { "levelCode": "SUB_TYPE", "order": 2, "parentLevel": "CATEGORY", "isFreeText": false, "isLeafServiceCode": true, "label": "Sub-Type" }
+      { "levelCode": "CATEGORY", "order": 1, "parentLevel": null, "isFreeText": false, "isLeafServiceCode": false, "label": "Complaint Category" },
+      { "levelCode": "SUB_TYPE", "order": 2, "parentLevel": "CATEGORY", "isFreeText": false, "isLeafServiceCode": true, "label": "Complaint Subcategory" }
     ]
   }
 ]

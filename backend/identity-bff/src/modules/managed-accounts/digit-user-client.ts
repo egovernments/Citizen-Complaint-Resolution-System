@@ -6,9 +6,32 @@ import { config } from "../../infrastructure/config.js";
  * can contain personal data, so neither is ever logged or rethrown.
  */
 export class DigitUnavailableError extends Error {
-  constructor(message: string, readonly status = 503) {
+  /** DIGIT's own error codes from a rejected request, e.g. `INVALID_ROLE`. */
+  constructor(message: string, readonly status = 503, readonly digitCodes: string[] = []) {
     super(message);
   }
+}
+
+/**
+ * Why egov-user refused a password grant. egov-user answers a refused grant
+ * with HTTP 400 and a fixed OAuth `error_description` (CustomAuthenticationProvider):
+ * "Invalid login credentials", "Account locked" or "Please activate your account".
+ * Only this classification is kept, never the text.
+ */
+export type DigitLoginRejection = "invalid_credentials" | "locked" | "inactive" | "unknown";
+
+export class DigitLoginRejectedError extends DigitUnavailableError {
+  constructor(readonly reason: DigitLoginRejection) {
+    super(`DIGIT login was refused (${reason})`, 400);
+  }
+}
+
+function loginRejection(description: unknown): DigitLoginRejection {
+  if (typeof description !== "string") return "unknown";
+  if (/^account locked/i.test(description)) return "locked";
+  if (/activate your account/i.test(description)) return "inactive";
+  if (/^invalid login credentials/i.test(description)) return "invalid_credentials";
+  return "unknown";
 }
 
 export class DigitUnauthorizedError extends DigitUnavailableError {
@@ -35,6 +58,7 @@ export interface DigitAccount {
   type: string;
   active: boolean;
   identificationMark?: string | null;
+  accountLocked?: boolean;
   roles: DigitRole[];
 }
 
@@ -70,14 +94,35 @@ async function send(path: string, init: RequestInit, operation: string): Promise
     await response.body?.cancel();
     throw new DigitUnauthorizedError(`DIGIT ${operation} was not authorized`);
   }
+  if (operation === "login" && response.status === 400) {
+    let description: unknown;
+    try {
+      description = (await response.json() as { error_description?: unknown })?.error_description;
+    } catch {
+      description = undefined;
+    }
+    throw new DigitLoginRejectedError(loginRejection(description));
+  }
   if (!response.ok) {
-    await response.body?.cancel();
     throw new DigitUnavailableError(
       `DIGIT ${operation} returned ${response.status}`,
       response.status,
+      await errorCodes(response),
     );
   }
   return response;
+}
+
+/** Only `Errors[].code` is kept: the rest of the body may hold personal data. */
+async function errorCodes(response: Response): Promise<string[]> {
+  try {
+    const errors = (await response.json() as { Errors?: unknown })?.Errors;
+    return Array.isArray(errors)
+      ? errors.map((error) => error?.code).filter((code): code is string => typeof code === "string")
+      : [];
+  } catch {
+    return [];
+  }
 }
 
 async function json(response: Response, operation: string): Promise<Record<string, unknown>> {
@@ -98,7 +143,7 @@ const USER_REQUEST_FIELDS = [
 ] as const;
 
 /** Only the documented login-profile fields are kept, cached or returned. */
-function loginProfile(value: Record<string, unknown>): Record<string, unknown> {
+export function loginProfile(value: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(USER_REQUEST_FIELDS.flatMap((field) =>
     field in value ? [[field, value[field]]] : []));
 }
@@ -139,7 +184,14 @@ export async function passwordLogin(input: {
 
 export async function searchAccounts(
   authToken: string,
-  criteria: { userName: string; tenantId: string; userType: string; active: boolean },
+  criteria: {
+    tenantId: string;
+    userType?: string;
+    active: boolean;
+    userName?: string;
+    uuid?: string[];
+    mobileNumber?: string;
+  },
 ): Promise<DigitAccount[]> {
   const response = await send("/_search", {
     method: "POST",
@@ -156,7 +208,7 @@ export async function searchAccounts(
 async function writeAccount(
   path: string,
   authToken: string,
-  user: DigitAccountInput,
+  user: DigitAccountInput | DigitIdentifierUpdate,
   operation: string,
 ): Promise<DigitAccount> {
   const response = await send(path, {
@@ -174,6 +226,14 @@ async function writeAccount(
 
 export function createAccount(authToken: string, user: DigitAccountInput): Promise<DigitAccount> {
   return writeAccount("/users/_createnovalidate", authToken, user, "user create");
+}
+
+/** Explicit payload for the safe identifier writer. */
+export type DigitIdentifierUpdate = Pick<DigitAccount, "uuid" | "tenantId" | "userName" | "name"> &
+  { id?: number; password?: string; [field: string]: unknown };
+
+export function updateIdentifiers(authToken: string, user: DigitIdentifierUpdate): Promise<DigitAccount> {
+  return writeAccount("/users/_updatenovalidate", authToken, user, "identifier update");
 }
 
 export function updateAccount(authToken: string, user: DigitAccountInput): Promise<DigitAccount> {

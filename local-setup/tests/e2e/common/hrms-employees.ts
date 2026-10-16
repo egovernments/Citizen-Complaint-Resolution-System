@@ -10,6 +10,7 @@
  * Public API:
  *   getEmployees(tenant, opts)                    -> Promise<HrmsEmployee[]>
  *   pickRandomEmployeeWithRole(tenant, role, opts) -> Promise<HrmsEmployee>
+ *   getLmeByUuid(tenant, uuid, opts)              -> Promise<{ employee, departments }>
  *
  * Random pick across qualifying employees — same rationale as the
  * boundary and servicedef helpers: vary the assignee across runs so
@@ -17,6 +18,7 @@
  * exercised over time instead of always landing on the same person.
  */
 import { getDigitToken } from '../utils/auth';
+import { requiredEnv } from '../utils/identity';
 
 export interface HrmsEmployee {
   id?: number;
@@ -37,7 +39,6 @@ export interface EmployeeLookupOptions {
   baseURL?: string;
   adminUser?: string;
   adminPassword?: string;
-  authTenant?: string;
 }
 
 /**
@@ -46,28 +47,22 @@ export interface EmployeeLookupOptions {
  */
 export async function getEmployees(
   tenant: string,
-  opts: EmployeeLookupOptions = {},
+  opts: EmployeeLookupOptions & { uuids?: string[] } = {},
 ): Promise<HrmsEmployee[]> {
-  const baseURL = opts.baseURL ?? process.env.BASE_URL ?? 'http://localhost:18080';
-  const authTenant = opts.authTenant ?? tenant;
-  const adminUser =
-    opts.adminUser ?? process.env.ADMIN_USER ?? process.env.DIGIT_EMPLOYEE_USER ?? 'ADMIN';
-  const adminPassword =
-    opts.adminPassword ??
-    process.env.ADMIN_PASSWORD ??
-    process.env.DIGIT_EMPLOYEE_PASSWORD ??
-    'eGov@123';
+  const baseURL = opts.baseURL ?? requiredEnv('BASE_URL');
+  const adminUser = opts.adminUser ?? requiredEnv('DIGIT_USERNAME');
+  const adminPassword = opts.adminPassword ?? requiredEnv('DIGIT_PASSWORD');
 
   const token = await getDigitToken({
     baseURL,
-    tenant: authTenant,
+    tenant,
     username: adminUser,
     password: adminPassword,
-    userType: 'EMPLOYEE',
   });
 
   const resp = await fetch(
-    `${baseURL}/egov-hrms/employees/_search?tenantId=${encodeURIComponent(tenant)}`,
+    `${baseURL}/egov-hrms/employees/_search?tenantId=${encodeURIComponent(tenant)}` +
+      (opts.uuids ? `&uuids=${opts.uuids.map(encodeURIComponent).join(',')}` : ''),
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -108,4 +103,22 @@ export async function pickRandomEmployeeWithRole(
     );
   }
   return matching[Math.floor(Math.random() * matching.length)];
+}
+
+/**
+ * The HRMS record for the employee with this egov-user uuid (one exact
+ * search, not a page of all employees). Throws unless it holds PGR_LME, the
+ * role an ASSIGN target needs. `departments` are its assignments' departments.
+ */
+export async function getLmeByUuid(
+  tenant: string,
+  uuid: string,
+  opts: EmployeeLookupOptions = {},
+): Promise<{ employee: HrmsEmployee; departments: string[] }> {
+  const [employee] = await getEmployees(tenant, { ...opts, uuids: [uuid] });
+  if (!employee?.user.roles?.some((r) => r.code === 'PGR_LME')) {
+    throw new Error(`Employee ${uuid} is not an HRMS employee with PGR_LME on ${tenant}; ASSIGN needs an LME to hand the complaint to`);
+  }
+  const departments = (employee.assignments ?? []).map((a) => a.department).filter((d): d is string => typeof d === 'string');
+  return { employee, departments };
 }

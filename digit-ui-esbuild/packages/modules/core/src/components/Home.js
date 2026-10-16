@@ -10,6 +10,7 @@ import { CitizenServices as CitizenServicesV2 } from "@egovernments/digit-ui-com
 import React, { Fragment } from "react";
 import { useTranslation } from "react-i18next";
 import { RoleBasedEmployeeHome } from "./RoleBasedEmployeeHome";
+import CitizenHomeBanner from "./CitizenHomeBanner";
 import QuickSetupConfigComponent from "../pages/employee/QuickStart/Config";
 
 /* 
@@ -22,6 +23,8 @@ export const processLinkData = (newData, code, t) => {
       if (Digit.Utils.getMultiRootTenant()) {
         link["navigationURL"] = link["navigationURL"].replace("/sandbox-ui/citizen", `/sandbox-ui/${Digit.ULBService.getStateId()}/citizen`);
       }
+      // Seeded `/digit-ui/...` links stay on the tenant route (no-op on legacy routes).
+      link["navigationURL"] = Digit.Utils.rebaseAppUrl(link["navigationURL"]);
       link.link = link["navigationURL"];
       link.i18nKey = t(link["name"]);
 
@@ -101,10 +104,9 @@ const CitizenHome = ({ getCitizenMenu, isLoading }) => {
   });
 
   return (
-    <CitizenServicesV2
-      modules={v2Modules}
-      renderIcon={moduleIcon}
-    />
+    <CitizenHomeBanner>
+      <CitizenServicesV2 modules={v2Modules} renderIcon={moduleIcon} />
+    </CitizenHomeBanner>
   );
 };
 

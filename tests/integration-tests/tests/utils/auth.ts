@@ -2,6 +2,8 @@
  * DIGIT auth utilities — token acquisition and session injection.
  */
 import { BASE_URL } from './env';
+import { chromium, type Page } from '@playwright/test';
+import { hostedSignIn, selectContext, surfacePath } from './identity-bff';
 
 export interface TokenResponse {
   access_token: string;
@@ -14,51 +16,40 @@ export interface TokenResponse {
 export interface AuthConfig {
   baseURL?: string;
   tenant: string;
-  /** Override the tenant used for OAuth (defaults to root derived from tenant). */
+  /** Explicit context tenant override retained for existing fixture callers; no parent is derived. */
   authTenant?: string;
   username: string;
   password: string;
   userType?: 'EMPLOYEE' | 'CITIZEN';
 }
 
-/** Acquire a DIGIT access token via /user/oauth/token (ROPC grant). */
+/** Acquire a DIGIT token through hosted sign-in and the BFF context exchange. */
 export async function getDigitToken(config: AuthConfig): Promise<TokenResponse> {
-  const baseURL = config.baseURL || BASE_URL;
-  const resp = await fetch(`${baseURL}/user/oauth/token`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      Authorization: 'Basic ZWdvdi11c2VyLWNsaWVudDo=',
-    },
-    body: new URLSearchParams({
-      grant_type: 'password',
-      username: config.username,
-      password: config.password,
-      tenantId: config.tenant,
-      scope: 'read',
-      userType: config.userType || 'EMPLOYEE',
-    }).toString(),
-  });
-
-  if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(`Auth failed (${resp.status}): ${text}`);
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage();
+    return await staffContext(page, config, 'configurator');
+  } finally {
+    await browser.close();
   }
-
-  return resp.json() as Promise<TokenResponse>;
 }
 
-/** Login via API token injection — bypasses the UI login form. */
+export async function staffContext(page: Page, config: AuthConfig, surface: 'configurator' | 'employee') {
+  if (config.userType === 'CITIZEN') throw new Error('Use citizenSignIn for citizen phone possession');
+  const baseURL = config.baseURL || BASE_URL;
+  await hostedSignIn(page, { baseURL, surface, username: config.username, password: config.password });
+  return selectContext(page.request, baseURL, surface, config.authTenant || config.tenant);
+}
+
+/** Keep the caller's BFF cookie and install the selected DIGIT token for business API tests. */
 export async function loginViaApi(
   page: import('@playwright/test').Page,
   config: AuthConfig,
 ): Promise<TokenResponse> {
   const baseURL = config.baseURL || BASE_URL;
-  // Auth against root tenant (ADMIN lives at root), but inject city tenant into UI
-  const rootTenant = config.authTenant || (config.tenant.includes('.') ? config.tenant.split('.')[0] : config.tenant);
-  const tokenResponse = await getDigitToken({ ...config, tenant: rootTenant });
+  const tokenResponse = await staffContext(page, config, 'employee');
 
-  await page.goto(`${baseURL}/digit-ui/employee/user/login`, {
+  await page.goto(`${baseURL}${surfacePath('employee', 'user/login')}`, {
     waitUntil: 'domcontentloaded',
     timeout: 30_000,
   });
@@ -80,7 +71,7 @@ export async function loginViaApi(
     },
   );
 
-  await page.goto(`${baseURL}/digit-ui/employee`, {
+  await page.goto(`${baseURL}${surfacePath('employee')}`, {
     waitUntil: 'domcontentloaded',
     timeout: 30_000,
   });

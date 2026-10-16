@@ -4,15 +4,20 @@ import { Label } from '@/components/ui/label';
 interface BooleanInputProps extends InputProps {
   label?: string;
   help?: string;
+  /** What an unset value means to the app reading it: shown, not written. */
+  whenUnset?: boolean;
 }
 
 /** Checkbox bound to a real boolean form value. Unlike a text-fallback, this
  *  preserves the boolean type on round-trip — some MDMS schemas reject
  *  string-"true" where a JSON bool is expected. */
-export function BooleanInput({ label, help, ...inputProps }: BooleanInputProps) {
+export function BooleanInput({ label, help, whenUnset, ...inputProps }: BooleanInputProps) {
   const { id, field, isRequired } = useInput({
     ...inputProps,
     parse: (v: boolean) => v,
+    // Display only: an unset value keeps its meaning on screen but stays unset
+    // in the record, so a save that doesn't touch the box writes nothing.
+    format: (v: boolean | null | undefined) => (v == null && whenUnset !== undefined ? whenUnset : v),
   });
   return (
     <div>

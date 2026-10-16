@@ -1,5 +1,6 @@
 import type { DataProvider } from 'react-admin';
 import type { Catalog, CatalogTest, RunSummary } from './types';
+import { normalize } from './normalize';
 
 /**
  * In-memory dataProvider over /tests/catalog.json.
@@ -23,10 +24,14 @@ let cache: Promise<Catalog> | null = null;
 function fetchCatalog(): Promise<Catalog> {
   if (cache) return cache;
   cache = (async () => {
-    const url = `${import.meta.env.BASE_URL}catalog.json?t=${Date.now()}`;
-    const resp = await fetch(url, { credentials: 'include' });
+    // Revalidate instead of cache-busting: the browser asks nginx whether its
+    // copy is current (ETag/Last-Modified) and gets a 304 until a run rewrites
+    // catalog.json. A ?t=<now> URL was a new resource on every load, so the
+    // whole file (about 1.9 MB at 30 runs) came down each time.
+    const url = `${import.meta.env.BASE_URL}catalog.json`;
+    const resp = await fetch(url, { credentials: 'include', cache: 'no-cache' });
     if (!resp.ok) throw new Error(`catalog.json: HTTP ${resp.status}`);
-    return resp.json() as Promise<Catalog>;
+    return normalize((await resp.json()) as Catalog);
   })();
   return cache;
 }
@@ -76,8 +81,8 @@ function applyFilter<T extends Record<string, unknown>>(
         if (!v.some(want => tags.includes(want as string))) return false;
         continue;
       }
-      // Direct equality on other fields.
-      if (row[k] !== v) return false;
+      // Direct equality on other fields; an array means "any of these".
+      if (Array.isArray(v) ? !v.includes(row[k]) : row[k] !== v) return false;
     }
     return true;
   });

@@ -292,5 +292,5 @@ The rewrite is behaviour-preserving. Worth knowing:
 
 ## Resources
 
-- [Novu notifications guide](../../docs/releases/2.12/notifications/README.md)
+- [Notifications guide](../../docs/releases/2.20/notifications/README.md)
 - Issue [#1982](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/1982) — Migrate user-preferences-service to the current platform stack

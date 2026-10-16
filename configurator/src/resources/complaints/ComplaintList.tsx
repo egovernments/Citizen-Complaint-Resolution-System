@@ -51,7 +51,7 @@ const columns: DigitColumn[] = [
   { source: 'serviceRequestId', label: 'app.fields.request_id' },
   {
     source: 'serviceCode',
-    label: 'app.fields.type',
+    label: 'app.fields.complaint_subcategory',
     render: (record) => {
       const code = String(record.serviceCode ?? '');
       return code ? (

@@ -190,8 +190,13 @@ test("public entry omits the employee navigation sidebar but keeps the filter ba
   // not be able to hide it again by mode alone.
   assert.match(source, /\{!readOnly\s*&&\s*\(\s*<DashboardFilters/);
   assert.doesNotMatch(source, /!publicMode\s*&&\s*\(?\s*<DashboardFilters/);
-  // The in-page language switcher mounts for every non-embedded shell.
-  assert.match(source, /showLanguageMenu=\{!embedded\}/);
+  // The in-page language switcher mounts for every non-embedded shell: in the
+  // header for the standalone employee page, in its own top bar for the
+  // public one.
+  assert.match(source, /showLanguageMenu=\{!embedded\s*&&\s*!publicMode\}/);
+  assert.match(source, /\{publicMode\s*&&\s*<PublicTopBar\s*\/>\}/);
+  const topBar = fs.readFileSync(path.join(path.dirname(DASHBOARD_LAYOUT), "PublicTopBar.jsx"), "utf8");
+  assert.match(topBar, /<LanguageMenu\s*\/>/);
 
   const admin = fs.readFileSync(ADMIN_DASHBOARD, "utf8");
   assert.match(admin, /readOnly=\{false\}/, "public renders Add KPI / Reset / filters like employee");

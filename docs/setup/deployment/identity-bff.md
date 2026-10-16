@@ -6,6 +6,7 @@ flow, and failure contract is in
 [`backend/identity-bff/docs/identity-bff.md`](../../../backend/identity-bff/docs/identity-bff.md).
 The concise component boundary and source-of-truth map is in the
 [`architecture one-pager`](../../../backend/identity-bff/docs/architecture.md).
+Kubernetes (Helm) deployments: see [helm-identity.md](helm-identity.md).
 
 ## Object mapping
 
@@ -44,7 +45,9 @@ a Keycloak token or Keycloak admin credential.
 
 ## Enable the deployment
 
-Set the following in the target host vars:
+This is required, not an add-on: since the legacy identity paths were removed
+(D26) every employee and citizen sign-in goes through the BFF, and the deploy
+refuses `enable_keycloak: false`. Set the following in the target host vars:
 
 ```yaml
 enable_keycloak: true
@@ -78,6 +81,29 @@ The deploy derives separate stable BFF-client and workload secrets from the
 Keycloak admin secret and writes them only to the mode-0600 Compose environment.
 A Keycloak admin-password rotation therefore also rotates those credentials on
 the next converge.
+
+### Staff password reset needs an email address
+
+Employee passwords live in Keycloak now. Both self-service routes send an
+email through the realm mail server: "Forgot password?" on the employee login
+page, and Account → "Set or update password" (a Keycloak `UPDATE_PASSWORD`
+action). So a self-service reset needs the employee's own email address on
+their Keycloak account, plus working realm SMTP (`identity_smtp_*`).
+
+The legacy SMS-OTP reset is gone. It was the employee "Forgot password" page
+calling `/user/password/nologin/_update`, which Kong closes when Keycloak is
+enabled. An employee known only by mobile number therefore cannot reset their
+own password. An administrator can:
+
+- give the employee an email address in the configurator. For an active
+  member use Members → "Change email"; the employee verifies it, then uses
+  "Forgot password?". For one who has not signed in yet, "Complete
+  invitation" (or "Reinvite") emails a password-setup link; or
+- set a temporary password in the Keycloak admin console (realm
+  `keycloak_organization_realm` → Users → the employee → Credentials → Reset
+  password, with "Temporary" on). Keycloak then makes them choose a new one at
+  next sign-in. The console is not public; reach it on the loopback port
+  `18180` (see [Validation](#validation)).
 
 ### Optional authentication methods
 
@@ -139,7 +165,7 @@ The Keycloak-owned screens in the sign-in journey — password entry,
 invalid-credential errors, password setup/reset, email verification,
 account-linking conflicts, expired sessions and generic errors — render in the
 `configurator-blue` login theme, a Keycloakify build of the Configurator's auth
-shell (`backend/identity-bff/keycloak/theme-src`, CCRS #2108). It is built into
+shell (`keycloak/theme-src`, CCRS #2108). It is built into
 the `identity-keycloak` image, so the custom image is what a deployment needs
 for a coherent password journey, not only for magic link.
 

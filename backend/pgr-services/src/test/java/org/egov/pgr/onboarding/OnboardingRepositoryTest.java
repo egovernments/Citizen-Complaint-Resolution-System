@@ -72,6 +72,8 @@ public class OnboardingRepositoryTest {
         assertEquals(true, sql.contains("completed_steps = ?::jsonb"));
         assertEquals(true, sql.contains("status = 'RUNNING' AND lease_token = ?"));
         assertEquals("[\"ORGANIZATION\"]", args[1]);
-        assertEquals(lease, args[args.length - 1]);
+        assertEquals(lease, args[args.length - 2]);
+        assertEquals(true, sql.contains("lease_expires_at > ?"));
+        assertEquals(true, sql.contains("lifecycle_restart_no"));
     }
 }

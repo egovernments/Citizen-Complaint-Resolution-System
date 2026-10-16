@@ -4,16 +4,14 @@ import { Redirect, Route, Switch, useLocation, useRouteMatch, useHistory } from 
 import { AppModules } from "../../components/AppModules";
 import ErrorBoundary from "../../components/ErrorBoundaries";
 import TopBarSideBar from "../../components/TopBarSideBar";
-import ChangePassword from "./ChangePassword";
-import ForgotPassword from "./ForgotPassword";
+import IdentityAccount from "../../components/IdentityAccount";
 import LanguageSelection from "./LanguageSelection";
-import EmployeeLogin from "./Login";
-import Otp from "./Otp";
+import IdentityBffEmployeeLogin from "./IdentityBffEmployeeLogin";
 import UserProfile from "../citizen/Home/UserProfile";
 import ErrorComponent from "../../components/ErrorComponent";
 import { PrivateRoute } from "@egovernments/digit-ui-components";
 import ImageComponent from "../../components/ImageComponent";
-const userScreensExempted = ["user/landing", "user/profile", "user/error", "user/productPage"];
+const userScreensExempted = ["user/account", "user/landing", "user/profile", "user/error", "user/productPage"];
 
 const EmployeeApp = ({
   stateInfo,
@@ -92,20 +90,10 @@ const EmployeeApp = ({
             }
           >
             <Switch>
-              {!Digit.Utils.getMultiRootTenant() && (
-                <Route exact path={`${path}/user/login`}>
-                  <EmployeeLogin stateCode={stateCode} appTenants={appTenants} />
-                </Route>
-              )}
-              <Route exact path={`${path}/user/login/otp`}>
-                <Otp isLogin={true} />
+              <Route exact path={`${path}/user/login`}>
+                <IdentityBffEmployeeLogin t={t} />
               </Route>
-              <Route path={`${path}/user/forgot-password`}>
-                <ForgotPassword stateCode={stateCode}/>
-              </Route>
-              <Route path={`${path}/user/change-password`}>
-                <ChangePassword />
-              </Route>
+              <PrivateRoute path={`${path}/user/account`} component={() => <IdentityAccount surface="employee" />} />
               <PrivateRoute path={`${path}/user/profile`} component={()=><UserProfile stateCode={stateCode} userType={"employee"} cityDetails={cityDetails} />}/>
               <Route path={`${path}/user/error`}>
                 <ErrorComponent

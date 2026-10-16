@@ -7,8 +7,44 @@
  * on every PENDINGATLME complaint, including ones that had already escalated past them.
  * Clicking it then advanced somebody else's ladder.
  *
- * Kept as a pure function so the rule is testable without rendering PGRDetails.
+ * Workflow stores assignees on transitions rather than on the complaint. The newest
+ * transition can therefore be a COMMENT or ESCALATE row with no assignees even though
+ * the complaint still has a holder. Keep the holder derivation here aligned with
+ * EscalationService.assigneesInCurrentOccupancy(): walk newest-first within the current
+ * state occupancy and stop at the first state boundary.
+ *
+ * Kept as pure functions so the rule is testable without rendering PGRDetails.
  */
+
+const stateId = (instance) => instance?.state?.uuid ?? null;
+
+const validAssignees = (instance) => {
+  if (!Array.isArray(instance?.assignes)) return [];
+  return instance.assignes.filter((assignee) => {
+    const uuid = assignee && typeof assignee === "object" ? assignee.uuid : assignee;
+    return typeof uuid === "string" && uuid.trim().length > 0;
+  });
+};
+
+/**
+ * @param {Array<{state?: {uuid?: string}, assignes?: Array<{uuid?: string}|string>}>} processInstances
+ *   workflow history ordered newest-first
+ * @returns {Array<{uuid?: string}|string>} assignees holding the current state occupancy
+ */
+export const currentAssigneesInOccupancy = (processInstances) => {
+  if (!Array.isArray(processInstances) || processInstances.length === 0) return [];
+
+  const currentState = stateId(processInstances[0]);
+  for (const instance of processInstances) {
+    if (stateId(instance) !== currentState) {
+      // Anything older belongs to an earlier state occupancy and must not regain ownership.
+      return [];
+    }
+    const assignees = validAssignees(instance);
+    if (assignees.length > 0) return assignees;
+  }
+  return [];
+};
 
 /**
  * @param {Array<{uuid?: string}|string>} currentAssignees workflow assignees, objects or uuids

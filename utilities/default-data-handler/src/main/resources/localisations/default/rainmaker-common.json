@@ -211,13 +211,13 @@
     },
     {
         "code": "ACTION_TEST_COMPLAINTS_TYPE",
-        "message": "Complaint Types",
+        "message": "Complaint Categories",
         "module": "rainmaker-common",
         "locale": "default"
     },
     {
         "code": "ACTION_TEST_COMPLAINT_TYPES",
-        "message": "Complaint Types",
+        "message": "Complaint Categories",
         "module": "rainmaker-common",
         "locale": "default"
     },
@@ -589,7 +589,7 @@
     },
     {
         "code": "CATEGORIES_OF_COMPLAINT_TYPES_CAN_BE_SUBMITTED_ON_GRIEVANCE_PORTAL",
-        "message": "categories of complaint types can be submitted on grievance portal. ",
+        "message": "categories of complaints can be submitted on grievance portal. ",
         "module": "rainmaker-common",
         "locale": "default"
     },
@@ -7160,6 +7160,24 @@
     {
         "code": "CS_HOME_MY_COMPLAINTS",
         "message": "My Complaints",
+        "module": "rainmaker-common",
+        "locale": "default"
+    },
+    {
+        "code": "CS_HOME_BANNER_WELCOME",
+        "message": "Welcome to",
+        "module": "rainmaker-common",
+        "locale": "default"
+    },
+    {
+        "code": "CS_HOME_BANNER_PRODUCT",
+        "message": "Complaint Management System",
+        "module": "rainmaker-common",
+        "locale": "default"
+    },
+    {
+        "code": "CS_HOME_BANNER_TAGLINE",
+        "message": "Report issues, track progress and see what is happening in your area.",
         "module": "rainmaker-common",
         "locale": "default"
     },

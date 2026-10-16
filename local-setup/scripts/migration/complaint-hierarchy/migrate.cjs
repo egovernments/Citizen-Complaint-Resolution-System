@@ -308,8 +308,8 @@ async function migrateTenant(managing) {
     interior = Array.from(interiorByCode.values());
   } else {
     levels = [
-      { levelCode: CATEGORY_LEVEL, order: 1, parentLevel: null, isFreeText: false, isLeafServiceCode: false, label: 'Category' },
-      { levelCode: LEAF_LEVEL, order: 2, parentLevel: CATEGORY_LEVEL, isFreeText: false, isLeafServiceCode: true, label: 'Sub-Type' },
+      { levelCode: CATEGORY_LEVEL, order: 1, parentLevel: null, isFreeText: false, isLeafServiceCode: false, label: 'Complaint Category' },
+      { levelCode: LEAF_LEVEL, order: 2, parentLevel: CATEGORY_LEVEL, isFreeText: false, isLeafServiceCode: true, label: 'Complaint Subcategory' },
     ];
     leafLevelCode = LEAF_LEVEL;
     const cats = new Map();

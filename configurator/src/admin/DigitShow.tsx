@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Pencil, RefreshCw } from 'lucide-react';
 import { DigitCard } from '@/components/digit/DigitCard';
 import { Button } from '@/components/ui/button';
+import { MASTER_SCREEN_META } from './masterScreens';
 
 export interface DigitShowProps extends ShowControllerProps {
   /** Page title (defaults to the record's defaultTitle from ra-core) */
@@ -28,7 +29,13 @@ export function DigitShow({
     refetch,
     resource,
     defaultTitle,
-  } = useShowController(controllerOptions);
+  } = useShowController({
+    ...controllerOptions,
+    queryOptions: {
+      ...controllerOptions.queryOptions,
+      meta: { ...MASTER_SCREEN_META, ...controllerOptions.queryOptions?.meta },
+    },
+  });
   const navigate = useNavigate();
 
   const displayTitle = title || defaultTitle || 'Detail';

@@ -89,9 +89,9 @@ export function downloadComplaintHierarchyTemplate(hierarchyType: string, levelC
     return [...path, dept, sla, kw];
   };
   const rows: Row[] = [
-    mkRow(null, 'Example Sub-type 1', 'DEPT_1', 24, 'keyword1, keyword2'),
-    mkRow(null, 'Example Sub-type 2', 'DEPT_1', 48, 'keyword3'),
-    mkRow(`Another ${safe[Math.max(0, leafIdx - 1)]}`, 'Example Sub-type 3', 'DEPT_2', 72, 'keyword4'),
+    mkRow(null, 'Example Subcategory 1', 'DEPT_1', 24, 'keyword1, keyword2'),
+    mkRow(null, 'Example Subcategory 2', 'DEPT_1', 48, 'keyword3'),
+    mkRow(`Another ${safe[Math.max(0, leafIdx - 1)]}`, 'Example Subcategory 3', 'DEPT_2', 72, 'keyword4'),
   ];
 
   const wb = XLSX.utils.book_new();

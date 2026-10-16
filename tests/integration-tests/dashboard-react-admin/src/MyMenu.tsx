@@ -102,7 +102,9 @@ export default function MyMenu() {
 
       <SectionLabel>Quick filters</SectionLabel>
       <Menu.Item
-        to={filterPath({ lastStatus: 'failed' })}
+        // Failing in the LATEST run, counted the way the run summary counts
+        // failed (failed + timed out) — not a carried-over older failure.
+        to={filterPath({ currentStatus: ['failed', 'timedOut'] })}
         primaryText="Failing now"
         leftIcon={<ErrorOutlineIcon />}
       />
