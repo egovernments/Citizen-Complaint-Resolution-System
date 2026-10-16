@@ -2216,6 +2216,9 @@ services:
       GATUS_PROFILE_NOTIFICATIONS: ${GATUS_PROFILE_NOTIFICATIONS:-false}
       GATUS_PROFILE_CHATBOT: ${GATUS_PROFILE_CHATBOT:-false}
       GATUS_AUDIT: "true"
+      # Kong's Admin API is loopback-only here (KONG_ADMIN_LISTEN above), so no
+      # other container can reach kong:8001 (#2458).
+      GATUS_KONG_ADMIN: "false"
       GATUS_PROXIES: "true"
       # Watch the monitoring itself (#1613). This is the only compose path that
       # deploys the full observability stack, so it is the only one where these
