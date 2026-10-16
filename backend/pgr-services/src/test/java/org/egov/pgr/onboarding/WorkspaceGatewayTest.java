@@ -141,7 +141,7 @@ public class WorkspaceGatewayTest {
         assertEquals("example",query.getFirst("tenantId"));assertEquals("0",query.getFirst("offset"));assertEquals("1000",query.getFirst("limit"));
     }
     @Test public void paginatedProbeStillExcludesFounderAndInactiveEmployees() throws Exception {
-        employees=List.of(Map.of("code","FOUNDER_1"),Map.of("code","INACTIVE_EMP","isActive",false),
+        employees=List.of(Map.of("code","FOUNDER_1"),Map.of("code","EMP_0001","assignments",List.of(Map.of("designation","ONBOARDING_FOUNDER"))),Map.of("code","INACTIVE_EMP","isActive",false),
                 Map.of("code","DISABLED_USER","user",Map.of("active",false)));
         workspaceSearch().andExpect(status().isOk()).andExpect(jsonPath("$.Probes.EMPLOYEES").value(false));
     }

@@ -18,6 +18,12 @@ public class OnboardingSteps {
      * hierarchy update), so it blocked that step (#2260).
      */
     public static final String WORKSPACE_HIERARCHY = "WORKSPACE";
+    /**
+     * The founder is the workspace's first employee, so they get the code the configurator's
+     * Employees step gives a first employee (#2456). One per tenant, so a retried step finds it.
+     * Founders made before this kept FOUNDER_ plus the signup id.
+     */
+    public static final String FOUNDER_CODE = "EMP_0001", FOUNDER_DESIGNATION = "ONBOARDING_FOUNDER";
     private final OnboardingProvisionerClient client;
     private final PlatformBaseline seed;
     private final ObjectMapper mapper;
@@ -326,17 +332,19 @@ public class OnboardingSteps {
     }
 
     private void founder(OnboardingSignup signup, OnboardingOperation operation, OnboardingProgress progress, OnboardingProgress.WriteScope scope) {
-        String tenant = signup.getRequestedTenantId(), code = "FOUNDER_" + signup.getId().toString().replace("-", "");
-        JsonNode employees = client.read("hrms", "/egov-hrms/employees/_search?tenantId=" + tenant + "&codes=" + code + "&offset=0&limit=2", Map.of()).path("Employees");
+        String tenant = signup.getRequestedTenantId(), code = FOUNDER_CODE;
+        // The old code too, so a run that created its founder under it before an upgrade finds them.
+        String codes = code + ",FOUNDER_" + signup.getId().toString().replace("-", "");
+        JsonNode employees = client.read("hrms", "/egov-hrms/employees/_search?tenantId=" + tenant + "&codes=" + codes + "&offset=0&limit=2", Map.of()).path("Employees");
         if (!employees.isArray()) throw new OnboardingFailure("HRMS_INVALID_RESPONSE", true);
-        if (employees.size() > 1) throw new OnboardingFailure("FOUNDER_AMBIGUOUS", false);
+        if (employees.size() > 1 || employees.size() == 1 && !isFounder(employees.get(0))) throw new OnboardingFailure("FOUNDER_AMBIGUOUS", false);
         if (employees.isEmpty()) {
             if (operation.getFounderDigitUuid() != null) throw new OnboardingFailure("FOUNDER_NOT_FOUND", true);
             JsonNode contact = mapper.valueToTree(signup.getTenantMetadata().get("tenantAdmin"));
             List<Map<String, String>> roles = new ArrayList<>();
             seed.founderRoles().forEach(r -> roles.add(Map.of("code", r.asText(), "name", r.asText(), "tenantId", tenant)));
             var user = new LinkedHashMap<String, Object>();
-            user.put("name", signup.getFounderName()); user.put("userName", code);
+            user.put("name", signup.getFounderName()); user.put("userName", founderUserName(signup));
             String phone = contact.path("mobileNumber").asText().replaceAll("[\\s()-]", "");
             String countryCode = contact.path("countryCode").asText().trim();
             if (!countryCode.isBlank() && phone.startsWith(countryCode)) phone = phone.substring(countryCode.length());
@@ -349,7 +357,7 @@ public class OnboardingSteps {
             employee.put("tenantId", tenant); employee.put("code", code); employee.put("employeeStatus", "EMPLOYED");
             employee.put("employeeType", "PERMANENT"); employee.put("dateOfAppointment", signup.getCreatedAt());
             employee.put("user", user); employee.put("isActive", true);
-            employee.put("assignments", List.of(Map.of("department", "ONBOARDING_ADMIN", "designation", "ONBOARDING_FOUNDER",
+            employee.put("assignments", List.of(Map.of("department", "ONBOARDING_ADMIN", "designation", FOUNDER_DESIGNATION,
                     "fromDate", signup.getCreatedAt(), "isCurrentAssignment", true)));
             employee.put("jurisdictions", List.of(Map.of("tenantId", tenant, "hierarchy", WORKSPACE_HIERARCHY, "boundaryType", "ROOT", "boundary", tenant, "roles", roles)));
             try {
@@ -371,6 +379,31 @@ public class OnboardingSteps {
         if (operation.getFounderDigitUuid() != null && !operation.getFounderDigitUuid().equals(uuid))
             throw new OnboardingFailure("BINDING_CONFLICT", false);
         operation.setFounderDigitUuid(uuid); progress.save();
+    }
+
+    /** The founder's HRMS row: the old FOUNDER_ code, or the designation only the founder holds (the configurator never offers it). */
+    public static boolean isFounder(JsonNode employee) {
+        if (employee.path("code").asText().startsWith("FOUNDER_")) return true;
+        for (JsonNode assignment : employee.path("assignments")) if (FOUNDER_DESIGNATION.equals(assignment.path("designation").asText())) return true;
+        return false;
+    }
+
+    /**
+     * The username the Employees step would give the founder: their name in lower case with every
+     * other character a dot (hrmsService.generateUsername). egov-user keeps usernames unique per
+     * tenant and type, and the founder is a new workspace's first user, so it is never taken. A name
+     * with no Latin letters or digits falls back to the email's local part, then to the code.
+     */
+    static String founderUserName(OnboardingSignup signup) {
+        String email = signup.getFounderEmail() == null ? "" : signup.getFounderEmail();
+        String name = userName(signup.getFounderName());
+        if (name.isEmpty()) name = userName(email.contains("@") ? email.substring(0, email.indexOf('@')) : email);
+        return name.isEmpty() ? FOUNDER_CODE.toLowerCase(Locale.ROOT) : name;
+    }
+    private static String userName(String text) {
+        String name = (text == null ? "" : text).toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", ".").replaceAll("\\.+", ".").replaceAll("^\\.|\\.$", "");
+        // egov-user takes at most 64 characters.
+        return name.length() > 64 ? name.substring(0, 64).replaceAll("\\.$", "") : name;
     }
 
     private JsonNode schema(String code) {

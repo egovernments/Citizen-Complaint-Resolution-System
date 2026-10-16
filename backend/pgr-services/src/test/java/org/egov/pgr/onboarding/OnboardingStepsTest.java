@@ -45,7 +45,7 @@ public class OnboardingStepsTest {
                 assertTrue("platform prerequisites before HRMS",rows.containsKey("newtown|common-masters.Department|ONBOARDING_ADMIN"));
                 if(createFailure!=null)throw createFailure;
                 Map<String,Object> employee=((List<Map<String,Object>>)body.get("Employees")).get(0);createdUser=(Map<String,Object>)employee.get("user");
-                createdUser=new LinkedHashMap<>(createdUser);createdUser.put("uuid","founder-uuid");employees.add(mapper.valueToTree(Map.of("user",createdUser)));writes.add("hrms:create");return mapper.valueToTree(Map.of("Employees",employees));
+                createdUser=new LinkedHashMap<>(createdUser);createdUser.put("uuid","founder-uuid");var stored=new LinkedHashMap<>(employee);stored.put("user",createdUser);employees.add(mapper.valueToTree(stored));writes.add("hrms:create");return mapper.valueToTree(Map.of("Employees",employees));
             }
             writes.add(service+":"+path);
             if(service.equals("workflow")) {
@@ -87,6 +87,26 @@ public class OnboardingStepsTest {
         verify(client,never()).read(eq("mdms"),anyString(),argThat(b->!b.toString().contains("tenantId=newtown")));
         var order=inOrder(client);order.verify(client).read(eq("hrms"),contains("_search"),anyMap());order.verify(client).write(any(),eq("hrms"),contains("_create"),anyMap());
         steps.perform("FOUNDER_HRMS",signup,op,progress);verify(client,times(1)).write(any(),eq("hrms"),contains("_create"),anyMap());
+    }
+    /** #2456: the founder's row reads like any employee's: the first EMP_ code and a username from their name. */
+    @Test public void founderGetsTheFirstEmployeeCodeAndANameUsername(){
+        signup.setFounderName("Anita  Wanjiru-Otieno ");prerequisites();steps.perform("FOUNDER_HRMS",signup,op,progress);
+        assertEquals("anita.wanjiru.otieno",createdUser.get("userName"));assertEquals("EMP_0001",employees.get(0).path("code").asText());
+        verify(client,atLeastOnce()).read(eq("hrms"),contains("&codes=EMP_0001,FOUNDER_"+signup.getId().toString().replace("-","")+"&"),anyMap());
+        assertEquals("founder",OnboardingSteps.founderUserName(OnboardingSignup.builder().founderName("Founder").build()));
+        assertEquals("e2e.ab",OnboardingSteps.founderUserName(OnboardingSignup.builder().founderName("أنيتا").founderEmail("E2E+ab@example.test").build()));
+        assertEquals("emp_0001",OnboardingSteps.founderUserName(OnboardingSignup.builder().founderName("أنيتا").build()));
+        assertEquals(64,OnboardingSteps.founderUserName(OnboardingSignup.builder().founderName("a".repeat(70)).build()).length());
+    }
+    /** A founder made under the old FOUNDER_ code is found, not made again; an EMP_0001 that isn't the founder is never adopted. */
+    @Test public void founderSearchFindsTheOldCodeAndRefusesSomeoneElse(){
+        prerequisites();
+        employees.add(mapper.valueToTree(Map.of("code","FOUNDER_"+signup.getId().toString().replace("-",""),"user",Map.of("uuid","legacy-uuid"))));
+        steps.perform("FOUNDER_HRMS",signup,op,progress);assertEquals("legacy-uuid",op.getFounderDigitUuid());
+        employees.clear();op.setFounderDigitUuid(null);
+        employees.add(mapper.valueToTree(Map.of("code","EMP_0001","assignments",List.of(Map.of("designation","CLERK")),"user",Map.of("uuid","someone-else"))));
+        assertEquals("FOUNDER_AMBIGUOUS",assertThrows(OnboardingFailure.class,()->steps.perform("FOUNDER_HRMS",signup,op,progress)).getCode());
+        assertNull(op.getFounderDigitUuid());verify(client,never()).write(any(),eq("hrms"),contains("_create"),anyMap());
     }
     @Test public void baselineCreatesTenantPgrWorkflowOnceWithSeededRoles(){
         prerequisites();assertEquals(1,workflows.size());JsonNode bs=mapper.valueToTree(workflows.get(0));

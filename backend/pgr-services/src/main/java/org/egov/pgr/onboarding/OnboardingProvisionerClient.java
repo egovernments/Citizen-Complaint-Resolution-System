@@ -208,8 +208,8 @@ public class OnboardingProvisionerClient {
             if (!signupWorkflows.contains(payload.path("businessService").asText())) denied();
         } else if ("hrms".equals(service) && "FOUNDER_HRMS".equals(step) && "/egov-hrms/employees/_create".equals(path)) {
             payload = only(body.path("Employees")); requireTenant(payload, tenant); requireTenant(payload.path("user"), tenant);
-            String founder = "FOUNDER_" + scope.signupId().toString().replace("-", "");
-            if (!founder.equals(payload.path("code").asText()) || !founder.equals(payload.path("user").path("userName").asText())) denied();
+            // Only the founder's own code (HRMS keeps codes unique per tenant) and a username of OnboardingSteps#founderUserName's shape.
+            if (!OnboardingSteps.FOUNDER_CODE.equals(payload.path("code").asText()) || !payload.path("user").path("userName").asText().matches("[a-z0-9_]+(\\.[a-z0-9_]+)*")) denied();
         } else denied();
         requireNestedTenants(body, tenant);
     }

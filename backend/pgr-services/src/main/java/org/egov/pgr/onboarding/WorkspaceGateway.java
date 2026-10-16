@@ -89,7 +89,7 @@ public class WorkspaceGateway {
                 return false;
             }
             case "EMPLOYEES": {
-                for(JsonNode row:reads.employees()) if(!row.path("code").asText().isBlank() && !row.path("code").asText().startsWith("FOUNDER_") && row.path("isActive").asBoolean(true) && row.path("user").path("active").asBoolean(true))return true;
+                for(JsonNode row:reads.employees()) if(!row.path("code").asText().isBlank() && !OnboardingSteps.isFounder(row) && row.path("isActive").asBoolean(true) && row.path("user").path("active").asBoolean(true))return true;
                 return false;
             }
             default: throw new IllegalArgumentException(step);
