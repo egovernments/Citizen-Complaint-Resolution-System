@@ -1,4 +1,5 @@
 import { localizationService, mdmsService } from '@/api';
+import { resolveConfig } from '@/api/runtimeConfig';
 import type { MdmsRecord } from '@/api/types';
 import { toPascal } from '@/utils/excelParser';
 import { labelLocales } from '../labelLocales';
@@ -71,6 +72,8 @@ export type LoadedComplaints =
   | { editable: false; leafCount: number; levels: string[]; departments: string[] };
 
 const stateRootOf = (tenantId: string) => tenantId.split('.')[0];
+const stateCopyEnabled = () =>
+  resolveConfig('COMPLAINT_TYPES_STATE_COPY', import.meta.env.VITE_COMPLAINT_TYPES_STATE_COPY).toLowerCase() !== 'false';
 const dataOf = (record: MdmsRecord) => record.data as Record<string, unknown>;
 const text = (value: unknown) => (typeof value === 'string' ? value : '');
 /**
@@ -316,9 +319,11 @@ export async function saveComplaints(
 
   // pgr-services validates serviceCode at the state root, so a city keeps a
   // copy there too, as the spreadsheet route does. Not fatal: the city's own
-  // copy is what its apps read.
+  // copy is what its apps read. A deployment whose pgr finds the city's own
+  // rows switches the copy off (COMPLAINT_TYPES_STATE_COPY: "false"): the root
+  // copy is shared by every city under the state.
   const stateRoot = stateRootOf(tenantId);
-  if (stateRoot !== tenantId) {
+  if (stateRoot !== tenantId && stateCopyEnabled()) {
     const rootDefinitions = await mdmsService.searchRecords(stateRoot, DEFINITION_SCHEMA).catch(() => [] as MdmsRecord[]);
     await sync(
       stateRoot,
