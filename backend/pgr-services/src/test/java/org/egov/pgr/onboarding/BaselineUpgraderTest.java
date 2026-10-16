@@ -19,6 +19,9 @@ public class BaselineUpgraderTest {
     private final List<String> writes = new ArrayList<>();
     private Map<String, Object> finished;
 
+    /** Inline mocks keep every call they record, platform-baseline payloads included, until cleared:
+     *  without this the onboarding package outgrows a 512 MB test heap. */
+    @After public void releaseMocks() { framework().clearInlineMocks(); }
     @Before @SuppressWarnings("unchecked") public void setup() throws Exception {
         client = mock(OnboardingProvisionerClient.class); seed = new PlatformBaseline(mapper); steps = new OnboardingSteps(client, seed, mapper);
         signup = OnboardingSignup.builder().id(UUID.randomUUID()).requestedTenantId("walkone").accountName("Walk One").accountCode("WALK1")

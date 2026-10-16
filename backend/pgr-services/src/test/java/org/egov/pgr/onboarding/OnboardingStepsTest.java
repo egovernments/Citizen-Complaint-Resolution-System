@@ -17,6 +17,9 @@ public class OnboardingStepsTest {
     private List<Object> workflows=new ArrayList<>();
     private OnboardingFailure createFailure;
     private int lagReads; private final Map<String,Integer> lagging=new HashMap<>();
+    /** Inline mocks keep every call they record, platform-baseline payloads included, until cleared:
+     *  without this the onboarding package outgrows a 512 MB test heap. */
+    @After public void releaseMocks() { framework().clearInlineMocks(); }
     @Before @SuppressWarnings("unchecked") public void setup() throws Exception {
         client=mock(OnboardingProvisionerClient.class);when(client.mdmsSchemaSearchPath()).thenReturn("/egov-mdms-service/schema/v1/_search");when(client.mdmsSearchPath()).thenReturn("/egov-mdms-service/v2/_search");steps=new OnboardingSteps(client,new PlatformBaseline(mapper),mapper);
         signup=OnboardingSignup.builder().id(UUID.randomUUID()).requestedTenantId("newtown").accountName("New Town").accountCode("NEW-TOWN").urlSlug("newtown").countryCode("IN").timeZone("Asia/Kolkata").financialYearPolicy("APRIL_MARCH")
