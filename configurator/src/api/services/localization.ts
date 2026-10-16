@@ -201,6 +201,10 @@ export const localizationService = {
   // `rainmaker-boundary-BOMET-Hierarchy` while the UI requests
   // `rainmaker-boundary-bomet-hierarchy` → 0 hits → every boundary dropdown
   // (Country/County/Ward) renders the raw code instead of the name.
+  boundaryModule(hierarchyType: string): string {
+    return `rainmaker-boundary-${hierarchyType.toLowerCase()}`;
+  },
+
   buildBoundaryLocalizations(
     tenantId: string,
     code: string,
@@ -208,7 +212,7 @@ export const localizationService = {
     hierarchyType: string,
     locale: string = 'en_IN'
   ): LocalizationMessage[] {
-    const module = `rainmaker-boundary-${hierarchyType.toLowerCase()}`;
+    const module = this.boundaryModule(hierarchyType);
     const tenantPrefix = tenantId.toUpperCase().replace(/\./g, '_');
     const prefixedCode = `${tenantPrefix}_${hierarchyType}_${code}`;
     const messages: LocalizationMessage[] = [{ code, message: name, module, locale }];

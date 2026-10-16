@@ -290,7 +290,8 @@ function isDuplicateError(error: unknown): boolean {
 
 /** PGR owns its escalation policy in RAINMAKER-PGR.EscalationConfig.
  *  Do not let the generic workflow masters create a second live PGR policy.
- *  Existing legacy rows remain deletable so operators can complete migration. */
+ *  Existing legacy rows can still be deactivated (Edit, untick Active) or
+ *  deleted, so operators can clear PGR_ESCALATION_CONFIG_CONFLICT. */
 function rejectLegacyPgrEscalationWrite(
   config: ResourceConfig,
   data: Record<string, unknown>,
@@ -1755,8 +1756,9 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
         mirrorActiveFlags(existing.data, desiredIsActive);
         // React-admin may send only dirty fields. Validate the authoritative
         // merged record so partial updates, updateMany, and reactivation cannot
-        // revive a competing PGR Workflow.AutoEscalation policy.
-        rejectLegacyPgrEscalationWrite(config, existing.data);
+        // revive a competing PGR Workflow.AutoEscalation policy. A write that
+        // leaves the row inactive is the migration path and is let through.
+        if (desiredIsActive) rejectLegacyPgrEscalationWrite(config, existing.data);
         const updated = await client.mdmsUpdate(existing, desiredIsActive);
         if (config.leafServiceDefAdapter) {
           // includeInactive: a leaf that was just disabled must still map back.

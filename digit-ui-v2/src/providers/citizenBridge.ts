@@ -221,7 +221,7 @@ const provider = {
           geoLocation:
             d.latitude != null && d.longitude != null
               ? { latitude: d.latitude, longitude: d.longitude }
-              : undefined,
+              : {},
         },
         additionalDetail: d.photos && (d.photos as string[]).length > 0 ? { images: d.photos } : {},
       },

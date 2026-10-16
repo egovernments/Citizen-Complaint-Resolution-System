@@ -175,6 +175,14 @@ export function registerPgrWorkflowTools(registry: ToolRegistry): void {
               required: ['code'],
             },
             city: { type: 'string', description: 'City name' },
+            geoLocation: {
+              type: 'object',
+              properties: {
+                latitude: { type: 'number' },
+                longitude: { type: 'number' },
+              },
+              description: 'Optional complaint location in decimal degrees. Leave it out when the location is unknown; the complaint is then stored with no location.',
+            },
           },
           required: ['locality'],
           description: 'Address with locality boundary code',

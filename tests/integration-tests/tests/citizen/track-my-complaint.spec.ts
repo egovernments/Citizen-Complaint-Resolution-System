@@ -76,7 +76,7 @@ Steps:
 3. Assert the details grid is visible and body contains "Complaint Details", "Complaint Timeline", the SR id, and "Application Status".
 4. Assert body does NOT contain "Something went wrong".
 
-The Map widget + "Open in Maps" only render when geoLocation has non-zero coords. This spec API-seeds with {0,0} so the map isn't asserted here — wizard.spec.ts walks the UI and drops a real pin so the map renders there.`,
+The Map widget + "Open in Maps" only render when geoLocation has non-zero coords. This spec API-seeds without a location so the map isn't asserted here — wizard.spec.ts walks the UI and drops a real pin so the map renders there.`,
     },
     tag: ['@area:pgr', '@kind:regression', '@layer:ui', '@persona:citizen'] }, async ({ page }) => {
     test.setTimeout(120_000);
@@ -98,7 +98,7 @@ The Map widget + "Open in Maps" only render when geoLocation has non-zero coords
     await expect(body).toContainText('Application Status');
 
     // Map widget + "Open in Maps" button only render when geoLocation
-    // has non-zero coords. This spec API-seeds with {0,0} so the map
+    // has non-zero coords. This spec API-seeds without a location so the map
     // can't be asserted here — wizard.spec.ts walks the UI and drops a
     // real pin, so the map renders there. Tracked under Story 5.1.
 

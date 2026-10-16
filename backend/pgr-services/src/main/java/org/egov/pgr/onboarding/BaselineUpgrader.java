@@ -28,6 +28,9 @@ public class BaselineUpgrader {
     static final int MAX_FAILURES = 30;
     /** Progress key naming the step, schema or record being worked on: where a failure happened. */
     static final String AT = "at";
+    /** Role-action grants a later seed removed, as role code to action id; the upgrade deactivates them. */
+    static final Map<String, Integer> REVOKED_GRANTS = Map.of("CSR", 605);
+    static final String ROLE_ACTIONS = "ACCESSCONTROL-ROLEACTIONS.roleactions";
     private final WorkspaceRepository workspaces;
     private final OnboardingRepository onboarding;
     private final OnboardingSteps steps;
@@ -85,6 +88,7 @@ public class BaselineUpgrader {
             step(progress, save, "state-info", () -> stateInfo(scope, signup, kept));
             step(progress, save, "stray-name-keys", () -> strayNameKeys(scope, signup, progress, kept));
         }
+        if (from < 7) step(progress, save, "revoked-grants", () -> revokedGrants(scope, signup));
         // Upserts and deletes evict the tenant's own cache entries; the full bust matches workspace rename.
         step(progress, save, "cache-bust", () -> {
             if (Boolean.TRUE.equals(progress.get("localizationChanged"))) client.write(scope, "localization", "/localization/messages/cache-bust", Map.of());
@@ -125,6 +129,24 @@ public class BaselineUpgrader {
         steps.ensureIdFormat(scope, signup);
         steps.ensureMobileRule(scope, signup);
         steps.ensureDashboardConfig(scope, signup);
+    }
+
+    /**
+     * v7 stops granting CSR /user/users/_createnovalidate (action 605), which creates a user with whatever roles the
+     * caller sends; with CSR on every employee that would let any of them create a SUPERUSER (#2239). Seed records are
+     * only ever created, so the grant an older seed wrote is deactivated here.
+     */
+    private void revokedGrants(OnboardingProgress.WriteScope scope, OnboardingSignup signup) {
+        String tenant = signup.getRequestedTenantId();
+        for (var grant : REVOKED_GRANTS.entrySet()) {
+            String id = grant.getKey() + "." + grant.getValue();
+            JsonNode rows = steps.records(tenant, ROLE_ACTIONS, id);
+            if (rows.isEmpty() || !rows.get(0).path("isActive").asBoolean(true)) continue;
+            var record = steps.asMap(rows.get(0)); record.put("isActive", false);
+            client.write(scope, "mdms", "/egov-mdms-service/v2/_update/" + ROLE_ACTIONS, Map.of("Mdms", record));
+            if (steps.records(tenant, ROLE_ACTIONS, id).path(0).path("isActive").asBoolean(true))
+                throw new OnboardingFailure("MDMS_RECORD_NOT_VISIBLE", true);
+        }
     }
 
     /**

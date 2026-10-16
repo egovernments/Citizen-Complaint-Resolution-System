@@ -12,9 +12,14 @@ const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\
 /** Returns the picked option's label: the first option, or the one called `name` (case-insensitive). */
 export async function pickSelectOption(page: Page, combo: Locator, name?: string): Promise<string> {
   await expect(combo).toBeEnabled({ timeout: 15_000 });
-  await combo.click();
   const first = page.getByRole('option').first();
-  await expect(first).toBeAttached({ timeout: 20_000 });
+  // A click while the options are still loading can leave the list closed
+  // (it remounts when they arrive), so reopen until an option is there. The
+  // trigger toggles, so only click it while aria-expanded says closed.
+  await expect(async () => {
+    if (await combo.getAttribute('aria-expanded') !== 'true') await combo.click();
+    await expect(first).toBeAttached({ timeout: 2_000 });
+  }, 'the Select never listed an option').toPass({ timeout: 20_000 });
   await expect.poll(() => page.evaluate(() => document.activeElement?.tagName), { message: 'the Select search box did not take focus' })
     .toBe('INPUT');
   if (name) {

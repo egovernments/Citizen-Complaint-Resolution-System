@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { config } from "../../src/infrastructure/config.js";
 import { getIdentityAppPort, startIdentityTestApp, stopIdentityTestApp } from "../e2e/identity-test-app.js";
 import { contractRoute, expectContractError } from "./harness.js";
+import { sessionCookie } from "../../src/modules/sessions/session-store.js";
 
 // Contract tests for the routes whose codes are already live. The lane that
 // changes a route (see its `items` in src/contract/routes.ts) extends its tests here.
@@ -200,6 +201,15 @@ describe("browser account boundaries", () => {
     await expectContractError(await fetch(`${base}${authorize.path}?action=UPDATE_PASSWORD`), authorize, "SESSION_REQUIRED");
     const session = contractRoute("GET", "/identity/v1/session");
     await expectContractError(await fetch(`${base}${session.path}?include=account`), session, "SESSION_REQUIRED");
+  });
+  it("clears a session cookie whose session has ended", async () => {
+    const route = contractRoute("GET", "/identity/v1/session");
+    const dead = await fetch(`${base}${route.path}?surface=configurator`, { headers: { Cookie: sessionCookie("ended-session", 600).split(";")[0] } });
+    await expectContractError(dead, route, "SESSION_REQUIRED");
+    expect(dead.headers.get("set-cookie")).toContain("Max-Age=0");
+    const none = await fetch(`${base}${route.path}?surface=configurator`);
+    await expectContractError(none, route, "SESSION_REQUIRED");
+    expect(none.headers.has("set-cookie")).toBe(false);
   });
   it("protects provider unlink with origin and session checks", async () => {
     const route = contractRoute("POST", "/identity/v1/account/providers/_unlink");

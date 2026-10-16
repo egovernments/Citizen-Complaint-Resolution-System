@@ -5964,6 +5964,18 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.bulk_employees.code_repeated",
+    "message": "%{code} is on more than one row",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.code_taken",
+    "message": "%{code} is already used by %{name}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.bulk_employees.col_department",
     "message": "Department code",
     "module": "configurator-ui",
@@ -8226,6 +8238,18 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.geography.created.already_there_one",
+    "message": "%{count} area was already in the hierarchy as listed, so it was left as it is.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.created.already_there_other",
+    "message": "%{count} areas were already in the hierarchy as listed, so they were left as they are.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.geography.created.area_one",
     "message": "%{count} area",
     "module": "configurator-ui",
@@ -8460,6 +8484,24 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.geography.excel.duplicate_code",
+    "message": "The code \"%{code}\" is used on rows %{rows}. Each boundary needs its own code.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.existing_conflict",
+    "message": "Row %{row}: %{code} is %{currentName} (parent: %{currentParent}) in the hierarchy, but %{sheetName} (parent: %{sheetParent}) in the sheet.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.existing_conflicts",
+    "message": "Nothing was uploaded. These codes are already in this hierarchy with a different name or parent, and an upload can’t rename or move an area. Use the current name and parent, or a new code.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.geography.excel.file",
     "message": "File: %{name}",
     "module": "configurator-ui",
@@ -8534,6 +8576,12 @@
   {
     "code": "app.onboarding.geography.excel.no_errors",
     "message": "No errors found",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.no_parent",
+    "message": "none",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -8696,6 +8744,12 @@
   {
     "code": "app.onboarding.geography.excel.type_reserved",
     "message": "\"%{type}\" is reserved for the workspace root. Choose another hierarchy name.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.unnamed",
+    "message": "unnamed",
     "module": "configurator-ui",
     "locale": "en_IN"
   },

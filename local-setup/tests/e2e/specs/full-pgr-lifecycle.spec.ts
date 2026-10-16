@@ -124,6 +124,7 @@ test.describe.serial('Full PGR lifecycle — citizen, admin, employee', () => {
   // The complaint type the citizen files under, top level first: one in the
   // employee persona's department, so the Assign dialog offers the persona.
   let typePath: Array<{ code: string; name: string }>;
+  let typeDepartment: string;
 
   test.beforeAll(async () => {
     CITIZEN_PHONE = await runCitizenMobile();
@@ -132,6 +133,7 @@ test.describe.serial('Full PGR lifecycle — citizen, admin, employee', () => {
     const { departments } = await getLmeByUuid(TENANT, persona.UserRequest.uuid, admin);
     const type = await pickServiceDefInDepartments(TENANT, departments, admin);
     typePath = await complaintTypePath(TENANT, type.serviceCode, admin);
+    typeDepartment = type.department!;
     console.log(`[full-lifecycle] citizen=${CITIZEN_PHONE} type=${typePath.map((n) => n.code).join(' > ')} department=${type.department} (tenant=${TENANT})`);
   });
 
@@ -321,7 +323,12 @@ test.describe.serial('Full PGR lifecycle — citizen, admin, employee', () => {
       await page.waitForTimeout(1000);
     }
     await expect(assignOption, 'Take Action offers no Assign for the GRO').toBeVisible({ timeout: 5_000 });
+    // The Assign dialog lists the employees its HRMS role search returns.
+    const assigneeSearch = page.waitForResponse((r) =>
+      r.url().includes('/employees/_search') && r.url().includes('roles='), { timeout: 20_000 });
     await assignOption.click();
+    const assignable: Array<{ user?: { uuid?: string; name?: string }; assignments?: Array<{ department?: string }> }> =
+      (await (await assigneeSearch).json()).Employees ?? [];
     await page.waitForTimeout(2000);
 
     // Modal is now open — wait for it
@@ -334,13 +341,20 @@ test.describe.serial('Full PGR lifecycle — citizen, admin, employee', () => {
     await assigneeContainer.locator('input').click();
 
     // Pick the employee persona, who signs in for the next steps. Options read
-    // "<name> (<department>)" in sentence case (the Dropdown renders labels
+    // "<name> (<department>)", in sentence case on some builds (the Dropdown's
     // TOSENTENCECASE), so match the whole name, ignoring case: "PGR Employee"
-    // must not pick "PGR Employee 2".
+    // must not pick "PGR Employee 2". Two employees can share a name, and the
+    // label holds no id, so take the persona's place among the same-named
+    // employees in the dialog's own HRMS result (the list keeps that order).
+    const sameName = assignable.filter((e) => e.assignments?.[0]?.department === typeDepartment
+      && e.user?.uuid && e.user?.name?.toLowerCase() === employeeName.toLowerCase());
+    const position = sameName.findIndex((e) => e.user?.uuid === employeeUuid);
+    expect(position, `employee persona "${employeeName}" is not among the dialog's assignable employees`).toBeGreaterThanOrEqual(0);
     const assigneeOption = assigneeContainer.locator('.digit-dropdown-item')
       .filter({ hasText: new RegExp(`^\\s*${escapeRegExp(employeeName)} \\(`, 'i') });
-    await expect(assigneeOption, `employee persona "${employeeName}" is not in the assignee list`).toHaveCount(1, { timeout: 10_000 });
-    await assigneeOption.click();
+    await expect(assigneeOption, `the assignee list does not show the ${sameName.length} employee(s) named "${employeeName}"`)
+      .toHaveCount(sameName.length, { timeout: 10_000 });
+    await assigneeOption.nth(position).click();
     await page.waitForTimeout(1000);
 
     // Fill comments textarea (mandatory)

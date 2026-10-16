@@ -68,3 +68,94 @@ test("REGRESSION: replies go to the address the citizen wrote from, not a re-pre
   await provider.sendMessageToUser({ mobileNumber: "712345678" }, ["hello"], { tenantId: "ke" });
   assert.deepEqual(sent, ["whatsapp:+254712345678"]);
 });
+
+test("REGRESSION: a body over 1600 characters is split at line breaks, not rejected", async () => {
+  // Twilio answers an over-long body with 21617 and delivers nothing, so the citizen's
+  // conversation stalled silently.
+  const provider = loadProvider("whatsapp:+14155238886");
+  provider.toWhatsAppAddress = async () => "whatsapp:+916307817430";
+  provider.chunkDelayMs = 0;
+  const bodies = [];
+  provider.sendTwilioRequest = async (params) => { bodies.push(params.get("Body")); return { sid: "SM" + bodies.length }; };
+
+  const lines = Array.from({ length: 100 }, (_, i) => `*${i + 1}.* complaints.categories.Option${i + 1}`);
+  await provider.sendTextMessage("6307817430", lines.join("\n"), "ke");
+
+  assert.ok(bodies.length > 1, "it went out as more than one message");
+  for (const body of bodies) assert.ok(body.length <= 1600, `a chunk is ${body.length} characters`);
+  assert.equal(bodies.join("\n"), lines.join("\n"), "nothing lost, nothing reordered, no line cut in half");
+
+  // A short body is still a single request, and a single line longer than the limit is hard-split.
+  bodies.length = 0;
+  await provider.sendTextMessage("6307817430", "hello", "ke");
+  assert.deepEqual(bodies, ["hello"]);
+  assert.deepEqual(provider.splitBody("x".repeat(3500)).map((c) => c.length), [1600, 1600, 300]);
+});
+
+test("REVIEW: a body within the limit goes out untouched, leading blank line included", () => {
+  const provider = loadProvider("whatsapp:+14155238886");
+  // List prompts start with "\n*1.*"; trimming it changed every existing message.
+  assert.deepEqual(provider.splitBody("\n*1.*  Garbage\n*2.*  Water"), ["\n*1.*  Garbage\n*2.*  Water"]);
+});
+
+test("REVIEW: a failed part stops the rest and the send reports failure", async () => {
+  const provider = loadProvider("whatsapp:+14155238886");
+  provider.toWhatsAppAddress = async () => "whatsapp:+916307817430";
+  provider.chunkDelayMs = 0;
+  const sent = [];
+  // Part 1 fails (rate limit / 5xx): sendTwilioRequest returns undefined.
+  provider.sendTwilioRequest = async (params) => { sent.push(params.get("Body")); return undefined; };
+  const lines = Array.from({ length: 100 }, (_, i) => `*${i + 1}.* complaints.categories.Option${i + 1}`);
+
+  const result = await provider.sendTextMessage("6307817430", lines.join("\n"), "ke");
+  assert.equal(sent.length, 2, "part 1 is retried once, and the rest is not sent");
+  assert.equal(sent[0], sent[1]);
+  assert.equal(result, undefined);
+});
+
+test("REVIEW: a hard split cuts at whitespace and never inside an emoji", () => {
+  const provider = loadProvider("whatsapp:+14155238886");
+  const words = provider.splitBody("word ".repeat(400).trim(), 1600);
+  for (const chunk of words) assert.match(chunk, /^(word )*word$/, "no word cut in half");
+
+  // An emoji whose surrogate pair straddles the limit moves whole to the next part.
+  const emoji = "x".repeat(1599) + "\u{1F449}" + "y";
+  const parts = provider.splitBody(emoji, 1600);
+  assert.deepEqual(parts.map((p) => p.length), [1599, 3]);
+  assert.equal(parts[1].codePointAt(0), 0x1F449);
+});
+
+test("REVIEW: parts of a split body are spaced out to keep their order", async () => {
+  const provider = loadProvider("whatsapp:+14155238886");
+  provider.toWhatsAppAddress = async () => "whatsapp:+916307817430";
+  provider.chunkDelayMs = 30;
+  const at = [];
+  provider.sendTwilioRequest = async () => { at.push(Date.now()); return { sid: "SM" }; };
+  await provider.sendTextMessage("6307817430", "a\n".repeat(1000) + "b".repeat(1000), "ke");
+  assert.ok(at.length >= 2);
+  for (let i = 1; i < at.length; i++) assert.ok(at[i] - at[i - 1] >= 25, `gap ${at[i] - at[i - 1]}ms`);
+});
+
+test("REVIEW: when a later part fails twice the citizen is told how to recover", async () => {
+  // Part 1 arrived, part 2 did not: without a word the citizen waits on options never shown.
+  const provider = loadProvider("whatsapp:+14155238886");
+  provider.toWhatsAppAddress = async () => "whatsapp:+916307817430";
+  provider.chunkDelayMs = 0;
+  const sent = [];
+  provider.sendTwilioRequest = async (params) => { sent.push(params.get("Body")); return sent.length === 1 ? { sid: "SM1" } : undefined; };
+  const lines = Array.from({ length: 100 }, (_, i) => `*${i + 1}.* complaints.categories.Option${i + 1}`);
+
+  const result = await provider.sendTextMessage("6307817430", lines.join("\n"), "mz", "pt_PT");
+  assert.equal(result, undefined);
+  assert.equal(sent.length, 4, "part 1, part 2 and its retry, then the notice");
+  assert.match(sent[3], /Envie \*olá\* para recomeçar/);
+});
+
+test("REVIEW: a later part never opens on a blank line", () => {
+  const provider = loadProvider("whatsapp:+14155238886");
+  // Part 1 is exactly full, so the blank separator line after it starts part 2.
+  const body = "a".repeat(1600) + "\n\n" + "*12.* next option";
+  const parts = provider.splitBody(body, 1600);
+  assert.equal(parts.length, 2);
+  assert.equal(parts[1], "*12.* next option");
+});

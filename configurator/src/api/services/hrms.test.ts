@@ -88,3 +88,44 @@ describe('hrmsService.buildEmployee — dob / dateOfAppointment are optional (eg
     expect(emp.assignments).toHaveLength(2);
   });
 });
+
+describe('hrmsService.generateUsername', () => {
+  it('joins the name with dots, trimming stray ones', () => {
+    expect(hrmsService.generateUsername(' Anita  Wanjiru-Otieno ')).toBe('anita.wanjiru.otieno');
+  });
+
+  it('keeps the base letter of an accented one (#2456)', () => {
+    expect(hrmsService.generateUsername('José Müller')).toBe('jose.muller');
+    expect(hrmsService.generateUsername('Zoë Ñúñez')).toBe('zoe.nunez');
+  });
+});
+
+describe('hrmsService.createEmployeeRecord — every new employee can file complaints (egovernments/CCRS#2239)', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  const employee = (roles: Array<{ code: string; name: string; tenantId?: string }>) =>
+    ({ tenantId: 'ke', code: 'EMP_001', user: { name: 'Jane Kamau', tenantId: 'ke', roles } }) as never;
+
+  const sentRoles = async (roles: Array<{ code: string; name: string; tenantId?: string }>) => {
+    const postSpy = vi.spyOn(apiClient, 'post').mockResolvedValue({ Employees: [{}] } as never);
+    await hrmsService.createEmployeeRecord(employee(roles));
+    const [, body] = postSpy.mock.calls[0];
+    return (body as { Employees: Array<{ user: { roles: Array<{ code: string; tenantId?: string }> } }> }).Employees[0].user.roles;
+  };
+
+  it('adds CSR to the roles the admin picked', async () => {
+    const roles = await sentRoles([{ code: 'GRO', name: 'Complaint Assessor', tenantId: 'ke' }]);
+    expect(roles.map((r) => r.code)).toEqual(['GRO', 'CSR']);
+    expect(roles[1].tenantId).toBe('ke');
+  });
+
+  it('does not add CSR twice', async () => {
+    const roles = await sentRoles([{ code: 'CSR', name: 'Complainant', tenantId: 'ke' }]);
+    expect(roles.map((r) => r.code)).toEqual(['CSR']);
+  });
+
+  it('adds CSR on each tenant the roles use, matching code and tenant', async () => {
+    const roles = await sentRoles([{ code: 'CSR', name: 'Complainant', tenantId: 'ke.cityb' }, { code: 'GRO', name: 'GRO', tenantId: 'ke.citya' }]);
+    expect(roles.map((r) => `${r.code}@${r.tenantId}`)).toEqual(['CSR@ke.cityb', 'GRO@ke.citya', 'CSR@ke.citya']);
+  });
+});

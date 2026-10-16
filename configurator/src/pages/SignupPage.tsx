@@ -15,7 +15,6 @@ import {
   checkIdentifier,
   createSignup,
   deriveAccountCode,
-  findOperation,
   findSignup,
   isOperationReady,
   isOperationSettled,
@@ -24,6 +23,7 @@ import {
   newIdempotencyKey,
   retryOperation,
   requestMagicLinkSignup,
+  searchOperation,
   session,
   slugifyAccountName,
   startSignIn,
@@ -280,6 +280,9 @@ function SignupFlow() {
   const [mobileError, setMobileError] = useState<string | null>(null);
   /** A failed run whose draft the backend handed back to be corrected. */
   const [reopened, setReopened] = useState(false);
+  // Whether a TERMINAL_FAILED run's signup was handed back is read from the signup. Until that
+  // read answers, neither "Change my details" nor "contact support" is shown.
+  const [reopenCheck, setReopenCheck] = useState<'pending' | 'failed' | 'done'>('pending');
   const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   const [codeState, setCodeState] = useState<AvailabilityResult | null>(null);
@@ -329,6 +332,18 @@ function SignupFlow() {
     // on the way back through should not quietly rewrite it.
     if (record.timeZone) timeZoneTouched.current = true;
   }, []);
+
+  /** The contract's answer to a 401: sign in again, which resumes the server-side draft. */
+  const restartSignIn = useCallback(async () => {
+    try {
+      const { methods: available } = await authMethods('signup');
+      setMethods(available);
+    } catch {
+      /* The gate still renders; it just may list nothing. */
+    }
+    setError(t('signup.session_expired', 'Your sign-in expired. Sign in again to pick up where you left off.'));
+    setPhase('signedOut');
+  }, [t]);
 
   /** Session → tenants → onboarding or chooser. The contract's own order. */
   // No synchronous setState in here: it runs from an effect on mount, where
@@ -393,14 +408,41 @@ function SignupFlow() {
         case 'ACTIVE':
           setPhase('resuming');
           return;
-        default:
+        default: {
+          // A DRAFT with a failed run was handed back after the run refused the founder's own
+          // details. Show that run, as before the reload, so the wizard isn't entered unexplained.
+          let run: Operation | null = null;
+          if (existing) {
+            try {
+              run = await searchOperation({ signupId: existing.id });
+            } catch (caught) {
+              // An expired sign-in goes back to sign-in.
+              if (isExpiredSession(caught)) {
+                await restartSignIn();
+                return;
+              }
+              // A 400 is a pgr-services from before #2515, which can only look a run up by its own
+              // id. Carry on as the page did then, rather than block every draft until it upgrades.
+              // Anything else is this load's own error, with its Try again.
+              if (!(caught instanceof OnboardingError && caught.status === 400)) throw caught;
+            }
+          }
+          if (run?.status === 'TERMINAL_FAILED') {
+            setOperation(run);
+            // The signup is a DRAFT again, so this run handed it back to be corrected.
+            setReopened(true);
+            setReopenCheck('done');
+            setPhase('provisioning');
+            return;
+          }
           setPhase('wizard');
+        }
       }
     } catch (caught) {
       setError(describeSignupError(caught, t).message);
       setPhase('failed');
     }
-  }, [seedFrom, t]);
+  }, [seedFrom, t, restartSignIn]);
 
   useEffect(() => {
     // Load on mount. Every setState inside `bootstrap` happens after an await,
@@ -521,15 +563,8 @@ function SignupFlow() {
       }
       return;
     }
-    try {
-      const { methods: available } = await authMethods('signup');
-      setMethods(available);
-    } catch {
-      /* The gate still renders; it just may list nothing. */
-    }
-    setError(t('signup.session_expired', 'Your sign-in expired. Sign in again to pick up where you left off.'));
-    setPhase('signedOut');
-  }, [describe, t]);
+    await restartSignIn();
+  }, [describe, restartSignIn]);
 
   /** The mobile number against the country's rule, before the server is asked. */
   const checkMobile = useCallback((): boolean => {
@@ -621,7 +656,7 @@ function SignupFlow() {
       inFlight = controller;
       const timeout = window.setTimeout(() => controller.abort(), POLL_TIMEOUT_MS);
       try {
-        const latest = await findOperation(operationId, controller.signal);
+        const latest = await searchOperation({ id: operationId }, controller.signal);
         if (!live) return;
         failures = 0;
         if (shownError) {
@@ -726,19 +761,24 @@ function SignupFlow() {
   // codes kept here, says which happened: DRAFT again means it can be corrected.
   const terminal = phase === 'provisioning' && operation?.status === 'TERMINAL_FAILED';
   useEffect(() => {
-    if (!terminal) return;
+    if (!terminal || reopenCheck !== 'pending') return;
     let live = true;
     findSignup()
       .then((latest) => {
-        if (live && latest?.status === 'DRAFT') setReopened(true);
+        if (!live) return;
+        if (latest?.status === 'DRAFT') setReopened(true);
+        setReopenCheck('done');
       })
-      .catch(() => {
-        /* Not knowing leaves the closed-signup wording in place. */
+      .catch((caught) => {
+        if (!live) return;
+        // Not knowing is not "closed": offer the check again rather than "contact support".
+        if (!isExpiredSession(caught)) setReopenCheck('failed');
+        void handleFailure(caught);
       });
     return () => {
       live = false;
     };
-  }, [terminal]);
+  }, [terminal, reopenCheck, handleFailure]);
 
   /** Back into the wizard on the reopened draft, at the step with the mobile number. */
   const correctDetails = async () => {
@@ -747,11 +787,21 @@ function SignupFlow() {
     try {
       const latest = await findSignup();
       if (latest) seedFrom(latest);
-      if (operation?.errorCode === 'TENANT_ADMIN_ACCOUNT_REJECTED') {
+      // The run already created the workspace under this account code, so it no longer follows the name or country.
+      codeTouched.current = true;
+      // Only a draft that still holds what the run refused is flagged or cleared. The failure set
+      // the signup's updatedAt to the run's own and only a save moves it on, so a correction saved
+      // since (and kept over a reload) stays as it is.
+      const savedSince = !!latest && !!operation && latest.updatedAt > operation.updatedAt;
+      const refused = savedSince ? null : operation?.errorCode?.toUpperCase();
+      if (refused === 'TENANT_ADMIN_ACCOUNT_REJECTED') {
         setMobileError(t('signup.mobile_rejected', 'Check this number: your user account couldn’t be created with it.'));
       }
+      // The one case where the country may change: it is what the run refused.
+      if (refused === 'COUNTRY_NOT_SUPPORTED') setCountryCode('');
       setOperation(null);
       setReopened(false);
+      setReopenCheck('pending');
       setStep('preferences');
       setPhase('wizard');
     } catch (caught) {
@@ -1044,10 +1094,22 @@ function SignupFlow() {
             {t('signup.correct_details', 'Change my details')}
           </Button>
         )}
-        {operation.status === 'TERMINAL_FAILED' && !reopened && (
+        {operation.status === 'TERMINAL_FAILED' && !reopened && reopenCheck === 'done' && (
           <p className="mt-4 text-sm text-muted-foreground">
             {t('signup.cannot_retry', 'This signup cannot be retried. Please contact support to continue.')}
           </p>
+        )}
+        {operation.status === 'TERMINAL_FAILED' && !reopened && reopenCheck === 'failed' && (
+          <Button
+            className="mt-4"
+            variant="outline"
+            onClick={() => {
+              setError(null);
+              setReopenCheck('pending');
+            }}
+          >
+            <RefreshCw className="mr-2 h-4 w-4" /> {t('signup.try_again', 'Try again')}
+          </Button>
         )}
         {awaitingPublication && !publishSlow && (
           <div className="mt-6 flex items-center text-sm text-muted-foreground">
