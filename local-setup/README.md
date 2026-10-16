@@ -107,7 +107,7 @@ Some never show `(healthy)`, and that is correct:
 
 | Container | Status you will see | Why |
 |---|---|---|
-| `egov-accesscontrol`, `user-otp`, `egov-notification-sms`, `digit-gatus` | `Up` | No health check: the access-control image has no shell to run one in, and the others don't declare one |
+| `egov-accesscontrol`, `user-otp`, `digit-gatus` | `Up` | No health check: the access-control image has no shell to run one in, and the others don't declare one |
 | `pgr-services-migration`, `digit-minio-init`, `pgr-workflow-seed`, `*-localization-seed-1`, `*-localization-cache-bust-1` | `Exited (0)` | One-shot setup jobs. `Exited (0)` means they succeeded; any other exit code is a failure |
 
 **How to know it's ready**: nothing shows `starting` or `unhealthy`. Press `Ctrl+C`, then verify:
@@ -249,6 +249,8 @@ The first `tilt up` runs a full `mvn package` of PGR before anything starts, whi
 - The `pgr-compile` resource rebuilds the jar. Tilt then copies the changed files into the running
   `pgr-services` container and restarts it, with no image rebuild. Expect about 30 seconds from save
   to the new code serving.
+- `pgr-services-migration` runs Flyway from the same source tree (`src/main/resources/db/`, built as
+  `pgr-services-db-dev`), so a new `V*.sql` is applied on the next `tilt up` or file change.
 - `pgr-services` runs the locally built `pgr-services-dev` image (via `docker-compose.tilt.yml`), not
   the registry image.
 
@@ -258,6 +260,10 @@ The first `tilt up` runs a full `mvn package` of PGR before anything starts, whi
   `digit-ui-esbuild` dev server with live reload on **http://localhost:18180/digit-ui/employee**,
   proxies API calls to Kong on :18000, and uses the same `nginx/globalConfigs.js`. The first start
   runs `npm install`, which takes a few minutes.
+- `ui-dev` serves the **current** UI source, while the container serves the pinned release, so the
+  two can differ. For example, the source no longer has the employee-login city dropdown
+  (4a9600b18): the tenant comes from the URL or defaults to the state tenant. Logging in on :18180
+  is therefore not always the same as [Option A, Step 4](#step-4-access-the-application).
 - Without Tilt, the same thing is:
   ```bash
   cd ../digit-ui-esbuild && npm install --legacy-peer-deps

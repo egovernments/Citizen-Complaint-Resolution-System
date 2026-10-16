@@ -76,6 +76,7 @@ dc_resource('pgr-services-migration', labels=['pgr'],
     resource_deps=['postgres-db', 'boundary-service', 'egov-user', 'mdms-backend', 'egov-workflow-v2'])
 
 dc_resource('pgr-services', labels=['pgr'],
+    resource_deps=['pgr-services-migration'],
     links=[link('http://localhost:18083/pgr-services/health', 'Health')])
 
 # ==================== Frontend ====================

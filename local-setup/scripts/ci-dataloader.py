@@ -111,6 +111,8 @@ def lookup_city_service_def(base_url, city_tenant):
     if not leaves:
         return None, None, None
     svc = leaves[0]
+    # The department code doubles as its name: the name is only the display label of the
+    # CI-only Department row ensure_department_for_tenant creates when the city lacks one.
     return svc.get("code"), svc.get("department"), svc.get("department")
 
 
@@ -200,6 +202,9 @@ def main():
             break
         time.sleep(3)
     if not service_code or not dept_code:
+        print(f"WARNING: no ComplaintHierarchy rows of {TARGET_TENANT}'s own after ~30s; falling "
+              f"back to the state-level ({state_tenant}) lookup. If {TARGET_TENANT} does define its "
+              f"own complaint types, PGR Assign will fail later with INVALID_ASSIGNMENT.")
         service_code, dept_code, dept_name = lookup_service_def(BASE_URL, state_tenant)
     if not service_code or not dept_code:
         print("FATAL: No leaf complaint types found in RAINMAKER-PGR.ComplaintHierarchy")
