@@ -31,19 +31,44 @@ public class OnboardingService {
 
     private final OnboardingRepository repository;
     private final OnboardingIdentifierService identifiers;
-    private final PlatformBaseline baseline;
     // Countries the platform baseline carries a mobile rule for. The worker cannot provision
     // any other country (COUNTRY_NOT_SUPPORTED), so an unsupported one is refused here,
     // before anything runs.
     private final Set<String> supportedCountries;
+    // Each country's dial code and mobile rule, compiled once: a seed rule that doesn't compile stops
+    // the service at start-up instead of failing a founder's signup.
+    private final Map<String, MobileRule> mobileRules;
+
+    private record MobileRule(String dialCode, Pattern pattern) {
+    }
 
     @Autowired
     public OnboardingService(OnboardingRepository repository, OnboardingIdentifierService identifiers,
                              PlatformBaseline baseline) {
         this.repository = repository;
         this.identifiers = identifiers;
-        this.baseline = baseline;
         this.supportedCountries = baseline.supportedCountries();
+        this.mobileRules = compileMobileRules(baseline);
+    }
+
+    private static Map<String, MobileRule> compileMobileRules(PlatformBaseline baseline) {
+        Map<String, MobileRule> rules = new LinkedHashMap<>();
+        for (String country : baseline.supportedCountries()) {
+            JsonNode rule = baseline.countryMobileRule(country);
+            String dialCode = rule.path("countryCode").asText();
+            String regex = rule.path("mobileNumberRegex").asText();
+            if (!dialCode.matches("^\\+\\d+$") || regex.isEmpty()) {
+                throw new IllegalStateException("Platform baseline countryMobileRules." + country
+                        + " needs a countryCode like +254 and a mobileNumberRegex");
+            }
+            try {
+                rules.put(country, new MobileRule(dialCode, Pattern.compile(regex)));
+            } catch (java.util.regex.PatternSyntaxException exception) {
+                throw new IllegalStateException("Platform baseline countryMobileRules." + country
+                        + ".mobileNumberRegex does not compile: " + regex, exception);
+            }
+        }
+        return Collections.unmodifiableMap(rules);
     }
 
     /** Uses the committed platform baseline. */
@@ -272,9 +297,10 @@ public class OnboardingService {
         } else if (values.containsKey("countryCode") && signup.getTenantMetadata() != null
                 && !signup.getTenantMetadata().isEmpty()) {
             // Country is the single source for phone validation and dial prefix.
-            // Re-normalize an existing draft contact when it changes.
+            // Re-normalize an existing draft contact when it changes. The stored dial code
+            // was derived from the old country, so it goes, and the new country's replaces it.
             signup.setTenantMetadata(normalizeTenantMetadata(
-                    signup.getTenantMetadata(), signup.getCountryCode(), false));
+                    withoutDialCode(signup.getTenantMetadata()), signup.getCountryCode(), false));
         }
 
         // These identifiers are server-owned projections of the tenant admin's choices.
@@ -283,6 +309,17 @@ public class OnboardingService {
         signup.setRequestedTenantId(signup.getUrlSlug() == null
                 ? null
                 : identifiers.tenantIdForSlug(signup.getUrlSlug()));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> withoutDialCode(Map<String, Object> metadata) {
+        Map<String, Object> copy = new LinkedHashMap<>(metadata);
+        if (copy.get("tenantAdmin") instanceof Map) {
+            Map<String, Object> tenantAdmin = new LinkedHashMap<>((Map<String, Object>) copy.get("tenantAdmin"));
+            tenantAdmin.remove("countryCode");
+            copy.put("tenantAdmin", tenantAdmin);
+        }
+        return copy;
     }
 
     private void applyKeepingProvisionedIdentifiers(OnboardingSignup signup, Map<String, Object> values,
@@ -296,7 +333,7 @@ public class OnboardingService {
         // A run refused for its country stopped at the mobile rule, before anything that depends on
         // the country was written, and the re-submitted run rewrites the tenant record's country.
         // So that is the one case where the country may change: it is what the founder must fix.
-        boolean countryRefused = "COUNTRY_NOT_SUPPORTED".equals(failed.getErrorCode());
+        boolean countryRefused = "COUNTRY_NOT_SUPPORTED".equalsIgnoreCase(failed.getErrorCode());
         if (!Objects.equals(accountCode, signup.getAccountCode())
                 || !countryRefused && !Objects.equals(countryCode, signup.getCountryCode())) {
             throw new CustomException("ONBOARDING_PROVISIONED_FIELD_LOCKED",
@@ -357,10 +394,10 @@ public class OnboardingService {
         // The country's rule in the platform baseline is the only mobile check. PLATFORM_BASELINE
         // writes it as the workspace's common-masters.MobileNumberValidation and egov-user enforces
         // it at FOUNDER_HRMS, so a number saved here is never refused there, nor the other way round.
-        JsonNode rule = baseline.countryMobileRule(region);
-        if (rule.isMissingNode()) requireSupportedCountry(region);
-        String dialCode = rule.path("countryCode").asText();
-        String national = nationalMobile(mobile, dialCode, Pattern.compile(rule.path("mobileNumberRegex").asText()));
+        MobileRule rule = mobileRules.get(region);
+        if (rule == null) throw new CustomException("ONBOARDING_VALIDATION_ERROR", "Signup.countryCode is not supported");
+        String dialCode = rule.dialCode();
+        String national = nationalMobile(mobile, dialCode, rule.pattern());
         if (national == null) invalid("Signup.tenantMetadata.tenantAdmin.mobileNumber");
         String suppliedDialCode = clean(tenantAdmin.get("countryCode"));
         if (suppliedDialCode != null && !dialCode.equals(suppliedDialCode)) {
@@ -377,12 +414,13 @@ public class OnboardingService {
 
     /**
      * The national number in what was typed, or null when it fails the rule. Spaces, dashes and
-     * brackets, the dial code with or without its "+", and a leading trunk 0 are accepted. The
+     * brackets, the dial code with "+", "00" or neither, and a leading trunk 0 are accepted. The
      * configurator's nationalMobile (onboarding/signup/mobileRules.ts) reads a number the same way.
      */
     static String nationalMobile(String input, String dialCode, Pattern rule) {
         String dial = dialCode.replaceFirst("^\\+", "");
         String digits = input.replaceAll("[\\s().-]", "");
+        if (digits.startsWith("00")) digits = "+" + digits.substring(2);
         if (digits.startsWith("+")) {
             if (!digits.startsWith("+" + dial)) return null;
             digits = digits.substring(dial.length() + 1);

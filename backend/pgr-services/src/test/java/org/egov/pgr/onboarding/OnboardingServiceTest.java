@@ -1,5 +1,6 @@
 package org.egov.pgr.onboarding;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.egov.tracer.model.CustomException;
 import org.junit.Before;
 import org.junit.Test;
@@ -12,14 +13,19 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -306,6 +312,58 @@ public class OnboardingServiceTest {
     }
 
     @Test
+    public void aCountryChangeReplacesTheDialCodeTheOldCountrySaved() {
+        UUID signupId = UUID.randomUUID();
+        OnboardingSignup signup = signup(signupId);
+        signup.setCountryCode("FR");
+        // What libphonenumber stored for a French draft before #2353: the old country's dial code.
+        Map<String, Object> stored = tenantAdminMetadata("712345678");
+        tenantAdmin(stored).put("countryCode", "+33");
+        signup.setTenantMetadata(stored);
+        reopenedBy(signup, "COUNTRY_NOT_SUPPORTED");
+        Map<String, Object> values = new LinkedHashMap<>();
+        values.put("id", signupId.toString());
+        values.put("countryCode", "KE");
+
+        OnboardingSignup updated = service.update(principal, values);
+
+        assertEquals("712345678", tenantAdmin(updated).get("mobileNumber"));
+        assertEquals("+254", tenantAdmin(updated).get("countryCode"));
+    }
+
+    @Test
+    public void theCountryRefusalIsRecognisedWhateverItsCase() {
+        UUID signupId = UUID.randomUUID();
+        OnboardingSignup signup = signup(signupId);
+        signup.setCountryCode("FR");
+        reopenedBy(signup, "country_not_supported");
+        Map<String, Object> values = new LinkedHashMap<>();
+        values.put("id", signupId.toString());
+        values.put("countryCode", "KE");
+
+        assertEquals("KE", service.update(principal, values).getCountryCode());
+    }
+
+    @Test
+    public void aNumberWrittenWithThe00InternationalPrefixIsRead() {
+        Pattern kenya = Pattern.compile("^[17][0-9]{8}$");
+        assertEquals("712345678", OnboardingService.nationalMobile("00254 712 345 678", "+254", kenya));
+        assertNull(OnboardingService.nationalMobile("00251 712 345 678", "+254", kenya));
+    }
+
+    @Test
+    public void aSeedMobileRuleThatDoesNotCompileStopsStartUp() throws Exception {
+        PlatformBaseline broken = mock(PlatformBaseline.class);
+        when(broken.supportedCountries()).thenReturn(Set.of("XX"));
+        when(broken.countryMobileRule("XX")).thenReturn(new ObjectMapper().readTree(
+                "{\"countryCode\": \"+1\", \"mobileNumberRegex\": \"^[0-9\"}"));
+
+        IllegalStateException error = assertThrows(IllegalStateException.class,
+                () -> new OnboardingService(repository, new OnboardingIdentifierService(), broken));
+        assertTrue(error.getMessage(), error.getMessage().contains("countryMobileRules.XX.mobileNumberRegex"));
+    }
+
+    @Test
     public void anyOtherReopenedRunKeepsTheCountryLocked() {
         UUID signupId = UUID.randomUUID();
         when(repository.findOwnedSignup(signupId, "https://issuer", "subject-1"))
@@ -457,7 +515,21 @@ public class OnboardingServiceTest {
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> tenantAdmin(OnboardingSignup signup) {
-        return (Map<String, Object>) signup.getTenantMetadata().get("tenantAdmin");
+        return tenantAdmin(signup.getTenantMetadata());
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> tenantAdmin(Map<String, Object> metadata) {
+        return (Map<String, Object>) metadata.get("tenantAdmin");
+    }
+
+    /** The draft handed back by a run that failed with errorCode. */
+    private void reopenedBy(OnboardingSignup signup, String errorCode) {
+        when(repository.findOwnedSignup(signup.getId(), "https://issuer", "subject-1")).thenReturn(Optional.of(signup));
+        when(repository.findOperationBySignup(signup.getId())).thenReturn(Optional.of(
+                OnboardingOperation.builder().id(UUID.randomUUID()).signupId(signup.getId())
+                        .status("TERMINAL_FAILED").errorCode(errorCode).attempt(1).build()));
+        when(repository.updateSignup(signup)).thenReturn(signup);
     }
 
     private OnboardingSignup signup(UUID id) {
