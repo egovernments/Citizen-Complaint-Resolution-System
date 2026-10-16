@@ -155,6 +155,8 @@ async function runPostCreatePipeline(
   hierarchyType: string,
   levels: { boundaryType: string }[],
   t: OnboardingT = englishT,
+  // Boundaries already there without a name, which the upload labels but doesn't create.
+  unnamed: { code: string; name: string }[] = [],
 ): Promise<string | null> {
   // Make this the tenant's PGR hierarchy (CMS-BOUNDARY.HierarchySchema) when it
   // has none yet: digit-ui, the dashboard and PGR read it in place of the
@@ -178,7 +180,7 @@ async function runPostCreatePipeline(
   }
 
   // Create localizations for boundaries
-  const boundaryData = created.map(b => ({
+  const boundaryData = [...created, ...unnamed].map(b => ({
     code: b.code,
     name: b.name,
   }));
@@ -683,9 +685,10 @@ export default function BoundaryImport({
 
     try {
       // An upload never renames or moves an area (#2456): a code already in the hierarchy under
-      // another name or parent stops the whole sheet before any write, and an exact match is left alone.
+      // another name or parent stops the whole sheet before any write. An exact match is left alone,
+      // except that one with no en_IN name gets the sheet's: adding a missing name isn't a rename.
       const existing = await boundaryService.existingBoundaries(boundaryTenant, selectedHierarchy.hierarchyType);
-      const { toCreate, alreadyThere, conflicts } = compareWithExisting(validBoundaries, existing);
+      const { toCreate, alreadyThere, toLabel, conflicts } = compareWithExisting(validBoundaries, existing);
       if (conflicts.length > 0) {
         const none = t('geography.excel.no_parent', 'none');
         setError([
@@ -746,6 +749,7 @@ export default function BoundaryImport({
         selectedHierarchy.hierarchyType,
         selectedHierarchy.boundaryHierarchy,
         t,
+        toLabel,
       );
 
       addUndo('create_boundaries', `Created ${result.success.length} boundaries`);

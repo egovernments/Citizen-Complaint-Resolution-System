@@ -19,12 +19,14 @@ export interface BoundaryConflict {
  * "already exists" for a code it has, which counts as created, and the upload then writes the
  * sheet's name for it. So a code already there under another name or parent would be renamed,
  * or keep its old parent, without a word: those rows are conflicts, and the sheet is refused.
- * A row matching what is there (a re-listed parent, or a retry) is left alone.
+ * A row matching what is there (a re-listed parent, or a retry) is left alone, except that one
+ * whose boundary has no en_IN name yet is labelled: adding a missing name isn't a rename.
  */
 export function compareWithExisting(rows: BoundaryExcelRow[], existing: ExistingBoundary[]) {
   const byCode = new Map(existing.map((boundary) => [boundary.code, boundary]));
   const toCreate: BoundaryExcelRow[] = [];
   const alreadyThere: BoundaryExcelRow[] = [];
+  const toLabel: BoundaryExcelRow[] = [];
   const conflicts: BoundaryConflict[] = [];
   for (const row of rows) {
     const found = byCode.get(row.code);
@@ -38,6 +40,7 @@ export function compareWithExisting(rows: BoundaryExcelRow[], existing: Existing
     const sameName = !found.name?.trim() || found.name.trim() === name;
     if ((found.parent || undefined) === parent && sameName) {
       alreadyThere.push(row);
+      if (!found.name?.trim()) toLabel.push(row);
     } else {
       conflicts.push({
         code: row.code,
@@ -47,5 +50,5 @@ export function compareWithExisting(rows: BoundaryExcelRow[], existing: Existing
       });
     }
   }
-  return { toCreate, alreadyThere, conflicts };
+  return { toCreate, alreadyThere, toLabel, conflicts };
 }

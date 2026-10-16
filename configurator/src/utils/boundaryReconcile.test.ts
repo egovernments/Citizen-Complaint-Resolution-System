@@ -20,6 +20,7 @@ describe('compareWithExisting (#2456)', () => {
     const result = compareWithExisting([row('COUNTRY_001', 'UAE'), row('EMIRATE_001', ' Dubai ', 'COUNTRY_001')], existing);
     expect(result.alreadyThere.map((r) => r.code)).toEqual(['COUNTRY_001', 'EMIRATE_001']);
     expect(result.toCreate).toEqual([]);
+    expect(result.toLabel).toEqual([]);
     expect(result.conflicts).toEqual([]);
   });
 
@@ -52,8 +53,13 @@ describe('compareWithExisting (#2456)', () => {
     expect(result.conflicts).toEqual([]);
   });
 
-  it('has no name to change on a boundary without an en_IN label', () => {
-    const result = compareWithExisting([row('EMIRATE_009', 'Ajman', 'COUNTRY_001')], [{ code: 'EMIRATE_009', parent: 'COUNTRY_001' }]);
-    expect(result.alreadyThere).toHaveLength(1);
+  it('labels an exact re-list whose boundary has no en_IN name, and leaves a named one alone', () => {
+    const result = compareWithExisting(
+      [row('EMIRATE_001', 'Dubai', 'COUNTRY_001'), row('EMIRATE_009', 'Ajman', 'COUNTRY_001')],
+      [...existing, { code: 'EMIRATE_009', parent: 'COUNTRY_001' }],
+    );
+    expect(result.alreadyThere.map((r) => r.code)).toEqual(['EMIRATE_001', 'EMIRATE_009']);
+    expect(result.toLabel.map((r) => r.code)).toEqual(['EMIRATE_009']);
+    expect(result.conflicts).toEqual([]);
   });
 });
