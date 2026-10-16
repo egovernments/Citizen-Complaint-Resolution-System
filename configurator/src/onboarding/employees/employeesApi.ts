@@ -132,16 +132,37 @@ export async function listEmployees(tenantId: string): Promise<EmployeeList> {
   };
 }
 
+/** The highest number among EMP_0001-style codes, or 0. */
+function highestEmployeeNumber(codes: string[]): number {
+  return codes.reduce((max, code) => {
+    const match = /^EMP_(\d+)$/.exec(code);
+    return match ? Math.max(max, Number(match[1])) : max;
+  }, 0);
+}
+
 /**
  * One past the highest EMP_0001-style code HRMS holds, removed employees'
  * included, so a removed employee's code is never offered again.
  */
 export function suggestEmployeeCode(codes: string[]): string {
-  const highest = codes.reduce((max, code) => {
-    const match = /^EMP_(\d+)$/.exec(code);
-    return match ? Math.max(max, Number(match[1])) : max;
-  }, 0);
-  return hrmsService.generateEmployeeCode('EMP', highest + 1);
+  return hrmsService.generateEmployeeCode('EMP', highestEmployeeNumber(codes) + 1);
+}
+
+/**
+ * Codes for a bulk upload's rows: a row's own code as given, a blank one the
+ * next free EMP_ code past the highest HRMS holds (removed employees included)
+ * and the highest on the sheet. Numbering from the row index took codes in use,
+ * the founder's EMP_0001 among them (#2456).
+ */
+export function planEmployeeCodes(existing: string[], given: string[]): string[] {
+  let next = highestEmployeeNumber([...existing, ...given]);
+  return given.map((code) => code || hrmsService.generateEmployeeCode('EMP', ++next));
+}
+
+/** A bulk sheet's rows with every blank code filled in by planEmployeeCodes. */
+export function withEmployeeCodes<T extends { employeeCode: string }>(rows: T[], existing: Map<string, EmployeeRecord>): T[] {
+  const codes = planEmployeeCodes([...existing.keys()], rows.map((row) => row.employeeCode));
+  return rows.map((row, index) => ({ ...row, employeeCode: codes[index] }));
 }
 
 /** Every employee HRMS holds, removed ones included, by code: what a bulk upload's codes are checked against. */

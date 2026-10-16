@@ -14,7 +14,7 @@ import type {
   Designation,
   Boundary,
 } from '@/api/types';
-import { codeProblem, employeesByCode, type EmployeeRecord } from '@/onboarding/employees/employeesApi';
+import { codeProblem, employeesByCode, withEmployeeCodes, type EmployeeRecord } from '@/onboarding/employees/employeesApi';
 import { useApp } from '../../App';
 
 type EmployeeBulkRow = EmployeeExcelRow & BulkRow;
@@ -84,9 +84,10 @@ function buildTemplate(
     ['Employee bulk import template'],
     [`Tenant: ${tenant}`],
     [''],
-    ['Required columns: employeeCode, name, mobileNumber (per the tenant mobile rule),'],
+    ['Required columns: name, mobileNumber (per the tenant mobile rule),'],
     ['department (from Codes), designation (from Codes).'],
-    ['Required: emailId. Optional: userName (auto-derives), gender, dob (YYYY-MM-DD),'],
+    ['Required: emailId. Optional: employeeCode (blank = the next free EMP_ code),'],
+    ['userName (auto-derives), gender, dob (YYYY-MM-DD),'],
     ['roles (comma-separated), jurisdictions (comma-separated boundary codes),'],
     ['dateOfAppointment (YYYY-MM-DD).'],
     [''],
@@ -181,8 +182,8 @@ export function EmployeeBulkImport() {
 
   const parseWorkbook = useCallback((wb: XLSX.WorkBook) => {
     const result = parseEmployeeExcel(wb);
-    return { data: result.data as EmployeeBulkRow[] };
-  }, []);
+    return { data: withEmployeeCodes(result.data, existingEmployees) as EmployeeBulkRow[] };
+  }, [existingEmployees]);
 
   const validateRow = useCallback(
     (row: EmployeeBulkRow, rows: EmployeeBulkRow[]): string[] => {

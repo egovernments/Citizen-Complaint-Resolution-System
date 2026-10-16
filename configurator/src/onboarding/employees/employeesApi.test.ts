@@ -4,6 +4,8 @@ vi.mock('@/identity/api', () => ({
   updateMemberEmail: vi.fn(async () => ({ status: 'verification_sent' })),
 }));
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import * as XLSX from 'xlsx';
+import { parseEmployeeExcel } from '@/utils/excelParser';
 import { hrmsService } from '@/api';
 import type { Employee } from '@/api/types';
 import { linkMember, removeMember, updateMemberEmail } from '@/identity/api';
@@ -15,6 +17,7 @@ import {
   removeEmployee,
   suggestEmployeeCode,
   updateEmployeeDetails,
+  withEmployeeCodes,
   type EmployeeChanges,
   type EmployeeOptions,
 } from './employeesApi';
@@ -64,27 +67,46 @@ describe('suggestEmployeeCode', () => {
   });
 });
 
-describe('codeProblem (bulk import preview, #2456)', () => {
-  const founder = { ...employee('EMP_0001'), user: { name: 'Anita Wanjiru', emailId: 'Anita@Example.org' } } as unknown as Employee;
-  const existing = new Map([['EMP_0001', founder]]);
+describe('bulk import codes, through the real parser (#2456)', () => {
+  const sheet = (rows: Record<string, string>[]) => {
+    const wb = XLSX.utils.book_new();
+    const base = { name: 'Jane Kamau', mobileNumber: '712345678', department: 'ROADS', designation: 'ENGINEER' };
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows.map((row) => ({ ...base, ...row }))), 'Employee');
+    const { data, validation } = parseEmployeeExcel(wb);
+    expect(validation.errors).toEqual([]);
+    return data;
+  };
+  // The founder holds EMP_0001; EMP_0007 belongs to someone removed.
+  const hrms = new Map([
+    ['EMP_0001', { ...employee('EMP_0001'), user: { name: 'Anita Wanjiru', emailId: 'Anita@Example.org' } } as unknown as Employee],
+    ['EMP_0007', employee('EMP_0007', { isActive: false })],
+  ]);
+  const check = (rows: ReturnType<typeof sheet>) => {
+    const planned = withEmployeeCodes(rows, hrms);
+    return planned.map((row) => ({ code: row.employeeCode, problem: codeProblem(row, planned, hrms) }));
+  };
 
-  it("flags a code HRMS holds for someone else", () => {
-    const row = { employeeCode: 'EMP_0001', emailId: 'joseph@example.org' };
-    expect(codeProblem(row, [row], existing)).toEqual({ takenBy: 'Anita Wanjiru' });
+  it('gives a code-less row the next free code past HRMS and the sheet', () => {
+    expect(check(sheet([{ emailId: 'a@example.org' }, { employeeCode: 'EMP_0010', emailId: 'b@example.org' }, { emailId: 'c@example.org' }]))).toEqual([
+      { code: 'EMP_0011', problem: null },
+      { code: 'EMP_0010', problem: null },
+      { code: 'EMP_0012', problem: null },
+    ]);
   });
 
-  it('lets the same person through, matching the email trimmed and in any case', () => {
-    const row = { employeeCode: 'EMP_0001', emailId: ' anita@example.ORG ' };
-    expect(codeProblem(row, [row], existing)).toBeNull();
-    // A removed employee's code is never reused, even by the same email.
-    const removed = new Map([['EMP_0001', { ...founder, isActive: false }]]);
-    expect(codeProblem(row, [row], removed)).toEqual({ takenBy: 'Anita Wanjiru' });
+  it('flags a given code HRMS holds for someone else', () => {
+    expect(check(sheet([{ employeeCode: 'EMP_0001', emailId: 'joseph@example.org' }]))).toEqual([
+      { code: 'EMP_0001', problem: { takenBy: 'Anita Wanjiru' } },
+    ]);
+  });
+
+  it('lets the same person through on their own code (email trimmed, any case)', () => {
+    expect(check(sheet([{ employeeCode: 'EMP_0001', emailId: ' anita@example.ORG ' }]))).toEqual([{ code: 'EMP_0001', problem: null }]);
   });
 
   it('flags a code on two rows of the sheet', () => {
-    const rows = [{ employeeCode: 'EMP_0002', emailId: 'a@example.org' }, { employeeCode: 'EMP_0002', emailId: 'b@example.org' }];
-    expect(codeProblem(rows[0], rows, existing)).toEqual({ repeated: true });
-    expect(codeProblem({ employeeCode: 'EMP_0003', emailId: 'c@example.org' }, rows, existing)).toBeNull();
+    expect(check(sheet([{ employeeCode: 'EMP_0020', emailId: 'a@example.org' }, { employeeCode: 'EMP_0020', emailId: 'b@example.org' }]))
+      .map((row) => row.problem)).toEqual([{ repeated: true }, { repeated: true }]);
   });
 });
 

@@ -747,15 +747,8 @@ export function parseEmployeeExcel(workbook: XLSX.WorkBook): {
       dateOfAppointment = String(doaRaw ?? '').trim() || undefined;
     }
 
-    if (!employeeCode) {
-      errors.push({
-        row: index + 2,
-        field: 'employeeCode',
-        message: 'Employee code is required',
-        code: 'REQUIRED_FIELD',
-      });
-      return;
-    }
+    // employeeCode is optional: the bulk imports give a blank one the next free
+    // EMP_ code (planEmployeeCodes, #2456).
 
     if (!name) {
       errors.push({

@@ -37,7 +37,7 @@ import {
 import { loadTenantHierarchies } from '@/api/services/tenantHierarchy';
 import { parseExcelFile, parseEmployeeExcel } from '@/utils/excelParser';
 import { downloadEmployeeTemplate } from '@/utils/templateBuilder';
-import { codeProblem, employeesByCode, type EmployeeRecord } from './employeesApi';
+import { codeProblem, employeesByCode, withEmployeeCodes, type EmployeeRecord } from './employeesApi';
 import { reportStepError, trackStepAction } from '../telemetry';
 import { useOnboardingT } from '../i18n';
 import { allowedEmployeeRoles, pickerChoices } from '@/lib/systemRecords';
@@ -183,10 +183,10 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
         return;
       }
 
-      // Validate employees against reference data and the codes HRMS holds now.
+      // Number blank codes and check given ones against the codes HRMS holds now.
       // The code check is advisory: creating still refuses a code that's taken.
       const existing = await employeesByCode(targetTenant).catch(() => new Map<string, EmployeeRecord>());
-      const validatedEmployees = validateEmployees(result.data, existing);
+      const validatedEmployees = validateEmployees(withEmployeeCodes(result.data, existing), existing);
       setEmployees(validatedEmployees);
       setUploadedFile(file);
       setStep('preview');
