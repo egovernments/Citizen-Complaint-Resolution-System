@@ -240,6 +240,7 @@
 {"code": "CS_VOICE_FAILED", "message": "A entrada de voz parou inesperadamente. Tente novamente.", "module": "rainmaker-pgr", "locale": "pt_BR"},
 {"code": "CS_VOICE_LANGUAGE_HINT", "message": "Fale no idioma selecionado no topo da página.", "module": "rainmaker-pgr", "locale": "pt_BR"},
 {"code": "CS_VOICE_LANGUAGE_NOT_SUPPORTED", "message": "A entrada de voz não está disponível neste idioma. Digite sua reclamação.", "module": "rainmaker-pgr", "locale": "pt_BR"},
+{"code": "CS_VOICE_LISTENING_IN", "message": "Ouvindo em {language}", "module": "rainmaker-pgr", "locale": "pt_BR"},
 {"code": "CS_VOICE_MIC_BLOCKED", "message": "O acesso ao microfone está bloqueado. Permita o acesso para este site nas configurações do navegador e tente novamente.", "module": "rainmaker-pgr", "locale": "pt_BR"},
 {"code": "CS_VOICE_NETWORK", "message": "A entrada de voz precisa de conexão com a internet. Verifique a conexão e tente novamente.", "module": "rainmaker-pgr", "locale": "pt_BR"},
 {"code": "CS_VOICE_NO_MIC", "message": "Nenhum microfone foi encontrado neste dispositivo.", "module": "rainmaker-pgr", "locale": "pt_BR"},

@@ -1446,6 +1446,12 @@
         "locale": "pt_PT"
     },
     {
+        "code": "CS_VOICE_LISTENING_IN",
+        "message": "A ouvir em {language}",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
         "code": "CS_VOICE_MIC_BLOCKED",
         "message": "O acesso ao microfone está bloqueado. Permita-o para este site nas definições do seu navegador e tente novamente.",
         "module": "rainmaker-pgr",
