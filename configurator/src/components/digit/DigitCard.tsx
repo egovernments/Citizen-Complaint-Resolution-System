@@ -11,7 +11,9 @@ const DigitCard: React.FC<DigitCardProps> = ({ children, className, style }) => 
   return (
     <div
       className={cn(
-        'bg-card rounded shadow-card p-4 sm:p-6 mb-4',
+        // A hairline, as the DIGIT console draws its cards: on a white page the
+        // shadow alone left a card with no edge.
+        'bg-card rounded border border-border shadow-card p-4 sm:p-6 mb-4',
         'max-w-[960px]',
         className
       )}

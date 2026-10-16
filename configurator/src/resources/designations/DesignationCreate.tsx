@@ -1,5 +1,4 @@
 import { DigitCreate, DigitFormCodeInput, DigitFormInput, v } from '@/admin';
-import { BooleanInput } from '@/admin/widgets';
 import { DepartmentChipInput } from './DepartmentChipInput';
 
 export function DesignationCreate() {
@@ -13,7 +12,6 @@ export function DesignationCreate() {
         label="Departments"
         help="Pick one or more. Stored as an array per the MDMS schema."
       />
-      <BooleanInput source="active" label="Active" />
     </DigitCreate>
   );
 }

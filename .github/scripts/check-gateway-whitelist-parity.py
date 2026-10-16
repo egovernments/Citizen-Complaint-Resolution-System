@@ -33,6 +33,13 @@ ENV = ROOT / "devops/deploy-as-code/charts/environments/env.yaml"
 
 _ENTRY = re.compile(r'\["(/[^"]+)"\]\s*=\s*true')
 
+# D26: AUTH_OPTIONAL entries tagged with this comment are the retired native
+# identity endpoints. The deploy strips them on every Keycloak box (which it now
+# requires) unless the identity_legacy_user_endpoints rollback switch is on, so
+# the effective Kong set excludes them. The Spring gateway has no such switch:
+# they MUST NOT appear in its whitelists either.
+LEGACY_IDENTITY_TAG = "-- identity-legacy-user-endpoint"
+
 # Reviewed exceptions to gateway parity. These paths MUST exist in Kong's
 # AUTH_OPTIONAL set and MUST NOT appear in either Spring whitelist.
 KONG_ONLY_AUTH_OPTIONAL = {
@@ -52,7 +59,48 @@ KONG_ONLY_AUTH_OPTIONAL = {
     "/novu-bridge/novu-adapter/v1/preferences",
     "/novu-bridge/novu-adapter/v1/providers/templates",
     "/novu-bridge/novu-adapter/v1/providers/twilio-templates",
+    # Provider catalog (Phase 1): the configurator is the only provider console, so
+    # the catalog read and the edit/rotate/delete writes are in the same bucket.
+    "/novu-bridge/novu-adapter/v1/providers/catalog",
+    "/novu-bridge/novu-adapter/v1/providers/_update",
+    "/novu-bridge/novu-adapter/v1/providers/_delete",
+    # Delivery receipts: machine callbacks (Novu webhook, SMSCountry DR) authenticated
+    # by a shared secret inside novu-bridge (novu.bridge.receipts.secret), not a user
+    # token — so no body authToken exists to enrich and Kong must let them through.
+    # Kong-only for the same reason as the rest of the bridge: the Spring gateway tier
+    # does not route novu-bridge at all.
+    "/novu-bridge/novu-adapter/v1/receipts/novu",
+    "/novu-bridge/novu-adapter/v1/receipts/smscountry",
+    # The published contract (Phase 3a): the inbound envelope's JSON Schema and the OpenAPI
+    # description of the bridge's own endpoints, served read-only from its jar. Descriptions of
+    # an interface — no tenant data, no recipient, no credential — and the same bytes are
+    # published in docs/releases/2.20/notifications/contract/. Anonymous on Kong, and novu-bridge does
+    # not gate them either (ProxyAuthFilter excludes /novu-adapter/v1/contract explicitly).
+    # Kong-only for the same reason as the rest of the bridge: the Spring gateway tier does not
+    # route novu-bridge at all.
+    "/novu-bridge/novu-adapter/v1/contract/envelope",
+    "/novu-bridge/novu-adapter/v1/contract/openapi",
+    # The thin domain event's schema, published for the same reason and served the same
+    # way (GET-only route, no accesscontrol action, ProxyAuthFilter excludes /contract).
+    "/novu-bridge/novu-adapter/v1/contract/thin-event",
+    # Thin-event design 5.2 / 7.2 P1. /config/source reports which config namespace
+    # served each master for a tenant; /dispatch/_resolve returns the envelope list a
+    # thin event would produce without dispatching it. Both authenticate inside
+    # novu-bridge (ProxyAuthFilter; _resolve on the admin role set), and both are
+    # Kong-only for the same reason as the rest of the bridge: the Spring gateway tier
+    # does not route novu-bridge at all.
+    "/novu-bridge/novu-adapter/v1/config/source",
+    "/novu-bridge/novu-adapter/v1/dispatch/_resolve",
+    # Inbound WhatsApp webhooks (#1992). Compose-only: the Spring gateway has no
+    # xstate-chatbot route, so there is nothing to mirror into env.yaml. Twilio cannot
+    # present a DIGIT token; these are authenticated by X-Twilio-Signature in-service.
+    "/xstate-chatbot/message",
+    "/xstate-chatbot/status",
 }
+# NOT whitelisted and NOT routed on purpose: /novu-bridge/novu-adapter/v1/gateways/**
+# (formerly the internal SMSCountry send adapter, which carried provider credentials
+# in headers; an older novu-bridge image may still serve it). Kong terminates it —
+# see novu-bridge-internal-gateways-deny in kong.yml.
 
 
 def _find_value(node, key):
@@ -89,12 +137,23 @@ def _find_lua(node, marker):
     return None
 
 
-def kong_whitelist(text: str) -> set:
+def _auth_optional_lua(text: str) -> str:
     lua = _find_lua(yaml.safe_load(text), "AUTH_OPTIONAL")
     if not lua:
         sys.exit("ERROR: AUTH_OPTIONAL pre-function not found in local-setup/kong/kong.yml")
+    return lua
+
+
+def kong_whitelist(text: str) -> set:
+    lua = _auth_optional_lua(text)
     # Only the exact-match set keys are extracted, so nested Lua tables can't confuse it.
-    return set(_ENTRY.findall(lua))
+    kept = "\n".join(line for line in lua.splitlines() if LEGACY_IDENTITY_TAG not in line)
+    return set(_ENTRY.findall(kept))
+
+
+def legacy_identity_paths(text: str) -> set:
+    lua = _auth_optional_lua(text)
+    return {p for line in lua.splitlines() if LEGACY_IDENTITY_TAG in line for p in _ENTRY.findall(line)}
 
 
 def env_whitelist(text: str) -> set:
@@ -113,11 +172,12 @@ def diff(kong: set, env: set, kong_only=KONG_ONLY_AUTH_OPTIONAL):
     return sorted(shared_kong - env), sorted(env - shared_kong)
 
 
-def report(kong: set, env: set) -> int:
+def report(kong: set, env: set, legacy: set = frozenset()) -> int:
     only_kong, only_env = diff(kong, env)
     missing_kong_only = sorted(KONG_ONLY_AUTH_OPTIONAL - kong)
     opened_on_spring = sorted(KONG_ONLY_AUTH_OPTIONAL & env)
-    if only_kong or only_env or missing_kong_only or opened_on_spring:
+    legacy_open_on_spring = sorted(legacy & env)
+    if only_kong or only_env or missing_kong_only or opened_on_spring or legacy_open_on_spring:
         print("Gateway auth-optional whitelist MISMATCH (Kong vs Spring gateway):\n")
         for p in only_kong:
             print(f"  + only in Kong (local-setup/kong/kong.yml):        {p}")
@@ -127,6 +187,8 @@ def report(kong: set, env: set) -> int:
             print(f"  ! missing required Kong-only exception:           {p}")
         for p in opened_on_spring:
             print(f"  ! Kong-only exception was opened on Spring:        {p}")
+        for p in legacy_open_on_spring:
+            print(f"  ! retired identity endpoint still open on Spring:  {p}")
         print(
             "\nShared paths must exist in BOTH files. KONG_ONLY_AUTH_OPTIONAL paths must "
             "exist only in Kong because Spring does not normalize anonymous userInfo."
@@ -148,6 +210,15 @@ def self_test() -> int:
     assert diff(base | {"/x"}, base, {"/x"}) == ([], []), "Kong-only path must be excluded"
     assert diff(base | {"/x"}, base | {"/x"}, {"/x"}) == ([], ["/x"]), \
         "Kong-only path opened on Spring must be detected"
+    lua_yaml = (
+        "plugins:\n- config:\n    access:\n    - |\n"
+        "      local AUTH_OPTIONAL = {\n"
+        "        [\"/a\"]=true,\n"
+        "        [\"/legacy\"]=true, " + LEGACY_IDENTITY_TAG + "\n"
+        "      }\n"
+    )
+    assert kong_whitelist(lua_yaml) == {"/a"}, "tagged legacy entries must leave the Kong set"
+    assert legacy_identity_paths(lua_yaml) == {"/legacy"}, "tagged legacy entries must be listed"
     print("self-test OK: drift is detected in both directions.")
     return 0
 
@@ -155,7 +226,8 @@ def self_test() -> int:
 def main() -> int:
     if "--self-test" in sys.argv:
         return self_test()
-    return report(kong_whitelist(KONG.read_text()), env_whitelist(ENV.read_text()))
+    kong_text = KONG.read_text()
+    return report(kong_whitelist(kong_text), env_whitelist(ENV.read_text()), legacy_identity_paths(kong_text))
 
 
 if __name__ == "__main__":

@@ -1,3 +1,6 @@
+import { establishIdentityBffSession } from "../../../../packages/libraries/src/services/auth/identityBffLogin";
+import { isIdentityBffAuth } from "../../../../packages/libraries/src/services/auth/authSurface";
+
 import { getTenantId } from "../config/dashboardConfig";
 import { isPublicDashboardRuntime } from "./dashboardRuntime";
 
@@ -519,7 +522,34 @@ export const REFRESH_REJECTED = "rejected";
 export const REFRESH_NO_TOKEN = "no_token";
 export const REFRESH_UNAVAILABLE = "unavailable";
 
+async function requestIdentityReselect() {
+  const tenant = window.__digitTenantContext;
+  const previousToken = getEmployeeToken();
+  const previousUuid = getEmployeeInfo()?.uuid;
+  if (!tenant || !previousToken || !previousUuid) return REFRESH_NO_TOKEN;
+  const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), REFRESH_TIMEOUT_MS) : null;
+  try {
+    const result = await establishIdentityBffSession({ surface: "employee", tenant,
+      fetchImpl: (url, init) => fetch(url, { ...init, ...(controller && { signal: controller.signal }) }) });
+    if (result.status === "signed-out" || result.status === "forbidden" || result.status === "pending-invitation") return REFRESH_REJECTED;
+    if (result.status !== "authenticated") return REFRESH_UNAVAILABLE;
+    // Never resurrect a signed-out session, nor adopt a different person's
+    // surface cookie after a shared-browser account switch.
+    if (getEmployeeToken() !== previousToken || getEmployeeInfo()?.uuid !== previousUuid || result.user.info.uuid !== previousUuid) {
+      return REFRESH_UNAVAILABLE;
+    }
+    persistSession({ accessToken: result.user.access_token, userInfo: result.user.info, tenantId: tenant.tenantId });
+    tokenGeneration += 1;
+    return REFRESH_REFRESHED;
+  } catch (_) { return REFRESH_UNAVAILABLE; }
+  finally { if (timer) clearTimeout(timer); }
+}
+
 async function requestRefresh() {
+  if (typeof window !== "undefined" && window.location?.pathname && isIdentityBffAuth()) {
+    return requestIdentityReselect();
+  }
   const refreshToken = getRefreshToken();
   if (!refreshToken) return REFRESH_NO_TOKEN;
 

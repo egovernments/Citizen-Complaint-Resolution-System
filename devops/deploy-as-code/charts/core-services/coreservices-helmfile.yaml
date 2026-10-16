@@ -61,8 +61,10 @@ releases:
     installed: true
     <<: *default
 
+  # Replaced by novu-bridge, which consumes egov.core.notification.sms itself
+  # (see common-services/novu-bridge). Kept for a one-release rollback.
   - name: egov-notification-sms
-    installed: true
+    installed: false
     <<: *default
 
   - name: egov-user

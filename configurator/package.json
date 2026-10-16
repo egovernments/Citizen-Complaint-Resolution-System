@@ -9,8 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "test:e2e": "node e2e/run-all.mjs"
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@digit-mcp/data-provider": "file:packages/data-provider",
@@ -37,7 +36,6 @@
     "json-logic-js": "^2.0.5",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.562.0",
-    "osmtogeojson": "^3.0.0-beta.5",
     "posthog-js": "^1.336.1",
     "ra-core": "^5.14.3",
     "ra-i18n-polyglot": "^5.14.4",
@@ -60,7 +58,6 @@
     "@types/json-logic-js": "^2.0.8",
     "@types/leaflet": "^1.9.21",
     "@types/node": "^24.10.1",
-    "@types/osmtogeojson": "^2.2.34",
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
@@ -71,7 +68,6 @@
     "globals": "^16.5.0",
     "jsdom": "^27.4.0",
     "postcss": "^8.5.6",
-    "puppeteer": "^24.40.0",
     "tailwindcss": "^3.4.19",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",

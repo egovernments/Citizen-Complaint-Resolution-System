@@ -1,0 +1,32 @@
+{
+  "schemaVersion": "1",
+  "eventId": "7b2d0a51-88c2-4f0e-9a77-1c0e4b6d2f30",
+  "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+  "eventTime": "2026-09-21T07:41:11.004Z",
+  "producer": "complaints-service",
+  "module": "Complaints",
+  "eventName": "COMPLAINTS.WORKFLOW.RESOLVE",
+  "entityType": "COMPLAINT",
+  "entityId": "PGR-2026-000123",
+  "tenantId": "ke.bomet",
+  "channel": "EMAIL",
+  "subscriberId": "ke.bomet:9a1f2e77-0c3b-4c2a-9f3e-5a1d2c3b4e5f",
+  "contact": {
+    "userId": "9a1f2e77-0c3b-4c2a-9f3e-5a1d2c3b4e5f",
+    "type": "CITIZEN",
+    "name": "Jane Doe",
+    "phone": "+254712345678",
+    "email": "jane.doe@example.org",
+    "locale": "en_IN"
+  },
+  "renderedBody": "Dear Jane,\n\nYour complaint PGR-2026-000123 has been resolved. If the issue persists you can reopen it within 5 days.\n\nCity Grievance Desk",
+  "subject": "Your complaint PGR-2026-000123 has been resolved",
+  "transactionId": "PGR-2026-000123:RESOLVE:RESOLVED:ke.bomet:9a1f2e77-0c3b-4c2a-9f3e-5a1d2c3b4e5f:EMAIL",
+  "templateKey": "CITIZEN.RESOLVE.RESOLVED.EMAIL.en_IN",
+  "data": {
+    "complaintNo": "PGR-2026-000123",
+    "status": "RESOLVED",
+    "action": "RESOLVE",
+    "toState": "RESOLVED"
+  }
+}

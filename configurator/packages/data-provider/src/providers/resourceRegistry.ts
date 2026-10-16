@@ -1,7 +1,7 @@
 import { ENDPOINTS } from '../client/endpoints.js';
 import { MDMS_SCHEMAS } from '../client/types.js';
 
-export type ResourceType = 'mdms' | 'hrms' | 'boundary' | 'pgr' | 'localization' | 'user' | 'workflow-bs' | 'workflow-process' | 'access-role' | 'access-action' | 'mdms-schema' | 'boundary-hierarchy'
+export type ResourceType = 'mdms' | 'hrms' | 'boundary' | 'pgr' | 'localization' | 'user' | 'workflow-bs' | 'workflow-process' | 'access-action' | 'mdms-schema' | 'boundary-hierarchy'
   // 'custom' resources are NOT MDMS-backed. They are read-only lists fetched
   // from an out-of-band DIGIT service (today: the novu-bridge read proxy) via
   // a plain GET to `endpoint.search`, using the same DIGIT auth token the rest
@@ -32,7 +32,8 @@ export interface ResourceConfig {
   customPath?: string;
   /** For `type: 'custom'` resources: when true, the fetcher appends the session
    *  tenantId as a `tenantId` query param (the novu-bridge /logs endpoint
-   *  requires it). Providers/integrations don't take a tenant, so omit it. */
+   *  requires it; the integrations list uses it to pick the workspace's own
+   *  notification account, #2203). */
   customTenantScoped?: boolean;
   /** 2-master complaint hierarchy: when set, the MDMS fetcher keeps only the
    *  LEAF rows of RAINMAKER-PGR.ComplaintHierarchy (rows carrying `department`
@@ -40,7 +41,47 @@ export interface ResourceConfig {
    *  (serviceCode/menuPath/menuPathName from parentCode) so downstream
    *  complaint-type UI keeps working unchanged. */
   leafServiceDefAdapter?: boolean;
+  /** MDMS masters the backend reads ONLY at the state root (pgr-services notification
+   *  masters, novu-bridge channel policy). Reads and writes go to the state tenant
+   *  regardless of the session tenant, so a city-scoped operator can never author rows
+   *  nothing reads. */
+  stateLevel?: boolean;
+  /** Listable, showable, NOT writable — no create/edit/delete affordance anywhere in
+   *  the UI (`useMastersCapability.canEditResource` returns false for these, which is
+   *  the single choke point the list/show/edit screens already consult).
+   *
+   *  Used for a master whose configuration has MOVED: the rows are still the live
+   *  configuration on a tenant that has not been migrated, so hiding them would be a
+   *  lie, but editing them would leave the tenant with two answers to "what is
+   *  configured". Rows are never deleted — the resource disappears one release later. */
+  readOnly?: boolean;
+  /** Shown as a banner on a read-only resource's list and show screens. Says where the
+   *  configuration moved to and what to run; never just "this is read-only". */
+  readOnlyNotice?: string;
+  /** Generic MDMS resources only: keep the auto-generated /manage/<id> routes
+   *  but list the resource nowhere (no sidebar entry, no Advanced card). For a
+   *  screen kept only so operators can finish a migration; the runbook that
+   *  needs it links the URL directly. */
+  unlisted?: boolean;
 }
+
+/**
+ * Shown on every legacy notification master. It has to answer three questions at
+ * once: where did the configuration go, is THIS tenant still using these rows,
+ * and what do I run to move it.
+ */
+// The command is spelled out, not imported: this package cannot reach the app's
+// notificationSource.ts. It must stay the same text as NOTIFICATION_MIGRATE_COMMAND there
+// (a deploy no longer copies anything — since 96c96d1 it upgrades software only).
+export const LEGACY_NOTIFICATION_NOTICE =
+  'Notification configuration has moved to the shared NOTIFICATIONS.* masters, which every module uses — see Notifications → Configure. '
+  + 'These rows are kept and still read by the notification service on a tenant that has not been migrated yet, so they are shown here, '
+  + 'read-only; they are never deleted. To move them, run the migration script on the server '
+  + '(migrate-notifications.py plan --tenant <tenant>, then apply --tenant <tenant> --yes): it copies what this tenant actually has, '
+  + 'is one-way per tenant, and leaves these rows untouched. Re-running the deploy does not move them. '
+  + 'Read-only applies to this screen only: the MDMS API still accepts writes to these masters from an admin role '
+  + '(MDMS_ADMIN / ACCOUNT_ADMIN), and once a tenant is migrated the notification service no longer reads them — '
+  + 'an edit made to them after migration has no effect. Change a migrated tenant in Notifications → Configure.';
 
 export const REGISTRY: Record<string, ResourceConfig> = {
   // Dedicated Resources
@@ -100,20 +141,23 @@ export const REGISTRY: Record<string, ResourceConfig> = {
     nameField: 'businessId', descriptionField: 'action', dedicated: true,
   },
   'access-roles': {
-    type: 'access-role', label: 'Access Roles', idField: 'code',
+    // Backed by the ACCESSCONTROL-ROLES.roles MDMS master itself (not the
+    // read-only accesscontrol role-search API, which only returns active
+    // roles), so roles can be added, edited and enabled/disabled via the
+    // root-level isActive like every other master. uniqueIdentifier == code,
+    // so ids and `reference="access-roles"` dropdowns are unchanged; those
+    // dropdowns still see active roles only (egovernments/CCRS#1846).
+    type: 'mdms', label: 'Access Roles', idField: 'code',
     nameField: 'name', descriptionField: 'description', dedicated: true,
-    // `schema` here is a masters-visibility policy key only (see
-    // docs/design/masters-configurator-access-policy-design.md §3.2) — this
-    // resource still fetches via the accesscontrol role API (`type:
-    // 'access-role'`), not a raw MDMS schemaCode search; `config.type` gates
-    // every fetch branch in dataProvider.ts before `config.schema` is ever
-    // read, so adding it here does not change how this resource is fetched.
     schema: MDMS_SCHEMAS.ROLES,
   },
   'access-actions': {
     type: 'access-action', label: 'Access Actions', idField: 'id',
     nameField: 'displayName', descriptionField: 'url', dedicated: true,
-    // Policy key only — see the comment on 'access-roles' above.
+    // `schema` is a masters-visibility policy key only (see
+    // docs/reference/architecture/access-control/masters-configurator-access-policy-design.md §3.2)
+    // and the source of the unfiltered action list; role-filtered reads still
+    // go through the accesscontrol action API (`type: 'access-action'`).
     schema: 'ACCESSCONTROL-ACTIONS-TEST.actions-test',
   },
   'mdms-schemas': {
@@ -149,31 +193,33 @@ export const REGISTRY: Record<string, ResourceConfig> = {
   // (RAINMAKER-PGR.ClassificationNode is gone — interior nodes now live in the
   // ComplaintHierarchy master alongside the leaves; cascade pickers read it
   // directly. No standalone classification-nodes resource anymore.)
+  //
+  // Masters used only for internal platform/project setup are deliberately NOT
+  // registered here, so the configurator has no route, sidebar entry or
+  // Advanced card for them (#1777): Workflow.BusinessService /
+  // BusinessServiceConfig / BusinessServiceMasterConfig, DataSecurity.* (EncryptionPolicy,
+  // DecryptionABAC, MaskingPatterns, SecurityPolicy), INBOX.InboxQueryConfiguration,
+  // egov-hrms.Degree / EmploymentTest / Specalization,
+  // common-masters.CronJobAPIConfig and egov-location.TenantBoundary. Their data
+  // still exists and tenant bootstrap still copies the ones a new tenant needs
+  // (see src/api/services/tenantBootstrap.ts) — only the editing screens are gone.
   'state-info': { type: 'mdms', label: 'State Info', schema: 'common-masters.StateInfo', idField: 'code', nameField: 'name' },
   'city-modules': { type: 'mdms', label: 'City Modules', schema: 'tenant.citymodule', idField: 'code', nameField: 'module' },
   'id-formats': { type: 'mdms', label: 'ID Formats', schema: 'common-masters.IdFormat', idField: 'idname', nameField: 'idname' },
-  'workflow-services': { type: 'mdms', label: 'Business Services', schema: 'Workflow.BusinessService', idField: 'businessService', nameField: 'business' },
-  'workflow-config': { type: 'mdms', label: 'Workflow Config', schema: 'Workflow.BusinessServiceConfig', idField: 'code', nameField: 'code' },
   // Generic workflow escalation remains for non-PGR products such as IM/TL.
   // PGR uses the dedicated self-loop policy below; operators must not add PGR here.
-  'auto-escalation': { type: 'mdms', label: 'Workflow Auto Escalation (non-PGR)', schema: 'Workflow.AutoEscalation', idField: 'businessService', nameField: 'businessService' },
+  // Unlisted rather than removed (#1777): it is the Configurator path for
+  // deactivating a legacy PGR row that makes pgr-services fail closed with
+  // PGR_ESCALATION_CONFIG_CONFLICT (docs/operations/data-migration/pgr-escalation-self-loop.md).
+  'auto-escalation': { type: 'mdms', label: 'Workflow Auto Escalation (non-PGR)', schema: 'Workflow.AutoEscalation', idField: 'businessService', nameField: 'businessService', unlisted: true },
   'sla-config': { type: 'mdms', label: 'SLA Config', schema: 'common-masters.wfSlaConfig', idField: 'slotPercentage', nameField: 'slotPercentage' },
   'role-actions': { type: 'mdms', label: 'Role Actions', schema: 'ACCESSCONTROL-ROLEACTIONS.roleactions', idField: 'id', nameField: 'rolecode', descriptionField: 'actionid' },
   roles: { type: 'mdms', label: 'Roles', schema: MDMS_SCHEMAS.ROLES, idField: 'code', nameField: 'name', descriptionField: 'description' },
   'action-mappings': { type: 'mdms', label: 'Action Mappings', schema: 'ACCESSCONTROL-ACTIONS-TEST.actions-test', idField: 'id', nameField: 'displayName', descriptionField: 'url' },
-  'encryption-policy': { type: 'mdms', label: 'Encryption Policy', schema: 'DataSecurity.EncryptionPolicy', idField: 'key', nameField: 'key' },
-  'decryption-abac': { type: 'mdms', label: 'Decryption ABAC', schema: 'DataSecurity.DecryptionABAC', idField: 'model', nameField: 'model' },
-  'masking-patterns': { type: 'mdms', label: 'Masking Patterns', schema: 'DataSecurity.MaskingPatterns', idField: 'patternId', nameField: 'patternId' },
-  'security-policy': { type: 'mdms', label: 'Security Policy', schema: 'DataSecurity.SecurityPolicy', idField: 'model', nameField: 'model' },
-  'inbox-config': { type: 'mdms', label: 'Inbox Config', schema: 'INBOX.InboxQueryConfiguration', idField: 'module', nameField: 'module' },
   'deactivation-reasons': { type: 'mdms', label: 'Deactivation Reasons', schema: 'egov-hrms.DeactivationReason', idField: 'code', nameField: 'code' },
-  degrees: { type: 'mdms', label: 'Degrees', schema: 'egov-hrms.Degree', idField: 'code', nameField: 'code' },
-  'employment-tests': { type: 'mdms', label: 'Employment Tests', schema: 'egov-hrms.EmploymentTest', idField: 'code', nameField: 'code' },
-  specializations: { type: 'mdms', label: 'Specializations', schema: 'egov-hrms.Specalization', idField: 'code', nameField: 'code' },
   'gender-types': { type: 'mdms', label: 'Gender Types', schema: MDMS_SCHEMAS.GENDER_TYPE, idField: 'code', nameField: 'code' },
   'employee-status': { type: 'mdms', label: 'Employee Status', schema: MDMS_SCHEMAS.EMPLOYEE_STATUS, idField: 'code', nameField: 'code' },
   'employee-type': { type: 'mdms', label: 'Employee Type', schema: MDMS_SCHEMAS.EMPLOYEE_TYPE, idField: 'code', nameField: 'code' },
-  'cron-jobs': { type: 'mdms', label: 'Cron Jobs', schema: 'common-masters.CronJobAPIConfig', idField: 'jobName', nameField: 'jobName' },
   'ui-homepage': { type: 'mdms', label: 'UI Homepage', schema: 'common-masters.uiHomePage', idField: 'redirectURL', nameField: 'redirectURL' },
 
   // Added by Stage-0 registry hygiene: schemas live on `ke` but had no UI surface.
@@ -181,9 +227,8 @@ export const REGISTRY: Record<string, ResourceConfig> = {
   // are layered on later via src/admin/schemaDescriptors/ (Stage 1+).
   'theme-config':           { type: 'mdms', label: 'Theme Config',             schema: 'common-masters.ThemeConfig',               idField: 'code',              nameField: 'name' },
   'mobile-number-validation': { type: 'mdms', label: 'Mobile Number Validation', schema: 'common-masters.MobileNumberValidation', idField: 'countryCode',       nameField: 'countryCode' },
-  'tenant-boundary':        { type: 'mdms', label: 'Tenant Boundary (HRMS)',   schema: 'egov-location.TenantBoundary',             idField: 'hierarchyType.code', nameField: 'hierarchyType.code' },
-  'auto-escalation-ignore': { type: 'mdms', label: 'Workflow Escalation Ignore (non-PGR)', schema: 'Workflow.AutoEscalationStatesToIgnore', idField: 'businessService', nameField: 'businessService' },
-  'workflow-bs-master':     { type: 'mdms', label: 'Workflow BS Master',       schema: 'Workflow.BusinessServiceMasterConfig',     idField: 'active',            nameField: 'businessService' },
+  // Unlisted for the same reason as 'auto-escalation' above.
+  'auto-escalation-ignore': { type: 'mdms', label: 'Workflow Escalation Ignore (non-PGR)', schema: 'Workflow.AutoEscalationStatesToIgnore', idField: 'businessService', nameField: 'businessService', unlisted: true },
   // Keyed on `code` (DEFAULT), NOT on REOPENSLA. mdms-v2 rejects any update that
   // changes a record's x-unique fields (UNIQUE_KEY_UPDATE_ERR), so keying the
   // record on its own only value made the reopen window permanently uneditable —
@@ -192,15 +237,59 @@ export const REGISTRY: Record<string, ResourceConfig> = {
   'pgr-ui-constants':       { type: 'mdms', label: 'PGR UI Constants',         schema: 'RAINMAKER-PGR.UIConstants',                idField: 'code',              nameField: 'REOPENSLA' },
   'pgr-escalation':         { type: 'mdms', label: 'PGR Escalation',           schema: 'RAINMAKER-PGR.EscalationConfig',           idField: 'code',              nameField: 'code' },
   'map-config':             { type: 'mdms', label: 'Map Configuration',        schema: 'RAINMAKER-PGR.MapConfig',                  idField: 'code',              nameField: 'code' },
-  // Composite-key masters: react-admin id comes from the MDMS uniqueIdentifier
-  // (see mapMdmsRecord), so idField/nameField here are display-only.
-  'notification-routing':   { type: 'mdms', label: 'PGR Notification Routing',  schema: 'RAINMAKER-PGR.NotificationRouting',  idField: 'action', nameField: 'action' },
-  'notification-template':  { type: 'mdms', label: 'PGR Notification Templates', schema: 'RAINMAKER-PGR.NotificationTemplate', idField: 'action', nameField: 'action' },
+  // -------------------------------------------------------------------------
+  // Notification configuration — the shared NOTIFICATIONS.* namespace.
+  //
+  // ONE namespace for every module, held at the STATE tenant, read by the box
+  // over MDMS v2 `_search` with the schemaCode in the body. Composite-key
+  // masters: the react-admin id comes from the MDMS uniqueIdentifier (see
+  // mapMdmsRecord), which MDMS derives server-side by joining the `x-unique`
+  // values with '.', so idField/nameField here are display-only.
+  //
+  // `eventName` replaced (businessService, action, toState) as the key: the
+  // business-service column had exactly one value ever ("PGR"), fromState was
+  // documentation-only, and a dotted module-prefixed event name is globally
+  // unique on its own. NOTE that eventName CONTAINS dots, so a uniqueIdentifier
+  // from these masters is deterministic but not decomposable — never split one
+  // on '.' to recover the key fields.
+  // -------------------------------------------------------------------------
+
+  // The event vocabulary: what a module can notify about, which actors each
+  // event carries, and which placeholder tokens it fills. Module-owned (PGR's
+  // rows are GENERATED from the workflow at seed time), so the Configurator
+  // shows it but does not author it.
+  'notifications-event-catalogue': {
+    type: 'mdms', label: 'Notification Events', schema: 'NOTIFICATIONS.EventCatalogue',
+    idField: 'eventName', nameField: 'label', descriptionField: 'module',
+    stateLevel: true, readOnly: true,
+    readOnlyNotice: 'Events are declared by the module that produces them — PGR\'s rows are generated from its workflow at seed time — so they are shown here but not edited here. A new event arrives with the module that fires it.',
+  },
+  'notifications-routing':  { type: 'mdms', label: 'Notification Routing',   schema: 'NOTIFICATIONS.Routing',  idField: 'eventName', nameField: 'eventName', descriptionField: 'audience', stateLevel: true },
+  'notifications-template': { type: 'mdms', label: 'Notification Templates', schema: 'NOTIFICATIONS.Template', idField: 'eventName', nameField: 'eventName', descriptionField: 'audience', stateLevel: true },
   // Provider-scoped external template mapping (e.g. Twilio WhatsApp ContentSids +
   // ordered variables + per-locale approval). Surfaces the localization linkage:
   // each row carries `locale` and `approvalStatus`, so an operator sees which
-  // (provider, channel, key, locale) templates are approved and sendable.
-  'notification-provider-template': { type: 'mdms', label: 'PGR Provider Templates', schema: 'RAINMAKER-PGR.NotificationProviderTemplate', idField: 'action', nameField: 'templateName' },
+  // (provider, channel, event, audience, locale) templates are approved and sendable.
+  'notifications-provider-template': { type: 'mdms', label: 'Notification Provider Templates', schema: 'NOTIFICATIONS.ProviderTemplate', idField: 'eventName', nameField: 'templateName', stateLevel: true },
+  // Per-tenant channel policy novu-bridge reads on every dispatch (at the STATE tenant).
+  // One row per channel: enabled + provider (+ legacy gateway/senderId). The single
+  // switch that decides whether a channel delivers — the env allowlist is only a
+  // fallback for tenants with no rows.
+  'notifications-channel':  { type: 'mdms', label: 'Notification Channels',  schema: 'NOTIFICATIONS.Channel',  idField: 'code', nameField: 'code', descriptionField: 'gateway', stateLevel: true },
+
+  // -------------------------------------------------------------------------
+  // LEGACY notification masters (RAINMAKER-PGR.Notification*) — READ-ONLY.
+  //
+  // Their configuration moved to NOTIFICATIONS.* above. They stay registered,
+  // and their rows are never deleted, because on a tenant that has not been
+  // migrated yet these rows ARE the live configuration (the box adapts them on
+  // read) and hiding them would show an operator an empty screen for a working
+  // tenant. They are removed from the UI one release after the copy ships.
+  // -------------------------------------------------------------------------
+  'notification-routing':   { type: 'mdms', label: 'Legacy (PGR) Notification Routing',  schema: 'RAINMAKER-PGR.NotificationRouting',  idField: 'action', nameField: 'action' , stateLevel: true, readOnly: true, readOnlyNotice: LEGACY_NOTIFICATION_NOTICE },
+  'notification-template':  { type: 'mdms', label: 'Legacy (PGR) Notification Templates', schema: 'RAINMAKER-PGR.NotificationTemplate', idField: 'action', nameField: 'action' , stateLevel: true, readOnly: true, readOnlyNotice: LEGACY_NOTIFICATION_NOTICE },
+  'notification-provider-template': { type: 'mdms', label: 'Legacy (PGR) Provider Templates', schema: 'RAINMAKER-PGR.NotificationProviderTemplate', idField: 'action', nameField: 'templateName' , stateLevel: true, readOnly: true, readOnlyNotice: LEGACY_NOTIFICATION_NOTICE },
+  'notification-channel':   { type: 'mdms', label: 'Legacy (PGR) Notification Channels',     schema: 'RAINMAKER-PGR.NotificationChannel',   idField: 'code',   nameField: 'code', descriptionField: 'gateway' , stateLevel: true, readOnly: true, readOnlyNotice: LEGACY_NOTIFICATION_NOTICE },
 
   // Non-MDMS, read-only resources served by the novu-bridge proxy (not egov-mdms).
   // Routed by Kong (local-setup/kong/kong.yml); novu-bridge validates the Bearer
@@ -212,10 +301,12 @@ export const REGISTRY: Record<string, ResourceConfig> = {
     descriptionField: 'status', dedicated: true,
     customPath: '/novu-bridge/novu-adapter/v1/logs', customTenantScoped: true,
   },
+  // Tenant-scoped since #2203: on a workspace with its own Novu organization the bridge
+  // lists THAT organization's providers; on any other tenant, the shared account's as before.
   'notification-provider': {
     type: 'custom', label: 'Notification Providers', idField: '_id', nameField: 'providerId',
     descriptionField: 'channel', dedicated: true,
-    customPath: '/novu-bridge/novu-adapter/v1/integrations', customTenantScoped: false,
+    customPath: '/novu-bridge/novu-adapter/v1/integrations', customTenantScoped: true,
   },
   // notification-preference -> GET /novu-bridge/novu-adapter/v1/preferences
   // (per-user consent per channel + preferredLanguage; same {data,total} envelope
@@ -283,8 +374,9 @@ export function getResourceBySchema(schemaCode: string): string | undefined {
  * Non-'mdms' resource types that nonetheless have a real MDMS-v2 schema with genuine
  * `/mdms-v2/v2/_create|_update/<schema>` write actions in the ACCESSCONTROL-ACTIONS-TEST seed, and
  * so must still be checked against ACCESSCONTROL-ROLEACTIONS by {@link isAccessControlGated} —
- * `access-roles`/`access-actions` use a dedicated `type` for their read path (a different fetch
- * shape than the generic MDMS list), but their EDIT gating is identical to any other mdms master.
+ * `access-actions` uses a dedicated `type` for its read path (a different fetch shape than the
+ * generic MDMS list), but its EDIT gating is identical to any other mdms master. (`access-roles`
+ * used to be `type: 'access-role'`; it is now a plain mdms master and gated by construction.)
  * Narrowing the gate to `type === 'mdms'` silently opened these two — the screens that edit the
  * permission system itself — to every role (#1826 review). Add a type here ONLY when you've
  * confirmed it has a real mdms-v2 write action in the seed; do not widen this to "any resource
@@ -292,7 +384,7 @@ export function getResourceBySchema(schemaCode: string): string | undefined {
  * identifiers too but write through non-mdms-v2 endpoints (HRMS, boundary-service, PGR,
  * localization) and must stay unrestricted, matching pre-gating behavior.
  */
-const EXPLICITLY_GATED_TYPES: ReadonlySet<ResourceType> = new Set(['access-role', 'access-action']);
+const EXPLICITLY_GATED_TYPES: ReadonlySet<ResourceType> = new Set(['access-action']);
 
 /**
  * Whether `useMastersCapability.canViewResource`/`canEditResource` should check this resource
@@ -301,6 +393,25 @@ const EXPLICITLY_GATED_TYPES: ReadonlySet<ResourceType> = new Set(['access-role'
  * carries a real schema); a small explicit allowlist ({@link EXPLICITLY_GATED_TYPES}) covers the
  * non-'mdms'-typed exceptions that still need it.
  */
+/**
+ * Whether this resource may be created, edited or deleted from the UI at all.
+ *
+ * A `readOnly` resource is still listed and shown — it is live configuration on
+ * some tenants — but every write affordance is withheld. This is checked BEFORE
+ * the access-control policy, because it is a property of the resource, not of
+ * the operator: an MDMS_ADMIN must not be able to edit a legacy notification
+ * master either.
+ */
+export function isReadOnlyResource(resource: string): boolean {
+  return REGISTRY[resource]?.readOnly === true;
+}
+
+/** The banner a read-only resource shows, or undefined. */
+export function readOnlyNoticeFor(resource: string): string | undefined {
+  const config = REGISTRY[resource];
+  return config?.readOnly ? config.readOnlyNotice : undefined;
+}
+
 export function isAccessControlGated(config: ResourceConfig | undefined): boolean {
   if (!config) return false;
   return config.type === 'mdms' || EXPLICITLY_GATED_TYPES.has(config.type);

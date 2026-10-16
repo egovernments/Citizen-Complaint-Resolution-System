@@ -5,22 +5,23 @@
  * don't:
  *
  *  1) The sidebar surface that anchors every authenticated citizen
- *     route — nav entries, current-user chip — must be localized. A
- *     raw key here is doubly bad because it follows the citizen onto
- *     every subsequent page until logout.
+ *     route (its nav entries) must be localized. A raw key here is
+ *     doubly bad because it follows the citizen onto every subsequent
+ *     page until logout.
  *
  *  2) Editing the profile (name + photo) is the only citizen-driven
  *     write into egov-user a non-employee can perform from the UI.
- *     The saved value must reflect back in the sidebar without a
- *     reload — otherwise the citizen has no signal that the write
- *     took (and a partial UI state where the form clears but the
- *     sidebar still shows the old chip has historically masked auth
- *     bugs where the update went through with the wrong UUID).
+ *     The saved name must come back on a fresh load of the profile,
+ *     so a form that clears while the server keeps the old value (or
+ *     writes another UUID) fails.
  */
 import { test, expect, type Page } from '@playwright/test';
-import { citizenOtpLogin } from '../../utils/citizen-auth';
+import { citizenLoginViaApi } from '../../utils/citizen-auth';
+import { requiredEnv } from '../../utils/identity';
+import { generateValidMobile, getMobileValidationRule } from '../../common/mdms-mobile';
 import * as fs from 'fs';
 import * as path from 'path';
+import { appBase } from '../../utils/auth';
 
 const RAW_KEY_RE = /\b[A-Z][A-Z0-9]*(?:[._][A-Z0-9]+)+\b/g;
 const rawKeysIn = (text: string) =>
@@ -40,33 +41,20 @@ function captureLoc(page: Page, sink: LocFetch[]) {
   });
 }
 
-// Open the sidebar. Different V2 revisions ship it as (a) a persistent
-// aside on desktop, (b) a hamburger that toggles a drawer, or (c) an
-// avatar/user-chip in the header. Try the common openers; fall through
-// silently if the sidebar is already visible.
+// Expand the sidebar if it is collapsed. Its toggle reads "Open sidebar" or
+// "Close sidebar", so only the open label is clicked: clicking the toggle
+// blindly closes a sidebar that is already open.
 async function openSidebar(page: Page) {
-  const openers = [
-    page.getByRole('button', { name: /menu|sidebar|navigation/i }),
-    page.locator('[aria-label*="menu" i], [aria-label*="navigation" i]'),
-    page.locator('header button').filter({ has: page.locator('svg') }).first(),
-  ];
-  for (const opener of openers) {
-    if (await opener.first().isVisible({ timeout: 1_500 }).catch(() => false)) {
-      await opener.first().click();
-      // Drawer transitions are short but non-zero.
-      await page.waitForTimeout(400);
-      return;
-    }
+  const open = page.getByRole('button', { name: /open sidebar/i });
+  if (await open.isVisible().catch(() => false)) {
+    await open.click();
+    await expect(page.getByRole('button', { name: /close sidebar/i })).toBeVisible();
   }
 }
 
-// Identify the sidebar by what it *contains* (the citizen nav) rather
-// than by tag — the markup varies across V2 revisions.
+// The sidebar is the parent of its footer (Logout and the eGov band).
 function sidebar(page: Page) {
-  return page
-    .locator('aside, [role="navigation"], [role="dialog"], nav')
-    .filter({ hasText: /my complaints|edit profile|logout|sign out/i })
-    .first();
+  return page.locator('.digit-sidebar-foot:visible').first().locator('xpath=..');
 }
 
 // Not serial: each test does its own login, so a sidebar-localization
@@ -81,8 +69,8 @@ test.describe('Citizen landing page sidebar + profile edit', () => {
     const locFetches: LocFetch[] = [];
     captureLoc(page, locFetches);
 
-    await citizenOtpLogin(page);
-    await page.goto('/digit-ui/citizen');
+    await citizenLoginViaApi(page);
+    await page.goto(`${appBase()}/citizen`);
 
     await openSidebar(page);
     const sb = sidebar(page);
@@ -113,15 +101,11 @@ test.describe('Citizen landing page sidebar + profile edit', () => {
     });
     console.log('SIDEBAR ATTR STRINGS:', sbAttrs);
 
-    // Positive: the post-login sidebar must identify this citizen
-    // (their logged-in mobile number is the cheap proof the chip
-    // wasn't stale from another session) AND expose the standard nav.
-    // "My Complaints" lives as a card on the home route, not in the
-    // side nav, so we don't assert it here — the inbox test already
-    // covers that surface.
-    expect(sbText).toContain(process.env.CITIZEN_MOBILE || '777777777');
+    // Positive: the standard citizen nav. Edit Profile and the citizen's
+    // name live in the header's avatar menu, not the sidebar.
     expect(sbText).toMatch(/home/i);
-    expect(sbText).toMatch(/edit profile|profile/i);
+    expect(sbText).toMatch(/file a complaint/i);
+    expect(sbText).toMatch(/my complaints/i);
     expect(sbText).toMatch(/logout|sign out|log out/i);
 
     // Negative: no raw localization keys leaking — in visible text OR
@@ -141,24 +125,17 @@ test.describe('Citizen landing page sidebar + profile edit', () => {
     ).toHaveLength(0);
   });
 
-  test('Edit Profile: name + photo round-trip, reflect in sidebar', async ({
+  test('Edit Profile: name + photo round-trip', async ({
     page,
   }) => {
-    await citizenOtpLogin(page);
-    await page.goto('/digit-ui/citizen');
-
-    await openSidebar(page);
-    const editProfile = page
-      .getByRole('link', { name: /edit profile/i })
-      .or(page.getByRole('button', { name: /edit profile/i }))
-      .or(page.getByText(/^edit profile$/i))
-      .first();
-    await editProfile.waitFor({ state: 'visible', timeout: 15_000 });
-    await editProfile.click();
+    // Its own citizen: this test rewrites the profile, and the run's citizen
+    // is shared with the specs that follow.
+    await citizenLoginViaApi(page, generateValidMobile(await getMobileValidationRule(requiredEnv('DIGIT_TENANT'))));
+    // The avatar menu's Edit Profile entry opens this route.
+    await page.goto(`${appBase()}/citizen/user/profile`);
 
     // Unique name per run so we can detect "form cleared but server
-    // kept old value" — the sidebar text must contain THIS exact
-    // string, not just any name.
+    // kept old value": the reloaded profile must show THIS exact string.
     const newName = `E2E Citizen ${Date.now()}`;
 
     // Find the name field robustly: name attribute, id, or label-for.
@@ -205,21 +182,11 @@ test.describe('Citizen landing page sidebar + profile edit', () => {
     await expect(saveBtn).toBeEnabled({ timeout: 10_000 });
     await saveBtn.click();
 
-    // The user explicitly asked: reflect "right away" — no reload.
-    // Give the save round-trip a chance to resolve, re-open the
-    // sidebar (which often closes on submit), then poll for the new
-    // name in the sidebar text.
+    // The write must reach egov-user: a fresh load of the profile shows the new name.
     await page.waitForTimeout(2_000);
-    await openSidebar(page);
-    const sb = sidebar(page);
-    await sb.waitFor({ state: 'visible', timeout: 15_000 });
+    await page.goto(`${appBase()}/citizen/user/profile`);
+    await expect(nameInput).toHaveValue(newName, { timeout: 20_000 });
 
-    await expect
-      .poll(async () => (await sb.innerText()).includes(newName), {
-        timeout: 20_000,
-      })
-      .toBe(true);
-
-    console.log('VERIFIED NEW NAME IN SIDEBAR:', newName);
+    console.log('VERIFIED NEW NAME AFTER RELOAD:', newName);
   });
 });

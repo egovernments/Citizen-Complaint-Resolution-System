@@ -277,6 +277,14 @@ worker:
     repository: "ghcr.io/novuhq/novu/worker"
     tag: "2.3.0"
     pullPolicy: IfNotPresent
+  # DIGIT's SMS providers (SMSCountry, Jasmin, Ozeki) for this stock image: the JS in
+  # files/novu-worker-providers/ is mounted from a ConfigMap and preloaded with
+  # NODE_OPTIONS. It is a copy of backend/novu-bridge/novu-worker-providers, kept
+  # identical by local-setup/tests/static/deployment-contracts.test.ts. The worker
+  # refuses to boot if they fail to load or the image is not the Novu version they
+  # were verified against. See docs/releases/2.20/notifications/providers.md.
+  digitProviders:
+    enabled: true
   replicas: 1
   flags:
     emailInlineCssDisabled: "false"

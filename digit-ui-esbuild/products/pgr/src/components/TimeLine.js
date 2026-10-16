@@ -2,6 +2,7 @@ import { Card, CardSubHeader, CheckPoint, ConnectingCheckPoints, GreyOutText, Lo
 import React, { Fragment, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { LOCALIZATION_KEY } from "../constants/Localization";
+import { formatLocaleDate } from "../utils/localeDate";
 import PendingAtLME from "./timelineInstances/pendingAtLme";
 import PendingForAssignment from "./timelineInstances/PendingForAssignment";
 import PendingForReassignment from "./timelineInstances/PendingForReassignment";
@@ -138,7 +139,7 @@ const TimeLine = ({ isLoading, data, serviceRequestId, complaintWorkflow, rating
             ComplainMaxIdleTime={ComplainMaxIdleTime}
             rating={index === 0 ? rating : undefined}
             serviceRequestId={serviceRequestId}
-            reopenDate={Digit.DateUtils.ConvertTimestampToDate(auditDetails.lastModifiedTime)}
+            reopenDate={formatLocaleDate(auditDetails.lastModifiedTime)}
             customChild={getCommentsInCustomChildComponent({ comment, thumbnailsToShow, auditDetails, assigner })}
           />
         );
@@ -153,7 +154,7 @@ const TimeLine = ({ isLoading, data, serviceRequestId, complaintWorkflow, rating
             ComplainMaxIdleTime={ComplainMaxIdleTime}
             rating={index === 0 ? rating : undefined}
             serviceRequestId={serviceRequestId}
-            reopenDate={Digit.DateUtils.ConvertTimestampToDate(auditDetails.lastModifiedTime)}
+            reopenDate={formatLocaleDate(auditDetails.lastModifiedTime)}
             customChild={getCommentsInCustomChildComponent({ comment, thumbnailsToShow, auditDetails, assigner })}
           />
         );

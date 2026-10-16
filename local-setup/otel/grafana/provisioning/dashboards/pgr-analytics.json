@@ -122,7 +122,7 @@
         "overrides": []
       },
       "options": {},
-      "description": "Duration of one executed analytics SQL query. Derived from the pgr_analytics_query_duration_ms histogram; see docs/observability/dashboard-metrics.md."
+      "description": "Duration of one executed analytics SQL query. Derived from the pgr_analytics_query_duration_ms histogram; see docs/operations/monitoring/dashboard-metrics.md."
     },
     {
       "id": 2,
@@ -297,7 +297,7 @@
         "overrides": []
       },
       "options": {},
-      "description": "Verbatim from docs/observability/dashboard-metrics.md."
+      "description": "Verbatim from docs/operations/monitoring/dashboard-metrics.md."
     },
     {
       "id": 7,

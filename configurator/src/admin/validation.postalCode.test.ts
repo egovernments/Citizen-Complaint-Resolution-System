@@ -147,29 +147,66 @@ describe('DDH seed contract — common-masters.FormValidations', () => {
     expect(new Set(types).size).toBe(types.length);
   });
 
-  it('full-dump.sql seeds the same FormValidations rows as the DDH seed (no drift)', () => {
-    // The dump baseline (local-setup/db/full-dump.sql) hand-carries the same
-    // rows so dump-booted stacks get them without DDH tenant-setup. Two copies
-    // of one dataset = a drift vector; pin them to each other. COPY text
-    // format doubles backslashes, so unescape before comparing.
-    const dump = readFileSync(resolve(process.cwd(), '../local-setup/db/full-dump.sql'), 'utf8');
-    const dumpRows = dump
+  // The dump baseline (local-setup/db/full-dump.sql) hand-carries the same
+  // rows so dump-booted stacks get them without DDH tenant-setup. Two copies
+  // of one dataset = a drift vector; pin them to each other. COPY text
+  // format doubles backslashes, so unescape before parsing.
+  // eg_mdms_data columns: id, tenantid, uniqueidentifier, schemacode, data,
+  // isactive, … (matching on the schemacode POSITION also excludes the
+  // schema-definition row in eg_mdms_schema_definition, whose code sits at
+  // index 2). Only active rows count: a dump-booted stack serves no others.
+  // Parsed on first use inside the dump tests, so a missing dump or an
+  // unparseable row fails only those tests, not the DDH-seed ones above.
+  let dumpLines: string[][] | undefined;
+  const dumpMdms = (schema: string) => {
+    dumpLines ??= readFileSync(resolve(process.cwd(), '../local-setup/db/full-dump.sql'), 'utf8')
       .split('\n')
-      .map((l) => l.split('\t'))
-      // eg_mdms_data columns: id, tenantid, uniqueidentifier, schemacode, data, …
-      // (matching on the schemacode POSITION also excludes the schema-definition
-      // row in eg_mdms_schema_definition, whose code sits at index 2).
-      .filter((cols) => cols[3] === 'common-masters.FormValidations')
-      .map((cols) => ({
-        uniqueidentifier: cols[2],
-        data: JSON.parse(cols[4].replace(/\\\\/g, '\\')) as { fieldType: string; regex: string },
-      }));
-    expect(dumpRows.length).toBe(rows.length);
-    for (const seedRow of rows) {
-      const dumpRow = dumpRows.find((d) => d.data.fieldType === seedRow.fieldType);
-      expect(dumpRow, `full-dump.sql must carry a ${seedRow.fieldType} row`).toBeDefined();
-      expect(dumpRow!.data.regex).toBe(seedRow.regex);
-      expect(dumpRow!.uniqueidentifier).toBe(seedRow.fieldType);
+      .map((l) => l.split('\t'));
+    const byTenant = new Map<string, { uniqueidentifier: string; data: Record<string, unknown> }[]>();
+    for (const cols of dumpLines.filter((c) => c[3] === schema && c[5] === 't')) {
+      const row = { uniqueidentifier: cols[2], data: JSON.parse(cols[4].replace(/\\\\/g, '\\')) };
+      byTenant.set(cols[1], [...(byTenant.get(cols[1]) ?? []), row]);
+    }
+    return byTenant;
+  };
+
+  it('full-dump.sql seeds each state tenant the same FormValidations rows as the DDH seed (no drift)', () => {
+    const tenants = dumpMdms('common-masters.FormValidations');
+    expect(tenants.size).toBeGreaterThan(0);
+    for (const [tenantId, dumpRows] of tenants) {
+      expect(dumpRows.length, `${tenantId}: FormValidations row count`).toBe(rows.length);
+      for (const seedRow of rows) {
+        const dumpRow = dumpRows.find((d) => d.data.fieldType === seedRow.fieldType);
+        expect(dumpRow, `${tenantId} must carry a ${seedRow.fieldType} row`).toBeDefined();
+        expect(dumpRow!.uniqueidentifier).toBe(seedRow.fieldType);
+        // postalCode is the one deliberate difference: the dump's pg tenants ship
+        // 6-digit pincodes, so its row is 6-digit (ba0eb9ec8). It is pinned to
+        // those pincodes in the next test instead of to the generic 5-digit seed.
+        if (seedRow.fieldType !== 'postalCode') expect(dumpRow!.data.regex).toBe(seedRow.regex);
+      }
+    }
+  });
+
+  it("full-dump.sql's postalCode rule accepts its own tenants' pincodes and rejects one digit fewer or more", () => {
+    const pincodesByTenant = dumpMdms('tenant.tenants');
+    for (const [tenantId, dumpRows] of dumpMdms('common-masters.FormValidations')) {
+      const row = dumpRows.find((d) => d.data.fieldType === 'postalCode');
+      expect(row, `${tenantId} must carry a postalCode row`).toBeDefined();
+      const regex = row!.data.regex as string;
+      const pincodes = (pincodesByTenant.get(tenantId) ?? []).flatMap((t) => (t.data.pincode ?? []) as (string | number)[]);
+      // With no pincodes of its own, a tenant has no reason to differ from the seed.
+      if (pincodes.length === 0) {
+        expect(regex, `${tenantId} ships no pincodes, so its rule must be the DDH seed's`).toBe(
+          rows.find((r) => r.fieldType === 'postalCode')!.regex,
+        );
+        continue;
+      }
+      const rule = new RegExp(regex);
+      for (const pincode of pincodes.map(String)) {
+        expect(pincode, `${tenantId} rule ${regex}`).toMatch(rule);
+        expect(pincode.slice(0, -1), `${tenantId} rule ${regex}`).not.toMatch(rule);
+        expect(`${pincode}0`, `${tenantId} rule ${regex}`).not.toMatch(rule);
+      }
     }
   });
 });

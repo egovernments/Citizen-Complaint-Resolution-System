@@ -15,19 +15,54 @@ initContainers:
   dbMigration:
     enabled: true
     schemaTable: "novu_bridge_schema"
+    # Same build as the app image below — see "One build" there.
     image:
       repository: "novu-bridge-db"
-      tag: "2.12-5137119"
+      tag: "nightly-develop"   # RELEASE STEP: develop-<sha8> — see "One build" below
+      pullPolicy: IfNotPresent   # Always while the tag is rolling (templates/deployment.yaml)
 
 # Container Configs
+# One build for the notification stack: novu-bridge, novu-bridge-db, pgr-services and
+# pgr-services-db MUST come from the same build (the bridge's dispatch-log migrations
+# ship in novu-bridge-db; pgr-services' thin events need a bridge of the same build).
+# global.notificationStackTag in charts/environments/env.yaml, when set, moves all four at
+# once (templates/deployment.yaml), and digit-user-preferences-service's pair with them;
+# otherwise these chart defaults apply. `nightly-develop` is a stopgap until the release
+# step pins develop-<sha8> here, in urban/pgr-services/values.yaml and in
+# common-services/digit-user-preferences-service/values.yaml — see the tag policy in
+# pgr-services.
 image:
   repository: "novu-bridge"
-  tag: "2.12-5137119"
+  tag: "nightly-develop"   # RELEASE STEP: develop-<sha8> of the merge build
+  pullPolicy: IfNotPresent   # Always while the tag is rolling (templates/deployment.yaml)
 replicas: "1"
 httpPort: 8080
 appType: "java-spring"
 tracing-enabled: true
 heap: "-Xmx192m -Xms192m"
+# See NOVU_BRIDGE_DIGIT_WORKER_PROVIDERS below: used only when global.novuWorkerDigitProviders
+# is not set (the helmfile sets it for both this chart and the novu worker).
+digit-worker-providers: true
+provider-admin-tenants: ""
+# Per-tenant Novu accounts (#2203): one Novu ORGANIZATION per root tenant, created by the bridge
+# signed in as the Novu platform admin (the account whose key is novu-api-key). OFF by default.
+# Turning it on needs the Secret named below in this namespace, created out of band (never
+# committed), with keys:
+#   novu-admin-email, novu-admin-password   the Novu platform admin login
+#   encryption-key                          >= 32 random chars; encrypts the stored tenant API keys
+#   encryption-key-previous                 (optional) the previous key during a rotation
+#   internal-admin-token                    /novu-adapter/v1/tenants/** (pgr-services, operators)
+#   internal-send-token                     (optional) POST /messages/_send (the Identity BFF)
+# e.g. kubectl -n egov create secret generic novu-bridge-tenant-accounts \
+#        --from-literal=encryption-key=$(openssl rand -hex 32) \
+#        --from-literal=internal-admin-token=$(openssl rand -hex 24) ...
+# A missing Secret or key keeps the pod from starting, and the bridge itself refuses to start
+# with the feature on and no usable encryption key or login: it fails closed. The two internal
+# APIs are not routed by the gateway (no accesscontrol action exists for them).
+tenant-accounts:
+  enabled: false
+  secretName: "novu-bridge-tenant-accounts"
+  environment: "Development"
 java-args: "-Dspring.profiles.active=monitoring"
 
 # Health Checks
@@ -52,16 +87,35 @@ env: |
     value: "8080"
   - name: SERVER_SERVLET_CONTEXT_PATH
     value: "/novu-bridge"
-  - name: NOVU_BRIDGE_KAFKA_INPUT_TOPIC
-    value: "complaints.domain.events"
-  - name: NOVU_BRIDGE_KAFKA_RETRY_TOPIC
-    value: "novu-bridge.retry"
+  # The envelope's eventType — never the topic — decides handling. `notifications.events`
+  # is the module-neutral topic any new producer should use; `complaints.domain.events` is
+  # PGR's original topic, still consumed so existing deployments are unaffected.
+  - name: NOVU_BRIDGE_KAFKA_INPUT_TOPICS
+    value: "complaints.domain.events,notifications.events"
+  # DIGIT-core SMS (login OTPs from user-otp, egov-user password resets) — the
+  # bridge translates SMSRequest into the envelope (eventType CORE_SMS).
+  - name: NOVU_BRIDGE_CORE_SMS_TOPIC
+    value: "egov.core.notification.sms"
+  # Tenant a core SMS (login OTP, password reset) is attributed to when the
+  # producer does not carry one. Hardcoding "pg" sent every OTP on a non-pg
+  # deployment to a tenant that does not exist, so the channel policy lookup
+  # found nothing and the OTP was dropped. Read the deployment's real state root
+  # from egov-config (compose gets the same value from the playbook, which rewrites
+  # the literal `pg` there to state_root after the tenant bootstrap).
+  - name: NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT
+    valueFrom:
+      configMapKeyRef:
+        name: egov-config
+        key: state-level-tenant-id
+  # Last-resort country code (e.g. "+254") for a phone with none; the user's own code and the
+  # tenant's common-masters.MobileNumberValidation rule come first. Blank, at a tenant without a
+  # rule: the message is SKIPPED / NB_CONTACT_INVALID, never sent as "+" + the national number.
+  - name: NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE
+    value: ""
   - name: NOVU_BRIDGE_KAFKA_DLQ_TOPIC
     value: "novu-bridge.dlq"
   - name: NOVU_BRIDGE_MAX_RETRIES
     value: "3"
-  - name: NOVU_BRIDGE_CHANNEL
-    value: "WHATSAPP"
   - name: NOVU_BRIDGE_DEFAULT_LOCALE
     value: "en_IN"
   - name: NOVU_BRIDGE_PREFERENCE_ENABLED
@@ -75,15 +129,6 @@ env: |
     value: {{ index .Values "preference-check-path" | quote }}
   - name: NOVU_BRIDGE_PREFERENCE_CODE
     value: "USER_NOTIFICATION_PREFERENCES"
-  - name: NOVU_BRIDGE_CONFIG_HOST
-    valueFrom:
-      configMapKeyRef:
-        name: egov-service-host
-        key: digit-config-service
-  - name: NOVU_BRIDGE_CONFIG_RESOLVE_PATH
-    value: {{ index .Values "config-resolve-path" | quote }}
-  - name: NOVU_BRIDGE_CONFIG_SEARCH_PATH
-    value: {{ index .Values "config-search-path" | quote }}
   - name: NOVU_BRIDGE_USER_HOST
     valueFrom:
       configMapKeyRef:
@@ -91,12 +136,77 @@ env: |
         key: egov-user
   - name: NOVU_BRIDGE_USER_SEARCH_PATH
     value: "/user/_search"
-  - name: MDMS_SEARCH_PATH
+  # Thin events: placeholder labels are resolved through egov-localization.
+  - name: NOVU_BRIDGE_LOCALIZATION_HOST
+    valueFrom:
+      configMapKeyRef:
+        name: egov-service-host
+        key: egov-localization
+  - name: NOVU_BRIDGE_MDMS_HOST
+    valueFrom:
+      configMapKeyRef:
+        name: egov-service-host
+        key: mdms-service-v2
+  - name: NOVU_BRIDGE_MDMS_SEARCH_PATH
     value: "/mdms-v2/v2/_search"
+  - name: NOVU_BRIDGE_RECEIPTS_SECRET
+    value: {{ index .Values "receipts-secret" | default "" | quote }}
+  # Whether novu-worker preloads DIGIT's SMS providers (SMSCountry, Ozeki, Jasmin). MUST match
+  # the novu chart's worker.digitProviders.enabled: helmfile sets both from
+  # global.novuWorkerDigitProviders (charts/environments/env.yaml); installing this chart on
+  # its own, set digit-worker-providers to what the worker runs with. false = the bridge
+  # hides/refuses those provider types (400 NB_PROVIDER_TYPE_UNAVAILABLE) and skips a channel
+  # pinned to one (SKIPPED / NB_PROVIDER_UNAVAILABLE) rather than let every send fail in Novu.
+  - name: NOVU_BRIDGE_DIGIT_WORKER_PROVIDERS
+    value: {{ if hasKey (.Values.global | default dict) "novuWorkerDigitProviders" }}{{ .Values.global.novuWorkerDigitProviders | toString | quote }}{{ else }}{{ index .Values "digit-worker-providers" | toString | quote }}{{ end }}
+  # Extra state tenants (comma-separated) whose admins may manage providers, besides the
+  # owning state (the state root of NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT, i.e. egov-config's
+  # state-level-tenant-id). A cluster serving several state roots (#1999) lists the others.
+  - name: NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS
+    value: {{ index .Values "provider-admin-tenants" | default "" | quote }}
   - name: NOVU_BASE_URL
     value: {{ index .Values "novu-base-url" | quote }}
   - name: NOVU_API_KEY
     value: {{ index .Values "novu-api-key" | quote }}
+  # Per-tenant Novu accounts (#2203); see tenant-accounts above.
+  - name: NOVU_BRIDGE_TENANT_ACCOUNTS_ENABLED
+    value: {{ index .Values "tenant-accounts" "enabled" | toString | quote }}
+  {{- if index .Values "tenant-accounts" "enabled" }}
+  - name: NOVU_BRIDGE_TENANT_ACCOUNTS_ENVIRONMENT
+    value: {{ index .Values "tenant-accounts" "environment" | quote }}
+  - name: NOVU_BRIDGE_NOVU_ADMIN_EMAIL
+    valueFrom:
+      secretKeyRef:
+        name: {{ index .Values "tenant-accounts" "secretName" }}
+        key: novu-admin-email
+  - name: NOVU_BRIDGE_NOVU_ADMIN_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: {{ index .Values "tenant-accounts" "secretName" }}
+        key: novu-admin-password
+  - name: NOVU_BRIDGE_TENANT_KEY_ENCRYPTION_KEY
+    valueFrom:
+      secretKeyRef:
+        name: {{ index .Values "tenant-accounts" "secretName" }}
+        key: encryption-key
+  - name: NOVU_BRIDGE_TENANT_KEY_ENCRYPTION_KEY_PREVIOUS
+    valueFrom:
+      secretKeyRef:
+        name: {{ index .Values "tenant-accounts" "secretName" }}
+        key: encryption-key-previous
+        optional: true
+  - name: NOVU_BRIDGE_INTERNAL_ADMIN_TOKEN
+    valueFrom:
+      secretKeyRef:
+        name: {{ index .Values "tenant-accounts" "secretName" }}
+        key: internal-admin-token
+  - name: NOVU_BRIDGE_INTERNAL_SEND_TOKEN
+    valueFrom:
+      secretKeyRef:
+        name: {{ index .Values "tenant-accounts" "secretName" }}
+        key: internal-send-token
+        optional: true
+  {{- end }}
   - name: NOVU_BRIDGE_DISPATCH_LOG_ENABLED
     value: "true"
   - name: JAVA_OPTS

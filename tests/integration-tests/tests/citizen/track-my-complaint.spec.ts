@@ -1,3 +1,4 @@
+import { tenantSlug } from '../utils/identity-bff';
 /**
  * Citizen track-complaint flow — Stories 4.1, 5.1, 5.2.
  *
@@ -36,12 +37,12 @@ test.describe.serial('Citizen track-complaint', () => {
   test('My Complaints list shows the seeded complaint with OPEN badge', {
     annotation: {
       type: 'description',
-      description: `Story 4.1 contract for /citizen/pgr/complaints: a freshly-filed complaint (still in PENDINGFORASSIGNMENT) must appear in the citizen's My Complaints list with the OPEN badge and the localized "Pending for assignment" status text.
+      description: `Story 4.1 contract for /citizen/pgr/complaints: a freshly-filed complaint (still in PENDINGFORASSIGNMENT) must appear in the citizen's My Complaints list with the localized "Pending for assignment" status pill (develop's list has no OPEN badge any more; the test title predates that).
 
 Steps:
 1. setTimeout 120s; citizenOtpLogin.
 2. Navigate to /digit-ui/citizen/pgr/complaints, wait 5s.
-3. Assert body contains "My Complaints", the seeded serviceRequestId, /OPEN/, and /Pending for assignment/i.
+3. Assert body contains "My Complaints", the seeded serviceRequestId, and /Pending for assignment/i.
 4. Assert body does NOT contain "Something went wrong".
 
 beforeAll is API-only — files a complaint as the suite-wide provisioned citizen via seedComplaintAsCitizen() — so the test isn't tied to whatever's currently seeded on the deployment.`,
@@ -49,7 +50,7 @@ beforeAll is API-only — files a complaint as the suite-wide provisioned citize
     tag: ['@area:pgr', '@kind:regression', '@layer:ui', '@persona:citizen'] }, async ({ page }) => {
     test.setTimeout(120_000);
     await citizenOtpLogin(page);
-    await page.goto(`${BASE_URL}/digit-ui/citizen/pgr/complaints`, {
+    await page.goto(`${BASE_URL}/${tenantSlug()}/digit-ui/citizen/pgr/complaints`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });
@@ -58,7 +59,8 @@ beforeAll is API-only — files a complaint as the suite-wide provisioned citize
     const body = page.locator('body');
     await expect(body).toContainText('My Complaints');
     await expect(body).toContainText(serviceRequestId);
-    await expect(body).toContainText(/OPEN/);
+    // Develop's list (#2038) dropped the OPEN/CLOSED badge; the status pill
+    // ("Pending for assignment") is the row's state now.
     await expect(body).toContainText(/Pending for assignment/i);
     await expect(body).not.toContainText('Something went wrong');
   });
@@ -66,27 +68,29 @@ beforeAll is API-only — files a complaint as the suite-wide provisioned citize
   test('Detail page renders Summary / Details / Map / Timeline sections', {
     annotation: {
       type: 'description',
-      description: `Story 5.1 / 5.2 contract for the complaint detail page. Asserts the four canonical sections are visible — Complaint Summary, Complaint Details, Complaint Timeline, plus the Application Status row and the SR id itself.
+      description: `Story 5.1 / 5.2 contract for the complaint detail page. Asserts the canonical sections are visible — the Complaint Details heading and grid, Complaint Timeline, plus the Application Status row and the SR id itself (develop's page has no separate Complaint Summary card).
 
 Steps:
 1. setTimeout 120s; citizenOtpLogin.
 2. Navigate to /digit-ui/citizen/pgr/complaints/{seeded id}, wait 5s.
-3. Assert body contains "Complaint Summary", "Complaint Details", "Complaint Timeline", the SR id, and "Application Status".
+3. Assert the details grid is visible and body contains "Complaint Details", "Complaint Timeline", the SR id, and "Application Status".
 4. Assert body does NOT contain "Something went wrong".
 
-The Map widget + "Open in Maps" only render when geoLocation has non-zero coords. This spec API-seeds with {0,0} so the map isn't asserted here — wizard.spec.ts walks the UI and drops a real pin so the map renders there.`,
+The Map widget + "Open in Maps" only render when geoLocation has non-zero coords. This spec API-seeds without a location so the map isn't asserted here — wizard.spec.ts walks the UI and drops a real pin so the map renders there.`,
     },
     tag: ['@area:pgr', '@kind:regression', '@layer:ui', '@persona:citizen'] }, async ({ page }) => {
     test.setTimeout(120_000);
     await citizenOtpLogin(page);
     await page.goto(
-      `${BASE_URL}/digit-ui/citizen/pgr/complaints/${serviceRequestId}`,
+      `${BASE_URL}/${tenantSlug()}/digit-ui/citizen/pgr/complaints/${serviceRequestId}`,
       { waitUntil: 'domcontentloaded', timeout: 30_000 },
     );
     await page.waitForTimeout(5000);
 
     const body = page.locator('body');
-    await expect(body).toContainText('Complaint Summary');
+    // No separate "Complaint Summary" card on develop's page (#2038): the
+    // details grid under the "Complaint Details" heading carries it.
+    await expect(page.locator('.cms-details-grid')).toBeVisible();
     await expect(body).toContainText('Complaint Details');
     // Ethiopia renders "Activity timeline"; Kenya renders "Complaint Timeline".
     await expect(body).toContainText(/Complaint Timeline|Activity timeline/i);
@@ -94,7 +98,7 @@ The Map widget + "Open in Maps" only render when geoLocation has non-zero coords
     await expect(body).toContainText('Application Status');
 
     // Map widget + "Open in Maps" button only render when geoLocation
-    // has non-zero coords. This spec API-seeds with {0,0} so the map
+    // has non-zero coords. This spec API-seeds without a location so the map
     // can't be asserted here — wizard.spec.ts walks the UI and drops a
     // real pin, so the map renders there. Tracked under Story 5.1.
 
@@ -112,7 +116,7 @@ Steps:
 2. Navigate directly to /digit-ui/citizen/pgr/complaints/{seeded id}; wait 4s.
 3. Assert page.url() matches /\\/digit-ui\\/citizen\\/pgr\\/complaints\\/<PGR_ID_PREFIX>-PGR-\\d{4}-\\d{2}-\\d{2}-\\d+/ (prefix from env).
 4. Assert page.url() does NOT contain '/complaint/details/' (no auto-redirect to the singular form).
-5. Assert body contains "Complaint Summary".
+5. Assert the complaint details grid is visible.
 6. Assert body does NOT contain "Something went wrong".
 
 If the SPA ever redirects plural → singular (or 404s), this test catches the change.`,
@@ -120,7 +124,7 @@ If the SPA ever redirects plural → singular (or 404s), this test catches the c
     tag: ['@area:pgr', '@kind:regression', '@layer:ui', '@persona:citizen'] }, async ({ page }) => {
     test.setTimeout(120_000);
     await citizenOtpLogin(page);
-    await page.goto(`${BASE_URL}/digit-ui/citizen/pgr/complaints`, {
+    await page.goto(`${BASE_URL}/${tenantSlug()}/digit-ui/citizen/pgr/complaints`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });
@@ -134,7 +138,7 @@ If the SPA ever redirects plural → singular (or 404s), this test catches the c
     // singular form does NOT serve the page — is captured by
     // verifying the page didn't redirect to /complaint/details/.
     await page.goto(
-      `${BASE_URL}/digit-ui/citizen/pgr/complaints/${serviceRequestId}`,
+      `${BASE_URL}/${tenantSlug()}/digit-ui/citizen/pgr/complaints/${serviceRequestId}`,
       { waitUntil: 'domcontentloaded', timeout: 30_000 },
     );
     await page.waitForTimeout(4000);
@@ -154,7 +158,7 @@ If the SPA ever redirects plural → singular (or 404s), this test catches the c
 
     // Detail content renders (not a 404 / not the error fallback)
     const body = page.locator('body');
-    await expect(body).toContainText('Complaint Summary');
+    await expect(page.locator('.cms-details-grid')).toBeVisible();
     await expect(body).not.toContainText('Something went wrong');
   });
 });

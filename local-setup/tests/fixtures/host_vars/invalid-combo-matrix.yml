@@ -2,6 +2,7 @@
 # must trip on this file (the CI run asserts invalid-* fixtures fire).
 db_fast_path: true                      # no ack, wrong master password
 auth_provider: keycloak                 # KC stack not enabled, no secret
+enable_keycloak: false                  # refused since D26
 nginx_features:
   digit_ui_v2: true                     # enable_digit_ui_v2 missing
 enable_mcp: true

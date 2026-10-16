@@ -1,3 +1,4 @@
+import { tenantSlug } from '../utils/identity-bff';
 /**
  * Employee PGR Complaint Details — Flow 5 render slice (operational scope).
  *
@@ -125,7 +126,7 @@ async function openDetails(page: Page, srid: string, skipReason: string): Promis
   });
 
   await page.goto(
-    `${BASE_URL}/digit-ui/employee/pgr/complaint-details/${srid}`,
+    `${BASE_URL}/${tenantSlug()}/digit-ui/employee/pgr/complaint-details/${srid}`,
     { waitUntil: 'domcontentloaded', timeout: 30_000 },
   );
 
@@ -336,7 +337,7 @@ test.describe('PGR complaint details — Flow 5 render slice', () => {
       }),
     );
     const locationHeading = () =>
-      page.getByText(/^(Complaint Location|CS_COMPLAINT_LOCATION)$/i, { exact: true });
+      page.getByText(/^(Complaint(?:'s)? Location|CS_COMPLAINT_LOCATION)$/i, { exact: true });
     const locationMarker = () => page.locator('.leaflet-container .leaflet-marker-icon');
 
     await openDetails(page, missingId, 'fresh no-location fixture creation failed');

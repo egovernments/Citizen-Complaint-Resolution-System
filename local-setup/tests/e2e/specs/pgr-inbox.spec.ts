@@ -1,11 +1,12 @@
 import { test, expect } from '@playwright/test';
 import { PgrInboxPage } from '../pages/pgr-inbox.page';
 import { loginViaApi } from '../utils/auth';
+import { requiredEnv } from '../utils/identity';
 
-const BASE_URL = process.env.BASE_URL || 'http://localhost:18080';
-const TENANT = process.env.DIGIT_TENANT || 'uitest.citya';
-const ADMIN_USER = process.env.DIGIT_USERNAME || 'ADMIN';
-const ADMIN_PASS = process.env.DIGIT_PASSWORD || 'eGov@123';
+const BASE_URL = requiredEnv('BASE_URL');
+const TENANT = requiredEnv('DIGIT_TENANT');
+const ADMIN_USER = requiredEnv('DIGIT_USERNAME');
+const ADMIN_PASS = requiredEnv('DIGIT_PASSWORD');
 
 test.describe('PGR Inbox — Bug Fixes', () => {
   test.beforeEach(async ({ page }) => {
@@ -32,7 +33,7 @@ test.describe('PGR Inbox — Bug Fixes', () => {
     await page.waitForTimeout(5000);
 
     const bodyText = await inbox.getBodyText();
-    const hasComplaints = /PG-PGR-/.test(bodyText);
+    const hasComplaints = /[A-Z0-9-]+-PGR-[0-9-]+/.test(bodyText);
     const hasEmptyState = /no result|no complaints|no data|no records/i.test(bodyText);
     const hasTable = await page.locator('table').count() > 0;
     const hasInboxHeader = /inbox/i.test(bodyText);
@@ -86,14 +87,14 @@ test.describe('PGR Inbox — Bug Fixes', () => {
     expect(failedRequests).toHaveLength(0);
   });
 
-  test('no raw SERVICEDEFS keys in rendered page', async ({ page }) => {
+  test('no raw COMPLAINT_HIERARCHY keys in rendered page', async ({ page }) => {
     const inbox = new PgrInboxPage(page);
     await inbox.goto();
     await page.waitForTimeout(5000);
 
     const bodyText = await inbox.getBodyText();
-    if (/PG-PGR-/.test(bodyText)) {
-      expect(bodyText).not.toMatch(/SERVICEDEFS\./);
+    if (/[A-Z0-9-]+-PGR-[0-9-]+/.test(bodyText)) {
+      expect(bodyText).not.toMatch(/COMPLAINT_HIERARCHY\./);
     }
   });
 });

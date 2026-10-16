@@ -11,36 +11,103 @@ ingress:
   context: "user-preference"
 
 # Init Containers - DB Migration
-# Disabled: Uses GORM AutoMigrate instead
+# The service is Spring Boot with Flyway; this init container owns the schema
+# and the app's embedded Flyway is switched off below, matching every sibling
+# Java service. (The Go implementation relied on GORM AutoMigrate, which is
+# why this used to be disabled.)
 initContainers:
   dbMigration:
-    enabled: false
+    enabled: true
+    schemaTable: "digit_user_preferences_service_schema"
+    # Same build as the app image below — see the tag note there.
+    image:
+      repository: "digit-user-preferences-service-db"
+      tag: "nightly-develop"   # RELEASE STEP: develop-<sha8> — the same tag as image.tag
+      pullPolicy: IfNotPresent   # Always while the tag is rolling (templates/deployment.yaml)
+    # The common chart's migration env, plus FLYWAY_VALIDATE_ON_MIGRATE=false.
+    # V20260205120000__create_user_preference.sql was edited after it shipped (#2081
+    # added the duplicate collapse ahead of the unique index), so a database whose
+    # Flyway history holds the earlier version records a different checksum: any
+    # cluster that ran this chart while it pinned the 2.12 -db image (2.12-5137119).
+    # With validation on, Flyway stops there ("Validate failed: Migration checksum
+    # mismatch for migration version 20260205120000") and the pod never leaves Init.
+    # The compose migrators have always run with validation off; this does the same
+    # for this service only. The alternative is a one-off `flyway repair` with this
+    # image and env against digit_user_preferences_service_schema, which rewrites the
+    # stored checksum; validation can then be switched back on.
+    env: |
+        - name: "DB_URL"
+          valueFrom:
+            configMapKeyRef:
+              name: egov-config
+              key: db-url
+        - name: "SCHEMA_TABLE"
+          value: {{ .Values.initContainers.dbMigration.schemaTable | quote }}
+        - name: "FLYWAY_USER"
+          valueFrom:
+            secretKeyRef:
+                name: db
+                key: flyway-username
+        - name: "FLYWAY_PASSWORD"
+          valueFrom:
+            secretKeyRef:
+                name: db
+                key: flyway-password
+        - name: "FLYWAY_LOCATIONS"
+          valueFrom:
+            configMapKeyRef:
+                name: egov-config
+                key: flyway-locations
+        - name: "FLYWAY_IGNORE_MIGRATION_PATTERNS"
+          value: "*:missing"
+        - name: "FLYWAY_OUT_OF_ORDER"
+          value: "true"
+        - name: "FLYWAY_BASELINE_ON_MIGRATE"
+          value: "true"
+        - name: "SCHEMA_NAME"
+          value: "public"
+        - name: "FLYWAY_VALIDATE_ON_MIGRATE"
+          value: "false"
 
 # Container Configs
+# The Spring Boot build (#1982) exists only on develop. Every 2.12 / master tag of
+# this image (2.12-5137119, v2.12, master-*) is the retired Go binary, which reads
+# DB_HOST/DB_USER and none of the datasource settings this chart and extraEnv.java
+# supply, so it cannot reach the database and the pod never turns ready.
+# This pair follows the notification stack's tag: global.notificationStackTag in
+# charts/environments/env.yaml, when set, moves it with pgr-services and novu-bridge
+# (templates/deployment.yaml); otherwise these chart defaults apply. `nightly-develop`
+# is the same stopgap as there — the release step (build/NIGHTLY-BUILDS.md) pins
+# develop-<sha8> here and in the other two stack charts at once.
 image:
   repository: "digit-user-preferences-service"
-  tag: "2.12-5137119"
+  tag: "nightly-develop"   # RELEASE STEP: develop-<sha8> of the merge build
+  pullPolicy: IfNotPresent   # Always while the tag is rolling (templates/deployment.yaml)
 replicas: "1"
 httpPort: 8080
+appType: "java-spring"
+heap: "-Xmx192m -Xms192m"
+java-args: "-Dspring.profiles.active=monitoring"
 
 # Health Checks
+# /health is at the container root, not under the API context path: the service
+# mounts its API under SERVER_CONTEXT_PATH and leaves the probe at the root.
 healthChecks:
   enabled: true
   livenessProbePath: "/health"
   readinessProbePath: "/health"
 
 # Resources
-memory_limits: "256Mi"
+memory_limits: "512Mi"
 resources: |
   requests:
-    memory: "64Mi"
-    cpu: "50m"
+    memory: "256Mi"
+    cpu: "100m"
   limits:
     memory: {{ .Values.memory_limits | quote }}
-    cpu: "200m"
+    cpu: "300m"
 
-# Tracing disabled for Go service
-tracing-enabled: false
+tracing-enabled: true
 
 # Environment variables
 env: |
@@ -48,30 +115,37 @@ env: |
     value: "8080"
   - name: SERVER_CONTEXT_PATH
     value: "/user-preference"
-  - name: DB_HOST
-    valueFrom:
-      configMapKeyRef:
-        name: egov-config
-        key: db-host
-  - name: DB_PORT
-    value: "5432"
-  - name: DB_NAME
-    valueFrom:
-      configMapKeyRef:
-        name: egov-config
-        key: db-name
-  - name: DB_USER
-    valueFrom:
-      secretKeyRef:
-        name: db
-        key: username
-  - name: DB_PASSWORD
-    valueFrom:
-      secretKeyRef:
-        name: db
-        key: password
+  - name: JAVA_OPTS
+    value: {{ index .Values "heap" | quote }}
+  - name: JAVA_ARGS
+    value: {{ index .Values "java-args" | quote }}
+  {{- if index .Values "tracing-enabled" }}
+  - name: TRACER_OPENTRACING_ENABLED
+    value: "true"
+  {{- end }}
+  # The init container above applies the migrations, so the app must not.
+  - name: SPRING_FLYWAY_ENABLED
+    value: "false"
+  # Both endpoints key on the userId in the request body, and this route is
+  # exposed through the gateway, so the service holds a citizen principal to
+  # its own record. Roles listed here may act on someone else's record within
+  # their own tenant, and are overridable per environment from env.yaml.
+  - name: ENFORCE_OWNERSHIP
+    value: {{ index .Values "enforce-ownership" | quote }}
+  - name: PRIVILEGED_ROLES
+    value: {{ index .Values "privileged-roles" | quote }}
+  # The datasource url, username and password all arrive from extraEnv.java
+  # (egov-config's db-url plus the db secret), as they do for every sibling
+  # Java service, so this chart does not restate them. DB_SSL_MODE is the
+  # exception: nothing upstream carries it, and application.properties applies
+  # it as a driver property so it survives the injected url.
   - name: DB_SSL_MODE
     value: {{ index .Values "db-ssl-mode" | quote }}
 
-# Default values
+# Default values, overridable per environment from charts/environments/env.yaml
 db-ssl-mode: "require"
+enforce-ownership: "true"
+# EMPLOYEE is excluded on purpose: HRMS forces that role onto every employee it
+# creates, so including it would cover every field worker and CSR rather than
+# administrators.
+privileged-roles: "SUPERUSER,ACCOUNT_ADMIN,SYSTEM"

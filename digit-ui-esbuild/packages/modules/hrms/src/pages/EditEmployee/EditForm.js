@@ -33,7 +33,8 @@ const EditForm = ({ tenantId, data }) => {
 
   // Fetch mobile validation config from common-masters.MobileNumberValidation —
   // the single source of truth for mobile validation across all frontends and backends.
-  const stateLvlTenantId = window?.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID");
+  // On a tenant route the URL tenant owns the rule (#2072).
+  const stateLvlTenantId = window.__digitTenantContext?.tenantId || window?.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID");
   const { data: validationConfig, isLoading: isValidationLoading } = Digit.Hooks.useCustomMDMS(
     stateLvlTenantId,
     "common-masters",

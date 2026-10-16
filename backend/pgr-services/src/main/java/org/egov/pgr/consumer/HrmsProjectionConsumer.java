@@ -15,7 +15,7 @@ import java.util.HashMap;
 
 /**
  * Keeps eg_pgr_hrms_projection in sync with HRMS by consuming the employee
- * create/update topics (VISIBILITY-DESIGN.md §4.3). Org changes reflect on
+ * create/update topics (docs/features/visibility/README.md §4.3). Org changes reflect on
  * the next inbox load with no complaint re-stamping; the scheduled rebuild in
  * HrmsProjectionService is the backstop for missed events.
  *

@@ -182,7 +182,6 @@ feat(tests): add complaint reopen validation against reason mandatory field (CCR
 - `tests/admin/` — Configurator admin-side UI
 - `tests/employee/` — Employee/GRO/LME UI flows
 - `tests/lifecycle/` — Non-citizen-anchored cross-persona flows (e.g. SLA auto-escalation)
-- `tests/onboarding/` — Tenant setup wizard
 - `tests/keycloak/` — Keycloak realm / IdP config
 - `tests/smoke/` — `@kind:smoke`-tagged fast health checks
 - `tests/utils/` — Shared helpers, env, MDMS lookups, provisioning

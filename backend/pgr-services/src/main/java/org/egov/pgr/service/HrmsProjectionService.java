@@ -20,7 +20,7 @@ import org.springframework.stereotype.Service;
 import java.util.Collections;
 
 /**
- * Owns eg_pgr_hrms_projection (VISIBILITY-DESIGN.md §4.3): parses HRMS
+ * Owns eg_pgr_hrms_projection (docs/features/visibility/README.md §4.3): parses HRMS
  * employee payloads into projection rows (used by HrmsProjectionConsumer for
  * the streaming path) and runs the full-rebuild backstop — nightly, plus once
  * at boot when the projection is empty (first deploy backfill).

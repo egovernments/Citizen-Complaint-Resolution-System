@@ -1,80 +1,74 @@
+import { test, expect, type Page } from '@playwright/test';
+import { loginViaApi, staffContext } from '../utils/auth';
+import { authorizeUrl, identityJson } from '../utils/identity-bff';
+import { BASE_URL, TENANT, ADMIN_USER, ADMIN_PASS } from '../utils/env';
+
 /**
- * Employee Login E2E
- *
- * Tests employee authentication:
- *   1. API token acquisition (valid + invalid credentials)
- *   2. API session injection → employee home page loads
+ * The wrong-password target: a Keycloak login with no DIGIT user and no roles
+ * (scripts/seed-personas.ts seeds LOGIN_PROBE_LOGIN and writes its password),
+ * so brute-force protection counts these failures against it, never a persona.
  */
-import { test, expect } from '@playwright/test';
-import { getDigitToken, loginViaApi } from '../utils/auth';
-import { BASE_URL, TENANT, ROOT_TENANT, ADMIN_USER, ADMIN_PASS } from '../utils/env';
+const PROBE_LOGIN = process.env.LOGIN_PROBE_LOGIN?.trim() ?? '';
 
-test.describe('Employee Login — API', () => {
-  test('valid credentials return access token', {
-    annotation: {
-      type: 'description',
-      description: `Smoke check that the OAuth password grant returns a usable access_token for the seeded ADMIN principal at root tenant. If this fails, every test that needs an admin token (most of the suite) will fail downstream.
+/** Keycloak's refusal: the stock theme's field error and feedback, the employee theme's toast and field error. */
+const REFUSAL = '#input-error, #input-error-password, .kc-feedback-text, #dg-toast[role="alert"], .dg-field-error';
 
-Steps:
-1. Call getDigitToken with ROOT_TENANT, ADMIN_USER, ADMIN_PASS.
-2. Assert the response.access_token is truthy.
+/**
+ * Post a pair through the hosted form the way hostedSignIn does, whichever
+ * Keycloak theme: one page or identity-first (username, then password), the
+ * consent box ticked only where the theme has one, #kc-login or the plain
+ * submit. Then Keycloak's refusal must show, and no session may result.
+ */
+async function expectRefused(page: Page, username: string, password: string): Promise<void> {
+  await page.goto(authorizeUrl(BASE_URL, 'employee'));
+  await page.locator('#username').fill(username);
+  const submit = page.locator('#kc-login, button[type="submit"]').first();
+  const refusal = page.locator(REFUSAL).first();
+  const passwordField = page.locator('#password');
+  if (!(await passwordField.isVisible())) {
+    await submit.click();
+    // Identity-first: an unknown login may be refused on the username page.
+    await expect(passwordField.or(refusal).first()).toBeVisible();
+  }
+  if (await passwordField.isVisible()) {
+    await passwordField.fill(password);
+    const consent = page.locator('#privacy-component-check');
+    // The digit-employee theme keeps #kc-login disabled until consent is ticked.
+    if (await consent.count()) await consent.check({ force: true });
+    await submit.click();
+  }
+  await expect(refusal).toBeVisible();
+  const response = await page.request.get(`${BASE_URL}/identity/v1/session?surface=employee`);
+  const session = await identityJson<{ authenticated: boolean; code: string }>(response, 401);
+  expect(session.authenticated).toBe(false);
+  expect(session.code).toBe('SESSION_REQUIRED');
+}
 
-Pairs with the bad-credentials negative case to bracket login behavior.`,
-    },
-    tag: ['@area:auth', '@kind:regression', '@layer:api', '@persona:employee'] }, async () => {
-    const tokenResponse = await getDigitToken({
-      tenant: ROOT_TENANT,
-      username: ADMIN_USER,
-      password: ADMIN_PASS,
-    });
-    expect(tokenResponse.access_token).toBeTruthy();
+// Only wrong passwords are typed here; persona sign-ins are browserless.
+test.use({ storageState: { cookies: [], origins: [] } });
+test.describe('Employee Login — BFF', () => {
+  test('valid credentials return access token', { tag: ['@area:auth', '@persona:employee'] }, async ({ page }) => {
+    const context = await staffContext(page, { tenant: TENANT, username: ADMIN_USER, password: ADMIN_PASS }, 'employee');
+    expect(Boolean(context.access_token)).toBe(true);
+    expect(context.UserRequest.type).toBe('EMPLOYEE');
+    expect(context.UserRequest.tenantId).toBe(TENANT);
+    expect('refresh_token' in context).toBe(false);
   });
 
-  test('bad credentials are rejected', {
-    annotation: {
-      type: 'description',
-      description: `Negative case — wrong password must throw. Catches a regression where the OAuth endpoint silently returns a token for an invalid password (which would mean any user could impersonate any other).
-
-Steps:
-1. Call getDigitToken with ROOT_TENANT, ADMIN_USER, password 'wrong-password'.
-2. Assert the promise rejects.
-
-Pairs with the positive case to ensure the auth surface fails closed.`,
-    },
-    tag: ['@area:auth', '@kind:edge-case', '@layer:api', '@persona:employee'] }, async () => {
-    await expect(
-      getDigitToken({
-        tenant: ROOT_TENANT,
-        username: ADMIN_USER,
-        password: 'wrong-password',
-      }),
-    ).rejects.toThrow();
+  test('an unknown login is rejected', { tag: ['@area:auth', '@persona:employee'] }, async ({ page }) => {
+    await expectRefused(page, `pw-no-such-user-${Date.now()}@example.invalid`, 'wrong-password');
   });
-});
 
-test.describe('Employee Login — UI', () => {
-  test('API session injection loads employee home', {
-    annotation: {
-      type: 'description',
-      description: `Confirms the loginViaApi helper (used by most tests) can put a Playwright page into a logged-in state without driving the UI form: it acquires a token, injects it into localStorage, and lands on /employee/. Asserts the home page renders without a generic error banner.
+  test('a real account with a wrong password is rejected', { tag: ['@area:auth', '@persona:employee'] }, async ({ page }) => {
+    expect(PROBE_LOGIN, 'Set LOGIN_PROBE_LOGIN in the env profile and seed it with scripts/seed-personas.ts').not.toBe('');
+    await expectRefused(page, PROBE_LOGIN, `wrong-${Date.now()}`);
+  });
 
-Steps:
-1. loginViaApi(page, { tenant: TENANT, username: ADMIN_USER, password: ADMIN_PASS }).
-2. Assert page.url() contains '/employee'.
-3. Read body innerText and assert it does NOT contain 'Something went wrong'.
-
-This is a layer-api setup test even though it ends with a UI assertion — the login is the API call; the page check is just confirming the helper actually worked.`,
-    },
-    tag: ['@area:auth', '@kind:regression', '@layer:api', '@persona:employee'] }, async ({ page }) => {
-    await loginViaApi(page, {
-      tenant: TENANT,
-      username: ADMIN_USER,
-      password: ADMIN_PASS,
-    });
-
+  test('API session injection loads employee home', { tag: ['@area:auth', '@persona:employee'] }, async ({ page }) => {
+    await loginViaApi(page, { tenant: TENANT, username: ADMIN_USER, password: ADMIN_PASS });
     expect(page.url()).toContain('/employee');
-
-    const bodyText = await page.locator('body').innerText();
-    expect(bodyText).not.toContain('Something went wrong');
+    await expect(page).not.toHaveURL(/\/user\/login/);
+    expect(await page.locator('body').innerText()).not.toContain('Something went wrong');
+    expect(await page.evaluate(() => Boolean(localStorage.getItem('Employee.token')))).toBe(true);
   });
 });

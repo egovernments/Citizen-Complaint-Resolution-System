@@ -13,6 +13,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { complaintLabel } from "../../utils/complaintLabel";
 import { pageOf, searchComplaints, statusTone } from "../../utils/citizenComplaints";
 import { trackEvent } from "../../utils/analytics";
+import { formatLocaleDate } from "../../utils/localeDate";
 import { useTranslation } from "react-i18next";
 import { Link, useHistory, useRouteMatch } from "react-router-dom";
 
@@ -153,7 +154,7 @@ export const ComplaintsList = () => {
         category: def?.menuPath ? complaintLabel(t, def.menuPath, def.menuPathName) : "",
         description: service.description || "",
         createdTime,
-        filedOn: createdTime ? Digit.DateUtils.ConvertTimestampToDate(createdTime) : "",
+        filedOn: formatLocaleDate(createdTime),
       };
     });
   }, [data, defsByCode, t]);

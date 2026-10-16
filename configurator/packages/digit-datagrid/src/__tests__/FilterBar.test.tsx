@@ -46,10 +46,13 @@ vi.mock('ra-core', () => ({
     resource: 'test',
   }),
   ListContextProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  // Untranslated: every call site passes its English default as `_`.
+  useTranslate: () => (key: string, options?: { _?: string }) => options?._ ?? key,
 }));
 
 vi.mock('react-router-dom', () => ({
   useNavigate: () => vi.fn(),
+  useLocation: () => ({ pathname: '/test' }),
 }));
 
 // Stub filter element for testing
@@ -180,5 +183,27 @@ describe('DigitList with filters', () => {
     );
     expect(screen.getByPlaceholderText('Search...')).toBeInTheDocument();
     expect(screen.queryByTestId('filter-live-form')).not.toBeInTheDocument();
+  });
+
+  it('tags a code title with its key, but not a plain-English one', () => {
+    const { unmount } = render(
+      <DigitList title="app.resources.employees">
+        <div>content</div>
+      </DigitList>
+    );
+    expect(screen.getByRole('heading', { level: 1 }).querySelector('[data-i18n-key]')).toHaveAttribute(
+      'data-i18n-key',
+      'app.resources.employees',
+    );
+    unmount();
+    // e.g. ComplaintHierarchyList: there is no such code to find in Localization.
+    render(
+      <DigitList title="Complaint Hierarchies">
+        <div>content</div>
+      </DigitList>
+    );
+    const heading = screen.getByRole('heading', { level: 1 });
+    expect(heading).toHaveTextContent('Complaint Hierarchies');
+    expect(heading.querySelector('[data-i18n-key]')).toBeNull();
   });
 });

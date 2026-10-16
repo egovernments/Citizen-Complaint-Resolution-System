@@ -1,0 +1,207 @@
+/*
+ * GENERATED FILE — do not edit.
+ * Source: configurator/src/themes/index.ts, every preset; the default is
+ * "cms-blue". Regenerate with `npm run tokens` from keycloak/theme-src.
+ */
+:root {
+    --background: 220 33% 98%;
+    --foreground: 221 28% 16%;
+    --card: 0 0% 100%;
+    --card-foreground: 221 28% 16%;
+    --sidebar: 0 0% 100%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 221 28% 16%;
+    --primary: 221 83% 53%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 214 68% 14%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 220 20% 96%;
+    --muted-foreground: 220 9% 46%;
+    --accent: 220 88% 97%;
+    --accent-foreground: 221 83% 53%;
+    --destructive: 7 77% 47%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 221 83% 53%;
+    --radius: 0.5rem;
+    --chart-1: 221 83% 53%;
+    --chart-2: 45 93% 58%;
+    --chart-3: 280 60% 52%;
+    --chart-4: 28 85% 56%;
+    --chart-5: 187 85% 53%;
+}
+
+:root[data-theme="cms-blue"] {
+    --background: 220 33% 98%;
+    --foreground: 221 28% 16%;
+    --card: 0 0% 100%;
+    --card-foreground: 221 28% 16%;
+    --sidebar: 0 0% 100%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 221 28% 16%;
+    --primary: 221 83% 53%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 214 68% 14%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 220 20% 96%;
+    --muted-foreground: 220 9% 46%;
+    --accent: 220 88% 97%;
+    --accent-foreground: 221 83% 53%;
+    --destructive: 7 77% 47%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 221 83% 53%;
+    --radius: 0.5rem;
+    --chart-1: 221 83% 53%;
+    --chart-2: 45 93% 58%;
+    --chart-3: 280 60% 52%;
+    --chart-4: 28 85% 56%;
+    --chart-5: 187 85% 53%;
+}
+
+:root[data-theme="digit-orange"] {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 21.2%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 21.2%;
+    --sidebar: 0 0% 98%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 21.2%;
+    --primary: 20 86.9% 42%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 197.8 80.5% 22.2%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 0 0% 93.3%;
+    --muted-foreground: 0 0% 47.1%;
+    --accent: 7 100% 98%;
+    --accent-foreground: 20 86.9% 42%;
+    --destructive: 8.1 100% 36.3%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 30 2.4% 83.5%;
+    --input: 200 8.6% 34.3%;
+    --ring: 20 86.9% 42%;
+    --radius: 0.25rem;
+    --chart-1: 20 86.9% 42%;
+    --chart-2: 197.8 80.5% 22.2%;
+    --chart-3: 212.4 100% 37.1%;
+    --chart-4: 152.1 100% 22%;
+    --chart-5: 36.1 100% 31%;
+}
+
+:root[data-theme="material-indigo"] {
+    --background: 220 14% 94%;
+    --foreground: 220 13% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 13% 10%;
+    --sidebar: 0 0% 100%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 13% 10%;
+    --primary: 231 48% 48%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 231 44% 94%;
+    --secondary-foreground: 231 48% 30%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;
+    --accent: 231 48% 94%;
+    --accent-foreground: 231 48% 48%;
+    --destructive: 4 90% 58%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 85%;
+    --input: 220 9% 46%;
+    --ring: 231 48% 48%;
+    --radius: 0.375rem;
+    --chart-1: 231 48% 48%;
+    --chart-2: 291 47% 51%;
+    --chart-3: 174 100% 29%;
+    --chart-4: 36 100% 50%;
+    --chart-5: 4 90% 58%;
+}
+
+:root[data-theme="material-teal"] {
+    --background: 174 14% 93%;
+    --foreground: 174 13% 8%;
+    --card: 0 0% 100%;
+    --card-foreground: 174 13% 8%;
+    --sidebar: 0 0% 100%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 174 13% 8%;
+    --primary: 174 100% 29%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 174 40% 93%;
+    --secondary-foreground: 174 100% 20%;
+    --muted: 174 14% 96%;
+    --muted-foreground: 174 9% 42%;
+    --accent: 174 60% 93%;
+    --accent-foreground: 174 100% 29%;
+    --destructive: 4 90% 58%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 174 10% 84%;
+    --input: 174 9% 42%;
+    --ring: 174 100% 29%;
+    --radius: 0.375rem;
+    --chart-1: 174 100% 29%;
+    --chart-2: 36 100% 50%;
+    --chart-3: 231 48% 48%;
+    --chart-4: 291 47% 51%;
+    --chart-5: 4 90% 58%;
+}
+
+:root[data-theme="material-blue"] {
+    --background: 207 14% 93%;
+    --foreground: 207 13% 8%;
+    --card: 0 0% 100%;
+    --card-foreground: 207 13% 8%;
+    --sidebar: 0 0% 100%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 207 13% 8%;
+    --primary: 207 90% 54%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 207 44% 93%;
+    --secondary-foreground: 207 90% 30%;
+    --muted: 207 14% 96%;
+    --muted-foreground: 207 9% 42%;
+    --accent: 207 80% 94%;
+    --accent-foreground: 207 90% 54%;
+    --destructive: 4 90% 58%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 207 10% 84%;
+    --input: 207 9% 42%;
+    --ring: 207 90% 54%;
+    --radius: 0.375rem;
+    --chart-1: 207 90% 54%;
+    --chart-2: 174 100% 29%;
+    --chart-3: 36 100% 50%;
+    --chart-4: 291 47% 51%;
+    --chart-5: 4 90% 58%;
+}
+
+:root[data-theme="digit-dark"] {
+    --background: 0 0% 7%;
+    --foreground: 0 0% 93%;
+    --card: 0 0% 10%;
+    --card-foreground: 0 0% 93%;
+    --sidebar: 0 0% 10%;
+    --popover: 0 0% 10%;
+    --popover-foreground: 0 0% 93%;
+    --primary: 24 78% 60%;
+    --primary-foreground: 0 0% 5%;
+    --secondary: 204 30% 18%;
+    --secondary-foreground: 0 0% 93%;
+    --muted: 0 0% 14%;
+    --muted-foreground: 0 0% 60%;
+    --accent: 24 40% 16%;
+    --accent-foreground: 24 78% 60%;
+    --destructive: 7 77% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 18%;
+    --input: 0 0% 18%;
+    --ring: 24 78% 60%;
+    --radius: 0.25rem;
+    --chart-1: 204 80% 55%;
+    --chart-2: 45 93% 58%;
+    --chart-3: 280 60% 60%;
+    --chart-4: 28 85% 60%;
+    --chart-5: 187 85% 55%;
+}

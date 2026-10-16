@@ -6,7 +6,7 @@ import type { MdmsRecord } from '../client/types.js';
  * Masters visibility/edit capability, computed client-side from data the
  * configurator already fetches from accesscontrol's MDMS masters — no new
  * MDMS master, no server-side (Tier-2) enforcement. See
- * docs/design/masters-configurator-access-policy-design.md §3.2/§3.3.
+ * docs/reference/architecture/access-control/masters-configurator-access-policy-design.md §3.2/§3.3.
  *
  * - canView(schema): evaluates the JsonLogic `condition` under the one shared
  *   MDMS search action's `resource.masters.<schema>` block (action id 2513,

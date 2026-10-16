@@ -102,6 +102,8 @@ describe('generateColumns', () => {
     const cols = generateColumns(ROLEACTIONS_SCHEMA, refMap);
     expect(cols.length).toBe(4);
     expect(cols[0].source).toBe('rolecode');
+    // English label as the fallback, the shared field code as the key.
+    expect(cols[1]).toMatchObject({ label: 'Actionid', labelKey: 'app.fields.actionid' });
     expect(cols[1].source).toBe('actionid');
     expect(cols[2].source).toBe('tenantId');
     expect(cols[3].source).toBe('actioncode');

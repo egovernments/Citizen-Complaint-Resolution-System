@@ -3,7 +3,6 @@ package org.egov.pgr.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
-import org.egov.common.contract.request.User;
 import org.egov.pgr.repository.ServiceRequestRepository;
 import org.egov.pgr.util.HRMSUtil;
 import org.egov.pgr.web.models.RequestInfoWrapper;
@@ -23,7 +22,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -266,45 +264,11 @@ public class EscalationService {
             if (response == null || CollectionUtils.isEmpty(response.getProcessInstances())) {
                 return Collections.emptyList();
             }
-            return assigneesInCurrentOccupancy(response.getProcessInstances());
+            return WorkflowService.currentHolders(response.getProcessInstances());
         } catch (Exception e) {
             log.error("Failed to read workflow assignees for complaint {}", serviceRequestId, e);
             return Collections.emptyList();
         }
-    }
-
-    /**
-     * Walks newest-first through one state occupancy and returns the first assignees found.
-     * The list is ordered newest-first by egov-workflow-v2.
-     */
-    private List<String> assigneesInCurrentOccupancy(List<ProcessInstance> instances) {
-        String currentState = stateOf(instances.get(0));
-        for (ProcessInstance instance : instances) {
-            if (!Objects.equals(currentState, stateOf(instance))) {
-                // Left the current state: anything older belongs to a previous occupancy.
-                return Collections.emptyList();
-            }
-            List<String> assignees = uuidsOf(instance);
-            if (!assignees.isEmpty()) {
-                return assignees;
-            }
-        }
-        return Collections.emptyList();
-    }
-
-    /** The state UUID an instance landed in, or null when workflow did not populate it. */
-    private String stateOf(ProcessInstance instance) {
-        return instance == null || instance.getState() == null ? null : instance.getState().getUuid();
-    }
-
-    private List<String> uuidsOf(ProcessInstance instance) {
-        if (instance == null || CollectionUtils.isEmpty(instance.getAssignes())) {
-            return Collections.emptyList();
-        }
-        return instance.getAssignes().stream()
-                .map(User::getUuid)
-                .filter(uuid -> uuid != null && !uuid.isBlank())
-                .collect(Collectors.toList());
     }
 
     /** Cheap scheduler preflight; the locked update repeats this authoritative check. */

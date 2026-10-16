@@ -24,12 +24,12 @@ It is also the only option with the browser onboarding wizard.
 
 **Not sure?** Exploring or debugging → Option A. Changing code → Option B. Deploying for real → Option C.
 
-> **Planning a production deployment?** For single-server vs Kubernetes guidance, capacity by city size, and complaint volume thresholds, see [`docs/deployment-decision-guide-africa.md`](../docs/deployment-decision-guide-africa.md) or [`docs/deployment-decision-guide-india.md`](../docs/deployment-decision-guide-india.md).
+> **Planning a production deployment?** For single-server vs Kubernetes guidance, capacity by city size, and complaint volume thresholds, see [`docs/setup/deployment/decision-guide-africa.md`](../docs/setup/deployment/decision-guide-africa.md) or [`docs/setup/deployment/decision-guide-india.md`](../docs/setup/deployment/decision-guide-india.md).
 
 > **On Windows?** The full Ansible stack also runs locally via WSL2 — see
-> [WINDOWS-QUICKSTART.md](../WINDOWS-QUICKSTART.md) (validated end-to-end on a
+> [docs/setup/quickstart-windows.md](../docs/setup/quickstart-windows.md) (validated end-to-end on a
 > 16 GB machine; the playbook self-heals the WSL-specific quirks). The macOS
-> equivalent is [MAC-QUICKSTART.md](../MAC-QUICKSTART.md).
+> equivalent is [docs/setup/quickstart-mac.md](../docs/setup/quickstart-mac.md).
 
 ---
 
@@ -296,8 +296,8 @@ to it using a key (not a password), and the machine you run the command from
 needs the tools in Step 2.
 
 > **On Windows?** Use WSL2 and follow
-> [WINDOWS-QUICKSTART.md](../WINDOWS-QUICKSTART.md) — validated end to end on a
-> 16 GB machine. On a Mac, [MAC-QUICKSTART.md](../MAC-QUICKSTART.md).
+> [docs/setup/quickstart-windows.md](../docs/setup/quickstart-windows.md) — validated end to end on a
+> 16 GB machine. On a Mac, [docs/setup/quickstart-mac.md](../docs/setup/quickstart-mac.md).
 
 ### Step 1 — Get the code
 
@@ -465,9 +465,28 @@ want soon:
 - `enable_novu` — SMS, email and WhatsApp notifications. Eight more containers.
   There is a turn-key installer, `scripts/enable-notifications.sh`, rather than
   just the flag.
-- `enable_keycloak` — single sign-on. DIGIT's own OTP login works without it.
-- `enable_otp_services` — real SMS one-time passwords. Off means the citizen
-  login OTP is always `123456`, which is what you want while testing.
+- `enable_keycloak` — Keycloak and the Identity BFF. **Not optional any more:**
+  every employee and citizen sign-in goes through them, the old DIGIT
+  OTP/password login pages are gone, and the deploy refuses `false`. The
+  shipped examples set it to `true`. It also turns on self-service tenant onboarding: PGR's onboarding runner
+  (`pgr_onboarding_runner_enabled`, default `true`, rendered on only with
+  Keycloak) provisions each signup as a platform provisioner account. The
+  deploy creates that account if absent (`PGR_PROVISIONER` on `state_root`,
+  with MDMS_ADMIN, ACCOUNT_ADMIN, LOC_ADMIN and HRMS_ADMIN there), keeps its
+  generated password in OpenBao as `pgr_digit_provisioner_password`, and fails
+  with the fix if an existing account of that name cannot sign in with those
+  roles. If PGR still cannot use it, the runner pauses and logs
+  `PGR onboarding runner PAUSED (<reason>)`; signups wait in the queue and
+  resume once it is fixed. It re-checks with backoff (30 s up to 15 min). A
+  refused password (`PROVISIONER_CREDENTIALS_REJECTED`) is re-checked every 10
+  minutes until the provisioner has logged in once (a fresh deploy creates the
+  account after pgr-services starts; the deploy then restarts pgr-services), and
+  only every 6 hours after that, since each failed login counts toward
+  egov-user's lockout (5 in 30 minutes): fix the password and restart
+  pgr-services.
+- `enable_otp_services` — real SMS one-time passwords. With it off, citizen
+  OTP login works only if you also set `identity_dev_fixed_otp: true`
+  (development only: the OTP is then always `123456`). Both are off by default.
 - `observability_level` — `metrics`, `logs` or `traces` (the default, meaning
   everything). Lowering it deploys fewer monitoring containers.
 - `enable_matomo` — self-hosted web analytics for the portal. Three more
@@ -477,7 +496,7 @@ want soon:
   collection turns on and off without a redeploy. Pair it with
   `nginx_features.matomo`. There is a turn-key installer,
   `scripts/enable-matomo.sh`, and a full walkthrough in
-  [`docs/matomo-deployment.md`](../docs/matomo-deployment.md).
+  [`docs/setup/deployment/matomo.md`](../docs/setup/deployment/matomo.md).
 - `run_ci_tests` — runs the Postman and Playwright suites at the end of every
   deploy. Adds 5–10 minutes.
 
@@ -590,7 +609,7 @@ repository — change them before anyone else can reach the machine.**
 | Onboarding wizard (`/configurator/`) | `ADMIN` | `eGov@123` | your **root** — the field is pre-filled from `state_tenant_id` |
 | Employee app (`/digit-ui/employee`) | `ADMIN` | `eGov@123` | pick from the City dropdown; only tenants in `login_tenant_allowlist` appear |
 | Employees you onboard later | their **employee code** | `eGov@123` | their city tenant |
-| Citizen app | a mobile number | OTP `123456` | — |
+| Citizen app | a mobile number | OTP `123456` (only with `identity_dev_fixed_otp: true`) | — |
 | Grafana (`/grafana/`) | `admin` | generated — see below | — |
 
 To change the administrator credentials, set `bootstrap_user` and
@@ -616,8 +635,9 @@ The employee code overriding the username is not a typo: HRMS replaces the
 `userName` you supply with the employee code when it creates the record, and
 the employee code is what actually authenticates.
 
-The citizen OTP is fixed at `123456` because `enable_otp_services` is off and
-Kong answers `/user-otp/*` with a canned response — no SMS provider needed.
+With `enable_otp_services` off, Kong answers `/user-otp/*` with a canned
+response, and the citizen OTP is `123456` only when the host opts in with
+`identity_dev_fixed_otp: true` (off by default; never on a public box).
 Turning real OTP on takes more than the flag; see the notes in
 `kong/kong.yml`.
 
@@ -645,14 +665,14 @@ reading, rotating and unsealing.
 | Login fails for `ADMIN` on your root tenant | that root was never created — see the tenant note in Step 3 | check the deploy output for the line naming the fallback to `pg` |
 
 Deeper diagnosis, including reading logs and metrics, is in the
-[operations handbook](../docs/2.12/operations/README.md).
+[operations handbook](../docs/releases/2.12/operations/README.md).
 
 ### Next: onboard a tenant
 
 The stack is running but has no city data in it yet — no wards, no
 departments, no complaint types, no staff. That comes next, in the browser:
 
-**→ [Onboarding & Add-ons guide](docs/ONBOARDING-AND-ADDONS.md)**
+**→ [Onboarding & Add-ons guide](../docs/setup/onboarding/README.md)**
 
 ---
 
@@ -660,30 +680,30 @@ departments, no complaint types, no staff. That comes next, in the browser:
 
 Ports, memory budgets, what each service does, direct API and database access,
 the Postman collections, and general troubleshooting have moved to
-**[docs/STACK-REFERENCE.md](docs/STACK-REFERENCE.md)**, so this page stays a
+**[docs/STACK-REFERENCE.md](../docs/reference/services/stack-reference.md)**, so this page stays a
 walkthrough.
 
 | Looking for | Go to |
 |---|---|
-| Every service, port and memory limit | [STACK-REFERENCE.md](docs/STACK-REFERENCE.md#whats-included) |
-| Calling the API by hand | [STACK-REFERENCE.md](docs/STACK-REFERENCE.md#api-access) |
-| Connecting to the database | [STACK-REFERENCE.md](docs/STACK-REFERENCE.md#database-access) |
-| Running the Postman collections | [STACK-REFERENCE.md](docs/STACK-REFERENCE.md#running-postman-api-tests) |
-| Loading master data from a script | [STACK-REFERENCE.md](docs/STACK-REFERENCE.md#loading-master-data-from-a-script) |
-| Troubleshooting a Compose or Tilt stack | [STACK-REFERENCE.md](docs/STACK-REFERENCE.md#troubleshooting) |
-| Repository layout | [STACK-REFERENCE.md](docs/STACK-REFERENCE.md#project-structure) |
+| Every service, port and memory limit | [STACK-REFERENCE.md](../docs/reference/services/stack-reference.md#whats-included) |
+| Calling the API by hand | [STACK-REFERENCE.md](../docs/reference/services/stack-reference.md#api-access) |
+| Connecting to the database | [STACK-REFERENCE.md](../docs/reference/services/stack-reference.md#database-access) |
+| Running the Postman collections | [STACK-REFERENCE.md](../docs/reference/services/stack-reference.md#running-postman-api-tests) |
+| Loading master data from a script | [STACK-REFERENCE.md](../docs/reference/services/stack-reference.md#loading-master-data-from-a-script) |
+| Troubleshooting a Compose or Tilt stack | [STACK-REFERENCE.md](../docs/reference/services/stack-reference.md#troubleshooting) |
+| Repository layout | [STACK-REFERENCE.md](../docs/reference/services/stack-reference.md#project-structure) |
 | Everything the Ansible playbook does | [ansible/README.md](ansible/README.md) |
-| Running the stack in production | [operations handbook](../docs/2.12/operations/README.md) |
+| Running the stack in production | [operations handbook](../docs/releases/2.12/operations/README.md) |
 
 ### Other guides in `docs/`
 
 | Guide | What it covers |
 |---|---|
-| [ONBOARDING-AND-ADDONS.md](docs/ONBOARDING-AND-ADDONS.md) | Create a city and load its data; turn on notifications, the dashboard and the other add-ons |
-| [STACK-REFERENCE.md](docs/STACK-REFERENCE.md) | Ports, memory, API and database access, Postman, troubleshooting |
-| [LOCALHOST-FULL-AND-SLIM.md](docs/LOCALHOST-FULL-AND-SLIM.md) | Two ready-made presets for deploying Option C to this machine |
-| [LOCAL-SETUP-GUIDE.md](docs/LOCAL-SETUP-GUIDE.md) | Running the Compose stack on a machine with about 4 GB of RAM |
-| [HYBRID-SETUP.md](docs/HYBRID-SETUP.md) | Some services local, the rest on a shared server |
-| [REMOTE-DEV-SETUP.md](docs/REMOTE-DEV-SETUP.md) | Developing against a remote stack |
-| [HOT-DEPLOY-GUIDE.md](docs/HOT-DEPLOY-GUIDE.md) | Pushing a code change into a running stack without a full redeploy |
-| [SERVICE-STARTUP-SEQUENCE.md](docs/SERVICE-STARTUP-SEQUENCE.md) | The order services come up in, and what waits on what |
+| [ONBOARDING-AND-ADDONS.md](../docs/setup/onboarding/README.md) | Create a city and load its data; turn on notifications, the dashboard and the other add-ons |
+| [STACK-REFERENCE.md](../docs/reference/services/stack-reference.md) | Ports, memory, API and database access, Postman, troubleshooting |
+| [LOCALHOST-FULL-AND-SLIM.md](../docs/setup/local/localhost-full-and-slim.md) | Two ready-made presets for deploying Option C to this machine |
+| [LOCAL-SETUP-GUIDE.md](../docs/setup/local/README.md) | Running the Compose stack on a machine with about 4 GB of RAM |
+| [HYBRID-SETUP.md](../docs/setup/local/hybrid.md) | Some services local, the rest on a shared server |
+| [REMOTE-DEV-SETUP.md](../docs/setup/local/remote-dev.md) | Developing against a remote stack |
+| [HOT-DEPLOY-GUIDE.md](../docs/setup/local/hot-deploy.md) | Pushing a code change into a running stack without a full redeploy |
+| [SERVICE-STARTUP-SEQUENCE.md](../docs/reference/services/startup-sequence.md) | The order services come up in, and what waits on what |

@@ -1,3 +1,5 @@
+import { getTenantHierarchy } from "../tenantHierarchy";
+
 const getBoundaryTypeOrder = (tenantBoundary) => {
   const order = [];
   const seenTypes = new Set();
@@ -20,7 +22,6 @@ const getBoundaryTypeOrder = (tenantBoundary) => {
 };
 
 const fetchBoundaries = async ({ tenantId }) => {
-  const hierarchyType = window?.globalConfigs?.getConfig("HIERARCHY_TYPE") || "ADMIN";
   // Intentionally no `boundaryType` filter — see PGRInitialization.js for
   // the rationale. We need the full tree here so BoundaryComponent can
   // walk `.children` and render each level of the cascade.
@@ -40,6 +41,9 @@ const fetchBoundaries = async ({ tenantId }) => {
     console.log("No CITIZEN user info found in localStorage.");
   }
 
+
+  // Same per-tenant hierarchy as PGRInitialization, so the tree matches the level order.
+  const { hierarchyType } = await getTenantHierarchy(tenantId);
 
   try {
     const fetchBoundaryData = await Digit.CustomService.getResponse({

@@ -1,3 +1,4 @@
+import { tenantSlug } from '../utils/identity-bff';
 /**
  * Citizen landing-page dispatch — ported from local-setup/tests/e2e/specs/citizen/citizen-flow.spec.ts
  *
@@ -62,7 +63,7 @@ class CitizenLandingPage {
   }
 
   async goto() {
-    await this.page.goto(`${BASE_URL}/digit-ui/citizen`, { waitUntil: 'domcontentloaded' });
+    await this.page.goto(`${BASE_URL}/${tenantSlug()}/digit-ui/citizen`, { waitUntil: 'domcontentloaded' });
   }
 
   async detectLanding(timeout = 15_000): Promise<CitizenLanding> {

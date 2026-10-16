@@ -23,5 +23,5 @@ public class DispatchDryRunRequest {
 
     @NotNull
     @Valid
-    private ComplaintsDomainEvent event;
+    private NotificationEvent event;
 }

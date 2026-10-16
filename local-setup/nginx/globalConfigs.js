@@ -14,7 +14,6 @@ var globalConfigs = (function () {
   var mdmsContext = "mdms-v2";
   var hrmsContext = "egov-hrms";
   var invalidEmployeeRoles = ["SYSTEM"];
-  var authProvider = "digit";
   var pgrBoundaryHighestLevel = "County";
   var pgrBoundaryLowestLevel = "Ward";
   var mapCenter = { lat: -1.0, lng: 37.0 };
@@ -23,6 +22,9 @@ var globalConfigs = (function () {
   // explicitly false — the emitter self-mutes when the /otel ingest route is
   // absent. Kill switch: flip to false here (no rebuild needed).
   var dashboardMetricsEnabled = true;
+  // Citizen home banner (#2358): StateInfo.bannerUrl as a hero above All
+  // Services. Off until it goes live (no rebuild needed to flip).
+  var citizenBannerEnabled = false;
   // Source of truth for mobile validation is common-masters.MobileNumberValidation in MDMS
   // (seeded during tenant onboarding). These values are a build-time fallback used only
   // when MDMS has not been seeded yet or cannot be reached. Changing these values alone
@@ -99,8 +101,6 @@ var globalConfigs = (function () {
       return mdmsContext;
     } else if (key === "HRMS_CONTEXT_PATH") {
       return hrmsContext;
-    } else if (key === "AUTH_PROVIDER") {
-      return authProvider;
     } else if (key === "INVALIDROLES") {
       return invalidEmployeeRoles;
     } else if (key === "PGR_BOUNDARY_HIGHEST_LEVEL") {
@@ -115,6 +115,8 @@ var globalConfigs = (function () {
       return coreMobileConfigs;
     } else if (key === "DASHBOARD_METRICS_ENABLED") {
       return dashboardMetricsEnabled;
+    } else if (key === "CITIZEN_BANNER_ENABLED") {
+      return citizenBannerEnabled;
     }
   };
 

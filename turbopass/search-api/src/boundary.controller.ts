@@ -1,0 +1,100 @@
+import { BadRequestException, Controller, Get, Query } from '@nestjs/common';
+import { BoundaryService } from './boundary.service';
+import { MATCH_MODES, isMatchMode } from './boundary-matcher';
+
+export const DEFAULT_SEARCH_LIMIT = 10;
+export const MAX_SEARCH_LIMIT = 50;
+
+/** min_descendants: blank → 0; otherwise a non-negative integer. */
+export function parseMinDescendants(raw: string | undefined): number {
+  if (raw === undefined || raw === '') return 0;
+  if (!/^\d+$/.test(raw)) {
+    throw new BadRequestException(
+      `min_descendants must be a non-negative integer, got '${raw}'`,
+    );
+  }
+  return Number(raw);
+}
+
+/** country: blank → every country; otherwise an ISO 3166-1 alpha-2 code. */
+export function parseCountry(raw: string | undefined): string | undefined {
+  if (raw === undefined || raw.trim() === '') return undefined;
+  const code = raw.trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(code)) {
+    throw new BadRequestException(
+      `country must be an ISO 3166-1 alpha-2 code, got '${raw}'`,
+    );
+  }
+  return code;
+}
+
+export function parseSearchLimit(raw: string | undefined): number {
+  if (raw === undefined || raw === '') return DEFAULT_SEARCH_LIMIT;
+  if (!/^\d+$/.test(raw) || Number(raw) < 1) {
+    throw new BadRequestException(
+      `limit must be a positive integer, got '${raw}'`,
+    );
+  }
+  return Math.min(Number(raw), MAX_SEARCH_LIMIT);
+}
+
+@Controller('boundary')
+export class BoundaryController {
+  constructor(private readonly boundaryService: BoundaryService) {}
+
+  // GET /boundary/search?q=&source=&match=&limit=&min_descendants=
+  //   match: exact | prefix | substring (default) | fuzzy — how the name matches.
+  //          Results are always ranked exact → prefix → substring → fuzzy, then
+  //          broadest admin level first. Unknown values → 400.
+  //   limit: 1..50, default 10.
+  //   min_descendants: only places with at least this many areas under them
+  //          (default 0). The configurator sends 1 — a place with nothing under
+  //          it can't form a hierarchy.
+  //   country: only places in this country (ISO alpha-2), filtered before the
+  //          limit. The configurator's Preconfigured search sends it.
+  // source: overture (default) | official | cod | geoboundaries — all served
+  //          from the offline DB, no API key — or geoapify (hosted, keyed).
+  //          official = per country, whichever of cod / geoboundaries nests
+  //          deepest; results carry `source` and `licence` for attribution.
+  // match, limit, min_descendants and country apply to the offline sources; the
+  // geoapify passthrough ignores them.
+  @Get('search')
+  async search(
+    @Query('q') query: string,
+    @Query('source') source = 'overture',
+    @Query('match') match = 'substring',
+    @Query('limit') limit?: string,
+    @Query('min_descendants') minDescendants?: string,
+    @Query('country') country?: string,
+  ) {
+    if (!isMatchMode(match)) {
+      throw new BadRequestException(
+        `Unsupported match '${match}'; expected one of: ${MATCH_MODES.join(', ')}`,
+      );
+    }
+    const n = parseSearchLimit(limit);
+    const minDesc = parseMinDescendants(minDescendants);
+    const scope = parseCountry(country);
+    if (!query) {
+      return { features: [] };
+    }
+    return this.boundaryService.search(query, source, match, n, minDesc, scope);
+  }
+
+  // GET /boundary/official?country=KE — the official set chosen for a country
+  //   (source, date, licence), the country area to fetch it from, and per
+  //   level how closely the other official source agrees. The configurator's
+  //   "Preconfigured" option is built on it. 404 when the country has none.
+  @Get('official')
+  official(@Query('country') country: string) {
+    return this.boundaryService.officialSet(country);
+  }
+
+  @Get('fetch')
+  async fetch(@Query('id') id: string, @Query('source') source = 'overture') {
+    if (!id) {
+      return { type: 'FeatureCollection', features: [] };
+    }
+    return this.boundaryService.fetchBoundaries(id, source);
+  }
+}

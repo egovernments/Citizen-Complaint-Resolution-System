@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Normalize Flyway history-table names before any migrator runs.
 
-See docs/superpowers/specs/2026-07-13-ansible-flyway-history-normalization-design.md
+See docs/operations/data-migration/flyway-history-normalization-design.md
 
 The database is the input; the decision table below is the entire logic. Keep
 `decide()` pure — every safety property is tested there, without a database.

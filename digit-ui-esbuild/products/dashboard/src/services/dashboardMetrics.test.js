@@ -447,3 +447,27 @@ test("flush restores everything when both POSTs fail", async () => {
   assert.deepEqual(Object.keys(m._inspect().pending.hist).sort(), hist);
   assert.equal(m._inspect().pending.logs.length, logsCount);
 });
+
+/* ------------------------------------------------------------------ */
+/* Tenant tag (#2072)                                                 */
+/* ------------------------------------------------------------------ */
+
+async function flushedTenantTag(m) {
+  settleInitialLoad(m);
+  m.flush("test");
+  await new Promise((r) => setTimeout(r, 0));
+  const metrics = JSON.parse(fetchCalls.find((c) => c.url === "/otel/v1/metrics").body);
+  const dp = metrics.resourceMetrics[0].scopeMetrics[0].metrics[0].histogram.dataPoints[0];
+  return dp.attributes.find((a) => a.key === "tenant").value.stringValue;
+}
+
+test("tenant tag is the route tenant on a tenant route, else the configured state tenant", async () => {
+  let m = loadFreshModule();
+  window.globalConfigs = { getConfig: (key) => (key === "STATE_LEVEL_TENANT_ID" ? "ke" : undefined) };
+  assert.equal(await flushedTenantTag(m), "ke");
+
+  m = loadFreshModule();
+  window.globalConfigs = { getConfig: (key) => (key === "STATE_LEVEL_TENANT_ID" ? "ke" : undefined) };
+  window.__digitTenantContext = { tenantId: "bometcounty", rootTenantId: "bometcounty" };
+  assert.equal(await flushedTenantTag(m), "bometcounty");
+});

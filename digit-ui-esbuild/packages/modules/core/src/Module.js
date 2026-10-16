@@ -5,17 +5,13 @@ import { getI18n } from "react-i18next";
 import { QueryClient, QueryClientProvider } from "react-query";
 import { Provider } from "react-redux";
 import { BrowserRouter as Router } from "react-router-dom";
-import { DigitApp, DigitAppWrapper } from "./App";
-import SelectOtp from "./pages/citizen/Login/SelectOtp";
-import ChangeCity from "./components/ChangeCity";
+import { DigitApp } from "./App";
 import ChangeLanguage from "./components/ChangeLanguage";
 import { useState } from "react";
 import ErrorBoundary from "./components/ErrorBoundaries";
 import getStore from "./redux/store";
 import PrivacyComponent from "./components/PrivacyComponent";
-import LoginSignupSelector from "./components/LoginSignupSelector";
 import ForgotOrganizationTooltip from "./components/ForgotOrganizationTooltip";
-import OtpComponent from "./pages/employee/Otp/OtpCustomComponent";
 
 const DigitUIWrapper = ({ stateCode, enabledModules, moduleReducers, defaultLanding,allowedUserTypes }) => {
   const { isLoading, data: initData={} } = Digit.Hooks.useInitStore(stateCode, enabledModules);
@@ -31,28 +27,15 @@ const DigitUIWrapper = ({ stateCode, enabledModules, moduleReducers, defaultLand
     <Provider store={data}>
       <Router>
         <BodyContainer>
-          {Digit.Utils.getMultiRootTenant() ? (
-            <DigitAppWrapper
-              initData={initData}
-              stateCode={stateCode}
-              modules={initData?.modules}
-              appTenants={initData.tenants}
-              logoUrl={initData?.stateInfo?.logoUrl}
-              logoUrlWhite={initData?.stateInfo?.logoUrlWhite}
-              defaultLanding={defaultLanding}
-              allowedUserTypes={allowedUserTypes}
-            />
-          ) : (
-            <DigitApp
-              initData={initData}
-              stateCode={stateCode}
-              modules={initData?.modules}
-              appTenants={initData.tenants}
-              logoUrl={initData?.stateInfo?.logoUrl}
-              defaultLanding={defaultLanding}
-              allowedUserTypes={allowedUserTypes}
-            />
-          )}
+          <DigitApp
+            initData={initData}
+            stateCode={stateCode}
+            modules={initData?.modules}
+            appTenants={initData.tenants}
+            logoUrl={initData?.stateInfo?.logoUrl}
+            defaultLanding={defaultLanding}
+            allowedUserTypes={allowedUserTypes}
+          />
         </BodyContainer>
       </Router>
     </Provider>
@@ -154,12 +137,8 @@ export const DigitUI = ({ stateCode, registry, enabledModules, moduleReducers, d
 };
 
 const componentsToRegister = {
-  SelectOtp,
-  ChangeCity,
   ChangeLanguage,
-  LoginSignupSelector,
   ForgotOrganizationTooltip,
-  OtpComponent,
   PrivacyComponent,
 };
 

@@ -56,10 +56,10 @@ const columns: DigitColumn[] = [
   },
   { source: 'slaHours', label: 'app.fields.sla_hours', editable: { type: 'number' } },
   {
-    source: 'active',
+    source: '_isActive',
     label: 'app.fields.status',
     render: (record) => (
-      <StatusChip value={record.active} labels={{ true: 'Active', false: 'Inactive' }} />
+      <StatusChip value={record._isActive} labels={{ true: 'Active', false: 'Inactive' }} />
     ),
   },
 ];

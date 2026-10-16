@@ -21,6 +21,8 @@ interface UseMutationModeOptions {
   onSuccess?: (data: unknown) => void;
   onError?: (error: Error) => void;
   transform?: (data: Record<string, unknown>) => Record<string, unknown>;
+  /** Data-provider `meta` merged into every update/delete call. */
+  meta?: Record<string, unknown>;
 }
 
 export function useMutationMode(options: UseMutationModeOptions = {}) {
@@ -30,6 +32,7 @@ export function useMutationMode(options: UseMutationModeOptions = {}) {
     onSuccess,
     onError,
     transform,
+    meta,
   } = options;
 
   const [update] = useUpdate();
@@ -67,9 +70,14 @@ export function useMutationMode(options: UseMutationModeOptions = {}) {
           result = await update(resource, {
             ...updateParams,
             data: dataToSave,
+            ...(meta ? { meta: { ...meta, ...updateParams.meta } } : {}),
           });
         } else {
-          result = await deleteOne(resource, params as DeleteParams);
+          const deleteParams = params as DeleteParams;
+          result = await deleteOne(resource, {
+            ...deleteParams,
+            ...(meta ? { meta: { ...meta, ...deleteParams.meta } } : {}),
+          });
         }
 
         if (onSuccess) {
@@ -82,7 +90,7 @@ export function useMutationMode(options: UseMutationModeOptions = {}) {
         throw error;
       }
     },
-    [update, deleteOne, transform, onSuccess, onError]
+    [update, deleteOne, transform, meta, onSuccess, onError]
   );
 
   const mutate = useCallback(

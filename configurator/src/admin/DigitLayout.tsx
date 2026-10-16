@@ -1,129 +1,63 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useLocaleState, useLocales, useTranslate } from 'ra-core';
+import { useTranslate } from 'ra-core';
 import { useApp } from '../App';
 import {
-  HelpCircle,
-  LogOut,
-  User,
   Building2,
-  MapPin,
-  Briefcase,
-  Award,
-  AlertTriangle,
-  Users,
   LayoutDashboard,
   BarChart3,
-  Network,
-  ChevronLeft,
-  ChevronRight,
   ChevronDown,
-  Settings,
-  Globe,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Search,
   Database,
-  Shield,
-  GitBranch,
-  MessageSquare,
-  History,
-  FileCode,
-  Workflow,
-  Bell,
-  Mail,
-  ScrollText,
-  Plug,
-  SlidersHorizontal,
-  MessageCircle,
-  UserCog,
-  Map,
   Globe2,
+  Inbox,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import DocsPane from '@/components/layout/DocsPane';
-import { getGenericMdmsResources, getResourceLabel } from '@/providers/bridge';
+import { T } from '@digit-ui/datagrid';
+import { getResourceLabel } from '@/providers/bridge';
+import { useResourceLabel } from '@/providers/useResourceLabel';
+import { ResourceLabel } from '@/providers/ResourceLabel';
+import { navGroups, getAdvancedResourceIds } from './navGroups';
 import { useMastersCapability } from '@/hooks/useMastersCapability';
-import { useTheme } from '@/providers/ThemeProvider';
-import { THEMES } from '@/themes';
 import { LEGACY_PGR_DASHBOARD_ENABLED } from '@/config/featureFlags';
-import { DigitFooter } from '@/components/DigitFooter';
+import { NavRow, NavExternalRow, SectionLabel, ActiveBar, RailBackdrop, RailCloseButton, RailMenuButton, RailPoweredBy } from '@/components/layout/rail';
+import { railClasses, rowTone } from '@/components/layout/railStyles';
+import { useRailDrawer } from '@/components/layout/useRailDrawer';
+import { AccountMenu, HelpButton, LocaleSwitcher, ThemeSwitcher } from '@/components/layout/HeaderControls';
+import { isOnboardingComplete } from '@/onboarding/progress';
+import { complaintDeskUrl, useWorkspaceSlug } from '@/identity/workspaceSlug';
 
-/** Sidebar navigation groups — names are i18n keys resolved at render time */
-const navGroups = [
-  {
-    labelKey: 'app.nav.notifications',
-    items: [
-      { id: 'notification-configure', nameKey: 'app.nav.notification_configure', path: '/manage/notification-configure', icon: SlidersHorizontal },
-      { id: 'notification-routing', nameKey: 'app.nav.notification_routing', path: '/manage/notification-routing', icon: Bell },
-      { id: 'notification-template', nameKey: 'app.nav.notification_templates', path: '/manage/notification-template', icon: Mail },
-      { id: 'notification-provider-template', nameKey: 'app.nav.notification_provider_templates', path: '/manage/notification-provider-template', icon: MessageCircle },
-      { id: 'notification-log', nameKey: 'app.nav.notification_logs', path: '/manage/notification-log', icon: ScrollText },
-      { id: 'notification-provider', nameKey: 'app.nav.notification_providers', path: '/manage/notification-provider', icon: Plug },
-      { id: 'notification-preference', nameKey: 'app.nav.notification_preferences', path: '/manage/notification-preference', icon: UserCog },
-    ],
-  },
-  {
-    labelKey: 'app.nav.tenant_management',
-    items: [
-      { id: 'tenants', nameKey: 'app.nav.tenants', path: '/manage/tenants', icon: Building2 },
-      { id: 'departments', nameKey: 'app.nav.departments', path: '/manage/departments', icon: Briefcase },
-      { id: 'designations', nameKey: 'app.nav.designations', path: '/manage/designations', icon: Award },
-      { id: 'boundary-hierarchies', nameKey: 'app.nav.hierarchies', path: '/manage/boundary-hierarchies', icon: GitBranch },
-      { id: 'map-config', nameKey: 'app.nav.map_config', path: '/manage/map-config', icon: Map },
-    ],
-  },
-  {
-    labelKey: 'app.nav.complaint_management',
-    items: [
-      { id: 'complaint-hierarchies', nameKey: 'app.nav.complaint_hierarchies', path: '/manage/complaint-hierarchies', icon: GitBranch },
-      { id: 'complaint-hierarchy', nameKey: 'app.nav.complaint_types', path: '/manage/complaint-hierarchy', icon: AlertTriangle },
-      { id: 'complaints', nameKey: 'app.nav.complaints', path: '/manage/complaints', icon: MessageSquare },
-      { id: 'localization', nameKey: 'app.nav.localization', path: '/manage/localization', icon: Globe },
-    ],
-  },
-  {
-    labelKey: 'app.nav.people',
-    items: [
-      { id: 'employees', nameKey: 'app.nav.employees', path: '/manage/employees', icon: Users },
-      { id: 'org-chart', nameKey: 'app.nav.org_chart', path: '/manage/org-chart', icon: Network },
-      { id: 'users', nameKey: 'app.nav.users', path: '/manage/users', icon: User },
-    ],
-  },
-  {
-    labelKey: 'app.nav.system',
-    items: [
-      { id: 'access-roles', nameKey: 'app.nav.access_roles', path: '/manage/access-roles', icon: Shield },
-      { id: 'workflow-business-services', nameKey: 'app.nav.workflows', path: '/manage/workflow-business-services', icon: Workflow },
-      { id: 'workflow-processes', nameKey: 'app.nav.processes', path: '/manage/workflow-processes', icon: History },
-      { id: 'mdms-schemas', nameKey: 'app.nav.mdms_schemas', path: '/manage/mdms-schemas', icon: FileCode },
-      { id: 'boundaries', nameKey: 'app.nav.boundaries', path: '/manage/boundaries', icon: MapPin },
-      // Only useful to people who can change destinations; requiredRoles keeps it
-      // out of everyone else's sidebar (the route itself renders read-only for
-      // them, so this is a tidiness gate, not the security boundary).
-      { id: 'analytics-providers', nameKey: 'app.nav.analytics_providers', path: '/manage/analytics-providers', icon: BarChart3, requiredRoles: ['SUPERUSER', 'MDMS_ADMIN'] },
-    ],
-  },
+/** The links above the groups, always shown first */
+const mainLinks = [
+  { path: '/manage', nameKey: 'app.nav.dashboard', icon: LayoutDashboard },
+  ...(LEGACY_PGR_DASHBOARD_ENABLED
+    ? [{ path: '/manage/pgr-dashboard', nameKey: 'app.nav.pgr_dashboard', icon: BarChart3 }]
+    : []),
+  { path: '/manage/public-dashboard', nameKey: 'app.nav.public_dashboard', icon: Globe2 },
 ];
 
-/** Generic MDMS resources for the Advanced section */
-const advancedResources = Object.keys(getGenericMdmsResources()).map((name) => ({
+/** Generic MDMS resources for the Advanced section (see getAdvancedResourceIds). */
+const advancedResources = getAdvancedResourceIds().map((name) => ({
   id: name,
   name: getResourceLabel(name),
   path: `/manage/${name}`,
 }));
 
 export function DigitLayout({ children }: { children?: ReactNode }) {
-  const { state, logout, setMode, toggleHelp } = useApp();
+  const { state, logout, toggleHelp } = useApp();
 
   const userRoles = state.user?.roles ?? [];
   const navigate = useNavigate();
   const location = useLocation();
   const translate = useTranslate();
+  const resourceLabel = useResourceLabel();
   const { canViewResource } = useMastersCapability();
 
   // Masters the current role can't see (per resource.masters conditions on
   // the shared MDMS search action) drop out of nav entirely — UI-level only,
-  // see docs/design/masters-configurator-access-policy-design.md §3.3.
+  // see docs/reference/architecture/access-control/masters-configurator-access-policy-design.md §3.3.
   // Two independent gates, and a nav item must clear BOTH. `canViewResource` is
   // master's masters-capability gate; `requiredRoles` is #1584's tidiness gate for
   // items that are only useful to a couple of roles. The rebase brought both in
@@ -136,7 +70,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
           ...group,
           items: group.items.filter(
             (item) =>
-              canViewResource(item.id) &&
+              canViewResource((item as { gate?: string }).gate ?? item.id) &&
               (!('requiredRoles' in item) ||
                 !!(item as { requiredRoles?: string[] }).requiredRoles?.some((r) => roleKey.split(',').includes(r))),
           ),
@@ -150,6 +84,8 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
   );
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [navQuery, setNavQuery] = useState('');
+  const drawer = useRailDrawer();
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>(() => {
     // Auto-expand groups that contain the active route, collapse others
     const initial: Record<string, boolean> = {};
@@ -169,15 +105,15 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
     setCollapsedGroups((prev) => ({ ...prev, [labelKey]: !prev[labelKey] }));
   };
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
+  const handleLogout = async () => {
+    try { await logout(); navigate('/login'); }
+    catch (error) { window.alert(error instanceof Error ? error.message : 'Sign-out failed. Please retry.'); }
   };
 
-  const handleSwitchToOnboarding = () => {
-    setMode('onboarding');
-    navigate('/phase/1');
-  };
+  // Once setup is done, the way to where the workspace's staff handle complaints.
+  const slug = useWorkspaceSlug(state.tenant);
+  const deskUrl = isOnboardingComplete(state.completedPhases) ? complaintDeskUrl(state.environment, slug) : null;
+
 
   const envName = state.environment.includes('api.egov.theflywheel') || state.environment.includes('chakshu')
     ? 'chakshu-dev'
@@ -189,354 +125,263 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
           ? 'uat'
           : 'custom';
 
+  const query = navQuery.trim().toLowerCase();
+  const matches = (label: string) => !query || label.toLowerCase().includes(query);
+  // Same code and fallback as the list title and dashboard card (resourceLabelKey).
+  const advancedLabel = (item: { id: string }) => resourceLabel(item.id);
+  const shownMainLinks = mainLinks.filter((link) => matches(translate(link.nameKey)));
+  const shownGroups = visibleNavGroups
+    .map((group) => ({ ...group, items: group.items.filter((item) => matches(translate(item.nameKey))) }))
+    .filter((group) => group.items.length > 0);
+  // A search naming "Advanced" itself lists every resource under it; otherwise
+  // only the resources whose names match, with the section opened to show them.
+  const advancedNameMatches = matches(translate('app.nav.advanced'));
+  const shownAdvanced = advancedNameMatches
+    ? visibleAdvancedResources
+    : visibleAdvancedResources.filter((item) => matches(advancedLabel(item)));
+  const showAdvancedSection = advancedNameMatches || shownAdvanced.length > 0;
+  const advancedOpen = advancedExpanded || (!!query && !advancedNameMatches);
+  const nothingFound = shownMainLinks.length === 0 && shownGroups.length === 0 && !showAdvancedSection;
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed((collapsed) => !collapsed);
+    setNavQuery('');
+  };
+
+  const openMobileNav = () => {
+    setSidebarCollapsed(false);
+    drawer.openDrawer();
+  };
+
   return (
     <div className="h-screen overflow-hidden bg-background flex">
-      {/* Sidebar */}
-      <aside
-        className={`${
-          sidebarCollapsed ? 'w-16' : 'w-64'
-        } bg-card border-r border-border flex flex-col transition-all duration-200 h-full`}
-      >
-        {/* Sidebar Header — DIGIT Admin Console branding */}
-        <div className="h-16 border-b border-border flex items-center px-4 gap-2">
-          <div className="w-1 h-8 bg-primary" />
+      <RailBackdrop open={drawer.open} onClose={drawer.closeDrawer} />
+
+      {/* Sidebar: the DIGIT admin console's rail; a drawer on a phone */}
+      <aside className={railClasses(sidebarCollapsed, drawer.open)}>
+        {/* Brand, collapse toggle and nav search */}
+        <div className="border-b border-border p-3 space-y-5">
+          <div className={`flex items-center min-h-9 ${sidebarCollapsed ? 'justify-center' : 'gap-2.5'}`}>
+            {!sidebarCollapsed && (
+              <>
+                <div className="w-7 h-7 rounded bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
+                  <Building2 className="w-4 h-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold leading-5 text-foreground truncate">DIGIT</p>
+                  <p className="text-xs leading-4 text-muted-foreground truncate">
+                    <T i18nKey="app.header.product_name">Complaint Management System</T>
+                  </p>
+                </div>
+              </>
+            )}
+            <RailCloseButton
+              label={translate('app.nav.close_menu', { _: 'Close menu' })}
+              onClick={drawer.closeDrawer}
+            />
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              aria-label={sidebarCollapsed
+                ? translate('app.nav.expand_sidebar', { _: 'Expand sidebar' })
+                : translate('app.nav.collapse_sidebar', { _: 'Collapse sidebar' })}
+              className="hidden md:inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:text-secondary hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              {sidebarCollapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
+            </button>
+          </div>
           {!sidebarCollapsed && (
-            <div>
-              <span className="font-condensed font-bold text-foreground">DIGIT</span>
-              <span className="font-condensed font-medium text-muted-foreground ml-1">
-                {translate('app.header.brand', { _: 'Complaints Management' })}
-              </span>
+            <div className="relative">
+              <input
+                type="text"
+                value={navQuery}
+                onChange={(event) => setNavQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') setNavQuery('');
+                }}
+                placeholder={translate('app.nav.search', { _: 'Search' })}
+                aria-label={translate('app.nav.search', { _: 'Search' })}
+                className="w-full h-8 pl-3 pr-8 text-xs rounded border border-border bg-sidebar text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-secondary"
+              />
+              <Search aria-hidden="true" className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
             </div>
           )}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className="ml-auto h-8 w-8 text-muted-foreground hover:text-foreground"
-          >
-            {sidebarCollapsed ? (
-              <ChevronRight className="w-4 h-4" />
-            ) : (
-              <ChevronLeft className="w-4 h-4" />
-            )}
-          </Button>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 py-4 px-2 overflow-y-auto">
-          {/* Dashboard always first */}
-          <div className="mb-2 space-y-0.5">
-            <button
-              onClick={() => navigate('/manage')}
-              className={`
-                w-full flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors
-                ${location.pathname === '/manage'
-                  ? 'bg-primary/10 text-primary border-l-2 border-primary'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'}
-              `}
-              title={sidebarCollapsed ? translate('app.nav.dashboard') : undefined}
-            >
-              <LayoutDashboard className="w-5 h-5 flex-shrink-0" />
-              {!sidebarCollapsed && <span className="text-sm font-medium">{translate('app.nav.dashboard')}</span>}
-            </button>
-            {LEGACY_PGR_DASHBOARD_ENABLED && (
-              <button
-                onClick={() => navigate('/manage/pgr-dashboard')}
-                className={`
-                  w-full flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors
-                  ${location.pathname === '/manage/pgr-dashboard'
-                    ? 'bg-primary/10 text-primary border-l-2 border-primary'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'}
-                `}
-                title={sidebarCollapsed ? translate('app.nav.pgr_dashboard') : undefined}
-              >
-                <BarChart3 className="w-5 h-5 flex-shrink-0" />
-                {!sidebarCollapsed && <span className="text-sm font-medium">{translate('app.nav.pgr_dashboard')}</span>}
-              </button>
-            )}
-            <button
-              onClick={() => navigate('/manage/public-dashboard')}
-              className={`
-                w-full flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors
-                ${location.pathname === '/manage/public-dashboard'
-                  ? 'bg-primary/10 text-primary border-l-2 border-primary'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'}
-              `}
-              title={sidebarCollapsed ? translate('app.nav.public_dashboard') : undefined}
-            >
-              <Globe2 className="w-5 h-5 flex-shrink-0" />
-              {!sidebarCollapsed && <span className="text-sm font-medium">{translate('app.nav.public_dashboard')}</span>}
-            </button>
-          </div>
+        <nav className="flex-1 py-2 overflow-y-auto">
+          {shownMainLinks.length > 0 && (
+            <div className="pb-5">
+              {!sidebarCollapsed && <SectionLabel><T i18nKey="app.nav.main">Main</T></SectionLabel>}
+              {shownMainLinks.map((link) => (
+                <NavRow
+                  key={link.path}
+                  icon={link.icon}
+                  label={translate(link.nameKey)}
+                  i18nKey={link.nameKey}
+                  active={location.pathname === link.path}
+                  collapsed={sidebarCollapsed}
+                  onClick={() => navigate(link.path)}
+                />
+              ))}
+            </div>
+          )}
 
-          {/* Grouped navigation */}
-          {visibleNavGroups.map((group) => {
-            const isCollapsed = collapsedGroups[group.labelKey];
+          {/* Grouped navigation. With the rail collapsed there are no labels to
+              open a group by, so every item shows as an icon. */}
+          {shownGroups.map((group) => {
+            const isOpen = sidebarCollapsed || !!query || !collapsedGroups[group.labelKey];
             return (
-              <div key={group.labelKey} className="mt-3">
+              <div key={group.labelKey} className={isOpen ? 'pb-5' : undefined}>
                 {!sidebarCollapsed && (
                   <button
+                    type="button"
                     onClick={() => toggleGroup(group.labelKey)}
-                    className="w-full flex items-center px-3 mb-1 group cursor-pointer"
+                    aria-expanded={isOpen}
+                    className="w-full text-left focus-visible:outline-none focus-visible:bg-muted"
                   >
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 group-hover:text-muted-foreground flex-1 text-left">
-                      {translate(group.labelKey)}
-                    </span>
-                    <ChevronDown
-                      className={`w-3 h-3 text-muted-foreground/40 group-hover:text-muted-foreground transition-transform ${isCollapsed ? '-rotate-90' : ''}`}
-                    />
+                    <SectionLabel>
+                      <span className="flex-1"><T i18nKey={group.labelKey} /></span>
+                      <ChevronDown
+                        aria-hidden="true"
+                        className={`w-3 h-3 transition-transform ${isOpen ? '' : '-rotate-90'}`}
+                      />
+                    </SectionLabel>
                   </button>
                 )}
-                {!isCollapsed && (
-                  <div className="space-y-0.5">
-                    {group.items.map((item) => {
-                      const Icon = item.icon;
-                      const isActive =
-                        location.pathname === item.path ||
-                        location.pathname.startsWith(item.path + '/');
-                      return (
-                        <button
-                          key={item.id}
-                          onClick={() => navigate(item.path)}
-                          className={`
-                            w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors
-                            ${isActive
-                              ? 'bg-primary/10 text-primary border-l-2 border-primary'
-                              : 'text-muted-foreground hover:bg-muted hover:text-foreground'}
-                          `}
-                          title={sidebarCollapsed ? translate(item.nameKey) : undefined}
-                        >
-                          {/* w-4.5 is not a Tailwind v3 utility (no CSS emitted) — the
-                              icon rendered at its intrinsic 24px and shrank the label box.
-                              text-left keeps a wrapped label on the shared left edge
-                              (buttons default to text-align:center). */}
-                          <Icon className="w-4 h-4 flex-shrink-0" />
-                          {!sidebarCollapsed && (
-                            <span className="text-sm font-medium flex-1 min-w-0 text-left">{translate(item.nameKey)}</span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
+                {isOpen &&
+                  group.items.map((item) => (
+                    <NavRow
+                      key={item.id}
+                      icon={item.icon}
+                      label={translate(item.nameKey)}
+                      i18nKey={item.nameKey}
+                      active={location.pathname === item.path || location.pathname.startsWith(item.path + '/')}
+                      collapsed={sidebarCollapsed}
+                      onClick={() => navigate(item.path)}
+                    />
+                  ))}
               </div>
             );
           })}
 
-          {/* Advanced Section — expandable list of generic MDMS resources */}
-          <div className="mt-4 pt-4 border-t border-border">
-            <button
-              onClick={() => {
-                if (sidebarCollapsed) {
-                  navigate('/manage/advanced');
-                } else {
-                  setAdvancedExpanded(!advancedExpanded);
-                }
-              }}
-              className={`
-                w-full flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors
-                ${
-                  location.pathname === '/manage/advanced'
-                    ? 'bg-primary/10 text-primary border-l-2 border-primary'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                }
-              `}
-              title={sidebarCollapsed ? translate('app.nav.advanced') : undefined}
-            >
-              <Database className="w-5 h-5 flex-shrink-0" />
-              {!sidebarCollapsed && (
-                <>
-                  <span className="text-sm font-medium flex-1 text-left">{translate('app.nav.advanced')}</span>
+          {/* Advanced: the generic MDMS resources */}
+          {showAdvancedSection && (
+            <div className="pb-2">
+              <NavRow
+                icon={Database}
+                label={translate('app.nav.advanced')}
+                i18nKey="app.nav.advanced"
+                active={location.pathname === '/manage/advanced'}
+                collapsed={sidebarCollapsed}
+                onClick={() => {
+                  if (sidebarCollapsed) {
+                    navigate('/manage/advanced');
+                  } else {
+                    setAdvancedExpanded(!advancedOpen);
+                  }
+                }}
+                trailing={
                   <ChevronDown
-                    className={`w-4 h-4 transition-transform ${advancedExpanded ? '' : '-rotate-90'}`}
+                    aria-hidden="true"
+                    className={`w-4 h-4 text-muted-foreground transition-transform ${advancedOpen ? '' : '-rotate-90'}`}
                   />
-                </>
-              )}
-            </button>
-
-            {!sidebarCollapsed && advancedExpanded && (
-              <div className="mt-1 space-y-0.5 ml-2">
-                {visibleAdvancedResources.map((item) => {
+                }
+              />
+              {!sidebarCollapsed && advancedOpen &&
+                shownAdvanced.map((item) => {
                   const isActive = location.pathname.startsWith(item.path);
                   return (
                     <button
                       key={item.id}
+                      type="button"
                       onClick={() => navigate(item.path)}
-                      className={`
-                        w-full flex items-center gap-2 px-3 py-1.5 rounded-md transition-colors text-left
-                        ${
-                          isActive
-                            ? 'bg-primary/10 text-primary'
-                            : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                        }
-                      `}
+                      aria-current={isActive ? 'page' : undefined}
+                      className={`relative w-full min-h-8 flex items-center pl-11 pr-4 py-1.5 text-xs text-left transition-colors ${rowTone(isActive)}`}
                     >
-                      <span className="w-1.5 h-1.5 rounded-full bg-current opacity-40 flex-shrink-0" />
-                      <span className="text-xs font-medium truncate">
-                        {translate(`app.resources.${item.id.replace(/-/g, '_')}`, { _: item.name })}
-                      </span>
+                      {isActive && <ActiveBar />}
+                      <span className="truncate"><ResourceLabel resource={item.id} /></span>
                     </button>
                   );
                 })}
-              </div>
-            )}
-          </div>
+            </div>
+          )}
+
+          {!sidebarCollapsed && query && nothingFound && (
+            <p className="px-4 py-2 text-xs text-muted-foreground">
+              <T i18nKey="app.nav.no_matches">No matches</T>
+            </p>
+          )}
         </nav>
 
-        {/* Sidebar Footer */}
-        <div className="border-t border-border p-3 space-y-2">
-          <button
-            onClick={handleSwitchToOnboarding}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-            title={sidebarCollapsed ? translate('app.nav.switch_to_onboarding') : undefined}
-          >
-            <Settings className="w-5 h-5 flex-shrink-0" />
-            {!sidebarCollapsed && (
-              <span className="text-sm">{translate('app.nav.switch_to_onboarding')}</span>
-            )}
-          </button>
-
-          {/* User info */}
-          <div className={`flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-2 px-3'} py-2`}>
-            <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
-              <User className="w-4 h-4 text-primary" />
-            </div>
-            {!sidebarCollapsed && (
-              <>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate">
-                    {state.user?.name}
-                  </p>
-                  <p className="text-xs text-muted-foreground truncate">{state.tenant}</p>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleLogout}
-                  className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 h-8 w-8 flex-shrink-0"
-                >
-                  <LogOut className="w-4 h-4" />
-                </Button>
-              </>
-            )}
+        {/* Sidebar footer: the complaint desk once setup is done, then "Powered by DIGIT" */}
+        {deskUrl && (
+          <div className="border-t border-border py-2">
+            <NavExternalRow
+              icon={Inbox}
+              label={translate('app.nav.open_complaint_desk', { _: 'Open complaint desk' })}
+              i18nKey="app.nav.open_complaint_desk"
+              href={deskUrl}
+              collapsed={sidebarCollapsed}
+            />
           </div>
-        </div>
+        )}
+        <RailPoweredBy collapsed={sidebarCollapsed} />
       </aside>
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Header */}
-        <header className="bg-card sticky top-0 z-40 shadow-card border-b border-border">
-          <div className="h-1 bg-primary" />
-          <div className="px-6 h-14 flex items-center justify-between">
-            {/* Left: Management Mode + env badges */}
-            <div className="flex items-center gap-2">
-              <Badge
-                variant="outline"
-                className="text-xs bg-blue-50 text-blue-700 border-blue-200"
-              >
-                {translate('app.header.management_mode')}
-              </Badge>
-              <Badge
-                variant="secondary"
-                className="text-xs bg-primary/10 text-primary border-primary/20"
-              >
-                {envName}
-              </Badge>
-            </div>
+        {/* Header: white and flat, as the DIGIT console draws it */}
+        <header className="sticky top-0 z-30 h-14 flex-shrink-0 bg-card border-b border-border pl-4 pr-4 sm:pr-6 flex items-center justify-between gap-2">
+          {/* Left: menu (phone), Management Mode + env badges */}
+          <div className="flex items-center gap-2 min-w-0">
+            <RailMenuButton
+              open={drawer.open}
+              label={translate('app.nav.open_menu', { _: 'Open menu' })}
+              onClick={openMobileNav}
+            />
+            <Badge
+              variant="outline"
+              className="hidden sm:inline-flex text-xs bg-blue-50 text-blue-700 border-blue-200"
+            >
+              <T i18nKey="app.header.management_mode" />
+            </Badge>
+            <Badge
+              variant="secondary"
+              className="text-xs bg-primary/10 text-primary border-primary/20"
+            >
+              {envName}
+            </Badge>
+          </div>
 
-            {/* Right: locale, theme, help */}
-            <div className="flex items-center gap-3">
-              {/* Locale switcher */}
-              <LocaleSwitcher />
+          {/* Right: help, locale, theme, and the account */}
+          <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+            <HelpButton label={translate('app.header.help', { _: 'Help' })} onClick={toggleHelp} />
 
-              {/* Theme switcher */}
-              <ThemeSwitcher />
+            <LocaleSwitcher />
 
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={toggleHelp}
-                className="h-9 w-9 text-muted-foreground hover:text-primary hover:bg-primary/10"
-              >
-                <HelpCircle className="w-5 h-5" />
-              </Button>
-            </div>
+            <ThemeSwitcher />
+
+            <AccountMenu
+              name={state.user?.name}
+              tenant={state.tenant}
+              accountLabel={translate('app.header.account', { _: 'Account' })}
+              docsLabel={translate('app.nav.open_digit_docs', { _: 'Open DIGIT Docs' })}
+              signOutLabel={translate('app.header.sign_out', { _: 'Sign out' })}
+              onSignOut={handleLogout}
+            />
           </div>
         </header>
 
         {/* Main content */}
-        <main id="main-content" className="flex-1 p-6 overflow-auto min-h-0">
+        <main id="main-content" className="flex-1 p-4 sm:p-6 overflow-auto min-h-0">
           {children}
         </main>
 
-        {/* Powered by DIGIT (CCRS#1841) */}
-        <footer className="flex-shrink-0 flex items-center justify-center border-t border-border bg-card py-2">
-          <DigitFooter />
-        </footer>
+        {/* Powered by DIGIT (CCRS#1841) + Open DIGIT Docs */}
+
       </div>
 
-      {/* Documentation Pane */}
-      <DocsPane />
     </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// LocaleSwitcher — compact dropdown using ra-core hooks
-// ---------------------------------------------------------------------------
-function LocaleSwitcher() {
-  const [locale, setLocale] = useLocaleState();
-  const locales = useLocales();
-
-  if (!locales || locales.length <= 1) return null;
-
-  return (
-    <Select value={locale} onValueChange={setLocale}>
-      <SelectTrigger className="h-8 w-[80px] text-xs border-border bg-transparent">
-        <Globe className="w-3.5 h-3.5 mr-1 flex-shrink-0" />
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {locales.map((l) => (
-          <SelectItem key={l.locale} value={l.locale} className="text-xs">
-            {l.name}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// ThemeSwitcher — compact dropdown with color swatch previews
-// ---------------------------------------------------------------------------
-function ThemeSwitcher() {
-  const { theme, setTheme } = useTheme();
-  const currentTheme = THEMES.find((t) => t.name === theme);
-
-  return (
-    <Select value={theme} onValueChange={setTheme}>
-      <SelectTrigger className="h-8 w-[90px] text-xs border-border bg-transparent">
-        <span
-          className="inline-block w-3 h-3 rounded-full border border-border flex-shrink-0 mr-1"
-          style={{ backgroundColor: currentTheme?.primaryHex }}
-        />
-        Theme
-      </SelectTrigger>
-      <SelectContent>
-        {THEMES.map((t) => (
-          <SelectItem key={t.name} value={t.name} className="text-xs">
-            <span className="flex items-center gap-2">
-              <span
-                className="inline-block w-3 h-3 rounded-full border border-border flex-shrink-0"
-                style={{ backgroundColor: t.primaryHex }}
-              />
-              {t.label}
-            </span>
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
   );
 }

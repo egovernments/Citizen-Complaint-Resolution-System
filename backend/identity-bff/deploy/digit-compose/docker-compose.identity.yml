@@ -1,0 +1,92 @@
+# Overlay for a DIGIT local-setup Compose project (egov-network, redis, and
+# the opt-in keycloak/keycloak-postgres services). egov-user is unchanged: the
+# BFF uses its existing user-service API. Apply with
+# the project's existing -f files plus this one; values come from the
+# operator's environment and 0600 env files, never from this repository.
+#
+#   IDENTITY_BFF_IMAGE    identity BFF image built from this repository
+#   KEYCLOAK_IMAGE        Keycloak image with the magic-link provider and themes
+#                         (keycloak/Dockerfile at the repo root), pinned by tag
+#   KEYCLOAK_PUBLIC_URL   public Keycloak base, e.g. https://example.org/auth
+#   IDENTITY_ENV_DIR      directory holding the env files below
+#
+# `--profile dev-mail` adds identity-mailpit, a local catcher for the Keycloak
+# SMTP mail. Never enable it on a deployment real users use.
+services:
+  keycloak:
+    # Same default as local-setup (build/build-config.yml publishes
+    # keycloak/Dockerfile at the repo root as identity-keycloak).
+    # Required, like IDENTITY_BFF_IMAGE: a moving default (nightly) would let
+    # Keycloak and its themes drift between hosts on every pull.
+    image: ${KEYCLOAK_IMAGE:?set KEYCLOAK_IMAGE}
+    command: ["start"]
+    # Replace the legacy start-dev environment: no KEYCLOAK_ADMIN bootstrap
+    # account is created from a persisted file. A temporary admin is created
+    # per configuration run with `kc.sh bootstrap-admin` and then removed.
+    environment: !override
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KC_DB_PASSWORD:?set KC_DB_PASSWORD}
+      KC_HTTP_ENABLED: "true"
+      KC_HTTP_PORT: "8180"
+      KC_PROXY_HEADERS: xforwarded
+      KC_HOSTNAME: ${KEYCLOAK_PUBLIC_URL:?set KEYCLOAK_PUBLIC_URL}
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_HEALTH_ENABLED: "true"
+    ports: !override
+      - "127.0.0.1:18180:8180"
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && head -1 <&3 | grep -q '200' || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 120s
+
+
+  identity-bff:
+    image: ${IDENTITY_BFF_IMAGE:?set IDENTITY_BFF_IMAGE}
+    container_name: digit-identity-bff
+    command: ["node", "dist/app/server.js"]
+    restart: unless-stopped
+    env_file:
+      - ${IDENTITY_ENV_DIR:?set IDENTITY_ENV_DIR}/identity-bff.env
+    environment:
+      # From the stack's .env, as egov-user reads them (#2189). Off unless .env
+      # sets it to true; note this overrides identity-bff.env.
+      CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED: ${CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED:-false}
+      CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE: ${CITIZEN_OTP_FIXED_VALUE:-123456}
+    depends_on:
+      keycloak:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:18400:3000"
+    networks:
+      - egov-network
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3000/livez').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  # Development-only mail catcher. SMTP identity-mailpit:1025 (no auth, no
+  # STARTTLS); UI and API on 127.0.0.1:18025/mailpit.
+  identity-mailpit:
+    image: axllent/mailpit:v1.27
+    container_name: identity-mailpit
+    profiles: ["dev-mail"]
+    restart: unless-stopped
+    environment:
+      MP_WEBROOT: /mailpit
+      MP_MAX_MESSAGES: "2000"
+    ports:
+      - "127.0.0.1:18025:8025"
+    networks:
+      - egov-network

@@ -1,6 +1,6 @@
 /**
  * useInboxVisibility — feature flag for the PGR inbox My/All visibility tabs
- * (Visibility V1, VISIBILITY-DESIGN.md §6.1).
+ * (Visibility V1, docs/features/visibility/README.md §6.1).
  *
  * Reads the state-level MDMS master `RAINMAKER-PGR.InboxVisibilityConfig`
  * ({ enabled, version, reporteeDepth, ... }). The flag is OFF unless a record

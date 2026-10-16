@@ -1,4 +1,4 @@
-# db-history-normalize — see docs/superpowers/specs/2026-07-13-ansible-flyway-history-normalization-design.md
+# db-history-normalize — see docs/operations/data-migration/flyway-history-normalization-design.md
 #
 # postgres:16 gives us psql; it does NOT ship python3, so install it.
 # Docker Hub, not the retired Flywheel mirror (#1503) — that host's wildcard

@@ -12,11 +12,11 @@
 // doesn't exist on a Mozambique stack — surfacing as a bare
 // "login failed: 400 Invalid login credentials" nowhere near the real cause.
 // Import the resolved values; never re-derive deployment shape locally.
-import { BASE_URL, ROOT_TENANT } from '../env';
+import { BASE_URL, ROOT_TENANT, ADMIN_USER, ADMIN_PASS } from '../env';
 
 // NAIPEPEA_BASE remains an explicit override for the (now-legacy) naipepea host.
 const BASE = process.env.NAIPEPEA_BASE ?? BASE_URL;
-const KONG_BASIC = 'Basic ZWdvdi11c2VyLWNsaWVudDo='; // egov-user-client: (no secret) — Kong convention
+import { getDigitToken } from '../auth';
 
 export type EmployeeAuth = {
   token: string;
@@ -24,23 +24,9 @@ export type EmployeeAuth = {
   type: 'EMPLOYEE';
 };
 
-export async function loginEmployee(username = 'ADMIN', password = 'eGov@123', tenantId = ROOT_TENANT): Promise<EmployeeAuth> {
-  const body = new URLSearchParams({
-    username,
-    password,
-    grant_type: 'password',
-    scope: 'read',
-    tenantId,
-    userType: 'EMPLOYEE',
-  });
-  const r = await fetch(`${BASE}/user/oauth/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded', Authorization: KONG_BASIC },
-    body,
-  });
-  if (!r.ok) throw new Error(`login failed: ${r.status} ${await r.text()}`);
-  const j = await r.json();
-  return { token: j.access_token as string, uuid: j.UserRequest?.uuid ?? 'x', type: 'EMPLOYEE' };
+export async function loginEmployee(username = ADMIN_USER, password = ADMIN_PASS, tenantId = ROOT_TENANT): Promise<EmployeeAuth> {
+  const context = await getDigitToken({ baseURL: BASE, tenant: tenantId, username, password });
+  return { token: context.access_token, uuid: String(context.UserRequest!.uuid), type: 'EMPLOYEE' };
 }
 
 export function requestInfo(auth: EmployeeAuth) {
@@ -166,9 +152,9 @@ export interface PgrCreateParams {
   /** Optional: send extended_attributes in service body. Per user direction:
    *  content must stay empty {}. Defaults to undefined (omitted). */
   extendedAttributes?: Record<string, unknown>;
-  /** Optional geo-location override for map/detail contract tests. The legacy
-   * default remains (0,0) so existing fixture semantics do not change. Pass
-   * an empty object to exercise a genuinely missing persisted location. */
+  /** Optional geo-location for map/detail contract tests. The default is `{}`,
+   * which is stored as no location. A spec that needs a legacy (0,0) row must
+   * pass `{ latitude: 0, longitude: 0 }` explicitly (#1581). */
   geoLocation?: { latitude?: number; longitude?: number };
 }
 
@@ -210,7 +196,9 @@ export async function pgrCreate(params: PgrCreateParams): Promise<PgrCreateResul
     address: {
       city: tenantId,
       locality: { code: localityCode },
-      geoLocation: geoLocation ?? { latitude: 0, longitude: 0 },
+      // No pin is `{}` (stored as no location), the same as the digit-ui create
+      // screens. (0, 0) is a real point at sea and showed up as data (#1581).
+      geoLocation: geoLocation ?? {},
     },
     citizen: { name: citizenName, mobileNumber: citizenPhone },
   };

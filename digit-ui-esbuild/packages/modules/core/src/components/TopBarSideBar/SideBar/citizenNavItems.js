@@ -48,7 +48,8 @@ export const useCitizenNavItems = (linkData) => {
       navigationUrl: `/${contextPath}/citizen/all-services`,
     },
     ...mdmsLinkRows(linkData, {
-      contextPath,
+      contextPath: Digit.Utils.mdmsAppId(),
+      rebaseUrl: Digit.Utils.rebaseAppUrl,
       labelFor: (code) => t(`ACTION_TEST_${Digit.Utils.locale.getTransformedLocale(code)}`),
       hasOwnSection: (code) => typeof sectionFor(code) === "function",
     }),

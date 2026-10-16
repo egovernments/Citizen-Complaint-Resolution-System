@@ -1,7 +1,12 @@
 package org.egov.pgr.repository.rowmapper;
 
+import org.egov.common.contract.request.RequestInfo;
+import org.egov.common.contract.request.Role;
+import org.egov.common.contract.request.User;
 import org.egov.pgr.config.PGRConfiguration;
 import org.egov.pgr.policy.PgrSearchScope;
+import org.egov.pgr.policy.PolicyDrivenScopeResolver;
+import org.egov.pgr.util.Principals;
 import org.egov.pgr.web.models.RequestSearchCriteria;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -13,6 +18,7 @@ import org.mockito.quality.Strictness;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -62,15 +68,110 @@ class PGRQueryBuilderTest {
     }
 
     @Test
-    void stateLevelScopeAddsTenantLikePredicate() {
+    void stateLevelScopeMatchesTheTenantAndItsSubtreeButNotASibling() {
         RequestSearchCriteria criteria = RequestSearchCriteria.builder().tenantId("pg").build();
         List<Object> preparedStmtList = new ArrayList<>();
         PgrSearchScope scope = new PgrSearchScope("pg", true, null, null, null);
 
         String query = queryBuilder.getPGRSearchQuery(criteria, preparedStmtList, null, scope);
 
-        assertTrue(query.contains("ser.tenantId LIKE ?"));
-        assertTrue(preparedStmtList.contains("pg%"));
+        // `LIKE 'pg%'` alone also matches the unrelated tenant `pgx.city`; the delimiter has to
+        // be in the pattern, and the tenant itself matched separately.
+        assertTrue(query.contains("(ser.tenantId = ? OR ser.tenantId LIKE ?)"), query);
+        assertTrue(preparedStmtList.contains("pg"));
+        assertTrue(preparedStmtList.contains("pg.%"));
+        assertFalse(preparedStmtList.contains("pg%"));
+    }
+
+    @Test
+    void aSiblingRootIsNotInsideTheSubtree() {
+        // The reachable case at state.level.tenantid.length=1: two ROOTS sharing a character
+        // prefix. Root pg must not read root pgx. The scope comes from the real resolver, so the
+        // test pins the state production produces (stateLevel=true for a one-segment id).
+        PgrSearchScope scope = new PolicyDrivenScopeResolver(config, null, null, new Principals(), null, null)
+                .resolve(citizen("pg"), "pg", 1, null);
+        assertTrue(scope.tenantStateLevel);
+
+        RequestSearchCriteria criteria = RequestSearchCriteria.builder().tenantId("pg").build();
+        List<Object> preparedStmtList = new ArrayList<>();
+        String query = queryBuilder.getPGRSearchQuery(criteria, preparedStmtList, null, scope);
+
+        assertTrue(query.contains("(ser.tenantId = ? OR ser.tenantId LIKE ?)"), query);
+        // The criteria predicate binds its own "pg", "pg.%" first; the scope predicate's pair is
+        // the second one. Pin both, so a regression in either is caught on its own.
+        assertEquals(List.of("pg", "pg.%", "pg", "pg.%"), preparedStmtList.subList(0, 4));
+        String pattern = (String) preparedStmtList.get(preparedStmtList.lastIndexOf("pg") + 1);
+        assertEquals("pg.%", pattern);
+        assertTrue(likeMatches(pattern, "pg.city"));
+        assertFalse(likeMatches(pattern, "pgx"), "a bare 'pg%' would also match root pgx");
+        assertFalse(likeMatches(pattern, "pgx.city"));
+    }
+
+    @Test
+    void anEmptyTenantIdMatchesNothingAtStateLevelLengthOne() {
+        // With state.level.tenantid.length=1, "" has one segment and takes the subtree branch.
+        // It used to bind '%' and match every tenant's rows.
+        RequestSearchCriteria criteria = RequestSearchCriteria.builder().tenantId("").build();
+        List<Object> preparedStmtList = new ArrayList<>();
+
+        queryBuilder.getPGRSearchQuery(criteria, preparedStmtList, null, PgrSearchScope.UNRESTRICTED);
+
+        assertEquals(List.of("", ".%"), preparedStmtList.subList(0, 2));
+        assertFalse(preparedStmtList.contains("%"));
+        assertFalse(likeMatches(".%", "pg"));
+        assertFalse(likeMatches(".%", "pg.city"));
+    }
+
+    @Test
+    void anEmptyTenantIdMatchesNothingAtLongerStateLevels() {
+        // With a two-segment state level, "" takes the exact-match branch instead: = '' matches
+        // no tenant either.
+        when(config.getStateLevelTenantIdLength()).thenReturn(2);
+        RequestSearchCriteria criteria = RequestSearchCriteria.builder().tenantId("").build();
+        List<Object> preparedStmtList = new ArrayList<>();
+
+        String query = queryBuilder.getPGRSearchQuery(criteria, preparedStmtList, null, PgrSearchScope.UNRESTRICTED);
+
+        assertTrue(query.contains("ser.tenantid=?"), query);
+        assertEquals("", preparedStmtList.get(0));
+        assertFalse(preparedStmtList.contains("%"));
+    }
+
+    private static RequestInfo citizen(String homeTenantId) {
+        User user = new User();
+        user.setUuid("citizen-1");
+        user.setUserName("citizen-1");
+        user.setType("CITIZEN");
+        user.setTenantId(homeTenantId);
+        user.setRoles(List.of(Role.builder().code("CITIZEN").build()));
+        RequestInfo requestInfo = new RequestInfo();
+        requestInfo.setUserInfo(user);
+        return requestInfo;
+    }
+
+    /** PostgreSQL LIKE with the default backslash escape, enough to check a bound pattern. */
+    private static boolean likeMatches(String pattern, String value) {
+        StringBuilder regex = new StringBuilder();
+        for (int i = 0; i < pattern.length(); i++) {
+            char c = pattern.charAt(i);
+            if (c == '\\' && i + 1 < pattern.length()) regex.append(Pattern.quote(String.valueOf(pattern.charAt(++i))));
+            else if (c == '%') regex.append(".*");
+            else if (c == '_') regex.append('.');
+            else regex.append(Pattern.quote(String.valueOf(c)));
+        }
+        return value.matches(regex.toString());
+    }
+
+    @Test
+    void likeMetacharactersInATenantIdAreEscaped() {
+        // An unescaped '_' matches any single character, silently widening the subtree.
+        RequestSearchCriteria criteria = RequestSearchCriteria.builder().tenantId("pg_a").build();
+        List<Object> preparedStmtList = new ArrayList<>();
+        PgrSearchScope scope = new PgrSearchScope("pg_a", true, null, null, null);
+
+        queryBuilder.getPGRSearchQuery(criteria, preparedStmtList, null, scope);
+
+        assertTrue(preparedStmtList.contains("pg\\_a.%"), preparedStmtList.toString());
     }
 
     @Test
@@ -173,5 +274,70 @@ class PGRQueryBuilderTest {
 
         assertTrue(query.contains("1 = 0"));
         assertFalse(query.contains("ads.locality IN"));
+    }
+
+    // Live repro: GRO (WATER, county) assigned a WT_WARD_B complaint to an LME scoped to
+    // WT_WARD_A; the LME's search returned nothing. The scope predicate must admit the caller's
+    // own-assigned complaints, OR'd only against the department/jurisdiction axes.
+    @Test
+    void ownAssignedComplaintsAreOrdIntoDepartmentAndJurisdictionScope() {
+        RequestSearchCriteria criteria = RequestSearchCriteria.builder().tenantId("pg.city").build();
+        List<Object> preparedStmtList = new ArrayList<>();
+        PgrSearchScope scope = new PgrSearchScope("pg.city", false, null, List.of("WATER"), List.of("WT_WARD_A"),
+                java.util.Set.of("PGR-ASSIGNED"));
+
+        String query = queryBuilder.getPGRSearchQuery(criteria, preparedStmtList, null, scope);
+        String flat = query.replaceAll("\\s+", " ");
+
+        // tenant stays ANDed outside the OR; dept AND jurisdiction are grouped, then OR own-assigned
+        assertTrue(flat.contains("AND ser.tenantId = ? AND ( ( 1 = 1 AND ser.additionaldetails->>'department' IN ( ? ) AND ads.locality IN ( ? ) ) OR ser.serviceRequestId IN ( ? ) )"),
+                flat);
+        assertTrue(preparedStmtList.contains("PGR-ASSIGNED"));
+        assertTrue(preparedStmtList.contains("WT_WARD_A"));
+        assertTrue(preparedStmtList.contains("WATER"));
+        // placeholders and bind values stay aligned
+        assertEquals(query.chars().filter(c -> c == '?').count(), preparedStmtList.size());
+    }
+
+    @Test
+    void withoutOwnAssignedTheScopeStillExcludesOutOfJurisdictionComplaints() {
+        RequestSearchCriteria criteria = RequestSearchCriteria.builder().tenantId("pg.city").build();
+        List<Object> preparedStmtList = new ArrayList<>();
+        PgrSearchScope scope = new PgrSearchScope("pg.city", false, null, List.of("WATER"), List.of("WT_WARD_A"));
+
+        String query = queryBuilder.getPGRSearchQuery(criteria, preparedStmtList, null, scope);
+
+        assertTrue(query.contains("ads.locality IN"));
+        assertFalse(query.contains(" OR ser.serviceRequestId IN"));
+    }
+
+    @Test
+    void ownAssignedNeverRelaxesCitizenOrUnrestrictedScopes() {
+        RequestSearchCriteria criteria = RequestSearchCriteria.builder().tenantId("pg.city").build();
+        List<Object> preparedStmtList = new ArrayList<>();
+        // No department/jurisdiction restriction => nothing to OR into; citizen-self stays ANDed.
+        PgrSearchScope scope = new PgrSearchScope("pg.city", false, "citizen-1", null, null,
+                java.util.Set.of("PGR-ASSIGNED"));
+
+        String query = queryBuilder.getPGRSearchQuery(criteria, preparedStmtList, null, scope);
+
+        assertTrue(query.contains("ser.accountId = ?"));
+        assertFalse(query.contains("ser.serviceRequestId IN"));
+        assertFalse(preparedStmtList.contains("PGR-ASSIGNED"));
+    }
+
+    @Test
+    void ownAssignedNeverLoosensADenyAllScope() {
+        // #2281 review: deny-all is encoded with a sentinel department, so it looks like a
+        // department restriction — the own-assigned OR must still never wrap it.
+        RequestSearchCriteria criteria = RequestSearchCriteria.builder().tenantId("pg.city").build();
+        List<Object> preparedStmtList = new ArrayList<>();
+        PgrSearchScope scope = PgrSearchScope.deniedAll("pg.city", false).withOwnAssigned(java.util.Set.of("PGR-ASSIGNED"));
+
+        String query = queryBuilder.getPGRSearchQuery(criteria, preparedStmtList, null, scope);
+
+        assertTrue(preparedStmtList.contains("__scope_denied__"));
+        assertFalse(query.contains("ser.serviceRequestId IN"));
+        assertFalse(preparedStmtList.contains("PGR-ASSIGNED"));
     }
 }

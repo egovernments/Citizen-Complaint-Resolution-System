@@ -1,0 +1,12 @@
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.3
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: test-admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_TEST_ADMIN_PASSWORD:?Use run.mjs to generate a local test password}
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - "127.0.0.1:${KEYCLOAK_TEST_PORT:-18388}:8080"
+    volumes:
+      - ./realm.json:/opt/keycloak/data/import/realm.json:ro

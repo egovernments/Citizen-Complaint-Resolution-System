@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { ENDPOINTS, OAUTH_CONFIG } from '../config/endpoints.js';
 import { getEnvironment } from '../config/environments.js';
 import type { RequestInfo, UserInfo, MdmsRecord, ApiError, Environment, ErrorCategory } from '../types/index.js';
+import { withCsrRole } from '@digit-mcp/data-provider/client';
 
 function deriveErrorCategory(statusCode: number): ErrorCategory {
   if (statusCode === 401 || statusCode === 403) return 'auth';
@@ -365,7 +366,7 @@ class DigitApiClient {
   // User search
   async userSearch(
     tenantId: string,
-    options?: { userName?: string; mobileNumber?: string; uuid?: string[]; roleCodes?: string[]; userType?: string; limit?: number; offset?: number }
+    options?: { userName?: string; mobileNumber?: string; uuid?: string[]; roleCodes?: string[]; userType?: string; active?: boolean; limit?: number; offset?: number }
   ): Promise<Record<string, unknown>[]> {
     // Only include defined filters — DIGIT user-service throws 500 on certain undefined combos
     const body: Record<string, unknown> = {
@@ -379,6 +380,8 @@ class DigitApiClient {
     if (options?.uuid) body.uuid = options.uuid;
     if (options?.roleCodes) body.roleCodes = options.roleCodes;
     if (options?.userType) body.userType = options.userType;
+    // egov-user returns only active users when `active` is omitted.
+    if (options?.active !== undefined) body.active = options.active;
 
     const data = await this.request<{ user?: Record<string, unknown>[] }>(
       this.endpoint('USER_SEARCH'),
@@ -617,8 +620,12 @@ class DigitApiClient {
     tenantId: string,
     hierarchyType?: string
   ): Promise<Record<string, unknown>[]> {
+    // Stock boundary-service binds relationship search criteria from the query string
+    // only (body criteria are ignored); the body copy is kept for older adapters.
+    const params = new URLSearchParams({ tenantId });
+    if (hierarchyType) params.set('hierarchyType', hierarchyType);
     const data = await this.request<{ TenantBoundary?: Record<string, unknown>[] }>(
-      this.endpoint('BOUNDARY_RELATIONSHIP_SEARCH'),
+      `${this.endpoint('BOUNDARY_RELATIONSHIP_SEARCH')}?${params.toString()}`,
       {
         RequestInfo: this.buildRequestInfo(),
         BoundaryRelationship: {
@@ -659,7 +666,7 @@ class DigitApiClient {
       this.endpoint('HRMS_EMPLOYEES_CREATE'),
       {
         RequestInfo: this.buildRequestInfo(),
-        Employees: employees.map((emp) => ({ ...emp, tenantId })),
+        Employees: employees.map((emp) => withCsrRole({ ...emp, tenantId }, tenantId)),
       }
     );
 
@@ -844,7 +851,9 @@ class DigitApiClient {
           tenantId,
           serviceCode,
           description,
-          address: { tenantId, geoLocation: { latitude: 0, longitude: 0 }, ...address },
+          // No location is `{}`: null or a missing geoLocation fails in the persister
+          // and the complaint is never saved, and (0, 0) is a real point (#1581).
+          address: { tenantId, ...address, geoLocation: address?.geoLocation ?? {} },
           citizen: citizenInfo,
           source: 'web',
           active: true,

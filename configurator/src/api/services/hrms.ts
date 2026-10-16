@@ -1,7 +1,15 @@
+import { createAndLink, type MemberEmployee } from '@/identity/memberActions';
 // HRMS Service - Employee Management
 import { apiClient } from '../client';
-import { ENDPOINTS, DEFAULT_PASSWORD } from '../config';
+import { ENDPOINTS } from '../config';
+import { withCsrRole as addCsrRole, employeesByCodeInTenant } from '@digit-mcp/data-provider';
 import type { Employee, EmployeeUser, Role } from '../types';
+
+// Every new employee gets CSR so they can file a complaint on a citizen's
+// behalf (#2239); the rule lives in the data provider.
+export function withCsrRole(employee: Employee): Employee {
+  return addCsrRole(employee as unknown as Record<string, unknown>, employee.tenantId) as unknown as Employee;
+}
 
 export const hrmsService = {
   // ============================================
@@ -12,6 +20,7 @@ export const hrmsService = {
     tenantId: string,
     options?: {
       codes?: string[];
+      uuids?: string[];
       departments?: string[];
       designations?: string[];
       roles?: string[];
@@ -25,17 +34,21 @@ export const hrmsService = {
     // the criteria must go in the URL; only RequestInfo belongs in the body.
     const params = new URLSearchParams({ tenantId });
     if (options?.codes?.length) params.append('codes', options.codes.join(','));
+    if (options?.uuids?.length) params.append('uuids', options.uuids.join(','));
     if (options?.departments?.length) params.append('departments', options.departments.join(','));
     if (options?.designations?.length) params.append('designations', options.designations.join(','));
     if (options?.roles?.length) params.append('roles', options.roles.join(','));
-    params.append('limit', String(options?.limit || 100));
-    params.append('offset', String(options?.offset || 0));
-
-    const response = await apiClient.post(`${ENDPOINTS.HRMS_EMPLOYEES_SEARCH}?${params.toString()}`, {
-      RequestInfo: apiClient.buildRequestInfo({ action: '_search' }),
-    });
-
-    return (response.Employees || []) as Employee[];
+    const page = async (limit: number, offset: number): Promise<Employee[]> => {
+      params.set('limit', String(limit));
+      params.set('offset', String(offset));
+      const response = await apiClient.post(`${ENDPOINTS.HRMS_EMPLOYEES_SEARCH}?${params.toString()}`, {
+        RequestInfo: apiClient.buildRequestInfo({ action: '_search' }),
+      });
+      return (response.Employees || []) as Employee[];
+    };
+    // Other workspaces' employees with the code come back too (#2456).
+    if (options?.codes?.length) return employeesByCodeInTenant(tenantId, page, options);
+    return page(options?.limit || 100, options?.offset || 0);
   },
 
   // Check if employee code exists
@@ -93,6 +106,13 @@ export const hrmsService = {
 
   // Create a single employee
   async createEmployee(employee: Employee): Promise<Employee> {
+    return createAndLink(employee as unknown as MemberEmployee,
+      () => this.searchEmployees(employee.tenantId, { codes: [employee.code] }) as unknown as Promise<MemberEmployee[]>,
+      async (safe) => this.createEmployeeRecord(safe as unknown as Employee) as unknown as Promise<MemberEmployee>,
+    ) as unknown as Promise<Employee>;
+  },
+
+  async createEmployeeRecord(employee: Employee): Promise<Employee> {
     const tenantId = employee.tenantId;
     const userName = employee.user?.userName;
     const mobileNumber = employee.user?.mobileNumber;
@@ -113,7 +133,7 @@ export const hrmsService = {
 
     const response = await apiClient.post(ENDPOINTS.HRMS_EMPLOYEES_CREATE, {
       RequestInfo: apiClient.buildRequestInfo({ action: '_create' }),
-      Employees: [employee],
+      Employees: [withCsrRole(employee)],
     });
 
     const created = (response.Employees || []) as Employee[];
@@ -219,8 +239,7 @@ export const hrmsService = {
       : data.dateOfAppointment;
 
     const user: EmployeeUser = {
-      userName: data.userName.toLowerCase(),
-      password: data.password || DEFAULT_PASSWORD,
+      userName: data.userName,
       name: data.name,
       mobileNumber: data.mobileNumber,
       emailId: data.emailId,
@@ -363,14 +382,6 @@ export const hrmsService = {
     return `${prefix}_${String(index).padStart(4, '0')}`;
   },
 
-  // Generate username from name
-  generateUsername(name: string): string {
-    return name
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, '.')
-      .replace(/\.+/g, '.')
-      .replace(/^\.|\.$/, '');
-  },
 
   // Delay helper for rate limiting
   delay(ms: number): Promise<void> {
