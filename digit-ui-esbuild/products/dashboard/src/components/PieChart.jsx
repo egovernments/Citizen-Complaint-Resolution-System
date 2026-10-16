@@ -63,26 +63,28 @@ const PieChart = ({ data = [] }) => {
                   {slice.pct}%
                 </text>
               ) : null}
-              <text
-                x={slice.labelX}
-                y={slice.labelY}
-                textAnchor={slice.labelAnchor}
-                dominantBaseline="middle"
-                fill={fill}
-                fontSize={PIE_CHART_LABEL_FONT_SIZE}
-                fontWeight="500"
-                pointerEvents="none"
-              >
-                {slice.labelLines.map((line, lineIndex) => (
-                  <tspan
-                    key={`${slice.label}-${lineIndex}`}
-                    x={slice.labelX}
-                    dy={lineIndex === 0 ? 0 : 11}
-                  >
-                    {line}
-                  </tspan>
-                ))}
-              </text>
+              {slice.showLabel ? (
+                <text
+                  x={slice.labelX}
+                  y={slice.labelY}
+                  textAnchor={slice.labelAnchor}
+                  dominantBaseline="middle"
+                  fill={fill}
+                  fontSize={PIE_CHART_LABEL_FONT_SIZE}
+                  fontWeight="500"
+                  pointerEvents="none"
+                >
+                  {slice.labelLines.map((line, lineIndex) => (
+                    <tspan
+                      key={`${slice.label}-${lineIndex}`}
+                      x={slice.labelX}
+                      dy={lineIndex === 0 ? 0 : 11}
+                    >
+                      {line}
+                    </tspan>
+                  ))}
+                </text>
+              ) : null}
             </g>
             );
           })}
