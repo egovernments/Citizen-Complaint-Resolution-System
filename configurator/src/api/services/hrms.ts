@@ -11,6 +11,15 @@ export function withCsrRole(employee: Employee): Employee {
   return addCsrRole(employee as unknown as Record<string, unknown>, employee.tenantId) as unknown as Employee;
 }
 
+/**
+ * Whether an employee row belongs to `tenantId` or one of its cities. A code search in egov-hrms drops the
+ * tenant filter unless someone in the tenant has the code as their username, so it also answers with other
+ * workspaces' employees that share the code (#2456).
+ */
+export function inTenant(rowTenantId: unknown, tenantId: string): boolean {
+  return typeof rowTenantId === 'string' && (rowTenantId === tenantId || rowTenantId.startsWith(`${tenantId}.`));
+}
+
 export const hrmsService = {
   // ============================================
   // Employee Search
@@ -38,14 +47,23 @@ export const hrmsService = {
     if (options?.departments?.length) params.append('departments', options.departments.join(','));
     if (options?.designations?.length) params.append('designations', options.designations.join(','));
     if (options?.roles?.length) params.append('roles', options.roles.join(','));
-    params.append('limit', String(options?.limit || 100));
-    params.append('offset', String(options?.offset || 0));
-
-    const response = await apiClient.post(`${ENDPOINTS.HRMS_EMPLOYEES_SEARCH}?${params.toString()}`, {
-      RequestInfo: apiClient.buildRequestInfo({ action: '_search' }),
-    });
-
-    return (response.Employees || []) as Employee[];
+    const page = async (limit: number, offset: number): Promise<Employee[]> => {
+      params.set('limit', String(limit));
+      params.set('offset', String(offset));
+      const response = await apiClient.post(`${ENDPOINTS.HRMS_EMPLOYEES_SEARCH}?${params.toString()}`, {
+        RequestInfo: apiClient.buildRequestInfo({ action: '_search' }),
+      });
+      return (response.Employees || []) as Employee[];
+    };
+    const limit = options?.limit || 100;
+    if (!options?.codes?.length) return page(limit, options?.offset || 0);
+    // Other workspaces' rows can come back (inTenant), and fill whole pages, so read them all and keep ours.
+    const own: Employee[] = [];
+    for (let offset = options?.offset || 0; ; offset += limit) {
+      const rows = await page(limit, offset);
+      own.push(...rows.filter((row) => inTenant(row.tenantId, tenantId)));
+      if (rows.length < limit) return own;
+    }
   },
 
   // Check if employee code exists

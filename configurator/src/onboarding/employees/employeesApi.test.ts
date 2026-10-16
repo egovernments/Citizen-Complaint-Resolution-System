@@ -169,6 +169,19 @@ describe('addEmployee', () => {
 });
 
 describe('removeEmployee', () => {
+  it('never deactivates another workspace\'s employee with the same code (#2456)', async () => {
+    hrms.searchEmployees.mockResolvedValue([employee('A', { tenantId: 'other', uuid: 'theirs' }), employee('A')]);
+    await removeEmployee(employee('A'));
+    expect(hrms.updateEmployee).toHaveBeenCalledTimes(1);
+    expect(hrms.updateEmployee).toHaveBeenCalledWith(expect.objectContaining({ tenantId: 'acme', uuid: 'A' }));
+  });
+
+  it('refuses when only another workspace has the code (#2456)', async () => {
+    hrms.searchEmployees.mockResolvedValue([employee('A', { tenantId: 'other', uuid: 'theirs' })]);
+    await expect(removeEmployee(employee('A'))).rejects.toThrow();
+    expect(hrms.updateEmployee).not.toHaveBeenCalled();
+  });
+
   it('deactivates with a reason, as management does', async () => {
     hrms.searchEmployees.mockResolvedValue([employee('A')]);
     await removeEmployee(employee('A'));
@@ -225,6 +238,18 @@ describe('editing an employee', () => {
     ...options,
     boundaries: [...options.boundaries, { code: 'WARD_NEW', name: 'New ward', boundaryType: 'Ward', hierarchyType: 'ADMIN', depth: 2 }],
   };
+
+  it('never updates another workspace\'s employee with the same code (#2456)', async () => {
+    const theirs = { ...fresh(), tenantId: 'other', uuid: 'theirs', user: { ...fresh().user, uuid: 'theirs' } } as Employee;
+    hrms.searchEmployees.mockResolvedValue([theirs, fresh()]);
+    await updateEmployeeDetails(fresh(), changes, options, { kind: 'active' });
+    expect(hrms.updateEmployee).toHaveBeenCalledTimes(1);
+    expect(hrms.updateEmployee).toHaveBeenCalledWith(expect.objectContaining({ tenantId: 'acme', uuid: 'u-2' }));
+
+    hrms.searchEmployees.mockResolvedValue([theirs]);
+    await expect(updateEmployeeDetails(fresh(), changes, options, { kind: 'active' })).rejects.toThrow();
+    expect(hrms.updateEmployee).toHaveBeenCalledTimes(1);
+  });
 
   it('replaces only the roles the step offers and keeps the rest', () => {
     const roles = applyEmployeeChanges(fresh(), changes, options).user.roles.map((role) => `${role.code}@${role.tenantId}`);

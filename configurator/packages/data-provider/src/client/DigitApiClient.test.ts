@@ -32,6 +32,18 @@ describe('DigitApiClient', () => {
     assert.equal(info.authToken, 'test-token');
   });
 
+  // egov-hrms drops its tenant filter on a code search unless someone in the tenant has the code as username (#2456).
+  it('keeps only the tenant\'s rows (and its cities\') from a code search, reading every page', async () => {
+    const urls: string[] = [];
+    const pages = [[{ tenantId: 'other' }, { tenantId: 'acme.city' }], [{ tenantId: 'acme' }]];
+    (client as unknown as { request: (...args: unknown[]) => Promise<unknown> }).request =
+      async (url: unknown) => { urls.push(String(url)); return { Employees: pages.shift() ?? [] }; };
+    const rows = await client.employeeSearch('acme', { codes: ['EMP_0002'], limit: 2 });
+    assert.deepEqual(rows.map((r) => r.tenantId), ['acme.city', 'acme']);
+    assert.equal(urls.length, 2);
+    assert.match(urls[1], /offset=2/);
+  });
+
   it('resolves endpoint with overrides', () => {
     const c = new DigitApiClient({
       url: 'https://test.example.com',

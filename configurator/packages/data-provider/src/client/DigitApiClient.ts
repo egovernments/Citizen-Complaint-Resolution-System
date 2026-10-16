@@ -346,14 +346,27 @@ export class DigitApiClient {
     if (options?.codes?.length) params.append('codes', options.codes.join(','));
     if (options?.uuids?.length) params.append('uuids', options.uuids.join(','));
     if (options?.departments?.length) params.append('departments', options.departments.join(','));
-    params.append('limit', String(options?.limit || 100));
-    params.append('offset', String(options?.offset || 0));
-
-    const data = await this.request<{ Employees?: Record<string, unknown>[] }>(
-      `${this.endpoint('HRMS_EMPLOYEES_SEARCH')}?${params.toString()}`,
-      { RequestInfo: this.buildRequestInfo() },
-    );
-    return data.Employees || [];
+    const page = async (limit: number, offset: number) => {
+      params.set('limit', String(limit));
+      params.set('offset', String(offset));
+      const data = await this.request<{ Employees?: Record<string, unknown>[] }>(
+        `${this.endpoint('HRMS_EMPLOYEES_SEARCH')}?${params.toString()}`,
+        { RequestInfo: this.buildRequestInfo() },
+      );
+      return data.Employees || [];
+    };
+    const limit = options?.limit || 100;
+    if (!options?.codes?.length) return page(limit, options?.offset || 0);
+    // A code search drops HRMS's tenant filter unless someone in the tenant has the code as their username, so
+    // other workspaces' employees with the code come back too, and can fill whole pages: keep this tenant's
+    // (and its cities') rows from every page.
+    const own: Record<string, unknown>[] = [];
+    for (let offset = options?.offset || 0; ; offset += limit) {
+      const rows = await page(limit, offset);
+      own.push(...rows.filter((row) => typeof row.tenantId === 'string' &&
+        (row.tenantId === tenantId || row.tenantId.startsWith(`${tenantId}.`))));
+      if (rows.length < limit) return own;
+    }
   }
 
   async employeeCreate(tenantId: string, employees: Record<string, unknown>[]): Promise<Record<string, unknown>[]> {

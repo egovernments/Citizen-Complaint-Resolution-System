@@ -1979,8 +1979,9 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
         let emp = results[0] as Record<string, unknown>;
         // If user is null (UUID search may omit user), re-fetch by code to get full object
         if (!emp.user && emp.code) {
-          const byCode = await client.employeeSearch(targetTenantId, { codes: [emp.code as string] });
-          if (byCode.length) emp = byCode[0] as Record<string, unknown>;
+          const byCode = (await client.employeeSearch(targetTenantId, { codes: [emp.code as string] }))
+            .find((row) => row.uuid === emp.uuid);
+          if (byCode) emp = byCode;
         }
         emp.isActive = false;
         emp.deactivationDetails = [{ reasonForDeactivation: 'OTHERS', effectiveFrom: Date.now() }];

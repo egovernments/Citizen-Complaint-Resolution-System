@@ -298,7 +298,8 @@ export async function updateEmployeeDetails(
   status: InviteStatus | null = null,
 ): Promise<{ email: EmailOutcome }> {
   const rows = await hrmsService.searchEmployees(employee.tenantId, { codes: [employee.code] });
-  const fresh = rows.find((row) => row.code === employee.code);
+  // Never another workspace's employee with the same code (#2456).
+  const fresh = rows.find((row) => row.code === employee.code && row.tenantId === employee.tenantId);
   if (!fresh) throw new MessageError('employees.gone', 'This employee no longer exists. Reload and try again.');
   const email = requiredEmail(changes.emailId);
   // An invitation still at an older address (a move that stopped halfway) counts as a change.
@@ -334,7 +335,8 @@ export async function removeEmployee(employee: Employee): Promise<void> {
   await deactivateAndRemove(
     async () => {
       const rows = await hrmsService.searchEmployees(employee.tenantId, { codes: [employee.code] });
-      const fresh = rows.find(row => row.uuid === employee.uuid || row.code === employee.code);
+      // By uuid only: another workspace's employee can share the code (#2456).
+      const fresh = rows.find(row => row.uuid === employee.uuid && row.tenantId === employee.tenantId);
       if (!fresh) throw new MessageError('employees.gone_from_hrms', 'Employee no longer exists in HRMS.');
       return fresh as unknown as MemberEmployee;
     },
