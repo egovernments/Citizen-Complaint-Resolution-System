@@ -10,6 +10,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { uniqueBy } from '@/lib/uniqueBy';
 import { pickerChoices } from '@/lib/systemRecords';
+import { useShowFieldError } from '@/admin/useShowFieldError';
 
 interface HierarchyLevel {
   boundaryType: string;
@@ -189,7 +190,7 @@ export function LocalityPicker({
     return uniqueBy(forType, (b) => b.code);
   }, [boundaryIndex, activeHierarchy, activeType]);
 
-  const hasError = fieldState.invalid && fieldState.isTouched;
+  const hasError = useShowFieldError(fieldState);
   const errorMessage = fieldState.error?.message;
 
   return (

@@ -30,3 +30,19 @@ it('outside a form (an input rendered alone) it falls back to touched / changed'
   render(<Alone />);
   expect(screen.getByText('false')).toBeTruthy();
 });
+
+it('no input gates its error on touched only any more', async () => {
+  const { readdirSync, readFileSync, statSync } = await import('node:fs');
+  const { join, resolve } = await import('node:path');
+  const root = resolve(__dirname, '..');
+  const hits: string[] = [];
+  const walk = (d: string) => {
+    for (const n of readdirSync(d)) {
+      const p = join(d, n);
+      if (statSync(p).isDirectory()) walk(p);
+      else if (/\.tsx?$/.test(n) && !/\.test\./.test(n) && /fieldState\.invalid && fieldState\.isTouched/.test(readFileSync(p, 'utf8'))) hits.push(p.slice(root.length));
+    }
+  };
+  walk(root);
+  expect(hits).toEqual([]);
+});
