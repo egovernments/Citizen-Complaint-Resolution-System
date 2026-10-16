@@ -77,6 +77,30 @@ describe('DigitApiClient', () => {
   });
 });
 
+describe('DigitApiClient.pgrCreate geoLocation', () => {
+  const sentAddress = async (address: Record<string, unknown>) => {
+    const client = new DigitApiClient({ url: 'https://test.example.com' });
+    let body: { service: { address: Record<string, unknown> } } | undefined;
+    (client as unknown as { request: (...args: unknown[]) => Promise<unknown> }).request =
+      async (_path: unknown, sent: unknown) => {
+        body = sent as typeof body;
+        return { ServiceWrappers: [{}] };
+      };
+    await client.pgrCreate('pg.citya', 'StreetLightNotWorking', 'test', address);
+    return body!.service.address;
+  };
+
+  it('sends an empty geoLocation, not (0, 0), when there is no location (#1581)', async () => {
+    assert.deepEqual((await sentAddress({ locality: { code: 'L1' } })).geoLocation, {});
+    assert.deepEqual((await sentAddress({ locality: { code: 'L1' }, geoLocation: null })).geoLocation, {});
+  });
+
+  it('keeps a location the caller passes', async () => {
+    const geoLocation = { latitude: -1.29, longitude: 36.82 };
+    assert.deepEqual((await sentAddress({ locality: { code: 'L1' }, geoLocation })).geoLocation, geoLocation);
+  });
+});
+
 describe('withCsrRole — every new employee can file complaints (#2239)', () => {
   const roles = (employee: Record<string, unknown>) =>
     ((employee.user as Record<string, unknown>).roles as Array<{ code: string; tenantId?: string }>).map((r) => `${r.code}@${r.tenantId}`);

@@ -588,7 +588,7 @@ export class DigitApiClient {
 
     const data = await this.request<{ ServiceWrappers?: Record<string, unknown>[] }>(this.endpoint('PGR_CREATE'), {
       RequestInfo: this.buildRequestInfo(),
-      service: { tenantId, serviceCode, description, address: { tenantId, geoLocation: { latitude: 0, longitude: 0 }, ...address }, citizen: citizenInfo, source: 'web', active: true },
+      service: { tenantId, serviceCode, description, address: { tenantId, ...address, geoLocation: address?.geoLocation ?? {} }, citizen: citizenInfo, source: 'web', active: true },
       workflow: { action: 'APPLY' },
     });
     return (data.ServiceWrappers || [])[0] || {};

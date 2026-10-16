@@ -851,7 +851,9 @@ class DigitApiClient {
           tenantId,
           serviceCode,
           description,
-          address: { tenantId, geoLocation: { latitude: 0, longitude: 0 }, ...address },
+          // No location is `{}`: null or a missing geoLocation fails in the persister
+          // and the complaint is never saved, and (0, 0) is a real point (#1581).
+          address: { tenantId, ...address, geoLocation: address?.geoLocation ?? {} },
           citizen: citizenInfo,
           source: 'web',
           active: true,

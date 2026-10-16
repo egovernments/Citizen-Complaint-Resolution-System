@@ -177,7 +177,7 @@ Steps:
 4. Stash data.ServiceWrappers[0].service.serviceRequestId.
 5. Assert applicationStatus === 'PENDINGFORASSIGNMENT'.
 
-geoLocation is intentionally set to {0,0} — non-null is the contract; the actual coordinates don't matter for this lifecycle.`,
+geoLocation is intentionally set to {} — non-null is the contract (null drops the complaint in the persister), and {} is stored as no location (#1581).`,
     },
     tag: ['@area:pgr', '@kind:lifecycle', '@layer:api', '@persona:cross'] }, async () => {
     const resp = await fetch(`${BASE_URL}/pgr-services/v2/request/_create`, {
@@ -193,7 +193,7 @@ geoLocation is intentionally set to {0,0} — non-null is the contract; the actu
           address: {
             city: TENANT,
             locality: { code: LOCALITY_CODE },
-            geoLocation: { latitude: 0, longitude: 0 },
+            geoLocation: {},
           },
           citizen: { name: CITIZEN_NAME, mobileNumber: CITIZEN_PHONE },
         },
