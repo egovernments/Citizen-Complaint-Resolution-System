@@ -2,6 +2,7 @@ import AccountPage from '@/identity/AccountPage';
 import MembersPage from '@/identity/MembersPage';
 import WorkspacePage from '@/identity/WorkspacePage';
 import { completedSteps, searchWorkspace, updateWorkspace, WORKSPACE_STEPS } from '@/identity/workspace';
+import { useIdentityKeepAlive } from '@/identity/keepAlive';
 import { describeWorkspaceError } from '@/onboarding/errors';
 import { translatorFrom } from '@/onboarding/i18n';
 import { toast } from '@/hooks/use-toast';
@@ -364,6 +365,8 @@ function App() {
       }
     }
   }, [state.isAuthenticated]);
+
+  useIdentityKeepAlive(state.isAuthenticated);
 
   // Track session restoration and identify user on initial load
   useEffect(() => {

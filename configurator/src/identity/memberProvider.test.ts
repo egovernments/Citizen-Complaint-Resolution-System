@@ -5,6 +5,7 @@ import { linkMember, removeMember } from './api';
 vi.mock('./api', () => ({ linkMember: vi.fn(), removeMember: vi.fn() }));
 vi.mock('@/api/client', () => ({ apiClient: { getAuth: () => ({ user: { uuid: 'admin' } }) } }));
 vi.mock('@/api/services/hrms', () => ({ hrmsService: { searchEmployees: vi.fn(async () => []) } }));
+vi.mock('@/api/onboarding', () => ({ session: vi.fn(async () => ({ authenticated: true })) }));
 const row = { id: 'u', uuid: 'u', code: 'E1', tenantId: 'acme', isActive: true, user: { id: 1, uuid: 'u', tenantId: 'acme', userName: 'immutable', emailId: 'fresh@example.org' } };
 const base = { getOne: vi.fn(async () => ({ data: row })), update: vi.fn(async (_r, p) => ({ data: p.data })), create: vi.fn(async (_r, p) => ({ data: { ...p.data, uuid: 'u', id: 'u' } })) };
 beforeEach(() => { vi.clearAllMocks(); base.getOne.mockResolvedValue({ data: row }); });
