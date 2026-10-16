@@ -33,6 +33,11 @@ public class WorkspaceRepository {
         return jdbc.queryForList("SELECT requested_tenant_id FROM eg_pgr_onboarding_signup WHERE status='ACTIVE' " +
                 "UNION SELECT tenant_id FROM eg_pgr_onboarding_workspace ORDER BY 1", String.class);
     }
+    /** The DIGIT uuid of the founder whose signup provisioned this tenant, once provisioning has seen them. */
+    public Optional<String> founderDigitUuid(String tenant) {
+        return jdbc.query("SELECT o.founder_digit_uuid FROM eg_pgr_onboarding_operation o JOIN eg_pgr_onboarding_signup s ON s.id=o.signup_id " +
+                "WHERE s.requested_tenant_id=? AND o.founder_digit_uuid IS NOT NULL ORDER BY o.updated_at DESC LIMIT 1",(rs,i)->rs.getString(1),tenant).stream().findFirst();
+    }
     public Optional<Map<String,Object>> find(String tenant, boolean lock) {
         return jdbc.query("SELECT tenant_id,status,steps,version,seed_version,updated_at,updated_by FROM eg_pgr_onboarding_workspace WHERE tenant_id = ?" + (lock ? " FOR UPDATE" : ""),
                 (rs,n) -> {

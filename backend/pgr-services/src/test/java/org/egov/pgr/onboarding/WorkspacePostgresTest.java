@@ -51,7 +51,7 @@ public class WorkspacePostgresTest {
         when(gateway.languages(anyString())).thenReturn(List.of("en_IN", "hi_IN"));
         // These tests cover multi-locale rename publication; which locales qualify is WorkspaceServiceTest's concern.
         when(gateway.seedsTenantNameModule(anyString())).thenReturn(true);
-        when(gateway.probes(anyString())).thenReturn(Map.of("BRANDING", true, "DEPARTMENTS", true, "GEOGRAPHY", true, "EMPLOYEES", true, "COMPLAINT_TYPES", true));
+        when(gateway.probes(anyString(),any())).thenReturn(Map.of("BRANDING", true, "DEPARTMENTS", true, "GEOGRAPHY", true, "EMPLOYEES", true, "COMPLAINT_TYPES", true));
         service = transactional(new WorkspaceService(repository, gateway, new OnboardingIdentifierService()));
     }
     @After public void cleanup() { if (jdbc != null) jdbc.execute("DROP SCHEMA " + schema + " CASCADE"); }
@@ -66,6 +66,14 @@ public class WorkspacePostgresTest {
                 .requestedTenantId(tenant).countryCode("IN").languages(List.of("en", "hi")).timeZone("Asia/Kolkata")
                 .financialYearPolicy("APRIL").acceptedTermsVersion("1").tenantMetadata(Map.of()).createdAt(1L).updatedAt(1L).version(1).build();
         onboarding.insertSignup(signup, "create-" + tenant); return signup;
+    }
+    @Test public void founderUuidComesFromTheSignupThatProvisionedTheTenant() {
+        var founded = signup("founded");
+        assertTrue(repository.founderDigitUuid("founded").isEmpty());
+        var operation = tx.execute(s -> onboarding.submit(founded, "submit-founded", 2L));
+        jdbc.update("UPDATE eg_pgr_onboarding_operation SET founder_digit_uuid=? WHERE id=?", "founder-uuid", operation.getId());
+        assertEquals(Optional.of("founder-uuid"), repository.founderDigitUuid("founded"));
+        assertTrue(repository.founderDigitUuid("other").isEmpty());
     }
     private void activate(OnboardingSignup signup) { tx.execute(s -> { onboarding.settleSignup(signup.getId(), "ACTIVE", "CONSUMED", "1", 2L); return null; }); }
     private Map<String,Object> rename(String tenant, String name, long version) { return Map.of("tenantId", tenant, "name", name, "version", version); }
@@ -156,7 +164,7 @@ public class WorkspacePostgresTest {
             assertEquals(1, count("eg_pgr_onboarding_workspace_rename"));
             var search = service.search(Map.of("tenantId", "legacy"));
             assertEquals(true, ((Map<?,?>) search.get("Workspace")).get("legacy")); assertNull(search.get("Probes"));
-            assertNotNull(search.get("Rename")); verify(gateway, never()).probes(anyString());
+            assertNotNull(search.get("Rename")); verify(gateway, never()).probes(anyString(),any());
             var update = service.update(update("legacy", 1));
             assertEquals("DONE", ((Map<?,?>) update.get("Workspace")).get("status"));
             assertEquals(1L, ((Map<?,?>) update.get("Workspace")).get("version"));
