@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { config } from "../../src/infrastructure/config.js";
 import { closeCache, getRedis, initCache } from "../../src/infrastructure/redis.js";
-import { contextKey, createIdentitySession, getIdentitySession, saveSelectedIdentityContext, sessionCookie, sessionKey } from "../../src/modules/sessions/session-store.js";
+import { contextKey, createIdentitySession, getIdentitySession, requireCurrentSession, revocationGenerationKey, saveSelectedIdentityContext, sessionCookie, sessionKey, SessionRevokedError } from "../../src/modules/sessions/session-store.js";
+import { withPersonLease } from "../../src/modules/accounts/person-lease.js";
 import { currentSession } from "../../src/modules/sessions/current-session.js";
 import * as oidc from "../../src/modules/authentication/oidc.js";
 
@@ -78,13 +79,28 @@ describe("session lifetime", () => {
     expect(current!.session.createdAt).toBe(signedInAt);
   });
 
-  it("a session past its absolute cap ends without a Keycloak refresh", async () => {
+  it("a record written before createdAt existed ends at its cap, fresh token or not, without a Keycloak refresh", async () => {
     const { sessionId } = await createIdentitySession(tokens, claims, "client");
-    const record = (await getIdentitySession(sessionId))!;
-    await getRedis().set(sessionKey(sessionId), JSON.stringify({ ...record, createdAt: Date.now() - config.identitySessionTtlSeconds * 1000 - 1 }), "KEEPTTL");
+    const { createdAt: _createdAt, ...legacy } = (await getIdentitySession(sessionId))!;
+    const capped = { ...legacy, authTime: Date.now() - config.identitySessionTtlSeconds * 1000 - 1 };
+    // A fresh access token takes the fast path; a due one the refresh path.
+    for (const accessExpiresAt of [Date.now() + 600_000, Date.now()]) {
+      await getRedis().set(sessionKey(sessionId), JSON.stringify({ ...capped, accessExpiresAt }), "KEEPTTL");
+      expect(await currentSession(sessionCookie(sessionId, 600))).toBeNull();
+    }
+    expect(oidc.refreshIdentityTokens).not.toHaveBeenCalled();
+    // What /authorize, contexts/_select and the account-action callback check.
+    await expect(withPersonLease(claims.sub, lease => requireCurrentSession(lease, sessionId))).rejects.toBeInstanceOf(SessionRevokedError);
+  });
+
+  it("a session revoked during its refresh is deleted, so later requests don't refresh it again", async () => {
+    const { sessionId } = await createIdentitySession(tokens, claims, "client");
+    vi.mocked(oidc.refreshIdentityTokens).mockImplementationOnce(async () => {
+      await getRedis().incr(revocationGenerationKey(claims.sub));
+      return refreshed;
+    });
 
     expect(await currentSession(sessionCookie(sessionId, 600))).toBeNull();
-    expect(oidc.refreshIdentityTokens).not.toHaveBeenCalled();
-    expect(await getIdentitySession(sessionId)).toBeNull();
+    expect(await getRedis().exists(sessionKey(sessionId))).toBe(0);
   });
 });

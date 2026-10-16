@@ -6,6 +6,7 @@ import { drainRevocationJobs } from "../../src/modules/revocation/index.js";
 import { getRedis } from "../../src/infrastructure/redis.js";
 import { startIdentityTestApp, stopIdentityTestApp } from "./identity-test-app.js";
 import { ACCOUNT_ACTIONS } from "../../src/modules/authentication/account-service.js";
+import { personLeaseKey } from "../../src/modules/accounts/person-lease.js";
 
 let base: string;
 const saved = { ...config };
@@ -76,6 +77,21 @@ describe("account self-service", () => {
     // The mock's refresh lifetime is an hour.
     expect((await getIdentitySession(sessionId))!.sessionExpiresAt).toBeGreaterThan(Date.now() + 3_000_000);
   });
+  it("reports Keycloak's outcome when the session can't be saved after the action (#2456)", async () => {
+    const { sessionId } = await session();
+    const before = (await getIdentitySession(sessionId))!.sessionExpiresAt;
+    const response = await fetch(`${base}/identity/v1/authorize?action=UPDATE_PASSWORD&returnTo=/account`, { redirect: "manual", headers: { Cookie: cookie(sessionId) } });
+    const url = new URL(response.headers.get("location")!);
+    // Another tab's refresh holds the person lease throughout, so the save gives up (LeaseBusyError) after it read the session.
+    await getRedis().set(personLeaseKey("identity-user-1"), "another-tab", "PX", 30_000);
+    try {
+      const callback = await fetch(`${base}/identity/v1/callback?state=${url.searchParams.get("state")}&code=valid-code:${url.searchParams.get("nonce")}&kc_action_status=success`, { redirect: "manual", headers: { Cookie: `${cookie(sessionId)}; ${response.headers.getSetCookie()[0].split(";")[0]}` } });
+      expect((await result(callback)).code).toBe("ACTION_COMPLETE");
+      expect((await getIdentitySession(sessionId))!.sessionExpiresAt).toBe(before);
+    } finally {
+      await getRedis().del(personLeaseKey("identity-user-1"));
+    }
+  }, 25_000);
   it("refuses an action callback that changes person", async () => {
     const { sessionId } = await session("other-person");
     await admin("/users", { id: "other-person", username: "other-person", enabled: true, credentials: [{ id: "p", type: "password" }] }, "POST");
