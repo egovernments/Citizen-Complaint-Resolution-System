@@ -1,4 +1,6 @@
 import { DigitEdit, DigitFormInput, v } from '@/admin';
+import { ChipArrayInput } from '@/admin/widgets';
+import { formatPincodes, parsePincodes } from './tenantFields';
 
 export function TenantEdit() {
   return (
@@ -26,6 +28,25 @@ export function TenantEdit() {
         source="address"
         label="Address"
         help="Office address shown in the citizen footer / contact pages."
+      />
+      <DigitFormInput
+        source="logoId"
+        label="Logo URL"
+        placeholder="https://… or /…/logo.png"
+        help="The tenant's logo in the citizen and employee top bar once signed in. Empty: the state logo."
+      />
+      <DigitFormInput
+        source="city.ulbGrade"
+        label="Grade"
+        placeholder="e.g. County, Municipal Corporation"
+        help="Shown next to the tenant name in the top bar (as the localised ULBGRADE_<GRADE> message)."
+      />
+      <ChipArrayInput
+        source="pincode"
+        label="Serviceable postal codes"
+        format={formatPincodes}
+        parse={parsePincodes}
+        help="The postal codes this tenant serves. When any tenant lists codes, a citizen complaint whose postal code is in none of them (and has no ward) is refused as not serviceable. Empty: no restriction."
       />
     </DigitEdit>
   );
