@@ -378,8 +378,9 @@ public class OnboardingSteps {
                 String error = failure.getCode().toUpperCase(Locale.ROOT);
                 // HRMS refuses a code that some user in the tenant already has as username. In a new workspace that is
                 // this step's own founder, whose user HRMS made at once while the employee row is still being saved.
+                // That founder's mobile is taken too, and HRMS lists the two errors in either order, so look at all of them.
                 if (error.contains("DUPLICATE") || error.contains("ALREADY_EXIST") || error.equals("PROVISIONING_HTTP_409")
-                        || error.equals("ERR_HRMS_USER_EXIST_USERNAME"))
+                        || failure.getCodes().contains("ERR_HRMS_USER_EXIST_USERNAME"))
                     throw new OnboardingFailure("FOUNDER_NOT_VISIBLE", true);
                 throw new OnboardingFailure("TENANT_ADMIN_ACCOUNT_REJECTED", false);
             }

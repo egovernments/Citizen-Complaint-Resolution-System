@@ -257,14 +257,17 @@ public class OnboardingProvisionerClient {
             return response;
         } catch (RestClientResponseException e) {
             String code = "PROVISIONING_HTTP_" + e.getStatusCode().value();
+            List<String> codes = new ArrayList<>();
             try {
                 JsonNode error = mapper.readTree(e.getResponseBodyAsString());
                 code = error.path("code").asText(error.path("Errors").path(0).path("code").asText(code));
+                // DIGIT lists several errors in no fixed order (HRMS builds them from a HashMap), so keep them all.
+                for (JsonNode item : error.path("Errors")) if (item.hasNonNull("code")) codes.add(item.path("code").asText());
             }
             catch (Exception ignored) { /* Preserve status classification without storing remote PII. */ }
             int status = e.getStatusCode().value();
             if (status == 401) { synchronized (this) { login = null; } }
-            throw new OnboardingFailure(code, status >= 500 || status == 401 || status == 403 || status == 429, status);
+            throw new OnboardingFailure(code, status >= 500 || status == 401 || status == 403 || status == 429, status, codes);
         } catch (RestClientException e) { throw new OnboardingFailure("PROVISIONING_UNAVAILABLE", true); }
     }
 }

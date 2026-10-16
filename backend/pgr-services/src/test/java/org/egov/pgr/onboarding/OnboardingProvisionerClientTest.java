@@ -19,7 +19,7 @@ public class OnboardingProvisionerClientTest {
     private final ObjectMapper mapper=new ObjectMapper();
     private HttpServer server; private OnboardingProvisionerClient client; private OnboardingRepository repository;
     private ObjectNode user; private JsonNode lastWrite; private int detailsStatus=200, writeStatus=200, loginStatus=200, writes, details, logins;
-    private String malformedDetails; private OnboardingSignup signup; private OnboardingOperation operation;
+    private String malformedDetails, writeError="{\"Errors\":[{\"code\":\"EMPLOYEE_ALREADY_EXISTS\"}]}"; private OnboardingSignup signup; private OnboardingOperation operation;
     private static final List<String> ROLES=List.of("MDMS_ADMIN","ACCOUNT_ADMIN","LOC_ADMIN","HRMS_ADMIN");
     @Before public void setup() throws Exception {
         user=mapper.valueToTree(Map.of("uuid","live-provisioner","userName","fixture","tenantId","pg","type","EMPLOYEE","active",true,
@@ -31,7 +31,7 @@ public class OnboardingProvisionerClientTest {
         server=HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);
         server.createContext("/user/oauth/token",e->{logins++;respond(e,loginStatus,loginStatus!=200?"{\"error\":\"invalid_grant\",\"error_description\":\"Account locked\"}":mapper.writeValueAsString(Map.of("access_token","fixture-only","UserRequest",Map.of("uuid","cached-claim","roles",ROLES))));});
         server.createContext("/user/_details",e->{details++;e.getRequestBody().readAllBytes();respond(e,detailsStatus,malformedDetails!=null?malformedDetails:mapper.writeValueAsString(Map.of("UserRequest",user)));});
-        server.createContext("/",e->{lastWrite=mapper.readTree(e.getRequestBody());writes++;respond(e,writeStatus,writeStatus==200?"{}":"{\"Errors\":[{\"code\":\"EMPLOYEE_ALREADY_EXISTS\"}]}");});
+        server.createContext("/",e->{lastWrite=mapper.readTree(e.getRequestBody());writes++;respond(e,writeStatus,writeStatus==200?"{}":writeError);});
         server.start();String base="http://127.0.0.1:"+server.getAddress().getPort();
         var env=new MockEnvironment().withProperty("pgr.onboarding.provisioner.username","fixture").withProperty("pgr.onboarding.provisioner.password","fixture-only")
                 .withProperty("pgr.onboarding.provisioner.tenant-id","pg");
@@ -140,6 +140,9 @@ public class OnboardingProvisionerClientTest {
     @Test public void errorEnvelopePreservesDuplicateClassificationAndServerFailuresRetry(){
         writeStatus=400;var rejected=assertThrows(OnboardingFailure.class,this::encrypt);assertEquals("EMPLOYEE_ALREADY_EXISTS",rejected.getCode());assertFalse(rejected.isRetryable());
         writeStatus=503;assertTrue(assertThrows(OnboardingFailure.class,this::encrypt).isRetryable());
+        writeStatus=400;writeError="{\"Errors\":[{\"code\":\"ERR_HRMS_USER_EXIST_MOB\"},{\"code\":\"ERR_HRMS_USER_EXIST_USERNAME\"}]}";
+        rejected=assertThrows(OnboardingFailure.class,this::encrypt);assertEquals("ERR_HRMS_USER_EXIST_MOB",rejected.getCode());
+        assertEquals(List.of("ERR_HRMS_USER_EXIST_MOB","ERR_HRMS_USER_EXIST_USERNAME"),rejected.getCodes());
     }
     @Test public void explicitReadIsSeparateAndCannotReachWritePaths(){
         client.read("hrms","/egov-hrms/employees/_search?tenantId=newtown&offset=0&limit=2",Map.of());assertEquals(0,details);

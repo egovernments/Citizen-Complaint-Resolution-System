@@ -112,6 +112,15 @@ public class OnboardingStepsTest {
         steps.perform("FOUNDER_HRMS",signup,op,progress);
         assertEquals("founder-uuid",op.getFounderDigitUuid());verify(client,times(1)).write(any(),eq("hrms"),contains("_create"),anyMap());
     }
+    /** HRMS lists the taken mobile and username in either order; any taken username is the founder in flight. A taken mobile alone is not. */
+    @Test public void aTakenUsernameAfterATakenMobileIsStillRetried(){
+        prerequisites();createFailure=new OnboardingFailure("ERR_HRMS_USER_EXIST_MOB",false,400,List.of("ERR_HRMS_USER_EXIST_MOB","ERR_HRMS_USER_EXIST_USERNAME"));
+        OnboardingFailure failure=assertThrows(OnboardingFailure.class,()->steps.perform("FOUNDER_HRMS",signup,op,progress));
+        assertEquals("FOUNDER_NOT_VISIBLE",failure.getCode());assertTrue(failure.isRetryable());
+        createFailure=new OnboardingFailure("ERR_HRMS_USER_EXIST_MOB",false,400,List.of("ERR_HRMS_USER_EXIST_MOB"));
+        failure=assertThrows(OnboardingFailure.class,()->steps.perform("FOUNDER_HRMS",signup,op,progress));
+        assertEquals("TENANT_ADMIN_ACCOUNT_REJECTED",failure.getCode());assertFalse(failure.isRetryable());
+    }
     /** Once the step has its founder, the uuid identifies them, so a designation they changed later doesn't matter. */
     @Test public void aKnownFounderWhoChangedTheirDesignationIsStillTheFounder(){
         prerequisites();op.setFounderDigitUuid("founder-uuid");
