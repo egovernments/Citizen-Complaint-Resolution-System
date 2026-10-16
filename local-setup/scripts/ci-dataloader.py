@@ -69,7 +69,7 @@ def lookup_service_def(base_url, state_tenant):
     defs = [r for r in rows if r.get("department")]
     if not defs:
         return None, None, None
-    svc = defs[0]
+    svc = min(defs, key=lambda d: d.get("code") or "")  # stable pick, as in lookup_city_service_def
     dept_code = svc.get("department")
 
     # Get department name from state-level MDMS
@@ -110,7 +110,9 @@ def lookup_city_service_def(base_url, city_tenant):
               and m.get("data", {}).get("department")]
     if not leaves:
         return None, None, None
-    svc = leaves[0]
+    # Lowest code, not leaves[0]: MDMS v2 row order is not stable, and the pick decides
+    # CI-ADMIN's department, so it must not change from run to run.
+    svc = min(leaves, key=lambda d: d.get("code") or "")
     # The department code doubles as its name: the name is only the display label of the
     # CI-only Department row ensure_department_for_tenant creates when the city lacks one.
     return svc.get("code"), svc.get("department"), svc.get("department")
@@ -138,6 +140,9 @@ def ensure_department_for_tenant(loader, dept_code, dept_name, city_tenant):
 
 # Locality the complaints-demo Postman collection files its complaint under.
 CI_LOCALITY_CODE = "JLC477"
+# Its level, recorded on CI-ADMIN's jurisdiction. ensure_locality_for_tenant creates the bare
+# boundary entity with no hierarchy relationship, so nothing else records it.
+CI_LOCALITY_TYPE = "Locality"
 
 
 def ensure_locality_for_tenant(loader, city_tenant):
@@ -152,7 +157,9 @@ def ensure_locality_for_tenant(loader, city_tenant):
         json={"RequestInfo": {"apiId": "Rainmaker", "authToken": loader.auth_token,
                               "userInfo": loader.user_info},
               "Boundary": [{"tenantId": city_tenant, "code": CI_LOCALITY_CODE, "geometry": None}]},
-        headers=headers, timeout=30)
+        # 120s: the first boundary write after boot also starts boundary-service's Kafka
+        # producer, which took ~31s on a loaded 16 GB host.
+        headers=headers, timeout=120)
     if resp.ok:
         print(f"   Created boundary {CI_LOCALITY_CODE} for {city_tenant}")
     elif "already exists" in resp.text.lower() or "DUPLICATE" in resp.text.upper():
@@ -224,6 +231,7 @@ def main():
         # PGR scopes employee search to the jurisdiction; it must cover the locality
         # the Postman collection files its complaint under, or PGR Search returns [].
         jurisdiction_boundary=CI_LOCALITY_CODE,
+        jurisdiction_boundary_type=CI_LOCALITY_TYPE,
     ):
         print("FATAL: Failed to create HRMS employee")
         return 1

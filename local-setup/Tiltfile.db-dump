@@ -72,11 +72,21 @@ dc_resource('user-otp', labels=['core-services'],
     links=[link('http://localhost:18095/user-otp/actuator/health', 'Health')])
 
 # ==================== PGR ====================
+# One-shot Flyway run for PGR's schema. It needs only postgres-db: every schema it reads comes
+# from full-dump.sql (see the comment on the service in docker-compose.yml).
 dc_resource('pgr-services-migration', labels=['pgr'],
-    resource_deps=['postgres-db', 'boundary-service', 'egov-user', 'mdms-backend', 'egov-workflow-v2'])
+    resource_deps=['postgres-db'])
+
+# pgr-services must not start until the migration has FINISHED. Tilt runs `docker compose up
+# --no-deps`, so compose's service_completed_successfully gate is skipped, and resource_deps on
+# the one-shot itself only waits for its container to start. This resource blocks until the
+# container exits and fails unless it exited 0.
+local_resource('pgr-services-migration-done', labels=['pgr'],
+    cmd='./scripts/wait-for-exit.sh pgr-services-migration',
+    resource_deps=['pgr-services-migration'])
 
 dc_resource('pgr-services', labels=['pgr'],
-    resource_deps=['pgr-services-migration'],
+    resource_deps=['pgr-services-migration-done'],
     links=[link('http://localhost:18083/pgr-services/health', 'Health')])
 
 # ==================== Frontend ====================

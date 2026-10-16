@@ -96,7 +96,12 @@ if not CI_MODE:
     if 'not_found' not in npm_check:
         local_resource(
             'ui-dev',
-            serve_cmd='cd ' + UI_PATH + ' && ([ -d node_modules ] || npm install --legacy-peer-deps) && npm run dev',
+            # Reinstall whenever package-lock.json differs from the one node_modules was last
+            # installed from: a pulled branch that adds a dependency, or an interrupted first
+            # install (the stamp is written only after `npm ci` succeeds; `npm ci` starts clean).
+            serve_cmd='cd ' + UI_PATH + ' && (cmp -s package-lock.json node_modules/.tilt-lock-stamp' +
+                ' || (npm ci --legacy-peer-deps && cp package-lock.json node_modules/.tilt-lock-stamp))' +
+                ' && npm run dev',
             serve_env={
                 'PORT': '18180',
                 'PROXY_PORT': '18000',
@@ -213,15 +218,24 @@ dc_resource('kong', labels=['gateway'],
     ])
 
 # ==================== PGR Services ====================
+# One-shot Flyway run for PGR's schema. It needs only postgres-db: every schema it reads comes
+# from full-dump.sql (see the comment on the service in docker-compose.yml).
+dc_resource('pgr-services-migration', labels=['pgr'],
+    resource_deps=['postgres-db'])
+
+# pgr-services must not start until the migration has FINISHED. Tilt runs `docker compose up
+# --no-deps`, so compose's service_completed_successfully gate is skipped, and resource_deps on
+# the one-shot itself only waits for its container to start. This resource blocks until the
+# container exits and fails unless it exited 0.
+local_resource('pgr-services-migration-done', labels=['pgr'],
+    cmd='./scripts/wait-for-exit.sh pgr-services-migration',
+    resource_deps=['pgr-services-migration'])
+
 dc_resource('pgr-services', labels=['pgr'],
-    resource_deps=['pgr-services-migration', 'egov-idgen', 'egov-user', 'egov-workflow-v2', 'egov-localization'],
+    resource_deps=['pgr-services-migration-done', 'egov-idgen', 'egov-user', 'egov-workflow-v2', 'egov-localization'],
     links=[
         link('http://localhost:18083/pgr-services/health', 'Health'),
     ])
-
-# One-shot Flyway run for PGR's schema; pgr-services waits for it to complete (see compose).
-dc_resource('pgr-services-migration', labels=['pgr'],
-    resource_deps=['postgres-db', 'boundary-service', 'egov-user', 'mdms-backend', 'egov-workflow-v2'])
 
 # One-shot seed container — auto_init=False prevents tilt ci from failing on exit
 dc_resource('pgr-workflow-seed', labels=['pgr'],

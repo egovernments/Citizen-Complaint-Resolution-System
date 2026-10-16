@@ -125,23 +125,48 @@ describe('PGR works end-to-end on the dev stack', () => {
   test('PGR schema is migrated before pgr-services starts, at the app image tag', () => {
     // The dump's PGR schema is from 2020; without the migrator the persister's
     // INSERT fails and every complaint is lost after PGR has answered 200.
-    const migrator = image('pgr-services-migration');
-    const app = image('pgr-services').match(/:-([^}]+)\}/)![1];
-    expect(migrator.split(':')[1]).toBe(app.split(':')[1]);
+    // Both images are overridable, and both defaults carry the same tag: a hard-coded
+    // migrator let PGR_SERVICES_IMAGE move the app while its schema stayed behind.
+    const migrator = image('pgr-services-migration').match(/^\$\{PGR_SERVICES_DB_IMAGE:-([^}]+)\}$/);
+    const app = image('pgr-services').match(/^\$\{PGR_SERVICES_IMAGE:-([^}]+)\}$/);
+    expect(migrator).not.toBeNull();
+    expect(app).not.toBeNull();
+    expect(migrator![1].split(':')[1]).toBe(app![1].split(':')[1]);
     expect(service('pgr-services')).toMatch(
       /pgr-services-migration:\s*\n\s*condition: service_completed_successfully/,
     );
   });
 
+  test('the PGR migrator waits for the dump itself, not for app JVMs or restarts', () => {
+    // Gating on four JVMs added their boot time to every cold start for tables the dump
+    // already has; relying on restart-on-failure could surface as a fatal error in `tilt ci`.
+    const migrator = service('pgr-services-migration');
+    const deps = migrator.match(/depends_on:\n((?:\s{6}.*\n)+)/)![1];
+    expect([...deps.matchAll(/^\s{6}([a-z0-9-]+):/gm)].map((m) => m[1])).toEqual(['postgres-db']);
+    expect(migrator).toMatch(/\/dev\/tcp\/postgres-db\/5432\) 2>\/dev\/null && exec \/usr\/bin\/migrate\.sh/);
+    expect(migrator).toMatch(/restart: "no"/);
+  });
+
   for (const tiltfile of TILTFILES) {
     test(`${tiltfile} starts pgr-services only after its migration`, () => {
-      // Tilt runs `docker compose up --no-deps`, so compose's own depends_on gate is not
-      // applied. Tilt 0.36 also derives this edge from depends_on, but keep it explicit in
-      // both Tiltfiles rather than rely on that.
-      const block = code(tiltfile).match(/dc_resource\('pgr-services',[\s\S]*?\n\s*(?:links=|\))/)![0];
-      expect(block).toMatch(/resource_deps=\[[^\]]*'pgr-services-migration'/);
+      // Tilt runs `docker compose up --no-deps`, so compose's service_completed_successfully
+      // gate is skipped, and resource_deps on the one-shot only waits for it to START. PGR
+      // then booted mid-migration. The gate resource blocks until the container has exited 0.
+      const src = code(tiltfile);
+      const block = src.match(/dc_resource\('pgr-services',[\s\S]*?\n\s*(?:links=|\))/)![0];
+      expect(block).toMatch(/resource_deps=\[[^\]]*'pgr-services-migration-done'/);
+      expect(src).toMatch(
+        /local_resource\('pgr-services-migration-done',[\s\S]*?cmd='\.\/scripts\/wait-for-exit\.sh pgr-services-migration',\s*resource_deps=\['pgr-services-migration'\]/,
+      );
     });
   }
+
+  test('wait-for-exit.sh is executable and fails on a non-zero exit', () => {
+    const script = path.join(ROOT, 'scripts', 'wait-for-exit.sh');
+    expect(fs.statSync(script).mode & 0o111).not.toBe(0);
+    const src = fs.readFileSync(script, 'utf8');
+    expect(src).toMatch(/if \[ "\$code" = 0 \]; then[\s\S]*?exit 0[\s\S]*?exit 1/);
+  });
 
   test('egov-accesscontrol declares no in-container healthcheck', () => {
     // Its image is distroless (no /bin/sh), so a CMD-SHELL check stays "starting" forever.
@@ -152,11 +177,10 @@ describe('PGR works end-to-end on the dev stack', () => {
 describe('full-dump.sql seed users can log in', () => {
   /**
    * The dump is loaded as-is by Compose, Tilt and the Ansible fast-path, so a
-   * bad seed user breaks every one of them at once. The k8s db-seed chart
-   * ships the same dump, but the per-tenant key checks below do not cover it:
-   * the Helm common chart runs egov-user with IS_ENVIRONMENT_CENTRAL_INSTANCE
-   * =false and STATE_LEVEL_TENANTID_LENGTH=1, so there a city user is looked
-   * up under the state tenant's key, not the city's.
+   * bad seed user breaks every one of them at once. The k8s db-seed chart ships
+   * the same dump, but its Job truncates eg_user and both eg_enc_* key tables
+   * straight after the load (k8s users come from the user-bootstrap chart), so
+   * these rows never reach a k8s deployment.
    */
   const dump = read('db/full-dump.sql').split('\n');
   const copyBlock = (table: string) => {

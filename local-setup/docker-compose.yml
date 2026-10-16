@@ -941,29 +941,47 @@ services:
     networks:
       - egov-network
 
-  # One-shot Flyway run for PGR's schema — same image and settings as
-  # pgr-services-migration in docker-compose.migrations.yml. full-dump.sql's PGR
-  # history stops at 2020, but the pinned app image writes columns added since
-  # (e.g. eg_pgr_service_v2.extended_attributes); without this the persister's
-  # INSERT fails and every complaint is lost after PGR has already answered 200.
-  # Keep the tag in lockstep with the pgr-services image below. Under `tilt up` (dev mode),
-  # docker-compose.tilt.yml swaps both for images built from the local source tree.
+  # One-shot Flyway run for PGR's schema. full-dump.sql's PGR history stops at 2020, but
+  # the app image writes columns added since (e.g. eg_pgr_service_v2.extended_attributes);
+  # without this the persister's INSERT fails and every complaint is lost after PGR has
+  # already answered 200.
+  #
+  # Same image and env as pgr-services-migration in docker-compose.migrations.yml, with two
+  # deliberate differences:
+  # - It waits only for postgres-db. Here every service runs with SPRING_FLYWAY_ENABLED=false
+  #   and gets its schema from full-dump.sql, so the tables PGR's materialized views read
+  #   exist as soon as the dump has loaded. The migrations file gates on four JVMs because
+  #   there each service's own migrator creates those tables.
+  # - No db-history-normalize step: it only renames legacy Flyway history tables, and the
+  #   dump already ships PGR's under the canonical name (db/flyway-history-map.yml), so it
+  #   would be a no-op for the one migrator this file runs.
+  #
+  # PGR_SERVICES_DB_IMAGE moves with PGR_SERVICES_IMAGE: override both together, or a newer
+  # app runs on the old schema. Under `tilt up` (dev mode), docker-compose.tilt.yml swaps
+  # both for images built from the local source tree.
   # Connects to postgres-db directly: pgbouncer's transaction mode breaks Flyway.
   pgr-services-migration:
-    image: egovio/pgr-services-db:2.12.1-7a38661
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    image: ${PGR_SERVICES_DB_IMAGE:-egovio/pgr-services-db:2.12.1-7a38661}
     container_name: pgr-services-migration
     depends_on:
       postgres-db:
         condition: service_healthy
-      # pgr's analytics migrations build materialized views over these services' tables.
-      boundary-service:
-        condition: service_healthy
-      egov-user:
-        condition: service_healthy
-      mdms-backend:
-        condition: service_healthy
-      egov-workflow-v2:
-        condition: service_healthy
+    # Waits for postgres-db itself instead of relying on restarts: under Tilt, depends_on is
+    # not applied, and a container that exits non-zero before Docker restarts it fails
+    # `tilt ci`. Postgres only listens on TCP once initdb (the full-dump.sql load) is done,
+    # so a successful connect means the dump is in.
+    entrypoint:
+      - bash
+      - -c
+      - |
+        for i in $$(seq 150); do
+          (exec 3<>/dev/tcp/postgres-db/5432) 2>/dev/null && exec /usr/bin/migrate.sh
+          sleep 2
+        done
+        echo "pgr-services-migration: postgres-db:5432 not reachable after 300s" >&2
+        exit 1
     environment:
       DB_URL: jdbc:postgresql://postgres-db:5432/egov
       SCHEMA_TABLE: pgr_services_schema
@@ -971,8 +989,7 @@ services:
       FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       FLYWAY_LOCATIONS: filesystem:/flyway/sql
       FLYWAY_VALIDATE_ON_MIGRATE: "false"
-    # Retries until postgres-db accepts connections: under Tilt, depends_on is not applied.
-    restart: on-failure:10
+    restart: "no"
     networks:
       - egov-network
 
