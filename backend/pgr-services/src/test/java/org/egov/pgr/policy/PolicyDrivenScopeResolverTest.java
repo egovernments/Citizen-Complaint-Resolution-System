@@ -16,8 +16,12 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.UriComponentsBuilder;
+import org.springframework.web.util.UriUtils;
 
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -104,21 +108,76 @@ class PolicyDrivenScopeResolverTest {
     }
 
     @Test
-    void hrmsLookupUrlEncodesSpecialCharactersInTheUsername() {
-        // An HRMS-linked username with '&'/'=' must not be able to inject extra query params or
-        // corrupt the query string — it has to survive as the LITERAL value of 'codes' (#1441 review).
-        when(config.getHrmsHost()).thenReturn("http://localhost:8092");
-        when(config.getHrmsEndPoint()).thenReturn("/egov-hrms/employees/_search");
+    void hrmsLookupIsByUuidAtTheCallersOwnTenantAndEncoded() {
+        // By uuid, not codes=userName: HRMS reads codes as a username lookup and, finding nobody,
+        // matches the code in every tenant. A value with '&'/'=' must stay the LITERAL uuid, never
+        // an extra query param (#1441 review).
         stubHrms(List.of(Map.of("department", "DEPT_1", "isCurrentAssignment", true)), List.of());
         ScopePolicy policy = ScopePolicy.of(List.of("department"), Map.of("department", ScopeLevel.OWN));
 
-        resolver.resolve(requestInfo("user&name=x", "EMPLOYEE", "GRO"), "pg.city", 2, policy);
+        PgrSearchScope scope = resolver.resolve(requestInfo("user&name=x", "EMPLOYEE", "GRO"), "pg.city", 2, policy);
 
-        ArgumentCaptor<String> urlCaptor = ArgumentCaptor.forClass(String.class);
-        verify(restTemplate).postForObject(urlCaptor.capture(), any(), eq(Map.class));
-        String url = urlCaptor.getValue();
+        String url = hrmsUrl();
         assertFalse(url.contains("&name="), "the '&' must be encoded, not read as a new query param");
-        assertTrue(url.contains("codes=user%26name%3Dx"), "actual URL: " + url);
+        assertTrue(url.contains("uuids=user%26name%3Dx"), "actual URL: " + url);
+        assertTrue(url.contains("tenantId=pg.city"), "actual URL: " + url);
+        assertFalse(url.contains("codes="), "actual URL: " + url);
+        assertEquals(List.of("DEPT_1"), scope.departmentCodes);
+    }
+
+    @Test
+    void aStateLevelCallerNarrowingIntoACityIsLookedUpAtTheirOwnTenant() {
+        // The case codes=userName got wrong: the username isn't found in the city, so HRMS matched
+        // the code across every tenant. The record comes from the caller's own tenant, never the
+        // requested (client-controlled) one.
+        ScopePolicy policy = ScopePolicy.of(List.of("department"), Map.of("department", ScopeLevel.OWN));
+        stubHrms(List.of(Map.of("department", "DEPT_1", "isCurrentAssignment", true)), List.of());
+
+        PgrSearchScope scope = resolver.resolve(requestInfo("emp1", "EMPLOYEE", "GRO", "pg"), "pg.city", 2, policy);
+
+        assertTrue(hrmsUrl().contains("tenantId=pg&"), "actual URL: " + hrmsUrl());
+        assertEquals(List.of("DEPT_1"), scope.departmentCodes);
+    }
+
+    @Test
+    void anotherEmployeesRecordNeverScopesTheCaller() {
+        // Same code in another workspace, or another uuid at this one: neither is the caller.
+        ScopePolicy policy = ScopePolicy.of(List.of("department", "jurisdiction"),
+                Map.of("department", ScopeLevel.OWN, "jurisdiction", ScopeLevel.OWN));
+        stubHrmsRows(
+                employee("emp1", "pg.other", "DEPT_9", "WARD_9"),
+                employee("emp2", "pg.city", "DEPT_8", "WARD_8"));
+
+        PgrSearchScope scope = resolver.resolve(requestInfo("emp1", "EMPLOYEE", "GRO"), "pg.city", 2, policy);
+
+        assertEquals(List.of("__scope_denied__"), scope.departmentCodes);
+        assertEquals(List.of("__scope_denied__"), scope.jurisdictionCodes);
+    }
+
+    @Test
+    void theCallersOwnRecordIsPickedFromAMixedResponse() {
+        ScopePolicy policy = ScopePolicy.of(List.of("department", "jurisdiction"),
+                Map.of("department", ScopeLevel.OWN, "jurisdiction", ScopeLevel.OWN));
+        stubHrmsRows(
+                employee("emp1", "pg.other", "DEPT_9", "WARD_9"),
+                employee("emp1", "pg.city", "DEPT_1", "WARD_1"));
+
+        PgrSearchScope scope = resolver.resolve(requestInfo("emp1", "EMPLOYEE", "GRO"), "pg.city", 2, policy);
+
+        assertEquals(List.of("DEPT_1"), scope.departmentCodes);
+        assertEquals(List.of("WARD_1"), scope.jurisdictionCodes);
+    }
+
+    @Test
+    void anEmployeeWithNoUuidIsNeverLookedUp() {
+        ScopePolicy policy = ScopePolicy.of(List.of("department"), Map.of("department", ScopeLevel.OWN));
+        RequestInfo requestInfo = requestInfo("emp1", "EMPLOYEE", "GRO");
+        requestInfo.getUserInfo().setUuid(" ");
+
+        PgrSearchScope scope = resolver.resolve(requestInfo, "pg.city", 2, policy);
+
+        assertEquals(List.of("__scope_denied__"), scope.departmentCodes);
+        verifyNoInteractions(restTemplate);
     }
 
     @Test
@@ -426,12 +485,37 @@ class PolicyDrivenScopeResolverTest {
         return ScopePolicy.parse(raw).orElseThrow();
     }
 
+    /** HRMS answers uuids= with that employee at the tenant asked for, as egov-hrms does. */
     private void stubHrms(List<Map<String, Object>> assignments, List<Map<String, Object>> jurisdictions) {
-        Map<String, Object> employee = new HashMap<>();
-        employee.put("assignments", assignments);
-        employee.put("jurisdictions", jurisdictions);
-        Map<String, Object> hrmsResponse = Map.of("Employees", List.of(employee));
-        when(restTemplate.postForObject(any(String.class), any(), eq(Map.class))).thenReturn(hrmsResponse);
+        when(restTemplate.postForObject(any(String.class), any(), eq(Map.class))).thenAnswer(inv -> {
+            MultiValueMap<String, String> params = UriComponentsBuilder
+                    .fromUriString(inv.getArgument(0, String.class)).build().getQueryParams();
+            Map<String, Object> employee = new HashMap<>();
+            employee.put("uuid", UriUtils.decode(params.getFirst("uuids"), StandardCharsets.UTF_8));
+            employee.put("tenantId", UriUtils.decode(params.getFirst("tenantId"), StandardCharsets.UTF_8));
+            employee.put("assignments", assignments);
+            employee.put("jurisdictions", jurisdictions);
+            return Map.of("Employees", List.of(employee));
+        });
+    }
+
+    /** HRMS answers with exactly these rows, whatever was asked. */
+    @SafeVarargs
+    private void stubHrmsRows(Map<String, Object>... employees) {
+        when(restTemplate.postForObject(any(String.class), any(), eq(Map.class)))
+                .thenReturn(Map.of("Employees", List.of(employees)));
+    }
+
+    private static Map<String, Object> employee(String uuid, String tenantId, String department, String ward) {
+        return Map.of("uuid", uuid, "tenantId", tenantId,
+                "assignments", List.of(Map.of("department", department, "isCurrentAssignment", true)),
+                "jurisdictions", List.of(Map.of("boundary", ward, "isActive", true)));
+    }
+
+    private String hrmsUrl() {
+        ArgumentCaptor<String> urlCaptor = ArgumentCaptor.forClass(String.class);
+        verify(restTemplate).postForObject(urlCaptor.capture(), any(), eq(Map.class));
+        return urlCaptor.getValue();
     }
 
     /**

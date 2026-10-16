@@ -148,16 +148,15 @@ public class PolicyDrivenScopeResolver {
                                                           boolean stateLevel, ScopePolicy scopePolicy) {
         Set<String> roleCodes = extractRoleCodes(u);
         try {
-            String userName = u.getUserName();
-            if (userName == null || userName.isEmpty())
-                return resolveViaEngine(requestInfo, u, tenantId, stateLevel, scopePolicy, roleCodes, Set.of(), Set.of(), "empty userName");
+            String uuid = u.getUuid();
+            if (uuid == null || uuid.isBlank())
+                return resolveViaEngine(requestInfo, u, tenantId, stateLevel, scopePolicy, roleCodes, Set.of(), Set.of(), "empty uuid");
 
-            JsonNode employees = searchHrmsByCode(requestInfo, tenantId, userName);
-            if (employees == null || !employees.isArray() || employees.size() == 0)
+            JsonNode emp = ownHrmsRecord(requestInfo, u);
+            if (emp == null)
                 return resolveViaEngine(requestInfo, u, tenantId, stateLevel, scopePolicy, roleCodes, Set.of(), Set.of(),
-                        "no HRMS employee for '" + userName + "'");
+                        "no HRMS employee for uuid '" + uuid + "' at '" + u.getTenantId() + "'");
 
-            JsonNode emp = employees.get(0);
             Set<String> departments = extractDepartments(emp);
             Set<String> jurisdictions = extractJurisdictions(emp, requestInfo, tenantId);
             return resolveViaEngine(requestInfo, u, tenantId, stateLevel, scopePolicy, roleCodes, departments, jurisdictions, null);
@@ -264,24 +263,33 @@ public class PolicyDrivenScopeResolver {
     }
 
     /**
-     * POST /egov-hrms/employees/_search with codes=[userName] + tenantId. Returns the Employees
-     * JSON array node (or null). Uses the internal gateway host from egov.hrms.host.
+     * The caller's own HRMS record, or null: POST /egov-hrms/employees/_search with
+     * uuids=[their uuid] at their own (token) tenant, keeping only a row that is theirs at that
+     * tenant. Uses the internal gateway host from egov.hrms.host.
+     *
+     * <p>Not codes=[userName]. HRMS reads codes as a username lookup in the given tenant, and when
+     * that finds nobody it drops the tenant filter and matches the code in every tenant. So a
+     * caller whose username is not their employee code resolved nothing, and a caller narrowing
+     * into a child tenant (where their username isn't found) got another workspace's employee with
+     * the same code, and that employee's departments and jurisdictions. EMP_0001 exists in most
+     * workspaces. The requested tenantId is client-controlled, so it never picks the record.
      */
-    private JsonNode searchHrmsByCode(RequestInfo requestInfo, String tenantId, String userName) {
-        // Built via UriComponentsBuilder (query params encoded), not raw string concatenation: an
-        // HRMS-linked username containing '&', '=', '%', or '#' (plausible for email-based/SSO
-        // usernames) would otherwise corrupt the query string and resolve the wrong employee — the
-        // exact record this resolver's department/jurisdiction scope values come from.
+    private JsonNode ownHrmsRecord(RequestInfo requestInfo, User u) {
+        // UriComponentsBuilder encodes the values, so a uuid or tenant id can't inject query params.
         String url = UriComponentsBuilder.fromHttpUrl(config.getHrmsHost() + config.getHrmsEndPoint())
-                .queryParam("tenantId", tenantId)
-                .queryParam("codes", userName)
+                .queryParam("tenantId", u.getTenantId())
+                .queryParam("uuids", u.getUuid())
                 .encode()
                 .toUriString();
         Map<String, Object> req = new LinkedHashMap<>();
         req.put("RequestInfo", requestInfo);
         Object resp = restTemplate.postForObject(url, req, Map.class);
         JsonNode root = mapper.convertValue(resp, JsonNode.class);
-        if (root == null) return null;
-        return root.get("Employees");
+        JsonNode employees = root == null ? null : root.get("Employees");
+        if (employees == null || !employees.isArray()) return null;
+        for (JsonNode emp : employees)
+            if (u.getUuid().equals(emp.path("uuid").asText(null)) && u.getTenantId().equals(emp.path("tenantId").asText(null)))
+                return emp;
+        return null;
     }
 }

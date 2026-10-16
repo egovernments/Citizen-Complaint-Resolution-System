@@ -23,7 +23,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import java.util.HashMap;
 import java.util.List;
@@ -224,12 +226,18 @@ class DashboardSearchScopeParityTest {
 
     // ---- helpers ----------------------------------------------------------------------------
 
+    /** HRMS answers uuids= with that employee at the tenant asked for, as egov-hrms does. */
     private void stubHrms(List<Map<String, Object>> assignments, List<Map<String, Object>> jurisdictions) {
-        Map<String, Object> employee = new HashMap<>();
-        employee.put("assignments", assignments);
-        employee.put("jurisdictions", jurisdictions);
-        when(restTemplate.postForObject(any(String.class), any(), eq(Map.class)))
-                .thenReturn(Map.of("Employees", List.of(employee)));
+        when(restTemplate.postForObject(any(String.class), any(), eq(Map.class))).thenAnswer(inv -> {
+            MultiValueMap<String, String> params = UriComponentsBuilder
+                    .fromUriString(inv.getArgument(0, String.class)).build().getQueryParams();
+            Map<String, Object> employee = new HashMap<>();
+            employee.put("uuid", params.getFirst("uuids"));
+            employee.put("tenantId", params.getFirst("tenantId"));
+            employee.put("assignments", assignments);
+            employee.put("jurisdictions", jurisdictions);
+            return Map.of("Employees", List.of(employee));
+        });
     }
 
     /** A real HRMS token carries the generic EMPLOYEE marker alongside the functional role. */
