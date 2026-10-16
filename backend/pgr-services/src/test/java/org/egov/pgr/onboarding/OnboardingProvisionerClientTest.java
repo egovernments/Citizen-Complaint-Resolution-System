@@ -19,7 +19,7 @@ public class OnboardingProvisionerClientTest {
     private final ObjectMapper mapper=new ObjectMapper();
     private HttpServer server; private OnboardingProvisionerClient client; private OnboardingRepository repository;
     private ObjectNode user; private JsonNode lastWrite; private int detailsStatus=200, writeStatus=200, loginStatus=200, writes, details, logins;
-    private String malformedDetails; private OnboardingSignup signup; private OnboardingOperation operation;
+    private String malformedDetails, writeError="{\"Errors\":[{\"code\":\"EMPLOYEE_ALREADY_EXISTS\"}]}"; private OnboardingSignup signup; private OnboardingOperation operation;
     private static final List<String> ROLES=List.of("MDMS_ADMIN","ACCOUNT_ADMIN","LOC_ADMIN","HRMS_ADMIN");
     @Before public void setup() throws Exception {
         user=mapper.valueToTree(Map.of("uuid","live-provisioner","userName","fixture","tenantId","pg","type","EMPLOYEE","active",true,
@@ -31,7 +31,7 @@ public class OnboardingProvisionerClientTest {
         server=HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);
         server.createContext("/user/oauth/token",e->{logins++;respond(e,loginStatus,loginStatus!=200?"{\"error\":\"invalid_grant\",\"error_description\":\"Account locked\"}":mapper.writeValueAsString(Map.of("access_token","fixture-only","UserRequest",Map.of("uuid","cached-claim","roles",ROLES))));});
         server.createContext("/user/_details",e->{details++;e.getRequestBody().readAllBytes();respond(e,detailsStatus,malformedDetails!=null?malformedDetails:mapper.writeValueAsString(Map.of("UserRequest",user)));});
-        server.createContext("/",e->{lastWrite=mapper.readTree(e.getRequestBody());writes++;respond(e,writeStatus,writeStatus==200?"{}":"{\"Errors\":[{\"code\":\"EMPLOYEE_ALREADY_EXISTS\"}]}");});
+        server.createContext("/",e->{lastWrite=mapper.readTree(e.getRequestBody());writes++;respond(e,writeStatus,writeStatus==200?"{}":writeError);});
         server.start();String base="http://127.0.0.1:"+server.getAddress().getPort();
         var env=new MockEnvironment().withProperty("pgr.onboarding.provisioner.username","fixture").withProperty("pgr.onboarding.provisioner.password","fixture-only")
                 .withProperty("pgr.onboarding.provisioner.tenant-id","pg");
@@ -106,14 +106,14 @@ public class OnboardingProvisionerClientTest {
         assertEquals(0,writes);assertEquals(0,details);
     }
     @Test public void nestedTenantMismatchAndDifferentFounderCannotEscapeScope(){
-        var employee=Map.of("tenantId","newtown","code","EMP_0001","user",Map.of("tenantId","newtown","userName","founder","roles",List.of(Map.of("code","SUPERUSER","tenantId","other"))));
+        var employee=Map.of("tenantId","newtown","code","EMP_0001","user",Map.of("tenantId","newtown","userName","EMP_0001","roles",List.of(Map.of("code","SUPERUSER","tenantId","other"))));
         assertThrows(OnboardingFailure.class,()->client.write(scope("FOUNDER_HRMS"),"hrms","/egov-hrms/employees/_create",Map.of("Employees",List.of(employee))));
         assertThrows(OnboardingFailure.class,()->client.write(scope("FOUNDER_HRMS"),"hrms","/egov-hrms/employees/_create",Map.of("Employees",List.of(Map.of("tenantId","newtown","code","other","user",Map.of("tenantId","newtown","userName","other"))))));
-        // #2456: no more FOUNDER_ codes, and only a username of the founder's shape.
+        // #2456: no more FOUNDER_ codes, and the username is the code.
         String old=OnboardingSteps.legacyFounderCode(signup.getId());
         assertThrows(OnboardingFailure.class,()->client.write(scope("FOUNDER_HRMS"),"hrms","/egov-hrms/employees/_create",Map.of("Employees",List.of(Map.of("tenantId","newtown","code",old,"user",Map.of("tenantId","newtown","userName",old))))));
-        assertThrows(OnboardingFailure.class,()->client.write(scope("FOUNDER_HRMS"),"hrms","/egov-hrms/employees/_create",Map.of("Employees",List.of(Map.of("tenantId","newtown","code","EMP_0001","user",Map.of("tenantId","newtown","userName","Admin@x"))))));
-        assertThrows(OnboardingFailure.class,()->client.write(scope("FOUNDER_HRMS"),"hrms","/egov-hrms/employees/_create",Map.of("Employees",List.of(Map.of("tenantId","newtown","code","EMP_0001","user",Map.of("tenantId","newtown","userName","a".repeat(65)))))));
+        for(String userName:List.of("anita.wanjiru","emp_0001","Admin@x"))
+            assertThrows(OnboardingFailure.class,()->client.write(scope("FOUNDER_HRMS"),"hrms","/egov-hrms/employees/_create",Map.of("Employees",List.of(Map.of("tenantId","newtown","code","EMP_0001","user",Map.of("tenantId","newtown","userName",userName))))));
         assertEquals(0,writes);assertEquals(0,details);
     }
     @Test public void seedUpgradeMayDeleteOnlyTheTenantNameKeyAndBustTheCacheButNeverWriteBoundaries(){
@@ -140,6 +140,9 @@ public class OnboardingProvisionerClientTest {
     @Test public void errorEnvelopePreservesDuplicateClassificationAndServerFailuresRetry(){
         writeStatus=400;var rejected=assertThrows(OnboardingFailure.class,this::encrypt);assertEquals("EMPLOYEE_ALREADY_EXISTS",rejected.getCode());assertFalse(rejected.isRetryable());
         writeStatus=503;assertTrue(assertThrows(OnboardingFailure.class,this::encrypt).isRetryable());
+        writeStatus=400;writeError="{\"Errors\":[{\"code\":\"ERR_HRMS_USER_EXIST_MOB\"},{\"code\":\"ERR_HRMS_USER_EXIST_USERNAME\"}]}";
+        rejected=assertThrows(OnboardingFailure.class,this::encrypt);assertEquals("ERR_HRMS_USER_EXIST_MOB",rejected.getCode());
+        assertEquals(List.of("ERR_HRMS_USER_EXIST_MOB","ERR_HRMS_USER_EXIST_USERNAME"),rejected.getCodes());
     }
     @Test public void explicitReadIsSeparateAndCannotReachWritePaths(){
         client.read("hrms","/egov-hrms/employees/_search?tenantId=newtown&offset=0&limit=2",Map.of());assertEquals(0,details);
@@ -185,7 +188,7 @@ public class OnboardingProvisionerClientTest {
         client.write(scope("PLATFORM_BASELINE"),"boundary","/boundary-service/boundary-hierarchy-definition/_create",Map.of("BoundaryHierarchy",Map.of("tenantId","newtown","hierarchyType",OnboardingSteps.WORKSPACE_HIERARCHY)));
         client.write(scope("PLATFORM_BASELINE"),"boundary","/boundary-service/boundary/_create",Map.of("Boundary",List.of(Map.of("tenantId","newtown","code","newtown"))));
         client.write(scope("PLATFORM_BASELINE"),"boundary","/boundary-service/boundary-relationships/_create",Map.of("BoundaryRelationship",Map.of("tenantId","newtown","code","newtown","hierarchyType",OnboardingSteps.WORKSPACE_HIERARCHY,"boundaryType","ROOT")));
-        client.write(scope("FOUNDER_HRMS"),"hrms","/egov-hrms/employees/_create",Map.of("Employees",List.of(Map.of("tenantId","newtown","code","EMP_0001","user",Map.of("tenantId","newtown","userName","anita.wanjiru")))));
+        client.write(scope("FOUNDER_HRMS"),"hrms","/egov-hrms/employees/_create",Map.of("Employees",List.of(Map.of("tenantId","newtown","code","EMP_0001","user",Map.of("tenantId","newtown","userName","EMP_0001")))));
         assertEquals(10,writes);assertEquals(writes,details);assertEquals(1,logins);
     }
 

@@ -209,9 +209,8 @@ public class OnboardingProvisionerClient {
             if (!signupWorkflows.contains(payload.path("businessService").asText())) denied();
         } else if ("hrms".equals(service) && "FOUNDER_HRMS".equals(step) && "/egov-hrms/employees/_create".equals(path)) {
             payload = only(body.path("Employees")); requireTenant(payload, tenant); requireTenant(payload.path("user"), tenant);
-            // Only the founder's own code (HRMS keeps codes unique per tenant) and a username of OnboardingSteps#founderUserName's shape.
-            String userName = payload.path("user").path("userName").asText();
-            if (!OnboardingSteps.FOUNDER_CODE.equals(payload.path("code").asText()) || userName.length() > 64 || !userName.matches("[a-z0-9_]+(\\.[a-z0-9_]+)*")) denied();
+            // Only the founder's own code (HRMS keeps codes unique per tenant), with that code as username, as HRMS stores it.
+            if (!OnboardingSteps.FOUNDER_CODE.equals(payload.path("code").asText()) || !OnboardingSteps.FOUNDER_CODE.equals(payload.path("user").path("userName").asText())) denied();
         } else denied();
         requireNestedTenants(body, tenant);
     }
@@ -258,14 +257,17 @@ public class OnboardingProvisionerClient {
             return response;
         } catch (RestClientResponseException e) {
             String code = "PROVISIONING_HTTP_" + e.getStatusCode().value();
+            List<String> codes = new ArrayList<>();
             try {
                 JsonNode error = mapper.readTree(e.getResponseBodyAsString());
                 code = error.path("code").asText(error.path("Errors").path(0).path("code").asText(code));
+                // DIGIT lists several errors in no fixed order (HRMS builds them from a HashMap), so keep them all.
+                for (JsonNode item : error.path("Errors")) if (item.hasNonNull("code")) codes.add(item.path("code").asText());
             }
             catch (Exception ignored) { /* Preserve status classification without storing remote PII. */ }
             int status = e.getStatusCode().value();
             if (status == 401) { synchronized (this) { login = null; } }
-            throw new OnboardingFailure(code, status >= 500 || status == 401 || status == 403 || status == 429, status);
+            throw new OnboardingFailure(code, status >= 500 || status == 401 || status == 403 || status == 429, status, codes);
         } catch (RestClientException e) { throw new OnboardingFailure("PROVISIONING_UNAVAILABLE", true); }
     }
 }
