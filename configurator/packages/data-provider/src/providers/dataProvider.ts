@@ -1981,8 +1981,9 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
         if (!emp) throw new Error(`Employee not found: ${params.id}`);
         // If user is null (UUID search may omit user), re-fetch by code to get full object
         if (!emp.user && emp.code) {
+          const { uuid } = emp;
           const byCode = (await client.employeeSearch(targetTenantId, { codes: [emp.code as string] }))
-            .find((row) => row.uuid === emp.uuid);
+            .find((row) => row.uuid === uuid);
           if (byCode) emp = byCode;
         }
         emp.isActive = false;
