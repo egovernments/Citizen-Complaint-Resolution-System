@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { ENDPOINTS, OAUTH_CONFIG } from '../config/endpoints.js';
 import { getEnvironment } from '../config/environments.js';
 import type { RequestInfo, UserInfo, MdmsRecord, ApiError, Environment, ErrorCategory } from '../types/index.js';
+import { withCsrRole } from '@digit-mcp/data-provider/client';
 
 function deriveErrorCategory(statusCode: number): ErrorCategory {
   if (statusCode === 401 || statusCode === 403) return 'auth';
@@ -665,7 +666,7 @@ class DigitApiClient {
       this.endpoint('HRMS_EMPLOYEES_CREATE'),
       {
         RequestInfo: this.buildRequestInfo(),
-        Employees: employees.map((emp) => ({ ...emp, tenantId })),
+        Employees: employees.map((emp) => withCsrRole({ ...emp, tenantId }, tenantId)),
       }
     );
 

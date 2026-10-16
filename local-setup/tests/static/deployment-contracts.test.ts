@@ -1493,6 +1493,45 @@ describe('tenant-master repair is report-only unless opted in', () => {
   });
 });
 
+describe('revoked role-action grants are deactivated on every deploy (#2239)', () => {
+  // Review of #2395 (4282485797): CSR -> /user/users/_createnovalidate stayed active on
+  // existing roots while the same deploy started giving CSR to every new employee.
+  const playbook = read('local-setup/ansible/playbook-deploy.yml');
+  const tasks = read('local-setup/ansible/tasks/revoke-role-grants.yml');
+  const sql = read('local-setup/db/revoke-role-grants.sql');
+  const include = playbook.slice(playbook.indexOf('revoke-grants — deactivate role-action grants this release revoked'));
+  const includeTask = include.slice(0, include.indexOf('\n    - name:'));
+
+  test('it runs on every box, pg included', () => {
+    expect(includeTask).toContain('tasks/revoke-role-grants.yml');
+    expect(includeTask).not.toContain('when:');
+  });
+
+  test('it runs after master-repair, so a repair cannot copy a grant back', () => {
+    expect(playbook.indexOf('revoke-grants — deactivate role-action grants')).toBeGreaterThan(
+      playbook.indexOf('master-repair — fail when the tenant cannot be repaired'));
+  });
+
+  test('the SQL only deactivates CSR -> 605 role-actions, and only active ones', () => {
+    expect(sql).toMatch(/UPDATE eg_mdms_data\s+SET isactive = false,/);
+    expect(sql).toContain("WHERE schemacode = 'ACCESSCONTROL-ROLEACTIONS.roleactions'");
+    expect(sql).toMatch(/AND isactive\s/);
+    expect(sql).toContain("IN (('CSR', '605'))");
+    expect(sql).not.toMatch(/\b(DELETE|INSERT)\b/);
+  });
+
+  test('a database error fails the deploy, and a restart is followed by a readiness wait', () => {
+    const run = tasks.slice(tasks.indexOf('revoke-grants — deactivate revoked role-action grants'));
+    expect(run.slice(0, run.indexOf('- name:', 10))).toContain('-v ON_ERROR_STOP=1');
+    expect(run.slice(0, run.indexOf('- name:', 10))).not.toContain('failed_when');
+    const restart = tasks.indexOf('revoke-grants — restart egov-accesscontrol');
+    const wait = tasks.indexOf('revoke-grants — wait for egov-accesscontrol to come back');
+    expect(restart).toBeGreaterThan(-1);
+    expect(wait).toBeGreaterThan(restart);
+    expect(tasks.slice(wait, wait + 600)).toContain('/access/health');
+  });
+});
+
 // Kanav review of #2097, second round.
 describe('notification deploy tasks (Kanav review of #2097, round 2)', () => {
   const playbook = read('local-setup/ansible/playbook-deploy.yml');

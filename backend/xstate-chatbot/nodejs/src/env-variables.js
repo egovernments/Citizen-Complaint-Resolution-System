@@ -60,7 +60,11 @@ const envVariables = {
 
     descriptionMinLength: parseInt(process.env.DESCRIPTION_MIN_LENGTH || '20', 10),
 
-    caseRelatedTo: process.env.CASE_RELATED_TO || 'IGE',
+    // The ComplaintTemplateType the bot files under. Each tenant is checked for that row
+    // before institution/confidentiality are asked (egov-pgr acceptsExtendedAttributes), so
+    // a tenant without it files plain complaints. Set but empty (after trimming) turns the
+    // attributes off everywhere; unset keeps IGE.
+    caseRelatedTo: (process.env.CASE_RELATED_TO ?? 'IGE').trim(),
     instituteNameMaxLength: parseInt(process.env.INSTITUTE_NAME_MAX_LENGTH || '300', 10),
 
     // boundary-service registers many unrelated hierarchy types per tenant

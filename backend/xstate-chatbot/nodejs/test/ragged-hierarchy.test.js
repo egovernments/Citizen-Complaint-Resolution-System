@@ -110,3 +110,79 @@ test("a level whose children all bottom out early is a leaf level outright", asy
   assert.equal(step.isLeafLevel, true, "nothing hangs off either option");
   assert.deepEqual(step.leafByCode, {}, "so there is no exception to record");
 });
+
+test("roots on a level the definition does not declare are not offered", async () => {
+  // ke ships CATEGORY -> SUB_TYPE plus ~900 AUTHORITY_TYPE test roots under the same
+  // hierarchyType. Offered at the root they made a 1,092-option menu Twilio refused to send.
+  raggedTree();
+  masters.ComplaintHierarchy.push(
+    { code: "PwauthorityTypeA", parentCode: null, levelCode: "AUTHORITY_TYPE", hierarchyType: "PGR", active: true },
+  );
+  const step = await pgrService.fetchComplaintHierarchyStep("mz", []);
+
+  assert.deepEqual(step.options, ["LIXO", "SAUDE"]);
+});
+
+test("REVIEW: an undeclared level under a real root is still walked", async () => {
+  // Only roots are filtered. A third level the definition omits is still the real tree:
+  // treating LIXO as a leaf would file a category code as the serviceCode.
+  raggedTree();
+  masters.ComplaintHierarchy.push(
+    { code: "LIXO_SECTOR", parentCode: "LIXO", levelCode: "SECTOR", hierarchyType: "PGR", active: true },
+  );
+  const root = await pgrService.fetchComplaintHierarchyStep("mz", []);
+  assert.equal(root.leafByCode.LIXO, undefined, "LIXO follows the level default: not a leaf");
+
+  const under = await pgrService.fetchComplaintHierarchyStep("mz", ["LIXO"]);
+  assert.deepEqual(under.options, ["LIXO_SECTOR"]);
+});
+
+test("REVIEW: level codes match loosely, and no matching root keeps every root", async (t) => {
+  raggedTree();
+  for (const row of masters.ComplaintHierarchy) if (row.parentCode == null) row.levelCode = "l_1";
+  let step = await pgrService.fetchComplaintHierarchyStep("mz", []);
+  assert.deepEqual(step.options, ["LIXO", "SAUDE"], "l_1 matches the declared L1");
+
+  pgrService.clearReferenceCache();
+  raggedTree();
+  for (const row of masters.ComplaintHierarchy) if (row.parentCode == null) row.levelCode = "SOMETHING_ELSE";
+  const warn = t.mock.method(console, "warn", () => {});
+  step = await pgrService.fetchComplaintHierarchyStep("mz", []);
+  assert.deepEqual(step.options, ["LIXO", "SAUDE"], "rather than an empty menu and SYSTEM_ERROR");
+  assert.equal(warn.mock.callCount(), 1);
+});
+
+test("without a definition every row is still offered", async () => {
+  raggedTree();
+  masters.ComplaintHierarchyDefinition = [];
+  masters.ComplaintHierarchy.push(
+    { code: "AUTH", parentCode: null, levelCode: "AUTHORITY_TYPE", hierarchyType: "PGR", active: true },
+  );
+  const step = await pgrService.fetchComplaintHierarchyStep("mz", []);
+
+  assert.deepEqual(step.options, ["AUTH", "LIXO", "SAUDE"]);
+});
+
+test("REVIEW: the level of a step is matched loosely too", async () => {
+  // Definition says L3 is the leaf level; rows under SAUDE jump straight to it and spell it
+  // "l_3". An exact match missed and fell back to levels[1] (L2): wrong label, not a leaf.
+  masters = {
+    ComplaintHierarchyDefinition: [{
+      active: true,
+      hierarchyType: "PGR",
+      levels: [
+        { levelCode: "L1", order: 1, label: "Categoria", isLeafServiceCode: false },
+        { levelCode: "L2", order: 2, label: "Subtipo", isLeafServiceCode: false },
+        { levelCode: "L3", order: 3, label: "Assunto", isLeafServiceCode: true },
+      ],
+    }],
+    ComplaintHierarchy: [
+      { code: "SAUDE", parentCode: null, levelCode: "L1", hierarchyType: "PGR", active: true },
+      { code: "SAUDE_X", parentCode: "SAUDE", levelCode: "l_3", hierarchyType: "PGR", active: true },
+      { code: "SAUDE_X_CHILD", parentCode: "SAUDE_X", levelCode: "L4", hierarchyType: "PGR", active: true },
+    ],
+  };
+  const step = await pgrService.fetchComplaintHierarchyStep("mz", ["SAUDE"]);
+  assert.equal(step.levelLabel, "Assunto");
+  assert.equal(step.isLeafLevel, true);
+});

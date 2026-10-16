@@ -58,6 +58,11 @@ export interface ResourceConfig {
   /** Shown as a banner on a read-only resource's list and show screens. Says where the
    *  configuration moved to and what to run; never just "this is read-only". */
   readOnlyNotice?: string;
+  /** Generic MDMS resources only: keep the auto-generated /manage/<id> routes
+   *  but list the resource nowhere (no sidebar entry, no Advanced card). For a
+   *  screen kept only so operators can finish a migration; the runbook that
+   *  needs it links the URL directly. */
+  unlisted?: boolean;
 }
 
 /**
@@ -188,31 +193,33 @@ export const REGISTRY: Record<string, ResourceConfig> = {
   // (RAINMAKER-PGR.ClassificationNode is gone — interior nodes now live in the
   // ComplaintHierarchy master alongside the leaves; cascade pickers read it
   // directly. No standalone classification-nodes resource anymore.)
+  //
+  // Masters used only for internal platform/project setup are deliberately NOT
+  // registered here, so the configurator has no route, sidebar entry or
+  // Advanced card for them (#1777): Workflow.BusinessService /
+  // BusinessServiceConfig / BusinessServiceMasterConfig, DataSecurity.* (EncryptionPolicy,
+  // DecryptionABAC, MaskingPatterns, SecurityPolicy), INBOX.InboxQueryConfiguration,
+  // egov-hrms.Degree / EmploymentTest / Specalization,
+  // common-masters.CronJobAPIConfig and egov-location.TenantBoundary. Their data
+  // still exists and tenant bootstrap still copies the ones a new tenant needs
+  // (see src/api/services/tenantBootstrap.ts) — only the editing screens are gone.
   'state-info': { type: 'mdms', label: 'State Info', schema: 'common-masters.StateInfo', idField: 'code', nameField: 'name' },
   'city-modules': { type: 'mdms', label: 'City Modules', schema: 'tenant.citymodule', idField: 'code', nameField: 'module' },
   'id-formats': { type: 'mdms', label: 'ID Formats', schema: 'common-masters.IdFormat', idField: 'idname', nameField: 'idname' },
-  'workflow-services': { type: 'mdms', label: 'Business Services', schema: 'Workflow.BusinessService', idField: 'businessService', nameField: 'business' },
-  'workflow-config': { type: 'mdms', label: 'Workflow Config', schema: 'Workflow.BusinessServiceConfig', idField: 'code', nameField: 'code' },
   // Generic workflow escalation remains for non-PGR products such as IM/TL.
   // PGR uses the dedicated self-loop policy below; operators must not add PGR here.
-  'auto-escalation': { type: 'mdms', label: 'Workflow Auto Escalation (non-PGR)', schema: 'Workflow.AutoEscalation', idField: 'businessService', nameField: 'businessService' },
+  // Unlisted rather than removed (#1777): it is the Configurator path for
+  // deactivating a legacy PGR row that makes pgr-services fail closed with
+  // PGR_ESCALATION_CONFIG_CONFLICT (docs/operations/data-migration/pgr-escalation-self-loop.md).
+  'auto-escalation': { type: 'mdms', label: 'Workflow Auto Escalation (non-PGR)', schema: 'Workflow.AutoEscalation', idField: 'businessService', nameField: 'businessService', unlisted: true },
   'sla-config': { type: 'mdms', label: 'SLA Config', schema: 'common-masters.wfSlaConfig', idField: 'slotPercentage', nameField: 'slotPercentage' },
   'role-actions': { type: 'mdms', label: 'Role Actions', schema: 'ACCESSCONTROL-ROLEACTIONS.roleactions', idField: 'id', nameField: 'rolecode', descriptionField: 'actionid' },
   roles: { type: 'mdms', label: 'Roles', schema: MDMS_SCHEMAS.ROLES, idField: 'code', nameField: 'name', descriptionField: 'description' },
   'action-mappings': { type: 'mdms', label: 'Action Mappings', schema: 'ACCESSCONTROL-ACTIONS-TEST.actions-test', idField: 'id', nameField: 'displayName', descriptionField: 'url' },
-  'encryption-policy': { type: 'mdms', label: 'Encryption Policy', schema: 'DataSecurity.EncryptionPolicy', idField: 'key', nameField: 'key' },
-  'decryption-abac': { type: 'mdms', label: 'Decryption ABAC', schema: 'DataSecurity.DecryptionABAC', idField: 'model', nameField: 'model' },
-  'masking-patterns': { type: 'mdms', label: 'Masking Patterns', schema: 'DataSecurity.MaskingPatterns', idField: 'patternId', nameField: 'patternId' },
-  'security-policy': { type: 'mdms', label: 'Security Policy', schema: 'DataSecurity.SecurityPolicy', idField: 'model', nameField: 'model' },
-  'inbox-config': { type: 'mdms', label: 'Inbox Config', schema: 'INBOX.InboxQueryConfiguration', idField: 'module', nameField: 'module' },
   'deactivation-reasons': { type: 'mdms', label: 'Deactivation Reasons', schema: 'egov-hrms.DeactivationReason', idField: 'code', nameField: 'code' },
-  degrees: { type: 'mdms', label: 'Degrees', schema: 'egov-hrms.Degree', idField: 'code', nameField: 'code' },
-  'employment-tests': { type: 'mdms', label: 'Employment Tests', schema: 'egov-hrms.EmploymentTest', idField: 'code', nameField: 'code' },
-  specializations: { type: 'mdms', label: 'Specializations', schema: 'egov-hrms.Specalization', idField: 'code', nameField: 'code' },
   'gender-types': { type: 'mdms', label: 'Gender Types', schema: MDMS_SCHEMAS.GENDER_TYPE, idField: 'code', nameField: 'code' },
   'employee-status': { type: 'mdms', label: 'Employee Status', schema: MDMS_SCHEMAS.EMPLOYEE_STATUS, idField: 'code', nameField: 'code' },
   'employee-type': { type: 'mdms', label: 'Employee Type', schema: MDMS_SCHEMAS.EMPLOYEE_TYPE, idField: 'code', nameField: 'code' },
-  'cron-jobs': { type: 'mdms', label: 'Cron Jobs', schema: 'common-masters.CronJobAPIConfig', idField: 'jobName', nameField: 'jobName' },
   'ui-homepage': { type: 'mdms', label: 'UI Homepage', schema: 'common-masters.uiHomePage', idField: 'redirectURL', nameField: 'redirectURL' },
 
   // Added by Stage-0 registry hygiene: schemas live on `ke` but had no UI surface.
@@ -220,9 +227,8 @@ export const REGISTRY: Record<string, ResourceConfig> = {
   // are layered on later via src/admin/schemaDescriptors/ (Stage 1+).
   'theme-config':           { type: 'mdms', label: 'Theme Config',             schema: 'common-masters.ThemeConfig',               idField: 'code',              nameField: 'name' },
   'mobile-number-validation': { type: 'mdms', label: 'Mobile Number Validation', schema: 'common-masters.MobileNumberValidation', idField: 'countryCode',       nameField: 'countryCode' },
-  'tenant-boundary':        { type: 'mdms', label: 'Tenant Boundary (HRMS)',   schema: 'egov-location.TenantBoundary',             idField: 'hierarchyType.code', nameField: 'hierarchyType.code' },
-  'auto-escalation-ignore': { type: 'mdms', label: 'Workflow Escalation Ignore (non-PGR)', schema: 'Workflow.AutoEscalationStatesToIgnore', idField: 'businessService', nameField: 'businessService' },
-  'workflow-bs-master':     { type: 'mdms', label: 'Workflow BS Master',       schema: 'Workflow.BusinessServiceMasterConfig',     idField: 'active',            nameField: 'businessService' },
+  // Unlisted for the same reason as 'auto-escalation' above.
+  'auto-escalation-ignore': { type: 'mdms', label: 'Workflow Escalation Ignore (non-PGR)', schema: 'Workflow.AutoEscalationStatesToIgnore', idField: 'businessService', nameField: 'businessService', unlisted: true },
   // Keyed on `code` (DEFAULT), NOT on REOPENSLA. mdms-v2 rejects any update that
   // changes a record's x-unique fields (UNIQUE_KEY_UPDATE_ERR), so keying the
   // record on its own only value made the reopen window permanently uneditable —

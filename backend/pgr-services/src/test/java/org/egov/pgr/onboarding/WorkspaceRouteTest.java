@@ -72,14 +72,14 @@ public class WorkspaceRouteTest {
         mdms("common-masters.Designation","[{\"tenantId\":\"example\",\"data\":{\"code\":\"ONBOARDING_FOUNDER\"}}]");
         boundaries("[]");
         when(client.read(eq("hrms"),anyString(),any())).thenReturn(mapper.readTree("{\"Employees\":[{\"code\":\"FOUNDER_1\"}]}"));
-        assertEquals(List.of(false,false,false,false,false),new ArrayList<>(gateway.probes("example").values()));
+        assertEquals(List.of(false,false,false,false,false),new ArrayList<>(gateway.probes("example",null).values()));
         mdms("tenant.tenants","[{\"data\":{\"imageId\":\"logo\"}}]");
         mdms("common-masters.Department","["+WATER+"]");
         mdms("common-masters.Designation","[{\"tenantId\":\"example\",\"data\":{\"code\":\"ENGINEER\"}}]");
         mdms("RAINMAKER-PGR.ComplaintHierarchy","[{\"tenantId\":\"example\",\"data\":{\"code\":\"Water\"}},{\"tenantId\":\"example\",\"data\":{\"code\":\"Leak\",\"parentCode\":\"Water\",\"department\":\"WATER\",\"slaHours\":24}}]");
         boundaries("[{\"code\":\"WARD_1\",\"children\":[]}]");
         hrms(gro("EMP_1","WATER",true,"example"));clearInvocations(client);
-        assertEquals(Map.of("BRANDING",true,"GEOGRAPHY",true,"DEPARTMENTS",true,"EMPLOYEES",true,"COMPLAINT_TYPES",true),gateway.probes("example"));
+        assertEquals(Map.of("BRANDING",true,"GEOGRAPHY",true,"DEPARTMENTS",true,"EMPLOYEES",true,"COMPLAINT_TYPES",true),gateway.probes("example",null));
         verify(client,times(1)).read(eq("hrms"),anyString(),any());                                  // EMPLOYEES and COMPLAINT_TYPES share one HRMS read
     }
     private void hrms(String... employees) throws Exception {
@@ -92,11 +92,11 @@ public class WorkspaceRouteTest {
     @Test public void departmentsNeedARealDesignation() throws Exception {
         mdms("common-masters.Department","["+WATER+"]");
         mdms("common-masters.Designation","[{\"tenantId\":\"example\",\"data\":{\"code\":\"ONBOARDING_FOUNDER\"}},{\"tenantId\":\"parent\",\"data\":{\"code\":\"CLERK\"}},{\"tenantId\":\"example\",\"data\":{\"code\":\"OLD\",\"active\":false}}]");
-        assertFalse(gateway.probe("example","DEPARTMENTS"));
+        assertFalse(gateway.probe("example","DEPARTMENTS",null));
         mdms("common-masters.Designation","[{\"tenantId\":\"example\",\"data\":{\"code\":\"CLERK\"}}]");
-        assertTrue(gateway.probe("example","DEPARTMENTS"));
+        assertTrue(gateway.probe("example","DEPARTMENTS",null));
         mdms("common-masters.Department","[]");
-        assertFalse(gateway.probe("example","DEPARTMENTS"));
+        assertFalse(gateway.probe("example","DEPARTMENTS",null));
     }
     @Test public void complaintTypesNeedALeafWithBothALiveDepartmentAndAnSla() throws Exception {
         mdms("common-masters.Department","["+WATER+",{\"tenantId\":\"example\",\"data\":{\"code\":\"ROADS\",\"active\":false}}]");
@@ -107,12 +107,12 @@ public class WorkspaceRouteTest {
                 "{\"code\":\"A\",\"department\":\"GHOST\",\"slaHours\":24}",                 // unknown department
                 "{\"code\":\"A\",\"department\":\"WATER\",\"slaHours\":24}},{\"tenantId\":\"example\",\"data\":{\"code\":\"B\",\"parentCode\":\"A\"}")) { // parent, not leaf
             mdms("RAINMAKER-PGR.ComplaintHierarchy","[{\"tenantId\":\"example\",\"data\":"+rows+"}]");
-            assertFalse(rows,gateway.probe("example","COMPLAINT_TYPES"));
+            assertFalse(rows,gateway.probe("example","COMPLAINT_TYPES",null));
         }
         verifyNoInteractions(client);                                                                 // no routable leaf: HRMS is never read
         mdms("RAINMAKER-PGR.ComplaintHierarchy","[{\"tenantId\":\"example\",\"data\":{\"code\":\"A\",\"department\":\"WATER\",\"slaHours\":24}}]");
         hrms(gro("EMP_1","WATER",true,"example"));
-        assertTrue(gateway.probe("example","COMPLAINT_TYPES"));
+        assertTrue(gateway.probe("example","COMPLAINT_TYPES",null));
     }
     @Test public void complaintTypesNeedACurrentGroInEveryRoutedDepartment() throws Exception {
         String roads="{\"tenantId\":\"example\",\"data\":{\"code\":\"ROADS\",\"active\":true}}";
@@ -122,7 +122,7 @@ public class WorkspaceRouteTest {
                 +"{\"tenantId\":\"example\",\"data\":{\"code\":\"Retired\",\"department\":\"PARKS\",\"slaHours\":8,\"active\":false}}]");
         String nonGro="{\"code\":\"EMP_3\",\"user\":{\"active\":true,\"roles\":[{\"code\":\"PGR_LME\",\"tenantId\":\"example\"}]},\"assignments\":[{\"department\":\"ROADS\",\"isCurrentAssignment\":true}]}";
         hrms(gro("EMP_1","WATER",true,"example"));                                                  // the live bug: ROADS complaints visible to nobody
-        assertFalse(gateway.probe("example","COMPLAINT_TYPES"));
+        assertFalse(gateway.probe("example","COMPLAINT_TYPES",null));
         for(String roadsCover:List.of(
                 gro("EMP_2","ROADS",false,"example"),                                                // past assignment
                 gro("EMP_2","ROADS",true,"other"),                                                   // GRO at another tenant
@@ -130,23 +130,23 @@ public class WorkspaceRouteTest {
                 gro("EMP_2","ROADS",true,"example").replaceFirst("\\{","{\"isActive\":false,"),        // inactive employee
                 gro("EMP_2","ROADS",true,"example").replace("\"active\":true","\"active\":false"))) { // disabled user
             hrms(gro("EMP_1","WATER",true,"example"),roadsCover);
-            assertFalse(roadsCover,gateway.probe("example","COMPLAINT_TYPES"));
+            assertFalse(roadsCover,gateway.probe("example","COMPLAINT_TYPES",null));
         }
         hrms(gro("EMP_1","WATER",true,"example"),gro("EMP_2","ROADS",true,"example"));               // inactive PARKS leaf needs no GRO
-        assertTrue(gateway.probe("example","COMPLAINT_TYPES"));
+        assertTrue(gateway.probe("example","COMPLAINT_TYPES",null));
         when(client.read(eq("hrms"),anyString(),any())).thenThrow(new OnboardingFailure("HRMS_DOWN",true));
-        assertThrows(OnboardingFailure.class,()->gateway.probe("example","COMPLAINT_TYPES"));       // unreadable HRMS never grants DONE
+        assertThrows(OnboardingFailure.class,()->gateway.probe("example","COMPLAINT_TYPES",null));       // unreadable HRMS never grants DONE
     }
     @Test public void geographyNeedsTwoLevelsInTheTenantsOwnHierarchy() throws Exception {
         when(mdms.records(eq("example"),anyString(),any())).thenReturn(mapper.readTree("[]"));
         when(client.read(eq("boundary"),anyString(),any())).thenReturn(mapper.readTree("{\"TenantBoundary\":[{\"boundary\":[{\"code\":\"COUNTY\",\"children\":[{\"code\":\"WARD_1\"}]}]}]}"));
-        assertFalse(gateway.probe("example","GEOGRAPHY"));                                           // no HierarchySchema record yet
+        assertFalse(gateway.probe("example","GEOGRAPHY",null));                                           // no HierarchySchema record yet
         mdms("CMS-BOUNDARY.HierarchySchema","[{\"tenantId\":\"example\",\"data\":{\"moduleName\":\"CMS\",\"hierarchy\":\"WORKSPACE\"}}]");
-        assertFalse(gateway.probe("example","GEOGRAPHY"));                                           // the founder's reserved root never counts
+        assertFalse(gateway.probe("example","GEOGRAPHY",null));                                           // the founder's reserved root never counts
         mdms("CMS-BOUNDARY.HierarchySchema","[{\"tenantId\":\"parent\",\"data\":{\"moduleName\":\"CMS\",\"hierarchy\":\"ADMIN\"}}]");
-        assertFalse(gateway.probe("example","GEOGRAPHY"));                                           // inherited record is not the tenant's
-        boundaries("[]");assertFalse(gateway.probe("example","GEOGRAPHY"));
-        boundaries("[{\"code\":\"WARD_1\",\"children\":[]}]");assertTrue(gateway.probe("example","GEOGRAPHY"));
+        assertFalse(gateway.probe("example","GEOGRAPHY",null));                                           // inherited record is not the tenant's
+        boundaries("[]");assertFalse(gateway.probe("example","GEOGRAPHY",null));
+        boundaries("[{\"code\":\"WARD_1\",\"children\":[]}]");assertTrue(gateway.probe("example","GEOGRAPHY",null));
     }
     @Test public void unreadableProbeReadsNullOnSearchButFailsTheDoneWrite() throws Exception {
         when(repository.find("example",false)).thenReturn(Optional.of(new LinkedHashMap<>(Map.of("tenantId","example","legacy",false))));

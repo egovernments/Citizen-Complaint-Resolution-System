@@ -20,7 +20,7 @@ function stub(file, exports) {
 // The live filing machine, with only its I/O collaborators replaced. Unlike the
 // old pgr-flow.test.js -- which drove the table-generated pgr.js that nothing in
 // the production require chain loads -- this is the machine citizens actually hit.
-function loadLiveMachine({ service, localisation }) {
+function loadLiveMachine({ service, localisation, env = {} }) {
   for (const f of [p("src/machine/pgr-machine.js"), p("src/machine/flow/pgr-messages.js")]) delete require.cache[f];
 
   stub(p("src/env-variables.js"), {
@@ -36,6 +36,8 @@ function loadLiveMachine({ service, localisation }) {
     descriptionMinLength: 20,
     caseRelatedTo: "IGE",
     maxMediaSizeMb: 5,
+    whatsAppProvider: "Twilio",
+    ...env,
   });
   stub(p("src/machine/service/service-loader.js"), { pgrService: service });
   stub(p("src/machine/util/localisation-service.js"), localisation);
@@ -43,9 +45,9 @@ function loadLiveMachine({ service, localisation }) {
   return require(p("src/machine/pgr-machine.js"));
 }
 
-function harness({ service, localisation = { getMessageBundleForCode: () => undefined, getLocales: () => [] } }) {
+function harness({ service, localisation = { getMessageBundleForCode: () => undefined, getLocales: () => [] }, env }) {
   const outputs = [];
-  const pgr = loadLiveMachine({ service, localisation });
+  const pgr = loadLiveMachine({ service, localisation, env });
 
   const machine = Machine({
     id: "root",
@@ -98,6 +100,8 @@ function happyPathService(overrides = {}) {
       isLeafLevel: true,
     }),
     persistComplaint: async () => ({ complaintNumber: "PGR-42", filedDate: "18/09/2026" }),
+    // mz has an IGE ComplaintTemplateType row, so institution and confidentiality are asked
+    acceptsExtendedAttributes: async () => true,
     ...overrides,
   };
 }
@@ -184,4 +188,225 @@ test("an empty complaint hierarchy reports a system error instead of looping", a
   await settle(20);
 
   assert.ok(h.outputs.includes("SYSTEM_ERROR"), "the citizen is told, and returned to the menu");
+});
+
+test("a long complaint level is paged under Twilio's 1600-character limit", async () => {
+  // Regression: ke's root level rendered 1,092 options in one message; Twilio refused it
+  // (21617) and the citizen heard nothing after choosing to file a complaint.
+  const codes = Array.from({ length: 120 }, (_, i) => `CAT_${String(i + 1).padStart(3, "0")}`);
+  const messageBundle = Object.fromEntries(
+    codes.map((code) => [code, { pt_PT: `complaints.categories.${code}LongEnoughToMatter` }])
+  );
+  const persisted = [];
+  const service = happyPathService({
+    fetchComplaintHierarchyStep: async () => ({
+      options: codes, messageBundle, trailBundle: {}, levelLabel: "Categoria", isLeafLevel: true,
+    }),
+    persistComplaint: async (user, slots) => {
+      persisted.push(slots);
+      return { complaintNumber: "PGR-42", filedDate: "18/09/2026" };
+    },
+  });
+
+  const h = harness({ service });
+  h.service.start();
+  await settle();
+  h.say("1");
+  await settle();
+
+  const pages = [h.outputs[h.outputs.length - 1]];
+  const optionsOn = (page) => (page.match(/^\*\d+\.\*/gm) || []).length;
+  assert.ok(pages[0].length <= 1500, `page 1 is ${pages[0].length} characters`);
+  assert.match(pages[0], /CAT_001/);
+  assert.match(pages[0], /Ver mais/, "the rest sit behind See more");
+
+  // Page through to the end; "See more" is always the last option on a paged level.
+  let seen = optionsOn(pages[0]) - 1;
+  while (seen < codes.length) {
+    h.say(String(optionsOn(pages[pages.length - 1])));
+    await settle();
+    const page = h.outputs[h.outputs.length - 1];
+    assert.ok(page.length <= 1500, `page ${pages.length + 1} is ${page.length} characters`);
+    pages.push(page);
+    seen += optionsOn(page) - 1;
+  }
+  assert.equal(seen, codes.length, "every option appears exactly once across the pages");
+  assert.match(pages[pages.length - 1], /CAT_120/);
+
+  // From the last page, See more wraps back to the first.
+  h.say(String(optionsOn(pages[pages.length - 1])));
+  await settle();
+  assert.match(h.outputs[h.outputs.length - 1], /\*1\.\*\s+complaints\.categories\.CAT_001/);
+
+  // Numbering restarts per page: "2" on page 2 is the option shown second there.
+  h.say(String(optionsOn(pages[0])));
+  await settle();
+  const second = pages[1].match(/^\*2\.\*\s+complaints\.categories\.(CAT_\d+)/m)[1];
+  h.say("2");
+  await settle();
+  // Through the boundary leaf, institution, description, attachment, consent,
+  // confidentiality and confirmation.
+  for (const reply of ["1", "Hospital Central", "Faltam medicamentos essenciais no hospital.", "1", "1", "2", "1"]) {
+    h.say(reply);
+    await settle();
+  }
+  await settle(20);
+
+  assert.equal(persisted.length, 1);
+  assert.equal(persisted[0].complaint, second, "the option picked on page 2 is the one filed");
+});
+
+test("REVIEW: on a tenant without the template, institution and confidentiality are not asked", async () => {
+  // PGR gets no extendedAttributes then, so a "keep me confidential" answer would be
+  // silently dropped while the citizen believed it was honoured. Decided per tenant (ke).
+  const persisted = [];
+  const service = happyPathService({
+    persistComplaint: async (user, slots) => {
+      persisted.push(slots);
+      return { complaintNumber: "PGR-42", filedDate: "18/09/2026" };
+    },
+    acceptsExtendedAttributes: async (tenantId) => tenantId !== "mz",
+  });
+  const h = harness({ service });
+  h.service.start();
+  await settle();
+
+  // menu -> file, category, sub-type (leaf), district (leaf): straight to the description
+  for (const reply of ["1", "1", "1", "1"]) {
+    h.say(reply);
+    await settle();
+  }
+  h.say("Faltam medicamentos essenciais no hospital desde a semana passada.");
+  await settle();
+  // skip attachment, accept consent: straight to the confirmation
+  for (const reply of ["1", "1"]) {
+    h.say(reply);
+    await settle();
+  }
+  const summary = h.outputs[h.outputs.length - 1];
+  assert.doesNotMatch(summary, /Confidencial/i, "no confidentiality line in the summary");
+  assert.doesNotMatch(summary, /Institui/i, "no institution line in the summary");
+  h.say("1");
+  await settle(20);
+
+  assert.equal(persisted.length, 1, "filed after description, attachment and consent only");
+  assert.match(persisted[0].description, /medicamentos/);
+  assert.equal(persisted[0].instituteName, undefined);
+  assert.equal(persisted[0].isConfidential, undefined);
+  assert.equal(persisted[0].extendedAttributes, false, "persist is told not to send them");
+  assert.ok(!h.outputs.some((m) => /confidencial/i.test(m) && /\*1\*/.test(m)), "the confidentiality question was never sent");
+});
+
+test("REVIEW: Go Back returns to the page the citizen left", async () => {
+  const codes = Array.from({ length: 60 }, (_, i) => `CAT_${String(i + 1).padStart(3, "0")}`);
+  const bundle = Object.fromEntries(codes.map((c) => [c, { pt_PT: `complaints.categories.${c}LongEnoughToPage` }]));
+  const service = happyPathService({
+    fetchComplaintHierarchyStep: async (tenantId, path = []) =>
+      path.length === 0
+        ? { options: codes, messageBundle: bundle, trailBundle: {}, levelLabel: "Categoria", isLeafLevel: false }
+        : { options: ["SUB"], messageBundle: { SUB: { pt_PT: "Subtipo" } }, trailBundle: bundle, levelLabel: "Subtipo", isLeafLevel: true },
+  });
+  const h = harness({ service });
+  h.service.start();
+  await settle();
+  h.say("1");
+  await settle();
+
+  const page1 = h.outputs[h.outputs.length - 1];
+  const count = (page) => (page.match(/^\*\d+\.\*/gm) || []).length;
+  h.say(String(count(page1))); // See more
+  await settle();
+  const page2 = h.outputs[h.outputs.length - 1];
+  const firstOnPage2 = page2.match(/^\*1\.\*\s+complaints\.categories\.(CAT_\d+)/m)[1];
+  assert.notEqual(firstOnPage2, "CAT_001");
+
+  h.say("1"); // descend into the first option on page 2
+  await settle();
+  const child = h.outputs[h.outputs.length - 1];
+  h.say(String(count(child))); // Go Back is the last option
+  await settle();
+
+  assert.match(h.outputs[h.outputs.length - 1], new RegExp(`^\\*1\\.\\*\\s+complaints\\.categories\\.${firstOnPage2}`, "m"),
+    "back on page 2, not page 1");
+});
+
+/** 60 categories over three pages, each with one leaf sub-type. */
+function pagedService(overrides = {}) {
+  const codes = Array.from({ length: 60 }, (_, i) => `CAT_${String(i + 1).padStart(3, "0")}`);
+  const bundle = Object.fromEntries(codes.map((c) => [c, { pt_PT: `complaints.categories.${c}LongEnoughToPage` }]));
+  return {
+    codes,
+    service: happyPathService({
+      fetchComplaintHierarchyStep: async (tenantId, path = []) =>
+        path.length === 0
+          ? { options: codes, messageBundle: bundle, trailBundle: {}, levelLabel: "Categoria", isLeafLevel: false }
+          : { options: ["SUB"], messageBundle: { SUB: { pt_PT: "Subtipo" } }, trailBundle: bundle, levelLabel: "Subtipo", isLeafLevel: true },
+      ...overrides,
+    }),
+  };
+}
+
+test("REVIEW: restarting the complaint flow clears the paging state", async () => {
+  // A Go Back whose fetch failed left RestoreOffset set; the next complaint's category
+  // menu then opened partway through the list.
+  const { config } = loadLiveMachine({ service: happyPathService() });
+  const context = { slots: { pgr: {} }, pgr: {} };
+  for (const walk of ["complaintType2Step", "boundary"]) {
+    Object.assign(context, {
+      [`${walk}Offset`]: 40, [`${walk}NextOffset`]: 60, [`${walk}OffsetStack`]: [20, 40], [`${walk}RestoreOffset`]: 40,
+    });
+  }
+  config.entry.assignment(context);
+  for (const key of Object.keys(context)) assert.doesNotMatch(key, /Offset/, `${key} survived the reset`);
+});
+
+test("REVIEW: picking a leaf empties the Go Back stack", async () => {
+  const { service } = pagedService();
+  const h = harness({ service });
+  h.service.start();
+  await settle();
+  h.say("1");          // file a complaint
+  await settle();
+  h.say("1");          // category 1 (descends, pushes its page)
+  await settle();
+  h.say("1");          // its leaf sub-type
+  await settle();
+  assert.deepEqual(h.service.state.context.complaintType2StepOffsetStack, []);
+});
+
+test("REVIEW: a name from another page is still recognised", async () => {
+  const persisted = [];
+  const { service } = pagedService({
+    persistComplaint: async (user, slots) => { persisted.push(slots); return { complaintNumber: "PGR-42", filedDate: "18/09/2026" }; },
+  });
+  const h = harness({ service });
+  h.service.start();
+  await settle();
+  h.say("1");
+  await settle();
+  const page1 = h.outputs[h.outputs.length - 1];
+  h.say(String((page1.match(/^\*\d+\.\*/gm) || []).length)); // See more: now on page 2
+  await settle();
+  assert.doesNotMatch(h.outputs[h.outputs.length - 1], /CAT_005/, "CAT_005 is not on page 2");
+
+  h.say("complaints.categories.CAT_005LongEnoughToPage");
+  await settle();
+  assert.match(h.outputs[h.outputs.length - 1], /Subtipo/, "the typed name descended into CAT_005");
+  assert.deepEqual(h.service.state.context.complaintType2StepPath, ["CAT_005"]);
+});
+
+test("REVIEW: a level that fits whole is not split just to fit a See more line", async () => {
+  // 18 options of 83 characters a line: 1,494 characters, under the 1,500 page budget,
+  // but over it once a "See more" line is reserved. They belong on one page.
+  const codes = Array.from({ length: 18 }, (_, i) => `C${String(i + 1).padStart(2, "0")}`);
+  const bundle = Object.fromEntries(codes.map((c) => [c, { pt_PT: c + "x".repeat(73) }]));
+  loadLiveMachine({ service: happyPathService() }); // stubs env-variables (Twilio's limit) for the walk
+  const WalkState = require(p("src/machine/flow/flow-state-walk.js"));
+  const walk = new WalkState("probe");
+  const context = { user: { locale: "pt_PT" }, probeStep: { options: codes, messageBundle: bundle } };
+  const page = walk.renderPage(context, 0);
+
+  assert.equal((page.prompt.match(/^\*\d+\.\*/gm) || []).length, 18, "all 18, no See more");
+  assert.ok(page.prompt.length <= 1500, `${page.prompt.length} characters`);
+  assert.equal(page.nextOffset, 0);
 });
