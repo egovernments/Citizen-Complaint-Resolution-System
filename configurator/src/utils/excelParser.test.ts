@@ -88,6 +88,43 @@ describe('Boundary coordinate parsing', () => {
   });
 });
 
+describe('Boundary codes repeated in a sheet (#2456)', () => {
+  it('refuses the sheet and names each repeated code with its rows', () => {
+    const wb = makeWorkbook('Boundary', [
+      { code: 'COUNTRY_001', name: 'UAE', boundaryType: 'Country' },
+      { code: 'EMIRATE_001', name: 'Dubai', boundaryType: 'Emirate', parentCode: 'COUNTRY_001' },
+      { code: 'DISTRICT_001', name: 'Deira', boundaryType: 'District', parentCode: 'EMIRATE_001' },
+      { code: 'COMMUNITY_001', name: 'Al Murar', boundaryType: 'Community', parentCode: 'DISTRICT_001' },
+      { code: 'EMIRATE_001', name: 'Abudhabi', boundaryType: 'Emirate', parentCode: 'COUNTRY_001' },
+      { code: 'COMMUNITY_002', name: 'Bur Dubai', boundaryType: 'Community', parentCode: 'DISTRICT_001' },
+    ]);
+    const { validation } = parseBoundaryExcel(wb);
+    expect(validation.valid).toBe(false);
+    expect(validation.errors).toEqual([
+      {
+        row: 3,
+        rows: [3, 6],
+        field: 'code',
+        value: 'EMIRATE_001',
+        message: 'The code "EMIRATE_001" is used on rows 3, 6. Each boundary needs its own code.',
+        code: 'DUPLICATE_CODE',
+      },
+    ]);
+  });
+
+  it('counts rows as the sheet does, blank rows included', () => {
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([
+      ['code', 'name', 'boundaryType'],
+      ['WARD_1', 'Ward 1', 'Ward'],
+      [],
+      [' WARD_1 ', 'Ward 1 again', 'Ward'],
+    ]);
+    XLSX.utils.book_append_sheet(wb, ws, 'Boundary');
+    expect(parseBoundaryExcel(wb).validation.errors.map((e) => e.rows)).toEqual([[2, 4]]);
+  });
+});
+
 describe('Tenant code validation (egovernments/CCRS#1847)', () => {
   // egov-user enforces `Pattern.createUserRequest.user.tenantId` =
   // `^[a-zA-Z. ]*$` server-side (letters, dots, spaces — no digits). A
