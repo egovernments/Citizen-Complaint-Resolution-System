@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { useInput, type InputProps } from 'ra-core';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useShowFieldError } from '@/admin/useShowFieldError';
 
 export interface DigitFormInputProps extends InputProps {
   /** Display label for the input */
@@ -46,7 +47,7 @@ export function DigitFormInput({
   // `isTouched` only flips on blur, so gating on it alone leaves the field
   // showing no error while the user is still typing an invalid value.
   // `isDirty` flips on the first change, giving immediate feedback.
-  const hasError = fieldState.invalid && (fieldState.isDirty || fieldState.isTouched);
+  const hasError = useShowFieldError(fieldState);
   // ra-core v5 wraps validator errors as `@@react-admin@@${JSON.stringify(msg)}`
   // before storing them in react-hook-form state. Strip the prefix and unwrap
   // the JSON string so the raw human-readable message is rendered.

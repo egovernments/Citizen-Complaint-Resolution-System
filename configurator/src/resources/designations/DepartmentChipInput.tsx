@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { uniqueBy } from '@/lib/uniqueBy';
 import { pickerChoices } from '@/lib/systemRecords';
+import { useShowFieldError } from '@/admin/useShowFieldError';
 
 export interface DepartmentChipInputProps {
   source?: string;
@@ -119,7 +120,7 @@ export function DepartmentChipInput({
     }
   };
 
-  const hasError = fieldState.invalid && fieldState.isTouched;
+  const hasError = useShowFieldError(fieldState);
   const errorMessage = fieldState.error?.message;
 
   return (

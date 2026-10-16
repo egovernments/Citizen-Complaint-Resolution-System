@@ -1,6 +1,7 @@
 import { useInput, type InputProps } from 'ra-core';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useShowFieldError } from '@/admin/useShowFieldError';
 
 interface DurationMsInputProps extends InputProps {
   label?: string;
@@ -30,7 +31,7 @@ export function DurationMsInput({ label, help, min, max, ...inputProps }: Durati
     ...inputProps,
     parse: (v: string) => (v === '' ? null : Number(v)),
   });
-  const hasError = fieldState.invalid && fieldState.isTouched;
+  const hasError = useShowFieldError(fieldState);
   const ms = typeof field.value === 'number' ? field.value : Number(field.value);
 
   return (
