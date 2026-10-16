@@ -32,6 +32,7 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
   // base tile theme (defaults to the light voyager basemap) + ward-highlight
   // colour (defaults to the legacy orange #FFA74F).
   const {
+    isReady: mapConfigReady,
     tileUrl,
     tileAttribution,
     wardHighlightColor: WARD_COLOR,
@@ -175,6 +176,9 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
           boxShadow: "0 2px 6px rgba(0,0,0,0.1)",
           zIndex: 0
         }}>
+          {/* ours#1039: MapContainer reads minZoom / maxZoom only at mount, and its TileLayer would fetch the default
+              (CARTO) tiles first: mount once MapConfig resolved (also when the MDMS read fails: fallbacks then). */}
+          {mapConfigReady ? (
           <MapContainer
             center={[latitude, longitude]}
             zoom={DETAIL_ZOOM}
@@ -218,6 +222,7 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
               )}
             </Marker>
           </MapContainer>
+          ) : null}
 
           {/* Open in Google Maps Button */}
           <button
