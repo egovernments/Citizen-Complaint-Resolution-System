@@ -42,6 +42,8 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { T } from '@digit-ui/datagrid';
 import { getGenericMdmsResources, getResourceLabel } from '@/providers/bridge';
+import { useResourceLabel } from '@/providers/useResourceLabel';
+import { ResourceLabel } from '@/providers/ResourceLabel';
 import { useMastersCapability } from '@/hooks/useMastersCapability';
 import { LEGACY_PGR_DASHBOARD_ENABLED } from '@/config/featureFlags';
 import { NavRow, NavExternalRow, SectionLabel, ActiveBar, RailBackdrop, RailCloseButton, RailMenuButton, RailPoweredBy } from '@/components/layout/rail';
@@ -173,6 +175,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
   const translate = useTranslate();
+  const resourceLabel = useResourceLabel();
   const { canViewResource } = useMastersCapability();
 
   // Masters the current role can't see (per resource.masters conditions on
@@ -247,8 +250,8 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
 
   const query = navQuery.trim().toLowerCase();
   const matches = (label: string) => !query || label.toLowerCase().includes(query);
-  const advancedLabel = (item: { id: string; name: string }) =>
-    translate(`app.resources.${item.id.replace(/-/g, '_')}`, { _: item.name });
+  // Same code and fallback as the list title and dashboard card (resourceLabelKey).
+  const advancedLabel = (item: { id: string }) => resourceLabel(item.id);
   const shownMainLinks = mainLinks.filter((link) => matches(translate(link.nameKey)));
   const shownGroups = visibleNavGroups
     .map((group) => ({ ...group, items: group.items.filter((item) => matches(translate(item.nameKey))) }))
@@ -420,9 +423,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
                       className={`relative w-full min-h-8 flex items-center pl-11 pr-4 py-1.5 text-xs text-left transition-colors ${rowTone(isActive)}`}
                     >
                       {isActive && <ActiveBar />}
-                      <span className="truncate">
-                        <T i18nKey={`app.resources.${item.id.replace(/-/g, '_')}`}>{item.name}</T>
-                      </span>
+                      <span className="truncate"><ResourceLabel resource={item.id} /></span>
                     </button>
                   );
                 })}

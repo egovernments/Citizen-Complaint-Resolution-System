@@ -20,9 +20,14 @@ import type { FilterElement } from './filters/types';
 import { FilterBar } from './filters/FilterBar';
 import { T } from './i18n/T';
 import { ColumnLabel } from './i18n/ColumnLabel';
+import { isI18nCode } from './i18n/columnLabelKey';
 
 export interface DigitListProps {
-  /** Page title displayed as h1 — a localization code, or a pre-built `<T>` node */
+  /**
+   * Page title displayed as h1 — a localization code, or a pre-built `<T>` node.
+   * Plain English is shown as written and gets no `data-i18n-key`: it isn't a
+   * code an admin could find under System → Localization.
+   */
   title: React.ReactNode;
   /** Optional subtitle shown below the title */
   subtitle?: string;
@@ -158,7 +163,11 @@ export function DigitList({
           <div className="min-w-0">
             <div className="flex items-center gap-3">
               <h1 className="text-2xl sm:text-3xl font-bold font-condensed text-foreground">
-                {typeof title === 'string' ? <T i18nKey={title}>{title}</T> : title}
+                {typeof title !== 'string'
+                  ? title
+                  : isI18nCode(title)
+                    ? <T i18nKey={title}>{title}</T>
+                    : translate(title, { _: title })}
               </h1>
               {listContext.total != null && (
                 <Badge variant="secondary" className="text-xs">
