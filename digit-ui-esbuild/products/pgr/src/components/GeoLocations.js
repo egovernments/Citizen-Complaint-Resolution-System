@@ -506,7 +506,8 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
           >
             <MapRefSetter mapRef={mapRef} />
             <MapClickHandler onClick={handleMapClick} />
-            <TileLayer key={tileUrl} attribution={tileAttribution} url={tileUrl} />
+            {/* the tenant's MapConfig decides the tiles: none before it answers (no default CARTO request) */}
+            {isReady && <TileLayer key={tileUrl} attribution={tileAttribution} url={tileUrl} />}
             {tenantBoundaries?.features?.length > 0 && (
               <GeoJSON
                 key={`${selectedWard || "_"}-${hoveredWard || "_"}-${tenantBoundaries.features.length}-${i18n.language}`}

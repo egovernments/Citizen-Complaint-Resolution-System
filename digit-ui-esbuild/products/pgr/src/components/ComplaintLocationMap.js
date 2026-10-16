@@ -33,6 +33,7 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
   // base tile theme (defaults to the light voyager basemap) + ward-highlight
   // colour (defaults to the legacy orange #FFA74F).
   const {
+    isReady: tilesReady,
     tileUrl,
     tileAttribution,
     wardHighlightColor: WARD_COLOR,
@@ -188,7 +189,8 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
             doubleClickZoom={true}
             touchZoom={true}
           >
-            <TileLayer key={tileUrl} attribution={tileAttribution} url={tileUrl} />
+            {/* the tenant's MapConfig decides the tiles: none before it answers (no default CARTO request) */}
+            {tilesReady && <TileLayer key={tileUrl} attribution={tileAttribution} url={tileUrl} />}
             {tenantBoundaries?.features?.length > 0 && (
               <GeoJSON
                 key={`${matchedWard?.properties?.code || "_"}-${tenantBoundaries.features.length}`}
