@@ -4,6 +4,7 @@ const fs = require("fs");
 const { spawnSync } = require("child_process");
 
 const PUBLIC_PATH = "/digit-ui/";
+const EXCELJS_BROWSER_BUNDLE = path.resolve(__dirname, "node_modules/exceljs/dist/exceljs.min.js");
 
 // Build entries, each with its own HTML shell. Both land in the same build/
 // docroot so hashed assets resolve against the one PUBLIC_PATH.
@@ -212,6 +213,11 @@ async function build() {
     if (entry.isDirectory()) copyRecursive(src, dest);
     else if (entry.isFile()) fs.copyFileSync(src, dest);
   }
+
+  // The dashboard export loads ExcelJS from here on first use instead of
+  // bundling ~1 MB into every page (#1977, products/dashboard/src/export/writeXlsx.js).
+  fs.mkdirSync(path.join(buildDir, "vendor"), { recursive: true });
+  fs.copyFileSync(EXCELJS_BROWSER_BUNDLE, path.join(buildDir, "vendor", "exceljs.min.js"));
 
   console.log("\nBuild complete! Output in build/");
 }

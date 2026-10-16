@@ -115,15 +115,26 @@ export function formatBarChartPercentOneDecimal(value) {
   return `${formatted}%`;
 }
 
+/** The count label a bar shows (also written by the dashboard export, #1977). */
+export function formatBarChartCount(val) {
+  return Number.isFinite(Number(val))
+    ? formatNumber(val, { decimals: 0 }) ?? String(Math.round(Number(val)))
+    : "";
+}
+
+/** The flow-ratio label a horizontal bar shows: two decimals. */
+export function formatFlowRatio(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return formatNumber(0, { decimals: 2 }) ?? "0.00";
+  return formatNumber(n, { decimals: 2 }) ?? n.toFixed(2);
+}
+
 export function buildBarChartDataLabels({ valueFormat } = {}) {
   const color = getBarChartDataLabelColor();
   const formatter =
     valueFormat === "percent"
       ? (val) => formatBarChartPercentOneDecimal(val)
-      : (val) =>
-          Number.isFinite(Number(val))
-            ? formatNumber(val, { decimals: 0 }) ?? String(Math.round(Number(val)))
-            : "";
+      : (val) => formatBarChartCount(val);
 
   return {
     enabled: true,

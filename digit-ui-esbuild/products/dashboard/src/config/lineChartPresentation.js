@@ -173,18 +173,20 @@ export function buildLineChartTooltip(categories = [], series = []) {
     // Numeric parts go through the tenant mask (formatNumber, null when
     // unconfigured -> the pre-#1213 expression, which keeps returning a
     // NUMBER on the count branch — Apex accepts both).
-    formatValue: (value, seriesIndex) => {
-      const entry = series[seriesIndex];
-      if (entry?.yAxisGroup === "percent") {
-        const rounded = Math.round(Number(value) * 10) / 10;
-        const formatted =
-          formatNumber(rounded, { decimals: 1, trim: true }) ??
-          (Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1));
-        return `${formatted}%`;
-      }
-      return formatNumber(value, { decimals: 0 }) ?? Math.round(Number(value));
-    },
+    formatValue: (value, seriesIndex) => formatLineChartValue(value, series[seriesIndex]),
   });
+}
+
+/** A line point's tooltip value (also written by the dashboard export, #1977). */
+export function formatLineChartValue(value, entry) {
+  if (entry?.yAxisGroup === "percent") {
+    const rounded = Math.round(Number(value) * 10) / 10;
+    const formatted =
+      formatNumber(rounded, { decimals: 1, trim: true }) ??
+      (Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1));
+    return `${formatted}%`;
+  }
+  return formatNumber(value, { decimals: 0 }) ?? Math.round(Number(value));
 }
 
 export function buildCompoundLineChartYAxis(series, yAxisConfig = {}) {

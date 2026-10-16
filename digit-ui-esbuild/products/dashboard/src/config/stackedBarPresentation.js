@@ -168,7 +168,8 @@ const STACKED_BAR_LABEL_PADDING_PX = 4;
 const STACKED_BAR_LABEL_VERTICAL_INSET_PX = 8;
 const STACKED_BAR_SEGMENT_LABEL_OFFSET_Y = 7;
 
-function formatStackedBarSegmentValue(value, valueFormat) {
+/** A stacked segment's label (also written by the dashboard export, #1977). */
+export function formatStackedBarSegmentValue(value, valueFormat) {
   const n = Number(value);
   if (!Number.isFinite(n) || n <= 0) return "";
   return valueFormat === "hours"

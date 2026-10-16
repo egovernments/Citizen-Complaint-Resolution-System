@@ -13,6 +13,13 @@ export const PIE_CHART_OUTER_R = 72;
 export const PIE_CHART_INNER_R = 42;
 export const PIE_CHART_LABEL_R = 94;
 export const PIE_CHART_MIN_SWEEP_FOR_VALUE = 20;
+/**
+ * Slice names sit just outside the ring at each slice's midpoint. Below this
+ * sweep neighbouring names collide (IVR / Walk-in / Mobile at 1–2% each,
+ * #1977), so a small slice is named only in its hover tooltip — the same
+ * rule its percentage already follows.
+ */
+export const PIE_CHART_MIN_SWEEP_FOR_LABEL = PIE_CHART_MIN_SWEEP_FOR_VALUE;
 /** Outside-ring labels — keep short channel names on one line. */
 export const PIE_CHART_LABEL_MAX_WIDTH_PX = 78;
 export const PIE_CHART_LABEL_FONT_SIZE = 9;
@@ -138,6 +145,7 @@ export function normalizePieChartData(data = []) {
       hoverX: hoverPoint.x,
       hoverY: hoverPoint.y,
       showValue: sweep >= PIE_CHART_MIN_SWEEP_FOR_VALUE,
+      showLabel: sweep >= PIE_CHART_MIN_SWEEP_FOR_LABEL,
       labelLines: resolvePieLabelLines(item.label),
     };
   });
