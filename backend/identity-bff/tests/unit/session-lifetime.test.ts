@@ -77,4 +77,14 @@ describe("session lifetime", () => {
     expect(current!.session.sessionExpiresAt).toBe(signedInAt + config.identitySessionTtlSeconds * 1000);
     expect(current!.session.createdAt).toBe(signedInAt);
   });
+
+  it("a session past its absolute cap ends without a Keycloak refresh", async () => {
+    const { sessionId } = await createIdentitySession(tokens, claims, "client");
+    const record = (await getIdentitySession(sessionId))!;
+    await getRedis().set(sessionKey(sessionId), JSON.stringify({ ...record, createdAt: Date.now() - config.identitySessionTtlSeconds * 1000 - 1 }), "KEEPTTL");
+
+    expect(await currentSession(sessionCookie(sessionId, 600))).toBeNull();
+    expect(oidc.refreshIdentityTokens).not.toHaveBeenCalled();
+    expect(await getIdentitySession(sessionId)).toBeNull();
+  });
 });

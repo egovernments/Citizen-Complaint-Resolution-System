@@ -344,15 +344,15 @@ export function registerAuthenticationRoutes(app: express.Application): void {
         const binding = attempt.accountAction;
         if (claims.sub !== binding.sub || sessionIdFromCookie(request.headers.cookie, surface) !== binding.sid) throw new Error("Account action changed the initiating person or session");
         await withPersonLease(binding.sub, async lease => {
-          // An action finished after the session ended still happened in Keycloak: report its outcome, and
-          // the person signs in again.
-          const session = await requireCurrentSession(lease, binding.sid)
-            .catch(error => { if (error instanceof SessionRevokedError) return null; throw error; });
-          if (!session) return;
+          const session = await requireCurrentSession(lease, binding.sid);
           if (session.surface && session.surface !== surface) throw new Error("Account action changed surface");
           // A finished action is use, so the session slides as on a refresh (#2456).
           await saveIdentitySession(binding.sid, tokens, claims,
             { oidcClientId: attempt.oidcClientId, binding: { surface, boundTenant: session.boundTenant } });
+        }).catch(error => {
+          // A session that ended before or during this save: the action still happened in Keycloak, so report
+          // its outcome, and the person signs in again.
+          if (!(error instanceof SessionRevokedError)) throw error;
         });
         const outcome = request.query.kc_action_status === "success" ? "ACTION_COMPLETE"
           : request.query.kc_action_status === "cancelled" ? "ACTION_CANCELLED" : "ACTION_FAILED";

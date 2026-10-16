@@ -240,10 +240,9 @@ export function consumePasswordSetupAttempt(id: string): Promise<PasswordSetupAt
   return load(passwordSetupKey(id), true, validPasswordSetupAttempt);
 }
 
-/** How long the session lasts unused: Keycloak's refresh lifetime, its idle limit. */
+/** How long the session lasts unused: Keycloak's refresh lifetime, its idle limit. saveIdentitySession applies the absolute cap. */
 function sessionTtl(tokens: IdentityTokenSet): number {
-  const tokenTtl = tokens.refreshExpiresIn || tokens.accessExpiresIn;
-  return Math.max(1, Math.min(config.identitySessionTtlSeconds, tokenTtl));
+  return Math.max(1, tokens.refreshExpiresIn || tokens.accessExpiresIn);
 }
 
 export async function createIdentitySession(
@@ -287,7 +286,9 @@ export async function saveIdentitySession(
       throw new Error("Invalid identity session surface binding");
     }
     const now = Date.now();
-    // A record written before createdAt existed counts from its sign-in, not from this write.
+    // A record written before createdAt existed counts from its sign-in, not from this write. authTime is
+    // Keycloak's auth_time, which is earlier when the sign-in reused a Keycloak SSO session; Keycloak's own
+    // 7-day max lifespan bounds that anyway.
     const createdAt = previous?.createdAt ?? previous?.authTime ?? now;
     const expiresAt = Math.min(createdAt + config.identitySessionTtlSeconds * 1000, now + sessionTtl(tokens) * 1000);
     if (expiresAt <= now) throw new SessionRevokedError();

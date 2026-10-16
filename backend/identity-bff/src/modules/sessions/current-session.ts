@@ -76,6 +76,12 @@ export async function currentSession(
       await deleteIdentitySession(sessionId);
       return null;
     }
+    // Past IDENTITY_SESSION_TTL_SECONDS no refresh can extend it, so end it before asking Keycloak.
+    const signedInAt = session.createdAt ?? session.authTime;
+    if (signedInAt !== undefined && signedInAt + config.identitySessionTtlSeconds * 1000 <= Date.now()) {
+      await deleteIdentitySession(sessionId);
+      return null;
+    }
 
     try {
       const oidcClientId = session.oidcClientId || config.keycloakBffClientId;

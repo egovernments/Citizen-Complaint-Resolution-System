@@ -413,7 +413,8 @@ Query: `surface`; `include=account` (optional).
 - `include=account` costs Keycloak Admin reads, so only the account menu asks for it (§1: the BFF is not called on a signed-in page load).
 - Phone-only citizens get empty `account` arrays.
 - A refresh failure caused by Keycloak being **unavailable** keeps the session. Only `invalid_grant` ends it (item 15).
-- `expiresAt` is when the session ends if it goes unused (§6). Each token refresh moves it.
+- `expiresAt` is when the session ends if it goes unused (§6). Each token refresh and each finished account action moves it.
+- A 401 for a session cookie with no live session also sends `Set-Cookie: <cookie>=; Max-Age=0`, so the browser stops sending the dead id. A response for an older request can clear a cookie that another tab's sign-in set meanwhile; that person is asked to sign in once more.
 - Errors: `UNSUPPORTED_SURFACE` 400, `IDENTITY_UNAVAILABLE` 503.
 
 #### 3.3.2 `POST /identity/v1/logout` (items 4, 10)
@@ -903,7 +904,7 @@ A pending binding past `expiresAt` counts as `removed` everywhere, even before a
 
 **Write rules:**
 - create: `SET … NX EX`;
-- refresh: `SET … XX PXAT`, keeping the generation it **re-read**. The session slides: its end (`sessionExpiresAt`, and the record's and selected context's expiry) moves to the new refresh token's expiry, which is Keycloak's idle limit, but never past `IDENTITY_SESSION_TTL_SECONDS` after sign-in (`createdAt`). Keycloak also shortens the refresh lifetime towards its SSO max lifespan and then refuses the refresh. A finished Keycloak account action slides the session the same way; one that finishes after the session ended still reports its outcome, and the person signs in again. A record written before `createdAt` existed counts from its `authTime`. The cookie's `Max-Age` is `IDENTITY_SESSION_TTL_SECONDS`, so an idle session ends at the record, not at the browser, and `GET /identity/v1/session` clears the cookie of a session that has ended;
+- refresh: `SET … XX PXAT`, keeping the generation it **re-read**. The session slides: its end (`sessionExpiresAt`, and the record's and selected context's expiry) moves to the new refresh token's expiry, which is Keycloak's idle limit, but never past `IDENTITY_SESSION_TTL_SECONDS` after sign-in (`createdAt`). Keycloak also shortens the refresh lifetime towards its SSO max lifespan and then refuses the refresh. A finished Keycloak account action slides the session the same way; one that finishes after the session ended still reports its outcome, and the person signs in again. A record written before `createdAt` existed counts from its `authTime`. A refresh runs only when the access token is within 30 s of expiry, so the idle end counts from the last refresh, not the last call (an effective idle window of about 25.5–30 minutes). Keycloak's idle timer also moves only on refresh, so a per-call touch would not help. The cookie's `Max-Age` is `IDENTITY_SESSION_TTL_SECONDS`, so an idle session ends at the record, not at the browser, and `GET /identity/v1/session` clears the cookie of a session that has ended;
 - touch: `SET … XX KEEPTTL`.
 
 A `nil` reply means the session was revoked: answer 401 and never recreate it. A record without `schemaVersion` counts as version 1 and gets generation 0.
