@@ -416,11 +416,15 @@ function SignupFlow() {
             try {
               run = await searchOperation({ signupId: existing.id });
             } catch (caught) {
-              // An expired sign-in goes back to sign-in. Anything else is this load's own
-              // error, with its Try again, never an unexplained wizard.
-              if (!isExpiredSession(caught)) throw caught;
-              await restartSignIn();
-              return;
+              // An expired sign-in goes back to sign-in.
+              if (isExpiredSession(caught)) {
+                await restartSignIn();
+                return;
+              }
+              // A 400 is a pgr-services from before #2515, which can only look a run up by its own
+              // id. Carry on as the page did then, rather than block every draft until it upgrades.
+              // Anything else is this load's own error, with its Try again.
+              if (!(caught instanceof OnboardingError && caught.status === 400)) throw caught;
             }
           }
           if (run?.status === 'TERMINAL_FAILED') {
