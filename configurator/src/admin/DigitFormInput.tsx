@@ -1,4 +1,5 @@
 // React is used implicitly for JSX transform
+import type { ReactNode } from 'react';
 import { useInput, type InputProps } from 'ra-core';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,7 +16,7 @@ export interface DigitFormInputProps extends InputProps {
   /** Additional CSS class names for the wrapper */
   className?: string;
   /** Optional helper text shown below the input (muted) */
-  help?: string;
+  help?: ReactNode;
   /** Maximum number of characters the input accepts (sets the HTML maxLength attribute) */
   maxLength?: number;
 }

@@ -4,16 +4,20 @@ vi.mock('@/identity/api', () => ({
   updateMemberEmail: vi.fn(async () => ({ status: 'verification_sent' })),
 }));
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import * as XLSX from 'xlsx';
+import { parseEmployeeExcel } from '@/utils/excelParser';
 import { hrmsService } from '@/api';
 import type { Employee } from '@/api/types';
 import { linkMember, removeMember, updateMemberEmail } from '@/identity/api';
 import {
   addEmployee,
   applyEmployeeChanges,
+  codeProblem,
   listEmployees,
   removeEmployee,
   suggestEmployeeCode,
   updateEmployeeDetails,
+  withEmployeeCodes,
   type EmployeeChanges,
   type EmployeeOptions,
 } from './employeesApi';
@@ -28,8 +32,6 @@ vi.mock('@/api', () => ({
     updateEmployee: vi.fn(async (employee) => employee),
     // The real helpers, so the test covers the payload actually sent.
     generateEmployeeCode: (prefix: string, index: number) => `${prefix}_${String(index).padStart(4, '0')}`,
-    generateUsername: (name: string) =>
-      name.toLowerCase().replace(/[^a-z0-9]/g, '.').replace(/\.+/g, '.').replace(/^\.|\.$/g, ''),
     buildEmployee: vi.fn((data) => ({ built: true, ...data })),
   },
 }));
@@ -63,6 +65,49 @@ describe('suggestEmployeeCode', () => {
   });
 });
 
+describe('bulk import codes, through the real parser (#2456)', () => {
+  const sheet = (rows: Record<string, string>[]) => {
+    const wb = XLSX.utils.book_new();
+    const base = { name: 'Jane Kamau', mobileNumber: '712345678', department: 'ROADS', designation: 'ENGINEER' };
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows.map((row) => ({ ...base, ...row }))), 'Employee');
+    const { data, validation } = parseEmployeeExcel(wb);
+    expect(validation.errors).toEqual([]);
+    return data;
+  };
+  // The founder holds EMP_0001; EMP_0007 belongs to someone removed.
+  const hrms = new Map([
+    ['EMP_0001', { ...employee('EMP_0001'), user: { name: 'Anita Wanjiru', emailId: 'Anita@Example.org' } } as unknown as Employee],
+    ['EMP_0007', employee('EMP_0007', { isActive: false })],
+  ]);
+  const check = (rows: ReturnType<typeof sheet>) => {
+    const planned = withEmployeeCodes(rows, hrms);
+    return planned.map((row) => ({ code: row.employeeCode, problem: codeProblem(row, planned, hrms) }));
+  };
+
+  it('gives a code-less row the next free code past HRMS and the sheet', () => {
+    expect(check(sheet([{ emailId: 'a@example.org' }, { employeeCode: 'EMP_0010', emailId: 'b@example.org' }, { emailId: 'c@example.org' }]))).toEqual([
+      { code: 'EMP_0011', problem: null },
+      { code: 'EMP_0010', problem: null },
+      { code: 'EMP_0012', problem: null },
+    ]);
+  });
+
+  it('flags a given code HRMS holds for someone else', () => {
+    expect(check(sheet([{ employeeCode: 'EMP_0001', emailId: 'joseph@example.org' }]))).toEqual([
+      { code: 'EMP_0001', problem: { takenBy: 'Anita Wanjiru' } },
+    ]);
+  });
+
+  it('lets the same person through on their own code (email trimmed, any case)', () => {
+    expect(check(sheet([{ employeeCode: 'EMP_0001', emailId: ' anita@example.ORG ' }]))).toEqual([{ code: 'EMP_0001', problem: null }]);
+  });
+
+  it('flags a code on two rows of the sheet', () => {
+    expect(check(sheet([{ employeeCode: 'EMP_0020', emailId: 'a@example.org' }, { employeeCode: 'EMP_0020', emailId: 'b@example.org' }]))
+      .map((row) => row.problem)).toEqual([{ repeated: true }, { repeated: true }]);
+  });
+});
+
 describe('listEmployees', () => {
   it('lists active employees but keeps every code HRMS holds', async () => {
     hrms.searchEmployees.mockResolvedValue([employee('EMP_0001'), { ...employee('EMP_0003'), isActive: false } as Employee]);
@@ -76,7 +121,6 @@ describe('listEmployees', () => {
 
 describe('addEmployee', () => {
   it('builds the HRMS payload from the dialog', async () => {
-    hrms.checkUsernameAvailable.mockResolvedValue(true);
     await addEmployee(
       'acme',
       {
@@ -96,7 +140,7 @@ describe('addEmployee', () => {
         tenantId: 'acme',
         code: 'EMP_0001',
         name: 'Anita Wanjiru',
-        userName: 'anita.wanjiru',
+        userName: 'EMP_0001',
         emailId: 'anita@example.org',
         department: 'ROADS,PARKS',
         designation: 'ENGINEER',
@@ -110,18 +154,47 @@ describe('addEmployee', () => {
     expect(hrms.createEmployee).toHaveBeenCalled();
   });
 
-  it('adds the code to a username someone already has', async () => {
-    hrms.checkUsernameAvailable.mockResolvedValue(false);
+  // HRMS makes every employee's username their code, so there is no name to check (#2456).
+  it('sends the code as the username without a username look-up', async () => {
     await addEmployee(
       'acme',
       { code: 'EMP_0007', name: 'Anita Wanjiru', emailId: 'anita@example.org', mobileNumber: '9876543210', departments: ['ROADS'], designation: 'ENGINEER', roles: ['EMPLOYEE'], jurisdictions: ['WARD_1'] },
       options,
     );
-    expect(hrms.buildEmployee).toHaveBeenCalledWith(expect.objectContaining({ userName: 'anita.wanjiru.emp_0007' }));
+    expect(hrms.buildEmployee).toHaveBeenCalledWith(expect.objectContaining({ userName: 'EMP_0007' }));
+    expect(hrms.checkUsernameAvailable).not.toHaveBeenCalled();
   });
 });
 
 describe('removeEmployee', () => {
+  it('never deactivates another workspace\'s employee with the same code (#2456)', async () => {
+    hrms.searchEmployees.mockResolvedValue([employee('A', { tenantId: 'other', uuid: 'theirs' }), employee('A')]);
+    await removeEmployee(employee('A'));
+    expect(hrms.searchEmployees).toHaveBeenCalledWith('acme', { uuids: ['A'] });
+    expect(hrms.updateEmployee).toHaveBeenCalledTimes(1);
+    expect(hrms.updateEmployee).toHaveBeenCalledWith(expect.objectContaining({ tenantId: 'acme', uuid: 'A' }));
+  });
+
+  it('removes an employee that carries only the user\'s uuid', async () => {
+    const userOnly = { code: 'A', tenantId: 'acme', user: { uuid: 'u-1' } } as Employee;
+    hrms.searchEmployees.mockResolvedValue([userOnly]);
+    await removeEmployee(userOnly);
+    expect(hrms.searchEmployees).toHaveBeenCalledWith('acme', { uuids: ['u-1'] });
+    expect(hrms.updateEmployee).toHaveBeenCalledWith(expect.objectContaining({ code: 'A', isActive: false }));
+  });
+
+  it('says so, and asks HRMS nothing, for an employee with no uuid', async () => {
+    await expect(removeEmployee({ code: 'A', tenantId: 'acme', user: {} } as Employee)).rejects.toThrow(/account identifier/);
+    expect(hrms.searchEmployees).not.toHaveBeenCalled();
+    expect(hrms.updateEmployee).not.toHaveBeenCalled();
+  });
+
+  it('refuses when only another workspace has the code (#2456)', async () => {
+    hrms.searchEmployees.mockResolvedValue([employee('A', { tenantId: 'other', uuid: 'theirs' })]);
+    await expect(removeEmployee(employee('A'))).rejects.toThrow();
+    expect(hrms.updateEmployee).not.toHaveBeenCalled();
+  });
+
   it('deactivates with a reason, as management does', async () => {
     hrms.searchEmployees.mockResolvedValue([employee('A')]);
     await removeEmployee(employee('A'));
@@ -178,6 +251,18 @@ describe('editing an employee', () => {
     ...options,
     boundaries: [...options.boundaries, { code: 'WARD_NEW', name: 'New ward', boundaryType: 'Ward', hierarchyType: 'ADMIN', depth: 2 }],
   };
+
+  it('never updates another workspace\'s employee with the same code (#2456)', async () => {
+    const theirs = { ...fresh(), tenantId: 'other', uuid: 'theirs', user: { ...fresh().user, uuid: 'theirs' } } as Employee;
+    hrms.searchEmployees.mockResolvedValue([theirs, fresh()]);
+    await updateEmployeeDetails(fresh(), changes, options, { kind: 'active' });
+    expect(hrms.updateEmployee).toHaveBeenCalledTimes(1);
+    expect(hrms.updateEmployee).toHaveBeenCalledWith(expect.objectContaining({ tenantId: 'acme', uuid: 'u-2' }));
+
+    hrms.searchEmployees.mockResolvedValue([theirs]);
+    await expect(updateEmployeeDetails(fresh(), changes, options, { kind: 'active' })).rejects.toThrow();
+    expect(hrms.updateEmployee).toHaveBeenCalledTimes(1);
+  });
 
   it('replaces only the roles the step offers and keeps the rest', () => {
     const roles = applyEmployeeChanges(fresh(), changes, options).user.roles.map((role) => `${role.code}@${role.tenantId}`);

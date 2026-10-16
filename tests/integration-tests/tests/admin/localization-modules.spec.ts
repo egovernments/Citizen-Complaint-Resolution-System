@@ -16,7 +16,7 @@
 
 import { test, expect } from '@playwright/test';
 import { getDigitToken } from '../utils/auth';
-import { BASE_URL, TENANT, ADMIN_USER, ADMIN_PASS } from '../utils/env';
+import { BASE_URL, ROOT_TENANT, ADMIN_USER, ADMIN_PASS } from '../utils/env';
 
 const LOCALE = 'en_IN';
 
@@ -36,7 +36,7 @@ async function searchLocalizations(
   accessToken: string,
   module: string,
 ): Promise<LocalizationMessage[]> {
-  const url = `${BASE_URL}/localization/messages/v1/_search?locale=${LOCALE}&tenantId=${TENANT}&module=${module}`;
+  const url = `${BASE_URL}/localization/messages/v1/_search?locale=${LOCALE}&tenantId=${ROOT_TENANT}&module=${module}`;
   const resp = await fetch(url, {
     method: 'POST',
     headers: {
@@ -58,7 +58,7 @@ test.describe('Configurator localization modules (#636)', () => {
   test.beforeAll(async () => {
     const tokenResponse = await getDigitToken({
       baseURL: BASE_URL,
-      tenant: TENANT,
+      tenant: ROOT_TENANT,
       username: ADMIN_USER,
       password: ADMIN_PASS,
     });

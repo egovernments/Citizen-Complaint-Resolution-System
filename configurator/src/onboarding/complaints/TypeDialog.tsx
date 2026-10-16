@@ -2,6 +2,7 @@ import { useId, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { RequiredMark } from '@/components/ui/required-mark';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { hasMixedHours, type DraftType } from './complaintsApi';
 import { chosenHours, formatHours, initialChoice, RESOLUTION_CHOICES, type HoursChoice } from './resolution';
@@ -112,20 +113,27 @@ export function TypeDialog({
           }}
         >
           <div className="space-y-1.5">
-            <label htmlFor={`${id}-name`} className="block text-sm font-medium text-foreground">{t('common.name', 'Name')}</label>
+            <label htmlFor={`${id}-name`} className="block text-sm font-medium text-foreground">
+              {t('common.name', 'Name')}
+              <RequiredMark />
+            </label>
             <Input
               id={`${id}-name`}
               value={name}
               autoFocus
+              aria-required="true"
               placeholder={t('complaints.name_example', 'Street lighting')}
               onChange={(event) => setName(event.target.value)}
             />
             {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
           </div>
           <div className="space-y-1.5">
-            <label htmlFor={`${id}-department`} className="block text-sm font-medium text-foreground">{t('complaints.handled_by_label', 'Handled by')}</label>
+            <label htmlFor={`${id}-department`} className="block text-sm font-medium text-foreground">
+              {t('complaints.handled_by_label', 'Handled by')}
+              <RequiredMark />
+            </label>
             <Select value={department} onValueChange={setDepartment}>
-              <SelectTrigger id={`${id}-department`} className="bg-card">
+              <SelectTrigger id={`${id}-department`} aria-required="true" className="bg-card">
                 <SelectValue placeholder={t('common.choose_department', 'Choose a department')} />
               </SelectTrigger>
               <SelectContent>
@@ -183,6 +191,7 @@ export function TypeDialog({
                   min={1}
                   inputMode="numeric"
                   aria-label={t('complaints.hours_input', 'Resolution time in hours')}
+                  aria-required="true"
                   placeholder={t('complaints.hours_placeholder', 'Hours')}
                   value={customHours}
                   onChange={(event) => setCustomHours(event.target.value)}

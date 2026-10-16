@@ -25,7 +25,14 @@ export interface EditableColumnConfig {
 
 export interface DigitColumn<RecordType extends RaRecord = RaRecord> {
   source: string;
+  /** Header text: a localization code (`app.fields.sla`) or plain English. */
   label: string;
+  /**
+   * Localization code for an English `label`, which then becomes the fallback.
+   * Set by the schema column generators; a hand-written English label without
+   * one renders as written.
+   */
+  labelKey?: string;
   sortable?: boolean;
   render?: (record: RecordType) => React.ReactNode;
   editable?: boolean | EditableColumnConfig;

@@ -2216,6 +2216,9 @@ services:
       GATUS_PROFILE_NOTIFICATIONS: ${GATUS_PROFILE_NOTIFICATIONS:-false}
       GATUS_PROFILE_CHATBOT: ${GATUS_PROFILE_CHATBOT:-false}
       GATUS_AUDIT: "true"
+      # Kong's Admin API is loopback-only here (KONG_ADMIN_LISTEN above), so no
+      # other container can reach kong:8001 (#2458).
+      GATUS_KONG_ADMIN: "false"
       GATUS_PROXIES: "true"
       # Watch the monitoring itself (#1613). This is the only compose path that
       # deploys the full observability stack, so it is the only one where these
@@ -3299,6 +3302,9 @@ services:
       DIGIT_ADMIN_USERNAME: ${IDENTITY_DIGIT_ADMIN_USERNAME:-ADMIN}
       DIGIT_ADMIN_PASSWORD: ${IDENTITY_DIGIT_ADMIN_PASSWORD:-eGov@123}
       DIGIT_ADMIN_TENANT_ID: ${IDENTITY_DIGIT_ADMIN_TENANT_ID:-pg}
+      # Roots tenant-routes/_backfill may give an Organization; empty = none. (identity-bff uses the
+      # root of DIGIT_ADMIN_TENANT_ID only when the variable is unset, which it never is here.)
+      IDENTITY_TENANT_ROUTE_BACKFILL_ROOTS: ${IDENTITY_TENANT_ROUTE_BACKFILL_ROOTS:-}
       DIGIT_ADMIN_USER_TYPE: EMPLOYEE
       DIGIT_MANAGED_BASE_ROLES: EMPLOYEE
       DIGIT_MANAGED_ROLE_ALLOWLIST: EMPLOYEE,GRO,PGR_LME,DGRO,CSR,SUPERVISOR,AUTO_ESCALATE,PGR_VIEWER,TICKET_REPORT_VIEWER,ACCOUNT_ADMIN,MDMS_ADMIN,LOC_ADMIN,SUPERUSER

@@ -135,6 +135,29 @@ class PGRService {
     return data.MdmsRes || data.mdms || {};
   }
 
+  /**
+   * Whether complaints on this tenant may carry extendedAttributes. PGR accepts them only
+   * when the tenant (or its state tenant, the same fallback PGR uses) has an active
+   * RAINMAKER-PGR.ComplaintTemplateType row for caseRelatedTo; ke has none and rejects them
+   * with INVALID_CASE_RELATED_TO. A master or module MDMS doesn't return means no row.
+   */
+  async acceptsExtendedAttributes(tenantId) {
+    const caseRelatedTo = config.caseRelatedTo;
+    if (!caseRelatedTo || !tenantId) return false;
+    const filter = `$.[?(@.active == true && @.caseRelatedTo == '${caseRelatedTo.replace(/'/g, "")}')]`;
+    const rowsFor = (tenant) =>
+      referenceCache.get(`template:${tenant}:${caseRelatedTo}`, () =>
+        this.fetchMdmsData(tenant, "RAINMAKER-PGR", "ComplaintTemplateType", filter).catch((error) => {
+          if (/not found/.test(error.message)) return [];
+          throw error;
+        })
+      );
+
+    if ((await rowsFor(tenantId)).length > 0) return true;
+    const stateTenant = String(tenantId).split(".")[0];
+    return stateTenant !== tenantId && (await rowsFor(stateTenant)).length > 0;
+  }
+
   async fetchComplaintHierarchyLevels(tenantId) {
     const rows = await referenceCache.get(`definition:${tenantId}`, () =>
       this.fetchMdmsData(
@@ -169,25 +192,41 @@ class PGRService {
     ]);
 
 
+    const sameType = hierarchyRows.filter((row) => !hierarchyType || row.hierarchyType === hierarchyType);
+
     const parentCode = hierarchyPath[hierarchyPath.length - 1];
-    const children = hierarchyRows
-      .filter((row) => !hierarchyType || row.hierarchyType === hierarchyType)
-      .filter((row) => (parentCode ? row.parentCode === parentCode : row.parentCode == null))
-      .sort(
-        (a, b) =>
-          (this.isOtherOption(a) ? 1 : 0) - (this.isOtherOption(b) ? 1 : 0) ||
-          (a.order ?? 0) - (b.order ?? 0) ||
-          String(a.code).localeCompare(String(b.code))
-      );
+    let children = sameType.filter((row) => (parentCode ? row.parentCode === parentCode : row.parentCode == null));
+
+    // Top-level rows on a level other than the definition's first are someone else's tree
+    // sharing the hierarchyType (ke carries ~900 AUTHORITY_TYPE test roots beside
+    // CATEGORY -> SUB_TYPE); offered as options they swamp the real roots. Only the root is
+    // filtered: anything under a real root is the real tree, declared or not. Level codes
+    // are compared loosely (Sub_Type = SUBTYPE), and if none match, every root is kept.
+    const loose = (code) => String(code ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+    const rootLevel = !parentCode && levels[0]?.levelCode;
+    if (rootLevel) {
+      const declared = children.filter((row) => row.levelCode == null || loose(row.levelCode) === loose(rootLevel));
+      if (declared.length > 0) {
+        children = declared;
+      } else if (children.length > 0) {
+        console.warn(`ComplaintHierarchy for ${tenantId}: no root is on the declared level ${rootLevel}; offering all ${children.length} roots`);
+      }
+    }
+
+    children.sort(
+      (a, b) =>
+        (this.isOtherOption(a) ? 1 : 0) - (this.isOtherOption(b) ? 1 : 0) ||
+        (a.order ?? 0) - (b.order ?? 0) ||
+        String(a.code).localeCompare(String(b.code))
+    );
 
     const level =
-      levels.find((candidate) => candidate.levelCode === children[0]?.levelCode) ??
+      levels.find((candidate) => children.length > 0 && loose(candidate.levelCode) === loose(children[0].levelCode)) ??
       levels[hierarchyPath.length];
-    
-    const hasChildren = (code) =>
-      hierarchyRows.some(
-        (row) => (!hierarchyType || row.hierarchyType === hierarchyType) && row.parentCode === code
-      );
+
+    // Built once: a per-child scan of every row was ~200k checks per step on ke.
+    const parentCodes = new Set(sameType.map((row) => row.parentCode));
+    const hasChildren = (code) => parentCodes.has(code);
       
     const isLeaf = (row) => !hasChildren(row.code);
     const isLeafLevel = level
@@ -817,11 +856,16 @@ class PGRService {
 
     requestBody["service"]["serviceCode"] = complaintType;
     requestBody["service"]["description"] = slots.description ?? "";
-    requestBody["service"]["extendedAttributes"] = {
-      caseRelatedTo: config.caseRelatedTo,
-      instituteName: slots.instituteName,
-      isConfidential: slots.isConfidential === true,
-    };
+    // Decided per tenant before the institution/confidentiality questions were asked
+    // (acceptsExtendedAttributes), so what the citizen answered is exactly what is sent.
+    // Without that template PGR rejects them, and the plain complaint is filed instead.
+    if (slots.extendedAttributes === true) {
+      requestBody["service"]["extendedAttributes"] = {
+        caseRelatedTo: config.caseRelatedTo,
+        instituteName: slots.instituteName,
+        isConfidential: slots.isConfidential === true,
+      };
+    }
 
     // Handle location coordinates (geocode)
     if (slots.geocode) {

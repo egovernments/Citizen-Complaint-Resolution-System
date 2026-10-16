@@ -21,10 +21,12 @@ public class PlatformBaselineSeedTest {
      * under an unchanged version never reaches them. v2 changed in place until #2269 merged; from then on, changing
      * the seed means bumping "version" and recording both here. v3 carries the onboarding Geography step's labels;
      * v4 drops the TRANSGENDER and OTHERS genders (#2397); v5 the docs rail, tour and next-step card labels (#2439);
-     * v6 the fr_FR and pt_BR citizen and employee packs, and the en_IN keys those screens ask for.
+     * v6 lets the founder save the dashboard settings (dss.DashboardConfig writes, #2221);
+     * v7 drops CSR's /user/users/_createnovalidate grant, which BaselineUpgrader also deactivates (#2239);
+     * v8 the fr_FR and pt_BR citizen and employee packs, and the en_IN keys those screens ask for.
      */
-    private static final String VERSION = "6";
-    private static final String SHA256 = "38506b0b3fd4dcec605862165e9a37dfb152288977d853c9be912b8eea04f0a9";
+    private static final String VERSION = "8";
+    private static final String SHA256 = "bbf05cd6f8232977b4f0d31bfd32f0a8243bc9677a9f887df3f06650b7638b27";
     @Test public void contentChangesComeWithAVersionBump() throws Exception {
         byte[] bytes;
         try (var in = PlatformBaselineSeedTest.class.getResourceAsStream("/onboarding/platform-baseline-v1.json")) { bytes = in.readAllBytes(); }

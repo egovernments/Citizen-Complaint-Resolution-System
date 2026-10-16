@@ -131,6 +131,7 @@ describe('PGR End-to-End Workflow', () => {
 
   describe('Step 3: Create PGR Complaint', () => {
     test('should create a new complaint', async () => {
+      const localityCode = await db.leafBoundaryCode(tenant.city);
       const response = await api.post(
         ports.pgr,
         `/pgr-services/v2/request/_create?tenantId=${tenant.city}`,
@@ -157,7 +158,7 @@ describe('PGR End-to-End Workflow', () => {
             address: {
               city: tenant.city,
               locality: {
-                code: 'LOCALITY1',
+                code: localityCode,
                 name: 'Test Locality',
               },
               geoLocation: {
@@ -177,6 +178,7 @@ describe('PGR End-to-End Workflow', () => {
         }
       );
 
+      if (!response.ok) console.log('Create failed:', JSON.stringify(response.data, null, 2).slice(0, 800));
       expect(response.ok).toBe(true);
 
       const data = response.data as {

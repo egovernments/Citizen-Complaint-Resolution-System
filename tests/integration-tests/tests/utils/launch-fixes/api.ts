@@ -152,9 +152,9 @@ export interface PgrCreateParams {
   /** Optional: send extended_attributes in service body. Per user direction:
    *  content must stay empty {}. Defaults to undefined (omitted). */
   extendedAttributes?: Record<string, unknown>;
-  /** Optional geo-location override for map/detail contract tests. The legacy
-   * default remains (0,0) so existing fixture semantics do not change. Pass
-   * an empty object to exercise a genuinely missing persisted location. */
+  /** Optional geo-location for map/detail contract tests. The default is `{}`,
+   * which is stored as no location. A spec that needs a legacy (0,0) row must
+   * pass `{ latitude: 0, longitude: 0 }` explicitly (#1581). */
   geoLocation?: { latitude?: number; longitude?: number };
 }
 
@@ -196,7 +196,9 @@ export async function pgrCreate(params: PgrCreateParams): Promise<PgrCreateResul
     address: {
       city: tenantId,
       locality: { code: localityCode },
-      geoLocation: geoLocation ?? { latitude: 0, longitude: 0 },
+      // No pin is `{}` (stored as no location), the same as the digit-ui create
+      // screens. (0, 0) is a real point at sea and showed up as data (#1581).
+      geoLocation: geoLocation ?? {},
     },
     citizen: { name: citizenName, mobileNumber: citizenPhone },
   };

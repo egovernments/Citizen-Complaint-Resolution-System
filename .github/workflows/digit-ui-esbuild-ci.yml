@@ -1,0 +1,57 @@
+name: digit-ui-esbuild CI
+
+# Offline unit tests for digit-ui-esbuild: `npm test` runs every
+# *.test.{js,mjs,cjs,jsx} file under tests/, src/theme/, scripts/lib/ and
+# products/dashboard/, so local runs match CI and new files need no workflow
+# edit. Besides digit-ui-esbuild/**, the paths list the files outside it that
+# those tests read. Without them, a PR that changes only one of those files
+# would merge without this job running.
+
+on:
+  pull_request:
+    branches: [develop, master]
+    # One list for both triggers (YAML anchor), so they can't drift apart.
+    paths: &paths
+      - 'digit-ui-esbuild/**'
+      # tests/tenant-route.test.js
+      - 'backend/identity-bff/docs/identity-bff.md'
+      # tests/localizationPacks.test.js
+      - 'utilities/default-data-handler/src/main/resources/localisations/**'
+      # products/dashboard/src/i18n/localizationContract.test.js,
+      # products/dashboard/src/services/publicRuntimeIsolation.test.js
+      - 'local-setup/db/dss-mdms-seed/l10n/**'
+      # products/dashboard/src/services/{dashboardCapabilityGate,analyticsBatchCatalog,publicRuntimeIsolation}.test.js
+      - 'ansible/nairobi-mdms/mdms/dss/KpiDefinition.json'
+      - 'ansible/nairobi-mdms/mdms/dss/DashboardPack.json'
+      - 'ansible/nairobi-mdms/mdms/ACCESSCONTROL-ACTIONS-TEST/actions-test.json'
+      - 'utilities/default-data-handler/src/main/resources/mdmsData/ACCESSCONTROL-ACTIONS-TEST/ACCESSCONTROL-ACTIONS-TEST.actions-test.json'
+      - 'digit-mcp/src/tools/dashboard-catalog-seed.ts'
+      - '.github/workflows/digit-ui-esbuild-ci.yml'
+  push:
+    branches: [develop, master]
+    paths: *paths
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: digit-ui-esbuild
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20 # as in docker/Dockerfile (node:20-slim)
+          cache: npm
+          cache-dependency-path: digit-ui-esbuild/package-lock.json
+
+      # --legacy-peer-deps as docker/Dockerfile uses (with npm install there):
+      # without it npm hits ERESOLVE.
+      - run: npm ci --legacy-peer-deps
+
+      - run: npm test

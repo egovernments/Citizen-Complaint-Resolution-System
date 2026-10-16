@@ -21,11 +21,12 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import { loginViaApi, getDigitToken, appBase } from '../utils/auth';
+import { requiredEnv } from '../utils/identity';
 
-const BASE_URL  = process.env.BASE_URL   || 'http://localhost:18080';
-const TENANT    = process.env.DIGIT_TENANT   || 'pg.citya';
-const USERNAME  = process.env.DIGIT_USERNAME || 'ADMIN';
-const PASSWORD  = process.env.DIGIT_PASSWORD || 'eGov@123';
+const BASE_URL  = requiredEnv('BASE_URL');
+const TENANT    = requiredEnv('DIGIT_TENANT');
+const USERNAME  = requiredEnv('DIGIT_USERNAME');
+const PASSWORD  = requiredEnv('DIGIT_PASSWORD');
 
 // Same default status filter the employee inbox queries on load.
 const INBOX_STATUSES = ['PENDINGFORASSIGNMENT', 'PENDINGFORREASSIGNMENT', 'PENDINGATLME'];
@@ -99,7 +100,7 @@ test.describe('PGR inbox pagination (#916)', () => {
 
     // Collect complaint numbers on page 1
     const page1Rows = await page.locator('table tbody tr, [class*="digit-results-table"] tr').allInnerTexts();
-    const page1Ids: string[] = page1Rows.join('\n').match(/PG-PGR-[0-9-]+/g) ?? [];
+    const page1Ids: string[] = page1Rows.join('\n').match(/[A-Z0-9-]+-PGR-[0-9-]+/g) ?? [];
 
     if (page1Ids.length === 0) {
       test.skip(true, 'No complaints in inbox — seed data required');
@@ -130,7 +131,7 @@ test.describe('PGR inbox pagination (#916)', () => {
 
     // Page 2 should have different complaint IDs
     const page2Rows = await page.locator('table tbody tr, [class*="digit-results-table"] tr').allInnerTexts();
-    const page2Ids: string[] = page2Rows.join('\n').match(/PG-PGR-[0-9-]+/g) ?? [];
+    const page2Ids: string[] = page2Rows.join('\n').match(/[A-Z0-9-]+-PGR-[0-9-]+/g) ?? [];
 
     expect(page2Ids.length).toBeGreaterThan(0);
 

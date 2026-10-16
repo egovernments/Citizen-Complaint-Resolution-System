@@ -140,13 +140,14 @@ export function mobileHint(countryName: string, rule: MobileRule, t: OnboardingT
  * The national number in what was typed, or null when it doesn't pass the rule.
  *
  * Accepts what the backend's parser accepts on the way in: spaces, dashes and
- * brackets, the dial code with or without its "+", and a leading trunk 0. What
+ * brackets, the dial code with "+", "00" or neither, and a leading trunk 0. What
  * comes back is the bare national number egov-user checks against the rule.
  */
 export function nationalMobile(input: string, rule: MobileRule): string | null {
   const matches = new RegExp(rule.pattern);
   const dial = rule.dialCode.replace(/^\+/, '');
   let digits = input.replace(/[\s().-]/g, '');
+  if (digits.startsWith('00')) digits = `+${digits.slice(2)}`;
   if (digits.startsWith('+')) {
     if (!digits.startsWith(`+${dial}`)) return null;
     digits = digits.slice(dial.length + 1);

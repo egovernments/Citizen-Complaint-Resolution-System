@@ -3,6 +3,8 @@ import { resolve } from 'node:path';
 
 const BASE_URL = process.env.BASE_URL;
 if (!BASE_URL) throw new Error('BASE_URL is required for dashboard tests');
+// Node's fetch (passwordSignIn) honours the same self-signed opt-in as ignoreHTTPSErrors below.
+if (process.env.IGNORE_HTTPS_ERRORS === '1') process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
 const resultsDir = process.env.DASHBOARD_RESULTS_DIR
   ? resolve(process.env.DASHBOARD_RESULTS_DIR)

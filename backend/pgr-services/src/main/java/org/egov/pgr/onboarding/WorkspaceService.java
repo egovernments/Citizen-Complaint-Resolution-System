@@ -29,7 +29,7 @@ public class WorkspaceService {
         if(((Number)row.get("version")).longValue()!=version)WorkspaceRepository.conflict("WORKSPACE_VERSION_CONFLICT");
         if(Boolean.TRUE.equals(row.get("legacy")))return response(row,null,repository.rename(tenant,null).orElse(null));
         // Only DONE needs evidence, and only for its own step: other writes must not depend on MDMS, boundary or HRMS.
-        Map<String,Boolean> probes="DONE".equals(state)?Map.of(step,gateway.probe(tenant,step)):null;
+        Map<String,Boolean> probes="DONE".equals(state)?Map.of(step,gateway.probe(tenant,step,founder(tenant))):null;
         if(probes!=null&&!probes.get(step)) WorkspaceRepository.conflict("WORKSPACE_PROBE_INCOMPLETE");
         Map<String,Object> steps=(Map<String,Object>)row.get("steps");
         steps.put(step,new LinkedHashMap<>(Map.of("state",state,"updatedAt",System.currentTimeMillis(),"updatedBy",actor)));
@@ -74,8 +74,9 @@ public class WorkspaceService {
             row.put("version",0L);row.put("seedVersion",null);row.put("updatedAt",null);row.put("updatedBy",null);row.put("legacy",true);
             return response(row,null,null);
         }
-        return response(row,Boolean.TRUE.equals(row.get("legacy"))?null:gateway.probes(tenant),repository.rename(tenant,null).orElse(null));
+        return response(row,Boolean.TRUE.equals(row.get("legacy"))?null:gateway.probes(tenant,founder(tenant)),repository.rename(tenant,null).orElse(null));
     }
+    private String founder(String tenant){return repository.founderDigitUuid(tenant).orElse(null);}
     private Map<String,Object> response(Map<String,Object> row,Map<String,Boolean> probes,Map<String,Object> rename){
         Map<String,Object> result=new LinkedHashMap<>();result.put("Workspace",row);result.put("Probes",probes);result.put("Rename",publicRename(rename));return result;
     }

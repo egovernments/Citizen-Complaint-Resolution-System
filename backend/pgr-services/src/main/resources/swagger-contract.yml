@@ -243,7 +243,19 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/OnboardingOperationRequest'
+              type: object
+              required: [Operation]
+              properties:
+                Operation:
+                  type: object
+                  description: The operation's id, or the id of the signup it belongs to (a page reloaded onto its signup).
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    signupId:
+                      type: string
+                      format: uuid
       responses:
         '200':
           description: Matching tenant-admin-owned operation

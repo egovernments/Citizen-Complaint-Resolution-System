@@ -2,6 +2,7 @@ import AccountPage from '@/identity/AccountPage';
 import MembersPage from '@/identity/MembersPage';
 import WorkspacePage from '@/identity/WorkspacePage';
 import { completedSteps, searchWorkspace, updateWorkspace, WORKSPACE_STEPS } from '@/identity/workspace';
+import { useIdentityKeepAlive } from '@/identity/keepAlive';
 import { describeWorkspaceError } from '@/onboarding/errors';
 import { translatorFrom } from '@/onboarding/i18n';
 import { toast } from '@/hooks/use-toast';
@@ -57,6 +58,8 @@ import { EscalationPolicyEditor } from '@/admin/escalation';
 import PgrDashboard from './pages/PgrDashboard';
 import OrgChartPage from './pages/org-chart/OrgChartPage';
 import PublicDashboardConfigure from './resources/public-dashboard/PublicDashboardConfigure';
+import { useLiveI18nProvider } from '@/providers/i18nProvider';
+import BrandingPage from './admin/BrandingPage';
 import { getGenericMdmsResources, getDataProvider, getAuthProvider, configureDigitClient, i18nProvider, DigitApiClient, isReadOnlyResource } from '@/providers/bridge';
 import { MastersCapabilityProvider, useMastersCapability } from '@/hooks/useMastersCapability';
 import { ThemeProvider } from '@/providers/ThemeProvider';
@@ -139,11 +142,12 @@ function ManagementAdmin() {
 function ManagementAdminResources() {
   const { state } = useApp();
   const { canViewResource } = useMastersCapability();
+  const liveI18nProvider = useLiveI18nProvider();
   return (
     <CoreAdminContext
       dataProvider={getDataProvider(state.tenant)}
       authProvider={getAuthProvider()}
-      i18nProvider={i18nProvider}
+      i18nProvider={liveI18nProvider}
       store={appStore}
       queryClient={queryClient}
       basename="/manage"
@@ -220,6 +224,7 @@ function ManagementAdminResources() {
             element={LEGACY_PGR_DASHBOARD_ENABLED ? <PgrDashboard /> : <Navigate to="/manage" replace />}
           />
           <Route path="/public-dashboard" element={<PublicDashboardConfigure />} />
+          <Route path="/branding" element={<BrandingPage />} />
           <Route path="/org-chart" element={<OrgChartPage />} />
           <Route path="/employees/bulk" element={<EmployeeBulkImport />} />
           <Route path="/departments/bulk" element={<DepartmentBulkImport />} />
@@ -362,6 +367,8 @@ function App() {
       }
     }
   }, [state.isAuthenticated]);
+
+  useIdentityKeepAlive(state.isAuthenticated);
 
   // Track session restoration and identify user on initial load
   useEffect(() => {

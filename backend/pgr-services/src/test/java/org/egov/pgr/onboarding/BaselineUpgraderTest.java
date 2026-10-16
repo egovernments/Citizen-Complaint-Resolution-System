@@ -96,6 +96,8 @@ public class BaselineUpgraderTest {
             var mdms = (Map<String, Object>) body.get("Mdms");
             if (!schemas.contains(mdms.get("schemaCode").toString())) throw new OnboardingFailure("SCHEMA_DEFINITION_NOT_FOUND", false);
             var row = (Map<String, Object>) body.get("Mdms"); put(row.get("schemaCode").toString(), row.get("uniqueIdentifier").toString(), (Map<String, Object>) row.get("data"));
+            if (Boolean.FALSE.equals(row.get("isActive")))
+                ((com.fasterxml.jackson.databind.node.ObjectNode) rows.get("walkone|" + row.get("schemaCode") + "|" + row.get("uniqueIdentifier"))).put("isActive", false);
             writes.add((path.contains("_create/") ? "create:" : "update:") + row.get("schemaCode") + ":" + row.get("uniqueIdentifier"));
         } else if (path.endsWith("_upsert") || path.endsWith("_delete")) {
             for (var m : (List<Object>) body.get("messages")) {
@@ -122,6 +124,17 @@ public class BaselineUpgraderTest {
         assertFalse("existing records are not rewritten", writes.stream().anyMatch(w -> w.startsWith("create:") && !w.contains("4560")));
         assertEquals(List.of(), finished.get("kept")); assertEquals("1", finished.get("from")); assertEquals(seed.version(), finished.get("to"));
         verify(workspaces).finishUpgrade(eq("walkone"), any(), eq(seed.version()), any(), anyLong());
+    }
+
+    @Test public void workspaceFromBeforeV7LosesCsrCreateUserGrant() {
+        put(BaselineUpgrader.ROLE_ACTIONS, "CSR.605", Map.of("id", 155, "actionid", 605, "rolecode", "CSR", "tenantId", "walkone", "actioncode", ""));
+        upgrader.upgrade("walkone", 6, new LinkedHashMap<>(), UUID.randomUUID());
+        assertTrue(writes.contains("update:" + BaselineUpgrader.ROLE_ACTIONS + ":CSR.605"));
+        assertFalse(rows.get("walkone|" + BaselineUpgrader.ROLE_ACTIONS + "|CSR.605").path("isActive").asBoolean(true));
+        assertEquals(1, writes.stream().filter(w -> w.startsWith("update:")).count());
+        writes.clear();
+        upgrader.upgrade("walkone", 6, new LinkedHashMap<>(), UUID.randomUUID());
+        assertFalse("an inactive grant is not written again", writes.stream().anyMatch(w -> w.contains("CSR.605")));
     }
 
     @Test public void rerunMakesNoWrites() {

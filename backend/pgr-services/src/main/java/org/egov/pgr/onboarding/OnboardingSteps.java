@@ -18,6 +18,14 @@ public class OnboardingSteps {
      * hierarchy update), so it blocked that step (#2260).
      */
     public static final String WORKSPACE_HIERARCHY = "WORKSPACE";
+    /**
+     * The founder is the workspace's first employee, so they get the code the configurator's
+     * Employees step gives a first employee (#2456). One per tenant, so a retried step finds it.
+     * Founders made before this keep {@link #legacyFounderCode}.
+     */
+    public static final String FOUNDER_CODE = "EMP_0001";
+    /** The designation the step gives the founder; the configurator offers it to nobody else. */
+    public static final String FOUNDER_DESIGNATION = "ONBOARDING_FOUNDER";
     private final OnboardingProvisionerClient client;
     private final PlatformBaseline seed;
     private final ObjectMapper mapper;
@@ -326,17 +334,26 @@ public class OnboardingSteps {
     }
 
     private void founder(OnboardingSignup signup, OnboardingOperation operation, OnboardingProgress progress, OnboardingProgress.WriteScope scope) {
-        String tenant = signup.getRequestedTenantId(), code = "FOUNDER_" + signup.getId().toString().replace("-", "");
-        JsonNode employees = client.read("hrms", "/egov-hrms/employees/_search?tenantId=" + tenant + "&codes=" + code + "&offset=0&limit=2", Map.of()).path("Employees");
-        if (!employees.isArray()) throw new OnboardingFailure("HRMS_INVALID_RESPONSE", true);
-        if (employees.size() > 1) throw new OnboardingFailure("FOUNDER_AMBIGUOUS", false);
+        String tenant = signup.getRequestedTenantId();
+        // The old code too, so a run that created its founder under it before an upgrade finds them. If that
+        // founder's HRMS row is still not visible after the upgrade, the create below is refused for the
+        // taken mobile and the signup goes back to its founder; by their resubmit the row is visible.
+        JsonNode employees = preferFounder(ownEmployees(tenant, FOUNDER_CODE, legacyFounderCode(signup.getId())),
+                operation.getFounderDigitUuid(), legacyFounderCode(signup.getId()));
+        // Until the step has seen its founder nobody else can edit the row it made; after that the uuid decides (below).
+        if (employees.size() > 1 || employees.size() == 1 && operation.getFounderDigitUuid() == null && !isFounder(employees.get(0)))
+            throw new OnboardingFailure("FOUNDER_AMBIGUOUS", false);
         if (employees.isEmpty()) {
             if (operation.getFounderDigitUuid() != null) throw new OnboardingFailure("FOUNDER_NOT_FOUND", true);
             JsonNode contact = mapper.valueToTree(signup.getTenantMetadata().get("tenantAdmin"));
             List<Map<String, String>> roles = new ArrayList<>();
             seed.founderRoles().forEach(r -> roles.add(Map.of("code", r.asText(), "name", r.asText(), "tenantId", tenant)));
+            // Every employee can file a complaint on a citizen's behalf (#2239). CSR is added here, not to the seed's
+            // founderRoles: BaselineUpgrader cannot change an existing founder's roles, so a seed bump would claim it did.
+            if (roles.stream().noneMatch(r -> "CSR".equals(r.get("code")))) roles.add(Map.of("code", "CSR", "name", "Complainant", "tenantId", tenant));
             var user = new LinkedHashMap<String, Object>();
-            user.put("name", signup.getFounderName()); user.put("userName", code);
+            // HRMS gives every employee their code as username (enrichUser), whatever is sent, so send that.
+            user.put("name", signup.getFounderName()); user.put("userName", FOUNDER_CODE);
             String phone = contact.path("mobileNumber").asText().replaceAll("[\\s()-]", "");
             String countryCode = contact.path("countryCode").asText().trim();
             if (!countryCode.isBlank() && phone.startsWith(countryCode)) phone = phone.substring(countryCode.length());
@@ -346,10 +363,10 @@ public class OnboardingSteps {
             user.put("type", "EMPLOYEE"); user.put("active", true); user.put("tenantId", tenant); user.put("roles", roles);
             if (signup.isFounderEmailVerified()) user.put("emailId", signup.getFounderEmail());
             var employee = new LinkedHashMap<String,Object>();
-            employee.put("tenantId", tenant); employee.put("code", code); employee.put("employeeStatus", "EMPLOYED");
+            employee.put("tenantId", tenant); employee.put("code", FOUNDER_CODE); employee.put("employeeStatus", "EMPLOYED");
             employee.put("employeeType", "PERMANENT"); employee.put("dateOfAppointment", signup.getCreatedAt());
             employee.put("user", user); employee.put("isActive", true);
-            employee.put("assignments", List.of(Map.of("department", "ONBOARDING_ADMIN", "designation", "ONBOARDING_FOUNDER",
+            employee.put("assignments", List.of(Map.of("department", "ONBOARDING_ADMIN", "designation", FOUNDER_DESIGNATION,
                     "fromDate", signup.getCreatedAt(), "isCurrentAssignment", true)));
             employee.put("jurisdictions", List.of(Map.of("tenantId", tenant, "hierarchy", WORKSPACE_HIERARCHY, "boundaryType", "ROOT", "boundary", tenant, "roles", roles)));
             try {
@@ -359,18 +376,69 @@ public class OnboardingSteps {
                 // a different founder to work around an asynchronous HRMS projection.
                 if (failure.isRetryable()) throw failure;
                 String error = failure.getCode().toUpperCase(Locale.ROOT);
-                if (error.contains("DUPLICATE") || error.contains("ALREADY_EXIST") || error.equals("PROVISIONING_HTTP_409"))
+                // HRMS refuses a code that some user in the tenant already has as username. In a new workspace that is
+                // this step's own founder, whose user HRMS made at once while the employee row is still being saved.
+                // That founder's mobile is taken too, and HRMS lists the two errors in either order, so look at all of them.
+                if (error.contains("DUPLICATE") || error.contains("ALREADY_EXIST") || error.equals("PROVISIONING_HTTP_409")
+                        || failure.getCodes().contains("ERR_HRMS_USER_EXIST_USERNAME"))
                     throw new OnboardingFailure("FOUNDER_NOT_VISIBLE", true);
                 throw new OnboardingFailure("TENANT_ADMIN_ACCOUNT_REJECTED", false);
             }
             // HRMS/egov-user persist asynchronously. A later claim searches again before create.
-            employees = client.read("hrms", "/egov-hrms/employees/_search?tenantId=" + tenant + "&codes=" + code + "&offset=0&limit=2", Map.of()).path("Employees");
+            employees = ownEmployees(tenant, FOUNDER_CODE);
         }
         String uuid = employees.path(0).path("user").path("uuid").asText();
         if (uuid.isBlank()) throw new OnboardingFailure("FOUNDER_NOT_VISIBLE", true);
         if (operation.getFounderDigitUuid() != null && !operation.getFounderDigitUuid().equals(uuid))
             throw new OnboardingFailure("BINDING_CONFLICT", false);
         operation.setFounderDigitUuid(uuid); progress.save();
+    }
+
+    private static final int HRMS_PAGE = 100;
+
+    /**
+     * The tenant's employees holding one of these codes. HRMS can't be asked by code: a `codes` search
+     * looks the first code up as a username in the tenant and then drops the tenant filter, so where no
+     * user has that username (a new workspace has no users at all) it answers with every tenant's row
+     * for the code. So the tenant's own employees are read, a page at a time, and matched here.
+     */
+    private JsonNode ownEmployees(String tenant, String... codes) {
+        com.fasterxml.jackson.databind.node.ArrayNode matches = mapper.createArrayNode();
+        // A new workspace has a handful of employees here; the bound only stops an HRMS that ignores offset.
+        for (int offset = 0; offset < 100 * HRMS_PAGE; offset += HRMS_PAGE) {
+            JsonNode page = client.read("hrms", "/egov-hrms/employees/_search?tenantId=" + tenant
+                    + "&offset=" + offset + "&limit=" + HRMS_PAGE, Map.of()).path("Employees");
+            if (!page.isArray()) throw new OnboardingFailure("HRMS_INVALID_RESPONSE", true);
+            for (JsonNode employee : page) {
+                // Only a row HRMS says is this tenant's counts: another tenant's founder, even an
+                // inactive one with the founder designation, is never this workspace's.
+                if (!tenant.equals(employee.path("tenantId").asText())) continue;
+                for (String code : codes) if (code.equalsIgnoreCase(employee.path("code").asText())) { matches.add(employee); break; }
+            }
+            if (page.size() < HRMS_PAGE) return matches;
+        }
+        throw new OnboardingFailure("HRMS_INVALID_RESPONSE", true);
+    }
+
+    /**
+     * Where several rows match, the founder's own: the row with the uuid the step already bound, else the
+     * old FOUNDER_ row. A workspace from before #2456 can hold both that row and an EMP_0001 its admin added.
+     */
+    private JsonNode preferFounder(JsonNode rows, String founderUuid, String legacyCode) {
+        if (rows.size() < 2) return rows;
+        for (JsonNode row : rows) if (founderUuid != null && founderUuid.equals(row.path("user").path("uuid").asText())) return mapper.createArrayNode().add(row);
+        for (JsonNode row : rows) if (legacyCode.equalsIgnoreCase(row.path("code").asText())) return mapper.createArrayNode().add(row);
+        return rows;
+    }
+
+    /** The code founders had before #2456. */
+    static String legacyFounderCode(UUID signupId) { return "FOUNDER_" + signupId.toString().replace("-", ""); }
+
+    /** A row this step made: the old FOUNDER_ code, or the founder designation (only trusted before anyone could edit it). */
+    private static boolean isFounder(JsonNode employee) {
+        if (employee.path("code").asText().startsWith("FOUNDER_")) return true;
+        for (JsonNode assignment : employee.path("assignments")) if (FOUNDER_DESIGNATION.equals(assignment.path("designation").asText())) return true;
+        return false;
     }
 
     private JsonNode schema(String code) {

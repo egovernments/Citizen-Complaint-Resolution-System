@@ -63,7 +63,7 @@ describe('mobileHint', () => {
 
 describe('nationalMobile', () => {
   it('takes the national number in any form the backend parses', () => {
-    for (const typed of ['712345678', '0712345678', '+254712345678', '254712345678', '+254 712 345 678', '(0712) 345-678']) {
+    for (const typed of ['712345678', '0712345678', '+254712345678', '254712345678', '+254 712 345 678', '(0712) 345-678', '00254 712 345 678']) {
       expect(nationalMobile(typed, MOBILE_RULES.KE)).toBe('712345678');
     }
   });
@@ -74,6 +74,7 @@ describe('nationalMobile', () => {
     expect(nationalMobile('812345678', MOBILE_RULES.MZ)).toBeNull();
     expect(nationalMobile('5123456789', MOBILE_RULES.IN)).toBeNull();
     expect(nationalMobile('+91 9876543210', MOBILE_RULES.KE)).toBeNull();
+    expect(nationalMobile('0091 9876543210', MOBILE_RULES.KE)).toBeNull();
     expect(nationalMobile('7123x5678', MOBILE_RULES.KE)).toBeNull();
   });
 });

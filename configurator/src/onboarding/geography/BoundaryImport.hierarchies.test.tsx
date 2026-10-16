@@ -69,3 +69,16 @@ describe('BoundaryImport: select an existing hierarchy', () => {
     expect(screen.queryByText(/Couldn’t load your hierarchies/)).toBeNull();
   });
 });
+
+describe('BoundaryImport: create a hierarchy', () => {
+  it('marks the hierarchy name and its levels as required', async () => {
+    loadTenantHierarchies.mockResolvedValue({ hierarchies: [] });
+    render(<BoundaryImport source="excel" hasHierarchies={false} sourceChoices={[]} onDone={vi.fn()} onCancel={vi.fn()} />);
+
+    const name = await screen.findByText(/Hierarchy Type Name/);
+    expect(name.querySelector('[data-required-mark]')).not.toBeNull();
+    expect(document.getElementById('hierarchyType')?.getAttribute('aria-required')).toBe('true');
+    // At least two named levels.
+    expect(screen.getByText(/Define Levels/).querySelector('[data-required-mark]')).not.toBeNull();
+  });
+});
