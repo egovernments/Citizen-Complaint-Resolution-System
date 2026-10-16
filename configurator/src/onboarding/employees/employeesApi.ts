@@ -193,17 +193,12 @@ export function codeProblem(
 export async function addEmployee(tenantId: string, input: NewEmployee, options: EmployeeOptions): Promise<Employee> {
   const boundaryByCode = new Map(options.boundaries.map((boundary) => [boundary.code, boundary]));
   const roleByCode = new Map(options.roles.map((role) => [role.code, role]));
-  // The username comes from the name; two people can share a name, so a taken
-  // one gets the (unique) employee code added.
-  const base = hrmsService.generateUsername(input.name.trim());
-  const userName = (await hrmsService.checkUsernameAvailable(tenantId, base))
-    ? base
-    : `${base}.${input.code.toLowerCase()}`;
   const employee = hrmsService.buildEmployee({
     tenantId,
     code: input.code,
     name: input.name.trim(),
-    userName,
+    // HRMS makes every employee's username their code (enrichUser), whatever is sent.
+    userName: input.code,
     mobileNumber: input.mobileNumber,
     emailId: requiredEmail(input.emailId),
     // buildEmployee makes the first the current assignment and the rest history.
@@ -298,7 +293,8 @@ export async function updateEmployeeDetails(
   status: InviteStatus | null = null,
 ): Promise<{ email: EmailOutcome }> {
   const rows = await hrmsService.searchEmployees(employee.tenantId, { codes: [employee.code] });
-  const fresh = rows.find((row) => row.code === employee.code);
+  // Never another workspace's employee with the same code (#2456).
+  const fresh = rows.find((row) => row.code === employee.code && row.tenantId === employee.tenantId);
   if (!fresh) throw new MessageError('employees.gone', 'This employee no longer exists. Reload and try again.');
   const email = requiredEmail(changes.emailId);
   // An invitation still at an older address (a move that stopped halfway) counts as a change.
@@ -331,10 +327,14 @@ export async function updateEmployeeDetails(
 
 /** Deactivate, as management's delete does: HRMS keeps the record, marked inactive. */
 export async function removeEmployee(employee: Employee): Promise<void> {
+  // By uuid, never by code: another workspace's employee can share the code (#2456). A uuid search keeps
+  // HRMS's tenant filter.
+  const uuid = employee.user?.uuid || employee.uuid;
+  if (!uuid) throw new MessageError('members.no_account_id', 'HRMS did not return the employee account identifier. Reload and retry.');
   await deactivateAndRemove(
     async () => {
-      const rows = await hrmsService.searchEmployees(employee.tenantId, { codes: [employee.code] });
-      const fresh = rows.find(row => row.uuid === employee.uuid || row.code === employee.code);
+      const rows = await hrmsService.searchEmployees(employee.tenantId, { uuids: [uuid] });
+      const fresh = rows.find(row => (row.user?.uuid || row.uuid) === uuid && row.tenantId === employee.tenantId);
       if (!fresh) throw new MessageError('employees.gone_from_hrms', 'Employee no longer exists in HRMS.');
       return fresh as unknown as MemberEmployee;
     },

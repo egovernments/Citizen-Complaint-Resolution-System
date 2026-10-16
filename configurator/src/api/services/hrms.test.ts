@@ -31,6 +31,33 @@ describe('hrmsService.searchEmployees', () => {
     const [url] = postSpy.mock.calls[0];
     expect(url).toContain('codes=EMP1%2CEMP2');
   });
+
+  // egov-hrms drops its tenant filter on a code search unless someone in the tenant has the code as username (#2456).
+  it('keeps only this tenant\'s rows (and its cities\') from a code search, reading every page', async () => {
+    const row = (tenantId: string) => ({ code: 'EMP_0002', tenantId });
+    const postSpy = vi.spyOn(apiClient, 'post')
+      .mockResolvedValueOnce({ Employees: [...Array(98).fill(row('other')), row('acme.city'), row('acmeco')] } as never)
+      .mockResolvedValueOnce({ Employees: [row('acme')] } as never);
+
+    const rows = await hrmsService.searchEmployees('acme', { codes: ['EMP_0002'] });
+
+    expect(rows.map((r) => r.tenantId)).toEqual(['acme.city', 'acme']);
+    expect(postSpy).toHaveBeenCalledTimes(2);
+    expect(postSpy.mock.calls[1][0]).toContain('offset=100');
+  });
+
+  it('a code search\'s limit caps the rows kept, not the page size', async () => {
+    const postSpy = vi.spyOn(apiClient, 'post')
+      .mockResolvedValue({ Employees: [{ code: 'EMP_0002', tenantId: 'other' }, { code: 'EMP_0002', tenantId: 'acme' }] } as never);
+    expect(await hrmsService.searchEmployees('acme', { codes: ['EMP_0002'], limit: 1 })).toEqual([{ code: 'EMP_0002', tenantId: 'acme' }]);
+    expect(postSpy.mock.calls[0][0]).toContain('limit=100');
+  });
+
+  it('reads one page when there is no code', async () => {
+    const postSpy = vi.spyOn(apiClient, 'post').mockResolvedValue({ Employees: [{ code: 'A', tenantId: 'other' }] } as never);
+    expect(await hrmsService.searchEmployees('acme', { limit: 1 })).toHaveLength(1);
+    expect(postSpy).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('hrmsService.buildEmployee — dob / dateOfAppointment are optional (egovernments/CCRS#1949)', () => {
@@ -86,17 +113,6 @@ describe('hrmsService.buildEmployee — dob / dateOfAppointment are optional (eg
 
     expect(emp.dateOfAppointment).toBeUndefined();
     expect(emp.assignments).toHaveLength(2);
-  });
-});
-
-describe('hrmsService.generateUsername', () => {
-  it('joins the name with dots, trimming stray ones', () => {
-    expect(hrmsService.generateUsername(' Anita  Wanjiru-Otieno ')).toBe('anita.wanjiru.otieno');
-  });
-
-  it('keeps the base letter of an accented one (#2456)', () => {
-    expect(hrmsService.generateUsername('José Müller')).toBe('jose.muller');
-    expect(hrmsService.generateUsername('Zoë Ñúñez')).toBe('zoe.nunez');
   });
 });
 

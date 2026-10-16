@@ -376,7 +376,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
             tenantId: targetTenant,
             code: emp.employeeCode,
             name: emp.name,
-            userName: emp.userName || hrmsService.generateUsername(emp.name),
+            userName: emp.employeeCode, // HRMS makes the username the code anyway
             mobileNumber: emp.mobileNumber,
             emailId: emp.emailId,
             gender: emp.gender,

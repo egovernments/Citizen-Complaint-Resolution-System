@@ -32,8 +32,6 @@ vi.mock('@/api', () => ({
     updateEmployee: vi.fn(async (employee) => employee),
     // The real helpers, so the test covers the payload actually sent.
     generateEmployeeCode: (prefix: string, index: number) => `${prefix}_${String(index).padStart(4, '0')}`,
-    generateUsername: (name: string) =>
-      name.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '').replace(/[^a-z0-9]/g, '.').replace(/\.+/g, '.').replace(/^\.|\.$/g, ''),
     buildEmployee: vi.fn((data) => ({ built: true, ...data })),
   },
 }));
@@ -123,7 +121,6 @@ describe('listEmployees', () => {
 
 describe('addEmployee', () => {
   it('builds the HRMS payload from the dialog', async () => {
-    hrms.checkUsernameAvailable.mockResolvedValue(true);
     await addEmployee(
       'acme',
       {
@@ -143,7 +140,7 @@ describe('addEmployee', () => {
         tenantId: 'acme',
         code: 'EMP_0001',
         name: 'Anita Wanjiru',
-        userName: 'anita.wanjiru',
+        userName: 'EMP_0001',
         emailId: 'anita@example.org',
         department: 'ROADS,PARKS',
         designation: 'ENGINEER',
@@ -157,18 +154,47 @@ describe('addEmployee', () => {
     expect(hrms.createEmployee).toHaveBeenCalled();
   });
 
-  it('adds the code to a username someone already has', async () => {
-    hrms.checkUsernameAvailable.mockResolvedValue(false);
+  // HRMS makes every employee's username their code, so there is no name to check (#2456).
+  it('sends the code as the username without a username look-up', async () => {
     await addEmployee(
       'acme',
       { code: 'EMP_0007', name: 'Anita Wanjiru', emailId: 'anita@example.org', mobileNumber: '9876543210', departments: ['ROADS'], designation: 'ENGINEER', roles: ['EMPLOYEE'], jurisdictions: ['WARD_1'] },
       options,
     );
-    expect(hrms.buildEmployee).toHaveBeenCalledWith(expect.objectContaining({ userName: 'anita.wanjiru.emp_0007' }));
+    expect(hrms.buildEmployee).toHaveBeenCalledWith(expect.objectContaining({ userName: 'EMP_0007' }));
+    expect(hrms.checkUsernameAvailable).not.toHaveBeenCalled();
   });
 });
 
 describe('removeEmployee', () => {
+  it('never deactivates another workspace\'s employee with the same code (#2456)', async () => {
+    hrms.searchEmployees.mockResolvedValue([employee('A', { tenantId: 'other', uuid: 'theirs' }), employee('A')]);
+    await removeEmployee(employee('A'));
+    expect(hrms.searchEmployees).toHaveBeenCalledWith('acme', { uuids: ['A'] });
+    expect(hrms.updateEmployee).toHaveBeenCalledTimes(1);
+    expect(hrms.updateEmployee).toHaveBeenCalledWith(expect.objectContaining({ tenantId: 'acme', uuid: 'A' }));
+  });
+
+  it('removes an employee that carries only the user\'s uuid', async () => {
+    const userOnly = { code: 'A', tenantId: 'acme', user: { uuid: 'u-1' } } as Employee;
+    hrms.searchEmployees.mockResolvedValue([userOnly]);
+    await removeEmployee(userOnly);
+    expect(hrms.searchEmployees).toHaveBeenCalledWith('acme', { uuids: ['u-1'] });
+    expect(hrms.updateEmployee).toHaveBeenCalledWith(expect.objectContaining({ code: 'A', isActive: false }));
+  });
+
+  it('says so, and asks HRMS nothing, for an employee with no uuid', async () => {
+    await expect(removeEmployee({ code: 'A', tenantId: 'acme', user: {} } as Employee)).rejects.toThrow(/account identifier/);
+    expect(hrms.searchEmployees).not.toHaveBeenCalled();
+    expect(hrms.updateEmployee).not.toHaveBeenCalled();
+  });
+
+  it('refuses when only another workspace has the code (#2456)', async () => {
+    hrms.searchEmployees.mockResolvedValue([employee('A', { tenantId: 'other', uuid: 'theirs' })]);
+    await expect(removeEmployee(employee('A'))).rejects.toThrow();
+    expect(hrms.updateEmployee).not.toHaveBeenCalled();
+  });
+
   it('deactivates with a reason, as management does', async () => {
     hrms.searchEmployees.mockResolvedValue([employee('A')]);
     await removeEmployee(employee('A'));
@@ -225,6 +251,18 @@ describe('editing an employee', () => {
     ...options,
     boundaries: [...options.boundaries, { code: 'WARD_NEW', name: 'New ward', boundaryType: 'Ward', hierarchyType: 'ADMIN', depth: 2 }],
   };
+
+  it('never updates another workspace\'s employee with the same code (#2456)', async () => {
+    const theirs = { ...fresh(), tenantId: 'other', uuid: 'theirs', user: { ...fresh().user, uuid: 'theirs' } } as Employee;
+    hrms.searchEmployees.mockResolvedValue([theirs, fresh()]);
+    await updateEmployeeDetails(fresh(), changes, options, { kind: 'active' });
+    expect(hrms.updateEmployee).toHaveBeenCalledTimes(1);
+    expect(hrms.updateEmployee).toHaveBeenCalledWith(expect.objectContaining({ tenantId: 'acme', uuid: 'u-2' }));
+
+    hrms.searchEmployees.mockResolvedValue([theirs]);
+    await expect(updateEmployeeDetails(fresh(), changes, options, { kind: 'active' })).rejects.toThrow();
+    expect(hrms.updateEmployee).toHaveBeenCalledTimes(1);
+  });
 
   it('replaces only the roles the step offers and keeps the rest', () => {
     const roles = applyEmployeeChanges(fresh(), changes, options).user.roles.map((role) => `${role.code}@${role.tenantId}`);
