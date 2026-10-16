@@ -58,6 +58,7 @@ import { EscalationPolicyEditor } from '@/admin/escalation';
 import PgrDashboard from './pages/PgrDashboard';
 import OrgChartPage from './pages/org-chart/OrgChartPage';
 import PublicDashboardConfigure from './resources/public-dashboard/PublicDashboardConfigure';
+import { useLiveI18nProvider } from '@/providers/i18nProvider';
 import BrandingPage from './admin/BrandingPage';
 import { getGenericMdmsResources, getDataProvider, getAuthProvider, configureDigitClient, i18nProvider, DigitApiClient, isReadOnlyResource } from '@/providers/bridge';
 import { MastersCapabilityProvider, useMastersCapability } from '@/hooks/useMastersCapability';
@@ -141,11 +142,12 @@ function ManagementAdmin() {
 function ManagementAdminResources() {
   const { state } = useApp();
   const { canViewResource } = useMastersCapability();
+  const liveI18nProvider = useLiveI18nProvider();
   return (
     <CoreAdminContext
       dataProvider={getDataProvider(state.tenant)}
       authProvider={getAuthProvider()}
-      i18nProvider={i18nProvider}
+      i18nProvider={liveI18nProvider}
       store={appStore}
       queryClient={queryClient}
       basename="/manage"

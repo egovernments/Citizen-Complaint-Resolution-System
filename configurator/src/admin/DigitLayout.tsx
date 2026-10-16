@@ -15,7 +15,10 @@ import {
   Inbox,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { getResourceLabel } from '@/providers/bridge';
+import { T } from '@digit-ui/datagrid';
+import { getGenericMdmsResources, getResourceLabel } from '@/providers/bridge';
+import { useResourceLabel } from '@/providers/useResourceLabel';
+import { ResourceLabel } from '@/providers/ResourceLabel';
 import { navGroups, getAdvancedResourceIds } from './navGroups';
 import { useMastersCapability } from '@/hooks/useMastersCapability';
 import { LEGACY_PGR_DASHBOARD_ENABLED } from '@/config/featureFlags';
@@ -49,6 +52,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
   const translate = useTranslate();
+  const resourceLabel = useResourceLabel();
   const { canViewResource } = useMastersCapability();
 
   // Masters the current role can't see (per resource.masters conditions on
@@ -123,8 +127,8 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
 
   const query = navQuery.trim().toLowerCase();
   const matches = (label: string) => !query || label.toLowerCase().includes(query);
-  const advancedLabel = (item: { id: string; name: string }) =>
-    translate(`app.resources.${item.id.replace(/-/g, '_')}`, { _: item.name });
+  // Same code and fallback as the list title and dashboard card (resourceLabelKey).
+  const advancedLabel = (item: { id: string }) => resourceLabel(item.id);
   const shownMainLinks = mainLinks.filter((link) => matches(translate(link.nameKey)));
   const shownGroups = visibleNavGroups
     .map((group) => ({ ...group, items: group.items.filter((item) => matches(translate(item.nameKey))) }))
@@ -166,7 +170,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold leading-5 text-foreground truncate">DIGIT</p>
                   <p className="text-xs leading-4 text-muted-foreground truncate">
-                    {translate('app.header.product_name', { _: 'Complaint Management System' })}
+                    <T i18nKey="app.header.product_name">Complaint Management System</T>
                   </p>
                 </div>
               </>
@@ -208,12 +212,13 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
         <nav className="flex-1 py-2 overflow-y-auto">
           {shownMainLinks.length > 0 && (
             <div className="pb-5">
-              {!sidebarCollapsed && <SectionLabel>{translate('app.nav.main', { _: 'Main' })}</SectionLabel>}
+              {!sidebarCollapsed && <SectionLabel><T i18nKey="app.nav.main">Main</T></SectionLabel>}
               {shownMainLinks.map((link) => (
                 <NavRow
                   key={link.path}
                   icon={link.icon}
                   label={translate(link.nameKey)}
+                  i18nKey={link.nameKey}
                   active={location.pathname === link.path}
                   collapsed={sidebarCollapsed}
                   onClick={() => navigate(link.path)}
@@ -236,7 +241,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
                     className="w-full text-left focus-visible:outline-none focus-visible:bg-muted"
                   >
                     <SectionLabel>
-                      <span className="flex-1">{translate(group.labelKey)}</span>
+                      <span className="flex-1"><T i18nKey={group.labelKey} /></span>
                       <ChevronDown
                         aria-hidden="true"
                         className={`w-3 h-3 transition-transform ${isOpen ? '' : '-rotate-90'}`}
@@ -250,6 +255,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
                       key={item.id}
                       icon={item.icon}
                       label={translate(item.nameKey)}
+                      i18nKey={item.nameKey}
                       active={location.pathname === item.path || location.pathname.startsWith(item.path + '/')}
                       collapsed={sidebarCollapsed}
                       onClick={() => navigate(item.path)}
@@ -265,6 +271,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
               <NavRow
                 icon={Database}
                 label={translate('app.nav.advanced')}
+                i18nKey="app.nav.advanced"
                 active={location.pathname === '/manage/advanced'}
                 collapsed={sidebarCollapsed}
                 onClick={() => {
@@ -293,7 +300,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
                       className={`relative w-full min-h-8 flex items-center pl-11 pr-4 py-1.5 text-xs text-left transition-colors ${rowTone(isActive)}`}
                     >
                       {isActive && <ActiveBar />}
-                      <span className="truncate">{advancedLabel(item)}</span>
+                      <span className="truncate"><ResourceLabel resource={item.id} /></span>
                     </button>
                   );
                 })}
@@ -302,7 +309,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
 
           {!sidebarCollapsed && query && nothingFound && (
             <p className="px-4 py-2 text-xs text-muted-foreground">
-              {translate('app.nav.no_matches', { _: 'No matches' })}
+              <T i18nKey="app.nav.no_matches">No matches</T>
             </p>
           )}
         </nav>
@@ -313,6 +320,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
             <NavExternalRow
               icon={Inbox}
               label={translate('app.nav.open_complaint_desk', { _: 'Open complaint desk' })}
+              i18nKey="app.nav.open_complaint_desk"
               href={deskUrl}
               collapsed={sidebarCollapsed}
             />
@@ -336,7 +344,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
               variant="outline"
               className="hidden sm:inline-flex text-xs bg-blue-50 text-blue-700 border-blue-200"
             >
-              {translate('app.header.management_mode')}
+              <T i18nKey="app.header.management_mode" />
             </Badge>
             <Badge
               variant="secondary"

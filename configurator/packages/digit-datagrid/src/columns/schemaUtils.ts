@@ -1,6 +1,7 @@
 import React from 'react';
 import type { DigitColumn } from './types';
 import type { FilterElement } from '../filters/types';
+import { fieldLabelKey } from '../i18n/columnLabelKey';
 import {
   SearchFilterInput,
   TextFilterInput,
@@ -122,6 +123,7 @@ export function generateColumns(
     const col: DigitColumn = {
       source: fieldName,
       label: formatFieldLabel(fieldName),
+      labelKey: fieldLabelKey(fieldName),
     };
 
     // Add ref renderer if callback provided
