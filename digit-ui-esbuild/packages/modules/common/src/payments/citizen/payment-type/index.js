@@ -98,7 +98,7 @@ export const SelectPaymentType = (props) => {
   };
 
   if (authorization === "true" && !userInfo.access_token) {
-    localStorage.clear();
+    Digit.Utils.clearLocalStorage();
     sessionStorage.clear();
     window.location.href = `/${window?.contextPath}/citizen/login?from=${encodeURIComponent(pathname + search)}`;
   }

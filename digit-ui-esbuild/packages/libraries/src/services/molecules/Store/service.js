@@ -1,6 +1,7 @@
 import i18next from "i18next";
 import { LocalizationService } from "../../elements/Localization/service";
-import { pickLanguage, rememberedLanguage } from "../../elements/Localization/rememberedLanguage";
+import { openingLanguage } from "../../elements/Localization/rememberedLanguage";
+import { clearLocalStorage } from "../../atoms/Utils/deviceStorage";
 import { MdmsService } from "../../elements/MDMS";
 import { Storage } from "../../atoms/Utils/Storage";
 import { ApiCacheService } from "../../atoms/ApiCacheService";
@@ -62,7 +63,7 @@ export const StoreService = {
     const tenantConfigs = await TenantConfigSearch.tenant(stateCode);
     const tenantConfigSearch = tenantConfigs?.tenantConfigs?.length > 0 ? tenantConfigs?.tenantConfigs : null;
     if (!tenantConfigSearch) {
-      localStorage.clear();
+      clearLocalStorage();
       sessionStorage.clear();
       // The /user/invalid-url page was removed with the legacy identity paths
       // (D26); fail the init query instead of navigating to a dead route.
@@ -167,14 +168,12 @@ export const StoreService = {
               ?.sort((x, y) => x?.order - y?.order) || [],
           uiHomePage: uiHomePage,
         };
-    initData.selectedLanguage = pickLanguage(initData.languages, Digit.SessionStorage.get("locale") || rememberedLanguage());
-    if (Digit.StoreData.getCurrentLanguage() !== initData.selectedLanguage) {
-      // The remembered language is not one this workspace offers (the memory is
-      // kept for one that does), or nothing is remembered and the workspace's
-      // first language is not the deployment default: show the one picked here.
-      Digit.SessionStorage.set("locale", initData.selectedLanguage);
-      i18next.changeLanguage(initData.selectedLanguage);
-    }
+    initData.selectedLanguage = openingLanguage(initData.languages, Digit.SessionStorage.get("locale"), Digit.Utils.getDefaultLanguage());
+    // The tab always records what it shows: pdf.js, TextInput and others read the
+    // session value directly. A fallback goes only here, never into the device's
+    // memory, so a workspace that does offer the remembered language still opens in it.
+    Digit.SessionStorage.set("locale", initData.selectedLanguage);
+    if (i18next.language !== initData.selectedLanguage) i18next.changeLanguage(initData.selectedLanguage);
 
     ApiCacheService.saveSetting(MdmsRes["DIGIT-UI"]?.ApiCachingSettings);
 

@@ -4,20 +4,6 @@ import Background from "../Background";
 import ImageComponent from "../ImageComponent";
 import Carousel from "./EmployeeLoginCarousel";
 
-export const setEmployeeDetail = (userObject, token) => {
-  if (Digit.Utils.getMultiRootTenant() && process.env.NODE_ENV !== "development") return;
-  const locale = Digit.StoreData.getCurrentLanguage();
-  localStorage.setItem("Employee.tenant-id", userObject?.tenantId);
-  localStorage.setItem("tenant-id", userObject?.tenantId);
-  localStorage.setItem("citizen.userRequestObject", JSON.stringify(userObject));
-  localStorage.setItem("locale", locale);
-  localStorage.setItem("Employee.locale", locale);
-  localStorage.setItem("token", token);
-  localStorage.setItem("Employee.token", token);
-  localStorage.setItem("user-info", JSON.stringify(userObject));
-  localStorage.setItem("Employee.user-info", JSON.stringify(userObject));
-};
-
 function PoweredByDigit({ onDarkSurface = true }) {
   const cfg = (key) => window?.globalConfigs?.getConfig?.(key);
   const preferred = onDarkSurface ? "DIGIT_FOOTER_BW" : "DIGIT_FOOTER";

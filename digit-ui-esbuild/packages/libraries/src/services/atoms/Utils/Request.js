@@ -1,5 +1,5 @@
 import Axios from "axios";
-import { keepRememberedLanguage } from "../../elements/Localization/rememberedLanguage";
+import { clearLocalStorage } from "./deviceStorage";
 
 /**
  * Custom Request to make all api calls
@@ -15,7 +15,7 @@ Axios.interceptors.response.use(
     if (err?.response?.data?.Errors) {
       for (const error of err.response.data.Errors) {
         if (error.message.includes("InvalidAccessTokenException")) {
-          keepRememberedLanguage(() => localStorage.clear());
+          clearLocalStorage();
           sessionStorage.clear();
           const loginPath = isEmployee ? `/${window?.contextPath}/employee/user/login` : `/${window?.contextPath}/citizen/login`;
           window.location.href = loginPath +

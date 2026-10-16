@@ -37,7 +37,7 @@ export const logoutV1 = async () => {
       .catch((error) => console.log("error", error));
   } catch (e) {
   } finally {
-    window.localStorage.clear();
+    Digit.Utils.clearLocalStorage();
     window.sessionStorage.clear();
     if (userType === "citizen") {
       window.location.replace("/digit-ui/citizen");
