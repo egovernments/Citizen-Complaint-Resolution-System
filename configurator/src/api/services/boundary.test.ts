@@ -219,7 +219,10 @@ describe('boundaryService.createBoundaries', () => {
 });
 
 describe('boundaryService.existingBoundaries', () => {
-  beforeEach(() => post.mockReset());
+  // Braces: a function returned from beforeEach runs as cleanup, and mockReset returns the mock.
+  beforeEach(() => {
+    post.mockReset();
+  });
 
   it('reads each parent from the tree and the en_IN name under either key an upload writes (#2456)', async () => {
     post.mockImplementation(async (url: string) =>
