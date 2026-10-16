@@ -775,11 +775,16 @@ function SignupFlow() {
       if (latest) seedFrom(latest);
       // The run already created the workspace under this account code, so it no longer follows the name or country.
       codeTouched.current = true;
-      if (operation?.errorCode === 'TENANT_ADMIN_ACCOUNT_REJECTED') {
+      // Only a draft that still holds what the run refused is flagged or cleared. The failure set
+      // the signup's updatedAt to the run's own and only a save moves it on, so a correction saved
+      // since (and kept over a reload) stays as it is.
+      const savedSince = !!latest && !!operation && latest.updatedAt > operation.updatedAt;
+      const refused = savedSince ? null : operation?.errorCode?.toUpperCase();
+      if (refused === 'TENANT_ADMIN_ACCOUNT_REJECTED') {
         setMobileError(t('signup.mobile_rejected', 'Check this number: your user account couldn’t be created with it.'));
       }
       // The one case where the country may change: it is what the run refused.
-      if (operation?.errorCode === 'COUNTRY_NOT_SUPPORTED') setCountryCode('');
+      if (refused === 'COUNTRY_NOT_SUPPORTED') setCountryCode('');
       setOperation(null);
       setReopened(false);
       setReopenCheck('pending');

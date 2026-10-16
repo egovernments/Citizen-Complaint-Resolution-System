@@ -477,7 +477,7 @@ describe('provisioning', () => {
   });
 
   /** A reload onto a draft whose run failed on the founder's own details and handed it back. */
-  function reloadOntoReopened(errorCode: string, countryCode: string) {
+  function reloadOntoReopened(errorCode: string, countryCode: string, signupFields: Record<string, unknown> = {}) {
     vi.mocked(api.session).mockResolvedValue(signedIn);
     vi.mocked(api.tenants).mockResolvedValue({ tenants: [], selectionRequired: false, onboardingRequired: true });
     vi.mocked(api.findSignup).mockResolvedValue({
@@ -492,6 +492,7 @@ describe('provisioning', () => {
       timeZone: 'Africa/Nairobi',
       financialYearPolicy: 'JUL_JUN',
       tenantMetadata: { schemaVersion: 1, tenantAdmin: { mobileNumber: '700000199' } },
+      ...signupFields,
     } as never);
     vi.mocked(findSignupOperation).mockResolvedValue({
       id: 'op-1', signupId: 'signup-1', status: 'TERMINAL_FAILED', currentStep: 'FOUNDER_HRMS',
@@ -523,6 +524,29 @@ describe('provisioning', () => {
     fireEvent.click(screen.getByRole('button', { name: /continue/i }));
     await waitFor(() => expect(api.updateSignup).toHaveBeenCalledWith(
       'signup-1', expect.objectContaining({ countryCode: 'KE', accountCode: 'FR-BOMET-COUNTY' })));
+  });
+
+  it('keeps a country corrected and saved before a reload (#2353)', async () => {
+    // Saved after the run failed (the run's updatedAt is 0).
+    reloadOntoReopened('COUNTRY_NOT_SUPPORTED', 'KE', { updatedAt: 5 });
+
+    fireEvent.click(await screen.findByRole('button', { name: /change my details/i }));
+    expect(await screen.findByLabelText(/base country/i)).toHaveValue('KE');
+  });
+
+  it('does not flag a number corrected and saved before a reload (#2353)', async () => {
+    reloadOntoReopened('TENANT_ADMIN_ACCOUNT_REJECTED', 'KE', { updatedAt: 5 });
+
+    fireEvent.click(await screen.findByRole('button', { name: /change my details/i }));
+    expect(await screen.findByLabelText(/mobile number/i)).toHaveValue('700000199');
+    expect(screen.queryByText(/couldn’t be created with it/)).not.toBeInTheDocument();
+  });
+
+  it('recognises the country refusal whatever its case (#2353)', async () => {
+    reloadOntoReopened('country_not_supported', 'FR');
+
+    fireEvent.click(await screen.findByRole('button', { name: /change my details/i }));
+    expect(await screen.findByLabelText(/base country/i)).toHaveValue('');
   });
 
   it('shows a reloaded draft as correctable at once, without asking for the signup again (#2353)', async () => {
