@@ -163,6 +163,18 @@ public class OnboardingProvisionerClientTest {
         client.write(scope("PLATFORM_BASELINE"),"localization","/localization/messages/v1/_upsert",Map.of("tenantId","newtown","messages",List.of(otp)));
         assertEquals(1,writes);
     }
+    @Test public void seedUpgradeMayOnlyDeactivateARevokedGrant(){
+        boolean[] lease={true};var upgrade=new OnboardingProgress.WriteScope(signup.getId(),"newtown",BaselineUpgrader.STEP,()->lease[0]);
+        String path="/egov-mdms-service/v2/_update/"+BaselineUpgrader.ROLE_ACTIONS;
+        java.util.function.BiFunction<String,Boolean,Map<String,Object>> grant=(id,active)->Map.of("Mdms",Map.of("tenantId","newtown","schemaCode",BaselineUpgrader.ROLE_ACTIONS,
+                "uniqueIdentifier",id,"isActive",active,"data",Map.of("rolecode",id.split("\\.")[0],"actionid",Integer.parseInt(id.split("\\.")[1]),"tenantId","newtown")));
+        client.write(upgrade,"mdms",path,grant.apply("CSR.605",false));assertEquals(1,writes);
+        assertThrows(OnboardingFailure.class,()->client.write(upgrade,"mdms",path,grant.apply("CSR.605",true)));      // never (re)activate
+        assertThrows(OnboardingFailure.class,()->client.write(upgrade,"mdms",path,grant.apply("CSR.2006",false)));    // only a revoked grant
+        assertThrows(OnboardingFailure.class,()->client.write(upgrade,"mdms",path,grant.apply("SUPERUSER.605",false)));
+        assertThrows(OnboardingFailure.class,()->client.write(scope("PLATFORM_BASELINE"),"mdms",path,grant.apply("CSR.605",false))); // only during an upgrade
+        assertEquals(1,writes);
+    }
     @Test public void legitimateSignupActionsPassThroughLiveAuthorization(){
         client.write(scope("TENANT_FOUNDATION"),"mdms","/egov-mdms-service/schema/v1/_create",Map.of("SchemaDefinition",Map.of("tenantId","newtown","code","tenant.tenants")));
         client.write(scope("TENANT_FOUNDATION"),"mdms","/egov-mdms-service/v2/_create/tenant.tenants",Map.of("Mdms",Map.of("tenantId","newtown","schemaCode","tenant.tenants","uniqueIdentifier","newtown","data",Map.of("code","newtown"))));

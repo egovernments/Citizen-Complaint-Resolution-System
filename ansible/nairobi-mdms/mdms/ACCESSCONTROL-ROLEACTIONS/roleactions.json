@@ -1132,16 +1132,6 @@
   {
     "tenantId": "ciboot",
     "data": {
-      "id": 155,
-      "actionid": 605,
-      "rolecode": "CSR",
-      "tenantId": "pg",
-      "actioncode": ""
-    }
-  },
-  {
-    "tenantId": "ciboot",
-    "data": {
       "id": 157,
       "actionid": 695,
       "rolecode": "CSR",
@@ -4964,16 +4954,6 @@
     "data": {
       "id": 1063,
       "actionid": 604,
-      "rolecode": "CSR",
-      "tenantId": "pg",
-      "actioncode": ""
-    }
-  },
-  {
-    "tenantId": "cids30947",
-    "data": {
-      "id": 155,
-      "actionid": 605,
       "rolecode": "CSR",
       "tenantId": "pg",
       "actioncode": ""
@@ -8812,16 +8792,6 @@
   {
     "tenantId": "ciwf30832",
     "data": {
-      "id": 155,
-      "actionid": 605,
-      "rolecode": "CSR",
-      "tenantId": "pg",
-      "actioncode": ""
-    }
-  },
-  {
-    "tenantId": "ciwf30832",
-    "data": {
       "id": 157,
       "actionid": 695,
       "rolecode": "CSR",
@@ -12644,16 +12614,6 @@
     "data": {
       "id": 1063,
       "actionid": 604,
-      "rolecode": "CSR",
-      "tenantId": "pg",
-      "actioncode": ""
-    }
-  },
-  {
-    "tenantId": "ciwfi31083",
-    "data": {
-      "id": 155,
-      "actionid": 605,
       "rolecode": "CSR",
       "tenantId": "pg",
       "actioncode": ""
@@ -16492,16 +16452,6 @@
   {
     "tenantId": "ke",
     "data": {
-      "id": 155,
-      "actionid": 605,
-      "rolecode": "CSR",
-      "tenantId": "pg",
-      "actioncode": ""
-    }
-  },
-  {
-    "tenantId": "ke",
-    "data": {
       "id": 157,
       "actionid": 695,
       "rolecode": "CSR",
@@ -20015,16 +19965,6 @@
       "id": 1038,
       "actionid": 2529,
       "rolecode": "MDMS_ADMIN",
-      "tenantId": "pg",
-      "actioncode": ""
-    }
-  },
-  {
-    "tenantId": "pg",
-    "data": {
-      "id": 155,
-      "actionid": 605,
-      "rolecode": "CSR",
       "tenantId": "pg",
       "actioncode": ""
     }
@@ -23664,16 +23604,6 @@
     "data": {
       "id": 1063,
       "actionid": 604,
-      "rolecode": "CSR",
-      "tenantId": "statea",
-      "actioncode": ""
-    }
-  },
-  {
-    "tenantId": "statea",
-    "data": {
-      "id": 155,
-      "actionid": 605,
       "rolecode": "CSR",
       "tenantId": "statea",
       "actioncode": ""

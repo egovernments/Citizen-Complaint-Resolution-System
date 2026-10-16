@@ -175,7 +175,8 @@ public class OnboardingProvisionerClient {
             if (!schema.matches("[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+")
                     || !(path.equals("/egov-mdms-service/v2/_create/" + schema) || path.equals("/egov-mdms-service/v2/_update/" + schema))) denied();
             if (!signupSchemas.contains(schema) || foundation && !"tenant.tenants".equals(schema)) denied();
-            if (path.contains("/_update/") && !Set.of("tenant.tenants", "common-masters.StateInfo").contains(schema)) denied();
+            if (path.contains("/_update/") && !Set.of("tenant.tenants", "common-masters.StateInfo").contains(schema)
+                    && !(upgrade && revokesGrant(schema, payload))) denied();
             requireTenant(payload, tenant);
             if ("tenant.tenants".equals(schema) && (!tenant.equals(payload.path("uniqueIdentifier").asText()) || !tenant.equals(payload.path("data").path("code").asText()))) denied();
         } else if ("enc".equals(service) && foundation && "/egov-enc-service/crypto/v1/_generatekey".equals(path)) {
@@ -213,6 +214,15 @@ public class OnboardingProvisionerClient {
             if (!OnboardingSteps.FOUNDER_CODE.equals(payload.path("code").asText()) || userName.length() > 64 || !userName.matches("[a-z0-9_]+(\\.[a-z0-9_]+)*")) denied();
         } else denied();
         requireNestedTenants(body, tenant);
+    }
+
+    /** The upgrader's one role-action write: deactivating a grant a later seed removed (BaselineUpgrader.REVOKED_GRANTS). */
+    private static boolean revokesGrant(String schema, JsonNode payload) {
+        JsonNode data = payload.path("data");
+        Integer action = BaselineUpgrader.REVOKED_GRANTS.get(data.path("rolecode").asText());
+        return BaselineUpgrader.ROLE_ACTIONS.equals(schema) && action != null && data.path("actionid").canConvertToInt()
+                && action == data.path("actionid").asInt() && (data.path("rolecode").asText() + "." + action).equals(payload.path("uniqueIdentifier").asText())
+                && payload.path("isActive").isBoolean() && !payload.path("isActive").booleanValue();
     }
 
     private JsonNode only(JsonNode array) { if (!array.isArray() || array.size() != 1) denied(); return array.path(0); }

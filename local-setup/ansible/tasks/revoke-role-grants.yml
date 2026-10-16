@@ -1,0 +1,57 @@
+---
+# Deactivates role-action grants a release revoked, on every tenant in the box's DIGIT
+# database, on every deploy (#2239). The one grant today is CSR -> action 605,
+# /user/users/_createnovalidate: with CSR on every new employee it would let any of
+# them create a SUPERUSER. The seeds dropped it, but seed rows are only ever created,
+# so a box installed from an older dump keeps it active until this runs.
+#
+# Runs on every box (unlike master-repair) and in the same deploy that ships the CSR
+# create-path changes, so no new employee gets CSR while the grant is live. The SQL is
+# db/revoke-role-grants.sql: it only ever deactivates the pairs listed there, and is
+# idempotent. It goes straight to Postgres because mdms-v2 refuses to update rows the
+# dump seeded (their uniqueIdentifier is a hash: UNIQUE_KEY_UPDATE_ERR).
+#
+# egov-accesscontrol caches role-actions for cache.expiry.role.action.minutes (15 by
+# default), so it is restarted when something changed.
+#
+# Inputs: digit_dir, upstream_kong_port, compose_profiles, compose_files
+
+- name: "revoke-grants — stage the revocation SQL"
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../db/revoke-role-grants.sql"
+    dest: "{{ digit_dir }}/revoke-role-grants.sql"
+    mode: '0644'
+
+# A failure (database unreachable, ON_ERROR_STOP) fails the deploy: the CSR changes
+# must not go live over an active grant.
+- name: "revoke-grants — deactivate revoked role-action grants"
+  ansible.builtin.shell: |
+    set -o pipefail
+    docker exec -i docker-postgres psql -U egov -d egov -v ON_ERROR_STOP=1 -tAq < revoke-role-grants.sql
+  args:
+    chdir: "{{ digit_dir }}"
+    executable: /bin/bash
+  register: revoke_grants
+  changed_when: "'REVOKED ' in (revoke_grants.stdout | default(''))"
+
+- name: "revoke-grants — result"
+  ansible.builtin.debug:
+    msg: "{{ revoke_grants.stdout_lines if revoke_grants.stdout_lines else ['no revoked grant was active'] }}"
+
+- name: "revoke-grants — restart egov-accesscontrol so the deactivation takes effect"
+  when: revoke_grants is changed
+  ansible.builtin.shell: >-
+    COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} restart egov-accesscontrol
+  args:
+    chdir: "{{ digit_dir }}"
+  changed_when: true
+
+- name: "revoke-grants — wait for egov-accesscontrol to come back"
+  when: revoke_grants is changed
+  ansible.builtin.shell: >-
+    curl -sf -o /dev/null http://127.0.0.1:{{ upstream_kong_port }}/access/health
+  register: accesscontrol_ready_revoke
+  retries: 60
+  delay: 5
+  until: accesscontrol_ready_revoke.rc == 0
+  changed_when: false
