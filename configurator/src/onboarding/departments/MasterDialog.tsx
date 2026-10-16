@@ -5,6 +5,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { RequiredMark } from '@/components/ui/required-mark';
 import { describeSaveError } from '../errors';
 import { useOnboardingT } from '../i18n';
 import { CODE_PATTERN, recordDepartments, recordName, suggestCode, type MasterInput, type MasterKind } from './mastersApi';
@@ -133,11 +134,13 @@ export function MasterDialog({
           <div className="space-y-1.5">
             <label htmlFor={`${id}-name`} className="block text-sm font-medium text-foreground">
               {isDepartment ? t('departments.department_name_label', 'Department name') : t('departments.designation_name_label', 'Designation name')}
+              <RequiredMark />
             </label>
             <Input
               id={`${id}-name`}
               value={name}
               autoFocus
+              aria-required="true"
               placeholder={
                 isDepartment
                   ? t('departments.department_name_example', 'Roads and Infrastructure')
@@ -156,11 +159,14 @@ export function MasterDialog({
           <div className="space-y-1.5">
             <label htmlFor={`${id}-code`} className="block text-sm font-medium text-foreground">
               {isDepartment ? t('departments.department_code_label', 'Department code') : t('departments.designation_code_label', 'Designation code')}
+              {/* Locked once saved, so only asked for when adding. */}
+              {!editing && <RequiredMark />}
             </label>
             <Input
               id={`${id}-code`}
               value={code}
               disabled={editing}
+              aria-required={!editing}
               placeholder={EXAMPLE[kind].code}
               onChange={(event) => {
                 setCodeTouched(true);

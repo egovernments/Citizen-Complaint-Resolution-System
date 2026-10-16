@@ -37,6 +37,7 @@ import type { Invitation } from '@/api/onboarding';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { RequiredMark } from '@/components/ui/required-mark';
 import { Stepper } from '@/components/ui/stepper';
 import { AuthShell } from '@/components/signup/AuthPanel';
 import { useAuthResult } from '@/hooks/useAuthResult';
@@ -171,12 +172,15 @@ function Field({
   help,
   children,
   status,
+  required,
 }: {
   id: string;
   label: string;
   help?: React.ReactNode;
   children: React.ReactNode;
   status?: React.ReactNode;
+  /** Marks the label with the red asterisk; the control carries `aria-required` itself. */
+  required?: boolean;
 }) {
   return (
     <div>
@@ -185,6 +189,7 @@ function Field({
         className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground"
       >
         {label}
+        {required && <RequiredMark />}
       </label>
       <div className="mt-1">{children}</div>
       {help && <p id={`${id}-help`} className="mt-1 text-xs text-muted-foreground">{help}</p>}
@@ -808,7 +813,7 @@ function SignupFlow() {
           {magicLink ? (
             <form className="space-y-3" onSubmit={(event) => void sendSignupLink(event)}>
               <div className="grid gap-3 sm:grid-cols-2">
-                <Field id="signup-first-name" label="First name">
+                <Field id="signup-first-name" label="First name" required>
                   <Input
                     id="signup-first-name"
                     className={CONTROL_HEIGHT}
@@ -818,7 +823,7 @@ function SignupFlow() {
                     required
                   />
                 </Field>
-                <Field id="signup-last-name" label="Last name">
+                <Field id="signup-last-name" label="Last name" required>
                   <Input
                     id="signup-last-name"
                     className={CONTROL_HEIGHT}
@@ -829,7 +834,7 @@ function SignupFlow() {
                   />
                 </Field>
               </div>
-              <Field id="signup-email" label="Email address">
+              <Field id="signup-email" label="Email address" required>
                 <Input
                   id="signup-email"
                   className={CONTROL_HEIGHT}
@@ -1121,10 +1126,12 @@ function SignupFlow() {
           <Field
             id="accountName"
             label="Account name"
+            required
             help="The name of your account. It could be a government organisation, agency, department, institution, or programme."
           >
             <Input
               id="accountName"
+              aria-required="true"
               value={accountName}
               onChange={(e) => setAccountName(e.target.value)}
             />
@@ -1133,6 +1140,7 @@ function SignupFlow() {
           <Field
             id="accountCode"
             label="Account code"
+            required
             help="Used as a short identifier for your account across configuration, URLs, and system references."
             status={
               <AvailabilityNote
@@ -1148,6 +1156,7 @@ function SignupFlow() {
           >
             <Input
               id="accountCode"
+              aria-required="true"
               value={accountCode}
               onChange={(e) => {
                 codeTouched.current = true;
@@ -1172,10 +1181,12 @@ function SignupFlow() {
           <Field
             id="countryCode"
             label="Base country of operations"
+            required
             help="Used to suggest locale, timezone, and account code defaults."
           >
             <select
               id="countryCode"
+              aria-required="true"
               className={selectClass}
               value={countryCode}
               onChange={(e) => {
@@ -1204,6 +1215,7 @@ function SignupFlow() {
           <div>
             <span className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
               Languages
+              <RequiredMark />
             </span>
             {/* Pills, not checkboxes: a short multi-select reads better as
                 toggles and matches the reference. */}
@@ -1234,9 +1246,10 @@ function SignupFlow() {
             </div>
           </div>
 
-          <Field id="timeZone" label="Timezone">
+          <Field id="timeZone" label="Timezone" required>
             <select
               id="timeZone"
+              aria-required="true"
               className={selectClass}
               value={timeZone}
               onChange={(e) => {
@@ -1254,9 +1267,10 @@ function SignupFlow() {
             </select>
           </Field>
 
-          <Field id="financialYearPolicy" label="Financial year">
+          <Field id="financialYearPolicy" label="Financial year" required>
             <select
               id="financialYearPolicy"
+              aria-required="true"
               className={selectClass}
               value={financialYearPolicy}
               onChange={(e) => setFinancialYearPolicy(e.target.value)}
@@ -1273,6 +1287,7 @@ function SignupFlow() {
           <Field
             id="urlSlug"
             label="Account URL"
+            required
             // No preview of a subdomain: workspace URLs are deferred and there
             // is no DNS or routing contract behind that shape yet, so showing
             // one would be promising an address nobody has agreed to serve.
@@ -1291,6 +1306,7 @@ function SignupFlow() {
           >
             <Input
               id="urlSlug"
+              aria-required="true"
               value={urlSlug}
               onChange={(e) => {
                 slugTouched.current = true;
@@ -1302,6 +1318,7 @@ function SignupFlow() {
           <Field
             id="tenantAdminMobile"
             label="Your mobile number"
+            required
             help={
               <>
                 {t('signup.mobile_purpose', 'Used to create your account inside the new workspace.')}
@@ -1324,6 +1341,7 @@ function SignupFlow() {
               ) : null}
               <Input
                 id="tenantAdminMobile"
+                aria-required="true"
                 className="flex-1"
                 inputMode="tel"
                 autoComplete="tel-national"
