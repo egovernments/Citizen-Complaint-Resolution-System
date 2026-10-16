@@ -4,6 +4,7 @@ import type { UserInfo } from '@/api/types';
 import { installDigitContext } from '@/lib/session';
 import { completedSteps, searchWorkspace } from './workspace';
 import { HOME_PATH } from '@/onboarding/steps';
+import { setWorkingTenant } from '@/lib/workingTenant';
 
 /** Identity discovery has no readiness. PGR is consulted only after token selection. */
 export async function enterWorkspace(tenantId: string, identity?: Pick<SessionUser, 'name' | 'email'> | null) {
@@ -17,6 +18,8 @@ export async function enterWorkspace(tenantId: string, identity?: Pick<SessionUs
   try {
     const progress = admin ? completedSteps((await searchWorkspace(tenantId)).Workspace) : [1, 2, 3, 4, 5];
     installDigitContext(context, identity, progress);
+    // work at the workspace entered, not the user record's home tenant
+    setWorkingTenant(tenantId);
     // An account still setting up lands on onboarding's Home, which says what to do next.
     window.location.assign(progress.length === 5 ? '/configurator/manage' : `/configurator${HOME_PATH}`);
   } catch (error) {
