@@ -3,6 +3,7 @@ import type { DigitApiClient } from '../client/DigitApiClient.js';
 import type { MdmsRecord } from '../client/types.js';
 import { getResourceConfig, type ResourceConfig } from './resourceRegistry.js';
 import { migrateThemeConfigToV3 } from './themeConfigMigration.js';
+import { buildNotificationLogQuery } from './notificationLogQuery.js';
 
 /** Extended data provider type with DIGIT-specific custom methods */
 export type DigitDataProvider = DataProvider & {
@@ -164,6 +165,57 @@ function dedupeById(records: RaRecord[]): RaRecord[] {
   return out;
 }
 
+/**
+ * Data-level flags that duplicate the MDMS envelope's root isActive in some
+ * masters (Department/Designation `active`, NotificationRouting.active,
+ * MobileNumberValidation.isActive). Root isActive is the enable/disable flag;
+ * update()/delete() mirror it into whichever of these is a boolean, and the
+ * generic create/edit forms hide them. Non-boolean fields of the same name
+ * (Workflow.BusinessServiceMasterConfig.active is a string identifier) are not
+ * status flags and are left alone.
+ */
+export const DUPLICATE_ACTIVE_KEYS: readonly string[] = ['isActive', 'active'];
+
+function mirrorActiveFlags(data: Record<string, unknown>, isActive: boolean): void {
+  for (const key of DUPLICATE_ACTIVE_KEYS) {
+    if (typeof data[key] === 'boolean') data[key] = isActive;
+  }
+}
+
+/** A boolean status flag the caller put in `data` itself (e.g. ComplaintTypeEdit's
+ *  `active` checkbox, Twilio template sync's `active`). */
+function dataActiveFlag(data: Record<string, unknown> | undefined): boolean | undefined {
+  for (const key of DUPLICATE_ACTIVE_KEYS) {
+    if (typeof data?.[key] === 'boolean') return data[key] as boolean;
+  }
+  return undefined;
+}
+
+/**
+ * Effective enabled state of an MDMS record. Root isActive, except that a record
+ * whose duplicate data flag is `false` is treated as disabled too: before root
+ * isActive became the only toggle, the Department/Designation/complaint-type
+ * checkboxes wrote `data.active=false` while update() forced root `true`, so
+ * existing tenants hold disabled records as root true / data false.
+ */
+function isEffectivelyActive(r: MdmsRecord): boolean {
+  return r.isActive && dataActiveFlag(r.data as Record<string, unknown> | undefined) !== false;
+}
+
+/** mdms-v2 search returns only the first tenant level (city, then its parents)
+ *  that has rows for a schema. Records of these permission masters therefore
+ *  live at the state root: one row created at a city would shadow every root
+ *  row for that city. */
+const STATE_LEVEL_SCHEMAS: ReadonlySet<string> = new Set([
+  'ACCESSCONTROL-ROLES.roles',
+  'ACCESSCONTROL-ROLEACTIONS.roleactions',
+  'ACCESSCONTROL-ACTIONS-TEST.actions-test',
+]);
+
+function stateRootTenant(tenantId: string): string {
+  return tenantId.split('.')[0];
+}
+
 function normalizeMdmsRecord(mdms: MdmsRecord, config: ResourceConfig): RaRecord {
   let data = mdms.data || {};
   // Legacy ThemeConfig records (v1 nested / v2 semantic shapes) don't carry the
@@ -182,7 +234,7 @@ function normalizeMdmsRecord(mdms: MdmsRecord, config: ResourceConfig): RaRecord
     // for legacy records that lack it.
     id: mdms.uniqueIdentifier || extractId(data, config),
     _uniqueIdentifier: mdms.uniqueIdentifier,
-    _isActive: mdms.isActive,
+    _isActive: isEffectivelyActive(mdms),
     _auditDetails: mdms.auditDetails,
     _schemaCode: mdms.schemaCode,
     _mdmsId: mdms.id,
@@ -373,8 +425,10 @@ function serviceDefToLeafWrite(
 }
 
 /** Reduce a full ComplaintHierarchy record set to ServiceDefs-shaped leaf
- *  RaRecords (keyed by uniqueIdentifier == leaf code). */
-function adaptHierarchyLeaves(records: MdmsRecord[], config: ResourceConfig): RaRecord[] {
+ *  RaRecords (keyed by uniqueIdentifier == leaf code). `includeInactive` keeps
+ *  disabled leaves (master screens, so a complaint type can be re-enabled);
+ *  pickers and lookups only get enabled ones. */
+function adaptHierarchyLeaves(records: MdmsRecord[], config: ResourceConfig, includeInactive = false): RaRecord[] {
   const parentNameByCode = new Map<string, string>();
   const hasChildren = new Set<string>();
   for (const r of records) {
@@ -391,7 +445,8 @@ function adaptHierarchyLeaves(records: MdmsRecord[], config: ResourceConfig): Ra
   const isFileableType = (d: Record<string, unknown>): boolean =>
     isLeafHierarchyRow(d) || !hasChildren.has(String(d.code));
   return records
-    .filter((r) => r.isActive && isFileableType((r.data || {}) as Record<string, unknown>))
+    .filter((r) =>
+      (includeInactive || isEffectivelyActive(r)) && isFileableType((r.data || {}) as Record<string, unknown>))
     .map((r) => {
       const adapted: MdmsRecord = {
         ...r,
@@ -415,6 +470,15 @@ function clientSort(records: RaRecord[], field: string, order: string): RaRecord
 // where the form lets the operator pick a target tenant that differs from
 // the session ADMIN tenant).
 const TENANT_OVERRIDE_KEY = '__tenantId';
+
+/** Tenant an MDMS read/write must target: explicit __tenantId override, else the state root for
+ *  state-level masters, else the session tenant. */
+function mdmsTenantFor(client: DigitApiClient, config: ResourceConfig, tenantId: string, filter?: Record<string, unknown>): string {
+  const override = filter?.[TENANT_OVERRIDE_KEY];
+  if (typeof override === 'string' && override.trim()) return override.trim();
+  if (config.stateLevel) return client.stateTenantId || tenantId.split('.')[0] || tenantId;
+  return tenantId;
+}
 
 function pickTenant(tenantId: string, filter?: Record<string, unknown>): string {
   const override = filter?.[TENANT_OVERRIDE_KEY];
@@ -523,14 +587,28 @@ async function mdmsSearchAll(client: DigitApiClient, tenant: string, schema: str
   return all;
 }
 
-async function mdmsGetList(client: DigitApiClient, config: ResourceConfig, tenantId: string, filter?: Record<string, unknown>): Promise<RaRecord[]> {
-  const tenant = pickTenant(tenantId, filter);
+async function mdmsGetList(
+  client: DigitApiClient,
+  config: ResourceConfig,
+  tenantId: string,
+  filter?: Record<string, unknown>,
+  includeInactive = false,
+): Promise<RaRecord[]> {
+  const tenant = mdmsTenantFor(client, config, tenantId, filter);
   // No isActive push-down here: the leaf-adapter (adaptHierarchyLeaves) needs inactive
   // rows too, to resolve a leaf's parent name even when that parent has since been
   // deactivated. Non-leaf-adapter callers filter isActive themselves below.
   const records = await mdmsSearchAll(client, tenant, config.schema!);
-  if (config.leafServiceDefAdapter) return adaptHierarchyLeaves(records, config);
-  return records.filter((r) => r.isActive).map((r) => normalizeMdmsRecord(r, config));
+  if (config.leafServiceDefAdapter) return adaptHierarchyLeaves(records, config, includeInactive);
+  const visible = includeInactive ? records : records.filter(isEffectivelyActive);
+  return visible.map((r) => normalizeMdmsRecord(r, config));
+}
+
+/** True when the caller is a configurator master screen (List/Show/Edit —
+ *  MASTER_SCREEN_META), the only place deactivated MDMS records are shown.
+ *  Every other consumer (dropdowns, lookups, EntityLink) sees active rows only. */
+function wantsInactive(meta: unknown): boolean {
+  return Boolean((meta as { showInactive?: boolean } | undefined)?.showInactive);
 }
 
 async function hrmsGetList(client: DigitApiClient, config: ResourceConfig, tenantId: string, filter?: Record<string, unknown>): Promise<RaRecord[]> {
@@ -889,8 +967,34 @@ async function userGetList(client: DigitApiClient, config: ResourceConfig, tenan
   return users.map((u) => normalizeRecord(u, config));
 }
 
+/**
+ * Workflow business services for the tenant.
+ *
+ * `filter.businessServices` narrows the search; WITHOUT it every business
+ * service the tenant has is returned, because egov-workflow-v2's `_search`
+ * omits the `businessServices` query param entirely when the list is empty and
+ * then answers with all of them.
+ *
+ * This used to default to `['PGR']`, and that single literal was a ceiling, not
+ * a default: every screen reading this resource — including the notification
+ * Configure tab's picker — could only ever see PGR, whatever the tenant
+ * actually had configured. A product with an IM or TL workflow got a picker
+ * with one entry and no way to tell that was a client-side constant. PGR keeps
+ * working identically: it is simply one of the services that comes back, and a
+ * caller that genuinely wants only PGR still passes the filter (see the
+ * `getOne` path below, which searches by the requested id).
+ */
 async function workflowBsGetList(client: DigitApiClient, config: ResourceConfig, tenantId: string, filter?: Record<string, unknown>): Promise<RaRecord[]> {
-  const codes = filter?.businessServices ? filter.businessServices as string[] : ['PGR'];
+  const requested = filter?.businessServices;
+  const listed = Array.isArray(requested)
+    ? (requested as string[]).map((c) => String(c).trim()).filter((c) => c !== '')
+    : typeof requested === 'string' && requested.trim() !== ''
+      ? [requested.trim()]
+      : [];
+  // An empty filter is not a filter: collapse it to `undefined` so the caller
+  // cannot accidentally ask for "no business services" and get all of them by
+  // a coincidence of the client's param handling.
+  const codes = listed.length > 0 ? listed : undefined;
   const services = await client.workflowBusinessServiceSearch(tenantId, codes);
   return services.map((s) => normalizeRecord(s, config));
 }
@@ -930,17 +1034,15 @@ async function workflowProcessGetList(client: DigitApiClient, config: ResourceCo
   }
 }
 
-async function accessRoleGetList(client: DigitApiClient, config: ResourceConfig, tenantId: string): Promise<RaRecord[]> {
-  const roles = await client.accessRolesSearch(tenantId);
-  return roles.map((r) => normalizeRecord(r, config));
-}
-
 async function accessActionGetList(client: DigitApiClient, config: ResourceConfig, tenantId: string, filter?: Record<string, unknown>): Promise<RaRecord[]> {
-  const roleCodes = filter?.roleCodes
-    ? (filter.roleCodes as string[])
-    : ['CITIZEN', 'EMPLOYEE', 'GRO', 'CSR'];
-  const actions = await client.accessActionsSearch(tenantId, roleCodes);
-  return actions.map((a) => normalizeRecord(a, config));
+  if (filter?.roleCodes) {
+    const actions = await client.accessActionsSearch(tenantId, filter.roleCodes as string[]);
+    return actions.map((a) => normalizeRecord(a, config));
+  }
+  // No role filter: list every action in the actions master, not just the ones
+  // some role already holds — the Role Action picker exists to grant new ones.
+  const records = await mdmsSearchAll(client, stateRootTenant(tenantId), config.schema!, { isActive: true });
+  return records.filter((r) => r.isActive).map((r) => normalizeRecord(r.data || {}, config));
 }
 
 async function mdmsSchemaGetList(client: DigitApiClient, config: ResourceConfig, tenantId: string): Promise<RaRecord[]> {
@@ -1063,14 +1165,14 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
   // Every list-shaped read funnels through here (getList's generic path,
   // getMany, getManyReference), so this is the one place that can guarantee the
   // "unique id per record" invariant react-admin depends on — see dedupeById.
-  async function fetchAll(resource: string, filter?: Record<string, unknown>): Promise<RaRecord[]> {
-    return dedupeById(await fetchAllRaw(resource, filter));
+  async function fetchAll(resource: string, filter?: Record<string, unknown>, includeInactive = false): Promise<RaRecord[]> {
+    return dedupeById(await fetchAllRaw(resource, filter, includeInactive));
   }
 
-  async function fetchAllRaw(resource: string, filter?: Record<string, unknown>): Promise<RaRecord[]> {
+  async function fetchAllRaw(resource: string, filter?: Record<string, unknown>, includeInactive = false): Promise<RaRecord[]> {
     const config = resolveConfig(resource);
     switch (config.type) {
-      case 'mdms': return mdmsGetList(client, config, tenantId, filter);
+      case 'mdms': return mdmsGetList(client, config, tenantId, filter, includeInactive);
       case 'hrms': return hrmsGetList(client, config, tenantId, filter);
       case 'boundary': return boundaryGetList(client, config, tenantId);
       case 'pgr': return pgrGetList(client, config, tenantId, filter);
@@ -1078,7 +1180,6 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
       case 'user': return userGetList(client, config, tenantId, filter);
       case 'workflow-bs': return workflowBsGetList(client, config, tenantId, filter);
       case 'workflow-process': return workflowProcessGetList(client, config, tenantId, filter);
-      case 'access-role': return accessRoleGetList(client, config, tenantId);
       case 'access-action': return accessActionGetList(client, config, tenantId, filter);
       case 'mdms-schema': return mdmsSchemaGetList(client, config, tenantId);
       case 'boundary-hierarchy': return boundaryHierarchyGetList(client, config, tenantId);
@@ -1180,16 +1281,15 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
       if (config.type === 'custom') {
         const filter = filterValues;
         if (resource === 'notification-log') {
-          const { records, total } = await customFetchList(client, config, tenantId, {
-            referenceNumber: typeof filter.referenceNumber === 'string' ? filter.referenceNumber : undefined,
-            // Substring-style search on the complaint number → prefix match server-side.
-            referenceNumberPrefix: typeof filter.referenceNumber === 'string' && filter.referenceNumber ? true : undefined,
-            transactionId: typeof filter.transactionId === 'string' ? filter.transactionId : undefined,
-            channel: typeof filter.channel === 'string' ? filter.channel : undefined,
-            status: typeof filter.status === 'string' ? filter.status : undefined,
-            limit: perPage,
-            offset: (page - 1) * perPage,
-          });
+          // Filter → query-param mapping lives in notificationLogQuery.ts, which
+          // is unit-tested: it is the only place the /logs parameter names
+          // (channel incl. NONE, sourcePath, includeTest, …) are written down.
+          const { records, total } = await customFetchList(
+            client,
+            config,
+            tenantId,
+            buildNotificationLogQuery(filter, page, perPage),
+          );
           return { data: records, total };
         }
         // Generic custom list (e.g. notification-provider): fetch-all then
@@ -1212,12 +1312,20 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
       // slice the requested page. mdmsSearchAll bounds itself on mdmsCount
       // with the SAME isActive criteria, so the total it hands back always
       // agrees with what was actually paged through.
+      // Master list screens pass meta.showInactive so deactivated records are
+      // listed (with a Status chip) and can be re-enabled; every other caller
+      // keeps seeing active rows only (egovernments/CCRS#1846).
+      const showInactive = wantsInactive(params.meta);
       if (config.type === 'mdms' && !config.leafServiceDefAdapter) {
         const filter = filterValues;
         const hasClientFilter = Object.keys(filter).some((k) => k !== TENANT_OVERRIDE_KEY);
         if (!hasClientFilter) {
           const tenant = pickTenant(tenantId, filter);
-          const all = await mdmsSearchAll(client, tenant, config.schema!, { isActive: true });
+          // showInactive skips the isActive push-down entirely — deactivated
+          // rows are shown (and re-enabled) rather than hidden.
+          const all = showInactive
+            ? await mdmsSearchAll(client, tenant, config.schema!)
+            : await mdmsSearchAll(client, tenant, config.schema!, { isActive: true });
           // Defensive fallback for any MDMS build that ignores the isActive criterion —
           // degrades to filtering client-side, never worse than the pre-push-down behavior.
           // dedupeById mirrors what fetchAll does for the filtered path below, so
@@ -1225,16 +1333,15 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
           // A no-op for records carrying an MDMS uniqueIdentifier (always unique);
           // it only bites on legacy rows that fall back to data[idField], which
           // normalizeMdmsRecord already notes collapse onto one record anyway.
-          const active = dedupeById(
-            all.filter((r) => r.isActive).map((r) => normalizeMdmsRecord(r, config)),
-          );
-          const sorted = clientSort(active, field, order);
+          const visible = showInactive ? all : all.filter(isEffectivelyActive);
+          const mapped = dedupeById(visible.map((r) => normalizeMdmsRecord(r, config)));
+          const sorted = clientSort(mapped, field, order);
           const data = clientPaginate(sorted, page, perPage);
-          return { data, total: active.length };
+          return { data, total: mapped.length };
         }
       }
 
-      const all = await fetchAll(resource, filterValues);
+      const all = await fetchAll(resource, filterValues, showInactive);
       const filtered = clientFilter(all, filterValues);
       const sorted = clientSort(filtered, field, order);
       const data = clientPaginate(sorted, page, perPage);
@@ -1261,17 +1368,23 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
         // menuPathName (its parent node's name), so always go through the
         // adapted list path rather than the single-uid fast path.
         if (config.leafServiceDefAdapter) {
-          const all = await mdmsGetList(client, config, tenantId);
+          const all = await mdmsGetList(client, config, tenantId, undefined, wantsInactive(params.meta));
           const found = all.find((r) => String(r.id) === String(params.id));
           if (!found) throw new Error(`Record not found: ${params.id}`);
           return { data: found };
         }
         // Try uniqueIdentifier lookup first (fast path for records we created)
-        const records = await client.mdmsSearch(tenantId, config.schema!, { uniqueIdentifiers: [String(params.id)] });
-        const active = records.filter((r) => r.isActive);
-        if (active.length) return { data: normalizeMdmsRecord(active[0], config) };
+        const records = await client.mdmsSearch(mdmsTenantFor(client, config, tenantId), config.schema!, { uniqueIdentifiers: [String(params.id)] });
+        // Master Show/Edit screens (meta.showInactive) also resolve a
+        // deactivated record so it can be viewed and re-enabled; every other
+        // lookup (EntityLink etc.) only resolves active ones.
+        const showInactive = wantsInactive(params.meta);
+        const match =
+          records.find(isEffectivelyActive) ??
+          (showInactive ? records.find((r) => r.isActive) ?? records[0] : undefined);
+        if (match) return { data: normalizeMdmsRecord(match, config) };
         // Fall back to fetching all and matching by id field (handles hash-based UIDs)
-        const all = await mdmsGetList(client, config, tenantId);
+        const all = await mdmsGetList(client, config, tenantId, undefined, showInactive);
         const found = all.find((r) => String(r.id) === String(params.id));
         if (!found) throw new Error(`Record not found: ${params.id}`);
         return { data: found };
@@ -1333,7 +1446,7 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
           const records = await client.mdmsSearch(tenantId, config.schema!, {
             uniqueIdentifiers: params.ids.map(String),
           });
-          const found = records.filter((r) => r.isActive).map((r) => normalizeMdmsRecord(r, config));
+          const found = records.filter(isEffectivelyActive).map((r) => normalizeMdmsRecord(r, config));
           if (found.length === params.ids.length) return { data: found };
         }
         // Fall back to fetching all and matching by id field (handles hash-based UIDs)
@@ -1385,7 +1498,10 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
           data.tenants = [{ code: tenantId }];
         }
         const uid = String(incoming[config.idField] || data.code || '');
-        const record = await client.mdmsCreate(tenantId, config.schema!, uid, data);
+        const createTenant = STATE_LEVEL_SCHEMAS.has(config.schema!)
+          ? stateRootTenant(tenantId)
+          : mdmsTenantFor(client, config, tenantId);
+        const record = await client.mdmsCreate(createTenant, config.schema!, uid, data);
         return { data: config.leafServiceDefAdapter
           ? (await mdmsGetList(client, config, tenantId)).find((r) => String(r.id) === uid)
             ?? normalizeMdmsRecord(record, config)
@@ -1592,12 +1708,15 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
     async update(resource, params): Promise<UpdateResult> {
       const config = resolveConfig(resource);
       if (config.type === 'mdms') {
-        const records = await client.mdmsSearch(tenantId, config.schema!, { uniqueIdentifiers: [String(params.id)] });
-        // Opt-in reactivation: when meta.includeInactive is set, fall back to a
-        // soft-deleted (inactive) row so Remove -> re-Add can resurrect the uid
-        // that delete() left occupied (mdmsUpdate below forces isActive: true).
-        const includeInactive = Boolean((params.meta as { includeInactive?: boolean } | undefined)?.includeInactive);
-        const existing = records.find((r) => r.isActive) ?? (includeInactive ? records[0] : undefined);
+        const records = await client.mdmsSearch(mdmsTenantFor(client, config, tenantId), config.schema!, { uniqueIdentifiers: [String(params.id)] });
+        // Fall back to a deactivated row for the master Edit screen
+        // (meta.showInactive, re-enable via _isActive) and for the
+        // Remove -> re-Add flow (meta.includeInactive), which resurrects the
+        // uid delete() left occupied.
+        const reactivate = Boolean((params.meta as { includeInactive?: boolean } | undefined)?.includeInactive);
+        const existing =
+          records.find((r) => r.isActive) ??
+          (reactivate || wantsInactive(params.meta) ? records[0] : undefined);
         if (!existing) throw new Error(`Record not found: ${params.id}`);
         // Strip the metadata that normalizeMdmsRecord glued onto the
         // record for react-admin's benefit (id, _isActive, _mdmsId,
@@ -1609,6 +1728,21 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
         const incoming = config.leafServiceDefAdapter
           ? serviceDefToLeafWrite(params.data as Record<string, unknown>)
           : (params.data as Record<string, unknown>);
+        // A caller can ask for a status two ways: `_isActive` (the MDMS
+        // envelope's isActive — MdmsResourceEdit, Department/Designation edit,
+        // RoleActionEdit; the one `_`-prefixed field callers may set) or a
+        // boolean data flag (ComplaintTypeEdit's `active`, Twilio template
+        // sync). A full-record payload usually carries both, one of them just
+        // echoing the loaded value, so whichever differs from the record's
+        // current status is the change. With neither, the record keeps its
+        // status, except the Remove -> re-Add flow above.
+        const currentIsActive = isEffectivelyActive(existing);
+        const rootFlag = typeof incoming._isActive === 'boolean' ? incoming._isActive : undefined;
+        const dataFlag = dataActiveFlag(incoming);
+        const desiredIsActive =
+          rootFlag !== undefined && rootFlag !== currentIsActive ? rootFlag
+          : dataFlag !== undefined && dataFlag !== currentIsActive ? dataFlag
+          : rootFlag ?? dataFlag ?? (reactivate || currentIsActive);
         const sanitized: Record<string, unknown> = {};
         for (const [key, value] of Object.entries(incoming)) {
           if (key === 'id') continue;
@@ -1616,13 +1750,17 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
           sanitized[key] = value;
         }
         existing.data = { ...existing.data, ...sanitized };
+        // Root-level isActive is the single source of truth for enable/disable;
+        // mirror it into the duplicate data flags so the two can never disagree.
+        mirrorActiveFlags(existing.data, desiredIsActive);
         // React-admin may send only dirty fields. Validate the authoritative
         // merged record so partial updates, updateMany, and reactivation cannot
         // revive a competing PGR Workflow.AutoEscalation policy.
         rejectLegacyPgrEscalationWrite(config, existing.data);
-        const updated = await client.mdmsUpdate(existing, true);
+        const updated = await client.mdmsUpdate(existing, desiredIsActive);
         if (config.leafServiceDefAdapter) {
-          const all = await mdmsGetList(client, config, tenantId);
+          // includeInactive: a leaf that was just disabled must still map back.
+          const all = await mdmsGetList(client, config, tenantId, undefined, true);
           const found = all.find((r) => String(r.id) === String(params.id));
           if (found) return { data: found };
         }
@@ -1801,7 +1939,7 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
     async updateMany(resource, params): Promise<{ data: Identifier[] }> {
       const results: Identifier[] = [];
       for (const id of params.ids) {
-        await provider.update(resource, { id, data: params.data, previousData: {} as RaRecord });
+        await provider.update(resource, { id, data: params.data, previousData: {} as RaRecord, meta: params.meta });
         results.push(id);
       }
       return { data: results };
@@ -1810,9 +1948,14 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
     async delete(resource, params): Promise<DeleteResult> {
       const config = resolveConfig(resource);
       if (config.type === 'mdms') {
-        const records = await client.mdmsSearch(tenantId, config.schema!, { uniqueIdentifiers: [String(params.id)] });
-        const existing = records.find((r) => r.isActive);
+        const records = await client.mdmsSearch(mdmsTenantFor(client, config, tenantId), config.schema!, { uniqueIdentifiers: [String(params.id)] });
+        // Master screens list deactivated rows too, so their row Delete may hit
+        // one; re-deactivating is harmless and also clears a stale data flag.
+        const existing =
+          records.find((r) => r.isActive) ?? (wantsInactive(params.meta) ? records[0] : undefined);
         if (!existing) throw new Error(`Record not found: ${params.id}`);
+        existing.data = { ...existing.data };
+        mirrorActiveFlags(existing.data, false);
         await client.mdmsUpdate(existing, false);
         return { data: normalizeMdmsRecord(existing, config) };
       }
@@ -1884,7 +2027,7 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
     async deleteMany(resource, params): Promise<{ data: Identifier[] }> {
       const results: Identifier[] = [];
       for (const id of params.ids) {
-        await provider.delete(resource, { id, previousData: {} as RaRecord });
+        await provider.delete(resource, { id, previousData: {} as RaRecord, meta: params.meta });
         results.push(id);
       }
       return { data: results };

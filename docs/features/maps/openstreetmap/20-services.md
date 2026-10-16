@@ -69,7 +69,7 @@ and not for anything per-user or per-page-view. Client obligations: send an iden
 `User-Agent`/`Referer`; back off on `429`/`504` rather than retrying immediately; cache; set
 a client-side abort so a hung call cannot hang the UI; never bulk-download — for "all
 boundaries in country X", `osmium` over an extract is the better tool anyway, and is what
-`overpass/prepare-extract.sh` does.
+the retired `overpass/prepare-extract.sh` did.
 
 ## Nominatim — geocoding
 

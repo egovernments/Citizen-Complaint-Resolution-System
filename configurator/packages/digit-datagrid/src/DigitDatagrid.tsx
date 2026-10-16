@@ -126,6 +126,7 @@ export function DigitDatagrid<RecordType extends RaRecord = RaRecord>({
     onSuccess: mutationOptions?.onSuccess,
     onError: mutationOptions?.onError,
     transform: mutationOptions?.transform,
+    meta: mutationOptions?.meta,
   });
 
   // Check if any column is editable

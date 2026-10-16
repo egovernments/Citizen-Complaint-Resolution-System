@@ -39,7 +39,7 @@ export function ComplaintCreate() {
         <div className="space-y-4">
           <ComplaintHierarchyCascade
             source="serviceCode"
-            label="Complaint Type"
+            label="Complaint Category"
             validate={v.required}
           />
           <DigitFormInput

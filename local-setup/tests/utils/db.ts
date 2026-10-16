@@ -74,6 +74,25 @@ class DatabaseClient {
     const result = await this.queryValue<string>(`SELECT COUNT(*) FROM ${tableName}`);
     return parseInt(result || '0', 10);
   }
+
+  /**
+   * A seeded leaf of the tenant's ADMIN boundary tree. PGR's create checks the
+   * complaint locality against boundary-service, so a made-up code such as
+   * LOC_CITYA_1 is refused with INVALID_BOUNDARY_CODE.
+   */
+  async leafBoundaryCode(tenantId: string): Promise<string> {
+    const code = await this.queryValue<string>(
+      `SELECT r.code FROM boundary_relationship r
+         JOIN boundary b ON b.tenantid = r.tenantid AND b.code = r.code
+        WHERE r.tenantid = $1 AND r.hierarchytype = 'ADMIN'
+          AND NOT EXISTS (SELECT 1 FROM boundary_relationship c
+                           WHERE c.tenantid = r.tenantid AND c.hierarchytype = r.hierarchytype AND c.parent = r.code)
+        ORDER BY r.code LIMIT 1`,
+      [tenantId]
+    );
+    if (!code) throw new Error(`No ADMIN boundary seeded for ${tenantId}`);
+    return code;
+  }
 }
 
 export const db = new DatabaseClient();

@@ -1,3 +1,4 @@
+import { tenantSlug } from '../utils/identity-bff';
 import { test, expect } from '@playwright/test';
 import { BASE_URL } from '../utils/env';
 
@@ -60,7 +61,7 @@ Catches the most common theme regression — MDMS fetch fails or the applyTheme(
     }
   });
 
-  await page.goto(`${BASE_URL}/digit-ui/citizen/login`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`${BASE_URL}/${tenantSlug()}/digit-ui/citizen/login`, { waitUntil: 'domcontentloaded' });
 
   await expect
     .poll(() => captured.length, {

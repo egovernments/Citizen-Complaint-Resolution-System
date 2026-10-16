@@ -1,3 +1,4 @@
+import { getDigitToken } from '../utils/auth';
 /**
  * Lifecycle — egov-user encryption-key drift after tenant flip + recreate (CCRS #622).
  *
@@ -52,25 +53,10 @@ import { resolvePersona } from '../utils/personas';
 const CIPHERTEXT_RE = /^\d+\|/;
 
 async function assertAdminCanOauth(request: APIRequestContext): Promise<void> {
-  const resp = await request.post(`${BASE_URL}/user/oauth/token`, {
-    headers: {
-      Authorization: 'Basic ZWdvdi11c2VyLWNsaWVudDo=',
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    data: `username=${ADMIN_USER}&password=${encodeURIComponent(ADMIN_PASS)}&grant_type=password&scope=read&tenantId=${ROOT_TENANT}&userType=EMPLOYEE`,
-  });
-
-  expect(
-    resp.status(),
-    `#622 — oauth/token returned ${resp.status()}; expected 2xx. Body: ${(await resp.text()).slice(0, 400)}`,
-  ).toBeLessThan(400);
-
-  const body = await resp.json();
-  expect(
-    typeof body.access_token,
-    `#622 — oauth/token body must contain access_token; got ${JSON.stringify(body).slice(0, 300)}`,
-  ).toBe('string');
+  const body = await getDigitToken({ tenant: ROOT_TENANT, username: ADMIN_USER, password: ADMIN_PASS });
+  expect(typeof body.access_token).toBe('string');
   expect(body.access_token.length).toBeGreaterThan(0);
+
 }
 
 test.describe('lifecycle — enc-key drift after STATE_LEVEL_TENANT_ID flip #622', () => {
@@ -104,22 +90,7 @@ Runs unconditionally: no flag, no redeploy, no destructive flip.`,
       `the only resolvable employee IS ${ADMIN_USER} — bootstrap re-provisions that account, so it cannot evidence drift`,
     );
 
-    const resp = await request.post(`${BASE_URL}/user/oauth/token`, {
-      headers: {
-        Authorization: 'Basic ZWdvdi11c2VyLWNsaWVudDo=',
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      data:
-        `username=${encodeURIComponent(employee!.username)}` +
-        `&password=${encodeURIComponent(employee!.password)}` +
-        `&grant_type=password&scope=read&tenantId=${employee!.tenant}&userType=EMPLOYEE`,
-    });
-    expect(
-      resp.status(),
-      `#622 — seeded employee ${employee!.username} got ${resp.status()} from oauth/token; a drifted enc key makes the username lookup miss its own row. Body: ${(await resp.text()).slice(0, 300)}`,
-    ).toBeLessThan(400);
-
-    const body = await resp.json();
+    const body = await getDigitToken({ tenant: employee!.tenant, username: employee!.username, password: employee!.password });
     expect(typeof body.access_token, '#622 — no access_token for a seeded employee').toBe('string');
 
     const name = String(body?.UserRequest?.name ?? '');

@@ -113,7 +113,23 @@ describe('generateColumns', () => {
     expect(sources).not.toContain('items');
     expect(sources).not.toContain('config');
     expect(sources).toContain('key');
-    expect(sources).toContain('active');
+  });
+
+  it('drops a boolean active/isActive column (the master list shows root isActive as Status) but keeps other booleans', () => {
+    const schema: SchemaDefinition = {
+      type: 'object',
+      properties: {
+        code: { type: 'string' },
+        active: { type: 'boolean' },
+        isActive: { type: 'boolean' },
+        isDefault: { type: 'boolean' },
+      },
+      required: ['code'],
+    };
+    const sources = generateColumns(schema, {}).map((c) => c.source);
+    expect(sources).not.toContain('active');
+    expect(sources).not.toContain('isActive');
+    expect(sources).toContain('isDefault');
   });
 
   it('caps columns at 8', () => {

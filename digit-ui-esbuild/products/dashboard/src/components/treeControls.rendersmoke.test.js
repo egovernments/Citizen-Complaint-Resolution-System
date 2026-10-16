@@ -94,7 +94,7 @@ const noop = () => {};
 
 /* ---------------- chip (closed widget) states ---------------- */
 
-test("chip smoke: root state shows All types with menu semantics", () => {
+test("chip smoke: root state shows All categories with menu semantics", () => {
   const html = renderFilter({
     tree: DEEP_TREE,
     filters: { complaintType: "all" },
@@ -103,7 +103,7 @@ test("chip smoke: root state shows All types with menu semantics", () => {
   });
   assert.match(html, /aria-haspopup="menu"/);
   assert.match(html, /aria-expanded="false"/);
-  assert.match(html, /All types/);
+  assert.match(html, /All categories/);
   assert.doesNotMatch(html, /<select/);
 });
 
@@ -142,7 +142,7 @@ test("panel smoke: root — categories listed, no All-in row, reset pinned", () 
   assert.match(html, /Roads/);
   assert.doesNotMatch(html, /All in/);
   assert.match(html, /dashboard-popover-footer/);
-  assert.match(html, /All types/);
+  assert.match(html, /All categories/);
   // interior children carry the descend chevron slot
   assert.match(html, /dashboard-menu-item-trailing/);
 });
@@ -170,7 +170,7 @@ test("panel smoke: 4-level-deep leaf — full trail fits, every level labeled", 
   const html = renderPanel({ tree: DEEP_TREE, appliedCode: "WaterSmelly", onApply: noop, t });
   // browse opens at WaterQuality (depth 3): all › Infrastructure › Water
   // supply › Water quality — exactly TRAIL_MAX, no elision needed.
-  assert.match(html, /All types/);
+  assert.match(html, /All categories/);
   assert.match(html, /Water supply/);
   assert.match(html, /Water quality/);
   assert.doesNotMatch(html, /dashboard-popover-trail-ellipsis/);
@@ -187,7 +187,7 @@ test("panel smoke: deeper than TRAIL_MAX — trail middle-truncates with ellipsi
   });
   // browse opens at WaterMuddy (depth 4): all › … › Water quality › Muddy water
   assert.match(html, /dashboard-popover-trail-ellipsis/);
-  assert.match(html, /All types/); // root endpoint kept clickable
+  assert.match(html, /All categories/); // root endpoint kept clickable
   assert.match(html, /Water quality/); // nearest ancestors kept
   assert.match(html, /Muddy water/);
   // elided levels stay recoverable from the ellipsis title

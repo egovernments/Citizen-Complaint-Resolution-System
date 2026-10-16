@@ -396,28 +396,35 @@ public class EscalationConfigurationService {
         }
 
         public long resolveSla(String serviceCode, int level) {
-            OverrideConfig override = override(serviceCode);
-            List<Long> percentages = override.percentages.isEmpty()
-                    ? defaultPercentages : override.percentages;
-            Long complaintSla = complaintSlas.get(serviceCode);
-            if (complaintSla != null && complaintSla > 0 && !percentages.isEmpty()) {
-                return percentageOf(complaintSla, valueAt(percentages, level));
-            }
-            List<Long> slas = override.slas.isEmpty() ? defaultSlas : override.slas;
-            return valueAt(slas, level);
+            Ladder ladder = ladder(serviceCode);
+            long threshold = valueAt(ladder.values, level);
+            return ladder.percentOf == null ? threshold : percentageOf(ladder.percentOf, threshold);
         }
 
-        /** Percentage ladders are finite: their last entry is the final escalation. */
+        /** Ladders are finite: their last entry is the final escalation. */
         public int effectiveMaxDepth(String serviceCode) {
+            return Math.min(maxDepth, ladder(serviceCode).values.size());
+        }
+
+        /**
+         * Picks the escalation ladder for a complaint type. Precedence: the type's own
+         * override beats the global defaults, and within each level a percentage ladder
+         * beats a millisecond one. Percentages need the type's slaHours to apply.
+         */
+        private Ladder ladder(String serviceCode) {
             OverrideConfig override = override(serviceCode);
-            List<Long> percentages = override.percentages.isEmpty()
-                    ? defaultPercentages : override.percentages;
             Long complaintSla = complaintSlas.get(serviceCode);
-            if (complaintSla != null && complaintSla > 0 && !percentages.isEmpty()) {
-                return Math.min(maxDepth, percentages.size());
+            Long percentOf = complaintSla != null && complaintSla > 0 ? complaintSla : null;
+            if (percentOf != null && !override.percentages.isEmpty()) {
+                return new Ladder(override.percentages, percentOf);
             }
-            List<Long> slas = override.slas.isEmpty() ? defaultSlas : override.slas;
-            return Math.min(maxDepth, slas.size());
+            if (!override.slas.isEmpty()) {
+                return new Ladder(override.slas, null);
+            }
+            if (percentOf != null && !defaultPercentages.isEmpty()) {
+                return new Ladder(defaultPercentages, percentOf);
+            }
+            return new Ladder(defaultSlas, null);
         }
 
         private OverrideConfig override(String serviceCode) {
@@ -448,6 +455,10 @@ public class EscalationConfigurationService {
         }
 
         private record OverrideConfig(List<Long> percentages, List<Long> slas, List<Boolean> enabled) {
+        }
+
+        /** Cumulative thresholds; percentages of {@code percentOf} when set, else milliseconds. */
+        private record Ladder(List<Long> values, Long percentOf) {
         }
     }
 }

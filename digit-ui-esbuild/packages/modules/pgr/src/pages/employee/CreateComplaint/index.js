@@ -17,7 +17,8 @@ export const CreateComplaint = ({ parentUrl }) => {
   const { data: cities, isLoading }  = Digit.Utils.getMultiRootTenant()? Digit.Hooks.useTenants() :Digit.Hooks.pgr.useTenants();
 
   const currentTenantId = window.Digit.SessionStorage.get("Employee.tenantId");
-  const stateLvlTenantId = window?.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID");
+  // On a tenant route the URL tenant replaces the deployment state tenant (#2072).
+  const stateLvlTenantId = window.__digitTenantContext?.tenantId || window?.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID");
 
   // Strategy: look for MobileNumberValidation within the current tenant first
   // (self-contained), then fall back to the state-level tenant.

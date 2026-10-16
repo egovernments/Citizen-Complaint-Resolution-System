@@ -7,6 +7,47 @@ import {
 import { isPublicDashboardRuntime } from "./dashboardRuntime";
 import { withTraceHeaders } from "./dashboardMetrics";
 import { chunkValues, runSequentialChunks } from "./sequentialChunks";
+import { getMdmsSearchUrl } from "./complaintHierarchyService";
+
+const hierarchyTypes = new Map();
+
+/**
+ * The tenant's boundary hierarchy type: its CMS-BOUNDARY.HierarchySchema "CMS"
+ * row (written by the configurator's Geography step; mdms-v2 resolves a city
+ * to its state's row), else globalConfigs HIERARCHY_TYPE, else ADMIN. Resolved
+ * once per tenant per page load; never rejects.
+ */
+export function fetchTenantHierarchyType(tenantId = getTenantId()) {
+  if (!hierarchyTypes.has(tenantId)) {
+    hierarchyTypes.set(
+      tenantId,
+      (async () => {
+        try {
+          const response = await authFetch(getMdmsSearchUrl(), {
+            headers: withTraceHeaders({}),
+            sessionCritical: false,
+            buildBody: () => ({
+              RequestInfo: buildRequestInfo("dashboard-boundary"),
+              MdmsCriteria: {
+                tenantId,
+                moduleDetails: [{ moduleName: "CMS-BOUNDARY", masterDetails: [{ name: "HierarchySchema" }] }],
+              },
+            }),
+          });
+          if (response.ok) {
+            const rows = (await response.json())?.MdmsRes?.["CMS-BOUNDARY"]?.HierarchySchema;
+            const row = Array.isArray(rows) ? rows.find((r) => r?.moduleName === "CMS" && r?.hierarchy) : null;
+            if (row) return String(row.hierarchy);
+          }
+        } catch (error) {
+          console.warn("CMS-BOUNDARY.HierarchySchema _search error", error);
+        }
+        return window.globalConfigs?.getConfig?.("HIERARCHY_TYPE") || "ADMIN";
+      })()
+    );
+  }
+  return hierarchyTypes.get(tenantId);
+}
 
 
 /**
@@ -121,11 +162,9 @@ export function deriveBoundaryRootCode(codes = []) {
  * Loads the full county tree from the shared root so ancestor chains are available
  * for state → city → district drill clustering.
  * API: POST /boundary-service/boundary-relationships/_search?tenantId=&codes=&hierarchyType=
+ * The hierarchy defaults to the tenant's own (fetchTenantHierarchyType).
  */
-export async function fetchBoundaryRelationshipsByCodes(
-  codes = [],
-  { hierarchyType = "ADMIN" } = {}
-) {
+export async function fetchBoundaryRelationshipsByCodes(codes = [], { hierarchyType } = {}) {
   if ((!isPublicDashboardRuntime() && !hasAuth()) || !codes.length) return {};
 
   const tenantId = getTenantId();
@@ -135,6 +174,7 @@ export async function fetchBoundaryRelationshipsByCodes(
   const index = {};
 
   try {
+    hierarchyType = hierarchyType || (await fetchTenantHierarchyType(tenantId));
     const params = new URLSearchParams({
       tenantId,
       codes: rootCode,

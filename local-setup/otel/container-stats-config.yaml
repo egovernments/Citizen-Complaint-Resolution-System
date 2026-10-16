@@ -1,0 +1,59 @@
+# Per-container CPU, memory, network and block I/O for the compose tier.
+#
+# Runs as its own collector (container-stats in docker-compose.monitoring.yml),
+# not as a receiver in otel-collector: the collector exits when any receiver
+# fails to start, and this one depends on the Docker API. Kept apart, a
+# refused API version or a missing proxy costs these metrics only, not every
+# service's JVM metrics and traces.
+#
+# Reads the daemon through docker-socket-proxy, never the raw socket. The proxy
+# allows GET /containers/... (list + stats) and denies every write; see the
+# note on docker-socket-proxy in docker-compose.egov-digit.yaml.
+#
+# Prometheus scrapes :8890 (job container-stats in otel/prometheus.yml). The
+# Kubernetes tier gets the same data from kubelet/cAdvisor instead.
+receivers:
+  docker_stats:
+    endpoint: tcp://docker-socket-proxy:2375
+    # The receiver defaults to API 1.25; Docker 29 refuses anything below 1.40.
+    # 1.41 is the newest version Docker 20.10 still serves, so the same pin
+    # works on older boxes. If a future Docker raises its minimum past this,
+    # the container restarts in a loop and the metrics stop; raise the pin.
+    api_version: "1.41"
+    collection_interval: 30s
+    metrics:
+      # Off by default upstream. Restarts are how a crash loop shows up without
+      # Docker access, and uptime tells a fresh container from a stuck one.
+      container.restarts:
+        enabled: true
+      container.uptime:
+        enabled: true
+
+processors:
+  # Keep the labels that identify a container across recreates. The id and
+  # hostname change on every recreate (a new series each time), and the runtime
+  # is always "docker".
+  resource:
+    attributes:
+      - key: container.id
+        action: delete
+      - key: container.hostname
+        action: delete
+      - key: container.runtime
+        action: delete
+  batch:
+
+exporters:
+  prometheus:
+    endpoint: 0.0.0.0:8890
+    # container.name and container.image.name are resource attributes; without
+    # this every container's series collapses into one unlabelled series.
+    resource_to_telemetry_conversion:
+      enabled: true
+
+service:
+  pipelines:
+    metrics:
+      receivers: [docker_stats]
+      processors: [resource, batch]
+      exporters: [prometheus]

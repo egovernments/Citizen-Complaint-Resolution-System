@@ -31,12 +31,14 @@ import ReactDOM from "react-dom";
 import AdminDashboard from "../products/dashboard/src/AdminDashboard";
 import { configurePublicDashboardRuntime } from "../products/dashboard/src/services/dashboardRuntime";
 import { applyTheme } from "./theme/applyTheme";
-import defaultTheme from "./theme/default.json";
+import cmsBlueTheme from "./theme/cms-blue.json";
 
-// Same bundled default theme the employee app applies synchronously before
-// render, so shared design tokens resolve identically on both surfaces.
+// The page has no tenant theme of its own (there is nothing to pick one with),
+// so it wears CMS Blue: the top bar in its header navy, the buttons in its
+// primary. Applied synchronously before render, as the employee app applies
+// its theme, so the shared design tokens resolve the same way.
 configurePublicDashboardRuntime();
-applyTheme(defaultTheme);
+applyTheme(cmsBlueTheme);
 
 ReactDOM.render(
   <React.StrictMode>

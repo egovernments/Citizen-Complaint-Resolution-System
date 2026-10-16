@@ -343,9 +343,9 @@ class UnifiedExcelReader:
             'active': True,
             'levels': [
                 {'levelCode': self.COMPLAINT_CATEGORY_LEVEL, 'order': 1, 'parentLevel': None,
-                 'isFreeText': False, 'isLeafServiceCode': False, 'label': 'Category'},
+                 'isFreeText': False, 'isLeafServiceCode': False, 'label': 'Complaint Category'},
                 {'levelCode': self.COMPLAINT_LEAF_LEVEL, 'order': 2, 'parentLevel': self.COMPLAINT_CATEGORY_LEVEL,
-                 'isFreeText': False, 'isLeafServiceCode': True, 'label': 'Sub-Type'},
+                 'isFreeText': False, 'isLeafServiceCode': True, 'label': 'Complaint Subcategory'},
             ],
         }
 
@@ -2996,11 +2996,11 @@ class APIUploader:
 
             genders = [g.get('code', '') for g in gender_data if g.get('active', True)]
             print(f"   ✅ Found {len(genders)} gender type(s)")
-            return genders if genders else ['MALE', 'FEMALE', 'TRANSGENDER', 'OTHERS']
+            return genders if genders else ['MALE', 'FEMALE']
 
         except Exception as e:
             print(f"   ⚠️  Using default gender types: {str(e)[:100]}")
-            return ['MALE', 'FEMALE', 'TRANSGENDER', 'OTHERS']
+            return ['MALE', 'FEMALE']
 
     def fetch_employee_status(self, tenant: str) -> list:
         """Fetch Employee Status from MDMS
@@ -3106,7 +3106,7 @@ class APIUploader:
         - Role codes dropdown (from MDMS)
         - Employee Status dropdown (EMPLOYED, SUSPENDED, etc.)
         - Employee Type dropdown (PERMANENT, TEMPORARY, etc.)
-        - Gender dropdown (Male, Female, Other)
+        - Gender dropdown (Male, Female)
         - Hierarchy Type dropdown (ADMIN, ADMIN1, etc.)
         - Boundary Type dropdown (from boundaries)
         - Boundary Code dropdown (from boundaries)
@@ -3372,7 +3372,7 @@ class APIUploader:
         instructions['A24'] = "  • Password - User password (default: eGov@123 if left blank)"
         instructions['A25'] = "  • Employee Status - EMPLOYED, SUSPENDED, RETIRED, TERMINATED (default: EMPLOYED)"
         instructions['A26'] = "  • Employee Type - PERMANENT, TEMPORARY, CONTRACT, DAILY_WAGE (default: PERMANENT)"
-        instructions['A27'] = "  • Gender - Male, Female, Other, Transgender"
+        instructions['A27'] = "  • Gender - Male, Female"
         instructions['A28'] = "  • Hierarchy Type - ADMIN, ADMIN1, ADMIN2, REVENUE (default: ADMIN)"
         instructions['A29'] = "  • Boundary Type - Select from available boundaries (default: City)"
         instructions['A30'] = "  • Boundary Code - Select from available boundaries (default: tenant code)"

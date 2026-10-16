@@ -6,6 +6,8 @@ import { DurationMsInput } from './DurationMsInput';
 import { BooleanInput } from './BooleanInput';
 import { LocaleListInput } from './LocaleListInput';
 import { JsonInput } from './JsonInput';
+import { ReferenceSelectInput } from './ReferenceSelectInput';
+import { ChannelGatewayInput } from './ChannelGatewayInput';
 import type { FieldSpec } from '../schemaDescriptors/types';
 
 interface WidgetDispatchProps {
@@ -22,6 +24,20 @@ export function WidgetForFieldSpec({ spec, source }: WidgetDispatchProps) {
   const shared = { source, label };
 
   switch (spec.widget) {
+    case 'reference-select':
+      // Falls back to text when the descriptor forgot the resource name — a
+      // missing dropdown must never cost the operator the field itself.
+      return spec.reference
+        ? (
+          <ReferenceSelectInput
+            {...shared}
+            help={spec.help}
+            reference={spec.reference}
+            optionValue={spec.optionValue}
+            optionText={spec.optionText}
+          />
+        )
+        : <DigitFormInput {...shared} type="text" help={spec.help} />;
     case 'color':
       return <ColorInput {...shared} help={spec.help} />;
     case 'regex':
@@ -34,8 +50,10 @@ export function WidgetForFieldSpec({ spec, source }: WidgetDispatchProps) {
       return <LocaleListInput {...shared} help={spec.help} />;
     case 'json':
       return <JsonInput {...shared} help={spec.help} />;
+    case 'channel-gateway':
+      return <ChannelGatewayInput {...shared} help={spec.help} />;
     case 'boolean':
-      return <BooleanInput {...shared} help={spec.help} />;
+      return <BooleanInput {...shared} help={spec.help} whenUnset={spec.whenUnset} />;
     case 'integer':
     case 'number':
       return <DigitFormInput {...shared} type="number" help={spec.help} />;
@@ -48,4 +66,4 @@ export function WidgetForFieldSpec({ spec, source }: WidgetDispatchProps) {
   }
 }
 
-export { ColorInput, RegexInput, ChipArrayInput, DurationMsInput, BooleanInput, LocaleListInput, JsonInput };
+export { ColorInput, RegexInput, ChipArrayInput, DurationMsInput, BooleanInput, LocaleListInput, JsonInput, ReferenceSelectInput, ChannelGatewayInput };

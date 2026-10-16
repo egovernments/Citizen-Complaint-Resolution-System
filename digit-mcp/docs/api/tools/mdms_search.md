@@ -28,7 +28,7 @@ MDMS records are scoped to a tenant root. A city-level tenant like `"pg.citya"` 
 |-------|-------------|----------|
 | DEPARTMENT | `common-masters.Department` | Department codes and names |
 | DESIGNATION | `common-masters.Designation` | Designation codes and names |
-| GENDER_TYPE | `common-masters.GenderType` | Gender options (MALE, FEMALE, TRANSGENDER) |
+| GENDER_TYPE | `common-masters.GenderType` | Gender options (MALE, FEMALE) |
 | EMPLOYEE_STATUS | `egov-hrms.EmployeeStatus` | EMPLOYED, RETIRED, etc. |
 | EMPLOYEE_TYPE | `egov-hrms.EmployeeType` | PERMANENT, TEMPORARY, etc. |
 | ROLES | `ACCESSCONTROL-ROLES.roles` | All platform role definitions |

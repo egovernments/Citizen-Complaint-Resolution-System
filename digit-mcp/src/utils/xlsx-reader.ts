@@ -466,8 +466,8 @@ const LEAF_LEVEL = 'SUB_TYPE';
 /** Mirrors hierarchyMigration.flatLevels() — keep both onboarding paths in sync. */
 function flatComplaintLevels(): ComplaintHierarchyDefinitionRecord['levels'] {
   return [
-    { levelCode: CATEGORY_LEVEL, order: 1, parentLevel: null, isFreeText: false, isLeafServiceCode: false, label: 'Category' },
-    { levelCode: LEAF_LEVEL, order: 2, parentLevel: CATEGORY_LEVEL, isFreeText: false, isLeafServiceCode: true, label: 'Sub-Type' },
+    { levelCode: CATEGORY_LEVEL, order: 1, parentLevel: null, isFreeText: false, isLeafServiceCode: false, label: 'Complaint Category' },
+    { levelCode: LEAF_LEVEL, order: 2, parentLevel: CATEGORY_LEVEL, isFreeText: false, isLeafServiceCode: true, label: 'Complaint Subcategory' },
   ];
 }
 

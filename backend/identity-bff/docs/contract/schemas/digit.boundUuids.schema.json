@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:digit:identity:digit.boundUuids:v1",
+  "title": "digit.boundUuids: one value of the multi-valued search index",
+  "description": "Multi-valued Keycloak user attribute: one '<tenantId>|<uuid>' value per pending or active binding in digit.bindings, written in the same PUT. Keycloak cannot search inside JSON, so ownership is checked with GET /users?q=digit.boundUuids:<tenantId>|<uuid>&exact=true. A removed binding drops its value, which releases the DIGIT account.",
+  "type": "string",
+  "pattern": "^[A-Za-z0-9_-]{1,50}\\|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+}

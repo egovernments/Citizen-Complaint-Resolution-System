@@ -17,8 +17,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
- * Lease contract for the external provisioning worker. PGR records progress and
- * outcome only; it performs no tenant, Keycloak or DIGIT account provisioning.
+ * Transactional lease and outcome boundary for the PGR provisioning runner.
  */
 @Service
 public class OnboardingWorkerService {
@@ -27,11 +26,12 @@ public class OnboardingWorkerService {
 
     private final OnboardingRepository repository;
     private final Set<String> userCorrectableErrors;
+    private final String seedVersion;
 
-    public OnboardingWorkerService(OnboardingRepository repository,
-                                   @Value("${pgr.onboarding.user-correctable-error-codes:TENANT_ADMIN_ACCOUNT_REJECTED}")
+    public OnboardingWorkerService(OnboardingRepository repository, PlatformBaseline seed,
+                                   @Value("${pgr.onboarding.user-correctable-error-codes:TENANT_ADMIN_ACCOUNT_REJECTED,COUNTRY_NOT_SUPPORTED}")
                                    String userCorrectableErrors) {
-        this.repository = repository;
+        this.repository = repository; this.seedVersion = seed.version();
         this.userCorrectableErrors = Arrays.stream(userCorrectableErrors.split(","))
                 .map(code -> code.trim().toUpperCase(Locale.ROOT))
                 .filter(code -> !code.isEmpty())
@@ -63,7 +63,7 @@ public class OnboardingWorkerService {
         long now = System.currentTimeMillis();
         OnboardingOperation operation = requireLease(operationId, leaseToken, "SUCCEEDED",
                 completedSteps, null, null, null, now);
-        repository.settleSignup(operation.getSignupId(), "ACTIVE", "CONSUMED", now);
+        repository.settleSignup(operation.getSignupId(), "ACTIVE", "CONSUMED", seedVersion, now);
     }
 
     @Transactional
@@ -87,7 +87,7 @@ public class OnboardingWorkerService {
         }
         // Partial root/KC objects are deliberately quarantined. Releasing their
         // identifiers would let another signup collide with materialized state.
-        repository.settleSignup(operation.getSignupId(), "FAILED", "RESERVED", now);
+        repository.settleSignup(operation.getSignupId(), "FAILED", "RESERVED", seedVersion, now);
     }
 
     private OnboardingOperation requireLease(UUID operationId, UUID leaseToken, String status, List<String> steps,

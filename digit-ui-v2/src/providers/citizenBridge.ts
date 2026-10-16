@@ -258,11 +258,8 @@ export const citizenDataProvider = provider as unknown as DataProvider;
 
 // ── AuthProvider ─────────────────────────────────────────────────────────
 
-// We let our own App.tsx own the login + logout flow (CitizenLoginPage drives
-// register/auth, AppContext drives state). The authProvider here is the read
-// view of that — it tells react-admin who the user is + whether the session
-// is alive. login()/logout() throw so react-admin can't surface its own
-// /login route over ours.
+// D26 retired this app's citizen login. Keep react-admin from installing a
+// competing identity route while the historical app remains buildable.
 export const citizenAuthProvider: AuthProvider = {
   async login() {
     throw new Error('react-admin login is not used; auth is driven by /citizen/login');

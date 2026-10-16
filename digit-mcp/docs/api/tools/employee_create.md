@@ -28,7 +28,7 @@ Before calling this tool, validate that the department code, designation code, a
 | `employee_type` | string | no | `"PERMANENT"` | Employee type. Use `mdms_search` with schema `"egov-hrms.EmployeeType"` to list valid types |
 | `date_of_appointment` | number | no | current time | Date of appointment as epoch timestamp in milliseconds |
 | `email` | string | no | -- | Email address |
-| `gender` | string | no | -- | Gender: `"MALE"`, `"FEMALE"`, or `"TRANSGENDER"` |
+| `gender` | string | no | -- | An active code of the tenant's `common-masters.GenderType` master; any other value is rejected before the API call |
 
 ## Response
 

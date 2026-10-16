@@ -19,6 +19,7 @@ import {
 import { testCode, testCodeIndexed } from '../utils/manage/codes';
 import { cleanupMdms } from '../utils/manage/teardown';
 import { ROOT_TENANT } from '../utils/env';
+import { expectRelatedListSettled } from '../utils/configurator-hooks';
 
 // Root (state) tenant, sourced from env (ROOT_TENANT / DIGIT_TENANT) so the
 // suite is deployment-portable — no hardcoded 'ke'.
@@ -126,7 +127,7 @@ Prior version was vacuous: expect(filteredCount).toBeLessThanOrEqual(initialCoun
     const initialCount = await dataRows.count();
     expect(initialCount, 'list should render at least one department').toBeGreaterThan(0);
 
-    const search = page.getByPlaceholder(/search/i).first();
+    const search = page.locator('#main-content').getByPlaceholder(/search/i).first();
     await expect(search).toBeVisible();
 
     // --- Search that matches nothing must empty the table ---
@@ -235,7 +236,7 @@ Guard banner check is loose because exact wording depends on dependency type and
     ]);
 
     // --- Verify in list, then open Show ---
-    await page.getByPlaceholder(/search/i).first().fill(code);
+    await page.locator('#main-content').getByPlaceholder(/search/i).first().fill(code);
     await page.waitForLoadState('networkidle').catch(() => {});
     const row = page.getByRole('row').filter({ hasText: code });
     await expect(row).toBeVisible();
@@ -257,7 +258,7 @@ Guard banner check is loose because exact wording depends on dependency type and
     // After Save the edit form returns to the LIST (DigitEdit redirect default),
     // so reopen the record's Show page before the deactivate edit — otherwise the
     // top-level "Edit" button doesn't exist on the list and the click hangs.
-    await page.getByPlaceholder(/search/i).first().fill(code);
+    await page.locator('#main-content').getByPlaceholder(/search/i).first().fill(code);
     await page.waitForLoadState('networkidle').catch(() => {});
     await page.getByRole('row').filter({ hasText: code }).first().click();
 
@@ -282,7 +283,7 @@ Guard banner check is loose because exact wording depends on dependency type and
       await statusFilter.click();
       await page.getByRole('option', { name: /Inactive/i }).click();
       await page.waitForLoadState('networkidle').catch(() => {});
-      await page.getByPlaceholder(/search/i).first().fill(code);
+      await page.locator('#main-content').getByPlaceholder(/search/i).first().fill(code);
       await page.waitForLoadState('networkidle').catch(() => {});
       await expect(page.getByRole('row').filter({ hasText: code })).toBeVisible();
     }
@@ -425,7 +426,7 @@ Catches a regression where the dup detection fails and all 3 rows would be sent 
   test('5a. Show page renders "Related" reverse references (complaint-types + employees)', {
     annotation: {
       type: 'description',
-      description: `Asserts the Department Show page renders the "Related" section with both "Complaint Types" and "Employees" sub-lists. Both should render even when empty. Picks the first non-PW_ active department to probe — avoids depending on any specific seed code.
+      description: `Asserts the Department Show page renders the "Related" section with both "Complaint Categories" ("Complaint Types" before #2243) and "Employees" sub-lists. Both should render even when empty. Picks the first non-PW_ active department to probe — avoids depending on any specific seed code.
 
 Steps:
 1. mdmsSearch for active departments (limit 20).
@@ -433,10 +434,10 @@ Steps:
 3. test.skip if no such record.
 4. Navigate to /departments/<code>/show.
 5. Assert text /^Related$/i is visible.
-6. Assert text /Complaint Types/i is visible.
-7. Assert text /^Employees$/i is visible.
+6. Assert the complaint-categories list settles: its reverse-ref-complaint-hierarchy hook reaches data-state empty|loaded (a failed lookup reports "error" and fails). Builds without the hook: "Complaint Categories" / "No complaint categories found" (older: "Complaint Types" / "No complaint types found") is visible.
+7. Same for the employees list (reverse-ref-employees; fallback "Employees" / "No employees found").
 
-Doesn't assert what's INSIDE the related lists — that depends on tenant content. Only that the section structure renders.`,
+Doesn't assert what's INSIDE the related lists — that depends on tenant content. Only that the section structure renders and each lookup succeeded.`,
     },
     tag: ['@area:configurator-manage', '@area:hrms', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
@@ -469,13 +470,19 @@ Doesn't assert what's INSIDE the related lists — that depends on tenant conten
     // department with no employees assigned to it; it was unreachable rather
     // than wrong about the feature. Accept either rendering, which is what
     // "the section structure renders even when empty" actually means.
+    //
+    // Each list is found by its reverse-ref-<resource> hook (#2352), which also
+    // reports data-state — so a failed lookup, which shows the same "No …
+    // found" copy, fails instead of passing as empty. Builds without the hook
+    // fall back to the label; #2243 renamed "Complaint Types" → "Complaint
+    // Categories", so the fallback accepts both.
     await expect(page.getByText(/^Related$/i).first()).toBeVisible();
-    await expect(
-      page.getByText(/^(Complaint Types|No complaint types found)$/i).first(),
-    ).toBeVisible();
-    await expect(
-      page.getByText(/^(Employees|No employees found)$/i).first(),
-    ).toBeVisible();
+    await expectRelatedListSettled(
+      page,
+      'complaint-hierarchy',
+      page.getByText(/^(Complaint (Types|Categories)|No complaint (types|categories) found)$/i),
+    );
+    await expectRelatedListSettled(page, 'employees', page.getByText(/^(Employees|No employees found)$/i));
   });
 
   test('5b. deactivation guard probes designation + employee APIs', {

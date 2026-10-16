@@ -1,30 +1,63 @@
 import { config } from "../../infrastructure/config.js";
 import { validateJwt } from "./token-verifier.js";
-import type { IdentityTokenSet, KeycloakClaims } from "./types.js";
+import type { IdentityAuthMethod, IdentityTokenSet, KeycloakClaims } from "./types.js";
 
-interface OidcClient {
+import { surfaceRegistry, type IdentitySurface } from "./surfaces.js";
+
+export interface OidcClient {
   clientId: string;
   clientSecret: string;
+  /** Surface whose sessions this client creates. */
+  surface: IdentitySurface;
+  /** Scope requested at the Keycloak authorization endpoint. */
+  scope: string;
 }
 
-export function oidcClientForMethod(type: "password" | "oauth" | "magic_link"): OidcClient {
-  return type === "magic_link"
-    ? {
+/**
+ * Every Keycloak client the BFF may authorize, exchange, refresh or log out
+ * with. Built on each call because tests (and future hot reloads) change
+ * `config` at runtime. A client with no secret is not usable and therefore
+ * absent, except the configurator's own client, whose secret has always had
+ * a development default.
+ */
+function oidcClients(): OidcClient[] {
+  const clients: OidcClient[] = Object.entries(surfaceRegistry())
+    .filter(([, entry]) => entry.clientSecret)
+    .map(([surface, entry]) => ({ surface, clientId: entry.clientId, clientSecret: entry.clientSecret, scope: entry.scope }));
+  if (config.keycloakMagicLinkClientSecret) {
+    clients.push({
       clientId: config.keycloakMagicLinkClientId,
       clientSecret: config.keycloakMagicLinkClientSecret,
-    }
-    : {
-      clientId: config.keycloakBffClientId,
-      clientSecret: config.keycloakBffClientSecret,
-    };
+      surface: "configurator",
+      scope: config.identityScope,
+    });
+  }
+  return clients;
 }
 
-function oidcClient(clientId: string): OidcClient {
-  if (clientId === config.keycloakMagicLinkClientId && config.keycloakMagicLinkClientSecret) {
-    return oidcClientForMethod("magic_link");
+export class UnknownOidcClientError extends Error {
+  constructor() {
+    super("Unknown identity OIDC client");
   }
-  if (clientId === config.keycloakBffClientId) return oidcClientForMethod("password");
-  throw new Error("Unknown identity OIDC client");
+}
+
+export function oidcClient(clientId: string): OidcClient {
+  const client = oidcClients().find((candidate) => candidate.clientId === clientId);
+  if (!client) throw new UnknownOidcClientError();
+  return client;
+}
+
+/** The Keycloak client configured for a surface and method, or null when unconfigured. */
+export function oidcClientForSurface(
+  surface: IdentitySurface,
+  type: IdentityAuthMethod["type"],
+): OidcClient | null {
+  if (type === "magic_link") {
+    return surface === "configurator"
+      ? oidcClients().find(client => client.clientId === config.keycloakMagicLinkClientId) || null
+      : null;
+  }
+  return oidcClients().find(client => client.surface === surface && client.clientId !== config.keycloakMagicLinkClientId) || null;
 }
 
 function oidcUrl(path: string, backchannel = false): string {
@@ -34,28 +67,48 @@ function oidcUrl(path: string, backchannel = false): string {
   return `${base.replace(/\/$/, "")}/protocol/openid-connect/${path}`;
 }
 
+/** Parameters the BFF owns; `extraParams` can never override them. */
+const RESERVED_AUTHORIZE_PARAMS = new Set([
+  "client_id", "redirect_uri", "response_type", "scope", "state", "nonce",
+  "code_challenge", "code_challenge_method", "kc_idp_hint",
+]);
+
 export function authorizationUrl(
   state: string,
   codeChallenge: string,
   nonce: string,
   clientId: string,
-  idpHint?: string,
+  options: {
+    scope?: string;
+    idpHint?: string;
+    /** e.g. `digit_tenant` (display only), `prompt=login`, `ui_locales`. */
+    extraParams?: Record<string, string>;
+  } = {},
 ): string {
   const url = new URL(oidcUrl("auth"));
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: config.identityRedirectUri,
     response_type: "code",
-    scope: config.identityScope,
+    scope: options.scope || config.identityScope,
     state,
     nonce,
     code_challenge: codeChallenge,
     code_challenge_method: "S256",
   });
-  if (idpHint) params.set("kc_idp_hint", idpHint);
+  if (options.idpHint) params.set("kc_idp_hint", options.idpHint);
+  for (const [name, value] of Object.entries(options.extraParams || {})) {
+    if (RESERVED_AUTHORIZE_PARAMS.has(name)) {
+      throw new Error(`Authorization parameter ${name} is reserved`);
+    }
+    params.set(name, value);
+  }
   url.search = params.toString();
   return url.toString();
 }
+
+export class InvalidGrantError extends Error {}
+export class IdentityUnavailableError extends Error {}
 
 async function tokenRequest(params: URLSearchParams, clientId: string): Promise<IdentityTokenSet> {
   const client = oidcClient(clientId);
@@ -68,7 +121,11 @@ async function tokenRequest(params: URLSearchParams, clientId: string): Promise<
     body: params.toString(),
   });
   if (!response.ok) {
-    throw new Error(`Keycloak token request failed: ${response.status}`);
+    const body = await response.json().catch(() => null) as { error?: string } | null;
+    if (response.status === 400 && body?.error === "invalid_grant") {
+      throw new InvalidGrantError("Keycloak rejected the grant");
+    }
+    throw new IdentityUnavailableError("Keycloak token endpoint unavailable");
   }
 
   const body = await response.json() as Record<string, unknown>;

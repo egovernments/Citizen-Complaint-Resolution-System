@@ -46,7 +46,8 @@ vi.mock('ra-core', () => ({
     resource: 'test',
   }),
   ListContextProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  useTranslate: () => (key: string, opts?: { _?: string }) => opts?._ ?? key,
+  // Untranslated: every call site passes its English default as `_`.
+  useTranslate: () => (key: string, options?: { _?: string }) => options?._ ?? key,
 }));
 
 vi.mock('react-router-dom', () => ({

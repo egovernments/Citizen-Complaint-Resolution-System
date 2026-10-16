@@ -18,11 +18,18 @@ import { AlertCircle } from "lucide-react";
 
 import { buildComplaintPath } from "../../utils/complaintHierarchyPath";
 import { complaintLabel } from "../../utils/complaintLabel";
+import { translateOr } from "../../utils/selectPlaceholder";
 import TimeLine from "../../components/TimeLine";
 import ComplaintPhotos from "../../components/ComplaintPhotos";
 import ComplaintLocationMap from "../../components/ComplaintLocationMap";
 import useReopenWindow from "../../hooks/pgr/useReopenWindow";
 import { hasUsableGeoLocation } from "../../utils/geoLocation";
+
+// An empty detail row, in the user's language.
+const notAvailable = (t) => {
+  const value = t("CS_NA");
+  return value && value !== "CS_NA" ? value : "N/A";
+};
 
 function renderRowValue(val, t) {
   if (Array.isArray(val)) {
@@ -31,9 +38,9 @@ function renderRowValue(val, t) {
       .filter(Boolean)
       .join(", ");
   }
-  if (val == null || val === "") return "N/A";
-  if (typeof val === "object") return t(val?.code ?? "") || "N/A";
-  return t(String(val)) || "N/A";
+  if (val == null || val === "") return notAvailable(t);
+  if (typeof val === "object") return t(val?.code ?? "") || notAvailable(t);
+  return t(String(val)) || notAvailable(t);
 }
 
 function WorkflowComponent({ complaintDetails, id }) {
@@ -125,12 +132,11 @@ const ComplaintDetailsPage = () => {
       }
     : {};
 
-  // When a hierarchy applies, the level rows below replace the flat Type/Sub-Type
-  // entries the details hook injects — drop those by their displayed label.
-  const isFlatTypeRow = (key) => {
-    const lbl = String(t(key) || "").toLowerCase().replace(/[-_]+/g, " ").trim();
-    return lbl === "complaint type" || lbl === "complaint sub type" || lbl === "complaint subtype";
-  };
+  // When a hierarchy applies, the level rows below replace the flat category
+  // and subcategory entries the details hook injects (useComplaintDetails).
+  // Matched by key: the labels are whatever the tenant seeds, so matching on
+  // their text stopped working as soon as they were renamed.
+  const isFlatTypeRow = (key) => key === "CS_ADDCOMPLAINT_COMPLAINT_TYPE" || key === "CS_ADDCOMPLAINT_COMPLAINT_SUB_TYPE";
 
   const geoLocation = complaintDetails?.service?.address?.geoLocation;
   const address = complaintDetails?.service?.address;
@@ -138,7 +144,7 @@ const ComplaintDetailsPage = () => {
     address?.buildingName,
     address?.street,
     address?.landmark,
-    address?.locality?.name || address?.locality?.code,
+    address?.locality?.code ? translateOr(t, address.locality.code, address.locality.name || address.locality.code) : address?.locality?.name,
     address?.pincode,
   ]
     .filter(Boolean)
@@ -153,7 +159,7 @@ const ComplaintDetailsPage = () => {
   let classificationPlaced = false;
   const pushClassification = () => {
     if (classificationPlaced || !classification || classification.length === 0) return;
-    classification.forEach((r) => detailRows.push({ key: r.levelCode, label: r.label, value: r.value || "N/A" }));
+    classification.forEach((r) => detailRows.push({ key: r.levelCode, label: r.label, value: r.value || notAvailable(t) }));
     classificationPlaced = true;
   };
   Object.keys(complaintDetails?.details || {}).forEach((flag) => {

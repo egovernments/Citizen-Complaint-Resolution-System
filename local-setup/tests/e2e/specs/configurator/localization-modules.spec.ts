@@ -16,11 +16,12 @@
 
 import { test, expect } from '@playwright/test';
 import { getDigitToken } from '../../utils/auth';
+import { requiredEnv } from '../../utils/identity';
 
-const BASE_URL = process.env.BASE_URL || 'http://localhost:18080';
-const TENANT = process.env.DIGIT_TENANT || 'pg';
-const ADMIN_USER = process.env.DIGIT_USERNAME || 'ADMIN';
-const ADMIN_PASS = process.env.DIGIT_PASSWORD || 'eGov@123';
+const BASE_URL = requiredEnv('BASE_URL');
+const TENANT = requiredEnv('DIGIT_TENANT');
+const ADMIN_USER = requiredEnv('DIGIT_USERNAME');
+const ADMIN_PASS = requiredEnv('DIGIT_PASSWORD');
 const LOCALE = 'en_IN';
 
 /** The module that StateInfo.localizationModules includes — the UI loads this. */

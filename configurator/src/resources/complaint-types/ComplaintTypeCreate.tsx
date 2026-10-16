@@ -57,7 +57,7 @@ export function ComplaintTypeCreate() {
   };
 
   return (
-    <DigitCreate title="Create Complaint Type" record={defaultRecord} afterCreate={afterCreate}>
+    <DigitCreate title="Create Complaint Category" record={defaultRecord} afterCreate={afterCreate}>
       {/* The grouping key is the parent node's code in the ComplaintHierarchy
           tree (replaces the old free-text menuPath). Optional here — leaves
           created standalone sit ungrouped until parented. */}
@@ -70,7 +70,7 @@ export function ComplaintTypeCreate() {
         validate={v.required}
       />
       <DigitFormInput source="slaHours" label="SLA (hours)" type="number" validate={v.slaHours} />
-      <DigitFormInput source="name" label="Complaint Sub-Type" validate={v.name} />
+      <DigitFormInput source="name" label="Complaint Subcategory" validate={v.name} />
       <DigitFormCodeInput source="serviceCode" label="Service Code" deriveFrom="name" validate={v.codeRequired} />
     </DigitCreate>
   );

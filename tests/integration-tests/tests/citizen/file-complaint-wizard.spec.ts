@@ -1,25 +1,23 @@
+import { tenantSlug } from '../utils/identity-bff';
 /**
  * Citizen file-complaint wizard — happy path
  *
- * Walks all 6 steps of the live wizard and asserts the confirmation page
- * contract. Per docs/personas/citizen-flows.md Stories 3.1–3.7, the
- * wizard is 6 steps (not 8 as the original catalogue claimed) and the
- * URL stays at `/create-complaint/complaint-type` for every step.
- *
- * Ground rules from the 2026-04-29 walk:
- *   - Step 1 (Complaint Details) requires Type + Subtype dropdowns.
- *   - Step 2 (Pin Complaint Location) is optional and starts with no marker.
- *   - Step 3 (Location Details) still requires the boundary cascade.
- *   - Step 4 (Complaint's Location) cascades County → Sub-County → Ward,
- *     gating each level (CCRS#477).
- *   - Step 5 description is required.
- *   - Step 6 photo dropzone is optional; SUBMIT is the final button.
+ * Walks the live wizard and asserts the confirmation page contract. Develop's
+ * flow (CreatePGRFlowV2, the #2038 design) has three steps and the URL stays
+ * at `/create-complaint/complaint-type` for every one:
+ *   - Step 1 (Complaint details): the description is required, photos are
+ *     optional, and every complaint-category level is required.
+ *   - Step 2 (Location): the map pin is optional and starts with no marker;
+ *     the boundary cascade is required down to its leaf (every level shows
+ *     from the start and a pick fills the levels above it, CCRS#477).
+ *   - Step 3 (Review): "Submit complaint" is the final button.
  */
 import { test, expect, type Page } from '@playwright/test';
 import { citizenOtpLogin } from '../utils/citizen-login';
 import { BASE_URL, PGR_ID_PREFIX } from '../utils/env';
 import { readProvisionedCitizen } from '../utils/citizen-provision';
 import { requires } from '../utils/capabilities';
+import { continueFiling, currentPane, fillDetailsStep, fillLocationStep, primaryButton } from '../utils/citizen-filing';
 
 test.describe('Citizen file-complaint wizard', () => {
   // ── Raw-key localization scan ─────────────────────────────────────────────
@@ -117,7 +115,8 @@ test.describe('Citizen file-complaint wizard', () => {
   };
 
   /**
-   * Walk all 6 wizard steps through SUBMIT and wait for the response page.
+   * Walk develop's three filing steps (details, location, review) through
+   * Submit and wait for the response page (utils/citizen-filing.ts).
    *
    * @param page            Playwright Page from the test fixture.
    * @param options.onAfterStep      Optional async callback fired after each named
@@ -139,130 +138,23 @@ test.describe('Citizen file-complaint wizard', () => {
       exerciseOptionalPinClear = false,
     } = options;
 
-    // Modern digit-ui renders dropdowns as <button role="combobox"> (shadcn
-    // style); older builds used `input.digit-dropdown-employee-select-wrap--elipses`.
-    // Match both so the test survives on either build.
-    const dropdowns = page.locator(
-      'button[role="combobox"], input.digit-dropdown-employee-select-wrap--elipses',
-    );
-    // Modern wizard uses <button role="combobox">; older builds used a
-    // wrapped <input>. Match both for cross-build compatibility.
-    const cascadeDropdowns = page.locator(
-      'button[role="combobox"], input[class*="select-wrap--elipses"]',
-    );
+    // ── Step 1: Complaint details (description, photos, category levels) ──
+    await fillDetailsStep(page, { onAfterStep });
+    await continueFiling(page);
 
-    const clickNext = async () => {
-      const btn = page.locator('button:visible').filter({ hasText: /^NEXT$/ }).first();
-      await btn.waitFor({ state: 'visible', timeout: 10_000 });
-      await btn.scrollIntoViewIfNeeded();
-      await btn.click();
-      await page.waitForTimeout(2500);
-    };
-
-    // ── Step 1: Complaint Details (Type + optional Subtype hierarchy) ──────────
-    //
-    // Handles two distinct wizard shapes detected at runtime via DOM:
-    //
-    //   • Flat (Ethiopia): wizard renders a single "Complaint Type" combobox.
-    //     After picking one option the NEXT button enables — no further comboboxes
-    //     appear. The loop below runs exactly once and exits.
-    //
-    //   • Hierarchical (Bomet ke): MDMS has ComplaintHierarchyDefinition with
-    //     CATEGORY → SUB_TYPE levels. The wizard renders only the first combobox
-    //     ("Complaint Type / Select a complaint type") initially; after the user
-    //     picks a Category a second combobox (Sub-Type) slides in. Additional
-    //     nesting levels follow the same pattern. The loop picks the first
-    //     available option at each level until no new combobox appears.
-    //
-    // Safety limit of 8 levels covers every known deployment.
-    await dropdowns.first().waitFor({ state: 'visible', timeout: 15_000 });
-    await onAfterStep?.('Step 1 – initial render');
-
-    for (let level = 0; level < 8; level++) {
-      const combobox = dropdowns.nth(level);
-      const visible = await combobox.isVisible({ timeout: level === 0 ? 5000 : 3000 }).catch(() => false);
-      if (!visible) break;
-
-      // On ke (CRS-based digit-ui) ALL hierarchy-level comboboxes render
-      // immediately, but child levels are disabled until the parent is
-      // selected. Wait up to 8 s for the element to become enabled (the
-      // parent selection triggers an MDMS call that may take 2–4 s on ke).
-      // Use expect().toBeEnabled() so Playwright actively polls the enabled
-      // state rather than doing a one-shot check.
-      await expect(combobox).toBeEnabled({ timeout: 8000 }).catch(() => {});
-      const enabled = await combobox.isEnabled().catch(() => false);
-      if (!enabled) {
-        // Still disabled after 8 s — no further interactive levels exist
-        // for this deployment at this point in the hierarchy.
-        break;
-      }
-
-      // Skip comboboxes that already carry a real value (not a placeholder).
-      // `innerText` on a button combobox includes the placeholder span text.
-      // On ke the shadcn Select renders "Select…" (ellipsis, no space) as the
-      // placeholder; on Ethiopia it renders "Select a complaint type". Match
-      // both: /^Select/i covers "Select…", "Select a …", "Select the level…".
-      const hasPlaceholder = await combobox.evaluate(
-        (el) => /^Select/i.test((el as HTMLElement).innerText.trim()),
-      ).catch(() => true);
-      if (!hasPlaceholder) {
-        // Already filled — move to the next level without interacting.
-        continue;
-      }
-
-      // The ke CRS complaint-type picker (y2 component) renders a
-      // <ul role="listbox"> populated from MDMS. On slow deployments the
-      // options array is empty at first render; the listbox appears but has
-      // no <li role="option"> children. Retry up to 3 times with increasing
-      // waits so the MDMS response can arrive before we give up.
-      //
-      // Scope the option locator to the currently open listbox so we don't
-      // accidentally match hidden options from a sibling dropdown (ke renders
-      // all hierarchy levels in the DOM simultaneously, each with its own
-      // listbox; an unscoped first() may pick from a closed, invisible one).
-      let option = page.locator(
-        '[role="listbox"][data-state="open"] [role="option"], [role="option"]:visible, .digit-dropdown-item:visible',
-      ).first();
-      let optionVisible = false;
-      for (let attempt = 0; attempt < 3; attempt++) {
-        await combobox.click();
-        // Wait longer on ke (MDMS can take 2-4 s); start shorter for
-        // Ethiopia which is typically faster.
-        const waitMs = 1000 + attempt * 2000;
-        await page.waitForTimeout(waitMs);
-        option = page.locator(
-          '[role="listbox"][data-state="open"] [role="option"], [role="option"]:visible, .digit-dropdown-item:visible',
-        ).first();
-        optionVisible = await option.isVisible({ timeout: 5000 }).catch(() => false);
-        if (optionVisible) break;
-        // Close the empty dropdown before retrying — click again to toggle off.
-        await combobox.click();
-        await page.waitForTimeout(500 + attempt * 500);
-      }
-      if (!optionVisible) break;
-      await option.click();
-      // After selecting a level, wait for the next combobox to become enabled
-      // (ke renders subsequent levels disabled and enables them progressively).
-      await page.waitForTimeout(1500);
-      await onAfterStep?.(`Step 1 – after level-${level} selection`);
-    }
-
-    await clickNext();
-
-    // ── Step 2: Pin Complaint Location (optional) ──────────────────
-    await page.waitForTimeout(2500);
-    await onAfterStep?.('Step 2 – Pin Location');
-
-    const map = page.locator('.leaflet-container').first();
+    // ── Step 2: Location (optional pin, boundary to the leaf, postal, landmark) ──
+    const pane = currentPane(page);
+    const map = pane.locator('.leaflet-container').first();
     const marker = map.locator('.leaflet-marker-icon');
-    const mapNext = page.locator('button:visible').filter({ hasText: /^NEXT$/ }).first();
+    const next = primaryButton(page);
     await expect(map, 'pin-location map must mount before its state is asserted').toBeVisible();
     await expect(
       marker,
       'a fresh complaint must use the configured coordinates only as its viewport, not as a selected pin',
     ).toHaveCount(0);
+    await fillLocationStep(page, { onAfterStep });
     await expect(
-      mapNext,
+      next,
       'the exact map pin is optional; a citizen must be able to continue without one',
     ).toBeEnabled();
 
@@ -287,7 +179,7 @@ test.describe('Citizen file-complaint wizard', () => {
         route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }),
       );
 
-      const searchInput = page.locator('input[type="text"]').first();
+      const searchInput = pane.locator('.cms-map input[type="text"]').first();
       await expect(searchInput).toBeVisible();
       await searchInput.fill('pin selected only to be cleared');
 
@@ -320,31 +212,31 @@ test.describe('Citizen file-complaint wizard', () => {
       await clearControl.click();
 
       await expect(marker, 'Clear must remove the explicitly selected pin').toHaveCount(0);
-      await expect(mapNext, 'clearing an optional pin must not disable Next').toBeEnabled();
+      await expect(next, 'clearing an optional pin must not disable Next').toBeEnabled();
 
       // Wait beyond the delayed reverse response. It must be ignored rather
       // than resurrecting the marker/form value or rewriting session storage.
       await page.waitForTimeout(1600);
       await expect(marker, 'a stale reverse-geocode response must not restore a cleared pin').toHaveCount(0);
-      await expect(mapNext).toBeEnabled();
+      await expect(next).toBeEnabled();
       const savedMapLocation = await page.evaluate(() =>
         (window as any).Digit?.SessionStorage?.get?.('PGR_MAP_LOCATION') ?? null,
       );
       expect(savedMapLocation, 'Clear must remove the cross-complaint map cache').toBeNull();
     }
 
-    await clickNext();
+    await continueFiling(page);
 
     if (exerciseOptionalPinClear) {
       // Re-entering the map step exercises the wizard restore path. The
       // cleared value must remain cleared after the component remounts.
-      const back = page.locator('button:visible').filter({ hasText: /^BACK$/ }).first();
+      const back = page.locator('button.cms-back');
       await expect(back).toBeVisible();
       await back.click();
       await expect(map).toBeVisible();
       await expect(marker, 'Back navigation must not restore a cleared/session-cached pin').toHaveCount(0);
-      await expect(mapNext).toBeEnabled();
-      await clickNext();
+      await expect(next).toBeEnabled();
+      await continueFiling(page);
     }
 
     if (assertPincodeToast) {
@@ -355,82 +247,29 @@ test.describe('Citizen file-complaint wizard', () => {
       await expect(pincodeToast).toHaveCount(0);
     }
 
-    // ── Step 3: Location Details — fill EVERY cascade level to the leaf ──
-    // With no exact pin, every administrative-boundary level is selected
-    // manually. If a caller did keep a pin, its boundary match may prefill
-    // only as deep as the deployment has geometry; this same loop skips those
-    // filled levels and continues to the real leaf.
-    // Loop up to 8 levels (was 3 — Kenya's County→SubCounty→Ward) so any
-    // number of cascade levels is filled; already-auto-filled levels are
-    // skipped, empty ones (the leaf) get selected.
-    await page.waitForTimeout(2000);
-    await onAfterStep?.('Step 3 – Location Details initial render');
-
-    for (let i = 0; i < 8; i++) {
-      const dd = cascadeDropdowns.nth(i);
-      // Wait briefly — the cascade child may not have rendered yet.
-      const visible = await dd.isVisible({ timeout: 5000 }).catch(() => false);
-      if (!visible) break;
-      // On ke (CRS digit-ui) all boundary cascade dropdowns render immediately
-      // but child levels are disabled until the parent is selected. Wait up
-      // to 6 s for each level to become enabled after the parent selection.
-      await expect(dd).toBeEnabled({ timeout: 6000 }).catch(() => {});
-      const ddEnabled = await dd.isEnabled().catch(() => false);
-      if (!ddEnabled) break;
-      // Skip if this dropdown already has a selection.
-      // Use /^Select/i (no trailing space) to also match "Select…" (ke shadcn placeholder).
-      const hasValue = await dd.evaluate(
-        (el) => !(el as HTMLElement).innerText.match(/^Select/i),
-      ).catch(() => false);
-      if (hasValue) continue;
-      await dd.click();
-      await page.waitForTimeout(800);
-      await page
-        .locator('[role="listbox"][data-state="open"] [role="option"], [role="option"]:visible, .digit-dropdown-item:visible')
-        .first()
-        .click();
-      await page.waitForTimeout(1500);
-      await onAfterStep?.(`Step 3 – after cascade dropdown ${i} selection`);
-    }
-    await clickNext();
-
-    // ── Step 5: Additional Details (Description required) ──────────
-    const description = page.locator('textarea').first();
-    await description.waitFor({ state: 'visible', timeout: 10_000 });
-    await onAfterStep?.('Step 5 – Description');
-    await description.fill(
-      `PW citizen wizard test ${Date.now()} — auto-filed, please ignore`,
-    );
-    await clickNext();
-
-    // ── Step 6: Upload Photos (skip) → SUBMIT ───────────────────────
-    await page.waitForTimeout(2000);
-    await onAfterStep?.('Step 6 – Upload Photos');
-
-    const submitBtn = page.locator('button:visible').filter({ hasText: /^SUBMIT$/ }).first();
-    await submitBtn.waitFor({ state: 'visible', timeout: 10_000 });
-    await submitBtn.click();
-    await page.waitForTimeout(8000);
+    // ── Step 3: Review → Submit complaint ──────────────────────────
+    await onAfterStep?.('Step 3 – Review');
+    await expect(next).toHaveText(/submit/i);
+    await continueFiling(page);
+    await page.waitForURL(/\/citizen\/pgr\/response/, { timeout: 30_000 }).catch(() => {});
+    await page.waitForTimeout(3000);
   }
 
   test('walks 6 steps + submits + lands on /pgr/response with PGR ID', {
     annotation: {
       type: 'description',
-      description: `Citizen happy-path: a logged-in citizen files a complaint by walking all six steps of the file-complaint wizard, clicks Submit, and lands on the confirmation page with a PGR identifier.
+      description: `Citizen happy-path: a logged-in citizen files a complaint by walking the three steps of the file-complaint wizard, clicks Submit, and lands on the confirmation page with a PGR identifier. (The test title predates the three-step design; it is kept so the run history stays joined.)
 
 Steps:
 1. OTP-login as the provisioned citizen (readProvisionedCitizen / citizen-fixture.json).
-2. Open /digit-ui/citizen/pgr/create-complaint/complaint-type.
-3. Step 1 (Complaint Details): pick Type and Subtype from the dropdowns, click Next.
-4. Step 2 (Pin Location): assert there is no default marker and NEXT is enabled; select a pin, clear it while reverse geocoding is in flight, and assert it stays cleared.
-5. Step 3 (Location Details): complete the required administrative-boundary cascade and click Next.
-6. Step 4 (Complaint's Location): pick County → Sub-County → Ward (cascade gates each level — CCRS#477).
-7. Step 5 (Description): fill the required description, click Next.
-8. Step 6 (Photo): skip the optional dropzone, click SUBMIT.
-9. Assert the URL flips to /pgr/response and a complaint id matching ^<PGR_ID_PREFIX>-PGR-\\d{4}-\\d{2}-\\d{2}-\\d+$ is rendered.
+2. Open /{slug}/digit-ui/citizen/pgr/create-complaint/complaint-type.
+3. Step 1 (Complaint details): fill the required description, pick every category level, click Next.
+4. Step 2 (Location): assert there is no default marker, complete the boundary cascade, and assert Next is enabled without a pin; select a pin, clear it while reverse geocoding is in flight, and assert it stays cleared.
+5. Step 3 (Review): Back to the map keeps the pin cleared; click Submit complaint.
+6. Assert the URL flips to /pgr/response and a complaint id matching ^<PGR_ID_PREFIX>-PGR-\\d{4}-\\d{2}-\\d{2}-\\d+$ is rendered.
    The prefix is discovered live from egov-idgen (citizen.setup.ts); PGR_ID_PREFIX env is the fallback ("PG" stock, "NCCG" on Nairobi).
 
-Test timeout is 180s — six steps plus DOM settles plus the final POST regularly exceeds 90s.`,
+Test timeout is 180s — the steps plus DOM settles plus the final POST regularly exceed 90s.`,
     },
     tag: ['@area:pgr', '@kind:regression', '@layer:ui', '@persona:citizen'],
   }, async ({ page }) => {
@@ -440,7 +279,7 @@ Test timeout is 180s — six steps plus DOM settles plus the final POST regularl
     await citizenOtpLogin(page);
 
     await page.goto(
-      `${BASE_URL}/digit-ui/citizen/pgr/create-complaint/complaint-type`,
+      `${BASE_URL}/${tenantSlug()}/digit-ui/citizen/pgr/create-complaint/complaint-type`,
       { waitUntil: 'domcontentloaded', timeout: 30_000 },
     );
     await page.waitForTimeout(5000);
@@ -463,7 +302,7 @@ Test timeout is 180s — six steps plus DOM settles plus the final POST regularl
     // capabilities.ts's pgr.citizenCreate encodes (APPLY role includes CITIZEN).
     // Both maputo-local and bomet declare it 'required', so this must run for
     // real on both — a true regression now fails loudly instead of hiding
-    // behind PGR_CREATE_UNSUPPORTED. Wizard navigation (Steps 1-6) above always
+    // behind PGR_CREATE_UNSUPPORTED. Wizard navigation (all steps) above always
     // runs regardless, and is independently verified by the raw-keys test.
     requires(test, 'pgr.citizenCreate', 'wizard navigation is verified by the raw-keys test');
     await expect(page).toHaveURL(/\/citizen\/pgr\/response/);
@@ -514,7 +353,7 @@ loading PGR_TEST_* localization rows would only hide that citizens are being ser
     await citizenOtpLogin(page);
 
     await page.goto(
-      `${BASE_URL}/digit-ui/citizen/pgr/create-complaint/complaint-type`,
+      `${BASE_URL}/${tenantSlug()}/digit-ui/citizen/pgr/create-complaint/complaint-type`,
       { waitUntil: 'domcontentloaded', timeout: 30_000 },
     );
     await page.waitForTimeout(5000);

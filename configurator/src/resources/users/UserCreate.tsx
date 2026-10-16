@@ -1,11 +1,6 @@
 import { DigitCreate, DigitFormInput, DigitFormSelect, T, v } from '@/admin';
 import { useMobileValidator } from '@/admin/hrms/useMobileValidator';
-
-const GENDER_CHOICES = [
-  { value: 'MALE', label: 'Male' },
-  { value: 'FEMALE', label: 'Female' },
-  { value: 'TRANSGENDER', label: 'Transgender' },
-];
+import { useGenderChoices } from '../useGenderChoices';
 
 const defaultRecord = {
   type: 'CITIZEN',
@@ -29,6 +24,7 @@ export function UserCreate() {
   // fallback), the same source EmployeeCreate/EmployeeEdit/ComplaintCreate use.
   // No hardcoded per-country regex here.
   const { validator: mobileValidate, rules: mobileRules } = useMobileValidator();
+  const genderChoices = useGenderChoices();
   const loginUsernameHelp = (
     <T i18nKey="app.fields.mobile_login_username_help">Used as the citizen's login username.</T>
   );
@@ -47,7 +43,7 @@ export function UserCreate() {
       <DigitFormSelect
         source="gender"
         label="Gender"
-        choices={GENDER_CHOICES}
+        choices={genderChoices}
         placeholder="Select gender..."
       />
     </DigitCreate>

@@ -122,6 +122,25 @@ class SearchAccessPolicyServiceTest {
     }
 
     @Test
+    void ownAssignedComplaintOutsideJurisdictionIsKeptButOthersStillDenied() {
+        // Live repro: a GRO assigned a WT_WARD_B complaint to a WT_WARD_A LME. The LME must still
+        // see it; a different out-of-jurisdiction complaint stays hidden.
+        PgrSearchScope scope = new PgrSearchScope(TENANT_ID, false, null, List.of("WATER"), List.of("WT_WARD_A"),
+                java.util.Set.of("PGR-ASSIGNED"));
+        RequestInfo requestInfo = requestInfo("lme-1", "EMPLOYEE");
+
+        ServiceWrapper assigned = wrapper("citizen-1", "WATER", "WT_WARD_B", TENANT_ID);
+        assigned.getService().setServiceRequestId("PGR-ASSIGNED");
+        ServiceWrapper other = wrapper("citizen-2", "WATER", "WT_WARD_B", TENANT_ID);
+        other.getService().setServiceRequestId("PGR-OTHER");
+
+        List<ServiceWrapper> result = service.enforce(requestInfo, TENANT_ID, scope, List.of(assigned, other));
+
+        assertEquals(1, result.size());
+        assertEquals("PGR-ASSIGNED", result.get(0).getService().getServiceRequestId());
+    }
+
+    @Test
     void employeeWithWrongJurisdictionIsDeniedRegardlessOfDepartment() {
         PgrSearchScope scope = new PgrSearchScope(TENANT_ID, false, null, null, List.of("WARD_5"));
         RequestInfo requestInfo = requestInfo("emp-1", "EMPLOYEE");
@@ -299,6 +318,27 @@ class SearchAccessPolicyServiceTest {
 
         assertEquals(List.of("__scope_denied__"), scope.departmentCodes);
         verifyNoInteractions(mockResolver);
+    }
+
+    @Test
+    void strictModeDenyIsExplicitAndOwnAssignedComplaintsCannotLoosenIt() {
+        // #2281 review: strict mode with no policy must deny every employee, including the
+        // complaints workflow assigns to them — in Tier-1 (scope) and Tier-2 (enforce) alike.
+        PGRConfiguration strictConfig = new PGRConfiguration();
+        strictConfig.setAbacStrictMode(true);
+        AccessPolicyRegistry registryNoScope = new AccessPolicyRegistry(mdmsUtils, new ObjectMapper(), strictConfig);
+        SearchAccessPolicyService serviceWithStrictMode = new SearchAccessPolicyService(
+                mock(PolicyDrivenScopeResolver.class), registryNoScope, new PolicyEvaluator(), new PolicyInputBuilder(), strictConfig);
+        RequestInfo requestInfo = requestInfo("lme-1", "EMPLOYEE");
+
+        PgrSearchScope scope = serviceWithStrictMode.resolveScope(requestInfo, TENANT_ID, 2)
+                .withOwnAssigned(java.util.Set.of("PGR-ASSIGNED"));
+        ServiceWrapper assigned = wrapper("citizen-1", "WATER", "WT_WARD_B", TENANT_ID);
+        assigned.getService().setServiceRequestId("PGR-ASSIGNED");
+
+        assertTrue(scope.denyAll);
+        assertTrue(service.enforce(requestInfo, TENANT_ID, scope, List.of(assigned)).isEmpty(),
+                "the Tier-2 own-assigned bypass must not admit rows under a deny-all scope");
     }
 
     @Test

@@ -7,8 +7,8 @@ on:
   workflow_dispatch: {}
 
 # NOTE: scheduled workflows fire only from the DEFAULT branch (master) and this
-# file must exist there. The reusable build checks out `develop` regardless of
-# which branch this file ran from, so the nightly always builds develop.
+# file must exist there. It calls develop's build-images.yml (not master's copy) and
+# that checks out `develop`, so both the build logic and the source track develop.
 
 concurrency:
   group: nightly-develop
@@ -16,6 +16,16 @@ concurrency:
 
 jobs:
   build:
+    # Only the canonical repository publishes the develop channel: build-images.yml
+    # skips every job anywhere else (see its `enumerate` job). Two forks carrying this
+    # file and egovio push credentials built THEIR develop every evening, hours after
+    # this nightly, under the same egovio/<image>:nightly-develop and develop-<sha8>
+    # names: `nightly-develop` ended up as a fork's build (still the Go
+    # digit-user-preferences-service, which cannot start under the develop compose
+    # definition) and this repo's develop-<sha8> pins aged out of the prune within days.
+    # A fork's own builds belong under its own tags (build.yml dispatches tag by branch
+    # name). Like the schedule, the guard runs from a repo's default branch: it stops a
+    # fork only once the fork has it there.
     uses: ./.github/workflows/build-images.yml
     with:
       ref: develop

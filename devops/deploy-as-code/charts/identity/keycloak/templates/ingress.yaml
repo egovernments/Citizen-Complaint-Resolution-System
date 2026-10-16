@@ -1,0 +1,88 @@
+{{- /*
+Public Keycloak routes, the same contract as the Compose stack
+(backend/identity-bff/deploy/digit-compose/nginx-identity.conf, and Kong's
+/auth route in local-setup/kong/kong.yml):
+
+  /auth/realms/<realm>/...  -> /realms/<realm>/...   OIDC endpoints, login pages
+  /auth/resources/...       -> /resources/...        login theme assets
+
+Keycloak listens at / and KC_HOSTNAME carries the public /auth prefix, so the
+prefix is stripped here. Nothing else under /auth is routed: not the admin
+console or Admin REST API (/auth/admin), and not the master realm, whose token
+endpoint mints admin tokens. Compose denies those with a 404 at Kong; here they
+are simply not exposed. Only the identity realm is, which is tighter than
+Kong's deny list and needs no snippet (snippets are off on ingress-nginx).
+
+Regex paths and annotations follow the digit-ui chart's tenant-ingress.yaml:
+ingress-nginx matches them case-insensitively (`~*`).
+*/ -}}
+{{- $_ := include "common.name" . }}
+{{- if .Values.ingress.enabled }}
+{{- $prefix := trimSuffix "/" .Values.ingress.pathPrefix }}
+{{- $realm := required "identity.realm must be set" .Values.identity.realm }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ template "common.name" . }}
+{{- if .Values.global.namespace }}
+  namespace: {{ .Values.global.namespace }}
+{{- else if .Values.ingress.namespace }}
+  namespace: {{ .Values.ingress.namespace }}
+{{- else if .Values.namespace }}
+  namespace: {{ .Values.namespace }}
+{{- end }}
+  {{- /* Keycloak's login responses carry several large Set-Cookie headers; the
+       default proxy buffer 502s them ("upstream sent too big header"). Same
+       sizes as nginx-identity.conf. */}}
+  {{- $annotations := dict "nginx.ingress.kubernetes.io/use-regex" "true" "nginx.ingress.kubernetes.io/rewrite-target" "/$1" "nginx.ingress.kubernetes.io/proxy-buffer-size" "64k" "nginx.ingress.kubernetes.io/proxy-buffers-number" "8" }}
+  {{- $annotations = merge $annotations (.Values.ingress.annotations | default dict) }}
+  {{- if .Values.ingress.waf.enabled }}
+  {{- $annotations = merge $annotations (.Values.ingress.waf.annotations | default dict) }}
+  {{- end }}
+  annotations:
+{{- toYaml $annotations | nindent 4 }}
+{{- if .Values.ingress.additionalAnnotations }}
+  {{- tpl .Values.ingress.additionalAnnotations . | nindent 4 }}
+{{- end }}
+  labels:
+{{- include "common.labels" . | nindent 4 }}
+spec:
+  rules:
+{{- if .Values.ingress.host }}
+  {{- tpl .Values.ingress.host . | nindent 2 }}
+{{- else if .Values.ingress.hostName }}
+  - host: {{ .Values.ingress.hostName }}
+{{- else }}
+  - host: {{ .Values.global.domain }}
+{{- end }}
+    http:
+      paths:
+        - path: {{ printf "%s/(realms/%s/.*)" $prefix (regexQuoteMeta $realm) }}
+          pathType: ImplementationSpecific
+          backend:
+            service:
+              name: {{ template "common.name" . }}
+              port:
+                number: {{ .Values.httpPort }}
+        - path: {{ printf "%s/(resources/.*)" $prefix }}
+          pathType: ImplementationSpecific
+          backend:
+            service:
+              name: {{ template "common.name" . }}
+              port:
+                number: {{ .Values.httpPort }}
+{{- if ne (toString .Values.global.setup) "quickstart" }}
+  tls:
+{{- if .Values.ingress.tls }}
+  {{- tpl .Values.ingress.tls . | nindent 2 }}
+{{- else if .Values.ingress.hostName }}
+    - hosts:
+        - {{ .Values.ingress.hostName }}
+      secretName: {{ .Values.ingress.hostName }}-tls-certs
+{{- else }}
+    - hosts:
+        - {{ .Values.global.domain }}
+      secretName: {{ .Values.global.domain }}-tls-certs
+{{- end }}
+{{- end }}
+{{- end }}

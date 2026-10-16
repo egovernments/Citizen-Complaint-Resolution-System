@@ -19,6 +19,8 @@ vi.mock('ra-core', () => ({
     isPending: false,
   }),
   useResourceContext: () => 'departments',
+  // Untranslated: every call site passes its English default as `_`.
+  useTranslate: () => (key: string, options?: { _?: string }) => options?._ ?? key,
   useUpdate: () => [vi.fn()],
   useDelete: () => [vi.fn()],
   useGetList: () => ({ data: [], isPending: false }),

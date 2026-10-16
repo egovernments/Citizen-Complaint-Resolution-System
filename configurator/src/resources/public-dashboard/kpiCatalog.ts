@@ -53,7 +53,7 @@ export const PUBLIC_DASHBOARD_KPIS: PublicDashboardKpi[] = [
   },
   {
     name: 'Complaints by service',
-    measures: 'Complaint counts grouped by service or complaint type',
+    measures: 'Complaint counts grouped by service or complaint category',
     source: 'Complaints + Master data',
     refresh: 'Daily',
   },

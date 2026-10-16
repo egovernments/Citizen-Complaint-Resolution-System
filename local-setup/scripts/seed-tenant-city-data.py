@@ -188,9 +188,9 @@ COMPLAINT_HIERARCHY_DEFINITION_DATA = {
     "hierarchyType": "PGR", "active": True,
     "levels": [
         {"levelCode": "CATEGORY", "order": 1, "parentLevel": None, "isFreeText": False,
-         "isLeafServiceCode": False, "label": "Category"},
+         "isLeafServiceCode": False, "label": "Complaint Category"},
         {"levelCode": "SUB_TYPE", "order": 2, "parentLevel": "CATEGORY", "isFreeText": False,
-         "isLeafServiceCode": True, "label": "Sub-Type"},
+         "isLeafServiceCode": True, "label": "Complaint Subcategory"},
     ],
 }
 

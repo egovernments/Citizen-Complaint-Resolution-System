@@ -1,5 +1,4 @@
 import { DigitCreate, DigitFormCodeInput, DigitFormInput, v } from '@/admin';
-import { BooleanInput } from '@/admin/widgets';
 
 // Department schema (`common-masters.Department`) declares
 // additionalProperties:false and only allows {code, name, active}. Any
@@ -11,7 +10,6 @@ export function DepartmentCreate() {
     <DigitCreate title="Create Department" record={{ active: true }}>
       <DigitFormInput source="name" label="Name" validate={v.name} />
       <DigitFormCodeInput source="code" label="Code" deriveFrom="name" validate={v.codeRequired} />
-      <BooleanInput source="active" label="Active" />
     </DigitCreate>
   );
 }

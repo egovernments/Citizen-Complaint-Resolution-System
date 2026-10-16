@@ -1,0 +1,19 @@
+# The sweep loop and the redaction rules, mounted into the pod.
+#
+# Both files are byte-identical copies of the compose tier's originals under
+# local-setup/opensre/ — a chart can only read files inside itself, so they are
+# duplicated here and a static test (local-setup/tests/static/opensre-parity)
+# fails the build if the two copies drift. Edit the compose-tier file, then
+# copy it here.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opensre
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: opensre
+data:
+  run-sweeps.sh: |
+{{ .Files.Get "files/run-sweeps.sh" | indent 4 }}
+  guardrails.yml: |
+{{ .Files.Get "files/guardrails.yml" | indent 4 }}

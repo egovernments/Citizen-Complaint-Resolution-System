@@ -1,0 +1,913 @@
+/*
+ * digit-employee: the legacy digit-ui employee login pages, restated.
+ *
+ * digit-ui paints these screens through five stylesheets (the vendored
+ * digit-ui-css, digit-ui-components-css, overrides.css, the v2 Tailwind layer
+ * and inline styles in login.js / SelectMobileNumber.js / SelectOtp.js).
+ * Vendoring them would drag ~1 MB of CSS into Keycloak and every rule that
+ * targets the rest of the app. Instead each value below is the *computed*
+ * style measured on the running legacy pages (digit-ui-esbuild dev server,
+ * Bomet backend and the default theme, 1440×900 and Pixel 7), with the CSS
+ * variable that feeds it where the value is themeable. Comments name the
+ * legacy selector or component each block mirrors.
+ *
+ * Every rule is scoped under .dg-root so nothing leaks into the
+ * configurator-blue theme that shares this jar.
+ */
+
+/* Roboto + Roboto Condensed from Google Fonts, the same request
+ * digit-ui-esbuild/public/index.html makes. */
+@import url("https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;500;700&family=Roboto:wght@400;500;700&display=swap");
+
+/* scripts/vendor-digit-ui-css.js ROOT_BLOCK: the defaults every var() below
+ * resolves to before (or without) a tenant ThemeConfig. applyTheme writes the
+ * tenant's values inline on <html>, which wins over this block. */
+:root {
+    --color-primary-light: #F18F5E;
+    --color-primary-main: #c84c0e;
+    --color-primary-dark: #C8602B;
+    --color-primary-accent: #F47738;
+    --color-primary-selected-bg: #FBEEE8;
+    --color-secondary: #22394D;
+    --color-text-primary: #0B0C0C;
+    --color-text-secondary: #505A5F;
+    --color-text-heading: #363636;
+    --color-text-muted: #787878;
+    --color-link-normal: #1D70B8;
+    --color-link-hover: #003078;
+    --color-border: #D6D5D4;
+    --color-input-border: #464646;
+    --color-error: #D4351C;
+    --color-error-dark: #B91900;
+    --color-success: #00703C;
+    --color-info-dark: #0057BD;
+    --color-warning-dark: #9E5F00;
+    --color-grey-dark: #9E9E9E;
+    --color-grey-disabled: #C5C5C5;
+    --color-grey-mid: #EEEEEE;
+    --color-grey-lighter: #F0F0F0;
+    --color-grey-light: #FAFAFA;
+    --color-grey-bg: #E3E3E3;
+    --color-digitv2-text-color-disabled: #B1B4B6;
+    --color-digitv2-header-sidenav: #0B4B66;
+    --color-digitv2-primary-bg: #FEEFE7;
+    --color-digitv2-alert-error-bg: #EFC7C1;
+    --color-digitv2-alert-success-bg: #BAD6C9;
+    --color-digitv2-alert-info: #3498DB;
+    --color-digitv2-alert-info-bg: #C7E0F1;
+    --color-primary-1: #C8602B;
+    --color-primary-2: #c84c0e;
+    --color-primary-1-bg: #FBEEE8;
+    --color-primary-2-bg: #FEEFE7;
+    --color-page-bg: #FFFFFF;
+    --color-page-secondary-bg: #FAFAFA;
+    --color-text-disabled: #C5C5C5;
+    --color-button-primary-bg-default: #c84c0e;
+    --color-button-primary-bg-hover: #B8420C;
+    --color-button-primary-bg-pressed: #A03A0A;
+    --color-button-primary-text: #FFFFFF;
+    --color-button-primary-border: #c84c0e;
+    --color-button-primary-disabled-bg: #E5E7EB;
+    --color-button-primary-disabled-text: #9CA3AF;
+    --color-button-secondary-bg-default: #FFFFFF;
+    --color-button-secondary-bg-hover: #F9FAFB;
+    --color-button-secondary-bg-pressed: #F3F4F6;
+    --color-button-secondary-text: #c84c0e;
+    --color-button-secondary-border: #c84c0e;
+    --color-button-tertiary-text: #1D70B8;
+    --color-input-bg: #FFFFFF;
+    --color-input-border-default: #D1D5DB;
+    --color-input-border-focus: #c84c0e;
+    --color-input-border-error: #D4351C;
+    --color-input-placeholder: #9CA3AF;
+    --color-input-text: #0B0C0C;
+    --color-input-label: #4B5563;
+    --color-input-helper: #6B7280;
+    --color-header-bg: #22394D;
+    --color-header-text: #FFFFFF;
+    --color-header-icon: #FFFFFF;
+    --color-card-border: #D6D5D4;
+    --color-card-divider: #E5E7EB;
+    --color-status-error-text: #D4351C;
+    --color-status-error-bg: #EFC7C1;
+
+    /* v2 layer (packages/digit-ui-components-v2/src/theme/tokens.css) —
+     * the card surface, its hairline and its text are v2 neutrals that no
+     * ThemeConfig reaches. */
+    --dg-v2-foreground: #242833; /* hsl(222 18% 17%) */
+    --dg-v2-border: #E5E7EB; /* hsl(220 13% 91%) */
+    --dg-surface: var(--v2-surface-color, var(--color-surface, #ffffff));
+}
+
+html.dg-html,
+body.dg-body {
+    margin: 0;
+    padding: 0;
+}
+
+body.dg-body {
+    /* .body-container */
+    background-color: #EEEEEE;
+}
+
+.dg-root {
+    font-family: Roboto;
+    font-size: 16px;
+    line-height: 24px;
+    font-weight: 400;
+    color: var(--color-text-primary);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+.dg-root *,
+.dg-root *::before,
+.dg-root *::after {
+    box-sizing: border-box;
+}
+
+.dg-root p,
+.dg-root h1,
+.dg-root h2,
+.dg-root h3 {
+    margin: 0;
+}
+
+.dg-visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* ───────────────────────── v2 scope (shared) ───────────────────────── */
+
+.dg-scope {
+    /* tailwind.css .v2-scope */
+    font-family: Roboto, system-ui, -apple-system, sans-serif;
+    font-size: 16px;
+    line-height: 24px;
+}
+
+/* digit-ui-components-v2 Card */
+.dg-card {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    background-color: var(--dg-surface);
+    color: var(--dg-v2-foreground);
+}
+
+/* login.js V2Card: radius 14, no border, lifted shadow */
+.dg-card--employee {
+    max-width: 420px;
+    padding: 32px;
+    gap: 16px;
+    border-radius: 14px;
+    border: none;
+    box-shadow:
+        0 12px 32px rgba(8, 20, 40, 0.18),
+        0 2px 8px rgba(8, 20, 40, 0.1);
+}
+
+/* Label + control stacked (components-v2 Field, `space-y-2`) */
+.dg-field > * + * {
+    margin-top: 8px;
+}
+
+/* components-v2 Label */
+.dg-label {
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.4;
+    color: var(--color-input-label);
+    user-select: none;
+}
+
+.dg-label__required {
+    margin-left: 2px;
+    color: var(--color-error, #d4351c);
+}
+
+/* components-v2 Input + overrides.css unified input chrome */
+.dg-input {
+    display: flex;
+    width: 100%;
+    height: 44px;
+    padding: 8px 12px;
+    font-size: 14px;
+    line-height: 1.25;
+    border: 1px solid var(--color-border, #d6d5d4);
+    border-radius: 6px;
+    background-color: var(--dg-surface);
+    outline: none;
+    box-shadow: none;
+    transition: border-color 0.15s ease-out;
+}
+
+.dg-input:hover,
+.dg-input:focus {
+    border-color: var(--color-primary-1, var(--color-primary-main, #c84c0e));
+}
+
+.dg-input[aria-invalid="true"] {
+    border-color: var(--color-error, #d4351c);
+}
+
+.dg-root input::placeholder {
+    color: rgba(0, 0, 0, 0.35);
+    opacity: 1;
+}
+
+/* login.js PasswordInput */
+.dg-password {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    border-radius: 0.375rem;
+    border: 1px solid var(--color-border, #d6d5d4);
+    background: var(--dg-surface);
+    overflow: hidden;
+    transition: border-color 0.15s ease-out;
+}
+
+.dg-password:focus-within {
+    border-color: var(--color-primary-1, var(--color-primary-main, #c84c0e));
+}
+
+.dg-password.is-invalid,
+.dg-password.is-invalid:focus-within {
+    border-color: var(--color-error, #d4351c);
+}
+
+.dg-password__input {
+    flex: 1;
+    min-width: 0;
+    height: 44px;
+    padding: 0 12px;
+    border: 0;
+    outline: none;
+    background: transparent;
+    font-size: 15px;
+    color: var(--color-text-primary, #0b0c0c);
+}
+
+.dg-password__toggle {
+    height: 44px;
+    width: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    color: var(--color-text-secondary, #6b7280);
+    padding: 0;
+}
+
+.dg-password__toggle svg {
+    width: 1rem;
+    height: 1rem;
+}
+
+/* components-v2 Button, variant primary, size md, width full */
+.dg-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    height: 40px;
+    padding: 1px 16px;
+    white-space: nowrap;
+    border: 0;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 20px;
+    cursor: pointer;
+    user-select: none;
+    text-decoration: none;
+    background-color: var(--color-button-primary-bg-default, var(--color-primary-2, #fec931));
+    color: var(--color-button-primary-text, var(--color-text-primary, #0b0c0c));
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    transition: background-color 0.15s;
+}
+
+.dg-button:hover:not(:disabled) {
+    background-color: var(--color-button-primary-bg-hover, var(--color-primary-2, #e6b800));
+}
+
+.dg-button:focus-visible {
+    outline: none;
+    box-shadow:
+        0 0 0 2px #ffffff,
+        0 0 0 4px var(--color-button-primary-bg-default, #c84c0e);
+}
+
+.dg-button:disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+/* Secondary (outline) — components-v2 Button variant secondary */
+.dg-button--secondary {
+    background-color: transparent;
+    border: 1px solid var(--color-button-secondary-border, var(--color-primary-2, #2563eb));
+    color: var(--color-button-secondary-text, var(--color-primary-2, #2563eb));
+    box-shadow: none;
+}
+
+.dg-button--secondary:hover:not(:disabled) {
+    background-color: var(--color-primary-1-bg, rgba(37, 99, 235, 0.08));
+}
+
+.dg-spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border-radius: 9999px;
+    border: 2px solid currentColor;
+    border-top-color: transparent;
+    animation: dg-spin 1s linear infinite;
+}
+
+@keyframes dg-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Clickable text (Forgot password?, resend) */
+.dg-link {
+    /* a <button> in digit-ui, so the UA form-control face, not Roboto */
+    font-family: Arial;
+    background: transparent;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    color: var(--color-button-tertiary-text, var(--color-link-normal, #2563eb));
+    font-weight: 500;
+    font-size: 0.875rem;
+    line-height: 1.4;
+    text-decoration: none;
+}
+
+.dg-link:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+/* ───────────────────────── Employee ───────────────────────── */
+
+/* components/Background.js `.banner.banner-container` + overrides.css #49
+ * (full-bleed header colour, bannerUrl hidden) */
+.dg-banner {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    /* A card taller than the viewport (landscape phone, privacy text open)
+       grows the page instead of overflowing above it. */
+    justify-content: safe center;
+    align-items: center;
+    min-height: 100vh;
+    min-height: 100dvh;
+    background-image: none;
+    background-color: var(--color-digitv2-header-sidenav, #0b4b66);
+}
+
+@media screen and (max-width: 768px) {
+    .dg-banner {
+        padding-bottom: 40px;
+    }
+}
+
+/* login.js V2LoginShell (no carousel) */
+.dg-banner__shell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 24px;
+    width: 100%;
+    background-color: transparent;
+    flex-shrink: 0;
+}
+
+/* login.js V2LoginShell (carousel variant) */
+.dg-carousel-shell {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(360px, 480px);
+    min-height: 100vh;
+    background-color: var(--color-page-bg, #f5f5f5);
+}
+
+.dg-carousel-shell__media {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--color-primary-1, var(--color-primary-main, #c84c0e));
+    color: #ffffff;
+    padding: 32px;
+    overflow: hidden;
+}
+
+.dg-carousel-shell__form {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 24px 64px;
+}
+
+/* Carousel/Carousel.js + digit-ui-css .carousel-* */
+.dg-carousel {
+    position: relative;
+    width: 70%;
+    height: 100%;
+    min-height: 420px;
+    z-index: 1;
+    overflow: hidden;
+    margin-right: -1rem;
+}
+
+.dg-carousel__slide {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: 50%;
+    opacity: 0;
+    transition: opacity 0.5s ease-in-out;
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-start;
+    color: #ffffff;
+    text-align: left;
+    padding: 0 0 60px 60px;
+}
+
+.dg-carousel__slide.is-active {
+    opacity: 1;
+}
+
+.dg-carousel__content {
+    max-width: 600px;
+    margin-right: 1rem;
+}
+
+.dg-carousel__content h2 {
+    font-size: 2.2rem;
+    line-height: 1.2;
+    margin-bottom: 1rem;
+    font-weight: 700;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.dg-carousel__content p {
+    font-size: 1.1rem;
+    line-height: 1.6;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+    margin-bottom: 20%;
+}
+
+.dg-carousel__controls {
+    position: absolute;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 10px 20px;
+    border-radius: 30px;
+    z-index: 10;
+}
+
+.dg-carousel__nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: #ffffff;
+    font-size: 1.3rem;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.dg-carousel__nav:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.dg-carousel__dots {
+    display: flex;
+    gap: 12px;
+}
+
+.dg-carousel__dot {
+    width: 10px;
+    height: 10px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.5);
+    cursor: pointer;
+}
+
+.dg-carousel__dot.is-active {
+    background: #ffffff;
+}
+
+@media (max-width: 768px) {
+    .dg-carousel-shell {
+        grid-template-columns: 1fr;
+    }
+    .dg-carousel {
+        width: 100%;
+        height: 45vh;
+        min-height: 350px;
+        margin: 0 0 -1rem;
+    }
+    .dg-carousel__slide {
+        padding: 0 0 40px 40px;
+        justify-content: center;
+        text-align: center;
+    }
+}
+
+/* components/Header.js inside .v2-employee-login-top-logos (overrides.css) */
+.dg-top-logos {
+    display: flex;
+    justify-content: center;
+}
+
+.dg-banner-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin: 0;
+}
+
+.dg-banner-header__logo {
+    width: auto;
+    height: 56px;
+    max-height: 56px;
+    object-fit: contain;
+    padding-right: 10px;
+    margin-right: 10px;
+}
+
+.dg-banner-header__tenant {
+    /* the browser's default <p> margin survives in digit-ui */
+    margin: 16px 0 !important;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+}
+
+/* login.js <h1> — Roboto Condensed via digit-ui-css `header` */
+.dg-title {
+    font-family: "Roboto Condensed";
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+}
+
+.dg-title--employee {
+    text-align: center;
+    color: var(--color-text-heading, #1d2433);
+}
+
+.dg-form {
+    display: flex;
+    flex-direction: column;
+}
+
+.dg-form--employee {
+    gap: 14px;
+}
+
+.dg-form--message {
+    gap: 16px;
+}
+
+.dg-forgot {
+    align-self: center;
+}
+
+/* PrivacyComponent.js inside the v2 card (overrides.css) */
+.dg-privacy {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.dg-checkbox {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.875rem;
+    line-height: 1.4;
+    color: var(--color-text-secondary, #6b7280);
+}
+
+.dg-checkbox__input {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.dg-checkbox__box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    min-width: 18px;
+    flex: 0 0 18px;
+    border: 1px solid var(--color-text-secondary, #505a5f);
+    cursor: pointer;
+}
+
+.dg-checkbox__box svg {
+    width: 18px;
+    height: 18px;
+    opacity: 0;
+    flex-shrink: 0;
+}
+
+.dg-checkbox__box svg path {
+    fill: var(--color-primary-main, #c84c0e);
+}
+
+.dg-checkbox__input:hover ~ .dg-checkbox__box {
+    border-color: var(--color-primary-main, #c84c0e);
+}
+
+.dg-checkbox__input:checked ~ .dg-checkbox__box {
+    border: 2px solid var(--color-primary-main, #c84c0e);
+}
+
+.dg-checkbox__input:checked ~ .dg-checkbox__box svg {
+    opacity: 1;
+}
+
+.dg-checkbox__input:focus-visible ~ .dg-checkbox__box {
+    outline: 2px solid var(--color-primary-main, #c84c0e);
+    outline-offset: 2px;
+}
+
+.dg-checkbox__label {
+    display: flex;
+    align-items: center;
+    font-family: Roboto;
+    font-weight: 500;
+    text-align: left;
+}
+
+.dg-privacy__link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    padding: 0;
+    height: auto;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--color-button-tertiary-text, var(--color-link-normal, #2563eb));
+}
+
+.dg-privacy__link span {
+    font-family: Roboto;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 21.92px;
+    letter-spacing: -0.01em;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+@media (max-aspect-ratio: 9 / 16) {
+    /* digit typography drops the link label to 12px on tall screens, but the
+     * button keeps the width it measured for the larger size, so the label
+     * sits ~3px in from the left. */
+    .dg-privacy__link {
+        padding: 0 3px;
+    }
+    .dg-privacy__link span {
+        font-size: 12px;
+    }
+}
+
+/* Privacy policy text, expanded inline under the consent row. */
+.dg-privacy__policy {
+    max-height: 16rem;
+    overflow-y: auto;
+    margin-top: 8px;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: var(--color-text-secondary, #505a5f);
+}
+
+/* PoweredByDigit: .EmployeeLoginFooter */
+.dg-employee-footer {
+    /* no left/right: the static position inside the centring flex parent,
+     * which is how digit-ui centres it (and keeps the same subpixel x) */
+    margin: auto;
+    position: absolute;
+    bottom: 10px;
+    line-height: 24px;
+}
+
+.dg-employee-footer img {
+    display: inline;
+    height: 1rem;
+    object-fit: contain;
+    cursor: pointer;
+    vertical-align: baseline;
+}
+
+/* Toast (digit-ui-components) type error, + overrides.css */
+.dg-toast {
+    position: fixed;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 3rem;
+    padding: 0.75rem 0.5rem 0.75rem 0.75rem;
+    border-radius: 6px;
+    box-shadow: 0 6px 16px rgba(16, 24, 40, 0.18);
+    color: #ffffff;
+    background-color: var(--color-error-dark, var(--color-error, #b91900));
+    font-family: Roboto, system-ui, -apple-system, sans-serif;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: 70px;
+    min-width: 50rem;
+    max-width: 100%;
+    animation: dg-toast-in 0.5s ease;
+}
+
+@keyframes dg-toast-in {
+    from {
+        transform: translate(-50%, 100vh);
+    }
+    to {
+        transform: translate(-50%, 0);
+    }
+}
+
+@media (min-aspect-ratio: 9 / 16) and (max-aspect-ratio: 3 / 4) {
+    .dg-toast {
+        min-width: 30rem;
+    }
+}
+
+@media (max-aspect-ratio: 9 / 16) {
+    .dg-toast {
+        left: 0;
+        transform: none;
+        width: 100%;
+        min-width: 100%;
+        bottom: 64px;
+        animation-name: dg-toast-in-mobile;
+    }
+}
+
+@keyframes dg-toast-in-mobile {
+    from {
+        transform: translateY(100vh);
+    }
+    to {
+        transform: translateY(0);
+    }
+}
+
+.dg-toast--info {
+    background-color: var(--color-info-dark, #0057bd);
+}
+
+.dg-toast__icon {
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+}
+
+.dg-toast__label {
+    flex-grow: 1;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    text-align: left;
+    font-family: Roboto;
+    font-size: 20px;
+    font-weight: 500;
+    line-height: 30px;
+    color: #ffffff;
+}
+
+@media (max-aspect-ratio: 3 / 4) {
+    .dg-toast__label {
+        font-size: 16px;
+        line-height: 24px;
+    }
+}
+
+.dg-toast__label > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.dg-toast__close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    margin-left: auto;
+    padding: 6px;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: #ffffff;
+    cursor: pointer;
+}
+
+.dg-toast__close:hover {
+    background-color: rgba(255, 255, 255, 0.18);
+}
+
+.dg-toast__close svg {
+    width: 18px;
+    height: 18px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .dg-toast,
+    .dg-carousel__slide {
+        animation: none;
+        transition: none;
+    }
+}
+
+/* Secondary text on the employee card (messages, info pages) */
+.dg-text {
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: var(--color-text-secondary, #6b7280);
+    text-align: center;
+}
+
+.dg-field-error {
+    font-size: 0.75rem;
+    line-height: 1.25rem;
+    color: var(--color-error, #d4351c);
+}
+
+/* Helper text on Keycloak pages rendered through DefaultPage (classes map) */
+.dg-hint {
+    margin: 0;
+    font-size: 0.75rem;
+    line-height: 1.25rem;
+    color: var(--color-text-secondary, #6b7280);
+}
+
+.dg-hint.is-error {
+    color: var(--color-error, #d4351c);
+}
+
+/* Keycloak pages rendered through DefaultPage (classes map) */
+.dg-kc-form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.dg-kc-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}

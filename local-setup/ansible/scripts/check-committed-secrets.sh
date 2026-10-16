@@ -49,6 +49,7 @@ SECRET_KEYS = {
   "keycloak_admin_password","keycloak_db_password","keycloak_google_client_secret",
   "keycloak_github_client_secret","identity_digit_admin_password",
   "identity_digit_provisioner_password","identity_smtp_password",
+  "pgr_digit_provisioner_password","pgr_digit_oauth_client_secret",
   "token_exchange_system_password","bootstrap_password","grafana_admin_password",
   "novu_jwt_secret","novu_store_encryption_key","novu_secret_key","novu_mongo_password",
   # basic-auth passwords introduced by the security rework, and secrets this
@@ -56,6 +57,8 @@ SECRET_KEYS = {
   "status_basic_auth_password","integration_tests_basic_auth_password",
   "twilio_auth_token","novu_api_key","novu_bridge_smscountry_password",
   "gatus_slack_webhook_url","ansible_become_password",
+  # integration-test regression alert mail (test_alerts_*)
+  "test_alerts_smtp_password",
 }
 PLACEHOLDERS = {"", "CHANGE_ME", None}
 import re as _re

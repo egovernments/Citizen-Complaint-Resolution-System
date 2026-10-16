@@ -42,19 +42,23 @@ for k in sys.argv[1].split("."):
     else: cur=(cur or {}).get(k)
 print(cur if cur is not None else "")' "$1" 2>/dev/null; }
 
-# Build a JSON object from key=value args, safely escaping any value
+# Build a JSON object from key=value args plus the password, safely escaping any value
 # (Novu passwords require a special char; a raw " or \ would break naive interpolation).
-_jbody() { python3 -c '
-import json, sys
-print(json.dumps(dict(a.split("=", 1) for a in sys.argv[1:])))
+# The password reaches python3 through its environment and curl through stdin, never a command
+# line: argv is readable by every user on the box (`ps`), and this is the Novu platform admin.
+_jbody() { NB_PASS="$PASS" python3 -c '
+import json, os, sys
+body = dict(a.split("=", 1) for a in sys.argv[1:])
+body["password"] = os.environ["NB_PASS"]
+print(json.dumps(body))
 ' "$@"; }
 
 echo "novu-mint-key: API=$API email=$EMAIL env=$ENV_NAME" >&2
 
 # 1) register (fresh) → JWT; on 4xx (user exists) fall back to login.
-reg=$(curl -s -w '\n%{http_code}' -X POST "$API/v1/auth/register" \
-  -H 'Content-Type: application/json' \
-  -d "$(_jbody email="$EMAIL" password="$PASS" firstName="$FIRST" lastName="$LAST" organizationName="$ORG")")
+reg=$(_jbody email="$EMAIL" firstName="$FIRST" lastName="$LAST" organizationName="$ORG" \
+  | curl -s -w '\n%{http_code}' -X POST "$API/v1/auth/register" \
+      -H 'Content-Type: application/json' --data-binary @-)
 code=$(tail -n1 <<<"$reg"); body=$(sed '$d' <<<"$reg")
 
 if [[ "$code" == "201" || "$code" == "200" ]]; then
@@ -62,8 +66,8 @@ if [[ "$code" == "201" || "$code" == "200" ]]; then
   jwt=$(_jget 'data.token' <<<"$body")
 else
   echo "  register -> $code (user likely exists); logging in" >&2
-  login=$(curl -s -X POST "$API/v1/auth/login" -H 'Content-Type: application/json' \
-    -d "$(_jbody email="$EMAIL" password="$PASS")")
+  login=$(_jbody email="$EMAIL" \
+    | curl -s -X POST "$API/v1/auth/login" -H 'Content-Type: application/json' --data-binary @-)
   jwt=$(_jget 'data.token' <<<"$login")
 fi
 
@@ -73,7 +77,7 @@ if [[ -z "$jwt" ]]; then
 fi
 
 # 2) read the requested environment's API key (JWT in Bearer; envs carry apiKeys inline).
-key=$(curl -s "$API/v1/environments" -H "Authorization: Bearer $jwt" | python3 -c '
+key=$(printf 'Authorization: Bearer %s\n' "$jwt" | curl -s "$API/v1/environments" -H @- | python3 -c '
 import sys, json
 want = sys.argv[1].lower()
 d = json.load(sys.stdin); data = d.get("data", d)

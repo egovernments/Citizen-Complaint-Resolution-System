@@ -1,129 +1,50 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const path = require("node:path");
 const crypto = require("node:crypto");
+const path = require("node:path");
 
-const projectRoot = path.resolve(__dirname, "..");
-const envPath = path.join(projectRoot, "src/env-variables.js");
-const modulePath = path.join(projectRoot, "src/channel/twilio-signature.js");
+const { isValidTwilioSignature, expectedSignature } = require(
+  path.join(path.resolve(__dirname, ".."), "src/channel/twilio-signature.js")
+);
 
-const AUTH_TOKEN = "test-auth-token-0123456789";
+const TOKEN = "test_auth_token";
+const URL = "https://chatbot.example.gov/xstate-chatbot/message";
+const BODY = { From: "whatsapp:+258840000000", To: "whatsapp:+258840000001", Body: "Ola" };
 
-function load({ authToken = AUTH_TOKEN, validateSignature = true, webhookBaseUrl = "" } = {}) {
-  delete require.cache[modulePath];
-  require.cache[envPath] = {
-    id: envPath,
-    filename: envPath,
-    loaded: true,
-    exports: { twilio: { authToken, validateSignature, webhookBaseUrl } },
-  };
-  return require(modulePath);
+/** Independent implementation of Twilio's scheme, to pin the canonical string. */
+function sign(url, params) {
+  const data = Object.keys(params).sort().reduce((acc, k) => acc + k + params[k], url);
+  return crypto.createHmac("sha1", TOKEN).update(Buffer.from(data, "utf-8")).digest("base64");
 }
 
-/** Twilio's documented algorithm, computed independently of the implementation. */
-function sign(url, params, token = AUTH_TOKEN) {
-  let payload = url;
-  for (const key of Object.keys(params).sort()) payload += key + params[key];
-  return crypto.createHmac("sha1", token).update(Buffer.from(payload, "utf-8")).digest("base64");
-}
-
-function formRequest(signature, params, { originalUrl = "/xstate-chatbot/message" } = {}) {
-  return {
-    headers: {
-      "x-twilio-signature": signature,
-      "content-type": "application/x-www-form-urlencoded",
-      host: "bomet.example.org",
-    },
-    protocol: "https",
-    originalUrl,
-    body: params,
-  };
-}
-
-const BODY = {
-  From: "whatsapp:+919876543210",
-  To: "whatsapp:+14155238886",
-  Body: "Hi",
-  NumMedia: "0",
-};
-const URL_BASE = "https://bomet.example.org";
-const FULL_URL = URL_BASE + "/xstate-chatbot/message";
-
-test("a correctly signed Twilio request is accepted", () => {
-  const mod = load({ webhookBaseUrl: URL_BASE });
-  const result = mod.validateRequest(formRequest(sign(FULL_URL, BODY), BODY));
-  assert.equal(result.valid, true);
+test("accepts a correctly signed request", () => {
+  const signature = sign(URL, BODY);
+  assert.equal(isValidTwilioSignature({ authToken: TOKEN, url: URL, params: BODY, signature }), true);
 });
 
-test("a tampered body is rejected", () => {
-  const mod = load({ webhookBaseUrl: URL_BASE });
-  const signature = sign(FULL_URL, BODY);
-  // Attacker keeps the captured signature but swaps the sender.
-  const forged = { ...BODY, From: "whatsapp:+919999999999" };
-  assert.equal(mod.validateRequest(formRequest(signature, forged)).valid, false);
+test("param order does not change the signature", () => {
+  const reordered = { Body: BODY.Body, To: BODY.To, From: BODY.From };
+  assert.equal(expectedSignature(TOKEN, URL, reordered), expectedSignature(TOKEN, URL, BODY));
 });
 
-test("a missing signature header is rejected", () => {
-  const mod = load({ webhookBaseUrl: URL_BASE });
-  const req = formRequest(undefined, BODY);
-  delete req.headers["x-twilio-signature"];
-  const result = mod.validateRequest(req);
-  assert.equal(result.valid, false);
-  assert.match(result.reason, /missing X-Twilio-Signature/);
+test("rejects a tampered From — the impersonation case", () => {
+  const signature = sign(URL, BODY);
+  const tampered = { ...BODY, From: "whatsapp:+258840000002" };
+  assert.equal(isValidTwilioSignature({ authToken: TOKEN, url: URL, params: tampered, signature }), false);
 });
 
-test("a signature from the wrong auth token is rejected", () => {
-  const mod = load({ webhookBaseUrl: URL_BASE });
-  const signature = sign(FULL_URL, BODY, "somebody-elses-token");
-  assert.equal(mod.validateRequest(formRequest(signature, BODY)).valid, false);
+test("rejects a signature computed over a different URL", () => {
+  const signature = sign("https://evil.example/xstate-chatbot/message", BODY);
+  assert.equal(isValidTwilioSignature({ authToken: TOKEN, url: URL, params: BODY, signature }), false);
 });
 
-test("an unset auth token fails closed", () => {
-  // HMAC over an empty key still verifies, so a blank token must not mean "allow".
-  const mod = load({ authToken: "", webhookBaseUrl: URL_BASE });
-  const signature = sign(FULL_URL, BODY, "");
-  const result = mod.validateRequest(formRequest(signature, BODY));
-  assert.equal(result.valid, false);
-  assert.match(result.reason, /TWILIO_AUTH_TOKEN is not set/);
+test("rejects when the signature header, token or url is missing", () => {
+  const signature = sign(URL, BODY);
+  assert.equal(isValidTwilioSignature({ authToken: TOKEN, url: URL, params: BODY, signature: undefined }), false);
+  assert.equal(isValidTwilioSignature({ authToken: "", url: URL, params: BODY, signature }), false);
+  assert.equal(isValidTwilioSignature({ authToken: TOKEN, url: "", params: BODY, signature }), false);
 });
 
-test("validation can be disabled for local console testing", () => {
-  const mod = load({ validateSignature: false, webhookBaseUrl: URL_BASE });
-  const req = formRequest(undefined, BODY);
-  delete req.headers["x-twilio-signature"];
-  assert.equal(mod.validateRequest(req).valid, true);
-});
-
-test("the configured base URL wins over spoofable proxy headers", () => {
-  const mod = load({ webhookBaseUrl: URL_BASE });
-  const req = formRequest(sign(FULL_URL, BODY), BODY);
-  // An attacker controls Host/X-Forwarded-*; the pinned base URL must be used anyway.
-  req.headers.host = "attacker.example.net";
-  req.headers["x-forwarded-host"] = "attacker.example.net";
-  req.headers["x-forwarded-proto"] = "http";
-  assert.equal(mod.validateRequest(req).valid, true);
-  assert.equal(mod.buildUrl(req), FULL_URL);
-});
-
-test("without a configured base URL the request headers are used", () => {
-  const mod = load({ webhookBaseUrl: "" });
-  const req = formRequest("x", BODY);
-  assert.equal(mod.buildUrl(req), FULL_URL);
-});
-
-test("a trailing slash on the configured base URL does not double up", () => {
-  const mod = load({ webhookBaseUrl: URL_BASE + "/" });
-  assert.equal(mod.buildUrl(formRequest("x", BODY)), FULL_URL);
-});
-
-test("the query string is part of the signed URL", () => {
-  const mod = load({ webhookBaseUrl: URL_BASE });
-  const urlWithQuery = FULL_URL + "?tenantId=pg.citya";
-  const signature = sign(urlWithQuery, BODY);
-  const req = formRequest(signature, BODY, {
-    originalUrl: "/xstate-chatbot/message?tenantId=pg.citya",
-  });
-  assert.equal(mod.validateRequest(req).valid, true);
-  // The same signature must not validate against the path without the query.
-  assert.equal(mod.validateRequest(formRequest(signature, BODY)).valid, false);
+test("a wrong-length signature does not throw (timingSafeEqual guard)", () => {
+  assert.equal(isValidTwilioSignature({ authToken: TOKEN, url: URL, params: BODY, signature: "short" }), false);
 });

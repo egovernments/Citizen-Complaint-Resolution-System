@@ -111,7 +111,7 @@ export function ComplaintShow() {
             </FieldSection>
 
             <FieldSection title="Details">
-              <FieldRow label="Type">
+              <FieldRow label="Subcategory">
                 {rec.serviceCode ? (
                   <EntityLink resource="complaint-hierarchy" id={String(rec.serviceCode)} />
                 ) : (

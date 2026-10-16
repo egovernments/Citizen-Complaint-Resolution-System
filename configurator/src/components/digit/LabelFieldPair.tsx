@@ -1,5 +1,6 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
+import { RequiredMark } from '@/components/ui/required-mark';
 
 interface LabelFieldPairProps {
   children: React.ReactNode;
@@ -31,12 +32,12 @@ const CardLabel: React.FC<CardLabelProps> = ({ children, className, required }) 
   return (
     <label
       className={cn(
-        'text-[19px] text-foreground font-medium mb-2 sm:mb-0 sm:w-[30%] sm:flex-shrink-0',
+        'text-sm text-foreground font-medium mb-2 sm:mb-0 sm:w-[30%] sm:flex-shrink-0',
         className
       )}
     >
       {children}
-      {required && <span className="text-destructive ml-1">*</span>}
+      {required && <RequiredMark />}
     </label>
   );
 };

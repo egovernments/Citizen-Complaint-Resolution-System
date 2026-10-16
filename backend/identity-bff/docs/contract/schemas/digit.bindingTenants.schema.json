@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:digit:identity:digit.bindingTenants:v1",
+  "title": "digit.bindingTenants: one value of the tenant member index",
+  "description": "Multi-valued Keycloak user attribute: the tenantId of every digit.bindings record, removed ones included, written in the same PUT. It lets GET /identity/v1/workspace-members page with GET /users?q=digit.bindingTenants:<tenantId> instead of scanning the realm. It never authorizes anything; the binding state lives in digit.bindings.",
+  "type": "string",
+  "pattern": "^[A-Za-z0-9_-]{1,50}$"
+}

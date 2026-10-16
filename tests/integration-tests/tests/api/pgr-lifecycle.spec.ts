@@ -10,8 +10,9 @@
  *
  * Run: npx playwright test tests/specs/pgr-lifecycle-api.spec.ts
  */
-import { test, expect } from '@playwright/test';
+import { test, expect, request as playwrightRequest } from '@playwright/test';
 import { getDigitToken } from '../utils/auth';
+import { citizenSignIn } from '../utils/identity-bff';
 import { getPrincipal } from '../utils/employee-ui';
 import { resolvePersona, resolveSeedPlan } from '../utils/personas';
 import {
@@ -40,67 +41,13 @@ async function fetchComplaint(token: string, userInfo: Record<string, unknown>, 
   return data.ServiceWrappers[0].service;
 }
 
-/** Register a citizen via OTP flow and return token. */
+/** Provision by BFF phone possession; never retry with a native password. */
 async function registerCitizen(phone: string): Promise<{ token: string; userInfo: Record<string, unknown> }> {
-  // Send OTP (mock — always succeeds)
-  await fetch(`${BASE_URL}/user-otp/v1/_send`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      otp: { mobileNumber: phone, tenantId: ROOT_TENANT, type: 'login', userType: 'CITIZEN' },
-    }),
-  });
-
-  // Try login first (citizen may already exist)
-  let resp = await fetch(`${BASE_URL}/user/oauth/token`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      Authorization: 'Basic ZWdvdi11c2VyLWNsaWVudDo=',
-    },
-    body: new URLSearchParams({
-      grant_type: 'password', username: phone, password: FIXED_OTP,
-      tenantId: ROOT_TENANT, scope: 'read', userType: 'CITIZEN',
-    }).toString(),
-  });
-
-  if (!resp.ok) {
-    // Register with a valid password (DIGIT requires 8+ chars with upper/lower/digit/special).
-    // The otpReference validates against the mock OTP service.
-    // After registration, OAuth login uses FIXED_OTP as password for CITIZEN userType.
-    await fetch(`${BASE_URL}/user/citizen/_create`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        RequestInfo: { apiId: 'Rainmaker' },
-        user: {
-          name: CITIZEN_NAME,
-          userName: phone,
-          mobileNumber: phone,
-          password: DEFAULT_PASSWORD,
-          tenantId: ROOT_TENANT,
-          type: 'CITIZEN',
-          roles: [{ code: 'CITIZEN', name: 'Citizen', tenantId: ROOT_TENANT }],
-          otpReference: FIXED_OTP,
-        },
-      }),
-    });
-
-    resp = await fetch(`${BASE_URL}/user/oauth/token`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Authorization: 'Basic ZWdvdi11c2VyLWNsaWVudDo=',
-      },
-      body: new URLSearchParams({
-        grant_type: 'password', username: phone, password: FIXED_OTP,
-        tenantId: ROOT_TENANT, scope: 'read', userType: 'CITIZEN',
-      }).toString(),
-    });
-  }
-
-  const data: any = await resp.json();
-  return { token: data.access_token, userInfo: data.UserRequest };
+  const request = await playwrightRequest.newContext();
+  try {
+    const context = await citizenSignIn(request, BASE_URL, phone);
+    return { token: context.access_token, userInfo: context.UserRequest };
+  } finally { await request.dispose(); }
 }
 
 test.describe.serial('PGR lifecycle — API only', () => {

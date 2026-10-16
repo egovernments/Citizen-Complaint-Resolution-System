@@ -4,6 +4,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '@/App';
 import { getConfiguredRootTenant } from '@/api';
+import { ApiClientError } from '@/api/client';
 import { mdmsService } from '@/api/services/mdms';
 import {
   buildPublicDashboardUrl,
@@ -18,6 +19,8 @@ import {
   type PreviewTile,
 } from './kpiCatalog';
 import { listTimeZones } from '@/lib/timezones';
+import { SearchableSelect } from '@/components/ui/SearchableSelect';
+import { useWorkspaceSlug } from '@/identity/workspaceSlug';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -83,12 +86,24 @@ function PreviewTileCard({ tile }: { tile: PreviewTile }) {
   );
 }
 
+/** Why the time zone didn't save, in words: a refusal says so instead of the server's code. */
+function describeTimeZoneSaveError(cause: unknown): string {
+  const message = cause instanceof Error ? cause.message : '';
+  const denied =
+    (cause instanceof ApiClientError && cause.statusCode === 403) || /AccessDenied|not authori[sz]ed|forbidden/i.test(message);
+  if (denied) return "This account isn't allowed to change the dashboard settings here, so the time zone wasn't saved.";
+  return message || 'Could not update the dashboard time zone.';
+}
+
 export default function PublicDashboardConfigure() {
   const { state } = useApp();
-  const tenantId = getConfiguredRootTenant() || state.tenant.split('.')[0];
+  // The signed-in tenant's root owns the record; the build-time root is only a
+  // fallback before a tenant is known (#2072).
+  const tenantId = state.tenant.split('.')[0] || getConfiguredRootTenant();
+  const slug = useWorkspaceSlug(state.tenant);
   const dashboardUrl = useMemo(
-    () => buildPublicDashboardUrl(state.environment),
-    [state.environment],
+    () => buildPublicDashboardUrl(state.environment, slug),
+    [state.environment, slug],
   );
 
   // The whole record, not just the switch: the Last published tile and the
@@ -96,6 +111,9 @@ export default function PublicDashboardConfigure() {
   const [config, setConfig] = useState<Partial<DashboardConfigData> | null>(null);
   const [timeZone, setTimeZone] = useState(DEFAULT_DASHBOARD_TIME_ZONE);
   const [savingTimeZone, setSavingTimeZone] = useState(false);
+  // Shown under the picker: the page-level alert sits above the cards, out of
+  // view when the picker snaps back after a failed save.
+  const [timeZoneError, setTimeZoneError] = useState<string | null>(null);
   // The saved value is always kept in the option list even if the runtime's IANA
   // database doesn't recognize it (older browser, deprecated zone) — otherwise the
   // <select> would silently show blank instead of the actual configured value.
@@ -142,6 +160,7 @@ export default function PublicDashboardConfigure() {
     const previous = timeZone;
     setSavingTimeZone(true);
     setError(null);
+    setTimeZoneError(null);
     setWarning(null);
     setSavedMessage(null);
     setTimeZone(nextTimeZone);
@@ -156,7 +175,7 @@ export default function PublicDashboardConfigure() {
       }
     } catch (cause: unknown) {
       setTimeZone(previous);
-      setError(cause instanceof Error ? cause.message : 'Could not update the dashboard time zone.');
+      setTimeZoneError(describeTimeZoneSaveError(cause));
     } finally {
       setSavingTimeZone(false);
     }
@@ -204,6 +223,7 @@ export default function PublicDashboardConfigure() {
   }, [state.user?.name, state.user?.email, tenantId]);
 
   const copyUrl = async () => {
+    if (!dashboardUrl) return;
     try {
       await navigator.clipboard.writeText(dashboardUrl);
       setCopied(true);
@@ -243,14 +263,19 @@ export default function PublicDashboardConfigure() {
             Public URL
           </p>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <Input value={dashboardUrl} readOnly aria-label="Public dashboard URL" />
-            <Button variant="outline" onClick={copyUrl} className="shrink-0">
+            <Input
+              value={dashboardUrl ?? ''}
+              placeholder={slug === undefined ? 'Resolving your workspace link…' : 'Workspace link unavailable. Sign in again to show it.'}
+              readOnly
+              aria-label="Public dashboard URL"
+            />
+            <Button variant="outline" onClick={copyUrl} disabled={!dashboardUrl} className="shrink-0">
               {copied ? <Check /> : <Copy />} {copied ? 'Copied' : 'Copy link'}
             </Button>
             <Button
               variant="outline"
-              disabled={!enabled}
-              onClick={() => window.open(dashboardUrl, '_blank', 'noopener,noreferrer')}
+              disabled={!enabled || !dashboardUrl}
+              onClick={() => dashboardUrl && window.open(dashboardUrl, '_blank', 'noopener,noreferrer')}
               className="shrink-0"
             >
               <ExternalLink /> Open public dashboard
@@ -415,17 +440,19 @@ export default function PublicDashboardConfigure() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          <select
-            aria-label="Dashboard time zone"
+          <SearchableSelect
+            ariaLabel="Dashboard time zone"
             value={timeZone}
+            options={timeZoneOptions}
+            onChange={(tz) => void setDashboardTimeZone(tz)}
             disabled={savingTimeZone || saving}
-            onChange={(e) => void setDashboardTimeZone(e.target.value)}
-            className="flex h-10 w-full max-w-sm rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {timeZoneOptions.map((tz) => (
-              <option key={tz} value={tz}>{tz}</option>
-            ))}
-          </select>
+            placeholder="Search timezone…"
+          />
+          {timeZoneError && (
+            <p role="alert" className="text-sm text-destructive" data-testid="timezone-save-error">
+              {timeZoneError}
+            </p>
+          )}
           <p className="text-xs leading-5 text-muted-foreground">
             Most tiles pick up the new zone on their next scheduled refresh (every few minutes),
             not instantly. The daily backlog trend is the one exception — it's an append-only

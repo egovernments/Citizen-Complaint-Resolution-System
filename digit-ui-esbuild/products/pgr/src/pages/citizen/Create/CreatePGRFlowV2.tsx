@@ -19,6 +19,7 @@ import { complaintLabel } from "../../../utils/complaintLabel";
 import { isPostalCodeValid, getPostalCodeErrorMessage, isPostalCodeNumeric } from "../../../utils/postalCode";
 import { serializeGeoLocation } from "../../../utils/geoLocation";
 import { trackEvent } from "../../../utils/analytics";
+import useVoiceInputEnabled from "../../../hooks/pgr/useVoiceInputEnabled";
 import { useDispatch } from "react-redux";
 import { useHistory } from "react-router-dom";
 import { useQueryClient } from "react-query";
@@ -474,7 +475,7 @@ function CategoryFields({ data, patch, serviceDefs, hierarchyDef, nodes, t }: St
       ) : (
         <>
           <Field
-            label={t("CS_COMPLAINT_DETAILS_COMPLAINT_TYPE")}
+            label={tr(t, "CS_COMPLAINT_DETAILS_COMPLAINT_TYPE", "Complaint Category")}
             required
             htmlFor="complaint-type"
           >
@@ -487,7 +488,7 @@ function CategoryFields({ data, patch, serviceDefs, hierarchyDef, nodes, t }: St
                 const picked = types.find((tp) => tp.menuPath === value);
                 patch({ SelectComplaintType: picked, SelectSubComplaintType: null });
               }}
-              placeholder={tr(t, "CS_COMPLAINT_PICK_TYPE", "Select a complaint type")}
+              placeholder={tr(t, "CS_COMPLAINT_PICK_TYPE", "Select a complaint category")}
               options={types.map((tp) => ({
                 value: tp.menuPath,
                 label: tp.menuPathName ?? tp.menuPath,
@@ -496,7 +497,7 @@ function CategoryFields({ data, patch, serviceDefs, hierarchyDef, nodes, t }: St
           </Field>
           {subTypes.length > 1 ? (
             <Field
-              label={t("CS_COMPLAINT_DETAILS_COMPLAINT_SUBTYPE")}
+              label={tr(t, "CS_COMPLAINT_DETAILS_COMPLAINT_SUBTYPE", "Complaint Subcategory")}
               required
               htmlFor="complaint-subtype"
             >
@@ -509,7 +510,7 @@ function CategoryFields({ data, patch, serviceDefs, hierarchyDef, nodes, t }: St
                   const picked = subTypes.find((s) => s.serviceCode === value);
                   patch({ SelectSubComplaintType: picked });
                 }}
-                placeholder={tr(t, "CS_COMPLAINT_PICK_SUBTYPE", "Select a subtype")}
+                placeholder={tr(t, "CS_COMPLAINT_PICK_SUBTYPE", "Select a subcategory")}
                 options={subTypes.map((s) => ({
                   value: s.serviceCode,
                   label: complaintLabel(t, s.serviceCode, s.name),
@@ -691,7 +692,7 @@ function DetailsStep(props: DetailsStepProps) {
     <div className="cms-step-body">
       <Section className="cms-section-describe">
         <label className="cms-label" htmlFor="complaint-description">
-          {say("CS_FILE_DESCRIBE", "Describe your complaint")} <span className="cms-required">*</span>
+          {say("CS_FILE_DESCRIBE_TITLE", "Tell us how we can help")} <span className="cms-required">*</span>
         </label>
         <div className={`cms-textarea-wrap${canSpeak ? " with-mic" : ""}`}>
           <Textarea
@@ -699,7 +700,10 @@ function DetailsStep(props: DetailsStepProps) {
             className="cms-textarea"
             rows={6}
             maxLength={DESCRIPTION_MAX}
-            placeholder={say("CS_FILE_DESCRIBE_PLACEHOLDER", "Type your complaint here…")}
+            placeholder={say(
+              "CS_FILE_DESCRIBE_PLACEHOLDER",
+              "Please share as much as you can about the issue. The more you can tell us, the sooner we can help.",
+            )}
             value={data.description ?? ""}
             onChange={(e) => patch({ description: e.target.value })}
           />
@@ -709,10 +713,10 @@ function DetailsStep(props: DetailsStepProps) {
           {(data.description ?? "").length} / {DESCRIPTION_MAX}
         </div>
       </Section>
-      <Section title={say("CS_FILE_PHOTO", "Upload a photo")} className="cms-section-photos">
+      <Section title={say("CS_FILE_PHOTO", "Add a photo")} className="cms-section-photos">
         <PhotoPicker photos={photos} onChange={setPhotos} tenantId={tenantId || ""} tr={say} />
       </Section>
-      <Section title={say("CS_FILE_CATEGORY", "Complaint category")} className="cms-section-category">
+      <Section title={say("CS_FILE_CATEGORY", "Nature of your issue")} className="cms-section-category">
         <CategoryFields {...props} />
       </Section>
     </div>
@@ -726,7 +730,7 @@ function LocationStep(props: StepBodyProps) {
   const coords = pinned ? `${Number(point?.lat).toFixed(5)}, ${Number(point?.lng).toFixed(5)}` : "";
   return (
     <div className="cms-step-body cms-location-body">
-      <Section title={tr(t, "CS_FILE_STEP_LOCATION", "Location")} className="cms-section-map">
+      <Section title={tr(t, "CS_FILE_LOCATION_TITLE", "Tell us where this happened")} className="cms-section-map">
         <p className="cms-section-hint">
           {tr(t, "CS_PIN_LOCATION_HINT", "Drop a pin on the exact spot — we'll use it to route your complaint to the right ward.")}
         </p>
@@ -835,9 +839,9 @@ function ReviewStep({ data, t, photos }: StepBodyProps & { photos: PickedPhoto[]
         <ReviewRows
           rows={[
             [say("CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS_DESCRIPTION", "Description"), data.description?.trim() ? truncate(data.description, 180) : notProvided],
-            [say("CS_FILE_CATEGORY_LABEL", "Category"), category || notSelected],
+            [say("CS_FILE_CATEGORY_LABEL", "Complaint Category"), category || notSelected],
             // A type with no sub-types has nothing to select here.
-            [say("CS_FILE_SUBCATEGORY_LABEL", "Sub-category"), subCategory || (category ? "—" : notSelected)],
+            [say("CS_FILE_SUBCATEGORY_LABEL", "Complaint Subcategory"), subCategory || (category ? "—" : notSelected)],
             [
               say("CS_FILE_PHOTOS", "Photos"),
               attached.length
@@ -853,7 +857,7 @@ function ReviewStep({ data, t, photos }: StepBodyProps & { photos: PickedPhoto[]
             [say("CS_FILE_ADDRESS", "Address"), addressLine(data, t) || notProvided],
             [say("CS_COMPLAINT_LANDMARK__DETAILS", "Landmark"), data.landmark?.trim() ? truncate(data.landmark, 60) : notProvided],
             [
-              say("CS_FILE_PIN_DROP", "Pin drop"),
+              say("CS_FILE_PIN_DROP", "Location"),
               pinned
                 ? point?.address || `${Number(point?.lat).toFixed(5)}, ${Number(point?.lng).toFixed(5)}`
                 : say("CS_FILE_NOT_CAPTURED", "Not captured"),
@@ -947,7 +951,7 @@ function FlowStrip({ index, t }: { index: number; t: (k: string) => string }) {
 // ---------------------------------------------------------------------------
 
 const CreatePGRFlowV2: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const history = useHistory();
   const dispatch = useDispatch();
   const client = useQueryClient();
@@ -1016,7 +1020,11 @@ const CreatePGRFlowV2: React.FC = () => {
   // The location step mounts on its first visit and then stays, so the map
   // and the boundary cascade keep what the citizen picked when they go Back.
   const [locationVisited, setLocationVisited] = React.useState(false);
-  const canSpeak = React.useMemo(() => speechToTextSupported(), []);
+  // The browser has to support speech, and the tenant mustn't have turned
+  // voice off (RAINMAKER-PGR.UIConstants.VOICE_INPUT: false).
+  const browserCanSpeak = React.useMemo(() => speechToTextSupported(), []);
+  const voiceEnabled = useVoiceInputEnabled(tenantId);
+  const canSpeak = browserCanSpeak && voiceEnabled;
 
   const patch = React.useCallback((partial: Partial<FormData>) => {
     setFormData((prev) => ({ ...prev, ...partial }));
@@ -1086,9 +1094,9 @@ const CreatePGRFlowV2: React.FC = () => {
   /** Why Next is held, in the words the design uses. */
   const hint = (() => {
     if (stepIndex === 0) {
-      if (!(formData.description ?? "").trim()) return tr(t, "CS_FILE_HINT_DESCRIBE", "Describe your complaint to continue.");
+      if (!(formData.description ?? "").trim()) return tr(t, "CS_FILE_HINT_DESCRIBE", "Tell us about the issue to continue.");
       if (!descriptionOk) return tr(t, "CS_FILE_HINT_LETTERS", "Use at least three letters to describe the complaint.");
-      if (!categoryOk) return tr(t, "CS_FILE_HINT_CATEGORY", "Select a category and sub-category to continue.");
+      if (!categoryOk) return tr(t, "CS_FILE_HINT_CATEGORY", "Select a complaint category and subcategory to continue.");
       if (uploading) return tr(t, "CS_FILE_HINT_UPLOADING", "Wait for your photos to finish uploading.");
       if (uploadFailed) return tr(t, "CS_FILE_HINT_UPLOAD_FAILED", "A photo didn't upload. Retry it or remove it.");
     }
@@ -1170,14 +1178,14 @@ const CreatePGRFlowV2: React.FC = () => {
           trackEvent("pgr.file-complaint.submit-failed", { category: "pgr" });
           dispatch({ type: "CREATE_COMPLAINT", payload: { responseInfo: { status: "failed" } } });
           setSubmitting(false);
-          history.push(`/digit-ui/citizen/pgr/response`);
+          history.push(`/${window?.contextPath}/citizen/pgr/response`);
         },
         onSuccess: async (responseData: any) => {
           trackEvent("pgr.file-complaint.submitted", { category: "pgr" });
           dispatch({ type: "CREATE_COMPLAINT", payload: responseData });
           await client.refetchQueries(["complaintsList"]);
           setSubmitting(false);
-          history.push(`/digit-ui/citizen/pgr/response`, { filedSummary });
+          history.push(`/${window?.contextPath}/citizen/pgr/response`, { filedSummary });
         },
       });
       return;
@@ -1218,7 +1226,7 @@ const CreatePGRFlowV2: React.FC = () => {
           }}
         >
           <span
-            aria-label="Loading"
+            aria-label={tr(t, "CS_LOADING", "Loading...")}
             style={{
               display: "inline-block",
               height: "2rem",
@@ -1327,7 +1335,13 @@ const CreatePGRFlowV2: React.FC = () => {
           </div>
         </div>
       </div>
-      <VoiceSheet open={voiceOpen} onClose={() => setVoiceOpen(false)} onUse={appendSpoken} tr={say} />
+      <VoiceSheet
+        open={voiceOpen}
+        onClose={() => setVoiceOpen(false)}
+        onUse={appendSpoken}
+        tr={say}
+        locale={i18n?.language}
+      />
     </ScreenContainer>
   );
 };

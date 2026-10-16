@@ -1,4 +1,5 @@
 import React, { useMemo, useRef, useState, useEffect, useLayoutEffect } from "react";
+import { workingContextPanelLeft } from "./workingContextPosition";
 
 /**
  * "What am I here to do, where and as what" for the logged-in employee
@@ -125,7 +126,7 @@ const countLabel = (t, n, singularKey, pluralKey, singular, plural) =>
  */
 /**
  * City name for the tenant the *context* belongs to. cityDetails describes
- * whichever city the header's ChangeCity control currently shows, which for a
+ * whichever tenant the route context currently identifies, which for a
  * state-level employee need not be that tenant — using it blindly would label
  * City A's departments and jurisdictions with City B's name.
  */
@@ -227,11 +228,7 @@ export function EmployeeWorkingContextPanel({ t, context, cityDetails, tenantId,
       // Prefer right-aligning to the trigger; clamp so it never leaves the
       // viewport. Narrow phones get the full width minus a gutter.
       const width = Math.min(272, window.innerWidth - 16);
-      // Right-align under a compact header trigger; centre in the viewport when
-      // the trigger spans the bar (the mobile row), where aligning to either
-      // edge strands it in a corner. Clamped so it never leaves the viewport.
-      const preferred = r.width > width ? (window.innerWidth - width) / 2 : r.right - width;
-      const left = Math.max(8, Math.min(preferred, window.innerWidth - width - 8));
+      const left = workingContextPanelLeft(r, window.innerWidth, width);
       const next = { top: Math.round(r.bottom + 8), left: Math.round(left) };
       // The settle pass below runs several times; only re-render on a real move.
       setPos((prev) => (prev && prev.top === next.top && prev.left === next.left ? prev : next));

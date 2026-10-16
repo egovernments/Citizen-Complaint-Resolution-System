@@ -3,24 +3,94 @@ import { apiClient } from '../client';
 import { ENDPOINTS, BOUNDARY_SEARCH_LIMIT } from '../config';
 import type { Boundary, BoundaryHierarchy, BoundaryLevel } from '../types';
 
+/** Reserved by the platform baseline for the founder's root jurisdiction. */
+export const WORKSPACE_HIERARCHY_TYPE = 'WORKSPACE';
+
+const HIERARCHY_PAGE_SIZE = 100;
+/** Still finding rows after this many pages means offset is ignored, not 20,000 hierarchies. */
+const HIERARCHY_MAX_PAGES = 200;
+
+// The deployment's HIERARCHY_TYPE, from the served globalConfigs (ansible
+// renders it from host_vars `hierarchy_type`). It is what digit-ui and PGR
+// resolve boundaries against when a tenant has no CMS-BOUNDARY.HierarchySchema
+// row, so the configurator must make the same choice — otherwise the citizen
+// complaint form's boundary picker 400s (HIERARCHY_DEFINITION_DOES_NOT_EXIST).
+// Falls back to DIGIT's default 'ADMIN' when globalConfigs isn't present.
+// globalConfigs.js is injected as a <script> before this bundle, so the read
+// resolves at module-eval time in the built app.
+export function getConfiguredHierarchyType(): string {
+  if (typeof window !== 'undefined') {
+    const gc = (
+      window as unknown as { globalConfigs?: { getConfig?: (k: string) => unknown } }
+    ).globalConfigs?.getConfig?.('HIERARCHY_TYPE');
+    if (typeof gc === 'string' && gc) return gc;
+  }
+  return 'ADMIN';
+}
+
+/**
+ * The hierarchy a screen starts on when the operator hasn't chosen one.
+ *
+ * Never `hierarchies[0]`: boundary-service lists newest first, so that is
+ * whatever was created last, which on a tenant the test suite has run against
+ * is a PW_* stub (#1915). Same order as digit-ui's tenantHierarchy.js: the
+ * tenant's recorded hierarchy (its CMS-BOUNDARY.HierarchySchema row), then the
+ * deployment's HIERARCHY_TYPE, then ADMIN; failing all three, the oldest,
+ * which is the one onboarding created.
+ */
+export function pickDefaultHierarchy(
+  hierarchies: BoundaryHierarchy[],
+  recordedHierarchyType?: string,
+  configuredHierarchyType: string = getConfiguredHierarchyType(),
+): BoundaryHierarchy | undefined {
+  const named = (type?: string) => (type ? hierarchies.find((h) => h.hierarchyType === type) : undefined);
+  const createdTime = (h: BoundaryHierarchy) => h.auditDetails?.createdTime ?? Number.MAX_SAFE_INTEGER;
+  const oldest = [...hierarchies].sort(
+    (a, b) => createdTime(a) - createdTime(b) || a.hierarchyType.localeCompare(b.hierarchyType),
+  )[0];
+  return named(recordedHierarchyType) ?? named(configuredHierarchyType) ?? named('ADMIN') ?? oldest;
+}
+
 export const boundaryService = {
   // ============================================
   // Hierarchy Methods
   // ============================================
 
-  // Get existing boundary hierarchies for a tenant
+  // Every hierarchy defined on the tenant. The search sends no total, so walk
+  // until an empty page: the first page alone is the 100 newest, and on a
+  // tenant the test suite runs against those are all PW_* stubs with ADMIN
+  // several pages back (#1915). Offsets advance by the rows actually returned,
+  // and a short page is not taken as the last one, because boundary-service
+  // clamps each page to boundary.max.default.limit, which a deployment can set
+  // below the size asked for.
+  //
+  // Known gap: boundary-service orders by createdtime alone, with no unique
+  // tie-breaker, so two hierarchies created in the same millisecond that
+  // straddle a page boundary can swap places between requests. The dedupe below
+  // absorbs a row seen twice but cannot notice one skipped; the fix is a
+  // tie-breaker in boundary-service's ORDER BY.
   async getHierarchies(tenantId: string): Promise<BoundaryHierarchy[]> {
-    const response = await apiClient.post(ENDPOINTS.BOUNDARY_HIERARCHY_SEARCH, {
-      RequestInfo: apiClient.buildRequestInfo(),
-      BoundaryTypeHierarchySearchCriteria: {
-        tenantId,
-        limit: 100,
-        offset: 0,
-      },
-    });
-
-    const hierarchies = response.BoundaryHierarchy || [];
-    return hierarchies as BoundaryHierarchy[];
+    // Keyed by type (unique per tenant): a hierarchy created mid-walk shifts
+    // the newest-first list and repeats a row across two pages.
+    const byType = new Map<string, BoundaryHierarchy>();
+    let offset = 0;
+    for (let page = 0; page < HIERARCHY_MAX_PAGES; page++) {
+      const response = await apiClient.post(ENDPOINTS.BOUNDARY_HIERARCHY_SEARCH, {
+        RequestInfo: apiClient.buildRequestInfo(),
+        BoundaryTypeHierarchySearchCriteria: { tenantId, limit: HIERARCHY_PAGE_SIZE, offset },
+      });
+      const batch = (response.BoundaryHierarchy || []) as BoundaryHierarchy[];
+      if (batch.length === 0) return Array.from(byType.values());
+      for (const h of batch) {
+        // WORKSPACE holds only the tenant's root boundary for the founder's
+        // jurisdiction (platform baseline); it is never an operational hierarchy.
+        if (h.hierarchyType !== WORKSPACE_HIERARCHY_TYPE) byType.set(h.hierarchyType, h);
+      }
+      offset += batch.length;
+    }
+    throw new Error(
+      `Boundary hierarchy search for ${tenantId} was still returning rows after ${HIERARCHY_MAX_PAGES} pages; refusing to return a partial list`,
+    );
   },
 
   // Create a new boundary hierarchy.

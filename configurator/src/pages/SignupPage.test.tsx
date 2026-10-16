@@ -1,4 +1,4 @@
-import { fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import SignupPage from './SignupPage';
@@ -56,6 +56,22 @@ describe('sign-in gate', () => {
     expect(await screen.findByRole('button', { name: /email and password/i })).toBeInTheDocument();
     // Nothing is hardcoded, so a provider that is off simply does not appear.
     expect(screen.queryByRole('button', { name: /google/i })).not.toBeInTheDocument();
+  });
+
+  it('does not resume a session an unconfirmed sign-out may have left, until the user chooses a method', async () => {
+    localStorage.setItem('crs-sign-out-incomplete', '1');
+    vi.mocked(api.session).mockResolvedValue(signedIn);
+    vi.mocked(api.authMethods).mockResolvedValue({
+      methods: [{ id: 'google', label: 'Continue with Google', type: 'oidc' }],
+    });
+
+    render(<SignupPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /continue with google/i }));
+    expect(api.session).not.toHaveBeenCalled();
+    expect(api.tenants).not.toHaveBeenCalled();
+    expect(localStorage.getItem('crs-sign-out-incomplete')).toBeNull();
+    expect(api.startSignIn).toHaveBeenCalledWith('google', 'signup');
   });
 
   it('shows the GitHub mark on the GitHub signup action', async () => {
@@ -155,7 +171,7 @@ describe('wizard', () => {
     fireEvent.change(await screen.findByLabelText(/account name/i), {
       target: { value: 'Bomet County Government' },
     });
-    await waitFor(() => expect(screen.getByLabelText(/account code/i)).toHaveValue('BCG'));
+    await waitFor(() => expect(screen.getByLabelText(/account code/i)).toHaveValue('BOMET-COUNTY-GOVERNMENT'));
   });
 
   it('re-prefixes the code once a country is chosen', async () => {
@@ -163,7 +179,7 @@ describe('wizard', () => {
     await completeAccountStep();
     fireEvent.change(screen.getByLabelText(/base country/i), { target: { value: 'KE' } });
     fireEvent.click(screen.getByRole('button', { name: /back/i }));
-    await waitFor(() => expect(screen.getByLabelText(/account code/i)).toHaveValue('KE-BCG'));
+    await waitFor(() => expect(screen.getByLabelText(/account code/i)).toHaveValue('KE-BOMET-COUNTY-GOVERNMENT'));
   });
 
   it('derives the slug without promising an address for it', async () => {
@@ -202,7 +218,7 @@ describe('wizard', () => {
     await completeAccountStep();
     fireEvent.change(screen.getByLabelText(/account url/i), { target: { value: 'kd4' } });
 
-    expect(await screen.findByText(/maps to tenant ID “kd”.*already in use/i)).toBeInTheDocument();
+    expect(await screen.findByText(/clashes with an existing workspace \(“kd”\)/i)).toBeInTheDocument();
   });
 
   it('creates the draft once Preferences is complete, not before', async () => {
@@ -257,6 +273,40 @@ describe('wizard', () => {
     render(<SignupPage />);
     await waitFor(() => expect(screen.getByLabelText(/account name/i)).toHaveValue('Bomet County'));
     expect(api.createSignup).not.toHaveBeenCalled();
+  });
+
+  const resumedDraft = (accountCode: string) => ({
+    id: 'signup-1',
+    status: 'DRAFT',
+    accountName: 'Bomet County',
+    accountCode,
+    urlSlug: 'bomet-county',
+    countryCode: 'KE',
+    languages: ['en'],
+    timeZone: 'Africa/Nairobi',
+    financialYearPolicy: 'JUL_JUN',
+    tenantMetadata: { schemaVersion: 1, tenantAdmin: { mobileNumber: '+254700000199' } },
+  });
+
+  it('keeps deriving a resumed code that was never edited by hand', async () => {
+    vi.mocked(api.findSignup).mockResolvedValue(resumedDraft('KE-BOMET-COUNTY') as never);
+    render(<SignupPage />);
+    await waitFor(() => expect(screen.getByLabelText(/account name/i)).toHaveValue('Bomet County'));
+
+    fireEvent.change(screen.getByLabelText(/account name/i), { target: { value: 'Bomet County Government' } });
+
+    await waitFor(() => expect(screen.getByLabelText(/account code/i)).toHaveValue('KE-BOMET-COUNTY-GOVERNMENT'));
+  });
+
+  it('never overwrites a resumed code the operator typed', async () => {
+    vi.mocked(api.findSignup).mockResolvedValue(resumedDraft('KE-BOMET') as never);
+    render(<SignupPage />);
+    await waitFor(() => expect(screen.getByLabelText(/account name/i)).toHaveValue('Bomet County'));
+
+    fireEvent.change(screen.getByLabelText(/account name/i), { target: { value: 'Bomet County Government' } });
+
+    await waitFor(() => expect(screen.getByLabelText(/account name/i)).toHaveValue('Bomet County Government'));
+    expect(screen.getByLabelText(/account code/i)).toHaveValue('KE-BOMET');
   });
 });
 
@@ -320,10 +370,11 @@ describe('expired session', () => {
 });
 
 describe('provisioning', () => {
-  it('shows the worker steps and offers a retry only when the failure is retryable', async () => {
+  /** Walks the wizard to "Create account" and submits, the run coming back as `operation`. */
+  async function submitWith(operation: Record<string, unknown>, afterRun: 'DRAFT' | 'FAILED' = 'DRAFT') {
     vi.mocked(api.session).mockResolvedValue(signedIn);
     vi.mocked(api.tenants).mockResolvedValue({ tenants: [], selectionRequired: false, onboardingRequired: true });
-    vi.mocked(api.findSignup).mockResolvedValue({
+    const draft = {
       id: 'signup-1',
       status: 'DRAFT',
       accountName: 'Bomet County',
@@ -334,20 +385,14 @@ describe('provisioning', () => {
       timeZone: 'Africa/Nairobi',
       financialYearPolicy: 'JUL_JUN',
       tenantMetadata: { schemaVersion: 1, tenantAdmin: { mobileNumber: '+254700000199' } },
-    } as never);
+    };
+    // The first read is the resume; later ones are the signup after the run, which a
+    // user-correctable failure hands back as a DRAFT.
+    vi.mocked(api.findSignup).mockResolvedValueOnce(draft as never).mockResolvedValue({ ...draft, status: afterRun } as never);
     vi.mocked(api.updateSignup).mockResolvedValue({ id: 'signup-1' } as never);
-    vi.mocked(api.submitSignup).mockResolvedValue({
-      id: 'op-1',
-      signupId: 'signup-1',
-      status: 'RETRYABLE_FAILED',
-      currentStep: 'ORGANIZATION',
-      completedSteps: ['TENANT_FOUNDATION'],
-      errorCode: 'ONBOARDING_VALIDATION_ERROR',
-      errorMessage: 'Could not create the organization.',
-      attempt: 1,
-      createdAt: 0,
-      updatedAt: 0,
-    } as never);
+    const run = { id: 'op-1', signupId: 'signup-1', errorCode: null, errorMessage: null, attempt: 1, createdAt: 0, updatedAt: 0, ...operation };
+    vi.mocked(api.submitSignup).mockResolvedValue(run as never);
+    vi.mocked(api.findOperation).mockResolvedValue(run as never);
 
     render(<SignupPage />);
 
@@ -358,9 +403,90 @@ describe('provisioning', () => {
     fireEvent.click(screen.getByRole('button', { name: /continue/i }));
     fireEvent.click(await screen.findByRole('checkbox'));
     fireEvent.click(screen.getByRole('button', { name: /create account/i }));
+  }
 
-    expect(await screen.findByText(/could not create the organization/i)).toBeInTheDocument();
+  const spinning = (label: RegExp) => !!screen.getByText(label).closest('li')?.querySelector('.animate-spin');
+
+  it('shows the worker steps and offers a retry only when the failure is retryable', async () => {
+    await submitWith({
+      status: 'RETRYABLE_FAILED',
+      currentStep: 'ORGANIZATION',
+      completedSteps: ['TENANT_FOUNDATION'],
+      errorCode: 'ONBOARDING_VALIDATION_ERROR',
+      errorMessage: 'Could not create the organization.',
+    });
+
+    // In words, with the code kept as a reference; never the run's own message.
+    expect(await screen.findByText(/usually temporary/i)).toBeInTheDocument();
+    expect(screen.getByText('Reference: ONBOARDING_VALIDATION_ERROR')).toBeInTheDocument();
+    expect(screen.queryByText(/could not create the organization/i)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument();
+  });
+
+  it('hands a rejected founder number back to be corrected, rather than closing the signup (#2353)', async () => {
+    await submitWith({
+      status: 'TERMINAL_FAILED',
+      currentStep: 'FOUNDER_HRMS',
+      completedSteps: ['TENANT_FOUNDATION', 'PLATFORM_BASELINE'],
+      errorCode: 'TENANT_ADMIN_ACCOUNT_REJECTED',
+      errorMessage: 'TENANT_ADMIN_ACCOUNT_REJECTED',
+    });
+
+    expect(await screen.findByText(/usually the mobile number/i)).toBeInTheDocument();
+    const change = await screen.findByRole('button', { name: /change my details/i });
+    expect(screen.queryByText(/cannot be retried/i)).not.toBeInTheDocument();
+
+    fireEvent.click(change);
+    expect(await screen.findByLabelText(/mobile number/i)).toHaveValue('+254700000199');
+    expect(screen.getByRole('alert')).toHaveTextContent(/couldn’t be created with it/);
+  });
+
+  it('keeps the closed-signup wording when the run did not hand the draft back', async () => {
+    await submitWith(
+      { status: 'TERMINAL_FAILED', currentStep: 'BINDING', completedSteps: [], errorCode: 'BINDING_CONFLICT', errorMessage: 'BINDING_CONFLICT' },
+      'FAILED',
+    );
+
+    expect(await screen.findByText(/cannot be retried/i)).toBeInTheDocument();
+    expect(screen.getByText('The setup could not be completed.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /change my details/i })).not.toBeInTheDocument();
+  });
+
+  it("follows PGR's steps, so the step the run is on is the one that spins", async () => {
+    await submitWith({ status: 'RUNNING', currentStep: 'PLATFORM_BASELINE', completedSteps: ['TENANT_FOUNDATION'] });
+
+    expect(await screen.findByText('Setting up the basics')).toBeInTheDocument();
+    expect(spinning(/setting up the basics/i)).toBe(true);
+    expect(spinning(/creating your workspace/i)).toBe(false);
+    expect(screen.getByText('Connecting your sign-in')).toBeInTheDocument();
+  });
+
+  it('spins on the first step not done after a resubmit, not on the stale currentStep', async () => {
+    // OnboardingRepository.resubmit clears completed_steps and leaves current_step alone.
+    await submitWith({ status: 'PENDING', currentStep: 'ORGANIZATION', completedSteps: [] });
+
+    expect(await screen.findByText('Creating your workspace')).toBeInTheDocument();
+    expect(spinning(/creating your workspace/i)).toBe(true);
+    expect(spinning(/setting up your account/i)).toBe(false);
+  });
+
+  it('spins nothing once the run has succeeded, even on a step code it does not know', async () => {
+    await submitWith({
+      status: 'SUCCEEDED',
+      currentStep: null,
+      completedSteps: ['TENANT_FOUNDATION', 'PLATFORM_BASELINE', 'FOUNDER_EMPLOYEE', 'ORGANIZATION', 'MEMBERSHIP', 'BINDING'],
+      lifecyclePublishedAt: null,
+    });
+
+    expect(await screen.findByText('Creating your employee record')).toBeInTheDocument();
+    expect(document.querySelector('li .animate-spin')).toBeNull();
+  });
+
+  it('still shows progress on a step code it does not know', async () => {
+    await submitWith({ status: 'RUNNING', currentStep: 'SOME_NEW_STEP', completedSteps: ['TENANT_FOUNDATION', 'PLATFORM_BASELINE'] });
+
+    expect(await screen.findByText('Creating your employee record')).toBeInTheDocument();
+    expect(spinning(/creating your employee record/i)).toBe(true);
   });
 });
 
@@ -420,6 +546,82 @@ describe('preferences follow the selected country (CCRS#2098)', () => {
     expect(mobile.getAttribute('placeholder')).not.toMatch(/^\+/);
   });
 
+  it('says what a mobile number looks like in the selected country (#2353)', async () => {
+    render(<SignupPage />);
+    await reachPreferences();
+
+    fireEvent.change(screen.getByLabelText(/base country/i), { target: { value: 'MZ' } });
+    expect(screen.getByText('+258')).toBeInTheDocument();
+    expect(
+      screen.getByText(/Mobile numbers in Mozambique have 9 digits and start with 82 to 87, for example 841234567\./),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText(/mobile number/i)).toHaveAttribute('placeholder', '841234567');
+  });
+});
+
+describe('a mobile number the rules refuse (#2353)', () => {
+  beforeEach(() => {
+    vi.mocked(api.session).mockResolvedValue(signedIn);
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [], selectionRequired: false, onboardingRequired: true });
+  });
+
+  const preferencesWith = async (country: string, zone: string, mobile: string) => {
+    render(<SignupPage />);
+    await completeAccountStep();
+    fireEvent.change(screen.getByLabelText(/base country/i), { target: { value: country } });
+    fireEvent.change(screen.getByLabelText(/timezone/i), { target: { value: zone } });
+    fireEvent.change(screen.getByLabelText(/financial year/i), { target: { value: 'JAN_DEC' } });
+    fireEvent.change(screen.getByLabelText(/mobile number/i), { target: { value: mobile } });
+    await waitFor(() => expect(screen.getByRole('button', { name: /continue/i })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: /continue/i }));
+  };
+
+  it('is caught under the field before anything is saved', async () => {
+    // The number from the issue's screenshot.
+    await preferencesWith('MZ', 'Africa/Maputo', '77777777777');
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('That isn’t a valid mobile number in Mozambique.');
+    expect(screen.getByLabelText(/mobile number/i)).toHaveAttribute('aria-invalid', 'true');
+    expect(api.createSignup).not.toHaveBeenCalled();
+  });
+
+  it('clears the complaint once the number is edited', async () => {
+    await preferencesWith('MZ', 'Africa/Maputo', '77777777777');
+    await screen.findByRole('alert');
+    fireEvent.change(screen.getByLabelText(/mobile number/i), { target: { value: '841234567' } });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('shows a server refusal under the field, never the field path', async () => {
+    vi.mocked(api.createSignup).mockRejectedValue(
+      new api.OnboardingError(400, 'ONBOARDING_VALIDATION_ERROR', 'Signup.tenantMetadata.tenantAdmin.mobileNumber is invalid'),
+    );
+    // Passes the egov-user rule, so it is the server's parser that refuses it.
+    await preferencesWith('KE', 'Africa/Nairobi', '199999999');
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('That isn’t a valid mobile number in Kenya.');
+    expect(screen.queryByText(/Signup\.tenantMetadata/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/could not continue/i)).not.toBeInTheDocument();
+  });
+
+  it('saves the bare national number, however it was typed', async () => {
+    vi.mocked(api.createSignup).mockResolvedValue({ id: 'signup-1', status: 'DRAFT' } as never);
+    await preferencesWith('KE', 'Africa/Nairobi', '+254 712 345 678');
+
+    await waitFor(() => expect(api.createSignup).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(api.createSignup).mock.calls[0][0].tenantMetadata?.tenantAdmin.mobileNumber).toBe('712345678');
+  });
+
+  it('puts other refusals in words in the banner', async () => {
+    vi.mocked(api.createSignup).mockRejectedValue(
+      new api.OnboardingError(409, 'ONBOARDING_IDENTIFIER_TAKEN', 'URL_SLUG is already reserved'),
+    );
+    await preferencesWith('KE', 'Africa/Nairobi', '712345678');
+
+    expect(await screen.findByText('That account URL is already taken. Choose a different one.')).toBeInTheDocument();
+    expect(screen.queryByText(/URL_SLUG/)).not.toBeInTheDocument();
+  });
+
 });
 
 describe('workspace readiness gate', () => {
@@ -444,65 +646,41 @@ describe('workspace readiness gate', () => {
     fireEvent.click(await screen.findByRole('button', { name: /kisumu county/i }));
   };
 
-  it('holds a workspace the backend has called identity-ready', async () => {
-    withTenant('IDENTITY_READY');
-
+  it('routes an invitation before creating or searching a signup', async () => {
+    vi.mocked(api.session).mockResolvedValue({ ...signedIn, pendingInvitations: [{ tenantId: 'invited', invitationVersion: 2, name: 'Invited workspace', invitedAt: 1, expiresAt: Date.now() + 60000 }] });
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [], selectionRequired: false, onboardingRequired: true });
     render(<SignupPage />);
-    await pickWorkspace();
-
-    expect(await screen.findByText(/workspace setup required/i)).toBeInTheDocument();
-    // No token is minted and nothing is mounted, so the calls that come back
-    // AccessDeniedException are never fired.
-    expect(api.selectContext).not.toHaveBeenCalled();
-  });
-
-  it('holds it without consulting the caller\'s own signup record', async () => {
-    // Readiness answers for the workspace. An invited admin has no signup at
-    // all and must still be held out of a half-built tenant.
-    withTenant('IDENTITY_READY');
-    vi.mocked(api.findSignup).mockResolvedValue(null);
-
-    render(<SignupPage />);
-    await pickWorkspace();
-
-    await screen.findByText(/workspace setup required/i);
+    expect(await screen.findByRole('button', { name: /accept invitation/i })).toBeInTheDocument();
     expect(api.findSignup).not.toHaveBeenCalled();
   });
 
-  it('offers no way to continue setup while there is no setup to continue', async () => {
-    withTenant('IDENTITY_READY');
-
+  it('shows memberships before pending invitations even when onboardingRequired is true', async () => {
+    vi.mocked(api.session).mockResolvedValue({ ...signedIn, pendingInvitations: [{ tenantId: 'invited', invitationVersion: 2, name: 'Invited workspace', invitedAt: 1, expiresAt: Date.now() + 60000 }] });
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [option()], selectionRequired: true, onboardingRequired: true });
     render(<SignupPage />);
-    await pickWorkspace();
-    await screen.findByText(/workspace setup required/i);
-
-    expect(screen.queryByRole('button', { name: /continue setup/i })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /sign out/i })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /kisumu county/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /accept invitation/i })).not.toBeInTheDocument();
+    expect(api.findSignup).not.toHaveBeenCalled();
   });
 
-  it('does not say setup is running when nothing is running', async () => {
-    withTenant('IDENTITY_READY');
-
+  it('does not allow accepting an expired invitation', async () => {
+    vi.mocked(api.session).mockResolvedValue({ ...signedIn, pendingInvitations: [{ tenantId: 'invited', invitationVersion: 2, name: 'Invited workspace', invitedAt: 1, expiresAt: 2 }] });
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [], selectionRequired: false, onboardingRequired: true });
     render(<SignupPage />);
-    await pickWorkspace();
-    await screen.findByText(/workspace setup required/i);
-
-    expect(screen.queryByText(/still being set up/i)).not.toBeInTheDocument();
-    expect(screen.getByText(/has not been installed yet/i)).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /accept invitation/i })).toBeDisabled();
   });
 
-  it('clears the DIGIT half of the session on sign out, not just the identity half', async () => {
-    withTenant('IDENTITY_READY');
-    window.localStorage.setItem('crs-auth-state', JSON.stringify({ authToken: 'stale' }));
+  it('does not consult the founder signup when entering an existing membership', async () => {
+    withTenant(); render(<SignupPage />);
+    await screen.findByRole('button', { name: /kisumu county/i });
+    expect(api.findSignup).not.toHaveBeenCalled();
+  });
 
-    render(<SignupPage />);
-    await pickWorkspace();
-    await screen.findByText(/workspace setup required/i);
-    fireEvent.click(screen.getByRole('button', { name: /sign out/i }));
-
-    await waitFor(() => expect(api.logout).toHaveBeenCalled());
-    // A surviving token would restore on a walk back to / or /manage.
-    await waitFor(() => expect(window.localStorage.getItem('crs-auth-state')).toBeNull());
+  it('shows selection errors without claiming setup is running', async () => {
+    withTenant(); vi.mocked(api.selectContext).mockRejectedValueOnce(new Error('Account locked'));
+    render(<SignupPage />); await pickWorkspace();
+    expect(await screen.findByText('Account locked')).toBeInTheDocument();
+    expect(screen.queryByText(/workspace setup is running/i)).not.toBeInTheDocument();
   });
 
   it('lets a tenant through when the backend has stated no readiness at all', async () => {
@@ -627,7 +805,7 @@ describe('resuming a run that was already going', () => {
 
     await waitFor(() => expect(api.submitSignup).toHaveBeenCalledWith('s1', expect.any(String)));
     // Real progress, read from the operation rather than invented.
-    expect(await screen.findByText(/creating your account/i)).toBeInTheDocument();
+    expect(await screen.findByText(/creating your workspace/i)).toBeInTheDocument();
   });
 
   it('surfaces the retry on a resumed retryable failure', async () => {
@@ -645,7 +823,8 @@ describe('resuming a run that was already going', () => {
     render(<SignupPage />);
 
     expect(await screen.findByRole('button', { name: /try again/i })).toBeInTheDocument();
-    expect(screen.getByText(/DIGIT is not answering/)).toBeInTheDocument();
+    expect(screen.getByText(/usually temporary/)).toBeInTheDocument();
+    expect(screen.getByText('Reference: DIGIT_UNAVAILABLE')).toBeInTheDocument();
   });
 
   it('invents no step detail when the operation cannot be recovered', async () => {
@@ -655,8 +834,8 @@ describe('resuming a run that was already going', () => {
     render(<SignupPage />);
     await screen.findByText(/setting up kisumu county/i);
 
-    expect(screen.queryByText(/creating your account/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/granting your permissions/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/creating your workspace/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/connecting your sign-in/i)).not.toBeInTheDocument();
   });
 
   it('does not reopen the wizard for an ACTIVE signup whose tenant has not surfaced', async () => {
@@ -666,5 +845,258 @@ describe('resuming a run that was already going', () => {
 
     expect(await screen.findByText(/opening your workspace/i)).toBeInTheDocument();
     expect(screen.queryByLabelText(/account name/i)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * PGR marks the run SUCCEEDED, then publishes the outcome to the identity side
+ * on a later tick. Until then the tenant list is empty and selecting the tenant
+ * is refused, so success waits for `lifecyclePublishedAt` (CCRS#2303).
+ */
+describe('a success that is not yet published', () => {
+  const provisioning = {
+    id: 's1',
+    status: 'PROVISIONING' as const,
+    accountName: 'Kisumu County',
+    urlSlug: 'kisumu-county',
+    countryCode: 'KE',
+    languages: ['en'],
+    version: 4,
+    createdAt: 0,
+    updatedAt: 0,
+  };
+  const succeeded = {
+    id: 'op1',
+    signupId: 's1',
+    status: 'SUCCEEDED' as const,
+    currentStep: null,
+    completedSteps: ['TENANT_FOUNDATION', 'PLATFORM_BASELINE', 'FOUNDER_HRMS', 'ORGANIZATION', 'MEMBERSHIP', 'BINDING'],
+    errorCode: null,
+    errorMessage: null,
+    attempt: 1,
+    lifecyclePublishedAt: null,
+    createdAt: 0,
+    updatedAt: 0,
+  };
+  const kisumu = { organizationAlias: 'kisumu-county', tenantId: 'kisumucounty', name: 'Kisumu County', roles: [] };
+
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.mocked(api.session).mockResolvedValue(signedIn);
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [], selectionRequired: false, onboardingRequired: true });
+    vi.mocked(api.findSignup).mockResolvedValue(provisioning as never);
+    vi.mocked(api.submitSignup).mockResolvedValue(succeeded as never);
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const tick = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+
+  it('keeps polling instead of reading a tenant list that is not there yet', async () => {
+    // A fresh object per read, as the network gives; the poll re-arms on change.
+    vi.mocked(api.findOperation).mockImplementation(async () => ({ ...succeeded }) as never);
+
+    render(<SignupPage />);
+    expect(await screen.findByText(/finishing setup/i)).toBeInTheDocument();
+    await tick(3000);
+    await tick(3000);
+
+    expect(api.findOperation).toHaveBeenCalledTimes(2);
+    // Only bootstrap's own read; nothing treated SUCCEEDED as ready.
+    expect(api.tenants).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(/choose a workspace/i)).not.toBeInTheDocument();
+  });
+
+  it('opens the workspace once the outcome is published', async () => {
+    vi.mocked(api.findOperation).mockResolvedValue({ ...succeeded, lifecyclePublishedAt: 1 } as never);
+    vi.mocked(api.selectContext).mockResolvedValue({
+      access_token: 't',
+      token_type: 'bearer',
+      expires_in: 3600,
+      scope: '',
+      UserRequest: { uuid: 'u', userName: 'kcbff', name: 'Founder', emailId: 'f@x.test', tenantId: 'kisumucounty', roles: [] },
+    });
+
+    render(<SignupPage />);
+    await screen.findByText(/finishing setup/i);
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [kisumu], selectionRequired: true, onboardingRequired: false });
+    await tick(3000);
+
+    // Single workspace enters directly without showing choose a workspace picker
+    await waitFor(() => expect(api.selectContext).toHaveBeenCalledWith('kisumucounty'));
+    expect(screen.queryByText(/choose a workspace/i)).not.toBeInTheDocument();
+  });
+
+  it('shows the workspace picker when multiple workspaces exist after publishing', async () => {
+    vi.mocked(api.findOperation).mockResolvedValue({ ...succeeded, lifecyclePublishedAt: 1 } as never);
+
+    render(<SignupPage />);
+    await screen.findByText(/finishing setup/i);
+    const otherTenant = { organizationAlias: 'nairobi', tenantId: 'nairobi', name: 'Nairobi City', roles: [] };
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [kisumu, otherTenant], selectionRequired: true, onboardingRequired: false });
+    await tick(3000);
+
+    expect(await screen.findByText(/choose a workspace/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /kisumu county/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /nairobi city/i })).toBeInTheDocument();
+  });
+
+  it('falls back to the workspace picker if automatic entry fails for a single workspace', async () => {
+    vi.mocked(api.findOperation).mockResolvedValue({ ...succeeded, lifecyclePublishedAt: 1 } as never);
+    vi.mocked(api.selectContext).mockRejectedValue(new Error('Network failure'));
+
+    render(<SignupPage />);
+    await screen.findByText(/finishing setup/i);
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [kisumu], selectionRequired: true, onboardingRequired: false });
+    await tick(3000);
+
+    expect(await screen.findByText(/choose a workspace/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /kisumu county/i })).toBeInTheDocument();
+  });
+
+  it('says it is almost ready after a long wait, and slows down without giving up', async () => {
+    // A fresh object per read, as the network gives; the poll re-arms on change.
+    vi.mocked(api.findOperation).mockImplementation(async () => ({ ...succeeded }) as never);
+
+    render(<SignupPage />);
+    await screen.findByText(/finishing setup/i);
+    await tick(120_000);
+
+    expect(await screen.findByText(/almost ready/i)).toBeInTheDocument();
+    const calls = vi.mocked(api.findOperation).mock.calls.length;
+    await tick(15_000);
+    expect(api.findOperation).toHaveBeenCalledTimes(calls + 1);
+    expect(screen.queryByText(/choose a workspace/i)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * The checklist reads the operation the worker checkpoints, so the poll must
+ * outlive answers that change nothing, come back empty or never return, and a
+ * single failed check is a blip rather than an error.
+ */
+describe('polling while the worker runs', () => {
+  const provisioning = {
+    id: 's1',
+    status: 'PROVISIONING' as const,
+    accountName: 'Kisumu County',
+    urlSlug: 'kisumu-county',
+    countryCode: 'KE',
+    languages: ['en'],
+    version: 4,
+    createdAt: 0,
+    updatedAt: 0,
+  };
+  const running = {
+    id: 'op1',
+    signupId: 's1',
+    status: 'RUNNING' as const,
+    currentStep: 'ORGANIZATION',
+    completedSteps: ['TENANT_FOUNDATION'],
+    errorCode: null,
+    errorMessage: null,
+    attempt: 1,
+    lifecyclePublishedAt: null,
+    createdAt: 0,
+    updatedAt: 0,
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.mocked(api.session).mockResolvedValue(signedIn);
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [], selectionRequired: false, onboardingRequired: true });
+    vi.mocked(api.findSignup).mockResolvedValue(provisioning as never);
+    vi.mocked(api.submitSignup).mockResolvedValue(running as never);
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const tick = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+  const start = async () => {
+    render(<SignupPage />);
+    expect(await screen.findByText(/setting up kisumu county/i)).toBeInTheDocument();
+  };
+
+  it('keeps polling when an answer changes nothing or comes back empty', async () => {
+    // The same object every time: a poll re-armed only on change would stop after the first.
+    vi.mocked(api.findOperation).mockResolvedValueOnce(null).mockResolvedValue(running as never);
+    await start();
+    await tick(3000);
+    await tick(3000);
+    await tick(3000);
+    expect(api.findOperation).toHaveBeenCalledTimes(3);
+  });
+
+  it('abandons a check that never answers and asks again', async () => {
+    vi.mocked(api.findOperation).mockImplementationOnce(
+      (_id: string, signal?: AbortSignal) =>
+        new Promise((_resolve, reject) => signal?.addEventListener('abort', () => reject(new Error('aborted')))) as never,
+    ).mockResolvedValue(running as never);
+    await start();
+    await tick(3000);
+    expect(api.findOperation).toHaveBeenCalledTimes(1);
+    await tick(10_000);
+    await tick(3000);
+    expect(api.findOperation).toHaveBeenCalledTimes(2);
+    expect(screen.queryByText(/aborted/i)).not.toBeInTheDocument();
+  });
+
+  it('shows an error only after three failed checks in a row, and clears it once one succeeds', async () => {
+    vi.mocked(api.findOperation)
+      .mockRejectedValueOnce(new Error('Status check failed'))
+      .mockRejectedValueOnce(new Error('Status check failed'))
+      .mockRejectedValueOnce(new Error('Status check failed'))
+      .mockResolvedValue(running as never);
+    await start();
+    await tick(3000);
+    await tick(3000);
+    expect(screen.queryByText(/status check failed/i)).not.toBeInTheDocument();
+    await tick(3000);
+    expect(await screen.findByText(/status check failed/i)).toBeInTheDocument();
+    await tick(3000);
+    await waitFor(() => expect(screen.queryByText(/status check failed/i)).not.toBeInTheDocument());
+    expect(api.findOperation).toHaveBeenCalledTimes(4);
+  });
+});
+
+describe('required marks', () => {
+  /** The control a label names, and whether that label carries the red asterisk. */
+  const field = (label: RegExp) => {
+    const control = screen.getByLabelText(label);
+    const tag = document.querySelector(`label[for="${control.id}"]`);
+    return { control, marked: !!tag?.querySelector('[data-required-mark]') };
+  };
+
+  it('marks the identity a sign-up link needs', async () => {
+    vi.mocked(api.session).mockResolvedValue({ authenticated: false });
+    vi.mocked(api.authMethods).mockResolvedValue({
+      methods: [{ id: 'magic-link', label: 'Email me a sign-in link', type: 'magic_link' }],
+    });
+    render(<SignupPage />);
+    await screen.findByLabelText(/first name/i);
+    for (const label of [/first name/i, /last name/i, /email address/i]) {
+      const { control, marked } = field(label);
+      expect(marked, String(label)).toBe(true);
+      expect(control, String(label)).toBeRequired();
+    }
+  });
+
+  it('marks every account and preference field, each one required to continue', async () => {
+    vi.mocked(api.session).mockResolvedValue(signedIn);
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [], selectionRequired: false, onboardingRequired: true });
+    render(<SignupPage />);
+    await screen.findByLabelText(/account name/i);
+    for (const label of [/account name/i, /account code/i]) {
+      const { control, marked } = field(label);
+      expect(marked, String(label)).toBe(true);
+      expect(control, String(label)).toHaveAttribute('aria-required', 'true');
+    }
+
+    await completeAccountStep();
+    for (const label of [/base country/i, /timezone/i, /financial year/i, /account url/i, /mobile number/i]) {
+      const { control, marked } = field(label);
+      expect(marked, String(label)).toBe(true);
+      expect(control, String(label)).toHaveAttribute('aria-required', 'true');
+    }
+    // Languages is a row of toggles under a heading, not a labelled control.
+    expect(screen.getByText('Languages').querySelector('[data-required-mark]')).not.toBeNull();
   });
 });

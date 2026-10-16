@@ -37,7 +37,7 @@ process.on("exit", () => {
   }
 });
 
-const { isCurrentAssignee } = require(OUT);
+const { currentAssigneesInOccupancy, isCurrentAssignee } = require(OUT);
 
 // The chain from the reported complaint PG-PGR-2026-09-23-284820.
 const AD_LME = "53d85ed2-445c-42cb-8b2b-c84861a1143c";
@@ -82,4 +82,59 @@ test("a malformed assignee entry never matches", () => {
 
 test("one match among several co-assignees is enough", () => {
   assert.equal(isCurrentAssignee([{ uuid: AD_LME_SUP }, { uuid: AD_LME_DIR }], AD_LME_DIR), true);
+});
+
+const PENDING_AT_LME = "pending-at-lme-state-uuid";
+const PENDING_FOR_REASSIGNMENT = "pending-for-reassignment-state-uuid";
+
+const transition = ({ state = PENDING_AT_LME, assignes, action }) => ({
+  action,
+  state: { uuid: state },
+  assignes,
+});
+
+test("a self-loop without assignees does not erase the holder", () => {
+  const history = [
+    transition({ action: "ESCALATE", assignes: [] }),
+    transition({ action: "ASSIGN", assignes: [{ uuid: AD_LME_DIR }] }),
+  ];
+
+  const holder = currentAssigneesInOccupancy(history);
+  assert.deepEqual(holder, [{ uuid: AD_LME_DIR }]);
+  assert.equal(isCurrentAssignee(holder, AD_LME_DIR), true);
+});
+
+test("multiple assignee-less self-loops retain the newest named holder", () => {
+  const history = [
+    transition({ action: "COMMENT" }),
+    transition({ action: "ESCALATE", assignes: null }),
+    transition({ action: "ASSIGN", assignes: [AD_LME_SUP] }),
+  ];
+
+  assert.deepEqual(currentAssigneesInOccupancy(history), [AD_LME_SUP]);
+});
+
+test("walking stops at a state boundary instead of resurrecting an old owner", () => {
+  const history = [
+    transition({ state: PENDING_FOR_REASSIGNMENT, action: "REASSIGN", assignes: [] }),
+    transition({ action: "ASSIGN", assignes: [{ uuid: AD_LME }] }),
+  ];
+
+  assert.deepEqual(currentAssigneesInOccupancy(history), []);
+});
+
+test("the first named assignee in the current occupancy wins", () => {
+  const history = [
+    transition({ action: "COMMENT", assignes: [] }),
+    transition({ action: "ESCALATE", assignes: [{ uuid: AD_LME_DIR }] }),
+    transition({ action: "ASSIGN", assignes: [{ uuid: AD_LME }] }),
+  ];
+
+  assert.deepEqual(currentAssigneesInOccupancy(history), [{ uuid: AD_LME_DIR }]);
+});
+
+test("missing or malformed workflow history has no holder", () => {
+  assert.deepEqual(currentAssigneesInOccupancy(undefined), []);
+  assert.deepEqual(currentAssigneesInOccupancy([]), []);
+  assert.deepEqual(currentAssigneesInOccupancy([transition({ assignes: [null, {}, ""] })]), []);
 });

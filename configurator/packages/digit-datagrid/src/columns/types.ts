@@ -35,6 +35,8 @@ export interface MutationOptions {
   onSuccess?: (data: unknown) => void;
   onError?: (error: Error) => void;
   transform?: (data: Record<string, unknown>) => Record<string, unknown>;
+  /** Data-provider `meta` sent with inline-edit updates and row deletes. */
+  meta?: Record<string, unknown>;
 }
 
 export interface DigitDatagridProps<RecordType extends RaRecord = RaRecord> {
