@@ -1784,6 +1784,10 @@
     # after this can't leave it live. (Vinoth review: previously pinned ~190
     # lines after up -d, opening the window on every image-pin-recreate redeploy.)
     # Override with `kong_cors_origins` in host_vars for extra origins.
+    # `kong_cors_credentials: true` adds `credentials: true` after the pinned
+    # list, for a cross-site dev frontend whose onboarding calls carry the
+    # identity BFF cookie. Safe only because the wildcard assert below still
+    # holds: Kong then echoes listed origins, never an arbitrary one.
     #
     # kong.yml is a single-file bind mount, so the edit MUST preserve the inode
     # (#1683). ansible.builtin.replace os.rename()s a temp file over it (new
@@ -1804,7 +1808,7 @@
       ansible.builtin.replace:
         path: "{{ digit_dir }}/kong/.kong.yml.pinned"
         regexp: "(origins:\\s+# kong-cors-origins-marker\\n)(?:[ \\t]*-[ \\t]*.*\\n)+"
-        replace: "\\1{% for o in (kong_cors_origins | default([ ('https://' if (tls_enabled | default(true)) else 'http://') ~ domain ])) %}    - '{{ o }}'\n{% endfor %}"
+        replace: "\\1{% for o in (kong_cors_origins | default([ ('https://' if (tls_enabled | default(true)) else 'http://') ~ domain ])) %}    - '{{ o }}'\n{% endfor %}{% if kong_cors_credentials | default(false) | bool %}    credentials: true\n{% endif %}"
       register: kong_cors_pin
 
     # Real OTP: the two request-termination mocks on /user-otp and /otp must go, or
@@ -7491,6 +7495,107 @@
         - enable_keycloak | default(false)
         - nginx_features.keycloak | default(false)
 
+    # Deploy-seeded roots (#2398). A root the deploy seeds (state_root) never went
+    # through signup, so nothing else gives it the Organization that every staff
+    # sign-in and its /<slug>/digit-ui/ route need. The BFF backfill creates one
+    # (alias and URL slug = the tenant id) for each root in
+    # IDENTITY_TENANT_ROUTE_BACKFILL_ROOTS that no Organization maps yet. It is
+    # idempotent and never renames, overwrites or adopts a mapping. The root's PGR
+    # onboarding workspace needs no write: a tenant with no workspace row already
+    # reads DONE, so its admin lands on /manage. The control plane is not routed
+    # through Kong, so this calls the BFF's loopback port. The roots are
+    # identity_route_backfill_roots (group_vars), never `pg`, and empty on a host
+    # rooted at `pg`.
+    - name: "identity-bootstrap — Organization route for the deploy-seeded root"
+      ansible.builtin.uri:
+        url: http://127.0.0.1:18400/internal/identity/v1/tenant-routes/_backfill
+        method: POST
+        headers:
+          Authorization: "Bearer {{ identity_secrets.identity_control_plane_token }}"
+        body_format: json
+        body: {actor: ansible-deploy}
+        status_code: [200]
+        timeout: 60
+      register: identity_route_backfill
+      # Retry only what clears by itself: no answer, a gateway error, or a 503 the
+      # BFF's error contract marks retryable (DIGIT or the Keycloak admin API
+      # failed). 401, 500 and CONTROL_PLANE_NOT_CONFIGURED need a change first.
+      until: >-
+        (identity_route_backfill.status | default(-1) | int) not in [-1, 502, 503, 504]
+        or ((identity_route_backfill.status | int) == 503
+            and (identity_route_backfill.json.code | default('')) not in ['DIGIT_UNAVAILABLE', 'IDENTITY_UNAVAILABLE'])
+      retries: 6
+      delay: 10
+      changed_when: (identity_route_backfill.json.created | default([])) | length > 0
+      failed_when: false
+      no_log: true
+      when:
+        - enable_keycloak | default(false)
+        - identity_route_backfill_roots | length > 0
+
+    - name: "identity-bootstrap — fail: identity-bff rejected the control-plane token"
+      ansible.builtin.fail:
+        msg: >-
+          identity-bff answered 401 to the tenant route backfill: the running container holds a
+          different IDENTITY_CONTROL_PLANE_TOKEN than this deploy rendered into {{ digit_dir }}/.env,
+          so it was not recreated after the token changed. Recreate it (in {{ digit_dir }}:
+          COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} up -d
+          --force-recreate identity-bff) and rerun the deploy.
+      when:
+        - identity_route_backfill is not skipped
+        - (identity_route_backfill.status | default(-1) | int) == 401
+
+    # On a 200 the BFF lists every root it processed, so a set that differs from
+    # identity_route_backfill_roots means its container env predates this deploy's
+    # .env (not recreated after the roots changed). Read by the ACTION below and by
+    # "validate — summary".
+    - name: "identity-bootstrap — roots left without an Organization route"
+      when: identity_route_backfill is not skipped
+      vars:
+        _r: "{{ identity_route_backfill.json | default({}) }}"
+        _expected: "{{ identity_route_backfill_roots.split(',') | sort }}"
+        _reported: >-
+          {{ ((_r.created | default([]))
+              + (((_r.skipped | default([])) + (_r.conflicts | default([]))) | map(attribute='tenantId') | list))
+             | unique | sort }}
+        _unrouted: >-
+          {{ (_r.skipped | default([]) | rejectattr('reason', 'equalto', 'ALREADY_MAPPED') | list)
+             + (_r.conflicts | default([])) }}
+      ansible.builtin.set_fact:
+        identity_route_backfill_problem: >-
+          {%- if (identity_route_backfill.status | default(-1) | int) != 200 -%}
+          HTTP {{ identity_route_backfill.status | default('n/a') }}{{ (' ' ~ _r.code) if _r.code is defined else '' }}
+          {{ _r.error | default(identity_route_backfill.msg | default('no response')) }}
+          {%- else -%}
+          {{ _unrouted | map(attribute='tenantId') | zip(_unrouted | map(attribute='reason')) | map('join', ' ') | join(', ') }}
+          {%- if _reported != _expected -%}
+          {{ '; ' if _unrouted else '' }}identity-bff processed {{ _reported | join(',') or 'no roots' }}, not {{ _expected | join(',') }}
+          {%- endif -%}
+          {%- endif -%}
+
+    - name: "identity-bootstrap — ACTION: a deploy-seeded root has no Organization route"
+      when: identity_route_backfill_problem | default('') | length > 0
+      ansible.builtin.debug:
+        msg: >-
+          Tenant route backfill for {{ identity_route_backfill_roots }}: {{ identity_route_backfill_problem }}.
+          A root without a route has no staff sign-in and its /<slug>/digit-ui/ answers 404.
+          NOT_ACTIVE: no active tenant.tenants record yet (check the MCP tenant bootstrap above).
+          NOT_ROOT: only a root tenant (no dot) gets a route; drop it from
+          identity_tenant_route_backfill_roots. INVALID_SLUG: the tenant id is not a usable URL
+          slug (lowercase letters, digits and hyphens, 2-63 characters, at least two letters, not
+          a reserved path such as api or digit-ui); the backfill never picks another slug.
+          SLUG_TAKEN: a self-serve workspace already uses that URL slug. ALIAS_TAKEN: Keycloak
+          refused the Organization (409) because an Organization or Organization group in the
+          realm already holds that alias or slug, or already maps the tenant; look in the realm,
+          not at self-serve workspaces. "identity-bff processed X, not Y": the container still
+          has an older IDENTITY_TENANT_ROUTE_BACKFILL_ROOTS; recreate it so it reads
+          {{ digit_dir }}/.env. HTTP 503: DIGIT_UNAVAILABLE or IDENTITY_UNAVAILABLE means DIGIT or
+          the Keycloak admin API failed (the error names the call; a Keycloak 403 is a
+          permission problem, not an outage); CONTROL_PLANE_NOT_CONFIGURED means identity-bff
+          has no control-plane token. The next deploy retries; so does
+          POST http://127.0.0.1:18400/internal/identity/v1/tenant-routes/_backfill with
+          IDENTITY_CONTROL_PLANE_TOKEN from {{ digit_dir }}/.env as the Bearer token.
+
     # ────────────────────────────────────────────────────────────────
     # UI-tenant fall-back: until the operator's chosen state_tenant_id is
     # bootstrapped (via /v1/tenant/bootstrap), ADMIN doesn't exist there
@@ -7617,6 +7722,10 @@
           - "Gatus /status/:        {{ '200 OK' if nginx_features.status | default(true) else 'SKIPPED (disabled)' }}"
           - "MCP /mcp:              {{ '200 OK' if nginx_features.mcp | default(false) else 'SKIPPED (disabled)' }}"
           - "Auth flow:             access_token minted"
+          - >-
+            Root tenant routes:    {{ 'SKIPPED' if identity_route_backfill_problem is not defined
+            else ('OK (' ~ identity_route_backfill_roots ~ ')') if identity_route_backfill_problem | length == 0
+            else 'MISSING (' ~ identity_route_backfill_problem ~ '): no staff sign-in there; see the ACTION above' }}
           - "MDMS StateInfo:        non-empty"
           - "OpenBao:               unsealed + initialized"
           - "===================================="
@@ -8441,6 +8550,16 @@
           writes will 403. Fix the mdms-v2 /mdms-v2/defaultdata/_create pagination or
           restore the rows directly, then re-run with --tags master-repair. Set
           `tolerate_bootstrap_failures: true` to continue past this.
+
+    # ─────────── Revoked role-action grants (#2239) ───────────
+    # Every deploy, every tenant: see tasks/revoke-role-grants.yml. After
+    # master-repair, so a repair copying from pg cannot bring a revoked grant back.
+    - name: "revoke-grants — deactivate role-action grants this release revoked"
+      tags: ['revoke-grants']
+      ansible.builtin.include_tasks:
+        file: tasks/revoke-role-grants.yml
+        apply:
+          tags: ['revoke-grants']
 
     # ─────────── Config-driven notification MDMS seed ───────────
     # A DEPLOY UPGRADES SOFTWARE ONLY. This step creates the notification schemas (both

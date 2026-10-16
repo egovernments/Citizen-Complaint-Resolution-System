@@ -341,6 +341,9 @@ export function parseBoundaryExcel(workbook: XLSX.WorkBook): {
 
   // Track seen boundary types for hierarchy
   const seenTypes = new Set<string>();
+  // The sheet rows each code is on. boundary-service keeps one boundary per code, so a repeated
+  // code would become one boundary, named by whichever row's label was written last (#2456).
+  const rowsByCode = new Map<string, number[]>();
 
   jsonData.forEach((row, index) => {
     const code = String(row['code'] || row['Code'] || row['boundaryCode'] || '').trim();
@@ -365,6 +368,9 @@ export function parseBoundaryExcel(workbook: XLSX.WorkBook): {
       });
       return;
     }
+    // Blank rows aren't in jsonData, so the sheet's own row number comes from xlsx.
+    const sheetRow = ((row as { __rowNum__?: number }).__rowNum__ ?? index + 1) + 1;
+    rowsByCode.set(code, [...(rowsByCode.get(code) ?? []), sheetRow]);
 
     if (!name) {
       errors.push({
@@ -399,8 +405,21 @@ export function parseBoundaryExcel(workbook: XLSX.WorkBook): {
       parentCode,
       latitude,
       longitude,
+      row: sheetRow,
     });
   });
+
+  for (const [code, rows] of rowsByCode) {
+    if (rows.length < 2) continue;
+    errors.push({
+      row: rows[0],
+      rows,
+      field: 'code',
+      value: code,
+      message: `The code "${code}" is used on rows ${rows.join(', ')}. Each boundary needs its own code.`,
+      code: 'DUPLICATE_CODE',
+    });
+  }
 
   return {
     data: boundaries,
@@ -747,15 +766,8 @@ export function parseEmployeeExcel(workbook: XLSX.WorkBook): {
       dateOfAppointment = String(doaRaw ?? '').trim() || undefined;
     }
 
-    if (!employeeCode) {
-      errors.push({
-        row: index + 2,
-        field: 'employeeCode',
-        message: 'Employee code is required',
-        code: 'REQUIRED_FIELD',
-      });
-      return;
-    }
+    // employeeCode is optional: the bulk imports give a blank one the next free
+    // EMP_ code (planEmployeeCodes, #2456).
 
     if (!name) {
       errors.push({
@@ -767,9 +779,9 @@ export function parseEmployeeExcel(workbook: XLSX.WorkBook): {
       return;
     }
 
-    // userName is optional at parse time — callers (Phase 4, bulk import) derive
-    // `firstname.lastname` from `name` when the Excel cell is blank. Keeping it
-    // required here forced operators to duplicate the name column unnecessarily.
+    // userName is not used: HRMS makes every employee's username their code
+    // (#2456), so the templates no longer have the column and an older sheet's
+    // value is ignored.
 
     if (!mobileNumber) {
       errors.push({

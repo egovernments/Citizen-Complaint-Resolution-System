@@ -1493,6 +1493,45 @@ describe('tenant-master repair is report-only unless opted in', () => {
   });
 });
 
+describe('revoked role-action grants are deactivated on every deploy (#2239)', () => {
+  // Review of #2395 (4282485797): CSR -> /user/users/_createnovalidate stayed active on
+  // existing roots while the same deploy started giving CSR to every new employee.
+  const playbook = read('local-setup/ansible/playbook-deploy.yml');
+  const tasks = read('local-setup/ansible/tasks/revoke-role-grants.yml');
+  const sql = read('local-setup/db/revoke-role-grants.sql');
+  const include = playbook.slice(playbook.indexOf('revoke-grants — deactivate role-action grants this release revoked'));
+  const includeTask = include.slice(0, include.indexOf('\n    - name:'));
+
+  test('it runs on every box, pg included', () => {
+    expect(includeTask).toContain('tasks/revoke-role-grants.yml');
+    expect(includeTask).not.toContain('when:');
+  });
+
+  test('it runs after master-repair, so a repair cannot copy a grant back', () => {
+    expect(playbook.indexOf('revoke-grants — deactivate role-action grants')).toBeGreaterThan(
+      playbook.indexOf('master-repair — fail when the tenant cannot be repaired'));
+  });
+
+  test('the SQL only deactivates CSR -> 605 role-actions, and only active ones', () => {
+    expect(sql).toMatch(/UPDATE eg_mdms_data\s+SET isactive = false,/);
+    expect(sql).toContain("WHERE schemacode = 'ACCESSCONTROL-ROLEACTIONS.roleactions'");
+    expect(sql).toMatch(/AND isactive\s/);
+    expect(sql).toContain("IN (('CSR', '605'))");
+    expect(sql).not.toMatch(/\b(DELETE|INSERT)\b/);
+  });
+
+  test('a database error fails the deploy, and a restart is followed by a readiness wait', () => {
+    const run = tasks.slice(tasks.indexOf('revoke-grants — deactivate revoked role-action grants'));
+    expect(run.slice(0, run.indexOf('- name:', 10))).toContain('-v ON_ERROR_STOP=1');
+    expect(run.slice(0, run.indexOf('- name:', 10))).not.toContain('failed_when');
+    const restart = tasks.indexOf('revoke-grants — restart egov-accesscontrol');
+    const wait = tasks.indexOf('revoke-grants — wait for egov-accesscontrol to come back');
+    expect(restart).toBeGreaterThan(-1);
+    expect(wait).toBeGreaterThan(restart);
+    expect(tasks.slice(wait, wait + 600)).toContain('/access/health');
+  });
+});
+
 // Kanav review of #2097, second round.
 describe('notification deploy tasks (Kanav review of #2097, round 2)', () => {
   const playbook = read('local-setup/ansible/playbook-deploy.yml');
@@ -2185,8 +2224,33 @@ describe('D26 legacy identity paths are retired', () => {
   // Low (Dhruv, #2271 review 3): ~38 Playwright navigations across the spec
   // and page files still opened tenantless /digit-ui/<route> URLs, which D26
   // turns into a 404 or a redirect to the deployment default. They go through
-  // appBase() (/<E2E_TENANT_SLUG>/digit-ui) now. The one tenantless URL left
-  // is the static globalConfigs.js that loginViaApi uses to set the origin.
+  // appBase() or surfacePath() (/<IDENTITY_TEST_TENANT_SLUG>/digit-ui) now.
+  // #2398 deleted the city-tenant specs and the HRMS UI checks (HRMS is not
+  // enabled in digit-ui), so fewer navigations remain.
+  // A navigation is either a string/template argument (`goto(`${appBase()}/x`)`)
+  // or a bare surfacePath() call (`goto(surfacePath('citizen', 'login'))`).
+  const scanNavigations = (body: string) => {
+    let scoped = 0;
+    const tenantless: string[] = [];
+    for (const m of body.matchAll(/goto\(\s*([`'"])([^`'"]*)/g)) {
+      if (m[2].includes('${appBase()}') || m[2].includes('${surfacePath(')) scoped += 1;
+      if (/^(?:\$\{[A-Za-z_.]+\})?\/digit-ui\//.test(m[2]) && !m[2].endsWith('/digit-ui/globalConfigs.js')) {
+        tenantless.push(m[2]);
+      }
+    }
+    scoped += [...body.matchAll(/goto\(\s*surfacePath\(/g)].length;
+    return { scoped, tenantless };
+  };
+
+  test('the navigation scan counts both argument forms and flags tenantless routes', () => {
+    expect(scanNavigations([
+      "await page.goto(surfacePath('citizen', 'login'), { waitUntil: 'domcontentloaded' });",
+      'await page.goto(`${appBase()}/citizen`);',
+      'await page.goto(`${BASE_URL}${surfacePath(\'employee\', \'user/login\')}`);',
+      "await page.goto('/digit-ui/employee/pgr/inbox');",
+    ].join('\n'))).toEqual({ scoped: 3, tenantless: ['/digit-ui/employee/pgr/inbox'] });
+  });
+
   test('Playwright specs navigate only to tenant-scoped digit-ui routes', () => {
     const e2eDir = path.join(REPO_ROOT, 'local-setup/tests/e2e');
     const files = (fs.readdirSync(e2eDir, { recursive: true }) as string[])
@@ -2195,16 +2259,13 @@ describe('D26 legacy identity paths are retired', () => {
     let scoped = 0;
     for (const file of files) {
       const body = fs.readFileSync(path.join(e2eDir, file), 'utf8');
-      for (const m of body.matchAll(/goto\(\s*([`'"])([^`'"]*)/g)) {
-        if (m[2].includes('${appBase()}')) scoped += 1;
-        if (/^(?:\$\{[A-Za-z_.]+\})?\/digit-ui\//.test(m[2]) && !m[2].endsWith('/digit-ui/globalConfigs.js')) {
-          tenantless.push(`${file}: ${m[2]}`);
-        }
-      }
+      const found = scanNavigations(body);
+      scoped += found.scoped;
+      tenantless.push(...found.tenantless.map((route) => `${file}: ${route}`));
       expect([file, /^const \w+ = '\/digit-ui\//m.test(body)]).toEqual([file, false]);
     }
     expect(tenantless).toEqual([]);
-    expect(scoped).toBeGreaterThanOrEqual(38);
+    expect(scoped).toBeGreaterThanOrEqual(23);
   });
 
   test('digit-ui-v2 cannot be deployed after its citizen identity removal', () => {
@@ -2233,7 +2294,8 @@ describe('D26 legacy identity paths are retired', () => {
       .toContain("/identity/v1/citizen/otp/_send");
     expect(read('tests/integration-tests/tests/employee/login.spec.ts'))
       .toContain("staffContext(page");
+    // Any request context: the spec selects on its own browser context, not a page.
     expect(read('tests/integration-tests/tests/keycloak/new-citizen-provisioning.spec.ts'))
-      .toContain("selectContext(page.request, BASE_URL, 'citizen'");
+      .toMatch(/selectContext\([^)]*'citizen'/);
   });
 });

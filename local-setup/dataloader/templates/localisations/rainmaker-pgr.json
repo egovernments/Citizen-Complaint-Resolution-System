@@ -2803,7 +2803,7 @@
     },
     {
         "code": "CS_REJECT_COMPLAINT",
-        "message": "Employee Name",
+        "message": "Rejection Reason",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },

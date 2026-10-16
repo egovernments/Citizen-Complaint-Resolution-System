@@ -9,4 +9,6 @@ export const INVITE_ERRORS: Record<string, string> = {
   ADMIN_REQUIRED: 'Only an admin of this workspace can send invitations.',
   IDENTITY_BUSY: 'Their account is being changed right now. Try again in a moment.',
   BINDING_BUSY: 'Their account is being changed right now. Try again in a moment.',
+  SESSION_REQUIRED: 'Your sign-in has ended. Sign out, sign in again, and try again.',
+  SESSION_REVOKED: 'Your sign-in has ended. Sign out, sign in again, and try again.',
 };

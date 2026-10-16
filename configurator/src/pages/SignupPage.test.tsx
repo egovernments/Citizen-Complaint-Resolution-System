@@ -25,7 +25,7 @@ vi.mock('@/api/onboarding', async () => {
     updateSignup: vi.fn(),
     checkIdentifier: vi.fn(),
     submitSignup: vi.fn(),
-    findOperation: vi.fn(),
+    searchOperation: vi.fn(),
     selectContext: vi.fn(),
     startSignIn: vi.fn(),
     requestMagicLinkSignup: vi.fn(),
@@ -37,9 +37,16 @@ import * as api from '@/api/onboarding';
 
 const signedIn = { authenticated: true, user: { id: 'u', email: 'f@x.test', name: 'F', preferredUsername: 'f' } };
 
+/** `searchOperation`, by what it is asked for: the run's own id (the poll) or its signup's id (after a reload). */
+const findOperation = vi.fn();
+const findSignupOperation = vi.fn();
+
 beforeEach(() => {
   vi.mocked(api.checkIdentifier).mockResolvedValue({ type: 'URL_SLUG', value: 'x', available: true });
   vi.mocked(api.findSignup).mockResolvedValue(null);
+  findSignupOperation.mockResolvedValue(null);
+  vi.mocked(api.searchOperation).mockImplementation(async (criteria, signal) =>
+    'signupId' in criteria ? findSignupOperation(criteria.signupId) : findOperation(criteria.id, signal));
 });
 
 afterEach(() => vi.clearAllMocks());
@@ -371,7 +378,12 @@ describe('expired session', () => {
 
 describe('provisioning', () => {
   /** Walks the wizard to "Create account" and submits, the run coming back as `operation`. */
-  async function submitWith(operation: Record<string, unknown>, afterRun: 'DRAFT' | 'FAILED' = 'DRAFT') {
+  async function submitWith(
+    operation: Record<string, unknown>,
+    afterRun: 'DRAFT' | 'FAILED' = 'DRAFT',
+    draftFields: Record<string, unknown> = {},
+    firstReadAfterRunFails = false
+  ) {
     vi.mocked(api.session).mockResolvedValue(signedIn);
     vi.mocked(api.tenants).mockResolvedValue({ tenants: [], selectionRequired: false, onboardingRequired: true });
     const draft = {
@@ -385,14 +397,16 @@ describe('provisioning', () => {
       timeZone: 'Africa/Nairobi',
       financialYearPolicy: 'JUL_JUN',
       tenantMetadata: { schemaVersion: 1, tenantAdmin: { mobileNumber: '+254700000199' } },
+      ...draftFields,
     };
     // The first read is the resume; later ones are the signup after the run, which a
     // user-correctable failure hands back as a DRAFT.
     vi.mocked(api.findSignup).mockResolvedValueOnce(draft as never).mockResolvedValue({ ...draft, status: afterRun } as never);
+    if (firstReadAfterRunFails) vi.mocked(api.findSignup).mockRejectedValueOnce(new Error('offline'));
     vi.mocked(api.updateSignup).mockResolvedValue({ id: 'signup-1' } as never);
     const run = { id: 'op-1', signupId: 'signup-1', errorCode: null, errorMessage: null, attempt: 1, createdAt: 0, updatedAt: 0, ...operation };
     vi.mocked(api.submitSignup).mockResolvedValue(run as never);
-    vi.mocked(api.findOperation).mockResolvedValue(run as never);
+    vi.mocked(findOperation).mockResolvedValue(run as never);
 
     render(<SignupPage />);
 
@@ -439,6 +453,158 @@ describe('provisioning', () => {
     fireEvent.click(change);
     expect(await screen.findByLabelText(/mobile number/i)).toHaveValue('+254700000199');
     expect(screen.getByRole('alert')).toHaveTextContent(/couldn’t be created with it/);
+  });
+
+  it('keeps the account code of a reopened draft when its name changes (#2353)', async () => {
+    await submitWith(
+      {
+        status: 'TERMINAL_FAILED',
+        currentStep: 'FOUNDER_HRMS',
+        completedSteps: ['TENANT_FOUNDATION', 'PLATFORM_BASELINE'],
+        errorCode: 'TENANT_ADMIN_ACCOUNT_REJECTED',
+        errorMessage: 'TENANT_ADMIN_ACCOUNT_REJECTED',
+      },
+      'DRAFT',
+      // What the name and country derive, so only the reopened run keeps it from following them.
+      { accountCode: 'KE-BOMET-COUNTY' }
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: /change my details/i }));
+    await screen.findByLabelText(/mobile number/i);
+    fireEvent.click(screen.getByRole('button', { name: /back/i }));
+    fireEvent.change(await screen.findByLabelText(/account name/i), { target: { value: 'Bomet County Government' } });
+    expect(screen.getByLabelText(/account code/i)).toHaveValue('KE-BOMET-COUNTY');
+  });
+
+  /** A reload onto a draft whose run failed on the founder's own details and handed it back. */
+  function reloadOntoReopened(errorCode: string, countryCode: string, signupFields: Record<string, unknown> = {}) {
+    vi.mocked(api.session).mockResolvedValue(signedIn);
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [], selectionRequired: false, onboardingRequired: true });
+    vi.mocked(api.findSignup).mockResolvedValue({
+      id: 'signup-1',
+      status: 'DRAFT',
+      accountName: 'Bomet County',
+      // What the name and country derive, so only the reopened run keeps it from following them.
+      accountCode: `${countryCode}-BOMET-COUNTY`,
+      urlSlug: 'bomet-county',
+      countryCode,
+      languages: ['en'],
+      timeZone: 'Africa/Nairobi',
+      financialYearPolicy: 'JUL_JUN',
+      tenantMetadata: { schemaVersion: 1, tenantAdmin: { mobileNumber: '700000199' } },
+      ...signupFields,
+    } as never);
+    vi.mocked(findSignupOperation).mockResolvedValue({
+      id: 'op-1', signupId: 'signup-1', status: 'TERMINAL_FAILED', currentStep: 'FOUNDER_HRMS',
+      completedSteps: ['TENANT_FOUNDATION', 'PLATFORM_BASELINE'], errorCode, errorMessage: errorCode,
+      attempt: 1, createdAt: 0, updatedAt: 0,
+    } as never);
+    render(<SignupPage />);
+  }
+
+  it('explains a reopened draft after a reload instead of dropping into the wizard (#2353)', async () => {
+    reloadOntoReopened('TENANT_ADMIN_ACCOUNT_REJECTED', 'KE');
+
+    expect(await screen.findByText(/usually the mobile number/i)).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: /change my details/i }));
+    expect(await screen.findByLabelText(/mobile number/i)).toHaveValue('700000199');
+    expect(findSignupOperation).toHaveBeenCalledWith('signup-1');
+  });
+
+  it('lets a run refused for its country change the country, keeping the account code (#2353)', async () => {
+    reloadOntoReopened('COUNTRY_NOT_SUPPORTED', 'FR');
+    vi.mocked(api.updateSignup).mockResolvedValue({ id: 'signup-1' } as never);
+
+    expect(await screen.findByText(/can’t be set up in this country/i)).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: /change my details/i }));
+    expect(await screen.findByLabelText(/base country/i)).toHaveValue('');
+
+    fireEvent.change(screen.getByLabelText(/base country/i), { target: { value: 'KE' } });
+    await waitFor(() => expect(screen.getByRole('button', { name: /continue/i })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: /continue/i }));
+    await waitFor(() => expect(api.updateSignup).toHaveBeenCalledWith(
+      'signup-1', expect.objectContaining({ countryCode: 'KE', accountCode: 'FR-BOMET-COUNTY' })));
+  });
+
+  it('keeps a country corrected and saved before a reload (#2353)', async () => {
+    // Saved after the run failed (the run's updatedAt is 0).
+    reloadOntoReopened('COUNTRY_NOT_SUPPORTED', 'KE', { updatedAt: 5 });
+
+    fireEvent.click(await screen.findByRole('button', { name: /change my details/i }));
+    expect(await screen.findByLabelText(/base country/i)).toHaveValue('KE');
+  });
+
+  it('does not flag a number corrected and saved before a reload (#2353)', async () => {
+    reloadOntoReopened('TENANT_ADMIN_ACCOUNT_REJECTED', 'KE', { updatedAt: 5 });
+
+    fireEvent.click(await screen.findByRole('button', { name: /change my details/i }));
+    expect(await screen.findByLabelText(/mobile number/i)).toHaveValue('700000199');
+    expect(screen.queryByText(/couldn’t be created with it/)).not.toBeInTheDocument();
+  });
+
+  it('recognises the country refusal whatever its case (#2353)', async () => {
+    reloadOntoReopened('country_not_supported', 'FR');
+
+    fireEvent.click(await screen.findByRole('button', { name: /change my details/i }));
+    expect(await screen.findByLabelText(/base country/i)).toHaveValue('');
+  });
+
+  it('shows a reloaded draft as correctable at once, without asking for the signup again (#2353)', async () => {
+    reloadOntoReopened('TENANT_ADMIN_ACCOUNT_REJECTED', 'KE');
+
+    expect(await screen.findByText(/usually the mobile number/i)).toBeInTheDocument();
+    // Never the closed-signup wording, not even until a second read of the signup answers.
+    expect(screen.queryByText(/cannot be retried/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /change my details/i })).toBeInTheDocument();
+    expect(api.findSignup).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a failed look-up of the run as an error to try again, not the wizard (#2353)', async () => {
+    reloadOntoReopened('TENANT_ADMIN_ACCOUNT_REJECTED', 'KE');
+    findSignupOperation.mockRejectedValue(new api.OnboardingError(503, null, 'Service unavailable'));
+
+    expect(await screen.findByRole('button', { name: /try again/i })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/account name/i)).not.toBeInTheDocument();
+  });
+
+  it('resumes the wizard when pgr-services is too old to find a run by its signup (#2353)', async () => {
+    reloadOntoReopened('TENANT_ADMIN_ACCOUNT_REJECTED', 'KE');
+    // What a pgr-services from before #2515 answers to { signupId }.
+    findSignupOperation.mockRejectedValue(
+      new api.OnboardingError(400, 'ONBOARDING_VALIDATION_ERROR', 'Operation.id is required'));
+
+    expect(await screen.findByLabelText(/account name/i)).toHaveValue('Bomet County');
+    expect(screen.queryByRole('button', { name: /try again/i })).not.toBeInTheDocument();
+  });
+
+  it('sends an expired sign-in during the run look-up back to sign-in (#2353)', async () => {
+    vi.mocked(api.authMethods).mockResolvedValue({ methods: [{ id: 'password', label: 'Email and password', type: 'password' }] });
+    reloadOntoReopened('TENANT_ADMIN_ACCOUNT_REJECTED', 'KE');
+    findSignupOperation.mockRejectedValue(
+      new api.OnboardingError(401, 'ONBOARDING_IDENTITY_REQUIRED', 'A valid identity session is required'));
+
+    expect(await screen.findByText(/sign-in expired/i)).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /email and password/i })).toBeInTheDocument();
+  });
+
+  it('offers the check again when it cannot tell whether the run handed the draft back (#2353)', async () => {
+    // The read after the run fails once; the next one answers.
+    await submitWith(
+      {
+        status: 'TERMINAL_FAILED',
+        currentStep: 'FOUNDER_HRMS',
+        completedSteps: ['TENANT_FOUNDATION', 'PLATFORM_BASELINE'],
+        errorCode: 'TENANT_ADMIN_ACCOUNT_REJECTED',
+        errorMessage: 'TENANT_ADMIN_ACCOUNT_REJECTED',
+      },
+      'DRAFT',
+      {},
+      true
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: /try again/i }));
+    expect(screen.queryByText(/cannot be retried/i)).not.toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /change my details/i })).toBeInTheDocument();
   });
 
   it('keeps the closed-signup wording when the run did not hand the draft back', async () => {
@@ -893,21 +1059,21 @@ describe('a success that is not yet published', () => {
 
   it('keeps polling instead of reading a tenant list that is not there yet', async () => {
     // A fresh object per read, as the network gives; the poll re-arms on change.
-    vi.mocked(api.findOperation).mockImplementation(async () => ({ ...succeeded }) as never);
+    vi.mocked(findOperation).mockImplementation(async () => ({ ...succeeded }) as never);
 
     render(<SignupPage />);
     expect(await screen.findByText(/finishing setup/i)).toBeInTheDocument();
     await tick(3000);
     await tick(3000);
 
-    expect(api.findOperation).toHaveBeenCalledTimes(2);
+    expect(findOperation).toHaveBeenCalledTimes(2);
     // Only bootstrap's own read; nothing treated SUCCEEDED as ready.
     expect(api.tenants).toHaveBeenCalledTimes(1);
     expect(screen.queryByText(/choose a workspace/i)).not.toBeInTheDocument();
   });
 
   it('opens the workspace once the outcome is published', async () => {
-    vi.mocked(api.findOperation).mockResolvedValue({ ...succeeded, lifecyclePublishedAt: 1 } as never);
+    vi.mocked(findOperation).mockResolvedValue({ ...succeeded, lifecyclePublishedAt: 1 } as never);
     vi.mocked(api.selectContext).mockResolvedValue({
       access_token: 't',
       token_type: 'bearer',
@@ -927,7 +1093,7 @@ describe('a success that is not yet published', () => {
   });
 
   it('shows the workspace picker when multiple workspaces exist after publishing', async () => {
-    vi.mocked(api.findOperation).mockResolvedValue({ ...succeeded, lifecyclePublishedAt: 1 } as never);
+    vi.mocked(findOperation).mockResolvedValue({ ...succeeded, lifecyclePublishedAt: 1 } as never);
 
     render(<SignupPage />);
     await screen.findByText(/finishing setup/i);
@@ -941,7 +1107,7 @@ describe('a success that is not yet published', () => {
   });
 
   it('falls back to the workspace picker if automatic entry fails for a single workspace', async () => {
-    vi.mocked(api.findOperation).mockResolvedValue({ ...succeeded, lifecyclePublishedAt: 1 } as never);
+    vi.mocked(findOperation).mockResolvedValue({ ...succeeded, lifecyclePublishedAt: 1 } as never);
     vi.mocked(api.selectContext).mockRejectedValue(new Error('Network failure'));
 
     render(<SignupPage />);
@@ -955,16 +1121,148 @@ describe('a success that is not yet published', () => {
 
   it('says it is almost ready after a long wait, and slows down without giving up', async () => {
     // A fresh object per read, as the network gives; the poll re-arms on change.
-    vi.mocked(api.findOperation).mockImplementation(async () => ({ ...succeeded }) as never);
+    vi.mocked(findOperation).mockImplementation(async () => ({ ...succeeded }) as never);
 
     render(<SignupPage />);
     await screen.findByText(/finishing setup/i);
     await tick(120_000);
 
     expect(await screen.findByText(/almost ready/i)).toBeInTheDocument();
-    const calls = vi.mocked(api.findOperation).mock.calls.length;
+    const calls = vi.mocked(findOperation).mock.calls.length;
     await tick(15_000);
-    expect(api.findOperation).toHaveBeenCalledTimes(calls + 1);
+    expect(findOperation).toHaveBeenCalledTimes(calls + 1);
     expect(screen.queryByText(/choose a workspace/i)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * The checklist reads the operation the worker checkpoints, so the poll must
+ * outlive answers that change nothing, come back empty or never return, and a
+ * single failed check is a blip rather than an error.
+ */
+describe('polling while the worker runs', () => {
+  const provisioning = {
+    id: 's1',
+    status: 'PROVISIONING' as const,
+    accountName: 'Kisumu County',
+    urlSlug: 'kisumu-county',
+    countryCode: 'KE',
+    languages: ['en'],
+    version: 4,
+    createdAt: 0,
+    updatedAt: 0,
+  };
+  const running = {
+    id: 'op1',
+    signupId: 's1',
+    status: 'RUNNING' as const,
+    currentStep: 'ORGANIZATION',
+    completedSteps: ['TENANT_FOUNDATION'],
+    errorCode: null,
+    errorMessage: null,
+    attempt: 1,
+    lifecyclePublishedAt: null,
+    createdAt: 0,
+    updatedAt: 0,
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.mocked(api.session).mockResolvedValue(signedIn);
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [], selectionRequired: false, onboardingRequired: true });
+    vi.mocked(api.findSignup).mockResolvedValue(provisioning as never);
+    vi.mocked(api.submitSignup).mockResolvedValue(running as never);
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const tick = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+  const start = async () => {
+    render(<SignupPage />);
+    expect(await screen.findByText(/setting up kisumu county/i)).toBeInTheDocument();
+  };
+
+  it('keeps polling when an answer changes nothing or comes back empty', async () => {
+    // The same object every time: a poll re-armed only on change would stop after the first.
+    vi.mocked(findOperation).mockResolvedValueOnce(null).mockResolvedValue(running as never);
+    await start();
+    await tick(3000);
+    await tick(3000);
+    await tick(3000);
+    expect(findOperation).toHaveBeenCalledTimes(3);
+  });
+
+  it('abandons a check that never answers and asks again', async () => {
+    vi.mocked(findOperation).mockImplementationOnce(
+      (_id: string, signal?: AbortSignal) =>
+        new Promise((_resolve, reject) => signal?.addEventListener('abort', () => reject(new Error('aborted')))) as never,
+    ).mockResolvedValue(running as never);
+    await start();
+    await tick(3000);
+    expect(findOperation).toHaveBeenCalledTimes(1);
+    await tick(10_000);
+    await tick(3000);
+    expect(findOperation).toHaveBeenCalledTimes(2);
+    expect(screen.queryByText(/aborted/i)).not.toBeInTheDocument();
+  });
+
+  it('shows an error only after three failed checks in a row, and clears it once one succeeds', async () => {
+    vi.mocked(findOperation)
+      .mockRejectedValueOnce(new Error('Status check failed'))
+      .mockRejectedValueOnce(new Error('Status check failed'))
+      .mockRejectedValueOnce(new Error('Status check failed'))
+      .mockResolvedValue(running as never);
+    await start();
+    await tick(3000);
+    await tick(3000);
+    expect(screen.queryByText(/status check failed/i)).not.toBeInTheDocument();
+    await tick(3000);
+    expect(await screen.findByText(/status check failed/i)).toBeInTheDocument();
+    await tick(3000);
+    await waitFor(() => expect(screen.queryByText(/status check failed/i)).not.toBeInTheDocument());
+    expect(findOperation).toHaveBeenCalledTimes(4);
+  });
+});
+
+describe('required marks', () => {
+  /** The control a label names, and whether that label carries the red asterisk. */
+  const field = (label: RegExp) => {
+    const control = screen.getByLabelText(label);
+    const tag = document.querySelector(`label[for="${control.id}"]`);
+    return { control, marked: !!tag?.querySelector('[data-required-mark]') };
+  };
+
+  it('marks the identity a sign-up link needs', async () => {
+    vi.mocked(api.session).mockResolvedValue({ authenticated: false });
+    vi.mocked(api.authMethods).mockResolvedValue({
+      methods: [{ id: 'magic-link', label: 'Email me a sign-in link', type: 'magic_link' }],
+    });
+    render(<SignupPage />);
+    await screen.findByLabelText(/first name/i);
+    for (const label of [/first name/i, /last name/i, /email address/i]) {
+      const { control, marked } = field(label);
+      expect(marked, String(label)).toBe(true);
+      expect(control, String(label)).toBeRequired();
+    }
+  });
+
+  it('marks every account and preference field, each one required to continue', async () => {
+    vi.mocked(api.session).mockResolvedValue(signedIn);
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [], selectionRequired: false, onboardingRequired: true });
+    render(<SignupPage />);
+    await screen.findByLabelText(/account name/i);
+    for (const label of [/account name/i, /account code/i]) {
+      const { control, marked } = field(label);
+      expect(marked, String(label)).toBe(true);
+      expect(control, String(label)).toHaveAttribute('aria-required', 'true');
+    }
+
+    await completeAccountStep();
+    for (const label of [/base country/i, /timezone/i, /financial year/i, /account url/i, /mobile number/i]) {
+      const { control, marked } = field(label);
+      expect(marked, String(label)).toBe(true);
+      expect(control, String(label)).toHaveAttribute('aria-required', 'true');
+    }
+    // Languages is a row of toggles under a heading, not a labelled control.
+    expect(screen.getByText('Languages').querySelector('[data-required-mark]')).not.toBeNull();
   });
 });

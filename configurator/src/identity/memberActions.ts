@@ -1,4 +1,5 @@
 import { linkMember, removeMember } from './api';
+import { session } from '@/api/onboarding';
 import { MessageError } from '@/onboarding/i18n';
 
 export interface MemberEmployee {
@@ -20,6 +21,11 @@ export function employeeUuid(employee: MemberEmployee): string {
   return uuid;
 }
 
+/** HRMS has the employee, but linking their sign-in failed. `employee` is the saved record, so the invite can be sent from it. */
+export type InviteUnfinished = MessageError & { employee: MemberEmployee; reason: unknown };
+export const isInviteUnfinished = (err: unknown): err is InviteUnfinished =>
+  err instanceof MessageError && err.key === 'members.invite_unfinished';
+
 /** Search by immutable code on every attempt, including after a lost create response. */
 export async function createAndLink<T extends MemberEmployee>(input: T, search: () => Promise<T[]>, create: (employee: T) => Promise<T>): Promise<T> {
   const email = requiredEmail(input.user.emailId);
@@ -27,17 +33,23 @@ export async function createAndLink<T extends MemberEmployee>(input: T, search: 
   if (existing && (existing.isActive === false || requiredEmail(existing.user.emailId) !== email)) {
     throw new MessageError('members.code_taken', 'This employee code already belongs to a different or inactive employee.');
   }
+  // The DIGIT token outlives the identity session, so HRMS would take the employee and the link
+  // would then fail, leaving an employee nobody can invite until the admin signs in again (#2456).
+  if (!existing && !(await session()).authenticated) {
+    throw new MessageError('members.signin_ended', 'Your sign-in has ended, so nobody was added. Sign out, sign in again, and add them again.');
+  }
   const user: MemberEmployee['user'] = { ...input.user, emailId: email };
   delete user.password;
   const employee = existing ?? await create({ ...input, user });
   try {
     await linkMember(input.tenantId, employeeUuid(employee), email);
   } catch (error) {
-    throw new MessageError(
+    const unfinished = new MessageError(
       'members.invite_unfinished',
       'Employee %{code} exists in HRMS; invitation is unfinished. Retry with the same code and email. %{reason}',
       { code: input.code, reason: error instanceof Error ? error.message : '' },
     );
+    throw Object.assign(unfinished, { employee, reason: error });
   }
   return employee;
 }

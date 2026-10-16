@@ -25,6 +25,11 @@ const { yesNoOptions } = require('./flow/yes-no-options');
 const localisationService = require('./util/localisation-service');
 const { pgrService } = require('./service/service-loader');
 
+// Institution and confidentiality reach PGR only inside extendedAttributes, which the
+// complaint's tenant may not accept (checkExtendedAttributes decides, per tenant). Asking
+// for them when they won't be sent would promise a confidentiality PGR never records.
+const collectsExtendedAttributes = (context) => context.slots.pgr.extendedAttributes === true;
+
 const consentStatements = (context) =>
   [messages.fileComplaint.consent.dataProcessing, messages.fileComplaint.consent.truthfulness]
     .map((bundle) => dialog.get_message(bundle, context.user.locale))
@@ -65,7 +70,7 @@ const confirmationSummary = (context) => {
     [fields.location, labelForCode(context, context.slots.pgr.locality)],
     [fields.institution, context.slots.pgr.instituteName],
     [fields.description, context.slots.pgr.description],
-    [fields.confidentiality, text(context.slots.pgr.isConfidential ? fields.yes : fields.no)]
+    [fields.confidentiality, collectsExtendedAttributes(context) && text(context.slots.pgr.isConfidential ? fields.yes : fields.no)]
   ]
     .filter(([, value]) => value)
     .map(([bundle, value]) => `*${text(bundle)}:* ${value}`)
@@ -77,6 +82,7 @@ const confirmationSummary = (context) => {
 const menu = new QuestionState('menu');
 const walkComplaintTypes = new WalkState('complaintType2Step');
 const walkBoundaries = new WalkState('boundary');
+const checkExtendedAttributes = new ProcessingState('checkExtendedAttributes');
 const askIntitution = new AskState('institution');
 const askDescription = new AskState('description');
 const askForAttachments = new AskState('imageUpload');
@@ -95,7 +101,8 @@ const system_error = new State('system_error');
 
 const typeGroup = new Group('type').setStates([walkComplaintTypes]).setStart('complaintType2Step');
 const locationGroup = new Group('location').setStates([walkBoundaries]).setStart('boundary');
-const otherGroup = new Group('other').setStates([askIntitution, askDescription, askForAttachments]).setStart('institution');
+const otherGroup = new Group('other').setStates([checkExtendedAttributes, askIntitution, askDescription, askForAttachments])
+  .setStart('checkExtendedAttributes');
 
 const fileComplaintGroup = new Group('fileComplaint')
   .setStates([typeGroup, locationGroup, otherGroup, askConsent, consentDeclined, askConfidentiality, confirmSubmission, persistComplaint])
@@ -123,6 +130,11 @@ walkBoundaries
   .setOnError(system_error)
   .setOnLeaf(otherGroup, { slot: 'locality', set: recordCity })
   .setOnEmpty(otherGroup, { slot: 'locality', set: recordCity });
+
+checkExtendedAttributes
+  .setProcessing((context) => pgrService.acceptsExtendedAttributes(context.slots.pgr.city))
+  .setConditionalNext(askIntitution, (context, event) => event.data === true, (context) => { context.slots.pgr.extendedAttributes = true; })
+  .setNext(askDescription, (context) => { context.slots.pgr.extendedAttributes = false; });
 
 askIntitution
   .setPrompt(messages.fileComplaint.institution.question)
@@ -166,7 +178,8 @@ askConsent
   .setPrompt(messages.fileComplaint.consent.question)
   .setFill({ statements: consentStatements })
   .setOptions(yesNoOptions(choices.accept, choices.decline))
-  .setConditionalNext(askConfidentiality, (context) => context.intention === 'Yes')
+  .setConditionalNext(askConfidentiality, (context) => context.intention === 'Yes' && collectsExtendedAttributes(context))
+  .setConditionalNext(confirmSubmission, (context) => context.intention === 'Yes')
   .setNext(consentDeclined);
 
 consentDeclined
@@ -209,6 +222,8 @@ const pgrConfig = {
     delete context[walk.pathSlot];
     delete context[walk.stepSlot];
     delete context[walk.grammerSlot];
+    // paging: without this a menu reopened after an error resumes partway through
+    for (const slot of walk.pagingSlots) delete context[slot];
   }
 }),
 
@@ -217,7 +232,7 @@ const pgrConfig = {
 
 module.exports = {
   config: pgrConfig,
-  states: { menu, complaintType2Step: walkComplaintTypes, boundary: walkBoundaries, institution: askIntitution, description: askDescription, imageUpload: askForAttachments,
+  states: { menu, complaintType2Step: walkComplaintTypes, boundary: walkBoundaries, checkExtendedAttributes, institution: askIntitution, description: askDescription, imageUpload: askForAttachments,
     consent: askConsent, consentDeclined, confidentiality: askConfidentiality, confirmSubmission, persistComplaint, cancelSession,
     endstate, system_error, fileComplaintGroup, typeGroup, locationGroup, otherGroup }
 };

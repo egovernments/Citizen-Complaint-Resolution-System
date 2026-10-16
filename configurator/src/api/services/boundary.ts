@@ -2,6 +2,7 @@
 import { apiClient } from '../client';
 import { ENDPOINTS, BOUNDARY_SEARCH_LIMIT } from '../config';
 import type { Boundary, BoundaryHierarchy, BoundaryLevel } from '../types';
+import { localizationService } from './localization';
 
 /** Reserved by the platform baseline for the founder's root jurisdiction. */
 export const WORKSPACE_HIERARCHY_TYPE = 'WORKSPACE';
@@ -198,6 +199,29 @@ export const boundaryService = {
     return boundaries;
   },
 
+  /**
+   * Every boundary in a hierarchy with its parent and its en_IN name (none when it has no label),
+   * read under the keys an upload writes, so a sheet can be checked against them before any write.
+   */
+  async existingBoundaries(
+    tenantId: string,
+    hierarchyType: string,
+  ): Promise<{ code: string; parent?: string; name?: string }[]> {
+    const [boundaries, messages] = await Promise.all([
+      this.searchBoundaries(tenantId, { hierarchyType }),
+      localizationService.searchMessages(tenantId, 'en_IN', localizationService.boundaryModule(hierarchyType)),
+    ]);
+    const names = new Map(messages.map((m) => [m.code, m.message]));
+    return boundaries.map(({ code, parent }) => ({
+      code,
+      parent: parent || undefined,
+      name: localizationService
+        .buildBoundaryLocalizations(tenantId, code, '', hierarchyType)
+        .map((m) => names.get(m.code))
+        .find((name) => !!name?.trim()),
+    }));
+  },
+
   // Helper to flatten nested boundary tree
   // Flatten a nested boundary tree into a flat list, deduping by code
   // (the relationships endpoint duplicates children under their parent)
@@ -209,6 +233,7 @@ export const boundaryService = {
     seen?: Set<string>,
     hierarchyType?: string,
     tenantId?: string,
+    parentCode?: string,
   ): void {
     const code = boundary.code;
     if (seen && code) {
@@ -221,7 +246,8 @@ export const boundaryService = {
       code: boundary.code,
       name: boundary.name,
       boundaryType: boundary.boundaryType,
-      parent: boundary.parent,
+      // A tree node's parent is the node it sits under, when the node doesn't say.
+      parent: boundary.parent ?? parentCode,
       hierarchyType: boundary.hierarchyType ?? hierarchyType,
       latitude: boundary.latitude,
       longitude: boundary.longitude,
@@ -229,7 +255,7 @@ export const boundaryService = {
 
     if (boundary.children) {
       for (const child of boundary.children) {
-        this.flattenBoundaries(child, result, seen, hierarchyType, tenantId);
+        this.flattenBoundaries(child, result, seen, hierarchyType, tenantId, boundary.code);
       }
     }
   },
@@ -480,6 +506,15 @@ export const boundaryService = {
     const failed: { boundary: Boundary; error: string }[] = [];
     const total = boundaries.length;
     if (total === 0) return { success, failed };
+
+    // One code is one boundary: a batch that repeats a code would fold two rows into one
+    // boundary, with whichever name was written last. Refuse before writing anything (#2456).
+    const seen = new Set<string>();
+    const repeated = new Set<string>();
+    for (const { code } of boundaries) (seen.has(code) ? repeated : seen).add(code);
+    if (repeated.size > 0) {
+      throw new Error(`Each boundary needs its own code. Used more than once: ${[...repeated].join(', ')}`);
+    }
 
     const tenantId = boundaries[0].tenantId;
     const byLevel = this.groupByLevel(boundaries);

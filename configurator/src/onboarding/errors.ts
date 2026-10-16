@@ -19,7 +19,7 @@ export function describeSaveError(err: unknown, fallback: string, t: OnboardingT
 
 /** What each step's server check (pgr-services WorkspaceGateway) looks for, for when it refuses DONE. */
 export const STEP_REQUIREMENT: Record<string, string> = {
-  BRANDING: 'Add a logo to finish branding, or skip the step.',
+  BRANDING: 'Branding finishes once the workspace has a saved logo. Save again, or choose Continue anyway.',
   GEOGRAPHY: 'Add at least two levels of places, for example counties and the wards inside them.',
   DEPARTMENTS: 'Add at least one department and one designation.',
   EMPLOYEES: 'Add at least one employee who can sign in.',

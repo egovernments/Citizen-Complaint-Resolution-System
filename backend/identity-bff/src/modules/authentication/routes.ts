@@ -25,6 +25,7 @@ import {
   sessionIdFromCookie,
   requireCurrentSession,
   saveIdentitySession,
+  getIdentitySession,
 } from "../sessions/session-store.js";
 import { enabledIdentityMethods } from "./methods.js";
 import {
@@ -342,13 +343,16 @@ export function registerAuthenticationRoutes(app: express.Application): void {
       if (attempt.accountAction) {
         const binding = attempt.accountAction;
         if (claims.sub !== binding.sub || sessionIdFromCookie(request.headers.cookie, surface) !== binding.sid) throw new Error("Account action changed the initiating person or session");
-        await withPersonLease(binding.sub, async lease => {
-          const session = await requireCurrentSession(lease, binding.sid);
-          if (session.surface && session.surface !== surface) throw new Error("Account action changed surface");
+        const session = await getIdentitySession(binding.sid);
+        if (session?.surface && session.surface !== surface) throw new Error("Account action changed surface");
+        // A finished action is use, so the session slides as on a refresh (#2456). Only best effort: the action
+        // already happened in Keycloak, so a session that ended (it stays ended, and the person signs in again),
+        // a busy lease or a Redis error must not report it as failed.
+        if (session) {
           await saveIdentitySession(binding.sid, tokens, claims,
-            Math.max(1, Math.floor((session.sessionExpiresAt - Date.now()) / 1000)), attempt.oidcClientId,
-            session.sessionExpiresAt, { surface, boundTenant: session.boundTenant });
-        });
+            { oidcClientId: attempt.oidcClientId, binding: { surface, boundTenant: session.boundTenant } })
+            .catch(error => console.warn("Account action left the session as it was:", (error as Error).message));
+        }
         const outcome = request.query.kc_action_status === "success" ? "ACTION_COMPLETE"
           : request.query.kc_action_status === "cancelled" ? "ACTION_CANCELLED" : "ACTION_FAILED";
         return redirectWithResult(response, surface, attempt.returnTo, outcome);

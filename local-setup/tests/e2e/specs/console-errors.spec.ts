@@ -1,11 +1,12 @@
 import { test, expect } from '@playwright/test';
 import { PgrInboxPage } from '../pages/pgr-inbox.page';
 import { loginViaApi } from '../utils/auth';
+import { requiredEnv } from '../utils/identity';
 
-const BASE_URL = process.env.BASE_URL || 'http://localhost:18080';
-const TENANT = process.env.DIGIT_TENANT || 'uitest.citya';
-const ADMIN_USER = process.env.DIGIT_USERNAME || 'ADMIN';
-const ADMIN_PASS = process.env.DIGIT_PASSWORD || 'eGov@123';
+const BASE_URL = requiredEnv('BASE_URL');
+const TENANT = requiredEnv('DIGIT_TENANT');
+const ADMIN_USER = requiredEnv('DIGIT_USERNAME');
+const ADMIN_PASS = requiredEnv('DIGIT_PASSWORD');
 
 test.describe('Console Errors', () => {
   test('no uncaught JS errors across employee flow', async ({ page }) => {

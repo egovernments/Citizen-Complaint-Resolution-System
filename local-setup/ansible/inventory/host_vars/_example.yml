@@ -894,6 +894,12 @@ pgr_onboarding_baseline_upgrade_enabled: true
 # pgr_onboarding_notification_defaults_enabled: false
 identity_digit_admin_username: "ADMIN"  # use a dedicated ACCOUNT_ADMIN in production
 identity_digit_admin_tenant_id: "pg"
+# Root tenants this deploy seeds, comma-separated. Each gets an Identity BFF
+# Organization route (alias and URL slug = the tenant id) when nothing maps it
+# yet; an existing route is never renamed. Unset (or a bare key) = state_root;
+# "" = none. `pg` never gets one, and a host with state_root: pg (a legacy,
+# pre-#1999 layout) routes no root, whatever this says.
+# identity_tenant_route_backfill_roots: ke
 # Platform provisioner the runner signs in as (PGR only, internal APIs). It must
 # be an EMPLOYEE of a ROOT tenant (no dot) holding MDMS_ADMIN, ACCOUNT_ADMIN,
 # LOC_ADMIN and HRMS_ADMIN there. With the runner on, the playbook creates it if
@@ -1270,6 +1276,15 @@ status_basic_auth_user: digit-status
 # kong_cors_origins:
 #   - "https://{{ domain }}"
 #   - "https://analytics.example.org"
+#
+# DEV tenant only — a configurator running on a developer's machine
+# (`VITE_ONBOARDING_API_ORIGIN=https://<domain> npm run dev`, see
+# configurator/README.md) needs its origin here AND in identity_allowed_origins,
+# plus these two flags, because its onboarding calls are cross-site and carry
+# the identity BFF's session cookie. Not for production: any page served from a
+# listed origin can then act as whoever is signed in on that browser.
+# kong_cors_credentials: false
+# identity_cookie_same_site: "Lax"          # "None" for the dev case above
 
 # ==================== nginx security headers ====================
 # X-Content-Type-Options, X-Frame-Options, Referrer-Policy and HSTS (when

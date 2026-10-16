@@ -1,4 +1,4 @@
-import { chromium } from 'playwright';
+import { chromium } from '@playwright/test';
 
 const BASE = 'https://bometfeedbackhub.digit.org/configurator';
 // Chromium resolves the real domain (valid cert) through the SSH tunnel on :8443.

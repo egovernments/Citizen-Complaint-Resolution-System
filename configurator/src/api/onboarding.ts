@@ -542,12 +542,20 @@ export async function submitSignup(
   return operation;
 }
 
-export async function findOperation(id: string): Promise<Operation | null> {
+/**
+ * A run, by its own id or by its signup's id. After a reload the page knows only the signup,
+ * so that is how it finds the signup's run.
+ */
+export async function searchOperation(
+  criteria: { id: string } | { signupId: string },
+  signal?: AbortSignal
+): Promise<Operation | null> {
   const { Operations } = await call<{ Operations: Operation[] }>(
     `${ONBOARDING_BASE}/operations/_search`,
     {
       method: 'POST',
-      body: JSON.stringify({ Operation: { id } }),
+      body: JSON.stringify({ Operation: criteria }),
+      signal,
     }
   );
   return Operations?.[0] ?? null;

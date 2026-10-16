@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createAndLink, deactivateAndRemove, type MemberEmployee } from './memberActions';
+import { createAndLink, deactivateAndRemove, isInviteUnfinished, type MemberEmployee } from './memberActions';
 import { linkMember, removeMember } from './api';
+import { session } from '@/api/onboarding';
 vi.mock('./api', () => ({ linkMember: vi.fn(), removeMember: vi.fn() }));
+vi.mock('@/api/onboarding', () => ({ session: vi.fn() }));
 const input: MemberEmployee = { tenantId: 'acme', code: 'E1', isActive: true, user: { emailId: ' PERSON@EXAMPLE.ORG ', password: 'must-not-send' } };
-beforeEach(() => vi.resetAllMocks());
+beforeEach(() => { vi.resetAllMocks(); vi.mocked(session).mockResolvedValue({ authenticated: true }); });
 
 describe('member actions', () => {
   it('requires email before creating HRMS records', async () => {
@@ -24,6 +26,21 @@ describe('member actions', () => {
     await expect(createAndLink(input, async () => rows, create)).rejects.toThrow('invitation is unfinished');
     await createAndLink(input, async () => rows, create);
     expect(create).toHaveBeenCalledTimes(1); expect(linkMember).toHaveBeenCalledTimes(2);
+  });
+  it('adds nobody once the identity session has ended, since the invite could not follow', async () => {
+    vi.mocked(session).mockResolvedValue({ authenticated: false });
+    const create = vi.fn();
+    await expect(createAndLink(input, async () => [], create)).rejects.toThrow('sign-in has ended');
+    expect(create).not.toHaveBeenCalled(); expect(linkMember).not.toHaveBeenCalled();
+  });
+  it('hands back the saved employee when only the invite failed', async () => {
+    const create = vi.fn(async row => ({ ...row, uuid: 'u1' }));
+    const refused = new Error('An identity session is required');
+    vi.mocked(linkMember).mockRejectedValueOnce(refused);
+    const error = await createAndLink(input, async () => [], create).catch((err: unknown) => err);
+    expect(isInviteUnfinished(error)).toBe(true);
+    expect(isInviteUnfinished(error) && error.employee).toMatchObject({ code: 'E1', uuid: 'u1' });
+    expect(isInviteUnfinished(error) && error.reason).toBe(refused);
   });
   it('recovers a lost HRMS create response by searching the immutable code', async () => {
     const create = vi.fn();

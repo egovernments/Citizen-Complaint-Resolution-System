@@ -115,7 +115,7 @@ export async function loadEmployeeOptions(tenantId: string): Promise<EmployeeOpt
   };
 }
 
-type EmployeeRecord = Employee & { isActive?: boolean };
+export type EmployeeRecord = Employee & { isActive?: boolean };
 
 export interface EmployeeList {
   /** The employees who can sign in: what the step lists. */
@@ -132,32 +132,73 @@ export async function listEmployees(tenantId: string): Promise<EmployeeList> {
   };
 }
 
+/** The highest number among EMP_0001-style codes, or 0. */
+function highestEmployeeNumber(codes: string[]): number {
+  return codes.reduce((max, code) => {
+    const match = /^EMP_(\d+)$/.exec(code);
+    return match ? Math.max(max, Number(match[1])) : max;
+  }, 0);
+}
+
 /**
  * One past the highest EMP_0001-style code HRMS holds, removed employees'
  * included, so a removed employee's code is never offered again.
  */
 export function suggestEmployeeCode(codes: string[]): string {
-  const highest = codes.reduce((max, code) => {
-    const match = /^EMP_(\d+)$/.exec(code);
-    return match ? Math.max(max, Number(match[1])) : max;
-  }, 0);
-  return hrmsService.generateEmployeeCode('EMP', highest + 1);
+  return hrmsService.generateEmployeeCode('EMP', highestEmployeeNumber(codes) + 1);
+}
+
+/**
+ * Codes for a bulk upload's rows: a row's own code as given, a blank one the
+ * next free EMP_ code past the highest HRMS holds (removed employees included)
+ * and the highest on the sheet. Numbering from the row index took codes in use,
+ * the founder's EMP_0001 among them (#2456).
+ */
+export function planEmployeeCodes(existing: string[], given: string[]): string[] {
+  let next = highestEmployeeNumber([...existing, ...given]);
+  return given.map((code) => code || hrmsService.generateEmployeeCode('EMP', ++next));
+}
+
+/** A bulk sheet's rows with every blank code filled in by planEmployeeCodes. */
+export function withEmployeeCodes<T extends { employeeCode: string }>(rows: T[], existing: Map<string, EmployeeRecord>): T[] {
+  const codes = planEmployeeCodes([...existing.keys()], rows.map((row) => row.employeeCode));
+  return rows.map((row, index) => ({ ...row, employeeCode: codes[index] }));
+}
+
+/** Every employee HRMS holds, removed ones included, by code: what a bulk upload's codes are checked against. */
+export async function employeesByCode(tenantId: string): Promise<Map<string, EmployeeRecord>> {
+  const employees = (await hrmsService.searchEmployees(tenantId, { limit: 500 })) as EmployeeRecord[];
+  return new Map(employees.filter((employee) => employee.code).map((employee): [string, EmployeeRecord] => [employee.code, employee]));
+}
+
+/**
+ * Why a bulk row's code can't be used, or null (#2456). A code HRMS holds is fine
+ * for the same active person (same email): createAndLink then finishes their
+ * invite. Anyone else's, a removed employee's, or one on two rows fails at create
+ * or folds two people into one; the founder holds EMP_0001.
+ */
+export function codeProblem(
+  row: { employeeCode: string; emailId?: string },
+  sheet: { employeeCode: string }[],
+  existing: Map<string, EmployeeRecord>,
+): { repeated: true } | { takenBy: string } | null {
+  if (sheet.filter((other) => other.employeeCode === row.employeeCode).length > 1) return { repeated: true };
+  const holder = existing.get(row.employeeCode);
+  if (!holder) return null;
+  const email = (value: unknown) => (typeof value === 'string' ? value.trim().toLowerCase() : '');
+  const same = holder.isActive !== false && email(row.emailId) !== '' && email(row.emailId) === email(holder.user?.emailId);
+  return same ? null : { takenBy: holder.user?.name || row.employeeCode };
 }
 
 export async function addEmployee(tenantId: string, input: NewEmployee, options: EmployeeOptions): Promise<Employee> {
   const boundaryByCode = new Map(options.boundaries.map((boundary) => [boundary.code, boundary]));
   const roleByCode = new Map(options.roles.map((role) => [role.code, role]));
-  // The username comes from the name; two people can share a name, so a taken
-  // one gets the (unique) employee code added.
-  const base = hrmsService.generateUsername(input.name.trim());
-  const userName = (await hrmsService.checkUsernameAvailable(tenantId, base))
-    ? base
-    : `${base}.${input.code.toLowerCase()}`;
   const employee = hrmsService.buildEmployee({
     tenantId,
     code: input.code,
     name: input.name.trim(),
-    userName,
+    // HRMS makes every employee's username their code (enrichUser), whatever is sent.
+    userName: input.code,
     mobileNumber: input.mobileNumber,
     emailId: requiredEmail(input.emailId),
     // buildEmployee makes the first the current assignment and the rest history.
@@ -252,7 +293,8 @@ export async function updateEmployeeDetails(
   status: InviteStatus | null = null,
 ): Promise<{ email: EmailOutcome }> {
   const rows = await hrmsService.searchEmployees(employee.tenantId, { codes: [employee.code] });
-  const fresh = rows.find((row) => row.code === employee.code);
+  // Never another workspace's employee with the same code (#2456).
+  const fresh = rows.find((row) => row.code === employee.code && row.tenantId === employee.tenantId);
   if (!fresh) throw new MessageError('employees.gone', 'This employee no longer exists. Reload and try again.');
   const email = requiredEmail(changes.emailId);
   // An invitation still at an older address (a move that stopped halfway) counts as a change.
@@ -285,10 +327,14 @@ export async function updateEmployeeDetails(
 
 /** Deactivate, as management's delete does: HRMS keeps the record, marked inactive. */
 export async function removeEmployee(employee: Employee): Promise<void> {
+  // By uuid, never by code: another workspace's employee can share the code (#2456). A uuid search keeps
+  // HRMS's tenant filter.
+  const uuid = employee.user?.uuid || employee.uuid;
+  if (!uuid) throw new MessageError('members.no_account_id', 'HRMS did not return the employee account identifier. Reload and retry.');
   await deactivateAndRemove(
     async () => {
-      const rows = await hrmsService.searchEmployees(employee.tenantId, { codes: [employee.code] });
-      const fresh = rows.find(row => row.uuid === employee.uuid || row.code === employee.code);
+      const rows = await hrmsService.searchEmployees(employee.tenantId, { uuids: [uuid] });
+      const fresh = rows.find(row => (row.user?.uuid || row.uuid) === uuid && row.tenantId === employee.tenantId);
       if (!fresh) throw new MessageError('employees.gone_from_hrms', 'Employee no longer exists in HRMS.');
       return fresh as unknown as MemberEmployee;
     },

@@ -1,13 +1,18 @@
 import type { ComponentType } from 'react';
 import { Building2, MapPin, MessageSquareText, RotateCcw, Sparkles, Users } from 'lucide-react';
 import type { OnboardingT } from '../i18n';
+import brandingImage from './tour/branding.webp';
+import cmsImage from './tour/cms.webp';
+import complaintsImage from './tour/complaints.webp';
+import geographyImage from './tour/geography.webp';
+import peopleImage from './tour/people.webp';
 
 /**
  * What the onboarding Home page says: the "Learn the basics" videos and the
  * tour. Product owns the wording, images and video links, so they live here,
  * apart from the components; a video with no `youtubeId` yet shows as coming
- * soon, and a tour page with no `image` falls back to an illustration of its
- * step. Each step's description and button are in ../stepGuide.
+ * soon, and a tour page with no `image` shows its step's icon. Each step's
+ * description and button are in ../stepGuide.
  */
 
 export interface LearnVideo {
@@ -25,11 +30,11 @@ export interface LearnVideo {
 export function learnVideos(t: OnboardingT): LearnVideo[] {
   return [
     { id: 'cms', title: t('home.videos.cms.title', 'What is CMS?'), summary: t('home.videos.cms.summary', 'How complaints flow end to end'), tint: 'bg-blue-50' },
-    { id: 'branding', title: t('home.videos.branding.title', 'Setting up your branding'), summary: t('home.videos.branding.summary', 'Logo, name and theme'), tint: 'bg-amber-50' },
-    { id: 'geography', title: t('home.videos.geography.title', 'Defining your geography'), summary: t('home.videos.geography.summary', 'Areas and their hierarchy'), tint: 'bg-emerald-50' },
-    { id: 'departments', title: t('home.videos.departments.title', 'Adding departments'), summary: t('home.videos.departments.summary', 'Who complaints route to'), tint: 'bg-violet-50' },
-    { id: 'employees', title: t('home.videos.employees.title', 'Adding employees'), summary: t('home.videos.employees.summary', 'Roles and the areas they cover'), tint: 'bg-sky-50' },
-    { id: 'complaints', title: t('home.videos.complaints.title', 'Setting up complaints'), summary: t('home.videos.complaints.summary', 'Categories, routing and resolution time'), tint: 'bg-rose-50' },
+    { id: 'branding', title: t('home.videos.branding.title', 'Setting up your branding'), summary: t('home.videos.branding.summary', 'Logo, name and theme'), youtubeId: 'ZdkVdTviiY8', duration: '0:59', tint: 'bg-amber-50' },
+    { id: 'geography', title: t('home.videos.geography.title', 'Defining your geography'), summary: t('home.videos.geography.summary', 'Areas and their hierarchy'), youtubeId: 'nA8sNGnCzxc', duration: '4:30', tint: 'bg-emerald-50' },
+    { id: 'departments', title: t('home.videos.departments.title', 'Adding departments'), summary: t('home.videos.departments.summary', 'Who complaints route to'), youtubeId: '-akBHQQbJz0', duration: '2:11', tint: 'bg-violet-50' },
+    { id: 'employees', title: t('home.videos.employees.title', 'Adding employees'), summary: t('home.videos.employees.summary', 'Roles and the areas they cover'), youtubeId: 'SuI3lzRpdI4', duration: '2:20', tint: 'bg-sky-50' },
+    { id: 'complaints', title: t('home.videos.complaints.title', 'Setting up complaints'), summary: t('home.videos.complaints.summary', 'Categories, routing and resolution time'), youtubeId: 'gG2WKsV2H18', duration: '2:20', tint: 'bg-rose-50' },
   ];
 }
 
@@ -39,7 +44,7 @@ export interface WelcomeSlide {
   title: string;
   /** The page's text, one paragraph each. */
   paragraphs: string[];
-  /** An illustration URL; until product supplies one, the page shows its icon. */
+  /** A square illustration; a page without one shows its icon. */
   image?: string;
   icon: ComponentType<{ className?: string }>;
 }
@@ -60,6 +65,7 @@ export function welcomeSlides(t: OnboardingT): WelcomeSlide[] {
         ),
         t('home.tour.cms.body_onboarding', 'Onboarding is where you set up your account to make this system possible.'),
       ],
+      image: cmsImage,
       icon: Sparkles,
     },
     {
@@ -72,6 +78,7 @@ export function welcomeSlides(t: OnboardingT): WelcomeSlide[] {
           'Pick from our template offerings with pre-loaded setup for issues ranging from Electricity-related complaints to Local Governance Complaints.',
         ),
       ],
+      image: complaintsImage,
       icon: MessageSquareText,
     },
     {
@@ -84,6 +91,7 @@ export function welcomeSlides(t: OnboardingT): WelcomeSlide[] {
           'Establish your account’s identity by adding a logo, name and appearance that will be reflected in the citizen and employee experience.',
         ),
       ],
+      image: brandingImage,
       icon: Building2,
     },
     {
@@ -100,6 +108,7 @@ export function welcomeSlides(t: OnboardingT): WelcomeSlide[] {
           'These define the area a complaint is raised in, and the jurisdictions an employee is assigned to serve.',
         ),
       ],
+      image: geographyImage,
       icon: MapPin,
     },
     {
@@ -116,6 +125,7 @@ export function welcomeSlides(t: OnboardingT): WelcomeSlide[] {
           'Each employee is assigned to a department and to the geographic areas they serve, which is what lets a complaint reach the right person.',
         ),
       ],
+      image: peopleImage,
       icon: Users,
     },
     {

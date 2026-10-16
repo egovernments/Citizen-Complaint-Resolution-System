@@ -1,4 +1,4 @@
-export { DigitApiClient } from './DigitApiClient.js';
+export { DigitApiClient, withCsrRole, inTenant, employeesByCodeInTenant, exactTenantRow } from './DigitApiClient.js';
 export type { DigitApiClientConfig } from './DigitApiClient.js';
 export { ApiClientError } from './errors.js';
 export { ENDPOINTS, OAUTH_CONFIG } from './endpoints.js';

@@ -5,7 +5,7 @@ import { EntityLink } from '@/components/ui/EntityLink';
 import { ReverseReferenceList } from './fields/ReverseReferenceList';
 import { useShowController, useResourceContext } from 'ra-core';
 import { getResourceConfig, getResourceBySchema } from '@/providers/bridge';
-import { useResourceLabel } from '@/providers/useResourceLabel';
+import { ResourceLabel } from '@/providers/ResourceLabel';
 import { useSchemaDefinition } from '@/hooks/useSchemaDefinition';
 import { useReverseRefs } from '@/hooks/useReverseRefs';
 import { groupShowFields, getRefMap, formatFieldLabel } from './schemaUtils';
@@ -17,7 +17,6 @@ import { ReadOnlyResourceNotice } from './ReadOnlyResourceNotice';
 export function MdmsResourceShow() {
   const resource = useResourceContext() ?? '';
   const config = getResourceConfig(resource);
-  const label = useResourceLabel()(resource);
   const { record } = useShowController({ queryOptions: { meta: MASTER_SCREEN_META } });
   const { canEditResource } = useMastersCapability();
 
@@ -28,7 +27,14 @@ export function MdmsResourceShow() {
   return (
     <>
       <ReadOnlyResourceNotice resource={resource} />
-      <DigitShow title={record ? `${label}: ${record[config?.idField ?? 'id'] ?? record.id}` : label} hasEdit={canEditResource(resource)}>
+      <DigitShow
+        title={
+          record
+            ? <><ResourceLabel resource={resource} />{`: ${record[config?.idField ?? 'id'] ?? record.id}`}</>
+            : <ResourceLabel resource={resource} />
+        }
+        hasEdit={canEditResource(resource)}
+      >
       {(rec: Record<string, unknown>) => {
         if (definition) {
           return <SchemaShowContent rec={rec} definition={definition} reverseRefs={reverseRefs} />;

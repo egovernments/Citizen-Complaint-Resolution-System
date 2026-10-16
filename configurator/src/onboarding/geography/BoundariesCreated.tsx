@@ -15,6 +15,7 @@ export function BoundariesCreated({
   workspace,
   sourceText,
   skipped = 0,
+  alreadyThere = 0,
   failed = 0,
   attribution,
   onDone,
@@ -30,6 +31,8 @@ export function BoundariesCreated({
   sourceText: string;
   /** Areas left out before create (unnamed, or in no area of the level above). */
   skipped?: number;
+  /** Areas the upload listed exactly as the hierarchy already had them, so left alone. */
+  alreadyThere?: number;
   /** Areas boundary-service refused; the error above the screen says why. */
   failed?: number;
   attribution?: string | null;
@@ -109,7 +112,7 @@ export function BoundariesCreated({
         </Table>
       </div>
 
-      {(skipped > 0 || attribution) && (
+      {(skipped > 0 || alreadyThere > 0 || attribution) && (
         <div className="space-y-1 text-sm text-muted-foreground">
           {skipped > 0 && (
             <p>
@@ -124,6 +127,17 @@ export function BoundariesCreated({
                     '%{count} areas were left out: unnamed, or lying in no area of the level above. The review step listed them.',
                     { count: skipped.toLocaleString('en-US') },
                   )}
+            </p>
+          )}
+          {alreadyThere > 0 && (
+            <p>
+              {alreadyThere === 1
+                ? t('geography.created.already_there_one', '%{count} area was already in the hierarchy as listed, so it was left as it is.', {
+                    count: alreadyThere.toLocaleString('en-US'),
+                  })
+                : t('geography.created.already_there_other', '%{count} areas were already in the hierarchy as listed, so they were left as they are.', {
+                    count: alreadyThere.toLocaleString('en-US'),
+                  })}
             </p>
           )}
           {attribution && (

@@ -139,34 +139,35 @@ describe('the Documentation rail', () => {
 });
 
 describe('the setup card', () => {
-  const card = () => screen.getByRole('region', { name: /^Next step:/ });
+  const card = (name: RegExp) => screen.getByRole('region', { name });
+  const progress = () => within(card(/./)).getByRole('progressbar', { name: 'Setup progress' });
 
-  it('starts at Branding with nothing done', () => {
+  it('invites setting up the account with nothing done', () => {
     layoutAt('/onboarding/home');
-    expect(card()).toHaveTextContent('Next step: Branding');
-    expect(card()).toHaveTextContent('Set up your account logo, name and appearance');
-    expect(within(card()).queryByText(/ done$/)).not.toBeInTheDocument();
-    expect(within(card()).getByRole('button', { name: 'Set Up Branding' })).toBeInTheDocument();
+    const start = card(/^Let’s set up your account$/);
+    expect(within(start).getByRole('button', { name: 'Let’s set up your account' })).toBeInTheDocument();
+    expect(start).toHaveTextContent('0 of 5 completed');
+    expect(progress()).toHaveAttribute('aria-valuenow', '0');
   });
 
   it.each([
-    [[1], 'Branding done', 'Next step: Geography', 'Define Geography'],
-    [[1, 2], 'Geography done', 'Next step: Departments', 'Add Departments'],
-    [[1, 2, 3], 'Departments done', 'Next step: Employees', 'Add Employees'],
-    [[1, 2, 3, 4], 'Employees done', 'Next step: Complaints Template', 'Choose Template'],
-  ])('after %j says %s, %s, with %s', (done, previous, next, action) => {
+    [[1], 'Next step: Geography', '1 of 5 completed'],
+    [[1, 2], 'Next step: Departments', '2 of 5 completed'],
+    [[1, 2, 3], 'Next step: Employees', '3 of 5 completed'],
+    [[1, 2, 3, 4], 'Next step: Complaints Template', '4 of 5 completed'],
+  ])('after %j says %s, %s', (done, next, count) => {
     app.state.completedPhases = done;
     layoutAt('/onboarding/home');
-    expect(within(card()).getByText(previous)).toBeInTheDocument();
-    expect(card()).toHaveTextContent(next);
-    expect(within(card()).getByRole('button', { name: action })).toBeInTheDocument();
+    expect(within(card(new RegExp(`^${next}$`))).getByRole('button', { name: next })).toBeInTheDocument();
+    expect(card(/^Next step:/)).toHaveTextContent(count);
+    expect(progress()).toHaveAttribute('aria-valuenow', String(done.length));
   });
 
   it('opens the next step', () => {
     app.state.completedPhases = [1];
     layoutAt('/onboarding/home');
-    fireEvent.click(within(card()).getByRole('button', { name: 'Define Geography' }));
-    expect(card()).toHaveTextContent('Next step: Geography');
-    expect(screen.getByText('page')).toBeInTheDocument();
+    expect(trackEvent).not.toHaveBeenCalledWith('phase_start', expect.objectContaining({ step: 'geography' }));
+    fireEvent.click(within(card(/^Next step:/)).getByRole('button', { name: 'Next step: Geography' }));
+    expect(trackEvent).toHaveBeenCalledWith('phase_start', expect.objectContaining({ step: 'geography' }));
   });
 });

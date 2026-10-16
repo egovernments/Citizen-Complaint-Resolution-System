@@ -15,6 +15,7 @@ import { announceOrganisation, initialsOf } from './organisation';
 import { describeSaveError } from './errors';
 import { reportStepError, trackStepAction } from './telemetry';
 import { useOnboardingT, type OnboardingT } from './i18n';
+import { useMastersCapability } from '@/hooks/useMastersCapability';
 
 const STEP = ONBOARDING_STEPS.find((step) => step.id === 'branding')!;
 const NEXT = ONBOARDING_STEPS.find((step) => step.number === STEP.number + 1)!;
@@ -23,9 +24,10 @@ const NEXT = ONBOARDING_STEPS.find((step) => step.number === STEP.number + 1)!;
 // as a 400. It takes no SVG, and serving an uploaded SVG from our own origin
 // would open a stored-XSS path anyway.
 const LOGO_TYPES = ['image/png', 'image/jpeg'];
+// Some JPEGs are saved as .jfif or .jpe; the picker should offer them too.
+const IMAGE_ACCEPT = [...LOGO_TYPES, '.jfif', '.jpe'].join(',');
 const LOGO_MAX_BYTES = 2 * 1024 * 1024;
 const LOGO_MIN_PX = 128;
-const NAME_MAX = 100;
 
 // The citizen home draws the banner full width behind its welcome, cropped to a
 // wide strip (about 4:1 on a desktop). Below 1200px it goes soft on a laptop
@@ -53,8 +55,51 @@ function imageSize(file: File): Promise<{ width: number; height: number } | null
   });
 }
 
+/**
+ * The file as egov-filestore will take it, or null when its bytes aren't the PNG or
+ * JPEG its name says. The picker's file.type comes from the name alone, while
+ * egov-filestore checks the bytes against the extension and turns a mismatch (a
+ * WebP saved as .png) away with its whole format list. Filestore knows JPEG only as
+ * .jpg or .jpeg, so a .jfif or .jpe JPEG is renamed .jpg.
+ */
+function asUploadableImage(file: File): Promise<File | null> {
+  const extension = /\.([a-z]+)$/i.exec(file.name)?.[1].toLowerCase() ?? '';
+  const named = extension === 'png' ? 'png' : ['jpg', 'jpeg', 'jpe', 'jfif'].includes(extension) ? 'jpeg' : null;
+  if (!named) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const head = new Uint8Array(reader.result as ArrayBuffer);
+      const png = head[0] === 0x89 && head[1] === 0x50 && head[2] === 0x4e && head[3] === 0x47;
+      const jpeg = head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff;
+      if (!(named === 'png' ? png : jpeg)) resolve(null);
+      else if (extension === 'jpe' || extension === 'jfif') {
+        resolve(new File([file], file.name.replace(/\.[a-z]+$/i, '.jpg'), { type: 'image/jpeg', lastModified: file.lastModified }));
+      } else resolve(file);
+    };
+    reader.onerror = () => resolve(null);
+    reader.readAsArrayBuffer(file.slice(0, 4));
+  });
+}
+
+/** Onboarding's Branding step. */
 export default function BrandingStep() {
+  return <BrandingEditor mode="onboarding" />;
+}
+
+/**
+ * The Branding screen. Onboarding shows it as a step: Save and continue records
+ * the step and moves on. The management console shows the same screen as a page
+ * of its own (`mode="console"`), so branding can still be changed once onboarding
+ * is over: Save changes saves and stays, and a role without write access to the
+ * tenant sees it read-only.
+ */
+export function BrandingEditor({ mode }: { mode: 'onboarding' | 'console' }) {
+  const inConsole = mode === 'console';
   const { state, completePhase } = useApp();
+  const { canEditResource } = useMastersCapability();
+  // Onboarding's layout already says when a role is view-only; the console page says it here.
+  const editable = !inConsole || canEditResource('tenants');
   const t = useOnboardingT();
   const navigate = useNavigate();
   const nameId = useId();
@@ -74,6 +119,14 @@ export default function BrandingStep() {
   const [themeId, setThemeId] = useState(DEFAULT_BRAND_THEME_ID);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // Once a save has failed, Continue anyway records the step skipped, so a save
+  // that keeps failing never leaves onboarding stuck here.
+  const [saveFailed, setSaveFailed] = useState(false);
+  // The console's "Branding saved.", until the next change.
+  const [justSaved, setJustSaved] = useState(false);
+  // Only the latest pick counts: an earlier, slower file's checks must not replace it.
+  const logoPick = useRef(0);
+  const bannerPick = useRef(0);
 
   const done = state.completedPhases.includes(STEP.number);
 
@@ -116,11 +169,14 @@ export default function BrandingStep() {
 
   const shownBanner = banner?.kind === 'remove' ? null : bannerPreview ?? branding?.bannerUrl ?? null;
 
-  const pickLogo = async (file: File | undefined) => {
+  const pickLogo = async (picked: File | undefined) => {
     if (fileInput.current) fileInput.current.value = '';
-    if (!file) return;
+    if (!picked) return;
+    const pick = ++logoPick.current;
     setLogoError(null);
-    if (!LOGO_TYPES.includes(file.type)) {
+    const file = await asUploadableImage(picked);
+    if (pick !== logoPick.current) return;
+    if (!file) {
       setLogoError(t('branding.logo_type', 'Use a PNG or JPG image.'));
       return;
     }
@@ -129,6 +185,7 @@ export default function BrandingStep() {
       return;
     }
     const size = await imageSize(file);
+    if (pick !== logoPick.current) return;
     if (size && (size.width < LOGO_MIN_PX || size.height < LOGO_MIN_PX)) {
       setLogoError(
         t('branding.logo_too_small', 'That image is %{width}×%{height}px. Use one at least %{min}px on each side.', {
@@ -140,19 +197,25 @@ export default function BrandingStep() {
       return;
     }
     setLogo({ kind: 'upload', file });
+    setJustSaved(false);
   };
 
   const removeLogo = () => {
+    logoPick.current++;
     setLogoError(null);
     // A logo picked but never saved just goes; a saved one is removed on save.
     setLogo(branding?.logoUrl ? { kind: 'remove' } : null);
+    setJustSaved(false);
   };
 
-  const pickBanner = async (file: File | undefined) => {
+  const pickBanner = async (picked: File | undefined) => {
     if (bannerInput.current) bannerInput.current.value = '';
-    if (!file) return;
+    if (!picked) return;
+    const pick = ++bannerPick.current;
     setBannerError(null);
-    if (!LOGO_TYPES.includes(file.type)) {
+    const file = await asUploadableImage(picked);
+    if (pick !== bannerPick.current) return;
+    if (!file) {
       setBannerError(t('branding.logo_type', 'Use a PNG or JPG image.'));
       return;
     }
@@ -161,6 +224,7 @@ export default function BrandingStep() {
       return;
     }
     const size = await imageSize(file);
+    if (pick !== bannerPick.current) return;
     if (size && size.width < BANNER_MIN_WIDTH) {
       setBannerError(
         t('branding.banner_too_narrow', 'That image is %{width}px wide. Use one at least %{min}px wide.', {
@@ -180,12 +244,19 @@ export default function BrandingStep() {
       return;
     }
     setBanner({ kind: 'upload', file });
+    setJustSaved(false);
   };
 
   const removeBanner = () => {
+    bannerPick.current++;
     setBannerError(null);
     setBanner(branding?.bannerUrl ? { kind: 'remove' } : null);
+    setJustSaved(false);
   };
+
+  // In the console there is nothing to save until something changes; the name is read-only.
+  const savedThemeId = branding?.themeId ?? DEFAULT_BRAND_THEME_ID;
+  const changed = logo !== null || banner !== null || themeId !== savedThemeId;
 
   const save = async () => {
     if (!branding) return;
@@ -194,10 +265,8 @@ export default function BrandingStep() {
       setNameError(t('branding.account_name_required', 'Enter your account’s name.'));
       return;
     }
-    if (trimmed.length > NAME_MAX) {
-      setNameError(t('branding.name_too_long', 'Keep the name under %{max} characters.', { max: NAME_MAX }));
-      return;
-    }
+    // No length check: the name is read-only here, and the server checks its length
+    // when Workspace settings renames it (up to 200 characters).
     setNameError(null);
     setSaveError(null);
     setSaving(true);
@@ -205,6 +274,15 @@ export default function BrandingStep() {
       const theme = BRAND_THEMES.find((candidate) => candidate.id === themeId) ?? null;
       const bannerChange = CITIZEN_BANNER_ENABLED ? banner : null;
       const saved = await saveBranding(branding, { name: trimmed, logo, theme, banner: bannerChange });
+      if (inConsole) {
+        // The theme just written is the saved one, even if mdms-v2's re-read hasn't caught up yet.
+        setBranding({ ...saved, themeId: theme?.id ?? saved.themeId });
+        setLogo(null);
+        setBanner(null);
+        announceOrganisation({ name: saved.name, logoUrl: saved.logoUrl });
+        setJustSaved(true);
+        return;
+      }
       trackStepAction('branding', 'entity_update', 'branding', {
         tenant: state.tenant,
         theme: theme?.id ?? 'none',
@@ -216,9 +294,18 @@ export default function BrandingStep() {
       setLogo(null);
       setBanner(null);
       announceOrganisation({ name: saved.name, logoUrl: saved.logoUrl });
-      if (!await completePhase(STEP.number)) return;
+      // PGR marks Branding done only once the tenant has a logo (imageId); without
+      // one the step is recorded as skipped, which completes it all the same. A logo
+      // this save uploaded or removed decides it rather than the re-read, which
+      // mdms-v2's persister may not have caught up with yet.
+      const hasLogo = logo ? logo.kind === 'upload' : !!saved.tenantRecord.data.imageId;
+      if (!await completePhase(STEP.number, !hasLogo)) {
+        setSaveFailed(true);
+        return;
+      }
       navigate(NEXT.path);
     } catch (err) {
+      if (!inConsole) setSaveFailed(true);
       if (err instanceof ThemeSaveError) reportStepError('branding', 'save_theme', err.cause, state.tenant);
       else reportStepError('branding', 'save', err, state.tenant);
       if (err instanceof ThemeSaveError) {
@@ -238,10 +325,32 @@ export default function BrandingStep() {
     }
   };
 
+  // SKIPPED needs no logo and no server check, so it completes the step whatever failed.
+  const continueAnyway = async () => {
+    setSaving(true);
+    try {
+      if (await completePhase(STEP.number, true)) navigate(NEXT.path);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const header = (intro?: ReactNode) =>
+    inConsole ? (
+      <div className="space-y-2">
+        <h1 className="text-2xl sm:text-3xl font-bold font-condensed text-foreground">{t('steps.branding', 'Branding')}</h1>
+        {intro && <p className="text-sm leading-6 text-muted-foreground">{intro}</p>}
+      </div>
+    ) : (
+      <StepHeader eyebrow={t('branding.account_eyebrow', 'Account setup')} title={t('steps.branding', 'Branding')} done={done}>
+        {intro}
+      </StepHeader>
+    );
+
   if (loadError) {
     return (
       <div className="space-y-6">
-        <StepHeader eyebrow={t('branding.account_eyebrow', 'Account setup')} title={t('steps.branding', 'Branding')} done={done} />
+        {header()}
         <Alert variant="destructive">
           <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
             <span>{t('branding.load_failed', 'Couldn’t load your workspace’s branding.')} {loadError}</span>
@@ -256,9 +365,15 @@ export default function BrandingStep() {
 
   return (
     <div className="max-w-xl space-y-8">
-      <StepHeader eyebrow={t('branding.account_eyebrow', 'Account setup')} title={t('steps.branding', 'Branding')} done={done}>
-        {t('branding.intro', 'Your logo, name and colour appear across your workspace and on the services citizens and employees experience.')}
-      </StepHeader>
+      {header(t('branding.intro', 'Your logo, name and colour appear across your workspace and on the services citizens and employees experience.'))}
+
+      {!editable && (
+        <Alert>
+          <AlertDescription>
+            {t('branding.view_only', 'Your role can see the branding but not change it. Changing it needs write access, for example MDMS_ADMIN.')}
+          </AlertDescription>
+        </Alert>
+      )}
 
       {!branding ? (
         <div className="space-y-6" aria-busy="true" aria-label={t('branding.loading', 'Loading branding')}>
@@ -286,10 +401,10 @@ export default function BrandingStep() {
                     : t('branding.logo_rules', 'PNG or JPG, at least %{min}px square.', { min: LOGO_MIN_PX })}
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  <Button variant="outline" size="sm" onClick={() => fileInput.current?.click()}>
+                  <Button variant="outline" size="sm" disabled={!editable} onClick={() => fileInput.current?.click()}>
                     {shownLogo ? t('branding.replace', 'Replace') : t('branding.upload_logo', 'Upload logo')}
                   </Button>
-                  {shownLogo && (
+                  {shownLogo && editable && (
                     <Button variant="ghost" size="sm" onClick={removeLogo}>
                       {t('common.remove', 'Remove')}
                     </Button>
@@ -299,8 +414,9 @@ export default function BrandingStep() {
               <input
                 ref={fileInput}
                 type="file"
-                accept={LOGO_TYPES.join(',')}
+                accept={IMAGE_ACCEPT}
                 className="hidden"
+                data-testid="logo-input"
                 onChange={(event) => pickLogo(event.target.files?.[0])}
               />
             </div>
@@ -312,6 +428,7 @@ export default function BrandingStep() {
               t={t}
               shown={shownBanner}
               available={!!branding.stateInfoRecord}
+              editable={editable}
               error={bannerError}
               onPick={() => bannerInput.current?.click()}
               onRemove={removeBanner}
@@ -319,7 +436,7 @@ export default function BrandingStep() {
                 <input
                   ref={bannerInput}
                   type="file"
-                  accept={LOGO_TYPES.join(',')}
+                  accept={IMAGE_ACCEPT}
                   className="hidden"
                   data-testid="banner-input"
                   onChange={(event) => pickBanner(event.target.files?.[0])}
@@ -337,7 +454,6 @@ export default function BrandingStep() {
               id={nameId}
               readOnly
               value={name}
-              maxLength={NAME_MAX + 20}
               onChange={(event) => {
                 setName(event.target.value);
                 if (nameError) setNameError(null);
@@ -366,8 +482,12 @@ export default function BrandingStep() {
                           type="button"
                           aria-label={t(`branding.themes.${theme.id}`, theme.label)}
                           aria-pressed={selected}
-                          onClick={() => setThemeId(theme.id)}
-                          className="w-11 h-11 rounded-md flex items-center justify-center text-white transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          disabled={!editable}
+                          onClick={() => {
+                            setThemeId(theme.id);
+                            setJustSaved(false);
+                          }}
+                          className="w-11 h-11 rounded-md flex items-center justify-center text-white transition-transform enabled:hover:scale-105 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                           style={{
                             backgroundColor: theme.swatch,
                             outline: selected ? `2px solid ${theme.swatch}` : undefined,
@@ -391,17 +511,34 @@ export default function BrandingStep() {
             </Alert>
           )}
 
-          <div className="pt-2">
+          {inConsole ? (
+            editable && (
+              <div className="flex flex-wrap items-center gap-3 pt-2">
+                <Button onClick={save} disabled={saving || !changed} className="h-10 gap-2 px-5">
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                  {t('common.save_changes', 'Save changes')}
+                </Button>
+                {justSaved && (
+                  <p role="status" className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                    <Check className="w-4 h-4 text-primary" />
+                    {t('branding.saved', 'Branding saved.')}
+                  </p>
+                )}
+              </div>
+            )
+          ) : (
+          <div className="flex flex-wrap gap-2 pt-2">
             <Button onClick={save} disabled={saving} className="h-10 gap-2 px-5">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
               {t('step.save_continue', 'Save and continue')}
             </Button>
-            <Button variant="ghost" disabled={saving} onClick={async () => {
-              setSaving(true);
-              try { if (await completePhase(STEP.number, true)) navigate(NEXT.path); }
-              finally { setSaving(false); }
-            }}>{t('branding.skip', 'Skip branding')}</Button>
+            {saveFailed && (
+              <Button variant="ghost" onClick={continueAnyway} disabled={saving} className="h-10">
+                {t('branding.continue_anyway', 'Continue anyway')}
+              </Button>
+            )}
           </div>
+          )}
         </div>
       )}
     </div>
@@ -417,6 +554,7 @@ function BannerField({
   t,
   shown,
   available,
+  editable,
   error,
   onPick,
   onRemove,
@@ -425,6 +563,7 @@ function BannerField({
   t: OnboardingT;
   shown: string | null;
   available: boolean;
+  editable: boolean;
   error: string | null;
   onPick: () => void;
   onRemove: () => void;
@@ -448,7 +587,7 @@ function BannerField({
             </p>
           )}
         </div>
-        {available && (
+        {available && editable && (
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-dashed border-border p-3">
             <p className="text-xs text-muted-foreground">
               {t('branding.banner_rules', 'PNG or JPG, at least %{min}px wide, up to 5 MB.', { min: BANNER_MIN_WIDTH })}

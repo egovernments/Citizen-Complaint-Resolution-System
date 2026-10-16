@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
 
 interface FieldSectionProps {
-  title: string;
+  /** Plain text, or a `<T>` node so the localization code shows in the DOM */
+  title: ReactNode;
   children: ReactNode;
   className?: string;
 }
@@ -18,7 +19,8 @@ export function FieldSection({ title, children, className }: FieldSectionProps) 
 }
 
 interface FieldRowProps {
-  label: string;
+  /** Plain text, or a `<T>` node so the localization code shows in the DOM */
+  label: ReactNode;
   children: ReactNode;
 }
 

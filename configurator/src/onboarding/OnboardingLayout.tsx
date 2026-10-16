@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowRight, Check, House, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Check, ChevronRight, House, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useApp } from '../App';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
 import { useMastersCapability } from '@/hooks/useMastersCapability';
 import { NavRow, SectionLabel, RailBackdrop, RailCloseButton, RailMenuButton, RailPoweredBy } from '@/components/layout/rail';
 import { railClasses } from '@/components/layout/railStyles';
@@ -16,7 +15,6 @@ import { trackEvent } from '@/lib/telemetry';
 import { useOnboardingT } from './i18n';
 import { DocsButton, DocsRail } from './docs/DocsRail';
 import type { DocsSection } from './docs/docsLinks';
-import { stepGuide } from './stepGuide';
 
 /**
  * The step marks in place of icons: a tick once a step is done, a filled dot
@@ -67,9 +65,7 @@ export default function OnboardingLayout() {
   // than from a failed submit deep in the step.
   const currentStepEditable = !currentStep || canEditResource(currentStep.master);
   const groups = [...new Set(ONBOARDING_STEPS.map((step) => step.group))];
-  const guide = stepGuide(t);
   const nextStep = resumeStep(completed);
-  const previousStep = ONBOARDING_STEPS.find((step) => step.number === nextStep.number - 1);
 
   // A step opened, from the rail, a Back or continue, or a resume.
   const openedStep = currentStepLocked ? undefined : currentStep;
@@ -124,35 +120,37 @@ export default function OnboardingLayout() {
             </button>
           </div>
 
-          {/* The step to do next, what it's for and a button into it. Steps unlock in
-              order, so the one before it is the one just finished. */}
+          {/* Where setup stands, as one compact card (the #2358 mock-up): what to do
+              next, how far along, and a click anywhere into that step. The title button
+              stretches over the card, so the progressbar stays outside it and keeps its role. */}
           {!collapsed && (
-            <section aria-labelledby="setup-card-next" className="rounded border border-border bg-card p-3">
-              {previousStep && (
-                <p className="mb-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Check aria-hidden="true" className="h-3.5 w-3.5 text-primary" strokeWidth={3} />
-                  {t('layout.card.done', '%{step} done', { step: t(`steps.${previousStep.id}`, previousStep.label) })}
-                </p>
-              )}
-              <h2 id="setup-card-next" className="text-sm font-semibold text-foreground">
-                {t('layout.card.next', 'Next step: %{step}', { step: t(`steps.${nextStep.id}`, nextStep.label) })}
-              </h2>
-              <p className="mt-1 text-xs leading-5 text-muted-foreground">{guide[nextStep.id].description}</p>
-              <Button size="sm" onClick={() => navigate(nextStep.path)} className="mt-3 h-8 w-full gap-1.5 text-xs">
-                {guide[nextStep.id].action}
-                <ArrowRight aria-hidden="true" className="h-3.5 w-3.5" />
-              </Button>
+            <section
+              aria-labelledby="setup-card-next"
+              className="relative rounded-lg border border-primary/20 bg-primary/5 p-3 transition-colors hover:bg-primary/10 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring"
+            >
+              <button
+                type="button"
+                onClick={() => navigate(nextStep.path)}
+                className="flex w-full items-center justify-between gap-2 text-left focus-visible:outline-none before:absolute before:inset-0 before:rounded-lg"
+              >
+                <span id="setup-card-next" className="text-sm font-semibold text-primary">
+                  {done === 0
+                    ? t('layout.setup_account', 'Let’s set up your account')
+                    : t('layout.card.next', 'Next step: %{step}', { step: t(`steps.${nextStep.id}`, nextStep.label) })}
+                </span>
+                <ChevronRight aria-hidden="true" className="h-4 w-4 shrink-0 text-primary" />
+              </button>
               <span
                 role="progressbar"
                 aria-label={t('layout.setup_progress', 'Setup progress')}
                 aria-valuemin={0}
                 aria-valuemax={total}
                 aria-valuenow={done}
-                className="mt-3 block h-1.5 overflow-hidden rounded-full bg-muted"
+                className="mt-3 block h-1.5 overflow-hidden rounded-full bg-primary/15"
               >
                 <span className="block h-full rounded-full bg-primary transition-all" style={{ width: `${(done / total) * 100}%` }} />
               </span>
-              <span className="mt-1.5 block text-xs text-muted-foreground">
+              <span className="mt-2 block text-xs text-primary/80">
                 {t('layout.completed_count', '%{done} of %{total} completed', { done, total })}
               </span>
             </section>

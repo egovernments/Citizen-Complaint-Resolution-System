@@ -2,6 +2,7 @@
 {"code": "app.nav.dashboard", "message": "Painel", "module": "configurator-ui", "locale": "pt_BR"},
 {"code": "app.nav.tenant_management", "message": "Gestão de entidades", "module": "configurator-ui", "locale": "pt_BR"},
 {"code": "app.nav.tenants", "message": "Entidades", "module": "configurator-ui", "locale": "pt_BR"},
+{"code": "app.nav.branding", "message": "Identidade visual", "module": "configurator-ui", "locale": "pt_BR"},
 {"code": "app.nav.departments", "message": "Departamentos", "module": "configurator-ui", "locale": "pt_BR"},
 {"code": "app.nav.designations", "message": "Cargos", "module": "configurator-ui", "locale": "pt_BR"},
 {"code": "app.nav.hierarchies", "message": "Hierarquias", "module": "configurator-ui", "locale": "pt_BR"},

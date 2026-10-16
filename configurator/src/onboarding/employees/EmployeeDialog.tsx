@@ -4,6 +4,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { RequiredMark } from '@/components/ui/required-mark';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { describeSaveError } from '../errors';
 import { useOnboardingT } from '../i18n';
@@ -21,6 +22,7 @@ function CheckList({
   error,
   empty,
   detail,
+  required,
 }: {
   legend: string;
   hint?: string;
@@ -30,6 +32,7 @@ function CheckList({
   error?: string;
   empty: string;
   detail?: (choice: Choice) => string;
+  required?: boolean;
 }) {
   const t = useOnboardingT();
   const [query, setQuery] = useState('');
@@ -40,7 +43,10 @@ function CheckList({
 
   return (
     <fieldset className="space-y-1.5">
-      <legend className="text-sm font-medium text-foreground">{legend}</legend>
+      <legend className="text-sm font-medium text-foreground">
+        {legend}
+        {required && <RequiredMark />}
+      </legend>
       {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
       {choices.length === 0 ? (
         <p className="rounded-md border border-dashed border-border px-3 py-2 text-sm text-muted-foreground">{empty}</p>
@@ -251,10 +257,12 @@ export function EmployeeDialog({
     }
   };
 
-  const field = (key: keyof Errors, label: string, input: ReactNode) => (
+  // Every field here is required; one that is read-only while editing drops the mark.
+  const field = (key: keyof Errors, label: string, input: ReactNode, required = true) => (
     <div className="space-y-1.5">
       <label htmlFor={`${id}-${key}`} className="block text-sm font-medium text-foreground">
         {label}
+        {required && <RequiredMark />}
       </label>
       {input}
       {errors[key] && <p className="text-xs text-destructive">{errors[key]}</p>}
@@ -292,9 +300,11 @@ export function EmployeeDialog({
                 id={`${id}-code`}
                 value={code}
                 readOnly={editing}
+                aria-required={!editing}
                 onChange={(event) => setCode(event.target.value.toUpperCase())}
                 className={`font-mono ${editing ? 'bg-muted text-muted-foreground' : ''}`}
               />,
+              !editing,
             )}
             {field(
               'name',
@@ -303,6 +313,7 @@ export function EmployeeDialog({
                 id={`${id}-name`}
                 value={name}
                 autoFocus
+                aria-required="true"
                 placeholder={t('employees.name_example', 'Anita Wanjiru')}
                 onChange={(event) => setName(event.target.value)}
               />,
@@ -310,7 +321,7 @@ export function EmployeeDialog({
             {field(
               'mobile',
               t('employees.mobile', 'Mobile number'),
-              <Input id={`${id}-mobile`} type="tel" inputMode="numeric" value={mobile} onChange={(event) => setMobile(event.target.value.replace(/\s+/g, ''))} />,
+              <Input id={`${id}-mobile`} type="tel" inputMode="numeric" aria-required="true" value={mobile} onChange={(event) => setMobile(event.target.value.replace(/\s+/g, ''))} />,
             )}
             {field(
               'email',
@@ -320,10 +331,12 @@ export function EmployeeDialog({
                 type="email"
                 value={email}
                 readOnly={editing && emailLocked}
+                aria-required={!(editing && emailLocked)}
                 placeholder={t('employees.email_example', 'anita@example.org')}
                 onChange={(event) => setEmail(event.target.value)}
                 className={editing && emailLocked ? 'bg-muted text-muted-foreground' : undefined}
               />,
+              !(editing && emailLocked),
             )}
           </div>
 
@@ -333,7 +346,7 @@ export function EmployeeDialog({
               t('departments.department', 'Department'),
               <>
                 <Select value={departments[0] ?? ''} onValueChange={(code) => setDepartments([code])}>
-                  <SelectTrigger id={`${id}-departments`} className="bg-card">
+                  <SelectTrigger id={`${id}-departments`} aria-required="true" className="bg-card">
                     <SelectValue placeholder={t('common.choose_department', 'Choose a department')} />
                   </SelectTrigger>
                   <SelectContent>
@@ -359,6 +372,7 @@ export function EmployeeDialog({
               picked={departments}
               onChange={setDepartments}
               error={errors.departments}
+              required
               empty={t('employees.departments_empty', 'Add departments first.')}
             />
           )}
@@ -367,7 +381,7 @@ export function EmployeeDialog({
             'designation',
             t('departments.designation', 'Designation'),
             <Select value={designation} onValueChange={setDesignation}>
-              <SelectTrigger id={`${id}-designation`} className="bg-card">
+              <SelectTrigger id={`${id}-designation`} aria-required="true" className="bg-card">
                 <SelectValue placeholder={t('employees.choose_designation', 'Choose a designation')} />
               </SelectTrigger>
               <SelectContent>
@@ -396,6 +410,7 @@ export function EmployeeDialog({
             picked={jurisdictions}
             onChange={setJurisdictions}
             error={errors.jurisdictions}
+            required
             empty={
               // Areas added since the options were loaded arrive with the refetch.
               optionsRefreshing

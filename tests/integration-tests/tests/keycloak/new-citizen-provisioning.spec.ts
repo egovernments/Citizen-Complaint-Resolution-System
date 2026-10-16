@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { test, expect, type BrowserContext } from '@playwright/test';
 import { BASE_URL, TENANT, KC_REALM, SERVICE_CODE, LOCALITY_CODE } from '../utils/env';
 import { getMobileValidationRule, generateValidMobile } from '../utils/mdms-mobile';
-import { hostedSignIn, selectContext, type DigitContext } from '../utils/identity-bff';
+import { passwordSignIn, selectContext, type DigitContext } from '../utils/identity-bff';
 import { keycloakAdmin } from '../utils/keycloak-admin';
 
 test.describe('New Keycloak citizen BFF provisioning', () => {
@@ -14,36 +14,38 @@ test.describe('New Keycloak citizen BFF provisioning', () => {
   let context: DigitContext;
   let userUrl: string | undefined;
   let phone: string;
-  test.beforeAll(async ({ browser, request }) => {
+  // The admin token and the person's password travel only through Node's fetch
+  // (keycloakAdmin calls, passwordSignIn): Playwright traces every context a test creates.
+  test.beforeAll(async ({ browser }) => {
     const admin = keycloakAdmin();
     const rule = await getMobileValidationRule(TENANT);
     phone = generateValidMobile(rule);
     if (!rule.prefix) throw new Error('New citizen fixture needs the tenant country calling code');
     const username = `e2e-citizen-${randomUUID()}`;
     const password = `Test@${randomUUID()}`;
-    const created = await request.post(`${admin.base}/admin/realms/${KC_REALM}/users`, {
-      headers: { Authorization: `Bearer ${admin.token}` },
-      data: { username, email: `${username}@example.test`, enabled: true, emailVerified: true,
+    const created = await fetch(`${admin.base}/admin/realms/${KC_REALM}/users`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${admin.token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, email: `${username}@example.test`, enabled: true, emailVerified: true,
         firstName: 'E2E', lastName: 'Citizen',
         attributes: { phoneNumber: [`+${rule.prefix.replace(/^\+/, '')}${phone}`], phoneNumberVerified: ['true'] },
-        credentials: [{ type: 'password', value: password, temporary: false }] },
+        credentials: [{ type: 'password', value: password, temporary: false }] }),
     });
-    expect(created.status()).toBe(201);
-    userUrl = created.headers().location;
+    expect(created.status).toBe(201);
+    userUrl = created.headers.get('location') ?? undefined;
     expect(Boolean(userUrl)).toBe(true);
     browserContext = await browser.newContext();
-    const page = await browserContext.newPage();
-    await hostedSignIn(page, { baseURL: BASE_URL, surface: 'citizen', username, password });
-    context = await selectContext(page.request, BASE_URL, 'citizen', TENANT);
+    await browserContext.addCookies(await passwordSignIn({ baseURL: BASE_URL, surface: 'citizen', username, password }));
+    context = await selectContext(browserContext.request, BASE_URL, 'citizen', TENANT);
     expect(context.UserRequest.type).toBe('CITIZEN');
     expect(Boolean(context.access_token)).toBe(true);
   });
 
-  test.afterAll(async ({ request }) => {
+  test.afterAll(async () => {
     await browserContext?.close();
     if (userUrl) {
       const admin = keycloakAdmin();
-      expect((await request.delete(userUrl, { headers: { Authorization: `Bearer ${admin.token}` } })).status()).toBe(204);
+      expect((await fetch(userUrl, { method: 'DELETE', headers: { Authorization: `Bearer ${admin.token}` } })).status).toBe(204);
     }
   });
 

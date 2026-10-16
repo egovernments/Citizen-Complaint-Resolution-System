@@ -73,6 +73,9 @@ plugins:
     # Nothing here needs it. DIGIT authenticates with the `auth-token` request
     # header (allowed above) and a Bearer Authorization header, not cookies or
     # TLS client certs — which is all the credentials flag governs.
+    # A DEV tenant can opt back in for an explicit origin list with
+    # `kong_cors_credentials` (see host_vars/_example.yml); the wildcard assert
+    # in the playbook keeps that from ever pairing with '*'.
     max_age: 3600
 - name: request-size-limiting
   config:
@@ -463,6 +466,11 @@ plugins:
         -- returned above, so this reaches only DIGIT API routes.)
         if kong.request.get_method() ~= "POST" then
           if not is_protected then return end          -- auth-optional GETs (boundary, filestore dl, ...) pass
+          -- A CORS preflight never carries credentials, and this pre-function runs
+          -- before the global cors plugin, so a 401 here fails the browser's preflight
+          -- for every protected path. Let a real preflight through: the cors plugin
+          -- answers it itself (preflight_continue is off), so it never reaches the backend.
+          if kong.request.get_method() == "OPTIONS" and kong.request.get_header("Access-Control-Request-Method") then return end
           local hdr = kong.request.get_header("auth-token")
           local q = kong.request.get_query()
           local qtok = q and q["access_token"]
