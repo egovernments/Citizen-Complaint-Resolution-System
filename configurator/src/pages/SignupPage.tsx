@@ -275,6 +275,9 @@ function SignupFlow() {
   const [mobileError, setMobileError] = useState<string | null>(null);
   /** A failed run whose draft the backend handed back to be corrected. */
   const [reopened, setReopened] = useState(false);
+  // Whether a TERMINAL_FAILED run's signup was handed back is read from the signup. Until that
+  // read answers, neither "Change my details" nor "contact support" is shown.
+  const [reopenCheck, setReopenCheck] = useState<'pending' | 'failed' | 'done'>('pending');
   const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   const [codeState, setCodeState] = useState<AvailabilityResult | null>(null);
@@ -324,6 +327,35 @@ function SignupFlow() {
     // on the way back through should not quietly rewrite it.
     if (record.timeZone) timeZoneTouched.current = true;
   }, []);
+
+  /**
+   * The session is a cookie with its own lifetime, so it can lapse mid-wizard.
+   * The contract's answer to a 401 is to restart sign-in, and leaving the
+   * operator on Review with a button that can only keep failing is not that.
+   * The server-side draft is what makes this cheap: signing back in resumes
+   * exactly where they were.
+   */
+  const handleFailure = useCallback(async (caught: unknown) => {
+    if (!isExpiredSession(caught)) {
+      const problem = describe(caught);
+      if (problem.field === 'mobile') {
+        // Under the field it is about, on the step that has it.
+        setMobileError(problem.message);
+        setStep('preferences');
+      } else {
+        setError(problem.message);
+      }
+      return;
+    }
+    try {
+      const { methods: available } = await authMethods('signup');
+      setMethods(available);
+    } catch {
+      /* The gate still renders; it just may list nothing. */
+    }
+    setError(t('signup.session_expired', 'Your sign-in expired. Sign in again to pick up where you left off.'));
+    setPhase('signedOut');
+  }, [describe, t]);
 
   /** Session → tenants → onboarding or chooser. The contract's own order. */
   // No synchronous setState in here: it runs from an effect on mount, where
@@ -391,9 +423,23 @@ function SignupFlow() {
         default: {
           // A DRAFT with a failed run was handed back after the run refused the founder's own
           // details. Show that run, as before the reload, so the wizard isn't entered unexplained.
-          const run = existing ? await searchOperation({ signupId: existing.id }).catch(() => null) : null;
+          let run: Operation | null = null;
+          if (existing) {
+            try {
+              run = await searchOperation({ signupId: existing.id });
+            } catch (caught) {
+              // An expired sign-in goes back to sign-in. Anything else is this load's own
+              // error, with its Try again, never an unexplained wizard.
+              if (!isExpiredSession(caught)) throw caught;
+              await handleFailure(caught);
+              return;
+            }
+          }
           if (run?.status === 'TERMINAL_FAILED') {
             setOperation(run);
+            // The signup is a DRAFT again, so this run handed it back to be corrected.
+            setReopened(true);
+            setReopenCheck('done');
             setPhase('provisioning');
             return;
           }
@@ -404,7 +450,7 @@ function SignupFlow() {
       setError(describeSignupError(caught, t).message);
       setPhase('failed');
     }
-  }, [seedFrom, t]);
+  }, [seedFrom, t, handleFailure]);
 
   useEffect(() => {
     // Load on mount. Every setState inside `bootstrap` happens after an await,
@@ -505,35 +551,6 @@ function SignupFlow() {
     setSignup(created);
     return created;
   }, [draft, signup]);
-
-  /**
-   * The session is a cookie with its own lifetime, so it can lapse mid-wizard.
-   * The contract's answer to a 401 is to restart sign-in, and leaving the
-   * operator on Review with a button that can only keep failing is not that.
-   * The server-side draft is what makes this cheap: signing back in resumes
-   * exactly where they were.
-   */
-  const handleFailure = useCallback(async (caught: unknown) => {
-    if (!isExpiredSession(caught)) {
-      const problem = describe(caught);
-      if (problem.field === 'mobile') {
-        // Under the field it is about, on the step that has it.
-        setMobileError(problem.message);
-        setStep('preferences');
-      } else {
-        setError(problem.message);
-      }
-      return;
-    }
-    try {
-      const { methods: available } = await authMethods('signup');
-      setMethods(available);
-    } catch {
-      /* The gate still renders; it just may list nothing. */
-    }
-    setError(t('signup.session_expired', 'Your sign-in expired. Sign in again to pick up where you left off.'));
-    setPhase('signedOut');
-  }, [describe, t]);
 
   /** The mobile number against the country's rule, before the server is asked. */
   const checkMobile = useCallback((): boolean => {
@@ -730,19 +747,24 @@ function SignupFlow() {
   // codes kept here, says which happened: DRAFT again means it can be corrected.
   const terminal = phase === 'provisioning' && operation?.status === 'TERMINAL_FAILED';
   useEffect(() => {
-    if (!terminal) return;
+    if (!terminal || reopenCheck !== 'pending') return;
     let live = true;
     findSignup()
       .then((latest) => {
-        if (live && latest?.status === 'DRAFT') setReopened(true);
+        if (!live) return;
+        if (latest?.status === 'DRAFT') setReopened(true);
+        setReopenCheck('done');
       })
-      .catch(() => {
-        /* Not knowing leaves the closed-signup wording in place. */
+      .catch((caught) => {
+        if (!live) return;
+        // Not knowing is not "closed": offer the check again rather than "contact support".
+        if (!isExpiredSession(caught)) setReopenCheck('failed');
+        void handleFailure(caught);
       });
     return () => {
       live = false;
     };
-  }, [terminal]);
+  }, [terminal, reopenCheck, handleFailure]);
 
   /** Back into the wizard on the reopened draft, at the step with the mobile number. */
   const correctDetails = async () => {
@@ -760,6 +782,7 @@ function SignupFlow() {
       if (operation?.errorCode === 'COUNTRY_NOT_SUPPORTED') setCountryCode('');
       setOperation(null);
       setReopened(false);
+      setReopenCheck('pending');
       setStep('preferences');
       setPhase('wizard');
     } catch (caught) {
@@ -1052,10 +1075,22 @@ function SignupFlow() {
             {t('signup.correct_details', 'Change my details')}
           </Button>
         )}
-        {operation.status === 'TERMINAL_FAILED' && !reopened && (
+        {operation.status === 'TERMINAL_FAILED' && !reopened && reopenCheck === 'done' && (
           <p className="mt-4 text-sm text-muted-foreground">
             {t('signup.cannot_retry', 'This signup cannot be retried. Please contact support to continue.')}
           </p>
+        )}
+        {operation.status === 'TERMINAL_FAILED' && !reopened && reopenCheck === 'failed' && (
+          <Button
+            className="mt-4"
+            variant="outline"
+            onClick={() => {
+              setError(null);
+              setReopenCheck('pending');
+            }}
+          >
+            <RefreshCw className="mr-2 h-4 w-4" /> {t('signup.try_again', 'Try again')}
+          </Button>
         )}
         {awaitingPublication && !publishSlow && (
           <div className="mt-6 flex items-center text-sm text-muted-foreground">

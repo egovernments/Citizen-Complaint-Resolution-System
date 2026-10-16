@@ -381,7 +381,8 @@ describe('provisioning', () => {
   async function submitWith(
     operation: Record<string, unknown>,
     afterRun: 'DRAFT' | 'FAILED' = 'DRAFT',
-    draftFields: Record<string, unknown> = {}
+    draftFields: Record<string, unknown> = {},
+    firstReadAfterRunFails = false
   ) {
     vi.mocked(api.session).mockResolvedValue(signedIn);
     vi.mocked(api.tenants).mockResolvedValue({ tenants: [], selectionRequired: false, onboardingRequired: true });
@@ -401,6 +402,7 @@ describe('provisioning', () => {
     // The first read is the resume; later ones are the signup after the run, which a
     // user-correctable failure hands back as a DRAFT.
     vi.mocked(api.findSignup).mockResolvedValueOnce(draft as never).mockResolvedValue({ ...draft, status: afterRun } as never);
+    if (firstReadAfterRunFails) vi.mocked(api.findSignup).mockRejectedValueOnce(new Error('offline'));
     vi.mocked(api.updateSignup).mockResolvedValue({ id: 'signup-1' } as never);
     const run = { id: 'op-1', signupId: 'signup-1', errorCode: null, errorMessage: null, attempt: 1, createdAt: 0, updatedAt: 0, ...operation };
     vi.mocked(api.submitSignup).mockResolvedValue(run as never);
@@ -521,6 +523,54 @@ describe('provisioning', () => {
     fireEvent.click(screen.getByRole('button', { name: /continue/i }));
     await waitFor(() => expect(api.updateSignup).toHaveBeenCalledWith(
       'signup-1', expect.objectContaining({ countryCode: 'KE', accountCode: 'FR-BOMET-COUNTY' })));
+  });
+
+  it('shows a reloaded draft as correctable at once, without asking for the signup again (#2353)', async () => {
+    reloadOntoReopened('TENANT_ADMIN_ACCOUNT_REJECTED', 'KE');
+
+    expect(await screen.findByText(/usually the mobile number/i)).toBeInTheDocument();
+    // Never the closed-signup wording, not even until a second read of the signup answers.
+    expect(screen.queryByText(/cannot be retried/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /change my details/i })).toBeInTheDocument();
+    expect(api.findSignup).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a failed look-up of the run as an error to try again, not the wizard (#2353)', async () => {
+    reloadOntoReopened('TENANT_ADMIN_ACCOUNT_REJECTED', 'KE');
+    findSignupOperation.mockRejectedValue(new api.OnboardingError(503, null, 'Service unavailable'));
+
+    expect(await screen.findByRole('button', { name: /try again/i })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/account name/i)).not.toBeInTheDocument();
+  });
+
+  it('sends an expired sign-in during the run look-up back to sign-in (#2353)', async () => {
+    vi.mocked(api.authMethods).mockResolvedValue({ methods: [{ id: 'password', label: 'Email and password', type: 'password' }] });
+    reloadOntoReopened('TENANT_ADMIN_ACCOUNT_REJECTED', 'KE');
+    findSignupOperation.mockRejectedValue(
+      new api.OnboardingError(401, 'ONBOARDING_IDENTITY_REQUIRED', 'A valid identity session is required'));
+
+    expect(await screen.findByText(/sign-in expired/i)).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /email and password/i })).toBeInTheDocument();
+  });
+
+  it('offers the check again when it cannot tell whether the run handed the draft back (#2353)', async () => {
+    // The read after the run fails once; the next one answers.
+    await submitWith(
+      {
+        status: 'TERMINAL_FAILED',
+        currentStep: 'FOUNDER_HRMS',
+        completedSteps: ['TENANT_FOUNDATION', 'PLATFORM_BASELINE'],
+        errorCode: 'TENANT_ADMIN_ACCOUNT_REJECTED',
+        errorMessage: 'TENANT_ADMIN_ACCOUNT_REJECTED',
+      },
+      'DRAFT',
+      {},
+      true
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: /try again/i }));
+    expect(screen.queryByText(/cannot be retried/i)).not.toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /change my details/i })).toBeInTheDocument();
   });
 
   it('keeps the closed-signup wording when the run did not hand the draft back', async () => {
