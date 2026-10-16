@@ -1,4 +1,4 @@
-import { expect, type APIRequestContext, type APIResponse, type Page, type Request, type Response } from '@playwright/test';
+import { expect, test, type APIRequestContext, type APIResponse, type Page, type Request, type Response } from '@playwright/test';
 
 export type Surface = 'configurator' | 'employee' | 'citizen';
 export interface DigitContext {
@@ -10,12 +10,19 @@ export interface DigitContext {
   tenant?: { urlSlug: string; tenantId: string };
 }
 
+/** An identity response with an unexpected status, and the BFF's error code (never the body). */
+export class IdentityHttpError extends Error {
+  constructor(readonly status: number, readonly code: string) {
+    super(`Identity request failed: HTTP ${status} (${code})`);
+  }
+}
+
 /** Never include a response body: successful and failed auth responses may hold secrets. */
 export async function identityJson<T>(response: Pick<APIResponse, 'status' | 'json'>, status = 200): Promise<T> {
   if (response.status() !== status) {
     const body = await response.json().catch(() => null);
     const code = typeof body?.code === 'string' && /^[A-Z_]+$/.test(body.code) ? body.code : 'UNEXPECTED_RESPONSE';
-    throw new Error(`Identity request failed: HTTP ${response.status()} (${code})`);
+    throw new IdentityHttpError(response.status(), code);
   }
   return response.json() as Promise<T>;
 }
@@ -61,10 +68,178 @@ export async function enterHostedUsername(page: Page, value: string): Promise<vo
   await expect(page.locator('#password')).toBeVisible();
 }
 
-/** Credentials go only to the hosted form. The landing app owns one-use auth results. */
+/** Keycloak refused the credentials. Retrying only feeds its brute-force detection. */
+export class KeycloakSignInError extends Error {}
+
+/**
+ * Keycloak ended the sign-in itself: the login timed out, the auth session
+ * expired or restarted, or its cookie was lost. Nothing was wrong with the
+ * credentials, so one fresh attempt is safe.
+ */
+export class KeycloakSessionExpiredError extends Error {}
+
+// Keycloak's English messages (the suite's deployments sign in in English):
+// expiredCodeMessage "Login timeout…", staleCodeMessage "…no longer valid…",
+// and the expired/restarted auth session ones. The login page carries no
+// message key, so its text is the only signal.
+const SESSION_ENDED = /timed out|timeout|expired|no longer valid|start from the beginning|restart|cookie not found/i;
+
+/** The error for a sign-in Keycloak sent back to its form, by what the page says. */
+function refusedWith(username: string, shown: string): KeycloakSignInError | KeycloakSessionExpiredError {
+  return SESSION_ENDED.test(shown)
+    ? new KeycloakSessionExpiredError(`Keycloak ended the sign-in for ${username}: ${shown}`)
+    : new KeycloakSignInError(`Keycloak refused the sign-in for ${username}: ${shown}`);
+}
+
+/** Each hosted sign-in request; past it, Keycloak or the BFF is stuck, not slow. */
+const SIGN_IN_REQUEST_MS = 30_000;
+
+/** A cookie the BFF or Keycloak set, in the shape BrowserContext.addCookies takes. */
+export interface SignInCookie {
+  name: string; value: string; domain: string; path: string;
+  expires: number; httpOnly: boolean; secure: boolean; sameSite: 'Strict' | 'Lax' | 'None';
+}
+
+// Keycloak's login pages, read from their HTML. The themes render the form with
+// JS, so the page's kcContext JSON carries the pageId and the post target.
+const unescapeHtml = (v: string) => v.replace(/\\u0026/g, '&').replace(/\\\//g, '/').replace(/&amp;/g, '&').replace(/&#x3D;/gi, '=').replace(/&#61;/g, '=');
+const keycloakPageId = (html: string) => html.match(/pageId"\s*:\s*"([^"]+)"/)?.[1];
+function keycloakLoginAction(html: string): string | undefined {
+  const match = html.match(/loginAction"\s*:\s*"([^"]+)"/) ?? html.match(/<form[^>]*action="([^"]+)"/);
+  return match ? unescapeHtml(match[1]) : undefined;
+}
+/** The sign-in pages: one page, or identity-first (username, then password). */
+const KEYCLOAK_LOGIN_PAGES = new Set(['login', 'login.ftl', 'login-username', 'login-password']);
+/** The error Keycloak rendered on the page, if any. */
+const keycloakError = (html: string) =>
+  unescapeHtml(html.match(/"summary"\s*:\s*"([^"]+)"/)?.[1] ?? html.match(/id="input-error"[^>]*>([^<]+)</)?.[1] ?? 'no message').trim();
+
+/**
+ * Hosted sign-in WITHOUT a browser: the Keycloak form is posted with Node's own
+ * fetch, which no Playwright context records. Every staff helper signs in this
+ * way, because Playwright traces every context and request a test creates, and
+ * a password typed or posted there lands in the trace, the step titles and
+ * report.json, all of which a run publishes. Returns the BFF session cookies
+ * for a context to adopt. A refused password throws KeycloakSignInError after
+ * ONE post; a sign-in Keycloak timed out or restarted throws
+ * KeycloakSessionExpiredError, which a caller may retry.
+ */
+export async function passwordSignIn(config: { baseURL: string; surface: Surface; username: string; password: string }): Promise<SignInCookie[]> {
+  const jar = new Map<string, SignInCookie>();
+  const header = (url: URL) => [...jar.values()]
+    .filter((c) => (url.hostname === c.domain || url.hostname.endsWith(`.${c.domain}`)) && url.pathname.startsWith(c.path))
+    .map((c) => `${c.name}=${c.value}`).join('; ');
+  const store = (raw: string, url: URL) => {
+    const [pair, ...attrs] = raw.split(';').map((p) => p.trim());
+    const at = pair.indexOf('=');
+    const attr = (name: string) => attrs.find((a) => a.toLowerCase().startsWith(`${name}=`))?.slice(name.length + 1);
+    const flag = (name: string) => attrs.some((a) => a.toLowerCase() === name);
+    const cookie: SignInCookie = { name: pair.slice(0, at), value: pair.slice(at + 1),
+      domain: (attr('domain') || url.hostname).replace(/^\./, ''), path: attr('path') || '/', expires: -1,
+      httpOnly: flag('httponly'), secure: flag('secure'),
+      sameSite: (['Strict', 'Lax', 'None'].find((v) => v.toLowerCase() === attr('samesite')?.toLowerCase()) ?? 'Lax') as SignInCookie['sameSite'] };
+    const maxAge = attr('max-age');
+    const expires = maxAge !== undefined ? Date.now() / 1000 + Number(maxAge) : attr('expires') ? Date.parse(attr('expires')!) / 1000 : -1;
+    const key = `${cookie.domain}|${cookie.path}|${cookie.name}`;
+    if (expires !== -1 && expires <= Date.now() / 1000) jar.delete(key);
+    else jar.set(key, { ...cookie, expires: expires === -1 ? -1 : Math.floor(expires) });
+  };
+  const go = async (start: string, form?: Record<string, string>) => {
+    let url = new URL(start);
+    let body = form ? new URLSearchParams(form).toString() : undefined;
+    for (let hop = 0; hop < 15; hop++) {
+      const cookies = header(url);
+      const response = await fetch(url, { method: body ? 'POST' : 'GET', redirect: 'manual', body, signal: AbortSignal.timeout(SIGN_IN_REQUEST_MS),
+        headers: { ...(body ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}), ...(cookies ? { Cookie: cookies } : {}) } });
+      for (const raw of response.headers.getSetCookie()) store(raw, url);
+      const location = response.headers.get('location');
+      if (response.status >= 300 && response.status < 400 && location) {
+        url = new URL(location, url);
+        body = undefined;
+        continue;
+      }
+      return { url, html: await response.text() };
+    }
+    throw new Error('Hosted sign-in redirected too many times');
+  };
+  // A login form: Keycloak's pageId (login, login-username, login-password), or a plain form.
+  const formOf = (html: string) => {
+    const pageId = keycloakPageId(html);
+    const action = keycloakLoginAction(html);
+    if (pageId && /expired|timeout/i.test(pageId)) throw new KeycloakSessionExpiredError(`Keycloak ended the sign-in for ${config.username} (${pageId})`);
+    if (pageId && !KEYCLOAK_LOGIN_PAGES.has(pageId)) throw new Error(`Hosted sign-in stopped on Keycloak page ${pageId}`);
+    return action ? { action, kind: pageId ?? `form${/id="username"/.test(html) ? '+user' : ''}${/id="password"/.test(html) ? '+password' : ''}` } : null;
+  };
+  const origin = new URL(config.baseURL).origin;
+  let page = await go(authorizeUrl(config.baseURL, config.surface));
+  let posted: string | undefined;
+  for (let step = 0; step < 3; step++) {
+    const form = formOf(page.html);
+    if (!form) break;
+    // The same login page again after a post means Keycloak refused the credentials.
+    if (form.kind === posted) throw refusedWith(config.username, keycloakError(page.html));
+    page = await go(new URL(form.action, page.url).href, { username: config.username, password: config.password });
+    posted = form.kind;
+  }
+  if (page.url.origin !== origin || page.url.pathname.startsWith('/auth/')) throw new Error('Hosted sign-in did not return to the application');
+  const resultId = page.url.searchParams.get('authResult');
+  if (resultId) {
+    const resultUrl = new URL(`${origin}/identity/v1/auth-results/${encodeURIComponent(resultId)}`);
+    const result = await fetch(resultUrl, { headers: { Cookie: header(resultUrl) }, signal: AbortSignal.timeout(SIGN_IN_REQUEST_MS) });
+    if (result.status !== 200 || (await result.json().catch(() => null))?.status !== 'complete') throw new Error('Hosted sign-in was rejected by the BFF');
+  }
+  const sessionUrl = new URL(`${origin}/identity/v1/session?surface=${config.surface}`);
+  const session = await fetch(sessionUrl, { headers: { Cookie: header(sessionUrl) }, signal: AbortSignal.timeout(SIGN_IN_REQUEST_MS) });
+  if (session.status !== 200 || (await session.json().catch(() => null))?.authenticated !== true) {
+    throw new Error('Hosted sign-in did not establish a BFF session');
+  }
+  return [...jar.values()];
+}
+
+/**
+ * A configured password (any *_PASS or *_PASSWORD in the env) must not be typed
+ * into a traced page. Pausing the trace does not help: the step title of a fill
+ * carries its value, and the trace's network log keeps the form post's fields
+ * whether or not a chunk is recording. Runs that do not trace (the identity-real
+ * config) may type them.
+ *
+ * "Traced" is this test's own setting: the `trace` option after every
+ * test.use() override, as the runner resolved it for this test. Playwright
+ * exposes that only on testInfo's internal tracing state (`_tracing`), so when
+ * that cannot be read the guard fails and says so, rather than guessing.
+ */
+function assertUntracedOrThrowaway(password: string): void {
+  let info: ReturnType<typeof test.info>;
+  try {
+    info = test.info();
+  } catch {
+    return; // outside the Playwright runner: nothing records the page
+  }
+  if (!password) return;
+  const configured = Object.entries(process.env).some(([name, value]) => /_PASS(WORD)?$/.test(name) && value === password);
+  if (!configured) return;
+  const tracing = (info as unknown as { _tracing?: { traceOptions?: () => unknown } })._tracing;
+  if (typeof tracing?.traceOptions !== 'function') {
+    throw new Error('hostedSignIn cannot determine tracing; Playwright internals changed (testInfo._tracing.traceOptions). ' +
+      'Refusing to type a configured password into a page that may be traced.');
+  }
+  if (tracing.traceOptions() !== undefined) {
+    throw new Error('hostedSignIn types the password into a traced page; sign personas in with passwordSignIn() (auth.ts staffContext/loginViaApi)');
+  }
+}
+
+/**
+ * Browser sign-in through the hosted form, for specs that test that form.
+ * It TYPES the password on the page, so in a traced test the value lands in
+ * the trace, step titles and report.json: throwaway credentials only there,
+ * which assertUntracedOrThrowaway() enforces. Persona sign-ins go through
+ * passwordSignIn() (auth.ts staffContext/getDigitToken). The landing app owns
+ * one-use auth results.
+ */
 export async function hostedSignIn(page: Page, config: {
   baseURL: string; surface: Surface; username: string; password: string;
 }): Promise<void> {
+  assertUntracedOrThrowaway(config.password);
   const origin = new URL(config.baseURL).origin;
   let resultId: string | null = null;
   let observedResult: Promise<{ httpStatus: number; body: { status?: string } | null }> | undefined;
@@ -118,6 +293,10 @@ export async function hostedSignIn(page: Page, config: {
 export function citizenAccountTenantId(tenantId: string) {
   return tenantId.split('.')[0];
 }
+
+/** `_select` refusals that say this person has no context at the tenant, not that the BFF failed. */
+const CONTEXT_REFUSALS = new Set(['TENANT_CONTEXT_UNAVAILABLE', 'EMPLOYEE_ACCOUNT_NOT_LINKED', 'PENDING_INVITATION', 'DIGIT_ACCOUNT_NOT_FOUND', 'DIGIT_ACCOUNT_INACTIVE']);
+export const isContextRefusal = (err: unknown) => err instanceof IdentityHttpError && CONTEXT_REFUSALS.has(err.code);
 
 export async function selectContext(request: APIRequestContext, baseURL: string, surface: Surface, tenantId: string) {
   const path = surface === 'citizen' ? 'contexts/citizen/_select' : 'contexts/_select';

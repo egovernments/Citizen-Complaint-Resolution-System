@@ -23,7 +23,7 @@ export async function citizenLoginViaApi(page: Page, phone?: string): Promise<vo
   if (!mobile) throw new Error('Citizen fixture missing: run citizen-setup or supply a phone');
   // Reuse the fixture citizen's BFF session when it is still live: every OTP
   // send counts against the BFF's per-phone (5/h) and per-IP (20/h) limits.
-  // citizen-setup records them as `sessionCookies` (#2454; absent before it).
+  // citizen-setup records them as `sessionCookies` (citizen-provision.ts).
   const fixtureCookies = (fixture as unknown as { sessionCookies?: SessionCookies } | null)?.sessionCookies;
   const cookies = phoneSessions.get(mobile) ?? (mobile === fixture?.mobile ? fixtureCookies : undefined);
   let context: DigitContext | null = null;

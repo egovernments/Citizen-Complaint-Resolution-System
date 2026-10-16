@@ -22,6 +22,7 @@ import {
   type AuthInfo,
 } from '../utils/manage/api';
 import { cleanupPgrComplaints } from '../utils/manage/teardown';
+import { SRID_RE } from '../utils/pgr-idgen';
 import { seedComplaintAsCitizen } from '../utils/seed';
 import { BASE_URL, generateCitizenPhone, ROOT_TENANT, TENANT, LOCALITY_CODE, SERVICE_CODE } from '../utils/env';
 
@@ -223,11 +224,11 @@ Citizen tenant must be ROOT — assigning to city would break login flows. Clean
 
     // Wait for the redirect to the Show page with a fresh <PREFIX>-PGR-* id
     // (Maputo: PG-PGR-…, Kenya: NCCG-PGR-…) — keep the SRID match prefix-agnostic.
-    await page.waitForURL(/[A-Z]+-PGR-/, { timeout: 30_000 });
+    await page.waitForURL(SRID_RE, { timeout: 30_000 });
     const url = page.url();
-    const match = url.match(/([A-Z]+-PGR-[^/?#]+)/);
+    const match = url.match(SRID_RE);
     expect(match, `expected <PREFIX>-PGR id in url ${url}`).not.toBeNull();
-    if (match) createdComplaints.add(match[1]);
+    if (match) createdComplaints.add(match[0]);
   });
 
   test('2. edit merges description + workflow ASSIGN in one round-trip', {

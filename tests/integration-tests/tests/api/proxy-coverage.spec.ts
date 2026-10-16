@@ -171,8 +171,10 @@ test.describe('API Proxy Coverage', () => {
   test('MDMS, localization, and access APIs work with JWT auth', {
     tag: ['@area:proxy', '@kind:regression', '@layer:api', '@persona:cross'],
   }, async ({ page }) => {
-    // Navigate to the domain first so fetch calls are same-origin
-    await page.goto(`${BASE_URL}/${tenantSlug()}/digit-ui/employee/user/login`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+    // Navigate to the domain first so fetch calls are same-origin. Not to a
+    // digit-ui page: with the BFF session in auth-api.json the SPA runs its own
+    // context _select and redirects, and that navigation aborts the fetches below.
+    await page.goto(`${BASE_URL}/identity/v1/tenant-contexts/${tenantSlug()}`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
 
     // Acquire a token through hosted sign-in + the BFF context exchange
     // (getDigitToken). This test is about proxy coverage of the downstream
