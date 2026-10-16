@@ -36,12 +36,13 @@ export default function MembersPage() {
     catch (e) { setError(e instanceof Error ? e.message : 'Member action failed.'); }
     finally { setBusy(false); }
   };
-  return <main className="mx-auto flex max-w-3xl flex-col gap-5 p-6">
-    <Link to="/">Back to workspace</Link><h1 className="text-2xl font-semibold">Members</h1>
+  // ours (cfgreview F24, #1570): rendered inside the app layout (which owns <main>), so a section, not a page
+  return <section className="mx-auto flex max-w-3xl flex-col gap-5 p-6" data-testid="members-page">
+    <h1 className="text-2xl font-semibold">Members</h1>
     {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
     {notice && <Alert><AlertDescription>{notice}</AlertDescription></Alert>}
     {!admin ? <p>Workspace administrator access is required.</p> : <>
-      <Link to="/manage/employees/create">Create and invite an employee</Link>
+      <Button asChild className="self-start"><Link to="/manage/employees/create">Create and invite an employee</Link></Button>
       <Button variant="outline" disabled={busy} onClick={() => void run(load)}>Refresh members</Button>
       {employees.filter(e => e.isActive !== false && !rows.some(row => row.digitUuid === (e.user.uuid || e.uuid))).map(e => <section key={e.uuid || e.code} className="flex flex-col gap-2">
         <p>{e.user.name} — invitation not linked</p>
@@ -90,5 +91,5 @@ export default function MembersPage() {
         })}>Confirm removal</Button><Button variant="outline" disabled={busy} onClick={() => setConfirm(null)}>Cancel</Button></div>
       </AlertDescription></Alert>}
     </>}
-  </main>;
+  </section>;
 }
