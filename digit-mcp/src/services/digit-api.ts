@@ -850,7 +850,7 @@ class DigitApiClient {
           tenantId,
           serviceCode,
           description,
-          address: { tenantId, geoLocation: { latitude: 0, longitude: 0 }, ...address },
+          address: { tenantId, geoLocation: {}, ...address },
           citizen: citizenInfo,
           source: 'web',
           active: true,

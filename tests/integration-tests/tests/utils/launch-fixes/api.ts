@@ -196,7 +196,9 @@ export async function pgrCreate(params: PgrCreateParams): Promise<PgrCreateResul
     address: {
       city: tenantId,
       locality: { code: localityCode },
-      geoLocation: geoLocation ?? { latitude: 0, longitude: 0 },
+      // No pin is `{}` (stored as no location), the same as the digit-ui create
+      // screens. (0, 0) is a real point at sea and showed up as data (#1581).
+      geoLocation: geoLocation ?? {},
     },
     citizen: { name: citizenName, mobileNumber: citizenPhone },
   };
