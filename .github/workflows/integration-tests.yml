@@ -1,0 +1,463 @@
+name: Integration tests
+
+# Deploys a fresh develop stack on a GitHub-hosted runner and runs
+# tests/integration-tests against it (#2030).
+#
+# The stack: local-setup/ansible/deploy.sh with host_vars/ci.yml.example (the
+# localhost-slim profile: dump-seeded pg tenants, Keycloak + identity BFF, MCP,
+# no notifications or search) and the docker-compose.ci.yml overlay (Mailpit).
+# Every CCRS-owned image in it is built from the checkout, so the run tests
+# this code and nothing published elsewhere.
+#
+# When it runs:
+#   pull_request → develop  on open / push / reopen / ready for review. Drafts
+#                           wait. A new push cancels the PR's older run.
+#   push → develop          every merge, never cancelled: its report is the
+#                           baseline PRs are compared with, and a regression it
+#                           finds points at that merge.
+#   workflow_dispatch       any branch, on demand.
+# The plan job skips the rest when no changed file can affect the stack or the
+# suite: docs, unit tests, other CI, code the CI stack does not deploy
+# (tests/integration-tests/scripts/ci-plan.mjs; unknown paths always run).
+#
+# Pass / fail: the deploy must succeed, and no test that passed on the latest
+# develop run may fail here (scripts/ci-compare.mjs). Tests that fail on develop
+# too are listed in the summary but do not fail the check. Before the first
+# develop run exists the check only reports.
+#
+# Fork PRs (most PRs here) get a read-only token and no secrets; nothing in this
+# workflow needs either.
+
+on:
+  pull_request:
+    branches: [develop]
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read # find and download the develop baseline report
+
+concurrency:
+  group: integration-tests-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  plan:
+    name: Plan
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.plan.outputs.run }}
+      build: ${{ steps.plan.outputs.build }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # A PR checks out GitHub's test merge commit; its first parent is
+          # the base branch tip, so HEAD^1..HEAD is exactly what the PR adds.
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: List changed files
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          case "$EVENT" in
+            pull_request)
+              git diff --name-only HEAD^1 HEAD > "$RUNNER_TEMP/changed.txt" ;;
+            push)
+              if [[ "$BEFORE" =~ ^0+$ ]] || ! git fetch --quiet --depth=1 origin "$BEFORE"; then
+                echo "No previous commit to diff against: treating every file as changed."
+                git ls-files > "$RUNNER_TEMP/changed.txt"
+              else
+                git diff --name-only "$BEFORE" "$SHA" > "$RUNNER_TEMP/changed.txt"
+              fi ;;
+            *)
+              # workflow_dispatch: always run.
+              git ls-files > "$RUNNER_TEMP/changed.txt" ;;
+          esac
+          echo "$(wc -l < "$RUNNER_TEMP/changed.txt") changed file(s)"
+
+      - name: Decide
+        id: plan
+        run: node tests/integration-tests/scripts/ci-plan.mjs --github < "$RUNNER_TEMP/changed.txt" > /dev/null
+
+  build:
+    name: Build ${{ matrix.image.image }}
+    needs: plan
+    if: needs.plan.outputs.run == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      # One image that does not build means no stack to test: stop the rest.
+      fail-fast: true
+      matrix:
+        image: ${{ fromJson(needs.plan.outputs.build) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Same context / Dockerfile / build args as build-images.yml, so CI tests
+      # what the nightly would publish. Layers are cached per image: PRs read
+      # develop's cache, so an image the PR did not touch rebuilds in seconds.
+      - name: Build
+        uses: docker/build-push-action@v6
+        env:
+          # No per-image .dockerbuild record artifact on every run.
+          DOCKER_BUILD_RECORD_UPLOAD: false
+        with:
+          context: ${{ matrix.image.context }}
+          file: ${{ matrix.image.dockerfile }}
+          build-args: ${{ matrix.image.buildArgs }}
+          platforms: linux/amd64
+          tags: ci.local/${{ matrix.image.image }}:ci
+          outputs: type=docker,dest=${{ runner.temp }}/image.tar
+          cache-from: type=gha,scope=integration-tests-${{ matrix.image.image }}
+          cache-to: type=gha,mode=max,scope=integration-tests-${{ matrix.image.image }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: image-${{ matrix.image.image }}
+          path: ${{ runner.temp }}/image.tar
+          retention-days: 1
+          compression-level: 1
+
+  # The suite is serial by design (it mutates tenant state), so it is split
+  # over shards, each on its own runner with its own fresh stack: a deploy
+  # costs ~10 minutes, far less than the suite. This job (it runs while the
+  # images build) picks the develop baseline the whole run uses and packs the
+  # spec files into SHARDS lists of about equal time on it, or on the newest
+  # run of any branch before develop has one (scripts/ci-shards.mjs). Playwright's own --shard splits by test count in
+  # file order, and the slow specs sit together: on develop it gave shards of
+  # 14, 32, 45+ and 9 minutes.
+  split:
+    name: Split the suite
+    needs: plan
+    if: needs.plan.outputs.run == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      SHARDS: 4
+      REPORT_ARTIFACT: integration-report
+    outputs:
+      matrix: ${{ steps.split.outputs.matrix }}
+      lists: ${{ steps.split.outputs.lists }}
+      baseline-run: ${{ steps.baseline.outputs.run }}
+      baseline-label: ${{ steps.baseline.outputs.label }}
+    defaults:
+      run:
+        working-directory: tests/integration-tests
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tests/integration-tests/package-lock.json
+
+      - run: npm ci
+
+      - name: Find the develop baseline
+        id: baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          # The newest completed develop push run of this workflow that left a
+          # report. For a develop run that is the merge before it.
+          for id in $(gh run list --repo "$REPO" --workflow integration-tests.yml --branch develop \
+                        --event push --status completed --limit 20 --json databaseId --jq '.[].databaseId'); do
+            [ "$id" = "$RUN_ID" ] && continue
+            if gh run download "$id" --repo "$REPO" --name "$REPORT_ARTIFACT" --dir "$RUNNER_TEMP/baseline" 2>/dev/null; then
+              sha=$(gh run view "$id" --repo "$REPO" --json headSha --jq '.headSha[0:8]')
+              { echo "run=$id"; echo "label=develop @ $sha (run $id)"; } >> "$GITHUB_OUTPUT"
+              echo "Baseline: run $id (develop @ $sha)"
+              exit 0
+            fi
+          done
+          echo "No develop run with a report yet."
+
+      # For timing only. Until develop has a run, the newest earlier run of
+      # this workflow on any branch (a PR's) times the specs well enough to
+      # balance the shards; Verdict still compares only with develop.
+      - name: Find spec timings
+        id: timing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          BASELINE_LABEL: ${{ steps.baseline.outputs.label }}
+        run: |
+          set -euo pipefail
+          if [ -n "$BASELINE_LABEL" ]; then
+            { echo "file=$RUNNER_TEMP/baseline/report.json"; echo "label=$BASELINE_LABEL"; } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          for id in $(gh run list --repo "$REPO" --workflow integration-tests.yml --status completed \
+                        --limit 20 --json databaseId --jq '.[].databaseId'); do
+            [ "$id" = "$RUN_ID" ] && continue
+            if gh run download "$id" --repo "$REPO" --name "$REPORT_ARTIFACT" --dir "$RUNNER_TEMP/timing" 2>/dev/null; then
+              { echo "file=$RUNNER_TEMP/timing/report.json"; echo "label=run $id"; } >> "$GITHUB_OUTPUT"
+              echo "Timings from run $id"
+              exit 0
+            fi
+          done
+          echo "No earlier run with a report: splitting by test count."
+
+      - name: Split
+        id: split
+        env:
+          TIMING_FILE: ${{ steps.timing.outputs.file }}
+          TIMING_LABEL: ${{ steps.timing.outputs.label }}
+        run: |
+          set -euo pipefail
+          npx playwright test --config playwright.ci.config.ts --list --reporter=json > "$RUNNER_TEMP/list.json"
+          node scripts/ci-shards.mjs --list "$RUNNER_TEMP/list.json" --shards "$SHARDS" \
+            --baseline "${TIMING_FILE:-none}" --baseline-label "$TIMING_LABEL" --github
+
+  integration:
+    name: Deploy and test ${{ matrix.shard }}/${{ strategy.job-total }}
+    needs: [plan, build, split]
+    if: needs.plan.outputs.run == 'true'
+    # Pinned, not ubuntu-latest (Ubuntu 26 from 2026-10-19): the playbook
+    # installs Docker and packages for the release it finds, and 24.04 is the
+    # one this was proven on. Move it deliberately.
+    runs-on: ubuntu-24.04
+    # Deploy ~10 min + the shard's share of the suite (capped below at 45).
+    timeout-minutes: 75
+    strategy:
+      # A shard that fails keeps the others going: their results still count.
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJson(needs.split.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Runner
+        run: |
+          echo "$(nproc) vCPU"; free -h; df -h /
+
+      # The stack needs ~10 GB of images plus Postgres, Kafka and MinIO data.
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup \
+            /opt/hostedtoolcache/CodeQL /usr/local/share/boost /usr/local/share/powershell \
+            /usr/share/swift /opt/microsoft
+          docker image prune -af > /dev/null
+          df -h /
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: image-*
+          path: ${{ runner.temp }}/images
+
+      - name: Load the images built from this checkout
+        run: |
+          set -euo pipefail
+          for tar in "$RUNNER_TEMP"/images/*/image.tar; do docker load -i "$tar"; done
+          rm -rf "$RUNNER_TEMP/images"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Ansible
+        run: pip install ansible
+
+      # host_vars/ci.yml.example plus a pin per image built above. A pin
+      # outranks the compose default (ccrs_image_catalog in group_vars), and
+      # `compose pull --ignore-pull-failures` leaves a ci.local/ image alone.
+      - name: Write the CI inventory
+        env:
+          BUILD: ${{ needs.plan.outputs.build }}
+        run: |
+          set -euo pipefail
+          hv=local-setup/ansible/inventory/host_vars
+          cp "$hv/ci.yml.example" "$hv/ci.yml"
+          echo "$BUILD" | jq -r '.[] | "\(.var): ci.local/\(.image):ci"' >> "$hv/ci.yml"
+          tail -n "$(echo "$BUILD" | jq length)" "$hv/ci.yml"
+
+      - name: Deploy the stack
+        working-directory: local-setup/ansible
+        timeout-minutes: 40
+        env:
+          SKIP_LINT: "1" # Local Setup CI lints the playbook
+          ANSIBLE_FORCE_COLOR: "1"
+        run: ./deploy.sh ci
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tests/integration-tests/package-lock.json
+
+      - name: Install the suite
+        working-directory: tests/integration-tests
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      # A fresh stack has nobody who can sign in through Keycloak: add the
+      # workspace, an admin and the seeded employees (scripts/ci-identities.sh).
+      - name: Provision test identities
+        working-directory: tests/integration-tests
+        run: bash scripts/ci-identities.sh > "$RUNNER_TEMP/identities.env"
+
+      - name: Run the suite (shard ${{ matrix.shard }}/${{ strategy.job-total }})
+        id: suite
+        working-directory: tests/integration-tests
+        env:
+          CI_SHARD: ${{ matrix.shard }} # names the blob report (playwright.ci.config.ts)
+          LISTS: ${{ needs.split.outputs.lists }}
+        run: |
+          jq -r --arg s "$CI_SHARD" '.[$s][]' <<< "$LISTS" > "$RUNNER_TEMP/tests.txt"
+          # An empty list would run nothing and look like a quiet shard.
+          [ -s "$RUNNER_TEMP/tests.txt" ] || { echo "::error::No spec files for shard $CI_SHARD."; exit 1; }
+          echo "$(wc -l < "$RUNNER_TEMP/tests.txt") spec file(s) in this shard"
+          set -a
+          source deploy/pg.env
+          source "$RUNNER_TEMP/identities.env"
+          set +a
+          # --global-timeout fires before the job timeout, so the blob report
+          # is still written with what finished.
+          npx playwright test --config playwright.ci.config.ts --test-list "$RUNNER_TEMP/tests.txt" --global-timeout=2700000 \
+            || echo "Playwright exited $?; the Verdict job decides."
+          ls blob-report/*.zip
+
+      - name: Upload the shard's report
+        if: always() && steps.suite.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: blob-report-${{ matrix.shard }}
+          path: tests/integration-tests/blob-report
+          retention-days: 7
+
+      # Always: a test that fails needs the server side of the story too.
+      - name: Collect stack diagnostics
+        if: always()
+        run: |
+          d="$RUNNER_TEMP/diagnostics"; mkdir -p "$d"
+          docker ps -a --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}' > "$d/containers.txt" || true
+          for c in $(docker ps -a --format '{{.Names}}'); do docker logs --tail 400 "$c" > "$d/$c.log" 2>&1 || true; done
+          sudo cp /opt/digit/*.progress "$d/" 2>/dev/null || true
+          sudo chown -R "$(id -u)" "$d"
+          df -h / > "$d/disk.txt"; free -h > "$d/memory.txt"
+          grep -vE '\b(Up|healthy)\b' "$d/containers.txt" || echo "All containers up."
+
+      - name: Upload stack diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stack-diagnostics-${{ matrix.shard }}
+          path: ${{ runner.temp }}/diagnostics
+          retention-days: 7
+
+  # The one check to require: merges the shards and judges the run.
+  verdict:
+    name: Verdict
+    needs: [plan, build, split, integration]
+    if: always() && needs.plan.outputs.run == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      REPORT_ARTIFACT: integration-report
+    defaults:
+      run:
+        working-directory: tests/integration-tests
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tests/integration-tests/package-lock.json
+
+      - run: npm ci
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: blob-report-*
+          path: tests/integration-tests/all-blob-reports
+          merge-multiple: true
+
+      - name: Merge the shards
+        id: merge
+        run: |
+          shopt -s nullglob
+          blobs=(all-blob-reports/*.zip)
+          echo "${#blobs[@]} shard report(s)"
+          [ "${#blobs[@]}" -gt 0 ] || { echo "No shard produced a report."; exit 1; }
+          npx playwright merge-reports --config playwright.ci-merge.config.ts all-blob-reports
+          test -f report.json
+
+      # The one the split job picked, so the shards were timed by the same run.
+      - name: Download the develop baseline
+        if: steps.merge.outcome == 'success' && needs.split.outputs.baseline-run != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BASELINE_RUN: ${{ needs.split.outputs.baseline-run }}
+        run: gh run download "$BASELINE_RUN" --repo "$REPO" --name "$REPORT_ARTIFACT" --dir "$RUNNER_TEMP/baseline"
+
+      - name: Upload the report (baseline for later runs)
+        if: steps.merge.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.REPORT_ARTIFACT }}
+          path: tests/integration-tests/report.json
+          retention-days: 30
+
+      - name: Upload the HTML report
+        if: steps.merge.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: tests/integration-tests/playwright-report
+          retention-days: 7
+
+      # Last, so the reports above are uploaded whatever it decides.
+      - name: Judge
+        if: always()
+        env:
+          BUILD: ${{ needs.build.result }}
+          SPLIT: ${{ needs.split.result }}
+          SHARDS: ${{ needs.integration.result }}
+          MERGED: ${{ steps.merge.outcome }}
+          LABEL: ${{ needs.split.outputs.baseline-label }}
+        run: |
+          status=0
+          if [ "$MERGED" = success ]; then
+            node scripts/ci-compare.mjs --current report.json \
+              --baseline "$RUNNER_TEMP/baseline/report.json" --baseline-label "${LABEL:-develop}" \
+              --summary "$GITHUB_STEP_SUMMARY" || status=$?
+          fi
+          if [ "$BUILD" != success ]; then
+            echo "::error::An image did not build (build: $BUILD), so there was no stack to test."
+            echo "**An image did not build: no stack to test.**" >> "$GITHUB_STEP_SUMMARY"; status=1
+          elif [ "$SPLIT" != success ]; then
+            echo "::error::The suite could not be listed or split (split: $SPLIT), so no shard ran."
+            echo "**The suite could not be split: no shard ran.**" >> "$GITHUB_STEP_SUMMARY"; status=1
+          elif [ "$SHARDS" != success ]; then
+            echo "::error::A shard did not deploy or did not finish (integration: $SHARDS); see its log and stack-diagnostics artifact."
+            echo "**A shard did not deploy or did not finish; its tests are missing above.**" >> "$GITHUB_STEP_SUMMARY"; status=1
+          fi
+          exit "$status"
