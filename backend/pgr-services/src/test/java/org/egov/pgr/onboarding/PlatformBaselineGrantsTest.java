@@ -15,7 +15,8 @@ public class PlatformBaselineGrantsTest {
     // (configurator/src/api/config.ts) + "/" + schema code, as used by mdmsService.create/update/
     // setActive/upsertMapConfig from configurator/src/onboarding/** (brandingApi.ts,
     // complaints/complaintsApi.ts, departments/mastersApi.ts, geography/BoundaryImport.tsx).
-    // configurator/src/identity/workspace.ts (workspace settings) writes identity.invitationPolicy.
+    // configurator/src/identity/workspace.ts (workspace settings) writes identity.invitationPolicy;
+    // the Public Dashboard screen (mdmsService.upsertDashboardConfig) writes dss.DashboardConfig.
     // Keep in sync when a setup step writes a new master.
     private static final List<String> WORKSPACE_SETUP_MDMS_WRITES = List.of(
             "/mdms-v2/v2/_update/tenant.tenants",
@@ -26,7 +27,8 @@ public class PlatformBaselineGrantsTest {
             "/mdms-v2/v2/_create/common-masters.Designation", "/mdms-v2/v2/_update/common-masters.Designation",
             "/mdms-v2/v2/_create/RAINMAKER-PGR.MapConfig", "/mdms-v2/v2/_update/RAINMAKER-PGR.MapConfig",
             "/mdms-v2/v2/_create/CMS-BOUNDARY.HierarchySchema",
-            "/mdms-v2/v2/_create/identity.invitationPolicy", "/mdms-v2/v2/_update/identity.invitationPolicy");
+            "/mdms-v2/v2/_create/identity.invitationPolicy", "/mdms-v2/v2/_update/identity.invitationPolicy",
+            "/mdms-v2/v2/_create/dss.DashboardConfig", "/mdms-v2/v2/_update/dss.DashboardConfig");
 
     @Test public void everyWorkspaceSetupMdmsWriteIsGrantedToAFounderRole() throws Exception {
         var seed = new PlatformBaseline(new ObjectMapper());

@@ -511,6 +511,9 @@ class UnifiedExcelReader:
         role_by_name_ci  = {r.get('name', '').strip().lower(): r for r in roles_list if r.get('name')}
         role_by_code_ci  = {r.get('code', '').strip().lower(): r for r in roles_list if r.get('code')}
         valid_role_codes = {r.get('code') for r in roles_list if r.get('code')}
+        csr_known = 'CSR' in valid_role_codes
+        if not csr_known:
+            print("   ⚠️  CSR is not in this tenant's ACCESSCONTROL-ROLES: employees will not get it")
         print(f"   Available role codes: {', '.join(sorted(valid_role_codes))}")
 
         employees = []
@@ -615,6 +618,12 @@ class UnifiedExcelReader:
             if not roles:
                 print(f"   ❌ Row {idx} ({user_name}): no valid roles resolved — skipping employee")
                 continue
+
+            # Every employee gets CSR so they can file a complaint on a
+            # citizen's behalf (#2239), whichever roles the sheet lists, when
+            # the tenant has the role (HRMS rejects an unknown one).
+            if csr_known and not any(r['code'] == 'CSR' for r in roles):
+                roles.append({'code': 'CSR', 'name': 'Complainant', 'tenantId': tenant_id})
 
             # Get boundary info (defaults to City level)
             hierarchy = str(row.get('Hierarchy Type', 'ADMIN')).strip()

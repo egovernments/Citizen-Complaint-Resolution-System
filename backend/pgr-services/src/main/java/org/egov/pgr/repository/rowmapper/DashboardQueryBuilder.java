@@ -1,5 +1,6 @@
 package org.egov.pgr.repository.rowmapper;
 
+import org.egov.pgr.util.SqlLike;
 import org.egov.pgr.config.PGRConfiguration;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
@@ -182,13 +183,21 @@ public class DashboardQueryBuilder {
     }
 
     /**
-     * Appends tenant filter: state-level uses LIKE, city-level uses =.
+     * Appends the tenant filter: a state-level id covers its subtree, a city-level id matches
+     * exactly.
+     *
+     * <p>The subtree is the tenant ITSELF plus everything under a '.' beneath it. A bare
+     * {@code LIKE value || '%'} also matches a sibling whose id merely starts with the same
+     * characters — state {@code ke} would aggregate every complaint belonging to the unrelated
+     * root tenant {@code kenya} — so the delimiter has to be part of the pattern. LIKE
+     * metacharacters are escaped for the same reason: unescaped, {@code _} matches any character.
      */
     private void appendTenantFilter(StringBuilder sb, String column, String tenantId, List<Object> preparedStmtList) {
         String[] chunks = tenantId.split("\\.");
         if (chunks.length == config.getStateLevelTenantIdLength()) {
-            sb.append(column).append(" LIKE ?");
-            preparedStmtList.add(tenantId + "%");
+            sb.append("(").append(column).append(" = ? OR ").append(column).append(" LIKE ?)");
+            preparedStmtList.add(tenantId);
+            preparedStmtList.add(SqlLike.subtreePattern(tenantId));
         } else {
             sb.append(column).append(" = ?");
             preparedStmtList.add(tenantId);

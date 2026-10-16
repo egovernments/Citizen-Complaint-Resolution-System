@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { RequiredMark } from '@/components/ui/required-mark';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { DigitCard } from '@/components/digit/DigitCard';
@@ -34,6 +35,7 @@ import { labelLocales } from '../labelLocales';
 import { parseExcelFile, parseBoundaryExcel } from '@/utils/excelParser';
 import { downloadBoundaryTemplate } from '@/utils/templateBuilder';
 import { parseGeoJsonSidecar, geometryForBoundary, type ParsedGeoJsonSidecar } from '@/utils/boundaryGeoJson';
+import { compareWithExisting } from '@/utils/boundaryReconcile';
 import { TURBOPASS_BASE } from '@/hooks/useTurbopassSources';
 import { buildOsmBoundaries, computeContainingParents, groupFetchedLevels, type OsmAdminLevel, type SkippedOsmFeature } from '@/utils/osmBoundaries';
 import {
@@ -154,6 +156,8 @@ async function runPostCreatePipeline(
   hierarchyType: string,
   levels: { boundaryType: string }[],
   t: OnboardingT = englishT,
+  // Boundaries already there without a name, which the upload labels but doesn't create.
+  unnamed: { code: string; name: string }[] = [],
 ): Promise<string | null> {
   // Make this the tenant's PGR hierarchy (CMS-BOUNDARY.HierarchySchema) when it
   // has none yet: digit-ui, the dashboard and PGR read it in place of the
@@ -177,7 +181,7 @@ async function runPostCreatePipeline(
   }
 
   // Create localizations for boundaries
-  const boundaryData = created.map(b => ({
+  const boundaryData = [...created, ...unnamed].map(b => ({
     code: b.code,
     name: b.name,
   }));
@@ -434,6 +438,7 @@ export default function BoundaryImport({
   const [createdCounts, setCreatedCounts] = useState<Record<string, number>>({});
   const [totalCreated, setTotalCreated] = useState(0);
   const [failedCount, setFailedCount] = useState(0);
+  const [alreadyThereCount, setAlreadyThereCount] = useState(0);
 
   // Fetch existing hierarchies on mount
   useEffect(() => {
@@ -586,7 +591,18 @@ export default function BoundaryImport({
         validateBoundaries(result.data);
         setStep('verify');
       } else {
-        setError(result.validation.errors.map(e => e.message).join(', '));
+        // A repeated code blocks the whole sheet, so nothing is written until each row has its own.
+        const { errors } = result.validation;
+        const repeated = errors
+          .filter(e => e.code === 'DUPLICATE_CODE')
+          .map(e =>
+            t('geography.excel.duplicate_code', 'The code "%{code}" is used on rows %{rows}. Each boundary needs its own code.', {
+              code: e.value ?? '',
+              rows: (e.rows ?? []).join(', '),
+            }),
+          );
+        const others = errors.filter(e => e.code !== 'DUPLICATE_CODE').map(e => e.message).join(', ');
+        setError([...repeated, others].filter(Boolean).join(' '));
       }
     } catch (err) {
       console.error('Excel parse error:', err);
@@ -669,10 +685,36 @@ export default function BoundaryImport({
     setError(null);
 
     try {
+      // An upload never renames or moves an area (#2456): a code already in the hierarchy under
+      // another name or parent stops the whole sheet before any write. An exact match is left alone,
+      // except that one with no en_IN name gets the sheet's: adding a missing name isn't a rename.
+      const existing = await boundaryService.existingBoundaries(boundaryTenant, selectedHierarchy.hierarchyType);
+      const { toCreate, alreadyThere, toLabel, conflicts } = compareWithExisting(validBoundaries, existing);
+      if (conflicts.length > 0) {
+        const none = t('geography.excel.no_parent', 'none');
+        setError([
+          t(
+            'geography.excel.existing_conflicts',
+            'Nothing was uploaded. These codes are already in this hierarchy with a different name or parent, and an upload can’t rename or move an area. Use the current name and parent, or a new code.',
+          ),
+          ...conflicts.map(c =>
+            t('geography.excel.existing_conflict', 'Row %{row}: %{code} is %{currentName} (parent: %{currentParent}) in the hierarchy, but %{sheetName} (parent: %{sheetParent}) in the sheet.', {
+              row: c.row ?? '?',
+              code: c.code,
+              currentName: c.current.name ?? t('geography.excel.unnamed', 'unnamed'),
+              currentParent: c.current.parent ?? none,
+              sheetName: c.sheet.name,
+              sheetParent: c.sheet.parent ?? none,
+            }),
+          ),
+        ].join(' '));
+        return;
+      }
+
       // Convert Excel rows to Boundary objects, attaching real geometry
       // (polygon sidecar > lat/long > undefined → service defaults to the
       // unit-square placeholder for unmatched rows).
-      const boundariesToCreate: Boundary[] = validBoundaries.map(row => ({
+      const boundariesToCreate: Boundary[] = toCreate.map(row => ({
         tenantId: boundaryTenant,
         code: row.code,
         name: row.name,
@@ -699,6 +741,7 @@ export default function BoundaryImport({
       setCreatedCounts(counts);
       setTotalCreated(result.success.length);
       setFailedCount(result.failed.length);
+      setAlreadyThereCount(alreadyThere.length);
 
       // Localizations + cache-bust + boundary-path repair (shared with OSM path)
       const schemaError = await runPostCreatePipeline(
@@ -707,6 +750,7 @@ export default function BoundaryImport({
         selectedHierarchy.hierarchyType,
         selectedHierarchy.boundaryHierarchy,
         t,
+        toLabel,
       );
 
       addUndo('create_boundaries', `Created ${result.success.length} boundaries`);
@@ -1203,6 +1247,7 @@ export default function BoundaryImport({
               <Field>
                 <Input
                   id="hierarchyType"
+                  aria-required="true"
                   value={hierarchyType}
                   onChange={(e) => setHierarchyType(e.target.value)}
                   placeholder="ADMIN"
@@ -1213,7 +1258,8 @@ export default function BoundaryImport({
             </LabelFieldPair>
 
             <div className="mb-4 sm:mb-6">
-              <CardLabel className="mb-2">{t('geography.excel.define_levels', 'Define Levels (top to bottom)')}</CardLabel>
+              {/* At least two named levels. */}
+              <CardLabel className="mb-2" required>{t('geography.excel.define_levels', 'Define Levels (top to bottom)')}</CardLabel>
               <div className="border border-border rounded p-3 sm:p-4 mt-2 bg-muted/30">
                 {hierarchyLevels.map((level, idx) => (
                   <div key={idx} className="flex items-center gap-2 sm:gap-3 mb-3 last:mb-0">
@@ -1876,8 +1922,14 @@ export default function BoundaryImport({
 
                   {lvl.selected && (
                     <div className="pt-2">
-                      <label className="text-sm font-medium mb-1.5 block">{t('geography.levels.name_label', 'Hierarchy Name')}</label>
+                      {/* A chosen level must be named before the hierarchy can be created. */}
+                      <label htmlFor={`level-name-${lvl.level}`} className="text-sm font-medium mb-1.5 block">
+                        {t('geography.levels.name_label', 'Hierarchy Name')}
+                        <RequiredMark />
+                      </label>
                       <Input
+                        id={`level-name-${lvl.level}`}
+                        aria-required="true"
                         placeholder={t('geography.levels.name_placeholder', 'e.g., District')}
                         value={lvl.mappedName}
                         onChange={(e) => {
@@ -1996,6 +2048,7 @@ export default function BoundaryImport({
           hierarchyType={selectedHierarchy.hierarchyType}
           workspace={workspaceName ?? boundaryTenant}
           sourceText={t('geography.source_excel', 'your Excel upload')}
+          alreadyThere={alreadyThereCount}
           failed={failedCount}
           onDone={onDone}
         />

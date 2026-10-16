@@ -80,7 +80,8 @@ describe("account self-service", () => {
     const url = new URL(response.headers.get("location")!);
     await deleteIdentitySession(sessionId);
     const callback = await fetch(`${base}/identity/v1/callback?state=${url.searchParams.get("state")}&code=valid-code:${url.searchParams.get("nonce")}&kc_action_status=success`, { redirect: "manual", headers: { Cookie: `${cookie(sessionId)}; ${response.headers.getSetCookie()[0].split(";")[0]}` } });
-    expect((await result(callback)).code).toBe("ACTION_FAILED");
+    // Keycloak finished the action, so that is the outcome (#2456); the ended session stays ended.
+    expect((await result(callback)).code).toBe("ACTION_COMPLETE");
     expect(await getIdentitySession(sessionId)).toBeNull();
   });
   it("returns empty account arrays for a phone-only citizen", async () => {

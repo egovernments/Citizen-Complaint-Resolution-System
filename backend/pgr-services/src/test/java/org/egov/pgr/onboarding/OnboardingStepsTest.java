@@ -15,7 +15,7 @@ public class OnboardingStepsTest {
     private Map<String,JsonNode> rows=new LinkedHashMap<>();private Set<String> schemas=new HashSet<>();
     private List<String> writes=new ArrayList<>();private List<JsonNode> employees=new ArrayList<>();private Map<String,Object> createdUser;
     private List<Object> workflows=new ArrayList<>();
-    private OnboardingFailure createFailure;
+    private OnboardingFailure createFailure; private boolean failOnce;
     private int lagReads; private final Map<String,Integer> lagging=new HashMap<>();
     @Before @SuppressWarnings("unchecked") public void setup() throws Exception {
         client=mock(OnboardingProvisionerClient.class);when(client.mdmsSchemaSearchPath()).thenReturn("/egov-mdms-service/schema/v1/_search");when(client.mdmsSearchPath()).thenReturn("/egov-mdms-service/v2/_search");steps=new OnboardingSteps(client,new PlatformBaseline(mapper),mapper);
@@ -43,9 +43,9 @@ public class OnboardingStepsTest {
             if(service.equals("hrms")) {
                 if(path.contains("_search")) { assertTrue("stock HRMS requires explicit offset",path.contains("&offset=0")); assertTrue("founder uniqueness search needs two results",path.contains("&limit=2")); return mapper.valueToTree(Map.of("Employees",employees)); }
                 assertTrue("platform prerequisites before HRMS",rows.containsKey("newtown|common-masters.Department|ONBOARDING_ADMIN"));
-                if(createFailure!=null)throw createFailure;
+                if(createFailure!=null){OnboardingFailure failure=createFailure;if(failOnce)createFailure=null;throw failure;}
                 Map<String,Object> employee=((List<Map<String,Object>>)body.get("Employees")).get(0);createdUser=(Map<String,Object>)employee.get("user");
-                createdUser=new LinkedHashMap<>(createdUser);createdUser.put("uuid","founder-uuid");employees.add(mapper.valueToTree(Map.of("user",createdUser)));writes.add("hrms:create");return mapper.valueToTree(Map.of("Employees",employees));
+                createdUser=new LinkedHashMap<>(createdUser);createdUser.put("uuid","founder-uuid");var stored=new LinkedHashMap<>(employee);stored.put("user",createdUser);employees.add(mapper.valueToTree(stored));writes.add("hrms:create");return mapper.valueToTree(Map.of("Employees",employees));
             }
             writes.add(service+":"+path);
             if(service.equals("workflow")) {
@@ -79,6 +79,8 @@ public class OnboardingStepsTest {
         assertEquals("founder-uuid",op.getFounderDigitUuid());assertEquals("9876543210",createdUser.get("mobileNumber"));assertEquals("+91",createdUser.get("countryCode"));
         assertFalse(createdUser.containsKey("emailId"));assertFalse(createdUser.containsKey("password"));
         assertTrue(mapper.valueToTree(createdUser.get("roles")).toString().contains("SUPERUSER"));
+        boolean csr=false;for(var r:mapper.valueToTree(createdUser.get("roles")))csr|="CSR".equals(r.path("code").asText())&&"newtown".equals(r.path("tenantId").asText());
+        assertTrue("every employee files complaints (#2239)",csr);
         assertEquals("New Town",rows.get("newtown|tenant.tenants|newtown").path("data").path("name").asText());
         assertEquals(2,rows.get("newtown|common-masters.StateInfo|newtown").path("data").path("languages").size());
         assertEquals(336,rows.get("newtown|identity.invitationPolicy|default").path("data").path("invitationExpiryHours").asInt());
@@ -87,6 +89,44 @@ public class OnboardingStepsTest {
         verify(client,never()).read(eq("mdms"),anyString(),argThat(b->!b.toString().contains("tenantId=newtown")));
         var order=inOrder(client);order.verify(client).read(eq("hrms"),contains("_search"),anyMap());order.verify(client).write(any(),eq("hrms"),contains("_create"),anyMap());
         steps.perform("FOUNDER_HRMS",signup,op,progress);verify(client,times(1)).write(any(),eq("hrms"),contains("_create"),anyMap());
+    }
+    /** #2456: the founder's row reads like any employee's: the first EMP_ code and a username from their name. */
+    @Test public void founderGetsTheFirstEmployeeCodeAndANameUsername(){
+        signup.setFounderName("Anita  Wanjiru-Otieno ");prerequisites();steps.perform("FOUNDER_HRMS",signup,op,progress);
+        assertEquals("anita.wanjiru.otieno",createdUser.get("userName"));assertEquals("EMP_0001",employees.get(0).path("code").asText());
+        verify(client,atLeastOnce()).read(eq("hrms"),contains("&codes=EMP_0001,"+OnboardingSteps.legacyFounderCode(signup.getId())+"&"),anyMap());
+        assertEquals("founder",OnboardingSteps.founderUserName(OnboardingSignup.builder().founderName("Founder").build(),false));
+        assertEquals("e2e.ab",OnboardingSteps.founderUserName(OnboardingSignup.builder().founderName("أنيتا").founderEmail("E2E+ab@example.test").build(),false));
+        assertEquals("emp_0001",OnboardingSteps.founderUserName(OnboardingSignup.builder().founderName("أنيتا").build(),false));
+        assertEquals(64,OnboardingSteps.founderUserName(OnboardingSignup.builder().founderName("a".repeat(70)).build(),false).length());
+        assertEquals("jose.muller",OnboardingSteps.founderUserName(OnboardingSignup.builder().founderName("José Müller").build(),false));
+        assertEquals("zoe.nunez",OnboardingSteps.founderUserName(OnboardingSignup.builder().founderName("Zoë Ñúñez").build(),false));
+        assertEquals("anita.emp_0001",OnboardingSteps.founderUserName(OnboardingSignup.builder().founderName("Anita").build(),true));
+        assertEquals(64,OnboardingSteps.founderUserName(OnboardingSignup.builder().founderName("a".repeat(70)).build(),true).length());
+    }
+    /** A username something else already holds gets the code added, as in the Employees step. */
+    @Test public void aTakenFounderUsernameGetsTheCodeAdded(){
+        prerequisites();createFailure=new OnboardingFailure("ERR_HRMS_USER_EXIST_USERNAME",false);failOnce=true;
+        steps.perform("FOUNDER_HRMS",signup,op,progress);
+        assertEquals("founder.emp_0001",createdUser.get("userName"));assertEquals("founder-uuid",op.getFounderDigitUuid());
+        verify(client,times(2)).write(any(),eq("hrms"),contains("_create"),anyMap());
+    }
+    /** Once the step has its founder, the uuid identifies them, so a designation they changed later doesn't matter. */
+    @Test public void aKnownFounderWhoChangedTheirDesignationIsStillTheFounder(){
+        prerequisites();op.setFounderDigitUuid("founder-uuid");
+        employees.add(mapper.valueToTree(Map.of("code","EMP_0001","assignments",List.of(Map.of("designation","CLERK")),"user",Map.of("uuid","founder-uuid"))));
+        steps.perform("FOUNDER_HRMS",signup,op,progress);
+        assertEquals("founder-uuid",op.getFounderDigitUuid());verify(client,never()).write(any(),eq("hrms"),contains("_create"),anyMap());
+    }
+    /** A founder made under the old FOUNDER_ code is found, not made again; an EMP_0001 that isn't the founder is never adopted. */
+    @Test public void founderSearchFindsTheOldCodeAndRefusesSomeoneElse(){
+        prerequisites();
+        employees.add(mapper.valueToTree(Map.of("code",OnboardingSteps.legacyFounderCode(signup.getId()),"user",Map.of("uuid","legacy-uuid"))));
+        steps.perform("FOUNDER_HRMS",signup,op,progress);assertEquals("legacy-uuid",op.getFounderDigitUuid());
+        employees.clear();op.setFounderDigitUuid(null);
+        employees.add(mapper.valueToTree(Map.of("code","EMP_0001","assignments",List.of(Map.of("designation","CLERK")),"user",Map.of("uuid","someone-else"))));
+        assertEquals("FOUNDER_AMBIGUOUS",assertThrows(OnboardingFailure.class,()->steps.perform("FOUNDER_HRMS",signup,op,progress)).getCode());
+        assertNull(op.getFounderDigitUuid());verify(client,never()).write(any(),eq("hrms"),contains("_create"),anyMap());
     }
     @Test public void baselineCreatesTenantPgrWorkflowOnceWithSeededRoles(){
         prerequisites();assertEquals(1,workflows.size());JsonNode bs=mapper.valueToTree(workflows.get(0));

@@ -108,6 +108,12 @@ describe('createDigitDataProvider', () => {
       isActive: true,
       auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 },
     }]);
+    // Every MDMS write path is mocked, so a missing guard shows up as a call
+    // here instead of as a network error.
+    const mdmsCreate = mock.method(client, 'mdmsCreate', async () => {
+      throw new Error('mdmsCreate must not be reached');
+    });
+    const mdmsUpdate = mock.method(client, 'mdmsUpdate', async (record: unknown) => record);
     const dp = createDigitDataProvider(client, 'pg');
     await assert.rejects(
       () => dp.create('auto-escalation', {
@@ -124,6 +130,19 @@ describe('createDigitDataProvider', () => {
       }),
       /configured only through RAINMAKER-PGR.EscalationConfig/,
     );
+    assert.equal(mdmsCreate.mock.callCount(), 0);
+    assert.equal(mdmsUpdate.mock.callCount(), 0);
+
+    // Existing legacy rows stay removable so operators can clear
+    // PGR_ESCALATION_CONFIG_CONFLICT: the Edit form's Active toggle and delete
+    // both deactivate the row.
+    await dp.update('auto-escalation-ignore', {
+      id: 'PGR', data: { _isActive: false }, previousData: { id: 'PGR' },
+    });
+    await dp.delete('auto-escalation-ignore', { id: 'PGR', previousData: { id: 'PGR' } });
+    assert.equal(mdmsCreate.mock.callCount(), 0);
+    assert.equal(mdmsUpdate.mock.callCount(), 2);
+    for (const call of mdmsUpdate.mock.calls) assert.equal(call.arguments[1], false);
   });
 
   it('creates a non-root boundary relationship in the login tenant with its direct parent', async () => {
@@ -356,6 +375,9 @@ describe('createDigitDataProvider', () => {
       }
       return [];
     });
+    // The post-create re-read pages ComplaintHierarchy through mdmsSearchAll,
+    // which is bounded by mdmsCount; the mocked search has no such rows.
+    mock.method(client, 'mdmsCount', async () => 0);
     let captured: Record<string, unknown> | null = null;
     mock.method(client, 'mdmsCreate', async (_t: string, _s: string, _u: string, data: Record<string, unknown>) => {
       captured = data;
@@ -378,6 +400,7 @@ describe('createDigitDataProvider', () => {
 
   it('falls back to PGR/SUB_TYPE for a new complaint type when the tenant has no hierarchy definition yet', async () => {
     mock.method(client, 'mdmsSearch', async () => []);
+    mock.method(client, 'mdmsCount', async () => 0);
     let captured: Record<string, unknown> | null = null;
     mock.method(client, 'mdmsCreate', async (_t: string, _s: string, _u: string, data: Record<string, unknown>) => {
       captured = data;
@@ -413,6 +436,7 @@ describe('createDigitDataProvider', () => {
       isActive: true,
       auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 },
     }]);
+    mock.method(client, 'mdmsCount', async () => 1);
     let captured: Record<string, unknown> | null = null;
     mock.method(client, 'mdmsUpdate', async (rec: { data: Record<string, unknown> }) => {
       captured = rec.data;

@@ -912,6 +912,7 @@ services:
       GATUS_PROFILE_NOTIFICATIONS: "false"
       GATUS_PROFILE_CHATBOT: "false"
       GATUS_AUDIT: "false"
+      GATUS_KONG_ADMIN: "true"     # Kong's Admin API listens on 0.0.0.0:8001 in this stack
       GATUS_PROXIES: "false"
       # No grafana/prometheus/loki/tempo on this path, so the observability
       # checks (#1613) stay off. Declared explicitly: Gatus reads an UNSET

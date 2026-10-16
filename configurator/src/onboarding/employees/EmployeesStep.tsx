@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowRight, FileText, LayoutGrid, Network, Plus, Users } from 'lucide-react';
 import { useApp } from '../../App';
 import type { Employee } from '@/api/types';
+import { isInviteUnfinished } from '@/identity/memberActions';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { DeleteConfirmDialog } from '@/components/ui/delete-confirm-dialog';
@@ -150,10 +151,18 @@ export default function EmployeesStep() {
 
   const add = async (input: NewEmployee) => {
     if (!options) return;
-    const created = await addEmployee(tenant, input, options).catch((err: unknown) => {
+    let created: Employee;
+    let inviteError: unknown = null;
+    try {
+      created = await addEmployee(tenant, input, options);
+    } catch (err) {
       reportStepError('employees', 'create_employee', err, tenant);
-      throw err;
-    });
+      // HRMS has them but the invitation didn't go out. They are added: list them, with the
+      // invite on their row, rather than offer a retry that would add them a second time (#2456).
+      if (!isInviteUnfinished(err)) throw err;
+      created = err.employee as unknown as Employee;
+      inviteError = err.reason;
+    }
     trackStepAction('employees', 'entity_create', 'employee', {
       tenant,
       source: 'form',
@@ -162,10 +171,20 @@ export default function EmployeesStep() {
       jurisdictions: input.jurisdictions.length,
       email: !!input.emailId,
     });
-    toast({
-      title: t('common.added_named', '%{name} added', { name: created.user.name }),
-      description: t('employees.signs_in_as', 'They sign in as %{username}.', { username: created.user.userName }),
-    });
+    toast(
+      inviteError
+        ? {
+            variant: 'destructive',
+            title: t('employees.added_not_invited', '%{name} added, but not invited', { name: created.user.name }),
+            description: t('employees.invite_from_row', '%{reason} They’re on your list now: use Edit or Send invite on their row to finish.', {
+              reason: describeInviteError(inviteError, t),
+            }),
+          }
+        : {
+            title: t('common.added_named', '%{name} added', { name: created.user.name }),
+            description: t('employees.signs_in_as', 'They sign in as %{username}.', { username: created.user.userName }),
+          },
+    );
     reload();
   };
 

@@ -2,6 +2,7 @@
 {"code": "app.nav.dashboard", "message": "डैशबोर्ड", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.nav.tenant_management", "message": "टेनेंट प्रबंधन", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.nav.tenants", "message": "टेनेंट", "module": "configurator-ui", "locale": "hi_IN"},
+{"code": "app.nav.branding", "message": "ब्रांडिंग", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.nav.departments", "message": "विभाग", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.nav.designations", "message": "पदनाम", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.nav.hierarchies", "message": "पदानुक्रम", "module": "configurator-ui", "locale": "hi_IN"},

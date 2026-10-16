@@ -36,6 +36,22 @@ export interface DigitApiClientConfig {
   keycloak?: KeycloakOverlayConfig;
 }
 
+
+// Every new employee gets CSR so they can file a complaint on a citizen's
+// behalf (#2239), whichever roles the caller picked. CSR goes on each tenant
+// the employee's other roles are tagged with (the employee UI tags them per
+// jurisdiction and its edit form keeps only those; some callers use the state
+// root), or on the employee's own tenant when there are no roles.
+export function withCsrRole(employee: Record<string, unknown>, tenantId: string): Record<string, unknown> {
+  const user = employee.user as Record<string, unknown> | undefined;
+  if (!user) return employee;
+  const roles = (user.roles as Array<Record<string, unknown>> | undefined) ?? [];
+  const tenants = [...new Set(roles.map((role) => role?.tenantId).filter((t): t is string => typeof t === 'string' && !!t))];
+  if (!tenants.length) tenants.push((user.tenantId as string) || tenantId);
+  const missing = tenants.filter((t) => !roles.some((role) => role?.code === 'CSR' && role?.tenantId === t));
+  if (!missing.length) return employee;
+  return { ...employee, user: { ...user, roles: [...roles, ...missing.map((t) => ({ code: 'CSR', name: 'Complainant', tenantId: t }))] } };
+}
 export class DigitApiClient {
   private baseUrl: string;
   private _stateTenantId: string;
@@ -335,7 +351,7 @@ export class DigitApiClient {
 
   async employeeCreate(tenantId: string, employees: Record<string, unknown>[]): Promise<Record<string, unknown>[]> {
     const data = await this.request<{ Employees?: Record<string, unknown>[] }>(this.endpoint('HRMS_EMPLOYEES_CREATE'), {
-      RequestInfo: this.buildRequestInfo(), Employees: employees.map((emp) => ({ ...emp, tenantId })),
+      RequestInfo: this.buildRequestInfo(), Employees: employees.map((emp) => withCsrRole({ ...emp, tenantId }, tenantId)),
     });
     return data.Employees || [];
   }
