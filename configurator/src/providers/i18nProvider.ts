@@ -121,6 +121,7 @@ const customEnglishMessages: TranslationMessages = {
       access_roles: 'Access Roles',
       access_actions: 'Access Actions',
       role_actions: 'Role Actions',
+      workflow_services: 'Workflow Business Services',
       workflow_processes: 'Workflow Processes',
       mdms_schemas: 'MDMS Schemas',
       boundary_hierarchies: 'Boundary Hierarchies',

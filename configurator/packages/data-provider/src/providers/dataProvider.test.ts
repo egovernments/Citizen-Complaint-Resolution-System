@@ -101,30 +101,48 @@ describe('createDigitDataProvider', () => {
     );
   });
 
-  it('does not expose the generic workflow escalation masters at all (#1777)', async () => {
-    // PGR owns its escalation policy in RAINMAKER-PGR.EscalationConfig. The
-    // configurator used to guard PGR writes through Workflow.AutoEscalation /
-    // AutoEscalationStatesToIgnore; those masters are no longer registered, so
-    // no write — PGR or otherwise — can reach them through this provider.
+  it('rejects PGR writes through the competing generic workflow escalation masters', async () => {
+    mock.method(client, 'mdmsSearch', async () => [{
+      id: 'legacy-pgr', tenantId: 'pg', schemaCode: 'Workflow.AutoEscalationStatesToIgnore',
+      uniqueIdentifier: 'PGR', data: { businessService: 'PGR', module: 'PGR' },
+      isActive: true,
+      auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 },
+    }]);
+    // Every MDMS write path is mocked, so a missing guard shows up as a call
+    // here instead of as a network error.
     const mdmsCreate = mock.method(client, 'mdmsCreate', async () => {
-      throw new Error('must not be called');
+      throw new Error('mdmsCreate must not be reached');
     });
+    const mdmsUpdate = mock.method(client, 'mdmsUpdate', async (record: unknown) => record);
     const dp = createDigitDataProvider(client, 'pg');
     await assert.rejects(
       () => dp.create('auto-escalation', {
         data: { businessService: 'PGR', module: 'PGR' },
       }),
-      /Unknown resource/,
+      /configured only through RAINMAKER-PGR.EscalationConfig/,
     );
     await assert.rejects(
       () => dp.update('auto-escalation-ignore', {
         id: 'PGR',
+        // Partial dirty-field payload: the guard must use the merged server row.
         data: { active: true },
         previousData: { businessService: 'PGR', module: 'PGR' },
       }),
-      /Unknown resource/,
+      /configured only through RAINMAKER-PGR.EscalationConfig/,
     );
     assert.equal(mdmsCreate.mock.callCount(), 0);
+    assert.equal(mdmsUpdate.mock.callCount(), 0);
+
+    // Existing legacy rows stay removable so operators can clear
+    // PGR_ESCALATION_CONFIG_CONFLICT: the Edit form's Active toggle and delete
+    // both deactivate the row.
+    await dp.update('auto-escalation-ignore', {
+      id: 'PGR', data: { _isActive: false }, previousData: { id: 'PGR' },
+    });
+    await dp.delete('auto-escalation-ignore', { id: 'PGR', previousData: { id: 'PGR' } });
+    assert.equal(mdmsCreate.mock.callCount(), 0);
+    assert.equal(mdmsUpdate.mock.callCount(), 2);
+    for (const call of mdmsUpdate.mock.calls) assert.equal(call.arguments[1], false);
   });
 
   it('creates a non-root boundary relationship in the login tenant with its direct parent', async () => {

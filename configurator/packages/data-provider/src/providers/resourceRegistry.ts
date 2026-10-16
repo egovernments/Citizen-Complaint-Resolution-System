@@ -58,10 +58,11 @@ export interface ResourceConfig {
   /** Shown as a banner on a read-only resource's list and show screens. Says where the
    *  configuration moved to and what to run; never just "this is read-only". */
   readOnlyNotice?: string;
-  /** Generic MDMS resources only: keep the auto-generated routes but leave the
-   *  resource out of the Advanced sidebar list and /manage/advanced grid,
-   *  because a sidebar group already links to it. */
-  hideFromAdvanced?: boolean;
+  /** Generic MDMS resources only: keep the auto-generated /manage/<id> routes
+   *  but list the resource nowhere (no sidebar entry, no Advanced card). For a
+   *  screen kept only so operators can finish a migration; the runbook that
+   *  needs it links the URL directly. */
+  unlisted?: boolean;
 }
 
 /**
@@ -196,8 +197,7 @@ export const REGISTRY: Record<string, ResourceConfig> = {
   // Masters used only for internal platform/project setup are deliberately NOT
   // registered here, so the configurator has no route, sidebar entry or
   // Advanced card for them (#1777): Workflow.BusinessService /
-  // BusinessServiceConfig / BusinessServiceMasterConfig / AutoEscalation /
-  // AutoEscalationStatesToIgnore, DataSecurity.* (EncryptionPolicy,
+  // BusinessServiceConfig / BusinessServiceMasterConfig, DataSecurity.* (EncryptionPolicy,
   // DecryptionABAC, MaskingPatterns, SecurityPolicy), INBOX.InboxQueryConfiguration,
   // egov-hrms.Degree / EmploymentTest / Specalization,
   // common-masters.CronJobAPIConfig and egov-location.TenantBoundary. Their data
@@ -206,6 +206,12 @@ export const REGISTRY: Record<string, ResourceConfig> = {
   'state-info': { type: 'mdms', label: 'State Info', schema: 'common-masters.StateInfo', idField: 'code', nameField: 'name' },
   'city-modules': { type: 'mdms', label: 'City Modules', schema: 'tenant.citymodule', idField: 'code', nameField: 'module' },
   'id-formats': { type: 'mdms', label: 'ID Formats', schema: 'common-masters.IdFormat', idField: 'idname', nameField: 'idname' },
+  // Generic workflow escalation remains for non-PGR products such as IM/TL.
+  // PGR uses the dedicated self-loop policy below; operators must not add PGR here.
+  // Unlisted rather than removed (#1777): it is the Configurator path for
+  // deactivating a legacy PGR row that makes pgr-services fail closed with
+  // PGR_ESCALATION_CONFIG_CONFLICT (docs/operations/data-migration/pgr-escalation-self-loop.md).
+  'auto-escalation': { type: 'mdms', label: 'Workflow Auto Escalation (non-PGR)', schema: 'Workflow.AutoEscalation', idField: 'businessService', nameField: 'businessService', unlisted: true },
   'sla-config': { type: 'mdms', label: 'SLA Config', schema: 'common-masters.wfSlaConfig', idField: 'slotPercentage', nameField: 'slotPercentage' },
   'role-actions': { type: 'mdms', label: 'Role Actions', schema: 'ACCESSCONTROL-ROLEACTIONS.roleactions', idField: 'id', nameField: 'rolecode', descriptionField: 'actionid' },
   roles: { type: 'mdms', label: 'Roles', schema: MDMS_SCHEMAS.ROLES, idField: 'code', nameField: 'name', descriptionField: 'description' },
@@ -221,6 +227,8 @@ export const REGISTRY: Record<string, ResourceConfig> = {
   // are layered on later via src/admin/schemaDescriptors/ (Stage 1+).
   'theme-config':           { type: 'mdms', label: 'Theme Config',             schema: 'common-masters.ThemeConfig',               idField: 'code',              nameField: 'name' },
   'mobile-number-validation': { type: 'mdms', label: 'Mobile Number Validation', schema: 'common-masters.MobileNumberValidation', idField: 'countryCode',       nameField: 'countryCode' },
+  // Unlisted for the same reason as 'auto-escalation' above.
+  'auto-escalation-ignore': { type: 'mdms', label: 'Workflow Escalation Ignore (non-PGR)', schema: 'Workflow.AutoEscalationStatesToIgnore', idField: 'businessService', nameField: 'businessService', unlisted: true },
   // Keyed on `code` (DEFAULT), NOT on REOPENSLA. mdms-v2 rejects any update that
   // changes a record's x-unique fields (UNIQUE_KEY_UPDATE_ERR), so keying the
   // record on its own only value made the reopen window permanently uneditable —
@@ -228,10 +236,7 @@ export const REGISTRY: Record<string, ResourceConfig> = {
   // configured window rather than the constant "DEFAULT".
   'pgr-ui-constants':       { type: 'mdms', label: 'PGR UI Constants',         schema: 'RAINMAKER-PGR.UIConstants',                idField: 'code',              nameField: 'REOPENSLA' },
   'pgr-escalation':         { type: 'mdms', label: 'PGR Escalation',           schema: 'RAINMAKER-PGR.EscalationConfig',           idField: 'code',              nameField: 'code' },
-  // Stays generic (its /manage/map-config routes open the dedicated editor), but
-  // it already has its own Tenant Management sidebar entry, so it is kept out of
-  // the Advanced list rather than shown twice (#1777).
-  'map-config':             { type: 'mdms', label: 'Map Configuration',        schema: 'RAINMAKER-PGR.MapConfig',                  idField: 'code',              nameField: 'code', hideFromAdvanced: true },
+  'map-config':             { type: 'mdms', label: 'Map Configuration',        schema: 'RAINMAKER-PGR.MapConfig',                  idField: 'code',              nameField: 'code' },
   // -------------------------------------------------------------------------
   // Notification configuration — the shared NOTIFICATIONS.* namespace.
   //
@@ -345,15 +350,6 @@ export function getGenericMdmsResources(): Record<string, ResourceConfig> {
   const result: Record<string, ResourceConfig> = {};
   for (const [name, config] of Object.entries(REGISTRY)) {
     if (config.type === 'mdms' && !config.dedicated) result[name] = config;
-  }
-  return result;
-}
-
-/** Generic MDMS resources listed under Advanced (sidebar + /manage/advanced). */
-export function getAdvancedMdmsResources(): Record<string, ResourceConfig> {
-  const result: Record<string, ResourceConfig> = {};
-  for (const [name, config] of Object.entries(getGenericMdmsResources())) {
-    if (!config.hideFromAdvanced) result[name] = config;
   }
   return result;
 }

@@ -2,6 +2,7 @@ import type { SchemaDescriptor } from './types';
 import { mobileValidationDescriptor } from './mobile-validation';
 import { formValidationsDescriptor } from './form-validations';
 import { themeConfigDescriptor } from './theme-config';
+import { autoEscalationIgnoreDescriptor } from './auto-escalation-ignore';
 import { pgrUiConstantsDescriptor } from './pgr-ui-constants';
 import { stateInfoDescriptor } from './state-info';
 import { notificationRoutingDescriptor } from './notification-routing';
@@ -22,6 +23,7 @@ const DESCRIPTORS: Record<string, SchemaDescriptor> = {
   [mobileValidationDescriptor.schema]: mobileValidationDescriptor,
   [formValidationsDescriptor.schema]: formValidationsDescriptor,
   [themeConfigDescriptor.schema]: themeConfigDescriptor,
+  [autoEscalationIgnoreDescriptor.schema]: autoEscalationIgnoreDescriptor,
   [pgrUiConstantsDescriptor.schema]: pgrUiConstantsDescriptor,
   [stateInfoDescriptor.schema]: stateInfoDescriptor,
   [notificationRoutingDescriptor.schema]: notificationRoutingDescriptor,

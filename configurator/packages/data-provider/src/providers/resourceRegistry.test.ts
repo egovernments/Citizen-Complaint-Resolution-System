@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
 import {
   getResourceConfig, getAllResources, getDedicatedResources,
-  getGenericMdmsResources, getAdvancedMdmsResources, getResourceLabel, getResourceIdField,
+  getGenericMdmsResources, getResourceLabel, getResourceIdField,
   getResourceBySchema, isReadOnlyResource, readOnlyNoticeFor,
 } from './resourceRegistry.js';
 
@@ -148,7 +148,6 @@ describe('resourceRegistry', () => {
     const internalSchemas = [
       'Workflow.BusinessService',
       'Workflow.BusinessServiceConfig',
-      'Workflow.AutoEscalation',
       'DataSecurity.EncryptionPolicy',
       'DataSecurity.DecryptionABAC',
       'DataSecurity.MaskingPatterns',
@@ -159,17 +158,16 @@ describe('resourceRegistry', () => {
       'egov-hrms.Specalization',
       'common-masters.CronJobAPIConfig',
       'egov-location.TenantBoundary',
-      'Workflow.AutoEscalationStatesToIgnore',
       'Workflow.BusinessServiceMasterConfig',
     ];
     for (const schema of internalSchemas) {
       assert.strictEqual(getResourceBySchema(schema), undefined, `${schema} must not be registered`);
     }
     for (const resource of [
-      'workflow-services', 'workflow-config', 'auto-escalation', 'encryption-policy',
+      'workflow-services', 'workflow-config', 'encryption-policy',
       'decryption-abac', 'masking-patterns', 'security-policy', 'inbox-config', 'degrees',
       'employment-tests', 'specializations', 'cron-jobs', 'tenant-boundary',
-      'auto-escalation-ignore', 'workflow-bs-master',
+      'workflow-bs-master',
     ]) {
       assert.strictEqual(getResourceConfig(resource), undefined, `${resource} must not be registered`);
     }
@@ -177,15 +175,18 @@ describe('resourceRegistry', () => {
     assert.ok(getResourceConfig('workflow-business-services'));
   });
 
-  it('keeps Map Configuration routable but out of the Advanced list (#1777)', () => {
-    // /manage/map-config is registered from the generic set and opens the
-    // dedicated editor behind the Tenant Management sidebar entry.
-    assert.ok(getGenericMdmsResources()['map-config']);
-    assert.strictEqual(getAdvancedMdmsResources()['map-config'], undefined);
-    // Advanced is otherwise exactly the generic set.
-    const advanced = Object.keys(getAdvancedMdmsResources());
-    const generic = Object.keys(getGenericMdmsResources()).filter((r) => r !== 'map-config');
-    assert.deepStrictEqual(advanced, generic);
+  it('keeps the generic workflow escalation screens routable but unlisted (#1777)', () => {
+    // pgr-services fails closed while an active PGR row remains in either master,
+    // and these screens are how an operator deactivates that row. They also stay
+    // the escalation editor for non-PGR products.
+    for (const [resource, schema] of [
+      ['auto-escalation', 'Workflow.AutoEscalation'],
+      ['auto-escalation-ignore', 'Workflow.AutoEscalationStatesToIgnore'],
+    ]) {
+      assert.strictEqual(getResourceBySchema(schema), resource);
+      assert.ok(getGenericMdmsResources()[resource], `${resource} must keep its /manage route`);
+      assert.strictEqual(getResourceConfig(resource)?.unlisted, true);
+    }
   });
 
   it('does not register schemas that do not exist on ke (phantom cleanup)', () => {

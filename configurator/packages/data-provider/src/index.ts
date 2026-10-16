@@ -10,7 +10,7 @@ export type {
 // Resource registry
 export {
   REGISTRY, getResourceConfig, getAllResources,
-  getDedicatedResources, getMdmsResources, getGenericMdmsResources, getAdvancedMdmsResources,
+  getDedicatedResources, getMdmsResources, getGenericMdmsResources,
   getResourceIdField, getResourceLabel, getResourceBySchema,
   isAccessControlGated, isReadOnlyResource, readOnlyNoticeFor, LEGACY_NOTIFICATION_NOTICE,
 } from './providers/resourceRegistry.js';

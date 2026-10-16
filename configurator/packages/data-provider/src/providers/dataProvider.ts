@@ -288,6 +288,28 @@ function isDuplicateError(error: unknown): boolean {
   return normalized.includes('duplicate') || normalized.includes('already exists');
 }
 
+/** PGR owns its escalation policy in RAINMAKER-PGR.EscalationConfig.
+ *  Do not let the generic workflow masters create a second live PGR policy.
+ *  Existing legacy rows can still be deactivated (Edit, untick Active) or
+ *  deleted, so operators can clear PGR_ESCALATION_CONFIG_CONFLICT. */
+function rejectLegacyPgrEscalationWrite(
+  config: ResourceConfig,
+  data: Record<string, unknown>,
+): void {
+  if (
+    config.schema !== 'Workflow.AutoEscalation' &&
+    config.schema !== 'Workflow.AutoEscalationStatesToIgnore'
+  ) return;
+
+  const businessService = String(data.businessService ?? '').trim().toUpperCase();
+  const module = String(data.module ?? '').trim().toUpperCase();
+  if (businessService === 'PGR' || module === 'PGR') {
+    throw new Error(
+      'PGR escalation is configured only through RAINMAKER-PGR.EscalationConfig',
+    );
+  }
+}
+
 // --- Complaint-hierarchy leaf adapter -------------------------------------
 //
 // The 2-master complaint hierarchy stores BOTH interior classification nodes
@@ -1461,6 +1483,7 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
               await resolveNewLeafDefaults(client, tenantId),
             )
           : (params.data as Record<string, unknown>);
+        rejectLegacyPgrEscalationWrite(config, incoming);
         // Same metadata-strip the update path applies (PR #40). The
         // create path didn't have it, so any defaultRecord that included
         // `id` (some forms set id == code on create) or any normalised
@@ -1731,6 +1754,11 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
         // Root-level isActive is the single source of truth for enable/disable;
         // mirror it into the duplicate data flags so the two can never disagree.
         mirrorActiveFlags(existing.data, desiredIsActive);
+        // React-admin may send only dirty fields. Validate the authoritative
+        // merged record so partial updates, updateMany, and reactivation cannot
+        // revive a competing PGR Workflow.AutoEscalation policy. A write that
+        // leaves the row inactive is the migration path and is let through.
+        if (desiredIsActive) rejectLegacyPgrEscalationWrite(config, existing.data);
         const updated = await client.mdmsUpdate(existing, desiredIsActive);
         if (config.leafServiceDefAdapter) {
           // includeInactive: a leaf that was just disabled must still map back.
