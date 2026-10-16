@@ -913,8 +913,6 @@
 {"code": "app.onboarding.home.video.soon", "message": "This video is coming soon.", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.home.videos.branding.summary", "message": "Logo, name and theme", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.home.videos.branding.title", "message": "Setting up your branding", "module": "configurator-ui", "locale": "en_IN"},
-{"code": "app.onboarding.home.videos.cms.summary", "message": "How complaints flow end to end", "module": "configurator-ui", "locale": "en_IN"},
-{"code": "app.onboarding.home.videos.cms.title", "message": "What is CMS?", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.home.videos.complaints.summary", "message": "Categories, routing and resolution time", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.home.videos.complaints.title", "message": "Setting up complaints", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.home.videos.departments.summary", "message": "Who complaints route to", "module": "configurator-ui", "locale": "en_IN"},

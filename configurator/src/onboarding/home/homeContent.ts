@@ -29,7 +29,6 @@ export interface LearnVideo {
 
 export function learnVideos(t: OnboardingT): LearnVideo[] {
   return [
-    { id: 'cms', title: t('home.videos.cms.title', 'What is CMS?'), summary: t('home.videos.cms.summary', 'How complaints flow end to end'), tint: 'bg-blue-50' },
     { id: 'branding', title: t('home.videos.branding.title', 'Setting up your branding'), summary: t('home.videos.branding.summary', 'Logo, name and theme'), youtubeId: 'ZdkVdTviiY8', duration: '0:59', tint: 'bg-amber-50' },
     { id: 'geography', title: t('home.videos.geography.title', 'Defining your geography'), summary: t('home.videos.geography.summary', 'Areas and their hierarchy'), youtubeId: 'nA8sNGnCzxc', duration: '4:30', tint: 'bg-emerald-50' },
     { id: 'departments', title: t('home.videos.departments.title', 'Adding departments'), summary: t('home.videos.departments.summary', 'Who complaints route to'), youtubeId: '-akBHQQbJz0', duration: '2:11', tint: 'bg-violet-50' },
