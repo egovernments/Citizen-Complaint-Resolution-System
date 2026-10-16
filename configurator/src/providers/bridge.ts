@@ -42,21 +42,42 @@ let _authProvider: AuthProvider | null = null;
 
 const WRITE_METHODS = ['create', 'update', 'updateMany', 'delete', 'deleteMany'] as const;
 
+/** The localization modules the configurator reads its own UI strings from. */
+const UI_STRING_MODULES = ['configurator-ui', 'rainmaker-common'];
+
 /**
- * Localization writes can change the configurator's own UI copy, so refresh
- * its translations as soon as one succeeds — an admin who relabels a string
- * in System → Localization sees it change without waiting out the cache.
- * The service's own cache is busted first: its module-scoped `_search` (the
- * one the configurator reads its strings through) otherwise keeps serving
- * the pre-write snapshot.
+ * Whether a write to these modules can change the configurator's own copy.
+ * An unknown module (`undefined`, e.g. a bulk delete by id) counts as yes.
  */
-async function afterLocalizationWrite(): Promise<void> {
+function touchesUiStrings(modules: Array<string | undefined>): boolean {
+  return modules.some((module) => !module || UI_STRING_MODULES.includes(module));
+}
+
+/**
+ * Run after the configurator writes localization messages. Busts the
+ * service's cache (its module-scoped `_search` otherwise keeps serving the
+ * pre-write snapshot) and, when the write touched the configurator's own
+ * strings, refreshes them, so an admin who relabels a string in
+ * System → Localization sees it change without waiting out the cache.
+ * `modules` are the modules written to.
+ */
+export async function afterLocalizationWrite(modules: Array<string | undefined>): Promise<void> {
   try {
     await localizationService.cacheBust();
   } catch (e) {
     console.warn('localization cache-bust failed', e);
   }
-  await refreshTranslations({ force: true });
+  if (touchesUiStrings(modules)) await refreshTranslations({ force: true });
+}
+
+/** The modules a data-provider localization write names, or `[undefined]` when it names none. */
+function writtenModules(params: unknown): Array<string | undefined> {
+  const { data, previousData } = (params ?? {}) as {
+    data?: { module?: unknown };
+    previousData?: { module?: unknown };
+  };
+  const modules = [data?.module, previousData?.module].filter((m) => m != null && m !== '').map(String);
+  return modules.length > 0 ? modules : [undefined];
 }
 
 function withTranslationRefresh(dataProvider: DataProvider): DataProvider {
@@ -65,7 +86,12 @@ function withTranslationRefresh(dataProvider: DataProvider): DataProvider {
     const original = dataProvider[method] as (resource: string, params: unknown) => Promise<unknown>;
     wrapped[method] = async (resource: string, params: unknown) => {
       const result = await original(resource, params);
-      if (resource === 'localization') void afterLocalizationWrite();
+      if (resource === 'localization') {
+        // A rainmaker-pgr (etc.) edit can't change the configurator's copy:
+        // skip the cache-bust and the re-fetch altogether.
+        const modules = writtenModules(params);
+        if (touchesUiStrings(modules)) void afterLocalizationWrite(modules);
+      }
       return result;
     };
   }
@@ -127,8 +153,9 @@ export function configureDigitClient(url: string, token?: string, user?: UserInf
   const currentInfo = digitClient.getAuthInfo();
   const previousTenant = digitClient.stateTenantId;
   const currentUrl = (digitClient as unknown as Record<string, unknown>)['baseUrl'] as string | undefined;
+  const clientRecreated = currentUrl !== url;
 
-  if (currentUrl !== url) {
+  if (clientRecreated) {
     // URL changed, create a fresh client
     digitClient = new DigitApiClient({ url, stateTenantId: stateTenant });
     // Reset cached providers since the client changed
@@ -149,6 +176,10 @@ export function configureDigitClient(url: string, token?: string, user?: UserInf
   notifyAuthChange();
 
   // The app's own strings are fetched per state tenant; the boot-time fetch
-  // ran before one was known, so load them now.
-  if (stateTenant && stateTenant !== previousTenant) void refreshTranslations();
+  // ran before one was known, so load them now. Also on a new server (same
+  // tenant code, different strings; resetProviders just dropped the cache)
+  // and on every sign-in.
+  if (stateTenant && (stateTenant !== previousTenant || clientRecreated || token)) {
+    void refreshTranslations();
+  }
 }

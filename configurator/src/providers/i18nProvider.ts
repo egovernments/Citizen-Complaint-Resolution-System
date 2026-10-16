@@ -707,14 +707,48 @@ const CACHE_KEY_PREFIX = 'digit-i18n-';
 
 const memoryCache = new Map<string, TranslationMessages>();
 
+/**
+ * The tenant the app's strings are read from: the session's state tenant, or
+ * with none yet (a founder on /signup) the deployment's root tenant, where the
+ * deploy seeds the configurator-ui bundle, but only when config names it.
+ * Never a hardcoded `'pg'`, which doesn't exist on every deployment.
+ */
+function translationTenant(): string {
+  return sessionTenant() || CONFIGURED_STATE_TENANT_ID.split('.')[0];
+}
+
+/**
+ * The session's state tenant, or '' before there is one. bridge.ts and this
+ * module import each other, and polyglot reads the boot messages while they
+ * are still initialising: `digitClient` is then in its temporal dead zone (a
+ * ReferenceError in the browser; merely undefined under vitest).
+ */
+function sessionTenant(): string {
+  try {
+    return digitClient?.stateTenantId ?? '';
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Cache key for a locale's strings. It names the tenant too, so a new session
+ * on another tenant in the same browser never gets the previous tenant's
+ * strings back from the cache.
+ */
+function cacheKey(locale: string): string {
+  return `${translationTenant()}-${locale}`;
+}
+
 /** Read cached translations from localStorage (returns null if expired/missing). */
 function readLocalStorageCache(locale: string): Record<string, string> | null {
+  const key = CACHE_KEY_PREFIX + cacheKey(locale);
   try {
-    const raw = localStorage.getItem(CACHE_KEY_PREFIX + locale);
+    const raw = localStorage.getItem(key);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as { ts: number; data: Record<string, string> };
     if (Date.now() - parsed.ts > CACHE_TTL_MS) {
-      localStorage.removeItem(CACHE_KEY_PREFIX + locale);
+      localStorage.removeItem(key);
       return null;
     }
     return parsed.data;
@@ -726,16 +760,27 @@ function readLocalStorageCache(locale: string): Record<string, string> | null {
 /** Write translations to localStorage with timestamp. */
 function writeLocalStorageCache(locale: string, data: Record<string, string>): void {
   try {
-    localStorage.setItem(CACHE_KEY_PREFIX + locale, JSON.stringify({ ts: Date.now(), data }));
+    localStorage.setItem(CACHE_KEY_PREFIX + cacheKey(locale), JSON.stringify({ ts: Date.now(), data }));
   } catch {
     // localStorage full or unavailable — ignore
   }
 }
 
-export function clearTranslationCache(): void {
-  memoryCache.clear();
-  for (const { locale } of AVAILABLE_LOCALES) {
-    try { localStorage.removeItem(CACHE_KEY_PREFIX + locale); } catch { /* ignore */ }
+/** Drop the cached strings of every tenant and locale, except `keepLocale`'s for the current tenant. */
+export function clearTranslationCache({ keepLocale }: { keepLocale?: string } = {}): void {
+  const keep = keepLocale ? cacheKey(keepLocale) : undefined;
+  for (const key of [...memoryCache.keys()]) {
+    if (key !== keep) memoryCache.delete(key);
+  }
+  try {
+    const stale: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(CACHE_KEY_PREFIX) && key !== CACHE_KEY_PREFIX + keep) stale.push(key);
+    }
+    stale.forEach((key) => localStorage.removeItem(key));
+  } catch {
+    // localStorage unavailable — ignore
   }
 }
 
@@ -747,21 +792,28 @@ async function fetchAppTranslations(locale: string): Promise<Record<string, stri
   const cached = readLocalStorageCache(locale);
   if (cached) return cached;
 
-  try {
-    const sessionTenant = digitClient.stateTenantId;
-    // No session tenant yet (a founder on /signup): read the deployment's root
-    // tenant, where the deploy seeds the configurator-ui bundle, but only when
-    // config names it. Never a hardcoded `'pg'`, which doesn't exist on every
-    // deployment; with neither, the UI falls through to the bundled English.
-    const tenantId = sessionTenant || CONFIGURED_STATE_TENANT_ID.split('.')[0];
-    if (!tenantId) return {};
+  const flat = await fetchBackendTranslations(locale);
+  if (!flat) return {};
+  cacheBackendTranslations(locale, flat);
+  return flat;
+}
 
+/**
+ * Read a locale's app strings from the localization service, bypassing every
+ * cache. Null when there is no tenant to read from, when either module's
+ * search fails, or when nothing comes back: a caller holding strings already
+ * should keep them rather than drop to the bundled English.
+ */
+async function fetchBackendTranslations(locale: string): Promise<Record<string, string> | null> {
+  const tenantId = translationTenant();
+  if (!tenantId) return null;
+  try {
     // Fetch from both modules in parallel. rainmaker-common provides shared keys
     // (e.g. ERR_INVALID_MOBILE_NUMBER, MOBILE_VALIDATION_*); configurator-ui
     // provides app-specific overrides and takes precedence on conflicts.
     const [configuratorMsgs, commonMsgs] = await Promise.all([
-      digitClient.localizationSearch(tenantId, locale, 'configurator-ui').catch(() => [] as unknown[]),
-      digitClient.localizationSearch(tenantId, locale, 'rainmaker-common').catch(() => [] as unknown[]),
+      digitClient.localizationSearch(tenantId, locale, 'configurator-ui'),
+      digitClient.localizationSearch(tenantId, locale, 'rainmaker-common'),
     ]);
 
     const flat: Record<string, string> = {};
@@ -770,43 +822,43 @@ async function fetchAppTranslations(locale: string): Promise<Record<string, stri
       const text = (msg as Record<string, unknown>).message as string | undefined;
       if (code && text) flat[code] = text;
     }
-    // The root's strings are not cached: the cache is per locale, not per
-    // tenant, and would stand in for the session tenant's own after sign-in.
-    if (sessionTenant && Object.keys(flat).length > 0) {
-      writeLocalStorageCache(locale, flat);
-    }
-    return flat;
+    return Object.keys(flat).length > 0 ? flat : null;
   } catch {
-    return {};
+    return null;
   }
+}
+
+function cacheBackendTranslations(locale: string, flat: Record<string, string>): void {
+  // The root's strings are not cached in localStorage: until there is a
+  // session tenant they are re-read on each load.
+  if (sessionTenant()) writeLocalStorageCache(locale, flat);
 }
 
 // ---------------------------------------------------------------------------
 // Get messages for a locale
 // ---------------------------------------------------------------------------
 async function getMessagesAsync(locale: string): Promise<TranslationMessages> {
-  const cached = memoryCache.get(locale);
+  const key = cacheKey(locale);
+  const cached = memoryCache.get(key);
   if (cached) return cached;
 
-  // Start with English app.* as fallback base
-  const base = JSON.parse(JSON.stringify(customEnglishMessages)) as Record<string, unknown>;
+  // Fetch app.* translations from DIGIT API (source of truth)
+  const result = buildMessages(locale, await fetchAppTranslations(locale));
+  memoryCache.set(key, result);
+  return result;
+}
 
-  // Overlay ra.* framework strings for this locale (bundled)
+/** Bundled English app.* as the base, this locale's ra.* bundle, then the backend app.* strings. */
+function buildMessages(locale: string, apiTranslations: Record<string, string>): TranslationMessages {
+  const base = JSON.parse(JSON.stringify(customEnglishMessages)) as Record<string, unknown>;
   const raBundle = RA_BUNDLES[locale];
   if (raBundle) {
     deepMerge(base, raBundle);
   }
-
-  // Fetch app.* translations from DIGIT API (source of truth)
-  const apiTranslations = await fetchAppTranslations(locale);
   if (Object.keys(apiTranslations).length > 0) {
-    const nested = dotToNested(apiTranslations);
-    deepMerge(base, nested);
+    deepMerge(base, dotToNested(apiTranslations));
   }
-
-  const result = base as TranslationMessages;
-  memoryCache.set(locale, result);
-  return result;
+  return base as TranslationMessages;
 }
 
 /**
@@ -837,7 +889,7 @@ function getMessages(locale: string): TranslationMessages | Promise<TranslationM
   // `configurator-ui` backend module like every other locale, and the bundle
   // is only a boot/offline fallback.
   if (locale === 'en_IN' || locale === 'en') {
-    const sync = memoryCache.get(locale) ?? buildSyncMessages(locale);
+    const sync = memoryCache.get(cacheKey(locale)) ?? buildSyncMessages(locale);
     void getMessagesAsync(locale);
     return sync;
   }
@@ -869,16 +921,37 @@ function subscribeToRefresh(listener: () => void): () => void {
   return () => refreshListeners.delete(listener);
 }
 
+let latestRefresh = 0;
+
 /**
  * Re-read the current locale's messages and swap them into polyglot.
- * `force` also drops the localStorage cache — use it after the configurator
- * itself writes localization messages, so the edit shows up straight away.
+ * `force` skips the localStorage cache, and drops the other locales' cached
+ * strings — use it after the configurator itself writes localization
+ * messages, so the edit shows up straight away.
+ *
+ * Fetch first, swap after: the strings on screen (and the current locale's
+ * cache) are replaced only by a successful read. A failed or empty one keeps
+ * them, rather than dropping a hi_IN/fr_FR/pt_BR UI to the bundled English.
+ * A refresh overtaken by a newer one, or by a locale switch made while it was
+ * waiting, discards its result.
  */
 export async function refreshTranslations({ force = false } = {}): Promise<void> {
+  const generation = ++latestRefresh;
   const locale = i18nProvider.getLocale();
-  if (force) clearTranslationCache();
-  else memoryCache.delete(locale);
-  await getMessagesAsync(locale);
+  const tenant = translationTenant();
+  // The other locales aren't on screen: re-read them when next selected.
+  if (force) clearTranslationCache({ keepLocale: locale });
+  const fresh = (!force && readLocalStorageCache(locale)) || (await fetchBackendTranslations(locale));
+  if (!fresh) return;
+  if (
+    generation !== latestRefresh ||
+    i18nProvider.getLocale() !== locale ||
+    translationTenant() !== tenant
+  ) {
+    return;
+  }
+  cacheBackendTranslations(locale, fresh);
+  memoryCache.set(cacheKey(locale), buildMessages(locale, fresh));
   await i18nProvider.changeLocale(locale);
   // A new object identity makes ra-core's I18nContext re-render every
   // translate() consumer, without the full remount a locale change does.

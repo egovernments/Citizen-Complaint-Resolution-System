@@ -27,7 +27,7 @@ import {
 import { DigitCard } from '@/components/digit/DigitCard';
 import { triggerDownload } from '@/admin/bulk/BulkImportPanel';
 import { localizationService } from '@/api';
-import { refreshTranslations } from '@/providers/i18nProvider';
+import { afterLocalizationWrite } from '@/providers/bridge';
 import { useApp } from '../../App';
 import { useAvailableLocales } from '@/hooks/useAvailableLocales';
 
@@ -208,14 +208,10 @@ export function LocalizationBulkImport() {
     }
 
     setProgressMsg('Busting localization cache…');
-    try {
-      await localizationService.cacheBust();
-    } catch (e) {
-      console.warn('cache-bust failed', e);
-      // Don't block — upserts succeeded; cache will eventually expire.
-    }
-    // The import may have touched the configurator's own strings.
-    void refreshTranslations({ force: true });
+    // Don't block on a failed cache-bust — upserts succeeded; cache will
+    // eventually expire. Refreshes the configurator's own strings if the
+    // import touched them.
+    await afterLocalizationWrite(valid.map((r) => r.module));
     setProgress(100);
     setSuccess(totalSuccess);
     setFailed(totalFailed + (rows.length - valid.length));
