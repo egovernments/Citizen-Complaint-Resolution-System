@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { T } from '@digit-ui/datagrid';
-import { getGenericMdmsResources, getResourceLabel } from '@/providers/bridge';
+import { getResourceLabel } from '@/providers/bridge';
 import { useResourceLabel } from '@/providers/useResourceLabel';
 import { ResourceLabel } from '@/providers/ResourceLabel';
 import { navGroups, getAdvancedResourceIds } from './navGroups';
