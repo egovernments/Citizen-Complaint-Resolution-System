@@ -11,6 +11,8 @@ import { RolesEditor } from './RolesEditor';
 import { JurisdictionEditor } from './JurisdictionEditor';
 import { AssignmentEditor } from './AssignmentEditor';
 import { useGenderChoices } from '../useGenderChoices';
+import { useShowFieldError } from '@/admin/useShowFieldError';
+import { useFieldErrorText } from '@/admin/fieldErrorText';
 
 const STATUS_CHOICES = [
   { value: 'EMPLOYED', label: 'Employed' },
@@ -53,8 +55,8 @@ interface DateEpochFieldProps extends InputProps {
 function DateEpochField({ label, help, className, ...inputProps }: DateEpochFieldProps) {
   const { id, field, fieldState, isRequired } = useInput(inputProps);
   const asString = epochToDateInput(field.value);
-  const hasError = fieldState.invalid && fieldState.isTouched;
-  const errorMessage = fieldState.error?.message;
+  const hasError = useShowFieldError(fieldState);
+  const errorMessage = useFieldErrorText(fieldState.error?.message);
   return (
     <div className={className}>
       {label && (

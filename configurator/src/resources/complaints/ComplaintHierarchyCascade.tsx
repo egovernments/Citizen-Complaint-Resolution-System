@@ -12,6 +12,8 @@ import {
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { uniqueBy } from '@/lib/uniqueBy';
+import { useShowFieldError } from '@/admin/useShowFieldError';
+import { useFieldErrorText } from '@/admin/fieldErrorText';
 
 // One RAINMAKER-PGR.ComplaintHierarchy row (interior node OR leaf complaint type).
 interface HierNode {
@@ -55,6 +57,8 @@ interface Level {
 export function ComplaintHierarchyCascade(props: InputProps & { label?: string }) {
   const { label } = props;
   const { field, fieldState, isRequired } = useInput(props);
+  const showError = useShowFieldError(fieldState);
+  const errorText = useFieldErrorText(fieldState.error?.message);
   const { state } = useApp();
   // Fetch at the LOGGED-IN tenant (e.g. ke.ige) — that's the operator's own
   // hierarchy. The state root can carry stale/dev-seed rows (Garbage/Street
@@ -183,7 +187,7 @@ export function ComplaintHierarchyCascade(props: InputProps & { label?: string }
             <div key={lvl.levelCode}>
               <Label className="mb-1 block text-xs text-muted-foreground">{lvl.label || lvl.levelCode}</Label>
               <Select value={sel[i] ?? ''} onValueChange={(v: string) => handleChange(i, v)} disabled={disabled}>
-                <SelectTrigger aria-invalid={(fieldState.invalid && fieldState.isTouched) || undefined}>
+                <SelectTrigger aria-invalid={showError || undefined}>
                   <SelectValue
                     placeholder={isLoading ? 'Loading…' : disabled ? 'Select the level above first' : 'Select…'}
                   />
@@ -200,8 +204,8 @@ export function ComplaintHierarchyCascade(props: InputProps & { label?: string }
           );
         })}
       </div>
-      {fieldState.invalid && fieldState.isTouched && fieldState.error?.message && (
-        <p className="mt-1 text-xs text-destructive">{fieldState.error.message}</p>
+      {showError && errorText && (
+        <p className="mt-1 text-xs text-destructive">{errorText}</p>
       )}
     </div>
   );
