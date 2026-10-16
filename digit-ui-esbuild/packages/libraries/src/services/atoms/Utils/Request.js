@@ -1,4 +1,7 @@
 import Axios from "axios";
+import { hierarchyMissing, emptyTenantBoundary, unionTenantBoundary } from "./boundaryGuard";
+import { enterableChildTenants } from "../../../utils/tenantScope";
+import { Storage } from "./Storage";
 
 /**
  * Custom Request to make all api calls
@@ -179,6 +182,23 @@ export const Request = async ({
     }
     return out.join("&");
   };
+
+ 
+  // answer it with an empty tree instead of sending it (boundaryGuard.js)
+  if (!userDownload && (await hierarchyMissing(url, params, (criteria) =>
+    Request({ url: "/boundary-service/boundary-hierarchy-definition/_search", method: "POST", useCache: false, auth, userService,
+      data: { BoundaryTypeHierarchySearchCriteria: criteria } })))) {
+    // a state without its own hierarchy: its counties' trees, only those the user can enter (tenantScope)
+    if (!params?.tenantId) return emptyTenantBoundary();
+    const counties = enterableChildTenants(params.tenantId, Storage.get("initData")?.tenants || [],
+      window?.Digit?.UserService?.getUser?.()?.info?.roles || []);
+    const answers = [];
+    for (const county of counties) {
+      answers.push(await Request({ url, method, useCache: false, auth, userService, params: { ...params, tenantId: county.code }, data: {} })
+        .catch(() => null));
+    }
+    return unionTenantBoundary(params.tenantId, params.hierarchyType, answers);
+  }
 
   const res = userDownload
     ? await Axios({ method, url: _url, data, params, headers, paramsSerializer, responseType: "arraybuffer" })

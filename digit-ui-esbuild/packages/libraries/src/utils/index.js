@@ -14,6 +14,7 @@ import { iconRender } from "./iconRender";
 import {getFieldIdName} from "./field";
 import { DEFAULT_MOBILE_PATTERN } from "../constants/mobileValidation";
 import { legacyMultiRootTenantEnabled, mdmsAppId, rebaseAppUrl } from "../services/tenant/tenantRoute";
+import * as tenantScope from "./tenantScope";
 
 const GetParamFromUrl = (key, fallback, search) => {
   if (typeof window !== "undefined") {
@@ -522,6 +523,7 @@ const mdms={
 }
 
 export default {
+  tenantScope,
   pdf: PDFUtil,
   createFunction,
   downloadReceipt,
