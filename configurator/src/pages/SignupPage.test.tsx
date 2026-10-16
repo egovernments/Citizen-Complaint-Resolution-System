@@ -567,6 +567,16 @@ describe('provisioning', () => {
     expect(screen.queryByLabelText(/account name/i)).not.toBeInTheDocument();
   });
 
+  it('resumes the wizard when pgr-services is too old to find a run by its signup (#2353)', async () => {
+    reloadOntoReopened('TENANT_ADMIN_ACCOUNT_REJECTED', 'KE');
+    // What a pgr-services from before #2515 answers to { signupId }.
+    findSignupOperation.mockRejectedValue(
+      new api.OnboardingError(400, 'ONBOARDING_VALIDATION_ERROR', 'Operation.id is required'));
+
+    expect(await screen.findByLabelText(/account name/i)).toHaveValue('Bomet County');
+    expect(screen.queryByRole('button', { name: /try again/i })).not.toBeInTheDocument();
+  });
+
   it('sends an expired sign-in during the run look-up back to sign-in (#2353)', async () => {
     vi.mocked(api.authMethods).mockResolvedValue({ methods: [{ id: 'password', label: 'Email and password', type: 'password' }] });
     reloadOntoReopened('TENANT_ADMIN_ACCOUNT_REJECTED', 'KE');
