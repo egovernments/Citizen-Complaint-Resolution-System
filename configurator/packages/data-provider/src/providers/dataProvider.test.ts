@@ -356,6 +356,9 @@ describe('createDigitDataProvider', () => {
       }
       return [];
     });
+    // The post-create re-read pages ComplaintHierarchy through mdmsSearchAll,
+    // which is bounded by mdmsCount; the mocked search has no such rows.
+    mock.method(client, 'mdmsCount', async () => 0);
     let captured: Record<string, unknown> | null = null;
     mock.method(client, 'mdmsCreate', async (_t: string, _s: string, _u: string, data: Record<string, unknown>) => {
       captured = data;
@@ -378,6 +381,7 @@ describe('createDigitDataProvider', () => {
 
   it('falls back to PGR/SUB_TYPE for a new complaint type when the tenant has no hierarchy definition yet', async () => {
     mock.method(client, 'mdmsSearch', async () => []);
+    mock.method(client, 'mdmsCount', async () => 0);
     let captured: Record<string, unknown> | null = null;
     mock.method(client, 'mdmsCreate', async (_t: string, _s: string, _u: string, data: Record<string, unknown>) => {
       captured = data;
@@ -413,6 +417,7 @@ describe('createDigitDataProvider', () => {
       isActive: true,
       auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 },
     }]);
+    mock.method(client, 'mdmsCount', async () => 1);
     let captured: Record<string, unknown> | null = null;
     mock.method(client, 'mdmsUpdate', async (rec: { data: Record<string, unknown> }) => {
       captured = rec.data;
