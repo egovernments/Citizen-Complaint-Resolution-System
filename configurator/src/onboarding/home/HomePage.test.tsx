@@ -5,7 +5,8 @@ import HomePage from './HomePage';
 import { LearnTheBasics } from './LearnTheBasics';
 import { cardsPerPage } from './videoRow';
 import { VideoDialog } from './VideoDialog';
-import type { LearnVideo } from './homeContent';
+import { learnVideos, type LearnVideo } from './homeContent';
+import { englishT } from '../i18n';
 
 const app = { state: { tenant: 'acme', targetTenant: 'acme', completedPhases: [] as number[] } };
 vi.mock('@/App', () => ({ useApp: () => app }));
@@ -94,6 +95,11 @@ describe('the welcome', () => {
 });
 
 describe('Learn the basics', () => {
+  it('lists only videos that are published', () => {
+    // A card with no video only says "coming soon" (#2358).
+    expect(learnVideos(englishT).filter((video) => !video.youtubeId)).toEqual([]);
+  });
+
   it('fits one to four cards by width', () => {
     expect([0, 459, 460, 699, 700, 940, 2000].map(cardsPerPage)).toEqual([1, 1, 2, 2, 3, 4, 4]);
   });
