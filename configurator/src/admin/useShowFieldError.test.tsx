@@ -24,3 +24,9 @@ it('a blank submit shows the required field error without the field being touche
   await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Create' })); });
   expect(screen.getByRole('alert').textContent).toMatch(/required/i);
 });
+
+it('outside a form (an input rendered alone) it falls back to touched / changed', () => {
+  function Alone() { return <span>{String(useShowFieldError({ invalid: true, isTouched: false }))}</span>; }
+  render(<Alone />);
+  expect(screen.getByText('false')).toBeTruthy();
+});
