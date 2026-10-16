@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { useShowFieldError } from '@/admin/useShowFieldError';
+import { useFieldErrorText } from '@/admin/fieldErrorText';
 
 export interface DigitFormCodeInputProps extends InputProps {
   /** Display label for the input */
@@ -50,7 +51,7 @@ export function DigitFormCodeInput({
   const [generating, setGenerating] = useState(false);
 
   const hasError = useShowFieldError(fieldState);
-  const errorMessage = fieldState.error?.message;
+  const errorMessage = useFieldErrorText(fieldState.error?.message);
 
   const canDeriveFromName = deriveFrom && typeof watchedName === 'string' && watchedName.trim().length > 0;
 

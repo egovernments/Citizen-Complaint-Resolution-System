@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { DigitFormSelect } from './DigitFormSelect';
 import { useShowFieldError } from '@/admin/useShowFieldError';
+import { useFieldErrorText } from '@/admin/fieldErrorText';
 
 interface WorkflowState {
   uuid?: string;
@@ -157,7 +158,7 @@ export function WorkflowActionSelect({
   const needsRating = selectedAction ? RATING_ACTIONS.has(selectedAction) : false;
 
   const hasError = useShowFieldError(fieldState);
-  const errorMessage = fieldState.error?.message;
+  const errorMessage = useFieldErrorText(fieldState.error?.message);
 
   // Clear assignee/rating when action changes
   const handleActionChange = (value: string) => {

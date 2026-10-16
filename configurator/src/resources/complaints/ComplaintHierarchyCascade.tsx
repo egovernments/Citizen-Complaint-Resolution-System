@@ -13,6 +13,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { uniqueBy } from '@/lib/uniqueBy';
 import { useShowFieldError } from '@/admin/useShowFieldError';
+import { useFieldErrorText } from '@/admin/fieldErrorText';
 
 // One RAINMAKER-PGR.ComplaintHierarchy row (interior node OR leaf complaint type).
 interface HierNode {
@@ -57,6 +58,7 @@ export function ComplaintHierarchyCascade(props: InputProps & { label?: string }
   const { label } = props;
   const { field, fieldState, isRequired } = useInput(props);
   const showError = useShowFieldError(fieldState);
+  const errorText = useFieldErrorText(fieldState.error?.message);
   const { state } = useApp();
   // Fetch at the LOGGED-IN tenant (e.g. ke.ige) — that's the operator's own
   // hierarchy. The state root can carry stale/dev-seed rows (Garbage/Street
@@ -202,8 +204,8 @@ export function ComplaintHierarchyCascade(props: InputProps & { label?: string }
           );
         })}
       </div>
-      {showError && fieldState.error?.message && (
-        <p className="mt-1 text-xs text-destructive">{fieldState.error.message}</p>
+      {showError && errorText && (
+        <p className="mt-1 text-xs text-destructive">{errorText}</p>
       )}
     </div>
   );

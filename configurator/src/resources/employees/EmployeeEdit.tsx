@@ -12,6 +12,7 @@ import { JurisdictionEditor } from './JurisdictionEditor';
 import { AssignmentEditor } from './AssignmentEditor';
 import { useGenderChoices } from '../useGenderChoices';
 import { useShowFieldError } from '@/admin/useShowFieldError';
+import { useFieldErrorText } from '@/admin/fieldErrorText';
 
 const STATUS_CHOICES = [
   { value: 'EMPLOYED', label: 'Employed' },
@@ -55,7 +56,7 @@ function DateEpochField({ label, help, className, ...inputProps }: DateEpochFiel
   const { id, field, fieldState, isRequired } = useInput(inputProps);
   const asString = epochToDateInput(field.value);
   const hasError = useShowFieldError(fieldState);
-  const errorMessage = fieldState.error?.message;
+  const errorMessage = useFieldErrorText(fieldState.error?.message);
   return (
     <div className={className}>
       {label && (

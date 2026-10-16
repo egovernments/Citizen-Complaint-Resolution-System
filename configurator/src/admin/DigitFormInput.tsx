@@ -4,6 +4,7 @@ import { useInput, type InputProps } from 'ra-core';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useShowFieldError } from '@/admin/useShowFieldError';
+import { useFieldErrorText } from '@/admin/fieldErrorText';
 
 export interface DigitFormInputProps extends InputProps {
   /** Display label for the input */
@@ -48,21 +49,7 @@ export function DigitFormInput({
   // showing no error while the user is still typing an invalid value.
   // `isDirty` flips on the first change, giving immediate feedback.
   const hasError = useShowFieldError(fieldState);
-  // ra-core v5 wraps validator errors as `@@react-admin@@${JSON.stringify(msg)}`
-  // before storing them in react-hook-form state. Strip the prefix and unwrap
-  // the JSON string so the raw human-readable message is rendered.
-  const rawError = fieldState.error?.message;
-  const errorMessage = rawError?.startsWith('@@react-admin@@')
-    ? (() => {
-        try {
-          const parsed: unknown = JSON.parse(rawError.slice(15));
-          if (typeof parsed === 'string') return parsed;
-          if (parsed && typeof parsed === 'object' && 'message' in parsed)
-            return String((parsed as { message: unknown }).message);
-          return String(parsed);
-        } catch { return rawError.slice(15); }
-      })()
-    : rawError;
+  const errorMessage = useFieldErrorText(fieldState.error?.message);
 
   return (
     <div className={className}>

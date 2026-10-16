@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { uniqueBy } from '@/lib/uniqueBy';
 import { pickerChoices } from '@/lib/systemRecords';
 import { useShowFieldError } from '@/admin/useShowFieldError';
+import { useFieldErrorText } from '@/admin/fieldErrorText';
 
 /** Resolve a dot-separated path like 'user.name' from a record */
 function getNestedValue(record: RaRecord, path: string): unknown {
@@ -88,7 +89,7 @@ export function DigitFormSelect({
   }, [staticChoices, data, optionValue, optionText, field.value]);
 
   const hasError = useShowFieldError(fieldState);
-  const errorMessage = fieldState.error?.message;
+  const errorMessage = useFieldErrorText(fieldState.error?.message);
 
   return (
     <div className={className}>
