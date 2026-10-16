@@ -251,6 +251,7 @@ The first `tilt up` runs a full `mvn package` of PGR before anything starts, whi
   to the new code serving.
 - `pgr-services-migration` runs Flyway from the same source tree (`src/main/resources/db/`, built as
   `pgr-services-db-dev`), so a new `V*.sql` is applied on the next `tilt up` or file change.
+  `pgr-services` starts only after the `pgr-services-migration-done` resource sees that job exit 0.
 - `pgr-services` runs the locally built `pgr-services-dev` image (via `docker-compose.tilt.yml`), not
   the registry image.
 
@@ -259,7 +260,8 @@ The first `tilt up` runs a full `mvn package` of PGR before anything starts, whi
 - For UI work, click ▶ on the **`ui-dev`** resource (it is not started automatically). It runs the
   `digit-ui-esbuild` dev server with live reload on **http://localhost:18180/digit-ui/employee**,
   proxies API calls to Kong on :18000, and uses the same `nginx/globalConfigs.js`. The first start
-  runs `npm install`, which takes a few minutes.
+  runs `npm ci`, which takes a few minutes. It runs again whenever `package-lock.json` changes
+  (for example after pulling a branch that adds a UI dependency).
 - `ui-dev` serves the **current** UI source, while the container serves the pinned release, so the
   two can differ. For example, the source no longer has the employee-login city dropdown
   (4a9600b18): the tenant comes from the URL or defaults to the state tenant. Logging in on :18180

@@ -1204,7 +1204,8 @@ class CRSLoader:
                         name: str = None, mobile: str = "9999999999",
                         roles: list = None, department: str = None,
                         designation: str = None,
-                        jurisdiction_boundary: str = None) -> bool:
+                        jurisdiction_boundary: str = None,
+                        jurisdiction_boundary_type: str = None) -> bool:
         """Create a single HRMS employee programmatically.
 
         Creates both the user account AND the HRMS employee record.
@@ -1222,6 +1223,8 @@ class CRSLoader:
             jurisdiction_boundary: Boundary code the employee's jurisdiction covers
                 (defaults to the tenant). PGR scopes employee search to it, so a
                 complaint outside it is invisible to this employee.
+            jurisdiction_boundary_type: Level of jurisdiction_boundary (e.g. "Locality").
+                Defaults to "City", which is only right for the tenant default.
 
         Returns:
             bool: True if employee was created or already exists
@@ -1256,7 +1259,8 @@ class CRSLoader:
             'dateOfAppointment': 1704067200000,
             'assignments': [{'fromDate': 1704067200000, 'isCurrentAssignment': True,
                              'department': department, 'designation': designation}],
-            'jurisdictions': [{'hierarchy': 'REVENUE', 'boundaryType': 'City',
+            'jurisdictions': [{'hierarchy': 'REVENUE',
+                               'boundaryType': jurisdiction_boundary_type or 'City',
                                'boundary': jurisdiction_boundary or tenant, 'tenantId': tenant,
                                'roles': role_objects}],
             'user': {'name': name, 'userName': username, 'mobileNumber': mobile,
@@ -1310,18 +1314,40 @@ class CRSLoader:
                             )
                     # Same for the jurisdiction: _create being a no-op leaves the
                     # seed's boundary in place, which PGR search scoping reads.
+                    # Retarget ONE active jurisdiction (the one already on the
+                    # boundary, else the first) so others aren't duplicated onto it.
                     if jurisdiction_boundary:
-                        for j in emp.get("jurisdictions") or []:
-                            if j.get("isActive", True) and j.get("boundary") != jurisdiction_boundary:
-                                print(f"   Reconciling jurisdiction: {j.get('boundary')} -> {jurisdiction_boundary}")
-                                j["boundary"] = jurisdiction_boundary
-                    requests.post(f"{self.base_url}{hrms_svc}/employees/_update",
+                        active = [j for j in emp.get("jurisdictions") or []
+                                  if j.get("isActive", True)]
+                        target = next((j for j in active
+                                       if j.get("boundary") == jurisdiction_boundary),
+                                      active[0] if active else None)
+                        new_type = jurisdiction_boundary_type or "City"
+                        if target and (target.get("boundary"), target.get("boundaryType")) != \
+                                (jurisdiction_boundary, new_type):
+                            print(f"   Reconciling jurisdiction: {target.get('boundary')} "
+                                  f"({target.get('boundaryType')}) -> {jurisdiction_boundary} ({new_type})")
+                            target["boundary"] = jurisdiction_boundary
+                            target["boundaryType"] = new_type
+                    ur = requests.post(f"{self.base_url}{hrms_svc}/employees/_update",
                         json={"RequestInfo": {"apiId": "Rainmaker", "authToken": self.auth_token,
                               "userInfo": self.user_info}, "Employees": [emp]},
                         headers=headers, timeout=REQUEST_TIMEOUT)
+                    # The password, assignment and jurisdiction all ride on this one
+                    # call: if HRMS rejects it, none of them took, and a later login
+                    # with `password` would fail with no hint why.
+                    if not ur.ok:
+                        print(f"   ERROR: HRMS _update for '{username}' failed "
+                              f"(HTTP {ur.status_code}): {ur.text[:500]}")
+                        return False
                     print(f"   Password set for '{username}'")
+                else:
+                    print(f"   ERROR: HRMS _search found no employee '{username}' to set the "
+                          f"password on (HTTP {sr.status_code}): {sr.text[:300]}")
+                    return False
             except Exception as e:
-                print(f"   Warning: password update failed: {e}")
+                print(f"   ERROR: password update for '{username}' failed: {e}")
+                return False
 
         return created
 
