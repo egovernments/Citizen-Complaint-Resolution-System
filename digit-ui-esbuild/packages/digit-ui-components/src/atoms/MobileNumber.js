@@ -2,6 +2,7 @@ import React from "react";
 import PropTypes from "prop-types";
 import TextInput from "./TextInput";
 import { getUserType } from "../utils/digitUtils";
+import { mobilePrefix } from "../utils/mobilePrefix"; // ours (#1929)
 
 const MobileNumber = (props) => {
   const user_type = getUserType();
@@ -45,7 +46,7 @@ const MobileNumber = (props) => {
             onBlur={props.onBlur}
             variant={props?.variant}
             populators={
-              !props.hideSpan ? {prefix: props?.prefix || "+91"} :{}
+              !props.hideSpan ? {prefix: props?.prefix || mobilePrefix()} /* ours (#1929): the tenant's code, not "+91" */ :{}
             }
           />
         </div>
