@@ -1,3 +1,4 @@
+import { slaDaysFormat, slaDaysParse } from './slaDays';
 import type { RaRecord } from 'ra-core';
 import { DigitCreate, DigitFormCodeInput, DigitFormInput, DigitFormSelect, v } from '@/admin';
 import { useAvailableLocales } from '@/hooks/useAvailableLocales';
@@ -69,7 +70,8 @@ export function ComplaintTypeCreate() {
         placeholder="Select department..."
         validate={v.required}
       />
-      <DigitFormInput source="slaHours" label="SLA (hours)" type="number" validate={v.slaHours} />
+      {/* ours (cfgreview F18, #1564): the SLA is entered in days; MDMS keeps hours (days x 24) */}
+      <DigitFormInput source="slaHours" label="SLA (days)" type="number" validate={v.slaHours} format={slaDaysFormat} parse={slaDaysParse} help="Days to resolve a complaint of this category (kept as hours: days x 24)." />
       <DigitFormInput source="name" label="Complaint Subcategory" validate={v.name} />
       <DigitFormCodeInput source="serviceCode" label="Service Code" deriveFrom="name" validate={v.codeRequired} />
     </DigitCreate>

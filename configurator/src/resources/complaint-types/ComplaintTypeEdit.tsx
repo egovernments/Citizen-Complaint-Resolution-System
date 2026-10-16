@@ -1,3 +1,4 @@
+import { slaDaysFormat, slaDaysParse } from './slaDays';
 import { DigitEdit, DigitFormInput, DigitFormSelect, v } from '@/admin';
 import { FieldSection } from '@/admin/fields';
 import { BooleanInput } from '@/admin/widgets';
@@ -16,7 +17,8 @@ export function ComplaintTypeEdit() {
             reference="departments"
             placeholder="Select department..."
           />
-          <DigitFormInput source="slaHours" label="SLA (hours)" type="number" validate={v.slaHours} />
+          {/* ours (cfgreview F18, #1564): the SLA is entered in days; MDMS keeps hours (days x 24) */}
+          <DigitFormInput source="slaHours" label="SLA (days)" type="number" validate={v.slaHours} format={slaDaysFormat} parse={slaDaysParse} help="Days to resolve a complaint of this category (kept as hours: days x 24)." />
           <DigitFormInput source="keywords" label="Keywords" />
           {/* The active flag was previously omitted from this dedicated
               edit form, so operators had no way to enable/disable a

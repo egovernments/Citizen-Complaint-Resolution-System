@@ -5,6 +5,7 @@ import { EntityLink } from '@/components/ui/EntityLink';
 import { Badge } from '@/components/ui/badge';
 import { useShowController } from 'ra-core';
 import { useMastersCapability } from '@/hooks/useMastersCapability';
+import { slaDaysText } from './slaDays';
 
 export function ComplaintTypeShow() {
   const { record } = useShowController();
@@ -38,7 +39,7 @@ export function ComplaintTypeShow() {
                   '--'
                 )}
               </FieldRow>
-              <FieldRow label="SLA (hours)">{String(rec.slaHours ?? '--')}</FieldRow>
+              <FieldRow label="SLA (days)">{slaDaysText(rec.slaHours)}</FieldRow>
               <FieldRow label="Status">
                 <StatusChip value={rec.active} labels={{ true: 'Active', false: 'Inactive' }} />
               </FieldRow>
