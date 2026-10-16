@@ -5970,6 +5970,21 @@
         headers: "{{ {} if (tls_enabled | default(true)) else {'Host': domain} }}"
       when: nginx_features.configurator | default(false)
 
+    # A check switched off with `enabled: ${VAR}` keeps its last stored result in
+    # Gatus's sqlite store, because Gatus prunes only endpoints that are missing
+    # from its config. Without this, the status page shows that tile red forever
+    # (#2458: Kong Admin API, frozen at its last failure from before
+    # GATUS_KONG_ADMIN=false). The script reads the toggles from the running
+    # container, does nothing when no switched-off check has stored rows, and
+    # otherwise stops Gatus, deletes those rows and starts it again. A failure
+    # here leaves a stale tile, not a broken stack, so it doesn't fail the deploy.
+    - name: "gatus — drop stored history for checks this stack switches off"
+      ansible.builtin.command:
+        argv: [python3, "{{ digit_dir }}/gatus/prune-disabled.py", "{{ digit_dir }}/gatus/config.yaml", digit-gatus]
+      register: gatus_prune
+      changed_when: "'CHANGED:' in gatus_prune.stdout"
+      ignore_errors: true
+
     # /status/ is behind basic auth now, so this gate has to present the
     # credential. Without it the task 401s and the deploy fails — meaning the
     # only configuration that could complete a deploy would be the board turned

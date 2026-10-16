@@ -64,3 +64,5 @@ jobs:
         run: python3 .github/scripts/check-gatus-coverage.py --self-test
       - name: Check every deployed service has a Gatus check
         run: python3 .github/scripts/check-gatus-coverage.py
+      - name: Self-test the deploy step that prunes switched-off checks (#2458)
+        run: python3 local-setup/gatus/prune-disabled.py --self-test
