@@ -2,6 +2,9 @@ import { defineConfig } from '@playwright/test';
 
 const BASE_URL = process.env.BASE_URL || 'https://naipepea.digit.org';
 const LOCAL_STACK = process.env.LOCAL_STACK === '1';
+// Node's fetch (passwordSignIn, citizen provisioning) honours the same
+// self-signed opt-in as the browser contexts' ignoreHTTPSErrors below.
+if (process.env.IGNORE_HTTPS_ERRORS === '1') process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 const EXCLUDE_LOCAL_ONLY = LOCAL_STACK ? undefined : /@local-only/;
 
 export default defineConfig({

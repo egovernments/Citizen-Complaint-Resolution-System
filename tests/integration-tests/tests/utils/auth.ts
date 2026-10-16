@@ -6,7 +6,7 @@
  * through a Playwright page or request context: Playwright traces every context
  * a test creates, and a run publishes its traces, step titles and report.json.
  * Tokens are cached per (user, tenant) until shortly before they expire, and a
- * refusal per (user, surface, password) for a while, so one wrong password
+ * refusal per (user, password) for a while, so one wrong password
  * costs ONE failed login against a realm with brute-force protection, not one
  * per caller. A session is reused per (user, surface) the same way: signing the
  * same person in every few seconds trips Keycloak's temporary lockout.
@@ -14,7 +14,7 @@
 import { createHash } from 'node:crypto';
 import { BASE_URL } from './env';
 import { request as playwrightRequest, type Page } from '@playwright/test';
-import { KeycloakSessionExpiredError, KeycloakSignInError, passwordSignIn, selectContext, surfacePath, type SignInCookie } from './identity-bff';
+import { IdentityHttpError, KeycloakSessionExpiredError, KeycloakSignInError, passwordSignIn, selectContext, surfacePath, type SignInCookie } from './identity-bff';
 
 export interface TokenResponse {
   access_token: string;
@@ -40,7 +40,7 @@ type StaffSurface = 'configurator' | 'employee';
 const EXPIRY_MARGIN_MS = 2 * 60_000;
 const tokens = new Map<string, { token: TokenResponse; expiresAt: number }>();
 /**
- * Keycloak refusals, per (user, surface, password), kept for a while rather
+ * Keycloak refusals, per (user, password) on any surface, kept for a while rather
  * than for the worker's life: "temporarily disabled" clears itself, a wrong
  * password does not. A sign-in Keycloak timed out or restarted is not a
  * refusal (KeycloakSessionExpiredError): it is retried once, never cached.
@@ -58,9 +58,10 @@ const digest = (password: string) => createHash('sha256').update(password).diges
 export async function signIn(baseURL: string, surface: StaffSurface, username: string, password: string,
   opts: { fresh?: boolean } = {}): Promise<SignInCookie[]> {
   if (!username || !password) throw new Error(`No credentials for a ${surface} sign-in: set the persona's user and password env vars`);
-  const key = JSON.stringify([baseURL, surface, username, digest(password)]);
-  const refused = refusals.get(key);
+  const refusalKey = JSON.stringify([baseURL, username, digest(password)]);
+  const refused = refusals.get(refusalKey);
   if (refused && Date.now() - refused.at < REFUSAL_MS) throw refused.error;
+  const key = JSON.stringify([baseURL, surface, username, digest(password)]);
   const session = sessions.get(key);
   if (!opts.fresh && session && Date.now() - session.at < SESSION_MS) return session.cookies;
   const post = () => passwordSignIn({ baseURL, surface, username, password });
@@ -72,7 +73,7 @@ export async function signIn(baseURL: string, surface: StaffSurface, username: s
     sessions.set(key, { cookies, at: Date.now() });
     return cookies;
   } catch (err) {
-    if (err instanceof KeycloakSignInError) refusals.set(key, { error: err, at: Date.now() });
+    if (err instanceof KeycloakSignInError) refusals.set(refusalKey, { error: err, at: Date.now() });
     throw err;
   }
 }
@@ -82,7 +83,7 @@ async function withSession<T>(run: (fresh: boolean) => Promise<T>): Promise<T> {
   try {
     return await run(false);
   } catch (err) {
-    if (!/HTTP 401/.test(String((err as Error).message))) throw err;
+    if (!(err instanceof IdentityHttpError && err.status === 401)) throw err;
     return run(true);
   }
 }
@@ -97,7 +98,7 @@ export async function getDigitToken(config: AuthConfig): Promise<TokenResponse> 
   if (hit && hit.expiresAt - EXPIRY_MARGIN_MS > Date.now()) return hit.token;
   const token = await withSession(async (fresh) => {
     const cookies = await signIn(baseURL, 'configurator', config.username, config.password, { fresh });
-    const api = await playwrightRequest.newContext({ storageState: { cookies, origins: [] } });
+    const api = await playwrightRequest.newContext({ storageState: { cookies, origins: [] }, ignoreHTTPSErrors: process.env.IGNORE_HTTPS_ERRORS === '1' });
     try {
       return await selectContext(api, baseURL, 'configurator', tenant);
     } finally {
@@ -130,6 +131,10 @@ export async function loginViaApi(
     waitUntil: 'domcontentloaded',
     timeout: 30_000,
   });
+  // With the BFF cookie, the login page runs its own _select and then replaces
+  // itself with the employee home. Writing localStorage or navigating before
+  // that lands races it ("Execution context was destroyed", ERR_ABORTED).
+  await page.waitForURL((url) => !url.pathname.endsWith('/user/login'), { waitUntil: 'domcontentloaded', timeout: 30_000 });
 
   await page.evaluate(
     ({ token, userInfo, tenant }) => {

@@ -17,6 +17,12 @@ import { getDigitToken } from './auth';
 const DEFAULT_FALLBACK = 'NCCG';
 
 /**
+ * A service-request ID, `<PREFIX>-PGR-<YYYY>-<MM>-<DD>-<seq>`; group 1 is the
+ * prefix, which can itself hold hyphens (a signup workspace's KE-QA).
+ */
+export const SRID_RE = /([A-Z0-9]+(?:-[A-Z0-9]+)*)-PGR-\d{4}-\d{2}-\d{2}-\d+/;
+
+/**
  * Resolve the PGR ID prefix for this deployment by asking egov-idgen
  * for one `pgr.servicerequestid`. Returns the segment before `-PGR-`
  * (e.g. "NCCG", "PG"). Falls back to "NCCG" only if both the city- and
@@ -55,8 +61,7 @@ export async function getPgrIdPrefix(opts?: { tenant?: string }): Promise<string
       };
       const id = json.idResponses?.[0]?.id;
       if (!id) continue;
-      // The prefix can itself hold hyphens: a signup workspace's is `<COUNTRY>-<TENANT>` (KE-QA).
-      const match = id.match(/^([A-Z0-9]+(?:-[A-Z0-9]+)*)-PGR-/);
+      const match = id.match(SRID_RE);
       if (match) return match[1];
     } catch {
       // try next tenant

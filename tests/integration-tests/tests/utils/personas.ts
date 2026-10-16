@@ -25,7 +25,7 @@
  * ACTOR needs credentials, and those come from env.
  */
 import { getDigitToken } from './auth';
-import { KeycloakSignInError } from './identity-bff';
+import { isContextRefusal, KeycloakSignInError } from './identity-bff';
 import { ROOT_TENANT, TENANT, DEFAULT_PASSWORD } from './env';
 import { fetchEmployees, type DiscoveredEmployee } from './probes';
 import { getProfile, type DeploymentProfile, type PersonaSummary } from './profile';
@@ -242,7 +242,7 @@ async function adminToken(tenants: TenantPair): Promise<string> {
       if (attempt < 3) await new Promise((r) => setTimeout(r, attempt * 2_000));
     }
   }
-  console.log(`[personas] admin token unavailable after 3 attempts — ${adminTokenErrors.get(root)}`);
+  console.log(`[personas] admin token unavailable — ${adminTokenErrors.get(root)}`);
   adminTokenCache.set(root, '');
   return '';
 }
@@ -303,8 +303,9 @@ async function login(c: Candidate): Promise<Principal | null> {
         break;
       }
     } catch (err) {
-      // Try the next tenant; a guessed password failing everywhere is normal.
-      if (!(err instanceof KeycloakSignInError)) failure ??= err;
+      // Try the next tenant; a guessed password failing everywhere is normal, and
+      // so is a password that works for someone with no context here (_select).
+      if (!(err instanceof KeycloakSignInError || isContextRefusal(err))) failure ??= err;
     }
   }
   // R6: every attempt is logged, so a lockout can be traced to this suite —

@@ -10,12 +10,19 @@ export interface DigitContext {
   tenant?: { urlSlug: string; tenantId: string };
 }
 
+/** An identity response with an unexpected status, and the BFF's error code (never the body). */
+export class IdentityHttpError extends Error {
+  constructor(readonly status: number, readonly code: string) {
+    super(`Identity request failed: HTTP ${status} (${code})`);
+  }
+}
+
 /** Never include a response body: successful and failed auth responses may hold secrets. */
 export async function identityJson<T>(response: Pick<APIResponse, 'status' | 'json'>, status = 200): Promise<T> {
   if (response.status() !== status) {
     const body = await response.json().catch(() => null);
     const code = typeof body?.code === 'string' && /^[A-Z_]+$/.test(body.code) ? body.code : 'UNEXPECTED_RESPONSE';
-    throw new Error(`Identity request failed: HTTP ${response.status()} (${code})`);
+    throw new IdentityHttpError(response.status(), code);
   }
   return response.json() as Promise<T>;
 }
@@ -71,7 +78,11 @@ export class KeycloakSignInError extends Error {}
  */
 export class KeycloakSessionExpiredError extends Error {}
 
-const SESSION_ENDED = /timed out|expired|start from the beginning|restart|cookie not found/i;
+// Keycloak's English messages (the suite's deployments sign in in English):
+// expiredCodeMessage "Login timeout…", staleCodeMessage "…no longer valid…",
+// and the expired/restarted auth session ones. The login page carries no
+// message key, so its text is the only signal.
+const SESSION_ENDED = /timed out|timeout|expired|no longer valid|start from the beginning|restart|cookie not found/i;
 
 /** The error for a sign-in Keycloak sent back to its form, by what the page says. */
 function refusedWith(username: string, shown: string): KeycloakSignInError | KeycloakSessionExpiredError {
@@ -79,6 +90,9 @@ function refusedWith(username: string, shown: string): KeycloakSignInError | Key
     ? new KeycloakSessionExpiredError(`Keycloak ended the sign-in for ${username}: ${shown}`)
     : new KeycloakSignInError(`Keycloak refused the sign-in for ${username}: ${shown}`);
 }
+
+/** Each hosted sign-in request; past it, Keycloak or the BFF is stuck, not slow. */
+const SIGN_IN_REQUEST_MS = 30_000;
 
 /** A cookie the BFF or Keycloak set, in the shape BrowserContext.addCookies takes. */
 export interface SignInCookie {
@@ -135,7 +149,7 @@ export async function passwordSignIn(config: { baseURL: string; surface: Surface
     let body = form ? new URLSearchParams(form).toString() : undefined;
     for (let hop = 0; hop < 15; hop++) {
       const cookies = header(url);
-      const response = await fetch(url, { method: body ? 'POST' : 'GET', redirect: 'manual', body,
+      const response = await fetch(url, { method: body ? 'POST' : 'GET', redirect: 'manual', body, signal: AbortSignal.timeout(SIGN_IN_REQUEST_MS),
         headers: { ...(body ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}), ...(cookies ? { Cookie: cookies } : {}) } });
       for (const raw of response.headers.getSetCookie()) store(raw, url);
       const location = response.headers.get('location');
@@ -170,10 +184,12 @@ export async function passwordSignIn(config: { baseURL: string; surface: Surface
   if (page.url.origin !== origin || page.url.pathname.startsWith('/auth/')) throw new Error('Hosted sign-in did not return to the application');
   const resultId = page.url.searchParams.get('authResult');
   if (resultId) {
-    const result = await fetch(`${origin}/identity/v1/auth-results/${encodeURIComponent(resultId)}`, { headers: { Cookie: header(page.url) } });
+    const resultUrl = new URL(`${origin}/identity/v1/auth-results/${encodeURIComponent(resultId)}`);
+    const result = await fetch(resultUrl, { headers: { Cookie: header(resultUrl) }, signal: AbortSignal.timeout(SIGN_IN_REQUEST_MS) });
     if (result.status !== 200 || (await result.json().catch(() => null))?.status !== 'complete') throw new Error('Hosted sign-in was rejected by the BFF');
   }
-  const session = await fetch(`${origin}/identity/v1/session?surface=${config.surface}`, { headers: { Cookie: header(new URL(`${origin}/identity/v1/session`)) } });
+  const sessionUrl = new URL(`${origin}/identity/v1/session?surface=${config.surface}`);
+  const session = await fetch(sessionUrl, { headers: { Cookie: header(sessionUrl) }, signal: AbortSignal.timeout(SIGN_IN_REQUEST_MS) });
   if (session.status !== 200 || (await session.json().catch(() => null))?.authenticated !== true) {
     throw new Error('Hosted sign-in did not establish a BFF session');
   }
@@ -277,6 +293,10 @@ export async function hostedSignIn(page: Page, config: {
 export function citizenAccountTenantId(tenantId: string) {
   return tenantId.split('.')[0];
 }
+
+/** `_select` refusals that say this person has no context at the tenant, not that the BFF failed. */
+const CONTEXT_REFUSALS = new Set(['TENANT_CONTEXT_UNAVAILABLE', 'EMPLOYEE_ACCOUNT_NOT_LINKED', 'PENDING_INVITATION', 'DIGIT_ACCOUNT_NOT_FOUND', 'DIGIT_ACCOUNT_INACTIVE']);
+export const isContextRefusal = (err: unknown) => err instanceof IdentityHttpError && CONTEXT_REFUSALS.has(err.code);
 
 export async function selectContext(request: APIRequestContext, baseURL: string, surface: Surface, tenantId: string) {
   const path = surface === 'citizen' ? 'contexts/citizen/_select' : 'contexts/_select';
