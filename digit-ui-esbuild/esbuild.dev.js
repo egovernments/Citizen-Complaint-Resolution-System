@@ -359,10 +359,14 @@ async function start() {
     // Serve vendored assets (e.g. the transformed digit-ui-css) from public/vendor/
     if (pathname.startsWith("/digit-ui/vendor/")) {
       const subPath = pathname.slice("/digit-ui/vendor/".length);
-      const vendorPath = path.resolve(__dirname, "public/vendor", subPath);
+      // The build copies ExcelJS here for the dashboard export (#1977); dev serves it from node_modules.
+      const vendorPath =
+        subPath === "exceljs.min.js"
+          ? path.resolve(__dirname, "node_modules/exceljs/dist/exceljs.min.js")
+          : path.resolve(__dirname, "public/vendor", subPath);
       if (fs.existsSync(vendorPath) && fs.statSync(vendorPath).isFile()) {
         const ext = path.extname(vendorPath);
-        const ct = ext === ".css" ? "text/css" : "application/octet-stream";
+        const ct = ext === ".css" ? "text/css" : ext === ".js" ? "application/javascript" : "application/octet-stream";
         res.writeHead(200, { "Content-Type": ct, "Cache-Control": "no-cache" });
         res.end(fs.readFileSync(vendorPath));
         return;
