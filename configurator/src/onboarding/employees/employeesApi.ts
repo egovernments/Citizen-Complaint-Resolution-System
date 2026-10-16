@@ -193,17 +193,12 @@ export function codeProblem(
 export async function addEmployee(tenantId: string, input: NewEmployee, options: EmployeeOptions): Promise<Employee> {
   const boundaryByCode = new Map(options.boundaries.map((boundary) => [boundary.code, boundary]));
   const roleByCode = new Map(options.roles.map((role) => [role.code, role]));
-  // The username comes from the name; two people can share a name, so a taken
-  // one gets the (unique) employee code added.
-  const base = hrmsService.generateUsername(input.name.trim());
-  const userName = (await hrmsService.checkUsernameAvailable(tenantId, base))
-    ? base
-    : `${base}.${input.code.toLowerCase()}`;
   const employee = hrmsService.buildEmployee({
     tenantId,
     code: input.code,
     name: input.name.trim(),
-    userName,
+    // HRMS makes every employee's username their code (enrichUser), whatever is sent.
+    userName: input.code,
     mobileNumber: input.mobileNumber,
     emailId: requiredEmail(input.emailId),
     // buildEmployee makes the first the current assignment and the rest history.

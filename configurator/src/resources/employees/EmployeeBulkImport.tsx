@@ -278,7 +278,7 @@ export function EmployeeBulkImport() {
         tenantId,
         code: row.employeeCode,
         name: row.name,
-        userName: (row.userName && row.userName.trim()) || hrmsService.generateUsername(row.name),
+        userName: row.employeeCode, // HRMS makes the username the code anyway
         mobileNumber: row.mobileNumber,
         emailId: row.emailId,
         gender: row.gender,

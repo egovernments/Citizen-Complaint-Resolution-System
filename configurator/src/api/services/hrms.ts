@@ -254,7 +254,7 @@ export const hrmsService = {
       : data.dateOfAppointment;
 
     const user: EmployeeUser = {
-      userName: data.userName.toLowerCase(),
+      userName: data.userName,
       name: data.name,
       mobileNumber: data.mobileNumber,
       emailId: data.emailId,
@@ -397,19 +397,6 @@ export const hrmsService = {
     return `${prefix}_${String(index).padStart(4, '0')}`;
   },
 
-  // Generate username from name
-  generateUsername(name: string): string {
-    return name
-      .toLowerCase()
-      // Accented letters keep their base letter: "José" → "jose", not "jos.".
-      .normalize('NFD')
-      .replace(/\p{M}/gu, '')
-      .replace(/[^a-z0-9]/g, '.')
-      .replace(/\.+/g, '.')
-      // Both ends: without the g flag only the first stray dot went, so a
-      // name with a leading and a trailing space kept "anita.wanjiru.".
-      .replace(/^\.|\.$/g, '');
-  },
 
   // Delay helper for rate limiting
   delay(ms: number): Promise<void> {

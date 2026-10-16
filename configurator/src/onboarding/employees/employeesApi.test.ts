@@ -32,8 +32,6 @@ vi.mock('@/api', () => ({
     updateEmployee: vi.fn(async (employee) => employee),
     // The real helpers, so the test covers the payload actually sent.
     generateEmployeeCode: (prefix: string, index: number) => `${prefix}_${String(index).padStart(4, '0')}`,
-    generateUsername: (name: string) =>
-      name.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '').replace(/[^a-z0-9]/g, '.').replace(/\.+/g, '.').replace(/^\.|\.$/g, ''),
     buildEmployee: vi.fn((data) => ({ built: true, ...data })),
   },
 }));
@@ -123,7 +121,6 @@ describe('listEmployees', () => {
 
 describe('addEmployee', () => {
   it('builds the HRMS payload from the dialog', async () => {
-    hrms.checkUsernameAvailable.mockResolvedValue(true);
     await addEmployee(
       'acme',
       {
@@ -143,7 +140,7 @@ describe('addEmployee', () => {
         tenantId: 'acme',
         code: 'EMP_0001',
         name: 'Anita Wanjiru',
-        userName: 'anita.wanjiru',
+        userName: 'EMP_0001',
         emailId: 'anita@example.org',
         department: 'ROADS,PARKS',
         designation: 'ENGINEER',
@@ -157,14 +154,15 @@ describe('addEmployee', () => {
     expect(hrms.createEmployee).toHaveBeenCalled();
   });
 
-  it('adds the code to a username someone already has', async () => {
-    hrms.checkUsernameAvailable.mockResolvedValue(false);
+  // HRMS makes every employee's username their code, so there is no name to check (#2456).
+  it('sends the code as the username without a username look-up', async () => {
     await addEmployee(
       'acme',
       { code: 'EMP_0007', name: 'Anita Wanjiru', emailId: 'anita@example.org', mobileNumber: '9876543210', departments: ['ROADS'], designation: 'ENGINEER', roles: ['EMPLOYEE'], jurisdictions: ['WARD_1'] },
       options,
     );
-    expect(hrms.buildEmployee).toHaveBeenCalledWith(expect.objectContaining({ userName: 'anita.wanjiru.emp_0007' }));
+    expect(hrms.buildEmployee).toHaveBeenCalledWith(expect.objectContaining({ userName: 'EMP_0007' }));
+    expect(hrms.checkUsernameAvailable).not.toHaveBeenCalled();
   });
 });
 
