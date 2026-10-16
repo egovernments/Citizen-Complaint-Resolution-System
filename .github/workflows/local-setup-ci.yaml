@@ -597,11 +597,13 @@ jobs:
             FAIL=1
           fi
 
-          # 3. Verify ServiceDefs were copied
-          echo -n "3. ServiceDefs on ciboot... "
+          # 3. Verify complaint types were copied
+          # Complaint types are the leaf rows (those with a department) of ComplaintHierarchy;
+          # the old RAINMAKER-PGR.ServiceDefs master no longer exists.
+          echo -n "3. Complaint types (ComplaintHierarchy leaves) on ciboot... "
           SVCDEFS=$(curl -sS -X POST "$MDMS_URL" -H 'Content-Type: application/json' \
-            -d '{"RequestInfo":{"apiId":"Rainmaker"},"MdmsCriteria":{"tenantId":"ciboot","moduleDetails":[{"moduleName":"RAINMAKER-PGR","masterDetails":[{"name":"ServiceDefs"}]}]}}')
-          SVCDEF_COUNT=$(echo "$SVCDEFS" | jq '[.MdmsRes."RAINMAKER-PGR".ServiceDefs // [] | length] | .[0]')
+            -d '{"RequestInfo":{"apiId":"Rainmaker"},"MdmsCriteria":{"tenantId":"ciboot","moduleDetails":[{"moduleName":"RAINMAKER-PGR","masterDetails":[{"name":"ComplaintHierarchy"}]}]}}')
+          SVCDEF_COUNT=$(echo "$SVCDEFS" | jq '[.MdmsRes."RAINMAKER-PGR".ComplaintHierarchy // [] | map(select(.department)) | length] | .[0]')
           if [ "$SVCDEF_COUNT" -gt 0 ]; then
             echo "OK ($SVCDEF_COUNT complaint types)"
           else

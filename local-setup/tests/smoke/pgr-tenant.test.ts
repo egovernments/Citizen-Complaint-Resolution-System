@@ -35,9 +35,14 @@ const PGR_ROLES = [
   { code: 'SUPERUSER', name: 'Super User' },
 ];
 const rolesForTenant = PGR_ROLES.map(r => ({ ...r, tenantId: TENANT }));
+// The HRMS employee this run creates and acts as.
+const EMPLOYEE_USERNAME = `e2e-${cityPart}-${timestamp}`;
 
+// These requests go straight to PGR, not through Kong, so this userInfo is all PGR knows
+// about the caller. Its search scope looks the caller's HRMS record up by userName:
+// without it every search is scoped to nothing and returns [].
 function userInfo(uuid: string) {
-  return { uuid, type: 'EMPLOYEE', tenantId: TENANT, roles: rolesForTenant };
+  return { uuid, userName: EMPLOYEE_USERNAME, type: 'EMPLOYEE', tenantId: TENANT, roles: rolesForTenant };
 }
 function reqInfo(token: string, uuid: string) {
   return { ...createRequestInfo({ authToken: token }), userInfo: userInfo(uuid) };
@@ -128,10 +133,14 @@ describe(`PGR E2E — ${TENANT}`, () => {
       const deptCode: string = (global as any).__testDeptCode;
       const desigs: any[] = (global as any).__testDesigs;
       const desig = pick(desigs);
-      userName = `e2e-${cityPart}-${timestamp}`;
+      userName = EMPLOYEE_USERNAME;
       const mobile = uniqueMobile();
 
-      console.log(`Creating HRMS employee: ${userName}, dept=${deptCode}, desig=${desig.code}`);
+      // PGR scopes employee search to the jurisdiction's boundary subtree, so it must be a
+      // real boundary above the complaint's locality, not the tenant id.
+      const root = await db.rootBoundary(TENANT);
+
+      console.log(`Creating HRMS employee: ${userName}, dept=${deptCode}, desig=${desig.code}, jurisdiction=${root.code}`);
 
       const r = await api.post(ports.hrms, '/egov-hrms/employees/_create', {
         RequestInfo: {
@@ -145,7 +154,7 @@ describe(`PGR E2E — ${TENANT}`, () => {
           employeeType: 'PERMANENT',
           dateOfAppointment: 1704067200000,
           assignments: [{ fromDate: 1704067200000, isCurrentAssignment: true, department: deptCode, designation: desig.code }],
-          jurisdictions: [{ hierarchy: 'ADMIN', boundaryType: 'City', boundary: TENANT, tenantId: TENANT, roles: rolesForTenant }],
+          jurisdictions: [{ hierarchy: 'ADMIN', boundaryType: root.boundaryType, boundary: root.code, tenantId: TENANT, roles: rolesForTenant }],
           user: {
             name: `${TENANT_LABEL} E2E Employee`,
             userName,
@@ -279,8 +288,14 @@ describe(`PGR E2E — ${TENANT}`, () => {
   // ── Step 5: Search ─────────────────────────────────────────
   describe('Step 5: Search Complaint', () => {
     test('should find by serviceRequestId', async () => {
-      await new Promise(r => setTimeout(r, 3000));
-      const r = await api.post(ports.pgr, `/pgr-services/v2/request/_search?tenantId=${TENANT}&serviceRequestId=${serviceRequestId}`, { RequestInfo: reqInfo(accessToken, userUuid) });
+      // Poll: the first scoped search is cold (HRMS lookup, boundary expansion, MDMS), and
+      // HRMS persists the employee just created asynchronously, so one early attempt can
+      // time out or resolve an empty scope.
+      let r = await api.post(ports.pgr, `/pgr-services/v2/request/_search?tenantId=${TENANT}&serviceRequestId=${serviceRequestId}`, { RequestInfo: reqInfo(accessToken, userUuid) }, { timeout: 30000 });
+      for (let i = 0; i < 15 && !(r.ok && (r.data as any)?.ServiceWrappers?.length); i++) {
+        await new Promise(res => setTimeout(res, 2000));
+        r = await api.post(ports.pgr, `/pgr-services/v2/request/_search?tenantId=${TENANT}&serviceRequestId=${serviceRequestId}`, { RequestInfo: reqInfo(accessToken, userUuid) }, { timeout: 30000 });
+      }
       expect(r.ok).toBe(true);
       const parsed = SearchServiceResponseSchema.safeParse(r.data);
       expect(parsed.success).toBe(true);
@@ -289,7 +304,7 @@ describe(`PGR E2E — ${TENANT}`, () => {
         currentServiceData = parsed.data.ServiceWrappers[0].service;
         console.log(`Found. Status: ${currentServiceData.applicationStatus}`);
       }
-    });
+    }, 90000);
 
     test('should appear in tenant-wide search', async () => {
       const r = await api.post(ports.pgr, `/pgr-services/v2/request/_search?tenantId=${TENANT}`, { RequestInfo: reqInfo(accessToken, userUuid) });
