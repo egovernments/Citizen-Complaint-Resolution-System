@@ -1,5 +1,6 @@
 package org.egov.pgr.analytics;
 
+import org.egov.pgr.util.SqlLike;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -848,7 +849,7 @@ public class AnalyticsService {
         try {
             Long count = stateLevel
                     ? jdbc.queryForObject(STATE_RECORD_COUNT_SQL,
-                                          Long.class, tenantId, AnalyticsPlanner.escapeLikeLiteral(tenantId) + ".%")
+                                          Long.class, tenantId, SqlLike.subtreePattern(tenantId))
                     : jdbc.queryForObject("SELECT count(*) FROM complaint_facts WHERE tenant_id = ?",
                                           Long.class, tenantId);
             if (count == null) return null;

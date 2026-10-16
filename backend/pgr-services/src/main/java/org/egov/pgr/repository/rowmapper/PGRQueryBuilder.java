@@ -1,5 +1,6 @@
 package org.egov.pgr.repository.rowmapper;
 
+import org.egov.pgr.util.SqlLike;
 import org.egov.pgr.config.PGRConfiguration;
 import org.egov.pgr.policy.PgrSearchScope;
 import org.egov.pgr.web.models.RequestSearchCriteria;
@@ -98,13 +99,16 @@ public class PGRQueryBuilder {
                 String[] tenantIdChunks = tenantId.split("\\.");
 
                 if (tenantIdChunks.length == config.getStateLevelTenantIdLength()) {
-                    // Same delimiter-safety as the scope predicate below. Note this branch also
-                    // caught an empty tenantId, which used to bind the pattern '%' and match every
-                    // row of every tenant; it now binds '' and '.%', which match nothing.
+                    // Same delimiter-safety as the scope predicate below. An empty tenantId has
+                    // one segment, so it lands here only when state.level.tenantid.length is 1:
+                    // it used to bind the pattern '%' and match every tenant's rows, and now binds
+                    // '' and '.%', which match nothing. With a longer state level it takes the
+                    // exact-match branch below, which also matches nothing. Either way an empty
+                    // tenantId fails closed.
                     addClauseIfRequired(preparedStmtList, builder);
                     builder.append(" (ser.tenantid = ? OR ser.tenantid LIKE ?) ");
                     preparedStmtList.add(tenantId);
-                    preparedStmtList.add(escapeLikeLiteral(tenantId) + ".%");
+                    preparedStmtList.add(SqlLike.subtreePattern(tenantId));
                 } else {
                     addClauseIfRequired(preparedStmtList, builder);
                     builder.append(" ser.tenantid=? ");
@@ -232,11 +236,6 @@ public class PGRQueryBuilder {
         return builder;
     }
 
-    /** Escapes LIKE metacharacters in server-derived text before a wildcard is appended to it. */
-    static String escapeLikeLiteral(String value) {
-        return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
-    }
-
     /**
      * Injects the RBAC scope's WHERE predicates. The same axes as
      * {@code AnalyticsPlanner.applyScope} in the analytics module (citizen self-scope, employee
@@ -279,7 +278,7 @@ public class PGRQueryBuilder {
                 // have to be escaped, or an id containing '_' would match any character there.
                 builder.append(" (ser.tenantId = ? OR ser.tenantId LIKE ?) ");
                 preparedStmtList.add(scope.tenantId);
-                preparedStmtList.add(escapeLikeLiteral(scope.tenantId) + ".%");
+                preparedStmtList.add(SqlLike.subtreePattern(scope.tenantId));
             } else {
                 builder.append(" ser.tenantId = ? ");
                 preparedStmtList.add(scope.tenantId);

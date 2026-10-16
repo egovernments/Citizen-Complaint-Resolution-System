@@ -52,6 +52,8 @@ public class AnalyticsServiceRecordCountTest {
 
         verify(jdbc).queryForObject(
                 eq(AnalyticsService.STATE_RECORD_COUNT_SQL), eq(Long.class), eq("ke"), eq("ke.%"));
+        // ...and only that query: never the city exact-match count as well.
+        verifyNoMoreInteractions(jdbc);
     }
 
     @Test
@@ -73,6 +75,9 @@ public class AnalyticsServiceRecordCountTest {
                 .thenReturn(9L);
 
         assertEquals(9L, service.recordCount("ke%_\\root", STATE_LEN));
+        verify(jdbc).queryForObject(eq(AnalyticsService.STATE_RECORD_COUNT_SQL), eq(Long.class),
+                eq("ke%_\\root"), eq("ke\\%\\_\\\\root.%"));
+        verifyNoMoreInteractions(jdbc);
     }
 
     @Test

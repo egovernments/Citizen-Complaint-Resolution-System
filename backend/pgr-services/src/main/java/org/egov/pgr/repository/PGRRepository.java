@@ -1,5 +1,6 @@
 package org.egov.pgr.repository;
 
+import org.egov.pgr.util.SqlLike;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -87,8 +88,11 @@ public class PGRRepository {
                 "SELECT DISTINCT tenantid FROM {schema}.eg_pgr_service_v2 "
                         + "WHERE tenantid = ? OR tenantid LIKE ? ORDER BY tenantid",
                 stateTenantId);
+        // Escaped like every other subtree filter: unescaped, a '_' in the state id matches any
+        // character, so state ke_a would also pick up keXa.city and escalate another root's
+        // complaints in its own run.
         return jdbcTemplate.queryForList(query, String.class,
-                stateTenantId, stateTenantId + ".%");
+                stateTenantId, SqlLike.subtreePattern(stateTenantId));
     }
 
     /**

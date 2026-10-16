@@ -97,11 +97,44 @@ class PGRQueryBuilderTest {
         String query = queryBuilder.getPGRSearchQuery(criteria, preparedStmtList, null, scope);
 
         assertTrue(query.contains("(ser.tenantId = ? OR ser.tenantId LIKE ?)"), query);
-        String pattern = (String) preparedStmtList.get(preparedStmtList.indexOf("pg") + 1);
+        // The criteria predicate binds its own "pg", "pg.%" first; the scope predicate's pair is
+        // the second one. Pin both, so a regression in either is caught on its own.
+        assertEquals(List.of("pg", "pg.%", "pg", "pg.%"), preparedStmtList.subList(0, 4));
+        String pattern = (String) preparedStmtList.get(preparedStmtList.lastIndexOf("pg") + 1);
         assertEquals("pg.%", pattern);
         assertTrue(likeMatches(pattern, "pg.city"));
         assertFalse(likeMatches(pattern, "pgx"), "a bare 'pg%' would also match root pgx");
         assertFalse(likeMatches(pattern, "pgx.city"));
+    }
+
+    @Test
+    void anEmptyTenantIdMatchesNothingAtStateLevelLengthOne() {
+        // With state.level.tenantid.length=1, "" has one segment and takes the subtree branch.
+        // It used to bind '%' and match every tenant's rows.
+        RequestSearchCriteria criteria = RequestSearchCriteria.builder().tenantId("").build();
+        List<Object> preparedStmtList = new ArrayList<>();
+
+        queryBuilder.getPGRSearchQuery(criteria, preparedStmtList, null, PgrSearchScope.UNRESTRICTED);
+
+        assertEquals(List.of("", ".%"), preparedStmtList.subList(0, 2));
+        assertFalse(preparedStmtList.contains("%"));
+        assertFalse(likeMatches(".%", "pg"));
+        assertFalse(likeMatches(".%", "pg.city"));
+    }
+
+    @Test
+    void anEmptyTenantIdMatchesNothingAtLongerStateLevels() {
+        // With a two-segment state level, "" takes the exact-match branch instead: = '' matches
+        // no tenant either.
+        when(config.getStateLevelTenantIdLength()).thenReturn(2);
+        RequestSearchCriteria criteria = RequestSearchCriteria.builder().tenantId("").build();
+        List<Object> preparedStmtList = new ArrayList<>();
+
+        String query = queryBuilder.getPGRSearchQuery(criteria, preparedStmtList, null, PgrSearchScope.UNRESTRICTED);
+
+        assertTrue(query.contains("ser.tenantid=?"), query);
+        assertEquals("", preparedStmtList.get(0));
+        assertFalse(preparedStmtList.contains("%"));
     }
 
     private static RequestInfo citizen(String homeTenantId) {
