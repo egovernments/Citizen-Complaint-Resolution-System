@@ -4,7 +4,7 @@ import { join, resolve } from 'node:path';
 import { render, screen } from '@testing-library/react';
 import { I18nContextProvider, type TranslationMessages } from 'ra-core';
 import polyglotI18nProvider from 'ra-i18n-polyglot';
-import { T } from '@digit-ui/datagrid';
+import { T, generateColumns, type SchemaDefinition } from '@digit-ui/datagrid';
 import { FieldRow } from '@/admin/fields';
 
 /**
@@ -78,14 +78,43 @@ describe('seeded localization bundle', () => {
     });
   }
 
+  const locales = ['en_IN', 'hi_IN', 'fr_FR', 'pt_BR'];
+  const seeded = new Set(bundle.map((m) => `${m.locale}|${m.code}`));
+
   it('seeds every static i18nKey in all four locales, so Inspect → Localization always finds it', () => {
-    const locales = ['en_IN', 'hi_IN', 'fr_FR', 'pt_BR'];
-    const seeded = new Set(bundle.map((m) => `${m.locale}|${m.code}`));
     const files = [...tsxFiles(resolve(root, 'src')), ...tsxFiles(resolve(root, 'packages/digit-datagrid/src'))];
     const codes = new Set(
       files.flatMap((f) => [...readFileSync(f, 'utf8').matchAll(/i18nKey="([^"]+)"/g)].map((m) => m[1])),
     );
     expect(codes.size).toBeGreaterThan(0);
+    const missing = [...codes].flatMap((c) => locales.filter((l) => !seeded.has(`${l}|${c}`)).map((l) => `${l} ${c}`));
+    expect(missing).toEqual([]);
+  });
+
+  // Codes built at runtime never appear as `i18nKey="…"`, so check them too:
+  // whatever Inspect shows has to be findable under System → Localization.
+  it('seeds the codes used as hand-written column labels', () => {
+    const files = [...tsxFiles(resolve(root, 'src'))];
+    const codes = new Set(
+      files.flatMap((f) =>
+        [...readFileSync(f, 'utf8').matchAll(/\blabel:\s*'(app\.fields\.[\w.]+)'/g)].map((m) => m[1]),
+      ),
+    );
+    codes.add('app.fields.id'); // AutoDetectDatagrid's empty-list column
+    expect(codes.size).toBeGreaterThan(1);
+    const missing = [...codes].flatMap((c) => locales.filter((l) => !seeded.has(`${l}|${c}`)).map((l) => `${l} ${c}`));
+    expect(missing).toEqual([]);
+  });
+
+  it('seeds the column codes derived from every MDMS schema the deploy seeds', () => {
+    const schemaDir = resolve(root, '../utilities/default-data-handler/src/main/resources/schema');
+    const schemas = readdirSync(schemaDir)
+      .filter((name) => name.endsWith('.json'))
+      .flatMap((name) => JSON.parse(readFileSync(join(schemaDir, name), 'utf8')) as Array<{ definition?: SchemaDefinition }>);
+    const codes = new Set(
+      schemas.flatMap((s) => (s.definition ? generateColumns(s.definition, {}) : []).map((c) => c.labelKey!)),
+    );
+    expect(codes.size).toBeGreaterThan(50);
     const missing = [...codes].flatMap((c) => locales.filter((l) => !seeded.has(`${l}|${c}`)).map((l) => `${l} ${c}`));
     expect(missing).toEqual([]);
   });

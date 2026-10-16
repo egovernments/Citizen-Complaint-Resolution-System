@@ -11206,5 +11206,1541 @@
     "message": "Abrir central de reclamações",
     "module": "configurator-ui",
     "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.actors",
+    "message": "Actors",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.actors",
+    "message": "अभिकर्ता",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.actors",
+    "message": "Acteurs",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.actors",
+    "message": "Atores",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.address",
+    "message": "Address",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.address",
+    "message": "पता",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.address",
+    "message": "Adresse",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.address",
+    "message": "Endereço",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.admin0_name",
+    "message": "Admin Level 0 Name",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.admin0_name",
+    "message": "प्रशासनिक स्तर 0 का नाम",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.admin0_name",
+    "message": "Nom du niveau administratif 0",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.admin0_name",
+    "message": "Nome do nível administrativo 0",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.admin1_name",
+    "message": "Admin Level 1 Name",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.admin1_name",
+    "message": "प्रशासनिक स्तर 1 का नाम",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.admin1_name",
+    "message": "Nom du niveau administratif 1",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.admin1_name",
+    "message": "Nome do nível administrativo 1",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.admin2_name",
+    "message": "Admin Level 2 Name",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.admin2_name",
+    "message": "प्रशासनिक स्तर 2 का नाम",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.admin2_name",
+    "message": "Nom du niveau administratif 2",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.admin2_name",
+    "message": "Nome do nível administrativo 2",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.administrative_region",
+    "message": "Administrative Region",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.administrative_region",
+    "message": "प्रशासनिक क्षेत्र",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.administrative_region",
+    "message": "Région administrative",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.administrative_region",
+    "message": "Região administrativa",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.approval_status",
+    "message": "Approval Status",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.approval_status",
+    "message": "अनुमोदन स्थिति",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.approval_status",
+    "message": "Statut d'approbation",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.approval_status",
+    "message": "Status de aprovação",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.assignee_only",
+    "message": "Assignee Only",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.assignee_only",
+    "message": "केवल असाइनी",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.assignee_only",
+    "message": "Assigné uniquement",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.assignee_only",
+    "message": "Somente responsável",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.base_map_theme",
+    "message": "Base Map Theme",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.base_map_theme",
+    "message": "आधार मानचित्र थीम",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.base_map_theme",
+    "message": "Thème du fond de carte",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.base_map_theme",
+    "message": "Tema do mapa base",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.campaign_type",
+    "message": "Campaign Type",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.campaign_type",
+    "message": "अभियान प्रकार",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.campaign_type",
+    "message": "Type de campagne",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.campaign_type",
+    "message": "Tipo de campanha",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.channels",
+    "message": "Channels",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.channels",
+    "message": "चैनल",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.channels",
+    "message": "Canaux",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.channels",
+    "message": "Canais",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.complaint_sub_type",
+    "message": "Complaint Subcategory",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.complaint_sub_type",
+    "message": "शिकायत उपश्रेणी",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.complaint_sub_type",
+    "message": "Sous-catégorie de plainte",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.complaint_sub_type",
+    "message": "Subcategoria de reclamação",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.complaint_type",
+    "message": "Complaint Category",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.complaint_type",
+    "message": "शिकायत प्रकार",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.complaint_type",
+    "message": "Type de plainte",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.complaint_type",
+    "message": "Tipo de reclamação",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.contact_number",
+    "message": "Contact Number",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.contact_number",
+    "message": "संपर्क नंबर",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.contact_number",
+    "message": "Numéro de contact",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.contact_number",
+    "message": "Número de contato",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.content_sid",
+    "message": "Content SID",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.content_sid",
+    "message": "कंटेंट SID",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.content_sid",
+    "message": "SID du contenu",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.content_sid",
+    "message": "SID do conteúdo",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.country_code",
+    "message": "Country Code",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.country_code",
+    "message": "देश कोड",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.country_code",
+    "message": "Indicatif pays",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.country_code",
+    "message": "Código do país",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.default_zoom",
+    "message": "Default Zoom",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.default_zoom",
+    "message": "डिफ़ॉल्ट ज़ूम",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.default_zoom",
+    "message": "Zoom par défaut",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.default_zoom",
+    "message": "Zoom padrão",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.department_name",
+    "message": "Department Name",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.department_name",
+    "message": "विभाग का नाम",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.department_name",
+    "message": "Nom du département",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.department_name",
+    "message": "Nome do departamento",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.designation_name",
+    "message": "Designation Name",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.designation_name",
+    "message": "पदनाम",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.designation_name",
+    "message": "Nom de la fonction",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.designation_name",
+    "message": "Nome do cargo",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.domain_url",
+    "message": "Domain URL",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.domain_url",
+    "message": "डोमेन URL",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.domain_url",
+    "message": "URL du domaine",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.domain_url",
+    "message": "URL do domínio",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.email_id",
+    "message": "Email ID",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.email_id",
+    "message": "ईमेल आईडी",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.email_id",
+    "message": "Adresse e-mail",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.email_id",
+    "message": "E-mail",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.endpoint_url",
+    "message": "Endpoint URL",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.endpoint_url",
+    "message": "एंडपॉइंट URL",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.endpoint_url",
+    "message": "URL du point de terminaison",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.endpoint_url",
+    "message": "URL do endpoint",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.english_message",
+    "message": "English Message",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.english_message",
+    "message": "अंग्रेज़ी संदेश",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.english_message",
+    "message": "Message en anglais",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.english_message",
+    "message": "Mensagem em inglês",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.entity_type",
+    "message": "Entity Type",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.entity_type",
+    "message": "इकाई प्रकार",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.entity_type",
+    "message": "Type d'objet",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.entity_type",
+    "message": "Tipo de objeto",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.event_name",
+    "message": "Event Name",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.event_name",
+    "message": "इवेंट का नाम",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.event_name",
+    "message": "Nom de l'événement",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.event_name",
+    "message": "Nome do evento",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.gateway",
+    "message": "Gateway",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.gateway",
+    "message": "गेटवे",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.gateway",
+    "message": "Passerelle",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.gateway",
+    "message": "Gateway",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.google_maps_api_key",
+    "message": "Google Maps API Key",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.google_maps_api_key",
+    "message": "Google Maps API कुंजी",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.google_maps_api_key",
+    "message": "Clé API Google Maps",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.google_maps_api_key",
+    "message": "Chave de API do Google Maps",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.hierarchy",
+    "message": "Hierarchy",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.hierarchy",
+    "message": "पदानुक्रम",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.hierarchy",
+    "message": "Hiérarchie",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.hierarchy",
+    "message": "Hierarquia",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.highest_hierarchy",
+    "message": "Highest Hierarchy",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.highest_hierarchy",
+    "message": "उच्चतम पदानुक्रम",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.highest_hierarchy",
+    "message": "Hiérarchie la plus haute",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.highest_hierarchy",
+    "message": "Hierarquia mais alta",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.image_id",
+    "message": "Image ID",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.image_id",
+    "message": "छवि आईडी",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.image_id",
+    "message": "ID de l'image",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.image_id",
+    "message": "ID da imagem",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.jurisdiction_scoped",
+    "message": "Jurisdiction Scoped",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.jurisdiction_scoped",
+    "message": "क्षेत्राधिकार तक सीमित",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.jurisdiction_scoped",
+    "message": "Limité à la juridiction",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.jurisdiction_scoped",
+    "message": "Restrito à jurisdição",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.label",
+    "message": "Label",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.label",
+    "message": "लेबल",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.label",
+    "message": "Libellé",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.label",
+    "message": "Rótulo",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.levels",
+    "message": "Levels",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.levels",
+    "message": "स्तर",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.levels",
+    "message": "Niveaux",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.levels",
+    "message": "Níveis",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.logo_file_path",
+    "message": "Logo File Path",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.logo_file_path",
+    "message": "लोगो फ़ाइल पथ",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.logo_file_path",
+    "message": "Chemin du fichier du logo",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.logo_file_path",
+    "message": "Caminho do arquivo do logotipo",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.lowest_hierarchy",
+    "message": "Lowest Hierarchy",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.lowest_hierarchy",
+    "message": "निम्नतम पदानुक्रम",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.lowest_hierarchy",
+    "message": "Hiérarchie la plus basse",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.lowest_hierarchy",
+    "message": "Hierarquia mais baixa",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.map_provider",
+    "message": "Map Provider",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.map_provider",
+    "message": "मानचित्र प्रदाता",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.map_provider",
+    "message": "Fournisseur de carte",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.map_provider",
+    "message": "Provedor de mapas",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.max_depth",
+    "message": "Max Depth",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.max_depth",
+    "message": "अधिकतम गहराई",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.max_depth",
+    "message": "Profondeur maximale",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.max_depth",
+    "message": "Profundidade máxima",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.measurement_id",
+    "message": "Measurement ID",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.measurement_id",
+    "message": "मेज़रमेंट आईडी",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.measurement_id",
+    "message": "ID de mesure",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.measurement_id",
+    "message": "ID de medição",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.mobile_number_regex",
+    "message": "Mobile Number Regex",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.mobile_number_regex",
+    "message": "मोबाइल नंबर रेगेक्स",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.mobile_number_regex",
+    "message": "Regex du numéro de mobile",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.mobile_number_regex",
+    "message": "Regex do número de celular",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.module_name",
+    "message": "Module Name",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.module_name",
+    "message": "मॉड्यूल का नाम",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.module_name",
+    "message": "Nom du module",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.module_name",
+    "message": "Nome do módulo",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.novu_api_key",
+    "message": "Novu API Key",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.novu_api_key",
+    "message": "Novu API कुंजी",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.novu_api_key",
+    "message": "Clé API Novu",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.novu_api_key",
+    "message": "Chave de API do Novu",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.placeholders",
+    "message": "Placeholders",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.placeholders",
+    "message": "प्लेसहोल्डर",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.placeholders",
+    "message": "Espaces réservés",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.placeholders",
+    "message": "Marcadores",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.priority",
+    "message": "Priority",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.priority",
+    "message": "प्राथमिकता",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.priority",
+    "message": "Priorité",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.priority",
+    "message": "Prioridade",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.provider",
+    "message": "Provider",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.provider",
+    "message": "प्रदाता",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.provider",
+    "message": "Fournisseur",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.provider",
+    "message": "Provedor",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.provider_name",
+    "message": "Provider Name",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.provider_name",
+    "message": "प्रदाता का नाम",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.provider_name",
+    "message": "Nom du fournisseur",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.provider_name",
+    "message": "Nome do provedor",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.regex",
+    "message": "Regex",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.regex",
+    "message": "रेगेक्स",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.regex",
+    "message": "Regex",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.regex",
+    "message": "Regex",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.reportee_depth",
+    "message": "Reportee Depth",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.reportee_depth",
+    "message": "अधीनस्थ गहराई",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.reportee_depth",
+    "message": "Profondeur des subordonnés",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.reportee_depth",
+    "message": "Profundidade de subordinados",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.resolution_time_hours",
+    "message": "Resolution Time (hrs)",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.resolution_time_hours",
+    "message": "समाधान समय (घंटे)",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.resolution_time_hours",
+    "message": "Délai de résolution (h)",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.resolution_time_hours",
+    "message": "Tempo de resolução (h)",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.script_url",
+    "message": "Script URL",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.script_url",
+    "message": "स्क्रिप्ट URL",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.script_url",
+    "message": "URL du script",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.script_url",
+    "message": "URL do script",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.search_words",
+    "message": "Search Words",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.search_words",
+    "message": "खोज शब्द",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.search_words",
+    "message": "Mots-clés de recherche",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.search_words",
+    "message": "Palavras de busca",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.sender_id",
+    "message": "Sender ID",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.sender_id",
+    "message": "प्रेषक आईडी",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.sender_id",
+    "message": "ID de l'expéditeur",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.sender_id",
+    "message": "ID do remetente",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.server_side",
+    "message": "Server Side",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.server_side",
+    "message": "सर्वर-साइड",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.server_side",
+    "message": "Côté serveur",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.server_side",
+    "message": "Lado do servidor",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.site_id",
+    "message": "Site ID",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.site_id",
+    "message": "साइट आईडी",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.site_id",
+    "message": "ID du site",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.site_id",
+    "message": "ID do site",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.template_id",
+    "message": "Template ID",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.template_id",
+    "message": "टेम्पलेट आईडी",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.template_id",
+    "message": "ID du modèle",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.template_id",
+    "message": "ID do modelo",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.template_name",
+    "message": "Template Name",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.template_name",
+    "message": "टेम्पलेट का नाम",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.template_name",
+    "message": "Nom du modèle",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.template_name",
+    "message": "Nome do modelo",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.tenant_code",
+    "message": "Tenant Code",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.tenant_code",
+    "message": "टेनेंट कोड",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.tenant_code",
+    "message": "Code de l'entité",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.tenant_code",
+    "message": "Código da entidade",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.tenant_display_name",
+    "message": "Tenant Display Name",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.tenant_display_name",
+    "message": "टेनेंट का प्रदर्शित नाम",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.tenant_display_name",
+    "message": "Nom affiché de l'entité",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.tenant_display_name",
+    "message": "Nome de exibição da entidade",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.tenant_type",
+    "message": "Tenant Type",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.tenant_type",
+    "message": "टेनेंट प्रकार",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.tenant_type",
+    "message": "Type d'entité",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.tenant_type",
+    "message": "Tipo de entidade",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.tile_attribution",
+    "message": "Tile Attribution",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.tile_attribution",
+    "message": "टाइल श्रेय",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.tile_attribution",
+    "message": "Attribution des tuiles",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.tile_attribution",
+    "message": "Atribuição dos blocos",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.tile_url",
+    "message": "Tile URL",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.tile_url",
+    "message": "टाइल URL",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.tile_url",
+    "message": "URL des tuiles",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.tile_url",
+    "message": "URL dos blocos",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.title",
+    "message": "Title",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.title",
+    "message": "शीर्षक",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.title",
+    "message": "Titre",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.title",
+    "message": "Título",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.translation",
+    "message": "Translation",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.translation",
+    "message": "अनुवाद",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.translation",
+    "message": "Traduction",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.translation",
+    "message": "Tradução",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.voice_input",
+    "message": "Voice Input",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.voice_input",
+    "message": "वॉइस इनपुट",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.voice_input",
+    "message": "Saisie vocale",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.voice_input",
+    "message": "Entrada por voz",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.ward_highlight_color",
+    "message": "Ward Highlight Color",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.ward_highlight_color",
+    "message": "वार्ड हाइलाइट रंग",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.ward_highlight_color",
+    "message": "Couleur de surbrillance du quartier",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.ward_highlight_color",
+    "message": "Cor de destaque do bairro",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
   }
 ]

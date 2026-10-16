@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { DigitList, DigitDatagrid } from '@/admin';
 import type { DigitColumn } from '@/admin';
+import { fieldLabelKey } from '@digit-ui/datagrid';
 import { useListContext, useResourceContext } from 'ra-core';
 import { getResourceConfig, getResourceBySchema } from '@/providers/bridge';
 import { ResourceLabel } from '@/providers/ResourceLabel';
@@ -59,13 +60,14 @@ function AutoDetectDatagrid({ descriptor }: { descriptor?: SchemaDescriptor }) {
   const firstRecord = data?.[0];
 
   const columns: DigitColumn[] = useMemo(() => {
-    if (!firstRecord) return [{ source: 'id', label: 'ID' }];
+    if (!firstRecord) return [{ source: 'id', label: 'ID', labelKey: fieldLabelKey('id') }];
     const detected = Object.keys(firstRecord as Record<string, unknown>)
       .filter((key) => !key.startsWith('_') && key !== 'id')
       .slice(0, 8)
       .map((key) => ({
         source: key,
         label: key.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase()),
+        labelKey: fieldLabelKey(key),
       }));
     return applyDescriptorListWidgets(detected, descriptor);
   }, [firstRecord, descriptor]);

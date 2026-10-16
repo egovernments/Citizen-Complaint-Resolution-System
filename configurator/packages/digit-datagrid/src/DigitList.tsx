@@ -19,7 +19,7 @@ import type { DigitColumn } from './columns/types';
 import type { FilterElement } from './filters/types';
 import { FilterBar } from './filters/FilterBar';
 import { T } from './i18n/T';
-import { columnLabelKey } from './i18n/columnLabelKey';
+import { ColumnLabel } from './i18n/ColumnLabel';
 
 export interface DigitListProps {
   /** Page title displayed as h1 — a localization code, or a pre-built `<T>` node */
@@ -197,7 +197,7 @@ export function DigitList({
                           disabled={alwaysVisibleSources?.includes(col.source)}
                           className="rounded"
                         />
-                        <T i18nKey={columnLabelKey(col)}>{col.label}</T>
+                        <ColumnLabel column={col} />
                       </label>
                     ))}
                     <Button

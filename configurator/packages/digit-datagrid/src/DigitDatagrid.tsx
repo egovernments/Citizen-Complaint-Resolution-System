@@ -22,7 +22,7 @@ import {
 } from './primitives/table';
 import { Button } from './primitives/button';
 import { T } from './i18n/T';
-import { columnLabelKey } from './i18n/columnLabelKey';
+import { ColumnLabel } from './i18n/ColumnLabel';
 import type { RaRecord } from 'ra-core';
 import type {
   DigitColumn,
@@ -253,7 +253,7 @@ export function DigitDatagrid<RecordType extends RaRecord = RaRecord>({
                     onClick={() => handleSort(col.source)}
                     className="flex items-center gap-1 font-medium text-muted-foreground hover:text-foreground transition-colors"
                   >
-                    <T i18nKey={columnLabelKey(col)}>{col.label}</T>
+                    <ColumnLabel column={col} />
                     {sort.field === col.source ? (
                       sort.order === 'ASC' ? (
                         <ArrowUp className="w-3.5 h-3.5" />
@@ -266,7 +266,7 @@ export function DigitDatagrid<RecordType extends RaRecord = RaRecord>({
                   </button>
                 ) : (
                   <span className="font-medium text-muted-foreground">
-                    <T i18nKey={columnLabelKey(col)}>{col.label}</T>
+                    <ColumnLabel column={col} />
                   </span>
                 )}
               </TableHead>

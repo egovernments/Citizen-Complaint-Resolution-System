@@ -15,6 +15,7 @@ export { DigitList } from './DigitList';
 export type { DigitListProps } from './DigitList';
 export { T } from './i18n/T';
 export type { TProps } from './i18n/T';
+export { fieldLabelKey } from './i18n/columnLabelKey';
 
 // Actions
 export { InlineDelete, RowActions } from './actions';
