@@ -407,8 +407,16 @@ const Login = ({ stateCode, isUserRegistered = true }) => {
     }
   };
 
+  // Same StateInfo.bannerUrl the employee sign-in paints behind its card
+  // (core App.js sets --banner-url on .loginContainer); the citizen shell has
+  // no such hook, so it is set here and consumed by the sign-in backdrop rule
+  // in src/index.css. Absent bannerUrl => the var is unset => plain page.
+  const { data: storeData } = Digit.Hooks.useStore.getInitData();
+  const bannerUrl = storeData?.stateInfo?.bannerUrl;
+  const wrapperStyle = bannerUrl ? { "--banner-url": `url(${bannerUrl})` } : undefined;
+
   return (
-    <div className="v2-scope citizen-form-wrapper">
+    <div className="v2-scope citizen-form-wrapper" style={wrapperStyle}>
       <Switch>
         <Route path={`${path}`} exact>
           <SelectMobileNumber
