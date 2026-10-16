@@ -22,6 +22,8 @@ vi.mock('ra-core', () => ({
   useUpdate: () => [vi.fn()],
   useDelete: () => [vi.fn()],
   useGetList: () => ({ data: [], isPending: false }),
+  // DigitDatagrid.tsx calls useTranslate (column headers, empty state); the mock predates it
+  useTranslate: () => (key: string, options?: { _?: string }) => options?._ ?? key,
 }));
 
 vi.mock('react-router-dom', () => ({

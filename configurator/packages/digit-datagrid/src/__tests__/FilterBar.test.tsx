@@ -46,10 +46,14 @@ vi.mock('ra-core', () => ({
     resource: 'test',
   }),
   ListContextProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  // DigitList.tsx calls useTranslate (search placeholder, empty state); the mock predates it
+  useTranslate: () => (key: string, options?: { _?: string }) => options?._ ?? key,
 }));
 
 vi.mock('react-router-dom', () => ({
   useNavigate: () => vi.fn(),
+  // DigitList.tsx reads useLocation (its search state follows the URL); the mock predates it
+  useLocation: () => ({ pathname: '/', search: '', hash: '', state: null, key: 'default' }),
 }));
 
 // Stub filter element for testing
