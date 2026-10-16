@@ -1,0 +1,923 @@
+{
+  "info": {
+    "_postman_id": "b2017544-de61-4309-82d8-cde449b16769",
+    "name": "DIGIT v2.12 \u2014 upgrade seed load",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Loads the seed data a v2.12-beta -> v2.12 UPGRADE does not migrate: 742 records, taken row-by-row from the difference between full-dump.sql at v2.12-beta and at v2.12.\n\nWHY: full-dump.sql only loads at Postgres initdb, i.e. on a FRESH install. An upgrade never replays it, so the tenant keeps beta's data. Verified on an upgraded box: 0 of the 729 new access-control rows were present.\n\nWHY DIRECT mdms-v2, NOT KONG: mdms-v2 authorises per schema (an action per /mdms-v2/v2/_create/<schema>). Through Kong, writes to schemas with no such action return 403 AccessDeniedException. {{mdmsUrl}} bypasses accesscontrol, the same approach enable-dashboard.sh takes.\n\nORDER: run folder 05 (schema definitions) BEFORE folder 10, or the five RejectionReasons\nrecords fail with SCHEMA_DEFINITION_NOT_FOUND_ERR.\n\nRUN (regenerate the data file per tenant first):\n  python3 generate-seed-data.py --tenant <tenant_id>\n  newman run ga-upgrade-seed-load.postman_collection.json \\\n    -d ga-upgrade-seed-load.data.<tenant_id>.json \\\n    --env-var mdmsUrl=http://localhost:18094 --env-var url=http://localhost:18000 \\\n    --env-var stateTenant=<tenant_id>\n\nFolder 30 is EXPECTED to fail with UNIQUE_KEY_UPDATE_ERR; see its description.\n\nTENANT VARIABLES ARE BLANK BY DESIGN. stateTenant/cityTenant must be supplied per run; a collection-level pre-request guard aborts each request and prints why if stateTenant is missing, or if the -d data file was generated for a different tenant. Add --bail so the run stops on the first such error instead of continuing."
+  },
+  "variable": [
+    {
+      "key": "url",
+      "value": "http://localhost:18000"
+    },
+    {
+      "key": "mdmsUrl",
+      "value": "http://localhost:18094"
+    },
+    {
+      "key": "username",
+      "value": "ADMIN"
+    },
+    {
+      "key": "password",
+      "value": "eGov@123"
+    },
+    {
+      "key": "stateTenant",
+      "value": "",
+      "description": "REQUIRED \u2014 set per run via --env-var or the Postman environment. Left blank deliberately so a wrong tenant cannot be inherited from the file."
+    },
+    {
+      "key": "cityTenant",
+      "value": "",
+      "description": "REQUIRED \u2014 set per run via --env-var or the Postman environment. Left blank deliberately so a wrong tenant cannot be inherited from the file."
+    },
+    {
+      "key": "authToken",
+      "value": ""
+    },
+    {
+      "key": "adminUuid",
+      "value": "1"
+    }
+  ],
+  "item": [
+    {
+      "name": "00 Preflight \u2014 counts",
+      "item": [
+        {
+          "name": "01 Auth token (Kong)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Basic ZWdvdi11c2VyLWNsaWVudDo="
+              },
+              {
+                "key": "content-type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "username",
+                  "value": "{{username}}",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "{{password}}",
+                  "type": "text"
+                },
+                {
+                  "key": "grant_type",
+                  "value": "password",
+                  "type": "text"
+                },
+                {
+                  "key": "scope",
+                  "value": "read",
+                  "type": "text"
+                },
+                {
+                  "key": "tenantId",
+                  "value": "{{stateTenant}}",
+                  "type": "text"
+                },
+                {
+                  "key": "userType",
+                  "value": "EMPLOYEE",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": "{{url}}/user/oauth/token",
+            "description": "Auth goes through Kong (it owns /user/oauth/token). Every MDMS write below goes DIRECT to mdms-v2."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.collectionVariables.set('authToken', j.access_token);",
+                  "if (j.UserRequest && j.UserRequest.uuid) pm.collectionVariables.set('adminUuid', j.UserRequest.uuid);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "count ACCESSCONTROL-ACTIONS-TEST.actions-test",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"RequestInfo\": {\n    \"apiId\": \"ga-seed-load\",\n    \"msgId\": \"ga-upgrade\",\n    \"authToken\": \"{{authToken}}\",\n    \"userInfo\": {\n      \"id\": 1,\n      \"uuid\": \"{{adminUuid}}\",\n      \"userName\": \"{{username}}\",\n      \"name\": \"{{username}}\",\n      \"mobileNumber\": \"9999999999\",\n      \"type\": \"EMPLOYEE\",\n      \"active\": true,\n      \"tenantId\": \"{{stateTenant}}\",\n      \"roles\": [\n        {\n          \"name\": \"MDMS Admin\",\n          \"code\": \"MDMS_ADMIN\",\n          \"tenantId\": \"{{stateTenant}}\"\n        },\n        {\n          \"name\": \"Super User\",\n          \"code\": \"SUPERUSER\",\n          \"tenantId\": \"{{stateTenant}}\"\n        }\n      ]\n    }\n  },\n  \"MdmsCriteria\": {\n    \"tenantId\": \"{{stateTenant}}\",\n    \"schemaCode\": \"ACCESSCONTROL-ACTIONS-TEST.actions-test\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{mdmsUrl}}/mdms-v2/v2/_count",
+            "description": "Uses /mdms-v2/v2/_count -> {\"totalCount\": N}. A _search is capped by `limit` and truncates silently, so counting its results under-reports."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const n = pm.response.json().totalCount;",
+                  "console.log('ACCESSCONTROL-ACTIONS-TEST.actions-test = ' + n + '   (beta -> GA seed: 246 -> 393)');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "count ACCESSCONTROL-ROLEACTIONS.roleactions",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"RequestInfo\": {\n    \"apiId\": \"ga-seed-load\",\n    \"msgId\": \"ga-upgrade\",\n    \"authToken\": \"{{authToken}}\",\n    \"userInfo\": {\n      \"id\": 1,\n      \"uuid\": \"{{adminUuid}}\",\n      \"userName\": \"{{username}}\",\n      \"name\": \"{{username}}\",\n      \"mobileNumber\": \"9999999999\",\n      \"type\": \"EMPLOYEE\",\n      \"active\": true,\n      \"tenantId\": \"{{stateTenant}}\",\n      \"roles\": [\n        {\n          \"name\": \"MDMS Admin\",\n          \"code\": \"MDMS_ADMIN\",\n          \"tenantId\": \"{{stateTenant}}\"\n        },\n        {\n          \"name\": \"Super User\",\n          \"code\": \"SUPERUSER\",\n          \"tenantId\": \"{{stateTenant}}\"\n        }\n      ]\n    }\n  },\n  \"MdmsCriteria\": {\n    \"tenantId\": \"{{stateTenant}}\",\n    \"schemaCode\": \"ACCESSCONTROL-ROLEACTIONS.roleactions\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{mdmsUrl}}/mdms-v2/v2/_count",
+            "description": "Uses /mdms-v2/v2/_count -> {\"totalCount\": N}. A _search is capped by `limit` and truncates silently, so counting its results under-reports."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const n = pm.response.json().totalCount;",
+                  "console.log('ACCESSCONTROL-ROLEACTIONS.roleactions = ' + n + '   (beta -> GA seed: 368 -> 950)');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "count ACCESSCONTROL-ROLES.roles",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"RequestInfo\": {\n    \"apiId\": \"ga-seed-load\",\n    \"msgId\": \"ga-upgrade\",\n    \"authToken\": \"{{authToken}}\",\n    \"userInfo\": {\n      \"id\": 1,\n      \"uuid\": \"{{adminUuid}}\",\n      \"userName\": \"{{username}}\",\n      \"name\": \"{{username}}\",\n      \"mobileNumber\": \"9999999999\",\n      \"type\": \"EMPLOYEE\",\n      \"active\": true,\n      \"tenantId\": \"{{stateTenant}}\",\n      \"roles\": [\n        {\n          \"name\": \"MDMS Admin\",\n          \"code\": \"MDMS_ADMIN\",\n          \"tenantId\": \"{{stateTenant}}\"\n        },\n        {\n          \"name\": \"Super User\",\n          \"code\": \"SUPERUSER\",\n          \"tenantId\": \"{{stateTenant}}\"\n        }\n      ]\n    }\n  },\n  \"MdmsCriteria\": {\n    \"tenantId\": \"{{stateTenant}}\",\n    \"schemaCode\": \"ACCESSCONTROL-ROLES.roles\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{mdmsUrl}}/mdms-v2/v2/_count",
+            "description": "Uses /mdms-v2/v2/_count -> {\"totalCount\": N}. A _search is capped by `limit` and truncates silently, so counting its results under-reports."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const n = pm.response.json().totalCount;",
+                  "console.log('ACCESSCONTROL-ROLES.roles = ' + n + '   (beta -> GA seed: 23 -> 26)');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "count RAINMAKER-PGR.RejectionReasons",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"RequestInfo\": {\n    \"apiId\": \"ga-seed-load\",\n    \"msgId\": \"ga-upgrade\",\n    \"authToken\": \"{{authToken}}\",\n    \"userInfo\": {\n      \"id\": 1,\n      \"uuid\": \"{{adminUuid}}\",\n      \"userName\": \"{{username}}\",\n      \"name\": \"{{username}}\",\n      \"mobileNumber\": \"9999999999\",\n      \"type\": \"EMPLOYEE\",\n      \"active\": true,\n      \"tenantId\": \"{{stateTenant}}\",\n      \"roles\": [\n        {\n          \"name\": \"MDMS Admin\",\n          \"code\": \"MDMS_ADMIN\",\n          \"tenantId\": \"{{stateTenant}}\"\n        },\n        {\n          \"name\": \"Super User\",\n          \"code\": \"SUPERUSER\",\n          \"tenantId\": \"{{stateTenant}}\"\n        }\n      ]\n    }\n  },\n  \"MdmsCriteria\": {\n    \"tenantId\": \"{{stateTenant}}\",\n    \"schemaCode\": \"RAINMAKER-PGR.RejectionReasons\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{mdmsUrl}}/mdms-v2/v2/_count",
+            "description": "Uses /mdms-v2/v2/_count -> {\"totalCount\": N}. A _search is capped by `limit` and truncates silently, so counting its results under-reports."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const n = pm.response.json().totalCount;",
+                  "console.log('RAINMAKER-PGR.RejectionReasons = ' + n + '   (beta -> GA seed: 0 -> 5)');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "count RAINMAKER-PGR.UIConstants",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"RequestInfo\": {\n    \"apiId\": \"ga-seed-load\",\n    \"msgId\": \"ga-upgrade\",\n    \"authToken\": \"{{authToken}}\",\n    \"userInfo\": {\n      \"id\": 1,\n      \"uuid\": \"{{adminUuid}}\",\n      \"userName\": \"{{username}}\",\n      \"name\": \"{{username}}\",\n      \"mobileNumber\": \"9999999999\",\n      \"type\": \"EMPLOYEE\",\n      \"active\": true,\n      \"tenantId\": \"{{stateTenant}}\",\n      \"roles\": [\n        {\n          \"name\": \"MDMS Admin\",\n          \"code\": \"MDMS_ADMIN\",\n          \"tenantId\": \"{{stateTenant}}\"\n        },\n        {\n          \"name\": \"Super User\",\n          \"code\": \"SUPERUSER\",\n          \"tenantId\": \"{{stateTenant}}\"\n        }\n      ]\n    }\n  },\n  \"MdmsCriteria\": {\n    \"tenantId\": \"{{stateTenant}}\",\n    \"schemaCode\": \"RAINMAKER-PGR.UIConstants\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{mdmsUrl}}/mdms-v2/v2/_count",
+            "description": "Uses /mdms-v2/v2/_count -> {\"totalCount\": N}. A _search is capped by `limit` and truncates silently, so counting its results under-reports."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const n = pm.response.json().totalCount;",
+                  "console.log('RAINMAKER-PGR.UIConstants = ' + n + '   (beta -> GA seed: 1 -> 2)');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "count common-masters.Department",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"RequestInfo\": {\n    \"apiId\": \"ga-seed-load\",\n    \"msgId\": \"ga-upgrade\",\n    \"authToken\": \"{{authToken}}\",\n    \"userInfo\": {\n      \"id\": 1,\n      \"uuid\": \"{{adminUuid}}\",\n      \"userName\": \"{{username}}\",\n      \"name\": \"{{username}}\",\n      \"mobileNumber\": \"9999999999\",\n      \"type\": \"EMPLOYEE\",\n      \"active\": true,\n      \"tenantId\": \"{{stateTenant}}\",\n      \"roles\": [\n        {\n          \"name\": \"MDMS Admin\",\n          \"code\": \"MDMS_ADMIN\",\n          \"tenantId\": \"{{stateTenant}}\"\n        },\n        {\n          \"name\": \"Super User\",\n          \"code\": \"SUPERUSER\",\n          \"tenantId\": \"{{stateTenant}}\"\n        }\n      ]\n    }\n  },\n  \"MdmsCriteria\": {\n    \"tenantId\": \"{{stateTenant}}\",\n    \"schemaCode\": \"common-masters.Department\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{mdmsUrl}}/mdms-v2/v2/_count",
+            "description": "Uses /mdms-v2/v2/_count -> {\"totalCount\": N}. A _search is capped by `limit` and truncates silently, so counting its results under-reports."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const n = pm.response.json().totalCount;",
+                  "console.log('common-masters.Department = ' + n + '   (beta -> GA seed: 1 -> 3)');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "count common-masters.MobileNumberValidation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"RequestInfo\": {\n    \"apiId\": \"ga-seed-load\",\n    \"msgId\": \"ga-upgrade\",\n    \"authToken\": \"{{authToken}}\",\n    \"userInfo\": {\n      \"id\": 1,\n      \"uuid\": \"{{adminUuid}}\",\n      \"userName\": \"{{username}}\",\n      \"name\": \"{{username}}\",\n      \"mobileNumber\": \"9999999999\",\n      \"type\": \"EMPLOYEE\",\n      \"active\": true,\n      \"tenantId\": \"{{stateTenant}}\",\n      \"roles\": [\n        {\n          \"name\": \"MDMS Admin\",\n          \"code\": \"MDMS_ADMIN\",\n          \"tenantId\": \"{{stateTenant}}\"\n        },\n        {\n          \"name\": \"Super User\",\n          \"code\": \"SUPERUSER\",\n          \"tenantId\": \"{{stateTenant}}\"\n        }\n      ]\n    }\n  },\n  \"MdmsCriteria\": {\n    \"tenantId\": \"{{stateTenant}}\",\n    \"schemaCode\": \"common-masters.MobileNumberValidation\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{mdmsUrl}}/mdms-v2/v2/_count",
+            "description": "Uses /mdms-v2/v2/_count -> {\"totalCount\": N}. A _search is capped by `limit` and truncates silently, so counting its results under-reports."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const n = pm.response.json().totalCount;",
+                  "console.log('common-masters.MobileNumberValidation = ' + n + '   (beta -> GA seed: 0 -> 1)');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "count tenant.citymodule",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"RequestInfo\": {\n    \"apiId\": \"ga-seed-load\",\n    \"msgId\": \"ga-upgrade\",\n    \"authToken\": \"{{authToken}}\",\n    \"userInfo\": {\n      \"id\": 1,\n      \"uuid\": \"{{adminUuid}}\",\n      \"userName\": \"{{username}}\",\n      \"name\": \"{{username}}\",\n      \"mobileNumber\": \"9999999999\",\n      \"type\": \"EMPLOYEE\",\n      \"active\": true,\n      \"tenantId\": \"{{stateTenant}}\",\n      \"roles\": [\n        {\n          \"name\": \"MDMS Admin\",\n          \"code\": \"MDMS_ADMIN\",\n          \"tenantId\": \"{{stateTenant}}\"\n        },\n        {\n          \"name\": \"Super User\",\n          \"code\": \"SUPERUSER\",\n          \"tenantId\": \"{{stateTenant}}\"\n        }\n      ]\n    }\n  },\n  \"MdmsCriteria\": {\n    \"tenantId\": \"{{stateTenant}}\",\n    \"schemaCode\": \"tenant.citymodule\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{mdmsUrl}}/mdms-v2/v2/_count",
+            "description": "Uses /mdms-v2/v2/_count -> {\"totalCount\": N}. A _search is capped by `limit` and truncates silently, so counting its results under-reports."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const n = pm.response.json().totalCount;",
+                  "console.log('tenant.citymodule = ' + n + '   (beta -> GA seed: 3 -> 4)');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "action 2008 \u2014 JBAC scope present?",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"RequestInfo\": {\n    \"apiId\": \"ga-seed-load\",\n    \"msgId\": \"ga-upgrade\",\n    \"authToken\": \"{{authToken}}\",\n    \"userInfo\": {\n      \"id\": 1,\n      \"uuid\": \"{{adminUuid}}\",\n      \"userName\": \"{{username}}\",\n      \"name\": \"{{username}}\",\n      \"mobileNumber\": \"9999999999\",\n      \"type\": \"EMPLOYEE\",\n      \"active\": true,\n      \"tenantId\": \"{{stateTenant}}\",\n      \"roles\": [\n        {\n          \"name\": \"MDMS Admin\",\n          \"code\": \"MDMS_ADMIN\",\n          \"tenantId\": \"{{stateTenant}}\"\n        },\n        {\n          \"name\": \"Super User\",\n          \"code\": \"SUPERUSER\",\n          \"tenantId\": \"{{stateTenant}}\"\n        }\n      ]\n    }\n  },\n  \"MdmsCriteria\": {\n    \"tenantId\": \"{{stateTenant}}\",\n    \"schemaCode\": \"ACCESSCONTROL-ACTIONS-TEST.actions-test\",\n    \"limit\": 2000\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{mdmsUrl}}/mdms-v2/v2/_search"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const r=(pm.response.json().mdms||[]).filter(x=>String((x.data||{}).id)==='2008');",
+                  "console.log('action 2008 rows: '+r.length+(r.length?('  has scope: '+!!((r[0].data||{}).resource)):''));",
+                  "if(r.length) pm.collectionVariables.set('action2008Uid', r[0].uniqueIdentifier||'');"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 Schema definitions (must run before 10)",
+      "item": [
+        {
+          "name": "06 Create RAINMAKER-PGR.RejectionReasons schema",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"RequestInfo\": {\n    \"apiId\": \"ga-seed-load\",\n    \"msgId\": \"ga-upgrade\",\n    \"authToken\": \"{{authToken}}\",\n    \"userInfo\": {\n      \"id\": 1,\n      \"uuid\": \"{{adminUuid}}\",\n      \"userName\": \"{{username}}\",\n      \"name\": \"{{username}}\",\n      \"mobileNumber\": \"9999999999\",\n      \"type\": \"EMPLOYEE\",\n      \"active\": true,\n      \"tenantId\": \"{{stateTenant}}\",\n      \"roles\": [\n        {\n          \"name\": \"MDMS Admin\",\n          \"code\": \"MDMS_ADMIN\",\n          \"tenantId\": \"{{stateTenant}}\"\n        },\n        {\n          \"name\": \"Super User\",\n          \"code\": \"SUPERUSER\",\n          \"tenantId\": \"{{stateTenant}}\"\n        }\n      ]\n    }\n  },\n  \"SchemaDefinition\": {\n    \"tenantId\": \"{{stateTenant}}\",\n    \"code\": \"RAINMAKER-PGR.RejectionReasons\",\n    \"description\": \"PGR rejection reasons shown in the GRO reject modal\",\n    \"definition\": {\n      \"type\": \"object\",\n      \"required\": [\n        \"code\",\n        \"name\",\n        \"active\"\n      ],\n      \"x-unique\": [\n        \"code\"\n      ],\n      \"properties\": {\n        \"code\": {\n          \"type\": \"string\"\n        },\n        \"name\": {\n          \"type\": \"string\"\n        },\n        \"active\": {\n          \"type\": \"boolean\",\n          \"default\": true\n        }\n      },\n      \"additionalProperties\": false\n    },\n    \"isActive\": true\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{mdmsUrl}}/mdms-v2/schema/v1/_create",
+            "description": "GA's full-dump.sql adds exactly ONE new schema definition over beta's: RAINMAKER-PGR.RejectionReasons. mdms-v2 refuses data for a schema it does not know (400 SCHEMA_DEFINITION_NOT_FOUND_ERR), so this must run before folder 10 or the five RejectionReasons records fail. Re-running is safe: an existing schema returns a duplicate error, which the test below accepts."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const txt = pm.response.text();",
+                  "const ok  = [200,201,202].includes(pm.response.code);",
+                  "const dup = /DUPLICATE|already exists|ALREADY/i.test(txt);",
+                  "console.log('schema create -> HTTP ' + pm.response.code + (dup ? ' (already present)' : ''));",
+                  "pm.test('RejectionReasons schema present', () => pm.expect(ok || dup).to.be.true);",
+                  "if (!ok && !dup) console.log(txt.slice(0,300));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "10 Load the delta (newman -d iterates)",
+      "item": [
+        {
+          "name": "11 MDMS v2 create record",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"RequestInfo\": {\n    \"apiId\": \"ga-seed-load\",\n    \"msgId\": \"ga-upgrade\",\n    \"authToken\": \"{{authToken}}\",\n    \"userInfo\": {\n      \"id\": 1,\n      \"uuid\": \"{{adminUuid}}\",\n      \"userName\": \"{{username}}\",\n      \"name\": \"{{username}}\",\n      \"mobileNumber\": \"9999999999\",\n      \"type\": \"EMPLOYEE\",\n      \"active\": true,\n      \"tenantId\": \"{{stateTenant}}\",\n      \"roles\": [\n        {\n          \"name\": \"MDMS Admin\",\n          \"code\": \"MDMS_ADMIN\",\n          \"tenantId\": \"{{stateTenant}}\"\n        },\n        {\n          \"name\": \"Super User\",\n          \"code\": \"SUPERUSER\",\n          \"tenantId\": \"{{stateTenant}}\"\n        }\n      ]\n    }\n  },\n  \"Mdms\": {\n    \"tenantId\": \"{{tenantId}}\",\n    \"schemaCode\": \"{{schemaCode}}\",\n    \"data\": {{recordJson}},\n    \"isActive\": true\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{mdmsUrl}}/mdms-v2/v2/_create/{{schemaCode}}",
+            "description": "data is injected UNQUOTED so the record lands as a JSON object, not a string. tenantId comes from the data file, which the generator already rewrote to the target tenant."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const txt = pm.response.text();",
+                  "const ok  = [200,201,202].includes(pm.response.code);",
+                  "const dup = /DUPLICATE|already exists|UniqueIdentifier/i.test(txt);",
+                  "pm.test(pm.iterationData.get('label') || 'record', () => pm.expect(ok || dup).to.be.true);",
+                  "if (!ok && !dup) console.log('FAIL ' + pm.iterationData.get('label') + ' -> ' + pm.response.code + ' ' + txt.slice(0,220));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "20 Verify",
+      "item": [
+        {
+          "name": "count ACCESSCONTROL-ACTIONS-TEST.actions-test",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"RequestInfo\": {\n    \"apiId\": \"ga-seed-load\",\n    \"msgId\": \"ga-upgrade\",\n    \"authToken\": \"{{authToken}}\",\n    \"userInfo\": {\n      \"id\": 1,\n      \"uuid\": \"{{adminUuid}}\",\n      \"userName\": \"{{username}}\",\n      \"name\": \"{{username}}\",\n      \"mobileNumber\": \"9999999999\",\n      \"type\": \"EMPLOYEE\",\n      \"active\": true,\n      \"tenantId\": \"{{stateTenant}}\",\n      \"roles\": [\n        {\n          \"name\": \"MDMS Admin\",\n          \"code\": \"MDMS_ADMIN\",\n          \"tenantId\": \"{{stateTenant}}\"\n        },\n        {\n          \"name\": \"Super User\",\n          \"code\": \"SUPERUSER\",\n          \"tenantId\": \"{{stateTenant}}\"\n        }\n      ]\n    }\n  },\n  \"MdmsCriteria\": {\n    \"tenantId\": \"{{stateTenant}}\",\n    \"schemaCode\": \"ACCESSCONTROL-ACTIONS-TEST.actions-test\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{mdmsUrl}}/mdms-v2/v2/_count",
+            "description": "Uses /mdms-v2/v2/_count -> {\"totalCount\": N}. A _search is capped by `limit` and truncates silently, so counting its results under-reports."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const n = pm.response.json().totalCount;",
+                  "console.log('ACCESSCONTROL-ACTIONS-TEST.actions-test = ' + n + '   (beta -> GA seed: 246 -> 393)');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "count ACCESSCONTROL-ROLEACTIONS.roleactions",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"RequestInfo\": {\n    \"apiId\": \"ga-seed-load\",\n    \"msgId\": \"ga-upgrade\",\n    \"authToken\": \"{{authToken}}\",\n    \"userInfo\": {\n      \"id\": 1,\n      \"uuid\": \"{{adminUuid}}\",\n      \"userName\": \"{{username}}\",\n      \"name\": \"{{username}}\",\n      \"mobileNumber\": \"9999999999\",\n      \"type\": \"EMPLOYEE\",\n      \"active\": true,\n      \"tenantId\": \"{{stateTenant}}\",\n      \"roles\": [\n        {\n          \"name\": \"MDMS Admin\",\n          \"code\": \"MDMS_ADMIN\",\n          \"tenantId\": \"{{stateTenant}}\"\n        },\n        {\n          \"name\": \"Super User\",\n          \"code\": \"SUPERUSER\",\n          \"tenantId\": \"{{stateTenant}}\"\n        }\n      ]\n    }\n  },\n  \"MdmsCriteria\": {\n    \"tenantId\": \"{{stateTenant}}\",\n    \"schemaCode\": \"ACCESSCONTROL-ROLEACTIONS.roleactions\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{mdmsUrl}}/mdms-v2/v2/_count",
+            "description": "Uses /mdms-v2/v2/_count -> {\"totalCount\": N}. A _search is capped by `limit` and truncates silently, so counting its results under-reports."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const n = pm.response.json().totalCount;",
+                  "console.log('ACCESSCONTROL-ROLEACTIONS.roleactions = ' + n + '   (beta -> GA seed: 368 -> 950)');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "count ACCESSCONTROL-ROLES.roles",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"RequestInfo\": {\n    \"apiId\": \"ga-seed-load\",\n    \"msgId\": \"ga-upgrade\",\n    \"authToken\": \"{{authToken}}\",\n    \"userInfo\": {\n      \"id\": 1,\n      \"uuid\": \"{{adminUuid}}\",\n      \"userName\": \"{{username}}\",\n      \"name\": \"{{username}}\",\n      \"mobileNumber\": \"9999999999\",\n      \"type\": \"EMPLOYEE\",\n      \"active\": true,\n      \"tenantId\": \"{{stateTenant}}\",\n      \"roles\": [\n        {\n          \"name\": \"MDMS Admin\",\n          \"code\": \"MDMS_ADMIN\",\n          \"tenantId\": \"{{stateTenant}}\"\n        },\n        {\n          \"name\": \"Super User\",\n          \"code\": \"SUPERUSER\",\n          \"tenantId\": \"{{stateTenant}}\"\n        }\n      ]\n    }\n  },\n  \"MdmsCriteria\": {\n    \"tenantId\": \"{{stateTenant}}\",\n    \"schemaCode\": \"ACCESSCONTROL-ROLES.roles\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{mdmsUrl}}/mdms-v2/v2/_count",
+            "description": "Uses /mdms-v2/v2/_count -> {\"totalCount\": N}. A _search is capped by `limit` and truncates silently, so counting its results under-reports."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const n = pm.response.json().totalCount;",
+                  "console.log('ACCESSCONTROL-ROLES.roles = ' + n + '   (beta -> GA seed: 23 -> 26)');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "count RAINMAKER-PGR.RejectionReasons",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"RequestInfo\": {\n    \"apiId\": \"ga-seed-load\",\n    \"msgId\": \"ga-upgrade\",\n    \"authToken\": \"{{authToken}}\",\n    \"userInfo\": {\n      \"id\": 1,\n      \"uuid\": \"{{adminUuid}}\",\n      \"userName\": \"{{username}}\",\n      \"name\": \"{{username}}\",\n      \"mobileNumber\": \"9999999999\",\n      \"type\": \"EMPLOYEE\",\n      \"active\": true,\n      \"tenantId\": \"{{stateTenant}}\",\n      \"roles\": [\n        {\n          \"name\": \"MDMS Admin\",\n          \"code\": \"MDMS_ADMIN\",\n          \"tenantId\": \"{{stateTenant}}\"\n        },\n        {\n          \"name\": \"Super User\",\n          \"code\": \"SUPERUSER\",\n          \"tenantId\": \"{{stateTenant}}\"\n        }\n      ]\n    }\n  },\n  \"MdmsCriteria\": {\n    \"tenantId\": \"{{stateTenant}}\",\n    \"schemaCode\": \"RAINMAKER-PGR.RejectionReasons\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{mdmsUrl}}/mdms-v2/v2/_count",
+            "description": "Uses /mdms-v2/v2/_count -> {\"totalCount\": N}. A _search is capped by `limit` and truncates silently, so counting its results under-reports."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const n = pm.response.json().totalCount;",
+                  "console.log('RAINMAKER-PGR.RejectionReasons = ' + n + '   (beta -> GA seed: 0 -> 5)');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "count RAINMAKER-PGR.UIConstants",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"RequestInfo\": {\n    \"apiId\": \"ga-seed-load\",\n    \"msgId\": \"ga-upgrade\",\n    \"authToken\": \"{{authToken}}\",\n    \"userInfo\": {\n      \"id\": 1,\n      \"uuid\": \"{{adminUuid}}\",\n      \"userName\": \"{{username}}\",\n      \"name\": \"{{username}}\",\n      \"mobileNumber\": \"9999999999\",\n      \"type\": \"EMPLOYEE\",\n      \"active\": true,\n      \"tenantId\": \"{{stateTenant}}\",\n      \"roles\": [\n        {\n          \"name\": \"MDMS Admin\",\n          \"code\": \"MDMS_ADMIN\",\n          \"tenantId\": \"{{stateTenant}}\"\n        },\n        {\n          \"name\": \"Super User\",\n          \"code\": \"SUPERUSER\",\n          \"tenantId\": \"{{stateTenant}}\"\n        }\n      ]\n    }\n  },\n  \"MdmsCriteria\": {\n    \"tenantId\": \"{{stateTenant}}\",\n    \"schemaCode\": \"RAINMAKER-PGR.UIConstants\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{mdmsUrl}}/mdms-v2/v2/_count",
+            "description": "Uses /mdms-v2/v2/_count -> {\"totalCount\": N}. A _search is capped by `limit` and truncates silently, so counting its results under-reports."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const n = pm.response.json().totalCount;",
+                  "console.log('RAINMAKER-PGR.UIConstants = ' + n + '   (beta -> GA seed: 1 -> 2)');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "count common-masters.Department",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"RequestInfo\": {\n    \"apiId\": \"ga-seed-load\",\n    \"msgId\": \"ga-upgrade\",\n    \"authToken\": \"{{authToken}}\",\n    \"userInfo\": {\n      \"id\": 1,\n      \"uuid\": \"{{adminUuid}}\",\n      \"userName\": \"{{username}}\",\n      \"name\": \"{{username}}\",\n      \"mobileNumber\": \"9999999999\",\n      \"type\": \"EMPLOYEE\",\n      \"active\": true,\n      \"tenantId\": \"{{stateTenant}}\",\n      \"roles\": [\n        {\n          \"name\": \"MDMS Admin\",\n          \"code\": \"MDMS_ADMIN\",\n          \"tenantId\": \"{{stateTenant}}\"\n        },\n        {\n          \"name\": \"Super User\",\n          \"code\": \"SUPERUSER\",\n          \"tenantId\": \"{{stateTenant}}\"\n        }\n      ]\n    }\n  },\n  \"MdmsCriteria\": {\n    \"tenantId\": \"{{stateTenant}}\",\n    \"schemaCode\": \"common-masters.Department\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{mdmsUrl}}/mdms-v2/v2/_count",
+            "description": "Uses /mdms-v2/v2/_count -> {\"totalCount\": N}. A _search is capped by `limit` and truncates silently, so counting its results under-reports."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const n = pm.response.json().totalCount;",
+                  "console.log('common-masters.Department = ' + n + '   (beta -> GA seed: 1 -> 3)');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "count common-masters.MobileNumberValidation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"RequestInfo\": {\n    \"apiId\": \"ga-seed-load\",\n    \"msgId\": \"ga-upgrade\",\n    \"authToken\": \"{{authToken}}\",\n    \"userInfo\": {\n      \"id\": 1,\n      \"uuid\": \"{{adminUuid}}\",\n      \"userName\": \"{{username}}\",\n      \"name\": \"{{username}}\",\n      \"mobileNumber\": \"9999999999\",\n      \"type\": \"EMPLOYEE\",\n      \"active\": true,\n      \"tenantId\": \"{{stateTenant}}\",\n      \"roles\": [\n        {\n          \"name\": \"MDMS Admin\",\n          \"code\": \"MDMS_ADMIN\",\n          \"tenantId\": \"{{stateTenant}}\"\n        },\n        {\n          \"name\": \"Super User\",\n          \"code\": \"SUPERUSER\",\n          \"tenantId\": \"{{stateTenant}}\"\n        }\n      ]\n    }\n  },\n  \"MdmsCriteria\": {\n    \"tenantId\": \"{{stateTenant}}\",\n    \"schemaCode\": \"common-masters.MobileNumberValidation\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{mdmsUrl}}/mdms-v2/v2/_count",
+            "description": "Uses /mdms-v2/v2/_count -> {\"totalCount\": N}. A _search is capped by `limit` and truncates silently, so counting its results under-reports."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const n = pm.response.json().totalCount;",
+                  "console.log('common-masters.MobileNumberValidation = ' + n + '   (beta -> GA seed: 0 -> 1)');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "count tenant.citymodule",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"RequestInfo\": {\n    \"apiId\": \"ga-seed-load\",\n    \"msgId\": \"ga-upgrade\",\n    \"authToken\": \"{{authToken}}\",\n    \"userInfo\": {\n      \"id\": 1,\n      \"uuid\": \"{{adminUuid}}\",\n      \"userName\": \"{{username}}\",\n      \"name\": \"{{username}}\",\n      \"mobileNumber\": \"9999999999\",\n      \"type\": \"EMPLOYEE\",\n      \"active\": true,\n      \"tenantId\": \"{{stateTenant}}\",\n      \"roles\": [\n        {\n          \"name\": \"MDMS Admin\",\n          \"code\": \"MDMS_ADMIN\",\n          \"tenantId\": \"{{stateTenant}}\"\n        },\n        {\n          \"name\": \"Super User\",\n          \"code\": \"SUPERUSER\",\n          \"tenantId\": \"{{stateTenant}}\"\n        }\n      ]\n    }\n  },\n  \"MdmsCriteria\": {\n    \"tenantId\": \"{{stateTenant}}\",\n    \"schemaCode\": \"tenant.citymodule\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{mdmsUrl}}/mdms-v2/v2/_count",
+            "description": "Uses /mdms-v2/v2/_count -> {\"totalCount\": N}. A _search is capped by `limit` and truncates silently, so counting its results under-reports."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const n = pm.response.json().totalCount;",
+                  "console.log('tenant.citymodule = ' + n + '   (beta -> GA seed: 3 -> 4)');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "analytics actions present (9 expected)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"RequestInfo\": {\n    \"apiId\": \"ga-seed-load\",\n    \"msgId\": \"ga-upgrade\",\n    \"authToken\": \"{{authToken}}\",\n    \"userInfo\": {\n      \"id\": 1,\n      \"uuid\": \"{{adminUuid}}\",\n      \"userName\": \"{{username}}\",\n      \"name\": \"{{username}}\",\n      \"mobileNumber\": \"9999999999\",\n      \"type\": \"EMPLOYEE\",\n      \"active\": true,\n      \"tenantId\": \"{{stateTenant}}\",\n      \"roles\": [\n        {\n          \"name\": \"MDMS Admin\",\n          \"code\": \"MDMS_ADMIN\",\n          \"tenantId\": \"{{stateTenant}}\"\n        },\n        {\n          \"name\": \"Super User\",\n          \"code\": \"SUPERUSER\",\n          \"tenantId\": \"{{stateTenant}}\"\n        }\n      ]\n    }\n  },\n  \"MdmsCriteria\": {\n    \"tenantId\": \"{{stateTenant}}\",\n    \"schemaCode\": \"ACCESSCONTROL-ACTIONS-TEST.actions-test\",\n    \"limit\": 2000\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{mdmsUrl}}/mdms-v2/v2/_search"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const r=(pm.response.json().mdms||[]).filter(x=>String((x.data||{}).url||'').includes('/analytics/'));",
+                  "console.log('analytics actions: '+r.length);",
+                  "pm.test('9 analytics actions', () => pm.expect(r.length).to.be.at.least(9));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "30 JBAC scope \u2014 EXPECTED TO FAIL",
+      "item": [
+        {
+          "name": "31 Attempt _update (documents the blocker)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"RequestInfo\": {\n    \"apiId\": \"ga-seed-load\",\n    \"msgId\": \"ga-upgrade\",\n    \"authToken\": \"{{authToken}}\",\n    \"userInfo\": {\n      \"id\": 1,\n      \"uuid\": \"{{adminUuid}}\",\n      \"userName\": \"{{username}}\",\n      \"name\": \"{{username}}\",\n      \"mobileNumber\": \"9999999999\",\n      \"type\": \"EMPLOYEE\",\n      \"active\": true,\n      \"tenantId\": \"{{stateTenant}}\",\n      \"roles\": [\n        {\n          \"name\": \"MDMS Admin\",\n          \"code\": \"MDMS_ADMIN\",\n          \"tenantId\": \"{{stateTenant}}\"\n        },\n        {\n          \"name\": \"Super User\",\n          \"code\": \"SUPERUSER\",\n          \"tenantId\": \"{{stateTenant}}\"\n        }\n      ]\n    }\n  },\n  \"Mdms\": {\n    \"tenantId\": \"{{stateTenant}}\",\n    \"schemaCode\": \"ACCESSCONTROL-ACTIONS-TEST.actions-test\",\n    \"uniqueIdentifier\": \"{{action2008Uid}}\",\n    \"isActive\": true,\n    \"data\": {\n      \"id\": 2008,\n      \"url\": \"/pgr-services/v2/request/_search\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{mdmsUrl}}/mdms-v2/v2/_update/ACCESSCONTROL-ACTIONS-TEST.actions-test",
+            "description": "EXPECTED 400 UNIQUE_KEY_UPDATE_ERR. actions-test declares x-unique:[\"id\"], so the JBAC scope block cannot be added to the existing 2008 row via the API. Use the SQL in the upgrade guide, step 7."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "console.log('HTTP '+pm.response.code+': '+pm.response.text().slice(0,200));",
+                  "pm.test('documents the x-unique blocker', () => pm.expect([200,400]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Tenant defaults are blank on purpose, so a wrong tenant cannot be inherited",
+          "// from this file. Fail loudly rather than writing to tenantId:\"\".",
+          "const t = pm.variables.get('stateTenant');",
+          "if (!t || !String(t).trim()) {",
+          "  const m = 'stateTenant is NOT SET. Pass --env-var stateTenant=<tenant_id> (newman), '",
+          "          + 'or select an environment that defines it (Postman GUI). '",
+          "          + 'Run newman with --bail so this stops the run.';",
+          "  console.error(m);",
+          "  throw new Error(m);",
+          "}",
+          "const d = pm.iterationData && pm.iterationData.get('tenantId');",
+          "if (d && String(d) !== String(t)) {",
+          "  const m = 'Data file is for tenant \"' + d + '\" but stateTenant is \"' + t + '\". '",
+          "          + 'Regenerate it: python3 generate-seed-data.py --tenant ' + t;",
+          "  console.error(m);",
+          "  throw new Error(m);",
+          "}"
+        ]
+      }
+    }
+  ]
+}
