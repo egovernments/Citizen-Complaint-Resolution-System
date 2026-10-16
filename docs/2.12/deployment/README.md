@@ -63,7 +63,129 @@ the box does hold a live database, see
 | `domain` | If needs to be deployed on a domain name vs localhost. Also, set `tls_enabled:true` in this case | | 
 | `bootstrap_user` | Admin Username (defaults to ADMIN) | | 
 | `bootstrap_password` | Admin Password (defaults to eGov@123) | |
+| `enable_turbopass` | City-name suggestions in the setup wizard. Off, there is no suggestion box and location search returns 404. [Watch the video below](#turbopass-video). | `false` |
+| `enable_search_stack` | Turns on the services used by the older inbox search: Elasticsearch, indexer and inbox. Set it to `false` to stop those services. The current Search Complaint and Dashboard pages still open. | `false` |
+| `employee_module_denylist` | Hides matching entries from the employee sidebar. Use the exact first part of the entry's access-control path, including capitals and spaces. `[]` hides none. Home cards and page access remain available. | `["Dashboard"]` |
+| `hierarchy_type` | Chooses the city's location hierarchy for the complaint form. Leaving it out uses `ADMIN`. It is a name, not an on/off switch; a name with no matching hierarchy leaves City and Ward unavailable. | `ADMIN` |
+| `enable_digit_ui_v2` | Builds the newer citizen website at `/citizen/` and automatically enables its nginx route. Off by default. The existing citizen website at `/digit-ui/citizen/` remains available. | `false` |
+| `digit_ui_mode` | How the existing employee and citizen websites are served. `container` uses the published UI container; `static` serves built files through nginx; `hmr` runs a development server with live reload and needs `digit_ui_esbuild_repo`. | `container` |
 
+After changing `mycity.yml`, run the deployment again to apply the setting.
+
+The search stack has three parts: Elasticsearch stores searchable data, the
+indexer adds complaint events to it, and the inbox service searches that data.
+Turning the stack off removes their containers but keeps the stored data.
+
+The current Search Complaint page searches through the complaint service (PGR)
+directly. Dashboard access depends on the user's permissions. Both pages can still
+open when the search stack is off. The flag also turns search-service checks on or
+off in Gatus, the health dashboard.
+
+Set `elasticsearch_password` in OpenBao, the deployment's secret store. Elasticsearch,
+the indexer and inbox must use the same password. With search enabled, a fresh
+installation stops if the password is missing or still set to `changeme-elastic`.
+An existing installation warns and continues instead. With search disabled, this
+password check is skipped. An installation is considered existing when its main
+PostgreSQL data volume is already present.
+
+`employee_module_denylist` is a separate sidebar setting. It matches the first
+part of each access-control path, before the first dot. The match is case-sensitive.
+Check the paths returned by `/access/v1/actions/mdms/_get` for your employee roles;
+a label on screen can differ from its path. For example, Nairobi's Search Complaint
+entry uses `SearchTicket`, and Create Complaint uses `New Ticket`.
+
+We tested these values on the Nairobi employee UI:
+
+| List value | Sidebar result |
+|---|---|
+| `[]` or `["IM"]` | Home, Create Complaint, Search Complaint and Dashboard remain. No entry in this account has an `IM` path. |
+| `["Dashboard"]` | Dashboard disappears; Home and both complaint entries remain. |
+| `["New Ticket", "SearchTicket", "Dashboard"]` | Only Home remains. |
+| `["dashboard", "SearchTicket.child", "PGR"]` | All entries remain: these values do not match their path roots. |
+
+Home cards remained in every case. With all three sidebar entries hidden, the
+Search Complaint home card still opened the search form. This setting does not
+stop services, remove user permissions or block direct links. It is for navigation,
+not access control. Reload the browser after applying a change.
+
+We also checked `[]` and `["IM"]` with search on and off:
+
+| `enable_search_stack` | `employee_module_denylist` | Search services | Employee pages |
+|---|---|---|---|
+| `false` | `[]` | Stopped and removed | Search Complaint and Dashboard open |
+| `false` | `["IM"]` | Stopped and removed | Search Complaint and Dashboard open |
+| `true` | `[]` | Running and healthy | Search Complaint and Dashboard open |
+| `true` | `["IM"]` | Running and healthy | Search Complaint and Dashboard open |
+
+These checks used the Nairobi admin account and employee UI image
+`egovio/digit-ui-esbuild:2.12-5137119`. The city had no complaints, so Search showed
+"No Results Found" and Dashboard showed zero counts. This confirms that the pages
+open with empty data. Searching existing complaints and showing populated charts
+still need checking. The older `/inbox/v2/_search` request returned `CONFIG_ERROR`
+with the stack on, so its indexing and search have not been confirmed end to end.
+
+
+### Location hierarchy
+
+`hierarchy_type` chooses the hierarchy to read for your city. It works with the
+city's boundary data and the location-level settings above. It does not create
+that data. Use the name that was created during your city's onboarding; only use
+a name such as `YOURCITY_ADMIN` if that hierarchy actually exists.
+
+Leaving the setting out uses `ADMIN`. On the tested employee UI, an empty string
+or YAML `false` also fell back to `ADMIN`: neither disabled the location picker.
+With the existing `ADMIN` data, City showed `CITY_001`, and selecting it offered
+`WARD_001` through `WARD_004`. With a nonexistent hierarchy name, the form showed
+the location heading but no City or Ward picker. Users then had no way to select
+those required locations. Do not treat `false` as a way to skip boundary setup.
+These UI checks used `egovio/digit-ui-esbuild:2.12-5137119`.
+
+### Citizen v1 and v2
+
+The existing citizen app (v1) is at `/digit-ui/citizen/`. Its home page offers
+File Complaint and My Complaints, and its sign-in screen asks for a mobile number.
+The newer app (v2) is at `/citizen/`; the tested Nairobi build shows the NaiPepea
+Citizen Portal and a mobile-number screen with Send OTP.
+
+Set `enable_digit_ui_v2: true` to build and serve v2. The playbook sets the
+effective `nginx_features.digit_ui_v2` to `true` before its checks, even if you
+left that nginx entry out or set it to `false`. Other nginx feature choices stay
+as they were. The inventory file itself is not rewritten.
+
+To disable v2, set `enable_digit_ui_v2: false` and leave
+`nginx_features.digit_ui_v2` unset or `false`. Setting only the nginx entry to
+`true` still stops deployment: nginx must not serve an app the deploy was told
+not to build. In the lab, removing the v2 route returned 404 at `/citizen/`,
+while the existing citizen and employee apps still returned 200. Built v2 files
+may remain on disk when the route is disabled. The checks covered routes and
+login screens, not a complete OTP login or complaint submission.
+
+### Choosing how to serve the existing UI
+
+`container` and `static` can serve the same published UI bundle, so the choice
+changes how it is hosted rather than which complaint features it has.
+`static` can use `digit_ui_bundle_image` without a source checkout.
+`hmr` is for development: provide `digit_ui_esbuild_repo` so the dev server has
+source files to watch. Deployment rejects HMR without that folder. Live editing
+through HMR has not been checked in this audit.
+
+### Optional flags with known problems
+
+These four flags were also checked. Their current limits matter before enabling
+them; detailed test evidence is in [PR #2292](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/2292).
+
+| Setting | What enabling it does | Current limit |
+|---|---|---|
+| `enable_otp_services` | Starts the OTP and SMS services. | Kong still returns mocked success for send/validate, so this flag alone does not enable real OTP. Turning it off does not remove the running containers. |
+| `enable_mcp` | Starts the MCP server and its database. | The tested server reports 70 tools and allows writes. Turning the flag off does not remove its running containers. |
+| `enable_mcp_readonly` | Starts a separate MCP server that disallows writes; the tested server reports 43 tools. | Requires `nginx_features.mcp_readonly: true` and `mcp_readonly_basic_auth_password`. Its database is in the `mcp` Compose profile, so read-only without that profile fails. Turning it off also leaves the container running. |
+| `enable_legacy_pgr_dashboard` | Adds the old PGR Dashboard button and page after rebuilding the configurator. Off hides the button and redirects its page to the main configurator. | The enabled page failed to load complaint data; its unauthenticated dashboard request returned 401. |
+
+### Turbopass video
+
+`enable_turbopass` on the setup wizard. Phase 2, Fetch from OpenStreetMap, then type a city name:
+
+https://github.com/user-attachments/assets/5c1d7f83-b309-484b-b2b3-5fb3c51d4706
 
 ## Start Deployment
 

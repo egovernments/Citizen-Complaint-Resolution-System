@@ -27,6 +27,13 @@
     DOCKER_DEFAULT_PLATFORM: "{{ docker_default_platform | default('') }}"
 
   pre_tasks:
+    # Building the citizen app also serves it. Keep the other nginx feature
+    # choices intact, including when host_vars provides only part of the map.
+    - name: "digit-ui-v2 — enable nginx route with the citizen app"
+      ansible.builtin.set_fact:
+        nginx_features: "{{ (nginx_features | default({})) | combine({'digit_ui_v2': true}) }}"
+      when: enable_digit_ui_v2 | default(false) | bool
+
     # ── host_vars naming preflight ─────────────────────────────────────────
     # Ansible variables are lowercase (every key in inventory/host_vars/ is).
     # The env-var names on the LEFT of `=` in templates/digit.env.j2 are
