@@ -120,17 +120,17 @@ public class OnboardingStepsTest {
     /** Once the step has its founder, the uuid identifies them, so a designation they changed later doesn't matter. */
     @Test public void aKnownFounderWhoChangedTheirDesignationIsStillTheFounder(){
         prerequisites();op.setFounderDigitUuid("founder-uuid");
-        employees.add(mapper.valueToTree(Map.of("code","EMP_0001","assignments",List.of(Map.of("designation","CLERK")),"user",Map.of("uuid","founder-uuid"))));
+        employees.add(employee("newtown","EMP_0001","CLERK","founder-uuid"));
         steps.perform("FOUNDER_HRMS",signup,op,progress);
         assertEquals("founder-uuid",op.getFounderDigitUuid());verify(client,never()).write(any(),eq("hrms"),contains("_create"),anyMap());
     }
     /** A founder made under the old FOUNDER_ code is found, not made again; an EMP_0001 that isn't the founder is never adopted. */
     @Test public void founderSearchFindsTheOldCodeAndRefusesSomeoneElse(){
         prerequisites();
-        employees.add(mapper.valueToTree(Map.of("code",OnboardingSteps.legacyFounderCode(signup.getId()),"user",Map.of("uuid","legacy-uuid"))));
+        employees.add(employee("newtown",OnboardingSteps.legacyFounderCode(signup.getId()),"CLERK","legacy-uuid"));
         steps.perform("FOUNDER_HRMS",signup,op,progress);assertEquals("legacy-uuid",op.getFounderDigitUuid());
         employees.clear();op.setFounderDigitUuid(null);
-        employees.add(mapper.valueToTree(Map.of("code","EMP_0001","assignments",List.of(Map.of("designation","CLERK")),"user",Map.of("uuid","someone-else"))));
+        employees.add(employee("newtown","EMP_0001","CLERK","someone-else"));
         assertEquals("FOUNDER_AMBIGUOUS",assertThrows(OnboardingFailure.class,()->steps.perform("FOUNDER_HRMS",signup,op,progress)).getCode());
         assertNull(op.getFounderDigitUuid());verify(client,never()).write(any(),eq("hrms"),contains("_create"),anyMap());
     }
@@ -139,15 +139,19 @@ public class OnboardingStepsTest {
     }
     /**
      * HRMS answers a codes search in a tenant with no matching username with every tenant's row for the code,
-     * so other workspaces' founders must never be adopted (one) or make the founder ambiguous (two).
+     * so other workspaces' founders (an inactive one too) and rows that name no tenant are never adopted
+     * and never make the founder ambiguous.
      */
     @Test public void anotherWorkspacesFounderIsNeverAdoptedOrCounted(){
         prerequisites();
         employees.add(employee("othertown","EMP_0001",OnboardingSteps.FOUNDER_DESIGNATION,"foreign-founder"));
+        employees.add(mapper.valueToTree(Map.of("code","EMP_0001","assignments",List.of(Map.of("designation",OnboardingSteps.FOUNDER_DESIGNATION)),"user",Map.of("uuid","no-tenant"))));
         steps.perform("FOUNDER_HRMS",signup,op,progress);
         assertEquals("founder-uuid",op.getFounderDigitUuid());verify(client,times(1)).write(any(),eq("hrms"),contains("_create"),anyMap());
         employees.removeIf(e->"founder-uuid".equals(e.path("user").path("uuid").asText()));op.setFounderDigitUuid(null);
         employees.add(employee("thirdtown","EMP_0001",OnboardingSteps.FOUNDER_DESIGNATION,"other-founder"));
+        ((com.fasterxml.jackson.databind.node.ObjectNode)employees.get(employees.size()-1)).put("isActive",false);
+        employees.add(employee("fourthtown","EMP_0001",OnboardingSteps.FOUNDER_DESIGNATION,"fourth-founder"));
         steps.perform("FOUNDER_HRMS",signup,op,progress);
         assertEquals("founder-uuid",op.getFounderDigitUuid());verify(client,times(2)).write(any(),eq("hrms"),contains("_create"),anyMap());
         verify(client,never()).read(eq("hrms"),contains("codes="),anyMap());

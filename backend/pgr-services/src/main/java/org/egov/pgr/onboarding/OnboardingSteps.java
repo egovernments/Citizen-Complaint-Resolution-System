@@ -413,8 +413,9 @@ public class OnboardingSteps {
                     + "&offset=" + offset + "&limit=" + HRMS_PAGE, Map.of()).path("Employees");
             if (!page.isArray()) throw new OnboardingFailure("HRMS_INVALID_RESPONSE", true);
             for (JsonNode employee : page) {
-                // HRMS states every row's tenant; another tenant's row is never this workspace's founder.
-                if (employee.hasNonNull("tenantId") && !tenant.equals(employee.path("tenantId").asText())) continue;
+                // Only a row HRMS says is this tenant's counts: another tenant's founder, even an
+                // inactive one with the founder designation, is never this workspace's.
+                if (!tenant.equals(employee.path("tenantId").asText())) continue;
                 for (String code : codes) if (code.equalsIgnoreCase(employee.path("code").asText())) { matches.add(employee); break; }
             }
             if (page.size() < HRMS_PAGE) return matches;
