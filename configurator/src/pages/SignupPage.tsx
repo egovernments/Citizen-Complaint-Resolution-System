@@ -328,25 +328,8 @@ function SignupFlow() {
     if (record.timeZone) timeZoneTouched.current = true;
   }, []);
 
-  /**
-   * The session is a cookie with its own lifetime, so it can lapse mid-wizard.
-   * The contract's answer to a 401 is to restart sign-in, and leaving the
-   * operator on Review with a button that can only keep failing is not that.
-   * The server-side draft is what makes this cheap: signing back in resumes
-   * exactly where they were.
-   */
-  const handleFailure = useCallback(async (caught: unknown) => {
-    if (!isExpiredSession(caught)) {
-      const problem = describe(caught);
-      if (problem.field === 'mobile') {
-        // Under the field it is about, on the step that has it.
-        setMobileError(problem.message);
-        setStep('preferences');
-      } else {
-        setError(problem.message);
-      }
-      return;
-    }
+  /** The contract's answer to a 401: sign in again, which resumes the server-side draft. */
+  const restartSignIn = useCallback(async () => {
     try {
       const { methods: available } = await authMethods('signup');
       setMethods(available);
@@ -355,7 +338,7 @@ function SignupFlow() {
     }
     setError(t('signup.session_expired', 'Your sign-in expired. Sign in again to pick up where you left off.'));
     setPhase('signedOut');
-  }, [describe, t]);
+  }, [t]);
 
   /** Session → tenants → onboarding or chooser. The contract's own order. */
   // No synchronous setState in here: it runs from an effect on mount, where
@@ -431,7 +414,7 @@ function SignupFlow() {
               // An expired sign-in goes back to sign-in. Anything else is this load's own
               // error, with its Try again, never an unexplained wizard.
               if (!isExpiredSession(caught)) throw caught;
-              await handleFailure(caught);
+              await restartSignIn();
               return;
             }
           }
@@ -450,7 +433,7 @@ function SignupFlow() {
       setError(describeSignupError(caught, t).message);
       setPhase('failed');
     }
-  }, [seedFrom, t, handleFailure]);
+  }, [seedFrom, t, restartSignIn]);
 
   useEffect(() => {
     // Load on mount. Every setState inside `bootstrap` happens after an await,
@@ -551,6 +534,28 @@ function SignupFlow() {
     setSignup(created);
     return created;
   }, [draft, signup]);
+
+  /**
+   * The session is a cookie with its own lifetime, so it can lapse mid-wizard.
+   * The contract's answer to a 401 is to restart sign-in, and leaving the
+   * operator on Review with a button that can only keep failing is not that.
+   * The server-side draft is what makes this cheap: signing back in resumes
+   * exactly where they were.
+   */
+  const handleFailure = useCallback(async (caught: unknown) => {
+    if (!isExpiredSession(caught)) {
+      const problem = describe(caught);
+      if (problem.field === 'mobile') {
+        // Under the field it is about, on the step that has it.
+        setMobileError(problem.message);
+        setStep('preferences');
+      } else {
+        setError(problem.message);
+      }
+      return;
+    }
+    await restartSignIn();
+  }, [describe, restartSignIn]);
 
   /** The mobile number against the country's rule, before the server is asked. */
   const checkMobile = useCallback((): boolean => {
