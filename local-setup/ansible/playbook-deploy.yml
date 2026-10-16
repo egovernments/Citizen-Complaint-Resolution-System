@@ -8551,6 +8551,16 @@
           restore the rows directly, then re-run with --tags master-repair. Set
           `tolerate_bootstrap_failures: true` to continue past this.
 
+    # ─────────── Revoked role-action grants (#2239) ───────────
+    # Every deploy, every tenant: see tasks/revoke-role-grants.yml. After
+    # master-repair, so a repair copying from pg cannot bring a revoked grant back.
+    - name: "revoke-grants — deactivate role-action grants this release revoked"
+      tags: ['revoke-grants']
+      ansible.builtin.include_tasks:
+        file: tasks/revoke-role-grants.yml
+        apply:
+          tags: ['revoke-grants']
+
     # ─────────── Config-driven notification MDMS seed ───────────
     # A DEPLOY UPGRADES SOFTWARE ONLY. This step creates the notification schemas (both
     # namespaces), grants the access-control rows the Channels screen, the new masters

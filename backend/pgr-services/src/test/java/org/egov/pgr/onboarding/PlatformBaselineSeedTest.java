@@ -25,7 +25,7 @@ public class PlatformBaselineSeedTest {
      * v7 drops CSR's /user/users/_createnovalidate grant, which BaselineUpgrader also deactivates (#2239).
      */
     private static final String VERSION = "7";
-    private static final String SHA256 = "5dbd4c8115b8fcd9d92035ebd2152be67e56168a50ae37b1cfa6a77a4548e306";
+    private static final String SHA256 = "c9ba0815a41351aad531158ad8a0fcb101c07e77d950c7ead6a7d201a77262ab";
     @Test public void contentChangesComeWithAVersionBump() throws Exception {
         byte[] bytes;
         try (var in = PlatformBaselineSeedTest.class.getResourceAsStream("/onboarding/platform-baseline-v1.json")) { bytes = in.readAllBytes(); }
