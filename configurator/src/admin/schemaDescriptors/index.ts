@@ -17,6 +17,8 @@ import { notificationsEventCatalogueDescriptor } from './notifications-event-cat
 import { mapConfigDescriptor } from './map-config';
 import { analyticsProviderDescriptor } from './analytics-provider';
 import { pgrEscalationDescriptor } from './pgr-escalation';
+import { tenantCityModuleDescriptor } from './tenant-citymodule';
+import { uiHomePageDescriptor } from './ui-homepage';
 
 /** Map of schema code -> descriptor. Add new entries as we cover more schemas. */
 const DESCRIPTORS: Record<string, SchemaDescriptor> = {
@@ -38,6 +40,8 @@ const DESCRIPTORS: Record<string, SchemaDescriptor> = {
   [mapConfigDescriptor.schema]: mapConfigDescriptor,
   [analyticsProviderDescriptor.schema]: analyticsProviderDescriptor,
   [pgrEscalationDescriptor.schema]: pgrEscalationDescriptor,
+  [tenantCityModuleDescriptor.schema]: tenantCityModuleDescriptor,
+  [uiHomePageDescriptor.schema]: uiHomePageDescriptor,
 };
 
 export function getDescriptor(schemaCode?: string): SchemaDescriptor | undefined {
