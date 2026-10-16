@@ -25,6 +25,7 @@
  * ACTOR needs credentials, and those come from env.
  */
 import { getDigitToken } from './auth';
+import { KeycloakSignInError } from './identity-bff';
 import { ROOT_TENANT, TENANT, DEFAULT_PASSWORD } from './env';
 import { fetchEmployees, type DiscoveredEmployee } from './probes';
 import { getProfile, type DeploymentProfile, type PersonaSummary } from './profile';
@@ -237,6 +238,7 @@ async function adminToken(tenants: TenantPair): Promise<string> {
       return r.access_token;
     } catch (err: any) {
       adminTokenErrors.set(root, `${user}@${root}: ${err?.message?.slice(0, 160) ?? err}`);
+      if (err instanceof KeycloakSignInError) break; // a refused password is never retried
       if (attempt < 3) await new Promise((r) => setTimeout(r, attempt * 2_000));
     }
   }
@@ -282,6 +284,11 @@ async function login(c: Candidate): Promise<Principal | null> {
   if (hit !== undefined) return hit;
 
   let result: Principal | null = null;
+  // Only a Keycloak refusal is a verdict about the credential. Anything else (a
+  // 5xx, a timeout, an ended Keycloak session) says nothing about it: caching it
+  // as "no" would let the persona resolve to the next candidate (often the
+  // admin) for the worker's life, so the run fails loudly instead.
+  let failure: unknown;
   for (const authTenant of c.authTenants) {
     try {
       const resp = await getDigitToken({ tenant: authTenant, authTenant, username: c.username, password: c.password });
@@ -295,8 +302,9 @@ async function login(c: Candidate): Promise<Principal | null> {
         };
         break;
       }
-    } catch {
+    } catch (err) {
       // Try the next tenant; a guessed password failing everywhere is normal.
+      if (!(err instanceof KeycloakSignInError)) failure ??= err;
     }
   }
   // R6: every attempt is logged, so a lockout can be traced to this suite —
@@ -304,6 +312,9 @@ async function login(c: Candidate): Promise<Principal | null> {
   console.log(
     `[personas] login ${c.username} (${c.source}) -> ${result ? `ok @ ${result.authTenant}` : `no (tried ${c.authTenants.join(', ')})`}`,
   );
+  if (!result && failure) {
+    throw new Error(`Sign-in for ${c.username} (${c.source}) failed for a reason other than a refusal: ${(failure as Error)?.message?.slice(0, 200) ?? failure}`);
+  }
   loginCache.set(key, result);
   return result;
 }

@@ -74,7 +74,7 @@ test('seed lifecycle fixtures (non-terminal + assigned + terminal-with-rating co
   try {
     // Complaint 1: non-terminal, left at PENDINGFORASSIGNMENT.
     const seeded1 = await seedComplaintAsCitizen({ description: `lifecycle setup non-terminal — ${new Date().toISOString()}` });
-    expect(seeded1.srid, 'response must contain serviceRequestId').toMatch(/^[A-Z]+-PGR-/);
+    expect(seeded1.srid, 'response must contain serviceRequestId').toMatch(/^[A-Z0-9]+(?:-[A-Z0-9]+)*-PGR-/);
     expect(seeded1.status, 'non-terminal initial status').toBe('PENDINGFORASSIGNMENT');
     nonTerminal = seeded1.srid;
     console.log(`[lifecycle.setup] NON_TERMINAL ${nonTerminal} → PENDINGFORASSIGNMENT`);

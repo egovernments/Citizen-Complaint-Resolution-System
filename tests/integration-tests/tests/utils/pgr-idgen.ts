@@ -55,7 +55,8 @@ export async function getPgrIdPrefix(opts?: { tenant?: string }): Promise<string
       };
       const id = json.idResponses?.[0]?.id;
       if (!id) continue;
-      const match = id.match(/^([A-Z0-9]+)-PGR-/);
+      // The prefix can itself hold hyphens: a signup workspace's is `<COUNTRY>-<TENANT>` (KE-QA).
+      const match = id.match(/^([A-Z0-9]+(?:-[A-Z0-9]+)*)-PGR-/);
       if (match) return match[1];
     } catch {
       // try next tenant

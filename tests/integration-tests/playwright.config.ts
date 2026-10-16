@@ -87,6 +87,8 @@ export default defineConfig({
         // duplicating every api result in report.json (38 pass/fail/skip rows
         // counted twice) and inflating suite runtime for zero added coverage.
         /tests\/(api|smoke|identity-real)\//,
+        // Dashboard benchmarks have their own config (playwright.dashboard.config.ts).
+        /tests\/dashboard-performance\//,
       ],
       grepInvert: EXCLUDE_LOCAL_ONLY,
     },

@@ -225,7 +225,8 @@ Citizen tenant must be ROOT — assigning to city would break login flows. Clean
     // (Maputo: PG-PGR-…, Kenya: NCCG-PGR-…) — keep the SRID match prefix-agnostic.
     await page.waitForURL(/[A-Z]+-PGR-/, { timeout: 30_000 });
     const url = page.url();
-    const match = url.match(/([A-Z]+-PGR-[^/?#]+)/);
+    // Hyphenated prefixes too (a signup workspace's KE-QA-PGR-…), or cleanup misses the complaint.
+    const match = url.match(/([A-Z0-9]+(?:-[A-Z0-9]+)*-PGR-[^/?#]+)/);
     expect(match, `expected <PREFIX>-PGR id in url ${url}`).not.toBeNull();
     if (match) createdComplaints.add(match[1]);
   });

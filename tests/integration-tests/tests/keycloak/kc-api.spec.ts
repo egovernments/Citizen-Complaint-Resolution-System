@@ -36,13 +36,17 @@ test.describe('Keycloak through identity-bff — API contract', () => {
     const context = await staffContext(page, { tenant: TENANT, username: ADMIN_USER, password: ADMIN_PASS }, 'employee');
     const response = await page.request.post(`${BASE_URL}/mdms-v2/v2/_search`, {
       data: { RequestInfo: { authToken: context.access_token }, MdmsCriteria: { tenantId: TENANT,
-        moduleDetails: [{ moduleName: 'common-masters', masterDetails: [{ name: 'StateInfo' }] }] } },
+        schemaCode: 'common-masters.StateInfo', limit: 1, offset: 0 } },
     });
     expect(response.status()).toBe(200);
-    expect(await response.json()).toHaveProperty('MdmsRes');
+    // mdms-v2's v2 search answers `mdms` (MdmsRes is the v1 shape).
+    expect(Array.isArray((await response.json()).mdms)).toBe(true);
   });
 
   test('BFF authorize owns PKCE and the configured Google IdP hint', { tag: ['@area:keycloak', '@persona:system'] }, async ({ request }) => {
+    const offered = await identityJson<{ methods?: Array<{ id?: string }> }>(
+      await request.get(`${BASE_URL}/identity/v1/auth-methods?surface=citizen&intent=signin`));
+    test.skip(!offered.methods?.some(m => m.id === 'google'), 'this deployment offers citizens no Google sign-in (/identity/v1/auth-methods)');
     const response = await request.get(authorizeUrl(BASE_URL, 'citizen', 'google'), { maxRedirects: 0 });
     expect(response.status()).toBe(302);
     const destination = new URL(response.headers().location);
@@ -53,7 +57,8 @@ test.describe('Keycloak through identity-bff — API contract', () => {
     expect(destination.searchParams.get('redirect_uri')).toBe(`${BASE_URL}/identity/v1/callback`);
   });
 
-  test('BFF readiness reports Redis and all identity dependencies', { tag: ['@area:keycloak', '@persona:system'] }, async ({ request }) => {
+  // /readyz is the BFF container's own endpoint; deployed nginx does not route it.
+  test('BFF readiness reports Redis and all identity dependencies', { tag: ['@local-only', '@area:keycloak', '@persona:system'] }, async ({ request }) => {
     const body = await identityJson<{ status: string; checks: Record<string, unknown> }>(await request.get(`${BASE_URL}/readyz`));
     expect(body.status).toBe('ready');
     expect(body.checks.redis).toBe('ok');

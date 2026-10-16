@@ -2294,7 +2294,8 @@ describe('D26 legacy identity paths are retired', () => {
       .toContain("/identity/v1/citizen/otp/_send");
     expect(read('tests/integration-tests/tests/employee/login.spec.ts'))
       .toContain("staffContext(page");
+    // Any request context: the spec selects on its own browser context, not a page.
     expect(read('tests/integration-tests/tests/keycloak/new-citizen-provisioning.spec.ts'))
-      .toContain("selectContext(page.request, BASE_URL, 'citizen'");
+      .toMatch(/selectContext\([^)]*'citizen'/);
   });
 });
