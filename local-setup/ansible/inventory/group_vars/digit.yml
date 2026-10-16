@@ -405,3 +405,23 @@ digit_ui_bundle_image: "egovio/digit-ui-esbuild:2.12.1-7a38661"
 # anyone holding the URL can post into the channel -- so prefer pulling it from
 # OpenBao via secrets_path rather than committing it here.
 gatus_slack_webhook_url: ""
+
+# Sherlog (docker-compose.sherlog.yml): alert rules from Sherlog's monitoring
+# standard for the components declared in local-setup/sherlog/sherlog.yaml, and
+# an automatic root-cause investigation of each critical or warning alert.
+# OFF by default. sherlog_mode "shadow" writes reports on the box and sends
+# nothing; "live" sends them (GitHub issues when sherlog_github_issues_repo and
+# its token are set). The model key and tokens are SECRETS: OpenBao.
+enable_sherlog: false
+sherlog_version: "0.2.0"
+sherlog_mode: shadow
+sherlog_model_provider: openai
+sherlog_model_upstream: https://api.openai.com
+sherlog_model_api_key: ""
+sherlog_daily_investigations: 30
+sherlog_github_issues_repo: ""
+sherlog_github_issues_token: ""
+sherlog_github_autofix: manual
+sherlog_alert_slack_webhook_url: ""   # set: critical/warning alerts (not log alerts) also go to Slack
+sherlog_deadman_url: ""               # set: Watchdog pings this dead man's switch (e.g. healthchecks.io)
+sherlog_overrides: {}                 # merged over sherlog/sherlog.yaml, e.g. {components: {logs: {threshold: 20}}}

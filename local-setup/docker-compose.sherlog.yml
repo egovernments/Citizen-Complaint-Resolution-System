@@ -1,0 +1,125 @@
+# Sherlog for the compose tier: alerting to the monitoring standard, and automatic root-cause analysis of each alert.
+#
+# What it is. Sherlog (github.com/singhalkarun/sherlog) defines the alert rules for every component this stack runs
+# (host, Postgres, Redpanda, Kong, the JVM services, service SLOs, error logs, ...) from maintained upstream rule
+# sets, renders them from local-setup/sherlog/sherlog.yaml, and investigates each critical or warning alert with an
+# LLM over Loki and Prometheus. CCRS declares its components in that one file; it does not maintain alert rules.
+#
+# Layered ALWAYS by the Ansible deploy, like the matomo and monitoring overlays; the services carry
+# `profiles: [sherlog]` and start only when the tenant sets `enable_sherlog: true`. With it off, Prometheus and Loki
+# still mount local-setup/sherlog/rendered/, which is then empty: no rules, no alerts, no Alertmanager target.
+#
+# How alerts flow:
+#   Prometheus (rule_files: sherlog/rendered/prometheus) ─┐
+#   Loki ruler (sherlog/rendered/loki)                    ├─► sherlog-alertmanager ─► sherlog-trigger ─► report / issue
+#                                                         ┘                     └─► Slack (if notify.slack)
+#
+# Data protection. The model sees only what the redacting proxy (sherlog-proxy) lets through: log lines are
+# redacted (emails, phone numbers, tokens) before they leave the box. The investigating agent (sherlog-runner)
+# sits on an internal network that reaches the proxy and nothing else; the model key stays in the proxy.
+#
+# Images are pinned by SHERLOG_VERSION (host_vars sherlog_version). The repository and images are private for now:
+# the host needs `docker login ghcr.io` with a read:packages token before the first deploy.
+x-sherlog: &sherlog
+  image: ${SHERLOG_IMAGE:-ghcr.io/singhalkarun/sherlog}:${SHERLOG_VERSION:-0.2.0}
+  profiles: [sherlog]
+  restart: unless-stopped
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+
+services:
+  sherlog-alertmanager:
+    image: prom/alertmanager:v0.28.1
+    container_name: sherlog-alertmanager
+    profiles: [sherlog]
+    restart: unless-stopped
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    command: ["--config.file=/etc/alertmanager/alertmanager.yml", "--storage.path=/alertmanager"]
+    volumes:
+      # Rendered from sherlog/sherlog.yaml by the deploy: routing, the standard's inhibitions, receivers.
+      - ./sherlog/rendered/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      # Receiver secrets as files (Slack webhook, dead man's switch URL), written by the deploy, never in the config.
+      - ./sherlog/secrets:/run/secrets:ro
+      - sherlog_alertmanager:/alertmanager
+    # No published port: Prometheus and Loki reach it on egov-network.
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+    networks: [egov-network]
+
+  # The investigating agent's only way out: Loki, Prometheus and the model all go through here, redacted.
+  sherlog-proxy:
+    <<: *sherlog
+    container_name: sherlog-proxy
+    command: ["python", "-m", "sherlog.proxy"]
+    environment:
+      PACK_DIR: /packs/digit
+      LOKI_UPSTREAM: http://loki:3100
+      PROMETHEUS_UPSTREAM: http://prometheus:9090
+      MODEL_UPSTREAM: ${SHERLOG_MODEL_UPSTREAM:-https://api.openai.com}
+      MODEL_PROVIDER: ${SHERLOG_MODEL_PROVIDER:-openai}
+      MODEL_API_KEY: ${SHERLOG_MODEL_API_KEY:-}
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    networks: [egov-network, sherlog-agent]
+
+  # HolmesGPT. On the internal network only: it can reach the proxy and nothing else.
+  sherlog-runner:
+    <<: *sherlog
+    image: ${SHERLOG_RUNNER_IMAGE:-ghcr.io/singhalkarun/sherlog-runner}:${SHERLOG_VERSION:-0.2.0}
+    container_name: sherlog-runner
+    command: ["python", "-m", "sherlog.runner"]
+    environment:
+      PACK_DIR: /packs/digit
+      LOGS_URL: http://sherlog-proxy:3100
+      METRICS_URL: http://sherlog-proxy:9090
+      OPENAI_API_BASE: http://sherlog-proxy:4000/v1
+      OPENAI_API_KEY: held-by-the-proxy
+      ANTHROPIC_API_BASE: http://sherlog-proxy:4000
+      ANTHROPIC_API_KEY: held-by-the-proxy
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+    networks: [sherlog-agent]
+
+  sherlog-trigger:
+    <<: *sherlog
+    container_name: sherlog-trigger
+    command: ["python", "-m", "sherlog.trigger"]
+    user: "10001"
+    # INVESTIGATE_SEVERITIES and SKIP_SERVICES, rendered from sherlog/sherlog.yaml.
+    env_file:
+      - path: ./sherlog/rendered/sherlog.env
+        required: false
+    environment:
+      PACK_DIR: /packs/digit
+      SITE_CATALOGUE_DIR: /data/known-errors
+      DATA_DIR: /data
+      LOGS_URL: http://sherlog-proxy:3100
+      METRICS_URL: http://sherlog-proxy:9090
+      RUNNER_URL: http://sherlog-runner:8090
+      MODE: ${SHERLOG_MODE:-shadow}
+      DAILY_INVESTIGATIONS: ${SHERLOG_DAILY_INVESTIGATIONS:-30}
+      GITHUB_ISSUES_REPO: ${SHERLOG_GITHUB_ISSUES_REPO:-}
+      GITHUB_ISSUES_TOKEN: ${SHERLOG_GITHUB_ISSUES_TOKEN:-}
+      GITHUB_AUTOFIX: ${SHERLOG_GITHUB_AUTOFIX:-manual}
+    volumes:
+      - sherlog_data:/data
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    networks: [egov-network, sherlog-agent]
+
+networks:
+  sherlog-agent:
+    internal: true
+
+volumes:
+  sherlog_alertmanager: null
+  sherlog_data: null

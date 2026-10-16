@@ -1,0 +1,3 @@
+# Rendered by the deploy from sherlog.yaml (python -m sherlog.standards render), and receiver secrets.
+rendered/
+secrets/

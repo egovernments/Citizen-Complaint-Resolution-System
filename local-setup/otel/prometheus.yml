@@ -2,6 +2,17 @@ global:
   scrape_interval: 15s
   evaluation_interval: 15s
 
+# Alert rules, and where alerts go, both come from Sherlog (docker-compose.sherlog.yml): the deploy renders them from
+# sherlog/sherlog.yaml into sherlog/rendered/, mounted here at /etc/prometheus/sherlog. With enable_sherlog off that
+# folder is empty, so there are no rules and no Alertmanager target (the file_sd file is written only when Sherlog
+# runs). The deploy's SIGHUP reload (#1608) picks up re-rendered rules.
+rule_files:
+  - /etc/prometheus/sherlog/prometheus/*.yaml
+alerting:
+  alertmanagers:
+    - file_sd_configs:
+        - files: [/etc/prometheus/sherlog/alertmanagers*.json]
+
 scrape_configs:
   # All JVM/runtime metrics flow OTLP → otel-collector → /metrics on :8889.
   # Prometheus scrapes that single endpoint; per-service `job` labels come
@@ -61,3 +72,15 @@ scrape_configs:
   - job_name: kong
     static_configs:
       - targets: ['kong:8100']
+
+  # Prometheus itself: failed rule evaluations, failed alert notifications, storage. The job name is the one the
+  # upstream prometheus-mixin rules select on.
+  - job_name: prometheus
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Gatus's health-check results (metrics: true in gatus/config.yaml), so a failing check is an alert routed like any
+  # other instead of only a Slack message from Gatus.
+  - job_name: gatus
+    static_configs:
+      - targets: ['gatus:8080']

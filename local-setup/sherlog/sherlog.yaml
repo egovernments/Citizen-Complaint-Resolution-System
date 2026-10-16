@@ -1,0 +1,26 @@
+# CCRS's monitoring, as declared to Sherlog (docker-compose.sherlog.yml). Sherlog owns the alert rules; this file only
+# says which components CCRS runs and where it differs from Sherlog's standard. The rules, their sources and every
+# option: https://github.com/singhalkarun/sherlog/blob/main/docs/standards.md. A tenant adds overrides with
+# host_vars `sherlog_overrides` (same shape, merged on top).
+product: ccrs
+pack: digit
+
+components:
+  node: {}            # node-exporter (docker-compose.monitoring.yml)
+  postgres: {}        # postgres-exporter
+  redpanda: {}        # Redpanda's /public_metrics
+  kong: {}            # Kong's Prometheus plugin (:8100)
+  jvm: {}             # the OpenTelemetry Java agent, through otel-collector:8889
+  gatus: {}           # Gatus's health checks (metrics: true in gatus/config.yaml)
+  prometheus: {}      # Prometheus itself (job "prometheus" in otel/prometheus.yml)
+  services: {}        # per-service SLOs: 99.5% not 5xx, 95% under 1s, over 30 days
+  logs:
+    exclude_services: [loki, promtail]
+
+investigate:
+  severities: [critical, warning]
+  skip_services: [loki, promtail]
+
+notify:
+  slack: false        # on when host_vars sherlog_alert_slack_webhook_url is set (the playbook overrides this)
+  deadman: false
