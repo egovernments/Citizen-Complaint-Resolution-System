@@ -88,3 +88,14 @@ describe('hrmsService.buildEmployee — dob / dateOfAppointment are optional (eg
     expect(emp.assignments).toHaveLength(2);
   });
 });
+
+describe('hrmsService.generateUsername', () => {
+  it('joins the name with dots, trimming stray ones', () => {
+    expect(hrmsService.generateUsername(' Anita  Wanjiru-Otieno ')).toBe('anita.wanjiru.otieno');
+  });
+
+  it('keeps the base letter of an accented one (#2456)', () => {
+    expect(hrmsService.generateUsername('José Müller')).toBe('jose.muller');
+    expect(hrmsService.generateUsername('Zoë Ñúñez')).toBe('zoe.nunez');
+  });
+});

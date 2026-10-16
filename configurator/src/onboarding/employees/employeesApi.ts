@@ -132,16 +132,31 @@ export async function listEmployees(tenantId: string): Promise<EmployeeList> {
   };
 }
 
+/** The highest number among EMP_0001-style codes, or 0. */
+function highestEmployeeNumber(codes: (string | undefined)[]): number {
+  return codes.reduce((max: number, code) => {
+    const match = /^EMP_(\d+)$/.exec(code ?? '');
+    return match ? Math.max(max, Number(match[1])) : max;
+  }, 0);
+}
+
 /**
  * One past the highest EMP_0001-style code HRMS holds, removed employees'
  * included, so a removed employee's code is never offered again.
  */
 export function suggestEmployeeCode(codes: string[]): string {
-  const highest = codes.reduce((max, code) => {
-    const match = /^EMP_(\d+)$/.exec(code);
-    return match ? Math.max(max, Number(match[1])) : max;
-  }, 0);
-  return hrmsService.generateEmployeeCode('EMP', highest + 1);
+  return hrmsService.generateEmployeeCode('EMP', highestEmployeeNumber(codes) + 1);
+}
+
+/**
+ * Codes for a bulk upload's rows: a row's own code as given, the rest numbered
+ * on from the highest EMP_ code HRMS holds or the sheet gives. Numbering from
+ * the row index took codes already in use, the founder's EMP_0001 among them
+ * (#2456).
+ */
+export function planEmployeeCodes(existing: string[], given: (string | undefined)[]): string[] {
+  let next = highestEmployeeNumber([...existing, ...given]);
+  return given.map((code) => code || hrmsService.generateEmployeeCode('EMP', ++next));
 }
 
 export async function addEmployee(tenantId: string, input: NewEmployee, options: EmployeeOptions): Promise<Employee> {

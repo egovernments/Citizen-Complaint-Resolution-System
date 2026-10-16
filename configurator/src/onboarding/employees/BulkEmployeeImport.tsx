@@ -37,6 +37,7 @@ import {
 import { loadTenantHierarchies } from '@/api/services/tenantHierarchy';
 import { parseExcelFile, parseEmployeeExcel } from '@/utils/excelParser';
 import { downloadEmployeeTemplate } from '@/utils/templateBuilder';
+import { listEmployees, planEmployeeCodes } from './employeesApi';
 import { reportStepError, trackStepAction } from '../telemetry';
 import { useOnboardingT } from '../i18n';
 import { allowedEmployeeRoles, pickerChoices } from '@/lib/systemRecords';
@@ -312,6 +313,8 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
     let failedTotal = 0;
 
     try {
+      // Read now, not when the sheet was picked: codes HRMS holds at upload time.
+      const codes = planEmployeeCodes((await listEmployees(targetTenant)).codes, validEmployees.map((e) => e.employeeCode));
       for (let i = 0; i < validEmployees.length; i++) {
         const emp = validEmployees[i];
         setProgressMessage(t('bulk_employees.creating_named', 'Creating %{name}...', { name: emp.name }));
@@ -365,7 +368,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
           // Build employee object
           const employee = hrmsService.buildEmployee({
             tenantId: targetTenant,
-            code: emp.employeeCode || hrmsService.generateEmployeeCode('EMP', i + 1),
+            code: codes[i],
             name: emp.name,
             userName: emp.userName || hrmsService.generateUsername(emp.name),
             mobileNumber: emp.mobileNumber,

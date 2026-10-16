@@ -11,6 +11,7 @@ import {
   addEmployee,
   applyEmployeeChanges,
   listEmployees,
+  planEmployeeCodes,
   removeEmployee,
   suggestEmployeeCode,
   updateEmployeeDetails,
@@ -29,7 +30,7 @@ vi.mock('@/api', () => ({
     // The real helpers, so the test covers the payload actually sent.
     generateEmployeeCode: (prefix: string, index: number) => `${prefix}_${String(index).padStart(4, '0')}`,
     generateUsername: (name: string) =>
-      name.toLowerCase().replace(/[^a-z0-9]/g, '.').replace(/\.+/g, '.').replace(/^\.|\.$/g, ''),
+      name.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '').replace(/[^a-z0-9]/g, '.').replace(/\.+/g, '.').replace(/^\.|\.$/g, ''),
     buildEmployee: vi.fn((data) => ({ built: true, ...data })),
   },
 }));
@@ -60,6 +61,21 @@ describe('suggestEmployeeCode', () => {
     expect(suggestEmployeeCode(['ADMIN', 'EMP_0001'])).toBe('EMP_0002');
     // Never fills a gap: EMP_0002 may belong to someone removed
     expect(suggestEmployeeCode(['EMP_0001', 'EMP_0003'])).toBe('EMP_0004');
+  });
+});
+
+describe('planEmployeeCodes (bulk import, #2456)', () => {
+  it('numbers past the highest code HRMS holds, not from the row', () => {
+    // The founder is EMP_0001; EMP_0007 may be someone removed.
+    expect(planEmployeeCodes(['EMP_0001', 'EMP_0007'], ['', ''])).toEqual(['EMP_0008', 'EMP_0009']);
+  });
+
+  it("keeps a row's own code and never repeats one the sheet gives", () => {
+    expect(planEmployeeCodes(['EMP_0001'], ['', 'EMP_0010', 'HR_7', ''])).toEqual(['EMP_0011', 'EMP_0010', 'HR_7', 'EMP_0012']);
+  });
+
+  it('starts at EMP_0001 on an empty workspace', () => {
+    expect(planEmployeeCodes([], [''])).toEqual(['EMP_0001']);
   });
 });
 

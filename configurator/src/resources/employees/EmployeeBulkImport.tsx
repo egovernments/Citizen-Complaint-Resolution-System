@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useGetList } from 'ra-core';
 import { Download } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -14,6 +14,7 @@ import type {
   Designation,
   Boundary,
 } from '@/api/types';
+import { listEmployees, planEmployeeCodes } from '@/onboarding/employees/employeesApi';
 import { useApp } from '../../App';
 
 type EmployeeBulkRow = EmployeeExcelRow & BulkRow;
@@ -238,8 +239,17 @@ export function EmployeeBulkImport() {
     [departments, designations, templateBoundaries, roles, mobileRules],
   );
 
+  // One code plan per run, read from HRMS when the upload starts (the panel passes a new rows array each run).
+  const codePlan = useRef<{ rows: EmployeeBulkRow[]; codes: Promise<string[]> } | null>(null);
   const createOne = useCallback(
-    async (row: EmployeeBulkRow, index: number) => {
+    async (row: EmployeeBulkRow, index: number, rows: EmployeeBulkRow[]) => {
+      if (codePlan.current?.rows !== rows) {
+        codePlan.current = {
+          rows,
+          codes: listEmployees(tenantId).then(({ codes }) => planEmployeeCodes(codes, rows.map((r) => r.employeeCode))),
+        };
+      }
+      const code = (await codePlan.current.codes)[index];
       const empRoles = row.roles
         ? row.roles
             .split(',')
@@ -268,7 +278,7 @@ export function EmployeeBulkImport() {
 
       const built = hrmsService.buildEmployee({
         tenantId,
-        code: row.employeeCode || hrmsService.generateEmployeeCode('EMP', index + 1),
+        code,
         name: row.name,
         userName: (row.userName && row.userName.trim()) || hrmsService.generateUsername(row.name),
         mobileNumber: row.mobileNumber,

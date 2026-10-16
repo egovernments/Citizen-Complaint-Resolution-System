@@ -66,8 +66,8 @@ export interface BulkImportPanelProps<Row extends BulkRow = BulkRow> {
   validateRow: (row: Row) => string[];
   /** Columns to render in the preview + completion tables. */
   columns: BulkColumn<Row>[];
-  /** Called once per valid row. Throw to mark the row failed. */
-  createOne: (row: Row, index: number) => Promise<void>;
+  /** Called once per valid row, with the run's valid rows (a new array each run). Throw to mark the row failed. */
+  createOne: (row: Row, index: number, rows: Row[]) => Promise<void>;
   /** Singular / plural noun for labels ("department" → "departments"). */
   entityLabel: { singular: string; plural: string };
   /** Noun for the code-style accept attribute: ".xlsx,.xls,.csv" by default. */
@@ -175,7 +175,7 @@ export function BulkImportPanel<Row extends BulkRow>({
       const row = valid[i];
       setProgressMsg(`Creating ${describeRow(row, columns)}…`);
       try {
-        await createOne(row, i);
+        await createOne(row, i, valid);
         setCreatedCount((n) => n + 1);
       } catch (err) {
         const msg =
