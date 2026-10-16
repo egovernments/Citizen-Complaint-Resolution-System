@@ -4,16 +4,20 @@ vi.mock('@/identity/api', () => ({
   updateMemberEmail: vi.fn(async () => ({ status: 'verification_sent' })),
 }));
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import * as XLSX from 'xlsx';
+import { parseEmployeeExcel } from '@/utils/excelParser';
 import { hrmsService } from '@/api';
 import type { Employee } from '@/api/types';
 import { linkMember, removeMember, updateMemberEmail } from '@/identity/api';
 import {
   addEmployee,
   applyEmployeeChanges,
+  codeProblem,
   listEmployees,
   removeEmployee,
   suggestEmployeeCode,
   updateEmployeeDetails,
+  withEmployeeCodes,
   type EmployeeChanges,
   type EmployeeOptions,
 } from './employeesApi';
@@ -29,7 +33,7 @@ vi.mock('@/api', () => ({
     // The real helpers, so the test covers the payload actually sent.
     generateEmployeeCode: (prefix: string, index: number) => `${prefix}_${String(index).padStart(4, '0')}`,
     generateUsername: (name: string) =>
-      name.toLowerCase().replace(/[^a-z0-9]/g, '.').replace(/\.+/g, '.').replace(/^\.|\.$/g, ''),
+      name.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '').replace(/[^a-z0-9]/g, '.').replace(/\.+/g, '.').replace(/^\.|\.$/g, ''),
     buildEmployee: vi.fn((data) => ({ built: true, ...data })),
   },
 }));
@@ -60,6 +64,49 @@ describe('suggestEmployeeCode', () => {
     expect(suggestEmployeeCode(['ADMIN', 'EMP_0001'])).toBe('EMP_0002');
     // Never fills a gap: EMP_0002 may belong to someone removed
     expect(suggestEmployeeCode(['EMP_0001', 'EMP_0003'])).toBe('EMP_0004');
+  });
+});
+
+describe('bulk import codes, through the real parser (#2456)', () => {
+  const sheet = (rows: Record<string, string>[]) => {
+    const wb = XLSX.utils.book_new();
+    const base = { name: 'Jane Kamau', mobileNumber: '712345678', department: 'ROADS', designation: 'ENGINEER' };
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows.map((row) => ({ ...base, ...row }))), 'Employee');
+    const { data, validation } = parseEmployeeExcel(wb);
+    expect(validation.errors).toEqual([]);
+    return data;
+  };
+  // The founder holds EMP_0001; EMP_0007 belongs to someone removed.
+  const hrms = new Map([
+    ['EMP_0001', { ...employee('EMP_0001'), user: { name: 'Anita Wanjiru', emailId: 'Anita@Example.org' } } as unknown as Employee],
+    ['EMP_0007', employee('EMP_0007', { isActive: false })],
+  ]);
+  const check = (rows: ReturnType<typeof sheet>) => {
+    const planned = withEmployeeCodes(rows, hrms);
+    return planned.map((row) => ({ code: row.employeeCode, problem: codeProblem(row, planned, hrms) }));
+  };
+
+  it('gives a code-less row the next free code past HRMS and the sheet', () => {
+    expect(check(sheet([{ emailId: 'a@example.org' }, { employeeCode: 'EMP_0010', emailId: 'b@example.org' }, { emailId: 'c@example.org' }]))).toEqual([
+      { code: 'EMP_0011', problem: null },
+      { code: 'EMP_0010', problem: null },
+      { code: 'EMP_0012', problem: null },
+    ]);
+  });
+
+  it('flags a given code HRMS holds for someone else', () => {
+    expect(check(sheet([{ employeeCode: 'EMP_0001', emailId: 'joseph@example.org' }]))).toEqual([
+      { code: 'EMP_0001', problem: { takenBy: 'Anita Wanjiru' } },
+    ]);
+  });
+
+  it('lets the same person through on their own code (email trimmed, any case)', () => {
+    expect(check(sheet([{ employeeCode: 'EMP_0001', emailId: ' anita@example.ORG ' }]))).toEqual([{ code: 'EMP_0001', problem: null }]);
+  });
+
+  it('flags a code on two rows of the sheet', () => {
+    expect(check(sheet([{ employeeCode: 'EMP_0020', emailId: 'a@example.org' }, { employeeCode: 'EMP_0020', emailId: 'b@example.org' }]))
+      .map((row) => row.problem)).toEqual([{ repeated: true }, { repeated: true }]);
   });
 });
 

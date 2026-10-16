@@ -289,6 +289,8 @@
 {"code": "app.onboarding.bulk_employees.boundary_ambiguous", "message": "Boundary name \"%{name}\" matches multiple boundaries — use the boundary code instead", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.bulk_employees.boundary_not_found", "message": "Boundary \"%{name}\" not found", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.bulk_employees.check_failures", "message": "Check the failure list below and retry the failed rows.", "module": "configurator-ui", "locale": "en_IN"},
+{"code": "app.onboarding.bulk_employees.code_repeated", "message": "%{code} is on more than one row", "module": "configurator-ui", "locale": "en_IN"},
+{"code": "app.onboarding.bulk_employees.code_taken", "message": "%{code} is already used by %{name}", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.bulk_employees.col_department", "message": "Department code", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.bulk_employees.col_designation", "message": "Designation code", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.bulk_employees.col_dob", "message": "Date of birth (YYYY-MM-DD), optional", "module": "configurator-ui", "locale": "en_IN"},

@@ -89,6 +89,17 @@ describe('hrmsService.buildEmployee — dob / dateOfAppointment are optional (eg
   });
 });
 
+describe('hrmsService.generateUsername', () => {
+  it('joins the name with dots, trimming stray ones', () => {
+    expect(hrmsService.generateUsername(' Anita  Wanjiru-Otieno ')).toBe('anita.wanjiru.otieno');
+  });
+
+  it('keeps the base letter of an accented one (#2456)', () => {
+    expect(hrmsService.generateUsername('José Müller')).toBe('jose.muller');
+    expect(hrmsService.generateUsername('Zoë Ñúñez')).toBe('zoe.nunez');
+  });
+});
+
 describe('hrmsService.createEmployeeRecord — every new employee can file complaints (egovernments/CCRS#2239)', () => {
   afterEach(() => vi.restoreAllMocks());
 

@@ -383,6 +383,9 @@ export const hrmsService = {
   generateUsername(name: string): string {
     return name
       .toLowerCase()
+      // Accented letters keep their base letter: "José" → "jose", not "jos.".
+      .normalize('NFD')
+      .replace(/\p{M}/gu, '')
       .replace(/[^a-z0-9]/g, '.')
       .replace(/\.+/g, '.')
       // Both ends: without the g flag only the first stray dot went, so a

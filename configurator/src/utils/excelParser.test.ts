@@ -195,6 +195,14 @@ describe('Employee dob is optional (egovernments/CCRS#1949)', () => {
     expect(data.map((e) => e.dob)).toEqual([undefined, undefined]);
   });
 
+  it('keeps a row without an employeeCode: the bulk imports number it (#2456)', () => {
+    const noCode: Record<string, unknown> = { ...baseRow };
+    delete noCode.employeeCode;
+    const { data, validation } = parseEmployeeExcel(makeWorkbook('Employee', [noCode]));
+    expect(validation.errors).toEqual([]);
+    expect(data.map((e) => e.employeeCode)).toEqual(['']);
+  });
+
   it('still parses a supplied dob', () => {
     const { data, validation } = parseEmployeeExcel(
       makeWorkbook('Employee', [{ ...baseRow, dob: '1990-05-14' }])
