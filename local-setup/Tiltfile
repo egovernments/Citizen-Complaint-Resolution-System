@@ -127,7 +127,11 @@ else:
     docker_compose(['./docker-compose.yml', './docker-compose.tilt.yml'])
 
 # ==================== Infrastructure ====================
-dc_resource('postgres-db', labels=['infrastructure'])
+# postgres-db waits for the telemetry sidecar so the sidecar is watching before the stack
+# (everything downstream of Postgres) comes up. Without this Tilt may schedule it last, and
+# `tilt ci` can exit before it has logged anything (the tilt-test telemetry check then fails).
+# Tilt treats it as ready once its container runs, so this adds seconds, not its healthcheck.
+dc_resource('postgres-db', labels=['infrastructure'], resource_deps=['telemetry'])
 dc_resource('pgbouncer', labels=['infrastructure'])
 dc_resource('redis', labels=['infrastructure'])
 dc_resource('redpanda', labels=['infrastructure'])

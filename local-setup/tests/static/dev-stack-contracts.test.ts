@@ -92,6 +92,12 @@ describe('Tilt builds the UI and PGR that Compose runs', () => {
     expect(fs.readFileSync(path.join(dbDir, 'Dockerfile'), 'utf8')).toMatch(/COPY \.\/migration\/main /);
   });
 
+  test('the telemetry sidecar is up before the stack it watches', () => {
+    // tilt-test asserts the sidecar logged and saw a container turn healthy. With no
+    // ordering, Tilt sometimes scheduled it last and `tilt ci` exited before it logged.
+    expect(code('Tiltfile')).toMatch(/dc_resource\('postgres-db',[^)]*resource_deps=\['telemetry'\]/);
+  });
+
   test('CI mode runs the compose pins as-is (no retagged copies to drift)', () => {
     // CI used to pull egovio/digit-ui:dev-ff0db90 while compose pinned digit-ui-esbuild.
     const tiltfile = read('Tiltfile');
