@@ -1,10 +1,11 @@
 import { LocalizationService } from "./Localization/service";
+import { tenantKeyPrefix } from "../../utils/tenantLabel";
 
 const ADMIN_CODE = ({ tenantId, hierarchyType }) => {
   if(Digit.Utils.getMultiRootTenant()){
     return hierarchyType.code;
   }else{
-  return tenantId.replace(".", "_").toUpperCase() + "_" + hierarchyType.code;
+  return tenantKeyPrefix(tenantId) + "_" + hierarchyType.code;
   }
 };
 
