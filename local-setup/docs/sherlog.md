@@ -15,3 +15,7 @@ option, cost, and what leaves the box: [Sherlog's standard](https://github.com/s
 3. Deploy. Sherlog runs from `/opt/digit/sherlog` as its own compose project (`/opt/digit/sherlog/sherlog.sh ps`).
 
 `enable_sherlog: false` stops it and removes its rules on the next deploy; its data is kept.
+
+Optional, with `sherlog_docker_diagnostics: true`: investigations may also read the containers' state (restarts,
+exit codes, OOM kills, health), last log lines and recent events, through Sherlog's read-only, redacted proxy. It
+mounts the Docker socket into a GET-only socket proxy that the investigating agent cannot reach directly.
