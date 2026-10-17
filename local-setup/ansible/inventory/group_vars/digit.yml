@@ -413,7 +413,7 @@ gatus_slack_webhook_url: ""
 # sends them. The model key and tokens are SECRETS: OpenBao.
 enable_sherlog: false
 sherlog_image: ghcr.io/singhalkarun/sherlog
-sherlog_version: "0.2.1"
+sherlog_version: "0.2.2"
 sherlog_mode: shadow
 sherlog_model_api_key: ""
 sherlog_model_provider: ""          # empty: Sherlog's default (openai)
@@ -424,4 +424,5 @@ sherlog_github_issues_token: ""
 sherlog_github_autofix: manual
 sherlog_alert_slack_webhook_url: ""   # set: critical/warning alerts (not log alerts) also go to Slack
 sherlog_deadman_url: ""               # set: Watchdog pings this dead man's switch (e.g. healthchecks.io)
+sherlog_docker_diagnostics: false     # true: investigations may read container state/logs/events (read-only, redacted)
 sherlog_overrides: {}                 # merged over sherlog/sherlog.yaml, e.g. {components: {logs: {threshold: 20}}}
