@@ -1,0 +1,4 @@
+# Written on the host by the deploy (docs/sherlog.md): Sherlog's bundle from its image, settings, rendered rules.
+*
+!sherlog.yaml
+!.gitignore

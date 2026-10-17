@@ -42,8 +42,12 @@ services:
       # Drop pseudo/virtual mounts and Docker's overlay layers so the
       # filesystem panels show real volumes, not per-container churn.
       - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|var/lib/docker/.+|rootfs/var/lib/docker/.+)($|/)
+      # Deploy markers (docs/sherlog.md): the playbook's last step writes deploy_timestamp_seconds here, so an
+      # investigation can answer "what changed before this alert?". Empty until Sherlog is on.
+      - --collector.textfile.directory=/textfile
     pid: host
     volumes:
+      - ./sherlog/textfile:/textfile:ro
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
       # rslave (node_exporter's documented recommendation) so mount points that
@@ -70,6 +74,38 @@ services:
   # Same conventions as node-exporter above: official Docker Hub image, no
   # published host port (Prometheus reaches it by DNS over egov-network), and
   # always layered by the Ansible deploy.
+  # Per-container CPU, memory, restarts and OOM kills, for Sherlog's pre-checks and its `cadvisor` alert component
+  # (docs/sherlog.md). Same tier as node-exporter. The tag is the one ccrs-telemetry runs with (>= 0.53 for Docker
+  # 29's containerd image store). No published port: Prometheus scrapes it on egov-network.
+  #
+  # Docker socket: read-only bind of the socket itself, not through docker-socket-proxy. That proxy is in the
+  # obs-logs profile and denies /info and /images, which cAdvisor calls to name containers; a second proxy would
+  # be more surface than the mount. cAdvisor only reads. Unprivileged: the mounts and /dev/kmsg (OOM events) are
+  # what it needs; it does not get the privileged flag upstream's quick-start uses.
+  cadvisor:
+    security_opt: ["no-new-privileges:true"]
+    image: ghcr.io/google/cadvisor:0.55.0
+    container_name: digit-cadvisor
+    profiles: [obs-metrics]
+    restart: unless-stopped
+    command:
+      - --docker_only=true
+      - --housekeeping_interval=30s
+      - --disable_metrics=advtcp,cpu_topology,cpuset,hugetlb,memory_numa,percpu,process,referenced_memory,resctrl,sched,tcp,udp
+    devices: ["/dev/kmsg"]
+    volumes:
+      - /:/rootfs:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    deploy:
+      resources:
+        limits:
+          memory: 192M
+    networks:
+      - egov-network
+
   postgres-exporter:
     # Hardening (review): match the base stack — no caps, no priv-escalation.
     security_opt: ["no-new-privileges:true"]
@@ -77,6 +113,9 @@ services:
     image: prometheuscommunity/postgres-exporter:v0.15.0
     container_name: digit-postgres-exporter
     restart: unless-stopped
+    # Statement statistics per query id (no query text) when host_vars postgres_stat_statements is on; the flag is
+    # rendered into .env as POSTGRES_STAT_STATEMENTS_FLAG.
+    command: ["${POSTGRES_STAT_STATEMENTS_FLAG:---no-collector.stat_statements}"]
     environment:
       # IMPORTANT: postgres-db, NOT postgres.
       # `postgres` is a network alias for PgBouncer in this stack; the database

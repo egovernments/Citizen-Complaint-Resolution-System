@@ -1,0 +1,25 @@
+# The components CCRS runs, declared to Sherlog (docs/sherlog.md). Sherlog owns the alert rules and the defaults;
+# list here only what CCRS runs and where it differs. Every component and option:
+# https://github.com/singhalkarun/sherlog/blob/main/docs/standards.md
+product: ccrs
+pack: digit
+components:
+  node: {}
+  cadvisor: {}        # container restarts, OOM kills, limits (docker-compose.monitoring.yml)
+  postgres: {}
+  redpanda: {}
+  kong: {}
+  jvm: {}
+  gatus: {}
+  prometheus: {}
+  services: {}
+  logs:
+    exclude_services: [loki, promtail]
+# Tenants with Keycloak add it through host_vars: sherlog_overrides: {components: {keycloak: {}}}
+
+# Approval-gated restarts (sherlog_actions): what a collaborator may have Sherlog restart by labelling the issue
+# sherlog-action:restart. Regexes on container names; the data stores are never on the list.
+actions:
+  restart:
+    allow: ["^digit-egov-.*", "^egov-.*", "^digit-pgr-services.*", "^digit-(inbox|mdms-backend|config-service|audit-service|user-preferences-service).*"]
+    deny: [".*(postgres|pgbouncer|redpanda|kafka|minio|elasticsearch|keycloak|openbao|mongo|redis).*"]

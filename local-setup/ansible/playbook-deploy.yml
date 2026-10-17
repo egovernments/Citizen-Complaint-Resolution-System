@@ -1427,6 +1427,7 @@
           dataloader: ../dataloader
           scripts:  ../scripts
           keycloak: ../keycloak
+          sherlog:  ../sherlog
 
     # ==================== Kong CORS origins (pin BEFORE up -d) ====================
     # The config sync above rsynced the repo's kong.yml, which ships
@@ -1549,6 +1550,56 @@
       register: prev_env
       failed_when: false
       no_log: true   # holds the entire previous .env (POSTGRES/MINIO/KC/GF secrets); -v would print it (Vinoth review)
+
+    # ==================== Sherlog: render the monitoring standard ====================
+    # Sherlog (docs/sherlog.md) runs beside the stack as its own compose project.
+    # Its files come from its image, pinned by sherlog_version: nothing of
+    # Sherlog's is copied into this repository, only CCRS's sherlog.yaml and its
+    # settings (templates/sherlog.env.j2). Prometheus and Loki mount
+    # {{ digit_dir }}/sherlog/rendered on every tenant; it is filled here, before
+    # "Start DIGIT stack", and emptied by `sherlog.sh uninstall` when the tenant
+    # turns Sherlog off. The containers start after the stack (they join its
+    # network): "Sherlog — start".
+    - name: "Sherlog — the commit being deployed (for the deploy marker)"
+      ansible.builtin.command: git -C {{ playbook_dir }} log -1 --format=%H%n%D
+      delegate_to: localhost
+      run_once: false
+      register: sherlog_commit
+      changed_when: false
+      failed_when: false
+      when: enable_sherlog | default(false)
+
+    - name: "Sherlog — its compose bundle for sherlog_version (from the image)"
+      ansible.builtin.command: >-
+        docker run --rm -u 0 -v {{ digit_dir }}/sherlog:/out
+        {{ sherlog_image }}:{{ sherlog_version }} python -m sherlog.bundle --out /out
+      changed_when: true
+      when: enable_sherlog | default(false)
+
+    - name: "Sherlog — settings (.env) and this tenant's overrides"
+      ansible.builtin.template:
+        src: "templates/{{ item.src }}"
+        dest: "{{ digit_dir }}/sherlog/{{ item.dest }}"
+        mode: "{{ item.mode }}"
+      loop:
+        - {src: sherlog.env.j2, dest: .env, mode: "0600"}           # holds the model key and tokens
+        - {src: sherlog-override.yaml.j2, dest: override.yaml, mode: "0644"}
+      when: enable_sherlog | default(false)
+
+    - name: "Sherlog — render the rules, Alertmanager config and investigation settings"
+      ansible.builtin.command: "{{ digit_dir }}/sherlog/sherlog.sh render"
+      changed_when: true
+      when: enable_sherlog | default(false)
+
+    - name: "Sherlog — off: stop it and remove its rules (no-op if it never ran)"
+      ansible.builtin.shell: |
+        [ -x {{ digit_dir }}/sherlog/sherlog.sh ] && [ -f {{ digit_dir }}/sherlog/.env ] || { echo NOCHANGE; exit 0; }
+        {{ digit_dir }}/sherlog/sherlog.sh uninstall
+      args:
+        executable: /bin/bash
+      register: sherlog_uninstall
+      changed_when: "'NOCHANGE' not in sherlog_uninstall.stdout"
+      when: not (enable_sherlog | default(false))
 
     - name: Write per-tenant compose .env
       template:
@@ -2978,6 +3029,35 @@
         | map(attribute='stdout_lines') | flatten
         | select('search', 'otel-collector-config')
         | list | length > 0
+
+    # Same failure mode as the collector (#1683): Loki reads -config.file once at
+    # startup. Its config gained the ruler section (Sherlog's log alerts), and a
+    # routine redeploy does not recreate Loki, so restart it when loki-config.yaml
+    # itself changed. The rules are NOT gated here: Loki's ruler re-reads its rule
+    # folder on its own.
+    - name: "Loki — restart when its config changed"
+      ansible.builtin.shell: |
+        set -e
+        if [ -z "$(docker ps -q -f name='^digit-loki$')" ]; then
+          echo "NOCHANGE loki not running"
+          exit 0
+        fi
+        docker restart digit-loki
+      args:
+        executable: /bin/bash
+      register: loki_restart
+      changed_when: "'NOCHANGE' not in loki_restart.stdout"
+      when: >-
+        config_sync.results | default([])
+        | selectattr('item.key', 'equalto', 'otel')
+        | map(attribute='stdout_lines') | flatten
+        | select('search', 'loki-config')
+        | list | length > 0
+
+    - name: "Sherlog — start (after the stack: it joins the stack's network)"
+      ansible.builtin.command: "{{ digit_dir }}/sherlog/sherlog.sh up -d"
+      changed_when: true
+      when: enable_sherlog | default(false)
 
     # ==================== Wait for Persister (Kafka consumer) ====================
     - name: Wait for egov-persister to be healthy
@@ -6967,6 +7047,43 @@
       when:
         - run_ci_tests | default(false)
         - xlsx_rc|int != 0 or dl_rc|int != 0 or pw_rc|int != 0
+
+    # ==================== Optional scrape targets (file_sd) and pg_stat_statements ====================
+    # Prometheus scrapes otel/targets/*.json; a tenant with Keycloak gets keycloak.json, one without gets nothing (no
+    # failing scrape, no TargetDown). The exporter's stat_statements collector needs the extension in the database.
+    - name: "Prometheus — Keycloak scrape target (enable_keycloak)"
+      ansible.builtin.copy:
+        dest: "{{ digit_dir }}/otel/targets/keycloak.json"
+        content: '[{"targets": ["keycloak:8080"], "labels": {"job": "keycloak"}}]'
+        mode: "0644"
+      when: enable_keycloak | default(false)
+
+    - name: "Prometheus — no Keycloak scrape target when Keycloak is off"
+      ansible.builtin.file:
+        path: "{{ digit_dir }}/otel/targets/keycloak.json"
+        state: absent
+      when: not (enable_keycloak | default(false))
+
+    - name: "Postgres — pg_stat_statements extension (postgres_stat_statements)"
+      ansible.builtin.command: docker exec docker-postgres psql -U egov -d egov -tAc "CREATE EXTENSION IF NOT EXISTS pg_stat_statements"
+      register: pgss
+      changed_when: "'CREATE EXTENSION' in pgss.stdout"
+      failed_when: pgss.rc != 0 and 'already exists' not in pgss.stderr
+      when: postgres_stat_statements | default(false)
+
+    # ==================== Sherlog: record this deploy ====================
+    # Last, so the marker means "this deploy finished". deploy_timestamp_seconds lands in node-exporter's textfile
+    # directory; Sherlog's pre-checks read it ("what changed before this alert?") and its verifier names the deploy
+    # an alert resolved after (docs/sherlog.md).
+    - name: "Sherlog — record this deploy for the pre-checks and the verifier"
+      ansible.builtin.command: >-
+        {{ digit_dir }}/sherlog/sherlog-deploy-mark --dir {{ digit_dir }}/sherlog/textfile
+        --repo egovernments/Citizen-Complaint-Resolution-System
+        --sha {{ (sherlog_commit.stdout_lines | default(['unknown']))[0] }}
+        --ref {{ ((sherlog_commit.stdout_lines | default(['', '']))[1] | default('')) | regex_replace('^HEAD -> ', '') | regex_replace(',.*$', '') | default('unknown', true) }}
+        --deployment {{ inventory_hostname }} --product ccrs
+      changed_when: true
+      when: enable_sherlog | default(false)
 
   handlers:
     - name: Reload nginx

@@ -1,0 +1,2 @@
+# This tenant's differences from local-setup/sherlog/sherlog.yaml (host_vars sherlog_overrides).
+{{ sherlog_overrides | to_nice_yaml if sherlog_overrides else '{}' }}
