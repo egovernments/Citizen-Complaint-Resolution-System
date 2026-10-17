@@ -109,6 +109,10 @@ class DryRunError(RuntimeError):
     """Expected validation or execution failure."""
 
 
+class ResolutionPending(DryRunError):
+    """The persistent workspace still needs an operator action."""
+
+
 def run(
     args: list[str],
     *,
@@ -521,6 +525,21 @@ def replace_tree(source: Path, destination: Path) -> None:
     shutil.copytree(source, destination, dirs_exist_ok=True, symlinks=True)
 
 
+def copy_candidate(repository: Path, candidate: Path) -> None:
+    """Copy a rebased worktree without its Git metadata."""
+    candidate.mkdir()
+    for child in repository.iterdir():
+        if child.name == ".git":
+            continue
+        destination = candidate / child.name
+        if child.is_dir() and not child.is_symlink():
+            shutil.copytree(child, destination, symlinks=True)
+        elif child.is_symlink():
+            os.symlink(os.readlink(child), destination)
+        else:
+            shutil.copy2(child, destination)
+
+
 def git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess:
     return run(
         [
@@ -649,20 +668,58 @@ def rebase_local_changes(
     )
 
     rebased_sha: str | None = None
+    resolution_workspace: str | None = None
     if not conflicts and rebase_result.returncode == 0:
         rebased_sha = git(rebase_repo, "rev-parse", "HEAD").stdout.strip()
         candidate = output / "candidate"
-        candidate.mkdir()
-        for child in rebase_repo.iterdir():
-            if child.name == ".git":
-                continue
-            destination = candidate / child.name
-            if child.is_dir() and not child.is_symlink():
-                shutil.copytree(child, destination, symlinks=True)
-            elif child.is_symlink():
-                os.symlink(os.readlink(child), destination)
-            else:
-                shutil.copy2(child, destination)
+        copy_candidate(rebase_repo, candidate)
+    elif conflicts:
+        # Git may map a local path onto its renamed target path while applying
+        # the commit. Record the paths Git actually populated in the index so
+        # resume can allow those legitimate translations without allowing
+        # arbitrary additional edits.
+        allowed_resolution_paths = sorted(
+            set(conflicts)
+            | {
+                line
+                for line in git(
+                    rebase_repo, "diff", "--cached", "--name-only", check=False
+                ).stdout.splitlines()
+                if line
+            }
+        )
+        resolution_root = output / "resolution-workspace"
+        resolution_root.mkdir(mode=0o700)
+        resolution_repo = resolution_root / "repository"
+        shutil.move(str(rebase_repo), resolution_repo)
+        state = {
+            "version": 2,
+            "status": "conflicts",
+            "conflicts": details,
+            "allowed_resolution_paths": allowed_resolution_paths,
+            "local_changes": [
+                {"status": status_code, "path": path}
+                for status_code, path in changes
+            ],
+            "base_commit": base_sha,
+            "local_commit": local_sha,
+            "target_commit": target_sha,
+        }
+        (resolution_root / "state.json").write_text(
+            json.dumps(state, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        (resolution_root / "README.md").write_text(
+            "# DIGIT conflict resolution workspace\n\n"
+            "This repository contains sanitized configuration only. Live "
+            "`/opt/digit` was not modified.\n\n"
+            "1. Run `git status` in `repository/`.\n"
+            "2. Resolve every unmerged path.\n"
+            "3. Stage each resolution with `git add` or `git rm`.\n"
+            "4. Run the analyser with `--resume-workspace` pointing to this "
+            "directory. Do not run `git rebase --continue` yourself.\n",
+            encoding="utf-8",
+        )
+        resolution_workspace = str(resolution_root)
     elif not conflicts:
         raise DryRunError(
             "rebase failed without reporting conflicted paths: "
@@ -680,6 +737,215 @@ def rebase_local_changes(
         "target_commit": target_sha,
         "rebased_commit": rebased_sha,
         "rebase_stderr": (rebase_result.stderr or "").strip(),
+        "resolution_workspace": resolution_workspace,
+    }
+
+
+def read_json_object(path: Path) -> dict[str, Any]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise DryRunError(f"cannot read workspace metadata {path}: {exc}") from exc
+    if not isinstance(value, dict):
+        raise DryRunError(f"workspace metadata is not an object: {path}")
+    return value
+
+
+def resume_resolution_workspace(
+    workspace: Path,
+    *,
+    acknowledge_secret_review: bool = False,
+) -> dict[str, Any]:
+    """Validate operator resolutions, continue the rebase, and emit a candidate."""
+    workspace = workspace.resolve()
+    state_path = workspace / "state.json"
+    repository = workspace / "repository"
+    output = workspace.parent
+    if not state_path.is_file() or not (repository / ".git").exists():
+        raise DryRunError(
+            f"not a DIGIT resolution workspace: {workspace}"
+        )
+    state = read_json_object(state_path)
+    candidate = output / "candidate"
+    if state.get("status") == "completed":
+        if not candidate.is_dir():
+            raise DryRunError("workspace says completed but candidate is missing")
+        return {
+            "candidate": str(candidate),
+            "rebased_commit": state.get("rebased_commit"),
+            "already_completed": True,
+        }
+
+    unresolved = [
+        line
+        for line in git(
+            repository, "diff", "--name-only", "--diff-filter=U", check=False
+        ).stdout.splitlines()
+        if line
+    ]
+    if unresolved:
+        raise ResolutionPending(
+            "unresolved conflicts remain: " + ", ".join(unresolved)
+        )
+
+    status_lines = [
+        line
+        for line in git(repository, "status", "--porcelain=v1").stdout.splitlines()
+        if line
+    ]
+    unstaged = [
+        line[3:]
+        for line in status_lines
+        if line.startswith("??") or (len(line) > 1 and line[1] != " ")
+    ]
+    if unstaged:
+        raise ResolutionPending(
+            "resolved files must be staged with git add/git rm: "
+            + ", ".join(unstaged)
+        )
+
+    original_conflicts = [item["path"] for item in state.get("conflicts", [])]
+    marker_paths: list[str] = []
+    for relative in original_conflicts:
+        path = repository / Path(*PurePosixPath(relative).parts)
+        if not path.is_file() or is_binary_bytes(path.read_bytes()):
+            continue
+        text_value = path.read_text(encoding="utf-8")
+        if re.search(r"(?m)^(<<<<<<< |=======\s*$|>>>>>>> )", text_value):
+            marker_paths.append(relative)
+    if marker_paths:
+        raise ResolutionPending(
+            "conflict markers remain in: " + ", ".join(marker_paths)
+        )
+
+    allowed_paths = set(state.get("allowed_resolution_paths", []))
+    if not allowed_paths:
+        # Backward compatibility for workspaces created before target-side
+        # rename translations were recorded explicitly.
+        allowed_paths = {item["path"] for item in state.get("local_changes", [])}
+    staged_paths = {
+        line
+        for line in git(repository, "diff", "--cached", "--name-only").stdout.splitlines()
+        if line
+    }
+    unexpected = sorted(staged_paths - allowed_paths)
+    if unexpected:
+        raise ResolutionPending(
+            "workspace contains changes outside the detected local-change set: "
+            + ", ".join(unexpected)
+        )
+
+    report_path = output / "report.json"
+    manifest_path = output / "run-manifest.json"
+    report = read_json_object(report_path)
+    manifest = read_json_object(manifest_path)
+    blocker_count = int(report.get("secrets", {}).get("blocker_count", 0))
+    if blocker_count and not acknowledge_secret_review:
+        raise ResolutionPending(
+            f"{blocker_count} secret finding(s) still require review; rerun with "
+            "--acknowledge-secret-review only after confirming runtime secrets "
+            "will be restored through the deployment secret mechanism"
+        )
+
+    _, unsafe_values = scan_tree_secrets(repository, secrets.token_bytes(32))
+    if unsafe_values:
+        raise ResolutionPending(
+            f"resolution workspace contains {len(unsafe_values)} unredacted "
+            "secret-like value(s); replace them with <REDACTED> before resuming"
+        )
+
+    rebase_active = git(
+        repository, "rev-parse", "--verify", "REBASE_HEAD", check=False
+    ).returncode == 0
+    if rebase_active:
+        rebase_head = git(
+            repository, "rev-parse", "--verify", "REBASE_HEAD"
+        ).stdout.strip()
+        committed = git(
+            repository,
+            "commit",
+            "-q",
+            "-C",
+            rebase_head,
+            check=False,
+        )
+        if committed.returncode != 0:
+            raise DryRunError(
+                "could not commit staged conflict resolutions: "
+                + (committed.stderr or committed.stdout).strip()
+            )
+        continued = git(
+            repository,
+            "rebase",
+            "--continue",
+            check=False,
+        )
+        if continued.returncode != 0:
+            remaining = [
+                line
+                for line in git(
+                    repository,
+                    "diff",
+                    "--name-only",
+                    "--diff-filter=U",
+                    check=False,
+                ).stdout.splitlines()
+                if line
+            ]
+            if remaining:
+                raise ResolutionPending(
+                    "rebase exposed additional conflicts: " + ", ".join(remaining)
+                )
+            raise DryRunError(
+                "git rebase --continue failed: "
+                + (continued.stderr or continued.stdout).strip()
+            )
+    elif status_lines:
+        raise DryRunError(
+            "workspace has staged changes but Git no longer has an active rebase"
+        )
+
+    final_status = git(repository, "status", "--porcelain=v1").stdout.strip()
+    if final_status:
+        raise DryRunError("rebased workspace is not clean after resume")
+    rebased_commit = git(repository, "rev-parse", "HEAD").stdout.strip()
+    if rebased_commit == state.get("target_commit"):
+        raise DryRunError("resume did not create the rebased local-change commit")
+
+    if candidate.exists():
+        raise DryRunError(f"candidate already exists: {candidate}")
+    copy_candidate(repository, candidate)
+
+    original_details = report["rebase"].get("conflicts", [])
+    report["status"] = "READY"
+    report["rebase"]["original_conflicts"] = original_details
+    report["rebase"]["conflicts"] = []
+    report["rebase"]["rebased_commit"] = rebased_commit
+    report["resolution"] = {
+        "workspace": str(workspace),
+        "resolved_conflicts": original_conflicts,
+        "secret_review_acknowledged": bool(blocker_count),
+    }
+    manifest["candidate_created"] = True
+    manifest["resolution_workspace"] = str(workspace)
+    manifest["resolved_conflicts"] = original_conflicts
+    manifest["secret_review_acknowledged"] = bool(blocker_count)
+    manifest["deployment_performed"] = False
+    manifest_path.write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    write_report(output, report)
+
+    state["status"] = "completed"
+    state["rebased_commit"] = rebased_commit
+    state["completed_at"] = dt.datetime.now(dt.timezone.utc).isoformat()
+    state_path.write_text(
+        json.dumps(state, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    return {
+        "candidate": str(candidate),
+        "rebased_commit": rebased_commit,
+        "already_completed": False,
     }
 
 
@@ -961,6 +1227,20 @@ def write_report(output: Path, report: dict[str, Any]) -> None:
         lines.extend(["## Configuration conflicts", ""])
         lines.extend(f"- `{item['path']}` ({item['kind']})" for item in conflicts)
         lines.append("")
+    if report.get("resolution"):
+        resolution = report["resolution"]
+        lines.extend(
+            [
+                "## Resolution",
+                "",
+                f"- Workspace: `{resolution['workspace']}`",
+                "- Resolved conflicts: "
+                f"**{len(resolution['resolved_conflicts'])}**",
+                "- Secret review acknowledged: "
+                f"**{resolution['secret_review_acknowledged']}**",
+                "",
+            ]
+        )
     if secret_findings["findings"]:
         lines.extend(["## Secret findings", ""])
         lines.extend(
@@ -1001,13 +1281,23 @@ def create_output(parent: Path) -> Path:
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--repo", required=True, type=Path)
+    parser.add_argument("--repo", type=Path)
     parser.add_argument("--base-ref", default="v2.12-beta")
     parser.add_argument("--target-ref", default="master")
-    parser.add_argument("--tenant", required=True)
-    parser.add_argument("--tenant-vars", required=True, type=Path)
-    parser.add_argument("--backup", required=True, type=Path)
-    parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--tenant")
+    parser.add_argument("--tenant-vars", type=Path)
+    parser.add_argument("--backup", type=Path)
+    parser.add_argument("--output", type=Path)
+    parser.add_argument(
+        "--resume-workspace",
+        type=Path,
+        help="resume a previously created persistent conflict workspace",
+    )
+    parser.add_argument(
+        "--acknowledge-secret-review",
+        action="store_true",
+        help="confirm reviewed secret findings remain redacted and will be restored securely",
+    )
     parser.add_argument(
         "--base-override",
         action="append",
@@ -1022,12 +1312,38 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         metavar="GLOB",
         help="additional PurePath.match glob excluded from all compared trees",
     )
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if args.resume_workspace:
+        return args
+    missing = [
+        option
+        for option, value in (
+            ("--repo", args.repo),
+            ("--tenant", args.tenant),
+            ("--tenant-vars", args.tenant_vars),
+            ("--backup", args.backup),
+            ("--output", args.output),
+        )
+        if value is None
+    ]
+    if missing:
+        parser.error("the following arguments are required: " + ", ".join(missing))
+    if args.acknowledge_secret_review:
+        parser.error("--acknowledge-secret-review is valid only with --resume-workspace")
+    return args
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     try:
+        if args.resume_workspace:
+            result = resume_resolution_workspace(
+                args.resume_workspace,
+                acknowledge_secret_review=args.acknowledge_secret_review,
+            )
+            print("resolution status: READY")
+            print(f"candidate: {result['candidate']}")
+            return 0
         repo = args.repo.resolve()
         if not (repo / ".git").exists():
             raise DryRunError(f"not a Git checkout: {repo}")
@@ -1161,6 +1477,7 @@ def main(argv: list[str] | None = None) -> int:
                 "excluded_patterns": [*EXCLUDED_PATTERNS, *extra_excludes],
                 "candidate_created": not blocked,
                 "deployment_performed": False,
+                "resolution_workspace": rebase["resolution_workspace"],
             }
             (output / "run-manifest.json").write_text(
                 json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
@@ -1201,6 +1518,16 @@ def main(argv: list[str] | None = None) -> int:
         print(f"dry-run status: {report['status']}")
         print(f"report: {output / 'report.md'}")
         if blocked:
+            if rebase["resolution_workspace"]:
+                print(
+                    "resolution workspace: "
+                    f"{rebase['resolution_workspace']}"
+                )
+                print(
+                    "resume after resolving and staging every conflict: "
+                    "python3 local-setup/scripts/upgrade_dry_run.py "
+                    f"--resume-workspace {rebase['resolution_workspace']}"
+                )
             conflict_paths = [item["path"] for item in rebase["conflicts"]]
             if conflict_paths:
                 print(
@@ -1215,6 +1542,9 @@ def main(argv: list[str] | None = None) -> int:
                     file=sys.stderr,
                 )
         return 2 if blocked else 0
+    except ResolutionPending as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
     except DryRunError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1

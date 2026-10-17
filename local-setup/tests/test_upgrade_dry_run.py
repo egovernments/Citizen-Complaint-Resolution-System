@@ -294,6 +294,105 @@ class RebaseTests(unittest.TestCase):
         self.assertEqual("config", result["conflicts"][0]["path"])
         self.assertIn("<<<<<<<", (output / "conflicts/config").read_text())
         self.assertFalse((output / "candidate").exists())
+        workspace = output / "resolution-workspace"
+        self.assertEqual(str(workspace), result["resolution_workspace"])
+        self.assertTrue((workspace / "repository/.git").exists())
+        state = json.loads((workspace / "state.json").read_text())
+        self.assertEqual(2, state["version"])
+        self.assertIn("config", state["allowed_resolution_paths"])
+        self.assertIn(
+            "config",
+            dry.git(
+                workspace / "repository",
+                "diff",
+                "--name-only",
+                "--diff-filter=U",
+            ).stdout,
+        )
+
+    def test_resume_requires_resolution_then_creates_candidate(self):
+        temp, _, output, result = self.rebase(
+            {"config": "value=old\n"},
+            {"config": "value=local\n"},
+            {"config": "value=target\n"},
+        )
+        self.addCleanup(temp.cleanup)
+        workspace = output / "resolution-workspace"
+        with self.assertRaises(dry.ResolutionPending):
+            dry.resume_resolution_workspace(workspace)
+
+        repository = workspace / "repository"
+        dry.git(repository, "checkout", "--theirs", "--", "config")
+        dry.git(repository, "add", "config")
+        report = {
+            "status": "BLOCKED",
+            "base_ref": "old",
+            "base_commit": "a" * 40,
+            "target_ref": "new",
+            "target_commit": "b" * 40,
+            "rebase": result,
+            "secrets": {
+                "blocked": False,
+                "blocker_count": 0,
+                "warning_count": 0,
+                "findings": [],
+            },
+            "output": str(output),
+        }
+        (output / "report.json").write_text(json.dumps(report))
+        (output / "run-manifest.json").write_text(
+            json.dumps({"candidate_created": False, "deployment_performed": False})
+        )
+
+        resumed = dry.resume_resolution_workspace(workspace)
+        self.assertFalse(resumed["already_completed"])
+        self.assertEqual(
+            "value=local\n", (output / "candidate/config").read_text()
+        )
+        final_report = json.loads((output / "report.json").read_text())
+        self.assertEqual("READY", final_report["status"])
+        self.assertEqual([], final_report["rebase"]["conflicts"])
+        self.assertEqual(1, len(final_report["rebase"]["original_conflicts"]))
+        self.assertFalse((output / "candidate/.git").exists())
+
+    def test_resume_requires_explicit_secret_review_acknowledgement(self):
+        temp, _, output, result = self.rebase(
+            {"config": "value=old\n"},
+            {"config": "value=local\n"},
+            {"config": "value=target\n"},
+        )
+        self.addCleanup(temp.cleanup)
+        workspace = output / "resolution-workspace"
+        repository = workspace / "repository"
+        dry.git(repository, "checkout", "--theirs", "--", "config")
+        dry.git(repository, "add", "config")
+        report = {
+            "status": "BLOCKED",
+            "base_ref": "old",
+            "base_commit": "a" * 40,
+            "target_ref": "new",
+            "target_commit": "b" * 40,
+            "rebase": result,
+            "secrets": {
+                "blocked": True,
+                "blocker_count": 1,
+                "warning_count": 0,
+                "findings": [],
+            },
+            "output": str(output),
+        }
+        (output / "report.json").write_text(json.dumps(report))
+        (output / "run-manifest.json").write_text(
+            json.dumps({"candidate_created": False, "deployment_performed": False})
+        )
+        with self.assertRaises(dry.ResolutionPending):
+            dry.resume_resolution_workspace(workspace)
+        resumed = dry.resume_resolution_workspace(
+            workspace, acknowledge_secret_review=True
+        )
+        self.assertTrue(Path(resumed["candidate"]).is_dir())
+        manifest = json.loads((output / "run-manifest.json").read_text())
+        self.assertTrue(manifest["secret_review_acknowledged"])
 
     def test_add_delete_and_binary_change_are_bundled(self):
         temp, _, output, result = self.rebase(
