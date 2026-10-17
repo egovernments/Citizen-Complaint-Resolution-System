@@ -1306,15 +1306,6 @@
         src: ../docker-compose.matomo.yml
         dest: "{{ digit_dir }}/docker-compose.matomo.yml"
 
-    # Sherlog overlay (alerting to Sherlog's monitoring standard + automatic
-    # root-cause analysis). Copied and layered ALWAYS, like Matomo: its services
-    # carry `profiles: [sherlog]`, so the -f flag costs nothing until
-    # `enable_sherlog: true` selects them. See docker-compose.sherlog.yml.
-    - name: Copy Sherlog overlay
-      copy:
-        src: ../docker-compose.sherlog.yml
-        dest: "{{ digit_dir }}/docker-compose.sherlog.yml"
-
     # Per-tenant compose overlay convention. If a file named
     # local-setup/docker-compose.<inventory_hostname>.yml exists on the
     # controller, copy it to the target and include it in every compose
@@ -1561,74 +1552,44 @@
       no_log: true   # holds the entire previous .env (POSTGRES/MINIO/KC/GF secrets); -v would print it (Vinoth review)
 
     # ==================== Sherlog: render the monitoring standard ====================
-    # Prometheus (rule_files) and Loki (ruler) mount {{ digit_dir }}/sherlog/rendered
-    # on every tenant; this fills it when enable_sherlog is on and empties it when
-    # off, so turning Sherlog off also removes its rules and Alertmanager target.
-    #
-    # The rules are not in this repository: sherlog/sherlog.yaml declares which
-    # components CCRS runs, and the Sherlog image (pinned by sherlog_version)
-    # renders the rules for them from its maintained upstream rule sets. A
-    # tenant's sherlog_overrides are merged on top. Rendering runs before
-    # "Start DIGIT stack", so Prometheus and Loki come up with the rules; on a
-    # redeploy the SIGHUP reload (#1608) and Loki's ruler polling pick them up.
-    - name: "Sherlog — rendered/ and secrets/ folders (owned by the image's user 10001)"
-      ansible.builtin.file:
-        path: "{{ digit_dir }}/sherlog/{{ item.path }}"
-        state: directory
-        owner: "10001"
-        mode: "{{ item.mode }}"
-      loop:
-        - {path: rendered, mode: "0755"}
-        - {path: rendered/prometheus, mode: "0755"}
-        - {path: rendered/loki, mode: "0755"}
-        - {path: secrets, mode: "0755"}
-
-    - name: "Sherlog — this tenant's overrides (sherlog_overrides; Slack and dead man's switch follow their secrets)"
-      ansible.builtin.copy:
-        dest: "{{ digit_dir }}/sherlog/override.yaml"
-        mode: "0644"
-        content: >-
-          {{ (sherlog_overrides | default({}))
-             | combine({'notify': {'slack': (sherlog_alert_slack_webhook_url | default('') | length > 0),
-                                   'deadman': (sherlog_deadman_url | default('') | length > 0)}}, recursive=True)
-             | to_nice_yaml }}
-      when: enable_sherlog | default(false)
-
-    # Receiver secrets as files: Alertmanager reads api_url_file / url_file, so
-    # the URLs never appear in its config. Readable by the Alertmanager user.
-    - name: "Sherlog — Alertmanager receiver secrets"
-      ansible.builtin.copy:
-        dest: "{{ digit_dir }}/sherlog/secrets/{{ item.name }}"
-        content: "{{ item.value }}"
-        mode: "0444"
-      loop:
-        - {name: alert_slack_webhook_url, value: "{{ sherlog_alert_slack_webhook_url | default('') }}"}
-        - {name: deadman_url, value: "{{ sherlog_deadman_url | default('') }}"}
-      no_log: true
-      when: enable_sherlog | default(false)
-
-    - name: "Sherlog — render the rules, Alertmanager config and investigation settings"
+    # Sherlog (docs/sherlog.md) runs beside the stack as its own compose project.
+    # Its files come from its image, pinned by sherlog_version: nothing of
+    # Sherlog's is copied into this repository, only CCRS's sherlog.yaml and its
+    # settings (templates/sherlog.env.j2). Prometheus and Loki mount
+    # {{ digit_dir }}/sherlog/rendered on every tenant; it is filled here, before
+    # "Start DIGIT stack", and emptied by `sherlog.sh uninstall` when the tenant
+    # turns Sherlog off. The containers start after the stack (they join its
+    # network): "Sherlog — start".
+    - name: "Sherlog — its compose bundle for sherlog_version (from the image)"
       ansible.builtin.command: >-
-        docker run --rm -u 10001 -v {{ digit_dir }}/sherlog:/work
-        {{ sherlog_image | default('ghcr.io/singhalkarun/sherlog') }}:{{ sherlog_version | default('0.2.0') }}
-        python -m sherlog.standards render --config /work/sherlog.yaml --override /work/override.yaml --out /work/rendered
-      register: sherlog_render
+        docker run --rm -u 0 -v {{ digit_dir }}/sherlog:/out
+        {{ sherlog_image }}:{{ sherlog_version }} python -m sherlog.bundle --out /out
       changed_when: true
       when: enable_sherlog | default(false)
 
-    - name: "Sherlog — Prometheus's Alertmanager target (file_sd, only while Sherlog runs)"
-      ansible.builtin.copy:
-        dest: "{{ digit_dir }}/sherlog/rendered/alertmanagers.json"
-        content: '[{"targets": ["sherlog-alertmanager:9093"]}]'
-        mode: "0644"
+    - name: "Sherlog — settings (.env) and this tenant's overrides"
+      ansible.builtin.template:
+        src: "templates/{{ item.src }}"
+        dest: "{{ digit_dir }}/sherlog/{{ item.dest }}"
+        mode: "{{ item.mode }}"
+      loop:
+        - {src: sherlog.env.j2, dest: .env, mode: "0600"}           # holds the model key and tokens
+        - {src: sherlog-override.yaml.j2, dest: override.yaml, mode: "0644"}
       when: enable_sherlog | default(false)
 
-    - name: "Sherlog — off: remove its rules and Alertmanager target"
+    - name: "Sherlog — render the rules, Alertmanager config and investigation settings"
+      ansible.builtin.command: "{{ digit_dir }}/sherlog/sherlog.sh render"
+      changed_when: true
+      when: enable_sherlog | default(false)
+
+    - name: "Sherlog — off: stop it and remove its rules (no-op if it never ran)"
       ansible.builtin.shell: |
-        cd {{ digit_dir }}/sherlog/rendered && rm -f prometheus/*.yaml loki/*.yaml alertmanagers.json
+        [ -x {{ digit_dir }}/sherlog/sherlog.sh ] && [ -f {{ digit_dir }}/sherlog/.env ] || { echo NOCHANGE; exit 0; }
+        {{ digit_dir }}/sherlog/sherlog.sh uninstall
       args:
         executable: /bin/bash
-      changed_when: false
+      register: sherlog_uninstall
+      changed_when: "'NOCHANGE' not in sherlog_uninstall.stdout"
       when: not (enable_sherlog | default(false))
 
     - name: Write per-tenant compose .env
@@ -1952,7 +1913,6 @@
               + (['keycloak']      if enable_keycloak      | default(false) else [])
               + (['otp']           if enable_otp_services  | default(false) else [])
               + (['matomo']        if enable_matomo        | default(false) else [])
-              + (['sherlog']       if enable_sherlog       | default(false) else [])
               + _obs_profiles
             ) | join(',')
           }}
@@ -1967,7 +1927,7 @@
     # The migration overlay is layered ALWAYS (see "Copy DB-migration overlay"):
     # it is the migration model, not an opt-in extra. It must come BEFORE the
     # per-tenant overlay so a tenant can still override a migrator if it has to.
-    - name: "Compute compose -f flags (fast-path + migrations + monitoring + matomo + sherlog + per-tenant overlay)"
+    - name: "Compute compose -f flags (fast-path + migrations + monitoring + matomo + per-tenant overlay)"
       ansible.builtin.set_fact:
         compose_files: >-
           {{
@@ -1976,7 +1936,6 @@
             ' -f docker-compose.migrations.yml' +
             ' -f docker-compose.monitoring.yml' +
             ' -f docker-compose.matomo.yml' +
-            ' -f docker-compose.sherlog.yml' +
             (' -f docker-compose.' ~ inventory_hostname ~ '.yml' if per_tenant_overlay.stat.exists else '')
           }}
 
@@ -3085,6 +3044,11 @@
         | map(attribute='stdout_lines') | flatten
         | select('search', 'loki-config')
         | list | length > 0
+
+    - name: "Sherlog — start (after the stack: it joins the stack's network)"
+      ansible.builtin.command: "{{ digit_dir }}/sherlog/sherlog.sh up -d"
+      changed_when: true
+      when: enable_sherlog | default(false)
 
     # ==================== Wait for Persister (Kafka consumer) ====================
     - name: Wait for egov-persister to be healthy

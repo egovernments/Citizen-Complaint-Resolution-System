@@ -274,7 +274,7 @@ services:
       # which is Prometheus's documented equivalent and has no HTTP surface.
     volumes:
       - ./otel/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      # Sherlog's rendered alert rules and Alertmanager target (docker-compose.sherlog.yml); empty when it is off.
+      # Sherlog's rendered alert rules and Alertmanager target (docs/sherlog.md); empty when it is off.
       - ./sherlog/rendered:/etc/prometheus/sherlog:ro
       - prometheus_data:/prometheus
     ports:
@@ -2140,7 +2140,7 @@ services:
     command: ["-config.file=/etc/loki/config.yaml"]
     volumes:
       - ./otel/loki-config.yaml:/etc/loki/config.yaml:ro
-      # Sherlog's rendered log alert rules (docker-compose.sherlog.yml); empty when it is off.
+      # Sherlog's rendered log alert rules (docs/sherlog.md); empty when it is off.
       - ./sherlog/rendered/loki:/etc/loki/rules/fake:ro
       - loki_data:/loki
     ports:

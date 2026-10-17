@@ -406,20 +406,20 @@ digit_ui_bundle_image: "egovio/digit-ui-esbuild:2.12.1-7a38661"
 # OpenBao via secrets_path rather than committing it here.
 gatus_slack_webhook_url: ""
 
-# Sherlog (docker-compose.sherlog.yml): alert rules from Sherlog's monitoring
-# standard for the components declared in local-setup/sherlog/sherlog.yaml, and
-# an automatic root-cause investigation of each critical or warning alert.
-# OFF by default. sherlog_mode "shadow" writes reports on the box and sends
-# nothing; "live" sends them (GitHub issues when sherlog_github_issues_repo and
-# its token are set). The model key and tokens are SECRETS: OpenBao.
+# Sherlog (docs/sherlog.md): alert rules from Sherlog's monitoring standard for
+# the components declared in local-setup/sherlog/sherlog.yaml, and an automatic
+# root-cause investigation of each critical or warning alert. OFF by default.
+# sherlog_mode "shadow" writes reports on the box and sends nothing; "live"
+# sends them. The model key and tokens are SECRETS: OpenBao.
 enable_sherlog: false
-sherlog_version: "0.2.0"
+sherlog_image: ghcr.io/singhalkarun/sherlog
+sherlog_version: "0.2.1"
 sherlog_mode: shadow
-sherlog_model_provider: openai
-sherlog_model_upstream: https://api.openai.com
 sherlog_model_api_key: ""
+sherlog_model_provider: ""          # empty: Sherlog's default (openai)
+sherlog_model_upstream: ""          # empty: the provider's API
 sherlog_daily_investigations: 30
-sherlog_github_issues_repo: ""
+sherlog_github_issues_repo: ""      # owner/repo: one issue per problem (live mode)
 sherlog_github_issues_token: ""
 sherlog_github_autofix: manual
 sherlog_alert_slack_webhook_url: ""   # set: critical/warning alerts (not log alerts) also go to Slack

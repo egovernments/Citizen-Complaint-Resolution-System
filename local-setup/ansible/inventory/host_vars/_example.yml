@@ -402,8 +402,9 @@ enable_search_stack: false
 #
 # See docs/matomo-deployment.md for the full walkthrough.
 # Sherlog: alerting to Sherlog's monitoring standard + automatic root-cause
-# analysis (docker-compose.sherlog.yml, local-setup/sherlog/sherlog.yaml).
+# analysis (docs/sherlog.md, local-setup/sherlog/sherlog.yaml).
 # First deploy needs `docker login ghcr.io` on the host (private images for now).
+# Settings and their defaults: group_vars/digit.yml.
 # enable_sherlog: false
 # sherlog_mode: shadow                    # shadow: reports stay on the box; live: sent
 # sherlog_model_api_key: ""               # SECRET (OpenBao)

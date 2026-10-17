@@ -41,7 +41,7 @@ compactor:
   retention_delete_delay: 2h
   delete_request_store: filesystem
 
-# Log alert rules from Sherlog (docker-compose.sherlog.yml), rendered by the deploy into sherlog/rendered/loki and
+# Log alert rules from Sherlog (docs/sherlog.md), rendered by the deploy into sherlog/rendered/loki and
 # mounted at /etc/loki/rules/fake ("fake" is the tenant when auth is off). Empty when enable_sherlog is off; the ruler
 # then has nothing to evaluate and sends nothing. Changing this file needs a Loki restart, which the deploy does.
 ruler:

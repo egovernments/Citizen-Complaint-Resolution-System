@@ -2,7 +2,7 @@ global:
   scrape_interval: 15s
   evaluation_interval: 15s
 
-# Alert rules, and where alerts go, both come from Sherlog (docker-compose.sherlog.yml): the deploy renders them from
+# Alert rules, and where alerts go, both come from Sherlog (docs/sherlog.md): the deploy renders them from
 # sherlog/sherlog.yaml into sherlog/rendered/, mounted here at /etc/prometheus/sherlog. With enable_sherlog off that
 # folder is empty, so there are no rules and no Alertmanager target (the file_sd file is written only when Sherlog
 # runs). The deploy's SIGHUP reload (#1608) picks up re-rendered rules.

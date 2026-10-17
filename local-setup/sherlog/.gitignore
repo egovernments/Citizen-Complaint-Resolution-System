@@ -1,3 +1,4 @@
-# Rendered by the deploy from sherlog.yaml (python -m sherlog.standards render), and receiver secrets.
-rendered/
-secrets/
+# Written on the host by the deploy (docs/sherlog.md): Sherlog's bundle from its image, settings, rendered rules.
+*
+!sherlog.yaml
+!.gitignore
