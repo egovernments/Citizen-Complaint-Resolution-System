@@ -413,7 +413,7 @@ gatus_slack_webhook_url: ""
 # sends them. The model key and tokens are SECRETS: OpenBao.
 enable_sherlog: false
 sherlog_image: ghcr.io/singhalkarun/sherlog
-sherlog_version: "0.2.2"
+sherlog_version: "0.3.0"
 sherlog_mode: shadow
 sherlog_model_api_key: ""
 sherlog_model_provider: ""          # empty: Sherlog's default (openai)

@@ -5,6 +5,7 @@ product: ccrs
 pack: digit
 components:
   node: {}
+  cadvisor: {}        # container restarts, OOM kills, limits (docker-compose.monitoring.yml)
   postgres: {}
   redpanda: {}
   kong: {}

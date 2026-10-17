@@ -1560,6 +1560,15 @@
     # "Start DIGIT stack", and emptied by `sherlog.sh uninstall` when the tenant
     # turns Sherlog off. The containers start after the stack (they join its
     # network): "Sherlog — start".
+    - name: "Sherlog — the commit being deployed (for the deploy marker)"
+      ansible.builtin.command: git -C {{ playbook_dir }} log -1 --format=%H%n%D
+      delegate_to: localhost
+      run_once: false
+      register: sherlog_commit
+      changed_when: false
+      failed_when: false
+      when: enable_sherlog | default(false)
+
     - name: "Sherlog — its compose bundle for sherlog_version (from the image)"
       ansible.builtin.command: >-
         docker run --rm -u 0 -v {{ digit_dir }}/sherlog:/out
@@ -7038,6 +7047,20 @@
       when:
         - run_ci_tests | default(false)
         - xlsx_rc|int != 0 or dl_rc|int != 0 or pw_rc|int != 0
+
+    # ==================== Sherlog: record this deploy ====================
+    # Last, so the marker means "this deploy finished". deploy_timestamp_seconds lands in node-exporter's textfile
+    # directory; Sherlog's pre-checks read it ("what changed before this alert?") and its verifier names the deploy
+    # an alert resolved after (docs/sherlog.md).
+    - name: "Sherlog — record this deploy for the pre-checks and the verifier"
+      ansible.builtin.command: >-
+        {{ digit_dir }}/sherlog/sherlog-deploy-mark --dir {{ digit_dir }}/sherlog/textfile
+        --repo egovernments/Citizen-Complaint-Resolution-System
+        --sha {{ (sherlog_commit.stdout_lines | default(['unknown']))[0] }}
+        --ref {{ ((sherlog_commit.stdout_lines | default(['', '']))[1] | default('')) | regex_replace('^HEAD -> ', '') | regex_replace(',.*$', '') | default('unknown', true) }}
+        --deployment {{ inventory_hostname }} --product ccrs
+      changed_when: true
+      when: enable_sherlog | default(false)
 
   handlers:
     - name: Reload nginx

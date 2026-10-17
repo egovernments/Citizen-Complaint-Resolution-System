@@ -16,6 +16,11 @@ option, cost, and what leaves the box: [Sherlog's standard](https://github.com/s
 
 `enable_sherlog: false` stops it and removes its rules on the next deploy; its data is kept.
 
+What the deploy gives Sherlog to work with: cAdvisor (container restarts, OOM kills, limits), Tempo's traces
+(the collector drops connection and caller attributes and URL query strings first), and a deploy marker written as
+the playbook's last step (`deploy_timestamp_seconds`: commit, ref, host), so an investigation starts from "what
+changed" and an alert that resolves after a deploy is closed as verified.
+
 Optional, with `sherlog_docker_diagnostics: true`: investigations may also read the containers' state (restarts,
 exit codes, OOM kills, health), last log lines and recent events, through Sherlog's read-only, redacted proxy. It
 mounts the Docker socket into a GET-only socket proxy that the investigating agent cannot reach directly.

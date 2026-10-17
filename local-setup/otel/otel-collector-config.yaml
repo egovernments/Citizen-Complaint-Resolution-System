@@ -18,6 +18,21 @@ processors:
   # needs CUMULATIVE, so accumulate deltas here. Inert for the (cumulative)
   # javaagent metrics already flowing through this pipeline.
   deltatocumulative:
+  # Traces are read by Sherlog's investigation (docs/sherlog.md). Spans carry how a service connects and who called
+  # it; neither helps a root-cause analysis and neither should be stored. db.statement is already sanitised by the
+  # Java agent (literals become ?). Query strings can carry phone numbers and tenant ids: stripped.
+  attributes/privacy:
+    actions:
+      - {key: db.connection_string, action: delete}
+      - {key: db.user, action: delete}
+      - {key: client.address, action: delete}
+      - {key: user_agent.original, action: delete}
+  transform/privacy:
+    trace_statements:
+      - context: span
+        statements:
+          - replace_pattern(attributes["url.full"], "\\?.*$", "")
+          - replace_pattern(attributes["url.query"], ".*", "[redacted]")
 
 exporters:
   otlp/tempo:
@@ -43,7 +58,7 @@ service:
   pipelines:
     traces:
       receivers: [otlp]
-      processors: [memory_limiter, batch]
+      processors: [memory_limiter, attributes/privacy, transform/privacy, batch]
       exporters: [otlp/tempo]
     logs:
       receivers: [otlp]
