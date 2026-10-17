@@ -36,3 +36,13 @@ services:
       PGR_ESCALATION_ENABLED: "true"
       PGR_ESCALATION_INTERVAL_MS: "300000"
       KAFKA_TOPICS_COMPLAINTS_DOMAIN_EVENTS: complaints.domain.events
+
+  # Tempo on bomet is OOM-killed about every two minutes (issue #2571): its blocklist (210k compacted blocks that
+  # retention never got to delete) takes ~780 MB to load against the 768M limit, so compaction and retention never
+  # run and the volume grew to 125 GB. Headroom for one full poll and retention pass; once the volume is back to a
+  # day's worth of traces this can come down again (the comment in #2571 says how to check).
+  tempo:
+    deploy:
+      resources:
+        limits:
+          memory: 2G
