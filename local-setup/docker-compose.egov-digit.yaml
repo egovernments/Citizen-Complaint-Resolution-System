@@ -276,6 +276,8 @@ services:
       - ./otel/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       # Sherlog's rendered alert rules and Alertmanager target (docs/sherlog.md); empty when it is off.
       - ./sherlog/rendered:/etc/prometheus/sherlog:ro
+      # Optional scrape targets the playbook writes (keycloak); empty when none is on.
+      - ./otel/targets:/etc/prometheus/targets:ro
       - prometheus_data:/prometheus
     ports:
       - "${BIND_IP:-127.0.0.1}:19090:9090"
@@ -310,7 +312,9 @@ services:
       POSTGRES_USER: egov
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       POSTGRES_DB: egov
-    command: postgres -c max_connections=200
+    # POSTGRES_EXTRA_ARGS (from host_vars postgres_stat_statements, docs/sherlog.md): -c shared_preload_libraries=
+    # pg_stat_statements, which needs a Postgres restart; the deploy recreates the container when .env changes.
+    command: postgres -c max_connections=200 ${POSTGRES_EXTRA_ARGS:-}
     volumes:
     - postgres_data:/var/lib/docker-postgresql/data
     ports:
@@ -2244,6 +2248,11 @@ services:
       # docker-socket-proxy below. Promtail reaches the daemon through that
       # read-only proxy instead.
       - promtail_data:/tmp
+      # The host's journal, read-only, for promtail's journal job (kernel OOM kills, unit failures). machine-id lets
+      # the journal reader open the host's files.
+      - /var/log/journal:/var/log/journal:ro
+      - /run/log/journal:/run/log/journal:ro
+      - /etc/machine-id:/etc/machine-id:ro
     depends_on:
       loki:
         condition: service_healthy
@@ -3026,6 +3035,10 @@ services:
       keycloak-postgres:
         condition: service_healthy
     environment:
+      # Prometheus metrics at /metrics on the HTTP port (Keycloak 24; 25+ moves them to :9000). Scraped through the
+      # file_sd target the playbook writes when enable_keycloak is on (otel/targets/keycloak.json).
+      KC_METRICS_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://keycloak-postgres:5432/keycloak
       KC_DB_USERNAME: keycloak

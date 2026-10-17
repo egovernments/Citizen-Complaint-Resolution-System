@@ -16,6 +16,12 @@ option, cost, and what leaves the box: [Sherlog's standard](https://github.com/s
 
 `enable_sherlog: false` stops it and removes its rules on the next deploy; its data is kept.
 
+Optional, per tenant: `sherlog_actions: true` lets a collaborator with write access approve a restart of a
+service's containers by labelling the Sherlog issue `sherlog-action:restart` (the allowlist is in `sherlog.yaml`);
+`postgres_stat_statements: true` adds statement statistics per query id (no query text; one Postgres restart). The
+host's journal (kernel OOM kills, unit failures) is in Loki as `job=journal`; Keycloak's metrics are scraped when
+`enable_keycloak` is on.
+
 What the deploy gives Sherlog to work with: cAdvisor (container restarts, OOM kills, limits), Tempo's traces
 (the collector drops connection and caller attributes and URL query strings first), and a deploy marker written as
 the playbook's last step (`deploy_timestamp_seconds`: commit, ref, host), so an investigation starts from "what

@@ -15,3 +15,11 @@ components:
   services: {}
   logs:
     exclude_services: [loki, promtail]
+# Tenants with Keycloak add it through host_vars: sherlog_overrides: {components: {keycloak: {}}}
+
+# Approval-gated restarts (sherlog_actions): what a collaborator may have Sherlog restart by labelling the issue
+# sherlog-action:restart. Regexes on container names; the data stores are never on the list.
+actions:
+  restart:
+    allow: ["^digit-egov-.*", "^egov-.*", "^digit-pgr-services.*", "^digit-(inbox|mdms-backend|config-service|audit-service|user-preferences-service).*"]
+    deny: [".*(postgres|pgbouncer|redpanda|kafka|minio|elasticsearch|keycloak|openbao|mongo|redis).*"]

@@ -7048,6 +7048,29 @@
         - run_ci_tests | default(false)
         - xlsx_rc|int != 0 or dl_rc|int != 0 or pw_rc|int != 0
 
+    # ==================== Optional scrape targets (file_sd) and pg_stat_statements ====================
+    # Prometheus scrapes otel/targets/*.json; a tenant with Keycloak gets keycloak.json, one without gets nothing (no
+    # failing scrape, no TargetDown). The exporter's stat_statements collector needs the extension in the database.
+    - name: "Prometheus — Keycloak scrape target (enable_keycloak)"
+      ansible.builtin.copy:
+        dest: "{{ digit_dir }}/otel/targets/keycloak.json"
+        content: '[{"targets": ["keycloak:8080"], "labels": {"job": "keycloak"}}]'
+        mode: "0644"
+      when: enable_keycloak | default(false)
+
+    - name: "Prometheus — no Keycloak scrape target when Keycloak is off"
+      ansible.builtin.file:
+        path: "{{ digit_dir }}/otel/targets/keycloak.json"
+        state: absent
+      when: not (enable_keycloak | default(false))
+
+    - name: "Postgres — pg_stat_statements extension (postgres_stat_statements)"
+      ansible.builtin.command: docker exec docker-postgres psql -U egov -d egov -tAc "CREATE EXTENSION IF NOT EXISTS pg_stat_statements"
+      register: pgss
+      changed_when: "'CREATE EXTENSION' in pgss.stdout"
+      failed_when: pgss.rc != 0 and 'already exists' not in pgss.stderr
+      when: postgres_stat_statements | default(false)
+
     # ==================== Sherlog: record this deploy ====================
     # Last, so the marker means "this deploy finished". deploy_timestamp_seconds lands in node-exporter's textfile
     # directory; Sherlog's pre-checks read it ("what changed before this alert?") and its verifier names the deploy

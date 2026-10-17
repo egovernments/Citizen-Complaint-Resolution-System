@@ -113,6 +113,9 @@ services:
     image: prometheuscommunity/postgres-exporter:v0.15.0
     container_name: digit-postgres-exporter
     restart: unless-stopped
+    # Statement statistics per query id (no query text) when host_vars postgres_stat_statements is on; the flag is
+    # rendered into .env as POSTGRES_STAT_STATEMENTS_FLAG.
+    command: ["${POSTGRES_STAT_STATEMENTS_FLAG:---no-collector.stat_statements}"]
     environment:
       # IMPORTANT: postgres-db, NOT postgres.
       # `postgres` is a network alias for PgBouncer in this stack; the database
