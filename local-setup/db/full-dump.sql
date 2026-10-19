@@ -7083,6 +7083,7 @@ aea9ac46-64f6-5b91-b856-b0676baef380	fr_FR	CS_REJECTION__OUTSIDE_JURISDICTION	Ho
 51b986f0-074d-5b0a-8812-bbdab4394f2f	fr_FR	CS_VOICE_FAILED	La saisie vocale s'est arrêtée de façon inattendue. Réessayez.	pg	rainmaker-pgr	1	2026-10-14 00:00:00	\N	\N
 7908ee2a-adb2-59c0-bcda-a3717c8531c4	fr_FR	CS_VOICE_LANGUAGE_HINT	Parlez dans la langue sélectionnée en haut de la page.	pg	rainmaker-pgr	1	2026-10-14 00:00:00	\N	\N
 a9f9585c-043d-57e7-ba42-dbc323d2915f	fr_FR	CS_VOICE_LANGUAGE_NOT_SUPPORTED	La saisie vocale n'est pas disponible dans cette langue. Saisissez plutôt votre réclamation.	pg	rainmaker-pgr	1	2026-10-14 00:00:00	\N	\N
+e37aa111-9d5a-522c-98c0-6b151b966476	fr_FR	CS_VOICE_LISTENING_IN	Écoute en {language}	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
 00c88248-8d9a-5879-86d7-ec26b04aa970	fr_FR	CS_VOICE_MIC_BLOCKED	L'accès au microphone est bloqué. Autorisez-le pour ce site dans les paramètres de votre navigateur, puis réessayez.	pg	rainmaker-pgr	1	2026-10-14 00:00:00	\N	\N
 b8454f35-341f-5a7c-bc52-cc2e24bd72ac	fr_FR	CS_VOICE_NETWORK	La saisie vocale nécessite une connexion Internet. Vérifiez-la et réessayez.	pg	rainmaker-pgr	1	2026-10-14 00:00:00	\N	\N
 0313b732-c4d6-59da-a154-c2ef89aaedc0	fr_FR	CS_VOICE_NO_MIC	Aucun microphone n'a été trouvé sur cet appareil.	pg	rainmaker-pgr	1	2026-10-14 00:00:00	\N	\N
@@ -7652,6 +7653,7 @@ ce6a83e8-f0bb-53fd-bd1c-710b018e9c9f	pt_BR	CS_SEARCH_ERROR	A pesquisa não funci
 3c9067bf-894f-529a-8e32-9b5e9cf27fbf	pt_BR	CS_VOICE_FAILED	A entrada de voz parou inesperadamente. Tente novamente.	pg	rainmaker-pgr	1	2026-10-14 00:00:00	\N	\N
 ee6d67d4-54f2-55cf-96db-304c6663bb9d	pt_BR	CS_VOICE_LANGUAGE_HINT	Fale no idioma selecionado no topo da página.	pg	rainmaker-pgr	1	2026-10-14 00:00:00	\N	\N
 4d4da186-73bd-5dd9-8dea-6591b4dd382d	pt_BR	CS_VOICE_LANGUAGE_NOT_SUPPORTED	A entrada de voz não está disponível neste idioma. Digite sua reclamação.	pg	rainmaker-pgr	1	2026-10-14 00:00:00	\N	\N
+e9954f1c-2a3e-5716-aa87-90a5129c849b	pt_BR	CS_VOICE_LISTENING_IN	Ouvindo em {language}	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
 a2bce9b7-be76-580a-be94-bf2e827b5eb4	pt_BR	CS_VOICE_MIC_BLOCKED	O acesso ao microfone está bloqueado. Permita o acesso para este site nas configurações do navegador e tente novamente.	pg	rainmaker-pgr	1	2026-10-14 00:00:00	\N	\N
 01557d72-84c3-5af5-a86d-c35064870b23	pt_BR	CS_VOICE_NETWORK	A entrada de voz precisa de conexão com a internet. Verifique a conexão e tente novamente.	pg	rainmaker-pgr	1	2026-10-14 00:00:00	\N	\N
 c99ad1a9-d685-537a-8727-ef0baba24f11	pt_BR	CS_VOICE_NO_MIC	Nenhum microfone foi encontrado neste dispositivo.	pg	rainmaker-pgr	1	2026-10-14 00:00:00	\N	\N
@@ -8012,6 +8014,7 @@ d60f7c9e-72d0-5cfe-baed-361561c2e2d6	en_IN	CS_SELECT_AREA	Draw an area on the ma
 e1e81d90-ffe8-5278-b935-2afa0681b537	en_IN	CS_VOICE_FAILED	Voice input stopped unexpectedly. Try again.	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
 72141465-706f-5a57-85db-f6cacb1c6d34	en_IN	CS_VOICE_LANGUAGE_HINT	Speak in the language selected at the top of the page.	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
 eded9527-1edd-5a27-a388-578dc5dfaa5f	en_IN	CS_VOICE_LANGUAGE_NOT_SUPPORTED	Voice input isn't available in this language. Type your complaint instead.	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+cf3bf2f7-56eb-524f-8c91-b56a81d0d359	en_IN	CS_VOICE_LISTENING_IN	Listening in {language}	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
 a0f8742a-b930-5bc5-8802-7c9528aff5e0	en_IN	CS_VOICE_MIC_BLOCKED	Microphone access is blocked. Allow it for this site in your browser settings, then try again.	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
 a530400f-d877-5f01-a230-5ac552711f0b	en_IN	CS_VOICE_NETWORK	Voice input needs an internet connection. Check it and try again.	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
 17f0da1f-dde7-5622-bc6f-48de5855baad	en_IN	CS_VOICE_NO_MIC	No microphone was found on this device.	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
