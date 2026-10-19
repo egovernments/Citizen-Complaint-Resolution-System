@@ -58,6 +58,18 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def hash_tree(root: Path) -> str:
+    digest = hashlib.sha256()
+    for path in sorted(root.rglob("*"), key=lambda item: item.as_posix()):
+        rel = path.relative_to(root).as_posix()
+        if path.is_symlink():
+            digest.update(f"L\0{rel}\0{os.readlink(path)}\n".encode())
+        elif path.is_file():
+            digest.update(f"F\0{rel}\0".encode())
+            digest.update(bytes.fromhex(sha256_file(path)))
+    return digest.hexdigest()
+
+
 def canonical_json(value: Any) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
@@ -338,7 +350,9 @@ def safe_relative(raw: str) -> Path:
     return Path(*posix.parts)
 
 
-def materialize_overlay(run_dir: Path, live_digit: Path) -> tuple[Path, list[str], dict[str, str]]:
+def materialize_overlay(
+    run_dir: Path, live_digit: Path, source_backup: Path
+) -> tuple[Path, list[str], dict[str, str]]:
     report = json.loads((run_dir / "report.json").read_text(encoding="utf-8"))
     candidate = run_dir / "candidate"
     if report.get("status") != "READY" or not candidate.is_dir():
@@ -371,11 +385,15 @@ def materialize_overlay(run_dir: Path, live_digit: Path) -> tuple[Path, list[str
             candidate_text = raw.decode("utf-8")
             live_path = live_digit / rel
             live_text = live_path.read_text(encoding="utf-8") if live_path.is_file() else ""
-            destination.write_text(
-                materialize_redactions(candidate_text, live_text, rel_raw),
-                encoding="utf-8",
-                newline="",
+            backup_path = source_backup / rel
+            backup_text = (
+                backup_path.read_text(encoding="utf-8") if backup_path.is_file() else ""
             )
+            try:
+                materialized = materialize_redactions(candidate_text, backup_text, rel_raw)
+            except DeployError:
+                materialized = materialize_redactions(candidate_text, live_text, rel_raw)
+            destination.write_text(materialized, encoding="utf-8", newline="")
             shutil.copymode(source, destination)
         hashes[rel.as_posix()] = sha256_file(destination)
     return overlay, sorted(deleted), dict(sorted(hashes.items()))
@@ -448,6 +466,7 @@ class UpgradeDeployment:
         repo: Path,
         tenant: str,
         tenant_vars: Path,
+        source_backup: Path,
         backup_parent: Path,
         resolution: Path | None,
         runner: CommandRunner | None = None,
@@ -457,6 +476,7 @@ class UpgradeDeployment:
         self.repo = repo.resolve()
         self.tenant = tenant
         self.tenant_vars = tenant_vars.resolve()
+        self.source_backup = source_backup.resolve()
         self.backup_parent = backup_parent.resolve()
         self.resolution = resolution.resolve() if resolution else None
         self.runner = runner or CommandRunner()
@@ -480,6 +500,10 @@ class UpgradeDeployment:
             raise DeployError("this run has already been deployed")
         if sha256_file(self.tenant_vars) != manifest.get("tenant_vars_sha256"):
             raise DeployError("tenant-vars hash no longer matches the analysis run")
+        if not self.source_backup.is_dir():
+            raise DeployError("source backup must be the directory used during analysis")
+        if hash_tree(self.source_backup) != manifest.get("backup_sha256"):
+            raise DeployError("source backup hash no longer matches the analysis run")
         inventory_vars = (
             self.repo
             / "local-setup/ansible/inventory/host_vars"
@@ -806,7 +830,9 @@ class UpgradeDeployment:
 
     def execute(self) -> dict[str, Any]:
         manifest = self.validate()
-        overlay, deleted, overlay_hashes = materialize_overlay(self.run_dir, self.digit_dir)
+        overlay, deleted, overlay_hashes = materialize_overlay(
+            self.run_dir, self.digit_dir, self.source_backup
+        )
         self.backup_parent.mkdir(parents=True, exist_ok=True)
         lock_path = self.backup_parent / ".digit-upgrade.lock"
         with lock_path.open("w", encoding="utf-8") as lock:
@@ -906,9 +932,10 @@ def deploy_run(
     repo: Path,
     tenant: str,
     tenant_vars: Path,
+    source_backup: Path,
     backup_parent: Path,
     resolution: Path | None,
 ) -> dict[str, Any]:
     return UpgradeDeployment(
-        run_dir, repo, tenant, tenant_vars, backup_parent, resolution
+        run_dir, repo, tenant, tenant_vars, source_backup, backup_parent, resolution
     ).execute()

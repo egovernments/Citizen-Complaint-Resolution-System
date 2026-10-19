@@ -1369,6 +1369,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                 ("--repo", args.repo),
                 ("--tenant", args.tenant),
                 ("--tenant-vars", args.tenant_vars),
+                ("--backup", args.backup),
             )
             if value is None
         ]
@@ -1376,7 +1377,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             parser.error("the following deploy arguments are required: " + ", ".join(missing))
         if not args.confirm_deploy:
             parser.error("--deploy-run requires --confirm-deploy")
-        if args.base_override or args.exclude or args.backup:
+        if args.base_override or args.exclude:
             parser.error("analysis-only options cannot be used with --deploy-run")
         return args
     missing = [
@@ -1417,6 +1418,7 @@ def main(argv: list[str] | None = None) -> int:
                     args.repo,
                     args.tenant,
                     args.tenant_vars,
+                    args.backup,
                     args.backup_dir,
                     args.mdms_resolution,
                 )

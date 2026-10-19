@@ -176,7 +176,7 @@ class OverlayTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            overlay, deleted, hashes = deploy.materialize_overlay(run_dir, live)
+            overlay, deleted, hashes = deploy.materialize_overlay(run_dir, live, live)
             self.assertFalse((overlay / ".env").exists())
             self.assertEqual(["obsolete.yml"], deleted)
             self.assertIn("config.yml", hashes)
@@ -208,6 +208,19 @@ class PlaybookCompatibilityTests(unittest.TestCase):
 
 
 class DeployCliTests(unittest.TestCase):
+    def test_deploy_accepts_the_verified_analysis_backup(self):
+        args = dry.parse_args(
+            [
+                "--deploy-run", "run",
+                "--repo", "repo",
+                "--tenant", "mycity",
+                "--tenant-vars", "mycity.yml",
+                "--backup", "digit-backup",
+                "--confirm-deploy",
+            ]
+        )
+        self.assertEqual(Path("digit-backup"), args.backup)
+
     def test_deploy_requires_explicit_confirmation(self):
         with self.assertRaises(SystemExit):
             dry.parse_args(

@@ -117,6 +117,7 @@ sudo python3 local-setup/scripts/upgrade-dry-run.py \
   --repo /path/to/Citizen-Complaint-Resolution-System \
   --tenant mycity \
   --tenant-vars /path/to/Citizen-Complaint-Resolution-System/local-setup/ansible/inventory/host_vars/mycity.yml \
+  --backup /var/backups/digit/digit \
   --backup-dir /var/backups/digit-upgrade \
   --confirm-deploy
 ```
@@ -144,6 +145,7 @@ sudo python3 local-setup/scripts/upgrade-dry-run.py \
   --repo /path/to/Citizen-Complaint-Resolution-System \
   --tenant mycity \
   --tenant-vars /path/to/Citizen-Complaint-Resolution-System/local-setup/ansible/inventory/host_vars/mycity.yml \
+  --backup /var/backups/digit/digit \
   --backup-dir /var/backups/digit-upgrade \
   --mdms-resolution /path/to/dry-run-output/digit-dry-run-YYYYMMDD-HHMMSS/mdms-resolution.json \
   --confirm-deploy
