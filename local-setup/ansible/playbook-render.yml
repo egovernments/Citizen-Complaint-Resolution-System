@@ -183,6 +183,43 @@
              | default('otp-publisher:local' if (build_otp_publisher | default(false))
                        else 'egovio/otp-publisher:2.12-81fc6be') }}
 
+    # Keep the renderer aligned with the deterministic image resolution used by
+    # playbook-deploy.yml.  Rendering must not import that playbook because its
+    # other tasks contact registries, OpenBao, Docker, and databases.
+    - name: Normalise target image tag inputs
+      ansible.builtin.set_fact:
+        ccrs_image_tag: "{{ image_tag | default('', true) | string | trim }}"
+        ccrs_image_tag_services: >-
+          {{ ((image_tag_services.split(',') if image_tag_services is string else image_tag_services)
+              | default([], true)) | map('trim') | reject('equalto', '') | list }}
+      when: render_profile == 'target'
+
+    - name: Map target image tag onto its catalog images
+      ansible.builtin.set_fact:
+        ccrs_tagged_images: >-
+          {% set scope = ccrs_image_tag_services
+               + (ccrs_image_catalog | selectattr('image', 'in', ccrs_image_tag_services)
+                  | selectattr('follows', 'defined') | map(attribute='follows') | list) -%}
+          {% set out = {} -%}
+          {% for e in ccrs_image_catalog -%}
+          {% set covered = ccrs_image_tag | length > 0 and (ccrs_image_tag_services | length == 0
+               or e.image in scope or (e.follows | default('')) in scope) -%}
+          {% set _ = out.update({e.image: (image_tag_namespace ~ '/' ~ e.image ~ ':' ~ ccrs_image_tag) if covered else ''}) -%}
+          {% endfor -%}
+          {{ out }}
+      when: render_profile == 'target'
+
+    - name: Resolve target compose image environment values
+      ansible.builtin.set_fact:
+        ccrs_image_env: >-
+          {% set out = {} -%}
+          {% for e in ccrs_image_catalog -%}
+          {% set pin = lookup('vars', e.var, default='') | default('', true) -%}
+          {% set _ = out.update({e.env: pin if pin else ccrs_tagged_images[e.image]}) -%}
+          {% endfor -%}
+          {{ out }}
+      when: render_profile == 'target'
+
     - name: Render tenant environment without OpenBao secrets
       ansible.builtin.template:
         src: "{{ source_root }}/local-setup/ansible/templates/digit.env.j2"

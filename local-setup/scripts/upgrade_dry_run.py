@@ -1070,7 +1070,10 @@ def render_ref(
     ]
     result = run(command, cwd=tool_repo, check=False)
     if result.returncode:
-        raise DryRunError(f"render failed for {profile}: {(result.stderr or result.stdout).strip()}")
+        details = "\n".join(
+            part.strip() for part in (result.stdout, result.stderr) if part and part.strip()
+        )
+        raise DryRunError(f"render failed for {profile}: {details}")
 
 
 def validate_tenant_yaml(path: Path) -> dict[str, Any]:
