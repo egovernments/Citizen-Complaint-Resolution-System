@@ -5,6 +5,7 @@ product: ccrs
 pack: digit
 components:
   node: {}
+  container-stats: {}   # per-container restarts and memory (docker-compose.monitoring.yml, job container-stats)
   postgres: {}
   redpanda: {}
   kong: {}
