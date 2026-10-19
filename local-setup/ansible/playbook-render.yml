@@ -56,7 +56,8 @@
              'docker-compose.fast-path.yml',
              'docker-compose.migrations.yml',
              'docker-compose.monitoring.yml']
-            + (['docker-compose.matomo.yml'] if render_profile == 'target' else [])
+            + (['docker-compose.matomo.yml', 'docker-compose.opensre.yml']
+               if render_profile == 'target' else [])
           }}
 
     - name: Copy deterministic Compose inputs
@@ -84,7 +85,7 @@
           {{
             ['otel', 'configs', 'nginx', 'kong', 'postman', 'db', 'seeds',
              'gatus', 'scripts', 'keycloak', 'docker']
-            + (['jupyter'] if render_profile == 'base' else ['dataloader'])
+            + (['jupyter'] if render_profile == 'base' else ['dataloader', 'opensre'])
           }}
 
     - name: Check deterministic source directories
@@ -107,6 +108,67 @@
       ansible.builtin.file:
         path: "{{ render_dir }}/otel/opentelemetry-javaagent.jar"
         state: absent
+
+    - name: Stage target identity and SMS helper files
+      ansible.builtin.copy:
+        src: "{{ item.src }}"
+        dest: "{{ render_dir }}/{{ item.dest }}"
+        mode: "{{ item.mode }}"
+      loop:
+        - src: "{{ source_root }}/keycloak/configure-keycloak.sh"
+          dest: configure-identity-keycloak.sh
+          mode: "0750"
+        - src: "{{ source_root }}/keycloak/realm.json"
+          dest: identity-keycloak-realm.json
+          mode: "0640"
+        - src: "{{ source_root }}/local-setup/scripts/core-sms-handoff.sh"
+          dest: core-sms-handoff.sh
+          mode: "0644"
+      when: render_profile == 'target'
+
+    - name: Stage target tenant-master repair helper
+      ansible.builtin.copy:
+        src: "{{ source_root }}/local-setup/scripts/repair-tenant-masters.py"
+        dest: "{{ render_dir }}/repair-tenant-masters.py"
+        mode: "0755"
+      when:
+        - render_profile == 'target'
+        - state_root != 'pg'
+        - verify_tenant_masters | default(true) | bool
+
+    - name: Stage target Novu worker providers
+      ansible.builtin.copy:
+        src: "{{ source_root }}/backend/novu-bridge/novu-worker-providers/"
+        dest: "{{ render_dir }}/novu-worker-providers/"
+        mode: preserve
+      when:
+        - render_profile == 'target'
+        - enable_novu | default(false)
+
+    - name: Remove provider test inputs excluded by deployment
+      ansible.builtin.file:
+        path: "{{ render_dir }}/novu-worker-providers/{{ item }}"
+        state: absent
+      loop:
+        - test
+        - run-tests.sh
+      when:
+        - render_profile == 'target'
+        - enable_novu | default(false)
+
+    - name: Create target OpenSRE runbook directory
+      ansible.builtin.file:
+        path: "{{ render_dir }}/opensre/runbook"
+        state: directory
+        mode: "0755"
+      when: render_profile == 'target'
+
+    - name: Stage target OpenSRE known-issues runbook
+      ansible.builtin.copy:
+        src: "{{ source_root }}/docs/releases/2.12/operations/known-issues.md"
+        dest: "{{ render_dir }}/opensre/runbook/known-issues.md"
+        mode: "0644"
+      when: render_profile == 'target'
 
     - name: Resolve image values used by the environment template
       ansible.builtin.set_fact:
@@ -295,22 +357,45 @@
         - enable_matomo | default(false)
         - matomo_auto_install | default(true)
 
+    - name: Define version-specific notification seed inputs
+      ansible.builtin.set_fact:
+        render_notification_enabled: >-
+          {{ (seed_notifications | default(enable_novu | default(false)))
+             if render_profile == 'target'
+             else (seed_notifications | default(pgr_notification_config_driven | default(false))) }}
+        render_notification_inputs: >-
+          {{
+            [source_root ~ '/utilities/default-data-handler/src/main/resources/schema/RAINMAKER-PGR.json',
+             source_root ~ '/utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/RAINMAKER-PGR.NotificationChannel.json',
+             source_root ~ '/utilities/default-data-handler/src/main/resources/schema/NOTIFICATIONS.json',
+             source_root ~ '/utilities/default-data-handler/src/main/resources/mdmsData-dev/NOTIFICATIONS/NOTIFICATIONS.EventCatalogue.json',
+             source_root ~ '/utilities/default-data-handler/src/main/resources/mdmsData-dev/NOTIFICATIONS/NOTIFICATIONS.Routing.json',
+             source_root ~ '/utilities/default-data-handler/src/main/resources/mdmsData-dev/NOTIFICATIONS/NOTIFICATIONS.Template.json',
+             source_root ~ '/utilities/default-data-handler/src/main/resources/mdmsData-dev/NOTIFICATIONS/NOTIFICATIONS.ProviderTemplate.json',
+             source_root ~ '/local-setup/scripts/seed-notifications.py',
+             source_root ~ '/local-setup/scripts/notifications_convert.py',
+             source_root ~ '/local-setup/scripts/generate_event_catalogue.py',
+             source_root ~ '/local-setup/scripts/migrate-notifications.py']
+            if render_profile == 'target'
+            else
+            [source_root ~ '/utilities/default-data-handler/src/main/resources/schema/RAINMAKER-PGR.json',
+             source_root ~ '/utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/RAINMAKER-PGR.NotificationRouting.json',
+             source_root ~ '/utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/RAINMAKER-PGR.NotificationTemplate.json',
+             source_root ~ '/utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/RAINMAKER-PGR.NotificationProviderTemplate.json',
+             source_root ~ '/local-setup/scripts/seed-notifications.py']
+          }}
+
     - name: Create notification seed directory when enabled
       ansible.builtin.file:
         path: "{{ render_dir }}/notification-seed"
         state: directory
         mode: "0755"
-      when: seed_notifications | default(pgr_notification_config_driven | default(false))
+      when: render_notification_enabled | bool
 
     - name: Stage notification seed inputs when enabled
       ansible.builtin.copy:
         src: "{{ item }}"
         dest: "{{ render_dir }}/notification-seed/"
         mode: preserve
-      loop:
-        - "{{ source_root }}/utilities/default-data-handler/src/main/resources/schema/RAINMAKER-PGR.json"
-        - "{{ source_root }}/utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/RAINMAKER-PGR.NotificationRouting.json"
-        - "{{ source_root }}/utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/RAINMAKER-PGR.NotificationTemplate.json"
-        - "{{ source_root }}/utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/RAINMAKER-PGR.NotificationProviderTemplate.json"
-        - "{{ source_root }}/local-setup/scripts/seed-notifications.py"
-      when: seed_notifications | default(pgr_notification_config_driven | default(false))
+      loop: "{{ render_notification_inputs }}"
+      when: render_notification_enabled | bool

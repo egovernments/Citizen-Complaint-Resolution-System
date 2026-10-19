@@ -77,11 +77,15 @@ RENDER_DESTINATION_PREFIXES = (
     "/.openbao",
     "/bootstrap-novu-whatsapp.sh",
     "/ci-tests",
+    "/configure-identity-keycloak.sh",
     "/configurator-runtime",
+    "/core-sms-handoff.sh",
     "/dataloader",
     "/docker",
     "/docker-compose.",
     "/e2e-tests",
+    "/identity",
+    "/identity-keycloak-realm.json",
     "/keycloak",
     "/jupyter",
     "/kong",
@@ -89,6 +93,9 @@ RENDER_DESTINATION_PREFIXES = (
     "/nginx",
     "/notification-seed",
     "/novu-mint-key.sh",
+    "/novu-worker-providers",
+    "/opensre",
+    "/repair-tenant-masters.py",
     "/scripts",
     "/test_onboarding_regressions.py",
 )
@@ -1008,8 +1015,9 @@ def validate_render_contract(exported: Path) -> None:
                 continue
             for match in pattern.finditer(line):
                 suffix = match.group("suffix") or ""
-                dynamic_config_destination = (
-                    suffix == "/{{" and "{{ item.key }}" in line
+                dynamic_config_destination = suffix == "/{{" and (
+                    "{{ item.key }}" in line
+                    or 'path: "{{ digit_dir }}/{{ item }}"' in line
                 )
                 if (
                     suffix

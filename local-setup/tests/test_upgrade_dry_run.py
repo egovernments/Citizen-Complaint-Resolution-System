@@ -502,6 +502,12 @@ class RendererContractTests(unittest.TestCase):
             "notification-seed",
             "matomo-bootstrap.php",
             "matomo-db.ini",
+            "docker-compose.opensre.yml",
+            "configure-identity-keycloak.sh",
+            "core-sms-handoff.sh",
+            "novu-worker-providers",
+            "repair-tenant-masters.py",
+            "NOTIFICATIONS.EventCatalogue.json",
         ):
             self.assertIn(value, renderer)
 
