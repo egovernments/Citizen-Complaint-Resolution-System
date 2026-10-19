@@ -241,13 +241,17 @@ def materialize_redactions(candidate: str, live: str, path: str) -> str:
     live_values = _live_assignment_values(live)
     live_lines = live.splitlines()
     output: list[str] = []
-    for line in candidate.splitlines(keepends=True):
+    for line_index, line in enumerate(candidate.splitlines(keepends=True)):
         if REDACTED not in line:
             output.append(line)
             continue
         candidate_line = line.rstrip("\r\n")
         match = ASSIGNMENT.match(candidate_line)
-        if match and match.group("key").lower() in live_values:
+        if (
+            match
+            and match.group("value") == REDACTED
+            and match.group("key").lower() in live_values
+        ):
             ending = "\n" if line.endswith("\n") else ""
             output.append(match.group("prefix") + live_values[match.group("key").lower()] + ending)
             continue
@@ -263,12 +267,42 @@ def materialize_redactions(candidate: str, live: str, path: str) -> str:
             for live_line in live_lines
             if marker and live_line.startswith(prefix) and live_line.endswith(suffix)
         ]
-        if len(matching_lines) != 1:
-            raise DeployError(
-                f"cannot materialize redacted field in {path}; no matching live assignment"
-            )
         ending = "\n" if line.endswith("\n") else ""
-        output.append(matching_lines[0] + ending)
+        if len(matching_lines) == 1:
+            output.append(matching_lines[0] + ending)
+            continue
+
+        # Identical placeholder/default lines can occur more than once.  The
+        # same-position line is safe only when its surrounding text still
+        # matches exactly.
+        if len(candidate.splitlines()) == len(live_lines) and line_index < len(live_lines):
+            live_line = live_lines[line_index]
+            if marker and live_line.startswith(prefix) and live_line.endswith(suffix):
+                output.append(live_line + ending)
+                continue
+
+        # A target-side edit can change the rest of an inline JSON command
+        # while leaving its sensitive field intact.  Restore that one field
+        # only when the field name and its live value are unique.
+        key_matches = re.findall(
+            r'(?i)([A-Za-z0-9_.-]*(?:password|passwd|secret|token|api[_-]?key|private[_-]?key|credential|unseal)[A-Za-z0-9_.-]*)',
+            prefix,
+        )
+        if key_matches:
+            key = key_matches[-1]
+            value_pattern = re.compile(
+                r'(?i)(?:\\?")'
+                + re.escape(key)
+                + r'(?:\\?")\s*:\s*(?:\\?")(?P<value>.*?)(?=\\?")'
+            )
+            values = {found.group("value") for found in value_pattern.finditer(live)}
+            if len(values) == 1:
+                output.append(prefix + values.pop() + suffix + ending)
+                continue
+
+        raise DeployError(
+            f"cannot materialize redacted field in {path}; no unique matching live value"
+        )
     result = "".join(output)
     if REDACTED in result:
         raise DeployError(f"unresolved redaction marker remains in {path}")

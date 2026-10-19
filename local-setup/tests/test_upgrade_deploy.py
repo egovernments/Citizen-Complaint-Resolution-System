@@ -108,6 +108,17 @@ class OverlayTests(unittest.TestCase):
         with self.assertRaises(deploy.DeployError):
             deploy.materialize_redactions(candidate, live, "test.sh")
 
+    def test_materializes_repeated_placeholder_by_same_line_context(self):
+        candidate = ': "<REDACTED>"\nunchanged\n: "<REDACTED>"\n'
+        live = ': "first"\nunchanged\n: "second"\n'
+        self.assertEqual(live, deploy.materialize_redactions(candidate, live, "seed.sh"))
+
+    def test_materializes_unique_inline_json_field_after_target_edit(self):
+        candidate = 'BODY="{\\"authToken\\":\\"<REDACTED>\\",\\"newField\\":true}"\n'
+        live = 'BODY="{\\"authToken\\":\\"live-token\\",\\"oldField\\":true}"\n'
+        expected = 'BODY="{\\"authToken\\":\\"live-token\\",\\"newField\\":true}"\n'
+        self.assertEqual(expected, deploy.materialize_redactions(candidate, live, "seed.sh"))
+
     def test_rejects_redaction_without_matching_live_assignment(self):
         with self.assertRaises(deploy.DeployError):
             deploy.materialize_redactions('"password": "<REDACTED>"\n', "", "config.json")
