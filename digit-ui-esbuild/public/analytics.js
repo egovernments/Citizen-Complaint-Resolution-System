@@ -405,15 +405,22 @@
     return routeSlug() ? pathSegments()[1] : firstSegment();
   }
 
-  /* The workspace a tenant route resolved to. The app resolves it after this
-   * script has booted, so it is read per event, and only when it matches the
-   * slug in the address bar. */
+  /* The workspace a tenant route resolved to, only when it matches the slug in
+   * the address bar. The app resolves it after this script has booted, so it
+   * is read per event; until then the app's saved copy of the same slug's
+   * context (tenantContextCache.js) answers, which covers a deep link's landing
+   * page view. Neither: "". */
   function routeTenant() {
     var slug = routeSlug();
     if (!slug) return "";
     try {
       var context = window.__digitTenantContext;
       if (context && context.urlSlug === slug && isStr(context.tenantId) && context.tenantId) return context.tenantId;
+    } catch (e) {}
+    try {
+      var saved = JSON.parse(lsGet("Digit.tenantContext." + slug) || "null");
+      var tenant = saved && saved.tenant;
+      if (tenant && tenant.urlSlug === slug && isStr(tenant.tenantId) && tenant.tenantId) return tenant.tenantId;
     } catch (e) {}
     return "";
   }
@@ -661,10 +668,11 @@
       stateTenant: state,
       cityTenant: city,
       /* What events are attributed to. On a tenant route that is its workspace,
-       * or a city within it; a city tenant left in localStorage by another
-       * workspace (it is origin-wide) does not count. */
-      tenant: workspace
-        ? (city && (city === workspace || city.indexOf(workspace + ".") === 0) ? city : workspace)
+       * or a city within it, and never the platform root or a city tenant
+       * another workspace left in localStorage (it is origin-wide): missing
+       * data beats wrong data. */
+      tenant: routeSlug()
+        ? (workspace ? (city && (city === workspace || city.indexOf(workspace + ".") === 0) ? city : workspace) : "")
         : (city || state),
       tenantKnown: !!city,
       page: currentPage(),   /* grouping key: prefix stripped */
