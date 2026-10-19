@@ -975,3 +975,86 @@ test("a redirect chain gated on async work records every hop it passes through",
   const after = t.sandbox._paq.filter((c) => c[0] === "trackPageView").length;
   assert.equal(after - before, 2, "each settled hop is its own pageview today");
 });
+
+/* ───────────────────────── tenant routes (#2582) ───────────────────────── */
+
+// A PostHog record at the deployment's state tenant, with the SDK arriving the
+// way it really does: after the shim has booted.
+function tenantRouteShim(pathname, local) {
+  const t = loadShim({
+    pathname,
+    local,
+    deferScriptLoad: true,
+    respond: (tenant) => (tenant === "mz" ? [row("mz", POSTHOG_OK)] : []),
+  });
+  const captured = [];
+  t.sandbox.posthog = { init: () => {}, capture: (name, props) => captured.push({ name, props }) };
+  t.loadScripts();
+  return { t, captured };
+}
+
+test("a tenant route (/<slug>/digit-ui/) is tracked, not turned off", () => {
+  const { t, captured } = tenantRouteShim("/ke/digit-ui/employee/pgr/inbox");
+  assert.equal(t.internal.providers(), 1, "the provider initialises on a tenant route");
+  const view = captured.find((c) => c.name === "$pageview");
+  assert.ok(view, "the page view is sent");
+  // Served URL as in the address bar; the entrance is still the context path.
+  assert.equal(view.props.$current_url, "/ke/digit-ui/employee/pgr/inbox");
+  assert.equal(view.props.entrance, "digit-ui");
+  // The slug is not part of the page's identity: the title comes from the same
+  // grouping key as on /digit-ui/, so one page is one report row across workspaces.
+  assert.equal(view.props.page_title, t.internal.pageTitle("/employee/pgr/inbox"));
+});
+
+test("on a tenant route, events belong to the route's workspace once the app resolves it", () => {
+  // Another workspace's city tenant left in localStorage, which is origin-wide.
+  const { t, captured } = tenantRouteShim("/ke/digit-ui/citizen/pgr/complaints", { "Citizen.tenant-id": "other.city" });
+  t.sandbox.__digitTenantContext = { urlSlug: "ke", tenantId: "ke" };
+  t.api.trackEvent("pgr.my-complaints.open", { category: "pgr" });
+  const event = captured.find((c) => c.name === "pgr.my-complaints.open");
+  assert.equal(event.props.tenant, "ke", "the stale tenant from another workspace is not used");
+});
+
+test("on a tenant route, a city within the workspace is kept", () => {
+  const { t, captured } = tenantRouteShim("/ke/digit-ui/employee/pgr/inbox", { "Employee.tenant-id": "ke.nairobi" });
+  t.sandbox.__digitTenantContext = { urlSlug: "ke", tenantId: "ke" };
+  t.api.trackEvent("pgr.complaint.action-selected", { category: "pgr" });
+  assert.equal(captured.find((c) => c.name === "pgr.complaint.action-selected").props.tenant, "ke.nairobi");
+});
+
+test("a context for another slug is ignored", () => {
+  const { t, captured } = tenantRouteShim("/ke/digit-ui/citizen/pgr/complaints");
+  t.sandbox.__digitTenantContext = { urlSlug: "bomet", tenantId: "bomet" };
+  t.api.trackEvent("pgr.my-complaints.open", { category: "pgr" });
+  assert.equal(captured.find((c) => c.name === "pgr.my-complaints.open").props.tenant, "", "not the deployment tenant: missing beats wrong");
+});
+
+test("a deep link's landing page view is not attributed to a stale tenant before the route resolves", () => {
+  // No live context yet, and another workspace's city tenant in localStorage.
+  const { captured } = tenantRouteShim("/ke/digit-ui/citizen/pgr/complaints", { "Citizen.tenant-id": "other.city" });
+  assert.equal(captured.find((c) => c.name === "$pageview").props.tenant, "");
+});
+
+test("before the route resolves, the app's saved context for the same slug answers", () => {
+  const saved = JSON.stringify({ tenant: { urlSlug: "ke", tenantId: "ke" }, savedAt: 1 });
+  const { captured } = tenantRouteShim("/ke/digit-ui/citizen/pgr/complaints", {
+    "Citizen.tenant-id": "other.city",
+    "Digit.tenantContext.ke": saved,
+    "Digit.tenantContext.bomet": JSON.stringify({ tenant: { urlSlug: "bomet", tenantId: "bomet" }, savedAt: 1 }),
+  });
+  assert.equal(captured.find((c) => c.name === "$pageview").props.tenant, "ke");
+});
+
+test("a reserved word or a non-slug before the context path is not a tenant route", () => {
+  for (const p of ["/configurator/digit-ui/employee/pgr/inbox", "/Ke/digit-ui/citizen", "/k/digit-ui/citizen", "/digit-ui-test/digit-ui/citizen"]) {
+    const t = loadShim({ pathname: p, respond: () => [] });
+    assert.equal(t.xhrCalls.length, 0, p);
+  }
+});
+
+test("the shim's reserved slugs are exactly the app's", () => {
+  const source = fs.readFileSync(path.resolve(__dirname, "../packages/libraries/src/services/tenant/tenantRoute.js"), "utf8");
+  const app = [...source.match(/RESERVED_TENANT_SLUGS = Object\.freeze\(\[([\s\S]*?)\]\)/)[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+  const shim = [...SHIM.match(/var RESERVED_TENANT_SLUGS = \[([\s\S]*?)\];/)[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(shim, app);
+});
