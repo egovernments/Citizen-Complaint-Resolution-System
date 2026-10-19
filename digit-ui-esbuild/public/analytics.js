@@ -365,13 +365,70 @@
     } catch (e) { return ""; }
   }
 
+  /* Tenant routes serve this same bundle at /<slug>/<context>/... (the app's
+   * parseTenantRoute in packages/libraries/src/services/tenant/tenantRoute.js).
+   * Same slug rule and reserved words, so the shim and the app agree on what a
+   * tenant route is; tests/analytics.shim.test.js keeps the two lists equal. */
+  var TENANT_SLUG = /^[a-z0-9][a-z0-9-]{1,62}$/;
+  var RESERVED_TENANT_SLUGS = [
+    "access", "api", "assets", "auth", "boundary-service", "brand",
+    "citizen", "common-persist", "configurator", "dashboard", "digit-ui", "egov-bndry-mgmnt",
+    "egov-enc-service", "egov-hrms", "egov-idgen", "egov-indexer", "egov-location", "egov-mdms-service",
+    "egov-user-event", "egov-workflow-v2", "employee", "env", "file-store", "filestore",
+    "gatus", "grafana", "health", "identity", "images", "inbox",
+    "kc", "keycloak", "localization", "matomo", "mcp", "mdms-v2",
+    "novu", "novu-api", "novu-bridge", "novu-ws", "otel", "otp",
+    "pgr-services", "static", "status", "tests", "tests-v2", "turbopass",
+    "user", "user-otp", "user-preference", "v1", "xstate-chatbot"
+  ];
+
+  function pathSegments() {
+    try {
+      return String(window.location.pathname || "").split("/").filter(function (p) { return p !== ""; });
+    } catch (e) { return []; }
+  }
+
+  /* The slug when this page is a tenant route, else "". */
+  function routeSlug() {
+    var parts = pathSegments();
+    if (parts.length < 2 || parts[1] !== contextPath()) return "";
+    if (!TENANT_SLUG.test(parts[0]) || RESERVED_TENANT_SLUGS.indexOf(parts[0]) !== -1) return "";
+    /* Kong serves /digit-ui<anything>/ (the testing entrance, typos) from this
+     * bundle too; that traffic stays out even with a context path after it. */
+    if (parts[0].indexOf(contextPath()) === 0) return "";
+    return parts[0];
+  }
+
+  /* The entrance a page was served through: the context segment, which sits
+   * after the slug on a tenant route. */
+  function entrance() {
+    return routeSlug() ? pathSegments()[1] : firstSegment();
+  }
+
+  /* The workspace a tenant route resolved to. The app resolves it after this
+   * script has booted, so it is read per event, and only when it matches the
+   * slug in the address bar. */
+  function routeTenant() {
+    var slug = routeSlug();
+    if (!slug) return "";
+    try {
+      var context = window.__digitTenantContext;
+      if (context && context.urlSlug === slug && isStr(context.tenantId) && context.tenantId) return context.tenantId;
+    } catch (e) {}
+    return "";
+  }
+
   /* Strip the context prefix by CONFIG, never by the literal "/digit-ui" —
    * the testing entrance and the container surface serve other prefixes. */
   function currentPage() {
     var path = "";
     try { path = window.location.pathname || ""; } catch (e) { return ""; }
     var cp = contextPath();
-    if (cp && path.indexOf("/" + cp) === 0) path = path.substring(cp.length + 1);
+    /* A tenant route's slug goes too: one route is one report row whichever
+     * workspace served it, and the tenant is reported on its own. */
+    var slug = routeSlug();
+    var prefix = slug ? "/" + slug + "/" + cp : "/" + cp;
+    if (cp && path.indexOf(prefix) === 0) path = path.substring(prefix.length);
     if (!path) path = "/";
     var q = "";
     try { q = scrubQuery(window.location.search || ""); } catch (e) {}
@@ -596,11 +653,19 @@
 
   function buildCtx(extra) {
     var city = cityTenant();
+    var state = stateTenant();
+    var workspace = routeTenant();
     var ctx = {
       surface: currentSurface(),
-      entrance: firstSegment(),
-      stateTenant: stateTenant(),
+      entrance: entrance(),
+      stateTenant: state,
       cityTenant: city,
+      /* What events are attributed to. On a tenant route that is its workspace,
+       * or a city within it; a city tenant left in localStorage by another
+       * workspace (it is origin-wide) does not count. */
+      tenant: workspace
+        ? (city && (city === workspace || city.indexOf(workspace + ".") === 0) ? city : workspace)
+        : (city || state),
       tenantKnown: !!city,
       page: currentPage(),   /* grouping key: prefix stripped */
       url: currentUrl(),     /* what a provider records: resolves as served */
@@ -979,11 +1044,11 @@
         });
       },
       pageView: function (rec, ctx) {
-        phCall("capture", ["$pageview", { $current_url: ctx.url, page_title: ctx.title, tenant: ctx.cityTenant || ctx.stateTenant, state_tenant: ctx.stateTenant, entrance: ctx.entrance, surface: ctx.surface, locale: ctx.locale }]);
+        phCall("capture", ["$pageview", { $current_url: ctx.url, page_title: ctx.title, tenant: ctx.tenant, state_tenant: ctx.stateTenant, entrance: ctx.entrance, surface: ctx.surface, locale: ctx.locale }]);
       },
       event: function (rec, ctx) {
         var e = ctx.event || {};
-        phCall("capture", [e.name || e.action || "event", { category: e.category || "ui", label: e.label || "", value: e.value, $current_url: ctx.url, tenant: ctx.cityTenant || ctx.stateTenant, entrance: ctx.entrance }]);
+        phCall("capture", [e.name || e.action || "event", { category: e.category || "ui", label: e.label || "", value: e.value, $current_url: ctx.url, tenant: ctx.tenant, entrance: ctx.entrance }]);
       },
       captureError: function (rec, ctx) {
         var er = ctx.error || {};
@@ -1010,7 +1075,7 @@
                   replaysSessionSampleRate: 0,
                   replaysOnErrorSampleRate: 0,
                   environment: ctx.stateTenant || "unknown",
-                  initialScope: { tags: { tenant: ctx.cityTenant || ctx.stateTenant, entrance: ctx.entrance, surface: ctx.surface } },
+                  initialScope: { tags: { tenant: ctx.tenant, entrance: ctx.entrance, surface: ctx.surface } },
                   beforeSend: function (ev) {
                     try {
                       if (ev.request) { delete ev.request.cookies; delete ev.request.headers; if (ev.request.url) ev.request.url = scrub(String(ev.request.url)); }
@@ -1550,10 +1615,11 @@
     /* 3. the testing entrance sets TESTING_MODE in its own globalConfigs */
     if (gc("TESTING_MODE")) { dbg("off: testing mode"); return; }
 
-    /* 4. only the canonical entrance is tracked. Kong prefix-matches /digit-ui
-     *    with strip_path:false, so /digit-ui-test/ and any /digit-ui<typo>/
-     *    serve the same bundle; none of that traffic belongs in the dataset. */
-    var seg = firstSegment();
+    /* 4. only the canonical entrance is tracked, directly or behind a tenant
+     *    route's slug (/<slug>/digit-ui/). Kong prefix-matches /digit-ui with
+     *    strip_path:false, so /digit-ui-test/ and any /digit-ui<typo>/ serve the
+     *    same bundle; none of that traffic belongs in the dataset. */
+    var seg = entrance();
     if (seg && seg !== contextPath()) { dbg("off: entrance " + seg + " is not " + contextPath()); return; }
 
     /* 5. an unrendered globalConfigs (stateTenantId === "uitest") means we
