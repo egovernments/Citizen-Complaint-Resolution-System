@@ -1026,7 +1026,23 @@ test("a context for another slug is ignored", () => {
   const { t, captured } = tenantRouteShim("/ke/digit-ui/citizen/pgr/complaints");
   t.sandbox.__digitTenantContext = { urlSlug: "bomet", tenantId: "bomet" };
   t.api.trackEvent("pgr.my-complaints.open", { category: "pgr" });
-  assert.equal(captured.find((c) => c.name === "pgr.my-complaints.open").props.tenant, "mz", "falls back to the deployment tenant");
+  assert.equal(captured.find((c) => c.name === "pgr.my-complaints.open").props.tenant, "", "not the deployment tenant: missing beats wrong");
+});
+
+test("a deep link's landing page view is not attributed to a stale tenant before the route resolves", () => {
+  // No live context yet, and another workspace's city tenant in localStorage.
+  const { captured } = tenantRouteShim("/ke/digit-ui/citizen/pgr/complaints", { "Citizen.tenant-id": "other.city" });
+  assert.equal(captured.find((c) => c.name === "$pageview").props.tenant, "");
+});
+
+test("before the route resolves, the app's saved context for the same slug answers", () => {
+  const saved = JSON.stringify({ tenant: { urlSlug: "ke", tenantId: "ke" }, savedAt: 1 });
+  const { captured } = tenantRouteShim("/ke/digit-ui/citizen/pgr/complaints", {
+    "Citizen.tenant-id": "other.city",
+    "Digit.tenantContext.ke": saved,
+    "Digit.tenantContext.bomet": JSON.stringify({ tenant: { urlSlug: "bomet", tenantId: "bomet" }, savedAt: 1 }),
+  });
+  assert.equal(captured.find((c) => c.name === "$pageview").props.tenant, "ke");
 });
 
 test("a reserved word or a non-slug before the context path is not a tenant route", () => {
