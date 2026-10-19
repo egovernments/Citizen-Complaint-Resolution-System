@@ -2,14 +2,13 @@
  * Citizen PGR Complaint — Full Lifecycle E2E
  *
  * Tests the complete complaint flow from citizen filing through employee resolution:
- *   1. Create citizen user (API)
- *   2. Citizen logs in through the UI with fixed OTP (123456)
- *   3. Citizen creates PGR complaint (API, as citizen)
- *   4. Citizen searches own complaint (API)
- *   5. Employee sees complaint in PGR inbox (UI)
- *   6. Employee assigns complaint to another employee (API — UI assign action is broken)
- *   7. Assigned employee resolves complaint (API)
- *   8. Employee verifies RESOLVED status on complaint details page (UI)
+ *   1. The run's citizen signs in (phone OTP via the BFF; full-pgr-lifecycle drives the form)
+ *   2. Citizen creates PGR complaint (API, as citizen)
+ *   3. Citizen searches own complaint (API)
+ *   4. GRO sees complaint in PGR inbox (UI)
+ *   5. GRO (DIGIT_USERNAME) assigns it to the EMPLOYEE_USER persona, an LME (API — UI assign action is broken)
+ *   6. Assigned employee resolves complaint (API)
+ *   7. Employee verifies RESOLVED status on complaint details page (UI)
  *
  * NOTE: The DIGIT UI "Take Action → Assign" crashes with CORE_SOMETHING_WENT_WRONG
  * (React error boundary), so assign/resolve are done via API. The test still verifies
@@ -17,17 +16,22 @@
  */
 import { test, expect } from '@playwright/test';
 import { PgrInboxPage } from '../../pages/pgr-inbox.page';
-import { getDigitToken, loginViaApi } from '../../utils/auth';
-import { getMobileValidationRule, generateValidMobile } from '../../common/mdms-mobile';
+import { getDigitToken, loginViaApi, appBase } from '../../utils/auth';
+import { citizenLoginViaApi, runCitizenMobile } from '../../utils/citizen-auth';
+import { requiredEnv } from '../../utils/identity';
 import { pickRandomLeafBoundary, type Boundary } from '../../common/mdms-boundary';
-import { pickRandomServiceCode, type ServiceDef } from '../../common/mdms-servicedef';
-import { pickRandomEmployeeWithRole, type HrmsEmployee } from '../../common/hrms-employees';
+import { pickServiceDefInDepartments, type ServiceDef } from '../../common/mdms-servicedef';
+import { getLmeByUuid } from '../../common/hrms-employees';
 
-const BASE_URL = process.env.BASE_URL || 'http://localhost:18080';
-const TENANT = process.env.DIGIT_TENANT || 'uitest.citya';
-const EMPLOYEE_USER = process.env.DIGIT_EMPLOYEE_USER || 'ADMIN';
-const EMPLOYEE_PASS = process.env.DIGIT_EMPLOYEE_PASSWORD || 'eGov@123';
-const FIXED_OTP = '123456';
+const BASE_URL = requiredEnv('BASE_URL');
+const TENANT = requiredEnv('DIGIT_TENANT');
+// Lookups, the GRO views and ASSIGN run as DIGIT_USERNAME (a GRO). EMPLOYEE_USER
+// is the LME who receives the complaint, and may hold neither GRO nor HRMS search.
+const ADMIN_USER = requiredEnv('DIGIT_USERNAME');
+const ADMIN_PASS = requiredEnv('DIGIT_PASSWORD');
+const EMPLOYEE_USER = requiredEnv('EMPLOYEE_USER');
+const EMPLOYEE_PASS = requiredEnv('EMPLOYEE_PASSWORD');
+const ADMIN = { baseURL: BASE_URL, adminUser: ADMIN_USER, adminPassword: ADMIN_PASS };
 
 const CITIZEN_NAME = 'Playwright Test Citizen';
 
@@ -36,17 +40,18 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
 
   let adminToken: string;
   let adminUserInfo: Record<string, unknown>;
+  let employeeToken: string;
+  let employeeUserInfo: Record<string, unknown>;
   let citizenToken: string;
   let citizenUserInfo: Record<string, unknown>;
   let serviceRequestId: string;
   let assigneeUuid: string;
-  let citizenCreated = false;
   let citizenLoggedIn = false;
   let complaintCreated = false;
   let complaintAssigned = false;
   // Tenant-aware fixtures sourced from the live deployment at setup time.
-  // - mobile rule comes from MDMS common-masters.MobileNumberValidation
-  // - locality is a RANDOMLY-picked leaf from the boundary tree (egov-location)
+  // - the citizen is the run's (runCitizenMobile), so no extra OTP sends
+  // - locality is a RANDOMLY-picked leaf from the boundary tree (boundary-service)
   // Random picking is deliberate: it forces the test to exercise different
   // wards across runs instead of pinning a single happy path.
   let CITIZEN_PHONE: string;
@@ -54,164 +59,49 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
   let SERVICE_DEF: ServiceDef;
 
   test.beforeAll(async () => {
-    const rule = await getMobileValidationRule(TENANT, {
-      baseURL: BASE_URL,
-      adminUser: EMPLOYEE_USER,
-      adminPassword: EMPLOYEE_PASS,
-    });
-    CITIZEN_PHONE = generateValidMobile(rule);
-    console.log(
-      `[citizen-lifecycle] phone=${CITIZEN_PHONE} pattern=${rule.pattern} (tenant=${TENANT})`,
-    );
+    CITIZEN_PHONE = await runCitizenMobile();
+    console.log(`[citizen-lifecycle] phone=${CITIZEN_PHONE} (tenant=${TENANT})`);
 
-    LOCALITY = await pickRandomLeafBoundary(TENANT, {
-      baseURL: BASE_URL,
-      adminUser: EMPLOYEE_USER,
-      adminPassword: EMPLOYEE_PASS,
-    });
+    LOCALITY = await pickRandomLeafBoundary(TENANT, ADMIN);
     console.log(
       `[citizen-lifecycle] locality=${LOCALITY.code} (${LOCALITY.name}) type=${LOCALITY.boundaryType ?? '?'} — picked random leaf`,
     );
 
-    SERVICE_DEF = await pickRandomServiceCode(TENANT, {
-      baseURL: BASE_URL,
-      adminUser: EMPLOYEE_USER,
-      adminPassword: EMPLOYEE_PASS,
-    });
+    // The complaint goes to the EMPLOYEE_USER persona, who then resolves it,
+    // so it is filed under a type in that persona's department.
+    const persona = await getDigitToken({ baseURL: BASE_URL, tenant: TENANT, username: EMPLOYEE_USER, password: EMPLOYEE_PASS });
+    const { employee, departments } = await getLmeByUuid(TENANT, persona.UserRequest.uuid, ADMIN);
+    assigneeUuid = employee.user.uuid;
+    SERVICE_DEF = await pickServiceDefInDepartments(TENANT, departments, ADMIN);
     console.log(
-      `[citizen-lifecycle] serviceCode=${SERVICE_DEF.serviceCode} menuPath=${SERVICE_DEF.menuPath ?? '?'} — picked random active ServiceDef`,
+      `[citizen-lifecycle] serviceCode=${SERVICE_DEF.serviceCode} department=${SERVICE_DEF.department ?? '-'} — picked random active ServiceDef for EMPLOYEE_USER's department`,
     );
   });
 
-  test('acquire admin API token', async () => {
+  test('acquire admin and employee API tokens', async () => {
     const tokenResponse = await getDigitToken({
       baseURL: BASE_URL,
       tenant: TENANT,
-      username: EMPLOYEE_USER,
-      password: EMPLOYEE_PASS,
+      username: ADMIN_USER,
+      password: ADMIN_PASS,
     });
 
     expect(tokenResponse.access_token).toBeTruthy();
     adminToken = tokenResponse.access_token;
     adminUserInfo = tokenResponse.UserRequest as Record<string, unknown>;
+
+    const employee = await getDigitToken({ baseURL: BASE_URL, tenant: TENANT, username: EMPLOYEE_USER, password: EMPLOYEE_PASS });
+    employeeToken = employee.access_token;
+    employeeUserInfo = employee.UserRequest as Record<string, unknown>;
   });
 
-  test('create citizen user via API', async () => {
-    expect(adminToken).toBeTruthy();
-
-    const resp = await fetch(`${BASE_URL}/user/users/_createnovalidate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        RequestInfo: {
-          apiId: 'Rainmaker',
-          authToken: adminToken,
-          userInfo: adminUserInfo,
-        },
-        user: {
-          userName: CITIZEN_PHONE,
-          name: CITIZEN_NAME,
-          mobileNumber: CITIZEN_PHONE,
-          tenantId: TENANT,
-          type: 'CITIZEN',
-          roles: [{ code: 'CITIZEN', name: 'Citizen', tenantId: TENANT }],
-          active: true,
-        },
-      }),
-    });
-
-    expect(resp.ok).toBe(true);
-    const data: any = await resp.json();
-    expect(data.user).toBeDefined();
-    expect(data.user[0].userName).toBe(CITIZEN_PHONE);
-    expect(data.user[0].type).toBe('CITIZEN');
-    citizenCreated = true;
-    console.log(`Created citizen: ${CITIZEN_PHONE}`);
-  });
-
-  test('citizen logs in through the UI with fixed OTP', async ({ page }) => {
-    test.skip(!citizenCreated, 'Skipped — citizen not created');
-
-    // Mock user-otp/_send (OTP service not deployed in local stack)
-    await page.route('**/user-otp/v1/_send**', async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          ResponseInfo: { apiId: 'Rainmaker', ver: '1.0', ts: Date.now(), status: 'successful' },
-          otp: { isValidated: false, UUID: 'mock-uuid', tenantId: TENANT },
-        }),
-      });
-    });
-
-    // Navigate to citizen login
-    await page.goto(`${BASE_URL}/digit-ui/citizen/login`, {
-      waitUntil: 'domcontentloaded',
-      timeout: 30_000,
-    });
-    await page.waitForTimeout(2000);
-
-    // Enter phone number. Selector chain handles two UI flavors:
-    //   legacy  -> <input name="mobileNumber">
-    //   bomet   -> labelled "Mobile Number", composite +country-code chip
-    //              plus a bare tel input with no name attribute
-    const mobileInput = page
-      .locator('input[name="mobileNumber"]')
-      .or(page.getByLabel(/Mobile Number/i))
-      .or(page.locator('input[type="tel"]:visible'))
-      .first();
-    await mobileInput.waitFor({ state: 'visible', timeout: 60_000 });
-    await mobileInput.click();
-    await mobileInput.type(CITIZEN_PHONE, { delay: 30 });
-    await page.waitForTimeout(500);
-
-    // Click submit (varies by build: NEXT, Continue, or the raw label key)
-    await page
-      .locator('button:visible')
-      .filter({
-        hasText: /NEXT|Next|Continue|CONTINUE|CS_COMMONS_NEXT|CORE_COMMON_CONTINUE/,
-      })
-      .first()
-      .click();
-    await page.waitForTimeout(5000);
-
-    // OTP page: enter 6-digit OTP
-    const otpInputs = page.locator('input[maxlength="1"]');
-    await otpInputs.first().waitFor({ state: 'visible', timeout: 60_000 });
-    const otpDigits = FIXED_OTP.split('');
-    for (let i = 0; i < otpDigits.length; i++) {
-      await otpInputs.nth(i).click();
-      await otpInputs.nth(i).type(otpDigits[i]);
-      await page.waitForTimeout(100);
-    }
-    await page.waitForTimeout(1000);
-
-    // Submit OTP (same button label variance as above)
-    await page
-      .locator('button:visible')
-      .filter({
-        hasText: /NEXT|Next|Continue|CONTINUE|CS_COMMONS_NEXT|CORE_COMMON_CONTINUE/,
-      })
-      .first()
-      .click();
-    await page.waitForTimeout(10_000);
-
-    // Verify citizen is logged in: token should be in localStorage
-    const token = await page.evaluate(() => localStorage.getItem('Citizen.token'));
-    expect(token).toBeTruthy();
+  test('citizen signs in with the fixed OTP', async ({ page }) => {
+    const session = await citizenLoginViaApi(page, CITIZEN_PHONE);
+    // The SPA's own DIGIT session doubles as the citizen API token.
+    citizenToken = session.token;
+    citizenUserInfo = session.userInfo;
     citizenLoggedIn = true;
-    console.log('Citizen logged in through UI, URL:', page.url());
-
-    // Also acquire citizen API token for subsequent API calls
-    const tokenResponse = await getDigitToken({
-      baseURL: BASE_URL,
-      tenant: TENANT,
-      username: CITIZEN_PHONE,
-      password: FIXED_OTP,
-      userType: 'CITIZEN',
-    });
-    citizenToken = tokenResponse.access_token;
-    citizenUserInfo = tokenResponse.UserRequest as Record<string, unknown>;
+    console.log('Citizen signed in, URL:', page.url());
   });
 
   test('citizen creates PGR complaint via API', async () => {
@@ -253,20 +143,13 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
       },
     );
 
-    if (resp.status === 400) {
-      const body = await resp.text();
-      console.log(`PGR create returned 400: ${body.slice(0, 300)}`);
-      test.skip(true, 'PGR create failed — missing data prerequisites');
-      return;
-    }
-
-    expect(resp.ok).toBe(true);
+    expect(resp.ok, `PGR create failed (${resp.status}): ${(await resp.clone().text()).slice(0, 300)}`).toBe(true);
     const data: any = await resp.json();
     expect(data.ServiceWrappers).toBeDefined();
     expect(data.ServiceWrappers.length).toBeGreaterThan(0);
 
     serviceRequestId = data.ServiceWrappers[0].service.serviceRequestId;
-    expect(serviceRequestId).toMatch(/^PG-PGR-/);
+    expect(serviceRequestId).toMatch(/^[A-Z0-9-]+-PGR-[0-9-]+$/);
     complaintCreated = true;
     console.log(`Citizen created complaint: ${serviceRequestId}`);
   });
@@ -301,10 +184,10 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
     console.log(`Citizen found own complaint: ${serviceRequestId}`);
   });
 
-  test('complaint appears in employee PGR inbox (UI)', async ({ page }) => {
+  test('complaint appears in the GRO PGR inbox (UI)', async ({ page }) => {
     test.skip(!complaintCreated, 'Skipped — complaint not created');
 
-    await loginViaApi(page, { baseURL: BASE_URL, tenant: TENANT, username: EMPLOYEE_USER, password: EMPLOYEE_PASS });
+    await loginViaApi(page, { baseURL: BASE_URL, tenant: TENANT, username: ADMIN_USER, password: ADMIN_PASS });
 
     const inbox = new PgrInboxPage(page);
     await inbox.goto();
@@ -321,12 +204,13 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
     }
   });
 
-  test('employee complaint details page shows PENDINGFORASSIGNMENT (UI)', async ({ page }) => {
+  test('GRO complaint details page shows PENDINGFORASSIGNMENT (UI)', async ({ page }) => {
     test.skip(!complaintCreated, 'Skipped — complaint not created');
 
-    await loginViaApi(page, { baseURL: BASE_URL, tenant: TENANT, username: EMPLOYEE_USER, password: EMPLOYEE_PASS });
+    // The GRO acts on an unassigned complaint, so it is the GRO who sees Take Action.
+    await loginViaApi(page, { baseURL: BASE_URL, tenant: TENANT, username: ADMIN_USER, password: ADMIN_PASS });
 
-    await page.goto(`/digit-ui/employee/pgr/complaint/details/${serviceRequestId}`, {
+    await page.goto(`${appBase()}/employee/pgr/complaint-details/${serviceRequestId}`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });
@@ -343,34 +227,9 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
     console.log(`Details page shows ${serviceRequestId} as pending for assignment`);
   });
 
-  test('ADMIN assigns complaint to employee via API', async () => {
+  test('ADMIN assigns complaint to the employee persona via API', async () => {
     test.skip(!complaintCreated, 'Skipped — complaint not created');
-
-    // Find a PGR_LME employee to assign to. Workflow `PENDINGFORASSIGNMENT.ASSIGN`
-    // requires the assignee to carry PGR_LME (or PGR_VIEWER). Picking blindly
-    // would silently produce a workflow-side rejection later.
-    let assignee: HrmsEmployee;
-    try {
-      assignee = await pickRandomEmployeeWithRole(TENANT, 'PGR_LME', {
-        baseURL: BASE_URL,
-        adminUser: EMPLOYEE_USER,
-        adminPassword: EMPLOYEE_PASS,
-      });
-    } catch (err) {
-      // Real ops finding — the deployment has no PGR_LME-bearing employee.
-      // Skip gracefully instead of failing or assigning to someone the
-      // workflow can't move to.
-      test.skip(
-        true,
-        `No PGR_LME employee on tenant=${TENANT} — assign step cannot proceed (${(err as Error).message})`,
-      );
-      return;
-    }
-    assigneeUuid = assignee.user.uuid;
-    const assigneeName = assignee.user.name ?? assignee.user.userName ?? '(unnamed)';
-    console.log(
-      `Assigning to: ${assigneeName} (${assigneeUuid}) — random PGR_LME on ${TENANT}`,
-    );
+    console.log(`Assigning to EMPLOYEE_USER (${assigneeUuid}), a PGR_LME on ${TENANT}`);
 
     // Fetch full service object (PGR _update requires it)
     const searchResp = await fetch(
@@ -415,12 +274,7 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
       },
     );
 
-    if (!resp.ok) {
-      const body = await resp.text();
-      console.log(`PGR assign returned ${resp.status}: ${body.slice(0, 500)}`);
-      test.skip(true, `PGR assign API failed (${resp.status})`);
-      return;
-    }
+    expect(resp.ok, `PGR assign was refused (${resp.status}): ${(await resp.clone().text()).slice(0, 300)}`).toBe(true);
     const data: any = await resp.json();
     expect(data.ServiceWrappers).toBeDefined();
     expect(data.ServiceWrappers[0].service.applicationStatus).toBe('PENDINGATLME');
@@ -433,7 +287,7 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
 
     await loginViaApi(page, { baseURL: BASE_URL, tenant: TENANT, username: EMPLOYEE_USER, password: EMPLOYEE_PASS });
 
-    await page.goto(`/digit-ui/employee/pgr/complaint/details/${serviceRequestId}`, {
+    await page.goto(`${appBase()}/employee/pgr/complaint-details/${serviceRequestId}`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });
@@ -441,7 +295,7 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
 
     const bodyText = await page.locator('body').innerText();
     expect(bodyText).toContain(serviceRequestId);
-    expect(bodyText).toMatch(/PENDINGATLME|Pending at LME|Pending for resolution/i);
+    expect(bodyText).toMatch(/PENDINGATLME|Pending at (LME|last mile employee)/i);
     console.log(`Details page confirms PENDINGATLME status`);
   });
 
@@ -454,11 +308,11 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
       {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${adminToken}`,
+          Authorization: `Bearer ${employeeToken}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          RequestInfo: { apiId: 'Rainmaker', authToken: adminToken, userInfo: adminUserInfo },
+          RequestInfo: { apiId: 'Rainmaker', authToken: employeeToken, userInfo: employeeUserInfo },
         }),
       },
     );
@@ -471,14 +325,14 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
       {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${adminToken}`,
+          Authorization: `Bearer ${employeeToken}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           RequestInfo: {
             apiId: 'Rainmaker',
-            authToken: adminToken,
-            userInfo: adminUserInfo,
+            authToken: employeeToken,
+            userInfo: employeeUserInfo,
           },
           service: fullService,
           workflow: {
@@ -501,7 +355,7 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
 
     await loginViaApi(page, { baseURL: BASE_URL, tenant: TENANT, username: EMPLOYEE_USER, password: EMPLOYEE_PASS });
 
-    await page.goto(`/digit-ui/employee/pgr/complaint/details/${serviceRequestId}`, {
+    await page.goto(`${appBase()}/employee/pgr/complaint-details/${serviceRequestId}`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });

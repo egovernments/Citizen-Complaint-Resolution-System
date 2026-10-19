@@ -1,5 +1,6 @@
-version: '3.8'
-
+# Standalone stack for local development of this service alone. The full DIGIT
+# stack lives in local-setup/docker-compose.egov-digit.yaml, where this service
+# shares the `egov` database and its schema is owned by a Flyway init container.
 services:
   app:
     build:
@@ -8,15 +9,18 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - SERVER_PORT=8080
-      - SERVER_CONTEXT_PATH=/user-preference
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_USER=postgres
-      - DB_PASSWORD=postgres
-      - DB_NAME=user_preferences
-      - DB_SSL_MODE=disable
-      - GIN_MODE=release
+      SERVER_PORT: '8080'
+      SERVER_CONTEXT_PATH: /user-preference
+      DB_HOST: postgres
+      DB_PORT: '5432'
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: user_preferences
+      DB_SSL_MODE: disable
+      # Standalone, so the application's own Flyway owns the schema. In the
+      # full stack this is 'false' and the -db migrator image runs instead.
+      SPRING_FLYWAY_ENABLED: 'true'
+      JAVA_OPTS: -Xmx192m -Xms192m
     depends_on:
       postgres:
         condition: service_healthy
@@ -27,14 +31,13 @@ services:
   postgres:
     image: postgres:15-alpine
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=user_preferences
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: user_preferences
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./db/migrations:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d user_preferences"]
       interval: 5s

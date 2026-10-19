@@ -1,0 +1,32 @@
+{
+  "schemaVersion": "1",
+  "eventId": "3f1c9c4e-1f0a-4a1c-9c55-2b3d6f1f0a11",
+  "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+  "eventTime": "2026-09-21T07:35:02.631Z",
+  "producer": "complaints-service",
+  "module": "Complaints",
+  "eventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+  "entityType": "COMPLAINT",
+  "entityId": "PGR-2026-000123",
+  "tenantId": "ke.bomet",
+  "channel": "SMS",
+  "subscriberId": "ke.bomet:9a1f2e77-0c3b-4c2a-9f3e-5a1d2c3b4e5f",
+  "contact": {
+    "userId": "9a1f2e77-0c3b-4c2a-9f3e-5a1d2c3b4e5f",
+    "type": "CITIZEN",
+    "name": "Jane Doe",
+    "phone": "+254712345678",
+    "email": null,
+    "locale": "en_IN"
+  },
+  "renderedBody": "Dear Jane, your complaint PGR-2026-000123 has been assigned to a field officer.",
+  "subject": null,
+  "transactionId": "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:9a1f2e77-0c3b-4c2a-9f3e-5a1d2c3b4e5f:SMS",
+  "templateKey": "CITIZEN.ASSIGN.PENDINGATLME.SMS.en_IN",
+  "data": {
+    "complaintNo": "PGR-2026-000123",
+    "status": "PENDINGATLME",
+    "action": "ASSIGN",
+    "toState": "PENDINGATLME"
+  }
+}

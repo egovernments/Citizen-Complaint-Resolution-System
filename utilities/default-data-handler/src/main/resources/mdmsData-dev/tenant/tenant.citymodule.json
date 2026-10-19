@@ -19,7 +19,7 @@
     "active": true,
     "module": "PGR",
     "tenants": [
-    {
+      {
         "code": "{tenantid}"
       },
       {

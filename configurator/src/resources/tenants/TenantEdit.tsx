@@ -4,7 +4,7 @@ export function TenantEdit() {
   return (
     <DigitEdit title="Edit Tenant">
       <DigitFormInput source="code" label="Code" disabled />
-      <DigitFormInput source="name" label="Name" validate={v.name} />
+      <DigitFormInput source="name" label="Name" disabled help="Change the workspace name in Workspace settings." />
       <DigitFormInput
         source="description"
         label="Description"

@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "1",
+  "eventId": "d16be8b9-20a5-3926-8492-1ee851aa5602",
+  "eventType": "CORE_SMS",
+  "eventTime": "2026-09-21T07:50:00.000Z",
+  "producer": "digit-core",
+  "module": "CORE",
+  "eventName": "CORE.SMS.OTPLOGIN",
+  "entityType": "SMS",
+  "entityId": "d16be8b9-20a5-3926-8492-1ee851aa5602",
+  "tenantId": "ke",
+  "channel": "SMS",
+  "subscriberId": "ke:+254712345678",
+  "contact": {
+    "type": "CITIZEN",
+    "phone": "+254712345678",
+    "locale": "en_IN"
+  },
+  "renderedBody": "123456 is your OTP for login.",
+  "transactionId": "CORE:ke:d16be8b9-20a5-3926-8492-1ee851aa5602",
+  "data": {
+    "category": "OTPLOGIN",
+    "expiryTime": 300
+  }
+}

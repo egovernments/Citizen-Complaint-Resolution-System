@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:digit:identity:digit.bindings:v1",
+  "title": "digit.bindings v1: a person's staff bindings and their states",
+  "description": "Single-valued Keycloak user attribute holding this JSON. Written only by the BFF binding service (workspace-members/_link, workspace-invitations/_accept, workspace-invitations/_decline, workspace-members/_remove, bindings/_ensure, the item-19 conversion job, and the expiry sweep). The key is (person, tenantId): at most one record per tenantId. A removed record is the tombstone.",
+  "type": "object",
+  "required": ["v", "bindings"],
+  "additionalProperties": false,
+  "properties": {
+    "v": { "const": 1 },
+    "bindings": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/binding" } }
+  },
+  "$defs": {
+    "tenantId": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,50}$" },
+    "uuid": { "type": "string", "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$" },
+    "subject": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "binding": {
+      "type": "object",
+      "required": ["tenantId", "uuid", "state", "invitationVersion", "createdAt", "createdBy"],
+      "additionalProperties": false,
+      "properties": {
+        "tenantId": { "$ref": "#/$defs/tenantId", "description": "The workspace tenant (D16). Equal to the DIGIT account's tenant" },
+        "uuid": { "$ref": "#/$defs/uuid", "description": "The DIGIT employee account (HRMS-created)" },
+        "email": { "type": "string", "minLength": 3, "maxLength": 254, "description": "_link only: the normalized (trimmed, lower-cased) address this invitationVersion was issued to. Absent for bindings/_ensure, the item-19 conversion and records written before it existed. Read by the tenant member list for pending and removed members" },
+        "state": { "enum": ["pending", "active", "removed"] },
+        "invitationVersion": { "type": "integer", "minimum": 1, "description": "Starts at 1. Raised only by an explicit re-invite. _accept must quote the current value" },
+        "createdAt": { "type": "integer", "minimum": 0, "description": "Epoch ms this invitationVersion was issued" },
+        "createdBy": {
+          "type": "object",
+          "required": ["kind"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "enum": ["browser", "workload", "conversion"] },
+            "subject": { "$ref": "#/$defs/subject", "description": "browser: the ACCOUNT_ADMIN who called _link" },
+            "operationId": { "type": "string", "maxLength": 64, "description": "workload: the PGR operation" },
+            "restartNo": { "type": "integer", "minimum": 0 },
+            "requestId": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "browser: the _link request id (see digit.linkPending)" }
+          }
+        },
+        "expiresAt": { "type": "integer", "minimum": 0, "description": "pending only: epoch ms the invitation expires (D22). Past it, the binding counts as removed" },
+        "acceptedAt": { "type": "integer", "minimum": 0 },
+        "boundAt": { "type": "integer", "minimum": 0, "description": "Epoch ms the binding became active" },
+        "removedAt": { "type": "integer", "minimum": 0 },
+        "removedBy": {
+          "type": "object",
+          "required": ["kind"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "enum": ["browser", "expiry", "operator"] },
+            "subject": { "$ref": "#/$defs/subject" }
+          }
+        }
+      },
+      "allOf": [
+        { "if": { "properties": { "state": { "const": "pending" } } }, "then": { "required": ["expiresAt"] } },
+        { "if": { "properties": { "state": { "const": "active" } } }, "then": { "required": ["boundAt"] } },
+        { "if": { "properties": { "state": { "const": "removed" } } }, "then": { "required": ["removedAt", "removedBy"] } }
+      ]
+    }
+  }
+}

@@ -18,7 +18,7 @@ spec:
     spec:
       containers:
         - name: minio
-          image: localhost:5000/minio/minio:RELEASE.2024-01-16T16-07-38Z
+          image: localhost:5000/egovio/minio:RELEASE.2024-01-16T16-07-38Z
           imagePullPolicy: IfNotPresent
           args: ["server", "/data", "--console-address", ":9001"]
           ports:
@@ -96,7 +96,7 @@ spec:
       restartPolicy: OnFailure
       initContainers:
         - name: wait-for-minio
-          image: localhost:5000/minio/mc:RELEASE.2024-01-16T16-06-34Z
+          image: localhost:5000/egovio/mc:RELEASE.2024-01-16T16-06-34Z
           command:
             - sh
             - -c
@@ -107,7 +107,7 @@ spec:
               done
       containers:
         - name: minio-init
-          image: localhost:5000/minio/mc:RELEASE.2024-01-16T16-06-34Z
+          image: localhost:5000/egovio/mc:RELEASE.2024-01-16T16-06-34Z
           command:
             - sh
             - -c

@@ -60,12 +60,22 @@ function useAccountSummary() {
 const LogoutDialog = ({ onSelect, onCancel, onDismiss, PopupStyles, isDisabled, hideSubmit }) => {
   const { t } = useTranslation();
   const account = useAccountSummary();
+  const [pending, setPending] = React.useState(false);
+  const [error, setError] = React.useState(false);
+  const submit = async () => {
+    setPending(true);
+    setError(false);
+    try { await onSelect(); }
+    catch (_) { setError(true); }
+    finally { setPending(false); }
+  };
 
   // The account card carries the whole body. The heading already asks the
   // question, so a separate "you will need to sign in again" line would be the
   // same restatement this dialog was rewritten to remove.
   const children = [
     <div className="digit-logout-popup-body" key="body">
+      {error && <p role="alert">{t("CORE_IDENTITY_LOGOUT_UNAVAILABLE", { defaultValue: "Sign-out could not be completed. Please try again." })}</p>}
       {account ? (
         <div className="digit-logout-account">
           <span className="digit-logout-account-avatar" aria-hidden="true">
@@ -103,8 +113,8 @@ const LogoutDialog = ({ onSelect, onCancel, onDismiss, PopupStyles, isDisabled, 
       variation={"primary"}
       label={t("CORE_LOGOUT_CONFIRM_ACTION", "Log out")}
       formId={"modal-action"}
-      onClick={onSelect}
-      isDisabled={isDisabled}
+      onClick={submit}
+      isDisabled={isDisabled || pending}
     />
   ];
 

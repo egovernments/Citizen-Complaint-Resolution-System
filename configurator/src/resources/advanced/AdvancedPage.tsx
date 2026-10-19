@@ -1,11 +1,11 @@
-import { getGenericMdmsResources, getResourceLabel, getResourceConfig } from '@/providers/bridge';
+import { getResourceLabel, getResourceConfig } from '@/providers/bridge';
+import { getAdvancedResourceIds } from '@/admin/navGroups';
 import { DigitCard } from '@/components/digit/DigitCard';
 import { useNavigate } from 'react-router-dom';
 import { Database } from 'lucide-react';
 
 export function AdvancedPage() {
-  const resourceMap = getGenericMdmsResources();
-  const resources = Object.keys(resourceMap);
+  const resources = getAdvancedResourceIds();
   const navigate = useNavigate();
 
   return (

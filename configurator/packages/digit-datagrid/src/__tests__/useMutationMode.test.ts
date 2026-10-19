@@ -367,4 +367,29 @@ describe('useMutationMode', () => {
       });
     });
   });
+
+  describe('meta', () => {
+    it('merges meta into update and delete params', async () => {
+      const { result } = renderHook(() =>
+        useMutationMode({ mode: 'pessimistic', meta: { showInactive: true } })
+      );
+
+      await act(async () => {
+        await result.current.mutate('posts', {
+          id: '1',
+          data: { name: 'Test' },
+          previousData: { id: '1', name: 'Old' },
+          meta: { extra: 1 },
+        });
+        await result.current.deleteMutate('posts', { id: '1', previousData: { id: '1' } });
+      });
+
+      expect(mockUpdate).toHaveBeenCalledWith('posts', expect.objectContaining({
+        meta: { showInactive: true, extra: 1 },
+      }));
+      expect(mockDelete).toHaveBeenCalledWith('posts', expect.objectContaining({
+        meta: { showInactive: true },
+      }));
+    });
+  });
 });

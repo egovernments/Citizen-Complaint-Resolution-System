@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   useListController,
   ListContextProvider,
@@ -6,6 +6,7 @@ import {
   type ListControllerProps,
   type SortPayload,
   type FilterPayload,
+  type RaRecord,
 } from 'ra-core';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { RefreshCw, Plus, Search, Settings2 } from 'lucide-react';
@@ -17,10 +18,17 @@ import { useColumnConfig } from './editing/useColumnConfig';
 import type { DigitColumn } from './columns/types';
 import type { FilterElement } from './filters/types';
 import { FilterBar } from './filters/FilterBar';
+import { T } from './i18n/T';
+import { ColumnLabel } from './i18n/ColumnLabel';
+import { isI18nCode } from './i18n/columnLabelKey';
 
 export interface DigitListProps {
-  /** Page title displayed as h1 */
-  title: string;
+  /**
+   * Page title displayed as h1 — a localization code, or a pre-built `<T>` node.
+   * Plain English is shown as written and gets no `data-i18n-key`: it isn't a
+   * code an admin could find under System → Localization.
+   */
+  title: React.ReactNode;
   /** Optional subtitle shown below the title */
   subtitle?: string;
   /** Resource name (overrides ResourceContext) */
@@ -49,6 +57,17 @@ export interface DigitListProps {
   preferenceKey?: string;
   /** Filter input elements (react-admin style) */
   filters?: FilterElement[];
+  /** Extra `meta` forwarded to the data provider's getList */
+  meta?: Record<string, unknown>;
+  /**
+   * Drop records this screen must never show, e.g. a notification integration
+   * on a channel we cannot deliver on. Unlike `filter` (a query the fetcher
+   * runs) this is a client-side rule applied to the fetched page, so the count
+   * badge is corrected by the number of records dropped FROM THAT PAGE — exact
+   * for a list that fits on one page, an approximation beyond it. Use it for
+   * rows that are never legitimate here, not as a substitute for a real filter.
+   */
+  recordFilter?: (record: RaRecord) => boolean;
 }
 
 export function DigitList({
@@ -67,6 +86,8 @@ export function DigitList({
   alwaysVisibleSources,
   preferenceKey,
   filters,
+  meta,
+  recordFilter,
 }: DigitListProps) {
   const [searchValue, setSearchValue] = useState('');
   const navigate = useNavigate();
@@ -79,9 +100,29 @@ export function DigitList({
     perPage,
     filter,
     disableSyncWithLocation: true,
+    ...(meta ? { queryOptions: { meta } } : {}),
   };
 
-  const listContext = useListController(controllerProps);
+  const rawContext = useListController(controllerProps);
+
+  // What the screen actually shows. Built once here (rather than inside the
+  // datagrid) so the count badge, the empty state and the rows all agree.
+  const listContext = useMemo(() => {
+    const fetched: RaRecord[] | undefined = rawContext.data;
+    const total: number | undefined = rawContext.total;
+    if (!recordFilter || !fetched) return rawContext;
+    const kept = fetched.filter(recordFilter);
+    const dropped = fetched.length - kept.length;
+    if (dropped === 0) return rawContext;
+    // `ListControllerResult` is a discriminated union (loading / error / success),
+    // and spreading it loses the discriminant; the values themselves are exactly
+    // the ones the controller produced, minus the records we dropped.
+    return {
+      ...rawContext,
+      data: kept,
+      total: total != null ? Math.max(0, total - dropped) : total,
+    } as typeof rawContext;
+  }, [rawContext, recordFilter]);
 
   const columnConfig =
     configurable && columns
@@ -113,36 +154,46 @@ export function DigitList({
   return (
     <ListContextProvider value={listContext}>
       <div className="space-y-4">
-        {/* Title bar */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl sm:text-3xl font-bold font-condensed text-foreground">
-              {translate(title, { _: title })}
-            </h1>
+        {/* Title bar. The subtitle sits BELOW the title rather than beside it:
+            on a wide title with several actions ("Notification Providers" plus
+            Sync / Add / Refresh at 1280px) an inline subtitle squeezed the
+            heading into two lines and left the mono text wedged against the
+            buttons. Stacked, the heading keeps the full row width to itself. */}
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl sm:text-3xl font-bold font-condensed text-foreground">
+                {typeof title !== 'string'
+                  ? title
+                  : isI18nCode(title)
+                    ? <T i18nKey={title}>{title}</T>
+                    : translate(title, { _: title })}
+              </h1>
+              {listContext.total != null && (
+                <Badge variant="secondary" className="text-xs">
+                  {listContext.total}
+                </Badge>
+              )}
+            </div>
             {subtitle && (
-              <span className="text-xs text-muted-foreground font-mono">
+              <p className="mt-1 text-xs text-muted-foreground font-mono">
                 {subtitle}
-              </span>
-            )}
-            {listContext.total != null && (
-              <Badge variant="secondary" className="text-xs">
-                {listContext.total}
-              </Badge>
+              </p>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-shrink-0">
             {actions}
             {columnConfig && (
               <Popover>
                 <PopoverTrigger asChild>
                   <Button variant="outline" size="sm" className="gap-1.5">
                     <Settings2 className="w-4 h-4" />
-                    {translate('app.list.columns', { _: 'Columns' })}
+                    <T i18nKey="app.list.columns">Columns</T>
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-56">
                   <div className="space-y-1">
-                    <p className="text-sm font-medium mb-2">{translate('app.list.show_columns', { _: 'Show columns' })}</p>
+                    <p className="text-sm font-medium mb-2"><T i18nKey="app.list.show_columns">Show columns</T></p>
                     {columns!.map((col) => (
                       <label
                         key={col.source}
@@ -155,7 +206,7 @@ export function DigitList({
                           disabled={alwaysVisibleSources?.includes(col.source)}
                           className="rounded"
                         />
-                        {translate(col.label, { _: col.label })}
+                        <ColumnLabel column={col} />
                       </label>
                     ))}
                     <Button
@@ -164,7 +215,7 @@ export function DigitList({
                       onClick={columnConfig.resetColumns}
                       className="w-full mt-2"
                     >
-                      {translate('app.list.reset', { _: 'Reset' })}
+                      <T i18nKey="app.list.reset">Reset</T>
                     </Button>
                   </div>
                 </PopoverContent>
@@ -180,12 +231,12 @@ export function DigitList({
               <RefreshCw
                 className={`w-4 h-4 ${listContext.isFetching ? 'animate-spin' : ''}`}
               />
-              {translate('app.list.refresh', { _: 'Refresh' })}
+              <T i18nKey="app.list.refresh">Refresh</T>
             </Button>
             {hasCreate && (
               <Button size="sm" onClick={onCreate ?? (() => navigate(`${location.pathname}/create`))} className="gap-1.5">
                 <Plus className="w-4 h-4" />
-                {translate('app.list.create', { _: 'Create' })}
+                <T i18nKey="app.list.create">Create</T>
               </Button>
             )}
           </div>
@@ -204,6 +255,7 @@ export function DigitList({
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
                   placeholder={translate('app.list.search', { _: 'Search...' })}
+                  data-i18n-key-placeholder="app.list.search"
                   value={searchValue}
                   onChange={handleSearchChange}
                   className="pl-9 max-w-sm"
@@ -216,7 +268,7 @@ export function DigitList({
           {listContext.isPending && (
             <div className="flex items-center justify-center py-12 text-muted-foreground">
               <RefreshCw className="w-5 h-5 animate-spin mr-2" />
-              {translate('app.list.loading', { _: 'Loading...' })}
+              <T i18nKey="app.list.loading">Loading...</T>
             </div>
           )}
 
@@ -224,12 +276,12 @@ export function DigitList({
           {listContext.error && !listContext.isPending && (
             <div className="text-center py-12">
               <p className="text-destructive font-medium">
-                {translate('app.list.error_loading', { _: 'Error loading data' })}
+                <T i18nKey="app.list.error_loading">Error loading data</T>
               </p>
               <p className="text-sm text-muted-foreground mt-1">
                 {listContext.error instanceof Error
                   ? listContext.error.message
-                  : translate('app.list.error_unexpected', { _: 'An unexpected error occurred' })}
+                  : <T i18nKey="app.list.error_unexpected">An unexpected error occurred</T>}
               </p>
               <Button
                 variant="outline"
@@ -237,7 +289,7 @@ export function DigitList({
                 onClick={handleRefresh}
                 className="mt-3"
               >
-                {translate('app.list.try_again', { _: 'Try again' })}
+                <T i18nKey="app.list.try_again">Try again</T>
               </Button>
             </div>
           )}
@@ -251,10 +303,10 @@ export function DigitList({
             listContext.data &&
             listContext.data.length === 0 && (
               <div className="text-center py-12 text-muted-foreground">
-                <p className="font-medium">{translate('app.list.no_records', { _: 'No records found' })}</p>
+                <p className="font-medium"><T i18nKey="app.list.no_records">No records found</T></p>
                 {searchValue && (
                   <p className="text-sm mt-1">
-                    {translate('app.list.adjust_search', { _: 'Try adjusting your search query' })}
+                    <T i18nKey="app.list.adjust_search">Try adjusting your search query</T>
                   </p>
                 )}
               </div>

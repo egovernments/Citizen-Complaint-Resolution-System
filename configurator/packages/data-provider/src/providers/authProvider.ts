@@ -4,7 +4,7 @@ import { loadMastersCapability, type MastersCapability } from './accessPolicy.js
 
 /** Shape returned by `getPermissions()` — role codes plus the masters
  *  visibility/edit capability computed from existing accesscontrol MDMS data.
- *  See docs/design/masters-configurator-access-policy-design.md §3.3. */
+ *  See docs/reference/architecture/access-control/masters-configurator-access-policy-design.md §3.3. */
 export interface DigitPermissions {
   roles: string[];
   masters: MastersCapability;

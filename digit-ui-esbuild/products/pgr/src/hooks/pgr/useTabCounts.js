@@ -11,7 +11,7 @@ import Urls from "../../utils/urls";
  *         (assignee = me, the same axis the My tab's list uses)
  *  - ALL: complaints newly added since the tab was last opened
  * realised as a high-water-mark cursor per (user, tenant, tab)
- * (VISIBILITY-DESIGN.md §5.5): badge = pgr `_count` over the tab's state
+ * (docs/features/visibility/README.md §5.5): badge = pgr `_count` over the tab's state
  * set with `fromDate = lastSeen`. Opening a tab advances its cursor, so
  * its badge drops to 0 and starts accumulating again (channel-unread
  * semantics). A never-opened tab counts everything currently in it.

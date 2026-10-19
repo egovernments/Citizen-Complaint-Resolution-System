@@ -12,6 +12,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -91,7 +92,9 @@ class IntegrationControllerTest {
 
         Map<String, Object> projected = controller.integrations().getBody().getData().get(0);
 
-        assertEquals(1, projected.size(), "only providerId is on the allowlist");
+        // providerId is the only allowlisted field present on the source; the other three are
+        // the list-view fields the Providers screen gets on every row (type/active/primary).
+        assertEquals(Set.of("providerId", "type", "active", "primary"), projected.keySet());
         assertEquals("twilio", projected.get("providerId"));
         assertFalse(projected.containsKey("meta"));
         assertFalse(projected.containsKey("steps"));
@@ -119,8 +122,11 @@ class IntegrationControllerTest {
         stubNovuBody(body(List.of(integ)));
 
         Map<String, Object> projected = controller.integrations().getBody().getData().get(0);
+        // active is normalized to a real boolean for the list view: the Providers screen
+        // renders a toggle per row, and Novu's integration selection treats absent/null
+        // exactly as false anyway.
         assertTrue(projected.containsKey("active"));
-        assertEquals(null, projected.get("active"));
+        assertEquals(false, projected.get("active"));
         // identifier was absent on the source → must not be invented.
         assertFalse(projected.containsKey("identifier"));
     }

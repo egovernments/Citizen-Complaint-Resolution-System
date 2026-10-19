@@ -89,14 +89,6 @@ export const ENDPOINTS = {
   AUTH: '/user/oauth/token',
   USER_SEARCH: '/user/_search',
 
-  // Citizen self-service (OTP-based).
-  // /user-otp/v1/_send is fronted by Kong's request-termination plugin and
-  // returns 200 unconditionally — no real OTP is sent. egov-user has
-  // CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED=true (value 123456), so the
-  // citizen login flow is fixed-OTP-mocked end-to-end on this deploy.
-  OTP_SEND: '/user-otp/v1/_send',
-  CITIZEN_REGISTER: '/user/citizen/_create',
-
   // MDMS
   MDMS_SEARCH: '/mdms-v2/v2/_search',
   MDMS_CREATE: '/mdms-v2/v2/_create',

@@ -1,0 +1,243 @@
+import { useEffect, useState } from 'react';
+import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Check, ChevronRight, House, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { useApp } from '../App';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { useMastersCapability } from '@/hooks/useMastersCapability';
+import { NavRow, SectionLabel, RailBackdrop, RailCloseButton, RailMenuButton, RailPoweredBy } from '@/components/layout/rail';
+import { railClasses } from '@/components/layout/railStyles';
+import { useRailDrawer } from '@/components/layout/useRailDrawer';
+import { AccountMenu, HelpButton, LocaleSwitcher, ThemeSwitcher } from '@/components/layout/HeaderControls';
+import { HOME_PATH, ONBOARDING_STEPS } from './steps';
+import { completedCount, resumePath, resumeStep, stepForPath, stepStatus, type StepStatus } from './progress';
+import { initialsOf, useOrganisation } from './organisation';
+import { trackEvent } from '@/lib/telemetry';
+import { useOnboardingT } from './i18n';
+import { DocsButton, DocsRail } from './docs/DocsRail';
+import type { DocsSection } from './docs/docsLinks';
+
+/**
+ * The step marks in place of icons: a tick once a step is done, a filled dot
+ * on the one to do now, a hollow ring on those still locked behind it.
+ */
+function StepMark({ status }: { status: StepStatus }) {
+  if (status === 'done') {
+    return (
+      <span className="w-4 h-4 rounded-full bg-primary text-primary-foreground flex items-center justify-center flex-shrink-0">
+        <Check className="w-2.5 h-2.5" strokeWidth={3.5} />
+      </span>
+    );
+  }
+  if (status === 'in-progress') {
+    return (
+      <span className="w-4 h-4 rounded-full border-2 border-primary flex items-center justify-center flex-shrink-0">
+        <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+      </span>
+    );
+  }
+  return <span className="w-4 h-4 rounded-full border-2 border-muted-foreground/40 flex-shrink-0" />;
+}
+
+
+export default function OnboardingLayout() {
+  const { state, logout, toggleHelp } = useApp();
+  const t = useOnboardingT();
+  const statusWord: Record<StepStatus, string> = {
+    done: t('layout.status.done', 'done'),
+    'in-progress': t('layout.status.to_do', 'to do'),
+    locked: t('layout.status.locked', 'locked'),
+  };
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { canEditResource } = useMastersCapability();
+  const drawer = useRailDrawer();
+  const [collapsed, setCollapsed] = useState(false);
+  const organisation = useOrganisation(state.tenant);
+  const orgName = organisation.name;
+
+  const completed = state.completedPhases;
+  const done = completedCount(completed);
+  const total = ONBOARDING_STEPS.length;
+  const currentStep = stepForPath(location.pathname);
+  // Steps unlock in order, so a typed or stale URL to a locked one resumes instead.
+  const currentStepLocked = !!currentStep && stepStatus(currentStep, completed) === 'locked';
+  // A view-only role learns up front that it can look but not create, rather
+  // than from a failed submit deep in the step.
+  const currentStepEditable = !currentStep || canEditResource(currentStep.master);
+  const groups = [...new Set(ONBOARDING_STEPS.map((step) => step.group))];
+  const nextStep = resumeStep(completed);
+
+  // A step opened, from the rail, a Back or continue, or a resume.
+  const openedStep = currentStepLocked ? undefined : currentStep;
+  const docsSection: DocsSection | undefined = location.pathname === HOME_PATH ? 'home' : openedStep?.id;
+  useEffect(() => {
+    if (openedStep) trackEvent('phase_start', { phase: openedStep.number, step: openedStep.id, tenant: state.tenant });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per step opened, not per tenant re-render
+  }, [openedStep?.id]);
+
+  const handleLogout = async () => {
+    try { await logout(); navigate('/login'); }
+    catch (error) { window.alert(error instanceof Error ? error.message : t('layout.sign_out_failed', 'Sign-out failed. Please retry.')); }
+  };
+
+
+  const openMobileNav = () => {
+    setCollapsed(false);
+    drawer.openDrawer();
+  };
+
+  return (
+    <div className="h-screen overflow-hidden bg-background flex">
+      <RailBackdrop open={drawer.open} onClose={drawer.closeDrawer} />
+
+      <aside className={railClasses(collapsed, drawer.open)}>
+        {/* Organisation, collapse toggle and progress */}
+        <div className="border-b border-border p-3 space-y-4">
+          <div className={`flex items-center min-h-9 ${collapsed ? 'justify-center' : 'gap-2.5'}`}>
+            {!collapsed && (
+              <>
+                <div className="w-7 h-7 rounded bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center flex-shrink-0 overflow-hidden">
+                  {organisation.logoUrl ? (
+                    <img src={organisation.logoUrl} alt="" className="w-full h-full object-contain bg-card" />
+                  ) : (
+                    initialsOf(orgName)
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold leading-5 text-foreground truncate" title={orgName}>{orgName}</p>
+                  <p className="text-xs leading-4 text-muted-foreground truncate">{t('app.header.product_name', 'Complaint Management System')}</p>
+                </div>
+              </>
+            )}
+            <RailCloseButton label={t('app.nav.close_menu', 'Close menu')} onClick={drawer.closeDrawer} />
+            <button
+              type="button"
+              onClick={() => setCollapsed((value) => !value)}
+              aria-label={collapsed ? t('app.nav.expand_sidebar', 'Expand sidebar') : t('app.nav.collapse_sidebar', 'Collapse sidebar')}
+              className="hidden md:inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:text-secondary hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              {collapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
+            </button>
+          </div>
+
+          {/* Where setup stands, as one compact card (the #2358 mock-up): what to do
+              next, how far along, and a click anywhere into that step. The title button
+              stretches over the card, so the progressbar stays outside it and keeps its role. */}
+          {!collapsed && (
+            <section
+              aria-labelledby="setup-card-next"
+              className="relative rounded-lg border border-primary/20 bg-primary/5 p-3 transition-colors hover:bg-primary/10 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring"
+            >
+              <button
+                type="button"
+                onClick={() => navigate(nextStep.path)}
+                className="flex w-full items-center justify-between gap-2 text-left focus-visible:outline-none before:absolute before:inset-0 before:rounded-lg"
+              >
+                <span id="setup-card-next" className="text-sm font-semibold text-primary">
+                  {done === 0
+                    ? t('layout.setup_account', 'Let’s set up your account')
+                    : t('layout.card.next', 'Next step: %{step}', { step: t(`steps.${nextStep.id}`, nextStep.label) })}
+                </span>
+                <ChevronRight aria-hidden="true" className="h-4 w-4 shrink-0 text-primary" />
+              </button>
+              <span
+                role="progressbar"
+                aria-label={t('layout.setup_progress', 'Setup progress')}
+                aria-valuemin={0}
+                aria-valuemax={total}
+                aria-valuenow={done}
+                className="mt-3 block h-1.5 overflow-hidden rounded-full bg-primary/15"
+              >
+                <span className="block h-full rounded-full bg-primary transition-all" style={{ width: `${(done / total) * 100}%` }} />
+              </span>
+              <span className="mt-2 block text-xs text-primary/80">
+                {t('layout.completed_count', '%{done} of %{total} completed', { done, total })}
+              </span>
+            </section>
+          )}
+        </div>
+
+        {/* Steps */}
+        <nav aria-label={t('layout.setup_steps', 'Setup steps')} className="flex-1 py-2 overflow-y-auto">
+          <div className="pb-2">
+            <NavRow
+              icon={House}
+              label={t('layout.home', 'Home')}
+              active={location.pathname === HOME_PATH}
+              collapsed={collapsed}
+              onClick={() => navigate(HOME_PATH)}
+            />
+          </div>
+          {groups.map((group) => (
+            <div key={group} className="pb-4">
+              {!collapsed && <SectionLabel>{t(`groups.${group.toLowerCase()}`, group)}</SectionLabel>}
+              {ONBOARDING_STEPS.filter((step) => step.group === group).map((step) => {
+                const status = stepStatus(step, completed);
+                return (
+                  <NavRow
+                    key={step.id}
+                    leading={<StepMark status={status} />}
+                    label={t(`steps.${step.id}`, step.label)}
+                    active={currentStep?.id === step.id}
+                    collapsed={collapsed}
+                    disabled={status === 'locked'}
+                    onClick={() => navigate(step.path)}
+                    trailing={<span className="sr-only">, {statusWord[status]}</span>}
+                  />
+                );
+              })}
+            </div>
+          ))}
+        </nav>
+
+        <RailPoweredBy collapsed={collapsed} />
+      </aside>
+
+      <div className="flex-1 flex flex-col min-w-0">
+        <header className="sticky top-0 z-30 h-14 flex-shrink-0 bg-card border-b border-border pl-4 pr-4 sm:pr-6 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <RailMenuButton open={drawer.open} label={t('app.nav.open_menu', 'Open menu')} onClick={openMobileNav} />
+            <h1 className="text-base font-semibold text-foreground truncate">
+              <span className="hidden sm:inline">{t('layout.title_prefix', 'Complaint Management System')} </span>
+              {t('layout.title', 'Onboarding')}
+            </h1>
+          </div>
+          <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+            {docsSection && <DocsButton section={docsSection} />}
+            <HelpButton label={t('app.header.help', 'Help')} onClick={toggleHelp} />
+            <LocaleSwitcher />
+            <ThemeSwitcher />
+            <AccountMenu
+              name={state.user?.name}
+              tenant={state.tenant}
+              accountLabel={t('app.header.account', 'Account')}
+              docsLabel={t('app.nav.open_digit_docs', 'Open DIGIT Docs')}
+              signOutLabel={t('app.header.sign_out', 'Sign out')}
+              onSignOut={handleLogout}
+            />
+          </div>
+        </header>
+
+        <main id="main-content" className="flex-1 overflow-auto min-h-0">
+          <div className="max-w-6xl mx-auto p-4 sm:p-8">
+            {!currentStepEditable && (
+              <Alert className="mb-4">
+                <AlertDescription>
+                  {t(
+                    'layout.view_only',
+                    'Your role has view-only access to %{step}. You can review this step, but creating or editing records here is restricted to roles with write access (e.g. MDMS_ADMIN).',
+                    { step: currentStep ? t(`steps.${currentStep.id}`, currentStep.label) : '' },
+                  )}
+                </AlertDescription>
+              </Alert>
+            )}
+            {currentStepLocked ? <Navigate to={resumePath(completed)} replace /> : <Outlet />}
+          </div>
+        </main>
+
+      </div>
+
+      {docsSection && <DocsRail section={docsSection} />}
+    </div>
+  );
+}

@@ -1,0 +1,10 @@
+{
+  "realm": "identity-test",
+  "enabled": true,
+  "organizationsEnabled": true,
+  "registrationAllowed": false,
+  "eventsEnabled": true,
+  "eventsExpiration": 86400,
+  "adminEventsEnabled": true,
+  "adminEventsDetailsEnabled": true
+}

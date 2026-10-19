@@ -1,294 +1,557 @@
-#!/bin/bash
+#!/usr/bin/env bash
+#
+# Acceptance run for the User Preferences Service against a live instance.
+#
+#   BASE_URL=http://localhost:8080 ./test_apis.sh
+#
+# Every case asserts an HTTP status and, where it matters, a field in the body,
+# and the script exits non-zero if any of them fail — so it is usable as a
+# post-deploy gate and not only as something to eyeball. Requires curl and jq.
+#
+# The expectations here are the API contract as the Go implementation defined
+# it; the JUnit suite under src/test asserts the same behaviour in-process.
+set -uo pipefail
 
-# Colors for output
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 BASE_URL="${BASE_URL:-http://localhost:8080}"
-CONTEXT_PATH="/user-preference"
+CONTEXT_PATH="${CONTEXT_PATH:-/user-preference}"
+API="${BASE_URL}${CONTEXT_PATH}/v1"
 
-echo -e "${BLUE}========================================${NC}"
-echo -e "${BLUE}Testing User Preferences Service${NC}"
-echo -e "${BLUE}========================================${NC}"
-echo ""
+# Unique per run so repeated runs against one database stay independent.
+SUFFIX="${RANDOM}${RANDOM}"
+USER_A="e2e-user-a-${SUFFIX}"
+USER_B="e2e-user-b-${SUFFIX}"
+USER_G="e2e-user-global-${SUFFIX}"
+TENANT="pg.citya"
+CODE="USER_NOTIFICATION_PREFERENCES"
 
-# Test 1: Health Check
-echo -e "${BLUE}1. Testing Health Check...${NC}"
-HEALTH_RESPONSE=$(curl -s -w "\n%{http_code}" "${BASE_URL}/health")
-HTTP_CODE=$(echo "$HEALTH_RESPONSE" | tail -n1)
-BODY=$(echo "$HEALTH_RESPONSE" | sed '$d')
+PASSED=0
+FAILED=0
+BODY=""
+STATUS=""
 
-if [ "$HTTP_CODE" = "200" ]; then
-    echo -e "${GREEN}✓ Health check passed (HTTP $HTTP_CODE)${NC}"
-    echo "$BODY" | jq . 2>/dev/null || echo "$BODY"
-else
-    echo -e "${RED}✗ Health check failed (HTTP $HTTP_CODE)${NC}"
-    echo "$BODY"
-fi
-echo ""
+fail() {
+    printf "${RED}  ✗ %s${NC}\n" "$1"
+    printf "    status=%s body=%s\n" "$STATUS" "$BODY"
+    FAILED=$((FAILED + 1))
+}
 
-# Test 2: Create/Upsert Preference
-echo -e "${BLUE}2. Testing Upsert (Create) Preference...${NC}"
-UPSERT_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "${BASE_URL}${CONTEXT_PATH}/v1/_upsert" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "requestInfo": {
-      "apiId": "user-preferences",
-      "ver": "1.0",
-      "ts": 1707100000000,
-      "action": "upsert",
-      "msgId": "test-msg-001",
-      "userInfo": {
-        "uuid": "test-user-123",
-        "tenantId": "pb.amritsar"
-      }
-    },
-    "preference": {
-      "userId": "test-user-123",
-      "tenantId": "pb.amritsar",
-      "preferenceCode": "USER_NOTIFICATION_PREFERENCES",
-      "payload": {
-        "preferredLanguage": "en_IN",
-        "consent": {
-          "WHATSAPP": {
-            "status": "GRANTED",
-            "scope": "GLOBAL"
-          },
-          "SMS": {
-            "status": "GRANTED",
-            "scope": "TENANT",
-            "tenantId": "pb.amritsar"
-          },
-          "EMAIL": {
-            "status": "REVOKED",
-            "scope": "GLOBAL"
-          }
-        }
-      }
-    }
-  }')
+pass() {
+    printf "${GREEN}  ✓ %s${NC}\n" "$1"
+    PASSED=$((PASSED + 1))
+}
 
-HTTP_CODE=$(echo "$UPSERT_RESPONSE" | tail -n1)
-BODY=$(echo "$UPSERT_RESPONSE" | sed '$d')
+# call <METHOD> <URL> [BODY]
+call() {
+    local method="$1" url="$2" payload="${3-}" response
+    if [ -n "$payload" ]; then
+        response=$(curl -s -w "\n%{http_code}" -X "$method" "$url" \
+            -H "Content-Type: application/json" -d "$payload")
+    else
+        response=$(curl -s -w "\n%{http_code}" -X "$method" "$url")
+    fi
+    STATUS=$(printf '%s' "$response" | tail -n1)
+    BODY=$(printf '%s' "$response" | sed '$d')
+}
 
-if [ "$HTTP_CODE" = "200" ]; then
-    echo -e "${GREEN}✓ Upsert passed (HTTP $HTTP_CODE)${NC}"
-    echo "$BODY" | jq . 2>/dev/null || echo "$BODY"
-else
-    echo -e "${RED}✗ Upsert failed (HTTP $HTTP_CODE)${NC}"
-    echo "$BODY" | jq . 2>/dev/null || echo "$BODY"
-fi
-echo ""
+expect_status() {
+    if [ "$STATUS" = "$1" ]; then
+        pass "$2"
+    else
+        fail "$2 (expected HTTP $1, got $STATUS)"
+    fi
+}
 
-# Test 3: Search Preference
-echo -e "${BLUE}3. Testing Search Preference...${NC}"
-SEARCH_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "${BASE_URL}${CONTEXT_PATH}/v1/_search" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "requestInfo": {
-      "apiId": "user-preferences",
-      "ver": "1.0",
-      "msgId": "test-msg-002"
-    },
-    "criteria": {
-      "userId": "test-user-123",
-      "tenantId": "pb.amritsar",
-      "limit": 10,
-      "offset": 0
-    }
-  }')
+# expect_json <jq-filter> <expected> <description>
+expect_json() {
+    local actual
+    actual=$(printf '%s' "$BODY" | jq -r "$1" 2>/dev/null)
+    if [ "$actual" = "$2" ]; then
+        pass "$3"
+    else
+        fail "$3 (expected '$2' at '$1', got '$actual')"
+    fi
+}
 
-HTTP_CODE=$(echo "$SEARCH_RESPONSE" | tail -n1)
-BODY=$(echo "$SEARCH_RESPONSE" | sed '$d')
+section() {
+    printf "\n${BLUE}%s${NC}\n" "$1"
+}
 
-if [ "$HTTP_CODE" = "200" ]; then
-    echo -e "${GREEN}✓ Search passed (HTTP $HTTP_CODE)${NC}"
-    echo "$BODY" | jq . 2>/dev/null || echo "$BODY"
-else
-    echo -e "${RED}✗ Search failed (HTTP $HTTP_CODE)${NC}"
-    echo "$BODY" | jq . 2>/dev/null || echo "$BODY"
-fi
-echo ""
+command -v jq >/dev/null || { printf "${RED}jq is required${NC}\n"; exit 2; }
 
-# Test 4: Update Preference (Upsert with same key)
-echo -e "${BLUE}4. Testing Upsert (Update) Preference...${NC}"
-UPDATE_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "${BASE_URL}${CONTEXT_PATH}/v1/_upsert" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "requestInfo": {
-      "apiId": "user-preferences",
-      "ver": "1.0",
-      "ts": 1707100001000,
-      "action": "upsert",
-      "msgId": "test-msg-003",
-      "userInfo": {
-        "uuid": "test-user-123",
-        "tenantId": "pb.amritsar"
-      }
-    },
-    "preference": {
-      "userId": "test-user-123",
-      "tenantId": "pb.amritsar",
-      "preferenceCode": "USER_NOTIFICATION_PREFERENCES",
-      "payload": {
-        "preferredLanguage": "hi_IN",
-        "consent": {
-          "WHATSAPP": {
-            "status": "GRANTED",
-            "scope": "GLOBAL"
-          },
-          "SMS": {
-            "status": "REVOKED",
-            "scope": "GLOBAL"
-          },
-          "EMAIL": {
-            "status": "GRANTED",
-            "scope": "TENANT",
-            "tenantId": "pb.amritsar"
-          }
-        }
+printf "${BLUE}========================================${NC}\n"
+printf "${BLUE}User Preferences Service — %s${NC}\n" "$API"
+printf "${BLUE}========================================${NC}\n"
+
+# ── Health ──────────────────────────────────────────────────────────────────
+# Served at the container root, NOT under the context path: the compose
+# healthcheck, both Kubernetes probes and both Gatus catalogues all use this.
+section "1. Health"
+call GET "${BASE_URL}/health"
+expect_status 200 "health responds"
+expect_json '.status' "UP" "health reports UP"
+expect_json '.components.database.status' "UP" "health reports the database UP"
+
+# ── Upsert: create ──────────────────────────────────────────────────────────
+section "2. Upsert — create"
+call POST "${API}/_upsert" "$(cat <<JSON
+{
+  "RequestInfo": {
+    "apiId": "user-preferences", "ver": "1.0", "ts": 1707100000000,
+    "action": "upsert", "msgId": "e2e-001",
+    "userInfo": { "uuid": "${USER_A}", "tenantId": "${TENANT}" }
+  },
+  "preference": {
+    "userId": "${USER_A}", "tenantId": "${TENANT}", "preferenceCode": "${CODE}",
+    "payload": {
+      "preferredLanguage": "en_IN",
+      "consent": {
+        "WHATSAPP": { "status": "GRANTED", "scope": "GLOBAL" },
+        "SMS": { "status": "GRANTED", "scope": "TENANT", "tenantId": "${TENANT}" },
+        "EMAIL": { "status": "REVOKED", "scope": "GLOBAL" }
       }
     }
-  }')
+  }
+}
+JSON
+)"
+expect_status 200 "create accepted"
+expect_json '.responseInfo.status' "successful" "responseInfo reports success"
+expect_json '.responseInfo.apiId' "user-preferences" "responseInfo echoes apiId"
+expect_json '.responseInfo.msgId' "e2e-001" "responseInfo echoes msgId"
+expect_json '.responseInfo | has("resMsgId")' "false" "responseInfo omits resMsgId"
+expect_json 'has("pagination")' "false" "an upsert carries no pagination block"
+expect_json '.preferences | length' "1" "one preference returned"
+expect_json '.preferences[0].userId' "${USER_A}" "userId round-trips"
+expect_json '.preferences[0].tenantId' "${TENANT}" "tenantId round-trips"
+expect_json '.preferences[0].payload.preferredLanguage' "en_IN" "language round-trips"
+expect_json '.preferences[0].payload.consent.SMS.tenantId' "${TENANT}" "tenant-scoped consent round-trips"
+expect_json '.preferences[0].auditDetails.createdBy' "${USER_A}" "audit records the caller"
 
-HTTP_CODE=$(echo "$UPDATE_RESPONSE" | tail -n1)
-BODY=$(echo "$UPDATE_RESPONSE" | sed '$d')
-
-if [ "$HTTP_CODE" = "200" ]; then
-    echo -e "${GREEN}✓ Update passed (HTTP $HTTP_CODE)${NC}"
-    echo "$BODY" | jq . 2>/dev/null || echo "$BODY"
+CREATED_ID=$(printf '%s' "$BODY" | jq -r '.preferences[0].id')
+CREATED_TIME=$(printf '%s' "$BODY" | jq -r '.preferences[0].auditDetails.createdTime')
+if printf '%s' "$CREATED_ID" | grep -Eq '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'; then
+    pass "id is a uuid"
 else
-    echo -e "${RED}✗ Update failed (HTTP $HTTP_CODE)${NC}"
-    echo "$BODY" | jq . 2>/dev/null || echo "$BODY"
+    fail "id is a uuid (got '$CREATED_ID')"
 fi
-echo ""
 
-# Test 5: Search after update to verify changes
-echo -e "${BLUE}5. Verifying Update (Search again)...${NC}"
-VERIFY_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "${BASE_URL}${CONTEXT_PATH}/v1/_search" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "requestInfo": {
-      "apiId": "user-preferences",
-      "ver": "1.0",
-      "msgId": "test-msg-004"
-    },
-    "criteria": {
-      "userId": "test-user-123",
-      "preferenceCode": "USER_NOTIFICATION_PREFERENCES"
+# ── Search ──────────────────────────────────────────────────────────────────
+section "3. Search"
+call POST "${API}/_search" "$(cat <<JSON
+{
+  "RequestInfo": { "apiId": "user-preferences", "ver": "1.0", "msgId": "e2e-002" },
+  "criteria": { "userId": "${USER_A}", "tenantId": "${TENANT}", "limit": 10, "offset": 0 }
+}
+JSON
+)"
+expect_status 200 "search accepted"
+expect_json '.preferences | length' "1" "the created preference is found"
+expect_json '.preferences[0].id' "${CREATED_ID}" "the same row comes back"
+expect_json '.pagination.limit' "10" "pagination echoes the limit"
+expect_json '.pagination.totalCount' "1" "pagination counts the matches"
+expect_json '.pagination | has("offset")' "false" "a zero offset is omitted"
+
+# ── Upsert: update ──────────────────────────────────────────────────────────
+section "4. Upsert — update on the same key"
+call POST "${API}/_upsert" "$(cat <<JSON
+{
+  "RequestInfo": { "msgId": "e2e-003", "userInfo": { "uuid": "e2e-editor-${SUFFIX}", "roles": [ { "code": "SUPERUSER", "tenantId": "${TENANT}" } ] } },
+  "preference": {
+    "userId": "${USER_A}", "tenantId": "${TENANT}", "preferenceCode": "${CODE}",
+    "payload": {
+      "preferredLanguage": "hi_IN",
+      "consent": { "WHATSAPP": { "status": "REVOKED", "scope": "GLOBAL" } }
     }
-  }')
+  }
+}
+JSON
+)"
+expect_status 200 "update accepted"
+expect_json '.preferences[0].id' "${CREATED_ID}" "the upsert lands on the existing row"
+expect_json '.preferences[0].payload.preferredLanguage' "hi_IN" "the payload is replaced"
+expect_json '.preferences[0].payload.consent | has("SMS")' "false" "the payload is replaced, not merged"
+expect_json '.preferences[0].auditDetails.createdBy' "${USER_A}" "the creation author is preserved"
+expect_json '.preferences[0].auditDetails.createdTime' "${CREATED_TIME}" "the creation time is preserved"
+expect_json '.preferences[0].auditDetails.lastModifiedBy' "e2e-editor-${SUFFIX}" "the editor is recorded"
 
-HTTP_CODE=$(echo "$VERIFY_RESPONSE" | tail -n1)
-BODY=$(echo "$VERIFY_RESPONSE" | sed '$d')
+call POST "${API}/_search" "{\"RequestInfo\":{},\"criteria\":{\"userId\":\"${USER_A}\",\"preferenceCode\":\"${CODE}\"}}"
+expect_status 200 "search after update"
+expect_json '.pagination.totalCount' "1" "the update did not create a second row"
+expect_json '.preferences[0].payload.preferredLanguage' "hi_IN" "the update is durable"
 
-if [ "$HTTP_CODE" = "200" ]; then
-    echo -e "${GREEN}✓ Verify passed (HTTP $HTTP_CODE)${NC}"
-    echo "$BODY" | jq . 2>/dev/null || echo "$BODY"
+# ── Global (untenanted) preferences ─────────────────────────────────────────
+section "5. Global preferences"
+call POST "${API}/_upsert" "$(cat <<JSON
+{
+  "RequestInfo": { "userInfo": { "uuid": "${USER_G}" } },
+  "preference": {
+    "userId": "${USER_G}", "preferenceCode": "${CODE}",
+    "payload": { "preferredLanguage": "fr_IN" }
+  }
+}
+JSON
+)"
+expect_status 200 "a preference with no tenant is accepted"
+expect_json '.preferences[0] | has("tenantId")' "false" "an absent tenant is omitted from the response"
+GLOBAL_ID=$(printf '%s' "$BODY" | jq -r '.preferences[0].id')
+
+call POST "${API}/_upsert" "$(cat <<JSON
+{
+  "RequestInfo": { "userInfo": { "uuid": "${USER_G}" } },
+  "preference": {
+    "userId": "${USER_G}", "preferenceCode": "${CODE}",
+    "payload": { "preferredLanguage": "pt_IN" }
+  }
+}
+JSON
+)"
+expect_json '.preferences[0].id' "${GLOBAL_ID}" "a second global upsert reuses the global row"
+
+call POST "${API}/_upsert" "$(cat <<JSON
+{
+  "RequestInfo": { "userInfo": { "uuid": "${USER_G}" } },
+  "preference": {
+    "userId": "${USER_G}", "tenantId": "${TENANT}", "preferenceCode": "${CODE}",
+    "payload": { "preferredLanguage": "en_IN" }
+  }
+}
+JSON
+)"
+expect_status 200 "the same user can also hold a tenant-scoped preference"
+TENANTED_ID=$(printf '%s' "$BODY" | jq -r '.preferences[0].id')
+if [ "$TENANTED_ID" != "$GLOBAL_ID" ]; then
+    pass "tenant-scoped and global preferences are distinct rows"
 else
-    echo -e "${RED}✗ Verify failed (HTTP $HTTP_CODE)${NC}"
-    echo "$BODY" | jq . 2>/dev/null || echo "$BODY"
+    fail "tenant-scoped and global preferences are distinct rows"
 fi
-echo ""
 
-# Test 6: Validation Error - Missing userId
-echo -e "${BLUE}6. Testing Validation Error (Missing userId)...${NC}"
-VALIDATION_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "${BASE_URL}${CONTEXT_PATH}/v1/_upsert" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "requestInfo": {
-      "apiId": "user-preferences",
-      "ver": "1.0",
-      "msgId": "test-msg-005"
-    },
-    "preference": {
-      "preferenceCode": "USER_NOTIFICATION_PREFERENCES",
-      "payload": {"test": "data"}
+# ── Paging and ordering ─────────────────────────────────────────────────────
+section "6. Paging and ordering"
+call POST "${API}/_upsert" "$(cat <<JSON
+{
+  "RequestInfo": {},
+  "preference": {
+    "userId": "${USER_B}", "tenantId": "${TENANT}", "preferenceCode": "${CODE}",
+    "payload": { "preferredLanguage": "en_IN" }
+  }
+}
+JSON
+)"
+expect_status 200 "a second tenant preference is created"
+
+call POST "${API}/_search" "{\"RequestInfo\":{},\"criteria\":{\"tenantId\":\"${TENANT}\",\"limit\":1,\"offset\":0}}"
+expect_status 200 "a one-row page is returned"
+expect_json '.preferences | length' "1" "the page holds one row"
+expect_json '.pagination.limit' "1" "the page size is echoed"
+PAGE_TOTAL=$(printf '%s' "$BODY" | jq -r '.pagination.totalCount')
+if [ "$PAGE_TOTAL" -ge 3 ]; then
+    pass "totalCount counts every match, not just the page ($PAGE_TOTAL)"
+else
+    fail "totalCount counts every match, not just the page (got $PAGE_TOTAL)"
+fi
+
+call POST "${API}/_search" "{\"RequestInfo\":{},\"criteria\":{\"tenantId\":\"${TENANT}\",\"limit\":1,\"offset\":1}}"
+expect_json '.pagination.offset' "1" "a non-zero offset is echoed"
+expect_json '.preferences | length' "1" "the second page holds one row"
+
+call POST "${API}/_search" "{\"RequestInfo\":{},\"criteria\":{\"tenantId\":\"${TENANT}\",\"limit\":9999}}"
+expect_json '.pagination.limit' "100" "an oversized page is clamped to 100"
+
+call POST "${API}/_search" "{\"RequestInfo\":{},\"criteria\":{\"userId\":\"${USER_A}\"}}"
+expect_json '.pagination.limit' "10" "an absent limit defaults to 10"
+
+call POST "${API}/_search" "{\"RequestInfo\":{},\"criteria\":{\"userId\":\"no-such-user-${SUFFIX}\"}}"
+expect_status 200 "a search that matches nothing still succeeds"
+expect_json '.preferences | length' "0" "an empty array is returned, not null"
+expect_json '.preferences | type' "array" "preferences is always an array"
+expect_json '.pagination | has("totalCount")' "false" "a zero totalCount is omitted"
+
+# ── Payload handling ────────────────────────────────────────────────────────
+section "7. Payload handling"
+call POST "${API}/_upsert" "$(cat <<JSON
+{
+  "RequestInfo": {},
+  "preference": {
+    "userId": "e2e-opaque-${SUFFIX}", "preferenceCode": "UI_DASHBOARD_LAYOUT",
+    "payload": { "preferredLanguage": "kl_XX", "widgets": [ { "id": "open", "span": 2 } ] }
+  }
+}
+JSON
+)"
+expect_status 200 "any other preferenceCode stores an unvalidated document"
+expect_json '.preferences[0].payload.widgets[0].span' "2" "a nested payload round-trips"
+
+call POST "${API}/_upsert" "$(cat <<JSON
+{
+  "RequestInfo": {},
+  "preference": {
+    "userId": "e2e-verbatim-${SUFFIX}", "preferenceCode": "${CODE}",
+    "payload": {
+      "preferredLanguage": "en_IN",
+      "quietHours": { "from": "22:00" },
+      "consent": { "whatsapp": { "status": "GRANTED", "scope": "GLOBAL" } }
     }
-  }')
+  }
+}
+JSON
+)"
+expect_status 200 "an unknown payload key is accepted"
+expect_json '.preferences[0].payload.quietHours.from' "22:00" "unknown payload keys are stored verbatim"
+expect_json '.preferences[0].payload.consent.whatsapp.status' "GRANTED" "the caller's key casing is preserved"
+expect_json '.preferences[0].payload.consent | has("WHATSAPP")' "false" "keys are not rewritten"
 
-HTTP_CODE=$(echo "$VALIDATION_RESPONSE" | tail -n1)
-BODY=$(echo "$VALIDATION_RESPONSE" | sed '$d')
+# ── Validation ──────────────────────────────────────────────────────────────
+section "8. Validation"
+call POST "${API}/_upsert" '{"preference":{"userId":"u","preferenceCode":"CODE","payload":{}}}'
+expect_status 400 "an upsert with no RequestInfo is rejected"
+expect_json '.Errors[0].code' "INVALID_REQUEST_INFO" "  INVALID_REQUEST_INFO"
+expect_json 'has("responseInfo")' "false" "  no responseInfo when the envelope never parsed"
 
-if [ "$HTTP_CODE" = "400" ]; then
-    echo -e "${GREEN}✓ Validation error correctly returned (HTTP $HTTP_CODE)${NC}"
-    echo "$BODY" | jq . 2>/dev/null || echo "$BODY"
+call POST "${API}/_upsert" '{"RequestInfo":{"msgId":"e2e-v1"}}'
+expect_status 400 "an upsert with no preference is rejected"
+expect_json '.Errors[0].code' "INVALID_REQUEST" "  INVALID_REQUEST"
+expect_json '.responseInfo.status' "failed" "  responseInfo reports failure"
+expect_json '.responseInfo.msgId' "e2e-v1" "  responseInfo echoes msgId on failure"
+
+call POST "${API}/_upsert" "{\"RequestInfo\":{},\"preference\":{\"preferenceCode\":\"${CODE}\",\"payload\":{}}}"
+expect_status 400 "a missing userId is rejected"
+expect_json '.Errors[0].code' "INVALID_USER_ID" "  INVALID_USER_ID"
+expect_json '.Errors[0].message' "userId is required" "  message wording"
+
+call POST "${API}/_upsert" '{"RequestInfo":{},"preference":{"userId":"u","payload":{}}}'
+expect_status 400 "a missing preferenceCode is rejected"
+expect_json '.Errors | length' "2" "  both the missing and out-of-range errors are returned"
+expect_json '.Errors[0].message' "preferenceCode is required" "  first error"
+expect_json '.Errors[1].message' "preferenceCode must be between 2 and 128 characters" "  second error"
+
+call POST "${API}/_upsert" '{"RequestInfo":{},"preference":{"userId":"u","preferenceCode":"CODE"}}'
+expect_status 400 "a missing payload is rejected"
+expect_json '.Errors[0].code' "INVALID_PAYLOAD" "  INVALID_PAYLOAD"
+
+call POST "${API}/_upsert" "{\"RequestInfo\":{},\"preference\":{\"userId\":\"$(printf 'u%.0s' $(seq 1 65))\",\"preferenceCode\":\"CODE\",\"payload\":{}}}"
+expect_status 400 "an over-long userId is rejected"
+expect_json '.Errors[0].message' "userId must not exceed 64 characters" "  message wording"
+
+call POST "${API}/_upsert" '{"RequestInfo":{},"preference":{"userId":"u","tenantId":"p","preferenceCode":"CODE","payload":{}}}'
+expect_status 400 "a one-character tenantId is rejected"
+expect_json '.Errors[0].code' "INVALID_TENANT_ID" "  INVALID_TENANT_ID"
+
+call POST "${API}/_upsert" "{\"RequestInfo\":{},\"preference\":{\"userId\":\"u\",\"preferenceCode\":\"${CODE}\",\"payload\":{\"preferredLanguage\":\"ta_IN\"}}}"
+expect_status 400 "an unsupported language is rejected"
+expect_json '.Errors[0].code' "INVALID_LANGUAGE" "  INVALID_LANGUAGE"
+expect_json '.Errors[0].message' "preferredLanguage must be one of: en_IN, hi_IN, fr_IN, pt_IN; got: ta_IN" "  the value is echoed back"
+
+call POST "${API}/_upsert" "{\"RequestInfo\":{},\"preference\":{\"userId\":\"u\",\"preferenceCode\":\"${CODE}\",\"payload\":{\"consent\":{\"WHATSAPP\":{\"status\":\"MAYBE\"}}}}}"
+expect_status 400 "an unknown consent status is rejected"
+expect_json '.Errors[0].message' "WHATSAPP consent status must be GRANTED or REVOKED; got: MAYBE" "  INVALID_CONSENT_STATUS wording"
+
+call POST "${API}/_upsert" "{\"RequestInfo\":{},\"preference\":{\"userId\":\"u\",\"preferenceCode\":\"${CODE}\",\"payload\":{\"consent\":{\"SMS\":{\"scope\":\"REGIONAL\"}}}}}"
+expect_status 400 "an unknown consent scope is rejected"
+expect_json '.Errors[0].message' "SMS consent scope must be GLOBAL or TENANT; got: REGIONAL" "  INVALID_CONSENT_SCOPE wording"
+
+call POST "${API}/_upsert" "{\"RequestInfo\":{},\"preference\":{\"userId\":\"u\",\"preferenceCode\":\"${CODE}\",\"payload\":{\"consent\":{\"EMAIL\":{\"status\":\"GRANTED\",\"scope\":\"TENANT\"}}}}}"
+expect_status 400 "tenant-scoped consent without a tenantId is rejected"
+expect_json '.Errors[0].code' "MISSING_TENANT_ID" "  MISSING_TENANT_ID"
+
+call POST "${API}/_upsert" "{\"RequestInfo\":{},\"preference\":{\"userId\":\"u\",\"preferenceCode\":\"${CODE}\",\"payload\":[\"en_IN\"]}}"
+expect_status 400 "a notification payload that is not an object is rejected"
+expect_json '.Errors[0].code' "INVALID_PAYLOAD_FORMAT" "  INVALID_PAYLOAD_FORMAT"
+
+call POST "${API}/_upsert" "{\"RequestInfo\":{},\"preference\":{\"userId\":\"u\",\"preferenceCode\":\"${CODE}\",\"payload\":{\"consent\":{\"WHATSAPP\":{\"status\":5}}}}}"
+expect_status 400 "a numeric consent status is rejected rather than coerced"
+expect_json '.Errors[0].code' "INVALID_PAYLOAD_FORMAT" "  INVALID_PAYLOAD_FORMAT"
+
+call POST "${API}/_search" '{"criteria":{"userId":"u"}}'
+expect_status 400 "a search with no RequestInfo is rejected"
+expect_json '.Errors[0].code' "INVALID_REQUEST_INFO" "  INVALID_REQUEST_INFO"
+
+call POST "${API}/_search" '{"RequestInfo":{}}'
+expect_status 400 "a search with no criteria is rejected"
+expect_json '.Errors[0].code' "INVALID_REQUEST" "  INVALID_REQUEST"
+
+call POST "${API}/_search" '{"RequestInfo":{},"criteria":{"limit":10}}'
+expect_status 400 "an unbounded search is rejected"
+expect_json '.Errors[0].code' "INVALID_CRITERIA" "  INVALID_CRITERIA"
+
+call POST "${API}/_search" '{"RequestInfo":{},"criteria":{"userId":"u","limit":-1,"offset":-2}}'
+expect_status 400 "negative paging is rejected"
+expect_json '.Errors | length' "2" "  both paging errors are returned"
+expect_json '.Errors[0].code' "INVALID_LIMIT" "  INVALID_LIMIT"
+expect_json '.Errors[1].code' "INVALID_OFFSET" "  INVALID_OFFSET"
+
+call POST "${API}/_upsert" '{"RequestInfo":{},'
+expect_status 400 "a malformed body is rejected"
+expect_json '.Errors[0].code' "INVALID_JSON" "  INVALID_JSON"
+expect_json '.Errors[0].message' "Invalid JSON format" "  the parser message is logged, not returned"
+
+call POST "${API}/_upsert" ''
+expect_status 400 "an empty body is rejected"
+expect_json '.Errors[0].code' "INVALID_JSON" "  INVALID_JSON"
+
+# ── Caller compatibility ────────────────────────────────────────────────────
+# novu-bridge's PreferenceServiceClient posts a lower-camel "requestInfo";
+# local-setup/scripts/seed-test-account-preferences.py posts "RequestInfo".
+# Go matched keys case-insensitively, so both spellings are in production.
+section "9. Caller compatibility"
+call POST "${API}/_search" "$(cat <<JSON
+{
+  "requestInfo": {},
+  "criteria": {
+    "userId": "${USER_A}", "tenantId": "${TENANT}",
+    "preferenceCode": "${CODE}", "limit": 1, "offset": 0
+  }
+}
+JSON
+)"
+expect_status 200 "the lower-camel requestInfo novu-bridge sends is accepted"
+expect_json '.preferences | length' "1" "  and returns the preference"
+expect_json '.preferences[0].payload.consent.WHATSAPP.status' "REVOKED" "  consent is reachable at payload.consent.<CHANNEL>.status"
+
+call POST "${API}/_upsert" "$(cat <<JSON
+{
+  "REQUESTINFO": {},
+  "PREFERENCE": {
+    "USERID": "e2e-casing-${SUFFIX}", "PreferenceCode": "USER_PROFILE", "Payload": { "k": "v" }
+  }
+}
+JSON
+)"
+expect_status 200 "arbitrary key casing is accepted, as Go's encoding/json did"
+expect_json '.preferences[0].userId' "e2e-casing-${SUFFIX}" "  the value lands on the right field"
+
+call POST "${API}/_upsert" "$(cat <<JSON
+{
+  "RequestInfo": { "apiId": "seed", "plainAccessRequest": { "recordId": "r" }, "brandNew": 1 },
+  "preference": { "userId": "e2e-extra-${SUFFIX}", "preferenceCode": "USER_PROFILE", "payload": { "k": "v" }, "extra": 1 }
+}
+JSON
+)"
+expect_status 200 "unknown fields are ignored rather than rejected"
+
+call POST "${API}/_upsert" "$(cat <<JSON
+{
+  "RequestInfo": { "userInfo": { "id": 4242 } },
+  "preference": { "userId": "4242", "preferenceCode": "USER_PROFILE", "payload": { "k": "v" } }
+}
+JSON
+)"
+expect_status 200 "a numeric userInfo.id is accepted"
+expect_json '.preferences[0].auditDetails.createdBy' "4242" "  and is recorded as the audit author"
+
+call POST "${API}/_upsert" "$(cat <<JSON
+{
+  "RequestInfo": {},
+  "preference": { "userId": "e2e-anon-${SUFFIX}", "preferenceCode": "USER_PROFILE", "payload": { "k": "v" } }
+}
+JSON
+)"
+expect_json '.preferences[0].auditDetails.createdBy' "system" "an unidentified caller is attributed to system"
+
+# ── Identifier and payload-casing checks ────────────────────────────────────
+section "10. Identifier and payload casing"
+call POST "${API}/_upsert" "{\"RequestInfo\":{},\"preference\":{\"id\":\"not-a-uuid\",\"userId\":\"e2e-badid-${SUFFIX}\",\"preferenceCode\":\"USER_PROFILE\",\"payload\":{\"k\":\"v\"}}}"
+expect_status 400 "a caller-supplied id that is not a uuid is a 400, not a 500"
+expect_json '.Errors[0].code' "INVALID_ID" "  INVALID_ID"
+
+# UUID.fromString zero-pads these, so a parse-based check accepted them and
+# PostgreSQL then rejected the raw string with a 500.
+call POST "${API}/_upsert" "{\"RequestInfo\":{},\"preference\":{\"id\":\"1-2-3-4-5\",\"userId\":\"e2e-short-${SUFFIX}\",\"preferenceCode\":\"USER_PROFILE\",\"payload\":{\"k\":\"v\"}}}"
+expect_status 400 "a short-group id is a 400, not a 500"
+expect_json '.Errors[0].code' "INVALID_ID" "  INVALID_ID"
+
+call POST "${API}/_upsert" "{\"RequestInfo\":{},\"preference\":{\"userId\":\"e2e-lower-${SUFFIX}\",\"preferenceCode\":\"${CODE}\",\"payload\":{\"consent\":{\"sms\":{\"status\":\"MAYBE\",\"scope\":\"REGIONAL\"}}}}}"
+expect_status 400 "a lower-cased consent block is validated, as Go's encoding/json did"
+expect_json '.Errors | length' "2" "  both the status and scope errors are returned"
+expect_json '.Errors[0].code' "INVALID_CONSENT_STATUS" "  INVALID_CONSENT_STATUS"
+expect_json '.Errors[1].code' "INVALID_CONSENT_SCOPE" "  INVALID_CONSENT_SCOPE"
+
+call POST "${API}/_upsert" "$(cat <<JSON
+{
+  "RequestInfo": {},
+  "preference": {
+    "userId": "  e2e-pad-${SUFFIX}  ", "tenantId": "  ${TENANT}  ",
+    "preferenceCode": "${CODE}", "payload": { "preferredLanguage": "en_IN" }
+  }
+}
+JSON
+)"
+expect_status 200 "a padded key is accepted"
+PAD_ID=$(printf '%s' "$BODY" | jq -r '.preferences[0].id')
+call POST "${API}/_upsert" "$(cat <<JSON
+{
+  "RequestInfo": {},
+  "preference": {
+    "userId": "e2e-pad-${SUFFIX}", "tenantId": "${TENANT}",
+    "preferenceCode": "${CODE}", "payload": { "preferredLanguage": "hi_IN" }
+  }
+}
+JSON
+)"
+expect_status 200 "the same key unpadded is an update, not a duplicate-key 500"
+expect_json '.preferences[0].id' "${PAD_ID}" "  and lands on the same row"
+
+# ── Ownership ───────────────────────────────────────────────────────────────
+# Both endpoints key on the body userId, so a citizen principal is held to
+# their own record (CWE-639). A call with no principal is service-to-service.
+section "11. Ownership"
+OWNER="11111111-1111-1111-1111-1111${SUFFIX:0:8}"
+VICTIM="22222222-2222-2222-2222-2222${SUFFIX:0:8}"
+call POST "${API}/_upsert" "{\"RequestInfo\":{\"userInfo\":{\"uuid\":\"${OWNER}\",\"roles\":[{\"code\":\"CITIZEN\"}]}},\"preference\":{\"userId\":\"${OWNER}\",\"tenantId\":\"${TENANT}\",\"preferenceCode\":\"${CODE}\",\"payload\":{\"preferredLanguage\":\"en_IN\"}}}"
+expect_status 200 "a citizen writes their own record"
+
+call POST "${API}/_upsert" "{\"RequestInfo\":{\"userInfo\":{\"uuid\":\"${OWNER}\",\"roles\":[{\"code\":\"CITIZEN\"}]}},\"preference\":{\"userId\":\"${VICTIM}\",\"tenantId\":\"${TENANT}\",\"preferenceCode\":\"${CODE}\",\"payload\":{\"preferredLanguage\":\"en_IN\"}}}"
+expect_status 403 "a citizen cannot write someone else's record"
+expect_json '.Errors[0].code' "NOT_AUTHORIZED" "  NOT_AUTHORIZED"
+
+call POST "${API}/_search" "{\"RequestInfo\":{\"userInfo\":{\"uuid\":\"${OWNER}\",\"roles\":[{\"code\":\"CITIZEN\"}]}},\"criteria\":{\"tenantId\":\"${TENANT}\"}}"
+expect_status 403 "a citizen cannot enumerate the tenant"
+expect_json '.Errors[0].code' "NOT_AUTHORIZED" "  NOT_AUTHORIZED"
+
+call POST "${API}/_search" "{\"RequestInfo\":{\"userInfo\":{\"uuid\":\"${OWNER}\",\"roles\":[{\"code\":\"CITIZEN\"}]}},\"criteria\":{\"userId\":\"${OWNER}\"}}"
+expect_status 200 "a citizen reads their own record"
+expect_json '.preferences | length' "1" "  and gets it"
+
+call POST "${API}/_search" "{\"RequestInfo\":{\"userInfo\":{\"uuid\":\"adm-${SUFFIX}\",\"roles\":[{\"code\":\"SUPERUSER\",\"tenantId\":\"${TENANT}\"}]}},\"criteria\":{\"tenantId\":\"${TENANT}\"}}"
+expect_status 200 "an admin reads across its own tenant"
+
+call POST "${API}/_search" "{\"RequestInfo\":{\"userInfo\":{\"uuid\":\"adm-${SUFFIX}\",\"roles\":[{\"code\":\"SUPERUSER\",\"tenantId\":\"pg\"}]}},\"criteria\":{\"tenantId\":\"${TENANT}\"}}"
+expect_status 200 "a state-level admin reaches a descendant tenant"
+
+call POST "${API}/_search" "{\"RequestInfo\":{\"userInfo\":{\"uuid\":\"adm-${SUFFIX}\",\"roles\":[{\"code\":\"SUPERUSER\",\"tenantId\":\"pg.cityb\"}]}},\"criteria\":{\"tenantId\":\"${TENANT}\"}}"
+expect_status 403 "an admin from another tenant is refused"
+expect_json '.Errors[0].code' "NOT_AUTHORIZED" "  NOT_AUTHORIZED"
+
+call POST "${API}/_search" "{\"RequestInfo\":{\"userInfo\":{\"uuid\":\"emp-${SUFFIX}\",\"roles\":[{\"code\":\"EMPLOYEE\",\"tenantId\":\"${TENANT}\"}]}},\"criteria\":{\"tenantId\":\"${TENANT}\"}}"
+expect_status 403 "EMPLOYEE is not privileged by default"
+
+call POST "${API}/_upsert" "{\"RequestInfo\":{\"userInfo\":{\"id\":42,\"roles\":[{\"code\":\"CITIZEN\"}]}},\"preference\":{\"userId\":\"${VICTIM}\",\"tenantId\":\"${TENANT}\",\"preferenceCode\":\"${CODE}\",\"payload\":{\"preferredLanguage\":\"en_IN\"}}}"
+expect_status 403 "a caller identified only by a numeric id cannot write another record"
+
+call POST "${API}/_upsert" "{\"RequestInfo\":{\"userInfo\":{}},\"preference\":{\"userId\":\"${VICTIM}\",\"preferenceCode\":\"USER_PROFILE\",\"payload\":{\"k\":\"v\"}}}"
+expect_status 403 "a present but unidentifiable caller fails closed"
+
+call POST "${API}/_search" "{\"requestInfo\":{},\"criteria\":{\"tenantId\":\"${TENANT}\",\"preferenceCode\":\"${CODE}\"}}"
+expect_status 200 "novu-bridge's principal-less call still lists the tenant"
+
+# ── Routing ─────────────────────────────────────────────────────────────────
+section "12. Routing"
+call POST "${API}/_nope" '{}'
+expect_status 404 "an unknown path is a 404, not a 500"
+call GET "${API}/_upsert"
+expect_status 405 "a GET on _upsert is a 405"
+
+# ── Summary ─────────────────────────────────────────────────────────────────
+printf "\n${BLUE}========================================${NC}\n"
+if [ "$FAILED" -eq 0 ]; then
+    printf "${GREEN}All %d assertions passed.${NC}\n" "$PASSED"
 else
-    echo -e "${RED}✗ Expected 400, got HTTP $HTTP_CODE${NC}"
-    echo "$BODY" | jq . 2>/dev/null || echo "$BODY"
+    printf "${RED}%d of %d assertions FAILED.${NC}\n" "$FAILED" "$((PASSED + FAILED))"
 fi
-echo ""
+printf "${BLUE}========================================${NC}\n"
 
-# Test 7: Create preference for different user
-echo -e "${BLUE}7. Testing Create Preference for Different User...${NC}"
-DIFF_USER_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "${BASE_URL}${CONTEXT_PATH}/v1/_upsert" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "requestInfo": {
-      "apiId": "user-preferences",
-      "ver": "1.0",
-      "msgId": "test-msg-006",
-      "userInfo": {
-        "uuid": "another-user-456"
-      }
-    },
-    "preference": {
-      "userId": "another-user-456",
-      "preferenceCode": "USER_NOTIFICATION_PREFERENCES",
-      "payload": {
-        "preferredLanguage": "ta_IN",
-        "consent": {
-          "WHATSAPP": {
-            "status": "REVOKED",
-            "scope": "GLOBAL"
-          }
-        }
-      }
-    }
-  }')
-
-HTTP_CODE=$(echo "$DIFF_USER_RESPONSE" | tail -n1)
-BODY=$(echo "$DIFF_USER_RESPONSE" | sed '$d')
-
-if [ "$HTTP_CODE" = "200" ]; then
-    echo -e "${GREEN}✓ Create for different user passed (HTTP $HTTP_CODE)${NC}"
-    echo "$BODY" | jq . 2>/dev/null || echo "$BODY"
-else
-    echo -e "${RED}✗ Create for different user failed (HTTP $HTTP_CODE)${NC}"
-    echo "$BODY" | jq . 2>/dev/null || echo "$BODY"
-fi
-echo ""
-
-# Test 8: Search by preferenceCode only
-echo -e "${BLUE}8. Testing Search by PreferenceCode...${NC}"
-SEARCH_CODE_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "${BASE_URL}${CONTEXT_PATH}/v1/_search" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "requestInfo": {
-      "apiId": "user-preferences",
-      "ver": "1.0",
-      "msgId": "test-msg-007"
-    },
-    "criteria": {
-      "preferenceCode": "USER_NOTIFICATION_PREFERENCES",
-      "limit": 10
-    }
-  }')
-
-HTTP_CODE=$(echo "$SEARCH_CODE_RESPONSE" | tail -n1)
-BODY=$(echo "$SEARCH_CODE_RESPONSE" | sed '$d')
-
-if [ "$HTTP_CODE" = "200" ]; then
-    echo -e "${GREEN}✓ Search by code passed (HTTP $HTTP_CODE)${NC}"
-    echo "$BODY" | jq . 2>/dev/null || echo "$BODY"
-else
-    echo -e "${RED}✗ Search by code failed (HTTP $HTTP_CODE)${NC}"
-    echo "$BODY" | jq . 2>/dev/null || echo "$BODY"
-fi
-echo ""
-
-echo -e "${BLUE}========================================${NC}"
-echo -e "${BLUE}All tests completed!${NC}"
-echo -e "${BLUE}========================================${NC}"
+[ "$FAILED" -eq 0 ] || exit 1

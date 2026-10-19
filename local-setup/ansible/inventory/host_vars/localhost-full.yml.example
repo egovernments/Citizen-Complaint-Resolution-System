@@ -8,7 +8,7 @@
 # moment the stack is up.
 #
 # FULL means every optional subsystem this profile knows about is on:
-# notifications (Novu + otp-publisher), MCP, the configurator wizard, and both
+# notifications (Novu), MCP, the configurator wizard, and both
 # SPAs (legacy employee UI at /digit-ui/ and the citizen SPA at /citizen/).
 #
 # SIZING. Needs ~16 GB for the containers alone. On a 16 GB box the notification
@@ -111,10 +111,6 @@ map_center:
   lat: 30.7333
   lng: 76.7794
 
-# Restrict which tenants may log in. Values: list of tenant ids, or `[]` (here)
-# to allow all. Most production deployments list exactly one city.
-login_tenant_allowlist: []
-
 # Employee-UI modules to hide. Values: list of module codes — commonly `["IM"]`
 # to hide inbox-v2 when enable_search_stack is false. Empty: hide nothing.
 employee_module_denylist: []
@@ -183,11 +179,10 @@ asset_s3_bucket: "pg-egov-assets"
 #         `hmr`       — esbuild dev server in tmux, live-reload on save.
 digit_ui_mode: container
 
-# Build and serve the Vite/React-19 citizen SPA at /citizen/, separate from the
-# legacy /digit-ui/ bundle. Pair with nginx_features.digit_ui_v2 — building it
-# without the nginx flag leaves the bundle on disk and unreachable.
-# Values: true | false.
-enable_digit_ui_v2: true
+# The Vite/React-19 citizen SPA at /citizen/. Keep false: D26 retired its
+# citizen sign-in and the deploy refuses `true`. Citizens use
+# /<tenant-slug>/digit-ui/citizen instead.
+enable_digit_ui_v2: false
 
 # Unset by default, so deploy builds the reviewed vendored `digit-ui-v2/` and
 # sibling `ui-shared/` sources from this checkout. To test an external source,
@@ -214,12 +209,14 @@ enable_integration_tests_runner: false
 
 # ────────── Optional services ──────────
 
-# Real OTP delivery: egov-otp + user-otp + egov-notification-sms.
-# Values: true | false. False (here) means Kong mocks /user-otp/* with a canned
-# 200, so citizen login works with the fixed OTP 123456 and no SMS infra.
-# Turning it on for production also needs the mock removed from kong.yml and a
-# real SMS_PROVIDER_CLASS wired up — it defaults to Console, which only logs.
+# Real OTP delivery: egov-otp + user-otp generate/validate; novu-bridge sends the SMS
+# (requires enable_novu: true and SMS enabled for the tenant). Values: true | false.
+# False (here) means Kong mocks /user-otp/* with a canned 200, so citizen login works
+# with the fixed OTP 123456 and no SMS infra — but only because this local
+# dev box opts in with identity_dev_fixed_otp below (off by default). The deploy strips the mocks when true.
 enable_otp_services: false
+# Development only: accept the fixed citizen OTP 123456 (never on a public box).
+identity_dev_fixed_otp: true
 
 # Elasticsearch + egov-indexer + inbox-v2. Values: true | false.
 # Off saves ~2-3 GB. The trade: the inbox and search screens stop working —
@@ -240,9 +237,6 @@ build_mcp: true
 # False here because digit_ui_mode is `container` — the image already has it.
 build_digit_ui: false
 
-# Build the OTP publisher image on this box. Values: true | false.
-build_otp_publisher: false
-
 # Let the deploy continue when tenant bootstrap steps fail. Values: true | false.
 # True is right for a local box booting from the dump, where some bootstrap
 # steps are already satisfied and would otherwise abort the run.
@@ -252,11 +246,6 @@ tolerate_bootstrap_failures: true
 # Needs scraped OSM data under turbopass/data on the controller.
 # Values: true | false.
 enable_turbopass: false
-
-# Self-hosted Overpass for boundary-polygon fetch. Off means the configurator
-# uses the public overpass-api.de, which is rate-limited and 504-prone.
-# Requires a prepared OSM extract on the box first. Values: true | false.
-enable_overpass: false
 
 # ────────── Notifications (the full-vs-slim dividing line) ──────────
 #
@@ -274,10 +263,17 @@ enable_overpass: false
 # integration and workflow inside Novu.
 enable_novu: true
 
+# This box starts from local-setup/db/full-dump.sql, which ships three demo
+# complaints under pg. Without this the deploy would (rightly) not treat pg as a
+# fresh install and would install no default notification configuration. Only for
+# a local box built from the dump — see notifications_adopt_defaults in _example.yml.
+notifications_adopt_defaults: true
+
 # Build a subpath-rebased Novu dashboard so the SPA serves cleanly under /novu.
-# Values: true | false. REQUIRED true when Keycloak shares the domain, because
-# the stock image's nginx workaround hijacks the whole /auth/ prefix.
-build_novu_dashboard: false
+# Values: true | false. Recommended true: the stock image's nginx workaround
+# claims root paths (/assets/, /auth/ ...); nginx keeps Keycloak's
+# /auth/realms/ and /auth/resources/ ahead of it either way.
+build_novu_dashboard: true
 
 # Novu API key, copied from the dashboard after first sign-up. Empty (here)
 # skips the bootstrap step — Novu still comes up and can be configured by hand.
@@ -302,18 +298,12 @@ novu_bridge_channel: "sms"
 
 # ────────── Keycloak SSO ──────────
 
-# Adds keycloak + token-exchange-svc and the /auth/ + /token-exchange/ nginx
-# blocks. Inert in the rest of the stack — DIGIT keeps working on OTP login
-# until auth_provider is flipped. Values: true | false.
-enable_keycloak: false
+# Adds Keycloak + Identity BFF and the /auth/ + /identity/v1/ routes.
+# REQUIRED: every employee and citizen sign-in goes through them, the old
+# DIGIT OTP/password login pages are gone, and the deploy refuses `false`.
+enable_keycloak: true
 
-# Which auth path the SPA uses. Values: `keycloak` for OIDC PKCE, `""` (here)
-# for OTP login. Do not flip until the realm is imported and a test login works.
-auth_provider: ""
-
-# OIDC public client id inside the per-tenant realm. The shipped realm template
-# defines `digit-ui`; change only if you forked the template.
-keycloak_client_id: "digit-ui"
+# auth_provider and keycloak_client_id are retired (D26): leave them unset.
 
 # Google federated login. Empty skips Google IdP wiring entirely.
 keycloak_google_client_id: ""
@@ -339,7 +329,7 @@ db_fast_path: true
 # db_fast_path without this ack, so every install is stopped once and must
 # confirm the wipe deliberately before it proceeds. Flip to true only after
 # confirming this box has NO postgres data in an anonymous volume. If it does,
-# migrate it first: docs/2.12/operations/postgres-volume-migration.md
+# migrate it first: docs/releases/2.12/operations/postgres-volume-migration.md
 db_fast_path_ack_data_wipe: false
 
 # Run the post-deploy CI suite (XLSX dataloader + Playwright) at the end of the
@@ -380,9 +370,8 @@ nginx_features:
                              #   bao kv get -field=status_basic_auth_password <secrets_path>
   api_pgr: false           # /api/pgr/ — proxied to MCP for the dashboard
   mcp: true                # /mcp + /v1/* — needs enable_mcp: true
-  keycloak: true           # /auth/ + /token-exchange/ — needs enable_keycloak: true
-                           # (true here but inert while enable_keycloak is false)
-  digit_ui_v2: true        # /citizen/ — needs enable_digit_ui_v2: true
+  keycloak: true           # /auth/ + /identity/v1/ — needs enable_keycloak: true
+  digit_ui_v2: false       # /citizen/ — retired with enable_digit_ui_v2 (D26)
   integration_tests: false      # /tests/ + /tests-v2/
   integration_tests_runner: false  # /tests/api/
 
@@ -417,4 +406,4 @@ bootstrap_secrets:
   keycloak_admin_password: "eGov@123"
   keycloak_db_password: "eGov@123"
   keycloak_google_client_secret: ""
-  token_exchange_system_password: "eGov@123"
+  identity_digit_admin_password: "eGov@123"

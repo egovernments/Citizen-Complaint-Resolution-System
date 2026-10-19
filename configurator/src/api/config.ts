@@ -25,9 +25,10 @@ export function getApiBaseUrl(): string {
 // STATE_TENANT_ID was the only one without, which is why a blank config.js used
 // to mean "retype the tenant on every login".
 export const DEFAULT_STATE_TENANT_ID = 'pg';
-export const STATE_TENANT_ID: string =
-  resolveConfig('STATE_TENANT_ID', import.meta.env.VITE_STATE_TENANT_ID) ||
-  DEFAULT_STATE_TENANT_ID;
+/** The root tenant config.js or the build names, or '' when neither does (no 'pg' default). */
+export const CONFIGURED_STATE_TENANT_ID: string =
+  resolveConfig('STATE_TENANT_ID', import.meta.env.VITE_STATE_TENANT_ID) || '';
+export const STATE_TENANT_ID: string = CONFIGURED_STATE_TENANT_ID || DEFAULT_STATE_TENANT_ID;
 
 /** Root (state) tenant code for this deployment, e.g. "mz". A city code
  *  collapses to its root segment. Never empty: falls back to
@@ -86,6 +87,7 @@ export const ENDPOINTS = {
   // Filestore
   FILESTORE_UPLOAD: '/filestore/v1/files',
   FILESTORE_URL: '/filestore/v1/files/url',
+  FILESTORE_FILE: '/filestore/v1/files/id',
 };
 
 // MDMS Schema codes
@@ -103,6 +105,10 @@ export const MDMS_SCHEMAS = {
   TENANT: 'tenant.tenants',
   MAP_CONFIG: 'RAINMAKER-PGR.MapConfig',
   DASHBOARD_CONFIG: 'dss.DashboardConfig',
+  ESCALATION_CONFIG: 'RAINMAKER-PGR.EscalationConfig',
+  // The tenant's operational boundary hierarchy (CMS row), read by digit-ui,
+  // the dashboard and PGR in place of the deployment-wide globalConfigs keys.
+  HIERARCHY_SCHEMA: 'CMS-BOUNDARY.HierarchySchema',
 };
 
 // OAuth credentials

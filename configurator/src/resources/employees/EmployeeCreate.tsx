@@ -1,17 +1,11 @@
 import { DigitCreate, DigitFormCodeInput, DigitFormInput, DigitFormSelect, v } from '@/admin';
 import { FieldSection } from '@/admin/fields';
-import { DEFAULT_PASSWORD } from '@/api/config';
 import { useMobileValidator } from '@/admin/hrms/useMobileValidator';
 import { useApp } from '../../App';
 import { RolesEditor } from './RolesEditor';
 import { JurisdictionEditor } from './JurisdictionEditor';
 import { AssignmentEditor } from './AssignmentEditor';
-
-const GENDER_CHOICES = [
-  { value: 'MALE', label: 'Male' },
-  { value: 'FEMALE', label: 'Female' },
-  { value: 'TRANSGENDER', label: 'Transgender' },
-];
+import { useGenderChoices } from '../useGenderChoices';
 
 const STATUS_CHOICES = [
   { value: 'EMPLOYED', label: 'Employed' },
@@ -39,6 +33,7 @@ export function EmployeeCreate() {
   const { state } = useApp();
   const tenantId = state.tenant;
   const { validator: mobileValidate, rules: mobileRules } = useMobileValidator();
+  const genderChoices = useGenderChoices();
 
   const defaults = {
     tenantId,
@@ -48,7 +43,6 @@ export function EmployeeCreate() {
       type: 'EMPLOYEE',
       active: true,
       gender: 'MALE',
-      password: DEFAULT_PASSWORD,
       tenantId,
       roles: [],
     },
@@ -76,7 +70,6 @@ export function EmployeeCreate() {
       tenantId: targetTenantId,
       type: 'EMPLOYEE',
       active: true,
-      password: typeof userInput.password === 'string' && userInput.password ? userInput.password : DEFAULT_PASSWORD,
       dob: toEpochMs(userInput.dob),
     };
 
@@ -103,12 +96,13 @@ export function EmployeeCreate() {
         <DigitFormSelect
           source="tenantId"
           label="Tenant"
+          disabled
           reference="tenants"
           optionValue="code"
           optionText="code"
           validate={v.codeRequired}
           placeholder="Select tenant"
-          help="Employee is created on this tenant — must match the login subdomain (the city tenant code, e.g. <root>.<city>)."
+          help="Employees are invited to this workspace."
         />
       </FieldSection>
 
@@ -128,7 +122,7 @@ export function EmployeeCreate() {
             maxLength={mobileRules.maxLength}
             help={mobileRules.errorMessage}
           />
-          <DigitFormInput source="user.emailId" label="Email" type="email" validate={v.emailOptional} />
+          <DigitFormInput source="user.emailId" label="Email" type="email" validate={v.emailRequired} />
           {/* DOB and Date of Appointment are optional — Edit already lets an
               operator clear both and save, so requiring them here only made the
               two screens disagree (egovernments/CCRS#1949). egov-hrms treats both
@@ -140,7 +134,7 @@ export function EmployeeCreate() {
           <DigitFormSelect
             source="user.gender"
             label="Gender"
-            choices={GENDER_CHOICES}
+            choices={genderChoices}
             placeholder="Select gender..."
           />
           <DigitFormInput source="dateOfAppointment" label="Date of Appointment" type="date" />
@@ -171,13 +165,7 @@ export function EmployeeCreate() {
         <JurisdictionEditor tenantId={tenantId} help="Areas this employee is responsible for." />
       </FieldSection>
 
-      <FieldSection title="Account Password">
-        <DigitFormInput
-          source="user.password"
-          label="Initial Password"
-          help="Defaults to eGov@123. Employee should rotate on first login."
-        />
-      </FieldSection>
+
     </DigitCreate>
   );
 }

@@ -48,7 +48,6 @@ npm install --save @egovernments/digit-ui-module-core@1.9.0
 - `ImageComponent` - Optimized image handling
 - `DummyLoader` - Improved loading states
 - `RoleBasedEmployeeHome` - Role-specific home pages
-- `LoginSignupSelector` - Streamlined access flow
 - `ForgotOrganizationTooltip` - Better user guidance
 
 ### Custom Hooks

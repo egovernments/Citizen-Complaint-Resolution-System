@@ -25,7 +25,14 @@ export interface EditableColumnConfig {
 
 export interface DigitColumn<RecordType extends RaRecord = RaRecord> {
   source: string;
+  /** Header text: a localization code (`app.fields.sla`) or plain English. */
   label: string;
+  /**
+   * Localization code for an English `label`, which then becomes the fallback.
+   * Set by the schema column generators; a hand-written English label without
+   * one renders as written.
+   */
+  labelKey?: string;
   sortable?: boolean;
   render?: (record: RecordType) => React.ReactNode;
   editable?: boolean | EditableColumnConfig;
@@ -35,6 +42,8 @@ export interface MutationOptions {
   onSuccess?: (data: unknown) => void;
   onError?: (error: Error) => void;
   transform?: (data: Record<string, unknown>) => Record<string, unknown>;
+  /** Data-provider `meta` sent with inline-edit updates and row deletes. */
+  meta?: Record<string, unknown>;
 }
 
 export interface DigitDatagridProps<RecordType extends RaRecord = RaRecord> {

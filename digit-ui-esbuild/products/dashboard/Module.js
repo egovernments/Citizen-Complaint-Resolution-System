@@ -4,6 +4,8 @@ import { Loader } from "@egovernments/digit-ui-react-components";
 import AdminDashboard from "./src/AdminDashboard";
 import DashboardCard from "./DashboardCard";
 import { useDashboardAccess } from "./roles";
+import { useQuery } from "react-query";
+import { fetchTenantHierarchyType } from "./src/services/boundaryService";
 
 // Mounted by core AppModules at /{contextPath}/employee/dashboard INSIDE the
 // employee chrome (topbar + sidebar). AppModules already guarantees a logged-in
@@ -16,8 +18,15 @@ const DashboardModule = ({ stateCode }) => {
   // (same pattern as PGRModule): rainmaker-dashboard for the dashboard's own
   // chrome/labels, rainmaker-pgr for complaint-type + workflow-status names,
   // rainmaker-common for department/designation labels,
-  // rainmaker-boundary-<hierarchy> for ward names on the map and filters.
-  const hierarchyType = window?.globalConfigs?.getConfig("HIERARCHY_TYPE") || "ADMIN";
+  // rainmaker-boundary-<hierarchy> for ward names on the map and filters,
+  // following the tenant's own hierarchy (CMS-BOUNDARY.HierarchySchema).
+  const { data: tenantHierarchyType, isLoading: hierarchyLoading } = useQuery(
+    ["DASHBOARD_TENANT_HIERARCHY", stateCode],
+    () => fetchTenantHierarchyType(),
+    { staleTime: Infinity }
+  );
+  const hierarchyType =
+    tenantHierarchyType || window?.globalConfigs?.getConfig("HIERARCHY_TYPE") || "ADMIN";
   const { isLoading } = Digit.Services.useStore({
     stateCode,
     moduleCode: ["dashboard", "pgr", "common", `boundary-${hierarchyType?.toString().toLowerCase()}`],
@@ -28,7 +37,7 @@ const DashboardModule = ({ stateCode }) => {
   // While the access-control capability check resolves, hold on the Loader
   // (never the Redirect) so an eventually-allowed caller doesn't flash away
   // from the route.
-  if (accessLoading || isLoading) {
+  if (accessLoading || isLoading || hierarchyLoading) {
     return <Loader />;
   }
   if (!allowed) {

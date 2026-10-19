@@ -1,18 +1,35 @@
 const config = require('../env-variables');
+const mobileValidation = require('../machine/service/mobile-validation-service');
 const fetch = require("node-fetch");
 const axios = require('axios');
 var FormData = require("form-data");
+const mediaTypes = require('../media-types');
+const { maskMobile, summarizeInbound } = require('../privacy');
+const { isValidTwilioSignature } = require('./twilio-signature');
 
-const MIME_TYPE_EXTENSIONS = {
-    'image/jpeg': '.jpg',
-    'image/jpg': '.jpg',
-    'image/png': '.png',
-    'image/gif': '.gif',
-    'image/webp': '.webp',
-    'application/pdf': '.pdf',
-    'application/msword': '.doc',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx'
+// Twilio's limit on a single message body. See splitBody below.
+const TWILIO_MAX_BODY = require('./limits').MAX_BODY_LENGTH.Twilio;
+
+// Sent when a split message stops partway: the citizen holds the first part of a menu and
+// would otherwise wait on options they never saw. Reset words (hi) restart the flow.
+const PARTIAL_DELIVERY_NOTICE = {
+    en_IN: 'Sorry, the rest of this message could not be delivered. Please send *hi* to start again.',
+    pt_PT: 'Desculpe, o resto desta mensagem não pôde ser entregue. Envie *olá* para recomeçar.',
 };
+
+// The only host inbound media is fetched from, and the only path shape accepted
+// on it. See twilioMediaUrl below.
+const TWILIO_MEDIA_HOST = 'api.twilio.com';
+const TWILIO_MEDIA_PATH = /^\/2010-04-01\/Accounts\/(AC[0-9a-f]{32})\/Messages\/(MM[0-9a-f]{32})\/Media\/(ME[0-9a-f]{32})$/i;
+const INPUT_TYPES = {
+    LOCATION: 'location',
+    BUTTON: 'button',
+    IMAGE: 'image',
+    DOCUMENT: 'document',
+    TEXT: 'text',
+    UNKNOWN: 'unknown',
+}
+
 
 class TwilioWhatsAppProvider {
 
@@ -21,6 +38,9 @@ class TwilioWhatsAppProvider {
         this.authToken = config.twilio.authToken;
         this.whatsappNumber = config.twilio.whatsappNumber;
         this.baseUrl = config.twilio.baseUrl || `https://api.twilio.com/2010-04-01/Accounts/${this.accountSid}/Messages.json`;
+        // Pause between the parts of a split body: Twilio does not guarantee WhatsApp
+        // delivery order, and back-to-back sends can arrive shuffled.
+        this.chunkDelayMs = 1000;
     }
 
     getAuthHeader() {
@@ -29,7 +49,27 @@ class TwilioWhatsAppProvider {
     }
 
     getExtensionForMimeType(contentType) {
-        return MIME_TYPE_EXTENSIONS[contentType] || '';
+        return mediaTypes.extensionForMimeType(contentType);
+    }
+
+    async fileStoreAPICall(fileName, fileData, contentType = null, tenantId = null, cancelToken) {
+        var url = config.egovServices.egovServicesHost + config.egovServices.egovFilestoreServiceUploadEndpoint;
+        url = url + '&tenantId=' + (tenantId || config.rootTenantId);
+        var form = new FormData();
+        form.append("file", fileData, {
+            filename: fileName,
+            contentType: mediaTypes.filestoreContentType(fileName) || contentType || 'application/octet-stream'
+        });
+        
+        const response = await axios.post(url, form, {
+            cancelToken,
+            headers: {
+                ...form.getHeaders()
+            }
+        });
+
+        var filestore = response.data;
+        return filestore['files'][0]['fileStoreId'];
     }
 
     getMimeTypeFromBase64(fileInBase64String) {
@@ -39,24 +79,6 @@ class TwilioWhatsAppProvider {
 
     stripBase64Prefix(fileInBase64String) {
         return fileInBase64String.replace(/^data:[^;]+;base64,/, '');
-    }
-
-    async fileStoreAPICall(fileName, fileData, contentType = 'application/octet-stream', tenantId = null) {
-        var url = config.egovServices.egovServicesHost + config.egovServices.egovFilestoreServiceUploadEndpoint;
-        url = url + '&tenantId=' + (tenantId || config.rootTenantId);
-        var form = new FormData();
-        form.append("file", fileData, {
-            filename: fileName,
-            contentType: contentType
-        });
-        let response = await axios.post(url, form, {
-            headers: {
-                ...form.getHeaders()
-            }
-        });
-
-        var filestore = response.data;
-        return filestore['files'][0]['fileStoreId'];
     }
 
     async convertFromBase64AndStore(fileInBase64String, tenantId = null) {
@@ -109,7 +131,7 @@ class TwilioWhatsAppProvider {
         }
         
         try {
-            let response = await fetch(url, options);
+            let response = await fetch(url, { ...options, timeout: config.timeouts.request });
             
             if (!response.ok) {
                 console.error("Twilio - Filestore API error:", response.status, response.statusText);
@@ -139,8 +161,72 @@ class TwilioWhatsAppProvider {
         }
     }
 
+    extractRawMessage(req) {
+        let requestBody = req.body;
+        if (Object.keys(requestBody).length === 0) {
+            requestBody = req.query;
+            console.debug("Twilio - Extracted raw message from query:", summarizeInbound(requestBody));
+        }
+        
+        console.debug("Twilio - Extracted raw message:", summarizeInbound(requestBody));
+        return requestBody;
+    }
+
+    // The served country comes from the tenant's MDMS MobileNumberValidation row,
+    // the same source extractPhoneNumber() validates against.
+    async isServedCountry(twilioNumber) {
+        // The primary rule and its alternates (ke: +254 and +91), so an alternate-country
+        // sender reaches the tenant-aware resolution instead of being dropped here.
+        const mobileConfig = await mobileValidation.getConfig(config.rootTenantId);
+        const codes = [mobileConfig, ...(mobileConfig.alternates || [])]
+            .map((rule) => mobileValidation.countryDigits(rule))
+            .filter(Boolean);
+        const digits = mobileValidation.digitsOnly(twilioNumber);
+        return !codes.length || codes.some((cc) => digits.startsWith(cc));
+    }
+
+    /**
+     * Request authenticity — the gate that makes `From` trustworthy. Without it
+     * anyone reaching the webhook can impersonate a whitelisted citizen, be logged
+     * in by the service account and file complaints under that citizen's uuid.
+     *
+     * Returns false (reject) when signing is misconfigured rather than failing
+     * open: a missing authToken/webhookBaseUrl in a deployment is exactly the
+     * state an attacker benefits from.
+     */
+    verifyRequest(req) {
+        if (!config.twilio.verifyWebhookSignature) {
+            console.warn('Twilio - webhook signature verification is DISABLED (TWILIO_VERIFY_WEBHOOK_SIGNATURE=false)');
+            return true;
+        }
+
+        const base = String(config.twilio.webhookBaseUrl || '').replace(/\/+$/, '');
+        if (!base || !this.authToken) {
+            console.error('Twilio - cannot verify webhook: TWILIO_WEBHOOK_BASE_URL or TWILIO_AUTH_TOKEN is unset');
+            return false;
+        }
+
+        return isValidTwilioSignature({
+            authToken: this.authToken,
+            url: base + req.originalUrl,
+            // Twilio signs the POST form fields; a GET status callback signs the
+            // query string, which is already part of originalUrl.
+            params: req.method === 'POST' ? req.body : {},
+            signature: req.get('X-Twilio-Signature'),
+        });
+    }
+
+
+    // Validates if the incoming request is a valid Twilio message (text, media, or location)
     async isValid(requestBody) {
         try {
+
+            // Discard messages from numbers that do not belong to the served country.
+            if (!(await this.isServedCountry(requestBody.From))) {
+                console.log(`Twilio - Discarding message from out-of-country number: ${maskMobile(requestBody.From)}`);
+                return false;
+            }
+
             // Twilio webhook validation
             if (requestBody.From && requestBody.To && requestBody.Body !== undefined) {
                 return true;
@@ -159,128 +245,340 @@ class TwilioWhatsAppProvider {
         return false;
     }
 
-    extractPhoneNumber(twilioNumber) {
-        // Twilio format: whatsapp:+919876543210
-        // Extract just the number without country code prefix
-        let number = twilioNumber.replace('whatsapp:', '').replace('+', '');
-        // Remove country code (assuming 91 for India)
-        if (number.startsWith('91') && number.length > 10) {
-            number = number.slice(2);
-        }
-        return number;
+/**
+     * Twilio `whatsapp:+254712345678` -> the tenant's national number (`712345678`).
+     *
+     * The country code and the valid-number rule come from the tenant's
+     * common-masters.MobileNumberValidation row, not from a hardcoded `91`. Returns the
+     * bare digits when the number cannot be reconciled with the tenant rule, so the caller
+     * still has something to key a session on and the downstream login produces the real
+     * error rather than this layer silently mangling the number.
+     */
+    async extractPhoneNumber(twilioNumber, tenantId = null) {
+        const mobileConfig = await mobileValidation.getConfig(tenantId || config.rootTenantId);
+        const national = mobileValidation.toNational(twilioNumber, mobileConfig);
+        if (national) return national;
+
+        const digits = mobileValidation.digitsOnly(twilioNumber);
+        console.error(
+            `Twilio - '${twilioNumber}' does not match the mobile rule for tenant ` +
+            `${tenantId || config.rootTenantId} (${mobileConfig.mobileNumberRegex}); using raw digits`
+        );
+        return digits;
     }
 
-    async getUserMessage(requestBody, tenantId = null) {
-        console.log("Twilio - Received requestBody:", JSON.stringify(requestBody, null, 2));
+    /**
+     * Number -> the `whatsapp:+E.164` address Twilio's To/From fields require.
+     *
+     * Uses toAddressableDigits rather than toE164 so a number that could not be reconciled
+     * to the tenant's rule is addressed as-sent instead of having the tenant's country code
+     * prepended to it. extractPhoneNumber below keeps the raw digits in exactly that case,
+     * and re-prefixing them fabricated addresses that cannot be delivered
+     * (+447700900123 under the ke rule became +254447700900123).
+     */
+    async toWhatsAppAddress(number, tenantId = null) {
+        // Already a full address (captured from the inbound From): use it untouched.
+        if (/^whatsapp:\+\d+$/.test(String(number))) return String(number);
+        const mobileConfig = await mobileValidation.getConfig(tenantId || config.rootTenantId);
+        const digits = mobileValidation.toAddressableDigits(number, mobileConfig);
+        if (!digits) throw new Error(`Cannot build a WhatsApp address from '${number}'`);
+        return `whatsapp:+${digits}`;
+    }
 
-        let reformattedMessage = {};
-        let type;
-        let input;
-
-        // Check for button response (Twilio interactive messages)
-        if (requestBody.ButtonPayload || requestBody.ListId) {
-            type = 'button';
-            input = requestBody.ButtonPayload || requestBody.ListId;
+    /**
+     * Build Twilio's `From` address from the configured sender.
+     *
+     * TWILIO_WHATSAPP_NUMBER is fed from `twilio_whatsapp_from`, and the repo-wide
+     * convention for that variable is the ALREADY-PREFIXED form `whatsapp:+14155238886`
+     * (every host_vars example and the Novu bootstrap default use it, because Novu's Twilio
+     * integration wants it that way). Blindly re-prefixing produced
+     * `From=whatsapp:+whatsapp:+14155238886`, which Twilio rejects -- the webhook validated,
+     * the dialog ran, state was written, and the citizen never got a reply.
+     *
+     * So normalise instead of assuming: strip any `whatsapp:` prefix and any leading `+`,
+     * then rebuild exactly once. That keeps `twilio_whatsapp_from` meaning the same thing for
+     * the Novu outbound bootstrap, which also consumes it -- inbound must not redefine a
+     * variable outbound depends on.
+     */
+    senderAddress() {
+        const raw = String(this.whatsappNumber || '').trim();
+        if (!raw) {
+            // Fail loudly rather than silently sending as someone else's number.
+            throw new Error(
+                'TWILIO_WHATSAPP_NUMBER is not set. Set twilio_whatsapp_from in host_vars ' +
+                '(e.g. "whatsapp:+14155238886") so the chatbot can address replies.'
+            );
         }
-        // Check for location
-        else if (requestBody.Latitude && requestBody.Longitude) {
-            type = 'location';
-            input = '(' + requestBody.Latitude + ',' + requestBody.Longitude + ')';
+        const digits = raw.replace(/^whatsapp:/i, '').replace(/[^0-9]/g, '');
+        return `whatsapp:+${digits}`;
+    }
+
+
+
+    getInputType(requestBody) {
+        if (requestBody.ButtonPayload || requestBody.ListId)
+            return INPUT_TYPES.BUTTON;
+        
+        if (requestBody.Latitude && requestBody.Longitude) 
+            return INPUT_TYPES.LOCATION;
+        
+        if (requestBody.NumMedia && parseInt(requestBody.NumMedia) > 0)
+            return this.getMediaType(requestBody);
+        
+        if (requestBody.Body) {
+            return INPUT_TYPES.TEXT;
         }
-        // Check for media (image, document, etc.)
-        else if (requestBody.NumMedia && parseInt(requestBody.NumMedia) > 0) {
-            const mediaType = requestBody.MediaContentType0 || '';
-            const fileExtension = this.getExtensionForMimeType(mediaType);
+        return INPUT_TYPES.UNKNOWN;
+    }
 
-            if (mediaType.startsWith('image/')) {
-                type = 'image';
-            } else if (mediaType) {
-                type = 'document';
-            } else {
-                type = 'unknown';
-                input = ' ';
-            }
+    async getInputFromType(requestBody, inputType, tenantId = null) {
+        switch (inputType) {
+            case INPUT_TYPES.BUTTON:
+                return requestBody.ButtonPayload || requestBody.ListId;
+            case INPUT_TYPES.LOCATION:
+                return '(' + requestBody.Latitude + ',' + requestBody.Longitude + ')';
+            case INPUT_TYPES.IMAGE:
+            case INPUT_TYPES.DOCUMENT:
+                return await this.processMediaInput(requestBody, tenantId);
+            case INPUT_TYPES.TEXT:
+                return requestBody.Body || '';
+            default:
+                // unsupported/unknown media, or no recognizable input at all
+                return ' ';
+        }
+    }
 
-            if (type === 'image' || type === 'document') {
-                try {
-                    const mediaUrl = requestBody.MediaUrl0;
-                    const response = await axios.get(mediaUrl, {
-                        responseType: 'arraybuffer',
-                        auth: {
-                            username: this.accountSid,
-                            password: this.authToken
-                        }
-                    });
-                    const fileBuffer = Buffer.from(response.data);
-                    const tempName = 'pgr-whatsapp-' + Date.now() + fileExtension;
-                    input = await this.fileStoreAPICall(tempName, fileBuffer, mediaType || response.headers['content-type'], tenantId);
-                } catch (error) {
-                    console.error("Error downloading/storing media:", error);
-                    input = ' ';
+    getMediaType(requestBody) {
+        const mediaType = requestBody.MediaContentType0 || '';
+        if (mediaType && !mediaTypes.isSupportedMimeType(mediaType)) {
+            return 'unsupported';
+        } else if (mediaType.startsWith('image/')) {
+            return 'image';
+        } else if (mediaType) {
+            return 'document';
+        }
+        return 'unknown';
+    }
+
+    // MediaUrl0 arrives in the webhook body and the download below attaches the
+    // account credentials as basic auth, so an attacker-controlled host would
+    // receive them. Only the path is taken from the webhook: the request URL is
+    // rebuilt against a constant base, which drops any host, port, scheme or
+    // userinfo the caller tried to smuggle in.
+    twilioMediaUrl(rawUrl) {
+        let parsed;
+        try {
+            parsed = new URL(String(rawUrl ?? ''));
+        } catch {
+            throw new Error('refusing to download media from a malformed url');
+        }
+        if (parsed.protocol !== 'https:' || parsed.hostname !== TWILIO_MEDIA_HOST) {
+            throw new Error('refusing to download media from a non-Twilio host');
+        }
+        const match = TWILIO_MEDIA_PATH.exec(parsed.pathname);
+        if (!match) {
+            throw new Error('refusing to download media from an unexpected twilio path');
+        }
+        // Assembled from the three validated SIDs rather than from the inbound path,
+        // so nothing the webhook sent reaches the request url verbatim.
+        const [, accountSid, messageSid, mediaSid] = match;
+        return `https://${TWILIO_MEDIA_HOST}/2010-04-01/Accounts/${accountSid}/Messages/${messageSid}/Media/${mediaSid}`;
+    }
+
+    async downloadMediaFromUrl(mediaUrl, cancelToken) {
+        return await axios.get(
+            this.twilioMediaUrl(mediaUrl),
+            {
+                responseType: 'arraybuffer',
+                cancelToken,
+                maxContentLength: config.maxMediaSizeBytes,
+                maxBodyLength: config.maxMediaSizeBytes,
+                auth: {
+                    username: this.accountSid,
+                    password: this.authToken
                 }
             }
-        }
-        // Text message
-        else if (requestBody.Body) {
-            type = 'text';
-            input = requestBody.Body;
-        }
-        else {
-            type = 'unknown';
-            input = ' ';
-        }
+        );
+    }
 
-        reformattedMessage.message = {
-            input: input,
-            type: type
-        };
+    async uploadMediaToFileStore(fileName, fileBuffer, contentType, tenantId = null, cancelToken) {
+        return await this.fileStoreAPICall(
+            fileName,
+            fileBuffer,
+            contentType,
+            tenantId,
+            cancelToken
+        );
+    }
 
-        reformattedMessage.user = {
-            mobileNumber: this.extractPhoneNumber(requestBody.From)
-        };
 
-        reformattedMessage.extraInfo = {
-            whatsAppBusinessNumber: this.extractPhoneNumber(requestBody.To),
-            tenantId: config.rootTenantId
+    getMediaContentType(requestBody) {
+        return requestBody.MediaContentType0 || '';
+    }
+
+        async processMediaInput(requestBody, tenantId = null) {
+        const mediaUrl = requestBody.MediaUrl0;
+        if (!mediaUrl)
+            return ' ';
+
+        // Set up a cancellation mechanism for the media download to enforce the timeout.
+        const cancellation = axios.CancelToken.source();
+        const timer = setTimeout(
+            () => cancellation.cancel(`media processing timed out after ${config.timeouts.mediaProcessing}ms`),
+            config.timeouts.mediaProcessing
+        );
+
+        try {
+            const response = await this.downloadMediaFromUrl(mediaUrl, cancellation.token);
+            const contentType = this.getMediaContentType(requestBody) || response.headers['content-type'] || '';
+            const fileExtension = this.getExtensionForMimeType(contentType);
+            const fileBuffer = Buffer.from(response.data);
+
+            if (fileBuffer.length > config.maxMediaSizeBytes) {
+                return 'FILE_TOO_LARGE';
+            }
+
+            return await this.uploadMediaToFileStore(
+                `pgr-whatsapp-${Date.now()}${fileExtension}`,
+                fileBuffer,
+                contentType,
+                tenantId,
+                cancellation.token
+            );
+        } catch (error) {
+            // axios enforces maxContentLength itself and rejects before the size check
+            // above runs; that is still an oversized file, not a failed download.
+            if (/maxContentLength size of .* exceeded/.test(error.message)) {
+                return 'FILE_TOO_LARGE';
+            }
+            if (axios.isCancel(error)) {
+                console.error(`Twilio - ${error.message}`);
+            } else {
+                console.error('Error processing media input:', error.message);
+            }
+            return ' ';
+        } finally {
+            clearTimeout(timer);
+        }
+    }
+
+
+
+    async getUserMessage(requestBody, tenantId = null) {
+        console.log("Twilio - inbound:", summarizeInbound(requestBody));
+        const inputType = this.getInputType(requestBody);
+        const inputFromType = await this.getInputFromType(requestBody, inputType, tenantId);
+
+        const reformattedMessage = {
+            message: {
+                input: inputFromType,
+                type: inputType
+            },
+            user: {
+                mobileNumber: await this.extractPhoneNumber(requestBody.From, tenantId),
+                // The exact address the citizen wrote from. The national number alone cannot say
+                // which country it belongs to when a state accepts several (ke: +254 and +91), so
+                // replies go back here rather than re-prefixing the tenant's default code.
+                whatsAppAddress: mobileValidation.digitsOnly(requestBody.From)
+                    ? `whatsapp:+${mobileValidation.digitsOnly(requestBody.From)}`
+                    : undefined
+            },
+            extraInfo: {
+                // The Twilio ACCOUNT's number, so it is deliberately not run through the
+                // citizen tenant's rule — a sandbox sender never matches it.
+                whatsAppBusinessNumber: mobileValidation.digitsOnly(requestBody.To),
+                tenantId: config.rootTenantId
+            }
         };
 
         return reformattedMessage;
     }
 
-    async processMessageFromUser(req, providedTenantId = null) {
-        let reformattedMessage = {};
-        let requestBody = req.body;
-
-        // Twilio sends POST with form-urlencoded data
-        if (Object.keys(requestBody).length === 0) {
-            requestBody = req.query;
-        }
-
-        if (!await this.isValid(requestBody)) {
-            console.log("Twilio - Invalid message received");
-            return null;
-        }
-
-        // Use provided tenant ID, or fall back to query parameter, or use default
-        let tenantId = providedTenantId || req.query.tenantId || config.rootTenantId;
-        
-        reformattedMessage = await this.getUserMessage(requestBody, tenantId);
-        return reformattedMessage;
+    async getFormattedMessageFromUser(rawMessage, tenantId) {
+        return await this.getUserMessage(rawMessage, tenantId);
     }
 
-    async sendTextMessage(to, body) {
-        const params = new URLSearchParams();
-        params.append('To', `whatsapp:+91${to}`);
-        params.append('From', `whatsapp:${this.whatsappNumber.startsWith('+') ? this.whatsappNumber : '+' + this.whatsappNumber}`);
-        params.append('Body', body);
+    // Twilio rejects a body over 1600 characters outright (error 21617), so an over-long
+    // prompt reached nobody and the conversation stalled with no reply. Split it instead,
+    // at line breaks where possible so a numbered option is never cut in half. A body
+    // within the limit is returned untouched, leading blank lines included.
+    splitBody(body, limit = TWILIO_MAX_BODY) {
+        const text = String(body);
+        if (text.length <= limit) return [text];
 
-        return this.sendTwilioRequest(params);
+        const chunks = [];
+        let current = '';
+        let started = false;
+        for (const line of text.split('\n')) {
+            const candidate = started ? current + '\n' + line : line;
+            started = true;
+            if (candidate.length <= limit) {
+                current = candidate;
+                continue;
+            }
+            if (current) chunks.push(current);
+            current = line;
+            while (current.length > limit) {
+                const cut = this.cutPoint(current, limit);
+                chunks.push(current.slice(0, cut));
+                current = current.slice(cut).replace(/^\s+/, '');
+            }
+        }
+        if (current) chunks.push(current);
+        // A part never opens on blank lines: a cut just before a separator line, or an empty
+        // hard-cut remainder, would otherwise start the next message with an empty line.
+        return chunks
+            .map((chunk, i) => (i === 0 ? chunk : chunk.replace(/^\s*\n/, '')))
+            .filter((chunk) => chunk.trim().length > 0);
     }
 
-    async sendMediaMessage(to, mediaUrl, caption = '') {
+    // Where to cut a single line longer than the limit: at the last whitespace before it
+    // (so a word or *bold* marker stays whole), else at the limit, never between the two
+    // halves of a surrogate pair (an emoji).
+    cutPoint(line, limit) {
+        const space = line.lastIndexOf(' ', limit);
+        let cut = space > 0 ? space : limit;
+        const code = line.charCodeAt(cut - 1);
+        if (code >= 0xD800 && code <= 0xDBFF) cut -= 1;
+        return cut;
+    }
+
+    // Sends each part in order, retrying a failed part once, and stops at the first that
+    // still fails: carrying on would show a menu starting partway through. If some parts
+    // were delivered, tells the citizen how to recover. Resolves to undefined on failure.
+    async sendTextMessage(to, body, tenantId = null, locale = null) {
+        const address = await this.toWhatsAppAddress(to, tenantId);
+        const send = (text) => {
+            const params = new URLSearchParams();
+            params.append('To', address);
+            params.append('From', this.senderAddress());
+            params.append('Body', text);
+            return this.sendTwilioRequest(params);
+        };
+        const pause = () => (this.chunkDelayMs > 0 ? new Promise((resolve) => setTimeout(resolve, this.chunkDelayMs)) : null);
+
+        const chunks = this.splitBody(body);
+        let response;
+        for (let i = 0; i < chunks.length; i++) {
+            if (i > 0) await pause();
+            response = await send(chunks[i]);
+            if (!response) {
+                await pause();
+                response = await send(chunks[i]);
+            }
+            if (!response) {
+                console.error(`Twilio - part ${i + 1} of ${chunks.length} failed twice; not sending the rest`);
+                if (i > 0) await send(PARTIAL_DELIVERY_NOTICE[locale] || PARTIAL_DELIVERY_NOTICE.en_IN);
+                return undefined;
+            }
+        }
+        return response;
+    }
+
+    async sendMediaMessage(to, mediaUrl, caption = '', tenantId = null) {
         const params = new URLSearchParams();
-        params.append('To', `whatsapp:+91${to}`);
-        params.append('From', `whatsapp:${this.whatsappNumber.startsWith('+') ? this.whatsappNumber : '+' + this.whatsappNumber}`);
+        params.append('To', await this.toWhatsAppAddress(to, tenantId));
+        params.append('From', this.senderAddress());
         params.append('MediaUrl', mediaUrl);
         if (caption) {
             params.append('Body', caption);
@@ -289,10 +587,10 @@ class TwilioWhatsAppProvider {
         return this.sendTwilioRequest(params);
     }
 
-    async sendTemplateMessage(to, contentSid, contentVariables = {}) {
+    async sendTemplateMessage(to, contentSid, contentVariables = {}, tenantId = null) {
         const params = new URLSearchParams();
-        params.append('To', `whatsapp:+91${to}`);
-        params.append('From', `whatsapp:${this.whatsappNumber.startsWith('+') ? this.whatsappNumber : '+' + this.whatsappNumber}`);
+        params.append('To', await this.toWhatsAppAddress(to, tenantId));
+        params.append('From', this.senderAddress());
         params.append('ContentSid', contentSid);
         if (Object.keys(contentVariables).length > 0) {
             params.append('ContentVariables', JSON.stringify(contentVariables));
@@ -305,6 +603,7 @@ class TwilioWhatsAppProvider {
         try {
             const response = await fetch(this.baseUrl, {
                 method: 'POST',
+                timeout: config.timeouts.request,
                 headers: {
                     'Authorization': this.getAuthHeader(),
                     'Content-Type': 'application/x-www-form-urlencoded'
@@ -328,7 +627,8 @@ class TwilioWhatsAppProvider {
     }
 
     async sendMessageToUser(user, messages, extraInfo) {
-        let userMobile = user.mobileNumber;
+        const tenantId = (extraInfo && extraInfo.tenantId) || config.rootTenantId;
+        let userMobile = user.whatsAppAddress || user.mobileNumber;
 
         for (let i = 0; i < messages.length; i++) {
             let message = messages[i];
@@ -348,7 +648,7 @@ class TwilioWhatsAppProvider {
 
             try {
                 if (type === 'text') {
-                    await this.sendTextMessage(userMobile, content);
+                    await this.sendTextMessage(userMobile, content, tenantId, user.locale);
                 }
                 else if (type === 'template') {
                     // For Twilio templates, we use ContentSid
@@ -363,7 +663,7 @@ class TwilioWhatsAppProvider {
                         });
                     }
 
-                    await this.sendTemplateMessage(userMobile, templateId, contentVariables);
+                    await this.sendTemplateMessage(userMobile, templateId, contentVariables, tenantId);
                 }
                 else if (type === 'image' || type === 'pdf') {
                     // For media messages, get the file URL
@@ -383,18 +683,18 @@ class TwilioWhatsAppProvider {
                         }
                         
                         let caption = extraInfo && extraInfo.fileName ? extraInfo.fileName : '';
-                        await this.sendMediaMessage(userMobile, fileURL, caption);
+                        await this.sendMediaMessage(userMobile, fileURL, caption, tenantId);
                     } catch (fileError) {
                         console.error("Twilio - Failed to send media message:", fileError.message);
                         // Send a fallback text message instead
                         let fallbackMessage = "Sorry, we couldn't load the instructional image. Please proceed with location sharing or type *1* to continue without sharing location.";
-                        await this.sendTextMessage(userMobile, fallbackMessage);
+                        await this.sendTextMessage(userMobile, fallbackMessage, tenantId);
                     }
                 }
                 else {
                     // Default to text message
                     if (content) {
-                        await this.sendTextMessage(userMobile, content.toString());
+                        await this.sendTextMessage(userMobile, content.toString(), tenantId);
                     }
                 }
             } catch (error) {

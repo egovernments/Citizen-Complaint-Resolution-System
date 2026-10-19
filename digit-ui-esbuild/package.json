@@ -10,7 +10,7 @@
     "build:docker": "docker build -f docker/Dockerfile -t digit-ui:esbuild .",
     "build:dashboard-css": "tailwindcss -c products/dashboard/src/tailwind.config.js -i products/dashboard/src/styles/input.css -o products/dashboard/src/styles/dashboard.css",
     "check-aliases": "node scripts/check-aliases.js",
-    "test": "node --test tests/*.test.js src/theme/*.test.js"
+    "test": "node scripts/run-tests.mjs"
   },
   "dependencies": {
     "@googlemaps/js-api-loader": "^1.13.10",
@@ -77,6 +77,7 @@
     "concurrently": "^9.2.1",
     "esbuild": "0.19.12",
     "postcss": "^8.5.14",
+    "react-test-renderer": "17.0.2",
     "tailwindcss": "^3.4.19"
   },
   "overrides": {

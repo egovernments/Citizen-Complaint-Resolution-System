@@ -111,6 +111,11 @@ tenant_id: ke.mycity
 # Defaults to `pg` (the dump's always-seeded tenant) when unset.
 ui_state_tenant_id: ke.mycity
 
+# Optional public landing tenant. When set, `/` and the retired tenantless
+# `/digit-ui/...` paths redirect to `/<slug>/digit-ui/...`. Leave empty to
+# return 404 and require the user to choose an organization-specific URL.
+digit_ui_default_tenant_slug: ""
+
 # REQUIRED — and, unlike the other UI settings, it has NO default in
 # group_vars and none at the point of use: globalConfigs.js.j2 renders it
 # bare, so omitting it aborts the deploy with an undefined-variable error.
@@ -119,11 +124,6 @@ ui_state_tenant_id: ke.mycity
 map_center:
   lat: 0.0
   lng: 0.0
-
-# Only these tenants can log in. Most deployments allow exactly one
-# city tenant. Leave empty to allow all.
-login_tenant_allowlist:
-  - ke.mycity
 
 # Hide these modules in the employee UI. Common: ["IM"] to hide
 # inbox-v2 if you're not running the search stack.
@@ -268,6 +268,11 @@ enable_digit_ui_v2: false
 # hidden, while the code and /pgr-services/v2/dashboard API remain intact.
 enable_legacy_pgr_dashboard: false
 
+# The banner upload in the Configurator's Branding step (#2358), baked in at
+# build time (VITE_ENABLE_CITIZEN_BANNER), so a change needs a configurator
+# rebuild. The citizen app draws the banner only with citizen_banner_enabled.
+configurator_banner_enabled: false
+
 # Optional external git source for the citizen SPA, for transitional or
 # standalone use. LEAVE UNSET on normal deploys: the default builds the
 # vendored in-tree digit-ui-v2/ (with ui-shared/) so the deployed bundle
@@ -366,16 +371,27 @@ test_alerts_enabled: false
 
 # ────────── Optional services (opt-in via flags) ──────────
 
-# Start the real OTP stack: egov-otp (stores OTPs), user-otp (orchestrates
-# send/validate), egov-notification-sms (delivers via SMS gateway).
+# Start the real OTP stack: egov-otp (stores OTPs) + user-otp (orchestrates
+# send/validate). The OTP SMS itself goes out through novu-bridge like every
+# other SMS (it consumes DIGIT core's egov.core.notification.sms topic).
 # Default false — local-setup/kong/kong.yml mocks /user-otp/* with a canned
-# 200 response so login/register work via the fixed OTP (123456, see
-# CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE) without any SMS infra.
-# Set true for production, AND follow the "TO ENABLE REAL OTP FOR PRODUCTION"
-# steps in local-setup/kong/kong.yml (remove the mock plugin there, and wire
-# up a real SMS_PROVIDER_CLASS in docker-compose.egov-digit.yaml — it
-# defaults to Console, which only logs OTP SMS instead of sending it).
+# 200 response. Citizen OTP login then works ONLY on a box that opts into the
+# fixed development OTP below; otherwise no citizen code can be delivered.
+# Set true for production. The deploy then strips the two Kong OTP mocks.
+# REQUIRES enable_novu: true (preflight asserts it) and SMS enabled for the
+# tenant (Configurator -> Notifications -> Channels).
 enable_otp_services: false
+
+# Fixed citizen OTP (123456, CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE) for egov-user
+# and the identity BFF, plus the BFF's `log` sender. DEVELOPMENT ONLY: anyone can
+# sign in as any citizen number with it. Off by default, never derived from
+# enable_otp_services. With enable_keycloak and neither this nor real OTP nor
+# identity_citizen_otp_sender, citizen phone sign-in is unavailable (the deploy
+# warns).
+# identity_dev_fixed_otp: false
+# The BFF's citizen OTP sender (IDENTITY_CITIZEN_OTP_SENDER). Empty by default;
+# `log` only when identity_dev_fixed_otp is true.
+# identity_citizen_otp_sender: ""
 
 # Bring up Elasticsearch + egov-indexer + inbox-v2. Heavy (~3GB RAM
 # extra). Off by default; only enable if you actually use the inbox.
@@ -400,7 +416,7 @@ enable_search_stack: false
 #   bao kv get -field=matomo_admin_password <secrets_path>
 # Reach the UI over a tunnel: ssh -L 18081:127.0.0.1:18081 <host>
 #
-# See docs/matomo-deployment.md for the full walkthrough.
+# See docs/setup/deployment/matomo.md for the full walkthrough.
 # enable_matomo: false
 # matomo_auto_install: true       # false = click through the wizard yourself
 # matomo_admin_user: admin        # the Matomo superuser login
@@ -408,6 +424,27 @@ enable_search_stack: false
 # matomo_site_name: ""            # defaults to <domain>; the label on reports
 # matomo_archive_interval: 3600   # seconds between report-archiving passes
 # upstream_matomo_port: 18081     # loopback bind + the Host header nginx sends
+
+# ────────── OpenSRE (diagnose-only AI SRE agent) ──────────
+# An AI agent that reads this box's monitoring (Gatus, Prometheus and Loki via
+# Grafana, Tempo, Redpanda consumer lag) and, whenever Gatus shows checks
+# failing, writes a root-cause diagnosis to /opt/digit/opensre/logs/. It changes
+# nothing and sends no alerts. 1 GB memory cap.
+#
+# Needs a PROJECT-OWNED Anthropic API key in OpenBao (not a personal one):
+#   bao kv patch <secrets_path> opensre_anthropic_api_key=<key>
+# Without it the container starts and idles. The Grafana read token it also
+# needs is minted by the deploy. Tokens, phone numbers and emails in what it
+# reads are masked before they reach the model — local-setup/opensre/guardrails.yml.
+#
+# Tempo is only used at observability_level `traces`. Setting this back to
+# false removes the container; its logs stay on disk.
+# See docs/operations/monitoring/opensre.md.
+# enable_opensre: false
+# opensre_model: claude-opus-5          # model for investigations
+# opensre_sweep_interval_minutes: 15    # how often it checks Gatus (no model call when all green)
+# opensre_dedupe_hours: 6               # don't re-investigate the same failures within this window
+# opensre_max_investigations_per_day: 12  # hard cap on investigations in any 24 h
 
 # Pull + start digit-mcp + mcp-postgres. The MCP server exposes a REST
 # shim on :3000 (POST /v1/tenant/bootstrap, POST /v1/tools/:name) that
@@ -457,41 +494,32 @@ enable_mcp: true
 # enable_mcp_readonly: false
 # mcp_readonly_basic_auth_user: "digit-mcp"
 
-# ────────── Turbopass (OSM location autocomplete) ──────────
+# ────────── Turbopass (Phase 2 boundary search + fetch) ──────────
 # Build + run the vendored turbopass search-api (turbopass/search-api/) as a
 # standalone on-box container (`turbopass-search`, loopback 127.0.0.1:13301)
 # and render the nginx /turbopass/ proxy in front of it. Powers the
-# configurator's Phase 2 location autocomplete
-# (GET /turbopass/search?q=<term>&limit=<n>). Requires the scraped OSM data
-# under turbopass/data on the controller — the playbook syncs it to the
-# target and mounts it read-only into the container (DATA_DIR=/data).
-# Off by default: when false, no image is built, no container runs, and the
-# nginx vhost renders byte-identical to a pre-turbopass deploy.
+# configurator's Phase 2 "fetch boundaries" flow
+# (GET /turbopass/boundary/search, /turbopass/boundary/fetch). Turbopass is
+# meant to run as its own central service; this on-box path suits a single
+# box or local testing. Off by default: when false, no image is built, no
+# container runs, and the nginx vhost renders byte-identical to a
+# pre-turbopass deploy.
 enable_turbopass: false
 # turbopass_port: 13301        # loopback port the search-api publishes on
-
-# ────────── Self-hosted Overpass (boundary-polygon fetch) ──────────
-# The configurator's Phase 2 OSM step fetches admin-boundary polygons from
-# Overpass. The public overpass-api.de is rate-limited / 504-prone; enable this
-# to run a standalone on-box `bomet-overpass` container (loopback 127.0.0.1:12346)
-# fed a boundary-filtered OSM extract, with nginx proxying /overpass/ → it. When
-# on, the configurator build bakes VITE_OVERPASS_URL=/overpass/api/interpreter so
-# Phase 2 uses the on-box instance. Off by default → public Overpass, nginx vhost
-# byte-identical to a pre-overpass deploy.
-# PREPARE THE EXTRACT FIRST (operator-specific country/size): see
-# overpass/README.md + overpass/prepare-extract.sh, then place the result at
-# overpass_planet_file on the target.
-enable_overpass: false
-# overpass_port: 12346                                   # loopback port
-# overpass_data_dir: /opt/overpass/data                  # holds the extract (mounted /data)
-# overpass_db_dir: /opt/overpass/db                      # Overpass DB volume (mounted /db)
-# overpass_planet_file: /opt/overpass/data/boundaries.osm.bz2  # prepared extract
+#
+# Offline Overture boundaries — the configurator's default source. Build the
+# DB separately (turbopass/README.md, "Build the boundary DB"); it is not part
+# of this deploy. The directory holding boundaries.sqlite, mounted read-only:
+# turbopass_overture_data_dir: /opt/turbopass/overture-data
+#
+# Optional Geoapify passthrough (source=geoapify). Prefer an ansible-vault var
+# over a plain value in this file:
+# turbopass_geoapify_api_key: ""
 
 # ────────── Notifications (Novu + Twilio WhatsApp) ──────────
-# Turn on the `notifications` compose profile — adds 9 containers:
+# Turn on the `notifications` compose profile — adds 8 containers:
 #   digit-config-service, digit-user-preferences-service, novu-bridge,
-#   novu-api, novu-worker, novu-ws, novu-dashboard, novu-mongo,
-#   otp-publisher (see build_otp_publisher below).
+#   novu-api, novu-worker, novu-ws, novu-dashboard, novu-mongo.
 # Roughly +1GB RAM + ~5min slower first boot.
 #
 # Workflow when enable_novu: true:
@@ -508,24 +536,92 @@ enable_overpass: false
 # Novu still comes up, operator can configure it via the UI later.
 enable_novu: false
 
+# ────────── Inbound WhatsApp — xstate-chatbot (#1992) ──────────
+#
+# The OTHER half of bidirectional WhatsApp. enable_novu above gives you OUTBOUND
+# (complaint updates pushed to the citizen, via Novu -> Twilio). Novu has no webhook
+# receiver, so a citizen's reply reaches nothing. This flag adds INBOUND: Twilio calls
+# the chatbot directly and the citizen can FILE and TRACK complaints by messaging the
+# business number. The two are independent — you can run either alone.
+#
+# Adds 2 containers (xstate-chatbot + a one-shot Flyway migration).
+#
+# BEFORE ENABLING, read docs/releases/2.12/notifications/inbound-whatsapp.md. In particular the
+# webhook is public by necessity (Twilio cannot present a DIGIT token), so it is
+# authenticated by Twilio signature validation — keep chatbot_validate_signature on and
+# set twilio_auth_token, or every inbound message is rejected.
+#
+# Workflow:
+#   1. Set twilio_account_sid / twilio_auth_token / twilio_whatsapp_from (shared with
+#      the Novu outbound bootstrap — same Twilio account serves both directions).
+#   2. enable_chatbot: true, then ./deploy.sh <tenant>.
+#   3. In the Twilio Console set the sender's inbound webhook to
+#         https://<domain>/xstate-chatbot/message        (HTTP POST)
+#      and the status callback to
+#         https://<domain>/xstate-chatbot/status         (HTTP POST)
+enable_chatbot: false
+
+# Tenant complaints filed over WhatsApp are recorded against. Must be a tenant whose
+# ComplaintHierarchy and boundaries are seeded. Defaults to the deployment's state_root.
+# chatbot_root_tenant: "pg"
+
+# Your WhatsApp sender in national form, digits only, no '+'. Used to build the
+# city/locality deep links. Blank omits them -- there is deliberately no built-in
+# default, because the old one was an eGov demo number that would otherwise appear in
+# citizen-facing links.
+#
+# This is SEPARATE from twilio_whatsapp_from, which is the Twilio sender address and
+# keeps its repo-wide `whatsapp:+<E164>` form (the Novu outbound bootstrap consumes the
+# same variable). The chatbot normalises that prefix itself, so either form works there.
+# chatbot_whatsapp_business_number: ""
+
+# false (recommended) uses the MDMS/boundary city -> locality pick-lists.
+# true needs nlp-engine — NOT deployed in this stack — plus a Google Maps key.
+# chatbot_geo_search: false
+
+# Boundary hierarchy complaints are filed against. Named per deployment; not always ADMIN.
+# chatbot_boundary_hierarchy_type: "ADMIN"
+
+# The employee account the bot creates citizens and files complaints as. Defaults to
+# bootstrap_user / bootstrap_password, which has full admin roles: fine for a demo box,
+# but use a dedicated account limited to citizen creation and PGR filing in production.
+# chatbot_service_account_username: "CHATBOT"
+# chatbot_service_account_password: ""
+
+# Number rule used when the tenant has no MDMS common-masters.MobileNumberValidation row,
+# or MDMS is unreachable. The chatbot refuses to start without them. The defaults match
+# the pg demo tenant (India); set your own country's, e.g. Mozambique:
+# chatbot_default_country_code: "+258"
+# chatbot_default_mobile_regex: "^8[0-9]{8}$"
+# chatbot_mobile_number_length: 9
+
+# Public origin Twilio was pointed at, used to verify the request signature. Defaults to
+# this tenant's own https://<domain>. Override only when TLS terminates on a different
+# hostname than `domain`.
+# chatbot_webhook_base_url: ""
+
+# Leave true. false disables Twilio signature validation, which makes the public webhook
+# forgeable by anyone who learns the URL — local console testing only.
+# chatbot_validate_signature: true
+
+# Shared secret for POST /xstate-chatbot/reminder, which fans a message out to EVERY
+# active session. Blank disables the route entirely (the safe default).
+# chatbot_reminder_token: ""
+
+# Image pins. Default to the nightly-develop builds published by CI.
+# chatbot_image: "egovio/xstate-chatbot:nightly-develop"
+# chatbot_db_image: "egovio/xstate-chatbot-db:nightly-develop"
+
 # Build a subpath-rebased Novu dashboard image locally so the SPA serves cleanly
 # under /novu (backend/novu-dashboard/Dockerfile, tagged novu-dashboard:local).
-# Strongly recommended — REQUIRED when Keycloak shares this domain (enable_keycloak),
-# because the stock dashboard's nginx workaround hijacks the whole /auth/ prefix.
-# When false, the stock image is pulled and the legacy root-path nginx workaround
+# Strongly recommended. The stock dashboard's nginx workaround claims root paths
+# (/assets/, /images/, /auth/ ...); Keycloak's /auth/realms/ and /auth/resources/
+# are carved back out, so it still works next to Keycloak. When false, the stock image is pulled and the legacy root-path nginx workaround
 # is rendered instead. See nginx-site.conf.j2 (enable_novu branch).
 build_novu_dashboard: false
 # novu_dashboard_version: "2.3.0"   # upstream tag to rebase FROM
 # novu_base_path: "/novu"           # subpath to bake into the rebased dist
 # novu_dashboard_image: ""          # override to pin a prebuilt image instead of building
-
-# otp-publisher is the 9th container in the notifications profile: it replaces
-# Kong's mock /user-otp termination with a real OTP generator (Redis + Kafka ->
-# novu-bridge -> Twilio SMS). Leave false to pull the published multi-arch image;
-# set true to build the vendored Node service
-# at utilities/otp-publisher on the box instead (tag otp-publisher:local).
-build_otp_publisher: false
-# otp_publisher_image: ""           # override to pin a different published tag
 
 # Pasted from the Novu dashboard after first sign-up.
 # https://docs.novu.co/sdks/api-keys for where to find it.
@@ -546,68 +642,162 @@ twilio_whatsapp_from: "whatsapp:+14155238886"   # Twilio Sandbox default
 
 
 # ────────── Ordinary SMS through a NON-Twilio gateway (optional) ──────────
-# For deployments that cannot use Twilio for SMS — e.g. the account has no SMS
-# compliance registration — the bridge can route the SMS leg through another
-# gateway using Novu's built-in "generic-sms" provider. WhatsApp is unaffected
-# and keeps using Twilio.
+# SMS gateways are Novu providers, added on Configurator -> Notifications ->
+# Providers and selected per tenant on Channels: Twilio SMS, SMSCountry, Ozeki,
+# Jasmin. SMSCountry / Ozeki / Jasmin ship with the deploy: their provider code is
+# mounted into the stock Novu worker. Nothing here is needed for them.
 #
-# Novu has no built-in provider for most regional gateways: setting an
-# integration's providerId to the gateway's own name fails at trigger time with
-# "Sms handler for provider <name> is not found". So the integration is created
-# in Novu with providerId "generic-sms", pointed at the gateway's REST endpoint
-# with its auth, and the bridge supplies the gateway-specific request body.
-#
-# Leave blank for Twilio SMS (the default). Set to "ozeki" (a gateway you run) or
-# "smscountry" (a bulk provider). The bootstrap does NOT create this integration —
-# add it in Novu or the Configurator first, then name its identifier here.
-# novu_bridge_sms_sender_id is used by smscountry only; Ozeki takes the sender
-# from its own gateway configuration.
+# novu_bridge_sms_provider is only for the LEGACY direct SMSCountry route of 2.12
+# deployments: "smscountry" makes novu-bridge post the SMS leg straight to
+# SMSCountry's legacy bulk API with the panel login below, bypassing Novu (no
+# credential store, activity log or Configurator management). Blank (default) =
+# SMS goes through Novu. Any other value is ignored. Use the direct route OR a
+# Configurator SMSCountry provider on a channel, not both.
+# novu_bridge_sms_sender_id is the direct route's registered sender id.
 novu_bridge_sms_provider: ""
 novu_bridge_sms_sender_id: ""
 
-# SMSCountry only. Its legacy bulk API authenticates with the SMSCountry PANEL
-# LOGIN — that account type issues no API key — and the bridge posts to it
-# directly, so no Novu integration is needed for this gateway.
+# Legacy direct route only. SMSCountry's legacy bulk API authenticates with the
+# PANEL LOGIN — that account type issues no API key.
 novu_bridge_smscountry_user: ""
 novu_bridge_smscountry_password: ""
 
-# ────────── Config-driven notifications (PGR + novu-bridge pass-through) ──────────
-# The new path (design D1/D4/D6/D7): PGR reads two MDMS masters
-# (PGR.NotificationRouting + PGR.NotificationTemplate), renders + localizes per
-# recipient, and publishes ONE pre-rendered event per (recipient × channel) to
-# complaints.domain.events. novu-bridge becomes a thin pass-through that
-# identifies the Novu subscriber and delivers renderedBody. Requires
-# enable_novu: true + the seeded MDMS masters + the pass-through
-# novu_bridge_image (below).
+# ────────── How a notification gets sent ──────────
+# pgr-services announces WHAT HAPPENED and nothing else: one event per workflow
+# transition ("complaint 123 was assigned"), published to
+# complaints.domain.events. It does not decide who to tell, does not pick a
+# channel or a language, and does not write any words.
+#
+# novu-bridge does all of that. For each event it looks up who should be told,
+# on which channel, in which language, fills the message from your templates and
+# hands it to the provider. Every attempt — and every deliberate decision NOT to
+# send — is one row on Configurator → Notifications → Logs.
+#
+# So almost nothing about notification CONTENT is configured in this file. The
+# people, the channels, the wording and the gateway accounts all live in the
+# Configurator, under Notifications, and can be changed without a deploy:
+#   Providers  — the gateway accounts (Twilio and friends) and their credentials
+#   Channels   — which channels are on for this tenant, and which provider serves each
+#   Configure  — who is told about which event, and what the message says
+# What IS here: whether the notification stack runs at all (enable_novu, above),
+# the Novu-side plumbing below, and who is allowed near those screens.
 
-# Flip PGR onto the config-driven path for THIS tenant. Default false keeps the
-# legacy hardcoded notification path. Cut over one tenant at a time after the
-# golden-output test + MDMS seed land. (docker-compose.<tenant>.yml may also
-# hard-set PGR_NOTIFICATION_CONFIG_DRIVEN — see docker-compose.bomet.yml.)
-pgr_notification_config_driven: false
+# Who may open the notification screens, and who may touch credentials.
+# Two tiers, both read by novu-bridge's proxy filter (comma-separated, no spaces):
+#   allowed — read Logs / Providers / Preferences, verify a provider, send a test
+#   admin   — additionally create a provider, rotate its credentials, delete it.
+#             An allowed-only role gets 403 NB_ADMIN_ROLE_REQUIRED on those, by
+#             design: rotating an SMS gateway password is a config-admin act.
+# An admin role also satisfies the allowed tier. The defaults below are what you
+# get when these are unset; set them only to widen or narrow that.
+# novu_bridge_proxy_allowed_roles: "EMPLOYEE,SUPERUSER,GRO,PGR_LME,MDMS_ADMIN"
+# novu_bridge_proxy_admin_roles:   "SUPERUSER,MDMS_ADMIN,ACCOUNT_ADMIN"
+#
+# The admin tier counts only when the role is held at a state that OWNS this
+# deployment's providers: state_root (novu-bridge reads it from its OTP default
+# tenant, which the deploy sets to state_root and checks), plus the extra state
+# tenants listed here. A box that serves several state roots (#1999) lists the
+# others, or their admins get 403 NB_TENANT_NOT_ALLOWED on Providers. Blank =
+# state_root's admins only.
+# novu_bridge_provider_admin_tenants: "pg,ke"
 
-# Custom image pins (built+pushed to the VPC registry 10.0.0.4:5000 by CI).
-# Leave unset to keep the published preview / local-build defaults.
-# pgr_services_image:  "10.0.0.4:5000/egovio/pgr-services:notif-config-<sha>"
-# novu_bridge_image:   "10.0.0.4:5000/egovio/novu-bridge:passthrough-<sha>"
+# WHERE the deploy seeds notification configuration: state_root, plus EVERY state
+# root that has complaints (the first segment of each complaint's tenant — a
+# dump-based box with state_root `ke` still has the stock `pg.*` complaints, and
+# novu-bridge resolves their notifications at `pg`, not at `ke`; #1943). Each root
+# is decided and reported on its own ("notif-seed — result per state root"), logs
+# in at itself as notif_seed_user (a root where that user does not exist is a
+# WARNING and is skipped; only state_root's is fatal), and one root failing does
+# not stop the others. Roots matching this regex are skipped and listed — by
+# default the Playwright suite's junk tenants, like migrate-notifications.py's
+# --exclude:
+# notifications_seed_exclude: "(?i)^(PW_|pwt)"
+#
+# The shipped default notification configuration. A deploy writes it ONLY into a
+# root with no notification configuration at all AND no complaint ever filed
+# under it (a fresh install). A root with complaints but no configuration is what
+# a 2.12 tenant on the old hard-coded path looks like; the defaults would change
+# what its citizens receive, so the deploy reports it (notif-seed — ACTION, state
+# none) — and until it has a configuration its complaints send NO notifications.
+# Install them after a review:
+#   `migrate-notifications.py plan --tenant <root> --adopt-defaults`, then
+#   `apply ... --adopt-defaults --yes` (docs/releases/2.20/notifications/migration.md).
+# notifications_adopt_defaults seeds them anyway, on the deploy's word — ONLY for
+# roots whose complaints are demo data (a restored dump). Never affects a root
+# that already has configuration (fresh or not, 2.12 or NOTIFICATIONS.*).
+#   false          — no root (default)
+#   true           — every root this deploy seeds (the stock quickstart: state_root
+#                    pg with the dump's demo complaints; localhost-full sets this)
+#   [pg]           — only these roots, e.g. a `ke` box that also carries the dump's
+#                    demo `pg` complaints but whose `ke` complaints are real
+#   (-e accepts true/false or a comma list: -e notifications_adopt_defaults=pg,ke)
+# notifications_adopt_defaults: false
+# notifications_adopt_defaults: [pg]
+
+# ONE BUILD for the notification stack. pgr-services, its pgr-services-db
+# migrator, novu-bridge and its novu-bridge-db migrator MUST come from the same
+# build: pgr-services emits thin events only a bridge of the same build resolves
+# (an older bridge dead-letters them, unrecoverably), and each app needs the
+# Flyway migrations its -db image carries. digit-user-preferences-service and its
+# -db migrator (the bridge's consent store) ride the same tag: its 2.12 tags are
+# the retired Go service, which the develop definition cannot run. This one tag
+# moves all six.
+# Unset = the compose default, for now "nightly-develop": the rolling tag the develop
+# nightly publishes for all six, a stopgap until a release pins an immutable one
+# (build/NIGHTLY-BUILDS.md "Release step"). That tag moves PER IMAGE and can briefly
+# point at different commits for different images, so a live deployment pins an
+# immutable tag that exists for all six: a release tag, or a develop-<sha8>. The
+# deploy warns while any image it runs resolves to a rolling tag.
+# notification_stack_tag: "develop-<sha8>"
+#
+# Per-image overrides — for a local or VPC-registry build. Each wins over the tag
+# above for ITS image only, so pin all six to the same build or none. The deploy
+# warns when only some are pinned: pgr_services_image + pgr_services_db_image on
+# every box (both run with notifications off too), all six when enable_novu is on.
+# pgr_services_image:     "10.0.0.4:5000/egovio/pgr-services:develop-<sha8>"
+# pgr_services_db_image:  "10.0.0.4:5000/egovio/pgr-services-db:develop-<sha8>"
+# novu_bridge_image:      "10.0.0.4:5000/egovio/novu-bridge:develop-<sha8>"
+# novu_bridge_db_image:   "10.0.0.4:5000/egovio/novu-bridge-db:develop-<sha8>"
+# digit_user_preferences_service_image:    "10.0.0.4:5000/egovio/digit-user-preferences-service:develop-<sha8>"
+# digit_user_preferences_service_db_image: "10.0.0.4:5000/egovio/digit-user-preferences-service-db:develop-<sha8>"
 
 # NOTE: `build_novu_bridge` and `build_pgr_services` used to be listed here.
 # Neither has ever had a playbook task behind it — the images come only from
 # `novu_bridge_image` / `pgr_services_image` above — so they have been
 # removed rather than left as knobs that quietly do nothing.
 
-# Channels the bridge actually delivers (comma-separated). WHATSAPP is
-# intentionally omitted until a legitimate provider is onboarded as a Novu
-# integration; then add it here. Default SMS,EMAIL.
+# Last-resort channel allowlist (comma-separated), for a tenant that has no
+# Channels rows yet. Once Notifications → Channels has rows, THAT is the switch
+# that decides whether a channel delivers, and this is ignored — so prefer the
+# screen and leave this unset.
+# The notification seed turns this list into channel rows for a tenant that has
+# none (listed = on, the rest off), so an upgraded tenant keeps delivering what it
+# delivered; after that the rows decide. Unset on a new deployment = every
+# channel starts off.
 # novu_bridge_channels_enabled: "SMS,EMAIL"
 
-# novu-bridge dispatch channel (sms | whatsapp | email). SMS-first per the
-# Bomet phasing (§3): cut SMS over, then add WhatsApp/EMAIL as config-only
-# routing edits. Default sms.
-novu_bridge_channel: "sms"
+# Delivery receipts: the shared secret providers present on
+# /novu-bridge/novu-adapter/v1/receipts/{novu|smscountry}. Blank = receipts off
+# (rows never move past SENT). A SECRET — keep it vault-encrypted.
+# novu_bridge_receipts_secret: ""
 
-# Per-channel Novu workflow ids the bridge triggers (rendered body travels in
-# payload.body — the workflow is just the delivery shell). Defaults match the
+# Consent gate: ask digit-user-preferences-service whether the recipient granted
+# the channel. fail_open: allow delivery when that service cannot be reached.
+# novu_bridge_preference_enabled: false
+# novu_bridge_preference_fail_open: true
+
+# Deployment-wide LAST-RESORT country code for phone numbers that arrive without
+# one (login OTPs from user-otp / egov-user, complaint notifications), e.g. "+254".
+# The tenant's own common-masters.MobileNumberValidation rule (written at workspace
+# signup from the signup country) and the user's own egov-user countryCode come
+# first, so a deployment with workspaces in several countries sends each its own
+# code; this is used only at a tenant that has no rule. Blank and no rule = the
+# message is NOT sent (SKIPPED / NB_CONTACT_INVALID on Logs), never as "+" + the
+# national number.
+# novu_bridge_core_sms_country_code: ""
+
+# Per-channel Novu workflow ids the bridge triggers (the rendered message travels
+# in payload.body — the workflow is just the delivery shell). Defaults match the
 # CI bootstrap-created workflows.
 # novu_bridge_workflow_id_sms:      "complaints-sms"
 # novu_bridge_workflow_id_whatsapp: "complaints-whatsapp"
@@ -645,50 +835,102 @@ novu_bridge_channel: "sms"
 # novu_front_base_url:  "https://pilot.example.org/novu"
 # novu_node_env: "production"
 
-# ────────── Keycloak SSO (opt-in) ──────────
-# Adds 2 containers (keycloak + token-exchange-svc) plus the host
-# nginx /auth/ and /token-exchange/ location blocks. Inert in the
-# rest of the stack — DIGIT keeps booting fine with OTP login. The UI
-# only switches to the Keycloak code path when auth_provider:
-# 'keycloak'; the cutover is intentionally a separate PR.
+# ────────── Keycloak + Identity BFF (REQUIRED) ──────────
+# Adds Keycloak 26.7.3 and the Identity BFF. Public browser routes are /auth/
+# and /identity/v1/; internal provisioning routes stay on the Docker network.
 #
-# Workflow when enable_keycloak: true:
-#   1. First deploy creates the `keycloak` Postgres DB (via the
-#      first-boot init script), starts the keycloak + token-exchange
-#      containers, and the playbook's keycloak-bootstrap block
-#      imports a per-tenant realm rendered from
-#      local-setup/keycloak/realm-template.json. Realm name =
-#      state_tenant_id.
-#   2. (Optional) set keycloak_google_client_id +
-#      keycloak_google_client_secret to add Google as a federated IdP.
-#   3. Flip auth_provider: 'keycloak' (in a follow-up PR) to switch
-#      the SPA's auth-adapter to OIDC PKCE.
-enable_keycloak: false
+# REQUIRED since D26: every employee and citizen sign-in goes through the
+# Identity BFF (the /<tenant-slug>/digit-ui/ routes resolve their tenant
+# through it), the old DIGIT OTP/password login pages are gone, and the
+# deploy refuses `enable_keycloak: false`.
+#
+# Workflow:
+#   1. The deploy creates one shared realm (`digit` by default) with
+#      Organizations enabled and configures confidential BFF/admin clients.
+#   2. Each DIGIT tenant maps to a Keycloak Organization in that realm.
+#   3. The frontend uses /identity/v1; it never receives a Keycloak token.
+#
+# Secrets: `keycloak_admin_password` must be set in OpenBao (the deploy fails
+# closed without it — an empty value makes compose fall back to the literal
+# `admin`). The identity secrets — keycloak_bff_client_secret,
+# keycloak_magic_link_client_secret, keycloak_admin_client_secret,
+# keycloak_employee_client_secret, keycloak_citizen_client_secret,
+# identity_control_plane_token, identity_session_introspection_token,
+# identity_onboarding_token and identity_citizen_otp_secret — are generated independently on first deploy
+# and stored in OpenBao, so none of them is derivable from another. Read one
+# back with `bao kv get -field=<key> kv/digit/<tenant>`; rotate one with
+# `bao kv put`, and the next deploy pushes it into Keycloak.
+enable_keycloak: true
+# Rollback switch for D26. Defaults to false when Keycloak is enabled and true
+# otherwise. Keep false after identity completion; it closes native create,
+# reset and OTP endpoints at Kong while preserving /user/oauth/token.
+# identity_legacy_user_endpoints: false
+keycloak_organization_realm: "digit"
+identity_bff_image: ""
+identity_keycloak_image: ""
+identity_post_login_redirect: ""       # default: this origin + /configurator/login
+identity_allowed_origins: ""           # comma-separated; default: this origin
+identity_trust_proxy_hops: 2            # host nginx + Kong; override for another topology
+identity_login_ttl_seconds: 1800        # match Keycloak's browser-login timeout
+identity_magic_link_request_window_seconds: 1800
+identity_magic_link_request_limit: 3
+identity_signin_methods: [password, google, github]
+identity_signup_methods: [magic_link, google, github]
+# Citizen sign-in methods on the digit-ui citizen client (KEYCLOAK_CITIZEN_SIGNIN_METHODS).
+# Empty (the default) offers none. [phone_otp] needs an OTP channel: enable_otp_services,
+# identity_citizen_otp_sender or, on a development box only, identity_dev_fixed_otp.
+identity_citizen_signin_methods: []
+identity_magic_link_enabled: false
+identity_reconcile_on_startup: true
+identity_reconciliation_interval_seconds: 900
+# PGR is the only onboarding runner (the BFF worker is gone). Rendered on only
+# with enable_keycloak: signups arrive through the identity BFF.
+pgr_onboarding_runner_enabled: true
+# Idle runner ticks bring workspaces onboarded on an older platform seed up to
+# the current one (create-if-absent; founder edits are kept).
+pgr_onboarding_baseline_upgrade_enabled: true
+# A new workspace gets the notification defaults (schemas, access rows, templates,
+# routing) at signup only where the notification stack runs: unset = enable_novu.
+# pgr_onboarding_notification_defaults_enabled: false
+identity_digit_admin_username: "ADMIN"  # use a dedicated ACCOUNT_ADMIN in production
+identity_digit_admin_tenant_id: "pg"
+# Root tenants this deploy seeds, comma-separated. Each gets an Identity BFF
+# Organization route (alias and URL slug = the tenant id) when nothing maps it
+# yet; an existing route is never renamed. Unset (or a bare key) = state_root;
+# "" = none. `pg` never gets one, and a host with state_root: pg (a legacy,
+# pre-#1999 layout) routes no root, whatever this says.
+# identity_tenant_route_backfill_roots: ke
+# Platform provisioner the runner signs in as (PGR only, internal APIs). It must
+# be an EMPLOYEE of a ROOT tenant (no dot) holding MDMS_ADMIN, ACCOUNT_ADMIN,
+# LOC_ADMIN and HRMS_ADMIN there. With the runner on, the playbook creates it if
+# absent, with a generated password kept in OpenBao (pgr_digit_provisioner_password),
+# and fails the deploy if an existing account of this name cannot sign in with
+# those roles. Empty = PGR_PROVISIONER on state_root (or a legacy
+# identity_digit_provisioner_username / _tenant_id when set).
+pgr_digit_provisioner_username: ""
+pgr_digit_provisioner_tenant_id: ""
+pgr_digit_oauth_client_id: "egov-user-client"
+identity_digit_otp_create_url: ""     # default: internal http://egov-otp:8089/otp/v1/_create (needs the otp profile)
+identity_smtp_host: ""
+identity_smtp_port: 587
+identity_smtp_from: ""
+identity_smtp_from_display_name: "DIGIT Identity"
+identity_smtp_auth: true
+identity_smtp_user: ""
+identity_smtp_ssl: false
+identity_smtp_starttls: true
 
-# 'keycloak' = SSO via the auth-adapter. '' (default) keeps OTP login.
-# Don't flip this until the realm is imported and the operator has
-# verified a successful test login via /auth/realms/<realm>/account.
-auth_provider: ""
-
-# Per-surface override (digit-ui-esbuild resolves these post-#793):
-#   citizen surface  -> citizen_auth_provider  || auth_provider || 'digit'
-#   employee surface -> employee_auth_provider || 'digit'  (never inherits auth_provider)
-# Use these when Keycloak SSO ("Continue with Google") should live ONLY on the
-# separate digit-ui-v2 (/citizen) surface while the legacy esbuild citizen login
-# stays on OTP — e.g. bomet sets `citizen_auth_provider: digit` with
-# `auth_provider: keycloak` (issue #809). Leave unset to inherit the defaults above.
-# citizen_auth_provider: ""
-# employee_auth_provider: ""
-
-# OIDC public client id in the per-tenant realm. The realm template
-# ships `digit-ui`; only change this if you've forked the template
-# and added a different client.
-keycloak_client_id: "digit-ui"
+# Retired (D26): auth_provider, citizen_auth_provider, employee_auth_provider
+# and keycloak_client_id no longer change anything. Every employee and citizen
+# sign-in goes through the Identity BFF (enable_keycloak above). The deploy
+# still refuses `keycloak` in the first three, because that meant the removed
+# browser-adapter path. Leave them unset.
 
 # Federated Google login (optional). Leave blank to skip Google IdP
 # wiring entirely. When set, the bootstrap will register a Google
 # identity-provider in the realm during deploy.
 keycloak_google_client_id: ""
+keycloak_github_client_id: ""
 
 # Init the nairobi-mdms git submodule on the controller. The submodule
 # lives in a separate repo and isn't auto-fetched on clone — turn this
@@ -711,7 +953,7 @@ db_fast_path: true
 # db_fast_path without this ack, so every install is stopped once and must
 # confirm the wipe deliberately before it proceeds. Flip to true only after
 # confirming this box has NO postgres data in an anonymous volume. If it does,
-# migrate it first: docs/2.12/operations/postgres-volume-migration.md
+# migrate it first: docs/releases/2.12/operations/postgres-volume-migration.md
 db_fast_path_ack_data_wipe: false
 
 # Escape hatch for the on-box storage check. The playbook inspects the TARGET
@@ -777,7 +1019,6 @@ grafana_anonymous_enabled: false
 # build_configurator: false     # DIGIT Studio SPA — also needs nginx_features.configurator
 # build_digit_ui: false         # digit-ui-esbuild bundle, built into the container
 # build_mcp: false              # digit-mcp from the vendored in-tree source
-# build_otp_publisher: false    # the vendored otp-publisher image
 
 # Where the configurator source comes from when build_configurator is on.
 # Defaults: a sibling ../../configurator checkout, no clone, repo default branch.
@@ -785,15 +1026,33 @@ grafana_anonymous_enabled: false
 # configurator_repo_url: "https://github.com/<org>/<repo>.git"   # "-" = build in place
 # configurator_ref: "main"
 
+# ── Deploy the images one CI build pushed under a single tag (#1729) ──
+# Usually passed per run instead: ./deploy.sh <tenant> --image-tag=<tag>.
+# Set here only to keep this tenant on a tag across routine redeploys. Covers
+# every image in ccrs_image_catalog (group_vars/digit.yml); empty = the
+# compose-file defaults. See "Deploying a specific image tag" in README.md.
+# image_tag: ""                 # e.g. develop-98c33580, nightly-develop, v2.12.1 — always QUOTED:
+#                               #   image_tag: "2.10", never image_tag: 2.10 (YAML reads that as 2.1)
+# image_tag_services: []        # e.g. [pgr-services] — only these (+ their -db image)
+
 # ── Pin a specific image instead of the compose-file default ──
 # Each maps to an env var consumed by docker-compose.egov-digit.yaml.
-# Useful for testing one service's build without touching the others.
+# Useful for testing one service's build without touching the others. A pin
+# outranks image_tag for that image (the deploy prints which ones it skipped).
 # accesscontrol_image: ""
 # egov_user_image: ""
 # digit_ui_image: ""
 # configurator_image: ""
-# otp_publisher_image: ""
 # mcp_image: ""                 # ignored when build_mcp: true
+# pgr_services_image: ""
+# pgr_services_db_image: ""
+# novu_bridge_image: ""
+# novu_bridge_db_image: ""
+# novu_bridge_endpoint_image: ""
+# digit_config_service_image: ""
+# digit_config_service_db_image: ""
+# digit_user_preferences_service_image: ""
+# digit_user_preferences_service_db_image: ""   # pin with the app image: one build
 
 # ── Ports ──
 # Host port nginx proxies /configurator/ to. The only upstream_*_port that
@@ -823,12 +1082,33 @@ grafana_anonymous_enabled: false
 # bootstrap_tenant: "pg"                # tenant those calls authenticate against
 # notif_seed_user: "ADMIN"              # notification seeder, same defaults
 # notif_seed_pass: "eGov@123"
-# token_exchange_system_username: "ADMIN"    # account the Keycloak token exchange impersonates
-# token_exchange_system_user_type: "EMPLOYEE"
-#   (its password is bootstrap_secrets.token_exchange_system_password, below)
+# The BFF's DIGIT admin username/tenant are configured in the identity block
+# above; its password belongs in bootstrap_secrets.identity_digit_admin_password.
 # novu_admin_email: "admin@digit.local"      # Novu's own first-run account
-# novu_admin_password: "Digit@12345"
+# novu_admin_password: "Digit@12345"         # with novu_tenant_accounts on, leave this UNSET: the
+#                                            # deploy generates one in OpenBao (novu_admin_password)
+#                                            # and refuses the published default
 # novu_org_name: "DIGIT"
+#
+# ── Per-tenant Novu accounts (#2203) ──
+# Each signup workspace gets its own Novu ORGANIZATION (its own provider credentials, managed by
+# its own admins in the Configurator); every other tenant keeps the shared account. Default: on
+# when both enable_novu and enable_keycloak are (self-serve signup); set it to override either way.
+# Secrets (generated into OpenBao on first use, never in host_vars):
+#   novu_bridge_tenant_key_encryption_key, novu_bridge_internal_admin_token,
+#   novu_bridge_internal_send_token, novu_admin_password
+# Turning it on for a box whose Novu admin still has the old password: the deploy changes it from
+# novu_admin_password_legacy (default the published "Digit@12345") to the OpenBao one, before
+# anything signs in. Read it back with `bao kv get -field=novu_admin_password <secrets_path>`.
+# The deploy then signs in to Novu with the password the bridge gets. Refused (an admin password
+# changed by hand and not pinned here): off for that deploy with an ACTION line, or the deploy
+# stops when novu_tenant_accounts is true or workspaces already have their own organization. Pin
+# the current password as novu_admin_password_legacy (moved) or novu_admin_password (kept).
+# novu_tenant_accounts: true
+# novu_admin_password_legacy: "Digit@12345"
+# Tenants that predate the feature are moved onto their own organization only when listed here
+# (idempotent; each then needs its own providers): docs/releases/2.20/notifications/tenant-accounts.md
+# novu_tenant_accounts_backfill: []          # e.g. ["acme", "globex"]
 
 # ── Host / platform ──
 # deploy_become: true                   # false = macOS thin path, no sudo
@@ -837,10 +1117,38 @@ grafana_anonymous_enabled: false
 
 # ── Deploy behaviour ──
 # run_playwright_tests: false           # browser E2E; ANDed with run_ci_tests
-# seed_notifications: false             # defaults to whatever pgr_notification_config_driven is
+# e2e_tenant_slug: ""                  # URL slug the browser E2E opens (/<slug>/digit-ui/); defaults to digit_ui_default_tenant_slug, skipped if both empty
+# seed_notifications: false             # OVERRIDE. Unset, it follows enable_novu:
+#                                       # the notification masters are seeded
+#                                       # whenever the notification stack runs.
+#                                       # Set false to keep a deploy from
+#                                       # (re)seeding them — e.g. a tenant whose
+#                                       # notification config was loaded by hand.
 # tolerate_bootstrap_failures: false    # true = keep going past a failed tenant bootstrap.
 #                                       # Leaves a half-seeded tenant; use only to get
 #                                       # past a known-benign failure you have diagnosed.
+#
+# Tenant access-control check (non-pg state roots only). A new tenant's role-actions
+# are copied from pg, and that copy can come up short (exactly 500 rows, a paging
+# bug in the mdms-v2 image): the admin roles then 403 on configurator writes.
+# verify_tenant_masters: true           # compare the tenant's ACCESSCONTROL actions /
+#                                       # role-actions with pg's on every deploy and
+#                                       # REPORT the gap ("master-repair — result").
+#                                       # Never writes; never fails a deploy.
+# repair_tenant_masters: false          # true = also COPY the missing rows from pg (and
+#                                       # restart egov-accesscontrol). Opt-in because
+#                                       # a gap can be deliberate — a tenant's own
+#                                       # role-action map, GRO/DGRO scoping — and a
+#                                       # copied grant cannot be removed by a deploy.
+#                                       # Read the report first. The deploy prints the
+#                                       # one-off command when the tenant shows the
+#                                       # truncation signature:
+#                                       #   ./deploy.sh <tenant> -e repair_tenant_masters=true \
+#                                       #     --tags master-repair,notifications
+#                                       # An opted-in run that cannot write (the admin
+#                                       # role lost the permission to restore the
+#                                       # permissions) fails, unless
+#                                       # tolerate_bootstrap_failures is true.
 
 # ── Extra UI settings ──
 # city_tenant: ""                # the tenant the citizen map falls back to when a
@@ -883,7 +1191,7 @@ grafana_anonymous_enabled: false
 # templates/globalConfigs.js.j2, so an inventory that never mentions them
 # renders exactly as before — no edit is required to adopt the feature.
 #
-# Full guide: docs/analytics-guide/  (start with 10-setup.md; the complete
+# Full guide: docs/features/analytics/  (start with 10-setup.md; the complete
 # self-hosted Matomo walkthrough is 50-self-hosted-matomo.md)
 
 # Hard off switch. `true` disables the shim entirely, whatever MDMS says —
@@ -917,6 +1225,13 @@ grafana_anonymous_enabled: false
 # ops opts in — on an environment where any employee token can write MDMS,
 # that write access is effectively script-injection access.
 # analytics_custom_enabled: false
+
+# Citizen home banner (#2358): draw the banner image set in the Configurator's
+# Branding step (common-masters.StateInfo.bannerUrl) as a hero above the
+# citizen's All Services. Off by default. Turning it on shows whatever
+# StateInfo.bannerUrl already holds, so set the banner (and StateInfo's name,
+# which the hero greets with) first. Re-render globalConfigs.js; no rebuild.
+# citizen_banner_enabled: false
 
 # ────────── nginx features (location blocks rendered into the host nginx site) ──────────
 #
@@ -961,6 +1276,15 @@ status_basic_auth_user: digit-status
 # kong_cors_origins:
 #   - "https://{{ domain }}"
 #   - "https://analytics.example.org"
+#
+# DEV tenant only — a configurator running on a developer's machine
+# (`VITE_ONBOARDING_API_ORIGIN=https://<domain> npm run dev`, see
+# configurator/README.md) needs its origin here AND in identity_allowed_origins,
+# plus these two flags, because its onboarding calls are cross-site and carry
+# the identity BFF's session cookie. Not for production: any page served from a
+# listed origin can then act as whoever is signed in on that browser.
+# kong_cors_credentials: false
+# identity_cookie_same_site: "Lax"          # "None" for the dev case above
 
 # ==================== nginx security headers ====================
 # X-Content-Type-Options, X-Frame-Options, Referrer-Policy and HSTS (when
@@ -1045,8 +1369,8 @@ nginx_features:
                              #   bao kv get -field=status_basic_auth_password <secrets_path>
   api_pgr: false             # /api/pgr/ — proxied to MCP server
   mcp: true                  # /mcp + /v1/* — MCP HTTP transport + REST shim (requires enable_mcp: true)
-  keycloak: false            # /auth/ + /token-exchange/ — requires enable_keycloak: true
-  digit_ui_v2: false         # /citizen/ — Vite + React 19 SPA (requires enable_digit_ui_v2: true)
+  keycloak: true             # /auth/ + /identity/v1/ — requires enable_keycloak: true
+  digit_ui_v2: false         # /citizen/ — retired by D26 (the deploy refuses enable_digit_ui_v2: true); leave false
   integration_tests: false   # /tests/ + -v2/ — test dashboards (requires enable_integration_tests: true)
   integration_tests_runner: false  # /tests/api/ — RUN-button daemon proxy (requires enable_integration_tests_runner: true)
   matomo: false              # /matomo/matomo.js + .php — the two Matomo TRACKING endpoints only
@@ -1143,7 +1467,15 @@ bootstrap_secrets:
   keycloak_admin_password: ""               # master realm admin login
   keycloak_db_password: ""                  # Keycloak's Postgres connection
   keycloak_google_client_secret: ""         # only if keycloak_google_client_id is set
-  token_exchange_system_password: "CHANGE_ME"  # DIGIT system user the exchange impersonates
+  keycloak_github_client_secret: ""         # only if keycloak_github_client_id is set
+  # BFF account-management credential. The legacy key remains a migration
+  # fallback; new environments should set identity_digit_admin_password.
+  identity_digit_admin_password: "CHANGE_ME"
+  # Empty = generated on first deploy (an existing identity_digit_provisioner_password
+  # wins over generating). Set it only to adopt an existing provisioner account.
+  pgr_digit_provisioner_password: ""
+  pgr_digit_oauth_client_secret: ""
+  identity_smtp_password: ""
   # Integration-test alert mail (test_alerts_*). Seeds a fresh tenant only; on
   # an existing one use `bao kv patch <secrets_path> test_alerts_smtp_password=…`.
   test_alerts_smtp_password: ""

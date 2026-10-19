@@ -1743,13 +1743,6 @@
     "actioncode": ""
   },
   {
-    "id": 155,
-    "actionid": 605,
-    "rolecode": "CSR",
-    "tenantId": "{tenantid}",
-    "actioncode": ""
-  },
-  {
     "id": 153,
     "actionid": 700,
     "rolecode": "GRO",

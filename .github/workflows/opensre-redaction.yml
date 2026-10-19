@@ -1,0 +1,38 @@
+name: OpenSRE redaction
+
+# Builds the OpenSRE image and checks, end to end, that what the agent sends to
+# the model provider carries none of the secrets or citizen phone numbers it
+# read (local-setup/tests/opensre-redaction/run.sh). The static tests check the
+# rules; this checks that they are applied on the route the image really uses.
+#
+# Runs only when the agent's files change: the build downloads ~400 MB (the
+# pinned OpenSRE release and Claude Code CLI). No branch filter on
+# pull_request, so a PR to any base branch runs it.
+on:
+  pull_request:
+    paths:
+      - 'local-setup/opensre/**'
+      - 'local-setup/tests/opensre-redaction/**'
+      - '.github/workflows/opensre-redaction.yml'
+  push:
+    branches: [master, develop]
+    paths:
+      - 'local-setup/opensre/**'
+      - 'local-setup/tests/opensre-redaction/**'
+      - '.github/workflows/opensre-redaction.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  redaction:
+    name: OpenSRE redaction (image, end to end)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build the image and capture what it sends to the model provider
+        run: local-setup/tests/opensre-redaction/run.sh

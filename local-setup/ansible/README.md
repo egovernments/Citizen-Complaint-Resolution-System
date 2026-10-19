@@ -7,11 +7,11 @@ fully independent stack on its own machine — same playbook, different
 service breakdown.
 
 > **Deploying from Windows?** Follow the
-> [Windows Quickstart (WSL2)](../../WINDOWS-QUICKSTART.md) — it walks the
+> [Windows Quickstart (WSL2)](../../docs/setup/quickstart-windows.md) — it walks the
 > same `./deploy.sh` flow end-to-end inside WSL2, including the
 > `localhost-slim` / `localhost-full` sizing templates for 16 GB and
 > 32 GB machines. On macOS, the equivalent is the
-> [macOS Quickstart (OrbStack)](../../MAC-QUICKSTART.md).
+> [macOS Quickstart (OrbStack)](../../docs/setup/quickstart-mac.md).
 
 ## Layout
 
@@ -67,8 +67,8 @@ playbook. Each profile is independent — enable any combination.
 | `obs-traces` | `observability_level: traces` | 1 | tempo |
 | `obs-logs` | `observability_level: logs` | 2 | loki, promtail |
 | `search` | `enable_search_stack: true` | 3 | elasticsearch, egov-indexer, inbox |
-| `otp` | `enable_otp_services: true` | 3 | egov-otp, user-otp, egov-notification-sms |
-| `notifications` | `enable_novu: true` | 10 | novu-mongo, novu-api, novu-worker, novu-ws, novu-dashboard, novu-bridge-endpoint, digit-config-service, digit-user-preferences-service, novu-bridge, otp-publisher |
+| `otp` | `enable_otp_services: true` (requires `enable_novu: true`) | 2 | egov-otp, user-otp (their SMS goes out through novu-bridge) |
+| `notifications` | `enable_novu: true` | 8 | novu-mongo, novu-api, novu-worker, novu-ws, novu-dashboard, digit-config-service, digit-user-preferences-service, novu-bridge |
 | `keycloak` | `enable_keycloak: true` | 3 | keycloak-postgres, keycloak, token-exchange-svc |
 | `mcp` | `enable_mcp: true` | 2 | mcp-postgres, digit-mcp |
 
@@ -122,11 +122,108 @@ cd ansible
 
 # Verbose for debugging a failing task
 ./deploy.sh nairobi -vvv
+
+# Deploy the images CI built under one tag (see "Deploying a specific image tag")
+./deploy.sh nairobi --image-tag=develop-98c33580
 ```
 
 `./deploy.sh` is intentionally tenant-agnostic — it forwards every flag
-after the tenant name to `ansible-playbook`. So `--tags`, `--start-at-task`,
-`--check`, `--limit`, `--skip-tags`, etc. all work.
+after the tenant name to `ansible-playbook` (except its own `--image-tag` /
+`--image-tag-services`). So `--tags`, `--start-at-task`, `--check`,
+`--limit`, `--skip-tags`, etc. all work.
+
+## Deploying a specific image tag
+
+Every CI image build pushes all the images it builds under **one** tag, and
+the run summary lists them:
+
+| Pipeline | Tag it pushes | Images |
+|---|---|---|
+| Nightly Develop Build (`nightly-build-develop.yml`) | `develop-<sha8>`, plus the rolling `nightly-develop` | every image in `build/build-config.yml` |
+| Release Build (`release-build.yml`) | the release tag, e.g. `v2.12.1` | every image in `build/build-config.yml` |
+| Build Pipeline / Container Build Pipeline (`build.yml`, `spa-build.yml`) | `<branch>-<sha>` | the one service you dispatched (+ its `-db` image) |
+
+Pass that tag to the deploy. Nothing to edit:
+
+```bash
+# Everything the tag covers (nightly / release builds)
+./deploy.sh <tenant> --image-tag=develop-98c33580
+./deploy.sh <tenant> --image-tag=nightly-develop     # rolling: re-pulls whatever is newest
+
+# One service from a dispatch build — the rest keep their defaults
+./deploy.sh <tenant> --image-tag=master-3f9e2a1 --image-tag-services=pgr-services
+
+# Same thing via the environment (handy in CI / wrapper scripts). CCRS_-prefixed
+# on purpose: a bare IMAGE_TAG is often already exported by CI docker steps.
+CCRS_IMAGE_TAG=v2.12.1 ./deploy.sh <tenant>
+```
+
+What the deploy then does:
+
+1. **Resolves** `egovio/<image>:<tag>` for each image in `ccrs_image_catalog`
+   (`inventory/group_vars/digit.yml`): pgr-services, novu-bridge,
+   novu-bridge-endpoint, digit-config-service, digit-user-preferences-service,
+   the digit-ui bundle, configurator, digit-mcp, otp-publisher, and the `-db`
+   migration images that go with them. It prints the plan, one line per image.
+2. **Verifies** every one of those tags exists in the registry *before*
+   rewriting `.env`. A typo or a tag an image does not have fails in seconds,
+   lists exactly what is missing, and leaves the running containers alone —
+   instead of `pull --ignore-pull-failures` skipping it and `up -d` dying
+   mid-deploy. Docker Hub is asked with manifest `HEAD` requests, which do not
+   count against the pull rate limit. When the registry cannot answer (rate
+   limit already spent, private repo, network) the image is reported as
+   `UNVERIFIED` with a warning and the deploy carries on to the pull.
+3. **Pulls and recreates** the changed containers through the normal
+   `compose pull` / `up -d` steps. A moving tag like `nightly-develop` gets
+   re-pulled, so re-running the same command picks up a newer build.
+
+Rules worth knowing:
+
+- **Without `--image-tag`, every image falls back to its default** — the
+  compose-file tag, exactly as before. The tag lasts for that one run. If the
+  previous deploy was on a tag, the deploy prints a `WARNING: the last deploy
+  ran image_tag …` line before moving off it. To keep a tenant on a tag across
+  routine redeploys, set `image_tag: <tag>` (and optionally
+  `image_tag_services: [...]`) in its host_vars instead.
+- **A per-image pin still wins.** `pgr_services_image:` etc. in host_vars, or
+  `build_mcp: true`, outrank the tag for that
+  image. The plan flags each one (`<-- NOT <tag>: pinned by …`), so delete the
+  old pins once you switch to tags.
+- **A service and its `-db` migration image move together.** Naming either
+  one in `--image-tag-services` covers both. And when a service is pinned
+  (`pgr_services_image: …`) but its `-db` image is not, the tag does not move
+  `pgr-services-db` either: it stays on its compose-file default, as without a
+  tag, and the deploy prints a warning, so a newer build's schema migrations
+  never run under an older service. If the pinned service needs newer
+  migrations, pin `pgr_services_db_image` to the matching image yourself.
+- **A tenant overlay that hard-codes an image wins over everything.** If
+  `docker-compose.<tenant>.yml` sets a literal `image:` on one of these
+  services, compose runs that image whatever the tag, pin or `.env` say. The
+  plan shows the image that will actually run, the deploy warns, and the
+  registry check skips it. Use `image: ${PGR_SERVICES_IMAGE}` in the overlay
+  (or drop the line) to let the tag apply.
+- **Quote numeric-looking tags** in host_vars: `image_tag: "2.10"`. Unquoted,
+  YAML reads `2.10` as the number 2.1, and the deploy refuses it.
+- `--image-tag` alone keeps an `image_tag_services` scope set in host_vars;
+  `--image-tag-services` alone narrows an `image_tag` set there.
+- The check also runs under `--check`, so a dry run with a bad tag fails the
+  same way the real run would.
+- **Images this tenant doesn't run are not checked.** Notification images
+  (profile `notifications`, i.e. `enable_novu`) and digit-mcp (`enable_mcp` /
+  `enable_mcp_readonly`) are skipped by the registry check when their profile
+  is off. The plan marks them `(not deployed: …)`.
+- The revert warning repeats the previous run's scope, e.g. `re-run with
+  --image-tag=master-3f9e2a1 --image-tag-services=pgr-services`.
+- **Images this repo does not build** (egov-user, accesscontrol, Kong,
+  Postgres, Novu, …) are not affected; they keep their compose-file pins.
+- `image_tag_verify: false` skips the check. Only a registry the target
+  cannot query at all needs it; one that merely refuses shows up as
+  `UNVERIFIED` and does not block the deploy.
+
+Adding a new CI-built image to the stack means one catalog entry in
+`group_vars/digit.yml`, a `${ENV:-egovio/<image>:<default>}` image line in the
+compose file, and nothing else — `tests/static/deployment-contracts.test.ts`
+fails the build if a CI-built image is deployed without being in the catalog.
 
 ## Adding a new tenant
 
@@ -157,7 +254,7 @@ their own. End-to-end:
    `./deploy.sh` stops and makes you confirm the wipe (issue #2082).
    Set the ack to `true` once you have checked the target box holds no
    database you want to keep. If it does, migrate it first —
-   `docs/2.12/operations/postgres-volume-migration.md`.
+   `docs/releases/2.12/operations/postgres-volume-migration.md`.
 
 3. **No inventory edit needed.** `deploy.sh` regenerates
    `inventory/hosts.yml` from `host_vars/*.yml` on every run, so
@@ -710,7 +807,7 @@ shared belongs in `group_vars/digit.yml`.
    container it deliberately did not deploy. **grafana, prometheus, tempo,
    otel-collector and node-exporter are not waited on at all** — and are not Gatus-checked
    either, so nothing reports them either way (#1613). See
-   `docs/observability/enabling-monitoring.md`.
+   `docs/operations/monitoring/enabling-monitoring.md`.
 8. **Host nginx site** — render `nginx-site.conf.j2`, validate, reload
 9. **CC + DataLoader + Playwright tests** — gates the deploy
 

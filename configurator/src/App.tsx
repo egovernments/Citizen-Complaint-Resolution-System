@@ -1,14 +1,30 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { useState, createContext, useContext, useEffect, useCallback } from 'react';
-import Layout from './components/layout/Layout';
+import AccountPage from '@/identity/AccountPage';
+import MembersPage from '@/identity/MembersPage';
+import WorkspacePage from '@/identity/WorkspacePage';
+import { completedSteps, searchWorkspace, updateWorkspace, WORKSPACE_STEPS } from '@/identity/workspace';
+import { useIdentityKeepAlive } from '@/identity/keepAlive';
+import { describeWorkspaceError } from '@/onboarding/errors';
+import { translatorFrom } from '@/onboarding/i18n';
+import { toast } from '@/hooks/use-toast';
+import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
+import { useState, createContext, useContext, useEffect, useCallback, useRef } from 'react';
+import OnboardingLayout from './onboarding/OnboardingLayout';
+import { OnboardingI18n } from './onboarding/OnboardingI18n';
+import { appStore } from './providers/appStore';
+import ComplaintsStep from './onboarding/ComplaintsStep';
+import HomePage from './onboarding/home/HomePage';
+import BrandingStep from './onboarding/BrandingStep';
+import GeographyStep from './onboarding/geography/GeographyStep';
+import DepartmentsStep from './onboarding/departments/DepartmentsStep';
+import EmployeesStep from './onboarding/employees/EmployeesStep';
+import { HOME_PATH, ONBOARDING_STEPS } from './onboarding/steps';
+import { ALL_STEP_QUERIES } from './onboarding/stepQueries';
+import { finishesOnboarding, isOnboardingComplete } from './onboarding/progress';
 import LoginPage from './pages/LoginPage';
-import Phase1Page from './pages/Phase1Page';
-import Phase2Page from './pages/Phase2Page';
-import Phase3Page from './pages/Phase3Page';
-import Phase4Page from './pages/Phase4Page';
-import CompletePage from './pages/CompletePage';
+import SignupPage from './pages/SignupPage';
+import RootLanding from './pages/RootLanding';
 import { CoreAdminContext, CoreAdminUI, Resource, CustomRoutes } from 'ra-core';
-import { QueryClient } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { DigitLayout, DigitDashboard, MdmsResourcePage, MdmsResourceShow, MdmsResourceEdit, MdmsResourceCreate } from '@/admin';
 import {
   DepartmentList, DepartmentShow, DepartmentEdit, DepartmentCreate, DepartmentBulkImport,
@@ -22,7 +38,7 @@ import {
   UserList, UserShow, UserEdit, UserCreate,
   AccessRoleList, AccessRoleShow,
   AccessActionList, AccessActionShow,
-  RoleActionList, RoleActionShow,
+  RoleActionList, RoleActionShow, RoleActionCreate, RoleActionEdit,
   WorkflowServiceList, WorkflowServiceShow,
   WorkflowProcessList, WorkflowProcessShow,
   MdmsSchemaList, MdmsSchemaShow,
@@ -34,34 +50,33 @@ import {
 // @/resources barrel) so the notification surfaces stay self-contained.
 import { NotificationLogList } from '@/resources/notification-logs/NotificationLogList';
 import { NotificationProviderList } from '@/resources/notification-providers/NotificationProviderList';
+import { NotificationChannelsPage } from '@/resources/notification-providers/NotificationChannelsPage';
 import { NotificationPreferenceList } from '@/resources/notification-preferences/NotificationPreferenceList';
 import { NotificationConfigure } from '@/resources/notification-configure/NotificationConfigure';
 import { AnalyticsProvidersEditor } from '@/admin/analytics/AnalyticsProvidersEditor';
+import { EscalationPolicyEditor } from '@/admin/escalation';
 import PgrDashboard from './pages/PgrDashboard';
 import OrgChartPage from './pages/org-chart/OrgChartPage';
 import PublicDashboardConfigure from './resources/public-dashboard/PublicDashboardConfigure';
-import { getGenericMdmsResources, getDataProvider, getAuthProvider, configureDigitClient, digitClient, resetProviders, i18nProvider, DigitApiClient } from '@/providers/bridge';
+import { useLiveI18nProvider } from '@/providers/i18nProvider';
+import BrandingPage from './admin/BrandingPage';
+import { getGenericMdmsResources, getDataProvider, getAuthProvider, configureDigitClient, i18nProvider, DigitApiClient, isReadOnlyResource } from '@/providers/bridge';
 import { MastersCapabilityProvider, useMastersCapability } from '@/hooks/useMastersCapability';
 import { ThemeProvider } from '@/providers/ThemeProvider';
 import HelpModal from './components/ui/HelpModal';
-// UndoToast removed — see CCRS#417. The previous Undo button only popped
-// the local UI stack; egov-mdms-service exposes no `_delete`/`_disable`
-// endpoint, so there is no real way to roll back a created tenant +
-// branding + localization rows from this UI today. The button promised
-// rollback it couldn't deliver, so we hide it until the backend grows
-// proper compensators (or until product defines a different semantic for
-// "Undo" — e.g. soft-deactivate via `_update isActive=false` for schemas
-// without unique-key collisions).
-// import UndoToast from './components/ui/UndoToast';
 import { Toaster } from './components/ui/toaster';
 import { apiClient, getApiBaseUrl, getConfiguredRootTenant } from './api';
-import { identifyUser, clearUser, trackEvent } from './lib/telemetry';
+import { identifyUser, trackEvent } from './lib/telemetry';
+import { clearLocalSession, SESSION_EXPIRED_KEY, signOutThisDevice } from './lib/session';
 import PageViewTracker from './components/PageViewTracker';
 import './App.css';
 import { LEGACY_PGR_DASHBOARD_ENABLED } from '@/config/featureFlags';
 
 // App context for global state
-type AppMode = 'onboarding' | 'management';
+function hasAdminRole(roles?: (string | { code: string })[]): boolean {
+  if (!roles) return false;
+  return roles.some((r) => (typeof r === 'string' ? r === 'ACCOUNT_ADMIN' : r?.code === 'ACCOUNT_ADMIN'));
+}
 
 interface AppState {
   isAuthenticated: boolean;
@@ -75,7 +90,6 @@ interface AppState {
    *  Set by Phase 1 after a successful tenant create; defaults to the session
    *  tenant so anything that skips Phase 1 keeps today's behavior. */
   targetTenant: string;
-  mode: AppMode;
   currentPhase: number;
   completedPhases: number[];
   undoStack: { id: string; action: string; description: string; timestamp: Date }[];
@@ -84,13 +98,11 @@ interface AppState {
 
 interface AppContextType {
   state: AppState;
-  login: (user: AppState['user'], env: string, tenant: string, mode: AppMode) => void;
-  logout: () => void;
-  setMode: (mode: AppMode) => void;
+  logout: () => Promise<void>;
   /** Point subsequent onboarding writes/reads at a child tenant. Called by
    *  Phase 1 after `tenant.tenants` create succeeds. */
   setTargetTenant: (code: string) => void;
-  completePhase: (phase: number) => void;
+  completePhase: (phase: number, skip?: boolean) => Promise<boolean>;
   goToPhase: (phase: number) => void;
   addUndo: (action: string, description: string) => void;
   undo: () => void;
@@ -100,13 +112,15 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | null>(null);
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useApp = () => {
   const context = useContext(AppContext);
   if (!context) throw new Error('useApp must be used within AppProvider');
   return context;
 };
 
-// react-admin query client (shared across ManagementAdmin mounts)
+// One query client for the app: react-admin's (shared across ManagementAdmin
+// mounts) and the onboarding steps' loads (keyed under 'onboarding').
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 5 * 60 * 1000 } },
 });
@@ -121,18 +135,20 @@ function ManagementAdmin() {
 
 // Split from ManagementAdmin so useMastersCapability() (which reads the
 // context MastersCapabilityProvider establishes above) resolves correctly —
-// see docs/design/masters-configurator-access-policy-design.md §3.3. Masters
+// see docs/reference/architecture/access-control/masters-configurator-access-policy-design.md §3.3. Masters
 // the current role can't see are filtered out via `{cond && <Resource .../>}`
 // (React.Children.toArray drops the resulting `false`), keeping every
 // <Resource> a direct child of <CoreAdminUI> as react-admin requires.
 function ManagementAdminResources() {
   const { state } = useApp();
   const { canViewResource } = useMastersCapability();
+  const liveI18nProvider = useLiveI18nProvider();
   return (
     <CoreAdminContext
       dataProvider={getDataProvider(state.tenant)}
       authProvider={getAuthProvider()}
-      i18nProvider={i18nProvider}
+      i18nProvider={liveI18nProvider}
+      store={appStore}
       queryClient={queryClient}
       basename="/manage"
     >
@@ -153,9 +169,13 @@ function ManagementAdminResources() {
         {canViewResource('users') && <Resource name="users" list={UserList} show={UserShow} edit={UserEdit} create={UserCreate} />}
 
         {/* Read-only entities with List/Show */}
-        {canViewResource('access-roles') && <Resource name="access-roles" list={AccessRoleList} show={AccessRoleShow} />}
+        {canViewResource('access-roles') && (
+          <Resource name="access-roles" list={AccessRoleList} show={AccessRoleShow} create={MdmsResourceCreate} edit={MdmsResourceEdit} />
+        )}
         {canViewResource('access-actions') && <Resource name="access-actions" list={AccessActionList} show={AccessActionShow} />}
-        {canViewResource('role-actions') && <Resource name="role-actions" list={RoleActionList} show={RoleActionShow} />}
+        {canViewResource('role-actions') && (
+          <Resource name="role-actions" list={RoleActionList} show={RoleActionShow} create={RoleActionCreate} edit={RoleActionEdit} />
+        )}
         {canViewResource('workflow-business-services') && <Resource name="workflow-business-services" list={WorkflowServiceList} show={WorkflowServiceShow} />}
         {canViewResource('workflow-processes') && <Resource name="workflow-processes" list={WorkflowProcessList} show={WorkflowProcessShow} />}
         {canViewResource('mdms-schemas') && <Resource name="mdms-schemas" list={MdmsSchemaList} show={MdmsSchemaShow} />}
@@ -170,14 +190,28 @@ function ManagementAdminResources() {
         {canViewResource('notification-provider') && <Resource name="notification-provider" list={NotificationProviderList} />}
         {canViewResource('notification-preference') && <Resource name="notification-preference" list={NotificationPreferenceList} />}
 
-        {/* Generic MDMS with Show/Edit/Create (exclude resources with dedicated UI above) */}
+        {/* Generic MDMS with Show/Edit/Create (exclude resources with dedicated UI above).
+            A `readOnly` master (the legacy RAINMAKER-PGR.Notification* four, whose
+            configuration moved to NOTIFICATIONS.*, and the module-owned event catalogue)
+            gets NO edit/create route at all — not merely a hidden button, so a
+            hand-typed /manage/<name>/<id> URL lands on Show rather than a form whose
+            Save would 403 or, worse, succeed. canEditResource already returns false for
+            them, which removes the buttons. */}
         {Object.keys(getGenericMdmsResources()).filter((name) => name !== 'role-actions' && canViewResource(name)).map((name) => (
-          <Resource key={name} name={name} list={MdmsResourcePage} show={MdmsResourceShow} edit={MdmsResourceEdit} create={MdmsResourceCreate} />
+          isReadOnlyResource(name)
+            ? <Resource key={name} name={name} list={MdmsResourcePage} show={MdmsResourceShow} />
+            // Notifications → Channels: the channel card replaces the generic list, and
+            // there is no Create — the three channels are a closed, seeded set (see
+            // NotificationChannelsPage). Show/Edit stay for the legacy gateway fields.
+            : name === 'notifications-channel'
+              ? <Resource key={name} name={name} list={NotificationChannelsPage} show={MdmsResourceShow} edit={MdmsResourceEdit} />
+              : <Resource key={name} name={name} list={MdmsResourcePage} show={MdmsResourceShow} edit={MdmsResourceEdit} create={MdmsResourceCreate} />
         ))}
 
         {/* Custom routes */}
         <CustomRoutes>
           <Route path="/notification-configure" element={<NotificationConfigure />} />
+          <Route path="/escalation-policy" element={<EscalationPolicyEditor />} />
           {/* Analytics destinations. A CustomRoute rather than a <Resource>: the
               screen deliberately does not use react-admin's list/edit/delete
               machinery, because the generic MDMS mutation path is not scoped to
@@ -190,6 +224,7 @@ function ManagementAdminResources() {
             element={LEGACY_PGR_DASHBOARD_ENABLED ? <PgrDashboard /> : <Navigate to="/manage" replace />}
           />
           <Route path="/public-dashboard" element={<PublicDashboardConfigure />} />
+          <Route path="/branding" element={<BrandingPage />} />
           <Route path="/org-chart" element={<OrgChartPage />} />
           <Route path="/employees/bulk" element={<EmployeeBulkImport />} />
           <Route path="/departments/bulk" element={<DepartmentBulkImport />} />
@@ -201,15 +236,15 @@ function ManagementAdminResources() {
   );
 }
 
-// Storage key for persisting auth state
-const AUTH_STORAGE_KEY = 'crs-auth-state';
+// Storage key for persisting auth state. Defined with the teardown that
+// clears it so the two cannot drift apart.
+import { AUTH_STORAGE_KEY } from './lib/session';
 
 // One-shot flag (sessionStorage) set when a request is rejected for an expired
 // session, read by LoginPage to explain why the operator was sent back.
-export const SESSION_EXPIRED_KEY = 'crs-session-expired';
 
 // Helper to restore apiClient from localStorage
-function restoreApiClientFromStorage(): { isAuthenticated: boolean; user: AppState['user']; environment: string; tenant: string; targetTenant: string; mode: AppMode; currentPhase: number; completedPhases: number[] } | null {
+function restoreApiClientFromStorage(): { isAuthenticated: boolean; user: AppState['user']; environment: string; tenant: string; targetTenant: string; currentPhase: number; completedPhases: number[] } | null {
   const saved = localStorage.getItem(AUTH_STORAGE_KEY);
   if (!saved) return null;
 
@@ -247,15 +282,16 @@ function restoreApiClientFromStorage(): { isAuthenticated: boolean; user: AppSta
         tenantId: restoredTenant,
       }, restoredTenant);
 
+      const restoredPhases = !hasAdminRole(parsed.user.roles) ? [1, 2, 3, 4, 5] : (parsed.completedPhases || []);
+
       return {
         isAuthenticated: true,
         user: parsed.user,
         environment: restoredEnv,
         tenant: restoredTenant,
         targetTenant: parsed.targetTenant || restoredTenant,
-        mode: parsed.mode || 'onboarding',
         currentPhase: parsed.currentPhase || 1,
-        completedPhases: parsed.completedPhases || [],
+        completedPhases: restoredPhases,
       };
     }
   } catch {
@@ -276,6 +312,7 @@ function getConfiguredTenantDefault(): string {
 }
 
 function App() {
+  const refreshSeq = useRef(0);
   // Initialize state from localStorage if available
   const [state, setState] = useState<AppState>(() => {
     const restored = restoreApiClientFromStorage();
@@ -293,7 +330,6 @@ function App() {
       environment: getApiBaseUrl(),
       tenant: defaultTenant,
       targetTenant: defaultTenant,
-      mode: 'onboarding',
       currentPhase: 1,
       completedPhases: [],
       undoStack: [],
@@ -309,11 +345,7 @@ function App() {
   useEffect(() => {
     const expire = () => {
       try { sessionStorage.setItem(SESSION_EXPIRED_KEY, '1'); } catch { /* ignore */ }
-      clearUser();
-      localStorage.removeItem(AUTH_STORAGE_KEY);
-      apiClient.logout();
-      digitClient.clearAuth();
-      resetProviders();
+      clearLocalSession();
       setState(s => ({ ...s, isAuthenticated: false, user: null }));
     };
     apiClient.setSessionExpiredHandler(expire);
@@ -330,10 +362,13 @@ function App() {
       const restored = restoreApiClientFromStorage();
       if (!restored) {
         // localStorage is gone too, force logout
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setState(s => ({ ...s, isAuthenticated: false, user: null }));
       }
     }
   }, [state.isAuthenticated]);
+
+  useIdentityKeepAlive(state.isAuthenticated);
 
   // Track session restoration and identify user on initial load
   useEffect(() => {
@@ -345,9 +380,27 @@ function App() {
         tenant: state.tenant,
         roles: state.user.roles,
       });
-      trackEvent('session_restored', { tenant: state.tenant, mode: state.mode });
+      trackEvent('session_restored', { tenant: state.tenant });
     }
   }, []); // Only run once on mount
+
+  // Sync onboarding progress from backend on session restore
+  useEffect(() => {
+    if (!state.isAuthenticated || !state.user) return;
+    const admin = hasAdminRole(state.user.roles as (string | { code: string })[]);
+    if (!admin) return;
+    const seq = ++refreshSeq.current;
+    searchWorkspace(state.tenant)
+      .then(view => {
+        if (seq === refreshSeq.current) {
+          const phases = completedSteps(view.Workspace);
+          setState(s => ({ ...s, completedPhases: phases }));
+        }
+      })
+      .catch(() => {
+        // If backend unreachable, keep the localStorage copy as fallback
+      });
+  }, [state.isAuthenticated, state.tenant]);
 
   // Persist auth state to localStorage
   useEffect(() => {
@@ -362,82 +415,48 @@ function App() {
         environment: state.environment,
         tenant: state.tenant,
         targetTenant: state.targetTenant,
-        mode: state.mode,
         currentPhase: state.currentPhase,
         completedPhases: state.completedPhases,
         authToken: token,
       };
       localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authData));
     }
-  }, [state.isAuthenticated, state.user, state.environment, state.tenant, state.targetTenant, state.mode, state.currentPhase, state.completedPhases]);
-
-  const login = (user: AppState['user'], env: string, tenant: string, mode: AppMode) => {
-    // Fresh login resets targetTenant to the session tenant. Phase 1 will
-    // point it at a child tenant once a create succeeds.
-    setState(s => ({ ...s, isAuthenticated: true, user, environment: env, tenant, targetTenant: tenant, mode }));
-
-    // Configure digitClient with the same auth as apiClient
-    const { token } = apiClient.getAuth();
-    if (token && user) {
-      configureDigitClient(env, token, {
-        id: user.id ?? 0,
-        uuid: user.uuid ?? '',
-        userName: user.name,
-        name: user.name,
-        mobileNumber: user.mobileNumber ?? '',
-        type: 'EMPLOYEE',
-        roles: user.roles?.map(r => ({ code: r, name: r, tenantId: tenant })) || [],
-        tenantId: tenant,
-      }, tenant);
-    }
-
-    // Track user in telemetry
-    if (user) {
-      identifyUser({
-        id: user.email || user.name,
-        name: user.name,
-        email: user.email,
-        tenant,
-        roles: user.roles,
-      });
-      trackEvent('login', { tenant, mode, environment: env });
-    }
-  };
-
-  const setMode = (mode: AppMode) => {
-    setState(s => ({ ...s, mode }));
-    trackEvent('mode_switch', { mode });
-  };
+  }, [state.isAuthenticated, state.user, state.environment, state.tenant, state.targetTenant, state.currentPhase, state.completedPhases]);
 
   const setTargetTenant = (code: string) => {
     setState(s => ({ ...s, targetTenant: code }));
     trackEvent('target_tenant_set', { targetTenant: code });
   };
 
-  const logout = () => {
+  const logout = async () => {
     trackEvent('logout', { tenant: state.tenant });
-    clearUser();
-
-    // Clear localStorage
-    localStorage.removeItem(AUTH_STORAGE_KEY);
-    // Clear apiClient and digitClient
-    apiClient.logout();
-    digitClient.clearAuth();
-    resetProviders();
-    setState(s => ({ ...s, isAuthenticated: false, user: null, mode: 'onboarding', currentPhase: 1, completedPhases: [], targetTenant: s.tenant }));
+    // Storage, both API clients and the cached providers first, then the BFF
+    // session best-effort, so sign-out never fails closed.
+    await signOutThisDevice();
+    queryClient.removeQueries({ queryKey: ALL_STEP_QUERIES });
+    setState(s => ({ ...s, isAuthenticated: false, user: null, currentPhase: 1, completedPhases: [], targetTenant: s.tenant }));
   };
 
-  const completePhase = (phase: number) => {
-    setState(s => ({
-      ...s,
-      completedPhases: [...new Set([...s.completedPhases, phase])],
-      currentPhase: Math.min(phase + 1, 5),
-    }));
-    trackEvent('phase_complete', { phase, tenant: state.tenant });
-
-    // Track onboarding completion (final phase is Phase 4 — Employees)
-    if (phase === 4) {
-      trackEvent('onboarding_complete', { tenant: state.tenant });
+  const completePhase = async (phase: number, skip = false): Promise<boolean> => {
+    refreshSeq.current++;
+    try {
+      const latest = await searchWorkspace(state.tenant);
+      const updated = await updateWorkspace(state.tenant, WORKSPACE_STEPS[phase - 1], skip ? 'SKIPPED' : 'DONE', latest.Workspace.version);
+      const completedPhases = completedSteps(updated.Workspace);
+      setState(s => ({ ...s, completedPhases, currentPhase: Math.min(phase + 1, ONBOARDING_STEPS.length) }));
+      const step = ONBOARDING_STEPS.find(candidate => candidate.number === phase);
+      trackEvent('phase_complete', { phase, step: step?.id, tenant: state.tenant });
+      if (finishesOnboarding(phase, state.completedPhases)) trackEvent('onboarding_complete', { tenant: state.tenant });
+      return true;
+    } catch (error) {
+      // App sits above the onboarding pages' translator, so it reads the provider directly.
+      const t = translatorFrom(i18nProvider.translate);
+      toast({
+        variant: 'destructive',
+        title: t('errors.step_not_completed', 'Could not complete setup step'),
+        description: describeWorkspaceError(error, WORKSPACE_STEPS[phase - 1], t),
+      });
+      return false;
     }
   };
 
@@ -503,9 +522,7 @@ function App() {
 
   const contextValue: AppContextType = {
     state,
-    login,
     logout,
-    setMode,
     setTargetTenant,
     completePhase,
     goToPhase,
@@ -515,45 +532,67 @@ function App() {
     toggleHelp,
   };
 
+  const onboardingDone = isOnboardingComplete(state.completedPhases);
+  const inOnboarding = !onboardingDone;
+
   return (
     <AppContext.Provider value={contextValue}>
+      <QueryClientProvider client={queryClient}>
       <ThemeProvider>
       <BrowserRouter basename="/configurator">
         <PageViewTracker />
         <a href="#main-content" className="skip-link">Skip to main content</a>
         <Routes>
+          <Route path="/account" element={<AccountPage />} />
+          <Route path="/members" element={state.isAuthenticated ? <MembersPage /> : <Navigate to="/login" />} />
+          <Route path="/workspace-settings" element={state.isAuthenticated ? <WorkspacePage /> : <Navigate to="/login" />} />
           <Route path="/login" element={<LoginPage />} />
+          {/* Self-serve onboarding (CCRS#1999). Public: the whole point is that
+              nobody has an account yet, so it sits outside the auth gate. */}
+          <Route path="/signup" element={<OnboardingI18n><SignupPage /></OnboardingI18n>} />
 
-          {/* Onboarding Mode Routes */}
+          {/* Onboarding. An account stays here until every step is done. */}
           <Route path="/" element={
             state.isAuthenticated
-              ? state.mode === 'onboarding' ? <MastersCapabilityProvider><Layout /></MastersCapabilityProvider> : <Navigate to="/manage" />
-              : <Navigate to="/login" />
+              ? inOnboarding ? <OnboardingI18n><MastersCapabilityProvider><OnboardingLayout /></MastersCapabilityProvider></OnboardingI18n> : <Navigate to="/manage" />
+              : <RootLanding />
           }>
-            <Route index element={<Navigate to="/phase/1" />} />
-            <Route path="phase/1" element={<Phase1Page />} />
-            <Route path="phase/2" element={<Phase2Page />} />
-            <Route path="phase/3" element={<Phase3Page />} />
-            <Route path="phase/4" element={<Phase4Page />} />
-            <Route path="complete" element={<CompletePage />} />
+            <Route index element={<Navigate to={HOME_PATH} replace />} />
+            <Route path="onboarding/home" element={<HomePage />} />
+            <Route path="onboarding/branding" element={<BrandingStep />} />
+            <Route path="onboarding/geography" element={<GeographyStep />} />
+            <Route path="onboarding/departments" element={<DepartmentsStep />} />
+            <Route path="onboarding/employees" element={<EmployeesStep />} />
+            <Route path="onboarding/complaints" element={<ComplaintsStep />} />
+            <Route path="onboarding/*" element={<Navigate to={HOME_PATH} replace />} />
+            {/* The old numbered phases, for bookmarks and the pages that still link to them */}
+            <Route path="phase/:number" element={<LegacyPhaseRedirect />} />
+            <Route path="complete" element={<Navigate to="/onboarding/complaints" replace />} />
           </Route>
 
           {/* Management Mode Routes — react-admin powered */}
           <Route path="/manage/*" element={
-            state.isAuthenticated && state.mode === 'management'
+            state.isAuthenticated && !inOnboarding
               ? <ManagementAdmin />
-              : state.isAuthenticated ? <Navigate to="/phase/1" /> : <Navigate to="/login" />
+              : state.isAuthenticated ? <Navigate to={HOME_PATH} /> : <Navigate to="/login" />
           } />
         </Routes>
 
         {/* Global modals and toasts */}
         {state.showHelp && <HelpModal onClose={toggleHelp} />}
-        {/* <UndoToast items={state.undoStack} onUndo={undo} onDismiss={dismissUndo} /> */}
         <Toaster />
       </BrowserRouter>
       </ThemeProvider>
+      </QueryClientProvider>
     </AppContext.Provider>
   );
+}
+
+/** /phase/N, the old numbered route, to the step that replaced it. */
+function LegacyPhaseRedirect() {
+  const { number } = useParams();
+  const step = ONBOARDING_STEPS.find((candidate) => String(candidate.number) === number) ?? ONBOARDING_STEPS[0];
+  return <Navigate to={step.path} replace />;
 }
 
 export default App;

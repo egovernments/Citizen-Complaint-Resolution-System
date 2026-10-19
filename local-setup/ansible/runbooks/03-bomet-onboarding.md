@@ -54,8 +54,6 @@ auth_provider: ""              # keep '' unless enable_keycloak: true
 enable_mcp: true               # REQUIRED on a cold box — bootstraps ke.
 build_mcp: true                #   (kit has false because the real Bomet DB
                                #    already contains ke; a pg-dump box doesn't)
-build_otp_publisher: true      # local-only image; notifications profile
-                               # validates it even on boxes that had it cached
 db_fast_path: true
 db_fast_path_ack_data_wipe: true   # bomet.yml.example ships this false; preflight
                                    # refuses until you set it. Only true because this
@@ -115,7 +113,7 @@ curl -s -X POST 'http://127.0.0.1/user/oauth/token' -H 'Host: localhost' \
 #   http://localhost/configurator/   (ADMIN / eGov@123 @ ke)
 #   http://localhost/digit-ui/       (employee)
 #   http://localhost/digit-ui/citizen  (citizen: any 7XXXXXXXX mobile, OTP 123456
-#                                       when CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED=true)
+#                                       when identity_dev_fixed_otp: true sets CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED=true)
 ```
 
 ---

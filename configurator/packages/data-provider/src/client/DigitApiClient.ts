@@ -10,6 +10,63 @@ export interface DigitApiClientConfig {
   endpointOverrides?: Record<string, string>;
 }
 
+
+// Every new employee gets CSR so they can file a complaint on a citizen's
+// behalf (#2239), whichever roles the caller picked. CSR goes on each tenant
+// the employee's other roles are tagged with (the employee UI tags them per
+// jurisdiction and its edit form keeps only those; some callers use the state
+// root), or on the employee's own tenant when there are no roles.
+export function withCsrRole(employee: Record<string, unknown>, tenantId: string): Record<string, unknown> {
+  const user = employee.user as Record<string, unknown> | undefined;
+  if (!user) return employee;
+  const roles = (user.roles as Array<Record<string, unknown>> | undefined) ?? [];
+  const tenants = [...new Set(roles.map((role) => role?.tenantId).filter((t): t is string => typeof t === 'string' && !!t))];
+  if (!tenants.length) tenants.push((user.tenantId as string) || tenantId);
+  const missing = tenants.filter((t) => !roles.some((role) => role?.code === 'CSR' && role?.tenantId === t));
+  if (!missing.length) return employee;
+  return { ...employee, user: { ...user, roles: [...roles, ...missing.map((t) => ({ code: 'CSR', name: 'Complainant', tenantId: t }))] } };
+}
+
+/**
+ * Whether an employee row belongs to `tenantId` or one of its cities. A code search in egov-hrms drops the
+ * tenant filter unless someone in the tenant has the code as their username, so it also answers with other
+ * workspaces' employees that share the code (#2456).
+ */
+export function inTenant(rowTenantId: unknown, tenantId: string): boolean {
+  return typeof rowTenantId === 'string' && (rowTenantId === tenantId || rowTenantId.startsWith(`${tenantId}.`));
+}
+
+/**
+ * A code search's rows for `tenantId` and its cities. Other workspaces' rows can fill whole pages (inTenant), so
+ * every page is read, up to SEARCH_MAX_PAGES. `limit` and `offset` apply to the rows kept, as on any other search.
+ */
+export async function employeesByCodeInTenant<T extends { tenantId?: unknown }>(
+  tenantId: string,
+  fetchPage: (limit: number, offset: number) => Promise<T[]>,
+  options?: { limit?: number; offset?: number },
+): Promise<T[]> {
+  const pageSize = DigitApiClient.SEARCH_PAGE_SIZE;
+  const start = options?.offset || 0;
+  const end = options?.limit ? start + options.limit : Infinity;
+  const own: T[] = [];
+  for (let page = 0; page < DigitApiClient.SEARCH_MAX_PAGES; page++) {
+    const rows = await fetchPage(pageSize, page * pageSize);
+    own.push(...rows.filter((row) => inTenant(row.tenantId, tenantId)));
+    if (own.length >= end || rows.length < pageSize) return own.slice(start, end);
+  }
+  throw new Error(`HRMS code search truncated after ${DigitApiClient.SEARCH_MAX_PAGES} pages; refusing to report a partial result`);
+}
+
+/**
+ * The row whose tenantId is exactly `tenantId`, or undefined when there is none. Codes are unique only per tenant,
+ * so a code search can also return a city's employee with the same code; more than one match is an error, never a guess.
+ */
+export function exactTenantRow<T extends { tenantId?: unknown }>(rows: T[], tenantId: string, id: string): T | undefined {
+  const matches = rows.filter((row) => row.tenantId === tenantId);
+  if (matches.length > 1) throw new Error(`More than one employee ${id} in ${tenantId}`);
+  return matches[0];
+}
+
 export class DigitApiClient {
   private baseUrl: string;
   private _stateTenantId: string;
@@ -330,19 +387,22 @@ export class DigitApiClient {
     if (options?.codes?.length) params.append('codes', options.codes.join(','));
     if (options?.uuids?.length) params.append('uuids', options.uuids.join(','));
     if (options?.departments?.length) params.append('departments', options.departments.join(','));
-    params.append('limit', String(options?.limit || 100));
-    params.append('offset', String(options?.offset || 0));
-
-    const data = await this.request<{ Employees?: Record<string, unknown>[] }>(
-      `${this.endpoint('HRMS_EMPLOYEES_SEARCH')}?${params.toString()}`,
-      { RequestInfo: this.buildRequestInfo() },
-    );
-    return data.Employees || [];
+    const page = async (limit: number, offset: number) => {
+      params.set('limit', String(limit));
+      params.set('offset', String(offset));
+      const data = await this.request<{ Employees?: Record<string, unknown>[] }>(
+        `${this.endpoint('HRMS_EMPLOYEES_SEARCH')}?${params.toString()}`,
+        { RequestInfo: this.buildRequestInfo() },
+      );
+      return data.Employees || [];
+    };
+    if (options?.codes?.length) return employeesByCodeInTenant(tenantId, page, options);
+    return page(options?.limit || 100, options?.offset || 0);
   }
 
   async employeeCreate(tenantId: string, employees: Record<string, unknown>[]): Promise<Record<string, unknown>[]> {
     const data = await this.request<{ Employees?: Record<string, unknown>[] }>(this.endpoint('HRMS_EMPLOYEES_CREATE'), {
-      RequestInfo: this.buildRequestInfo(), Employees: employees.map((emp) => ({ ...emp, tenantId })),
+      RequestInfo: this.buildRequestInfo(), Employees: employees.map((emp) => withCsrRole({ ...emp, tenantId }, tenantId)),
     });
     return data.Employees || [];
   }
@@ -572,7 +632,7 @@ export class DigitApiClient {
 
     const data = await this.request<{ ServiceWrappers?: Record<string, unknown>[] }>(this.endpoint('PGR_CREATE'), {
       RequestInfo: this.buildRequestInfo(),
-      service: { tenantId, serviceCode, description, address: { tenantId, geoLocation: { latitude: 0, longitude: 0 }, ...address }, citizen: citizenInfo, source: 'web', active: true },
+      service: { tenantId, serviceCode, description, address: { tenantId, ...address, geoLocation: address?.geoLocation ?? {} }, citizen: citizenInfo, source: 'web', active: true },
       workflow: { action: 'APPLY' },
     });
     return (data.ServiceWrappers || [])[0] || {};
@@ -659,15 +719,6 @@ export class DigitApiClient {
   }
 
   // --- Access Control ---
-
-  async accessRolesSearch(tenantId: string): Promise<Record<string, unknown>[]> {
-    const params = new URLSearchParams({ tenantId });
-    const data = await this.request<{ roles?: Record<string, unknown>[] }>(
-      `${this.endpoint('ACCESS_ROLES_SEARCH')}?${params.toString()}`,
-      { RequestInfo: this.buildRequestInfo() },
-    );
-    return data.roles || [];
-  }
 
   async accessActionsSearch(tenantId: string, roleCodes: string[], actionMaster = 'actions-test'): Promise<Record<string, unknown>[]> {
     const data = await this.request<{ actions?: Record<string, unknown>[] }>(this.endpoint('ACCESS_ACTIONS_SEARCH'), {

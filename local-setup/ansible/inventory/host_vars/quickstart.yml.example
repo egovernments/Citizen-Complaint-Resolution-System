@@ -21,7 +21,7 @@
 #
 # ── The seven CHANGE ME lines ──────────────────────────────────────
 #   state_root, state_tenant_id, tenant_id, boot_tenant,
-#   ui_state_tenant_id, login_tenant_allowlist   → your tenant names
+#   ui_state_tenant_id                           → your tenant names
 #   map_center                                   → your city's coordinates
 #   pgr_boundary_* / boundary_type               → your admin-area names
 #   core_mobile_configs                          → your country's phone rule
@@ -88,13 +88,6 @@ boot_tenant: mycountry.mycity
 # tenant: that is where the onboarding wizard stores boundaries, and the
 # citizen, employee and complaint screens all have to read the same tenant.
 ui_state_tenant_id: mycountry.mycity
-
-# CHANGE ME — which tenants appear in the login screen's City dropdown.
-# A tenant that is missing here cannot be logged into, even though it
-# exists. List both your root and your city.
-login_tenant_allowlist:
-  - mycountry
-  - mycountry.mycity
 
 # Hide employee-UI modules you are not running. `IM` is the inbox, which
 # needs the Elasticsearch search stack (off below) — leaving it visible
@@ -191,17 +184,29 @@ db_fast_path: true
 # db_fast_path without this ack, so every install is stopped once and must
 # confirm the wipe deliberately before it proceeds. Flip to true only after
 # confirming this box has NO postgres data in an anonymous volume. If it does,
-# migrate it first: docs/2.12/operations/postgres-volume-migration.md
+# migrate it first: docs/releases/2.12/operations/postgres-volume-migration.md
 db_fast_path_ack_data_wipe: false
+
+# REQUIRED. Every employee and citizen sign-in goes through Keycloak and the
+# Identity BFF; the old DIGIT OTP/password login pages are gone, and the deploy
+# refuses `false`. Needs the keycloak_* and identity_digit_admin_password
+# entries in bootstrap_secrets below.
+enable_keycloak: true
 
 # Off by default, and each one costs real memory:
 enable_search_stack: false     # Elasticsearch + indexer + employee inbox (~3 GB)
 enable_novu: false             # SMS / email / WhatsApp notifications (~1 GB, 8 containers)
-enable_keycloak: false         # single sign-on; DIGIT's own OTP login works without it
-enable_otp_services: false     # real SMS OTP; without it the login OTP is always 123456
+enable_otp_services: false     # real SMS OTP; without it, citizen OTP login needs identity_dev_fixed_otp: true (dev only, OTP 123456)
 enable_digit_ui_v2: false      # the newer citizen SPA at /citizen/
 run_ci_tests: false            # adds 5–10 minutes of Postman + Playwright to every deploy
 requires_nairobi_mdms: false   # an external config submodule most deployments do not use
+
+# With enable_novu on, the deploy seeds notification configuration at state_root AND
+# at every state root that has complaints — the dump's demo complaints sit under `pg`,
+# so `pg` is reported as having complaints but no configuration (it sends nothing).
+# They are demo data: this installs the shipped defaults there too. Leave it out if
+# `pg` carries complaints real people filed (docs/releases/2.20/notifications/migration.md §3).
+# notifications_adopt_defaults: [pg]
 install_claude_code: false
 
 # Which URL paths the host nginx serves. A service that is running but has
@@ -220,7 +225,7 @@ nginx_features:
   grafana: true              # /grafana/ — dashboards; asks for a login
   brand_assets: false
   api_pgr: false
-  keycloak: false
+  keycloak: true             # validates /auth/ and /identity/v1/ after the deploy
   digit_ui_v2: false
   integration_tests: false
   integration_tests_runner: false
@@ -255,6 +260,9 @@ bootstrap_secrets:
   minio_root_password: change-me-strong
   elasticsearch_master_password: "asd@#$@$!132123"   # do not change while db_fast_path is true
   egov_hrms_default_password: "eGov@123"             # first password for every employee you onboard
+  keycloak_admin_password: change-me-strong          # Keycloak master-realm admin
+  keycloak_db_password: change-me-strong             # Keycloak's own Postgres
+  identity_digit_admin_password: change-me-strong    # the Identity BFF's DIGIT admin login
 
 # The ADMIN account the deploy creates in each tenant, and that you use to
 # log into the configurator. Uncomment to change them — the defaults are

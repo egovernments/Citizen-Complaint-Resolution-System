@@ -1,13 +1,5 @@
 import Axios from "axios";
-import { isKeycloakAuth } from "../../auth/authSurface";
-
-function getTokenExchangeUrl() {
-  return window?.globalConfigs?.getConfig("TOKEN_EXCHANGE_URL") || "";
-}
-
-function getKeycloakToken() {
-  return window.localStorage.getItem("token") || null;
-}
+import { clearLocalStorage } from "./deviceStorage";
 
 /**
  * Custom Request to make all api calls
@@ -23,11 +15,9 @@ Axios.interceptors.response.use(
     if (err?.response?.data?.Errors) {
       for (const error of err.response.data.Errors) {
         if (error.message.includes("InvalidAccessTokenException")) {
-          localStorage.clear();
+          clearLocalStorage();
           sessionStorage.clear();
-          const loginPath = isKeycloakAuth()
-            ? `/${window?.contextPath}/user/login`
-            : (isEmployee ? `/${window?.contextPath}/employee/user/login` : `/${window?.contextPath}/citizen/login`);
+          const loginPath = isEmployee ? `/${window?.contextPath}/employee/user/login` : `/${window?.contextPath}/citizen/login`;
           window.location.href = loginPath +
             `?from=${encodeURIComponent(window.location.pathname + window.location.search)}`;
         } else if (
@@ -144,27 +134,11 @@ export const Request = async ({
     })
     .join("/");
 
-  // Keycloak mode: proxy through token-exchange only when we have a token.
-  // Pre-login calls (MDMS init, localization) go direct to Kong.
-  if (isKeycloakAuth() && auth) {
-    const kcToken = getKeycloakToken();
-    if (kcToken) {
-      const teUrl = getTokenExchangeUrl();
-      if (teUrl) {
-        _url = `${teUrl}${_url}`;
-        headers = { ...headers, Authorization: `Bearer ${kcToken}` };
-      }
-    }
-  }
-
   if (multipartFormData) {
-    const multipartHeaders = { "Content-Type": "multipart/form-data" };
-    if (isKeycloakAuth()) {
-      const kcToken = getKeycloakToken();
-      if (kcToken) multipartHeaders["Authorization"] = `Bearer ${kcToken}`;
-    } else {
-      multipartHeaders["auth-token"] = Digit.UserService.getUser()?.access_token || null;
-    }
+    const multipartHeaders = {
+      "Content-Type": "multipart/form-data",
+      "auth-token": Digit.UserService.getUser()?.access_token || null,
+    };
     const multipartFormDataRes = await Axios({
       method,
       url: _url,

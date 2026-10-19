@@ -14,6 +14,11 @@ spec:
     metadata:
       labels:
 {{- toYaml .Values.worker.labels | nindent 8 }}
+      {{- if .Values.worker.digitProviders.enabled }}
+      annotations:
+        # The worker loads its providers once, at boot: roll the pods when they change.
+        checksum/digit-providers: {{ (.Files.Glob "files/novu-worker-providers/*.js").AsConfig | sha256sum }}
+      {{- end }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -23,11 +28,32 @@ spec:
         - name: worker
           image: "{{ .Values.worker.image.repository }}:{{ .Values.worker.image.tag }}"
           imagePullPolicy: {{ .Values.worker.image.pullPolicy }}
-          {{- if .Values.worker.env }}
+          {{- if or .Values.worker.env .Values.worker.digitProviders.enabled }}
           env:
+          {{- if .Values.worker.env }}
 {{- tpl .Values.worker.env $ | nindent 12 }}
+          {{- end }}
+          {{- if .Values.worker.digitProviders.enabled }}
+            - name: NODE_OPTIONS
+              value: "--require /opt/digit-novu-providers/register.js"
+            # Every node process in the container registers the providers or crashes (register.js).
+            - name: DIGIT_NOVU_PROVIDERS
+              value: "required"
+          {{- end }}
+          {{- end }}
+          {{- if .Values.worker.digitProviders.enabled }}
+          volumeMounts:
+            - name: digit-providers
+              mountPath: /opt/digit-novu-providers
+              readOnly: true
           {{- end }}
           {{- with .Values.worker.resources }}
           resources:
 {{- toYaml . | nindent 12 }}
           {{- end }}
+      {{- if .Values.worker.digitProviders.enabled }}
+      volumes:
+        - name: digit-providers
+          configMap:
+            name: {{ .Values.worker.name }}-digit-providers
+      {{- end }}

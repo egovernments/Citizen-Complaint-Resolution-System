@@ -1,5 +1,5 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
-import { applyTheme, getStoredTheme, THEMES } from '@/themes';
+import { createContext, useContext, useState, useLayoutEffect, type ReactNode } from 'react';
+import { applyTheme, applyThemeVariables, getStoredTheme, THEMES } from '@/themes';
 
 interface ThemeContextValue {
   theme: string;
@@ -17,9 +17,10 @@ export function useTheme() {
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState(() => getStoredTheme());
 
-  // Apply on mount
-  useEffect(() => {
-    applyTheme(theme);
+  // Before the first paint, so a saved preset never flashes the CSS default.
+  // Paint only: saving here would record the default as if it were a pick.
+  useLayoutEffect(() => {
+    applyThemeVariables(theme);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setTheme = (name: string) => {

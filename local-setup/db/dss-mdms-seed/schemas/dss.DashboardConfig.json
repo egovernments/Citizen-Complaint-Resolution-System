@@ -14,7 +14,7 @@
       "description": "Config record key; the UI reads the \"default\" record (single-record master)"
     },
     "numberFormat": {
-      "description": "Number DISPLAY mask for the supervisor dashboard \u2014 separators only, resolved PER LOCALE. Canonical form: an object keyed by locale code (the values of common-masters.StateInfo.languages, e.g. \"en_IN\") with an optional \"default\" mask for locales without an entry \u2014 each user sees their selected language's convention. Legacy form: a plain string = one mask applied for every locale (kept for back-compat). Mask syntax: placeholder chars are [#0]; the first non-placeholder is the grouping separator, the last is the decimal separator; decimal COUNT stays per-KPI (viz.format). Examples: \"#,##0.00\" (en_IN \u2192 1,234.56), \"#.##0,00\" (pt_PT \u2192 1.234,56), \"# ##0,00\" (fr_FR \u2192 1 234,56). Absent/malformed (or no entry for the locale and no default) \u2192 the UI keeps its built-in formatting unchanged. Display-only: CSV export always stays raw.",
+      "description": "Number DISPLAY mask for the supervisor dashboard — separators only, resolved PER LOCALE. Canonical form: an object keyed by locale code (the values of common-masters.StateInfo.languages, e.g. \"en_IN\") with an optional \"default\" mask for locales without an entry — each user sees their selected language's convention. Legacy form: a plain string = one mask applied for every locale (kept for back-compat). Mask syntax: placeholder chars are [#0]; the first non-placeholder is the grouping separator, the last is the decimal separator; decimal COUNT stays per-KPI (viz.format). Examples: \"#,##0.00\" (en_IN → 1,234.56), \"#.##0,00\" (pt_PT → 1.234,56), \"# ##0,00\" (fr_FR → 1 234,56). Absent/malformed (or no entry for the locale and no default) → the UI keeps its built-in formatting unchanged. Display-only: CSV export always stays raw.",
       "oneOf": [
         {
           "type": "string",
@@ -41,7 +41,7 @@
         "enforced",
         "disabled"
       ],
-      "description": "Whether analytics scopes employees to their HRMS department. 'disabled' widens visibility to all employees on the tenant \u2014 temporary, pending department enrichment (#1280). Absent = enforced."
+      "description": "Whether analytics scopes employees to their HRMS department. 'disabled' widens visibility to all employees on the tenant — temporary, pending department enrichment (#1280). Absent = enforced."
     },
     "publicDashboardEnabled": {
       "type": "boolean",
@@ -50,7 +50,19 @@
     },
     "timeZone": {
       "type": "string",
-      "description": "IANA time zone id (e.g. \"Africa/Nairobi\", \"Africa/Maputo\", \"Asia/Kolkata\") the analytics engine resolves ONE BusinessCalendar from per request \u2014 every named window (dtd/wtd/mtd/qtd/ytd), pinned-window suppression decision, explicit dateFrom/dateTo bound, timeBucket, and compose elapsed-time calculation is judged against this zone's calendar day, not UTC or the server's JVM zone (#29). Optional: absent, empty, or not a valid IANA zone id falls back to Africa/Nairobi (the historical hardcoded default every unconfigured tenant already behaved as \u2014 a migration-compatibility default, not a real default timezone). Configurator changes take effect immediately through its authenticated protected refresh; only when that refresh fails do they wait for the shared analytics config-cache TTL (five minutes by default). The underlying complaint_facts/complaint_events materialized views are refreshed by DashboardRefreshScheduler on its own cadence (pgr.dashboard.refresh.interval.ms), so a DB-derived tile's data reflects a timeZone change only from its NEXT refresh onward, not instantaneously."
+      "description": "IANA time zone id (e.g. \"Africa/Nairobi\", \"Africa/Maputo\", \"Asia/Kolkata\") the analytics engine resolves ONE BusinessCalendar from per request — every named window (dtd/wtd/mtd/qtd/ytd), pinned-window suppression decision, explicit dateFrom/dateTo bound, timeBucket, and compose elapsed-time calculation is judged against this zone's calendar day, not UTC or the server's JVM zone (#29). Optional: absent, empty, or not a valid IANA zone id falls back to Africa/Nairobi (the historical hardcoded default every unconfigured tenant already behaved as — a migration-compatibility default, not a real default timezone). Configurator changes take effect immediately through its authenticated protected refresh; only when that refresh fails do they wait for the shared analytics config-cache TTL (five minutes by default). The underlying complaint_facts/complaint_events materialized views are refreshed by DashboardRefreshScheduler on its own cadence (pgr.dashboard.refresh.interval.ms), so a DB-derived tile's data reflects a timeZone change only from its NEXT refresh onward, not instantaneously."
+    },
+    "lastPublishedAt": {
+      "type": "integer",
+      "description": "Epoch millis of the last time publicDashboardEnabled was set to true, written by the configurator on that transition. Powers the admin console's \"Last published\" tile (#1883). Absent on records that were switched on before this field existed — the tile renders an em dash rather than guessing. Not a security field: nothing reads it to decide access."
+    },
+    "disabledBy": {
+      "type": "string",
+      "description": "Display name of the operator who last set publicDashboardEnabled to false, captured at the time of that action (#1883). Deliberately NOT derived from the record's auditDetails.lastModifiedBy: that moves on any write to DashboardConfig (timeZone, numberFormat, departmentScoping), so an unrelated later edit would re-attribute the disable to the wrong person. Cleared when public access is turned back on, so the attribution can never outlive the state it describes."
+    },
+    "disabledAt": {
+      "type": "integer",
+      "description": "Epoch millis matching disabledBy — when public access was last turned off (#1883). Cleared (0) when public access is turned back on. The admin console shows both as \"Public Dashboard disabled by <name> on <date-time>\" inside the Public URL box, and shows nothing when either is missing."
     }
   }
 }

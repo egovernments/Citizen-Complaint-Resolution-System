@@ -93,6 +93,8 @@ export type EventName =
   // UI Interactions
   | 'help_open'
   | 'docs_click'
+  | 'theme_change'
+  | 'locale_change'
   | 'mode_switch'
   | 'target_tenant_set'
   // Audit

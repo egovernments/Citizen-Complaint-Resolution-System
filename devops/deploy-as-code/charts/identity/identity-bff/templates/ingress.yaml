@@ -1,0 +1,69 @@
+{{- /*
+/identity/v1 to the BFF, the route Kong's identity-bff-route gives it under
+Compose (strip_path: false: the BFF serves the full path). Anchored, so the
+internal control plane (/internal/identity/v1/*: introspection, workload and
+operator routes) is never published, as nginx-identity.conf keeps it private.
+
+Regex path and annotations follow the digit-ui chart's tenant-ingress.yaml.
+No rewrite: the path reaches the BFF unchanged. Not routed through the DIGIT
+gateway (zuul): these routes carry the BFF's own session cookie, not a DIGIT
+token.
+*/ -}}
+{{- $_ := include "common.name" . }}
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ template "common.name" . }}
+{{- if .Values.global.namespace }}
+  namespace: {{ .Values.global.namespace }}
+{{- else if .Values.ingress.namespace }}
+  namespace: {{ .Values.ingress.namespace }}
+{{- else if .Values.namespace }}
+  namespace: {{ .Values.namespace }}
+{{- end }}
+  {{- $annotations := dict "nginx.ingress.kubernetes.io/use-regex" "true" "nginx.ingress.kubernetes.io/proxy-read-timeout" "120" }}
+  {{- $annotations = merge $annotations (.Values.ingress.annotations | default dict) }}
+  {{- if .Values.ingress.waf.enabled }}
+  {{- $annotations = merge $annotations (.Values.ingress.waf.annotations | default dict) }}
+  {{- end }}
+  annotations:
+{{- toYaml $annotations | nindent 4 }}
+{{- if .Values.ingress.additionalAnnotations }}
+  {{- tpl .Values.ingress.additionalAnnotations . | nindent 4 }}
+{{- end }}
+  labels:
+{{- include "common.labels" . | nindent 4 }}
+spec:
+  rules:
+{{- if .Values.ingress.host }}
+  {{- tpl .Values.ingress.host . | nindent 2 }}
+{{- else if .Values.ingress.hostName }}
+  - host: {{ .Values.ingress.hostName }}
+{{- else }}
+  - host: {{ .Values.global.domain }}
+{{- end }}
+    http:
+      paths:
+        - path: {{ printf "/%s(/|$)" (trimAll "/" .Values.ingress.context) }}
+          pathType: ImplementationSpecific
+          backend:
+            service:
+              name: {{ template "common.name" . }}
+              port:
+                number: {{ .Values.httpPort }}
+{{- if ne (toString .Values.global.setup) "quickstart" }}
+  tls:
+{{- if .Values.ingress.tls }}
+  {{- tpl .Values.ingress.tls . | nindent 2 }}
+{{- else if .Values.ingress.hostName }}
+    - hosts:
+        - {{ .Values.ingress.hostName }}
+      secretName: {{ .Values.ingress.hostName }}-tls-certs
+{{- else }}
+    - hosts:
+        - {{ .Values.global.domain }}
+      secretName: {{ .Values.global.domain }}-tls-certs
+{{- end }}
+{{- end }}
+{{- end }}

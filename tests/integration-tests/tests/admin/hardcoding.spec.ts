@@ -2,7 +2,6 @@
  * Smoke checks for the recently-cleaned hardcoding regressions.
  *
  * Each assertion guards a specific bug class that has bitten us before:
- *   1. Login tenant placeholder is the configured tenant, not a baked-in literal.
  *   2. Employee/user create payloads address only the configured tenant.
  *   3. Complaint create payload addresses only the configured tenant.
  *   4. Localization never falls back to some other deployment's tenant.
@@ -35,10 +34,6 @@
 import { test, expect, type Request } from '@playwright/test';
 import { ROOT_TENANT } from '../utils/env';
 
-// The configured root (state) tenant, from env — the login placeholder
-// derives from the configured tenant (app fix), so we expect ROOT_TENANT here.
-const TENANT_CODE = ROOT_TENANT;
-
 /**
  * A tenantId belongs to this deployment if it is the root tenant itself or a
  * dot-separated descendant of it ('pg' -> 'pg.citya'). Anything else is a
@@ -63,47 +58,9 @@ function foreignTenantIds(body: string): string[] {
 }
 
 test.describe('hardcoding smoke', () => {
-  // Test 1 needs an unauthenticated session. The other three need the
-  // authed session that auth.setup.ts wrote — they share the chromium
-  // project's storageState by default.
-
-  test('1. login tenant placeholder uses configured tenant, not "pg"', {
-    annotation: {
-      type: 'description',
-      description: `Smoke check that the configurator login form's tenant placeholder reflects the configured root tenant (ROOT_TENANT, from env) and is NOT the legacy 'pg' (Punjab) value. The app fix derives the placeholder from the configured tenant, so this expects ROOT_TENANT on any deployment. Catches a regression where someone copy-pastes example markup with hardcoded 'pg' back into the login template.
-
-Steps:
-1. Open a fresh browser context with no storageState (need the unauthenticated form).
-2. Navigate to /configurator/login.
-3. Locate input#tenantCode; assert visible.
-4. Read placeholder attribute.
-5. Assert placeholder === TENANT_CODE (the configured ROOT_TENANT).
-6. Assert placeholder.toLowerCase() !== 'pg' — belt-and-braces in case the placeholder is empty.
-
-Pairs with the other three hardcoding tests in this file — together they cover login UI + employee create + complaint create + localization endpoint as the four most common 'pg' leak vectors.`,
-    },
-    tag: ['@area:configurator-manage', '@kind:smoke', '@layer:ui', '@persona:admin'] }, async ({
-    browser,
-  }) => {
-    // Fresh context with no storageState so we hit the login form.
-    const context = await browser.newContext({ storageState: undefined });
-    const page = await context.newPage();
-    try {
-      await page.goto('/configurator/login');
-
-      const tenantInput = page.locator('#tenantCode');
-      await expect(tenantInput).toBeVisible();
-
-      // Guard the guard: if ROOT_TENANT were empty, the assertion below would
-      // be satisfied by a missing placeholder and prove nothing.
-      expect(TENANT_CODE, 'ROOT_TENANT must be configured for this test to mean anything').toBeTruthy();
-
-      const placeholder = await tenantInput.getAttribute('placeholder');
-      expect(placeholder).toBe(TENANT_CODE);
-    } finally {
-      await context.close();
-    }
-  });
+  // These need the authed session that auth.setup.ts wrote — they share the
+  // chromium project's storageState by default. (Test 1, the #tenantCode login
+  // placeholder, was removed: hosted sign-in has no tenant field since #2107.)
 
   test('2. employee create surface addresses only the configured tenant', {
     annotation: {
