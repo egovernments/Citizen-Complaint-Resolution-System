@@ -1,10 +1,16 @@
 import { X, Keyboard, Book, MessageCircle } from 'lucide-react';
+import { ONBOARDING_GUIDE } from '@/onboarding/docs/docsLinks';
+import { useOnboardingT } from '@/onboarding/i18n';
+import { stepGuide } from '@/onboarding/stepGuide';
+import { ONBOARDING_STEPS } from '@/onboarding/steps';
 
 interface HelpModalProps {
   onClose: () => void;
 }
 
 export default function HelpModal({ onClose }: HelpModalProps) {
+  const t = useOnboardingT();
+  const guide = stepGuide(t);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
@@ -73,24 +79,18 @@ export default function HelpModal({ onClose }: HelpModalProps) {
               <Book className="w-5 h-5 text-blue-600" />
               <h3 className="font-medium text-gray-900">Quick Guide</h3>
             </div>
-            <div className="space-y-3 text-sm text-gray-600">
-              <p>
-                <strong className="text-gray-900">Phase 1:</strong> Create tenant and configure branding.
-                Upload "Tenant And Branding Master.xlsx".
-              </p>
-              <p>
-                <strong className="text-gray-900">Phase 2:</strong> Set up boundary hierarchy (State → City → Ward).
-                Create or select existing hierarchy.
-              </p>
-              <p>
-                <strong className="text-gray-900">Phase 3:</strong> Configure departments, designations, and complaint categories.
-                Upload "Common and Complaint Master.xlsx".
-              </p>
-              <p>
-                <strong className="text-gray-900">Phase 4:</strong> Bulk create employees with roles and jurisdictions.
-                Generate dynamic template, fill, and upload.
-              </p>
-            </div>
+            {/* The onboarding steps in order, each with the same one-line description the
+                setup card and Home show (stepGuide), so the guide can't drift from them. */}
+            <ol className="space-y-3 text-sm text-gray-600">
+              {ONBOARDING_STEPS.map((step) => (
+                <li key={step.id}>
+                  <strong className="text-gray-900">
+                    {step.number}. {t(`steps.${step.id}`, step.label)}:
+                  </strong>{' '}
+                  {guide[step.id].description}
+                </li>
+              ))}
+            </ol>
           </section>
 
           {/* Support */}
@@ -104,18 +104,12 @@ export default function HelpModal({ onClose }: HelpModalProps) {
             </p>
             <div className="flex flex-col gap-2">
               <a
-                href="#"
+                href={ONBOARDING_GUIDE}
+                target="_blank"
+                rel="noreferrer"
                 className="text-sm text-blue-600 hover:text-blue-700 hover:underline"
-                onClick={(e) => e.preventDefault()}
               >
                 View Documentation
-              </a>
-              <a
-                href="#"
-                className="text-sm text-blue-600 hover:text-blue-700 hover:underline"
-                onClick={(e) => e.preventDefault()}
-              >
-                Contact Support
               </a>
             </div>
           </section>
