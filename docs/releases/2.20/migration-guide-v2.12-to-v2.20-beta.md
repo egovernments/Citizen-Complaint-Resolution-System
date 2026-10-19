@@ -218,8 +218,7 @@ identity_smtp_from: <no-reply address>
 identity_smtp_user: <smtp user>
 identity_signin_methods: [password]          # add google only if 2.3 is done
 identity_signup_methods: [magic_link]
-identity_magic_link_enabled: true            # default false; without it the configurator's signup
-                                             # page offers no method ("No sign-in method is enabled")
+identity_magic_link_enabled: true            # default false; signup needs it, see 2.6
 identity_citizen_signin_methods: [phone_otp] # needs an OTP channel, see 2.5
 # One immutable CI build for every CI-built image (see below)
 image_tag: "develop-<sha8>"                  # or the release tag once one is published
@@ -461,6 +460,33 @@ fail.
 | `enable_otp_services: true` | Starts DIGIT's older OTP services; their SMS goes through novu-bridge | Needs `enable_novu: true` and an SMS provider. The preflight counts it as a channel, but the BFF's own sender stays unset, and 2.20 notes that BFF codes do not go through notifications yet. Whether citizens actually receive a code this way is **(TO CONFIRM)**. |
 
 This is a product decision for the county, not a technical default.
+
+### 2.6 Configurator signup
+
+Signup is how a new organisation creates its own workspace from the configurator:
+the person enters an email address, gets a one-use link, and lands in onboarding.
+Staff and admins of an existing workspace only need sign-in, which works without
+it. Enable signup during the upgrade or at any time after it:
+
+```yaml
+identity_signup_methods: [magic_link]
+identity_magic_link_enabled: true
+```
+
+Then run a full `./deploy.sh <tenant>`; a `--tags` run skips the identity tasks.
+The deploy creates the `digit-identity-bff-magic-link` client in realm `digit`,
+and the BFF offers magic link only once that client exists and is enabled.
+
+- **Both lines are needed.** With `identity_signup_methods` alone, sign-in works but
+  the signup page says "No sign-in method is enabled".
+- **Check:** `curl -s https://<domain>/identity/v1/auth-methods?intent=signup`
+  lists `magic_link`.
+- **Mail:** the link goes out through the realm SMTP (2.2). With a mail catcher,
+  only someone who can read the catcher can finish a signup.
+- **Every completed signup creates a new root workspace** on the install. On a
+  single-county install, decide whether you want that before enabling it.
+- The link is valid for 30 minutes (`identity_login_ttl_seconds`). One address can
+  request 3 links per 30 minutes.
 
 ---
 
@@ -769,7 +795,15 @@ stopped.
    affected role now gets 403. The root then stays on its 2.12 notification
    configuration, which keeps delivering. Everything after the seed in the
    playbook is CI test tasks, so the identity upgrade itself is complete at this
-   point.
+   point. Every later full deploy (for example, to enable signup, 2.6) stops at the
+   same task until the seed is fixed. Everything it needed to change has been applied
+   by then, so the failure is safe to ignore. To skip the seed, pass a JSON boolean:
+   `./deploy.sh <tenant> -e '{"seed_notifications": false}'`. The form
+   `-e seed_notifications=false` passes the string `"false"`, which the seed's
+   condition treats as true. A re-run logs `+23 created` again, but nothing is written:
+   the deactivated rows keep their unique key, and an `_authorize` check against
+   egov-accesscontrol still refuses all 23 grants. Do not check through Kong, which
+   answers 401 to every `/access` call.
 
 ---
 
@@ -888,4 +922,5 @@ marks once a step is proven.
 | 06:33 | same | Deploy run 4 | Realm `digit`, BFF ready; stopped at the notification seed | 5.1 #4: 23 role-actions on the wrong endpoints, deactivated and verified 403. |
 | 06:50 | same | First admin + staff (4.1) | 61 of 61 linked | Staff sign-in returned 503 until `ACCOUNT_ADMIN` got its `/user/*` role-actions (2.3). |
 | 06:58 | same | Verify by role (6) | Admin, GRO, LME, CSR, citizen OTP and service accounts all pass | Orphan cleanup and re-enabling the nightly still to do. |
-| later | same | Configurator signup reported broken | Sign-in works; the signup page says "No sign-in method is enabled" | `identity_signup_methods: [magic_link]` was set without `identity_magic_link_enabled: true` (2.2). The founder signup row of step 6 was not run. |
+| 14:22 | same | Configurator signup reported broken; enable it (2.6) | Sign-in had worked all along. The signup page said "No sign-in method is enabled" | `identity_signup_methods: [magic_link]` had been set without `identity_magic_link_enabled: true`. Backed up Keycloak and Postgres, set the flag, ran a full deploy. |
+| 14:34 | same | Same deploy, end | Signup offers magic link; the link reaches the mail catcher and lands signed in on `/configurator/signup`. Every role still signs in. Stopped at the notification seed (rc 2), as expected | The skip flag was passed as `=false`, so the seed ran: it logged `+23 created` but wrote nothing, and egov-accesscontrol still refuses all 23 (5.1 #4). |
