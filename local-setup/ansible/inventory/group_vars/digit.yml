@@ -535,7 +535,7 @@ identity_route_backfill_roots: >-
 # sends them. The model key and tokens are SECRETS: OpenBao.
 enable_sherlog: false
 sherlog_image: ghcr.io/singhalkarun/sherlog
-sherlog_version: "0.6.3"
+sherlog_version: "0.6.4"
 sherlog_mode: shadow
 sherlog_model_api_key: ""
 sherlog_model_provider: ""          # empty: Sherlog's default (openai)
