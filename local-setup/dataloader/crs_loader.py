@@ -1238,7 +1238,8 @@ class CRSLoader:
                         roles: list = None, department: str = None,
                         designation: str = None,
                         jurisdiction_boundary: str = None,
-                        jurisdiction_boundary_type: str = None) -> bool:
+                        jurisdiction_boundary_type: str = None,
+                        jurisdiction_hierarchy: str = "ADMIN") -> bool:
         """Create a single HRMS employee programmatically.
 
         Creates both the user account AND the HRMS employee record.
@@ -1258,6 +1259,10 @@ class CRSLoader:
                 complaint outside it is invisible to this employee.
             jurisdiction_boundary_type: Level of jurisdiction_boundary (e.g. "Locality").
                 Defaults to "City", which is only right for the tenant default.
+            jurisdiction_hierarchy: Boundary hierarchy jurisdiction_boundary belongs to.
+                PGR expands the jurisdiction to its descendants in THIS hierarchy, so it
+                must be the tree the boundary sits in. Defaults to "ADMIN", the hierarchy
+                the seed dump and the CI loaders build.
 
         Returns:
             bool: True if employee was created or already exists
@@ -1292,7 +1297,7 @@ class CRSLoader:
             'dateOfAppointment': 1704067200000,
             'assignments': [{'fromDate': 1704067200000, 'isCurrentAssignment': True,
                              'department': department, 'designation': designation}],
-            'jurisdictions': [{'hierarchy': 'REVENUE',
+            'jurisdictions': [{'hierarchy': jurisdiction_hierarchy,
                                'boundaryType': jurisdiction_boundary_type or 'City',
                                'boundary': jurisdiction_boundary or tenant, 'tenantId': tenant,
                                'roles': role_objects}],
@@ -1355,13 +1360,14 @@ class CRSLoader:
                         target = next((j for j in active
                                        if j.get("boundary") == jurisdiction_boundary),
                                       active[0] if active else None)
-                        new_type = jurisdiction_boundary_type or "City"
-                        if target and (target.get("boundary"), target.get("boundaryType")) != \
-                                (jurisdiction_boundary, new_type):
-                            print(f"   Reconciling jurisdiction: {target.get('boundary')} "
-                                  f"({target.get('boundaryType')}) -> {jurisdiction_boundary} ({new_type})")
-                            target["boundary"] = jurisdiction_boundary
-                            target["boundaryType"] = new_type
+                        wanted = (jurisdiction_boundary, jurisdiction_boundary_type or "City",
+                                  jurisdiction_hierarchy)
+                        current = (target.get("boundary"), target.get("boundaryType"),
+                                   target.get("hierarchy")) if target else None
+                        if target and current != wanted:
+                            print(f"   Reconciling jurisdiction: {current[0]} ({current[1]}, {current[2]}) "
+                                  f"-> {wanted[0]} ({wanted[1]}, {wanted[2]})")
+                            target["boundary"], target["boundaryType"], target["hierarchy"] = wanted
                     ur = requests.post(f"{self.base_url}{hrms_svc}/employees/_update",
                         json={"RequestInfo": {"apiId": "Rainmaker", "authToken": self.auth_token,
                               "userInfo": self.user_info}, "Employees": [emp]},

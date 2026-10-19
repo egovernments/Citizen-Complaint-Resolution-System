@@ -11,7 +11,9 @@ allow_k8s_contexts(k8s_context())
 load('ext://uibutton', 'cmd_button', 'location')
 
 # ==================== Docker Compose ====================
-docker_compose('./docker-compose.yml')
+# docker-compose.tilt-restart.yml adds the restart policies Tilt needs because it skips
+# compose's depends_on gates; see that file.
+docker_compose(['./docker-compose.yml', './docker-compose.tilt-restart.yml'])
 
 # ==================== Infrastructure ====================
 dc_resource('postgres-db', labels=['infrastructure'])

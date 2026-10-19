@@ -1,10 +1,9 @@
-# `restart: on-failure:10` on the application services is for Tilt (Option B). Tilt starts each
-# service on its own with `docker compose up --no-deps`, so the `depends_on: service_healthy`
-# gates below only apply to a plain `docker compose up`. A service that calls a dependency at
-# boot (egov-hrms -> egov-user, for one) can start before that dependency is ready, exit 1, and
-# stay dead. The retry turns that race into a restart. Under plain Compose the gates still hold
-# and it only fires on a genuine crash. (Tilt's docker_compose(wait=True) is not an alternative:
-# `up --wait` fails on every one-shot job below that exits 0.)
+# No restart policies on the application services here: under a plain `docker compose up` the
+# `depends_on: service_healthy` gates below order the boot, and a service with a real fault
+# should exit once with its first stack trace. Tilt skips those gates (`up --no-deps`), so the
+# Tiltfiles also load docker-compose.tilt-restart.yml, which adds the retries Tilt needs.
+# (Tilt's docker_compose(wait=True) is not an alternative: `up --wait` fails on every one-shot
+# job below that exits 0.)
 services:
   # PostgreSQL with pre-loaded data. Only PGR's schema is migrated on top (pgr-services-migration).
   postgres-db:
@@ -160,25 +159,30 @@ services:
 
   minio-init:
     image: egovio/mc:RELEASE.2024-01-16T16-06-34Z
-    restart: on-failure:10
     container_name: digit-minio-init
     depends_on:
       minio:
         condition: service_healthy
-    entrypoint: >
-      /bin/sh -c "
-      mc alias set myminio http://minio:9000 minioadmin minioadmin;
-      mc mb --ignore-existing myminio/egov-rainmaker;
-      mc anonymous set download myminio/egov-rainmaker;
-      exit 0;
-      "
+    # Waits for MinIO itself (under Tilt, depends_on is not applied), then exits with the real
+    # result: a non-zero exit here means the egov-rainmaker bucket is missing and filestore
+    # uploads will fail, so it must not look like success.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        for i in $$(seq 60); do
+          mc alias set myminio http://minio:9000 minioadmin minioadmin >/dev/null 2>&1 && break
+          [ "$$i" = 60 ] && { echo "minio-init: minio:9000 not reachable after 120s" >&2; exit 1; }
+          sleep 2
+        done
+        mc mb --ignore-existing myminio/egov-rainmaker &&
+        mc anonymous set download myminio/egov-rainmaker
     networks:
       - egov-network
 
   # MDMS Backend
   mdms-backend:
     image: egovio/mdms-v2:maven-jdk21-f3a7c13
-    restart: on-failure:10
     container_name: mdms-backend
     depends_on:
       pgbouncer:
@@ -215,7 +219,6 @@ services:
 
   egov-mdms-service:
     image: nginx:alpine
-    restart: on-failure:10
     container_name: egov-mdms-service
     depends_on:
       mdms-backend:
@@ -240,7 +243,6 @@ services:
 
   egov-enc-service:
     image: egovio/egov-enc-service:2.12-87e13fe
-    restart: on-failure:10
     container_name: egov-enc-service
     depends_on:
       egov-mdms-service:
@@ -284,7 +286,6 @@ services:
 
   egov-idgen:
     image: egovio/egov-idgen:maven-jdk21-9f83afb
-    restart: on-failure:10
     container_name: egov-idgen
     depends_on:
       pgbouncer:
@@ -332,7 +333,6 @@ services:
 
   egov-user:
     image: egovio/egov-user:2.12-68f707e
-    restart: on-failure:10
     container_name: egov-user
     depends_on:
       pgbouncer:
@@ -399,7 +399,6 @@ services:
   # scaled instances via Docker DNS round-robin.
   egov-user-proxy:
     image: egovio/nginx:alpine
-    restart: on-failure:10
     container_name: egov-user-proxy
     depends_on:
       egov-user:
@@ -417,7 +416,6 @@ services:
 
   egov-otp:
     image: egovio/egov-otp:v2.9.2-4a60f20
-    restart: on-failure:10
     container_name: egov-otp
     depends_on:
       pgbouncer:
@@ -455,7 +453,6 @@ services:
 
   user-otp:
     image: egovio/user-otp:master-e22c7c5
-    restart: on-failure:10
     container_name: user-otp
     depends_on:
       egov-otp:
@@ -505,7 +502,6 @@ services:
 
   egov-workflow-v2:
     image: egovio/egov-workflow-v2:2.12-87e13fe
-    restart: on-failure:10
     container_name: egov-workflow-v2
     depends_on:
       pgbouncer:
@@ -556,7 +552,6 @@ services:
   # keep-alive connections cause all traffic to stick to one instance.
   egov-workflow-proxy:
     image: egovio/nginx:alpine
-    restart: on-failure:10
     container_name: egov-workflow-proxy
     depends_on:
       egov-workflow-v2:
@@ -574,7 +569,6 @@ services:
 
   egov-localization:
     image: egovio/egov-localization:2.12-87e13fe
-    restart: on-failure:10
     container_name: egov-localization
     depends_on:
       pgbouncer:
@@ -618,7 +612,6 @@ services:
 
   boundary-service:
     image: egovio/boundary-service:maven-jdk21-9f83afb
-    restart: on-failure:10
     container_name: boundary-service
     depends_on:
       pgbouncer:
@@ -669,7 +662,6 @@ services:
 
   egov-accesscontrol:
     image: egovio/egov-accesscontrol:abac-changes-cb6a372
-    restart: on-failure:10
     container_name: egov-accesscontrol
     depends_on:
       pgbouncer:
@@ -709,7 +701,6 @@ services:
 
   egov-persister:
     image: egovio/egov-persister:maven-jdk21-9f83afb
-    restart: on-failure:10
     container_name: egov-persister
     depends_on:
       pgbouncer:
@@ -752,7 +743,6 @@ services:
 
   egov-filestore:
     image: egovio/egov-filestore:maven-jdk21-9f83afb
-    restart: on-failure:10
     container_name: egov-filestore
     depends_on:
       pgbouncer:
@@ -799,7 +789,6 @@ services:
 
   egov-hrms:
     image: egovio/egov-hrms:2.12-beta-dd641a6
-    restart: on-failure:10
     container_name: egov-hrms
     depends_on:
       pgbouncer:
@@ -856,7 +845,6 @@ services:
 
   egov-bndry-mgmnt:
     image: egovio/egov-bndry-mgmnt:bndry-mgmnt-3794b8c
-    restart: on-failure:10
     container_name: egov-bndry-mgmnt
     depends_on:
       pgbouncer:
@@ -907,7 +895,6 @@ services:
 
   egov-url-shortening:
     image: egovio/egov-url-shortening:maven-jdk21-983e8b2
-    restart: on-failure:10
     container_name: egov-url-shortening
     depends_on:
       pgbouncer:
@@ -995,7 +982,6 @@ services:
 
   pgr-services:
     image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:2.12.1-7a38661}
-    restart: on-failure:10
     container_name: pgr-services
     depends_on:
       pgr-services-migration:
@@ -1102,7 +1088,6 @@ services:
 
   kong:
     image: kong:3.6
-    restart: on-failure:10
     container_name: kong-gateway
     environment:
       KONG_DATABASE: "off"

@@ -59,7 +59,7 @@ For Options A and B:
 | [Node.js 20+](https://nodejs.org/en/download/) (with npm) | [Download](https://nodejs.org/) | Running Postman tests with Newman (`npx`); the live-reload UI dev server (Tilt `ui-dev`) |
 | [Python 3.8+](https://www.python.org/downloads/) | [Download](https://www.python.org/downloads/) | Running the CI dataloader script |
 | **JDK 17 or 21** | [Temurin 17](https://adoptium.net/temurin/releases/?version=17) | Hot reload for PGR Java code (default `Tiltfile` only) — see note below |
-| [Maven](https://maven.apache.org/download.cgi) + `unzip` | [Download](https://maven.apache.org/download.cgi) | Hot reload for PGR Java code (default `Tiltfile` only). Validated with Maven 3.8.7 |
+| [Maven](https://maven.apache.org/download.cgi) + `unzip` + `rsync` | [Download](https://maven.apache.org/download.cgi) | Hot reload for PGR Java code (default `Tiltfile` only). Validated with Maven 3.8.7 |
 
 > **JDK version matters.** `backend/pgr-services` sets `<java.version>17</java.version>` and builds only on
 > **JDK 17 or 21**. JDK 23 and 25 fail: Lombok 1.18.30 (inherited from the Spring Boot 3.2.2 parent) cannot
@@ -179,7 +179,8 @@ tilt version
 > when its health check passes. Tilt also starts each service on its own (`docker compose up --no-deps`),
 > so the `depends_on: service_healthy` gates in `docker-compose.yml` do **not** apply under Tilt. Ordering
 > comes from the Tiltfile's `resource_deps`, and services that race a dependency at boot recover through
-> their `restart: on-failure` policy. For example, `egov-hrms` typically restarts once. So:
+> the `restart: on-failure` policies in `docker-compose.tilt-restart.yml`, which every Tiltfile loads (plain
+> `docker compose up` doesn't need them). For example, `egov-hrms` typically restarts once. So:
 >
 > - don't trust the dashboard's green as "healthy". Check `docker compose ps` or the `gatus` resource;
 > - `tilt ci` goes green within a minute or so, long before the JVMs are serving. Wait for health before
@@ -200,7 +201,7 @@ tilt up -f Tiltfile.db-dump
 | File | Use the `-f` flag | What it does |
 |------|-------------------|-------------|
 | `Tiltfile.db-dump` | `tilt up -f Tiltfile.db-dump` | Pre-built images only. No local toolchain needed. Best for getting started. |
-| `Tiltfile` | `tilt up` (default) | Builds PGR from `backend/pgr-services` with hot reload, plus an optional live-reload UI dev server. Needs JDK 17/21, Maven and `unzip`; Node 20 + npm for the UI server. `TILT_CI=1 tilt up` runs it with pre-built images instead (what CI does). |
+| `Tiltfile` | `tilt up` (default) | Builds PGR from `backend/pgr-services` with hot reload, plus an optional live-reload UI dev server. Needs JDK 17/21, Maven, `unzip` and `rsync`; Node 20 + npm for the UI server. `TILT_CI=1 tilt up` runs it with pre-built images instead (what CI does). |
 
 ### Step 3: Open the Tilt dashboard
 
@@ -244,7 +245,7 @@ tilt up    # uses the default Tiltfile with hot reload
 
 The first `tilt up` runs a full `mvn package` of PGR before anything starts, which takes a few minutes.
 
-**PGR Services (Java)**: needs JDK 17/21, Maven and `unzip`.
+**PGR Services (Java)**: needs JDK 17/21, Maven, `unzip` and `rsync`.
 - Edit files in `backend/pgr-services/src/main/java/...`
 - The `pgr-compile` resource rebuilds the jar. Tilt then copies the changed files into the running
   `pgr-services` container and restarts it, with no image rebuild. Expect about 30 seconds from save

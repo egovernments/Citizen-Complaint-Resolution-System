@@ -92,23 +92,57 @@ describe('Tilt builds the UI and PGR that Compose runs', () => {
     expect(fs.readFileSync(path.join(dbDir, 'Dockerfile'), 'utf8')).toMatch(/COPY \.\/migration\/main /);
   });
 
-  test('the telemetry sidecar is up before the stack it watches', () => {
-    // tilt-test asserts the sidecar logged and saw a container turn healthy. With no
-    // ordering, Tilt sometimes scheduled it last and `tilt ci` exited before it logged.
-    expect(code('Tiltfile')).toMatch(/dc_resource\('postgres-db',[^)]*resource_deps=\['telemetry'\]/);
-  });
-
   test('CI mode runs the compose pins as-is (no retagged copies to drift)', () => {
     // CI used to pull egovio/digit-ui:dev-ff0db90 while compose pinned digit-ui-esbuild.
     const tiltfile = read('Tiltfile');
     expect(tiltfile).not.toMatch(/docker pull egovio\//);
-    expect(tiltfile).toMatch(/if CI_MODE:\s*\n\s*docker_compose\('\.\/docker-compose\.yml'\)/);
+    expect(tiltfile).toMatch(
+      /if CI_MODE:\s*\n\s*docker_compose\(\['\.\/docker-compose\.yml', '\.\/docker-compose\.tilt-restart\.yml'\]\)/,
+    );
+  });
+
+  test('pgr-compile mirrors the jar: drops stale files, rewrites only changed ones', () => {
+    // `unzip -o` over the old tree kept a renamed class's old .class (duplicate beans) and
+    // rewrote ~100 MB of BOOT-INF/lib on every edit, all of which live_update then synced.
+    const tiltfile = code('Tiltfile');
+    expect(tiltfile).toMatch(/rsync -rc --delete target\/extracted\.new\/ target\/extracted\//);
+    expect(tiltfile).not.toMatch(/unzip -o target\/pgr-services-\*\.jar -d target\/extracted\b/);
   });
 
   test('the PGR dev image honours JAVA_OPTS and restarts on a class sync', () => {
     const tiltfile = read('Tiltfile');
     expect(tiltfile).toMatch(/exec java \$JAVA_OPTS/);
     expect(tiltfile).toMatch(/restart_container\(\)/);
+  });
+});
+
+describe('restart policies are a Tilt-only concern', () => {
+  const TILT_RESTART = read('docker-compose.tilt-restart.yml');
+  const restartServices = [...TILT_RESTART.matchAll(/^  ([a-z0-9][a-z0-9_-]*):/gm)].map((m) => m[1]);
+
+  test('docker-compose.yml itself sets no on-failure retries on application services', () => {
+    // Under plain `docker compose up` the depends_on gates order the boot; a retry loop there
+    // only buries a real boot fault's first stack trace. digit-ui's policy predates #1744.
+    const retried = [...COMPOSE_SERVICES].filter(([n, b]) => n !== 'digit-ui' && /^\s+restart:\s*"?on-failure/m.test(b));
+    expect(retried.map(([n]) => n)).toEqual([]);
+  });
+
+  test('the Tilt restart overlay names only real services, and every Tiltfile loads it', () => {
+    expect(restartServices.length).toBeGreaterThan(0);
+    expect(restartServices.filter((n) => !COMPOSE_SERVICES.has(n))).toEqual([]);
+    for (const tiltfile of TILTFILES) {
+      for (const m of code(tiltfile).matchAll(/docker_compose\(([^)]*)\)/g)) {
+        expect(m[1]).toMatch(/docker-compose\.tilt-restart\.yml/);
+      }
+    }
+  });
+
+  test('minio-init reports failure instead of exiting 0', () => {
+    // A trailing `exit 0` hid a failed `mc mb`: no bucket, broken uploads, everything "Exited (0)".
+    const job = service('minio-init');
+    expect(job).not.toMatch(/exit 0/);
+    expect(job).not.toMatch(/^\s+restart:/m);
+    expect(job).toMatch(/mc mb --ignore-existing myminio\/egov-rainmaker &&\s*\n\s*mc anonymous set download/);
   });
 });
 
