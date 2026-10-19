@@ -579,7 +579,8 @@ function App() {
         </Routes>
 
         {/* Global modals and toasts */}
-        {state.showHelp && <HelpModal onClose={toggleHelp} />}
+        {/* Outside both route trees, so it gets onboarding's translator here. */}
+        {state.showHelp && <OnboardingI18n><HelpModal onClose={toggleHelp} /></OnboardingI18n>}
         <Toaster />
       </BrowserRouter>
       </ThemeProvider>
