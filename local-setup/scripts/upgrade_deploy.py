@@ -366,7 +366,9 @@ def effective_deployment_changes(
     ):
         return original
 
-    target = str(report.get("target_commit", ""))
+    # These are commits in the sanitized synthetic rebase repository, not the
+    # source checkout SHA recorded at report.target_commit.
+    target = str(rebase.get("target_commit", ""))
     rebased = str(rebase.get("rebased_commit", ""))
     if not re.fullmatch(r"[0-9a-f]{40}", target) or not re.fullmatch(
         r"[0-9a-f]{40}", rebased
