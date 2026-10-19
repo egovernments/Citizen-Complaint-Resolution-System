@@ -206,6 +206,28 @@ def _live_assignment_values(text: str) -> dict[str, str]:
 
 
 def materialize_redactions(candidate: str, live: str, path: str) -> str:
+    if REDACTED in candidate:
+        # A manually resolved conflict may intentionally select the complete
+        # backup file.  When the candidate is exactly the live file with only
+        # one or more redacted spans, restoring the complete live file is both
+        # lossless and unambiguous (including multiline private keys).
+        parts = candidate.split(REDACTED)
+        template_parts = ["\\A", re.escape(parts[0])]
+        offset = len(parts[0])
+        for part in parts[1:]:
+            line_start = candidate.rfind("\n", 0, offset) + 1
+            line_end = candidate.find("\n", offset + len(REDACTED))
+            if line_end < 0:
+                line_end = len(candidate)
+            marker_is_whole_line = candidate[line_start:line_end].strip() == REDACTED
+            template_parts.append("(?s:.*?)" if marker_is_whole_line else "[^\\r\\n]*?")
+            template_parts.append(re.escape(part))
+            offset += len(REDACTED) + len(part)
+        template_parts.append("\\Z")
+        template = "".join(template_parts)
+        if re.fullmatch(template, live):
+            return live
+
     if REDACTED in candidate and path.lower().endswith(".json"):
         try:
             candidate_json = json.loads(candidate)

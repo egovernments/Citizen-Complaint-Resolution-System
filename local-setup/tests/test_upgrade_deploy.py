@@ -93,6 +93,11 @@ class OverlayTests(unittest.TestCase):
         self.assertIn("PASSWORD=current-secret", result)
         self.assertNotIn(deploy.REDACTED, result)
 
+    def test_restores_complete_backup_file_when_only_redacted_spans_differ(self):
+        candidate = "header\n<REDACTED>\nTOKEN=<REDACTED>\nfooter\n"
+        live = "header\nPRIVATE_KEY=line-1\nline-2\nTOKEN=live-token\nfooter\n"
+        self.assertEqual(live, deploy.materialize_redactions(candidate, live, "compose.yml"))
+
     def test_materializes_embedded_shell_assignment_from_unique_live_line(self):
         candidate = "docker run -e USER=egov -e PASSWORD=<REDACTED> image\n"
         live = "docker run -e USER=egov -e PASSWORD=current-secret image\n"
