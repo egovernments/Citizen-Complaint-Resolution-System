@@ -239,18 +239,36 @@ def materialize_redactions(candidate: str, live: str, path: str) -> str:
         except json.JSONDecodeError:
             pass
     live_values = _live_assignment_values(live)
+    live_lines = live.splitlines()
     output: list[str] = []
     for line in candidate.splitlines(keepends=True):
         if REDACTED not in line:
             output.append(line)
             continue
-        match = ASSIGNMENT.match(line.rstrip("\r\n"))
-        if not match or match.group("key").lower() not in live_values:
+        candidate_line = line.rstrip("\r\n")
+        match = ASSIGNMENT.match(candidate_line)
+        if match and match.group("key").lower() in live_values:
+            ending = "\n" if line.endswith("\n") else ""
+            output.append(match.group("prefix") + live_values[match.group("key").lower()] + ending)
+            continue
+
+        # Redaction also finds assignments embedded in shell commands, such as
+        # `docker run -e POSTGRES_PASSWORD=...`.  They are not top-level
+        # assignments, so restore the live value only when the unchanged text
+        # around the marker identifies exactly one live line.  Ambiguous or
+        # missing matches remain a hard failure.
+        prefix, marker, suffix = candidate_line.partition(REDACTED)
+        matching_lines = [
+            live_line
+            for live_line in live_lines
+            if marker and live_line.startswith(prefix) and live_line.endswith(suffix)
+        ]
+        if len(matching_lines) != 1:
             raise DeployError(
                 f"cannot materialize redacted field in {path}; no matching live assignment"
             )
         ending = "\n" if line.endswith("\n") else ""
-        output.append(match.group("prefix") + live_values[match.group("key").lower()] + ending)
+        output.append(matching_lines[0] + ending)
     result = "".join(output)
     if REDACTED in result:
         raise DeployError(f"unresolved redaction marker remains in {path}")

@@ -93,6 +93,21 @@ class OverlayTests(unittest.TestCase):
         self.assertIn("PASSWORD=current-secret", result)
         self.assertNotIn(deploy.REDACTED, result)
 
+    def test_materializes_embedded_shell_assignment_from_unique_live_line(self):
+        candidate = "docker run -e USER=egov -e PASSWORD=<REDACTED> image\n"
+        live = "docker run -e USER=egov -e PASSWORD=current-secret image\n"
+        result = deploy.materialize_redactions(candidate, live, "test.sh")
+        self.assertEqual(live, result)
+
+    def test_rejects_ambiguous_embedded_shell_assignment(self):
+        candidate = "docker run -e PASSWORD=<REDACTED> image\n"
+        live = (
+            "docker run -e PASSWORD=first image\n"
+            "docker run -e PASSWORD=second image\n"
+        )
+        with self.assertRaises(deploy.DeployError):
+            deploy.materialize_redactions(candidate, live, "test.sh")
+
     def test_rejects_redaction_without_matching_live_assignment(self):
         with self.assertRaises(deploy.DeployError):
             deploy.materialize_redactions('"password": "<REDACTED>"\n', "", "config.json")
