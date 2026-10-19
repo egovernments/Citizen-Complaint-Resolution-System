@@ -1,5 +1,6 @@
 package org.egov.pgr.repository.rowmapper;
 
+import org.egov.pgr.util.SqlLike;
 import org.egov.pgr.config.PGRConfiguration;
 import org.egov.pgr.policy.PgrSearchScope;
 import org.egov.pgr.web.models.RequestSearchCriteria;
@@ -98,9 +99,16 @@ public class PGRQueryBuilder {
                 String[] tenantIdChunks = tenantId.split("\\.");
 
                 if (tenantIdChunks.length == config.getStateLevelTenantIdLength()) {
+                    // Same delimiter-safety as the scope predicate below. An empty tenantId has
+                    // one segment, so it lands here only when state.level.tenantid.length is 1:
+                    // it used to bind the pattern '%' and match every tenant's rows, and now binds
+                    // '' and '.%', which match nothing. With a longer state level it takes the
+                    // exact-match branch below, which also matches nothing. Either way an empty
+                    // tenantId fails closed.
                     addClauseIfRequired(preparedStmtList, builder);
-                    builder.append(" ser.tenantid LIKE ? ");
-                    preparedStmtList.add(criteria.getTenantId() + '%');
+                    builder.append(" (ser.tenantid = ? OR ser.tenantid LIKE ?) ");
+                    preparedStmtList.add(tenantId);
+                    preparedStmtList.add(SqlLike.subtreePattern(tenantId));
                 } else {
                     addClauseIfRequired(preparedStmtList, builder);
                     builder.append(" ser.tenantid=? ");
@@ -229,7 +237,7 @@ public class PGRQueryBuilder {
     }
 
     /**
-     * Injects the RBAC scope's WHERE predicates. Mirrors the same axes/pattern as
+     * Injects the RBAC scope's WHERE predicates. The same axes as
      * {@code AnalyticsPlanner.applyScope} in the analytics module (citizen self-scope, employee
      * department-scope, and — per {@link PgrSearchScope}'s own Javadoc — the tenant axis itself),
      * plus PGR search's own jurisdiction axis: an exact-match IN-list against the complaint's
@@ -262,8 +270,15 @@ public class PGRQueryBuilder {
         if (scope.tenantId != null) {
             addClauseIfRequired(preparedStmtList, builder);
             if (scope.tenantStateLevel) {
-                builder.append(" ser.tenantId LIKE ? ");
-                preparedStmtList.add(scope.tenantId + '%');
+                // The subtree is the tenant ITSELF plus everything under a '.' beneath it. A bare
+                // `LIKE value || '%'` also matches a SIBLING whose id merely starts with the same
+                // characters — with state.level.tenantid.length=1 that means root `ke` reading
+                // every row of the unrelated root `kenya` — which is a cross-tenant read. The
+                // delimiter has to be part of the pattern, and LIKE metacharacters in a tenant id
+                // have to be escaped, or an id containing '_' would match any character there.
+                builder.append(" (ser.tenantId = ? OR ser.tenantId LIKE ?) ");
+                preparedStmtList.add(scope.tenantId);
+                preparedStmtList.add(SqlLike.subtreePattern(scope.tenantId));
             } else {
                 builder.append(" ser.tenantId = ? ");
                 preparedStmtList.add(scope.tenantId);
@@ -283,8 +298,21 @@ public class PGRQueryBuilder {
         // instead of a true empty one for that case today, but this must independently enforce
         // deny-all (not silently drop the axis and return unrestricted rows) if that contract ever
         // regresses upstream (#1441 review).
+        if (!scope.restrictsDepartmentOrJurisdiction())
+            return;
+
+        // Department AND jurisdiction, OR'd with the caller's own currently-assigned complaints
+        // (resolved server-side from workflow, see PGRService). An employee must always be able
+        // to see what workflow assigned to them, even when a GRO routed it outside their
+        // department/jurisdiction. Tenant and citizen-self predicates above stay ANDed.
+        // Never for a deny-all decision (no policy in strict mode, tenant outside the caller's
+        // subtree): the OR would turn "see nothing" into "see your assignments".
+        boolean ownAssigned = !scope.denyAll && !CollectionUtils.isEmpty(scope.ownAssignedServiceRequestIds);
+        addClauseIfRequired(preparedStmtList, builder);
+        builder.append(" ( ( 1 = 1 ");
+
         if (scope.departmentCodes != null) {
-            addClauseIfRequired(preparedStmtList, builder);
+            builder.append(" AND");
             if (scope.departmentCodes.isEmpty()) {
                 builder.append(" 1 = 0 ");
             } else {
@@ -294,7 +322,7 @@ public class PGRQueryBuilder {
         }
 
         if (scope.jurisdictionCodes != null) {
-            addClauseIfRequired(preparedStmtList, builder);
+            builder.append(" AND");
             if (scope.jurisdictionCodes.isEmpty()) {
                 builder.append(" 1 = 0 ");
             } else {
@@ -302,6 +330,13 @@ public class PGRQueryBuilder {
                 addToPreparedStatement(preparedStmtList, scope.jurisdictionCodes);
             }
         }
+
+        builder.append(" ) ");
+        if (ownAssigned) {
+            builder.append(" OR ser.serviceRequestId IN (").append(createQuery(scope.ownAssignedServiceRequestIds)).append(")");
+            addToPreparedStatement(preparedStmtList, scope.ownAssignedServiceRequestIds);
+        }
+        builder.append(" ) ");
     }
 
 

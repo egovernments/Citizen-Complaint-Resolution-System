@@ -1,0 +1,103 @@
+# Diagnose-only AI SRE agent (OpenSRE). Off by default via the helmfile's
+# `monitoring.opensre` toggle; nothing here runs until an operator sets it.
+#
+# This file is the DEFAULT layer. monitoring-helmfile.yaml also passes the merged
+# environment tree in after it, so anything environment-specific belongs in
+# charts/environments, not here.
+
+namespace: monitoring
+
+image:
+  # No public image carries the release this agent needs (upstream's newest
+  # published image predates the headless `opensre ask` command), so the
+  # deployment runs an image this repo builds and pushes:
+  #   docker build local-setup/opensre -t egovio/opensre:0.1.2026.9.21
+  #   docker push  egovio/opensre:0.1.2026.9.21
+  # Pinned, never :latest — OpenSRE is alpha upstream and ships daily.
+  repository: egovio/opensre
+  tag: 0.1.2026.9.21
+  pullPolicy: IfNotPresent
+
+# How the sweep loop paces itself. A sweep with nothing failing costs nothing:
+# it is one HTTP call to Gatus and no model call.
+sweep:
+  intervalMinutes: 15
+  # Do not re-investigate a failing check within this window.
+  dedupeHours: 6
+  investigationTimeoutSeconds: 900
+  # Hard ceiling on paid runs: no investigation starts while this many started
+  # in the last 24 hours, whatever is failing.
+  maxInvestigationsPerDay: 12
+
+# What the agent reads. Empty values switch that integration off.
+endpoints:
+  # Gatus drives the sweep: no Gatus, no investigations.
+  gatusUrl: http://gatus.monitoring:8080
+  grafanaUrl: http://grafana.monitoring
+  # Redpanda/Kafka bootstrap for consumer-group lag.
+  kafkaBootstrapServers: kafka-kraft-controller-headless.backbone:9092
+  kafkaSecurityProtocol: PLAINTEXT
+  # Tempo is a compose-tier component; the Helm tier runs Jaeger, which OpenSRE
+  # has no integration for. Left empty deliberately.
+  tempoUrl: ""
+
+# The deployment, as the agent should picture it when it names components and
+# writes the commands a human should run. The deployment template appends the
+# namespaces from rbac.namespaces. Describe your cluster if it differs.
+deployment:
+  description: >-
+    A Kubernetes cluster deployed with this repo's helmfiles: the DIGIT services
+    in namespace egov, Kafka (kafka-kraft) and the other backbone services in
+    backbone, Novu in novu, and the monitoring stack in monitoring. Traces go to
+    Jaeger, which you cannot read, so there are none. Read pods, their logs,
+    events, deployments and nodes with your Kubernetes tools. A human acts with
+    kubectl and helmfile.
+
+model:
+  # Passed to the Claude Code CLI in the image, which is how the agent reaches
+  # the model: it is the one route on which OpenSRE masks what it sends with
+  # guardrails.yml. The sweep loop fixes the provider itself, so there is no
+  # provider setting.
+  name: claude-opus-5
+
+# Credentials come from a Secret an operator creates — never from this repo,
+# which is public. Create it once per cluster in the release namespace:
+#   kubectl -n monitoring create secret generic opensre \
+#     --from-literal=anthropic-api-key='<key>' \
+#     --from-literal=grafana-token='<grafana service account token>'
+# The Grafana token is optional: without it the agent still sees Gatus, Kafka
+# lag and Kubernetes, but no metrics or logs. Mint it in Grafana as a Viewer
+# service account.
+secret:
+  name: opensre
+  anthropicApiKeyKey: anthropic-api-key
+  grafanaTokenKey: grafana-token
+
+# Read-only access to the cluster: this is what lets the agent see restart
+# counts, OOM kills, crash-loop events and pod logs. Verbs are get/list only,
+# granted per namespace (templates/rbac.yaml), plus nodes cluster-wide.
+rbac:
+  create: true
+  serviceAccountName: opensre
+  # The namespaces the agent can read. Each must exist: a RoleBinding into a
+  # missing namespace fails the install. Leave out any whose pod logs should
+  # not reach the model provider.
+  namespaces: [egov, backbone, novu, monitoring]
+  # Namespace the agent looks at first; must be one of the above.
+  defaultNamespace: egov
+
+# Optional: a ConfigMap holding a runbook the agent attaches to every
+# investigation, with the file under the key `known-issues.md`. Create it from
+# this repo's operations handbook:
+#   kubectl -n monitoring create configmap opensre-runbook \
+#     --from-file=known-issues.md=docs/releases/2.12/operations/known-issues.md
+runbook:
+  configMapName: ""
+
+resources:
+  limits:
+    memory: 1Gi
+    cpu: "1000m"
+  requests:
+    memory: 256Mi
+    cpu: "50m"

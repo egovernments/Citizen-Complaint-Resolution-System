@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/select';
 import { toast } from '@/hooks/use-toast';
 import { useApp } from '../../App';
+import { analyticsShimPath, useWorkspaceSlug } from '@/identity/workspaceSlug';
 import { digitClient } from '@/providers/bridge';
 import { getDescriptor } from '../schemaDescriptors';
 import type { FieldSpec } from '../schemaDescriptors/types';
@@ -161,6 +162,7 @@ export function buildPayload(draft: AnalyticsProviderRecord): Record<string, unk
 export function AnalyticsProvidersEditor() {
   const { state } = useApp();
   const tenantId = state.tenant;
+  const slug = useWorkspaceSlug(tenantId);
   const stateTenant = digitClient.stateTenantId || tenantId;
   const roles: string[] = useMemo(() => state.user?.roles ?? [], [state.user]);
   const canWrite = roles.some((r) => WRITE_ROLES.includes(r));
@@ -231,8 +233,12 @@ export function AnalyticsProvidersEditor() {
         if (!cancelled) setBundleSupported(null);
         return;
       }
+      // Wait for the workspace slug, then probe the shim where a tenant page
+      // loads it from. Without a slug, the tenantless asset path is still
+      // served (nginx and the Helm static-assets ingress exempt bundle assets).
+      if (slug === undefined) return;
       try {
-        const res = await fetch('/digit-ui/analytics.js', { method: 'HEAD' });
+        const res = await fetch(analyticsShimPath(slug), { method: 'HEAD' });
         const ct = res.headers.get('content-type') || '';
         if (!cancelled) setBundleSupported(res.ok && ct.includes('javascript'));
       } catch {
@@ -242,7 +248,7 @@ export function AnalyticsProvidersEditor() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [slug]);
 
   const startEdit = (row: MergedRow) => {
     setJsonErrors({});

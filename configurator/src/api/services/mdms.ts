@@ -1,12 +1,14 @@
 // MDMS Service - Master Data Management
 import { apiClient } from '../client';
 import { ENDPOINTS, MDMS_SCHEMAS } from '../config';
+import { WORKSPACE_HIERARCHY_TYPE } from './boundary';
 import type {
   Department,
   Designation,
   ComplaintType,
   MdmsRecord,
   Tenant,
+  EscalationConfigData,
 } from '../types';
 import {
   selectOwnedDashboardConfig,
@@ -20,6 +22,30 @@ import {
 // UI reads MapConfig[0], which then picks between them arbitrarily.
 const MAP_CONFIG_KEY = 'DEFAULT';
 const DASHBOARD_CONFIG_KEY = 'default';
+
+/**
+ * The record a _create or _update wrote. mdms-v2 answers with an `mdms` array
+ * (MdmsResponseV2); reading `Mdms` returned undefined to every caller. A write
+ * that is accepted without echoing the record (a bare 202) still resolves,
+ * rather than turning a successful write into an error, so callers that need
+ * the stored record re-read it.
+ */
+function writtenRecord(response: Record<string, unknown>): MdmsRecord {
+  const written = response.mdms ?? response.Mdms;
+  return (Array.isArray(written) ? written[0] : written) as MdmsRecord;
+}
+
+/**
+ * The tenant's active "CMS" HierarchySchema row; HRMS rows don't count. A city
+ * search returns its own rows and its state's in no set order, so the city's
+ * own row wins over the one it inherits.
+ */
+function visibleCmsHierarchyRow(rows: MdmsRecord[], tenantId: string): MdmsRecord | undefined {
+  const cms = rows.filter(
+    (r) => r.isActive !== false && (r.data as { moduleName?: string } | undefined)?.moduleName === 'CMS',
+  );
+  return cms.find((r) => r.tenantId === tenantId) ?? cms[0];
+}
 
 export const mdmsService = {
   /**
@@ -99,7 +125,7 @@ export const mdmsService = {
       },
     });
 
-    return response.Mdms as MdmsRecord;
+    return writtenRecord(response);
   },
 
   // Raw search: keeps `uniqueIdentifier` / `id` / `auditDetails` / `isActive`,
@@ -134,7 +160,28 @@ export const mdmsService = {
         isActive: true,
       },
     });
-    return response.Mdms as MdmsRecord;
+    return writtenRecord(response);
+  },
+
+  /**
+   * Soft-delete (or restore) a record by flipping isActive, as management's
+   * delete does. mdms-v2 keeps a deactivated row's uniqueIdentifier taken, so a
+   * later create of the same code has to restore it instead.
+   */
+  async setActive(record: MdmsRecord, isActive: boolean, data?: Record<string, unknown>): Promise<MdmsRecord> {
+    const response = await apiClient.post(`${ENDPOINTS.MDMS_UPDATE}/${record.schemaCode}`, {
+      RequestInfo: apiClient.buildRequestInfo(),
+      Mdms: {
+        tenantId: record.tenantId,
+        schemaCode: record.schemaCode,
+        uniqueIdentifier: record.uniqueIdentifier,
+        id: record.id,
+        data: data ?? record.data,
+        auditDetails: record.auditDetails,
+        isActive,
+      },
+    });
+    return writtenRecord(response);
   },
 
   /**
@@ -160,6 +207,43 @@ export const mdmsService = {
     const inherited = existing.find((r) => r.isActive !== false)?.data as Record<string, unknown> | undefined;
     const data = { ...(inherited || {}), ...patch, code: MAP_CONFIG_KEY };
     return this.create(tenantId, MDMS_SCHEMAS.MAP_CONFIG, MAP_CONFIG_KEY, data);
+  },
+
+  /**
+   * Records the tenant's operational boundary hierarchy in
+   * CMS-BOUNDARY.HierarchySchema (the "CMS" row), which digit-ui, the dashboard
+   * and PGR read in place of the deployment-wide globalConfigs keys.
+   *
+   * Written only when no active CMS row is visible: a workspace's first
+   * hierarchy becomes PGR's, and a row the tenant (or, for a legacy city, its
+   * state) already has is never rewritten from here, since every complaint
+   * filed so far is addressed in it. Changing it is an explicit MDMS edit.
+   */
+  async ensureHierarchySchema(
+    tenantId: string,
+    hierarchy: { hierarchy: string; highestHierarchy: string; lowestHierarchy: string },
+  ): Promise<MdmsRecord | null> {
+    // WORKSPACE only roots the founder; the GEOGRAPHY probe never accepts it
+    // as the tenant's hierarchy, and this row is never rewritten once set.
+    if (hierarchy.hierarchy === WORKSPACE_HIERARCHY_TYPE) {
+      throw new Error(
+        `"${WORKSPACE_HIERARCHY_TYPE}" is reserved for the workspace root and can't be your complaint hierarchy. Use another hierarchy name.`,
+      );
+    }
+    const rows = await this.searchRecords(tenantId, MDMS_SCHEMAS.HIERARCHY_SCHEMA);
+    if (visibleCmsHierarchyRow(rows, tenantId)) return null;
+    return this.create(tenantId, MDMS_SCHEMAS.HIERARCHY_SCHEMA, 'CMS.All', {
+      moduleName: 'CMS',
+      department: 'All',
+      ...hierarchy,
+    });
+  },
+
+  /** The hierarchy type the tenant's CMS HierarchySchema row names, if it has one. */
+  async getRecordedHierarchyType(tenantId: string): Promise<string | undefined> {
+    const rows = await this.searchRecords(tenantId, MDMS_SCHEMAS.HIERARCHY_SCHEMA);
+    const hierarchy = (visibleCmsHierarchyRow(rows, tenantId)?.data as { hierarchy?: string } | undefined)?.hierarchy;
+    return hierarchy || undefined;
   },
 
   /** Load the active DashboardConfig owned by the state root (never an inherited row). */
@@ -203,6 +287,34 @@ export const mdmsService = {
       tenantId,
     });
     return response.publicDashboardEnabled === true;
+  },
+
+  /**
+   * Load the singleton EscalationConfig record (raw, with metadata).
+   * Searches RAINMAKER-PGR.EscalationConfig at tenantId, returning the
+   * active 'DEFAULT' record (or first active record).
+   */
+  async getEscalationConfig(tenantId: string): Promise<MdmsRecord | null> {
+    const records = await this.searchRecords(tenantId, MDMS_SCHEMAS.ESCALATION_CONFIG);
+    const active = records.filter(
+      (r) => r.isActive !== false && r.tenantId === tenantId
+    );
+    return active.find((r) => r.uniqueIdentifier === 'DEFAULT') ?? active[0] ?? null;
+  },
+
+  /**
+   * Save the edited EscalationConfig, preserving unknown top-level fields.
+   */
+  async saveEscalationConfig(
+    record: MdmsRecord,
+    data: EscalationConfigData
+  ): Promise<MdmsRecord> {
+    const mergedData = {
+      ...(record.data as Record<string, unknown>),
+      ...data,
+      code: 'DEFAULT',
+    };
+    return this.update(record, mergedData);
   },
 
   // ============================================

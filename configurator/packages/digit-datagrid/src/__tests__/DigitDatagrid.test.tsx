@@ -19,6 +19,8 @@ vi.mock('ra-core', () => ({
     isPending: false,
   }),
   useResourceContext: () => 'departments',
+  // Untranslated: every call site passes its English default as `_`.
+  useTranslate: () => (key: string, options?: { _?: string }) => options?._ ?? key,
   useUpdate: () => [vi.fn()],
   useDelete: () => [vi.fn()],
   useGetList: () => ({ data: [], isPending: false }),
@@ -49,6 +51,27 @@ describe('DigitDatagrid', () => {
     render(<DigitDatagrid columns={columns} />);
     expect(screen.getByText('Name')).toBeInTheDocument();
     expect(screen.getByText('Active')).toBeInTheDocument();
+  });
+
+  it('tags a column header with its localization code only when it has one', () => {
+    render(
+      <DigitDatagrid
+        columns={[
+          // Hand-written English: no code, rendered as written.
+          { source: 'code', label: 'Employee Code' },
+          // Hand-written code: used as-is.
+          { source: 'name', label: 'app.fields.name' },
+          // Schema-generated: English label plus the derived code.
+          { source: 'businessService', label: 'Business Service', labelKey: 'app.fields.business_service' },
+        ]}
+      />,
+    );
+    expect(screen.getByText('Employee Code')).not.toHaveAttribute('data-i18n-key');
+    expect(screen.getByText('app.fields.name')).toHaveAttribute('data-i18n-key', 'app.fields.name');
+    expect(screen.getByText('Business Service')).toHaveAttribute(
+      'data-i18n-key',
+      'app.fields.business_service',
+    );
   });
 
   it('shows auto row actions when rowActions is auto', () => {

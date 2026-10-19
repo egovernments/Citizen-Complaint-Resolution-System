@@ -6,6 +6,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.novubridge.config.NovuBridgeConfiguration;
+import org.egov.novubridge.service.account.TenantAccountService;
+import org.egov.novubridge.util.Values;
+import org.egov.novubridge.util.ServiceUrl;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -14,51 +17,188 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.context.request.RequestAttributes;
+import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 
 /**
- * Server-side authentication for the configurator proxy endpoints
- * ({@code GET /novu-adapter/v1/logs}, {@code /novu-adapter/v1/integrations},
- * {@code /novu-adapter/v1/preferences}, the {@code /novu-adapter/v1/providers}
- * self-service management paths — GET/POST — and the {@code /novu-adapter/v1/dispatch}
- * diagnostic endpoints).
+ * Authenticates the configurator endpoints: the opaque DIGIT bearer token is introspected against
+ * egov-user {@code /user/_details}; the caller must be an EMPLOYEE with a role from
+ * {@code novu.bridge.proxy.allowed.roles}. Credential-bearing, destructive, PII-expanding and
+ * message-sending POSTs additionally need a role from {@code novu.bridge.proxy.admin.roles} held
+ * at a STATE tenant (403 {@code NB_ADMIN_ROLE_REQUIRED}). Provider create, _update, _delete and
+ * test-send also need that state to be one that owns the deployment's providers (403
+ * {@code NB_TENANT_NOT_ALLOWED}): the core-SMS default tenant's state plus
+ * {@code novu.bridge.provider.admin.tenants}. Providers are deployment-wide, so neither a city admin
+ * nor the admin of another root on the same box (a #1999 workspace) may rotate or delete the one the
+ * owning state sends its OTPs through. {@code /dispatch/_resolve} and {@code /dispatch/_dry-run} are
+ * about one tenant's events instead, so DispatchController admits the admin of the event tenant's
+ * state root (or of an owning state). Tenant-scoped reads
+ * ({@code /logs}, {@code /config/source}) are limited to the caller's tenants (403
+ * {@code NB_TENANT_NOT_ALLOWED}). The resolved {@link Caller} is cached 60s keyed by SHA-256 of
+ * the token, never the raw token, and handed to the controllers as a request attribute.
  *
- * <p>DIGIT access tokens are opaque OAuth tokens minted by egov-user. This filter
- * introspects the incoming {@code Authorization: Bearer <token>} against egov-user
- * {@code POST /user/_details?access_token=<token>} and allows the request only when
- * the resolved user is an {@code EMPLOYEE} carrying at least one role code from the
- * configured allowlist ({@code novu.bridge.proxy.allowed.roles}). A valid token is
- * cached (by SHA-256 hash, never raw) for 60s so the Logs screen's polling does not
- * hammer egov-user.
+ * <p>Per-tenant accounts (#2203): a provider write or test-send whose {@code tenantId} query
+ * parameter names a workspace with its OWN Novu organization is decided on that workspace alone:
+ * an admin role held at its root passes (no owning-state listing needed), anyone else is refused,
+ * the owning state's admins included. Without such a selector nothing changes.
  *
- * <p>The POST diagnostic endpoints under the same {@code /novu-adapter/v1} namespace
- * ({@code _validate}, {@code _dry-run}, {@code _test-trigger}) are gated by the same
- * URL pattern; they are additionally NOT routed publicly by Kong.
+ * <p>Paths: every decision (whether to authenticate at all, the admin tier, the owning-state and
+ * tenant-scoped sets) is made on {@link RequestPaths#canonical the canonical path}, never the raw
+ * URI, so a variant Spring MVC maps the same way ({@code ;x} parameters, a trailing slash, another
+ * case) cannot slip out of a tier. The filter authenticates EVERY path in the namespace except the
+ * ones with their own authentication (receipts, the #2203 machine APIs) and the public contract
+ * documents: a path added later is protected until someone decides otherwise. A request whose raw
+ * path is not plain ({@link RequestPaths#rejection}) is refused with 400.
  */
 @Slf4j
 public class ProxyAuthFilter extends OncePerRequestFilter {
 
     private static final long CACHE_TTL_MS = 60_000L;
     private static final String BEARER_PREFIX = "Bearer ";
+    private static final String NAMESPACE = "/novu-adapter/v1";
+
+    /**
+     * The admin tier, exact paths, not prefixes: every other {@code /providers/*} path stays on the
+     * broad allowlist. Each needs an admin role held at a state tenant.
+     */
+    private static final Set<String> ADMIN_ONLY_PATHS = Set.of(
+            NAMESPACE + "/providers",
+            NAMESPACE + "/providers/_update",
+            NAMESPACE + "/providers/_delete",
+            // Sends a real message, of the caller's wording, to any number, through the
+            // government sender.
+            NAMESPACE + "/providers/test-send",
+            // _dry-run always: its send flag is in the body, and without it _dry-run is _validate.
+            NAMESPACE + "/dispatch/_dry-run",
+            // _resolve answers with filled contact blocks: recipient PII for every holder of a role.
+            NAMESPACE + "/dispatch/_resolve");
+
+    /**
+     * The part of the admin tier that acts on the deployment-wide providers, so the admin role must
+     * be held at a state that OWNS them. The rest ({@code _dry-run}, {@code _resolve}) is about one
+     * tenant's events: DispatchController lets an admin of the event's own state root through (and
+     * an owning-state admin for any), and keeps {@code _dry-run} with {@code send:true}, a real send
+     * through the shared providers, to the owning state like test-send.
+     */
+    private static final Set<String> OWNING_STATE_PATHS = Set.of(
+            NAMESPACE + "/providers",
+            NAMESPACE + "/providers/_update",
+            NAMESPACE + "/providers/_delete",
+            NAMESPACE + "/providers/test-send");
+
+    /** GETs whose {@code tenantId} query parameter must be one of the caller's tenants. */
+    private static final Set<String> TENANT_SCOPED_READS = Set.of(
+            NAMESPACE + "/logs",
+            NAMESPACE + "/config/source");
+
+    /** Request attribute carrying the {@link Caller}; read it with {@link #currentCaller()}. */
+    public static final String CALLER_ATTRIBUTE = ProxyAuthFilter.class.getName() + ".caller";
+
+    /**
+     * Request attribute set when a provider write was let through as an admin of a workspace with its
+     * own account (the root), not as an admin of a state that owns the shared providers; read it with
+     * {@link #admittedWorkspace()}. The controller must then act on that workspace's account or on
+     * none: falling back to the shared account would skip the owning-state check.
+     */
+    public static final String ADMITTED_WORKSPACE_ATTRIBUTE = ProxyAuthFilter.class.getName() + ".workspace";
+
+    /**
+     * The authenticated employee, from egov-user {@code /user/_details} (whose role objects carry
+     * their own {@code tenantId}).
+     *
+     * @param scopeTenants      the user's own tenant plus every tenant it holds an allowed or admin role at
+     * @param adminStateTenants the state tenants (no dot) at which it holds an admin role
+     */
+    public record Caller(Set<String> roles, Set<String> scopeTenants, Set<String> adminStateTenants) {
+
+        /** Holds an admin role at {@code tenantId}'s state root ({@code ke} for {@code ke.bomet}). */
+        public boolean administersStateOf(String tenantId) {
+            if (!StringUtils.hasText(tenantId)) {
+                return false;
+            }
+            String trimmed = tenantId.trim();
+            int dot = trimmed.indexOf('.');
+            return adminStateTenants.contains(dot < 0 ? trimmed : trimmed.substring(0, dot));
+        }
+
+        /** Holds an admin role at one of {@code owningStates}, the states that own the providers. */
+        public boolean administersAnyOf(Set<String> owningStates) {
+            for (String state : adminStateTenants) {
+                if (owningStates.contains(state)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /** One of its tenants, or, for a state-level caller, a city of that state. Exact, like the SQL. */
+        public boolean mayRead(String tenantId) {
+            if (!StringUtils.hasText(tenantId)) {
+                return false;
+            }
+            if (scopeTenants.contains(tenantId)) {
+                return true;
+            }
+            int dot = tenantId.indexOf('.');
+            return dot > 0 && scopeTenants.contains(tenantId.substring(0, dot));
+        }
+    }
+
+    /** The current request's caller; null when proxy auth is off (local dev) or outside a request. */
+    public static Caller currentCaller() {
+        RequestAttributes attributes = RequestContextHolder.getRequestAttributes();
+        Object caller = attributes == null ? null
+                : attributes.getAttribute(CALLER_ATTRIBUTE, RequestAttributes.SCOPE_REQUEST);
+        return caller instanceof Caller c ? c : null;
+    }
+
+    /** The workspace root this request was admitted for ({@link #ADMITTED_WORKSPACE_ATTRIBUTE}), else null. */
+    public static String admittedWorkspace() {
+        RequestAttributes attributes = RequestContextHolder.getRequestAttributes();
+        Object root = attributes == null ? null
+                : attributes.getAttribute(ADMITTED_WORKSPACE_ATTRIBUTE, RequestAttributes.SCOPE_REQUEST);
+        return root instanceof String r ? r : null;
+    }
+
+    private record CachedUser(long expiresAt, Caller caller) {
+    }
 
     private final RestTemplate restTemplate;
     private final NovuBridgeConfiguration config;
-    // tokenHash -> expiry epoch millis. Never stores the raw token.
-    private final ConcurrentHashMap<String, Long> validTokenCache = new ConcurrentHashMap<>();
+    /** Per-tenant Novu accounts (#2203); null = none, every provider path is the shared account's. */
+    private final TenantAccountService tenantAccounts;
+    private final ConcurrentHashMap<String, CachedUser> validTokenCache = new ConcurrentHashMap<>();
 
     public ProxyAuthFilter(RestTemplate restTemplate, NovuBridgeConfiguration config) {
+        this(restTemplate, config, null);
+    }
+
+    public ProxyAuthFilter(RestTemplate restTemplate, NovuBridgeConfiguration config,
+                           TenantAccountService tenantAccounts) {
         this.restTemplate = restTemplate;
         this.config = config;
+        this.tenantAccounts = tenantAccounts;
     }
+
+    /**
+     * The namespace's paths this filter leaves to others: machine callers with their own
+     * authentication (the receipt secret; InternalAuthFilter's tokens) and the public contract
+     * documents (no tenant data). Everything else in the namespace is authenticated.
+     */
+    private static final List<String> NOT_AUTHENTICATED_HERE = List.of(
+            NAMESPACE + "/receipts",
+            NAMESPACE + "/contract",
+            NAMESPACE + "/tenants",
+            NAMESPACE + "/messages");
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
@@ -66,20 +206,27 @@ public class ProxyAuthFilter extends OncePerRequestFilter {
         if (HttpMethod.OPTIONS.matches(request.getMethod())) {
             return true;
         }
-        String path = request.getServletPath();
-        if (!StringUtils.hasText(path)) {
-            path = request.getRequestURI();
+        String path = RequestPaths.inNamespace(request);
+        if (path.isEmpty()) {
+            return true; // Not an API path: health, the error page.
         }
-        return !(path.startsWith("/novu-adapter/v1/logs")
-                || path.startsWith("/novu-adapter/v1/integrations")
-                || path.startsWith("/novu-adapter/v1/preferences")
-                || path.startsWith("/novu-adapter/v1/providers")
-                || path.startsWith("/novu-adapter/v1/dispatch"));
+        for (String prefix : NOT_AUTHENTICATED_HERE) {
+            if (RequestPaths.isAtOrUnder(path, prefix)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
+        String why = RequestPaths.rejection(request);
+        if (why != null) {
+            log.warn("Proxy auth: refusing {} with {} in its path", request.getMethod(), why);
+            RequestFirewallFilter.reject(response, why);
+            return;
+        }
         // Escape hatch for local dev.
         if (config.getProxyAuthEnabled() == null || !config.getProxyAuthEnabled()) {
             chain.doFilter(request, response);
@@ -98,14 +245,14 @@ public class ProxyAuthFilter extends OncePerRequestFilter {
         }
 
         long now = System.currentTimeMillis();
-        String tokenHash = sha256(token);
-        Long expiry = validTokenCache.get(tokenHash);
-        if (expiry != null && expiry > now) {
-            chain.doFilter(request, response);
+        String tokenHash = Values.sha256Hex(token);
+        CachedUser cached = validTokenCache.get(tokenHash);
+        if (cached != null && cached.expiresAt() > now) {
+            proceed(request, response, chain, cached.caller());
             return;
         }
         // Opportunistic sweep of expired entries.
-        validTokenCache.entrySet().removeIf(e -> e.getValue() <= now);
+        validTokenCache.entrySet().removeIf(e -> e.getValue().expiresAt() <= now);
 
         Map<String, Object> user;
         try {
@@ -119,19 +266,145 @@ public class ProxyAuthFilter extends OncePerRequestFilter {
             writeError(response, HttpStatus.UNAUTHORIZED, "invalid token");
             return;
         }
-        if (!isAuthorized(user)) {
+        Caller caller = employee(user);
+        if (caller == null || !isAuthorized(caller.roles())) {
             writeError(response, HttpStatus.FORBIDDEN, "insufficient role");
             return;
         }
 
-        validTokenCache.put(tokenHash, now + CACHE_TTL_MS);
+        // Cached before the admin decision, so a refused rotation doesn't make every Logs poll re-introspect.
+        validTokenCache.put(tokenHash, new CachedUser(now + CACHE_TTL_MS, caller));
+        proceed(request, response, chain, caller);
+    }
+
+    /** The per-request checks, on a fresh and on a cached token alike. */
+    private void proceed(HttpServletRequest request, HttpServletResponse response, FilterChain chain,
+                         Caller caller) throws IOException, ServletException {
+        if (!adminCheckPasses(request, response, caller) || !tenantCheckPasses(request, response, caller)) {
+            return;
+        }
+        request.setAttribute(CALLER_ATTRIBUTE, caller);
         chain.doFilter(request, response);
     }
 
-    /** POST /user/_details?access_token=... — returns the flat user object or null on non-2xx. */
+    /** Writes the 403 itself and returns false when it refuses. */
+    private boolean adminCheckPasses(HttpServletRequest request, HttpServletResponse response,
+                                     Caller caller) throws IOException {
+        if (!requiresAdmin(request)) {
+            return true;
+        }
+        if (caller.adminStateTenants().isEmpty()) {
+            log.warn("Proxy auth: refusing {} {} — caller holds none of the admin roles {} at a state tenant",
+                    request.getMethod(), pathOf(request), config.getProxyAdminRoles());
+            writeError(response, HttpStatus.FORBIDDEN, "NB_ADMIN_ROLE_REQUIRED",
+                    "This needs one of these roles held at a state tenant (e.g. ke, not ke.bomet): "
+                            + String.join(", ", config.getProxyAdminRoles()));
+            return false;
+        }
+        if (!OWNING_STATE_PATHS.contains(pathOf(request))) {
+            // Tenant-scoped: the controller checks the event's tenant against the caller's states.
+            return true;
+        }
+        // #2203: a workspace with its own Novu organization is managed by ITS admins, and only by
+        // them. The selector is the same `tenantId` query parameter the controllers act on.
+        String selector = request.getParameter("tenantId");
+        if (tenantAccounts != null && StringUtils.hasText(selector) && tenantAccounts.isProvisioned(selector)) {
+            String root = TenantAccountService.rootOf(selector);
+            if (caller.administersStateOf(root)) {
+                request.setAttribute(ADMITTED_WORKSPACE_ATTRIBUTE, root);
+                return true;
+            }
+            log.warn("Proxy auth: refusing {} {} — workspace {} has its own notification account and the caller "
+                    + "is an admin at {}, not there", request.getMethod(), pathOf(request), root, caller.adminStateTenants());
+            // root is validated ([a-z0-9_-]): safe to echo.
+            writeError(response, HttpStatus.FORBIDDEN, "NB_TENANT_NOT_ALLOWED", "Workspace " + root
+                    + " has its own notification account; managing it needs an admin role held at " + root);
+            return false;
+        }
+        Set<String> owning = config.providerAdminStateTenants();
+        if (caller.administersAnyOf(owning)) {
+            return true;
+        }
+        log.warn("Proxy auth: refusing {} {} — caller is an admin at {}, not at a state that owns the providers {}",
+                request.getMethod(), pathOf(request), caller.adminStateTenants(), owning);
+        // Only configured values are echoed: writeError concatenates.
+        writeError(response, HttpStatus.FORBIDDEN, "NB_TENANT_NOT_ALLOWED", owning.isEmpty()
+                ? "No state tenant owns this deployment's notification providers: set "
+                        + "NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT or NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS"
+                : "Notification providers are shared by the whole deployment, so only an admin of "
+                        + String.join(", ", owning) + " may manage them or test-send through them; "
+                        + "your admin role is at another state tenant");
+        return false;
+    }
+
+    /** Every {@code tenantId} value must be the caller's; a missing one is the controller's 400. */
+    private boolean tenantCheckPasses(HttpServletRequest request, HttpServletResponse response,
+                                      Caller caller) throws IOException {
+        if (!TENANT_SCOPED_READS.contains(pathOf(request))) {
+            return true;
+        }
+        String[] tenantIds = request.getParameterValues("tenantId");
+        if (tenantIds == null) {
+            return true;
+        }
+        for (String tenantId : tenantIds) {
+            if (StringUtils.hasText(tenantId) && !caller.mayRead(tenantId)) {
+                log.warn("Proxy auth: refusing {} {} for tenant {} — outside the caller's tenants {}",
+                        request.getMethod(), pathOf(request), tenantId, caller.scopeTenants());
+                // Not echoed: writeError concatenates, and this value is the caller's.
+                writeError(response, HttpStatus.FORBIDDEN, "NB_TENANT_NOT_ALLOWED",
+                        "The requested tenant is not your own tenant, nor a city of your state");
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Admin roles count for the broad gate too; the default lists don't overlap (ACCOUNT_ADMIN). */
+    private boolean isAuthorized(Set<String> roles) {
+        return containsAny(roles, config.getProxyAllowedRoles())
+                || containsAny(roles, config.getProxyAdminRoles());
+    }
+
+    private static boolean requiresAdmin(HttpServletRequest request) {
+        if (!HttpMethod.POST.matches(request.getMethod())) {
+            return false;
+        }
+        return isAdminOnly(pathOf(request));
+    }
+
+    /** Public so a test can state which endpoints are on the admin tier without re-listing them. */
+    public static boolean isAdminOnly(String path) {
+        return ADMIN_ONLY_PATHS.contains(normalize(path));
+    }
+
+    /** The canonical path from the namespace on, with or without the {@code /novu-bridge} context. */
+    private static String pathOf(HttpServletRequest request) {
+        return RequestPaths.inNamespace(request);
+    }
+
+    /** A path as given (a test's, a log's) in the form the sets above are written in. */
+    private static String normalize(String path) {
+        String p = RequestPaths.canonical(path);
+        int at = p.indexOf(NAMESPACE);
+        return at < 0 ? p : p.substring(at);
+    }
+
+    private static boolean containsAny(Set<String> roles, List<String> allowed) {
+        if (roles == null || allowed == null) {
+            return false;
+        }
+        for (String candidate : allowed) {
+            if (candidate != null && roles.contains(candidate.trim().toUpperCase())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     @SuppressWarnings("unchecked")
     private Map<String, Object> introspect(String token) {
-        String url = config.getUserHost() + config.getUserDetailsPath() + "?access_token=" + token;
+        String url = ServiceUrl.join(config.getUserHost(), config.getUserDetailsPath()) + "?access_token=" + token;
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         ResponseEntity<Map> res = restTemplate.exchange(url, HttpMethod.POST,
@@ -142,29 +415,51 @@ public class ProxyAuthFilter extends OncePerRequestFilter {
         return null;
     }
 
-    /** Allow EMPLOYEE users carrying at least one allowlisted role code. */
+    /**
+     * The caller, or null when the user is not an EMPLOYEE (whatever roles a citizen carries). A
+     * role without a {@code tenantId} still counts for the broad gate, never for scope or admin.
+     */
     @SuppressWarnings("unchecked")
-    private boolean isAuthorized(Map<String, Object> user) {
+    private Caller employee(Map<String, Object> user) {
         Object type = user.get("type");
         if (type == null || !"EMPLOYEE".equalsIgnoreCase(type.toString())) {
-            return false;
+            return null;
         }
         Object rolesObj = user.get("roles");
         if (!(rolesObj instanceof List)) {
-            return false;
+            return null;
         }
-        Set<String> allowed = config.getProxyAllowedRoles().stream()
-                .map(r -> r.trim().toUpperCase())
-                .collect(Collectors.toSet());
+        Set<String> codes = new HashSet<>();
+        Set<String> scope = new LinkedHashSet<>();
+        Set<String> adminStates = new LinkedHashSet<>();
+        Object ownTenant = user.get("tenantId");
+        if (ownTenant != null && StringUtils.hasText(ownTenant.toString())) {
+            scope.add(ownTenant.toString().trim());
+        }
         for (Object roleObj : (List<Object>) rolesObj) {
-            if (roleObj instanceof Map) {
-                Object code = ((Map<String, Object>) roleObj).get("code");
-                if (code != null && allowed.contains(code.toString().toUpperCase())) {
-                    return true;
-                }
+            if (!(roleObj instanceof Map)) {
+                continue;
+            }
+            Object code = ((Map<String, Object>) roleObj).get("code");
+            if (code == null || !StringUtils.hasText(code.toString())) {
+                continue;
+            }
+            String upper = code.toString().trim().toUpperCase();
+            codes.add(upper);
+            Object roleTenant = ((Map<String, Object>) roleObj).get("tenantId");
+            String tenant = roleTenant == null ? "" : roleTenant.toString().trim();
+            if (tenant.isEmpty()) {
+                continue;
+            }
+            boolean admin = containsAny(Set.of(upper), config.getProxyAdminRoles());
+            if (admin || containsAny(Set.of(upper), config.getProxyAllowedRoles())) {
+                scope.add(tenant);
+            }
+            if (admin && tenant.indexOf('.') < 0) {
+                adminStates.add(tenant);
             }
         }
-        return false;
+        return new Caller(Set.copyOf(codes), Set.copyOf(scope), Set.copyOf(adminStates));
     }
 
     private void writeError(HttpServletResponse response, HttpStatus status, String message) throws IOException {
@@ -173,17 +468,13 @@ public class ProxyAuthFilter extends OncePerRequestFilter {
         response.getWriter().write("{\"error\":\"" + message + "\"}");
     }
 
-    private static String sha256(String value) {
-        try {
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            byte[] digest = md.digest(value.getBytes(StandardCharsets.UTF_8));
-            StringBuilder sb = new StringBuilder(digest.length * 2);
-            for (byte b : digest) {
-                sb.append(String.format("%02x", b));
-            }
-            return sb.toString();
-        } catch (Exception e) {
-            return Integer.toHexString(value.hashCode());
-        }
+    /** Adds the controllers' {@code Errors:[{code,message}]} shape, keeping the flat {@code error} key. */
+    private void writeError(HttpServletResponse response, HttpStatus status, String code, String message)
+            throws IOException {
+        response.setStatus(status.value());
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.getWriter().write("{\"error\":\"" + message + "\","
+                + "\"code\":\"" + code + "\","
+                + "\"Errors\":[{\"code\":\"" + code + "\",\"message\":\"" + message + "\"}]}");
     }
 }

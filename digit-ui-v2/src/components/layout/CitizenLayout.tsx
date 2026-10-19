@@ -6,7 +6,7 @@
  * link is injected only when its build-time rollback flag is enabled.
  */
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, LogOut, FileText, UserCircle, BarChart3 } from 'lucide-react';
+import { LayoutDashboard, LogOut, FileText, BarChart3 } from 'lucide-react';
 import { useApp } from '@/App';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -18,7 +18,6 @@ const NAV: { to: string; label: string; icon: React.ComponentType<{ className?: 
     : []),
   { to: '/dashboard-v2', label: 'Dashboard v2', icon: BarChart3 },
   { to: '/complaints', label: 'My Complaints', icon: FileText },
-  { to: '/profile', label: 'Profile', icon: UserCircle },
 ];
 
 export default function CitizenLayout() {

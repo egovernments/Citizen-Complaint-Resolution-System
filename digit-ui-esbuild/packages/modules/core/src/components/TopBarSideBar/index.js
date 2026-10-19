@@ -1,3 +1,4 @@
+import { isIdentityBffAuth } from "@egovernments/digit-ui-libraries";
 import React, { useState } from "react";
 import TopBar from "./TopBar";
 import { useHistory } from "react-router-dom";
@@ -37,8 +38,8 @@ const TopBarSideBar = ({
     toggleSidebar(false);
     setShowDialog(true);
   };
-  const handleOnSubmit = () => {
-    Digit.UserService.logout();
+  const handleOnSubmit = async () => {
+    await Digit.UserService.logout();
     setShowDialog(false);
   };
   const handleOnCancel = () => {
@@ -53,6 +54,8 @@ const TopBarSideBar = ({
   };
   const userOptions = [
     { name: t("EDIT_PROFILE"), icon: "Edit", func: userProfile },
+    ...(isIdentityBffAuth() ? [{ name: t("CORE_IDENTITY_ACCOUNT", { defaultValue: "Account and security" }), icon: "Person",
+      func: () => history.push(`/${window.contextPath}/${CITIZEN ? "citizen" : "employee"}/user/account`) }] : []),
     { name: t("CORE_COMMON_LOGOUT"), icon: "Logout", func: handleLogout },
   ];
 

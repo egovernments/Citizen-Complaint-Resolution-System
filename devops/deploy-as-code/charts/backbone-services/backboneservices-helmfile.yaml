@@ -513,6 +513,12 @@ releases:
     # Signing/encryption secrets from the SOPS-covered file rather than the
     # chart's example values. jwtSecret signs sessions; a known value is a
     # forged login.
+    # DIGIT's SMS providers in the worker: from global.novuWorkerDigitProviders (env.yaml),
+    # the same switch novu-bridge's NOVU_BRIDGE_DIGIT_WORKER_PROVIDERS follows. Unset = the
+    # chart default (on). hasKey, not `default`: `false | default true` is true.
+    - worker:
+        digitProviders:
+          enabled: {{ if hasKey .Values.global "novuWorkerDigitProviders" }}{{ .Values.global.novuWorkerDigitProviders }}{{ else }}true{{ end }}
     - novu:
         secrets:
           # Preferred: name a Secret created out of band (see env-secrets.yaml),

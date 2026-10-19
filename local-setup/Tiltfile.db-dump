@@ -71,9 +71,6 @@ dc_resource('user-otp', labels=['core-services'],
     resource_deps=['egov-otp', 'egov-user'],
     links=[link('http://localhost:18095/user-otp/actuator/health', 'Health')])
 
-dc_resource('egov-notification-sms', labels=['core-services'],
-    links=[link('http://localhost:18093/notification-sms/actuator/health', 'Health')])
-
 # ==================== PGR ====================
 dc_resource('pgr-services', labels=['pgr'],
     links=[link('http://localhost:18083/pgr-services/health', 'Health')])

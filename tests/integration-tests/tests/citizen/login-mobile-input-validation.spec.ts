@@ -1,3 +1,4 @@
+import { tenantSlug } from '../utils/identity-bff';
 /**
  * Citizen login mobile-number validation (CCRS #429).
  *
@@ -71,7 +72,7 @@ Catches a regression where the citizen login regresses to the hardcoded Indian v
       'short',
     );
 
-    await page.goto(`${BASE_URL}/digit-ui/citizen/login`, {
+    await page.goto(`${BASE_URL}/${tenantSlug()}/digit-ui/citizen/login`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });

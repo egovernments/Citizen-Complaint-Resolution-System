@@ -1,5 +1,5 @@
 // Client
-export { DigitApiClient, ApiClientError } from './client/index.js';
+export { DigitApiClient, ApiClientError, withCsrRole, inTenant, employeesByCodeInTenant, exactTenantRow } from './client/index.js';
 export type { DigitApiClientConfig } from './client/index.js';
 export { ENDPOINTS, OAUTH_CONFIG, MDMS_SCHEMAS } from './client/index.js';
 export type {
@@ -12,12 +12,12 @@ export {
   REGISTRY, getResourceConfig, getAllResources,
   getDedicatedResources, getMdmsResources, getGenericMdmsResources,
   getResourceIdField, getResourceLabel, getResourceBySchema,
-  isAccessControlGated,
+  isAccessControlGated, isReadOnlyResource, readOnlyNoticeFor, LEGACY_NOTIFICATION_NOTICE,
 } from './providers/resourceRegistry.js';
 export type { ResourceConfig, ResourceType } from './providers/resourceRegistry.js';
 
 // react-admin providers (optional peer dep on ra-core)
-export { createDigitDataProvider } from './providers/dataProvider.js';
+export { createDigitDataProvider, DUPLICATE_ACTIVE_KEYS } from './providers/dataProvider.js';
 export type { DigitDataProvider } from './providers/dataProvider.js';
 export { createDigitAuthProvider } from './providers/authProvider.js';
 export type { DigitPermissions } from './providers/authProvider.js';

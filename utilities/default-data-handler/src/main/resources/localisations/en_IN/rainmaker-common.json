@@ -7158,6 +7158,24 @@
         "locale": "en_IN"
     },
     {
+        "code": "CS_HOME_BANNER_WELCOME",
+        "message": "Welcome to",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_HOME_BANNER_PRODUCT",
+        "message": "Complaint Management System",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_HOME_BANNER_TAGLINE",
+        "message": "Report issues, track progress and see what is happening in your area.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
         "code": "CS_HOME_PT",
         "message": "Property Tax",
         "module": "rainmaker-common",
@@ -9860,6 +9878,738 @@
     {
         "code": "CS_ROLE_CONTEXT_ADMIN",
         "message": "Administrator",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_COMMON_CHANGE_PHOTO",
+        "message": "Change photo",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_COMMON_DISABLED",
+        "message": "Off",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_COMMON_EMAIL_NOTIFICATIONS",
+        "message": "Email notifications",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_COMMON_ENABLED",
+        "message": "On",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_COMMON_LANGUAGE",
+        "message": "Language",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_COMMON_NOTIFICATION_PREFERENCES",
+        "message": "Notifications",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_COMMON_PREFERRED_LANGUAGE",
+        "message": "Preferred language",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_COMMON_PROFILE",
+        "message": "Edit Profile",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_COMMON_PROFILE_MOBILE_READONLY_HELP",
+        "message": "Mobile number is your login identifier and cannot be changed from this screen.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_COMMON_PROFILE_PERSONAL_DETAILS",
+        "message": "Personal details",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_COMMON_REMOVE",
+        "message": "Remove current photo",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_COMMON_SELECT_GENDER",
+        "message": "Select gender",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_COMMON_SELECT_LANGUAGE",
+        "message": "Select language",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_COMMON_SMS_NOTIFICATIONS",
+        "message": "SMS notifications",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_COMMON_WHATSAPP_NOTIFICATIONS",
+        "message": "WhatsApp notifications",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_ACCEPT_INVITATION",
+        "message": "Accept invitation",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_ACCOUNT",
+        "message": "Account and security",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_CHANGE_PHONE",
+        "message": "Change phone number",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_CHOOSE_ORGANISATION",
+        "message": "Choose your organisation",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_CONFIRM_DECLINE",
+        "message": "Confirm decline",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_CURRENT_SESSION",
+        "message": "(this session)",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_DECLINE_INVITATION",
+        "message": "Decline invitation",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_DECLINE_INVITATION_CONFIRM",
+        "message": "Decline this invitation? Your administrator would need to invite you again.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_INVITATION_DECLINED",
+        "message": "You declined the invitation to this workspace.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_LINK_PROVIDER",
+        "message": "Link provider",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_LOGOUT_ALL",
+        "message": "Sign out everywhere",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_LOGOUT_ALL_FAILED",
+        "message": "Signing out everywhere could not be confirmed. Other devices may still be signed in. Try again.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_LOGOUT_OTHERS",
+        "message": "Sign out other sessions",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_LOGOUT_UNAVAILABLE",
+        "message": "Sign-out could not be completed. Please try again.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_NEW_PHONE",
+        "message": "New phone number",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_OTHER_SESSIONS_ENDED",
+        "message": "Your other sessions have been signed out.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_OTP_CHANGE_NUMBER",
+        "message": "Change number",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_OTP_CODE",
+        "message": "Verification code",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_PHONE_CHANGED",
+        "message": "Your phone number has been changed.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_PHONE_CHANGED_SIGNIN",
+        "message": "Phone changed. Sign in again to refresh your account.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_PHONE_HELP",
+        "message": "Enter the new number without the country code. We will send a verification code to it.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_REMOVE_FACTOR",
+        "message": "Remove second factor",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_RESEND",
+        "message": "Resend code",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_SEND_CODE",
+        "message": "Send code",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_SESSIONS",
+        "message": "Signed-in sessions",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_SIGNIN_FAILED",
+        "message": "Sign-in could not be completed. Please try again.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_SIGNIN_UNAVAILABLE",
+        "message": "Sign-in is temporarily unavailable. Please try again.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_SIGNOUT_INCOMPLETE",
+        "message": "Sign-out may not have finished, so this browser can still be signed in. Try signing out again, or sign in to continue.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_SIGN_IN",
+        "message": "Sign in →",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_SIGN_OUT",
+        "message": "Sign out",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_SIGN_OUT_AGAIN",
+        "message": "Try signing out again",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_SIGN_OUT_HINT",
+        "message": "Sign out if you need to use a different account.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_TRY_AGAIN",
+        "message": "Try again",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_UNAVAILABLE",
+        "message": "The phone change could not be completed. Please try again.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_UNLINK_PROVIDER",
+        "message": "Unlink provider",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_USE_ORGANISATION_LINK",
+        "message": "Sign in from your organisation's own link. It looks like /your-organisation/digit-ui/. Ask your administrator if you do not have it.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_VERIFY_PHONE",
+        "message": "Verify and change phone",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_LOGOUT_CONFIRMATION_BODY",
+        "message": "You will need to sign in again to continue.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_LOGOUT_CONFIRM_ACTION",
+        "message": "Log out",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_LOGOUT_CONFIRM_HEADING",
+        "message": "Are you sure you want to log out?",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_PROFILE_CHOOSE_PHOTO",
+        "message": "Choose from gallery",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_PROFILE_UPLOAD_HINT",
+        "message": "Pick a new image (max 5 MB) or remove the current one.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_SIDEBAR_CLOSE",
+        "message": "Close sidebar",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_SIDEBAR_COLLAPSE",
+        "message": "Collapse",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_SIDEBAR_OPEN",
+        "message": "Open sidebar",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_SIDEBAR_PIN",
+        "message": "Keep open",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_SIDEBAR_PUBLIC_DASHBOARD",
+        "message": "Public Dashboard",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_SIDEBAR_SECTION_COMPLAINTS",
+        "message": "Complaints",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMMON_EMPLOYEE_FETCH_ERROR",
+        "message": "Couldn't load employees. Please try again.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMMON_ERROR_LOADING_TITLE",
+        "message": "Couldn't load your complaints",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMMON_PREVIOUS",
+        "message": "Previous",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMMON_SELECT",
+        "message": "Select",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMMON_SORT_ASC",
+        "message": "Ascending",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMMON_SORT_BY",
+        "message": "Sort by",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMMON_SORT_DESC",
+        "message": "Descending",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMMON_SORT_ORDER",
+        "message": "Order",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "Clear",
+        "message": "Clear",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_ERROR_USER_NOT_PERMITTED",
+        "message": "User not permitted to log in.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "Latitude",
+        "message": "Latitude",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "Longitude",
+        "message": "Longitude",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "MYCITY_STATECODE_LABEL",
+        "message": "State",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "Modules",
+        "message": "Modules",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ROWS_PER_PAGE",
+        "message": "Rows per page",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ke.bomet",
+        "message": "Bomet",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_ACCOUNT_DISABLED",
+        "message": "This account is disabled.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_ACCOUNT_LOCKED",
+        "message": "Your account is locked. Contact your administrator.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_ACTION_CANCELLED",
+        "message": "The account change was cancelled.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_ACTION_COMPLETE",
+        "message": "Your account has been updated.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_ACTION_FAILED",
+        "message": "The account change could not be completed. Please try again.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_CONTEXT_FAILED",
+        "message": "Your tenant session could not be prepared. Please try again.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_DIGIT_ACCOUNT_INACTIVE",
+        "message": "Your account is inactive. Contact your administrator.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_EMPLOYEE_ACCOUNT_NOT_LINKED",
+        "message": "Your account has not been linked to this workspace. Contact your administrator.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_IDENTITY_EMAIL_CHANGED",
+        "message": "Your email has changed. Sign in again.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_INVALID_MOBILE_NUMBER",
+        "message": "This mobile number cannot be used here.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_INVALID_SESSION",
+        "message": "The signed-in account did not produce a valid session for this tenant.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_INVITATION_STALE",
+        "message": "This invitation has expired or changed. Ask your administrator for a new invitation.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_LAST_SIGNIN_METHOD",
+        "message": "Add another sign-in method before removing this provider.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_OTP_CHANNEL_UNAVAILABLE",
+        "message": "We can't send a code right now. Please try again later.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_OTP_EXPIRED",
+        "message": "This code has expired. Request a new one.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_OTP_INVALID",
+        "message": "That code is not correct. {{attempts}} attempts left.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_OTP_INVALID_CODE",
+        "message": "That code is not correct.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_OTP_INVALID_MOBILE",
+        "message": "This mobile number cannot be used here.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_OTP_LOCKED",
+        "message": "Too many wrong codes for this number. Try again in {{seconds}} seconds.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_OTP_NO_ATTEMPTS_LEFT",
+        "message": "Too many wrong codes. Request a new code.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_OTP_RATE_LIMITED",
+        "message": "Too many codes requested. Try again in {{seconds}} seconds.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_OTP_RESEND_TOO_SOON",
+        "message": "Please wait {{seconds}} seconds before requesting another code.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_OTP_TRY_LATER",
+        "message": "Too many attempts. Please try again later.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_PENDING_INVITATION",
+        "message": "Accept the invitation to continue to this workspace.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_PHONE_IN_USE",
+        "message": "This phone number cannot be used for this account.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_PHONE_SESSION_CHANGED",
+        "message": "Your signed-in account has changed. Reopen account settings before continuing.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_PROVIDER_NOT_LINKED",
+        "message": "This provider is no longer linked. Refresh your account details.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_SESSION_EXPIRED",
+        "message": "Your session has ended. Sign in again.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_SESSION_REQUIRED",
+        "message": "Your session has ended. Sign in again.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_SESSION_REVOKED",
+        "message": "Your session has ended. Sign in again.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_TENANT_FORBIDDEN",
+        "message": "Your account does not have access to {{tenant}}.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_TENANT_SESSION_MISMATCH",
+        "message": "Sign in again to continue to {{tenant}}.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_TENANT_UNAVAILABLE",
+        "message": "This site is not available.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "BACK",
+        "message": "Back",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_COMMON_HOME",
+        "message": "Home",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_COMMON_PROFILE_PREFERENCE_UPDATE_ERROR",
+        "message": "We couldn't save your notification preferences. Please try again.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_COMMON_PROFILE_UPDATE_ERROR",
+        "message": "We couldn't save your profile. Please try again.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_CONFIGURE_TOTP",
+        "message": "Set up an authenticator",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_SURFACE_CITIZEN",
+        "message": "Citizen portal",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_SURFACE_CONFIGURATOR",
+        "message": "Configurator",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_SURFACE_EMPLOYEE",
+        "message": "Employee portal",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_UPDATE_EMAIL",
+        "message": "Change email address",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_IDENTITY_UPDATE_PASSWORD",
+        "message": "Set or update password",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },

@@ -18,7 +18,7 @@ processors:
   # needs CUMULATIVE, so accumulate deltas here. Inert for the (cumulative)
   # javaagent metrics already flowing through this pipeline.
   deltatocumulative:
-  # Traces are read by Sherlog's investigation (docs/sherlog.md). Spans carry how a service connects and who called
+  # Traces are read by Sherlog's investigation (docs/operations/monitoring/sherlog.md). Spans carry how a service connects and who called
   # it; neither helps a root-cause analysis and neither should be stored. db.statement is already sanitised by the
   # Java agent (literals become ?). Query strings can carry phone numbers and tenant ids: stripped.
   attributes/privacy:

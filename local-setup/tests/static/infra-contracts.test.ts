@@ -41,7 +41,8 @@ describe('JVM OOM dashboard service scope', () => {
   const baseJvmServices = serviceBlocks(BASE_COMPOSE)
     .filter(
       ({ body }) =>
-        jvmEnvironment.test(body) || /^\s*image:\s*quay\.io\/keycloak\/keycloak:/m.test(body),
+        jvmEnvironment.test(body) ||
+        /^\s*image:\s*(?:quay\.io\/keycloak\/keycloak:|\$\{IDENTITY_KEYCLOAK_IMAGE)/m.test(body),
     )
     .map(({ name }) => name);
   // `-migration` is the per-service Flyway container; `-migrations` (plural) is
@@ -114,8 +115,65 @@ describe('Kong declarative route syntax', () => {
    */
   test('Keycloak route strips the public /auth prefix', () => {
     expect(KONG).toMatch(
-      /^  - name: keycloak-route\n    paths:\n    - \/auth\n    strip_path: true$/m,
+      // Comment lines may sit between the path and strip_path (develop documents KC_HOSTNAME there).
+      /^  - name: keycloak-route\n    paths:\n    - \/auth\n(?:    #[^\n]*\n)*    strip_path: true$/m,
     );
+  });
+});
+
+describe("Keycloak's privileged surface is not published", () => {
+  /**
+   * Incident: #2088 review (Dhruv). `keycloak-route` fronts a Keycloak that
+   * listens at `/` with `strip_path: true`, and `/auth/` is token-exempt in the
+   * global `is_public_infra` gate — so `https://<domain>/auth/admin/` served the
+   * admin console AND the Admin REST API, and `/auth/realms/master/...` served
+   * the master realm's token endpoint. With `KC_BOOTSTRAP_ADMIN_PASSWORD`
+   * falling back to `admin`, that is a full Keycloak takeover from the internet.
+   * Host nginx forwards `location /` to Kong, so kong.yml is the single
+   * enforcement point for both front doors.
+   */
+  // Kong services start at column 0 with `- name:`; slice the file into them.
+  const serviceBlocks = (() => {
+    const headers = [...KONG.matchAll(/^- name: (\S+)$/gm)];
+    return headers.map((header, index) => ({
+      name: header[1],
+      start: header.index as number,
+      body: KONG.slice(header.index, headers[index + 1]?.index ?? KONG.length),
+    }));
+  })();
+  const service = (name: string) => {
+    const found = serviceBlocks.find((block) => block.name === name);
+    if (!found) throw new Error(`kong.yml has no service named ${name}`);
+    return found;
+  };
+  const routePaths = (body: string) =>
+    [...body.matchAll(/^\s{4}- (\S+)$/gm)].map((match) => match[1]);
+
+  test('the admin console and the master realm are terminated at the gateway', () => {
+    const denied = service('keycloak-admin-denied');
+    expect(routePaths(denied.body).sort()).toEqual(['/auth/admin', '/auth/realms/master']);
+    expect(denied.body).toMatch(/- name: request-termination/);
+    expect(denied.body).toMatch(/status_code: 404/);
+  });
+
+  test('the deny routes outrank the /auth catch-all', () => {
+    // Kong matches the LONGEST prefix first, and a deny route declared after
+    // the service it guards is easy to lose in a later edit. Both hold here.
+    const denied = service('keycloak-admin-denied');
+    expect(denied.start).toBeLessThan(service('keycloak-service').start);
+    for (const denyPath of routePaths(denied.body)) {
+      expect(denyPath.length).toBeGreaterThan('/auth'.length);
+      expect(denyPath.startsWith('/auth/')).toBe(true);
+    }
+  });
+
+  test('no other route republishes anything under /auth', () => {
+    const otherAuthPaths = serviceBlocks
+      .filter((block) => block.name !== 'keycloak-admin-denied')
+      .flatMap((block) => routePaths(block.body))
+      .filter((routePath) => routePath === '/auth' || routePath.startsWith('/auth/'));
+    // Exactly one: the login/registration proxy the deny routes sit in front of.
+    expect(otherAuthPaths).toEqual(['/auth']);
   });
 });
 
@@ -407,5 +465,44 @@ describe('observability ports are loopback-bound in every compose file', () => {
       o.includes('docker-compose.egov-digit.yaml'),
     );
     expect(offenders).toEqual([]);
+  });
+});
+
+describe('the profile teardown names every service of its tiers', () => {
+  /**
+   * Review on #2213 (4255083513): container-stats and docker-socket-proxy carry
+   * `profiles: [obs-metrics]` but were missing from _profile_tier_services in
+   * playbook-deploy.yml. Lowering observability_level below metrics then left
+   * both running, the proxy still serving every container's Env. Every tier the
+   * map knows must list exactly the services that carry that profile.
+   */
+  const block = PLAYBOOK.match(/^\s+_profile_tier_services:\n((?:\s+(?:#.*|[a-z-]+: \[.*\])\n)+)/m);
+  const map = new Map(
+    [...(block?.[1] ?? '').matchAll(/^\s+([a-z-]+): \[(.*)\]$/gm)].map((m) => [
+      m[1],
+      m[2].split(',').map((s) => s.trim()).sort(),
+    ]),
+  );
+
+  const composeFiles = fs.readdirSync(ROOT).filter((f) => /^docker-compose.*\.ya?ml$/.test(f));
+  const gated = new Map<string, string[]>();
+  for (const file of composeFiles) {
+    const text = fs.readFileSync(path.join(ROOT, file), 'utf8');
+    const headers = [...text.matchAll(/^ {2}([a-z0-9][a-z0-9_-]*):\s*$/gm)];
+    headers.forEach((header, i) => {
+      const body = text.slice(header.index, headers[i + 1]?.index ?? text.length);
+      const profiles = body.match(/^ {4}profiles:\s*\[(.*)\]/m)?.[1];
+      for (const profile of (profiles ?? '').split(',').map((p) => p.trim().replace(/["']/g, '')).filter(Boolean)) {
+        gated.set(profile, [...(gated.get(profile) ?? []), header[1]]);
+      }
+    });
+  }
+
+  test('the map parses', () => {
+    expect([...map.keys()]).toEqual(expect.arrayContaining(['obs-metrics', 'obs-logs', 'obs-traces', 'matomo', 'opensre']));
+  });
+
+  test.each(['obs-metrics', 'obs-logs', 'obs-traces', 'matomo', 'opensre'])('%s', (tier) => {
+    expect(map.get(tier)).toEqual([...new Set(gated.get(tier) ?? [])].sort());
   });
 });

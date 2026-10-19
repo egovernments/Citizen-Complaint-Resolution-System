@@ -1,11 +1,10 @@
-# The components CCRS runs, declared to Sherlog (docs/sherlog.md). Sherlog owns the alert rules and the defaults;
+# The components CCRS runs, declared to Sherlog (docs/operations/monitoring/sherlog.md). Sherlog owns the alert rules and the defaults;
 # list here only what CCRS runs and where it differs. Every component and option:
 # https://github.com/singhalkarun/sherlog/blob/main/docs/standards.md
 product: ccrs
 pack: digit
 components:
   node: {}
-  cadvisor: {}        # container restarts, OOM kills, limits (docker-compose.monitoring.yml)
   postgres: {}
   redpanda: {}
   kong: {}

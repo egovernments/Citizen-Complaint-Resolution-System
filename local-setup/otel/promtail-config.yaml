@@ -51,7 +51,7 @@ scrape_configs:
       # Docker JSON log driver wraps each line in {"log":"...","stream":"...","time":"..."}
       - docker: {}
 
-  # The host's journal (docs/sherlog.md): kernel OOM kills, systemd unit failures, sshd, the Docker daemon. Needs the
+  # The host's journal (docs/operations/monitoring/sherlog.md): kernel OOM kills, systemd unit failures, sshd, the Docker daemon. Needs the
   # journal mounts in docker-compose.egov-digit.yaml. Labelled job=journal; Sherlog's kernel_oom pre-check reads it.
   - job_name: journal
     journal:

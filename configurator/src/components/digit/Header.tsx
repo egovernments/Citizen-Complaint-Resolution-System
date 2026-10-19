@@ -23,7 +23,7 @@ const SubHeader: React.FC<HeaderProps> = ({ children, className }) => {
   return (
     <h2
       className={cn(
-        'text-foreground text-xl sm:text-2xl font-bold font-condensed mb-3 sm:mb-4',
+        'text-foreground text-lg font-semibold mb-3 sm:mb-4',
         className
       )}
     >

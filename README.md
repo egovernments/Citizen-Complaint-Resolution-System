@@ -7,7 +7,7 @@ and is deployed across cities in Africa and India.
 
 ![CCRS architecture](https://github.com/user-attachments/assets/8e421d9c-09fb-4193-bec4-faea3bcb653b)
 
-For a detailed walkthrough, see [docs/HLD.md](docs/HLD.md).
+For a detailed walkthrough, see [docs/reference/architecture/HLD.md](docs/reference/architecture/HLD.md).
 
 ---
 
@@ -18,7 +18,7 @@ For a detailed walkthrough, see [docs/HLD.md](docs/HLD.md).
 │   ├── pgr-services/                   # Core complaint service (Java/Spring Boot)
 │   ├── digit-config-service/           # Tenant configuration API
 │   ├── digit-user-preferences-service/
-│   ├── novu-bridge/ & novu-bridge-endpoint/  # Notification pipeline bridges
+│   ├── novu-bridge/                    # Notification service (thin events, providers via Novu)
 │   └── xstate-chatbot/                 # WhatsApp / chatbot integration
 │
 ├── frontend/
@@ -98,8 +98,8 @@ requirements.
 
 Detailed guidance with complaint volume assumptions by city tier:
 
-- Africa: `[docs/deployment-decision-guide-africa.md](docs/deployment-decision-guide-africa.md)`
-- India: `[docs/deployment-decision-guide-india.md](docs/deployment-decision-guide-india.md)`
+- Africa: `[docs/setup/deployment/decision-guide-africa.md](docs/setup/deployment/decision-guide-africa.md)`
+- India: `[docs/setup/deployment/decision-guide-india.md](docs/setup/deployment/decision-guide-india.md)`
 
 ---
 
@@ -115,23 +115,23 @@ Detailed guidance with complaint volume assumptions by city tier:
 | Server deployment and tenant configuration | [local-setup/ansible/README.md](local-setup/ansible/README.md) |
 | Secrets management (OpenBao) | [local-setup/ansible/runbooks/01-openbao.md](local-setup/ansible/runbooks/01-openbao.md) |
 | Notifications setup | [docs/notifications-guide/](docs/notifications-guide/) |
-| Deployment sizing — Africa | [docs/deployment-decision-guide-africa.md](docs/deployment-decision-guide-africa.md) |
-| Deployment sizing — India | [docs/deployment-decision-guide-india.md](docs/deployment-decision-guide-india.md) |
+| Deployment sizing — Africa | [docs/setup/deployment/decision-guide-africa.md](docs/setup/deployment/decision-guide-africa.md) |
+| Deployment sizing — India | [docs/setup/deployment/decision-guide-india.md](docs/setup/deployment/decision-guide-india.md) |
 
 ### Operations & Monitoring Guide
 
 | Topic | Location |
 |-------|----------|
-| Enabling monitoring | [docs/observability/enabling-monitoring.md](docs/observability/enabling-monitoring.md) |
-| Dashboard metrics reference | [docs/observability/dashboard-metrics.md](docs/observability/dashboard-metrics.md) |
-| Alerting runbook | [docs/observability/alerting-runbook.md](docs/observability/alerting-runbook.md) |
+| Enabling monitoring | [docs/operations/monitoring/enabling-monitoring.md](docs/operations/monitoring/enabling-monitoring.md) |
+| Dashboard metrics reference | [docs/operations/monitoring/dashboard-metrics.md](docs/operations/monitoring/dashboard-metrics.md) |
+| Alerting runbook | [docs/operations/monitoring/alerting-runbook.md](docs/operations/monitoring/alerting-runbook.md) |
 | L0/L1 operator runbook | [docs/ops/l0-l1-monitoring-guide.md](docs/ops/l0-l1-monitoring-guide.md) |
 
 ### Developer Guide
 
 | Topic | Location |
 |-------|----------|
-| High-level design | [docs/HLD.md](docs/HLD.md) |
+| High-level design | [docs/reference/architecture/HLD.md](docs/reference/architecture/HLD.md) |
 | PGR data model and ERDs | [docs/pgr/](docs/pgr/) |
 | Performance benchmarks and capacity planning | [performance/docs/executive-summary.md](performance/docs/executive-summary.md) |
 

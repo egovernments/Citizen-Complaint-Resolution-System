@@ -38,3 +38,10 @@ releases:
   - name: novu-bridge
     installed: true
     <<: *default
+    # Wait for the rollout before moving on: digit-helmfile.yaml deploys urban
+    # (pgr-services) after this file, and a new pgr-services must not publish thin
+    # events while the old bridge is still the one consuming them — it dead-letters
+    # them. A bridge that never becomes Ready fails the sync here, before pgr-services
+    # is touched, and the old pair keeps working.
+    wait: true
+    timeout: 600

@@ -1,0 +1,103 @@
+# Identity stack: Keycloak and the Identity BFF (/identity/v1).
+#
+# OFF unless `identity.enabled: true` in charts/environments/env.yaml. Once
+# legacy identity is removed (#2271) every digit-ui sign-in goes through the BFF
+# and Keycloak, so with this off nobody can sign in: on such a release it is
+# REQUIRED. See docs/setup/deployment/helm-identity.md.
+#
+# Values are release-scoped (deploy-as-code/README.md: "prefer a release-scoped
+# block over a new top-level key"): each chart gets `global`, the shared
+# `identity` settings, its own overrides from identity.keycloak /
+# identity.identity-bff, and the secret reference from secrets.identity — not
+# the whole env.yaml tree.
+environments:
+  env:
+    values:
+      # Defaults for the keys read below, listed BEFORE env.yaml so it
+      # overrides them and so they always exist (same reason as
+      # charts/monitoring/monitoring-helmfile.yaml).
+      - identity:
+          enabled: false
+      - ../environments/env-secrets.yaml
+      - ../environments/env.yaml
+---
+{{- /* Read defensively, as monitoring-helmfile.yaml does: helmfile renders
+       with missingkey=error and CI pins helmfile v0.140.0 (no sprig `dig`). An
+       `identity:` that is not a map is a typo for "turn identity on"; failing
+       beats silently uninstalling the stack. */ -}}
+{{- $id := dict }}
+{{- if hasKey .Values "identity" }}
+{{-   if not (kindIs "map" (index .Values "identity")) }}
+{{-     fail "`identity:` in charts/environments/env.yaml must be a map (enabled, realm, publicUrl, ...), not a single value" }}
+{{-   end }}
+{{-   $id = .Values.identity }}
+{{- end }}
+{{- $enabled := index $id "enabled" | default false }}
+{{- $namespace := "egov" }}
+{{- /* Where identity-bff reaches Keycloak: the keycloak chart's Service name
+       (common.name: its `name` override, else the chart name), this
+       namespace and its httpPort, read from the same identity.keycloak
+       overrides the keycloak release gets. Both charts build the URL with
+       common.identity.keycloakUrl, and the keycloak chart fails the render if
+       these do not match its Service. The defaults are the chart's. */ -}}
+{{- $kcOverrides := index $id "keycloak" | default dict }}
+{{- $keycloak := dict
+      "service" (index $kcOverrides "name" | default "keycloak")
+      "namespace" $namespace
+      "httpPort" (index $kcOverrides "httpPort" | default 8180) }}
+{{- $shared := dict
+      "realm" (index $id "realm" | default "digit")
+      "publicUrl" (index $id "publicUrl" | default "")
+      "postLoginRedirect" (index $id "postLoginRedirect" | default "")
+      "allowedOrigins" (index $id "allowedOrigins" | default "")
+      "keycloak" $keycloak }}
+{{- /* secrets.identity in env-secrets.yaml: existingSecret (preferred) or
+       values (escape hatch). Both charts get the same block, so Keycloak's
+       clients and the BFF share one value per secret. */ -}}
+{{- $sec := dict }}
+{{- if and (hasKey .Values "secrets") (hasKey .Values.secrets "identity") }}
+{{-   $sec = index .Values.secrets "identity" }}
+{{- end }}
+{{- $secret := dict "existingSecret" (index $sec "existingSecret" | default "") "values" (index $sec "values" | default dict) }}
+
+releases:
+  # Ready before the BFF starts: the BFF's readiness needs the realm the
+  # keycloak release's post-install Job creates.
+  - name: keycloak
+    chart: ./keycloak
+    namespace: {{ $namespace }}
+    installed: {{ $enabled }}
+    missingFileHandler: Warn
+    wait: true
+    # Helm applies this to each wait in turn: the Deployment's readiness (a
+    # first start runs Keycloak's database migrations), then the realm-configure
+    # hook Job. It must exceed the Job's configure.activeDeadlineSeconds
+    # (keycloak/values.yaml, 600 s, all retries included) so the Job, not Helm,
+    # decides when the reconcile has failed: a Helm timeout first would fail the
+    # release with the Job still running and skip identity-bff (needs: keycloak).
+    # local-setup/tests/static/helm-identity.test.ts checks the ordering.
+    timeout: 900
+    values:
+      - global:
+          {{- .Values.global | toYaml | nindent 10 }}
+        identity:
+          {{- $shared | toYaml | nindent 10 }}
+        secret:
+          {{- $secret | toYaml | nindent 10 }}
+      - {{ $kcOverrides | toYaml | nindent 8 }}
+
+  - name: identity-bff
+    chart: ./identity-bff
+    namespace: {{ $namespace }}
+    installed: {{ $enabled }}
+    missingFileHandler: Warn
+    needs:
+      - keycloak
+    values:
+      - global:
+          {{- .Values.global | toYaml | nindent 10 }}
+        identity:
+          {{- $shared | toYaml | nindent 10 }}
+        secret:
+          {{- $secret | toYaml | nindent 10 }}
+      - {{ index $id "identity-bff" | default dict | toYaml | nindent 8 }}

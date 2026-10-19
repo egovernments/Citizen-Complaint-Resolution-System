@@ -15,8 +15,6 @@ var globalConfigs = (function () {
   var hrmsContext = "egov-hrms";
   var invalidEmployeeRoles = ["SYSTEM"];
 
-  var authProvider = "digit";
-
   // Runtime locale fallback for local setup
   try {
     var parseMaybeJSON = function (value) {
@@ -60,6 +58,8 @@ var globalConfigs = (function () {
   var analyticsKillSwitch = false;   // true => hard off, whatever MDMS says
   var analyticsScriptHosts = [];     // extra allowed script hostnames (ops only)
   var analyticsCustomEnabled = false; // true => allow type:"CUSTOM" records
+  // Citizen home banner (#2358): StateInfo.bannerUrl as a hero above All Services.
+  var citizenBannerEnabled = false;
 
   var getConfig = function (key) {
     if (key === "STATE_LEVEL_TENANT_ID") return stateTenantId;
@@ -80,7 +80,6 @@ var globalConfigs = (function () {
     else if (key === "MDMS_V1_CONTEXT_PATH") return mdmsContext;
     else if (key === "HRMS_CONTEXT_PATH") return hrmsContext;
     else if (key === "INVALIDROLES") return invalidEmployeeRoles;
-    else if (key === "AUTH_PROVIDER") return authProvider;
     else if (key === "PGR_BOUNDARY_LOWEST_LEVEL") return pgrBoundaryLowestLevel;
     else if (key === "PGR_BOUNDARY_HIGHEST_LEVEL") return pgrBoundaryHighestLevel;
     else if (key === "HIERARCHY_TYPE") return hierarchyType;
@@ -88,6 +87,7 @@ var globalConfigs = (function () {
     else if (key === "ANALYTICS_KILL_SWITCH") return analyticsKillSwitch;
     else if (key === "ANALYTICS_SCRIPT_HOSTS") return analyticsScriptHosts;
     else if (key === "ANALYTICS_CUSTOM_ENABLED") return analyticsCustomEnabled;
+    else if (key === "CITIZEN_BANNER_ENABLED") return citizenBannerEnabled;
   };
 
   return {

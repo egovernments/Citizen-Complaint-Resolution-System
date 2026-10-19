@@ -3,14 +3,17 @@ import { DigitCreate } from './DigitCreate';
 import { DigitFormInput } from './DigitFormInput';
 import { WidgetForFieldSpec } from './widgets';
 import { useResourceContext, useInput, required } from 'ra-core';
-import { getResourceConfig } from '@/providers/bridge';
+import { getResourceConfig, DUPLICATE_ACTIVE_KEYS } from '@/providers/bridge';
 import { useResourceLabel } from '@/providers/useResourceLabel';
 import { useSchemaDefinition } from '@/hooks/useSchemaDefinition';
 import { orderFields, formatFieldLabel } from './schemaUtils';
 import { Label } from '@/components/ui/label';
 import { getDescriptor } from './schemaDescriptors';
+import { DescriptorNotice } from './DescriptorNotice';
 import type { SchemaDescriptor } from './schemaDescriptors/types';
 import type { SchemaDefinition, SchemaProperty } from './schemaUtils';
+import { useNotificationFormGuard } from '@/resources/notification-configure/useNotificationGuard';
+import { GuardBanner } from '@/resources/notification-configure/NotificationFindings';
 
 function inputType(prop: SchemaProperty): string {
   if (prop.type === 'number' || prop.type === 'integer') return 'number';
@@ -22,11 +25,16 @@ function isComplex(prop: SchemaProperty): boolean {
   return prop.type === 'array' || prop.type === 'object';
 }
 
+// DUPLICATE_ACTIVE_KEYS: data-level flags duplicating the MDMS record's
+// root-level isActive. A new record is always created active at the root, so
+// these aren't offered as a toggle on create — they default to true to match
+// (see MdmsResourceEdit).
+
 function buildDefaults(definition: SchemaDefinition): Record<string, unknown> {
   const defaults: Record<string, unknown> = {};
   const props = definition.properties ?? {};
   for (const [key, prop] of Object.entries(props)) {
-    if (prop.type === 'boolean') defaults[key] = key === 'active' ? true : false;
+    if (prop.type === 'boolean') defaults[key] = DUPLICATE_ACTIVE_KEYS.includes(key);
   }
   return defaults;
 }
@@ -71,10 +79,14 @@ function MdmsCreateFields({
 
   return (
     <>
+      {/* "Prefer the guided screen" and similar, when the descriptor carries one. */}
+      <DescriptorNotice descriptor={descriptor} />
+
       {/* descriptor-defined widgets */}
       {descriptorFields.map((path) => {
         const spec = descriptor?.fields.find((f) => f.path === path);
         if (!spec || spec.hidden === 'create' || spec.hidden === 'always') return null;
+        if (spec.widget === 'boolean' && DUPLICATE_ACTIVE_KEYS.includes(path)) return null;
         return <WidgetForFieldSpec key={path} spec={spec} source={path} />;
       })}
 
@@ -84,6 +96,7 @@ function MdmsCreateFields({
         const prop = props[field];
         if (!prop || isComplex(prop)) return null;
         if (prop.type === 'boolean') {
+          if (DUPLICATE_ACTIVE_KEYS.includes(field)) return null;
           return <BooleanInput key={field} source={field} label={formatFieldLabel(field)} />;
         }
         return (
@@ -106,6 +119,10 @@ export function MdmsResourceCreate() {
   const label = useResourceLabel()(resource);
   const { definition } = useSchemaDefinition(config?.schema);
   const descriptor = getDescriptor(config?.schema);
+  // No-op for every resource except the four notification masters; those get
+  // the same whole-config checker the Configure screen runs, on the record this
+  // form would create. Errors this row causes block the Create button.
+  const guard = useNotificationFormGuard(resource);
 
   const defaults = useMemo(() => {
     if (!definition) return undefined;
@@ -121,8 +138,15 @@ export function MdmsResourceCreate() {
   }
 
   return (
-    <DigitCreate title={`Create ${label}`} record={defaults}>
+    <DigitCreate
+      title={`Create ${label}`}
+      record={defaults}
+      validate={guard.enabled ? guard.validate : undefined}
+    >
       <MdmsCreateFields definition={definition} descriptor={descriptor} />
+      {guard.result && (
+        <GuardBanner blocking={guard.result.blocking} advisory={guard.result.advisory} />
+      )}
     </DigitCreate>
   );
 }

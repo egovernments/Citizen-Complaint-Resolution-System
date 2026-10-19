@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { BulkImportPanel, triggerDownload, type BulkRow, type BulkColumn } from '@/admin/bulk/BulkImportPanel';
 import { parseEmployeeExcel } from '@/utils/excelParser';
 import { hrmsService, mdmsService, boundaryService } from '@/api';
+import { loadTenantHierarchies } from '@/api/services/tenantHierarchy';
 import type {
   EmployeeExcelRow,
   Employee,
@@ -13,6 +14,7 @@ import type {
   Designation,
   Boundary,
 } from '@/api/types';
+import { codeProblem, employeesByCode, withEmployeeCodes, type EmployeeRecord } from '@/onboarding/employees/employeesApi';
 import { useApp } from '../../App';
 
 type EmployeeBulkRow = EmployeeExcelRow & BulkRow;
@@ -20,7 +22,6 @@ type EmployeeBulkRow = EmployeeExcelRow & BulkRow;
 const TEMPLATE_COLUMNS = [
   'employeeCode',
   'name',
-  'userName',
   'mobileNumber',
   'emailId',
   'gender',
@@ -35,7 +36,6 @@ const TEMPLATE_COLUMNS = [
 const TEMPLATE_SAMPLE = {
   employeeCode: 'EMP_001',
   name: 'Jane Kamau',
-  userName: '',
   mobileNumber: '0712345678',
   emailId: 'jane.kamau@example.com',
   gender: 'FEMALE',
@@ -82,13 +82,15 @@ function buildTemplate(
     ['Employee bulk import template'],
     [`Tenant: ${tenant}`],
     [''],
-    ['Required columns: employeeCode, name, mobileNumber (per the tenant mobile rule),'],
+    ['Required columns: name, mobileNumber (per the tenant mobile rule),'],
     ['department (from Codes), designation (from Codes).'],
-    ['Optional: userName (auto-derives), emailId, gender, dob (YYYY-MM-DD),'],
+    ['Required: emailId. Optional: employeeCode (blank = the next free EMP_ code),'],
+    ['gender, dob (YYYY-MM-DD),'],
     ['roles (comma-separated), jurisdictions (comma-separated boundary codes),'],
     ['dateOfAppointment (YYYY-MM-DD).'],
     [''],
-    ['Password defaults to eGov@123; employees rotate on first login.'],
+    ['Email is required. New employees receive a secure password setup email.'],
+    ['Each employee signs in with their employee code as username.'],
   ]);
   notes['!cols'] = [{ wch: 80 }];
   XLSX.utils.book_append_sheet(wb, notes, 'Instructions');
@@ -114,6 +116,7 @@ export function EmployeeBulkImport() {
     pattern: string;
     errorMessage: string;
   } | null>(null);
+  const [existingEmployees, setExistingEmployees] = useState<Map<string, EmployeeRecord>>(new Map());
   const [refsLoading, setRefsLoading] = useState(false);
   const [createdEmployees, setCreatedEmployees] = useState<Employee[]>([]);
 
@@ -127,15 +130,19 @@ export function EmployeeBulkImport() {
     async function load() {
       setRefsLoading(true);
       try {
-        const hierarchies = await boundaryService.getHierarchies(tenantId).catch(() => []);
-        const hierarchyType = hierarchies[0]?.hierarchyType;
+        // Only the boundaries wait for the hierarchy walk.
+        const boundariesInDefaultHierarchy = loadTenantHierarchies(tenantId).then(({ hierarchyType }) =>
+          boundaryService.searchBoundaries(tenantId, hierarchyType ? { hierarchyType } : undefined),
+        );
 
-        const [depts, desigs, bounds, fetchedRoles, mobile] = await Promise.all([
+        const [depts, desigs, bounds, fetchedRoles, mobile, employees] = await Promise.all([
           mdmsService.getDepartments(tenantId),
           mdmsService.getDesignations(tenantId),
-          boundaryService.searchBoundaries(tenantId, hierarchyType ? { hierarchyType } : undefined),
+          boundariesInDefaultHierarchy,
           mdmsService.getRoles(tenantId).catch(() => [] as typeof roles),
           mdmsService.getMobileValidation(tenantId).catch(() => null),
+          // The code check is advisory: creating still refuses a code that's taken.
+          employeesByCode(tenantId).catch(() => new Map<string, EmployeeRecord>()),
         ]);
         if (cancelled) return;
         setDepartments(depts);
@@ -143,6 +150,7 @@ export function EmployeeBulkImport() {
         setBoundaries(bounds);
         setRoles(fetchedRoles);
         setMobileRules(mobile);
+        setExistingEmployees(employees);
       } finally {
         if (!cancelled) setRefsLoading(false);
       }
@@ -173,11 +181,11 @@ export function EmployeeBulkImport() {
 
   const parseWorkbook = useCallback((wb: XLSX.WorkBook) => {
     const result = parseEmployeeExcel(wb);
-    return { data: result.data as EmployeeBulkRow[] };
-  }, []);
+    return { data: withEmployeeCodes(result.data, existingEmployees) as EmployeeBulkRow[] };
+  }, [existingEmployees]);
 
   const validateRow = useCallback(
-    (row: EmployeeBulkRow): string[] => {
+    (row: EmployeeBulkRow, rows: EmployeeBulkRow[]): string[] => {
       const deptCodes = new Set(departments.map((d) => d.code));
       const desigCodes = new Set(designations.map((d) => d.code));
       const boundaryCodes = new Set(templateBoundaries.map((b) => b.code));
@@ -189,6 +197,9 @@ export function EmployeeBulkImport() {
       }
 
       const errors: string[] = [];
+      if (!row.emailId || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.emailId)) errors.push('A valid email is required to invite an employee.');
+      const clash = codeProblem(row, rows, existingEmployees);
+      if (clash) errors.push('repeated' in clash ? `${row.employeeCode} is on more than one row` : `${row.employeeCode} is already used by ${clash.takenBy}`);
       if (row.department && !deptCodes.has(row.department)) errors.push(`Department "${row.department}" not found`);
       if (row.designation && !desigCodes.has(row.designation)) errors.push(`Designation "${row.designation}" not found`);
       if (row.roles) {
@@ -231,11 +242,11 @@ export function EmployeeBulkImport() {
       }
       return errors;
     },
-    [departments, designations, templateBoundaries, roles, mobileRules],
+    [departments, designations, templateBoundaries, roles, mobileRules, existingEmployees],
   );
 
   const createOne = useCallback(
-    async (row: EmployeeBulkRow, index: number) => {
+    async (row: EmployeeBulkRow) => {
       const empRoles = row.roles
         ? row.roles
             .split(',')
@@ -264,9 +275,9 @@ export function EmployeeBulkImport() {
 
       const built = hrmsService.buildEmployee({
         tenantId,
-        code: row.employeeCode || hrmsService.generateEmployeeCode('EMP', index + 1),
+        code: row.employeeCode,
         name: row.name,
-        userName: (row.userName && row.userName.trim()) || hrmsService.generateUsername(row.name),
+        userName: row.employeeCode, // HRMS makes the username the code anyway
         mobileNumber: row.mobileNumber,
         emailId: row.emailId,
         gender: row.gender,
@@ -297,16 +308,16 @@ export function EmployeeBulkImport() {
     [],
   );
 
-  const handleDownloadCreds = useCallback(() => {
-    const rowsOut = [['Name', 'Employee Code', 'Mobile', 'Password']];
+  const handleDownloadInvitations = useCallback(() => {
+    const rowsOut = [['Name', 'Employee Code', 'Mobile', 'Email']];
     for (const emp of createdEmployees) {
-      rowsOut.push([emp.user.name, emp.user.userName, emp.user.mobileNumber, 'eGov@123']);
+      rowsOut.push([emp.user.name, emp.user.userName, emp.user.mobileNumber, emp.user.emailId || '']);
     }
     const csv = rowsOut
       .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','))
       .join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
-    triggerDownload(blob, `employee-credentials-${tenantId}.csv`);
+    triggerDownload(blob, `employee-invitations-${tenantId}.csv`);
   }, [createdEmployees, tenantId]);
 
   return (
@@ -332,9 +343,9 @@ export function EmployeeBulkImport() {
       entityLabel={{ singular: 'employee', plural: 'employees' }}
       completionExtras={(createdCount) =>
         createdCount > 0 ? (
-          <Button variant="outline" onClick={handleDownloadCreds} className="gap-2">
+          <Button variant="outline" onClick={handleDownloadInvitations} className="gap-2">
             <Download className="w-4 h-4" />
-            Download credentials CSV
+            Download invitations CSV
           </Button>
         ) : null
       }

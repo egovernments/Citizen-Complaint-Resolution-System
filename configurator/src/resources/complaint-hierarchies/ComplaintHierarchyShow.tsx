@@ -1,4 +1,4 @@
-import { DigitShow } from '@/admin';
+import { DigitShow, MASTER_SCREEN_META } from '@/admin';
 import { FieldSection, FieldRow, DateField } from '@/admin/fields';
 import { Badge } from '@/components/ui/badge';
 import { ArrowDown } from 'lucide-react';
@@ -25,7 +25,7 @@ interface HierarchyNode {
 const isLeafNode = (n: HierarchyNode) => n.department != null || n.slaHours != null;
 
 export function ComplaintHierarchyShow() {
-  const { record } = useShowController();
+  const { record } = useShowController({ queryOptions: { meta: MASTER_SCREEN_META } });
   const { state } = useApp();
   // ComplaintHierarchy data is scoped PER TENANT — in some deployments it lives at
   // the state root, in others at the sub-tenant the user operates under (prod: the

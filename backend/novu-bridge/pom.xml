@@ -99,6 +99,18 @@
             <version>4.13.2</version>
             <scope>test</scope>
         </dependency>
+        <!--
+          Test scope only. The published inbound contract (src/main/resources/contract/
+          envelope-v1.schema.json) is a real JSON Schema, so it is checked with a real JSON
+          Schema validator rather than a hand-rolled subset that would agree with whatever
+          the schema happens to say. Nothing in main/ depends on this.
+        -->
+        <dependency>
+            <groupId>com.networknt</groupId>
+            <artifactId>json-schema-validator</artifactId>
+            <version>1.5.4</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <repositories>

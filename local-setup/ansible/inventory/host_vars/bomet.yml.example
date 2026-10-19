@@ -60,7 +60,6 @@ boot_tenant: ke.bomet
 tenant_id: ke
 ui_state_tenant_id: ke.bomet
 nginx_preserve_vhost: false        # kit: true — local box has no hand-managed vhost to preserve
-login_tenant_allowlist: []
 
 # Hide these modules in the employee UI. IM (inbox-v2) needs the search
 # stack, which is off on this box (enable_search_stack: false below).
@@ -114,10 +113,8 @@ db_fast_path: true                 # REQUIRED — see kit NON-PERSISTED-STATE.md
 # db_fast_path without this ack, so every install is stopped once and must
 # confirm the wipe deliberately before it proceeds. Flip to true only after
 # confirming this box has NO postgres data in an anonymous volume. If it does,
-# migrate it first: docs/2.12/operations/postgres-volume-migration.md
+# migrate it first: docs/releases/2.12/operations/postgres-volume-migration.md
 db_fast_path_ack_data_wipe: false
-build_otp_publisher: true          # not in kit: real Bomet box already has otp-publisher:local;
-                                   # the notifications profile needs it, so build it here
 build_digit_ui: true
 build_configurator: true
 tolerate_bootstrap_failures: true  # bootstrap is partial-success tolerant (see kit GAPS)
@@ -127,17 +124,21 @@ tolerate_bootstrap_failures: true  # bootstrap is partial-success tolerant (see 
 requires_nairobi_mdms: false
 
 # ── Config-driven notifications (design D1/D4/D6/D7/D8) ──
-# Bomet is the FIRST tenant cut over. PGR reads PGR.NotificationRouting +
-# PGR.NotificationTemplate from MDMS, renders + localizes per recipient, and
-# emits one pre-rendered event per (recipient × channel); novu-bridge delivers.
-# docker-compose.bomet.yml ALSO hard-sets PGR_NOTIFICATION_CONFIG_DRIVEN=true.
+# Bomet was the FIRST tenant cut over. Config-driven notifications are now the
+# only path and are decided by which image you run, not by a setting: pgr-services
+# emits ONE thin event per workflow transition and novu-bridge reads the
+# NOTIFICATIONS.* masters to route, render and deliver it.
+# The variable below is an INERT leftover — nothing renders it into any env file
+# or compose service any more. It is kept only so an existing inventory copied
+# from this example does not need editing; setting it either way changes nothing.
 pgr_notification_config_driven: true
 novu_bridge_channel: "sms"         # SMS-first; add WHATSAPP/EMAIL as config-only routing edits
 
 # Build a subpath-rebased Novu dashboard image so the SPA serves cleanly
-# under /novu. Not required here (enable_keycloak is false below, so no
-# domain-sharing conflict yet) — matches _example.yml's off-by-default.
-build_novu_dashboard: false
+# under /novu. Recommended: the stock dashboard's nginx workaround claims
+# root paths (/assets/, /auth/ ...) on the domain Keycloak also uses; nginx
+# keeps Keycloak's /auth/realms/ and /auth/resources/ ahead of it either way.
+build_novu_dashboard: true
 
 # Custom image pins (built+pushed to the VPC registry by CI). Replace <sha>
 # with the actual CI tags once the Phase 1/2 images are built. Until then the
@@ -153,14 +154,12 @@ twilio_auth_token: ""
 twilio_whatsapp_from: "whatsapp:+14155238886"
 
 # ── Optional services (opt-in via flags; all off, matching _example.yml) ──
-# Real OTP stack (egov-otp/user-otp/egov-notification-sms). Off keeps the
-# local kong.yml mock (fixed OTP 123456) — fine for this local box.
+# Real OTP stack (egov-otp/user-otp; the SMS goes out via novu-bridge, so it
+# needs enable_novu). Off keeps the kong.yml mock; the fixed OTP 123456 then also
+# needs `identity_dev_fixed_otp: true` (off by default, development only).
 enable_otp_services: false
 # Turbopass (OSM location autocomplete) — standalone on-box container.
 enable_turbopass: false
-# Self-hosted Overpass (boundary-polygon fetch) — falls back to public
-# overpass-api.de when off.
-enable_overpass: false
 
 # ── digit-integration-tests dashboards (off — not used on this box) ──
 enable_integration_tests: false
@@ -185,19 +184,16 @@ nginx_features:
   api_pgr: false
   mcp: true                        # kit: false — paired with enable_mcp above
   keycloak: true
-  digit_ui_v2: true
+  digit_ui_v2: false               # /citizen/ — retired with enable_digit_ui_v2 (D26)
   integration_tests: false         # pair with enable_integration_tests above
   integration_tests_runner: false  # pair with enable_integration_tests_runner above
 
 # ── auth (Keycloak) ──
-enable_keycloak: false
-# Must stay '' while enable_keycloak is false — 'keycloak' flips the SPA's
-# auth adapter to OIDC and citizen/employee logins POST to /kc/realms/...,
-# which has no upstream when the keycloak profile is off (observed:
-# citizen OTP login failing on this box, 2026-06-11).
-auth_provider: ""
-keycloak_client_id: digit-ui
-enable_digit_ui_v2: true
+# REQUIRED: every sign-in goes through Keycloak and the Identity BFF since
+# D26, and the deploy refuses `false`.
+enable_keycloak: true
+# auth_provider and keycloak_client_id are retired (D26): leave them unset.
+enable_digit_ui_v2: false          # retired by D26; the deploy refuses true
 digit_ui_esbuild_branch: feat/keycloak-auth-adapter
 # Left unset on purpose: the citizen SPA builds from the vendored in-tree
 # digit-ui-v2/ source, so this box ships the revision it is deployed from
@@ -233,4 +229,4 @@ bootstrap_secrets:
   keycloak_admin_password: "CHANGE_ME"
   keycloak_db_password: "CHANGE_ME"
   keycloak_google_client_secret: ''
-  token_exchange_system_password: "CHANGE_ME"
+  identity_digit_admin_password: "CHANGE_ME"

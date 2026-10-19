@@ -15,8 +15,14 @@ export const DEFAULT_BRAND_THEME = {
 export const DASHBOARD_FONT_FAMILY =
   "Inter, Roboto, ui-sans-serif, system-ui, sans-serif";
 
+/**
+ * On a tenant route (/{slug}/digit-ui/...) the tenant comes only from the URL,
+ * as resolved by tenantRoute.js. Elsewhere (legacy routes, the public bundle)
+ * it is the deployment's configured state tenant.
+ */
 export function getTenantId() {
   return (
+    window.__digitTenantContext?.tenantId ||
     window.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID") ||
     process.env.REACT_APP_STATE_LEVEL_TENANT_ID ||
     "default"

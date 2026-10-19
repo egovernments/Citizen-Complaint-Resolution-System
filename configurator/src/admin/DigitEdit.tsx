@@ -1,4 +1,5 @@
 import React from 'react';
+import { MASTER_SCREEN_META } from './masterScreens';
 import { EditBase, useEditContext, Form, useResourceContext, useRedirect, type TransformData, type RaRecord } from 'ra-core';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Save, RefreshCw } from 'lucide-react';
@@ -12,6 +13,17 @@ import {
   MutationErrorBanner,
   type MutationErrorInfo,
 } from './mutationError';
+
+/**
+ * Contract of the `validate` prop, as ra-core ACTUALLY calls it: it hands the
+ * function the form values and expects `{ field: 'message' }` back
+ * (getSimpleValidationResolver). Its <Form> prop type is the accidental
+ * INTERSECTION of that signature with react-hook-form's own `ValidateForm`
+ * (which takes `{ formValues, formState, … }`), so nothing satisfies both and
+ * the cast at the call site is unavoidable. Typed here once, with the reason.
+ */
+export type FormValidate = (values: Record<string, unknown>) => Record<string, string> | undefined;
+type RaFormValidate = React.ComponentProps<typeof Form>['validate'];
 
 function pickRecordLabel(data: RaRecord | undefined): string {
   if (!data) return 'Record';
@@ -42,6 +54,14 @@ export interface DigitEditProps {
   redirect?: 'list' | 'edit' | 'show' | false;
   /** Optional pre-submit transform */
   transform?: TransformData;
+  /**
+   * Form-level validation. Receives the WHOLE would-be record and returns
+   * `{ field: message }` for anything that must block the save; react-hook-form
+   * attaches each message to that field and refuses to submit. Used by the
+   * notification masters to run the same checker the Configure screen runs
+   * (see resources/notification-configure/useNotificationGuard.ts).
+   */
+  validate?: FormValidate;
 }
 
 function DigitEditContent({
@@ -49,11 +69,13 @@ function DigitEditContent({
   children,
   errorInfo,
   onDismissError,
+  validate,
 }: {
   title?: string;
   children: React.ReactNode;
   errorInfo: MutationErrorInfo | null;
   onDismissError: () => void;
+  validate?: FormValidate;
 }) {
   const { record, isPending, saving, error, defaultTitle, refetch } =
     useEditContext();
@@ -61,7 +83,7 @@ function DigitEditContent({
   const resource = useResourceContext();
   const { canEditResource } = useMastersCapability();
   // UI-level only (not a security boundary) — see
-  // docs/design/masters-configurator-access-policy-design.md §3.3. A role
+  // docs/reference/architecture/access-control/masters-configurator-access-policy-design.md §3.3. A role
   // that can view but not edit this master's schema loses the Save button;
   // the resource keeps working read-only via the same Edit screen.
   const canEdit = !resource || canEditResource(resource);
@@ -146,7 +168,7 @@ function DigitEditContent({
         {/* mode="onChange": see matching note in DigitCreate.tsx — without
             it, fieldState.invalid stays unset (no red/error styling) until
             the first submit attempt. */}
-        <Form mode="onChange">
+        <Form mode="onChange" validate={validate as RaFormValidate}>
           {/* fieldset[disabled] natively blocks all interaction with (and keyboard/Enter
               submission via) every native form control inside it — a view-only form has one
               blocking input, but hiding the submit button alone doesn't stop that. */}
@@ -180,7 +202,7 @@ function DigitEditContent({
   );
 }
 
-export function DigitEdit({ title, children, resource, id, redirect = 'list', transform }: DigitEditProps) {
+export function DigitEdit({ title, children, resource, id, redirect = 'list', transform, validate }: DigitEditProps) {
   const { info, capture, clear } = useMutationError();
   const contextResource = useResourceContext();
   const redirectTo = useRedirect();
@@ -194,7 +216,9 @@ export function DigitEdit({ title, children, resource, id, redirect = 'list', tr
       // as a full override of its post-update handler and silently drops the
       // built-in redirect. Drive the redirect ourselves from inside onSuccess.
       transform={transform}
+      queryOptions={{ meta: MASTER_SCREEN_META }}
       mutationOptions={{
+        meta: MASTER_SCREEN_META,
         onError: (err) => capture(err),
         onSuccess: (data) => {
           clear();
@@ -209,7 +233,7 @@ export function DigitEdit({ title, children, resource, id, redirect = 'list', tr
         },
       }}
     >
-      <DigitEditContent title={title} errorInfo={info} onDismissError={clear}>
+      <DigitEditContent title={title} errorInfo={info} onDismissError={clear} validate={validate}>
         {children}
       </DigitEditContent>
     </EditBase>

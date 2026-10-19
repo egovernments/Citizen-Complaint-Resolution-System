@@ -42,7 +42,7 @@ services:
       # Drop pseudo/virtual mounts and Docker's overlay layers so the
       # filesystem panels show real volumes, not per-container churn.
       - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|var/lib/docker/.+|rootfs/var/lib/docker/.+)($|/)
-      # Deploy markers (docs/sherlog.md): the playbook's last step writes deploy_timestamp_seconds here, so an
+      # Deploy markers (docs/operations/monitoring/sherlog.md): the playbook's last step writes deploy_timestamp_seconds here, so an
       # investigation can answer "what changed before this alert?". Empty until Sherlog is on.
       - --collector.textfile.directory=/textfile
     pid: host
@@ -66,6 +66,43 @@ services:
     networks:
       - egov-network
 
+  # Per-container metrics: CPU, memory (usage, limit, percent), network, block
+  # I/O, restarts and uptime for every container on the box, labelled
+  # container_name and container_image_name. node-exporter shows that the HOST
+  # is short of memory; this shows WHICH container is using it. The Kubernetes
+  # tier gets the same from kubelet/cAdvisor.
+  #
+  # An OpenTelemetry Collector running only the docker_stats receiver (config:
+  # otel/container-stats-config.yaml, which explains why it is not a receiver
+  # in otel-collector). It reads the daemon through docker-socket-proxy (GET
+  # /containers/... only), so it holds no socket and can change nothing.
+  # Prometheus scrapes it as job container-stats; no host port is published.
+  container-stats:
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    # Same image as otel-collector, so no extra pull on most boxes.
+    image: egovio/opentelemetry-collector-contrib:0.114.0
+    container_name: digit-container-stats
+    profiles: [obs-metrics]
+    # A refused Docker API call makes the collector exit; restarting keeps it
+    # trying instead of silently staying down.
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./otel/container-stats-config.yaml:/etc/otelcol-contrib/config.yaml:ro
+    depends_on:
+      docker-socket-proxy:
+        condition: service_started
+    # Measured at ~52 MiB with 44 containers (704 series); room for growth.
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    networks:
+      - egov-network
+      # docker-socket-proxy is reachable only on docker-api-network.
+      - docker-api-network
+
   # Database metrics (#1615). Postgres is under every complaint, user lookup
   # and workflow transition, and the only thing we knew about it was whether a
   # TCP connect succeeded — which stays green while the connection pool is
@@ -74,38 +111,6 @@ services:
   # Same conventions as node-exporter above: official Docker Hub image, no
   # published host port (Prometheus reaches it by DNS over egov-network), and
   # always layered by the Ansible deploy.
-  # Per-container CPU, memory, restarts and OOM kills, for Sherlog's pre-checks and its `cadvisor` alert component
-  # (docs/sherlog.md). Same tier as node-exporter. The tag is the one ccrs-telemetry runs with (>= 0.53 for Docker
-  # 29's containerd image store). No published port: Prometheus scrapes it on egov-network.
-  #
-  # Docker socket: read-only bind of the socket itself, not through docker-socket-proxy. That proxy is in the
-  # obs-logs profile and denies /info and /images, which cAdvisor calls to name containers; a second proxy would
-  # be more surface than the mount. cAdvisor only reads. Unprivileged: the mounts and /dev/kmsg (OOM events) are
-  # what it needs; it does not get the privileged flag upstream's quick-start uses.
-  cadvisor:
-    security_opt: ["no-new-privileges:true"]
-    image: ghcr.io/google/cadvisor:0.55.0
-    container_name: digit-cadvisor
-    profiles: [obs-metrics]
-    restart: unless-stopped
-    command:
-      - --docker_only=true
-      - --housekeeping_interval=30s
-      - --disable_metrics=advtcp,cpu_topology,cpuset,hugetlb,memory_numa,percpu,process,referenced_memory,resctrl,sched,tcp,udp
-    devices: ["/dev/kmsg"]
-    volumes:
-      - /:/rootfs:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /sys:/sys:ro
-      - /var/lib/docker/:/var/lib/docker:ro
-      - /dev/disk/:/dev/disk:ro
-    deploy:
-      resources:
-        limits:
-          memory: 192M
-    networks:
-      - egov-network
-
   postgres-exporter:
     # Hardening (review): match the base stack — no caps, no priv-escalation.
     security_opt: ["no-new-privileges:true"]

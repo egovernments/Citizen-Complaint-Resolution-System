@@ -289,21 +289,6 @@ endpoints:
     alerts:
       - type: slack
 
-  # The port is a variable because this service listens on 8005 under
-  # docker-compose.egov-digit.yaml but on 8080 in every other compose file, and
-  # they all share this config. Both work -- SERVER_PORT is honoured either way
-  # and the context path is /notification-sms regardless.
-  - name: Notification SMS Service
-    group: OTP
-    enabled: ${GATUS_PROFILE_OTP}
-    url: "http://egov-notification-sms:${GATUS_SMS_PORT}/notification-sms/actuator/health"
-    interval: 30s
-    conditions:
-      - "[STATUS] == 200"
-      - "[BODY].status == UP"
-    alerts:
-      - type: slack
-
   # -------------------- profile: search --------------------
   - name: Elasticsearch
     group: Search
@@ -377,10 +362,10 @@ endpoints:
     alerts:
       - type: slack
 
-  - name: Token Exchange Service
+  - name: Identity BFF
     group: Keycloak
     enabled: ${GATUS_PROFILE_KEYCLOAK}
-    url: "http://token-exchange-svc:3000/healthz"
+    url: "http://identity-bff:3000/readyz"
     interval: 30s
     conditions:
       - "[STATUS] == 200"
@@ -439,15 +424,13 @@ endpoints:
     alerts:
       - type: slack
 
-  - name: Novu Bridge Endpoint
+  - name: XState Chatbot (inbound WhatsApp)
     group: Notifications
-    enabled: ${GATUS_PROFILE_NOTIFICATIONS}
-    url: "http://novu-bridge-endpoint:3000/health"
+    enabled: ${GATUS_PROFILE_CHATBOT}
+    url: "http://xstate-chatbot:8080/xstate-chatbot/health"
     interval: 30s
     conditions:
       - "[STATUS] == 200"
-    alerts:
-      - type: slack
 
   - name: Config Service
     group: Notifications
@@ -469,16 +452,6 @@ endpoints:
     alerts:
       - type: slack
 
-  - name: OTP Publisher
-    group: Notifications
-    enabled: ${GATUS_PROFILE_NOTIFICATIONS}
-    url: "http://otp-publisher:3030/healthz"
-    interval: 30s
-    conditions:
-      - "[STATUS] == 200"
-    alerts:
-      - type: slack
-
   # ==================== API Gateway ====================
   - name: Kong Gateway (Proxy)
     group: API Gateway
@@ -489,8 +462,14 @@ endpoints:
     alerts:
       - type: slack
 
+  # docker-compose.egov-digit.yaml (the tenant stack ansible deploys) binds the
+  # Admin API to Kong's own loopback (KONG_ADMIN_LISTEN 127.0.0.1:8001), so
+  # kong:8001 refuses every other container there and it sets GATUS_KONG_ADMIN
+  # false. The other compose stacks and the k3s tier still listen on
+  # 0.0.0.0:8001 and keep the check (#2458).
   - name: Kong Admin API
     group: API Gateway
+    enabled: ${GATUS_KONG_ADMIN}
     url: "http://kong:8001/"
     interval: 30s
     conditions:

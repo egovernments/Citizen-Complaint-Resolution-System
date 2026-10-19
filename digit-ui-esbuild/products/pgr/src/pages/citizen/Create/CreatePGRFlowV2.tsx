@@ -1178,14 +1178,14 @@ const CreatePGRFlowV2: React.FC = () => {
           trackEvent("pgr.file-complaint.submit-failed", { category: "pgr" });
           dispatch({ type: "CREATE_COMPLAINT", payload: { responseInfo: { status: "failed" } } });
           setSubmitting(false);
-          history.push(`/digit-ui/citizen/pgr/response`);
+          history.push(`/${window?.contextPath}/citizen/pgr/response`);
         },
         onSuccess: async (responseData: any) => {
           trackEvent("pgr.file-complaint.submitted", { category: "pgr" });
           dispatch({ type: "CREATE_COMPLAINT", payload: responseData });
           await client.refetchQueries(["complaintsList"]);
           setSubmitting(false);
-          history.push(`/digit-ui/citizen/pgr/response`, { filedSummary });
+          history.push(`/${window?.contextPath}/citizen/pgr/response`, { filedSummary });
         },
       });
       return;
@@ -1226,7 +1226,7 @@ const CreatePGRFlowV2: React.FC = () => {
           }}
         >
           <span
-            aria-label="Loading"
+            aria-label={tr(t, "CS_LOADING", "Loading...")}
             style={{
               display: "inline-block",
               height: "2rem",

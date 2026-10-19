@@ -1,7 +1,6 @@
 // Re-export datagrid components and types from @digit-ui/datagrid package
+export { DigitDatagrid, DigitList, MASTER_SCREEN_META } from './masterScreens';
 export {
-  DigitDatagrid,
-  DigitList,
   EditableCell,
   ReferenceSelect,
   RowActions,
@@ -10,6 +9,7 @@ export {
   useColumnConfig,
   validationPatterns,
   commonValidations,
+  T,
 } from '@digit-ui/datagrid';
 
 // Filter components from @digit-ui/datagrid
@@ -33,6 +33,7 @@ export type {
   ValidationRule,
   EditableCellType,
   DigitListProps,
+  TProps,
 } from '@digit-ui/datagrid';
 
 // App-specific components (not in the package)

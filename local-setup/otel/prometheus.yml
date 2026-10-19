@@ -2,7 +2,7 @@ global:
   scrape_interval: 15s
   evaluation_interval: 15s
 
-# Alert rules, and where alerts go, both come from Sherlog (docs/sherlog.md): the deploy renders them from
+# Alert rules, and where alerts go, both come from Sherlog (docs/operations/monitoring/sherlog.md): the deploy renders them from
 # sherlog/sherlog.yaml into sherlog/rendered/, mounted here at /etc/prometheus/sherlog. With enable_sherlog off that
 # folder is empty, so there are no rules and no Alertmanager target (the file_sd file is written only when Sherlog
 # runs). The deploy's SIGHUP reload (#1608) picks up re-rendered rules.
@@ -20,6 +20,12 @@ scrape_configs:
   - job_name: otel-collector
     static_configs:
       - targets: ['otel-collector:8889']
+
+  # Per-container CPU/memory/network/block I/O, restarts and uptime from
+  # container-stats (docker-compose.monitoring.yml), labelled container_name.
+  - job_name: container-stats
+    static_configs:
+      - targets: ['container-stats:8890']
 
   # Host-level metrics (CPU/mem/disk/net) from node-exporter, added by the
   # docker-compose.monitoring.yml overlay (issue #1335). Reached by DNS name
@@ -85,10 +91,6 @@ scrape_configs:
     static_configs:
       - targets: ['gatus:8080']
 
-  # Container CPU, memory, restarts, OOM kills (docker-compose.monitoring.yml).
-  - job_name: cadvisor
-    static_configs:
-      - targets: ['cadvisor:8080']
 
   # Optional components, as file_sd targets the playbook writes into otel/targets/ when their flag is on, so a tenant
   # without them has no failing scrape: keycloak.json (enable_keycloak). Each file names its own job label.

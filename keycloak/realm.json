@@ -1,0 +1,292 @@
+{
+  "$comment": "Declared state of the shared Organizations realm (design \u00a712). configure-keycloak.sh applies every section on each run; a setting listed here is reset if someone changes it by hand. Clients, secrets and URLs are per-box and stay in the script.",
+  "events": {
+    "$comment": "The BFF reads these back through the Admin API to notice sign-outs, credential changes, disables and deletes (design \u00a76). Retention must outlast the longest outage we tolerate, or a missed event is gone before the BFF catches up; KEYCLOAK_EVENTS_EXPIRATION_SECONDS overrides it per box.",
+    "$userEvents": "Keep event details unchanged. Password UPDATE_CREDENTIAL events identify the session by details.code_id (frozen contract \u00a710); normal LOGOUT uses sessionId.",
+    "$adminEvents": "Admin events include representations where Keycloak emits them. ORGANIZATION_MEMBERSHIP DELETE identifies the user in resourcePath; membership adds have no user id.",
+    "eventsEnabled": true,
+    "eventsListeners": [
+      "jboss-logging"
+    ],
+    "eventsExpiration": 604800,
+    "adminEventsEnabled": true,
+    "adminEventsDetailsEnabled": true,
+    "enabledEventTypes": [
+      "LOGIN",
+      "LOGIN_ERROR",
+      "LOGOUT",
+      "LOGOUT_ERROR",
+      "CODE_TO_TOKEN",
+      "REFRESH_TOKEN",
+      "USER_SESSION_DELETED",
+      "UPDATE_PASSWORD",
+      "UPDATE_CREDENTIAL",
+      "REMOVE_CREDENTIAL",
+      "UPDATE_TOTP",
+      "REMOVE_TOTP",
+      "RESET_PASSWORD",
+      "SEND_RESET_PASSWORD",
+      "EXECUTE_ACTIONS",
+      "VERIFY_EMAIL",
+      "SEND_VERIFY_EMAIL",
+      "UPDATE_EMAIL",
+      "UPDATE_PROFILE",
+      "DELETE_ACCOUNT",
+      "FEDERATED_IDENTITY_LINK",
+      "REMOVE_FEDERATED_IDENTITY",
+      "IDENTITY_PROVIDER_LINK_ACCOUNT",
+      "IDENTITY_PROVIDER_FIRST_LOGIN",
+      "USER_DISABLED_BY_PERMANENT_LOCKOUT",
+      "USER_DISABLED_BY_TEMPORARY_LOCKOUT"
+    ]
+  },
+  "requiredActions": {
+    "$comment": "Self-service actions a person starts through /authorize?action= (design \u00a78), each enabled with the config given (an empty object keeps Keycloak's defaults). Which client may start which action is a client attribute. UPDATE_EMAIL always verifies the new address before it is saved (D18).",
+    "UPDATE_PASSWORD": {},
+    "CONFIGURE_TOTP": {},
+    "delete_credential": {},
+    "UPDATE_EMAIL": {
+      "verifyEmail": "true"
+    },
+    "idp_link": {},
+    "VERIFY_EMAIL": {}
+  },
+  "userProfile": {
+    "$comment": "DIGIT owns names (D3, D17): the BFF writes the whole name into firstName and leaves lastName empty, so lastName is not required. People cannot edit either name in Keycloak. firstName keeps Keycloak's default requirement: Keycloak does not demand a field the person may not edit, so a nameless account still signs in (checked by tests/live-check.py). \"required\": null removes the requirement; a missing key leaves it as it is. The digit.* attributes are the BFF's records about a person (identity-bff.md \u00a75.1): view and edit for admin only, so the person never sees or edits them in the account console, while the BFF's admin service account reads and writes them. They are declared because Keycloak caps each value of an undeclared attribute at 2048 characters (400 error-invalid-length). Limits, per value, from the v1 schemas in backend/identity-bff/docs/contract/schemas: digit.bindings holds at most 64 records of at most ~720 characters (every optional field present, 50-character tenant ids, 64-character subjects) = 45,908, so 65536. digit.accounts holds at most 64 entries of at most ~38,000 characters (128 roles of 64-character codes on 203-character dotted tenant ids, a 180-character userName) = 2,429,745, so 4194304; a realistic entry is a few hundred characters. Every other digit.* value is under 600 characters (digit.linkPending at most 570; the multivalued ones are short ids), so they keep 2048, the limit they have today, and no stored value becomes invalid. Attributes not declared here (phoneNumber, retired digit.* names) stay admin-only through unmanagedAttributePolicy ADMIN_EDIT. Declared attributes are added to an existing realm on the next run. backend/identity-bff/tests/unit/keycloak-user-profile.test.ts checks that every digit.* user attribute the BFF writes is declared here.",
+    "attributes": {
+      "firstName": {
+        "permissions": {
+          "view": [
+            "admin",
+            "user"
+          ],
+          "edit": [
+            "admin"
+          ]
+        }
+      },
+      "lastName": {
+        "permissions": {
+          "view": [
+            "admin",
+            "user"
+          ],
+          "edit": [
+            "admin"
+          ]
+        },
+        "required": null
+      },
+      "digit.accounts": {
+        "permissions": {
+          "view": [
+            "admin"
+          ],
+          "edit": [
+            "admin"
+          ]
+        },
+        "validations": {
+          "length": {
+            "max": 4194304
+          }
+        }
+      },
+      "digit.bindings": {
+        "permissions": {
+          "view": [
+            "admin"
+          ],
+          "edit": [
+            "admin"
+          ]
+        },
+        "validations": {
+          "length": {
+            "max": 65536
+          }
+        }
+      },
+      "digit.bindingTenants": {
+        "permissions": {
+          "view": [
+            "admin"
+          ],
+          "edit": [
+            "admin"
+          ]
+        },
+        "validations": {
+          "length": {
+            "max": 2048
+          }
+        },
+        "multivalued": true
+      },
+      "digit.boundUuids": {
+        "permissions": {
+          "view": [
+            "admin"
+          ],
+          "edit": [
+            "admin"
+          ]
+        },
+        "validations": {
+          "length": {
+            "max": 2048
+          }
+        },
+        "multivalued": true
+      },
+      "digit.linkPending": {
+        "permissions": {
+          "view": [
+            "admin"
+          ],
+          "edit": [
+            "admin"
+          ]
+        },
+        "validations": {
+          "length": {
+            "max": 2048
+          }
+        }
+      },
+      "digit.accountLinks": {
+        "permissions": {
+          "view": [
+            "admin"
+          ],
+          "edit": [
+            "admin"
+          ]
+        },
+        "validations": {
+          "length": {
+            "max": 2048
+          }
+        },
+        "multivalued": true
+      },
+      "digit.accountLinkBlocks": {
+        "permissions": {
+          "view": [
+            "admin"
+          ],
+          "edit": [
+            "admin"
+          ]
+        },
+        "validations": {
+          "length": {
+            "max": 2048
+          }
+        },
+        "multivalued": true
+      },
+      "digit.citizenRegistrations": {
+        "permissions": {
+          "view": [
+            "admin"
+          ],
+          "edit": [
+            "admin"
+          ]
+        },
+        "validations": {
+          "length": {
+            "max": 2048
+          }
+        },
+        "multivalued": true
+      },
+      "digit.managedTenants": {
+        "permissions": {
+          "view": [
+            "admin"
+          ],
+          "edit": [
+            "admin"
+          ]
+        },
+        "validations": {
+          "length": {
+            "max": 2048
+          }
+        },
+        "multivalued": true
+      },
+      "digit.identityBffSignup": {
+        "permissions": {
+          "view": [
+            "admin"
+          ],
+          "edit": [
+            "admin"
+          ]
+        },
+        "validations": {
+          "length": {
+            "max": 2048
+          }
+        }
+      },
+      "digit.identityBffPhoneOtp": {
+        "permissions": {
+          "view": [
+            "admin"
+          ],
+          "edit": [
+            "admin"
+          ]
+        },
+        "validations": {
+          "length": {
+            "max": 2048
+          }
+        }
+      }
+    }
+  },
+  "identityProviders": {
+    "$comment": "IMPORT: name and email are filled once at first sign-in and never overwritten (D19). Applied to every provider and every provider mapper.",
+    "syncMode": "IMPORT"
+  },
+  "employeeFlow": {
+    "$comment": "Password, then a one-time code only for people who have set one up (conditional OTP). Enrolling TOTP therefore turns on the second step at the next employee sign-in. Staff SSO policy is changed here (design \u00a79): REQUIRED makes every employee set up and use a code.",
+    "otpSubFlow": "digit-employee-otp",
+    "otpRequirement": "CONDITIONAL",
+    "otpSteps": {
+      "conditional-user-configured": "REQUIRED",
+      "auth-otp-form": "REQUIRED"
+    }
+  },
+  "adminServiceAccount": {
+    "$comment": "realm-management roles for the BFF's admin client. view-events lets it read the event store above.",
+    "realmManagementRoles": [
+      "manage-organizations",
+      "query-organizations",
+      "view-organizations",
+      "manage-users",
+      "query-users",
+      "view-users",
+      "query-clients",
+      "view-clients",
+      "view-identity-providers",
+      "view-events"
+    ]
+  },
+  "clientPolicy": {
+    "$comment": "Client capability policy consumed by the BFF. Allowance never substitutes for a signed-in person or credential eligibility checks.",
+    "accountActions": [
+      "UPDATE_PASSWORD",
+      "CONFIGURE_TOTP",
+      "delete_credential",
+      "UPDATE_EMAIL",
+      "idp_link"
+    ],
+    "passwordSetupRedirectPath": "/password/setup-complete/*"
+  }
+}

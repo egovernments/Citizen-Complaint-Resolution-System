@@ -88,10 +88,15 @@ function splitList(raw: string): string[] {
  */
 export const BASE_URL = process.env.BASE_URL || 'http://localhost';
 export const TENANT = process.env.DIGIT_TENANT || PROFILE?.tenant.city || 'ke.nairobi';
+// TENANT_CODE / ADMIN_USER / ADMIN_PASSWORD are the names some deploy/*.env files
+// (pg, maputo-local) set; accepting them here keeps one admin identity for every caller.
 export const ROOT_TENANT =
-  process.env.ROOT_TENANT || PROFILE?.tenant.root || (TENANT.includes('.') ? TENANT.split('.')[0] : TENANT);
-export const ADMIN_USER = process.env.DIGIT_USERNAME || 'ADMIN';
-export const ADMIN_PASS = process.env.DIGIT_PASSWORD || 'eGov@123';
+  process.env.ROOT_TENANT ||
+  process.env.TENANT_CODE ||
+  PROFILE?.tenant.root ||
+  (TENANT.includes('.') ? TENANT.split('.')[0] : TENANT);
+export const ADMIN_USER = process.env.DIGIT_USERNAME || process.env.ADMIN_USER || 'ADMIN';
+export const ADMIN_PASS = process.env.DIGIT_PASSWORD || process.env.ADMIN_PASSWORD || 'eGov@123';
 export const FIXED_OTP = process.env.FIXED_OTP || '123456';
 /**
  * The complaint type + boundary leaf every seeded complaint is filed against.

@@ -1,0 +1,82 @@
+{{- if .Values.rbac.create }}
+# Read-only cluster access for the agent.
+#
+# get/list only, and no secrets or configmaps: the agent is diagnose-only, so
+# it must never be able to change a workload, and whatever it reads goes to the
+# model provider. ConfigMaps are out because OpenSRE returns their data whole.
+# Pods and workloads are in: OpenSRE returns their env var names only, never
+# the values, and drops kubectl's last-applied annotation. Pod logs are
+# masked by guardrails.yml on the way out.
+#
+# Granted per namespace (rbac.namespaces), not cluster-wide: the ClusterRole
+# below is only a set of rules, and each RoleBinding applies it inside one
+# namespace. Only nodes, which have no namespace, are read cluster-wide.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Values.rbac.serviceAccountName }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: opensre
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: opensre-read
+  labels:
+    app: opensre
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "events", "services", "persistentvolumeclaims"]
+    verbs: ["get", "list"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets", "daemonsets", "replicasets"]
+    verbs: ["get", "list"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list"]
+{{- range .Values.rbac.namespaces }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: opensre-read
+  namespace: {{ . }}
+  labels:
+    app: opensre
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: opensre-read
+subjects:
+  - kind: ServiceAccount
+    name: {{ $.Values.rbac.serviceAccountName }}
+    namespace: {{ $.Values.namespace }}
+{{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: opensre-read-nodes
+  labels:
+    app: opensre
+rules:
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: opensre-read-nodes
+  labels:
+    app: opensre
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: opensre-read-nodes
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Values.rbac.serviceAccountName }}
+    namespace: {{ .Values.namespace }}
+{{- end }}

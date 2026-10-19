@@ -17,6 +17,7 @@ import { hasUsableGeoLocation } from "../../utils/geoLocation";
 import { trackEvent } from "../../utils/analytics";
 import { currentAssigneesInOccupancy, isCurrentAssignee } from "./escalationVisibility";
 import { buildWorkflowUpdate, formDataForAction } from "./workflowUpdate";
+import { getTenantHierarchy } from "../../services/tenantHierarchy";
 
 // Action configurations used for handling different workflow actions like ASSIGN, REJECT, RESOLVE
 // TO DO: Move this to MDMS for handling Action Modal properties
@@ -368,7 +369,7 @@ const PGRDetails = () => {
         if (!cancelled) setBoundaryRows([]);
         return;
       }
-      const hierarchyType = window?.globalConfigs?.getConfig?.("HIERARCHY_TYPE") || "ADMIN";
+      const { hierarchyType } = await getTenantHierarchy(complaintTenantId);
       try {
         const res = await Digit.CustomService.getResponse({
           url: "/boundary-service/boundary-relationships/_search",
@@ -576,13 +577,19 @@ const PGRDetails = () => {
     isCurrentAssignee(currentAssignees, userInfo?.info?.uuid)
     && workingContext?.hasReportingTo !== false;
 
+  // The roles this screen acts on. An employee account can also hold CITIZEN, and the
+  // workflow grants CITIZEN its own actions (COMMENT, RATE) that this screen has no form
+  // for, so picking one did nothing (#2314). Those belong to the citizen app.
+  const employeeRoles = () =>
+    (userInfo?.info?.roles || []).map((role) => role.code).filter((code) => code !== "CITIZEN");
+
   // Get list of valid actions for current user and state
   const getNextActionOptions = (workflowData, businessServiceResponse) => {
     const currentState = workflowData?.ProcessInstances?.[0]?.state;
     const currentAssignees = currentAssigneesInOccupancy(workflowData?.ProcessInstances);
     const matchingState = businessServiceResponse?.states?.find((state) => state.uuid === currentState?.uuid);
     if (!matchingState) return [];
-    const userRoles = userInfo?.info?.roles?.map((role) => role.code) || [];
+    const userRoles = employeeRoles();
     return matchingState.actions
       ? matchingState.actions
         .filter((action) => action.roles.some((role) => userRoles.includes(role)))
@@ -610,7 +617,7 @@ const PGRDetails = () => {
   // are seeded with PGR_LME or GRO but no PGR_VIEWER). PGR_VIEWER is
   // a viewer credential, not a prerequisite to act.
   const shouldShowActionButton = () => {
-    const userRoles = userInfo?.info?.roles?.map((role) => role.code) || [];
+    const userRoles = employeeRoles();
     const currentState = workflowData?.ProcessInstances?.[0]?.state;
     if (!currentState?.actions) return false;
     const allActionRoles = new Set();
@@ -652,7 +659,7 @@ const PGRDetails = () => {
                     inline: true,
                     label: t("CS_COMPLAINT_DETAILS_COMPLAINT_NO"),
                     type: "text",
-                    value: pgrData?.ServiceWrappers[0].service?.serviceRequestId || "NA",
+                    value: pgrData?.ServiceWrappers[0].service?.serviceRequestId || t("ES_COMMON_NA"),
                   },
                   // Hierarchy tenants: one row per level (Main Category › Sector ›
                   // Sub-Type …). Flat tenants: the legacy Type + Sub-Type pair.
@@ -661,7 +668,7 @@ const PGRDetails = () => {
                         inline: true,
                         label: r.label,
                         type: "text",
-                        value: r.value || "NA",
+                        value: r.value || t("ES_COMMON_NA"),
                       }))
                     : [
                         {
@@ -690,7 +697,7 @@ const PGRDetails = () => {
                         inline: true,
                         label: r.label,
                         type: "text",
-                        value: r.value || "NA",
+                        value: r.value || t("ES_COMMON_NA"),
                       }))
                     : [
                         {
@@ -708,7 +715,7 @@ const PGRDetails = () => {
                   {
                     inline: true,
                     label: t("CS_COMPLAINT_LANDMARK__DETAILS"),
-                    value: pgrData?.ServiceWrappers[0].service?.address?.landmark || "NA",
+                    value: pgrData?.ServiceWrappers[0].service?.address?.landmark || t("ES_COMMON_NA"),
                   },
                   // Pincode is optional in this deployment; only show it when set.
                   ...(pgrData?.ServiceWrappers[0].service?.address?.pincode
@@ -724,7 +731,7 @@ const PGRDetails = () => {
                   {
                     inline: true,
                     label: t("CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS_DESCRIPTION"),
-                    value: pgrData?.ServiceWrappers[0].service?.description || "NA",
+                    value: pgrData?.ServiceWrappers[0].service?.description || t("ES_COMMON_NA"),
                   },
                 ],
               },

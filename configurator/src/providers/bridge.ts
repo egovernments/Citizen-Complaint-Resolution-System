@@ -1,3 +1,4 @@
+import { withIdentityMembers } from '@/identity/memberProvider';
 /**
  * Bridge module: adapts @digit-mcp/data-provider to the CRS UI's patterns.
  *
@@ -8,7 +9,8 @@
 import { DigitApiClient, createDigitDataProvider, createDigitAuthProvider } from '@digit-mcp/data-provider';
 import type { DataProvider, AuthProvider } from 'ra-core';
 import type { UserInfo } from '@digit-mcp/data-provider';
-import { clearTranslationCache } from './i18nProvider';
+import { clearTranslationCache, refreshTranslations } from './i18nProvider';
+import { localizationService } from '@/api/services/localization';
 
 // Re-export registry functions so the rest of the app imports from one place
 export {
@@ -20,7 +22,10 @@ export {
   getResourceLabel,
   getResourceBySchema,
   isAccessControlGated,
+  isReadOnlyResource,
+  readOnlyNoticeFor,
   REGISTRY,
+  DUPLICATE_ACTIVE_KEYS,
 } from '@digit-mcp/data-provider';
 export type { ResourceConfig } from '@digit-mcp/data-provider';
 export { DigitApiClient } from '@digit-mcp/data-provider';
@@ -35,9 +40,67 @@ let _dataProvider: DataProvider | null = null;
 let _dataProviderTenant: string = '';
 let _authProvider: AuthProvider | null = null;
 
+const WRITE_METHODS = ['create', 'update', 'updateMany', 'delete', 'deleteMany'] as const;
+
+/** The localization modules the configurator reads its own UI strings from. */
+const UI_STRING_MODULES = ['configurator-ui', 'rainmaker-common'];
+
+/**
+ * Whether a write to these modules can change the configurator's own copy.
+ * An unknown module (`undefined`, e.g. a bulk delete by id) counts as yes.
+ */
+function touchesUiStrings(modules: Array<string | undefined>): boolean {
+  return modules.some((module) => !module || UI_STRING_MODULES.includes(module));
+}
+
+/**
+ * Run after the configurator writes localization messages. Busts the
+ * service's cache (its module-scoped `_search` otherwise keeps serving the
+ * pre-write snapshot) and, when the write touched the configurator's own
+ * strings, refreshes them, so an admin who relabels a string in
+ * System → Localization sees it change without waiting out the cache.
+ * `modules` are the modules written to.
+ */
+export async function afterLocalizationWrite(modules: Array<string | undefined>): Promise<void> {
+  try {
+    await localizationService.cacheBust();
+  } catch (e) {
+    console.warn('localization cache-bust failed', e);
+  }
+  if (touchesUiStrings(modules)) await refreshTranslations({ force: true });
+}
+
+/** The modules a data-provider localization write names, or `[undefined]` when it names none. */
+function writtenModules(params: unknown): Array<string | undefined> {
+  const { data, previousData } = (params ?? {}) as {
+    data?: { module?: unknown };
+    previousData?: { module?: unknown };
+  };
+  const modules = [data?.module, previousData?.module].filter((m) => m != null && m !== '').map(String);
+  return modules.length > 0 ? modules : [undefined];
+}
+
+function withTranslationRefresh(dataProvider: DataProvider): DataProvider {
+  const wrapped: Record<string, unknown> = { ...dataProvider };
+  for (const method of WRITE_METHODS) {
+    const original = dataProvider[method] as (resource: string, params: unknown) => Promise<unknown>;
+    wrapped[method] = async (resource: string, params: unknown) => {
+      const result = await original(resource, params);
+      if (resource === 'localization') {
+        // A rainmaker-pgr (etc.) edit can't change the configurator's copy:
+        // skip the cache-bust and the re-fetch altogether.
+        const modules = writtenModules(params);
+        if (touchesUiStrings(modules)) void afterLocalizationWrite(modules);
+      }
+      return result;
+    };
+  }
+  return wrapped as unknown as DataProvider;
+}
+
 export function getDataProvider(tenantId: string): DataProvider {
   if (!_dataProvider || _dataProviderTenant !== tenantId) {
-    _dataProvider = createDigitDataProvider(digitClient, tenantId);
+    _dataProvider = withTranslationRefresh(withIdentityMembers(createDigitDataProvider(digitClient, tenantId), tenantId));
     _dataProviderTenant = tenantId;
   }
   return _dataProvider;
@@ -88,9 +151,11 @@ function notifyAuthChange(): void {
 export function configureDigitClient(url: string, token?: string, user?: UserInfo, stateTenant?: string): void {
   // Check if URL changed -- if so, we need a new client instance
   const currentInfo = digitClient.getAuthInfo();
+  const previousTenant = digitClient.stateTenantId;
   const currentUrl = (digitClient as unknown as Record<string, unknown>)['baseUrl'] as string | undefined;
+  const clientRecreated = currentUrl !== url;
 
-  if (currentUrl !== url) {
+  if (clientRecreated) {
     // URL changed, create a fresh client
     digitClient = new DigitApiClient({ url, stateTenantId: stateTenant });
     // Reset cached providers since the client changed
@@ -109,4 +174,12 @@ export function configureDigitClient(url: string, token?: string, user?: UserInf
   }
 
   notifyAuthChange();
+
+  // The app's own strings are fetched per state tenant; the boot-time fetch
+  // ran before one was known, so load them now. Also on a new server (same
+  // tenant code, different strings; resetProviders just dropped the cache)
+  // and on every sign-in.
+  if (stateTenant && (stateTenant !== previousTenant || clientRecreated || token)) {
+    void refreshTranslations();
+  }
 }

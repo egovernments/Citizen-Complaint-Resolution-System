@@ -3,7 +3,7 @@ import * as assert from 'node:assert/strict';
 import {
   getResourceConfig, getAllResources, getDedicatedResources,
   getGenericMdmsResources, getResourceLabel, getResourceIdField,
-  getResourceBySchema,
+  getResourceBySchema, isReadOnlyResource, readOnlyNoticeFor,
 } from './resourceRegistry.js';
 
 describe('resourceRegistry', () => {
@@ -117,9 +117,6 @@ describe('resourceRegistry', () => {
     const expected: Record<string, string> = {
       'theme-config': 'common-masters.ThemeConfig',
       'mobile-number-validation': 'common-masters.MobileNumberValidation',
-      'tenant-boundary': 'egov-location.TenantBoundary',
-      'auto-escalation-ignore': 'Workflow.AutoEscalationStatesToIgnore',
-      'workflow-bs-master': 'Workflow.BusinessServiceMasterConfig',
       'pgr-ui-constants': 'RAINMAKER-PGR.UIConstants',
       'pgr-escalation': 'RAINMAKER-PGR.EscalationConfig',
     };
@@ -143,6 +140,53 @@ describe('resourceRegistry', () => {
     assert.strictEqual(uiConstants.idField, 'code');
     // Same defect, same fix, one master earlier — keep both honest.
     assert.strictEqual(getResourceConfig('map-config')?.idField, 'code');
+  });
+
+  it('does not register masters used only for internal project setup (#1777)', () => {
+    // These have no configurator screen: no route, no sidebar/Advanced entry,
+    // and no reverse-reference link. Their data stays in MDMS untouched.
+    const internalSchemas = [
+      'Workflow.BusinessService',
+      'Workflow.BusinessServiceConfig',
+      'DataSecurity.EncryptionPolicy',
+      'DataSecurity.DecryptionABAC',
+      'DataSecurity.MaskingPatterns',
+      'DataSecurity.SecurityPolicy',
+      'INBOX.InboxQueryConfiguration',
+      'egov-hrms.Degree',
+      'egov-hrms.EmploymentTest',
+      'egov-hrms.Specalization',
+      'common-masters.CronJobAPIConfig',
+      'egov-location.TenantBoundary',
+      'Workflow.BusinessServiceMasterConfig',
+    ];
+    for (const schema of internalSchemas) {
+      assert.strictEqual(getResourceBySchema(schema), undefined, `${schema} must not be registered`);
+    }
+    for (const resource of [
+      'workflow-services', 'workflow-config', 'encryption-policy',
+      'decryption-abac', 'masking-patterns', 'security-policy', 'inbox-config', 'degrees',
+      'employment-tests', 'specializations', 'cron-jobs', 'tenant-boundary',
+      'workflow-bs-master',
+    ]) {
+      assert.strictEqual(getResourceConfig(resource), undefined, `${resource} must not be registered`);
+    }
+    // The dedicated Workflows viewer (workflow service API, not MDMS) is unaffected.
+    assert.ok(getResourceConfig('workflow-business-services'));
+  });
+
+  it('keeps the generic workflow escalation screens routable but unlisted (#1777)', () => {
+    // pgr-services fails closed while an active PGR row remains in either master,
+    // and these screens are how an operator deactivates that row. They also stay
+    // the escalation editor for non-PGR products.
+    for (const [resource, schema] of [
+      ['auto-escalation', 'Workflow.AutoEscalation'],
+      ['auto-escalation-ignore', 'Workflow.AutoEscalationStatesToIgnore'],
+    ]) {
+      assert.strictEqual(getResourceBySchema(schema), resource);
+      assert.ok(getGenericMdmsResources()[resource], `${resource} must keep its /manage route`);
+      assert.strictEqual(getResourceConfig(resource)?.unlisted, true);
+    }
   });
 
   it('does not register schemas that do not exist on ke (phantom cleanup)', () => {
@@ -172,5 +216,86 @@ describe('analytics providers', () => {
     'must NOT appear in the generic set — the generic CRUD is unsafe for this master'
   );
     assert.equal(getResourceBySchema('common-masters.AnalyticsProvider'), 'analytics-providers');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Notification configuration: the shared NOTIFICATIONS.* namespace, plus the
+// legacy PGR masters kept READ-ONLY for one release.
+// ---------------------------------------------------------------------------
+describe('notification masters', () => {
+  const NEW = {
+    'notifications-event-catalogue': 'NOTIFICATIONS.EventCatalogue',
+    'notifications-routing': 'NOTIFICATIONS.Routing',
+    'notifications-template': 'NOTIFICATIONS.Template',
+    'notifications-provider-template': 'NOTIFICATIONS.ProviderTemplate',
+    'notifications-channel': 'NOTIFICATIONS.Channel',
+  } as const;
+
+  const LEGACY = {
+    'notification-routing': 'RAINMAKER-PGR.NotificationRouting',
+    'notification-template': 'RAINMAKER-PGR.NotificationTemplate',
+    'notification-provider-template': 'RAINMAKER-PGR.NotificationProviderTemplate',
+    'notification-channel': 'RAINMAKER-PGR.NotificationChannel',
+  } as const;
+
+  it('registers all five new masters, read and written at the STATE tenant', () => {
+    for (const [name, schema] of Object.entries(NEW)) {
+      const config = getResourceConfig(name);
+      assert.ok(config, `${name} must be registered`);
+      assert.equal(config!.schema, schema);
+      assert.equal(config!.type, 'mdms');
+      // The backend reads these only at the state root; a city-scoped operator
+      // must never author rows nothing reads.
+      assert.equal(config!.stateLevel, true, `${name} must be stateLevel`);
+      assert.equal(getResourceBySchema(schema), name);
+    }
+  });
+
+  it('leaves routing/template/provider-template/channel writable', () => {
+    for (const name of ['notifications-routing', 'notifications-template', 'notifications-provider-template', 'notifications-channel']) {
+      assert.equal(isReadOnlyResource(name), false, `${name} must stay writable`);
+      assert.equal(readOnlyNoticeFor(name), undefined);
+    }
+  });
+
+  it('keeps the module-owned event catalogue read-only, with a reason', () => {
+    // PGR's rows are generated from its workflow at seed time; a new event
+    // arrives with the module that fires it, not from this screen.
+    assert.equal(isReadOnlyResource('notifications-event-catalogue'), true);
+    assert.ok((readOnlyNoticeFor('notifications-event-catalogue') ?? '').length > 40);
+  });
+
+  it('keeps every legacy master registered, listable and READ-ONLY', () => {
+    for (const [name, schema] of Object.entries(LEGACY)) {
+      const config = getResourceConfig(name);
+      assert.ok(config, `${name} must stay registered — it is still live configuration on an un-migrated tenant`);
+      assert.equal(config!.schema, schema);
+      assert.equal(isReadOnlyResource(name), true, `${name} must be read-only`);
+      assert.match(config!.label, /^Legacy \(PGR\)/, `${name}'s label must say it is legacy`);
+      const notice = readOnlyNoticeFor(name);
+      assert.ok(notice, `${name} must explain where its configuration moved`);
+      assert.match(notice!, /NOTIFICATIONS\.\*/);
+      // Kanav review of #2097 (4079418192): the deploy no longer copies anything, so the
+      // notice must send the operator to the migration script, not back to the deploy.
+      assert.ok(notice!.includes('migrate-notifications.py plan --tenant <tenant>, then apply --tenant <tenant> --yes'),
+        `${name}'s notice must name the migration command`);
+      assert.doesNotMatch(notice!, /--tags notifications|seed step/);
+      assert.match(notice!, /never deleted/);
+      // Kanav re-review 4118608372: readOnly only hides this screen's edit routes. The MDMS
+      // role-actions still let an admin write these masters through the API, and after
+      // migration novu-bridge ignores them — the notice must not let "read-only" imply more.
+      assert.match(notice!, /MDMS API still accepts writes/);
+      assert.match(notice!, /after migration has no effect/);
+    }
+  });
+
+  it('leaves the three bridge-proxied notification resources untouched', () => {
+    for (const name of ['notification-log', 'notification-provider', 'notification-preference']) {
+      const config = getResourceConfig(name);
+      assert.ok(config);
+      assert.equal(config!.type, 'custom');
+      assert.equal(isReadOnlyResource(name), false);
+    }
   });
 });

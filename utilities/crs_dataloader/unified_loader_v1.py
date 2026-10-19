@@ -511,6 +511,9 @@ class UnifiedExcelReader:
         role_by_name_ci  = {r.get('name', '').strip().lower(): r for r in roles_list if r.get('name')}
         role_by_code_ci  = {r.get('code', '').strip().lower(): r for r in roles_list if r.get('code')}
         valid_role_codes = {r.get('code') for r in roles_list if r.get('code')}
+        csr_known = 'CSR' in valid_role_codes
+        if not csr_known:
+            print("   ⚠️  CSR is not in this tenant's ACCESSCONTROL-ROLES: employees will not get it")
         print(f"   Available role codes: {', '.join(sorted(valid_role_codes))}")
 
         employees = []
@@ -615,6 +618,12 @@ class UnifiedExcelReader:
             if not roles:
                 print(f"   ❌ Row {idx} ({user_name}): no valid roles resolved — skipping employee")
                 continue
+
+            # Every employee gets CSR so they can file a complaint on a
+            # citizen's behalf (#2239), whichever roles the sheet lists, when
+            # the tenant has the role (HRMS rejects an unknown one).
+            if csr_known and not any(r['code'] == 'CSR' for r in roles):
+                roles.append({'code': 'CSR', 'name': 'Complainant', 'tenantId': tenant_id})
 
             # Get boundary info (defaults to City level)
             hierarchy = str(row.get('Hierarchy Type', 'ADMIN')).strip()
@@ -2996,11 +3005,11 @@ class APIUploader:
 
             genders = [g.get('code', '') for g in gender_data if g.get('active', True)]
             print(f"   ✅ Found {len(genders)} gender type(s)")
-            return genders if genders else ['MALE', 'FEMALE', 'TRANSGENDER', 'OTHERS']
+            return genders if genders else ['MALE', 'FEMALE']
 
         except Exception as e:
             print(f"   ⚠️  Using default gender types: {str(e)[:100]}")
-            return ['MALE', 'FEMALE', 'TRANSGENDER', 'OTHERS']
+            return ['MALE', 'FEMALE']
 
     def fetch_employee_status(self, tenant: str) -> list:
         """Fetch Employee Status from MDMS
@@ -3106,7 +3115,7 @@ class APIUploader:
         - Role codes dropdown (from MDMS)
         - Employee Status dropdown (EMPLOYED, SUSPENDED, etc.)
         - Employee Type dropdown (PERMANENT, TEMPORARY, etc.)
-        - Gender dropdown (Male, Female, Other)
+        - Gender dropdown (Male, Female)
         - Hierarchy Type dropdown (ADMIN, ADMIN1, etc.)
         - Boundary Type dropdown (from boundaries)
         - Boundary Code dropdown (from boundaries)
@@ -3372,7 +3381,7 @@ class APIUploader:
         instructions['A24'] = "  • Password - User password (default: eGov@123 if left blank)"
         instructions['A25'] = "  • Employee Status - EMPLOYED, SUSPENDED, RETIRED, TERMINATED (default: EMPLOYED)"
         instructions['A26'] = "  • Employee Type - PERMANENT, TEMPORARY, CONTRACT, DAILY_WAGE (default: PERMANENT)"
-        instructions['A27'] = "  • Gender - Male, Female, Other, Transgender"
+        instructions['A27'] = "  • Gender - Male, Female"
         instructions['A28'] = "  • Hierarchy Type - ADMIN, ADMIN1, ADMIN2, REVENUE (default: ADMIN)"
         instructions['A29'] = "  • Boundary Type - Select from available boundaries (default: City)"
         instructions['A30'] = "  • Boundary Code - Select from available boundaries (default: tenant code)"

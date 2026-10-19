@@ -13,12 +13,26 @@ const buttonVariants = cva(
           "bg-primary text-primary-foreground shadow hover:bg-primary/90",
         destructive:
           "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90",
+        // DIGIT's Secondary: a stroke and no fill, in the primary colour.
+        // Neutral `border-input` was the shadcn default and read as a disabled
+        // control next to a solid primary rather than as the complementary
+        // action the system intends.
         outline:
-          "border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground",
+          "border border-primary bg-transparent text-primary shadow-sm hover:bg-accent",
         secondary:
           "bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80",
+        // DIGIT's Tertiary: text only, and in its own blue rather than the
+        // theme's primary. Bomet ships `--color-button-tertiary-text: #2563EB`
+        // separately from its primary, so tertiary is not "primary without the
+        // fill" — it is a distinct, quieter action colour. Kept apart from
+        // `ghost` too: ghost carries the icon buttons here (67 of them), and
+        // those want neutral ink, not a coloured glyph.
+        tertiary: "text-[#2563EB] hover:bg-accent",
         ghost: "hover:bg-accent hover:text-accent-foreground",
-        link: "text-primary underline-offset-4 hover:underline",
+        // DIGIT's Link: underlined always, not on hover. The underline is what
+        // marks it as navigation, so revealing it on hover hides the only
+        // signal a reader has.
+        link: "text-primary underline underline-offset-4",
       },
       size: {
         default: "h-9 px-4 py-2",

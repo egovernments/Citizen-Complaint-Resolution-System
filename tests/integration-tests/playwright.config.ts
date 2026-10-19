@@ -2,6 +2,9 @@ import { defineConfig } from '@playwright/test';
 
 const BASE_URL = process.env.BASE_URL || 'https://naipepea.digit.org';
 const LOCAL_STACK = process.env.LOCAL_STACK === '1';
+// Node's fetch (passwordSignIn, citizen provisioning) honours the same
+// self-signed opt-in as the browser contexts' ignoreHTTPSErrors below.
+if (process.env.IGNORE_HTTPS_ERRORS === '1') process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 const EXCLUDE_LOCAL_ONLY = LOCAL_STACK ? undefined : /@local-only/;
 
 export default defineConfig({
@@ -22,6 +25,7 @@ export default defineConfig({
     'fixtures/citizen.setup.ts',
     'fixtures/profile.setup.ts',
   ],
+  testIgnore: /tests\/identity-real\//,
   timeout: 120_000,
   expect: { timeout: 15_000 },
   retries: 0,
@@ -52,9 +56,12 @@ export default defineConfig({
       testMatch: /tests\/fixtures\/profile\.setup\.ts$/,
     },
     {
-      // Runs first — performs UI login and writes storageState to auth.json.
+      // Admin configurator session -> auth.json: walks the login form on form builds,
+      // seeds the session from an API token on hosted sign-in builds (#2107). Reads
+      // tenant + credentials through env.ts, so it needs the discovered profile.
       name: 'setup',
       testMatch: /tests\/fixtures\/auth\.setup\.ts$/,
+      dependencies: ['profile-setup'],
     },
     {
       // Runs after `setup`. Drives the PGR API end-to-end to seed two
@@ -82,7 +89,9 @@ export default defineConfig({
         // spec ran a second time under chromium with the UI storage state,
         // duplicating every api result in report.json (38 pass/fail/skip rows
         // counted twice) and inflating suite runtime for zero added coverage.
-        /tests\/(api|smoke)\//,
+        /tests\/(api|smoke|identity-real)\//,
+        // Dashboard benchmarks have their own config (playwright.dashboard.config.ts).
+        /tests\/dashboard-performance\//,
       ],
       grepInvert: EXCLUDE_LOCAL_ONLY,
     },
@@ -99,7 +108,7 @@ export default defineConfig({
       // On maputo that surfaces as `ROPC token request failed (400)`; on bomet
       // it would pass for the worst possible reason — the fallback literal `ke`
       // happens to BE bomet's real tenant, so the bug is invisible there.
-      // `setup` needs no such edge: it does not import env.ts.
+      // `setup` has the same edge for the same reason.
       name: 'api-setup',
       testMatch: /tests\/fixtures\/api\.setup\.ts$/,
       dependencies: ['profile-setup'],

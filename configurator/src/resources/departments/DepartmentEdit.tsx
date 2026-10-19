@@ -1,4 +1,4 @@
-import { DigitEdit, DigitFormInput, v } from '@/admin';
+import { DigitEdit, DigitFormInput, v, MASTER_SCREEN_META } from '@/admin';
 import { BooleanInput } from '@/admin/widgets';
 import { DeactivationGuard } from '@/admin/DeactivationGuard';
 import { useShowController } from 'ra-core';
@@ -10,7 +10,7 @@ export function DepartmentEdit() {
     <DigitEdit title="Edit Department">
       <DigitFormInput source="code" label="Code" disabled />
       <DigitFormInput source="name" label="Name" validate={v.name} />
-      <BooleanInput source="active" label="Active" />
+      <BooleanInput source="_isActive" label="Active" />
       <DeactivationGuardForDepartment />
     </DigitEdit>
   );
@@ -19,11 +19,12 @@ export function DepartmentEdit() {
 function DeactivationGuardForDepartment() {
   // Read the record via the edit context to get the department's own code,
   // then probe for dependent designations + currently-assigned employees.
-  const { record } = useShowController();
+  const { record } = useShowController({ queryOptions: { meta: MASTER_SCREEN_META } });
   const code = String(record?.code ?? record?.id ?? '');
   if (!code) return null;
   return (
     <DeactivationGuard
+      source="_isActive"
       probes={[
         {
           label: 'designations referencing this department',

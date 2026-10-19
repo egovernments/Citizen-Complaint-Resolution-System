@@ -1,3 +1,4 @@
+import { tenantSlug } from '../utils/identity-bff';
 /**
  * Regression tests for citizen-side bugs fixed in theflywheel/digit-ui-esbuild.
  * Each test references the egovernments/CCRS issue it covers.
@@ -153,7 +154,7 @@ Unlike rate-resolved-complaint.spec.ts this test DOES submit — the complaint i
       await driveToResolved(srid);
 
       await citizenOtpLogin(page);
-      await page.goto(`${BASE_URL}/digit-ui/citizen/pgr/rate/${srid}`, {
+      await page.goto(`${BASE_URL}/${tenantSlug()}/digit-ui/citizen/pgr/rate/${srid}`, {
         waitUntil: 'domcontentloaded',
         timeout: 30_000,
       });
