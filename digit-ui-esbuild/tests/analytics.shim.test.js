@@ -503,6 +503,32 @@ test("a tagged click keeps its event name as the Matomo action", () => {
   );
 });
 
+test("a tracking-plan click tag is Matomo's category and action", () => {
+  const enabled = Object.assign({}, MATOMO_OK, { trackClicks: true });
+  const t = loadShim({ respond: (tenant) => (tenant === "mz" ? [row("mz", enabled)] : []) });
+  const attrs = { "data-analytics-event": "complaint:file_step_back", "data-analytics-label": "location" };
+  t.dispatchDocument("click", { target: { getAttribute: (name) => attrs[name] || null, parentNode: null } });
+  assert.ok(
+    t.sandbox._paq.some((c) => c[0] === "trackEvent" && c[1] === "complaint" && c[2] === "file_step_back" && c[3] === "location"),
+    JSON.stringify(t.sandbox._paq.filter((c) => c[0] === "trackEvent"))
+  );
+});
+
+test("a tracking-plan trackEvent name decides the category, whatever the caller passed", () => {
+  const t = loadShim({ respond: (tenant) => (tenant === "mz" ? [row("mz", MATOMO_OK)] : []) });
+  t.api.trackEvent("complaint:photo_reject", { category: "pgr", action: "other", label: "size" });
+  t.api.trackEvent("complaint:voice_transcribe_success", { value: 12 });
+  const events = t.sandbox._paq.filter((c) => c[0] === "trackEvent");
+  assert.deepEqual(events.map((c) => c.slice(1, 4)), [["complaint", "photo_reject", "size"], ["complaint", "voice_transcribe_success", ""]]);
+  assert.equal(events[1][4], 12);
+});
+
+test("an older dotted name keeps the caller's category, as before", () => {
+  const t = loadShim({ respond: (tenant) => (tenant === "mz" ? [row("mz", MATOMO_OK)] : []) });
+  t.api.trackEvent("pgr.test.event", { category: "pgr" });
+  assert.ok(t.sandbox._paq.some((c) => c[0] === "trackEvent" && c[1] === "pgr" && c[2] === "pgr.test.event"));
+});
+
 test("a record whose script host is not allowlisted loads nothing", () => {
   const bad = Object.assign({}, MATOMO_OK, { code: "evil", scriptUrl: "https://evil.example.com/m.js" });
   const t = loadShim({ respond: (tenant) => (tenant === "mz" ? [row("mz", bad)] : []) });
@@ -604,6 +630,20 @@ test("a pageview emitted before array.js lands is replayed, not dropped", () => 
   // is what PostHog links back to, and /employee/... 404s under a /digit-ui
   // entrance. {{page}} keeps the stripped form for grouping.
   assert.equal(captured[0].props.$current_url, "/digit-ui/employee/pgr/inbox");
+});
+
+test("PostHog events and page views carry app and tenant_id", () => {
+  const t = loadShim({ deferScriptLoad: true, respond: (tenant) => (tenant === "mz" ? [row("mz", POSTHOG_OK)] : []) });
+  const captured = [];
+  t.sandbox.posthog = { init: () => {}, capture: (name, props) => captured.push({ name, props }) };
+  t.loadScripts();
+  t.api.trackEvent("complaint:action_select", { label: "RESOLVE" });
+  assert.deepEqual(captured.map((c) => c.name), ["$pageview", "complaint:action_select"]);
+  for (const { props } of captured) {
+    assert.equal(props.app, "employee");
+    assert.equal(props.tenant_id, props.tenant);
+  }
+  assert.equal(captured[1].props.category, "complaint");
 });
 
 test("PostHog init forces every restraint, and no record can loosen them", () => {

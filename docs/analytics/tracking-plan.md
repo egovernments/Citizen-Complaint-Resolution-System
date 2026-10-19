@@ -89,10 +89,11 @@ Page views are sent separately: PostHog `$pageview` and Matomo `trackPageView`, 
 
 ## Citizen and employee apps (`digit-ui-esbuild/`)
 
-These replace the citizen app's current names in a follow-up change. `app` is `citizen` or `employee` from the route. Click tags (`data-analytics-event`) and `trackEvent` calls use the same names.
+`app` is `citizen` or `employee` from the route. Click tags (`data-analytics-event`, with `data-analytics-label` for the label) and `trackEvent` calls use the same names. The analytics shim (`public/analytics.js`) reads a name of this shape as Matomo's Category and Action; PostHog gets `app` and `tenant_id` on every event and page view, next to the older `tenant` and `entrance`.
 
 | Event | Label | Was |
 |---|---|---|
+| `app:menu_open` | — | `shell.menu.open` |
 | `app:nav_toggle` | — | `shell.rail.toggle` |
 | `app:sign_out` | — | `shell.rail.logout`, `shell.drawer.logout` |
 | `app:language_menu_open` | — | `shell.language.open` |
