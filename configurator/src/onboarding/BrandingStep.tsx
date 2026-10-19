@@ -13,7 +13,7 @@ import { loadBranding, saveBranding, ThemeSaveError, type Branding, type ImageCh
 import { CITIZEN_BANNER_ENABLED } from '@/config/featureFlags';
 import { announceOrganisation, initialsOf } from './organisation';
 import { describeSaveError } from './errors';
-import { reportStepError, trackStepAction } from './telemetry';
+import { reportStepError, trackRecordSave } from './telemetry';
 import { useOnboardingT, type OnboardingT } from './i18n';
 import { useMastersCapability } from '@/hooks/useMastersCapability';
 
@@ -283,8 +283,7 @@ export function BrandingEditor({ mode }: { mode: 'onboarding' | 'console' }) {
         setJustSaved(true);
         return;
       }
-      trackStepAction('branding', 'entity_update', 'branding', {
-        tenant: state.tenant,
+      trackRecordSave('branding', 'branding', 'update', {
         theme: theme?.id ?? 'none',
         logo: logo?.kind ?? 'unchanged',
         banner: bannerChange?.kind ?? 'unchanged',

@@ -1,8 +1,8 @@
 /**
  * Telemetry Utilities
  *
- * Unified interface for tracking events, errors, and user actions
- * using PostHog (analytics) and Sentry (error tracking).
+ * Who the admin is (pseudonymously), errors and feature flags, for PostHog
+ * and Sentry. Product events go through ./analytics.
  */
 
 import posthog from 'posthog-js';
@@ -18,38 +18,37 @@ import { isTelemetryKilled } from './telemetryGate';
 // ============================================
 
 export interface TelemetryUser {
-  id: string;
-  name: string;
-  email?: string;
+  /** The DIGIT user's uuid. Only its hash leaves the browser. */
+  uuid?: string;
   tenant: string;
   roles?: string[];
 }
 
-/**
- * Identify the current user for analytics and error tracking
- */
-export function identifyUser(user: TelemetryUser) {
-  if (isTelemetryKilled()) return;
-  // PostHog identification
-  posthog.identify(user.id, {
-    name: user.name,
-    email: user.email,
-    tenant: user.tenant,
-    roles: user.roles?.join(', '),
-  });
-
-  // Sentry user context
-  Sentry.setUser({
-    id: user.id,
-    username: user.name,
-    email: user.email,
-  });
-
-  // Sentry tags for filtering
-  Sentry.setTag('tenant', user.tenant);
-  if (user.roles?.length) {
-    Sentry.setTag('role', user.roles[0]);
+/** A stable id for the admin that isn't their uuid, email or name. */
+export async function pseudonymousId(uuid: string): Promise<string | null> {
+  try {
+    const bytes = new TextEncoder().encode(`cms-console:${uuid}`);
+    const digest = await crypto.subtle.digest('SHA-256', bytes);
+    return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('').slice(0, 32);
+  } catch {
+    // No SubtleCrypto outside a secure context: stay anonymous rather than send the uuid.
+    return null;
   }
+}
+
+/**
+ * Identify the admin by a hash of their uuid, so a funnel can follow them
+ * across days without PostHog or Sentry holding who they are. Without a uuid
+ * they stay anonymous.
+ */
+export async function identifyUser(user: TelemetryUser) {
+  if (isTelemetryKilled()) return;
+  Sentry.setTag('tenant', user.tenant);
+  if (user.roles?.length) Sentry.setTag('role', user.roles[0]);
+  const id = user.uuid ? await pseudonymousId(user.uuid) : null;
+  if (!id || isTelemetryKilled()) return;
+  posthog.identify(id, { roles: user.roles?.join(', ') });
+  Sentry.setUser({ id });
 }
 
 /**
@@ -59,66 +58,6 @@ export function clearUser() {
   if (isTelemetryKilled()) return;
   posthog.reset();
   Sentry.setUser(null);
-}
-
-// ============================================
-// Event Tracking
-// ============================================
-
-export type EventName =
-  // Navigation
-  | 'page_view'
-  | 'navigation'
-  // Authentication
-  | 'login'
-  | 'logout'
-  | 'session_restored'
-  // Entity Actions
-  | 'entity_view'
-  | 'entity_create'
-  | 'entity_update'
-  | 'entity_delete'
-  | 'entity_export'
-  | 'entity_import'
-  // Search & Filter
-  | 'search'
-  | 'filter_apply'
-  // Onboarding
-  | 'phase_start'
-  | 'phase_complete'
-  | 'onboarding_complete'
-  // Errors
-  | 'api_error'
-  | 'validation_error'
-  // UI Interactions
-  | 'help_open'
-  | 'docs_click'
-  | 'theme_change'
-  | 'locale_change'
-  | 'mode_switch'
-  | 'target_tenant_set'
-  // Audit
-  | 'audit_run'
-  | 'audit_complete';
-
-interface EventProperties {
-  [key: string]: string | number | boolean | string[] | undefined;
-}
-
-/**
- * Track a custom event
- */
-export function trackEvent(event: EventName, properties?: EventProperties) {
-  if (isTelemetryKilled()) return;
-  posthog.capture(event, properties);
-
-  // Also add breadcrumb to Sentry for context
-  Sentry.addBreadcrumb({
-    category: 'user-action',
-    message: event,
-    data: properties,
-    level: 'info',
-  });
 }
 
 // ============================================
@@ -134,20 +73,13 @@ interface ErrorContext {
 }
 
 /**
- * Capture an error with context
+ * Capture an error with context. Sentry only: product analytics gets the
+ * error's code from the caller's own event, never its message.
  */
 export function captureError(error: Error, context?: ErrorContext) {
   if (isTelemetryKilled()) return;
-  // Send to Sentry
   Sentry.captureException(error, {
     extra: context,
-  });
-
-  // Also track in PostHog
-  posthog.capture('error', {
-    error_message: error.message,
-    error_name: error.name,
-    ...context,
   });
 }
 
@@ -158,7 +90,6 @@ export function captureApiError(
   endpoint: string,
   status: number,
   message: string,
-  requestBody?: unknown
 ) {
   if (isTelemetryKilled()) return;
   const error = new Error(`API Error: ${status} - ${message}`);
@@ -167,19 +98,11 @@ export function captureApiError(
     extra: {
       endpoint,
       status,
-      message,
-      requestBody: requestBody ? JSON.stringify(requestBody).slice(0, 1000) : undefined,
     },
     tags: {
       api_endpoint: endpoint,
       http_status: status.toString(),
     },
-  });
-
-  posthog.capture('api_error', {
-    endpoint,
-    status,
-    message,
   });
 }
 

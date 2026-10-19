@@ -13,6 +13,7 @@ vi.mock('posthog-js', () => ({
     init: vi.fn(),
     capture: vi.fn(),
     identify: vi.fn(),
+    register: vi.fn(),
     reset: vi.fn(),
     isFeatureEnabled: vi.fn(() => false),
     getFeatureFlag: vi.fn(),
