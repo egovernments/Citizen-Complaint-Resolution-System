@@ -1,4 +1,4 @@
-# DIGIT upgrade rebase dry run
+# DIGIT upgrade rebase and guarded deployment
 
 This analyser answers two questions without changing a deployment:
 
@@ -7,8 +7,9 @@ This analyser answers two questions without changing a deployment:
 2. Can those local changes be rebased onto the target release without a
    conflict?
 
-It never runs `deploy.sh`, starts containers, contacts OpenBao, connects to a
-database, or writes to live `/opt/digit`.
+Analysis and resume never run `deploy.sh`, start containers, contact OpenBao,
+connect to a database, or write to live `/opt/digit`. Deployment is a separate,
+explicit command available only after a candidate is ready.
 
 ## Prerequisites
 
@@ -102,7 +103,65 @@ Secret-like fields in text, YAML, JSON, and `.env` content are replaced with
 Use repeatable `--exclude GLOB` arguments for environment-specific generated
 paths. Effective exclusions and resolved commit SHAs are recorded in
 `run-manifest.json`. The candidate is sanitized analysis output and must not be
-deployed.
+copied directly to `/opt/digit`.
+
+## Guarded deployment
+
+Run deployment on the DIGIT server from a clean checkout whose `HEAD` is the
+exact `target_commit` recorded in `run-manifest.json`. The tenant YAML in
+`inventory/host_vars/<tenant>.yml` must exactly match `--tenant-vars`.
+
+```bash
+sudo python3 local-setup/scripts/upgrade-dry-run.py \
+  --deploy-run /path/to/dry-run-output/digit-dry-run-YYYYMMDD-HHMMSS \
+  --repo /path/to/Citizen-Complaint-Resolution-System \
+  --tenant mycity \
+  --tenant-vars /path/to/Citizen-Complaint-Resolution-System/local-setup/ansible/inventory/host_vars/mycity.yml \
+  --backup-dir /var/backups/digit-upgrade \
+  --confirm-deploy
+```
+
+This command is intentionally separate from analysis/resume. It enters a
+maintenance window, stops application writers, and creates all of the
+following before deployment:
+
+- PostgreSQL custom-format and globals dumps, verified with `pg_restore`;
+- deterministic row counts and SHA-256 fingerprints for `eg_mdms_data`,
+  `eg_mdms_schema_definition`, and `eg_config_data`;
+- a dedicated MDMS/config archive and per-file hashes;
+- a cold `/opt/digit` archive and cold archives of every Compose volume,
+  including anonymous volumes.
+
+The target MDMS migrations run first against an isolated clone of the backup.
+An update or deletion of an existing MDMS/config-service row is reported as a
+conflict and production is restarted unchanged. Review the sanitized
+`mdms-conflicts.json`, edit the generated `mdms-resolution.json` so every value
+is either `backup` or `target`, then rerun explicitly:
+
+```bash
+sudo python3 local-setup/scripts/upgrade-dry-run.py \
+  --deploy-run /path/to/dry-run-output/digit-dry-run-YYYYMMDD-HHMMSS \
+  --repo /path/to/Citizen-Complaint-Resolution-System \
+  --tenant mycity \
+  --tenant-vars /path/to/Citizen-Complaint-Resolution-System/local-setup/ansible/inventory/host_vars/mycity.yml \
+  --backup-dir /var/backups/digit-upgrade \
+  --mdms-resolution /path/to/dry-run-output/digit-dry-run-YYYYMMDD-HHMMSS/mdms-resolution.json \
+  --confirm-deploy
+```
+
+Upgrade mode invokes the normal `deploy.sh` procedure with a gated
+`upgrade_safe_mode=true` overlay. It preserves the established PostgreSQL data
+mount, removes the fast-path dump initializer, disables compose/API seed jobs,
+restores secrets through the existing OpenBao path, and still runs versioned
+database migrations and normal health checks. A normal `./deploy.sh <tenant>`
+does not enable any of these upgrade-only branches.
+
+After startup the command requires the resolved MDMS counts/checksums and every
+protected local configuration hash to match. Any deployment, health, MDMS, or
+configuration failure stops the new stack, restores `/opt/digit` and every
+captured volume, starts the previous service set, and verifies the original
+MDMS and configuration fingerprints. A failed rollback leaves an explicit
+error and preserves the backup for manual recovery.
 
 ## Renderer maintenance
 

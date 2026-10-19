@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Read-only DIGIT upgrade rebase analyser.
+"""DIGIT upgrade analyser, conflict resolver, and guarded deploy entrypoint.
 
 The analyser renders deterministic deployment trees for two Git references,
 compares the base render with an /opt/digit backup, and applies the detected
-local changes to the target render with a real Git rebase.  It never
-runs deploy.sh and never talks to Docker, OpenBao, or a database.
+local changes to the target render with a real Git rebase.  Analysis and
+resume are read-only.  Deployment is available only through the separate,
+explicit ``--deploy-run`` mode after every conflict has been resolved.
 """
 
 from __future__ import annotations
@@ -597,8 +598,18 @@ def rebase_local_changes(
     git(rebase_repo, "commit", "-q", "--allow-empty", "-m", "local changes")
     local_sha = git(rebase_repo, "rev-parse", "HEAD").stdout.strip()
 
+    # Represent a rename as one deletion plus one addition.  The deployment
+    # overlay can then apply both sides explicitly instead of leaving the old
+    # path behind when a candidate is materialized onto /opt/digit.
     changes = parse_name_status(
-        git(rebase_repo, "diff", "--name-status", "-M", base_sha, local_sha).stdout
+        git(
+            rebase_repo,
+            "diff",
+            "--name-status",
+            "--no-renames",
+            base_sha,
+            local_sha,
+        ).stdout
     )
     patch = git(rebase_repo, "diff", "--binary", base_sha, local_sha).stdout
     (output / "local-changes.patch").write_text(patch, encoding="utf-8")
@@ -1294,6 +1305,27 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="resume a previously created persistent conflict workspace",
     )
     parser.add_argument(
+        "--deploy-run",
+        type=Path,
+        help="explicitly deploy a completed run directory on the Linux deployment server",
+    )
+    parser.add_argument(
+        "--backup-dir",
+        type=Path,
+        default=Path("/var/backups/digit-upgrade"),
+        help="root-owned destination for database, /opt/digit, and volume backups",
+    )
+    parser.add_argument(
+        "--mdms-resolution",
+        type=Path,
+        help="JSON choices for conflicts emitted by a previous deploy preflight",
+    )
+    parser.add_argument(
+        "--confirm-deploy",
+        action="store_true",
+        help="required acknowledgement that deployment enters a maintenance window",
+    )
+    parser.add_argument(
         "--acknowledge-secret-review",
         action="store_true",
         help="confirm reviewed secret findings remain redacted and will be restored securely",
@@ -1313,7 +1345,28 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="additional PurePath.match glob excluded from all compared trees",
     )
     args = parser.parse_args(argv)
+    if args.resume_workspace and args.deploy_run:
+        parser.error("--resume-workspace and --deploy-run are mutually exclusive")
     if args.resume_workspace:
+        if args.confirm_deploy or args.mdms_resolution:
+            parser.error("deployment options are invalid with --resume-workspace")
+        return args
+    if args.deploy_run:
+        missing = [
+            option
+            for option, value in (
+                ("--repo", args.repo),
+                ("--tenant", args.tenant),
+                ("--tenant-vars", args.tenant_vars),
+            )
+            if value is None
+        ]
+        if missing:
+            parser.error("the following deploy arguments are required: " + ", ".join(missing))
+        if not args.confirm_deploy:
+            parser.error("--deploy-run requires --confirm-deploy")
+        if args.base_override or args.exclude or args.backup:
+            parser.error("analysis-only options cannot be used with --deploy-run")
         return args
     missing = [
         option
@@ -1343,6 +1396,25 @@ def main(argv: list[str] | None = None) -> int:
             )
             print("resolution status: READY")
             print(f"candidate: {result['candidate']}")
+            return 0
+        if args.deploy_run:
+            from upgrade_deploy import MdmsConflict, deploy_run
+
+            try:
+                result = deploy_run(
+                    args.deploy_run,
+                    args.repo,
+                    args.tenant,
+                    args.tenant_vars,
+                    args.backup_dir,
+                    args.mdms_resolution,
+                )
+            except MdmsConflict as exc:
+                print(f"ERROR: {exc}", file=sys.stderr)
+                return 2
+            print("deployment status: DEPLOYED")
+            print(f"backup: {result['backup']}")
+            print(f"report: {args.deploy_run.resolve() / 'deployment-report.json'}")
             return 0
         repo = args.repo.resolve()
         if not (repo / ".git").exists():
