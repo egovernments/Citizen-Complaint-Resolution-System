@@ -245,10 +245,51 @@ Otherwise the box keeps serving the 2.12 bundle: the compose default for the
 digit-ui container is still a 2.12.1 image.
 
 **SMTP.** The deploy **refuses to run** without `identity_smtp_host` and
-`identity_smtp_from` (and an OpenBao `identity_smtp_password` when
-`identity_smtp_auth` is true). An install whose staff have no usable mailboxes can
-point the realm at a mail catcher and hand each person their setup link by hand.
-That is what the first production upgrade did:
+`identity_smtp_from`, and without an OpenBao `identity_smtp_password` when
+`identity_smtp_auth` is true (the default). Keycloak sends every identity email
+through this one setting, on the BFF's behalf: password setup and reset, address
+verification, and magic links. Complaint notifications do not use it; email
+notifications, if you send any, are a separate Novu integration.
+
+Every full deploy rewrites the realm's mail settings from host_vars and OpenBao,
+so change them there, never in the Keycloak console. A `--tags` run skips the
+identity tasks, so a change takes effect on the next full `./deploy.sh <tenant>`.
+
+**Real mail server.** Use any SMTP relay that will send as your domain: your mail
+provider, Amazon SES, SendGrid, Mailgun, Microsoft 365 and so on.
+
+```yaml
+identity_smtp_host: smtp.example.org
+identity_smtp_port: 587                  # default
+identity_smtp_starttls: true             # default; implicit TLS on 465 = ssl true, starttls false
+identity_smtp_ssl: false                 # default
+identity_smtp_auth: true                 # default; the password goes into OpenBao (below)
+identity_smtp_user: <relay username>
+identity_smtp_from: no-reply@<domain>
+identity_smtp_from_display_name: "<a name staff will recognise>"  # default "DIGIT Identity"
+```
+
+- **Sending domain.** Verify the `identity_smtp_from` domain with the relay and
+  publish its SPF and DKIM records, plus a DMARC policy. Without them the relay
+  rejects the mail or it lands in spam, and to the employee a setup link in spam
+  looks like no email at all.
+- **Reachability.** Many cloud hosts block outbound port 25, and some block 465 and
+  587 until asked. Check from the Keycloak container, since that is what sends:
+
+  ```bash
+  docker exec keycloak timeout 10 bash -c 'exec 3<>/dev/tcp/smtp.example.org/587 && head -1 <&3'
+  # a "220 ..." greeting is good; a timeout or "Connection refused" means the port is blocked
+  ```
+
+- **Password.** Put `identity_smtp_password` into OpenBao with the command below.
+- **After the deploy**, check delivery with the "real mailbox" rows in
+  [step 6](#6-after-the-deploy-verify-by-role). A failed send shows in
+  `docker logs keycloak 2>&1 | grep -iE 'smtp|mail'`.
+
+**Mail catcher.** An install whose staff have no usable mailboxes can point the
+realm at a mail catcher and hand each person their setup link by hand. That is
+what the first production upgrade did. [Step 4.5](#45-from-a-mail-catcher-to-real-email)
+moves such an install to real email later, without re-linking anyone.
 
 ```yaml
 identity_smtp_host: "mailpit"      # container name on the DIGIT network
@@ -535,7 +576,7 @@ integration-test personas.
 there is none, a common synthetic scheme such as `<code-lowercased>@staff.<domain>`
 works when realm mail goes to a mail catcher (2.2): an admin reads the setup link
 there and hands it to the person. Keycloak usernames are the addresses, so pick a
-scheme you will keep.
+scheme you will keep: a later change of address (4.5) leaves the username as it was.
 
 **Setup links expire after 15 minutes** (`IDENTITY_PASSWORD_SETUP_TTL_SECONDS`,
 default 900). Links sent during the bulk run are dead by the time an admin hands
@@ -583,6 +624,44 @@ tenant has an active key, and look at the key-id prefixes from inventory 1.1:
   login and by the BFF's phone search. The fix is re-encrypting those fields under
   the right tenant's key (decrypt with the old key, encrypt with the new, update),
   as done in the v2.12 upgrade. Count them; do not rotate keys.
+
+### 4.5 From a mail catcher to real email
+
+An install that went live with a mail catcher and synthetic addresses (4.1) can
+move to real email at any time. Nobody is re-linked. Passwords, roles, bindings and
+complaint history stay as they are.
+
+1. **Switch the realm to the real relay** (2.2) and run a full deploy. From then on,
+   all identity mail goes out for real, including mail to synthetic addresses,
+   which bounces. Do not link, resend or reset anyone at a synthetic address after
+   this point.
+2. **Give each employee their real address.** As a linked `ACCOUNT_ADMIN`, use
+   Configurator → Employees → edit the email (for an Active member this changes
+   their sign-in email), or Members → Change email. A script can use the session
+   that bulk-linked staff (4.1):
+   `POST /identity/v1/workspace-members/_updateEmail {tenantId, digitUuid, email}`
+   → `202 {status: "verification_sent"}`. Keycloak emails a verification link to
+   the new address.
+   - Keycloak's email changes at once. DIGIT's (`eg_user.emailid`) changes only once
+     the person clicks the link.
+   - The Keycloak **username** stays the synthetic address. The person can sign in
+     with either.
+   - `403 ADMIN_EMAIL_CHANGE_NOT_ALLOWED`: the target is you, holds an
+     administrative role you don't hold, has a citizen account or a verified phone,
+     or belongs to another workspace. That person changes it themselves:
+     Configurator → Account → Change email (Keycloak's `UPDATE_EMAIL`). For your
+     own address, a second admin can also do it.
+   - `409 IDENTITY_EMAIL_CHANGED`: another Keycloak user already has that address.
+3. **Staff who never set a password** (their handed-out link expired, or was never
+   handed out): once the address has changed, send setup with Employees →
+   "Resend email", or `_link` with `resend: true` and the **new** address. Wait at
+   least 60 s after the change (`429 RESEND_TOO_SOON`). That email covers both
+   verification and the password, so the person can ignore the first one.
+4. **Check** that `GET /identity/v1/workspace-members?tenantId=<root>&state=active`
+   (`max` up to 500) lists no email at the synthetic domain. As people verify,
+   their `eg_user.emailid` follows.
+5. **Retire the catcher** once no synthetic address is left: stop its Compose
+   project, and remove the `/mailpit` nginx location and its basic-auth file.
 
 ---
 
