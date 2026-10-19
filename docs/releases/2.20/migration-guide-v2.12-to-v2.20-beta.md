@@ -218,6 +218,8 @@ identity_smtp_from: <no-reply address>
 identity_smtp_user: <smtp user>
 identity_signin_methods: [password]          # add google only if 2.3 is done
 identity_signup_methods: [magic_link]
+identity_magic_link_enabled: true            # default false; without it the configurator's signup
+                                             # page offers no method ("No sign-in method is enabled")
 identity_citizen_signin_methods: [phone_otp] # needs an OTP channel, see 2.5
 # One immutable CI build for every CI-built image (see below)
 image_tag: "develop-<sha8>"                  # or the release tag once one is published
@@ -886,3 +888,4 @@ marks once a step is proven.
 | 06:33 | same | Deploy run 4 | Realm `digit`, BFF ready; stopped at the notification seed | 5.1 #4: 23 role-actions on the wrong endpoints, deactivated and verified 403. |
 | 06:50 | same | First admin + staff (4.1) | 61 of 61 linked | Staff sign-in returned 503 until `ACCOUNT_ADMIN` got its `/user/*` role-actions (2.3). |
 | 06:58 | same | Verify by role (6) | Admin, GRO, LME, CSR, citizen OTP and service accounts all pass | Orphan cleanup and re-enabling the nightly still to do. |
+| later | same | Configurator signup reported broken | Sign-in works; the signup page says "No sign-in method is enabled" | `identity_signup_methods: [magic_link]` was set without `identity_magic_link_enabled: true` (2.2). The founder signup row of step 6 was not run. |
