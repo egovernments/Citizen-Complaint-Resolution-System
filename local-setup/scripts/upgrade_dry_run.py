@@ -686,9 +686,23 @@ def rebase_local_changes(
     )
 
     rebased_sha: str | None = None
+    deployment_changes: list[dict[str, str]] | None = None
     resolution_workspace: str | None = None
     if not conflicts and rebase_result.returncode == 0:
         rebased_sha = git(rebase_repo, "rev-parse", "HEAD").stdout.strip()
+        deployment_changes = [
+            {"status": status_code, "path": path}
+            for status_code, path in parse_name_status(
+                git(
+                    rebase_repo,
+                    "diff",
+                    "--name-status",
+                    "--no-renames",
+                    target_sha,
+                    rebased_sha,
+                ).stdout
+            )
+        ]
         candidate = output / "candidate"
         copy_candidate(rebase_repo, candidate)
     elif conflicts:
@@ -754,6 +768,7 @@ def rebase_local_changes(
         "local_commit": local_sha,
         "target_commit": target_sha,
         "rebased_commit": rebased_sha,
+        "deployment_changes": deployment_changes,
         "rebase_stderr": (rebase_result.stderr or "").strip(),
         "resolution_workspace": resolution_workspace,
     }
@@ -939,6 +954,19 @@ def resume_resolution_workspace(
     report["rebase"]["original_conflicts"] = original_details
     report["rebase"]["conflicts"] = []
     report["rebase"]["rebased_commit"] = rebased_commit
+    report["rebase"]["deployment_changes"] = [
+        {"status": status_code, "path": path}
+        for status_code, path in parse_name_status(
+            git(
+                repository,
+                "diff",
+                "--name-status",
+                "--no-renames",
+                state["target_commit"],
+                rebased_commit,
+            ).stdout
+        )
+    ]
     report["resolution"] = {
         "workspace": str(workspace),
         "resolved_conflicts": original_conflicts,

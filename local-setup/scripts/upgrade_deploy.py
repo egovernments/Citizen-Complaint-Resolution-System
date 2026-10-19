@@ -350,6 +350,57 @@ def safe_relative(raw: str) -> Path:
     return Path(*posix.parts)
 
 
+def effective_deployment_changes(
+    run_dir: Path, report: dict[str, Any], candidate: Path
+) -> list[dict[str, str]]:
+    rebase = report.get("rebase", {})
+    recorded = rebase.get("deployment_changes")
+    if isinstance(recorded, list):
+        return recorded
+
+    original = rebase.get("local_changes", [])
+    if all(
+        str(item.get("status", "")).startswith("D")
+        or (candidate / safe_relative(str(item.get("path", "")))).is_file()
+        for item in original
+    ):
+        return original
+
+    target = str(report.get("target_commit", ""))
+    rebased = str(rebase.get("rebased_commit", ""))
+    if not re.fullmatch(r"[0-9a-f]{40}", target) or not re.fullmatch(
+        r"[0-9a-f]{40}", rebased
+    ):
+        raise DeployError("run is missing valid target/rebased commits for translated paths")
+    repository = run_dir / "resolution-workspace" / "repository"
+    if not (repository / ".git").exists():
+        raise DeployError("candidate paths changed during rebase but resolution repository is missing")
+    result = subprocess.run(
+        [
+            "git",
+            "diff",
+            "--name-status",
+            "--no-renames",
+            target,
+            rebased,
+        ],
+        cwd=repository,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode:
+        raise DeployError("cannot derive translated candidate paths from resolution repository")
+    changes: list[dict[str, str]] = []
+    for line in result.stdout.splitlines():
+        status, separator, path = line.partition("\t")
+        if not separator or status[:1] not in {"A", "M", "D", "T"}:
+            raise DeployError("invalid translated candidate path metadata")
+        safe_relative(path)
+        changes.append({"status": status, "path": path})
+    return changes
+
+
 def materialize_overlay(
     run_dir: Path, live_digit: Path, source_backup: Path
 ) -> tuple[Path, list[str], dict[str, str]]:
@@ -363,7 +414,7 @@ def materialize_overlay(
     overlay.mkdir(mode=0o700)
     deleted: list[str] = []
     hashes: dict[str, str] = {}
-    for change in report.get("rebase", {}).get("local_changes", []):
+    for change in effective_deployment_changes(run_dir, report, candidate):
         rel_raw = str(change["path"])
         rel = safe_relative(rel_raw)
         if rel.parts[0] in RUNTIME_MANAGED:
