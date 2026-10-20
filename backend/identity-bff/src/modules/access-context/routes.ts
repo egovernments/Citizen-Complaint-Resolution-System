@@ -41,7 +41,7 @@ import type { TenantOption } from "./tenant-directory.js";
 import { liveTenantRoute, resolvePublicTenantRoute } from "./tenant-route.js";
 import { resolveTenantOption, resolveTenantOptions } from "./tenant-options.js";
 import { AccountLinkError } from "../account-links/account-links.js";
-import { publicTrialAccess, sendTrialExpired } from "../workspace-trial/access.js";
+import { sendTrialExpired } from "../workspace-trial/access.js";
 import { isTrialLocked, trialNotice } from "../workspace-trial/trial.js";
 
 // Registry context kinds preserve the core selection checks for every surface.
@@ -137,9 +137,8 @@ export function registerAccessContextRoutes(app: express.Application): void {
       if (!tenant) {
         return response.status(404).json({ error: "Tenant route is not available" });
       }
-      const access = await publicTrialAccess(tenant.urlSlug);
       response.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
-      return response.json({ tenant, ...(access && { access }) });
+      return response.json({ tenant });
     } catch (error) {
       return digitFailure(error, response, "Tenant routes are temporarily unavailable");
     }

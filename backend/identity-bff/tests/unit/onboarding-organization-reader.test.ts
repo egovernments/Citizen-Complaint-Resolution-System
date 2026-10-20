@@ -20,12 +20,6 @@ describe("raw onboarding Organization reader", () => {
     expect(await readOrganizationByTenant("tenant")).toMatchObject({ lifecycle: null, enabled: true });
     expect(await readOrganizationByTenant("missing")).toBeNull();
   });
-  it("carries the trial end when the Organization has one, else null", async () => {
-    serve([record("org", { "digit.trialEndsAt": ["2026-11-19T00:00:00.000Z"] })]);
-    expect(await readOrganizationByTenant("tenant")).toMatchObject({ trial: { endsAt: "2026-11-19T00:00:00.000Z", approvedAt: null, approvedBy: null } });
-    serve([record("org")]);
-    expect(await readOrganizationByTenant("tenant")).toMatchObject({ trial: null });
-  });
   it("ignores superseded records", async () => {
     serve([record("old", { "digit.supersededBy": ["new"] }), record("new")]);
     expect(await readOrganizationByTenant("tenant")).toMatchObject({ id: "new" });

@@ -15,7 +15,7 @@ import {
 } from "../organizations/organization-service.js";
 import { sessionCookie } from "../sessions/session-store.js";
 import { config } from "../../infrastructure/config.js";
-import { publicTrialAccess, sendTrialExpired } from "../workspace-trial/access.js";
+import { isSlugTrialLocked, sendTrialExpired } from "../workspace-trial/access.js";
 import { audit } from "./audit.js";
 import { fixedOtpCode, OtpDeliveryError, otpSender, phoneOtpAvailable } from "./otp-sender.js";
 import {
@@ -62,17 +62,7 @@ async function routeTenant(
     response.status(route.status).json({ error: route.error, code: route.code });
     return null;
   }
-  let locked: Awaited<ReturnType<typeof publicTrialAccess>>;
-  try {
-    locked = await publicTrialAccess(route.urlSlug);
-  } catch (error) {
-    // A second read of the same route: a Keycloak failure answers as routeForSlug's does.
-    if (!(error instanceof IdentityAdminError)) throw error;
-    console.warn("Tenant route resolution failed:", error.message);
-    response.status(503).json({ error: "Tenant routes are temporarily unavailable", code: "TENANT_ROUTE_UNAVAILABLE" });
-    return null;
-  }
-  if (locked) {
+  if (await isSlugTrialLocked(route.urlSlug)) {
     sendTrialExpired(response);
     return null;
   }

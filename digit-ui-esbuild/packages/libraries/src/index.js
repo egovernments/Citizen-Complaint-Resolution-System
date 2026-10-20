@@ -38,7 +38,6 @@ import Hooks from "./hooks";
 import Utils from "./utils";
 import { subFormRegistry } from "./subFormRegistry";
 import AccessControlService from "./services/elements/Access";
-import { fetchWorkspaceAccess } from "./services/tenant/tenantRoute";
 import { isIdentityBffAuth, privateRouteLogin } from "./services/auth/authSurface";
 import {
   buildAuthorizeUrl as buildIdentityBffAuthorizeUrl,
@@ -106,6 +105,6 @@ export * from "./constants/mobileValidation";
 export { initLibraries, Enums, Hooks, subFormRegistry, Request, MdmsService, isIdentityBffAuth,
   buildIdentityBffAuthorizeUrl, establishIdentityBffSession, restrictIdentityBffDestination, identityBffSurfaceBase,
   identityBffSignOutIncomplete, clearIdentityBffSignOutIncomplete,
-  fetchCitizenSigninMethods, fillMessage, sendCitizenOtp, verifyCitizenOtp, fetchWorkspaceAccess };
+  fetchCitizenSigninMethods, fillMessage, sendCitizenOtp, verifyCitizenOtp };
 
 export * as IdentityAccount from "./services/auth/identityAccount";

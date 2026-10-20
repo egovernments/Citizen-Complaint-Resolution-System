@@ -11,14 +11,13 @@ import {
 
 /**
  * Blocking notice for a workspace whose trial has ended. Every field is
- * operator-supplied and rendered as plain text; the link needs label and url.
+ * operator-supplied and rendered as plain text.
  */
 export function WorkspaceTrialDialog({ notice, open, onClose }: {
   notice: WorkspaceTrialNotice;
   open: boolean;
   onClose: () => void;
 }) {
-  const link = notice.linkLabel && notice.linkUrl ? { label: notice.linkLabel, url: notice.linkUrl } : null;
   return (
     <AlertDialog open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
       <AlertDialogContent>
@@ -26,9 +25,9 @@ export function WorkspaceTrialDialog({ notice, open, onClose }: {
           <AlertDialogTitle>{notice.title}</AlertDialogTitle>
           <AlertDialogDescription className="whitespace-pre-line">{notice.message}</AlertDialogDescription>
         </AlertDialogHeader>
-        {link && (
-          <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-primary underline underline-offset-4">
-            {link.label}
+        {notice.linkUrl && (
+          <a href={notice.linkUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-primary underline underline-offset-4">
+            {notice.linkLabel}
           </a>
         )}
         <AlertDialogFooter>

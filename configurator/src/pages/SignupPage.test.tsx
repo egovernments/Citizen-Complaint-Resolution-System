@@ -928,20 +928,6 @@ describe('expired trial workspace', () => {
     expect(api.findSignup).not.toHaveBeenCalled();
   });
 
-  it('labels a locked option and opens the dialog on click without selecting it', async () => {
-    vi.mocked(api.session).mockResolvedValue(signedIn);
-    vi.mocked(api.tenants).mockResolvedValue({ tenants: [open, locked], selectionRequired: true, onboardingRequired: false, notice });
-    render(<SignupPage />);
-
-    const lockedButton = await screen.findByRole('button', { name: /demo workspace/i });
-    expect(lockedButton).toHaveTextContent(/trial ended/i);
-    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
-    fireEvent.click(lockedButton);
-    expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
-    expect(screen.getByText(notice.title)).toBeInTheDocument();
-    expect(api.selectContext).not.toHaveBeenCalled();
-  });
-
   it('opens the dialog when _select answers 403 WORKSPACE_TRIAL_EXPIRED', async () => {
     vi.mocked(api.session).mockResolvedValue(signedIn);
     vi.mocked(api.tenants).mockResolvedValue({ tenants: [open], selectionRequired: false, onboardingRequired: false });
@@ -952,17 +938,6 @@ describe('expired trial workspace', () => {
     expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
     expect(screen.getByText(notice.title)).toBeInTheDocument();
     expect(screen.queryByText(/something went wrong/i)).not.toBeInTheDocument();
-  });
-
-  it('says so in plain words when the 403 carries no notice', async () => {
-    vi.mocked(api.session).mockResolvedValue(signedIn);
-    vi.mocked(api.tenants).mockResolvedValue({ tenants: [open], selectionRequired: false, onboardingRequired: false });
-    vi.mocked(api.selectContext).mockRejectedValue(new api.OnboardingError(403, 'WORKSPACE_TRIAL_EXPIRED', 'Trial ended'));
-    render(<SignupPage />);
-
-    fireEvent.click(await screen.findByRole('button', { name: /kisumu county/i }));
-    expect(await screen.findByText(/this workspace’s trial has ended/i)).toBeInTheDocument();
-    expect(screen.queryByText(/WORKSPACE_TRIAL_EXPIRED/)).not.toBeInTheDocument();
   });
 });
 

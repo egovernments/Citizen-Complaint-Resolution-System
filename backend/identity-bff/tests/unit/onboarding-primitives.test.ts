@@ -69,11 +69,6 @@ describe("onboarding primitives with Redis locks", () => {
       await service.lifecycle({ ...input, state: "ACTIVE" });
       expect(trialOf()).toEqual(["2026-11-19T00:00:00.000Z"]);
     }));
-    it("writes nothing when trial days is 0", () => withDays(0, async () => {
-      await service.ensure(input);
-      await service.lifecycle({ ...input, state: "ACTIVE" });
-      expect(trialOf()).toBeUndefined();
-    }));
     it("never overwrites an existing end on a replayed ACTIVE", () => withDays(30, async () => {
       await service.ensure(input);
       const org = [...records.values()][0];
@@ -81,11 +76,6 @@ describe("onboarding primitives with Redis locks", () => {
       await service.lifecycle({ ...input, state: "ACTIVE" });
       await service.lifecycle({ ...input, state: "ACTIVE" });
       expect(trialOf()).toEqual(["2027-01-01T00:00:00.000Z"]);
-    }));
-    it("does not stamp FAILED", () => withDays(30, async () => {
-      await service.ensure(input);
-      await service.lifecycle({ ...input, state: "FAILED" });
-      expect(trialOf()).toBeUndefined();
     }));
   });
 

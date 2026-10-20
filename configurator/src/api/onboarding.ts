@@ -106,7 +106,7 @@ export interface TenantsResponse {
   notice?: WorkspaceTrialNotice;
 }
 
-/** Operator-configured text for an expired trial. The link needs both label and url. */
+/** Operator-configured text for an expired trial. The BFF sends the link only with both halves. */
 export interface WorkspaceTrialNotice {
   title: string;
   message: string;

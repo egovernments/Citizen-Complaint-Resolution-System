@@ -35,29 +35,9 @@ function cookieSameSite(value: string): "Lax" | "None" | "Strict" {
   throw new Error("IDENTITY_COOKIE_SAME_SITE must be Lax, None, or Strict");
 }
 
-// A misconfigured trial must not silently turn off, so a bad value throws at load.
-// The cap keeps the end date representable: past it, every activation would fail.
-function trialDays(value: string | undefined): number {
-  if (value === undefined) return 0;
-  if (!/^\d+$/.test(value.trim()) || parseInt(value.trim(), 10) > 3650) {
-    throw new Error("IDENTITY_WORKSPACE_TRIAL_DAYS must be an integer from 0 to 3650");
-  }
-  return parseInt(value.trim(), 10);
-}
-
 function trialNotice() {
-  const linkLabel = (process.env.IDENTITY_WORKSPACE_TRIAL_NOTICE_LINK_LABEL || "").trim();
-  const linkUrl = (process.env.IDENTITY_WORKSPACE_TRIAL_NOTICE_LINK_URL || "").trim();
-  if (linkUrl) {
-    let ok = false;
-    try {
-      const u = new URL(linkUrl);
-      ok = u.protocol === "http:" || u.protocol === "https:";
-    } catch { /* not absolute */ }
-    if (!ok) {
-      throw new Error("IDENTITY_WORKSPACE_TRIAL_NOTICE_LINK_URL must be an absolute http or https URL");
-    }
-  }
+  const linkLabel = process.env.IDENTITY_WORKSPACE_TRIAL_NOTICE_LINK_LABEL;
+  const linkUrl = process.env.IDENTITY_WORKSPACE_TRIAL_NOTICE_LINK_URL;
   return {
     title: process.env.IDENTITY_WORKSPACE_TRIAL_NOTICE_TITLE || "This workspace's trial has ended",
     message: process.env.IDENTITY_WORKSPACE_TRIAL_NOTICE_MESSAGE ||
@@ -202,7 +182,7 @@ export const config = {
 
   // Self-serve workspace trial: 0 turns it off; a workspace without
   // digit.trialEndsAt is never locked.
-  workspaceTrialDays: trialDays(process.env.IDENTITY_WORKSPACE_TRIAL_DAYS),
+  workspaceTrialDays: parseInt(process.env.IDENTITY_WORKSPACE_TRIAL_DAYS || "0"),
   workspaceTrialNotice: trialNotice(),
 
   // Existing DIGIT user-service contract. The BFF owns only the accounts it

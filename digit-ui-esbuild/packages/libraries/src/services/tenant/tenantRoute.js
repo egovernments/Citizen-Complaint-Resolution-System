@@ -153,35 +153,7 @@ async function fetchTenantContext(urlSlug, request) {
     error.verificationFailed = true;
     throw error;
   }
-  // The trial-lock notice rides along on the tenant; it is advisory display
-  // data and is not part of the verified mapping above.
-  return body.access ? { ...tenant, access: body.access } : tenant;
-}
-
-/**
- * Fresh trial-lock check for the sign-in pages. The boot path may serve the
- * tenant from the storage cache (or the browser HTTP cache), so this goes to
- * the BFF directly. Resolves to `{ state: "TRIAL_EXPIRED", notice }` or null;
- * null on any failure, because the check is advisory and the BFF still
- * refuses the sign-in itself.
- */
-export async function fetchWorkspaceAccess(urlSlug, fetchImpl) {
-  const request = fetchImpl || (typeof window !== "undefined" ? window.fetch.bind(window) : null);
-  if (!request) return null;
-  try {
-    const response = await request(
-      `/identity/v1/tenant-contexts/${encodeURIComponent(urlSlug)}`,
-      { credentials: "include", cache: "no-store", headers: { Accept: "application/json" } },
-    );
-    if (!response.ok) return null;
-    const access = (await response.json())?.access;
-    return access?.state === "TRIAL_EXPIRED" && typeof access.notice?.title === "string" &&
-      typeof access.notice.message === "string"
-      ? { state: "TRIAL_EXPIRED", notice: access.notice }
-      : null;
-  } catch (_) {
-    return null;
-  }
+  return tenant;
 }
 
 export function tenantContext() {

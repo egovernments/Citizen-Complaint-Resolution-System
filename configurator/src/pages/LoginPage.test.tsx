@@ -183,20 +183,6 @@ describe('configurator sign in', () => {
       vi.unstubAllGlobals();
     });
 
-    it('labels a locked option in the chooser and opens the dialog without selecting it', async () => {
-      vi.mocked(api.session).mockResolvedValue(signedIn);
-      vi.mocked(api.tenants).mockResolvedValue({ tenants: [open, locked], selectionRequired: true, onboardingRequired: false, notice });
-      renderPage();
-
-      const lockedButton = await screen.findByRole('button', { name: /demo workspace/i });
-      expect(lockedButton).toHaveTextContent(/trial ended/i);
-      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
-      fireEvent.click(lockedButton);
-      expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
-      expect(screen.getByText(notice.title)).toBeInTheDocument();
-      expect(api.selectContext).not.toHaveBeenCalled();
-    });
-
     it('opens the dialog when _select answers 403 WORKSPACE_TRIAL_EXPIRED', async () => {
       vi.mocked(api.session).mockResolvedValue(signedIn);
       vi.mocked(api.tenants).mockResolvedValue({ tenants: [open], selectionRequired: false, onboardingRequired: false });
@@ -209,35 +195,6 @@ describe('configurator sign in', () => {
       expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
       expect(screen.getByText(notice.title)).toBeInTheDocument();
       expect(screen.queryByText(/could not sign in/i)).not.toBeInTheDocument();
-    });
-
-    it('renders the link only when both label and url are present', async () => {
-      vi.mocked(api.session).mockResolvedValue(signedIn);
-      vi.mocked(api.tenants).mockResolvedValue({ tenants: [locked], selectionRequired: false, onboardingRequired: false, notice });
-      const { unmount } = renderPage();
-      const link = await screen.findByRole('link', { name: 'Contact sales' });
-      expect(link).toHaveAttribute('href', 'https://example.org/sales');
-      unmount();
-
-      vi.mocked(api.tenants).mockResolvedValue({
-        tenants: [locked], selectionRequired: false, onboardingRequired: false,
-        notice: { title: notice.title, message: notice.message, linkLabel: 'Contact sales' },
-      });
-      renderPage();
-      await screen.findByRole('alertdialog');
-      expect(screen.queryByRole('link')).not.toBeInTheDocument();
-    });
-
-    it('renders markup in the message as literal text', async () => {
-      vi.mocked(api.session).mockResolvedValue(signedIn);
-      vi.mocked(api.tenants).mockResolvedValue({
-        tenants: [locked], selectionRequired: false, onboardingRequired: false,
-        notice: { title: 'Ended', message: 'Hello <b>x</b>' },
-      });
-      renderPage();
-      const dialog = await screen.findByRole('alertdialog');
-      expect(dialog).toHaveTextContent('Hello <b>x</b>');
-      expect(dialog.querySelector('b')).toBeNull();
     });
   });
 

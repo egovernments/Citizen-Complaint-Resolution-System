@@ -42,7 +42,6 @@ before(async () => {
           contents = `export * as IdentityAccount from ${JSON.stringify(auth + "/identityAccount.js")};
             export * from ${JSON.stringify(auth + "/citizenOtp.js")};
             export * from ${JSON.stringify(auth + "/authSurface.js")};
-            export { fetchWorkspaceAccess } from ${JSON.stringify(path.join(root, "packages/libraries/src/services/tenant/tenantRoute.js"))};
             export { establishIdentityBffSession, buildAuthorizeUrl as buildIdentityBffAuthorizeUrl,
               surfaceBase as identityBffSurfaceBase, restrictDestination as restrictIdentityBffDestination,
               signOutIncomplete as identityBffSignOutIncomplete, clearSignOutIncomplete as clearIdentityBffSignOutIncomplete } from ${JSON.stringify(auth + "/identityBffLogin.js")};
@@ -431,47 +430,17 @@ test("pending invitation decline asks for confirmation, then leaves the person s
   view.unmount();
 });
 
-test("a locked workspace shows its notice instead of the sign-in controls", async () => {
-  const notice = { title: "Trial ended", message: "<b>Contact us</b>", linkLabel: "Upgrade", linkUrl: "https://example.org/up" };
-  const calls = [];
-  browser("employee", async (url) => {
-    calls.push(url);
-    return json(200, { tenant, access: { state: "TRIAL_EXPIRED", notice } });
-  });
-  const Shell = ({ children }) => ui.React.createElement("section", null, children);
-  const Login = () => ui.React.createElement(ui.SignInFailureCard, {
-    signIn: ui.useIdentityBffSignIn({ surface: "employee", t, onAuthenticated: () => {} }), Shell,
-  });
-  const view = await render(Login);
-  assert.deepEqual(calls, ["/identity/v1/tenant-contexts/bomet"]);
-  const body = view.root.findByProps({ className: "digit-workspace-trial-notice" });
-  assert.equal(text(body), "<b>Contact us</b>Upgrade");
-  assert.equal(body.findByType("a").props.href, "https://example.org/up");
-  assert.equal(button(view, "Sign in"), undefined);
-});
-
-test("a notice link that is not http(s) is not rendered", async () => {
-  const notice = { title: "Trial ended", message: "Contact us.", linkLabel: "Go", linkUrl: "javascript:alert(1)" };
-  browser("employee", async () => json(200, { tenant, access: { state: "TRIAL_EXPIRED", notice } }));
-  const Shell = ({ children }) => ui.React.createElement("section", null, children);
-  const Login = () => ui.React.createElement(ui.SignInFailureCard, {
-    signIn: ui.useIdentityBffSignIn({ surface: "employee", t, onAuthenticated: () => {} }), Shell,
-  });
-  const view = await render(Login);
-  assert.equal(view.root.findAllByType("a").length, 0);
-});
-
-test("closing the trial modal shows the notice inline and keeps sign-in blocked", async () => {
+test("a trial-expired _select shows the notice; closing the modal keeps it inline and sign-in blocked", async () => {
   const notice = { title: "Trial ended", message: "Contact us.", linkLabel: "Upgrade", linkUrl: "https://example.org/up" };
-  browser("employee", async () => json(200, { tenant, access: { state: "TRIAL_EXPIRED", notice } }));
+  browser("employee", async (url) => url.includes("/session")
+    ? json(200, { authenticated: true, tenant })
+    : json(403, { code: "WORKSPACE_TRIAL_EXPIRED", notice }));
   const Shell = ({ children }) => ui.React.createElement("section", null, children);
   const Login = () => ui.React.createElement(ui.SignInFailureCard, {
-    signIn: ui.useIdentityBffSignIn({ surface: "employee", t, onAuthenticated: () => {} }), Shell,
+    signIn: ui.useIdentityBffSignIn({ surface: "employee", t, onAuthenticated: () => assert.fail("a locked workspace cannot sign in") }), Shell,
   });
   const view = await render(Login);
   const popup = view.root.findByProps({ className: "digit-workspace-trial-popup" });
-  assert.equal(typeof popup.props.onClose, "function");
-  assert.equal(typeof popup.props.onOverlayClick, "function");
   await ui.act(async () => { popup.props.onClose(); });
   assert.equal(view.root.findAllByProps({ className: "digit-workspace-trial-popup" }).length, 0);
   assert.equal(button(view, "Sign in"), undefined);

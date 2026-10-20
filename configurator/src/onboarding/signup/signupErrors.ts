@@ -32,8 +32,6 @@ export const SIGNUP_ERRORS: Record<string, string> = {
   ACCOUNT_LOCKED: 'Your account in this workspace is locked. Ask its admin to unlock it.',
   DIGIT_ACCOUNT_INACTIVE: 'Your account in this workspace isn’t active. Ask its admin to turn it back on.',
   TENANT_ROLES_MISSING: 'This workspace isn’t fully set up yet. Try again in a few minutes.',
-  // The deployment's own notice is shown in a dialog; this is for a refusal that came without one.
-  WORKSPACE_TRIAL_EXPIRED: 'This workspace’s trial has ended. Contact the platform team to continue.',
 };
 
 /**

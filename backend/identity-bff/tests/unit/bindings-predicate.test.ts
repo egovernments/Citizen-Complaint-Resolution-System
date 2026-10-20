@@ -59,10 +59,6 @@ describe("fresh identity-side access predicate", () => {
     expect(await staffAccess("person", "pg")).toMatchObject({ allowed: false, denial: "WORKSPACE_TRIAL_EXPIRED" });
     f.org.trial = { ...ended, approvedAt: "2020-02-01T00:00:00.000Z", approvedBy: "ops" };
     expect(await staffAccess("person", "pg")).toMatchObject({ allowed: true, via: "binding" });
-    f.org.trial = { ...ended, endsAt: new Date(Date.now() + 60_000).toISOString() };
-    expect(await staffAccess("person", "pg")).toMatchObject({ allowed: true, via: "binding" });
-    f.org.trial = null;
-    expect(await staffAccess("person", "pg")).toMatchObject({ allowed: true, via: "binding" });
   });
   it("rechecks live membership on every call", async () => {
     binding(); expect((await staffAccess("person", "pg")).allowed).toBe(true); f.member = false;

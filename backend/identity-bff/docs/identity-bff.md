@@ -339,13 +339,12 @@ Answers `303` to the attempt's `returnTo` with a result: `PASSWORD_SETUP_COMPLET
 #### 3.2.8 `GET /identity/v1/tenant-contexts/:urlSlug` (items 11, 15)
 
 ```
-200 {tenant: {urlSlug, tenantId, rootTenantId, parentTenantId: null, fallbackTenantIds: [], name}, access?: {state: "TRIAL_EXPIRED", notice}}
+200 {tenant: {urlSlug, tenantId, rootTenantId, parentTenantId: null, fallbackTenantIds: [], name}}
 ```
 
 - `rootTenantId` = `tenantId`. `parentTenantId` and `fallbackTenantIds` are kept for compatibility, always `null` and `[]` (D16).
 - `name` is the Organization `name`, which mirrors MDMS `tenant.tenants.name` (D21).
 - An Organization in `PROVISIONING` or `FAILED` answers 404.
-- `access` is present only when the workspace's trial ended unapproved, so the login page can show the notice before anyone signs in. It is read from the cached tenant directory and is advisory: `_select` is the authority.
 - `Cache-Control: public, max-age=60, stale-while-revalidate=300`.
 - Errors: `TENANT_ROUTE_NOT_FOUND` 404, `TENANT_ROUTE_UNAVAILABLE` 503.
 
@@ -362,7 +361,7 @@ Answers `303` to the attempt's `returnTo` with a result: `PASSWORD_SETUP_COMPLET
 - The challenge is bound to `(challengeId, phone, tenant, purpose)`, plus the session and person for `stepup` and `change_phone`.
 - The answer does not depend on whether the number has an account, for any `purpose`. A `stepup` or `change_phone` code for a number another person owns is still sent (and charged to the send limits); `_verify` refuses it with 409 `PHONE_IN_USE`, checked under the phone lock.
 - Delivery goes through `HttpOtpSender` (item 3, see below), or `log` on dev boxes.
-- A workspace whose trial ended unapproved gets `WORKSPACE_TRIAL_EXPIRED` with its `notice`, for every `purpose`, and no code is sent (cached tenant directory, as `tenant-contexts`).
+- A workspace whose trial ended unapproved gets `WORKSPACE_TRIAL_EXPIRED` with its `notice`, for every `purpose`, and no code is sent (read from the cached tenant directory).
 - Errors: `INVALID_REQUEST`, `PHONE_OTP_DISABLED`, `INVALID_MOBILE_NUMBER` (400); `SESSION_REQUIRED` 401; `UNTRUSTED_ORIGIN`, `WORKSPACE_TRIAL_EXPIRED` (403); `TENANT_ROUTE_NOT_FOUND` 404; `OTP_RESEND_TOO_SOON`, `OTP_RATE_LIMITED` (429, `Retry-After`); `TENANT_ROUTE_UNAVAILABLE`, `CITIZEN_SIGNIN_NOT_CONFIGURED`, `OTP_CHANNEL_UNAVAILABLE`, `IDENTITY_UNAVAILABLE` (503).
 
 **`HttpOtpSender`** POSTs to `IDENTITY_OTP_SENDER_URL`:
@@ -695,9 +694,9 @@ Organization membership **only**, and idempotent. The role projection and the ma
 
 - **`POST /internal/identity/v1/reconciliation/_run`** (item 12) → `200 | 202 {acquired, subjects, mirrored, revoked, propagated, unchanged, failures: [{subject, code}], lagSeconds}`. It **never** writes DIGIT `active`, and never creates or restores a membership or binding. `deactivated` and `unprovisioned` are removed.
 - **`account-links/_link`, `_unlink`, `GET account-links`** keep today's shapes. After item 14 they accept `userType: "CITIZEN"` only, and `EMPLOYEE` → `INVALID_REQUEST`. They are how an admin resolves `CITIZEN_ACCOUNT_AMBIGUOUS`. Until item 14, an `EMPLOYEE` link writes an `active` binding (item 19 runs the bulk conversion).
-- **`GET /internal/identity/v1/workspace-trials`** → `200 {workspaces: [{tenantId, urlSlug, name, trialEndsAt, approvedAt, approvedBy, state: TRIAL | APPROVED | EXPIRED}]}`, one row per tenant whose serving Organization has a trial end, soonest first and an unparseable end last. FAILED, superseded and ambiguous Organizations are left out, as the writes refuse them.
-- **`POST /internal/identity/v1/workspace-trials/_approve`** `{tenantId, actor?}` → `200 {workspace}`. Sets `trialApprovedAt` and `trialApprovedBy` (`control-plane:<actor>`); a second call keeps the first approval. No Organization → `WORKSPACE_NOT_FOUND` (404); no trial → `WORKSPACE_NOT_ON_TRIAL` (409).
-- **`POST /internal/identity/v1/workspace-trials/_extend`** `{tenantId, endsAt, actor?}` → `200 {workspace}`. Sets `trialEndsAt` to `endsAt` (ISO 8601, must be in the future, else `INVALID_REQUEST`); works on a workspace with no trial. Both writes re-read the Organization before the PUT, under the onboarding lock its primitives take (`op` by `digit.operationId`, else `tenant`), and clear the tenant mapping cache, so `tenant-contexts` reflects them at once. Keycloak failure, an ambiguous tenant, or an Organization that failed or was superseded meanwhile → `IDENTITY_UNAVAILABLE` (retry).
+- **`GET /internal/identity/v1/workspace-trials`** → `200 {workspaces: [{tenantId, urlSlug, name, trialEndsAt, approvedAt, approvedBy, state: TRIAL | APPROVED | EXPIRED}]}`, one row per Organization with a trial end.
+- **`POST /internal/identity/v1/workspace-trials/_approve`** `{tenantId, actor?}` → `200 {workspace}`. Sets `trialApprovedAt` and `trialApprovedBy` (`control-plane:<actor>`); a second call keeps the first approval. No Organization → `WORKSPACE_NOT_FOUND` (404).
+- **`POST /internal/identity/v1/workspace-trials/_extend`** `{tenantId, endsAt, actor?}` → `200 {workspace}`. Sets `trialEndsAt` to `endsAt` (ISO 8601, else `INVALID_REQUEST`); works on a workspace with no trial. Both writes re-read the Organization before the PUT, under the onboarding lock its primitives take (`op` by `digit.operationId`, else `tenant`), and clear the tenant mapping cache. Keycloak failure → `IDENTITY_UNAVAILABLE` (retry).
 - **`POST /internal/identity/v1/tenant-routes/_backfill`** `{dryRun?: boolean, actor?: string}` → `200 {created: [tenantId], skipped: [{tenantId, reason: NOT_ROOT | NOT_ACTIVE | ALREADY_MAPPED}], conflicts: [{tenantId, reason: INVALID_SLUG | SLUG_TAKEN | ALIAS_TAKEN}]}`. It gives every active DIGIT root tenant in `IDENTITY_TENANT_ROUTE_BACKFILL_ROOTS` (unset: the root of `DIGIT_ADMIN_TENANT_ID`; set but empty: none, which is how a deployment opts out; the Helm chart leaves an empty value unset) that no Organization maps an Organization whose alias and URL slug are the tenant id (`ke` → `/ke/digit-ui/...`). Idempotent; it never renames or overwrites a mapping. `IDENTITY_TENANT_ROUTE_BACKFILL=true` runs the same backfill at startup. It is kept after item 14 because it is the only way a root tenant that predates signup gets a route; signup's `organizations/_ensure` covers new tenants. Keycloak or DIGIT failures → `IDENTITY_UNAVAILABLE` / `DIGIT_UNAVAILABLE`. The Ansible deploy is a regular caller: every converge POSTs it on the loopback port for the roots it renders from `identity_tenant_route_backfill_roots` (empty when it routes none, never `pg`), and compares `created`/`skipped`/`conflicts` with those roots to report any left without a route (#2398).
 
 ### 3.6 Console employee flows
@@ -798,7 +797,6 @@ The console calls HRMS first, then the BFF. The BFF never writes HRMS (§1), and
 | `ACCOUNT_LINK_BUSY` | 503 | yes | The account-link lock wait timed out (citizen links) |
 | `TENANT_NOT_FOUND` | 404 | no | Unknown or inactive DIGIT tenant |
 | `WORKSPACE_NOT_FOUND` | 404 | no | No Organization exists for the tenant |
-| `WORKSPACE_NOT_ON_TRIAL` | 409 | no | The workspace has no trial to approve |
 | `IDENTITY_NOT_FOUND` | 404 | no | No enabled Keycloak user with that subject |
 | `WORKLOAD_UNAUTHORIZED` | 401 | no | Missing or wrong bearer token for this internal route |
 | `CONTROL_PLANE_NOT_CONFIGURED` | 503 | after-change | The token for this internal route is not configured |
@@ -1205,7 +1203,7 @@ Probed on Keycloak 26.7.3 on 2026-10-04; the event shapes the poller matches are
 | `IDENTITY_STAFF_CREDENTIAL_MODE` | `rotate` \| `derived`, per box (D24) |
 | `IDENTITY_OTP_SENDER` = `log` \| `http`, `IDENTITY_OTP_SENDER_URL` | `HttpOtpSender` (item 3) |
 | `IDENTITY_POLLER_MAX_LAG_SECONDS` | Readiness threshold for the event poller |
-| `IDENTITY_WORKSPACE_TRIAL_DAYS` | Trial length for new self-serve workspaces; integer from 0 to 3650, default 0 (off). An invalid value fails startup |
+| `IDENTITY_WORKSPACE_TRIAL_DAYS` | Trial length for new self-serve workspaces; integer, default 0 (off) |
 | `IDENTITY_WORKSPACE_TRIAL_NOTICE_TITLE`, `_MESSAGE` | Text of the `WORKSPACE_TRIAL_EXPIRED` notice (defaults: "This workspace's trial has ended" / "Sign-in is paused until the workspace is approved. Contact the platform team to continue.") |
 | `IDENTITY_WORKSPACE_TRIAL_NOTICE_LINK_LABEL`, `_LINK_URL` | Optional notice link; sent only when both are set |
 | `IDENTITY_RECONCILIATION_INTERVAL_SECONDS` | Unchanged (default 300); reported by `/readyz` |
@@ -1250,14 +1248,13 @@ No line contains a token, cookie, session id or Keycloak session id.
 **Workspace trials.** A self-serve workspace can be locked 30 days (or `IDENTITY_WORKSPACE_TRIAL_DAYS`) after signup unless an operator approves it. Off when the value is 0.
 - **Gates that refuse:** employee and configurator `contexts/_select`, citizen `contexts/citizen/_select`, and citizen OTP `_send` and `_verify`. Each answers `403 {code: "WORKSPACE_TRIAL_EXPIRED", error, notice}`, where `notice` is `{title, message, linkLabel?, linkUrl?}` from the deployment settings.
 - **`GET /identity/v1/tenants`** keeps the locked workspace listed with `code: "WORKSPACE_TRIAL_EXPIRED"` and no roles, so a founder is not sent to signup.
-- **`tenant-contexts` `access`** is advisory and comes from the cached tenant directory. `_select` is the authority.
-- **Open sessions** end within one reconcile pass. Expiry is a new tenant state (`TRIAL_EXPIRED`) and revokes only that workspace's sessions. Only this fan-out also reaches citizens, found through the DIGIT token inventory (`token:<tenantId>:*`) after the members and bindings are queued; a disabled Organization or an inactive tenant still reaches only members and bindings, as before. A token record that can't be read is skipped and logged by its key, never its contents.
+- **Open sessions** end within one reconcile pass. Expiry is a new tenant state (`TRIAL_EXPIRED`) and revokes only that workspace's sessions. Only this fan-out also reaches citizens, found through the DIGIT token inventory (`token:<tenantId>:*`) after the members and bindings are queued; a disabled Organization or an inactive tenant still reaches only members and bindings, as before.
 - **Approval** moves the reconcile checkpoint back to the active state without revoking anyone.
 
 **Approving a trial workspace.** The control plane is never published by Kong or nginx. Run these on the server itself, against the BFF's loopback port.
 
 ```
-# list every workspace with a trial end, soonest first
+# list every workspace with a trial end
 curl -s -H "Authorization: Bearer $IDENTITY_CONTROL_PLANE_TOKEN" \
   http://127.0.0.1:<bff-port>/internal/identity/v1/workspace-trials
 
@@ -1274,7 +1271,6 @@ curl -s -X POST -H "Authorization: Bearer $IDENTITY_CONTROL_PLANE_TOKEN" \
   http://127.0.0.1:<bff-port>/internal/identity/v1/workspace-trials/_extend
 ```
 
-- `_approve` works only on a workspace that is on trial; one without a trial end answers 409 `WORKSPACE_NOT_ON_TRIAL`. Run `_extend` first to start a trial.
 - `approvedBy` is stored as `control-plane:<actor>`. `actor` may use letters, digits and `_ . @ : -`, up to 100 characters; any other value is dropped and stored as plain `control-plane`.
 - An approval shows at once on the replica that served it, and on other replicas within the 60 s tenant cache.
 - Fallback: a master-realm admin can edit the same Organization attributes in the Keycloak admin console, reached through an SSH tunnel.
@@ -1282,7 +1278,6 @@ curl -s -X POST -H "Authorization: Bearer $IDENTITY_CONTROL_PLANE_TOKEN" \
 **Known gaps (workspace trials).**
 - `/user/oauth/token` is public at Kong, so anyone who knows a DIGIT password can get a token without the BFF.
 - Open sessions end within one reconcile interval (900 s on Ansible deploys), not instantly.
-- `tenant-contexts` is HTTP-cached (60 s plus a 300 s stale-while-revalidate window), so an approval can take up to about 6 minutes to reach a browser. `_select` is live.
 - In the compose `.env`, a notice message cannot end with a backslash or contain a backslash directly before an apostrophe.
 
 The configuration reference for each variable is `deploy/digit-compose/identity-bff.env.example`. The deployment walkthrough is `docs/setup/deployment/identity-bff.md` at the repository root.
