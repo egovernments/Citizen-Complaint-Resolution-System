@@ -75,10 +75,11 @@ export const ROUTES: RouteContract[] = [
   { method: "POST", path: "/identity/v1/citizen/otp/_send", auth: "none", state: "changing", items: [3, 13],
     codes: ["UNTRUSTED_ORIGIN", "INVALID_REQUEST", "TENANT_ROUTE_NOT_FOUND", "TENANT_ROUTE_UNAVAILABLE", "PHONE_OTP_DISABLED",
       "CITIZEN_SIGNIN_NOT_CONFIGURED", "INVALID_MOBILE_NUMBER", "OTP_RESEND_TOO_SOON", "OTP_RATE_LIMITED",
-      "OTP_CHANNEL_UNAVAILABLE", "IDENTITY_UNAVAILABLE", "SESSION_REQUIRED"] },
+      "OTP_CHANNEL_UNAVAILABLE", "IDENTITY_UNAVAILABLE", "SESSION_REQUIRED", "WORKSPACE_TRIAL_EXPIRED"] },
   { method: "POST", path: "/identity/v1/citizen/otp/_verify", auth: "none", state: "changing", items: [13],
     codes: ["UNTRUSTED_ORIGIN", "INVALID_REQUEST", "TENANT_ROUTE_NOT_FOUND", "TENANT_ROUTE_UNAVAILABLE", "PHONE_OTP_DISABLED", "OTP_EXPIRED",
-      "OTP_INVALID", "IDENTITY_DISABLED", "IDENTITY_CONFLICT", "IDENTITY_UNAVAILABLE", "SESSION_REQUIRED", "PHONE_IN_USE"] },
+      "OTP_INVALID", "IDENTITY_DISABLED", "IDENTITY_CONFLICT", "IDENTITY_UNAVAILABLE", "SESSION_REQUIRED", "PHONE_IN_USE",
+      "WORKSPACE_TRIAL_EXPIRED"] },
 
   // Browser, signed in
   { method: "GET", path: "/identity/v1/session", auth: "session", state: "changing", items: [4, 9, 10, 15],
@@ -94,7 +95,7 @@ export const ROUTES: RouteContract[] = [
       "DIGIT_UNAVAILABLE", "IDENTITY_UNAVAILABLE", "IDENTITY_BUSY"] },
   { method: "POST", path: "/identity/v1/contexts/citizen/_select", auth: "session", state: "changing", items: [10, 12, 13],
     codes: [...BROWSER_WRITE, "UNSUPPORTED_SURFACE", "SESSION_EXPIRED", "PHONE_NOT_VERIFIED", "CITIZEN_CONTEXT_UNAVAILABLE",
-      "CITIZEN_SIGNIN_NOT_CONFIGURED", "CITIZEN_ACCOUNT_AMBIGUOUS", "CITIZEN_ACCOUNT_LINK_BLOCKED", "ACCOUNT_LOCKED",
+      "WORKSPACE_TRIAL_EXPIRED", "CITIZEN_SIGNIN_NOT_CONFIGURED", "CITIZEN_ACCOUNT_AMBIGUOUS", "CITIZEN_ACCOUNT_LINK_BLOCKED", "ACCOUNT_LOCKED",
       "DIGIT_ACCOUNT_INACTIVE", "ACCOUNT_LINK_BUSY", "DIGIT_PII_MASKED", "DIGIT_ACCOUNT_MISMATCH", "DIGIT_UNAVAILABLE",
       "IDENTITY_UNAVAILABLE", "IDENTITY_BUSY"] },
   { method: "POST", path: "/identity/v1/workspace-members/_link", auth: "session", state: "live", items: [8, 9],

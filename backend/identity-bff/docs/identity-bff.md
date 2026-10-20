@@ -336,12 +336,13 @@ Answers `303` to the attempt's `returnTo` with a result: `PASSWORD_SETUP_COMPLET
 #### 3.2.8 `GET /identity/v1/tenant-contexts/:urlSlug` (items 11, 15)
 
 ```
-200 {tenant: {urlSlug, tenantId, rootTenantId, parentTenantId: null, fallbackTenantIds: [], name}}
+200 {tenant: {urlSlug, tenantId, rootTenantId, parentTenantId: null, fallbackTenantIds: [], name}, access?: {state: "TRIAL_EXPIRED", notice}}
 ```
 
 - `rootTenantId` = `tenantId`. `parentTenantId` and `fallbackTenantIds` are kept for compatibility, always `null` and `[]` (D16).
 - `name` is the Organization `name`, which mirrors MDMS `tenant.tenants.name` (D21).
 - An Organization in `PROVISIONING` or `FAILED` answers 404.
+- `access` is present only when the workspace's trial ended unapproved, so the login page can show the notice before anyone signs in. It is read from the cached tenant directory and is advisory: `_select` is the authority.
 - `Cache-Control: public, max-age=60, stale-while-revalidate=300`.
 - Errors: `TENANT_ROUTE_NOT_FOUND` 404, `TENANT_ROUTE_UNAVAILABLE` 503.
 
@@ -358,7 +359,8 @@ Answers `303` to the attempt's `returnTo` with a result: `PASSWORD_SETUP_COMPLET
 - The challenge is bound to `(challengeId, phone, tenant, purpose)`, plus the session and person for `stepup` and `change_phone`.
 - The answer does not depend on whether the number has an account, for any `purpose`. A `stepup` or `change_phone` code for a number another person owns is still sent (and charged to the send limits); `_verify` refuses it with 409 `PHONE_IN_USE`, checked under the phone lock.
 - Delivery goes through `HttpOtpSender` (item 3, see below), or `log` on dev boxes.
-- Errors: `INVALID_REQUEST`, `PHONE_OTP_DISABLED`, `INVALID_MOBILE_NUMBER` (400); `SESSION_REQUIRED` 401; `UNTRUSTED_ORIGIN` 403; `TENANT_ROUTE_NOT_FOUND` 404; `OTP_RESEND_TOO_SOON`, `OTP_RATE_LIMITED` (429, `Retry-After`); `TENANT_ROUTE_UNAVAILABLE`, `CITIZEN_SIGNIN_NOT_CONFIGURED`, `OTP_CHANNEL_UNAVAILABLE`, `IDENTITY_UNAVAILABLE` (503).
+- A workspace whose trial ended unapproved gets `WORKSPACE_TRIAL_EXPIRED` with its `notice`, for every `purpose`, and no code is sent (cached tenant directory, as `tenant-contexts`).
+- Errors: `INVALID_REQUEST`, `PHONE_OTP_DISABLED`, `INVALID_MOBILE_NUMBER` (400); `SESSION_REQUIRED` 401; `UNTRUSTED_ORIGIN`, `WORKSPACE_TRIAL_EXPIRED` (403); `TENANT_ROUTE_NOT_FOUND` 404; `OTP_RESEND_TOO_SOON`, `OTP_RATE_LIMITED` (429, `Retry-After`); `TENANT_ROUTE_UNAVAILABLE`, `CITIZEN_SIGNIN_NOT_CONFIGURED`, `OTP_CHANNEL_UNAVAILABLE`, `IDENTITY_UNAVAILABLE` (503).
 
 **`HttpOtpSender`** POSTs to `IDENTITY_OTP_SENDER_URL`:
 
@@ -383,7 +385,8 @@ change_phone → 200 {phoneNumber, phoneNumberVerified: true}
 - New phone identities get an **opaque** Keycloak username. Existing usernames stay, and lookup always follows the current verified phone (design §8).
 - A **phone change** keeps the citizen account's uuid. It updates Keycloak, then DIGIT. It ends the person's other sessions that carry the old number.
 - A new citizen without a given name gets the national mobile number as their DIGIT name (D17).
-- Errors: `INVALID_REQUEST`, `PHONE_OTP_DISABLED`, `OTP_EXPIRED`, `OTP_INVALID` (+ `attemptsRemaining`) (400); `SESSION_REQUIRED` 401; `UNTRUSTED_ORIGIN`, `IDENTITY_DISABLED` (403); `TENANT_ROUTE_NOT_FOUND` 404; `IDENTITY_CONFLICT`, `PHONE_IN_USE` (409); `TENANT_ROUTE_UNAVAILABLE`, `IDENTITY_UNAVAILABLE` (503).
+- A workspace whose trial ended unapproved gets `WORKSPACE_TRIAL_EXPIRED` with its `notice` before the code is checked, as in `_send`.
+- Errors: `INVALID_REQUEST`, `PHONE_OTP_DISABLED`, `OTP_EXPIRED`, `OTP_INVALID` (+ `attemptsRemaining`) (400); `SESSION_REQUIRED` 401; `UNTRUSTED_ORIGIN`, `IDENTITY_DISABLED`, `WORKSPACE_TRIAL_EXPIRED` (403); `TENANT_ROUTE_NOT_FOUND` 404; `IDENTITY_CONFLICT`, `PHONE_IN_USE` (409); `TENANT_ROUTE_UNAVAILABLE`, `IDENTITY_UNAVAILABLE` (503).
 
 ### 3.3 Browser, signed in
 
@@ -433,12 +436,13 @@ Body or query `{surface, scope?: "current" | "others" | "all"}`, default `curren
 Configurator surface.
 
 ```
-200 {tenants: [{organizationAlias, tenantId, name, roles: string[], code?: "DIGIT_ACCOUNT_INACTIVE"}], selectionRequired, onboardingRequired}
+200 {tenants: [{organizationAlias, tenantId, name, roles: string[], code?: "DIGIT_ACCOUNT_INACTIVE" | "WORKSPACE_TRIAL_EXPIRED"}], selectionRequired, onboardingRequired, notice?}
 ```
 
 - It lists the `ACTIVE` Organizations where the staff predicate holds. The read is targeted from `digit.bindings` and memberships; it no longer probes every Organization (item 15).
 - `roles` are the role codes of the mirrored `digit.accounts` entry.
 - **Inactive staff** (DIGIT `active=false`) still see the tenant, with `code: "DIGIT_ACCOUNT_INACTIVE"`, and can't select it.
+- A workspace whose **trial ended** unapproved stays listed with `code: "WORKSPACE_TRIAL_EXPIRED"` and `roles: []`, and the response carries the `notice`. A locked founder is never sent to signup (`onboardingRequired` stays false).
 - Pending invitations are **not** listed here; they are in `/session`.
 - Errors: `SESSION_REQUIRED` / `SESSION_REVOKED` 401, `DIGIT_UNAVAILABLE` / `IDENTITY_UNAVAILABLE` 503.
 
@@ -452,7 +456,7 @@ Body `{surface: "configurator" | "employee", tenantId}`. An employee's `tenantId
 
 **Order (design §6), all inside the person lease:**
 1. Re-read the session. Gone → `SESSION_EXPIRED`; generation behind → `SESSION_REVOKED`.
-2. The staff predicate and Organization `ACTIVE`, else `TENANT_CONTEXT_UNAVAILABLE`. A `pending` binding → `PENDING_INVITATION`. No binding (and no managed account until item 14), or no membership → `EMPLOYEE_ACCOUNT_NOT_LINKED`. An entry marked `missing` → `DIGIT_ACCOUNT_NOT_FOUND`.
+2. The staff predicate and Organization `ACTIVE`, else `TENANT_CONTEXT_UNAVAILABLE`. A trial that ended unapproved (read live) → `WORKSPACE_TRIAL_EXPIRED` with its `notice`. A `pending` binding → `PENDING_INVITATION`. No binding (and no managed account until item 14), or no membership → `EMPLOYEE_ACCOUNT_NOT_LINKED`. An entry marked `missing` → `DIGIT_ACCOUNT_NOT_FOUND`.
 3. DIGIT `active`, else `DIGIT_ACCOUNT_INACTIVE`.
 4. Return the cached token if egov-user still accepts it. A dependency error is not treated as an invalid token.
 5. Otherwise mint with the derived credential (§8). The typed login outcomes are:
@@ -473,6 +477,7 @@ Body `{surface?: "citizen"}`. The tenant comes only from the session's bound ten
 - The same steps as staff `_select`, with the citizen predicate. Issuance is the egov-otp-backed citizen grant.
 - Resolution: the `digit.accounts` citizen entry, then the citizen link, then a CITIZEN search by the verified phone. An ambiguous match → `CITIZEN_ACCOUNT_AMBIGUOUS`.
 - The per-tenant registration `DISABLED` status is removed (D6). Blocking a citizen = disabling their Keycloak user.
+- The bound workspace's trial is read live, after the route check: ended unapproved → `WORKSPACE_TRIAL_EXPIRED` with its `notice`.
 - Errors: as staff `_select`, plus `PHONE_NOT_VERIFIED`, `CITIZEN_CONTEXT_UNAVAILABLE` (403); `CITIZEN_ACCOUNT_AMBIGUOUS`, `CITIZEN_ACCOUNT_LINK_BLOCKED` (409); `DIGIT_ACCOUNT_MISMATCH` 502; `CITIZEN_SIGNIN_NOT_CONFIGURED`, `ACCOUNT_LINK_BUSY` (503).
 
 #### 3.3.6 `POST /identity/v1/workspace-members/_link` (items 8, 9)

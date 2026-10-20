@@ -41,6 +41,9 @@ import type { TenantOption } from "./tenant-directory.js";
 import { isLiveTenantRoute, resolvePublicTenantRoute } from "./tenant-route.js";
 import { resolveTenantOption, resolveTenantOptions } from "./tenant-options.js";
 import { AccountLinkError } from "../account-links/account-links.js";
+import { readOrganizationByTenant } from "../onboarding/organization-reader.js";
+import { publicTrialAccess, sendTrialExpired } from "../workspace-trial/access.js";
+import { isTrialLocked, trialNotice } from "../workspace-trial/trial.js";
 
 // Registry context kinds preserve the core selection checks for every surface.
 function staffSurfacePolicy(surface: ReturnType<typeof parseSurface>) {
@@ -83,6 +86,8 @@ async function cleanupIssuedToken(lease: PersonLease, account: AccountRef, login
  * from the catalogue, so a code is never sent with two statuses.
  */
 function digitFailure(error: unknown, response: express.Response, message: string, citizen = false) {
+  // A trial lock is never sent without its notice.
+  if ((error as { code?: unknown })?.code === "WORKSPACE_TRIAL_EXPIRED") return sendTrialExpired(response);
   if (error instanceof StaffLoginError) return send(response, error.reason === "ACCOUNT_LOCKED" ? "ACCOUNT_LOCKED" : error.reason === "ACCOUNT_INACTIVE" ? "DIGIT_ACCOUNT_INACTIVE" : "DIGIT_UNAVAILABLE", error.reason === "ACCOUNT_LOCKED" ? "This account is locked" : error.reason === "ACCOUNT_INACTIVE" ? "This account is not active" : message);
   const typed = error as { code?: unknown };
   if (isErrorCode(typed?.code) && typeof errorStatus(typed.code as HttpErrorCode) === "number") return send(response, typed.code as HttpErrorCode, message);
@@ -133,8 +138,9 @@ export function registerAccessContextRoutes(app: express.Application): void {
       if (!tenant) {
         return response.status(404).json({ error: "Tenant route is not available" });
       }
+      const access = await publicTrialAccess(tenant.urlSlug);
       response.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
-      return response.json({ tenant });
+      return response.json({ tenant, ...(access && { access }) });
     } catch (error) {
       return digitFailure(error, response, "Tenant routes are temporarily unavailable");
     }
@@ -151,6 +157,7 @@ export function registerAccessContextRoutes(app: express.Application): void {
         tenants: tenants.map(publicTenant),
         selectionRequired: tenants.length > 1,
         onboardingRequired: tenants.length === 0,
+        ...(tenants.some((tenant) => tenant.code === "WORKSPACE_TRIAL_EXPIRED") && { notice: trialNotice() }),
       });
     } catch (error) {
       return digitFailure(error, response, "Tenant options are temporarily unavailable");
@@ -187,6 +194,7 @@ export function registerAccessContextRoutes(app: express.Application): void {
         await runPendingRevocations(lease);
         await requireCurrentSession(lease, current.sessionId);
         const access = await staffAccess(subject, tenantId);
+        if (access.denial === "WORKSPACE_TRIAL_EXPIRED") throw new BindingError("WORKSPACE_TRIAL_EXPIRED", "This workspace's trial has ended");
         if (!access.allowed) throw new BindingError(access.binding?.state === "pending" ? "PENDING_INVITATION" : surfacePolicy.tenantBound ? "EMPLOYEE_ACCOUNT_NOT_LINKED" : "TENANT_CONTEXT_UNAVAILABLE", "Tenant context is not available");
         const selected = await resolveTenantOption(subject, tenantId);
         if (!selected) throw new BindingError("TENANT_CONTEXT_UNAVAILABLE", "Tenant context is not available");
@@ -263,6 +271,9 @@ export function registerAccessContextRoutes(app: express.Application): void {
           if (!await isLiveTenantRoute(boundTenant) || !await isActiveDigitTenant(boundTenant.tenantId)) {
             return send(response, "CITIZEN_CONTEXT_UNAVAILABLE", "Citizen context is not available");
           }
+          // The workspace owns the route's root tenant; its trial is read live too.
+          const workspace = await readOrganizationByTenant(boundTenant.rootTenantId);
+          if (isTrialLocked(workspace?.trial ?? null, Date.now())) return sendTrialExpired(response);
           const rule = await mobileValidationForRoute({
             urlSlug: boundTenant.urlSlug,
             tenantId: boundTenant.tenantId,

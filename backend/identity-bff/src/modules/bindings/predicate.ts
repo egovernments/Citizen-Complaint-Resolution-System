@@ -3,9 +3,10 @@ import { managedFallbackAccess } from "./managed-fallback.js";
 import { isOrganizationMember } from "../organizations/organization-service.js";
 import { bindingsFromUser, effectiveBinding, readBindingUser, type Binding } from "./store.js";
 import { readOrganizationByTenant } from "../onboarding/organization-reader.js";
+import { isTrialLocked } from "../workspace-trial/trial.js";
 
 export type AccessDenial = "KEYCLOAK_DISABLED" | "NO_ACTIVE_BINDING" | "NOT_A_MEMBER" |
-  "ORGANIZATION_INACTIVE" | "TENANT_INACTIVE" | "PHONE_NOT_VERIFIED";
+  "ORGANIZATION_INACTIVE" | "WORKSPACE_TRIAL_EXPIRED" | "TENANT_INACTIVE" | "PHONE_NOT_VERIFIED";
 export interface StaffAccess {
   allowed: boolean;
   denial?: AccessDenial;
@@ -29,6 +30,7 @@ export async function staffAccess(subject: string, tenantId: string): Promise<St
   }
   const org = await readOrganizationByTenant(tenantId);
   if (!org || !org.enabled || (org.lifecycle !== null && org.lifecycle !== "ACTIVE")) return deny("ORGANIZATION_INACTIVE");
+  if (isTrialLocked(org.trial, Date.now())) return deny("WORKSPACE_TRIAL_EXPIRED");
   if (!await isActiveDigitTenant(tenantId)) return deny("TENANT_INACTIVE");
   if (!await isOrganizationMember(org.id, subject)) return deny("NOT_A_MEMBER");
   return { ...base, allowed: true };

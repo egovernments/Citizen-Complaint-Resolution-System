@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BindingUser } from "../../src/modules/bindings/types.js";
 const f = vi.hoisted(() => ({
   user: { enabled: true, attributes: {} } as BindingUser,
-  org: { id: "org", enabled: true, lifecycle: null as string | null },
+  org: { id: "org", enabled: true, lifecycle: null as string | null, trial: null as object | null },
   member: true, tenant: true, managed: null as object | null,
 }));
 vi.mock("../../src/modules/organizations/organization-service.js", () => ({
@@ -23,7 +23,7 @@ function binding(state = "active") {
   }] })];
 }
 beforeEach(() => {
-  f.user = { enabled: true, attributes: {} }; f.org = { id: "org", enabled: true, lifecycle: null };
+  f.user = { enabled: true, attributes: {} }; f.org = { id: "org", enabled: true, lifecycle: null, trial: null };
   f.member = true; f.tenant = true; f.managed = null;
 });
 describe("fresh identity-side access predicate", () => {
@@ -45,6 +45,17 @@ describe("fresh identity-side access predicate", () => {
   it.each(["PROVISIONING", "FAILED"])("denies %s Organizations", async (state) => {
     binding(); f.org.lifecycle = state;
     expect(await staffAccess("person", "pg")).toMatchObject({ allowed: false, denial: "ORGANIZATION_INACTIVE" });
+  });
+  it("denies an Organization whose trial ended unless it was approved", async () => {
+    binding(); const ended = { endsAt: "2020-01-01T00:00:00.000Z", approvedAt: null, approvedBy: null };
+    f.org.trial = ended;
+    expect(await staffAccess("person", "pg")).toMatchObject({ allowed: false, denial: "WORKSPACE_TRIAL_EXPIRED" });
+    f.org.trial = { ...ended, approvedAt: "2020-02-01T00:00:00.000Z", approvedBy: "ops" };
+    expect(await staffAccess("person", "pg")).toMatchObject({ allowed: true, via: "binding" });
+    f.org.trial = { ...ended, endsAt: new Date(Date.now() + 60_000).toISOString() };
+    expect(await staffAccess("person", "pg")).toMatchObject({ allowed: true, via: "binding" });
+    f.org.trial = null;
+    expect(await staffAccess("person", "pg")).toMatchObject({ allowed: true, via: "binding" });
   });
   it("rechecks live membership on every call", async () => {
     binding(); expect((await staffAccess("person", "pg")).allowed).toBe(true); f.member = false;
