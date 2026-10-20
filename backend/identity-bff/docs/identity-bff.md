@@ -477,7 +477,7 @@ Body `{surface?: "citizen"}`. The tenant comes only from the session's bound ten
 - The same steps as staff `_select`, with the citizen predicate. Issuance is the egov-otp-backed citizen grant.
 - Resolution: the `digit.accounts` citizen entry, then the citizen link, then a CITIZEN search by the verified phone. An ambiguous match → `CITIZEN_ACCOUNT_AMBIGUOUS`.
 - The per-tenant registration `DISABLED` status is removed (D6). Blocking a citizen = disabling their Keycloak user.
-- The bound workspace's trial is read live, after the route check: ended unapproved → `WORKSPACE_TRIAL_EXPIRED` with its `notice`.
+- The bound workspace's trial comes from the same live Organization read that re-checks the route: ended unapproved → `WORKSPACE_TRIAL_EXPIRED` with its `notice`.
 - Errors: as staff `_select`, plus `PHONE_NOT_VERIFIED`, `CITIZEN_CONTEXT_UNAVAILABLE` (403); `CITIZEN_ACCOUNT_AMBIGUOUS`, `CITIZEN_ACCOUNT_LINK_BLOCKED` (409); `DIGIT_ACCOUNT_MISMATCH` 502; `CITIZEN_SIGNIN_NOT_CONFIGURED`, `ACCOUNT_LINK_BUSY` (503).
 
 #### 3.3.6 `POST /identity/v1/workspace-members/_link` (items 8, 9)

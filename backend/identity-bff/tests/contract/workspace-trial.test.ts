@@ -12,12 +12,13 @@ import { getIdentityAppPort, startIdentityTestApp, stopIdentityTestApp } from ".
 import { contractRoute, expectContractError } from "./harness.js";
 
 // Workspace trial lock at every sign-in gate. `acme`'s trial ended; `bravo`'s
-// ended too but was approved, so it must pass every gate. The real app runs
-// over the Keycloak Admin mock (in a realm of its own), a fake DIGIT and Redis.
+// ended too but was approved, so it must pass every gate; `charlie` has no
+// trial, like every workspace that predates trials. The real app runs over the
+// Keycloak Admin mock (in a realm of its own), a fake DIGIT and Redis.
 
 const TRUSTED = "http://localhost:5173";
 const ENDED = "2020-01-01T00:00:00.000Z";
-const digit = createFakeDigitUser({ tenants: ["acme", "bravo"] });
+const digit = createFakeDigitUser({ tenants: ["acme", "bravo", "charlie"] });
 const sent: OtpMessage[] = [];
 const originalSender = otpSender();
 const saved: Record<string, unknown> = {};
@@ -49,7 +50,8 @@ async function workspace(slug: string, trial: Record<string, string[]>) {
   expect((await kc("POST", "/organizations", { id: `org-${slug}`, alias: slug, name: `${slug} workspace`, enabled: true,
     attributes: { "digit.rootTenantId": [slug], "digit.urlSlug": [slug], "digit.lifecycle": ["ACTIVE"], ...trial } })).status).toBe(201);
   const subject = `founder-${slug}`;
-  await kc("POST", "/users", { id: subject, username: subject, email: `${subject}@example.test`, emailVerified: true, enabled: true });
+  expect((await kc("POST", "/users", { id: subject, username: subject, email: `${subject}@example.test`, emailVerified: true, enabled: true })).status)
+    .toBe(201);
   const account = digit.addAccount({ userName: `FOUNDER-${slug.toUpperCase()}`, name: "Founder", mobileNumber: "712000001",
     emailId: null, tenantId: slug, type: "EMPLOYEE", active: true, identificationMark: null, password: "Founder@123",
     roles: ["EMPLOYEE", "ACCOUNT_ADMIN"].map((code) => ({ code, tenantId: slug })) });
@@ -72,10 +74,10 @@ async function staffCookie(slug: string, surface: "configurator" | "employee"): 
 }
 
 /** A Keycloak-signed-in citizen bound to the workspace route. */
-async function citizenCookie(slug: string): Promise<string> {
+async function citizenCookie(slug: string, phone: string): Promise<string> {
   const subject = `citizen-${slug}`;
-  await kc("POST", "/users", { id: subject, username: subject, enabled: true,
-    attributes: { phoneNumber: ["+254712000101"], phoneNumberVerified: ["true"] } });
+  expect((await kc("POST", "/users", { id: subject, username: subject, enabled: true,
+    attributes: { phoneNumber: [phone], phoneNumberVerified: ["true"] } })).status).toBe(201);
   const { sessionId } = await createIdentitySession({ accessToken: "trial-contract-token", accessExpiresIn: 3600 },
     { sub: subject, azp: config.keycloakCitizenClientId }, config.keycloakCitizenClientId,
     { surface: "citizen", boundTenant: tenantOf(slug) });
@@ -111,6 +113,11 @@ beforeAll(async () => {
   await workspace("acme", { [TRIAL_ATTRIBUTES.endsAt]: [ENDED] });
   await workspace("bravo", { [TRIAL_ATTRIBUTES.endsAt]: [ENDED], [TRIAL_ATTRIBUTES.approvedAt]: ["2020-01-15T00:00:00.000Z"],
     [TRIAL_ATTRIBUTES.approvedBy]: ["ops@example.org"] });
+  await workspace("charlie", {});
+  // A failed earlier attempt for the same tenant: disabled, so routing ignores it.
+  expect((await kc("POST", "/organizations", { id: "org-charlie-failed", alias: "charlie-failed", name: "charlie workspace",
+    enabled: false, attributes: { "digit.rootTenantId": ["charlie"], "digit.urlSlug": ["charlie"], "digit.lifecycle": ["FAILED"] } })).status)
+    .toBe(201);
   clearTenantMappingCache();
 });
 
@@ -161,7 +168,7 @@ describe("a workspace whose trial ended", () => {
 
   it("refuses citizen _select for a session bound to it and mints no DIGIT token", async () => {
     const tokens = digit.tokens.size;
-    const response = await post(routes.citizenSelect.path, {}, await citizenCookie("acme"));
+    const response = await post(routes.citizenSelect.path, {}, await citizenCookie("acme", "+254712000101"));
     const body = await expectContractError(response, routes.citizenSelect, "WORKSPACE_TRIAL_EXPIRED");
     expect(body.notice).toEqual(config.workspaceTrialNotice);
     expect(digit.tokens.size).toBe(tokens);
@@ -201,5 +208,13 @@ describe("an approved trial workspace", () => {
     const selected = await post(routes.citizenSelect.path, {}, cookie);
     expect(selected.status).toBe(200);
     expect(await selected.json()).toMatchObject({ UserRequest: { type: "CITIZEN" }, tenant: { urlSlug: "bravo", tenantId: "bravo" } });
+  });
+});
+
+describe("a workspace with no trial", () => {
+  it("selects a citizen context even when a disabled Organization also claims its tenant", async () => {
+    const response = await post(routes.citizenSelect.path, {}, await citizenCookie("charlie", "+254712000102"));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ UserRequest: { type: "CITIZEN" }, tenant: { urlSlug: "charlie", tenantId: "charlie" } });
   });
 });

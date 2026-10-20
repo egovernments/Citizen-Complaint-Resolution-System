@@ -38,10 +38,9 @@ import {
   keycloakPhoneIsAdminControlled,
 } from "../organizations/organization-service.js";
 import type { TenantOption } from "./tenant-directory.js";
-import { isLiveTenantRoute, resolvePublicTenantRoute } from "./tenant-route.js";
+import { liveTenantRoute, resolvePublicTenantRoute } from "./tenant-route.js";
 import { resolveTenantOption, resolveTenantOptions } from "./tenant-options.js";
 import { AccountLinkError } from "../account-links/account-links.js";
-import { readOrganizationByTenant } from "../onboarding/organization-reader.js";
 import { publicTrialAccess, sendTrialExpired } from "../workspace-trial/access.js";
 import { isTrialLocked, trialNotice } from "../workspace-trial/trial.js";
 
@@ -268,12 +267,12 @@ export function registerAccessContextRoutes(app: express.Application): void {
           // Like employee `_select`, re-read the tenant's Organization (or group)
           // live: disabling or unmapping it stops citizen sign-in at once, not
           // when the session expires.
-          if (!await isLiveTenantRoute(boundTenant) || !await isActiveDigitTenant(boundTenant.tenantId)) {
+          const live = await liveTenantRoute(boundTenant);
+          if (!live || !await isActiveDigitTenant(boundTenant.tenantId)) {
             return send(response, "CITIZEN_CONTEXT_UNAVAILABLE", "Citizen context is not available");
           }
-          // The workspace owns the route's root tenant; its trial is read live too.
-          const workspace = await readOrganizationByTenant(boundTenant.rootTenantId);
-          if (isTrialLocked(workspace?.trial ?? null, Date.now())) return sendTrialExpired(response);
+          // The live mapping carries the workspace's trial (a group, its parent's).
+          if (isTrialLocked(live.trial, Date.now())) return sendTrialExpired(response);
           const rule = await mobileValidationForRoute({
             urlSlug: boundTenant.urlSlug,
             tenantId: boundTenant.tenantId,
