@@ -385,6 +385,36 @@ docker exec -e BAO_TOKEN="$T" -e BAO_ADDR=http://127.0.0.1:8200 openbao \
   the deploy log as "<root> looks like a truncated bootstrap"; the deploy's
   `-e repair_tenant_masters=true --tags master-repair` restores all of them from
   `pg`. Review that list first if the root has deliberate RBAC changes.
+- **Configurator workspace endpoints, and a workspace record for the root.** After
+  sign-in the configurator calls `/pgr-services/v2/onboarding/workspaces/_search`
+  (and `_update` and `_rename` later). Signup seeds these permissions for the
+  workspaces it creates, but nothing seeds them for a root that existed before
+  2.20. Without them the admin signs in, picks the workspace, and sees
+  `AccessDeniedException`, and Kong logs a 403 on `workspaces/_search`.
+  Add the three actions and their `ACCOUNT_ADMIN` role-actions at the root,
+  through the MDMS v2 `_create` API as `ADMIN`. The shapes and ids come from
+  `backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json`;
+  check first that ids 900000, 900001 and 901000 are free at the root.
+  - `ACCESSCONTROL-ACTIONS-TEST.actions-test`:
+    `{"id": 900000, "url": "/pgr-services/v2/onboarding/workspaces/_search", "name": "platform-900000", "displayName": "/pgr-services/v2/onboarding/workspaces/_search", "orderNumber": 0, "enabled": true, "serviceCode": "PLATFORM", "path": "", "method": "POST"}`,
+    and the same for `_update` (900001) and `_rename` (901000).
+  - `ACCESSCONTROL-ROLEACTIONS.roleactions`, one per action:
+    `{"id": 900000, "rolecode": "ACCOUNT_ADMIN", "actionid": 900000, "actioncode": "", "tenantId": "<root>"}`.
+
+  The root also needs a row in `eg_pgr_onboarding_workspace`, or `_search` returns
+  `"Workspace": null` and the configurator fails on the next step. Insert the
+  same "legacy, setup complete" row that pgr-services writes for a pre-existing
+  tenant on its first rename. A row with no `seed_version` is never upgraded by the
+  baseline upgrader:
+
+  ```bash
+  PQ "insert into eg_pgr_onboarding_workspace(tenant_id,status,steps,version)
+      values ('<root>','DONE','{\"BRANDING\":{\"state\":\"DONE\",\"updatedAt\":null,\"updatedBy\":null},\"GEOGRAPHY\":{\"state\":\"DONE\",\"updatedAt\":null,\"updatedBy\":null},\"DEPARTMENTS\":{\"state\":\"DONE\",\"updatedAt\":null,\"updatedBy\":null},\"EMPLOYEES\":{\"state\":\"DONE\",\"updatedAt\":null,\"updatedBy\":null},\"COMPLAINT_TYPES\":{\"state\":\"DONE\",\"updatedAt\":null,\"updatedBy\":null}}'::jsonb,0)
+      on conflict do nothing"
+  ```
+
+  `egov-accesscontrol` caches role-actions for 15 minutes
+  (`cache.expiry.role.action.minutes`). Wait that long, or restart it.
 - **Mobile number rule:** citizen phone sign-in validates the number against the
   root's `MobileNumberValidation` rule. The deploy also refuses an old
   `core_mobile_configs` schema. Make sure exactly one current rule is the default.
@@ -924,3 +954,4 @@ marks once a step is proven.
 | 06:58 | same | Verify by role (6) | Admin, GRO, LME, CSR, citizen OTP and service accounts all pass | Orphan cleanup and re-enabling the nightly still to do. |
 | 14:22 | same | Configurator signup reported broken; enable it (2.6) | Sign-in had worked all along. The signup page said "No sign-in method is enabled" | `identity_signup_methods: [magic_link]` had been set without `identity_magic_link_enabled: true`. Backed up Keycloak and Postgres, set the flag, ran a full deploy. |
 | 14:34 | same | Same deploy, end | Signup offers magic link; the link reaches the mail catcher and lands signed in on `/configurator/signup`. Every role still signs in. Stopped at the notification seed (rc 2), as expected | The skip flag was passed as `=false`, so the seed ran: it logged `+23 created` but wrote nothing, and egov-accesscontrol still refuses all 23 (5.1 #4). |
+| 10-20 07:33 | same | A colleague reports the configurator admin getting `AccessDeniedException` | Sign-in and workspace pick work, then `workspaces/_search` returns 403 from Kong | The root predates 2.20, so signup never seeded the onboarding workspace role-actions, and the root had no `eg_pgr_onboarding_workspace` row. Added both (2.3). They take effect once the 15-minute role-action cache expires. |
