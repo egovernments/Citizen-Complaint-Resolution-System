@@ -888,10 +888,14 @@ A pending binding past `expiresAt` counts as `removed` everywhere, even before a
 | `digit.operationHash` | 64 hex characters | §9 |
 | `digit.lifecycle` | `PROVISIONING` \| `ACTIVE` \| `FAILED` | **Absent = `ACTIVE`** |
 | `digit.lifecycleRestartNo` | integer, as a string | The `restartNo` the lifecycle was set at, so a repeated `_lifecycle` call is recognized |
+| `digit.trialEndsAt` | ISO-8601 UTC string | Present means the workspace is on trial. Written by the BFF at the first `PROVISIONING` → `ACTIVE` when `IDENTITY_WORKSPACE_TRIAL_DAYS` > 0 (never over an existing value), or by the operator's `_extend` |
+| `digit.trialApprovedAt` | ISO-8601 UTC string | Present means approved. Written by the operator's `_approve` |
+| `digit.trialApprovedBy` | `control-plane:<actor>` | Audit only. Written by `_approve` |
 | `digit.supersededBy` | Organization id | On a `FAILED` Organization replaced after a slug change |
 | `digit.replacementPending` | single JSON value `{restartNo,operationHash,tenantId,slug,name}` | Durable changed-slug attempt, written before changing the old Organization and cleared after supersession finishes (§9.3) |
 | `digit.accountCode`, `digit.fallbackTenantIds` | as today | Read-only legacy; not written by new code |
 
+- **Trial state:** no `trialEndsAt` means not a trial (every workspace that predates trials). `trialApprovedAt` set means approved, and approval wins over the end date. Otherwise before `trialEndsAt` is a trial and on or after it is expired. An unparseable `trialEndsAt` counts as expired (fail closed).
 - The Organization `name` mirrors MDMS `tenant.tenants.name` (D21). The BFF updates it on rename (reconcile).
 - Organization **names and aliases are unique in the realm**. When a slug change creates a new Organization, the old one is renamed `<name> [failed <first 8 characters of its id>]` before the create.
 - The visibility filter (lifecycle absent or `ACTIVE`, and enabled) runs **before** tenant-collision detection.
@@ -1242,5 +1246,42 @@ Removed by item 14/15: the `DIGIT_PROVISIONER_*` variables, the onboarding worke
 No line contains a token, cookie, session id or Keycloak session id.
 
 **Documented limits** (design §6): native refresh tokens issued before binding (up to 14 days) can't be revoked without an egov-user change; revocation pauses while the BFF is down; after Redis loss, citizen tokens, inactive or locked staff tokens, and tokens of a Keycloak user deleted in the same window live until they expire.
+
+**Workspace trials.** A self-serve workspace can be locked 30 days (or `IDENTITY_WORKSPACE_TRIAL_DAYS`) after signup unless an operator approves it. Off when the value is 0.
+- **Gates that refuse:** employee and configurator `contexts/_select`, citizen `contexts/citizen/_select`, and citizen OTP `_send` and `_verify`. Each answers `403 {code: "WORKSPACE_TRIAL_EXPIRED", error, notice}`, where `notice` is `{title, message, linkLabel?, linkUrl?}` from the deployment settings.
+- **`GET /identity/v1/tenants`** keeps the locked workspace listed with `code: "WORKSPACE_TRIAL_EXPIRED"` and no roles, so a founder is not sent to signup.
+- **`tenant-contexts` `access`** is advisory and comes from the cached tenant directory. `_select` is the authority.
+- **Open sessions** end within one reconcile pass. Expiry is a new tenant state (`TRIAL_EXPIRED`) and revokes only that workspace's sessions. Tenant fan-outs now also reach citizens, found through the DIGIT token inventory (`token:<tenantId>:*`), for every tenant-state reason: a disabled Organization, an inactive tenant and an expired trial, not only trials. This changes the behaviour of the first two.
+- **Approval** moves the reconcile checkpoint back to the active state without revoking anyone.
+
+**Approving a trial workspace.** The control plane is never published by Kong or nginx. Run these on the server itself, against the BFF's loopback port.
+
+```
+# list every workspace with a trial end, soonest first
+curl -s -H "Authorization: Bearer $IDENTITY_CONTROL_PLANE_TOKEN" \
+  http://127.0.0.1:<bff-port>/internal/identity/v1/workspace-trials
+
+# approve
+curl -s -X POST -H "Authorization: Bearer $IDENTITY_CONTROL_PLANE_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"tenantId":"<tenant-id>","actor":"<your-name>"}' \
+  http://127.0.0.1:<bff-port>/internal/identity/v1/workspace-trials/_approve
+
+# extend (also starts a trial on a workspace that has none)
+curl -s -X POST -H "Authorization: Bearer $IDENTITY_CONTROL_PLANE_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"tenantId":"<tenant-id>","endsAt":"2026-12-31T00:00:00Z","actor":"<your-name>"}' \
+  http://127.0.0.1:<bff-port>/internal/identity/v1/workspace-trials/_extend
+```
+
+- `approvedBy` is stored as `control-plane:<actor>`.
+- An approval shows at once on the replica that served it, and on other replicas within the 60 s tenant cache.
+- Fallback: a master-realm admin can edit the same Organization attributes in the Keycloak admin console, reached through an SSH tunnel.
+
+**Known gaps (workspace trials).**
+- `/user/oauth/token` is public at Kong, so anyone who knows a DIGIT password can get a token without the BFF.
+- Open sessions end within one reconcile interval (900 s on Ansible deploys), not instantly.
+- `tenant-contexts` is HTTP-cached (60 s plus a 300 s stale-while-revalidate window), so an approval can take up to about 6 minutes to reach a browser. `_select` is live.
+- In the compose `.env`, a notice message cannot end with a backslash or contain a backslash directly before an apostrophe.
 
 The configuration reference for each variable is `deploy/digit-compose/identity-bff.env.example`. The deployment walkthrough is `docs/setup/deployment/identity-bff.md` at the repository root.
