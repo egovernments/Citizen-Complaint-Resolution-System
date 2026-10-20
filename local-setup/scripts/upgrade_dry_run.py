@@ -1505,6 +1505,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"report: {args.deploy_run.resolve() / 'deployment-report.json'}")
             return 0
         repo = args.repo.resolve()
+        controller_repo = Path(__file__).resolve().parents[2]
         if not (repo / ".git").exists():
             raise DryRunError(f"not a Git checkout: {repo}")
         tenant_vars = args.tenant_vars.resolve()
@@ -1533,7 +1534,7 @@ def main(argv: list[str] | None = None) -> int:
             rendered_base_raw = temp / "rendered-base-raw"
             rendered_target_raw = temp / "rendered-target-raw"
             render_ref(
-                repo,
+                controller_repo,
                 base_source,
                 rendered_base_raw,
                 args.tenant,
@@ -1541,7 +1542,7 @@ def main(argv: list[str] | None = None) -> int:
                 "base",
             )
             render_ref(
-                repo,
+                controller_repo,
                 target_source,
                 rendered_target_raw,
                 args.tenant,
