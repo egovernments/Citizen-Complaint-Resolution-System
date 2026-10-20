@@ -4191,43 +4191,34 @@
     # against ansible.posix.synchronize 2.2.2 + rsync 3.4.4: editing only
     # prometheus.yml leaves this gate false while the item still reports
     # changed=true; editing otel-collector-config.yaml flips it true.
-    - name: "OTEL Collector — restart when its config changed (#1683)"
+    #
+    # The same holds for container-stats (the same collector binary) and for Loki
+    # (-config.file read once at startup; its config gained the ruler section for
+    # Sherlog's log alerts). Each is restarted only when its own file changed.
+    # Loki's rules are NOT gated here: its ruler re-reads its rule folder itself.
+    - name: "Observability — restart a service whose config changed (#1683)"
       ansible.builtin.shell: |
         set -e
-        if [ -z "$(docker ps -q -f name='^digit-otel-collector$')" ]; then
-          echo "NOCHANGE collector not running"
+        if [ -z "$(docker ps -q -f name='^{{ item.container }}$')" ]; then
+          echo "NOCHANGE {{ item.container }} not running"
           exit 0
         fi
-        docker restart digit-otel-collector
+        docker restart {{ item.container }}
       args:
         executable: /bin/bash
-      register: otel_collector_restart
-      changed_when: "'NOCHANGE' not in otel_collector_restart.stdout"
+      loop:
+        - {file: otel-collector-config, container: digit-otel-collector}
+        - {file: container-stats-config, container: digit-container-stats}
+        - {file: loki-config, container: digit-loki}
+      loop_control:
+        label: "{{ item.container }}"
+      register: observability_restart
+      changed_when: "'NOCHANGE' not in observability_restart.stdout"
       when: >-
         config_sync.results | default([])
         | selectattr('item.key', 'equalto', 'otel')
         | map(attribute='stdout_lines') | flatten
-        | select('search', 'otel-collector-config')
-        | list | length > 0
-    # container-stats is the same collector binary with the same no-watch, no-
-    # reload behaviour, so it gets the same narrow gate on its own config file.
-    - name: "Container stats — restart when its config changed"
-      ansible.builtin.shell: |
-        set -e
-        if [ -z "$(docker ps -q -f name='^digit-container-stats$')" ]; then
-          echo "NOCHANGE container-stats not running"
-          exit 0
-        fi
-        docker restart digit-container-stats
-      args:
-        executable: /bin/bash
-      register: container_stats_restart
-      changed_when: "'NOCHANGE' not in container_stats_restart.stdout"
-      when: >-
-        config_sync.results | default([])
-        | selectattr('item.key', 'equalto', 'otel')
-        | map(attribute='stdout_lines') | flatten
-        | select('search', 'container-stats-config')
+        | select('search', item.file)
         | list | length > 0
 
     # novu-worker loads its mounted providers once, at boot, and compose recreates it
@@ -4248,30 +4239,6 @@
       when:
         - enable_novu | default(false)
         - novu_worker_providers_sync is changed
-
-    # Same failure mode as the collector (#1683): Loki reads -config.file once at
-    # startup. Its config gained the ruler section (Sherlog's log alerts), and a
-    # routine redeploy does not recreate Loki, so restart it when loki-config.yaml
-    # itself changed. The rules are NOT gated here: Loki's ruler re-reads its rule
-    # folder on its own.
-    - name: "Loki — restart when its config changed"
-      ansible.builtin.shell: |
-        set -e
-        if [ -z "$(docker ps -q -f name='^digit-loki$')" ]; then
-          echo "NOCHANGE loki not running"
-          exit 0
-        fi
-        docker restart digit-loki
-      args:
-        executable: /bin/bash
-      register: loki_restart
-      changed_when: "'NOCHANGE' not in loki_restart.stdout"
-      when: >-
-        config_sync.results | default([])
-        | selectattr('item.key', 'equalto', 'otel')
-        | map(attribute='stdout_lines') | flatten
-        | select('search', 'loki-config')
-        | list | length > 0
 
     - name: "Sherlog — start (after the stack: it joins the stack's network)"
       ansible.builtin.command: "{{ digit_dir }}/sherlog/sherlog.sh up -d"
