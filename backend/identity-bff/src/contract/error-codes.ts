@@ -125,6 +125,8 @@ export const ERROR_CODES = {
   DIGIT_ACCOUNT_MANAGED: { status: 409, retry: "no", meaning: "A kcbff- managed account cannot be bound" },
   SUBJECT_ALREADY_LINKED: { status: 409, retry: "no", meaning: "The person already has a link of that type at the tenant" },
   ACCOUNT_LINK_BUSY: { status: 503, retry: "yes", meaning: "The account-link lock wait timed out (citizen links)" },
+  WORKSPACE_NOT_FOUND: { status: 404, retry: "no", meaning: "No Organization exists for the tenant" },
+  WORKSPACE_NOT_ON_TRIAL: { status: 409, retry: "no", meaning: "The workspace has no trial to approve" },
   TENANT_NOT_FOUND: { status: 404, retry: "no", meaning: "Unknown or inactive DIGIT tenant" },
   IDENTITY_NOT_FOUND: { status: 404, retry: "no", meaning: "No enabled Keycloak user with that subject" },
 

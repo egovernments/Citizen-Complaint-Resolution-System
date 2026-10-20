@@ -24,7 +24,11 @@ const originalSender = otpSender();
 const saved: Record<string, unknown> = {};
 let base = "";
 
+const OPS = "ops-contract-token";
 const routes = {
+  list: contractRoute("GET", "/internal/identity/v1/workspace-trials"),
+  approve: contractRoute("POST", "/internal/identity/v1/workspace-trials/_approve"),
+  extend: contractRoute("POST", "/internal/identity/v1/workspace-trials/_extend"),
   tenants: contractRoute("GET", "/identity/v1/tenants"),
   context: contractRoute("GET", "/identity/v1/tenant-contexts/:urlSlug"),
   select: contractRoute("POST", "/identity/v1/contexts/_select"),
@@ -89,6 +93,7 @@ beforeAll(async () => {
   digit.addAccount({ userName: "BFF-ADMIN", name: "BFF admin", mobileNumber: "0700000000", emailId: null, tenantId: "pg",
     type: "EMPLOYEE", active: true, identificationMark: null, roles: [{ code: "ACCOUNT_ADMIN", tenantId: "pg" }], password: "Adm1n@Secret" });
   const overrides = {
+    identityControlPlaneToken: OPS,
     cachePrefix: `identity-trial-contract-${process.pid}`,
     keycloakOrganizationRealm: "workspace-trial-contract",
     identityAllowedOrigins: [TRUSTED],
@@ -216,5 +221,79 @@ describe("a workspace with no trial", () => {
     const response = await post(routes.citizenSelect.path, {}, await citizenCookie("charlie", "+254712000102"));
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ UserRequest: { type: "CITIZEN" }, tenant: { urlSlug: "charlie", tenantId: "charlie" } });
+  });
+});
+
+const ops = (path: string, body?: unknown, token = OPS) => fetch(`${base}${path}`, {
+  method: body === undefined ? "GET" : "POST",
+  headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+  ...(body !== undefined && { body: JSON.stringify(body) }),
+});
+const listed = async (slug: string) =>
+  (await (await ops(routes.list.path)).json()).workspaces.find((w: { urlSlug: string }) => w.urlSlug === slug);
+
+describe("operator trial routes", () => {
+  it("require the control-plane token and are not served under /identity/v1", async () => {
+    expect((await ops(routes.list.path, undefined, "wrong")).status).toBe(401);
+    expect((await ops(routes.approve.path, { tenantId: "acme" }, "wrong")).status).toBe(401);
+    expect((await get(routes.list.path.replace("/internal", ""))).status).toBe(404);
+  });
+
+  it("list workspaces with a trial, soonest end first", async () => {
+    const response = await ops(routes.list.path);
+    expect(response.status).toBe(200);
+    const { workspaces } = await response.json();
+    expect(workspaces.map((w: { urlSlug: string }) => w.urlSlug)).toEqual(["acme", "bravo"]);
+    expect(workspaces[0]).toEqual({ tenantId: "acme", urlSlug: "acme", name: "acme workspace", trialEndsAt: ENDED,
+      approvedAt: null, approvedBy: null, state: "EXPIRED" });
+  });
+
+  it("approve unlocks an expired workspace at once, for the next select and the next public read", async () => {
+    // Warm the cached directory with the lock in it.
+    expect((await (await get("/identity/v1/tenant-contexts/acme")).json()).access.state).toBe("TRIAL_EXPIRED");
+    const response = await ops(routes.approve.path, { tenantId: "acme", actor: "ops@example.org" });
+    expect(response.status).toBe(200);
+    const { workspace } = await response.json();
+    expect(workspace).toMatchObject({ tenantId: "acme", state: "APPROVED", approvedBy: "control-plane:ops@example.org" });
+    expect((await post(routes.select.path, { surface: "configurator", tenantId: "acme" }, await staffCookie("acme", "configurator"))).status).toBe(200);
+    expect(await (await get("/identity/v1/tenant-contexts/acme")).json()).not.toHaveProperty("access");
+    expect(await listed("acme")).toMatchObject({ state: "APPROVED", approvedBy: "control-plane:ops@example.org" });
+  });
+
+  it("keeps the first approval on a second call", async () => {
+    const first = (await listed("acme")).approvedAt;
+    const response = await ops(routes.approve.path, { tenantId: "acme", actor: "someone-else" });
+    expect(response.status).toBe(200);
+    expect((await response.json()).workspace).toMatchObject({ approvedAt: first, approvedBy: "control-plane:ops@example.org" });
+  });
+
+  it("extend puts an expired trial back in TRIAL and refuses a past or invalid end", async () => {
+    const endsAt = new Date(Date.now() + 3600_000).toISOString();
+    const response = await ops(routes.extend.path, { tenantId: "bravo", endsAt, actor: "ops@example.org" });
+    expect(response.status).toBe(200);
+    // bravo is approved, so its state stays APPROVED; the new end is stored.
+    expect((await response.json()).workspace).toMatchObject({ trialEndsAt: endsAt, state: "APPROVED" });
+    for (const bad of ["2020-01-01T00:00:00.000Z", "not a date", undefined]) {
+      await expectContractError(await ops(routes.extend.path, { tenantId: "bravo", endsAt: bad }), routes.extend, "INVALID_REQUEST");
+    }
+  });
+
+  it("extend on an unapproved expired trial gives state TRIAL, and works without a trial", async () => {
+    expect((await kc("POST", "/organizations", { id: "org-delta", alias: "delta", name: "delta workspace", enabled: true,
+      attributes: { "digit.rootTenantId": ["delta"], "digit.urlSlug": ["delta"], "digit.lifecycle": ["ACTIVE"], [TRIAL_ATTRIBUTES.endsAt]: [ENDED] } })).status).toBe(201);
+    const endsAt = new Date(Date.now() + 3600_000).toISOString();
+    expect((await (await ops(routes.extend.path, { tenantId: "delta", endsAt })).json()).workspace).toMatchObject({ state: "TRIAL", trialEndsAt: endsAt });
+    const none = await ops(routes.extend.path, { tenantId: "charlie", endsAt });
+    expect((await none.json()).workspace).toMatchObject({ tenantId: "charlie", state: "TRIAL" });
+  });
+
+  it("answer an unknown tenant with 404 and a workspace with no trial with 409 on approve", async () => {
+    await expectContractError(await ops(routes.approve.path, { tenantId: "nowhere" }), routes.approve, "WORKSPACE_NOT_FOUND");
+    await expectContractError(await ops(routes.extend.path, { tenantId: "nowhere", endsAt: new Date(Date.now() + 1e6).toISOString() }),
+      routes.extend, "WORKSPACE_NOT_FOUND");
+    // charlie got a trial from the extend above; a fresh one has none.
+    expect((await kc("POST", "/organizations", { id: "org-echo", alias: "echo", name: "echo workspace", enabled: true,
+      attributes: { "digit.rootTenantId": ["echo"], "digit.urlSlug": ["echo"], "digit.lifecycle": ["ACTIVE"] } })).status).toBe(201);
+    await expectContractError(await ops(routes.approve.path, { tenantId: "echo" }), routes.approve, "WORKSPACE_NOT_ON_TRIAL");
   });
 });
