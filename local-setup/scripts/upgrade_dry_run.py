@@ -552,7 +552,10 @@ def normalize_tree(
                         text,
                         exact_secret_values,
                         redact_assignments=not is_source_code,
-                        redact_json_fields=not is_source_code,
+                        # JSON-looking fragments in shell/Python/YAML often
+                        # contain variable expressions. Only parsed .json files
+                        # receive structural JSON-field redaction above.
+                        redact_json_fields=False,
                     )
                 target.write_text(clean, encoding="utf-8", newline="")
                 entry["binary"] = False

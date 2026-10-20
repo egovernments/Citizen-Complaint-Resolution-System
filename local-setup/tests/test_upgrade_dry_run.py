@@ -213,6 +213,21 @@ class RedactionAndNormalizationTests(unittest.TestCase):
             self.assertIn('"authToken": self.auth_token', rendered)
             self.assertNotIn("<REDACTED>", rendered)
 
+    def test_shell_json_fragment_keeps_variable_expression(self):
+        with temp_directory() as name:
+            root = Path(name)
+            source = root / "source"
+            normalized = root / "normalized"
+            write(
+                source,
+                "seed.sh",
+                'BODY=\'{"password":"$SEED_ADMIN_PASSWORD"}\'\n',
+            )
+            dry.normalize_tree(source, normalized)
+            rendered = (normalized / "seed.sh").read_text()
+            self.assertIn('"password":"$SEED_ADMIN_PASSWORD"', rendered)
+            self.assertNotIn("<REDACTED>", rendered)
+
     def test_secret_metadata_keys_are_not_treated_as_secret_values(self):
         values = dry.sensitive_values(
             {"secrets_path": "secret/digit/city", "token_user_type": "EMPLOYEE"}
