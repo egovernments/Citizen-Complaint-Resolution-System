@@ -5,6 +5,8 @@ import { resetIdentityMethodCatalog } from "../../src/modules/authentication/met
 import { ensureActive } from "../../src/modules/bindings/store.js";
 import { managedIdentity } from "../../src/modules/managed-accounts/managed-account-service.js";
 import { otpSender, setOtpSender, type OtpMessage } from "../../src/modules/citizen-otp/otp-sender.js";
+import { withOnboardingLock } from "../../src/modules/onboarding/locks.js";
+import * as onboardingReader from "../../src/modules/onboarding/organization-reader.js";
 import * as organizationService from "../../src/modules/organizations/organization-service.js";
 import { clearTenantMappingCache, ensureOrganizationMembership, IdentityAdminError } from "../../src/modules/organizations/organization-service.js";
 import { createIdentitySession } from "../../src/modules/sessions/session-store.js";
@@ -333,5 +335,74 @@ describe("operator trial routes", () => {
     expect((await kc("POST", "/organizations", { id: "org-echo", alias: "echo", name: "echo workspace", enabled: true,
       attributes: { "digit.rootTenantId": ["echo"], "digit.urlSlug": ["echo"], "digit.lifecycle": ["ACTIVE"] } })).status).toBe(201);
     await expectContractError(await ops(routes.approve.path, { tenantId: "echo" }), routes.approve, "WORKSPACE_NOT_ON_TRIAL");
+  });
+});
+
+describe("operator trial writes and list", () => {
+  const later = (ms: number) => new Date(Date.now() + ms).toISOString();
+  const organization = (slug: string, attributes: Record<string, string[]>, rootTenantId = slug) =>
+    kc("POST", "/organizations", { id: `org-${slug}`, alias: slug, name: `${slug} workspace`, enabled: true,
+      attributes: { "digit.rootTenantId": [rootTenantId], "digit.urlSlug": [slug], "digit.lifecycle": ["ACTIVE"], ...attributes } });
+  const stored = async (slug: string) => (await (await kc("GET", `/organizations/org-${slug}`, undefined)).json()).attributes;
+
+  it("approve reads a blank approval as none, as the gates do", async () => {
+    expect((await organization("golf", { [TRIAL_ATTRIBUTES.endsAt]: [ENDED], [TRIAL_ATTRIBUTES.approvedAt]: [" "] })).status).toBe(201);
+    const response = await ops(routes.approve.path, { tenantId: "golf", actor: "ops@example.org" });
+    expect(response.status).toBe(200);
+    expect((await response.json()).workspace).toMatchObject({ state: "APPROVED", approvedBy: "control-plane:ops@example.org" });
+  });
+
+  it("lists only the workspaces the writes accept, an unparseable end last", async () => {
+    expect((await organization("hotel", { [TRIAL_ATTRIBUTES.endsAt]: ["not a date"] })).status).toBe(201);
+    expect((await organization("india", { [TRIAL_ATTRIBUTES.endsAt]: [later(3600_000)], "digit.lifecycle": ["FAILED"] })).status).toBe(201);
+    // Two Organizations serving one tenant, neither superseded: ambiguous.
+    expect((await organization("juliet", { [TRIAL_ATTRIBUTES.endsAt]: [later(3600_000)] })).status).toBe(201);
+    expect((await organization("juliet-2", { [TRIAL_ATTRIBUTES.endsAt]: [later(3600_000)] }, "juliet")).status).toBe(201);
+    expect((await organization("lima", { [TRIAL_ATTRIBUTES.endsAt]: [later(10 * 86_400_000)] })).status).toBe(201);
+    const { workspaces } = await (await ops(routes.list.path)).json() as { workspaces: Array<{ urlSlug: string; trialEndsAt: string; state: string }> };
+    const slugs = workspaces.map((w) => w.urlSlug);
+    expect(slugs).toContain("lima");
+    expect(slugs.filter((slug) => ["india", "juliet", "juliet-2"].includes(slug))).toEqual([]);
+    expect(workspaces.at(-1)).toMatchObject({ urlSlug: "hotel", state: "EXPIRED" });
+    const ends = workspaces.slice(0, -1).map((w) => Date.parse(w.trialEndsAt));
+    expect(ends).toEqual([...ends].sort((a, b) => a - b));
+    // ...because the writes refuse them.
+    await expectContractError(await ops(routes.extend.path, { tenantId: "india", endsAt: later(3600_000) }), routes.extend, "WORKSPACE_NOT_FOUND");
+    await expectContractError(await ops(routes.extend.path, { tenantId: "juliet", endsAt: later(3600_000) }), routes.extend, "IDENTITY_UNAVAILABLE");
+  });
+
+  it("lands a concurrent approve and extend on the same workspace", async () => {
+    expect((await organization("mike", { [TRIAL_ATTRIBUTES.endsAt]: [ENDED] })).status).toBe(201);
+    const endsAt = later(7200_000);
+    const [approved, extended] = await Promise.all([
+      ops(routes.approve.path, { tenantId: "mike", actor: "ops@example.org" }),
+      ops(routes.extend.path, { tenantId: "mike", endsAt }),
+    ]);
+    expect([approved.status, extended.status]).toEqual([200, 200]);
+    expect(await stored("mike")).toMatchObject({ [TRIAL_ATTRIBUTES.endsAt]: [endsAt], [TRIAL_ATTRIBUTES.approvedBy]: ["control-plane:ops@example.org"] });
+  });
+
+  it("waits for the onboarding operation's lock and never writes an Organization that failed meanwhile", async () => {
+    expect((await organization("november", { [TRIAL_ATTRIBUTES.endsAt]: [ENDED], "digit.operationId": ["op-november"] })).status).toBe(201);
+    const original = onboardingReader.readOnboardingOrganizations;
+    let resolved!: () => void;
+    const resolving = new Promise<void>((resolve) => { resolved = resolve; });
+    const spy = vi.spyOn(onboardingReader, "readOnboardingOrganizations")
+      .mockImplementationOnce(async () => { try { return await original(); } finally { resolved(); } });
+    try {
+      const { pending } = await withOnboardingLock("op", "op-november", async () => {
+        const pending = ops(routes.extend.path, { tenantId: "november", endsAt: later(3600_000) });
+        await resolving;
+        // A lifecycle write lands while the operator call waits for the lock.
+        const org = await (await kc("GET", "/organizations/org-november", undefined)).json();
+        expect((await kc("PUT", "/organizations/org-november", { ...org, attributes: { ...org.attributes, "digit.lifecycle": ["FAILED"] } })).status)
+          .toBe(204);
+        return { pending };
+      });
+      await expectContractError(await pending, routes.extend, "IDENTITY_UNAVAILABLE");
+    } finally {
+      spy.mockRestore();
+    }
+    expect(await stored("november")).toMatchObject({ [TRIAL_ATTRIBUTES.endsAt]: [ENDED], "digit.lifecycle": ["FAILED"] });
   });
 });

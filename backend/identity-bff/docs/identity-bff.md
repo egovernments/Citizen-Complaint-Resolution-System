@@ -695,9 +695,9 @@ Organization membership **only**, and idempotent. The role projection and the ma
 
 - **`POST /internal/identity/v1/reconciliation/_run`** (item 12) → `200 | 202 {acquired, subjects, mirrored, revoked, propagated, unchanged, failures: [{subject, code}], lagSeconds}`. It **never** writes DIGIT `active`, and never creates or restores a membership or binding. `deactivated` and `unprovisioned` are removed.
 - **`account-links/_link`, `_unlink`, `GET account-links`** keep today's shapes. After item 14 they accept `userType: "CITIZEN"` only, and `EMPLOYEE` → `INVALID_REQUEST`. They are how an admin resolves `CITIZEN_ACCOUNT_AMBIGUOUS`. Until item 14, an `EMPLOYEE` link writes an `active` binding (item 19 runs the bulk conversion).
-- **`GET /internal/identity/v1/workspace-trials`** → `200 {workspaces: [{tenantId, urlSlug, name, trialEndsAt, approvedAt, approvedBy, state: TRIAL | APPROVED | EXPIRED}]}`, every Organization with a trial end, soonest first.
+- **`GET /internal/identity/v1/workspace-trials`** → `200 {workspaces: [{tenantId, urlSlug, name, trialEndsAt, approvedAt, approvedBy, state: TRIAL | APPROVED | EXPIRED}]}`, one row per tenant whose serving Organization has a trial end, soonest first and an unparseable end last. FAILED, superseded and ambiguous Organizations are left out, as the writes refuse them.
 - **`POST /internal/identity/v1/workspace-trials/_approve`** `{tenantId, actor?}` → `200 {workspace}`. Sets `trialApprovedAt` and `trialApprovedBy` (`control-plane:<actor>`); a second call keeps the first approval. No Organization → `WORKSPACE_NOT_FOUND` (404); no trial → `WORKSPACE_NOT_ON_TRIAL` (409).
-- **`POST /internal/identity/v1/workspace-trials/_extend`** `{tenantId, endsAt, actor?}` → `200 {workspace}`. Sets `trialEndsAt` to `endsAt` (ISO 8601, must be in the future, else `INVALID_REQUEST`); works on a workspace with no trial. Both writes re-read the Organization before the PUT and clear the tenant mapping cache, so `tenant-contexts` reflects them at once. Keycloak failure → `IDENTITY_UNAVAILABLE`.
+- **`POST /internal/identity/v1/workspace-trials/_extend`** `{tenantId, endsAt, actor?}` → `200 {workspace}`. Sets `trialEndsAt` to `endsAt` (ISO 8601, must be in the future, else `INVALID_REQUEST`); works on a workspace with no trial. Both writes re-read the Organization before the PUT, under the onboarding lock its primitives take (`op` by `digit.operationId`, else `tenant`), and clear the tenant mapping cache, so `tenant-contexts` reflects them at once. Keycloak failure, an ambiguous tenant, or an Organization that failed or was superseded meanwhile → `IDENTITY_UNAVAILABLE` (retry).
 - **`POST /internal/identity/v1/tenant-routes/_backfill`** `{dryRun?: boolean, actor?: string}` → `200 {created: [tenantId], skipped: [{tenantId, reason: NOT_ROOT | NOT_ACTIVE | ALREADY_MAPPED}], conflicts: [{tenantId, reason: INVALID_SLUG | SLUG_TAKEN | ALIAS_TAKEN}]}`. It gives every active DIGIT root tenant in `IDENTITY_TENANT_ROUTE_BACKFILL_ROOTS` (unset: the root of `DIGIT_ADMIN_TENANT_ID`; set but empty: none, which is how a deployment opts out; the Helm chart leaves an empty value unset) that no Organization maps an Organization whose alias and URL slug are the tenant id (`ke` → `/ke/digit-ui/...`). Idempotent; it never renames or overwrites a mapping. `IDENTITY_TENANT_ROUTE_BACKFILL=true` runs the same backfill at startup. It is kept after item 14 because it is the only way a root tenant that predates signup gets a route; signup's `organizations/_ensure` covers new tenants. Keycloak or DIGIT failures → `IDENTITY_UNAVAILABLE` / `DIGIT_UNAVAILABLE`. The Ansible deploy is a regular caller: every converge POSTs it on the loopback port for the roots it renders from `identity_tenant_route_backfill_roots` (empty when it routes none, never `pg`), and compares `created`/`skipped`/`conflicts` with those roots to report any left without a route (#2398).
 
 ### 3.6 Console employee flows
@@ -1264,17 +1264,18 @@ curl -s -H "Authorization: Bearer $IDENTITY_CONTROL_PLANE_TOKEN" \
 # approve
 curl -s -X POST -H "Authorization: Bearer $IDENTITY_CONTROL_PLANE_TOKEN" \
   -H 'Content-Type: application/json' \
-  -d '{"tenantId":"<tenant-id>","actor":"<your-name>"}' \
+  -d '{"tenantId":"<tenant-id>","actor":"ops@example.org"}' \
   http://127.0.0.1:<bff-port>/internal/identity/v1/workspace-trials/_approve
 
 # extend (also starts a trial on a workspace that has none)
 curl -s -X POST -H "Authorization: Bearer $IDENTITY_CONTROL_PLANE_TOKEN" \
   -H 'Content-Type: application/json' \
-  -d '{"tenantId":"<tenant-id>","endsAt":"2026-12-31T00:00:00Z","actor":"<your-name>"}' \
+  -d '{"tenantId":"<tenant-id>","endsAt":"2026-12-31T00:00:00Z","actor":"ops@example.org"}' \
   http://127.0.0.1:<bff-port>/internal/identity/v1/workspace-trials/_extend
 ```
 
-- `approvedBy` is stored as `control-plane:<actor>`.
+- `_approve` works only on a workspace that is on trial; one without a trial end answers 409 `WORKSPACE_NOT_ON_TRIAL`. Run `_extend` first to start a trial.
+- `approvedBy` is stored as `control-plane:<actor>`. `actor` may use letters, digits and `_ . @ : -`, up to 100 characters; any other value is dropped and stored as plain `control-plane`.
 - An approval shows at once on the replica that served it, and on other replicas within the 60 s tenant cache.
 - Fallback: a master-realm admin can edit the same Organization attributes in the Keycloak admin console, reached through an SSH tunnel.
 

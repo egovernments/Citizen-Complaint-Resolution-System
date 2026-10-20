@@ -2,6 +2,7 @@ import type express from "express";
 import { asyncRoute, sendError } from "../../app/async-route.js";
 import { clearTenantCaches } from "../access-context/tenant-directory.js";
 import { OnboardingError } from "../onboarding/errors.js";
+import { withOnboardingLock } from "../onboarding/locks.js";
 import { onboardingAdminRequest, readOnboardingOrganizations } from "../onboarding/organization-reader.js";
 import { organizationAttribute, type OnboardingOrganization } from "../onboarding/primitives.js";
 import { readWorkspaceTrial, TRIAL_ATTRIBUTES, workspaceTrialState } from "./trial.js";
@@ -20,16 +21,26 @@ function view(org: OnboardingOrganization) {
   };
 }
 
+/** Sort key: an unparseable end (EXPIRED, fail closed) goes last instead of turning the comparison into NaN. */
+function endOf(workspace: ReturnType<typeof view>): number {
+  const ends = Date.parse(workspace.trialEndsAt!);
+  return Number.isNaN(ends) ? Number.MAX_VALUE : ends;
+}
+
 type Change = (attributes: Record<string, string[]>) => void;
 
 /**
- * The Organization that serves a tenant: not superseded and not FAILED (a
- * failed earlier attempt may share the tenant id). More than one is ambiguous.
+ * Whether an Organization can serve `tenantId`: it maps that tenant and is not
+ * superseded or FAILED (a failed earlier attempt may share the tenant id).
  */
-async function organizationOf(tenantId: string): Promise<OnboardingOrganization | null> {
-  const matches = (await readOnboardingOrganizations()).filter((org) =>
-    organizationAttribute(org, "rootTenantId") === tenantId && !organizationAttribute(org, "supersededBy") &&
-    organizationAttribute(org, "lifecycle") !== "FAILED");
+function serves(org: OnboardingOrganization, tenantId: string | undefined): boolean {
+  return !!tenantId && organizationAttribute(org, "rootTenantId") === tenantId &&
+    !organizationAttribute(org, "supersededBy") && organizationAttribute(org, "lifecycle") !== "FAILED";
+}
+
+/** The Organization that serves a tenant. More than one is ambiguous. */
+function organizationOf(organizations: OnboardingOrganization[], tenantId: string): OnboardingOrganization | null {
+  const matches = organizations.filter((org) => serves(org, tenantId));
   if (matches.length > 1) throw new OnboardingError("IDENTITY_UNAVAILABLE", "Ambiguous Organization ownership for tenant");
   return matches[0] ?? null;
 }
@@ -37,24 +48,33 @@ async function organizationOf(tenantId: string): Promise<OnboardingOrganization 
 /**
  * Writes `change` into the trial attributes of a tenant's Organization.
  * Stock Keycloak requires the complete representation, so it is read again
- * immediately before the PUT, as reconcile does for a rename. Null when the
- * tenant has no Organization.
+ * immediately before the PUT, as reconcile does for a rename. The read-modify-
+ * write runs under the onboarding lock the primitives take for this
+ * Organization (its operation, else its tenant), so neither a concurrent
+ * operator write nor a lifecycle change is lost. Null when the tenant has no
+ * Organization.
  */
 async function updateTrial(tenantId: string, change: Change): Promise<OnboardingOrganization | null> {
-  const found = await organizationOf(tenantId);
+  const found = organizationOf(await readOnboardingOrganizations(), tenantId);
   if (!found) return null;
-  const path = `/organizations/${encodeURIComponent(found.id)}`;
-  const fresh = await (await onboardingAdminRequest(path)).json() as OnboardingOrganization;
-  const attributes = { ...fresh.attributes };
-  change(attributes);
-  const next = { ...fresh, attributes };
-  // A no-op change (a repeated approval) skips the write.
-  if (JSON.stringify(attributes) !== JSON.stringify(fresh.attributes)) {
-    await onboardingAdminRequest(path, { method: "PUT", body: JSON.stringify(next) });
-    // The public tenant directory caches the trial for up to a minute.
-    clearTenantCaches();
-  }
-  return next;
+  const operationId = organizationAttribute(found, "operationId");
+  return withOnboardingLock(operationId ? "op" : "tenant", operationId ?? tenantId, async (fence) => {
+    const path = `/organizations/${encodeURIComponent(found.id)}`;
+    const fresh = await (await onboardingAdminRequest(path)).json() as OnboardingOrganization;
+    // It may have failed or been superseded while this call waited.
+    if (!serves(fresh, tenantId)) throw new OnboardingError("IDENTITY_UNAVAILABLE", "The tenant's Organization changed; retry");
+    const attributes = { ...fresh.attributes };
+    change(attributes);
+    const next = { ...fresh, attributes };
+    // A no-op change (a repeated approval) skips the write.
+    if (JSON.stringify(attributes) !== JSON.stringify(fresh.attributes)) {
+      await fence.assertHeld();
+      await onboardingAdminRequest(path, { method: "PUT", body: JSON.stringify(next) });
+      // The public tenant directory caches the trial for up to a minute.
+      clearTenantCaches();
+    }
+    return next;
+  });
 }
 
 export function registerWorkspaceTrialRoutes(app: express.Application, actorOf: (value: unknown) => string): void {
@@ -62,10 +82,17 @@ export function registerWorkspaceTrialRoutes(app: express.Application, actorOf: 
 
   app.get(base, asyncRoute(async (_req, res) => {
     try {
-      const workspaces = (await readOnboardingOrganizations())
-        .filter((org) => readWorkspaceTrial(org.attributes) && !organizationAttribute(org, "supersededBy"))
+      const organizations = await readOnboardingOrganizations();
+      // Only rows the writes accept: the one Organization serving its tenant, so
+      // never a FAILED, superseded or ambiguous one.
+      const writable = (org: OnboardingOrganization) => {
+        const tenantId = organizationAttribute(org, "rootTenantId");
+        return serves(org, tenantId) && organizations.filter((other) => serves(other, tenantId)).length === 1;
+      };
+      const workspaces = organizations
+        .filter((org) => readWorkspaceTrial(org.attributes) && writable(org))
         .map(view)
-        .sort((a, b) => Date.parse(a.trialEndsAt!) - Date.parse(b.trialEndsAt!));
+        .sort((a, b) => endOf(a) - endOf(b));
       return res.json({ workspaces });
     } catch (error) {
       if (error instanceof OnboardingError) return sendError(res, "IDENTITY_UNAVAILABLE", error.message);
@@ -82,7 +109,7 @@ export function registerWorkspaceTrialRoutes(app: express.Application, actorOf: 
       const org = await updateTrial(tenantId, (attributes) => {
         if (!readWorkspaceTrial(attributes)) { notOnTrial = true; return; }
         // Idempotent: a second approval keeps the first.
-        if (attributes[TRIAL_ATTRIBUTES.approvedAt]?.[0]) return;
+        if (readWorkspaceTrial(attributes)?.approvedAt) return;
         attributes[TRIAL_ATTRIBUTES.approvedAt] = [new Date().toISOString()];
         attributes[TRIAL_ATTRIBUTES.approvedBy] = [actor];
       });
