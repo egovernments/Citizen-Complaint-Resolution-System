@@ -28,7 +28,11 @@ export async function readToken(account: AccountRef): Promise<TokenRecord | null
   return raw ? JSON.parse(raw) as TokenRecord : null;
 }
 
-/** People holding an inventoried DIGIT token at this tenant: how a tenant fan-out reaches citizens. */
+/**
+ * People holding an inventoried DIGIT token at this tenant: how a tenant fan-out reaches citizens.
+ * A record it cannot read is skipped, so one bad entry never stops the fan-out; the log names
+ * the record's key (tenant and account), never its contents, which may hold a token.
+ */
 export async function tokenSubjectsForTenant(tenantId: string, kind?: TokenRecord["kind"]): Promise<string[]> {
   const pattern = `${key(`token:${tenantId}:`).replace(/[*?[\]\\]/g, "\\$&")}*`;
   const subjects = new Set<string>();
@@ -36,10 +40,17 @@ export async function tokenSubjectsForTenant(tenantId: string, kind?: TokenRecor
   do {
     const [next, names] = await getRedis().scan(cursor, "MATCH", pattern, "COUNT", 100);
     cursor = next;
-    for (const raw of names.length ? await getRedis().mget(...names) : []) {
-      const token = raw ? JSON.parse(raw) as TokenRecord : null;
-      if (token && (!kind || token.kind === kind)) subjects.add(token.subject);
-    }
+    const values = names.length ? await getRedis().mget(...names) : [];
+    values.forEach((raw, index) => {
+      if (!raw) return;
+      let token: Partial<TokenRecord> | null = null;
+      try { token = JSON.parse(raw) as Partial<TokenRecord> | null; } catch { /* reported below */ }
+      if (typeof token?.subject !== "string") {
+        console.warn(`Skipping an unreadable token record: ${names[index]}`);
+        return;
+      }
+      if (!kind || token.kind === kind) subjects.add(token.subject);
+    });
   } while (cursor !== "0");
   return [...subjects];
 }

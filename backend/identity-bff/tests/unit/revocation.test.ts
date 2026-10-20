@@ -303,6 +303,41 @@ describe("token inventory and revocation", () => {
     expect(digit.revokeToken).toHaveBeenCalledExactlyOnceWith("acme-citizen-token");
     expect(await readToken({ tenantId: "other", uuid: "c-2" })).not.toBeNull();
   });
+  const staffOfAcme = (enabled: boolean) => {
+    vi.spyOn(organizations, "readOrganizationByTenant").mockResolvedValue({ id: "org", alias: "acme", name: "Acme", lifecycle: "ACTIVE", enabled,
+      trial: { endsAt: "2020-01-01T00:00:00.000Z", approvedAt: null, approvedBy: null } });
+    vi.spyOn(keycloak, "listOrganizationMembers").mockResolvedValue([{ id: "member" }]);
+    vi.spyOn(bindings, "bindingsFor").mockResolvedValue([{ subject: "bound", binding: { tenantId: "acme", uuid: "staff" } }]);
+    const observed: string[] = [];
+    vi.mocked(keycloak.getRevocationUser).mockImplementation(async sub => { observed.push(sub); return { id: sub }; });
+    return observed;
+  };
+  it.each(["ORGANIZATION_DISABLED", "TENANT_INACTIVE"] as const)("a %s fan-out reaches members and bindings, never citizens", async (reason) => {
+    const observed = staffOfAcme(false);
+    await citizenToken("citizen", { tenantId: "acme", uuid: "c-1" });
+    await revokeTenantMembers("acme", reason);
+    expect(new Set(observed)).toEqual(new Set(["member", "bound"]));
+    expect(await readToken({ tenantId: "acme", uuid: "c-1" })).not.toBeNull();
+    expect(digit.revokeToken).not.toHaveBeenCalled();
+  });
+  it("an unreadable token record at the tenant stops neither the staff jobs nor the other citizens, and its token is never logged", async () => {
+    const observed = staffOfAcme(true);
+    await citizenToken("citizen", { tenantId: "acme", uuid: "c-1" });
+    await getRedis().set(key("token:acme:broken"), '{"accessToken":"leaked-access-token","subject":');
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    await revokeTenantMembers("acme", "TRIAL_EXPIRED");
+    expect(new Set(observed)).toEqual(new Set(["member", "bound", "citizen"]));
+    const logged = warn.mock.calls.flat().map(String);
+    expect(logged.some(line => line.includes("token:acme:broken"))).toBe(true);
+    expect(logged.some(line => line.includes("leaked-access-token"))).toBe(false);
+  });
+  it("trial expiry queues the staff jobs before it scans the token inventory for citizens", async () => {
+    staffOfAcme(true);
+    vi.spyOn(getRedis(), "scan").mockRejectedValueOnce(new Error("Redis scan failed"));
+    await expect(revokeTenantMembers("acme", "TRIAL_EXPIRED")).rejects.toThrow("Redis scan failed");
+    // Queued jobs survive for the revocation worker.
+    expect((await getRedis().zrange(key("revoke-jobs"), 0, -1)).map(id => id.split("|")[0]).sort()).toEqual(["bound", "member"]);
+  });
   it("trial expiry ends only the locked workspace's session and token of a person in two (Review Focus 3)", async () => {
     vi.spyOn(organizations, "readOrganizationByTenant").mockResolvedValue(null);
     vi.spyOn(bindings, "bindingsFor").mockResolvedValue([]);

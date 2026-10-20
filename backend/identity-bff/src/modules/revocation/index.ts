@@ -277,7 +277,8 @@ export async function drainRevocationJobs(limit = 100): Promise<void> {
 
 /**
  * All jobs are recorded before taking a person lease; repeats repair interrupted fan-out.
- * Citizens are neither members nor bound, so they are found by their DIGIT tokens at the tenant.
+ * Only an expired trial reaches citizens: they are neither members nor bound, so they are
+ * found by their DIGIT tokens at the tenant, after the staff jobs are queued.
  * Each job is scoped to the tenant: the person's sessions and tokens elsewhere survive.
  */
 export async function revokeTenantMembers(tenantId: string, reason: "ORGANIZATION_DISABLED" | "TENANT_INACTIVE" | "TRIAL_EXPIRED"): Promise<void> {
@@ -285,9 +286,11 @@ export async function revokeTenantMembers(tenantId: string, reason: "ORGANIZATIO
   const organization = await readOrganizationByTenant(tenantId);
   const members = organization ? await listOrganizationMembers(organization.id) : [];
   const bindings = await bindingsFor(tenantId);
-  const citizens = await tokenSubjectsForTenant(tenantId, "citizen");
-  const subjects = new Set([...members.map(member => member.id), ...bindings.map(binding => binding.subject), ...citizens]);
-  for (const subject of subjects) await enqueueRevocation(subject, reason, { tenantId, eventId: `tenant:${tenantId}` });
+  const enqueue = async (subjects: Iterable<string>) => {
+    for (const subject of subjects) await enqueueRevocation(subject, reason, { tenantId, eventId: `tenant:${tenantId}` });
+  };
+  await enqueue(new Set([...members.map(member => member.id), ...bindings.map(binding => binding.subject)]));
+  if (reason === "TRIAL_EXPIRED") await enqueue(await tokenSubjectsForTenant(tenantId, "citizen"));
   await drainRevocationJobs();
 }
 
