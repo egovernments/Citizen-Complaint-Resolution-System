@@ -7,6 +7,7 @@ import {
   buildHierarchyCatalogue,
   normalizeOverride,
   diffEscalationPolicy,
+  validateOverrides,
 } from './escalationPolicyUtils';
 import type { EscalationConfigData } from './escalationPolicyTypes';
 
@@ -269,6 +270,41 @@ describe('escalationPolicyUtils', () => {
         slaPercentageByLevel: [50, 100],
         enabledByLevel: [true, false],
         slaByLevel: [1000, 2000],
+      });
+    });
+  });
+  describe('validateOverrides', () => {
+    it('accepts increasing millisecond lists and percentage objects', () => {
+      expect(
+        validateOverrides({
+          A: [120000, 240000, 480000],
+          B: { slaPercentageByLevel: [2, 4, 8], enabledByLevel: [true, true, true] },
+          C: { slaByLevel: [1000, 2000] },
+        })
+      ).toEqual({});
+    });
+
+    it('flags a plain list that does not increase, as pgr-services ignores it', () => {
+      expect(validateOverrides({ PWTESTESCALATION: [2, 2, 4] })).toEqual({
+        PWTESTESCALATION: 'L2: Must be greater than L1 (2 ms)',
+      });
+    });
+
+    it('flags bad percentages and millisecond ladders inside an override object', () => {
+      expect(validateOverrides({ A: { slaPercentageByLevel: [80, 250] } })).toEqual({
+        A: 'L2: Cannot exceed 200%',
+      });
+      expect(validateOverrides({ B: { slaByLevel: [3000, 2000] } })).toEqual({
+        B: 'L2: Must be greater than L1 (3000 ms)',
+      });
+    });
+
+    it('flags non-numeric values and overrides that are not a ladder', () => {
+      expect(validateOverrides({ A: ['2', 4] })).toEqual({
+        A: 'L1: Must be a whole number of milliseconds',
+      });
+      expect(validateOverrides({ B: 5 })).toEqual({
+        B: 'Must be a list of milliseconds or an object with slaPercentageByLevel or slaByLevel',
       });
     });
   });
