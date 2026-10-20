@@ -24,7 +24,9 @@ wa = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(wa)
 
 with open(BASELINE, encoding="utf-8") as fh:
-    ACTIONS, GRANTS = wa.select(json.load(fh), "ke")
+    _baseline = json.load(fh)
+ACTIONS, GRANTS = wa.select(_baseline, "ke")
+RESERVED = wa.reserved(_baseline)
 SEARCH, UPDATE, RENAME = (wa.URL_PREFIX + route for route in ("_search", "_update", "_rename"))
 
 
@@ -51,26 +53,32 @@ class Selection(unittest.TestCase):
 
 class Plan(unittest.TestCase):
     def test_a_root_without_them_gets_the_baseline_rows_under_the_baseline_ids(self):
-        actions, grants, notes = wa.plan(ACTIONS, GRANTS, held(action(1, "/other")), [], {"ACCOUNT_ADMIN"})
+        actions, grants, notes = wa.plan(ACTIONS, GRANTS, held(action(1, "/other")), [], {"ACCOUNT_ADMIN"}, RESERVED)
         self.assertEqual(actions, ACTIONS)
         self.assertEqual(grants, GRANTS)
         self.assertEqual(notes, [])
 
     def test_a_url_the_root_holds_under_another_id_is_reused_and_granted_there(self):
         actions, grants, _ = wa.plan(ACTIONS, GRANTS, held(action(77, SEARCH), action("78", UPDATE), action(79, RENAME)),
-                                     [], {"ACCOUNT_ADMIN"})
+                                     [], {"ACCOUNT_ADMIN"}, RESERVED)
         self.assertEqual(actions, [])
         self.assertEqual([g["actionid"] for g in grants], [77, 78, 79])
 
-    def test_a_baseline_id_taken_by_another_url_moves_above_the_roots_highest(self):
+    def test_a_taken_baseline_id_moves_above_the_baselines_ids_and_the_roots(self):
+        # Inside the baseline's range (up to 901017) a fallback would take a baseline row's id.
+        self.assertEqual((max(RESERVED[0]), max(RESERVED[1])), (901017, 901017))
         actions, grants, _ = wa.plan(ACTIONS, GRANTS, held(action(900000, "/someone/else"), action(5, "/x")),
-                                     held(grant(900001, "CSR", 5)), {"ACCOUNT_ADMIN"})
-        self.assertEqual([(a["id"], a["url"]) for a in actions], [(900001, SEARCH), (900002, UPDATE), (901000, RENAME)])
-        self.assertEqual([(g["actionid"], g["id"]) for g in grants], [(900001, 900000), (900002, 900002), (901000, 901000)])
+                                     held(grant(900001, "CSR", 5)), {"ACCOUNT_ADMIN"}, RESERVED)
+        self.assertEqual([(a["id"], a["url"]) for a in actions], [(901018, SEARCH), (900001, UPDATE), (901000, RENAME)])
+        self.assertEqual([(g["actionid"], g["id"]) for g in grants], [(901018, 900000), (900001, 901018), (901000, 901000)])
+        actions, _, _ = wa.plan(ACTIONS, GRANTS, held(action(900000, "/someone/else"), action(990000, "/y")), [],
+                                {"ACCOUNT_ADMIN"}, RESERVED)
+        self.assertEqual(actions[0]["id"], 990001)
 
     def test_an_existing_grant_is_kept_and_nothing_is_rewritten(self):
         root = held(*(action(a["id"], a["url"]) for a in ACTIONS))
-        actions, grants, notes = wa.plan(ACTIONS, GRANTS, root, held(grant(12, "ACCOUNT_ADMIN", "900000.0")), {"ACCOUNT_ADMIN"})
+        actions, grants, notes = wa.plan(ACTIONS, GRANTS, root, held(grant(12, "ACCOUNT_ADMIN", "900000.0")),
+                                         {"ACCOUNT_ADMIN"}, RESERVED)
         self.assertEqual(actions, [])
         self.assertEqual([g["actionid"] for g in grants], [900001, 901000])
         self.assertEqual(notes, [])
@@ -78,7 +86,7 @@ class Plan(unittest.TestCase):
     def test_inactive_rows_are_reported_and_left_alone(self):
         root = held(action(900000, SEARCH), action(900001, UPDATE)) + held(action(901000, RENAME), active=False)
         actions, grants, notes = wa.plan(ACTIONS, GRANTS, root, held(grant(1, "ACCOUNT_ADMIN", 900001), active=False),
-                                         {"ACCOUNT_ADMIN"})
+                                         {"ACCOUNT_ADMIN"}, RESERVED)
         self.assertEqual(actions, [])
         self.assertEqual([g["actionid"] for g in grants], [900000])
         self.assertEqual(len(notes), 2)
@@ -86,7 +94,7 @@ class Plan(unittest.TestCase):
         self.assertIn("INACTIVE", notes[1]); self.assertIn(UPDATE, notes[1])
 
     def test_a_role_the_root_does_not_have_is_reported_not_invented(self):
-        actions, grants, notes = wa.plan(ACTIONS, GRANTS, [], [], {"SUPERUSER"})
+        actions, grants, notes = wa.plan(ACTIONS, GRANTS, [], [], {"SUPERUSER"}, RESERVED)
         self.assertEqual(len(actions), 3)
         self.assertEqual(grants, [])
         self.assertTrue(all("no ACCOUNT_ADMIN role" in note for note in notes) and len(notes) == 3)

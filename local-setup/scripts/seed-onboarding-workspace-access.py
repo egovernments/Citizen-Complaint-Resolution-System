@@ -19,10 +19,13 @@ CREATE-ONLY, MATCHED ON MEANING, NOT ON ID
 ------------------------------------------
   actions       by url. The root's action for a url is reused under whatever id it has. A
                 missing one is created with the baseline id when no action at the root has
-                that id, else with the next id above the root's highest.
+                that id, else with the next id above both the root's highest and the
+                baseline's.
   role-actions  by (rolecode, url): a grant of the role on any of the root's actions for that
                 url. A missing one is created on the root's action, with the baseline id when
-                no role-action at the root has it, else the next id above the root's highest.
+                no role-action at the root has it, else the next id above both highests.
+A fallback id never lands inside the baseline's own ids: MCP's tenant_bootstrap seeds the whole
+baseline into the root by id, and would skip a baseline row whose id one of ours holds.
 Existing rows are never updated or deactivated. An inactive action or grant is reported and left
 as it is, and a role the root does not have (ACCESSCONTROL-ROLES.roles) is reported and skipped.
 A failed read writes nothing.
@@ -90,15 +93,23 @@ def select(baseline, tenant):
     return actions, grants
 
 
-def _free(wanted, taken):
-    chosen = wanted if wanted is not None and wanted not in taken else max(taken | {0}) + 1
+def reserved(baseline):
+    """(every action id, every role-action id) the whole baseline uses."""
+    records = baseline.get("records") or []
+    return tuple({_id(r["data"].get("id")) for r in records if r.get("schemaCode") == code} - {None}
+                 for code in (ACTIONS, ROLEACTIONS))
+
+
+def _free(wanted, taken, reserved_ids):
+    chosen = wanted if wanted is not None and wanted not in taken else max(taken | reserved_ids | {0}) + 1
     taken.add(chosen)
     return chosen
 
 
-def plan(actions, grants, held_actions, held_grants, roles):
+def plan(actions, grants, held_actions, held_grants, roles, reserved_ids):
     """(actions to create, role-actions to create, notes) for a root holding `held_actions` and
-    `held_grants` ([(data, active)]) and the active role codes `roles`. Pure."""
+    `held_grants` ([(data, active)]) and the active role codes `roles`; `reserved_ids` is reserved().
+    Pure."""
     taken = {_id(d.get("id")) for d, _ in held_actions} - {None}
     taken_grants = {_id(d.get("id")) for d, _ in held_grants} - {None}
     new_actions, new_grants, notes, root_ids = [], [], [], {}
@@ -110,7 +121,7 @@ def plan(actions, grants, held_actions, held_grants, roles):
         elif same_url:
             notes.append("action %s is INACTIVE at the root: left as it is, nothing granted on it" % action["url"])
         else:
-            created = dict(action, id=_free(_id(action["id"]), taken))
+            created = dict(action, id=_free(_id(action["id"]), taken, reserved_ids[0]))
             new_actions.append(created)
             root_ids[action["id"]] = [created["id"]]
     urls = {a["id"]: a["url"] for a in actions}
@@ -128,7 +139,7 @@ def plan(actions, grants, held_actions, held_grants, roles):
             notes.append("the root has no %s role (ACCESSCONTROL-ROLES.roles): %s not granted to it" % (role, url))
         else:
             actionid = grant["actionid"] if grant["actionid"] in ids else ids[0]
-            new_grants.append(dict(grant, actionid=actionid, id=_free(_id(grant.get("id")), taken_grants)))
+            new_grants.append(dict(grant, actionid=actionid, id=_free(_id(grant.get("id")), taken_grants, reserved_ids[1])))
     return new_actions, new_grants, notes
 
 
@@ -196,7 +207,8 @@ def main():
         print("WORKSPACE-ACCESS-FAILED: DIGIT_URL, TENANT and BASELINE_FILE are required")
         return 2
     with open(BASELINE_FILE, encoding="utf-8") as fh:
-        actions, grants = select(json.load(fh), TENANT)
+        baseline = json.load(fh)
+    actions, grants = select(baseline, TENANT)
     if not actions:
         print("WORKSPACE-ACCESS-FAILED: %s has no %s* action" % (BASELINE_FILE, URL_PREFIX))
         return 2
@@ -213,7 +225,7 @@ def main():
         print("WORKSPACE-ACCESS-FAILED: reading %s's access-control rows failed (%s). Nothing was "
               "written." % (TENANT, _why(exc)))
         return 2
-    new_actions, new_grants, notes = plan(actions, grants, held_actions, held_grants, roles)
+    new_actions, new_grants, notes = plan(actions, grants, held_actions, held_grants, roles, reserved(baseline))
     for note in notes:
         print("  WARNING: " + note)
     created = 0

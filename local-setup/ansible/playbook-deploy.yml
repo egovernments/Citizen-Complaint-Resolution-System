@@ -8607,15 +8607,21 @@
           ansible.builtin.debug:
             msg: "{{ workspace_access.stdout_lines | default(['(no output)']) }}"
 
-        - name: "workspace-access — fail when the root could not be given them"
+        # Not a failure (the rows are the operator's), but the admin may still be refused.
+        - name: "workspace-access — WARNING: inactive rows or a role this root does not have"
+          when: "'WARNING' in (workspace_access.stdout | default(''))"
+          ansible.builtin.debug:
+            msg: "{{ workspace_access.stdout_lines | default([]) | select('search', 'WARNING') | list }}"
+
+        - name: "workspace-access — fail when the root could not be checked"
           when:
             - workspace_access.rc | default(1) != 0
             - not (tolerate_bootstrap_failures | default(false))
           ansible.builtin.fail:
             msg: >-
-              {{ state_root }} is missing access-control rows for the configurator's workspace
-              endpoints, and they could not be created (see the result above). Its
-              ACCOUNT_ADMIN will get AccessDeniedException after sign-in. Fix the cause, then
+              {{ state_root }}'s access-control rows for the configurator's workspace endpoints
+              could not be checked or created (see the result above). Until they exist, its
+              ACCOUNT_ADMIN gets AccessDeniedException after sign-in. Fix the cause, then
               re-run with --tags onboarding-workspace-access. Set
               `tolerate_bootstrap_failures: true` to continue past this.
 

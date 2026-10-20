@@ -46,6 +46,7 @@ public class WorkspaceRouteTest {
     }
     /** A root that predates 2.20 has no workspace row: the configurator's _update reads it as legacy DONE, never a 500, and writes nothing. */
     @Test public void updateWithoutAWorkspaceRowReadsAsLegacyAndWritesNothing() throws Exception {
+        when(repository.find("example",true)).thenReturn(Optional.empty());
         mvc.perform(post("/v2/onboarding/workspaces/_update").contentType("application/json").content(request()))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.Workspace.legacy").value(true))
                 .andExpect(jsonPath("$.Workspace.status").value("DONE")).andExpect(jsonPath("$.Workspace.version").value(0));
