@@ -35,6 +35,7 @@ const {
   parseTenantRoute,
   rebaseAppUrl,
   resolveTenantRoute,
+  fetchWorkspaceAccess,
 } = require(OUT);
 
 test("canonical tenant routes disable legacy in-app multi-root selection", () => {
@@ -312,4 +313,46 @@ test("broken or blocked storage does not break a live lookup", async () => {
     resolveTenantRoute(ROUTE, async () => ({ ok: false, status: 500 }), corrupt),
     /temporarily unavailable/i,
   );
+});
+
+const NOTICE = { title: "Trial ended", message: "Contact us.", linkLabel: "Upgrade", linkUrl: "https://example.org/up" };
+const lockedBody = {
+  tenant: {
+    urlSlug: "bomet-county", tenantId: "ke.bomet", rootTenantId: "ke",
+    parentTenantId: "ke", fallbackTenantIds: ["ke"], name: "Bomet County Government",
+  },
+  access: { state: "TRIAL_EXPIRED", notice: NOTICE },
+};
+
+test("tenant route resolver keeps access on the resolved tenant", async () => {
+  const resolved = await resolveTenantRoute(
+    "/bomet-county/digit-ui/employee",
+    async () => ({ ok: true, status: 200, json: async () => lockedBody }),
+    null,
+  );
+  assert.equal(resolved.access.state, "TRIAL_EXPIRED");
+  assert.deepEqual(resolved.access.notice, NOTICE);
+});
+
+test("fetchWorkspaceAccess fetches fresh even when the storage cache holds the slug", async () => {
+  let calls = 0;
+  // A saved context for the slug, as the boot path would leave it.
+  const storage = new Map([["Digit.tenantContext.bomet-county", JSON.stringify({ tenant: lockedBody.tenant, savedAt: Date.now() })]]);
+  const access = await fetchWorkspaceAccess("bomet-county", async (url) => {
+    calls += 1;
+    assert.equal(url, "/identity/v1/tenant-contexts/bomet-county");
+    return { ok: true, status: 200, json: async () => lockedBody };
+  });
+  assert.equal(calls, 1);
+  assert.equal(access.state, "TRIAL_EXPIRED");
+  assert.deepEqual(access.notice, NOTICE);
+  assert.equal(storage.size, 1);
+});
+
+test("fetchWorkspaceAccess is null when unlocked, on 503, and on a network error", async () => {
+  assert.equal(await fetchWorkspaceAccess("bomet-county", async () => ({
+    ok: true, status: 200, json: async () => ({ tenant: lockedBody.tenant }),
+  })), null);
+  assert.equal(await fetchWorkspaceAccess("bomet-county", async () => ({ ok: false, status: 503 })), null);
+  assert.equal(await fetchWorkspaceAccess("bomet-county", async () => { throw new Error("down"); }), null);
 });

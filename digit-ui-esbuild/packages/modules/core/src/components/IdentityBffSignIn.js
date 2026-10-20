@@ -8,6 +8,7 @@ import {
   buildIdentityBffAuthorizeUrl,
   clearIdentityBffSignOutIncomplete,
   establishIdentityBffSession,
+  fetchWorkspaceAccess,
   identityBffSignOutIncomplete,
   identityBffSurfaceBase,
   restrictIdentityBffDestination,
@@ -15,6 +16,7 @@ import {
 } from "@egovernments/digit-ui-libraries";
 
 import Header from "./Header";
+import WorkspaceTrialNotice from "./WorkspaceTrialNotice";
 
 const cleanAuthResult = () => {
   const url = new URL(window.location.href);
@@ -43,6 +45,8 @@ export const useIdentityBffSignIn = ({ surface, t, onAuthenticated, onSignedOut 
   const [status, setStatus] = useState(hasTenant ? "checking" : "no-tenant");
   const [message, setMessage] = useState("");
   const [invitation, setInvitation] = useState(null);
+  // Set with status "trial-expired": the workspace's operator notice.
+  const [notice, setNotice] = useState(null);
   const destination = hasTenant
     ? restrictIdentityBffDestination(
         location.state?.from || new URLSearchParams(location.search).get("from"),
@@ -81,6 +85,11 @@ export const useIdentityBffSignIn = ({ surface, t, onAuthenticated, onSignedOut 
 
     if (result.status === "signed-out" && !result.fromAuthResult && !result.messageKey) {
       await (onSignedOut || beginSignIn)();
+      return;
+    }
+    if (result.status === "trial-expired") {
+      setNotice(result.notice);
+      setStatus("trial-expired");
       return;
     }
     if (result.status !== "authenticated") {
@@ -140,6 +149,15 @@ export const useIdentityBffSignIn = ({ surface, t, onAuthenticated, onSignedOut 
   useEffect(() => {
     // A tenantless page keeps its choose-organisation card, whatever the flag says.
     if (!hasTenant) return;
+    // A locked workspace shows its notice instead of any sign-in step. The
+    // check is advisory (null on failure); the BFF refuses the sign-in too.
+    const checkAccess = async () => {
+      const access = await fetchWorkspaceAccess(tenant.urlSlug, window.fetch.bind(window));
+      if (!access) return false;
+      setNotice(access.notice);
+      setStatus("trial-expired");
+      return true;
+    };
     // The last sign-out in this tab could not end the BFF session, so its
     // cookie may still be live: do not silently sign that user back in.
     if (identityBffSignOutIncomplete()) {
@@ -147,12 +165,15 @@ export const useIdentityBffSignIn = ({ surface, t, onAuthenticated, onSignedOut 
       setMessage(tr("CORE_IDENTITY_SIGNOUT_INCOMPLETE", "Sign-out may not have finished, so this browser can still be signed in. Try signing out again, or sign in to continue."));
       return;
     }
-    retry(establishSession);
+    retry(async () => {
+      if (await checkAccess()) return;
+      await establishSession();
+    });
     // Tenant context is immutable for the lifetime of this page.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return { tenant, status, setStatus, message, setMessage, tr, unavailable, beginSignIn, establishSession, complete, retry, invitation, acceptInvitation, signInAfterIncompleteSignOut, declineInvitation };
+  return { tenant, status, setStatus, notice, setNotice, message, setMessage, tr, unavailable, beginSignIn, establishSession, complete, retry, invitation, acceptInvitation, signInAfterIncompleteSignOut, declineInvitation };
 };
 
 /** The card shown when sign-in stops: retry, sign in again, or sign out. */
@@ -160,6 +181,7 @@ export const SignInFailureCard = ({ signIn, Shell, onSignIn }) => {
   const { tenant, status, message, tr, beginSignIn, establishSession, retry, invitation, acceptInvitation, signInAfterIncompleteSignOut, declineInvitation } = signIn;
   const [confirmDecline, setConfirmDecline] = useState(false);
   if (status === "no-tenant") return <ChooseOrganisationCard tr={tr} Shell={Shell} />;
+  if (status === "trial-expired") return <Shell><WorkspaceTrialNotice notice={signIn.notice} /></Shell>;
   return (
     <Shell>
       <V2Card

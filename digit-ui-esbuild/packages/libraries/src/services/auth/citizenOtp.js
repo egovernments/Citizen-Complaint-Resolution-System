@@ -73,7 +73,7 @@ const retryAfterOf = (response, body) => {
 };
 
 /**
- * `{ ok: false, code, messageKey, message, params, retryAfter?, attemptsRemaining? }`
+ * `{ ok: false, code, messageKey, message, params, retryAfter?, attemptsRemaining?, notice? }`
  * for a failed call. `message` is the English fallback with params filled in.
  */
 export function citizenOtpFailure(response, body) {
@@ -93,6 +93,7 @@ export function citizenOtpFailure(response, body) {
     messageKey,
     params,
     message: fillMessage(template, params),
+    ...(code === "WORKSPACE_TRIAL_EXPIRED" && body?.notice ? { notice: body.notice } : {}),
     ...(retryAfter !== undefined ? { retryAfter } : {}),
     ...(attemptsRemaining !== undefined ? { attemptsRemaining } : {}),
   };
