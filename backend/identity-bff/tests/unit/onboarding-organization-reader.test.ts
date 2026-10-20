@@ -13,12 +13,18 @@ const serve = (records: unknown[]) => vi.stubGlobal("fetch", vi.fn(async () => R
 describe("raw onboarding Organization reader", () => {
   it.each(["PROVISIONING", "ACTIVE", "FAILED"])("returns %s Organizations even when disabled", async (lifecycle) => {
     serve([record("org", { "digit.lifecycle": [lifecycle] }, false)]);
-    expect(await readOrganizationByTenant("tenant")).toEqual({ id: "org", alias: "org", name: "Workspace", lifecycle, enabled: false });
+    expect(await readOrganizationByTenant("tenant")).toEqual({ id: "org", alias: "org", name: "Workspace", lifecycle, enabled: false, trial: null });
   });
   it("preserves absent lifecycle as null and returns null only for absent tenants", async () => {
     serve([record("org")]);
     expect(await readOrganizationByTenant("tenant")).toMatchObject({ lifecycle: null, enabled: true });
     expect(await readOrganizationByTenant("missing")).toBeNull();
+  });
+  it("carries the trial end when the Organization has one, else null", async () => {
+    serve([record("org", { "digit.trialEndsAt": ["2026-11-19T00:00:00.000Z"] })]);
+    expect(await readOrganizationByTenant("tenant")).toMatchObject({ trial: { endsAt: "2026-11-19T00:00:00.000Z", approvedAt: null, approvedBy: null } });
+    serve([record("org")]);
+    expect(await readOrganizationByTenant("tenant")).toMatchObject({ trial: null });
   });
   it("ignores superseded records", async () => {
     serve([record("old", { "digit.supersededBy": ["new"] }), record("new")]);
