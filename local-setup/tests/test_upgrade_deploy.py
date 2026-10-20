@@ -3,6 +3,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 
@@ -38,6 +39,139 @@ class CommandRunnerTests(unittest.TestCase):
                 deploy.CommandRunner().run(["preflight"])
         self.assertIn("real validation failure", str(raised.exception))
         self.assertIn("tool notice", str(raised.exception))
+
+
+class ProjectMetadataTests(unittest.TestCase):
+    def test_stopped_one_shot_container_volume_is_excluded(self):
+        class Runner:
+            def __init__(self, volume_path):
+                self.volume_path = volume_path
+                self.inspected_volumes = []
+
+            def run(self, args, **_kwargs):
+                if args[:3] == ["docker", "inspect", "docker-postgres"]:
+                    stdout = "digit\n"
+                elif args[:3] == ["docker", "info", "--format"]:
+                    stdout = str(self.volume_path.parents[2]) + "\n"
+                elif args[:3] == ["docker", "ps", "-aq"]:
+                    stdout = "running-id\nstopped-id\n"
+                elif args[:2] == ["docker", "inspect"] and len(args) == 3:
+                    running = args[2] == "running-id"
+                    name = "keep-volume" if running else "vanishing-volume"
+                    stdout = json.dumps(
+                        [
+                            {
+                                "Config": {
+                                    "Labels": {
+                                        "com.docker.compose.service": "app" if running else "one-shot",
+                                        "com.docker.compose.project.config_files": "/opt/digit/compose.yml",
+                                    }
+                                },
+                                "State": {"Running": running},
+                                "Mounts": [
+                                    {
+                                        "Type": "volume",
+                                        "Name": name,
+                                        "Destination": "/data",
+                                    }
+                                ],
+                            }
+                        ]
+                    )
+                elif args[:3] == ["docker", "volume", "inspect"]:
+                    self.inspected_volumes.append(args[3])
+                    stdout = json.dumps([{"Mountpoint": str(self.volume_path)}])
+                elif args[0] == "du":
+                    stdout = "1 path\n"
+                else:
+                    raise AssertionError(args)
+                return deploy.subprocess.CompletedProcess(args, 0, stdout=stdout, stderr="")
+
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as tmp:
+            root = Path(tmp)
+            digit = root / "digit"
+            backup = root / "backups"
+            volume = root / "docker" / "volumes" / "keep-volume" / "_data"
+            for path in (digit, backup, volume):
+                path.mkdir(parents=True)
+            runner = Runner(volume)
+            upgrade = deploy.UpgradeDeployment(
+                root / "run",
+                root / "repo",
+                "mycity",
+                root / "tenant.yml",
+                root / "source",
+                backup,
+                None,
+                runner=runner,
+                digit_dir=digit,
+            )
+            with mock.patch.object(
+                deploy.shutil, "disk_usage", return_value=SimpleNamespace(free=10**12)
+            ):
+                upgrade._project_metadata()
+            self.assertEqual(["app"], upgrade.previous_services)
+            self.assertEqual(["keep-volume"], [item["name"] for item in upgrade.volume_map])
+            self.assertEqual(["keep-volume"], runner.inspected_volumes)
+
+
+class PreviousStackRecoveryTests(unittest.TestCase):
+    def make_upgrade(self, root, runner):
+        upgrade = deploy.UpgradeDeployment(
+            root / "run",
+            root / "repo",
+            "mycity",
+            root / "tenant.yml",
+            root / "source",
+            root / "backups",
+            None,
+            runner=runner,
+            digit_dir=root / "digit",
+        )
+        upgrade.project = "digit"
+        upgrade.compose_files = ["/opt/digit/compose.yml"]
+        upgrade.previous_services = ["app", "postgres-db"]
+        upgrade.previous_containers = {"app": "app-id", "postgres-db": "db-id"}
+        return upgrade
+
+    def test_existing_previous_containers_restart_without_compose(self):
+        class Runner:
+            def __init__(self):
+                self.calls = []
+
+            def run(self, args, **_kwargs):
+                self.calls.append(args)
+                return deploy.subprocess.CompletedProcess(args, 0, stdout="[]", stderr="")
+
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as name:
+            runner = Runner()
+            self.make_upgrade(Path(name), runner)._compose_up_previous()
+        self.assertEqual(
+            ["docker", "start", "app-id", "db-id"], runner.calls[-1]
+        )
+        self.assertFalse(any(call[:2] == ["docker", "compose"] for call in runner.calls))
+
+    def test_missing_previous_container_recreates_without_dependencies(self):
+        class Runner:
+            def __init__(self):
+                self.calls = []
+
+            def run(self, args, **_kwargs):
+                self.calls.append(args)
+                return deploy.subprocess.CompletedProcess(
+                    args,
+                    1 if args[:3] == ["docker", "inspect", "app-id"] else 0,
+                    stdout="",
+                    stderr="",
+                )
+
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as name:
+            runner = Runner()
+            self.make_upgrade(Path(name), runner)._compose_up_previous()
+        compose = runner.calls[-1]
+        self.assertEqual(["docker", "compose"], compose[:2])
+        self.assertIn("--no-deps", compose)
+        self.assertEqual("never", compose[compose.index("--pull") + 1])
 
 
 class MdmsSnapshotTests(unittest.TestCase):

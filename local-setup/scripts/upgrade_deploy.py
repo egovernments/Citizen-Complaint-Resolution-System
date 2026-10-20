@@ -553,6 +553,8 @@ class UpgradeDeployment:
         self.previous_services: list[str] = []
         self.compose_files: list[str] = []
         self.volume_map: list[dict[str, str]] = []
+        self.previous_containers: dict[str, str] = {}
+        self.docker_volume_root: Path | None = None
         self.project = ""
         self.estimated_backup_bytes = 0
 
@@ -604,6 +606,14 @@ class UpgradeDeployment:
         if not project:
             raise DeployError("cannot determine the current Compose project")
         self.project = project
+        docker_root = Path(
+            self.runner.run(
+                ["docker", "info", "--format", "{{.DockerRootDir}}"]
+            ).stdout.strip()
+        ).resolve()
+        if not docker_root.is_absolute() or docker_root == Path("/"):
+            raise DeployError(f"unsafe Docker data root: {docker_root}")
+        self.docker_volume_root = docker_root / "volumes"
         ids = self.runner.run(
             ["docker", "ps", "-aq", "--filter", f"label=com.docker.compose.project={project}"]
         ).stdout.split()
@@ -615,17 +625,24 @@ class UpgradeDeployment:
             info = json.loads(raw)[0]
             labels = info.get("Config", {}).get("Labels", {}) or {}
             service = labels.get("com.docker.compose.service")
-            if service and info.get("State", {}).get("Running"):
+            running = bool(info.get("State", {}).get("Running"))
+            if service and running:
                 services.add(service)
+                self.previous_containers[service] = container_id
             config_files = config_files or labels.get("com.docker.compose.project.config_files", "")
-            for mount in info.get("Mounts", []):
-                if mount.get("Type") == "volume":
-                    name = mount["Name"]
-                    volumes[name] = {
-                        "name": name,
-                        "service": service or "unknown",
-                        "destination": mount["Destination"],
-                    }
+            # A stopped one-shot Compose container may still be listed here
+            # while Docker is asynchronously removing its anonymous volume.
+            # Only running services are part of the stack being protected and
+            # restarted, so only their volumes belong in this backup set.
+            if running:
+                for mount in info.get("Mounts", []):
+                    if mount.get("Type") == "volume":
+                        name = mount["Name"]
+                        volumes[name] = {
+                            "name": name,
+                            "service": service or "unknown",
+                            "destination": mount["Destination"],
+                        }
         self.previous_services = sorted(services)
         self.compose_files = [item for item in config_files.split(",") if item]
         self.volume_map = [volumes[key] for key in sorted(volumes)]
@@ -683,12 +700,23 @@ class UpgradeDeployment:
     def _archive_volumes(self, volume_dir: Path) -> None:
         volume_dir.mkdir(parents=True)
         for item in self.volume_map:
-            inspect = json.loads(self.runner.run(["docker", "volume", "inspect", item["name"]]).stdout)[0]
-            mountpoint = Path(inspect["Mountpoint"]).resolve()
-            if not str(mountpoint).startswith("/var/lib/docker/volumes/") or mountpoint.name != "_data":
-                raise DeployError(f"refusing unsafe Docker volume mountpoint: {mountpoint}")
+            mountpoint = self._volume_mountpoint(item["name"])
             archive = volume_dir / f"{item['name']}.tar.zst"
             self.runner.run(["tar", "--zstd", "-cpf", str(archive), "-C", str(mountpoint), "."])
+
+    def _volume_mountpoint(self, name: str) -> Path:
+        if self.docker_volume_root is None:
+            raise DeployError("Docker volume root is unavailable")
+        inspect = json.loads(
+            self.runner.run(["docker", "volume", "inspect", name]).stdout
+        )[0]
+        mountpoint = Path(inspect["Mountpoint"]).resolve()
+        if (
+            mountpoint.name != "_data"
+            or mountpoint.parent.parent != self.docker_volume_root
+        ):
+            raise DeployError(f"refusing unsafe Docker volume mountpoint: {mountpoint}")
+        return mountpoint
 
     def backup(self, overlay_hashes: dict[str, str]) -> dict[str, Any]:
         stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d-%H%M%S")
@@ -846,10 +874,32 @@ class UpgradeDeployment:
             sql_path.unlink(missing_ok=True)
 
     def _compose_up_previous(self) -> None:
+        existing = []
+        for service in self.previous_services:
+            container = self.previous_containers.get(service)
+            if not container:
+                existing = []
+                break
+            inspected = self.runner.run(
+                ["docker", "inspect", container], check=False
+            )
+            if inspected.returncode:
+                existing = []
+                break
+            existing.append(container)
+        if len(existing) == len(self.previous_services):
+            self.runner.run(["docker", "start", *existing], check=False)
+            return
+
         args = ["docker", "compose", "-p", self.project]
         for compose_file in self.compose_files:
             args.extend(["-f", compose_file])
-        args.extend(["up", "-d", *self.previous_services])
+        # Recreate only the long-lived services.  Their normal dependencies
+        # include migration and seed one-shots, which must never run while
+        # recovering a pre-deployment failure or rollback.
+        args.extend(
+            ["up", "-d", "--no-deps", "--pull", "never", *self.previous_services]
+        )
         self.runner.run(args, cwd=self.digit_dir)
 
     def rollback(self, reason: str) -> None:
@@ -866,10 +916,7 @@ class UpgradeDeployment:
             self.digit_dir.rename(failed)
         self.runner.run(["tar", "--zstd", "-xpf", str(self.backup_dir / "opt-digit.tar.zst"), "-C", "/opt"])
         for item in self.volume_map:
-            inspect = json.loads(self.runner.run(["docker", "volume", "inspect", item["name"]]).stdout)[0]
-            mountpoint = Path(inspect["Mountpoint"]).resolve()
-            if not str(mountpoint).startswith("/var/lib/docker/volumes/") or mountpoint.name != "_data":
-                raise DeployError(f"rollback refused unsafe volume mountpoint: {mountpoint}")
+            mountpoint = self._volume_mountpoint(item["name"])
             for child in mountpoint.iterdir():
                 if child.is_dir() and not child.is_symlink():
                     shutil.rmtree(child)
