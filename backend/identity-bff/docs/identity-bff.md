@@ -1205,7 +1205,7 @@ Probed on Keycloak 26.7.3 on 2026-10-04; the event shapes the poller matches are
 | `IDENTITY_STAFF_CREDENTIAL_MODE` | `rotate` \| `derived`, per box (D24) |
 | `IDENTITY_OTP_SENDER` = `log` \| `http`, `IDENTITY_OTP_SENDER_URL` | `HttpOtpSender` (item 3) |
 | `IDENTITY_POLLER_MAX_LAG_SECONDS` | Readiness threshold for the event poller |
-| `IDENTITY_WORKSPACE_TRIAL_DAYS` | Trial length for new self-serve workspaces; integer >= 0, default 0 (off). An invalid value fails startup |
+| `IDENTITY_WORKSPACE_TRIAL_DAYS` | Trial length for new self-serve workspaces; integer from 0 to 3650, default 0 (off). An invalid value fails startup |
 | `IDENTITY_WORKSPACE_TRIAL_NOTICE_TITLE`, `_MESSAGE` | Text of the `WORKSPACE_TRIAL_EXPIRED` notice (defaults: "This workspace's trial has ended" / "Sign-in is paused until the workspace is approved. Contact the platform team to continue.") |
 | `IDENTITY_WORKSPACE_TRIAL_NOTICE_LINK_LABEL`, `_LINK_URL` | Optional notice link; sent only when both are set |
 | `IDENTITY_RECONCILIATION_INTERVAL_SECONDS` | Unchanged (default 300); reported by `/readyz` |

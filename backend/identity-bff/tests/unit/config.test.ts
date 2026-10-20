@@ -63,6 +63,13 @@ describe("identity configuration", () => {
 
     it("reads the number of days", async () => {
       expect((await load({ IDENTITY_WORKSPACE_TRIAL_DAYS: "30" })).workspaceTrialDays).toBe(30);
+      expect((await load({ IDENTITY_WORKSPACE_TRIAL_DAYS: "3650" })).workspaceTrialDays).toBe(3650);
+    });
+
+    it("refuses more than 3650 days, which would make every activation fail", async () => {
+      for (const bad of ["3651", "100000000"]) {
+        await expect(load({ IDENTITY_WORKSPACE_TRIAL_DAYS: bad })).rejects.toThrow(/IDENTITY_WORKSPACE_TRIAL_DAYS/);
+      }
     });
 
     it("refuses an invalid day count instead of silently turning the trial off", async () => {
