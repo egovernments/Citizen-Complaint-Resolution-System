@@ -464,7 +464,7 @@ Body `{surface: "configurator" | "employee", tenantId}`. An employee's `tenantId
 7. Mirror DIGIT→Keycloak, and write the verified email Keycloak→DIGIT.
 
 - The BFF never returns a refresh token (D25/B7). Clients call `_select` again on expiry.
-- Errors: `INVALID_REQUEST`, `UNSUPPORTED_SURFACE` (400); `SESSION_REQUIRED`, `SESSION_EXPIRED`, `SESSION_REVOKED` (401); `UNTRUSTED_ORIGIN`, `TENANT_CONTEXT_UNAVAILABLE`, `EMPLOYEE_ACCOUNT_NOT_LINKED`, `PENDING_INVITATION`, `ACCOUNT_LOCKED`, `DIGIT_ACCOUNT_INACTIVE` (403); `DIGIT_ACCOUNT_NOT_FOUND` 404; `TENANT_ROLES_MISSING`, `DIGIT_PII_MASKED`, `DIGIT_ACCOUNT_INVALID`, `DIGIT_UNAVAILABLE`, `IDENTITY_UNAVAILABLE`, `IDENTITY_BUSY` (503).
+- Errors: `INVALID_REQUEST`, `UNSUPPORTED_SURFACE` (400); `SESSION_REQUIRED`, `SESSION_EXPIRED`, `SESSION_REVOKED` (401); `UNTRUSTED_ORIGIN`, `TENANT_CONTEXT_UNAVAILABLE`, `EMPLOYEE_ACCOUNT_NOT_LINKED`, `PENDING_INVITATION`, `ACCOUNT_LOCKED`, `DIGIT_ACCOUNT_INACTIVE`, `WORKSPACE_TRIAL_EXPIRED` (403); `DIGIT_ACCOUNT_NOT_FOUND` 404; `TENANT_ROLES_MISSING`, `DIGIT_PII_MASKED`, `DIGIT_ACCOUNT_INVALID`, `DIGIT_UNAVAILABLE`, `IDENTITY_UNAVAILABLE`, `IDENTITY_BUSY` (503).
 
 #### 3.3.5 `POST /identity/v1/contexts/citizen/_select` (items 6, 10, 12, 13)
 
@@ -744,6 +744,7 @@ The console calls HRMS first, then the BFF. The BFF never writes HRMS (§1), and
 | `PENDING_INVITATION` | 403 | after-change | The binding at this tenant is pending; accept the invitation first |
 | `ACCOUNT_LOCKED` | 403 | after-change | egov-user reports the DIGIT account locked; no credential repair |
 | `DIGIT_ACCOUNT_INACTIVE` | 403 | after-change | The DIGIT account is inactive (D4); reactivate it in HRMS |
+| `WORKSPACE_TRIAL_EXPIRED` | 403 | after-change | The workspace's trial ended and it is not approved; body carries notice |
 | `TENANT_ROLES_MISSING` | 503 | after-change | egov-user INVALID_ROLE: the tenant baseline is not seeded |
 | `DIGIT_PII_MASKED` | 503 | after-change | The DIGIT writer refused a write because a read came back masked |
 | `DIGIT_ACCOUNT_INVALID` | 503 | after-change | egov-user rejected a stored field on read-modify-write |
@@ -1187,6 +1188,9 @@ Probed on Keycloak 26.7.3 on 2026-10-04; the event shapes the poller matches are
 | `IDENTITY_STAFF_CREDENTIAL_MODE` | `rotate` \| `derived`, per box (D24) |
 | `IDENTITY_OTP_SENDER` = `log` \| `http`, `IDENTITY_OTP_SENDER_URL` | `HttpOtpSender` (item 3) |
 | `IDENTITY_POLLER_MAX_LAG_SECONDS` | Readiness threshold for the event poller |
+| `IDENTITY_WORKSPACE_TRIAL_DAYS` | Trial length for new self-serve workspaces; integer >= 0, default 0 (off). An invalid value fails startup |
+| `IDENTITY_WORKSPACE_TRIAL_NOTICE_TITLE`, `_MESSAGE` | Text of the `WORKSPACE_TRIAL_EXPIRED` notice (defaults: "This workspace's trial has ended" / "Sign-in is paused until the workspace is approved. Contact the platform team to continue.") |
+| `IDENTITY_WORKSPACE_TRIAL_NOTICE_LINK_LABEL`, `_LINK_URL` | Optional notice link; sent only when both are set |
 | `IDENTITY_RECONCILIATION_INTERVAL_SECONDS` | Unchanged (default 300); reported by `/readyz` |
 
 Removed by item 14/15: the `DIGIT_PROVISIONER_*` variables, the onboarding worker variables, the role allowlist, and the `admin/admin` Keycloak fallback.

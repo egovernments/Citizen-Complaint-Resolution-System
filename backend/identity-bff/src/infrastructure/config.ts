@@ -35,6 +35,27 @@ function cookieSameSite(value: string): "Lax" | "None" | "Strict" {
   throw new Error("IDENTITY_COOKIE_SAME_SITE must be Lax, None, or Strict");
 }
 
+// A misconfigured trial must not silently turn off, so a bad value throws at load.
+function trialDays(value: string | undefined): number {
+  if (value === undefined) return 0;
+  if (!/^\d+$/.test(value.trim())) {
+    throw new Error("IDENTITY_WORKSPACE_TRIAL_DAYS must be an integer >= 0");
+  }
+  return parseInt(value.trim(), 10);
+}
+
+function trialNotice() {
+  const linkLabel = (process.env.IDENTITY_WORKSPACE_TRIAL_NOTICE_LINK_LABEL || "").trim();
+  const linkUrl = (process.env.IDENTITY_WORKSPACE_TRIAL_NOTICE_LINK_URL || "").trim();
+  return {
+    title: process.env.IDENTITY_WORKSPACE_TRIAL_NOTICE_TITLE || "This workspace's trial has ended",
+    message: process.env.IDENTITY_WORKSPACE_TRIAL_NOTICE_MESSAGE ||
+      "Sign-in is paused until the workspace is approved. Contact the platform team to continue.",
+    // The link is shown only when both halves are set.
+    ...(linkLabel && linkUrl ? { linkLabel, linkUrl } : {}),
+  };
+}
+
 function keycloakIssuerRealm(): string {
   const issuer = process.env.KEYCLOAK_ISSUER ||
     "http://localhost:8180/auth/realms/digit-sandbox";
@@ -167,6 +188,11 @@ export const config = {
   identityReconciliationIntervalSeconds: parseInt(
     process.env.IDENTITY_RECONCILIATION_INTERVAL_SECONDS || "300",
   ),
+
+  // Self-serve workspace trial: 0 turns it off; a workspace without
+  // digit.trialEndsAt is never locked.
+  workspaceTrialDays: trialDays(process.env.IDENTITY_WORKSPACE_TRIAL_DAYS),
+  workspaceTrialNotice: trialNotice(),
 
   // Existing DIGIT user-service contract. The BFF owns only the accounts it
   // created (see managed-account-service.ts); the admin credential is used solely
