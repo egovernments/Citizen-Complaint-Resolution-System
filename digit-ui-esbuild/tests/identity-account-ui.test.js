@@ -460,3 +460,22 @@ test("a notice link that is not http(s) is not rendered", async () => {
   const view = await render(Login);
   assert.equal(view.root.findAllByType("a").length, 0);
 });
+
+test("closing the trial modal shows the notice inline and keeps sign-in blocked", async () => {
+  const notice = { title: "Trial ended", message: "Contact us.", linkLabel: "Upgrade", linkUrl: "https://example.org/up" };
+  browser("employee", async () => json(200, { tenant, access: { state: "TRIAL_EXPIRED", notice } }));
+  const Shell = ({ children }) => ui.React.createElement("section", null, children);
+  const Login = () => ui.React.createElement(ui.SignInFailureCard, {
+    signIn: ui.useIdentityBffSignIn({ surface: "employee", t, onAuthenticated: () => {} }), Shell,
+  });
+  const view = await render(Login);
+  const popup = view.root.findByProps({ className: "digit-workspace-trial-popup" });
+  assert.equal(typeof popup.props.onClose, "function");
+  assert.equal(typeof popup.props.onOverlayClick, "function");
+  await ui.act(async () => { popup.props.onClose(); });
+  assert.equal(view.root.findAllByProps({ className: "digit-workspace-trial-popup" }).length, 0);
+  assert.equal(button(view, "Sign in"), undefined);
+  assert.match(text(view.root), /Trial ended/);
+  assert.match(text(view.root.findByProps({ className: "digit-workspace-trial-notice" })), /Contact us\./);
+  assert.equal(view.root.findByType("a").props.href, "https://example.org/up");
+});

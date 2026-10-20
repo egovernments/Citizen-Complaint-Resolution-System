@@ -16,7 +16,7 @@ import {
 } from "@egovernments/digit-ui-libraries";
 
 import Header from "./Header";
-import WorkspaceTrialNotice from "./WorkspaceTrialNotice";
+import WorkspaceTrialNotice, { WorkspaceTrialNoticeBody } from "./WorkspaceTrialNotice";
 
 const cleanAuthResult = () => {
   const url = new URL(window.location.href);
@@ -180,8 +180,22 @@ export const useIdentityBffSignIn = ({ surface, t, onAuthenticated, onSignedOut 
 export const SignInFailureCard = ({ signIn, Shell, onSignIn }) => {
   const { tenant, status, message, tr, beginSignIn, establishSession, retry, invitation, acceptInvitation, signInAfterIncompleteSignOut, declineInvitation } = signIn;
   const [confirmDecline, setConfirmDecline] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
   if (status === "no-tenant") return <ChooseOrganisationCard tr={tr} Shell={Shell} />;
-  if (status === "trial-expired") return <Shell><WorkspaceTrialNotice notice={signIn.notice} /></Shell>;
+  // Closing the modal leaves the notice inline; sign-in stays blocked.
+  if (status === "trial-expired" && signIn.notice) {
+    return dismissed ? (
+      <Shell>
+        <V2Card style={{ width: "100%", maxWidth: "420px", padding: "32px", display: "flex", flexDirection: "column", gap: "16px", borderRadius: "14px", border: "none", boxShadow: "0 12px 32px rgba(8, 20, 40, 0.18), 0 2px 8px rgba(8, 20, 40, 0.10)" }}>
+          <div style={{ display: "flex", justifyContent: "center" }}><Header /></div>
+          <h1 style={{ margin: 0, fontSize: "1.5rem", textAlign: "center", color: "var(--color-text-heading, #1D2433)" }}>{signIn.notice.title}</h1>
+          <WorkspaceTrialNoticeBody notice={signIn.notice} />
+        </V2Card>
+      </Shell>
+    ) : (
+      <Shell><WorkspaceTrialNotice notice={signIn.notice} onClose={() => setDismissed(true)} /></Shell>
+    );
+  }
   return (
     <Shell>
       <V2Card
