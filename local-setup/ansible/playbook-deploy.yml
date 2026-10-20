@@ -2939,6 +2939,21 @@
         url: http://127.0.0.1:18200/v1/sys/init
         status_code: [200]
       register: bao_init_status
+      when: not (upgrade_safe_mode | default(false) | bool)
+
+    # During an existing-install upgrade Docker may briefly accept the TCP
+    # connection while OpenBao is still restarting around its restored data.
+    # Keep the normal deployment path unchanged; only the guarded upgrade
+    # waits through that short readiness race.
+    - name: "OpenBao — check init status (upgrade-safe retry)"
+      ansible.builtin.uri:
+        url: http://127.0.0.1:18200/v1/sys/init
+        status_code: [200]
+      register: bao_init_status
+      retries: 12
+      delay: 5
+      until: bao_init_status.status | default(0) == 200
+      when: upgrade_safe_mode | default(false) | bool
 
     - name: "OpenBao — initialize if first deploy (writes init.json with 0600)"
       when: not bao_init_status.json.initialized
