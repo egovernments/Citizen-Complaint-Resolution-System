@@ -1,6 +1,6 @@
 # Workspace setup and tenant rename
 
-Workspace setup is separate from identity provisioning. The BFF carries no workspace state. These PGR routes use a normal DIGIT token in RequestInfo.authToken; PGR resolves the token through egov-user and requires live ACCOUNT_ADMIN at the requested tenant. Kong role-action grants provide the gateway check as well. `_update` only changes local workspace/audit rows and retains the live tenant ACCOUNT_ADMIN check. Workspace dependency reads use the provisioner client’s read-only allowlist; downstream writes never use provisioner credentials.
+Workspace setup is separate from identity provisioning. The BFF carries no workspace state. These PGR routes use a normal DIGIT token in RequestInfo.authToken; PGR resolves the token through egov-user and requires live ACCOUNT_ADMIN at the requested tenant. Kong role-action grants provide the gateway check as well: the platform baseline gives the three routes' actions and ACCOUNT_ADMIN role-actions to each workspace signup creates, and every Ansible deploy gives them to the state root (tag `onboarding-workspace-access`). `_update` only changes local workspace/audit rows and retains the live tenant ACCOUNT_ADMIN check. Workspace dependency reads use the provisioner client’s read-only allowlist; downstream writes never use provisioner credentials.
 
 ## Agreed workspace routes
 

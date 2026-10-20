@@ -1,3 +1,4 @@
+import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -151,6 +152,18 @@ describe('PGR onboarding cutover deployment contract', () => {
     const task = playbook.slice(restart, playbook.indexOf('\n    - name:', restart));
     expect(task).toContain('restart pgr-services');
     expect(task).toContain('pgr_provisioner_seed is changed');
+  });
+
+  test('every deploy gives the state root the workspace endpoints from the platform baseline', () => {
+    const playbook = read('local-setup/ansible/playbook-deploy.yml');
+    const start = playbook.indexOf('workspace-access — onboarding workspace endpoints at');
+    expect(start).toBeGreaterThan(-1);
+    const block = playbook.slice(start, playbook.indexOf('\n    - name:', playbook.indexOf('workspace-access — fail when', start)));
+    expect(block).toContain("tags: ['onboarding-workspace-access']");
+    expect(block).toContain('backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json');
+    // What the seeder selects and creates (test_onboarding_workspace_access.py); unittest reports on stderr.
+    expect(() => execFileSync('python3', ['-m', 'unittest', 'local-setup/tests/test_onboarding_workspace_access.py'],
+      { cwd: root, encoding: 'utf8', stdio: 'pipe' })).not.toThrow();
   });
 
   test('Helm wires onboarding with the runner off by default', () => {
