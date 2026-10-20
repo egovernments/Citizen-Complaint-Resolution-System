@@ -493,7 +493,11 @@ class CommandRunner:
             args, cwd=cwd, env=env, text=True, capture_output=True, check=False
         )
         if check and result.returncode:
-            detail = (result.stderr or result.stdout).strip()
+            detail = "\n".join(
+                part.strip()
+                for part in (result.stdout, result.stderr)
+                if part and part.strip()
+            )
             command, detail = sanitized_command(args, detail)
             raise DeployError(f"command failed ({command}): {detail}")
         return result

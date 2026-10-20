@@ -3,6 +3,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 SCRIPT_DIR = Path(__file__).resolve().parents[1] / "scripts"
@@ -25,6 +26,18 @@ def row(identifier="one", value="before"):
 
 def empty_snapshot():
     return {table: {} for table in deploy.MDMS_TABLES}
+
+
+class CommandRunnerTests(unittest.TestCase):
+    def test_failure_reports_stdout_and_stderr(self):
+        completed = deploy.subprocess.CompletedProcess(
+            ["preflight"], 1, stdout="real validation failure\n", stderr="tool notice\n"
+        )
+        with mock.patch.object(deploy.subprocess, "run", return_value=completed):
+            with self.assertRaises(deploy.DeployError) as raised:
+                deploy.CommandRunner().run(["preflight"])
+        self.assertIn("real validation failure", str(raised.exception))
+        self.assertIn("tool notice", str(raised.exception))
 
 
 class MdmsSnapshotTests(unittest.TestCase):
