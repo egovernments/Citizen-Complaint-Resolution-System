@@ -3,7 +3,8 @@ import { useTranslation } from "react-i18next";
 import { PopUp, Timeline, TimelineMolecule, Loader } from '@egovernments/digit-ui-components';
 import { useMyContext } from "../utils/context";
 import { convertEpochFormateToDate } from '../utils';
-import { channelFiler } from '../utils/filedBy';
+import { complainantFiler } from '../utils/filedBy';
+import { translateOr } from '../utils/selectPlaceholder';
 
 const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPrefix = "", service }) => {
     const { state } = useMyContext();
@@ -62,18 +63,16 @@ const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPre
                 return `${t('CS_COMMON_EMPLOYEE_COMMENTS')} : "${raw}"`;
             };
 
-            // A WhatsApp complaint's APPLY actor is the chatbot's service account, so that
-            // row shows the complainant instead, never the bot account (#2503). A name
-            // pgr-services redacted falls back to a plain "Citizen" label.
-            const filer = channelFiler(service);
-            const filerRecord = filer && { name: filer.name || t("ACCESSCONTROL_ROLES_ROLES_CITIZEN", "Citizen"), mobileNumber: filer.mobileNumber };
+            // When the APPLY actor is not the complainant (the WhatsApp bot's service
+            // account, an employee filing for a citizen), that row shows the complainant
+            // instead (#2503).
+            const citizenLabel = translateOr(t, "ACCESSCONTROL_ROLES_ROLES_CITIZEN", "Citizen");
 
             // Map API response to timeline steps
             const steps = workflowData.ProcessInstances.map((instance, index) => {
                 const assignee = instance?.assignes?.[0];
-                const personRecord = filerRecord && instance?.action === "APPLY"
-                    ? filerRecord
-                    : isAssigningAction(instance?.action) ? assignee : instance?.assigner;
+                const filer = instance?.action === "APPLY" ? complainantFiler(service, instance?.assigner, citizenLabel) : null;
+                const personRecord = filer || (isAssigningAction(instance?.action) ? assignee : instance?.assigner);
                 const personLine = formatPerson(personRecord);
                 const mobile = personRecord?.mobileNumber;
                 const contactLine = mobile ? `${t("ES_COMMON_CONTACT_DETAILS")}: ${mobile}` : null;
@@ -92,7 +91,7 @@ const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPre
             });
             setTimelineSteps(steps);
         }
-    }, [workflowData, service]);
+    }, [workflowData, service, t]);
 
     return (
         isWorkFlowLoading ? <Loader /> :

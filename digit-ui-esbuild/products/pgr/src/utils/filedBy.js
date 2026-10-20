@@ -1,32 +1,28 @@
-// Who a timeline shows as having filed a complaint. A WhatsApp complaint is
-// filed by the chatbot's service account (Kong resolves the caller from the
-// token, so the bot cannot act as the citizen), and the workflow records that
-// account as the APPLY actor: the timeline read "Admin" and the admin's mobile
-// (#2503). For those complaints the filer shown is the complainant instead.
+// Who a timeline shows as having filed a complaint. The workflow records the
+// account that made the APPLY call, which is not always the complainant: a
+// WhatsApp complaint is filed by the chatbot's service account (Kong resolves
+// the caller from the token, so the bot cannot act as the citizen), and the
+// timeline read "Admin" and the admin's mobile (#2503). Whenever the APPLY
+// actor is not the complainant, the filing row shows the complainant instead.
 //
-// service.citizen comes from pgr-services' search, which already redacts the
-// citizen's name and mobile for viewers its field-visibility policy denies, so
-// this never shows more than that policy allows. A confidential complaint
-// shows the name only.
-
-export const CHANNEL_FILED_SOURCES = ["whatsapp"];
-
-/** True when the workflow's APPLY actor is a channel account, not the complainant. */
-export function isFiledThroughChannel(service) {
-  return CHANNEL_FILED_SOURCES.includes(String(service?.source || "").toLowerCase());
-}
+// service.citizen comes from pgr-services' search, whose field-visibility
+// policy already decides which viewers see the citizen's name and mobile. Its
+// answer is shown as is: a redacted name shows as the fallback label and a
+// redacted mobile is left out, never the filing account's.
 
 /**
- * The person to show on the filing row of a channel-filed complaint, or null
- * when the workflow's own actor is the right one to show.
+ * The person to show on a filing row, or null when the workflow's own actor is
+ * the complainant (or either is unknown), so the row keeps showing that actor.
+ * @param {object} service       the complaint, as pgr-services' search returns it
+ * @param {object} actor         the APPLY process instance's assigner
+ * @param {string} fallbackName  shown when the complainant's name is redacted
  * @returns {{ name: string|null, mobileNumber: string|null } | null}
  */
-export function channelFiler(service) {
-  if (!isFiledThroughChannel(service)) return null;
-  const citizen = service?.citizen;
-  const confidential = service?.extendedAttributes?.isConfidential === true;
+export function complainantFiler(service, actor, fallbackName) {
+  const complainant = service?.accountId;
+  if (!complainant || !actor?.uuid || actor.uuid === complainant) return null;
   return {
-    name: citizen?.name || null,
-    mobileNumber: confidential ? null : citizen?.mobileNumber || null,
+    name: service?.citizen?.name || fallbackName || null,
+    mobileNumber: service?.citizen?.mobileNumber || null,
   };
 }
