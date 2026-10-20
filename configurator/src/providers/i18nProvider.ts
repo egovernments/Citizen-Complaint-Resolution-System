@@ -231,6 +231,16 @@ const customEnglishMessages: TranslationMessages = {
       // Shown instead of the controls to a user without a provider-admin role.
       admin_only: 'Read-only: switching a channel on or off, or choosing its provider, needs the SUPERUSER, MDMS_ADMIN or ACCOUNT_ADMIN role.',
     },
+    workspace_links: {
+      title: 'Workspace links',
+      employee_label: 'Employee app',
+      employee_hint: 'Where your staff sign in and handle complaints',
+      citizen_label: 'Citizen app',
+      citizen_hint: 'Share this with citizens to file and track complaints',
+      copy: 'Copy',
+      copied: 'Link copied.',
+      open: 'Open',
+    },
     providers: {
       // Notification Providers screen — self-service actions.
       add: 'Add Provider',
