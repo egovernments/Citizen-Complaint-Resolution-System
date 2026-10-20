@@ -7,7 +7,7 @@
 
 import posthog from 'posthog-js';
 import * as Sentry from '@sentry/react';
-import { isTelemetryKilled } from './telemetryGate';
+import { isPosthogOn, isTelemetryKilled } from './telemetryGate';
 
 // Every exported function below is gated. Gating only the init calls in main.tsx
 // would leave these reachable, and whether posthog-js / @sentry-react silently
@@ -47,7 +47,7 @@ export async function identifyUser(user: TelemetryUser) {
   if (user.roles?.length) Sentry.setTag('role', user.roles[0]);
   const id = user.uuid ? await pseudonymousId(user.uuid) : null;
   if (!id || isTelemetryKilled()) return;
-  posthog.identify(id, { roles: user.roles?.join(', ') });
+  if (isPosthogOn()) posthog.identify(id, { roles: user.roles?.join(', ') });
   Sentry.setUser({ id });
 }
 
@@ -56,7 +56,7 @@ export async function identifyUser(user: TelemetryUser) {
  */
 export function clearUser() {
   if (isTelemetryKilled()) return;
-  posthog.reset();
+  if (isPosthogOn()) posthog.reset();
   Sentry.setUser(null);
 }
 
@@ -114,7 +114,7 @@ export function captureApiError(
  * Start a performance measurement
  */
 export function startMeasure(name: string): () => void {
-  if (isTelemetryKilled()) return () => {};
+  if (!isPosthogOn()) return () => {};
   const start = performance.now();
 
   return () => {
@@ -130,7 +130,7 @@ export function startMeasure(name: string): () => void {
  * Track page load performance
  */
 export function trackPagePerformance() {
-  if (isTelemetryKilled()) return;
+  if (!isPosthogOn()) return;
   if (typeof window !== 'undefined' && window.performance) {
     const timing = performance.timing;
     const loadTime = timing.loadEventEnd - timing.navigationStart;
@@ -152,7 +152,7 @@ export function trackPagePerformance() {
  * Check if a feature flag is enabled
  */
 export function isFeatureEnabled(flagName: string): boolean {
-  if (isTelemetryKilled()) return false;
+  if (!isPosthogOn()) return false;
   return posthog.isFeatureEnabled(flagName) ?? false;
 }
 
@@ -160,7 +160,7 @@ export function isFeatureEnabled(flagName: string): boolean {
  * Get feature flag value
  */
 export function getFeatureFlag<T>(flagName: string): T | undefined {
-  if (isTelemetryKilled()) return undefined;
+  if (!isPosthogOn()) return undefined;
   return posthog.getFeatureFlag(flagName) as T | undefined;
 }
 
@@ -172,7 +172,7 @@ export function getFeatureFlag<T>(flagName: string): T | undefined {
  * Start session recording
  */
 export function startRecording() {
-  if (isTelemetryKilled()) return;
+  if (!isPosthogOn()) return;
   posthog.startSessionRecording();
 }
 
@@ -180,7 +180,7 @@ export function startRecording() {
  * Stop session recording
  */
 export function stopRecording() {
-  if (isTelemetryKilled()) return;
+  if (!isPosthogOn()) return;
   posthog.stopSessionRecording();
 }
 
@@ -192,7 +192,7 @@ export function stopRecording() {
  * Enable debug mode for development
  */
 export function enableDebugMode() {
-  if (isTelemetryKilled()) return;
+  if (!isPosthogOn()) return;
   posthog.debug();
   console.log('[Telemetry] Debug mode enabled');
 }

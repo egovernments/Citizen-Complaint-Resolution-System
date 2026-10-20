@@ -273,6 +273,14 @@ enable_legacy_pgr_dashboard: false
 # rebuild. The citizen app draws the banner only with citizen_banner_enabled.
 configurator_banner_enabled: false
 
+# The Configurator's own Sentry and PostHog, rendered into its config.js at
+# deploy time, so changing them needs no rebuild. Unset means off: the repo
+# ships no project. The citizen app's analytics are MDMS rows instead
+# (configurator → System → Analytics Providers).
+# configurator_sentry_dsn: ""
+# configurator_posthog_key: ""          # phc_…, the project's write-only key
+# configurator_posthog_host: ""         # default https://us.i.posthog.com
+
 # Optional external git source for the citizen SPA, for transitional or
 # standalone use. LEAVE UNSET on normal deploys: the default builds the
 # vendored in-tree digit-ui-v2/ (with ui-shared/) so the deployed bundle
