@@ -38,7 +38,7 @@ import { loadTenantHierarchies } from '@/api/services/tenantHierarchy';
 import { parseExcelFile, parseEmployeeExcel } from '@/utils/excelParser';
 import { downloadEmployeeTemplate } from '@/utils/templateBuilder';
 import { codeProblem, employeesByCode, withEmployeeCodes, type EmployeeRecord } from './employeesApi';
-import { reportStepError, trackStepAction } from '../telemetry';
+import { reportStepError, trackImport, trackTemplateDownload, trackUploadRefused } from '../telemetry';
 import { useOnboardingT } from '../i18n';
 import { allowedEmployeeRoles, pickerChoices } from '@/lib/systemRecords';
 import type {
@@ -180,6 +180,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
 
       if (result.data.length === 0) {
         setError(t('bulk_employees.no_rows', 'No employee data found in Excel file.'));
+        trackUploadRefused('employees', 'employee', 'NOTHING_FOUND');
         return;
       }
 
@@ -193,6 +194,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
     } catch (err) {
       console.error('Excel parse error:', err);
       setError(t('bulk_employees.unreadable', 'Failed to parse Excel file. Please ensure it is a valid .xlsx file.'));
+      trackUploadRefused('employees', 'employee', 'UNREADABLE');
     } finally {
       setLoading(false);
     }
@@ -414,9 +416,8 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
       }
 
       addUndo('create_employees', `Created ${createdCount} employees`);
-      trackStepAction('employees', 'entity_import', 'employee', {
-        tenant: targetTenant,
-        source: 'bulk',
+      trackImport('employees', 'employee', {
+        method: 'bulk',
         count: createdTotal,
         failed: failedTotal,
       });
@@ -439,6 +440,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
 
   const handleDownloadTemplate = () => {
     downloadEmployeeTemplate();
+    trackTemplateDownload('employees', 'employee');
   };
 
   const handleDownloadInvitations = () => {

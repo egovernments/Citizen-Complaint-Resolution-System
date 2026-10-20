@@ -90,7 +90,7 @@ function ComplaintNumber({ id, tr }) {
         className="cms-link-button"
         onClick={copy}
         aria-live="polite"
-        data-analytics-event="pgr.complaint.response-copy-number"
+        data-analytics-event="complaint:response_number_copy"
       >
         {copied ? tr("CS_COMMON_COPIED", "Copied") : tr("CS_COMMON_COPY", "Copy")}
       </button>
@@ -194,17 +194,17 @@ const Response = () => {
               variant="outline"
               leading={<EyeGlyph />}
               onClick={() => history.push(goDetail)}
-              data-analytics-event="pgr.complaint.response-view"
+              data-analytics-event="complaint:response_view_click"
             >
               {tr("CS_COMMON_VIEW_COMPLAINT", "View Complaint")}
             </Button>
           ) : !success ? (
-            <Button variant="outline" onClick={() => history.push(retryFlow)} data-analytics-event="pgr.complaint.response-try-again">
+            <Button variant="outline" onClick={() => history.push(retryFlow)} data-analytics-event="complaint:response_retry_click">
               {tr("CS_COMMON_TRY_AGAIN", "Try Again")}
             </Button>
           ) : null}
           {/* Same name the employee response page gives its home button. */}
-          <Button onClick={() => history.push(goHome)} data-analytics-event="pgr.complaint.response-go-home">
+          <Button onClick={() => history.push(goHome)} data-analytics-event="complaint:response_home_click">
             {tr("CORE_COMMON_GO_TO_HOME", "Go back to home page")}
           </Button>
         </div>

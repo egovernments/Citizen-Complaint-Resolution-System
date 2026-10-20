@@ -357,8 +357,7 @@ const BoundaryComponent = ({ t, config, onSelect, userType, formData, readOnly }
     setAutoFilledKeys(newAutoFilled);
 
     // The option is chosen inside a menu, which the click tracking can't see.
-    trackEvent("pgr.boundary.selected", {
-      category: "pgr",
+    trackEvent("complaint:location_level_select", {
       label: boundaryType,
       value: levelsFilledAbove(selectedBoundary, selectedValues, newSelectedValues, boundaryHierarchy),
     });

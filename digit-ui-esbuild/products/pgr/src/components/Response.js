@@ -45,7 +45,7 @@ const Response = () => {
       ></PanelCard>
       <ActionBar className="mc_back">
         <Button
-          data-analytics-event="pgr.complaint.response-go-home"
+          data-analytics-event="complaint:response_home_click"
           style={{ margin: "0.5rem", marginLeft: "6rem", minWidth: "16rem" }}
           variation="primary"
           label={t(back)}
