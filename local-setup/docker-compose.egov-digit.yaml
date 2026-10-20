@@ -274,6 +274,10 @@ services:
       # which is Prometheus's documented equivalent and has no HTTP surface.
     volumes:
       - ./otel/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      # Sherlog's rendered alert rules and Alertmanager target (docs/operations/monitoring/sherlog.md); empty when it is off.
+      - ./sherlog/rendered:/etc/prometheus/sherlog:ro
+      # Optional scrape targets the playbook writes (keycloak); empty when none is on.
+      - ./otel/targets:/etc/prometheus/targets:ro
       - prometheus_data:/prometheus
     ports:
       - "${BIND_IP:-127.0.0.1}:19090:9090"
@@ -308,7 +312,9 @@ services:
       POSTGRES_USER: egov
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       POSTGRES_DB: egov
-    command: postgres -c max_connections=200
+    # POSTGRES_EXTRA_ARGS (from host_vars postgres_stat_statements, docs/operations/monitoring/sherlog.md): -c shared_preload_libraries=
+    # pg_stat_statements, which needs a Postgres restart; the deploy recreates the container when .env changes.
+    command: postgres -c max_connections=200 ${POSTGRES_EXTRA_ARGS:-}
     volumes:
     - postgres_data:/var/lib/docker-postgresql/data
     ports:
@@ -2262,6 +2268,8 @@ services:
     command: ["-config.file=/etc/loki/config.yaml"]
     volumes:
       - ./otel/loki-config.yaml:/etc/loki/config.yaml:ro
+      # Sherlog's rendered log alert rules (docs/operations/monitoring/sherlog.md); empty when it is off.
+      - ./sherlog/rendered/loki:/etc/loki/rules/fake:ro
       - loki_data:/loki
     ports:
       - "${BIND_IP:-127.0.0.1}:13100:3100"
@@ -2375,6 +2383,11 @@ services:
       # docker-socket-proxy below. Promtail reaches the daemon through that
       # read-only proxy instead.
       - promtail_data:/tmp
+      # The host's journal, read-only, for promtail's journal job (kernel OOM kills, unit failures). machine-id lets
+      # the journal reader open the host's files. Only on a host with a persistent journal (the deploy sets these);
+      # otherwise, and by default, an empty folder in the repository, so Docker never creates /var/log/journal.
+      - ${PROMTAIL_JOURNAL_DIR:-./otel/no-journal}:/var/log/journal:ro
+      - ${PROMTAIL_MACHINE_ID:-./otel/no-journal/machine-id}:/etc/machine-id:ro
     depends_on:
       loki:
         condition: service_healthy
@@ -3207,6 +3220,9 @@ services:
       keycloak-postgres:
         condition: service_healthy
     environment:
+      # Prometheus metrics at /metrics on the management port, 9000. metrics-enabled is a build option: it is set in
+      # keycloak/Dockerfile (`kc.sh build`), since `start --optimized` ignores it here. Scraped through the file_sd
+      # target the playbook writes when enable_keycloak is on (otel/targets/keycloak.json).
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://keycloak-postgres:5432/keycloak
       KC_DB_USERNAME: keycloak

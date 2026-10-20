@@ -527,3 +527,30 @@ identity_route_backfill_roots: >-
      ([identity_tenant_route_backfill_roots if (identity_tenant_route_backfill_roots | default(none)) is not none
        else state_root | default('')] | flatten | map('string') | join(',')).split(',')
      | map('trim') | reject('equalto', '') | reject('equalto', 'pg') | unique | join(',') }}
+
+# Sherlog (docs/operations/monitoring/sherlog.md): alert rules from Sherlog's monitoring standard for
+# the components declared in local-setup/sherlog/sherlog.yaml, and an automatic
+# root-cause investigation of each critical or warning alert. OFF by default.
+# sherlog_mode "shadow" writes reports on the box and sends nothing; "live"
+# sends them. The model key and tokens are SECRETS: put them in OpenBao under the same names
+# (`bao kv patch <secrets_path> sherlog_model_api_key=...`); the deploy reads them from there first, and only
+# falls back to the empty host_vars below. It stops when Sherlog is on and the model key is empty.
+enable_sherlog: false
+sherlog_image: ghcr.io/singhalkarun/sherlog
+sherlog_version: "0.6.6"
+sherlog_mode: shadow
+sherlog_model_api_key: ""          # secret: OpenBao
+sherlog_model_provider: ""          # empty: Sherlog's default (openai)
+sherlog_model_upstream: ""          # empty: the provider's API
+sherlog_daily_investigations: 30
+sherlog_github_issues_repo: ""      # owner/repo: one issue per problem (live mode)
+sherlog_github_issues_token: ""    # secret: OpenBao; required when sherlog_github_issues_repo is set
+sherlog_github_autofix: manual
+sherlog_alert_slack_webhook_url: ""   # secret: OpenBao. Set: critical/warning alerts (not log alerts) also go to Slack
+sherlog_deadman_url: ""               # secret: OpenBao. Set: Watchdog pings this dead man's switch (e.g. healthchecks.io)
+sherlog_docker_diagnostics: false     # true: investigations may read container state/logs/events (read-only, redacted)
+sherlog_actions: false                # true: a collaborator can approve a restart by labelling a Sherlog issue (live mode)
+# Statement statistics for Postgres (pg_stat_statements, per query id, no query text) for investigations and the
+# postgres component's slow-query signals. Turning it on restarts Postgres once (shared_preload_libraries).
+postgres_stat_statements: false
+sherlog_overrides: {}                 # merged over sherlog/sherlog.yaml, e.g. {components: {logs: {threshold: 20}}}

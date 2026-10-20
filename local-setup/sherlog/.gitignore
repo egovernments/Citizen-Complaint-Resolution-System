@@ -1,0 +1,14 @@
+# Written on the host by the deploy (docs/operations/monitoring/sherlog.md): Sherlog's bundle from its image, settings, rendered rules.
+*
+!sherlog.yaml
+!.gitignore
+# The bind-mount sources (docker-compose.egov-digit.yaml, docker-compose.monitoring.yml) exist in a checkout, so Docker
+# does not create them as root. The deploy's config sync leaves the placeholders out (--exclude=.gitkeep).
+!rendered/
+rendered/*
+!rendered/loki/
+rendered/loki/*
+!rendered/loki/.gitkeep
+!textfile/
+textfile/*
+!textfile/.gitkeep

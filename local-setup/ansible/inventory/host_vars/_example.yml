@@ -462,6 +462,25 @@ enable_search_stack: false
 # unreachable one fails the whole `docker compose up`.
 enable_mcp: true
 
+# ────────── Sherlog (alerting + automatic root-cause analysis) ──────────
+# Alerting to Sherlog's monitoring standard + automatic root-cause analysis
+# (docs/operations/monitoring/sherlog.md, local-setup/sherlog/sherlog.yaml).
+# Needs observability_level: traces (Loki and Tempo), and on the host, once,
+# `docker login ghcr.io` (private images for now). The secrets go in OpenBao:
+#   bao kv patch <secrets_path> sherlog_model_api_key=<key>
+# (host_vars of the same names are only the fallback). Live mode needs the
+# issues repo and its token. Settings and their defaults: group_vars/digit.yml.
+# enable_sherlog: false
+# sherlog_mode: shadow                    # shadow: reports stay on the box; live: sent
+# sherlog_github_issues_repo: ""          # owner/repo for one issue per problem (required in live mode)
+# OpenBao: sherlog_github_issues_token (fine-grained, Issues read/write on that repo only),
+#          sherlog_alert_slack_webhook_url (critical/warning alerts to Slack)
+# sherlog_docker_diagnostics: false      # true: investigations read container state, logs, events (read-only,
+#                                         # redacted; mounts the Docker socket into a GET-only socket proxy)
+# sherlog_overrides:                      # this tenant's differences from sherlog.yaml
+#   components: {logs: {threshold: 20}}
+#   investigate: {skip_services: [loki, promtail, postgres-db]}
+
 # ────────── digit-mcp read-only (public) ──────────
 # A SEPARATE, publicly-exposable read-only MCP (digit-mcp-readonly). With
 # MCP_READ_ONLY=1 every write-risk tool is absent (tenant_destroy, decrypt_data,

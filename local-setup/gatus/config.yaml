@@ -20,6 +20,11 @@
 # steady-state size instead of growing forever. Set those keys here only if a
 # deployment wants a different window -- and check the pinned image supports them,
 # since Gatus rejects unknown config keys outright.
+
+# Prometheus metrics on the web port (/metrics): each check's result, scraped by Prometheus (job "gatus") so Sherlog's
+# rules alert on failing checks alongside everything else. Gatus's own Slack alerting below is unchanged.
+metrics: true
+
 storage:
   type: sqlite
   path: /data/gatus.db

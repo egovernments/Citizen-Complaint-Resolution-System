@@ -281,6 +281,9 @@
       ansible.builtin.shell: |
         set -eo pipefail
         cd "{{ digit_dir }}"
+        # Sherlog is its own compose project but joins the network of the stack: stop it first, or `down` cannot
+        # remove the network and fails. Its data volume is kept (no -v).
+        if [ -x sherlog/sherlog.sh ] && [ -f sherlog/.env ]; then sherlog/sherlog.sh down --timeout 30; fi
         docker compose -f docker-compose.egov-digit.yaml down --remove-orphans --timeout 30
       args:
         chdir: "{{ digit_dir }}"
@@ -1742,6 +1745,9 @@
         delay_updates: false
         rsync_opts:
           - "--inplace"
+          # Placeholders that keep empty bind-mount sources in a checkout (sherlog/rendered/loki, otel/targets):
+          # the folders are synced, the files are not. One in rendered/loki would sit among Loki's rule files.
+          - "--exclude=.gitkeep"
       register: config_sync
       loop: "{{ digit_config_dirs | dict2items }}"
       vars:
@@ -1756,6 +1762,7 @@
           gatus:    ../gatus
           dataloader: ../dataloader
           scripts:  ../scripts
+          sherlog:  ../sherlog
 
     # DIGIT's SMS providers (SMSCountry, Jasmin, Ozeki) for the STOCK Novu worker. Compose
     # mounts this directory read-only into novu-worker (NOVU_WORKER_PROVIDERS_DIR in .env)
@@ -2197,6 +2204,44 @@
       failed_when: false
       no_log: true   # holds the entire previous .env (POSTGRES/MINIO/KC/GF secrets); -v would print it (Vinoth review)
 
+    # Sherlog (docs/operations/monitoring/sherlog.md) runs beside the stack as its own compose project.
+    # Its files come from its image, pinned by sherlog_version: nothing of
+    # Sherlog's is copied into this repository, only CCRS's sherlog.yaml and its
+    # settings (templates/sherlog.env.j2). Prometheus and Loki mount
+    # {{ digit_dir }}/sherlog/rendered on every tenant; it is filled here, before
+    # "Start DIGIT stack", and emptied by `sherlog.sh uninstall` when the tenant
+    # turns Sherlog off. The containers start after the stack (they join its
+    # network): "Sherlog — start". Its bundle, settings and render come after
+    # the OpenBao read (its secrets are there): "Sherlog — its secrets".
+    # Three lines: the commit, its refs (%D) and the origin remote's URL, from the controller's checkout.
+    - name: "Sherlog — the commit being deployed (for the deploy marker)"
+      ansible.builtin.shell: |
+        git -C {{ playbook_dir }} log -1 --format=%H%n%D || printf '\n\n'
+        git -C {{ playbook_dir }} remote get-url origin 2>/dev/null || echo
+      delegate_to: localhost
+      become: false   # the controller's checkout, as the other localhost tasks: no sudo there
+      register: sherlog_commit
+      changed_when: false
+      failed_when: false
+      when: enable_sherlog | default(false) | bool
+
+    # The repository from origin (a fork records itself), and a ref Sherlog can resolve: a detached or shallow
+    # checkout (CI) gives HEAD or grafted, so the first real branch or tag among the refs, then --image-tag.
+    - name: "Sherlog — the deploy marker's repository, commit and ref"
+      ansible.builtin.set_fact:
+        sherlog_deploy:
+          sha: "{{ (sherlog_commit.stdout_lines | default([]))[0] | default('', true) or 'unknown' }}"
+          repo: >-
+            {{ ((sherlog_commit.stdout_lines | default([]) + ['', '', ''])[2]
+                | regex_replace('^(?:.*github\.com[:/]([^/]+/[^/]+?)(?:\.git)?/?|.*)$', '\1'))
+               or 'egovernments/Citizen-Complaint-Resolution-System' }}
+          ref: >-
+            {{ ((sherlog_commit.stdout_lines | default([]) + ['', ''])[1]).split(', ')
+               | map('regex_replace', '^HEAD -> ', '') | map('regex_replace', '^tag: ', '')
+               | reject('in', ['', 'HEAD', 'grafted', 'origin/HEAD']) | map('regex_replace', '^origin/', '')
+               | first | default(ccrs_image_tag | default('', true), true) | default('unknown', true) }}
+      when: enable_sherlog | default(false) | bool
+
     # A tag passed with --image-tag lives only in that run. The next plain
     # `./deploy.sh <tenant>` falls back to the compose defaults — by design
     # (#1729), but it is a silent downgrade if nobody meant it. digit.env.j2
@@ -2242,6 +2287,16 @@
         novu_tenant_accounts_on: >-
           {{ (enable_novu | default(false) | bool)
              and (novu_tenant_accounts | default(enable_keycloak | default(false)) | bool) }}
+
+    # Promtail's journal job reads the host's persistent journal. Mounted only where it exists: a missing bind source
+    # would be created by Docker, and an empty /var/log/journal makes journald switch to persistent storage on its
+    # next restart (Storage=auto). Elsewhere (a volatile journal, macOS) promtail gets otel/no-journal, an empty
+    # folder, and the journal job reads nothing (digit.env.j2: PROMTAIL_JOURNAL_DIR, PROMTAIL_MACHINE_ID).
+    - name: "Promtail — does the host keep a persistent journal?"
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop: [/var/log/journal, /etc/machine-id]
+      register: host_journal
 
     - name: Write per-tenant compose .env
       template:
@@ -2995,6 +3050,113 @@
       loop: "{{ _optin_secret_checks }}"
       loop_control:
         label: "{{ item.feature }} / {{ item.var }}"
+
+    # ==================== Sherlog: bundle, settings and render ====================
+    # Here, after the OpenBao read: the model key and tokens are tenant secrets, read like POSTGRES_PASSWORD
+    # (`bao kv patch <secrets_path> sherlog_model_api_key=...`; not `kv put`, which would drop the tenant's other
+    # secrets), with host_vars as the fallback. Before "Start DIGIT
+    # stack", whose Prometheus and Loki load the rendered rules.
+    - name: "Sherlog — its secrets (OpenBao, host_vars as the fallback)"
+      ansible.builtin.set_fact:
+        sherlog_secret:
+          model_api_key: "{{ bao_secrets.json.data.data.sherlog_model_api_key | default('', true) or sherlog_model_api_key | default('') }}"
+          github_issues_token: "{{ bao_secrets.json.data.data.sherlog_github_issues_token | default('', true) or sherlog_github_issues_token | default('') }}"
+          alert_slack_webhook_url: "{{ bao_secrets.json.data.data.sherlog_alert_slack_webhook_url | default('', true) or sherlog_alert_slack_webhook_url | default('') }}"
+          deadman_url: "{{ bao_secrets.json.data.data.sherlog_deadman_url | default('', true) or sherlog_deadman_url | default('') }}"
+      no_log: true
+      when: enable_sherlog | default(false) | bool
+
+    # Without a model key every investigation fails at the model call; without the token, live mode cannot open
+    # its issues. Refuse rather than start Sherlog half-configured.
+    - name: "Sherlog — its secrets are set"
+      ansible.builtin.assert:
+        that:
+          - sherlog_secret.model_api_key | length > 0
+          - not (sherlog_github_issues_repo | default('') | length > 0) or (sherlog_secret.github_issues_token | length > 0)
+        fail_msg: >-
+          enable_sherlog is on, but sherlog_model_api_key is empty, or sherlog_github_issues_repo is set and
+          sherlog_github_issues_token is empty. Set them in OpenBao (`bao kv patch {{ secrets_path }}
+          sherlog_model_api_key=<key>`) or in host_vars.
+        quiet: true
+      when: enable_sherlog | default(false) | bool
+
+    # What else Sherlog needs: Loki (its log rules, the journal, the logs investigations read) and Tempo, which only
+    # observability_level traces runs; and somewhere for live mode's reports (in CCRS, GitHub issues: the Slack
+    # webhook carries alerts, not reports).
+    - name: "Sherlog — needs observability_level traces (Loki and Tempo)"
+      ansible.builtin.assert:
+        that: (observability_level | default('traces')) == 'traces'
+        fail_msg: >-
+          enable_sherlog needs observability_level traces (got {{ observability_level | default('traces') }}): Loki
+          (obs-logs) evaluates its log rules and holds the logs and journal its investigations read, Tempo
+          (obs-traces) the traces.
+        quiet: true
+      when: enable_sherlog | default(false) | bool
+
+    - name: "Sherlog — live mode has somewhere to send its reports"
+      ansible.builtin.assert:
+        that: >-
+          sherlog_mode | default('shadow') != 'live'
+          or ((sherlog_github_issues_repo | default('') | length > 0) and (sherlog_secret.github_issues_token | length > 0))
+        fail_msg: >-
+          sherlog_mode live sends its reports as GitHub issues: set sherlog_github_issues_repo and
+          sherlog_github_issues_token, or use sherlog_mode shadow (reports stay on the box).
+        quiet: true
+      when: enable_sherlog | default(false) | bool
+
+    # Extracted once per image (.bundle-version records the reference), not on every deploy.
+    - name: "Sherlog — its compose bundle for sherlog_version (from the image)"
+      ansible.builtin.shell: |
+        set -e
+        ref="{{ sherlog_image }}:{{ sherlog_version }}"
+        stamp={{ digit_dir }}/sherlog/.bundle-version
+        if [ "$(cat "$stamp" 2>/dev/null)" = "$ref" ] && [ -x {{ digit_dir }}/sherlog/sherlog.sh ]; then
+          echo NOCHANGE; exit 0
+        fi
+        docker run --rm -u 0 -v {{ digit_dir }}/sherlog:/out "$ref" python -m sherlog.bundle --out /out
+        echo "$ref" > "$stamp"
+      args:
+        executable: /bin/bash
+      register: sherlog_bundle
+      changed_when: "'NOCHANGE' not in sherlog_bundle.stdout"
+      when: enable_sherlog | default(false) | bool
+
+    - name: "Sherlog — settings (.env) and this tenant's overrides"
+      ansible.builtin.template:
+        src: "templates/{{ item.src }}"
+        dest: "{{ digit_dir }}/sherlog/{{ item.dest }}"
+        mode: "{{ item.mode }}"
+      loop:
+        - {src: sherlog.env.j2, dest: .env, mode: "0600"}           # holds the model key and tokens
+        - {src: sherlog-override.yaml.j2, dest: override.yaml, mode: "0644"}
+      no_log: true   # .env holds the model key and tokens; --diff would print them
+      when: enable_sherlog | default(false) | bool
+
+    # Rendered on every deploy (sherlog.yaml or a tenant's overrides may have changed); "changed" only when the
+    # rendered files did.
+    - name: "Sherlog — render the rules, Alertmanager config and investigation settings"
+      ansible.builtin.shell: |
+        set -eo pipefail
+        cd {{ digit_dir }}/sherlog
+        digest() { [ -d rendered ] && find rendered -type f -print0 | sort -z | xargs -0r sha256sum | sha256sum || echo none; }
+        before=$(digest)
+        ./sherlog.sh render
+        [ "$before" = "$(digest)" ] && echo NOCHANGE || true
+      args:
+        executable: /bin/bash
+      register: sherlog_render
+      changed_when: "'NOCHANGE' not in sherlog_render.stdout"
+      when: enable_sherlog | default(false) | bool
+
+    - name: "Sherlog — off: stop it and remove its rules (no-op if it never ran)"
+      ansible.builtin.shell: |
+        [ -x {{ digit_dir }}/sherlog/sherlog.sh ] && [ -f {{ digit_dir }}/sherlog/.env ] || { echo NOCHANGE; exit 0; }
+        {{ digit_dir }}/sherlog/sherlog.sh uninstall
+      args:
+        executable: /bin/bash
+      register: sherlog_uninstall
+      changed_when: "'NOCHANGE' not in sherlog_uninstall.stdout"
+      when: not (enable_sherlog | default(false) | bool)
 
     # Grafana admin password. Tenants seeded BEFORE this key existed can't get
     # it from the bootstrap seed above (that write is cas:0 — it only fires when
@@ -4112,43 +4274,34 @@
     # against ansible.posix.synchronize 2.2.2 + rsync 3.4.4: editing only
     # prometheus.yml leaves this gate false while the item still reports
     # changed=true; editing otel-collector-config.yaml flips it true.
-    - name: "OTEL Collector — restart when its config changed (#1683)"
+    #
+    # The same holds for container-stats (the same collector binary) and for Loki
+    # (-config.file read once at startup; its config gained the ruler section for
+    # Sherlog's log alerts). Each is restarted only when its own file changed.
+    # Loki's rules are NOT gated here: its ruler re-reads its rule folder itself.
+    - name: "Observability — restart a service whose config changed (#1683)"
       ansible.builtin.shell: |
         set -e
-        if [ -z "$(docker ps -q -f name='^digit-otel-collector$')" ]; then
-          echo "NOCHANGE collector not running"
+        if [ -z "$(docker ps -q -f name='^{{ item.container }}$')" ]; then
+          echo "NOCHANGE {{ item.container }} not running"
           exit 0
         fi
-        docker restart digit-otel-collector
+        docker restart {{ item.container }}
       args:
         executable: /bin/bash
-      register: otel_collector_restart
-      changed_when: "'NOCHANGE' not in otel_collector_restart.stdout"
+      loop:
+        - {file: otel-collector-config, container: digit-otel-collector}
+        - {file: container-stats-config, container: digit-container-stats}
+        - {file: loki-config, container: digit-loki}
+      loop_control:
+        label: "{{ item.container }}"
+      register: observability_restart
+      changed_when: "'NOCHANGE' not in observability_restart.stdout"
       when: >-
         config_sync.results | default([])
         | selectattr('item.key', 'equalto', 'otel')
         | map(attribute='stdout_lines') | flatten
-        | select('search', 'otel-collector-config')
-        | list | length > 0
-    # container-stats is the same collector binary with the same no-watch, no-
-    # reload behaviour, so it gets the same narrow gate on its own config file.
-    - name: "Container stats — restart when its config changed"
-      ansible.builtin.shell: |
-        set -e
-        if [ -z "$(docker ps -q -f name='^digit-container-stats$')" ]; then
-          echo "NOCHANGE container-stats not running"
-          exit 0
-        fi
-        docker restart digit-container-stats
-      args:
-        executable: /bin/bash
-      register: container_stats_restart
-      changed_when: "'NOCHANGE' not in container_stats_restart.stdout"
-      when: >-
-        config_sync.results | default([])
-        | selectattr('item.key', 'equalto', 'otel')
-        | map(attribute='stdout_lines') | flatten
-        | select('search', 'container-stats-config')
+        | select('search', item.file)
         | list | length > 0
 
     # novu-worker loads its mounted providers once, at boot, and compose recreates it
@@ -4169,6 +4322,36 @@
       when:
         - enable_novu | default(false)
         - novu_worker_providers_sync is changed
+
+    - name: "Sherlog — start (after the stack: it joins the stack's network)"
+      ansible.builtin.command: "{{ digit_dir }}/sherlog/sherlog.sh up -d"
+      changed_when: true
+      when: enable_sherlog | default(false) | bool
+
+    # Sherlog: record this deploy, right after the stack (and Sherlog) came up with the new containers, so a deploy
+    # that fails later (a CI test) is still on record: those are the deploys most likely to have caused an alert.
+    # deploy_timestamp_seconds lands in node-exporter's textfile directory; Sherlog's pre-checks read it ("what
+    # changed before this alert?") and its verifier names the deploy an alert resolved after
+    # (docs/operations/monitoring/sherlog.md). A marker that cannot be written warns; it never fails a deploy.
+    - name: "Sherlog — record this deploy for the pre-checks and the verifier"
+      ansible.builtin.command: >-
+        {{ digit_dir }}/sherlog/sherlog-deploy-mark --dir {{ digit_dir }}/sherlog/textfile
+        --repo {{ sherlog_deploy.repo | quote }} --sha {{ sherlog_deploy.sha | quote }} --ref {{ sherlog_deploy.ref | quote }}
+        --deployment {{ inventory_hostname }} --product ccrs
+      register: sherlog_deploy_mark
+      changed_when: sherlog_deploy_mark.rc == 0
+      failed_when: false
+      when: enable_sherlog | default(false) | bool
+
+    - name: "Sherlog — warn when the deploy marker could not be written"
+      ansible.builtin.debug:
+        msg: >-
+          WARNING: the Sherlog deploy marker was not written (rc {{ sherlog_deploy_mark.rc }}):
+          {{ (sherlog_deploy_mark.stderr | default('') or sherlog_deploy_mark.msg | default('')) | truncate(300) }}.
+          The deploy continues; Sherlog's investigations will not see this deploy as a change.
+      when:
+        - enable_sherlog | default(false) | bool
+        - sherlog_deploy_mark.rc | default(0) != 0
 
     # ==================== Wait for Persister (Kafka consumer) ====================
     - name: Wait for egov-persister to be healthy
@@ -4648,6 +4831,38 @@
         NEWPW: "{{ bao_secrets.json.data.data.postgres_password }}"
       no_log: true
       changed_when: true
+
+    # ==================== Optional scrape targets (file_sd) and pg_stat_statements ====================
+    # Prometheus scrapes otel/targets/*.json; a tenant with Keycloak gets keycloak.json, one without gets nothing (no
+    # failing scrape, no TargetDown). The exporter's stat_statements collector needs the extension in the database:
+    # created here, as soon as Postgres is up, not at the end of the play, where a failed CI test would stop the
+    # play before it (and the exporter errors on every scrape until it exists). Keycloak serves /metrics on its
+    # management port, 9000 (Keycloak 25+; the image is 26), not on its HTTP port 8180.
+    - name: "Prometheus — Keycloak scrape target (enable_keycloak)"
+      ansible.builtin.copy:
+        dest: "{{ digit_dir }}/otel/targets/keycloak.json"
+        content: '[{"targets": ["keycloak:9000"], "labels": {"job": "keycloak"}}]'
+        mode: "0644"
+      when: enable_keycloak | default(false) | bool
+
+    - name: "Prometheus — no Keycloak scrape target when Keycloak is off"
+      ansible.builtin.file:
+        path: "{{ digit_dir }}/otel/targets/keycloak.json"
+        state: absent
+      when: not (enable_keycloak | default(false) | bool)
+
+    # psql prints the CREATE EXTENSION tag even when IF NOT EXISTS skips it, so "changed" comes from pg_extension.
+    - name: "Postgres — pg_stat_statements extension (postgres_stat_statements)"
+      ansible.builtin.shell: |
+        set -eo pipefail
+        q() { docker exec docker-postgres psql -U egov -d egov -v ON_ERROR_STOP=1 -tAc "$1"; }
+        [ "$(q "SELECT 1 FROM pg_extension WHERE extname = 'pg_stat_statements'")" = 1 ] && { echo NOCHANGE; exit 0; }
+        q "CREATE EXTENSION IF NOT EXISTS pg_stat_statements"
+      args:
+        executable: /bin/bash
+      register: pgss
+      changed_when: "'NOCHANGE' not in pgss.stdout"
+      when: postgres_stat_statements | default(false) | bool
 
     # Same drift as egov above, on the MCP session-store postgres:
     # initdb ran with the default mcp123 (no .env yet) and created the

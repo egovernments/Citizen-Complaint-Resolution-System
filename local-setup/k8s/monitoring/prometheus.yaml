@@ -11,6 +11,10 @@
 # wherever it can be -- same job NAMES especially, so dashboards carry over --
 # and differs only where the runtime genuinely differs. Those differences are
 # annotated inline rather than left for a reader to infer.
+#
+# Not carried over: Sherlog's alerting (rule_files, the Alertmanager target and
+# the prometheus/gatus jobs it needs, docs/operations/monitoring/sherlog.md).
+# Sherlog is compose-tier only for now; its Kubernetes wiring is a follow-up.
 apiVersion: v1
 kind: Namespace
 metadata:

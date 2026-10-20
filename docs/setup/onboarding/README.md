@@ -941,6 +941,7 @@ reachable.
 | **Integration-test dashboards** | `enable_integration_tests` + `nginx_features.integration_tests` (+ `_runner` pair for in-dashboard runs) | Published Playwright dashboards at `/tests/` | Runner is CPU/RAM heavy — shares the box with the live stack |
 | **Brand assets** | `nginx_features.brand_assets` | Local logo/banner mirror at `/brand/` | |
 | **CI test suites on deploy** | `run_ci_tests` | Newman + regression suites at the end of every deploy | Adds ~5–10 min per deploy |
+| **Sherlog (alerting + root-cause analysis)** | `enable_sherlog` (+ `sherlog_model_api_key`) | Alert rules for every component CCRS runs, Alertmanager routing, and an automatic investigation of each critical or warning alert | See [sherlog.md](../../operations/monitoring/sherlog.md); the host needs `docker login ghcr.io` first (private images) |
 
 Full inline documentation for every flag lives in
 [`../ansible/inventory/host_vars/_example.yml`](../../../local-setup/ansible/inventory/host_vars/_example.yml) —

@@ -18,6 +18,29 @@ processors:
   # needs CUMULATIVE, so accumulate deltas here. Inert for the (cumulative)
   # javaagent metrics already flowing through this pipeline.
   deltatocumulative:
+  # Traces are read by Sherlog's investigation (docs/operations/monitoring/sherlog.md). Spans carry how a service connects and who called
+  # it; neither helps a root-cause analysis and neither should be stored. db.statement is already sanitised by the
+  # Java agent (literals become ?). Query strings can carry phone numbers and tenant ids: stripped. Both the current
+  # attribute names and the older ones Kong's OpenTelemetry plugin still sends (http.url with the query string,
+  # http.client_ip, net.peer.ip; Kong samples every request).
+  attributes/privacy:
+    actions:
+      - {key: db.connection_string, action: delete}
+      - {key: db.user, action: delete}
+      - {key: client.address, action: delete}
+      - {key: http.client_ip, action: delete}
+      - {key: net.peer.ip, action: delete}
+      - {key: net.sock.peer.addr, action: delete}
+      - {key: user_agent.original, action: delete}
+      - {key: http.user_agent, action: delete}
+  transform/privacy:
+    trace_statements:
+      - context: span
+        statements:
+          - replace_pattern(attributes["url.full"], "\\?.*$", "")
+          - replace_pattern(attributes["url.query"], ".*", "[redacted]")
+          - replace_pattern(attributes["http.url"], "\\?.*$", "")
+          - replace_pattern(attributes["http.target"], "\\?.*$", "")
 
 exporters:
   otlp/tempo:
@@ -43,7 +66,7 @@ service:
   pipelines:
     traces:
       receivers: [otlp]
-      processors: [memory_limiter, batch]
+      processors: [memory_limiter, attributes/privacy, transform/privacy, batch]
       exporters: [otlp/tempo]
     logs:
       receivers: [otlp]
