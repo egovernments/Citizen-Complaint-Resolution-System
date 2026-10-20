@@ -1,11 +1,12 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createFakeDigitUser } from "../../mocks/fake-digit-user.js";
 import { config } from "../../src/infrastructure/config.js";
 import { resetIdentityMethodCatalog } from "../../src/modules/authentication/methods.js";
 import { ensureActive } from "../../src/modules/bindings/store.js";
 import { managedIdentity } from "../../src/modules/managed-accounts/managed-account-service.js";
 import { otpSender, setOtpSender, type OtpMessage } from "../../src/modules/citizen-otp/otp-sender.js";
-import { clearTenantMappingCache, ensureOrganizationMembership } from "../../src/modules/organizations/organization-service.js";
+import * as organizationService from "../../src/modules/organizations/organization-service.js";
+import { clearTenantMappingCache, ensureOrganizationMembership, IdentityAdminError } from "../../src/modules/organizations/organization-service.js";
 import { createIdentitySession } from "../../src/modules/sessions/session-store.js";
 import { mirrorPerson } from "../../src/modules/sync/mirror.js";
 import { TRIAL_ATTRIBUTES } from "../../src/modules/workspace-trial/trial.js";
@@ -222,6 +223,21 @@ describe("an approved trial workspace", () => {
     const body = await response.json();
     expect(body.tenant).toMatchObject({ urlSlug: "bravo", tenantId: "bravo" });
     expect(body).not.toHaveProperty("access");
+  });
+
+  it("answers OTP routes 503, not 500, when Keycloak fails during the trial check", async () => {
+    const original = organizationService.readTenantMappingForUrlSlug;
+    // The route resolves, then the trial lookup for the same slug fails.
+    const spy = vi.spyOn(organizationService, "readTenantMappingForUrlSlug");
+    try {
+      for (const [route, body] of [[routes.send, { tenantSlug: "bravo", mobileNumber: "712000302" }],
+        [routes.verify, { tenantSlug: "bravo", challengeId: "a".repeat(32), code: "123456" }]] as const) {
+        spy.mockImplementationOnce(original).mockRejectedValueOnce(new IdentityAdminError("Keycloak Admin unavailable", 503));
+        await expectContractError(await post(route.path, body), route, "TENANT_ROUTE_UNAVAILABLE");
+      }
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it("signs a citizen in by OTP and selects the citizen context", async () => {
