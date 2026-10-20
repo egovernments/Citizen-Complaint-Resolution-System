@@ -210,6 +210,7 @@ class CandidateComposeValidationTests(unittest.TestCase):
                 None,
                 runner=runner,
                 digit_dir=root / "digit",
+                controller_repo=root / "controller",
             )
             upgrade._validate_candidate_compose()
 
@@ -236,6 +237,7 @@ class CandidateComposeValidationTests(unittest.TestCase):
                 None,
                 runner=Runner(),
                 digit_dir=root / "digit",
+                controller_repo=root / "controller",
             )
             with self.assertRaisesRegex(
                 deploy.DeployError, "missing deployment Compose file"

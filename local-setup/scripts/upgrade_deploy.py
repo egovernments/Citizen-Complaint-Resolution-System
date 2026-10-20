@@ -539,6 +539,7 @@ class UpgradeDeployment:
         resolution: Path | None,
         runner: CommandRunner | None = None,
         digit_dir: Path = Path("/opt/digit"),
+        controller_repo: Path | None = None,
     ) -> None:
         self.run_dir = run_dir.resolve()
         self.repo = repo.resolve()
@@ -549,6 +550,11 @@ class UpgradeDeployment:
         self.resolution = resolution.resolve() if resolution else None
         self.runner = runner or CommandRunner()
         self.digit_dir = digit_dir
+        self.controller_repo = (
+            controller_repo.resolve()
+            if controller_repo is not None
+            else Path(__file__).resolve().parents[2]
+        )
         self.backup_dir: Path | None = None
         self.previous_services: list[str] = []
         self.compose_files: list[str] = []
@@ -575,7 +581,7 @@ class UpgradeDeployment:
         if hash_tree(self.source_backup) != manifest.get("backup_sha256"):
             raise DeployError("source backup hash no longer matches the analysis run")
         inventory_vars = (
-            self.repo
+            self.controller_repo
             / "local-setup/ansible/inventory/host_vars"
             / f"{self.tenant}.yml"
         )
@@ -1022,7 +1028,7 @@ class UpgradeDeployment:
                 deployment_started = True
                 self.runner.run(
                     ["bash", "deploy.sh", self.tenant, "-e", json.dumps(extra_vars, separators=(",", ":"))],
-                    cwd=self.repo / "local-setup/ansible",
+                    cwd=self.controller_repo / "local-setup/ansible",
                 )
                 self._apply_backup_rows(restore_rows)
                 post_path = self.run_dir / "mdms-after.json"
