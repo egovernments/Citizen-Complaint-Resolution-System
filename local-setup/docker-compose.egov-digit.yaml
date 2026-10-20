@@ -2384,10 +2384,10 @@ services:
       # read-only proxy instead.
       - promtail_data:/tmp
       # The host's journal, read-only, for promtail's journal job (kernel OOM kills, unit failures). machine-id lets
-      # the journal reader open the host's files.
-      - /var/log/journal:/var/log/journal:ro
-      - /run/log/journal:/run/log/journal:ro
-      - /etc/machine-id:/etc/machine-id:ro
+      # the journal reader open the host's files. Only on a host with a persistent journal (the deploy sets these);
+      # otherwise, and by default, an empty folder in the repository, so Docker never creates /var/log/journal.
+      - ${PROMTAIL_JOURNAL_DIR:-./otel/no-journal}:/var/log/journal:ro
+      - ${PROMTAIL_MACHINE_ID:-./otel/no-journal/machine-id}:/etc/machine-id:ro
     depends_on:
       loki:
         condition: service_healthy
@@ -3220,9 +3220,9 @@ services:
       keycloak-postgres:
         condition: service_healthy
     environment:
-      # Prometheus metrics at /metrics on the HTTP port (Keycloak 24; 25+ moves them to :9000). Scraped through the
-      # file_sd target the playbook writes when enable_keycloak is on (otel/targets/keycloak.json).
-      KC_METRICS_ENABLED: "true"   # KC_HEALTH_ENABLED is set below
+      # Prometheus metrics at /metrics on the management port, 9000. metrics-enabled is a build option: it is set in
+      # keycloak/Dockerfile (`kc.sh build`), since `start --optimized` ignores it here. Scraped through the file_sd
+      # target the playbook writes when enable_keycloak is on (otel/targets/keycloak.json).
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://keycloak-postgres:5432/keycloak
       KC_DB_USERNAME: keycloak

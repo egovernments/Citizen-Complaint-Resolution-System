@@ -2209,18 +2209,27 @@
     - name: "Sherlog — the commit being deployed (for the deploy marker)"
       ansible.builtin.command: git -C {{ playbook_dir }} log -1 --format=%H%n%D
       delegate_to: localhost
-      run_once: false
+      become: false   # the controller's checkout, as the other localhost tasks: no sudo there
       register: sherlog_commit
       changed_when: false
       failed_when: false
-      when: enable_sherlog | default(false)
+      when: enable_sherlog | default(false) | bool
 
+    # Extracted once per sherlog_version (.bundle-version records it), not on every deploy.
     - name: "Sherlog — its compose bundle for sherlog_version (from the image)"
-      ansible.builtin.command: >-
-        docker run --rm -u 0 -v {{ digit_dir }}/sherlog:/out
-        {{ sherlog_image }}:{{ sherlog_version }} python -m sherlog.bundle --out /out
-      changed_when: true
-      when: enable_sherlog | default(false)
+      ansible.builtin.shell: |
+        set -e
+        stamp={{ digit_dir }}/sherlog/.bundle-version
+        if [ "$(cat "$stamp" 2>/dev/null)" = "{{ sherlog_image }}:{{ sherlog_version }}" ] && [ -x {{ digit_dir }}/sherlog/sherlog.sh ]; then
+          echo NOCHANGE; exit 0
+        fi
+        docker run --rm -u 0 -v {{ digit_dir }}/sherlog:/out {{ sherlog_image }}:{{ sherlog_version }} python -m sherlog.bundle --out /out
+        echo "{{ sherlog_image }}:{{ sherlog_version }}" > "$stamp"
+      args:
+        executable: /bin/bash
+      register: sherlog_bundle
+      changed_when: "'NOCHANGE' not in sherlog_bundle.stdout"
+      when: enable_sherlog | default(false) | bool
 
     - name: "Sherlog — settings (.env) and this tenant's overrides"
       ansible.builtin.template:
@@ -2230,12 +2239,23 @@
       loop:
         - {src: sherlog.env.j2, dest: .env, mode: "0600"}           # holds the model key and tokens
         - {src: sherlog-override.yaml.j2, dest: override.yaml, mode: "0644"}
-      when: enable_sherlog | default(false)
+      when: enable_sherlog | default(false) | bool
 
+    # Rendered on every deploy (sherlog.yaml or a tenant's overrides may have changed); "changed" only when the
+    # rendered files did.
     - name: "Sherlog — render the rules, Alertmanager config and investigation settings"
-      ansible.builtin.command: "{{ digit_dir }}/sherlog/sherlog.sh render"
-      changed_when: true
-      when: enable_sherlog | default(false)
+      ansible.builtin.shell: |
+        set -eo pipefail
+        cd {{ digit_dir }}/sherlog
+        digest() { [ -d rendered ] && find rendered -type f -print0 | sort -z | xargs -0r sha256sum | sha256sum || echo none; }
+        before=$(digest)
+        ./sherlog.sh render
+        [ "$before" = "$(digest)" ] && echo NOCHANGE || true
+      args:
+        executable: /bin/bash
+      register: sherlog_render
+      changed_when: "'NOCHANGE' not in sherlog_render.stdout"
+      when: enable_sherlog | default(false) | bool
 
     - name: "Sherlog — off: stop it and remove its rules (no-op if it never ran)"
       ansible.builtin.shell: |
@@ -2245,7 +2265,7 @@
         executable: /bin/bash
       register: sherlog_uninstall
       changed_when: "'NOCHANGE' not in sherlog_uninstall.stdout"
-      when: not (enable_sherlog | default(false))
+      when: not (enable_sherlog | default(false) | bool)
     # A tag passed with --image-tag lives only in that run. The next plain
     # `./deploy.sh <tenant>` falls back to the compose defaults — by design
     # (#1729), but it is a silent downgrade if nobody meant it. digit.env.j2
@@ -2292,7 +2312,16 @@
           {{ (enable_novu | default(false) | bool)
              and (novu_tenant_accounts | default(enable_keycloak | default(false)) | bool) }}
 
-    # ==================== Sherlog: render the monitoring standard =============
+    # Promtail's journal job reads the host's persistent journal. Mounted only where it exists: a missing bind source
+    # would be created by Docker, and an empty /var/log/journal makes journald switch to persistent storage on its
+    # next restart (Storage=auto). Elsewhere (a volatile journal, macOS) promtail gets otel/no-journal, an empty
+    # folder, and the journal job reads nothing (digit.env.j2: PROMTAIL_JOURNAL_DIR, PROMTAIL_MACHINE_ID).
+    - name: "Promtail — does the host keep a persistent journal?"
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop: [/var/log/journal, /etc/machine-id]
+      register: host_journal
+
     - name: Write per-tenant compose .env
       template:
         src: templates/digit.env.j2
@@ -4247,7 +4276,7 @@
     - name: "Sherlog — start (after the stack: it joins the stack's network)"
       ansible.builtin.command: "{{ digit_dir }}/sherlog/sherlog.sh up -d"
       changed_when: true
-      when: enable_sherlog | default(false)
+      when: enable_sherlog | default(false) | bool
 
     # ==================== Wait for Persister (Kafka consumer) ====================
     - name: Wait for egov-persister to be healthy
@@ -4727,6 +4756,32 @@
         NEWPW: "{{ bao_secrets.json.data.data.postgres_password }}"
       no_log: true
       changed_when: true
+
+    # ==================== Optional scrape targets (file_sd) and pg_stat_statements ====================
+    # Prometheus scrapes otel/targets/*.json; a tenant with Keycloak gets keycloak.json, one without gets nothing (no
+    # failing scrape, no TargetDown). The exporter's stat_statements collector needs the extension in the database:
+    # created here, as soon as Postgres is up, not at the end of the play, where a failed CI test would stop the
+    # play before it (and the exporter errors on every scrape until it exists). Keycloak serves /metrics on its
+    # management port, 9000 (Keycloak 25+; the image is 26), not on its HTTP port 8180.
+    - name: "Prometheus — Keycloak scrape target (enable_keycloak)"
+      ansible.builtin.copy:
+        dest: "{{ digit_dir }}/otel/targets/keycloak.json"
+        content: '[{"targets": ["keycloak:9000"], "labels": {"job": "keycloak"}}]'
+        mode: "0644"
+      when: enable_keycloak | default(false) | bool
+
+    - name: "Prometheus — no Keycloak scrape target when Keycloak is off"
+      ansible.builtin.file:
+        path: "{{ digit_dir }}/otel/targets/keycloak.json"
+        state: absent
+      when: not (enable_keycloak | default(false) | bool)
+
+    - name: "Postgres — pg_stat_statements extension (postgres_stat_statements)"
+      ansible.builtin.command: docker exec docker-postgres psql -U egov -d egov -tAc "CREATE EXTENSION IF NOT EXISTS pg_stat_statements"
+      register: pgss
+      changed_when: "'CREATE EXTENSION' in pgss.stdout"
+      failed_when: pgss.rc != 0 and 'already exists' not in pgss.stderr
+      when: postgres_stat_statements | default(false) | bool
 
     # Same drift as egov above, on the MCP session-store postgres:
     # initdb ran with the default mcp123 (no .env yet) and created the
@@ -9799,29 +9854,6 @@
         - run_ci_tests | default(false)
         - xlsx_rc|int != 0 or dl_rc|int != 0 or pw_rc|int != 0
 
-    # ==================== Optional scrape targets (file_sd) and pg_stat_statements ====================
-    # Prometheus scrapes otel/targets/*.json; a tenant with Keycloak gets keycloak.json, one without gets nothing (no
-    # failing scrape, no TargetDown). The exporter's stat_statements collector needs the extension in the database.
-    - name: "Prometheus — Keycloak scrape target (enable_keycloak)"
-      ansible.builtin.copy:
-        dest: "{{ digit_dir }}/otel/targets/keycloak.json"
-        content: '[{"targets": ["keycloak:8080"], "labels": {"job": "keycloak"}}]'
-        mode: "0644"
-      when: enable_keycloak | default(false)
-
-    - name: "Prometheus — no Keycloak scrape target when Keycloak is off"
-      ansible.builtin.file:
-        path: "{{ digit_dir }}/otel/targets/keycloak.json"
-        state: absent
-      when: not (enable_keycloak | default(false))
-
-    - name: "Postgres — pg_stat_statements extension (postgres_stat_statements)"
-      ansible.builtin.command: docker exec docker-postgres psql -U egov -d egov -tAc "CREATE EXTENSION IF NOT EXISTS pg_stat_statements"
-      register: pgss
-      changed_when: "'CREATE EXTENSION' in pgss.stdout"
-      failed_when: pgss.rc != 0 and 'already exists' not in pgss.stderr
-      when: postgres_stat_statements | default(false)
-
     # ==================== Sherlog: record this deploy ====================
     # Last, so the marker means "this deploy finished". deploy_timestamp_seconds lands in node-exporter's textfile
     # directory; Sherlog's pre-checks read it ("what changed before this alert?") and its verifier names the deploy
@@ -9830,11 +9862,11 @@
       ansible.builtin.command: >-
         {{ digit_dir }}/sherlog/sherlog-deploy-mark --dir {{ digit_dir }}/sherlog/textfile
         --repo egovernments/Citizen-Complaint-Resolution-System
-        --sha {{ (sherlog_commit.stdout_lines | default(['unknown']))[0] }}
-        --ref {{ ((sherlog_commit.stdout_lines | default(['', '']))[1] | default('')) | regex_replace('^HEAD -> ', '') | regex_replace(',.*$', '') | default('unknown', true) }}
+        --sha {{ ((sherlog_commit.stdout_lines | default([])) + ['unknown'])[0] | default('unknown', true) }}
+        --ref {{ ((sherlog_commit.stdout_lines | default([])) + ['', ''])[1] | regex_replace('^HEAD -> ', '') | regex_replace(',.*$', '') | default('unknown', true) }}
         --deployment {{ inventory_hostname }} --product ccrs
       changed_when: true
-      when: enable_sherlog | default(false)
+      when: enable_sherlog | default(false) | bool
 
   handlers:
     - name: Reload nginx

@@ -33,7 +33,10 @@ FROM ghcr.io/jqlang/jq:1.8.1@sha256:4f34c6d23f4b1372ac789752cc955dc67c2ae177eb1b
 FROM quay.io/keycloak/keycloak:${KEYCLOAK_VERSION} AS builder
 COPY --from=extension --chown=keycloak:keycloak /keycloak-magic-link.jar /opt/keycloak/providers/keycloak-magic-link.jar
 COPY --from=theme --chown=keycloak:keycloak /theme/dist_keycloak/configurator-blue-login-theme.jar /opt/keycloak/providers/configurator-blue-login-theme.jar
-RUN /opt/keycloak/bin/kc.sh build --db=postgres --health-enabled=true
+# metrics-enabled: Prometheus metrics on the management port (9000), which the compose tier's Prometheus scrapes
+# (local-setup/ansible/playbook-deploy.yml, "Prometheus — Keycloak scrape target"). A build option: `start
+# --optimized` ignores it when set at runtime.
+RUN /opt/keycloak/bin/kc.sh build --db=postgres --health-enabled=true --metrics-enabled=true
 
 FROM quay.io/keycloak/keycloak:${KEYCLOAK_VERSION}
 COPY --from=builder /opt/keycloak/ /opt/keycloak/

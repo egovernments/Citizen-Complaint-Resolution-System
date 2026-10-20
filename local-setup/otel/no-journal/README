@@ -1,0 +1,2 @@
+Promtail's journal job reads this empty folder on a host without a persistent journal (see docker-compose.egov-digit.yaml,
+promtail). machine-id is an empty placeholder for the same mount. Do not add files here.

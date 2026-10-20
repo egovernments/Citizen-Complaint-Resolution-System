@@ -4,6 +4,10 @@
 # runtime-identical, containing no Docker-specific assumptions. Tiltfile.k8s
 # generates the ConfigMap from that file, so the tiers cannot drift in
 # retention or ingestion limits.
+#
+# One exception: the file's ruler (Sherlog's log alerts, compose tier only)
+# reads /etc/loki/rules, which this tier does not have. The ruler is pointed at
+# an empty folder instead, so it has nothing to evaluate and logs no errors.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -39,13 +43,14 @@ spec:
       containers:
         - name: loki
           image: grafana/loki:3.4.2
-          args: ["-config.file=/etc/loki/config.yaml"]
+          args: ["-config.file=/etc/loki/config.yaml", "-ruler.storage.local.directory=/loki-rules"]
           ports:
             - containerPort: 3100
               name: http
           volumeMounts:
             - {name: config, mountPath: /etc/loki}
             - {name: data, mountPath: /loki}
+            - {name: rules, mountPath: /loki-rules}
           readinessProbe:
             httpGet: {path: /ready, port: 3100}
             initialDelaySeconds: 20
@@ -54,6 +59,7 @@ spec:
             limits: {memory: 512Mi}
       volumes:
         - {name: config, configMap: {name: loki-config}}
+        - {name: rules, emptyDir: {}}
         - name: data
           persistentVolumeClaim:
             claimName: loki-data
