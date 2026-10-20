@@ -208,6 +208,16 @@ jobs:
         if: always()
         run: |
           echo "=== Telemetry Sidecar Logs ==="
+          # Nothing orders the sidecar before the stack (the database must not wait on an
+          # opt-out sidecar), so Tilt can start it last and `tilt ci` can exit while it is still
+          # installing curl/jq. Wait for its attach line and first health transition before
+          # asserting: it replays events from its own start, and the JVMs pass their health
+          # checks well after `tilt ci` reports them running, so these do arrive.
+          for _ in $(seq 1 48); do
+            LOGS=$(docker compose logs telemetry 2>&1 || true)
+            if [[ "$LOGS" == *"project="* && "$LOGS" == *"[telemetry] ."* ]]; then break; fi
+            sleep 5
+          done
           LOGS=$(docker compose logs telemetry 2>&1 || echo "(no telemetry container)")
           echo "$LOGS"
 

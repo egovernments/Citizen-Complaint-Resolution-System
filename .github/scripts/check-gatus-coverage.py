@@ -77,6 +77,10 @@ LS = ROOT / "local-setup"
 #                               requires every compose file on disk to be accounted for,
 #                               and "adds nothing today" is exactly the assumption that
 #                               went stale for the five files above.
+#   docker-compose.tilt-restart.yml
+#                               restart-policy overlay every Tiltfile loads (#1744). Sets
+#                               `restart:` on existing services only, so it adds no service
+#                               of its own; listed for the same reason as docker-compose.tilt.yml.
 #   docker-compose.monitoring.yml
 #                               host-metrics overlay (#1335): adds node-exporter, always
 #                               layered by ansible alongside the migrations overlay. Its
@@ -107,6 +111,7 @@ COMPOSE_FILES = [
     LS / "docker-compose.bomet.yml",
     LS / "docker-compose.core.yml",
     LS / "docker-compose.tilt.yml",
+    LS / "docker-compose.tilt-restart.yml",
     LS / "docker-compose.monitoring.yml",
     LS / "docker-compose.matomo.yml",
     LS / "docker-compose.opensre.yml",
