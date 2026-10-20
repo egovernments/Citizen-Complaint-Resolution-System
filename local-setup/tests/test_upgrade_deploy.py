@@ -174,6 +174,75 @@ class PreviousStackRecoveryTests(unittest.TestCase):
         self.assertEqual("never", compose[compose.index("--pull") + 1])
 
 
+class CandidateComposeValidationTests(unittest.TestCase):
+    def test_all_profiles_are_validated_before_deployment(self):
+        class Runner:
+            def __init__(self):
+                self.calls = []
+
+            def run(self, args, **kwargs):
+                self.calls.append((args, kwargs))
+                return deploy.subprocess.CompletedProcess(
+                    args, 0, stdout="", stderr=""
+                )
+
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as name:
+            root = Path(name)
+            candidate = root / "run" / "candidate"
+            candidate.mkdir(parents=True)
+            for compose_name in (
+                "docker-compose.egov-digit.yaml",
+                "docker-compose.migrations.yml",
+                "docker-compose.monitoring.yml",
+                "docker-compose.matomo.yml",
+                "docker-compose.opensre.yml",
+                "docker-compose.upgrade-safe.yml",
+            ):
+                (candidate / compose_name).write_text("services: {}\n")
+            runner = Runner()
+            upgrade = deploy.UpgradeDeployment(
+                root / "run",
+                root / "repo",
+                "mycity",
+                root / "tenant.yml",
+                root / "source",
+                root / "backups",
+                None,
+                runner=runner,
+                digit_dir=root / "digit",
+            )
+            upgrade._validate_candidate_compose()
+
+        args, kwargs = runner.calls[-1]
+        self.assertEqual(["docker", "compose"], args[:2])
+        self.assertEqual(["--profile", "*", "config", "--quiet"], args[-4:])
+        self.assertEqual(candidate, kwargs["cwd"])
+
+    def test_missing_compose_file_is_rejected_without_running_docker(self):
+        class Runner:
+            def run(self, args, **kwargs):
+                raise AssertionError((args, kwargs))
+
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as name:
+            root = Path(name)
+            (root / "run" / "candidate").mkdir(parents=True)
+            upgrade = deploy.UpgradeDeployment(
+                root / "run",
+                root / "repo",
+                "mycity",
+                root / "tenant.yml",
+                root / "source",
+                root / "backups",
+                None,
+                runner=Runner(),
+                digit_dir=root / "digit",
+            )
+            with self.assertRaisesRegex(
+                deploy.DeployError, "missing deployment Compose file"
+            ):
+                upgrade._validate_candidate_compose()
+
+
 class MdmsSnapshotTests(unittest.TestCase):
     def test_summary_is_deterministic_and_records_counts(self):
         first = empty_snapshot()

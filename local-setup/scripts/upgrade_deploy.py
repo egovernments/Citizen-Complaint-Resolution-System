@@ -664,6 +664,33 @@ class UpgradeDeployment:
                 f"insufficient backup space: need at least {required} bytes, have {free}"
             )
 
+    def _validate_candidate_compose(self) -> None:
+        """Reject an internally inconsistent candidate before production stops."""
+        candidate = self.run_dir / "candidate"
+        names = (
+            "docker-compose.egov-digit.yaml",
+            "docker-compose.migrations.yml",
+            "docker-compose.monitoring.yml",
+            "docker-compose.matomo.yml",
+            "docker-compose.opensre.yml",
+            "docker-compose.upgrade-safe.yml",
+        )
+        missing = [name for name in names if not (candidate / name).is_file()]
+        if missing:
+            raise DeployError(
+                "candidate is missing deployment Compose file(s): "
+                + ", ".join(missing)
+            )
+        args = ["docker", "compose"]
+        for name in names:
+            args.extend(["-f", name])
+        # Validate every profiled service, not only the services enabled for
+        # this tenant. This catches cross-file contracts such as an overlay
+        # service referring to a network removed by a whole-file conflict
+        # resolution. No container is created and live /opt/digit is untouched.
+        args.extend(["--profile", "*", "config", "--quiet"])
+        self.runner.run(args, cwd=candidate)
+
     def _stop_writers(self) -> None:
         for service in self.previous_services:
             if service != "postgres-db":
@@ -951,6 +978,7 @@ class UpgradeDeployment:
             self.source_backup,
             self.repo / "local-setup",
         )
+        self._validate_candidate_compose()
         self.backup_parent.mkdir(parents=True, exist_ok=True)
         lock_path = self.backup_parent / ".digit-upgrade.lock"
         with lock_path.open("w", encoding="utf-8") as lock:
