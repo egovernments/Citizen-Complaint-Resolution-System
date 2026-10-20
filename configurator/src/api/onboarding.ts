@@ -95,13 +95,23 @@ export interface TenantOption {
   tenantId: string;
   name: string;
   roles: string[];
-  code?: 'DIGIT_ACCOUNT_INACTIVE';
+  code?: 'DIGIT_ACCOUNT_INACTIVE' | 'WORKSPACE_TRIAL_EXPIRED';
 }
 
 export interface TenantsResponse {
   tenants: TenantOption[];
   selectionRequired: boolean;
   onboardingRequired: boolean;
+  /** Present when any option is `WORKSPACE_TRIAL_EXPIRED`. Plain text only. */
+  notice?: WorkspaceTrialNotice;
+}
+
+/** Operator-configured text for an expired trial. The link needs both label and url. */
+export interface WorkspaceTrialNotice {
+  title: string;
+  message: string;
+  linkLabel?: string;
+  linkUrl?: string;
 }
 
 /** Server-derived fields are readonly here so a caller cannot try to send them. */
@@ -273,9 +283,12 @@ export interface DigitContext {
 export class OnboardingError extends Error {
   readonly status: number;
   readonly code: string | null;
+  /** The rest of the error body, e.g. the `notice` on WORKSPACE_TRIAL_EXPIRED. */
+  readonly details?: Record<string, unknown>;
 
-  constructor(status: number, code: string | null, message: string) {
+  constructor(status: number, code: string | null, message: string, details?: Record<string, unknown>) {
     super(message);
+    this.details = details;
     this.name = 'OnboardingError';
     this.status = status;
     this.code = code;
@@ -341,7 +354,7 @@ export async function call<T>(path: string, init: RequestInit = {}): Promise<T> 
       (record.message as string) ||
       (record.error as string) ||
       `Request failed (${response.status}).`;
-    throw new OnboardingError(response.status, code, message);
+    throw new OnboardingError(response.status, code, message, record);
   }
 
   return body as T;
