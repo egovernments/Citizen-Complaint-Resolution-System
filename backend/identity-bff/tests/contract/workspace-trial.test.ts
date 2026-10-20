@@ -227,7 +227,7 @@ describe("an approved trial workspace", () => {
     expect(body).not.toHaveProperty("access");
   });
 
-  it("answers OTP routes 503, not 500, when Keycloak fails during the trial check", async () => {
+  it("answers the OTP routes' own 503 TENANT_ROUTE_UNAVAILABLE when Keycloak fails during the trial check", async () => {
     const original = organizationService.readTenantMappingForUrlSlug;
     // The route resolves, then the trial lookup for the same slug fails.
     const spy = vi.spyOn(organizationService, "readTenantMappingForUrlSlug");
