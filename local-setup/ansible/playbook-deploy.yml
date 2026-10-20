@@ -1745,6 +1745,9 @@
         delay_updates: false
         rsync_opts:
           - "--inplace"
+          # Placeholders that keep empty bind-mount sources in a checkout (sherlog/rendered/loki, otel/targets):
+          # the folders are synced, the files are not. One in rendered/loki would sit among Loki's rule files.
+          - "--exclude=.gitkeep"
       register: config_sync
       loop: "{{ digit_config_dirs | dict2items }}"
       vars:
@@ -2210,13 +2213,33 @@
     # turns Sherlog off. The containers start after the stack (they join its
     # network): "Sherlog — start". Its bundle, settings and render come after
     # the OpenBao read (its secrets are there): "Sherlog — its secrets".
+    # Three lines: the commit, its refs (%D) and the origin remote's URL, from the controller's checkout.
     - name: "Sherlog — the commit being deployed (for the deploy marker)"
-      ansible.builtin.command: git -C {{ playbook_dir }} log -1 --format=%H%n%D
+      ansible.builtin.shell: |
+        git -C {{ playbook_dir }} log -1 --format=%H%n%D || printf '\n\n'
+        git -C {{ playbook_dir }} remote get-url origin 2>/dev/null || echo
       delegate_to: localhost
       become: false   # the controller's checkout, as the other localhost tasks: no sudo there
       register: sherlog_commit
       changed_when: false
       failed_when: false
+      when: enable_sherlog | default(false) | bool
+
+    # The repository from origin (a fork records itself), and a ref Sherlog can resolve: a detached or shallow
+    # checkout (CI) gives HEAD or grafted, so the first real branch or tag among the refs, then --image-tag.
+    - name: "Sherlog — the deploy marker's repository, commit and ref"
+      ansible.builtin.set_fact:
+        sherlog_deploy:
+          sha: "{{ (sherlog_commit.stdout_lines | default([]))[0] | default('', true) or 'unknown' }}"
+          repo: >-
+            {{ ((sherlog_commit.stdout_lines | default([]) + ['', '', ''])[2]
+                | regex_replace('^(?:.*github\.com[:/]([^/]+/[^/]+?)(?:\.git)?/?|.*)$', '\1'))
+               or 'egovernments/Citizen-Complaint-Resolution-System' }}
+          ref: >-
+            {{ ((sherlog_commit.stdout_lines | default([]) + ['', ''])[1]).split(', ')
+               | map('regex_replace', '^HEAD -> ', '') | map('regex_replace', '^tag: ', '')
+               | reject('in', ['', 'HEAD', 'grafted', 'origin/HEAD']) | map('regex_replace', '^origin/', '')
+               | first | default(ccrs_image_tag | default('', true), true) | default('unknown', true) }}
       when: enable_sherlog | default(false) | bool
 
     # A tag passed with --image-tag lives only in that run. The next plain
@@ -3030,7 +3053,8 @@
 
     # ==================== Sherlog: bundle, settings and render ====================
     # Here, after the OpenBao read: the model key and tokens are tenant secrets, read like POSTGRES_PASSWORD
-    # (`bao kv put <secrets_path> sherlog_model_api_key=...`), with host_vars as the fallback. Before "Start DIGIT
+    # (`bao kv patch <secrets_path> sherlog_model_api_key=...`; not `kv put`, which would drop the tenant's other
+    # secrets), with host_vars as the fallback. Before "Start DIGIT
     # stack", whose Prometheus and Loki load the rendered rules.
     - name: "Sherlog — its secrets (OpenBao, host_vars as the fallback)"
       ansible.builtin.set_fact:
@@ -3056,16 +3080,51 @@
         quiet: true
       when: enable_sherlog | default(false) | bool
 
-    # Extracted once per sherlog_version (.bundle-version records it), not on every deploy.
-    - name: "Sherlog — its compose bundle for sherlog_version (from the image)"
+    # What else Sherlog needs: Loki (its log rules, the journal, the logs investigations read) and Tempo, which only
+    # observability_level traces runs; somewhere for live mode's reports (in CCRS, GitHub issues: the Slack webhook
+    # carries alerts, not reports); and an image digest to extract its scripts from.
+    - name: "Sherlog — needs observability_level traces (Loki and Tempo)"
+      ansible.builtin.assert:
+        that: (observability_level | default('traces')) == 'traces'
+        fail_msg: >-
+          enable_sherlog needs observability_level traces (got {{ observability_level | default('traces') }}): Loki
+          (obs-logs) evaluates its log rules and holds the logs and journal its investigations read, Tempo
+          (obs-traces) the traces.
+        quiet: true
+      when: enable_sherlog | default(false) | bool
+
+    - name: "Sherlog — live mode has somewhere to send its reports"
+      ansible.builtin.assert:
+        that: >-
+          sherlog_mode | default('shadow') != 'live'
+          or ((sherlog_github_issues_repo | default('') | length > 0) and (sherlog_secret.github_issues_token | length > 0))
+        fail_msg: >-
+          sherlog_mode live sends its reports as GitHub issues: set sherlog_github_issues_repo and
+          sherlog_github_issues_token, or use sherlog_mode shadow (reports stay on the box).
+        quiet: true
+      when: enable_sherlog | default(false) | bool
+
+    - name: "Sherlog — its image is pinned by digest"
+      ansible.builtin.assert:
+        that: sherlog_image_digest | default('') is match('^sha256:[0-9a-f]{64}$')
+        fail_msg: >-
+          sherlog_image_digest must be the sha256 digest of {{ sherlog_image }}:{{ sherlog_version }} (its release
+          build prints it); set it together with sherlog_version.
+        quiet: true
+      when: enable_sherlog | default(false) | bool
+
+    # Extracted once per image (.bundle-version records the reference), not on every deploy. By digest: these
+    # scripts run on the host as root, so a re-pushed tag must not change them.
+    - name: "Sherlog — its compose bundle for sherlog_version (from the image, by digest)"
       ansible.builtin.shell: |
         set -e
+        ref="{{ sherlog_image }}:{{ sherlog_version }}@{{ sherlog_image_digest }}"
         stamp={{ digit_dir }}/sherlog/.bundle-version
-        if [ "$(cat "$stamp" 2>/dev/null)" = "{{ sherlog_image }}:{{ sherlog_version }}" ] && [ -x {{ digit_dir }}/sherlog/sherlog.sh ]; then
+        if [ "$(cat "$stamp" 2>/dev/null)" = "$ref" ] && [ -x {{ digit_dir }}/sherlog/sherlog.sh ]; then
           echo NOCHANGE; exit 0
         fi
-        docker run --rm -u 0 -v {{ digit_dir }}/sherlog:/out {{ sherlog_image }}:{{ sherlog_version }} python -m sherlog.bundle --out /out
-        echo "{{ sherlog_image }}:{{ sherlog_version }}" > "$stamp"
+        docker run --rm -u 0 -v {{ digit_dir }}/sherlog:/out "$ref" python -m sherlog.bundle --out /out
+        echo "$ref" > "$stamp"
       args:
         executable: /bin/bash
       register: sherlog_bundle
@@ -4287,9 +4346,7 @@
     - name: "Sherlog — record this deploy for the pre-checks and the verifier"
       ansible.builtin.command: >-
         {{ digit_dir }}/sherlog/sherlog-deploy-mark --dir {{ digit_dir }}/sherlog/textfile
-        --repo egovernments/Citizen-Complaint-Resolution-System
-        --sha {{ ((sherlog_commit.stdout_lines | default([])) + ['unknown'])[0] | default('unknown', true) }}
-        --ref {{ ((sherlog_commit.stdout_lines | default([])) + ['', ''])[1] | regex_replace('^HEAD -> ', '') | regex_replace(',.*$', '') | default('unknown', true) }}
+        --repo {{ sherlog_deploy.repo | quote }} --sha {{ sherlog_deploy.sha | quote }} --ref {{ sherlog_deploy.ref | quote }}
         --deployment {{ inventory_hostname }} --product ccrs
       register: sherlog_deploy_mark
       changed_when: sherlog_deploy_mark.rc == 0

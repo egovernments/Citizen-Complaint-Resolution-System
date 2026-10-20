@@ -42,8 +42,9 @@ services:
       # Drop pseudo/virtual mounts and Docker's overlay layers so the
       # filesystem panels show real volumes, not per-container churn.
       - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|var/lib/docker/.+|rootfs/var/lib/docker/.+)($|/)
-      # Deploy markers (docs/operations/monitoring/sherlog.md): the playbook's last step writes deploy_timestamp_seconds here, so an
-      # investigation can answer "what changed before this alert?". Empty until Sherlog is on.
+      # Deploy markers (docs/operations/monitoring/sherlog.md): the playbook writes deploy_timestamp_seconds here right after the
+      # stack and Sherlog come up ("Sherlog — record this deploy"), so an investigation can answer "what changed before this
+      # alert?". Empty until Sherlog is on.
       - --collector.textfile.directory=/textfile
     pid: host
     volumes:

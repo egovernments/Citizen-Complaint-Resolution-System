@@ -11,7 +11,9 @@ option, cost, and what leaves the box: [Sherlog's standard](https://github.com/s
    for now).
 2. In OpenBao: `bao kv patch <secrets_path> sherlog_model_api_key=<key>` (and `sherlog_github_issues_token`,
    `sherlog_alert_slack_webhook_url`, `sherlog_deadman_url` when used; host_vars of the same names are only the
-   fallback). In host_vars: `enable_sherlog: true`. The deploy stops if the model key is empty. The other settings and their
+   fallback). In host_vars: `enable_sherlog: true` (the tenant must run `observability_level: traces`: Loki and Tempo). The deploy stops
+   if the model key is empty, or in `sherlog_mode: live` without `sherlog_github_issues_repo` and its token (live mode's
+   reports are GitHub issues; the Slack webhook carries alerts). The other settings and their
    defaults are in `ansible/inventory/group_vars/digit.yml`; this tenant's differences from `sherlog.yaml` go in
    `sherlog_overrides`.
 3. Deploy. Sherlog runs from `/opt/digit/sherlog` as its own compose project (`/opt/digit/sherlog/sherlog.sh ps`).
@@ -26,9 +28,11 @@ host's journal (kernel OOM kills, unit failures) is in Loki as `job=journal` wit
 port 9000) are scraped when `enable_keycloak` is on, from an identity-keycloak image built with `--metrics-enabled`.
 
 What the deploy gives Sherlog to work with: the host's journal in Loki (kernel OOM kills, unit failures), Tempo's traces
-(the collector drops connection and caller attributes and URL query strings first), and a deploy marker written as
-the playbook's last step (`deploy_timestamp_seconds`: commit, ref, host), so an investigation starts from "what
-changed" and an alert that resolves after a deploy is closed as verified.
+(the collector drops connection and caller attributes and URL query strings first), and a deploy marker written
+right after the stack and Sherlog come up ("Sherlog — record this deploy" in `playbook-deploy.yml`;
+`deploy_timestamp_seconds`: repository, commit, ref, host), so an investigation starts from "what changed" and an
+alert that resolves after a deploy is closed as verified. A deploy that fails later (a CI test) is still recorded; a
+marker that cannot be written is a warning in the deploy's output, not a failure.
 
 Optional, with `sherlog_docker_diagnostics: true`: investigations may also read the containers' state (restarts,
 exit codes, OOM kills, health), last log lines and recent events, through Sherlog's read-only, redacted proxy. It
