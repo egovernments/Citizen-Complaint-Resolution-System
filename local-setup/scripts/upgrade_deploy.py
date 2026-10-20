@@ -335,7 +335,8 @@ def materialize_redactions(candidate: str, live: str, path: str) -> str:
                 continue
 
         raise DeployError(
-            f"cannot materialize redacted field in {path}; no unique matching live value"
+            f"cannot materialize redacted field in {path}:{line_index + 1}; "
+            "no unique matching live value"
         )
     result = "".join(output)
     if REDACTED in result:
