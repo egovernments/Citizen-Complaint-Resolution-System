@@ -1222,7 +1222,7 @@ Removed by item 14/15: the `DIGIT_PROVISIONER_*` variables, the onboarding worke
 
 | Field | Meaning |
 |---|---|
-| `reason` | The job's reason: `CREDENTIAL_CHANGED`, `KEYCLOAK_DISABLED`, `KEYCLOAK_DELETED`, `LOGOUT_ALL`, `MEMBERSHIP_REMOVED`, `BINDING_REMOVED`, `ROLE_CHANGED`, `DIGIT_INACTIVE`, `DIGIT_ACCOUNT_MISSING`, `ORGANIZATION_DISABLED`, `TENANT_INACTIVE`, or a logout reason above |
+| `reason` | The job's reason: `CREDENTIAL_CHANGED`, `KEYCLOAK_DISABLED`, `KEYCLOAK_DELETED`, `LOGOUT_ALL`, `MEMBERSHIP_REMOVED`, `BINDING_REMOVED`, `ROLE_CHANGED`, `DIGIT_INACTIVE`, `DIGIT_ACCOUNT_MISSING`, `ORGANIZATION_DISABLED`, `TENANT_INACTIVE`, `TRIAL_EXPIRED`, or a logout reason above |
 | `subject` | Keycloak subject |
 | `tenantId`, `account` | The tenant (and `tenantId:uuid` DIGIT account) a scoped job targets; absent for person-wide jobs |
 | `trigger` | `eventId` (`<time>:<id>` for a Keycloak event), `eventType` (the user event type, e.g. `UPDATE_CREDENTIAL`, or the admin event's operation and resource, e.g. `UPDATE USER`), `eventTime` (ISO). A job the BFF started itself has only a generated `eventId` (`tenant:<tenantId>` for a tenant fan-out); a logout line not caused by a Keycloak event has an empty `trigger` |

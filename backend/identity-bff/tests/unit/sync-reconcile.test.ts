@@ -91,8 +91,9 @@ describe("reconciliation", () => {
     if (condition === "missing") account = null;
     if (condition === "nonmember") mocks.member.mockResolvedValue(false);
     if (condition === "FAILED") organization.lifecycle = "FAILED";
+    if (condition === "trial") organization.trial = { endsAt: "2020-01-01T00:00:00.000Z", approvedAt: null, approvedBy: null };
   }
-  it.each(["disabled", "inactive", "missing", "nonmember", "FAILED"])(
+  it.each(["disabled", "inactive", "missing", "nonmember", "FAILED", "trial"])(
     "a second %s pass performs no password grant or token logout", async condition => {
       const { recover, logout } = await useRealRevocation();
       deny(condition);
@@ -107,7 +108,7 @@ describe("reconciliation", () => {
       expect(logout).not.toHaveBeenCalled();
       expect(mocks.tenant).not.toHaveBeenCalled();
     });
-  it.each(["disabled", "inactive", "nonmember", "FAILED"])(
+  it.each(["disabled", "inactive", "nonmember", "FAILED", "trial"])(
     "a new live token in steady %s state is revoked without a password grant", async condition => {
       const { recover, logout } = await useRealRevocation();
       deny(condition);
@@ -157,6 +158,27 @@ describe("reconciliation", () => {
     organization.lifecycle = "FAILED";
     await runReconcile();
     expect(mocks.tenant).toHaveBeenCalledTimes(1);
+  });
+  it("revokes once when a trial ends, and checkpoints approval without revoking", async () => {
+    const now = Date.now;
+    const acme = { ...organization, id: "acme-org", alias: "acme",
+      trial: { endsAt: new Date(now() + 60_000).toISOString(), approvedAt: null as string | null, approvedBy: null as string | null } };
+    mocks.organizations.mockResolvedValue(["acme"]);
+    mocks.organization.mockImplementation(async tenantId => tenantId === "acme" ? acme : organization);
+    const state = () => getRedis().hget(reconcileStatsKey(), "tenant:acme");
+    expect((await runReconcile()).failures).toEqual([]);
+    expect(await state()).toBe("active");
+    vi.spyOn(Date, "now").mockImplementation(() => now() + 120_000);
+    expect((await runReconcile()).failures).toEqual([]);
+    expect(mocks.tenant).toHaveBeenCalledExactlyOnceWith("acme", "TRIAL_EXPIRED");
+    expect(await state()).toBe("TRIAL_EXPIRED");
+    mocks.tenant.mockClear();
+    await runReconcile();
+    expect(mocks.tenant).not.toHaveBeenCalled();
+    acme.trial.approvedAt = new Date(Date.now()).toISOString(); acme.trial.approvedBy = "operator";
+    expect((await runReconcile()).failures).toEqual([]);
+    expect(await state()).toBe("active");
+    expect(mocks.tenant).not.toHaveBeenCalled();
   });
 
   it.each(["deactivation", "role-change"])("%s removes the actual Redis token inventory through the real revocation provider", async change => {
@@ -257,12 +279,14 @@ describe("reconciliation", () => {
     await runReconcile();
     expect(puts).toContainEqual({ path: "/organizations/org", body: { ...organization, name: "Renamed Tenant", domains: [], attributes: { "digit.lifecycle": ["ACTIVE"] } } });
   });
-  it.each(["disabled", "FAILED", "inactive-tenant"])("revokes tenant members outside person leases for %s", async condition => {
+  it.each([["disabled", "ORGANIZATION_DISABLED"], ["FAILED", "ORGANIZATION_DISABLED"], ["inactive-tenant", "TENANT_INACTIVE"],
+    ["trial", "TRIAL_EXPIRED"]])("revokes tenant members outside person leases for %s", async (condition, reason) => {
     if (condition === "disabled") organization.enabled = false;
     if (condition === "FAILED") organization.lifecycle = "FAILED";
     if (condition === "inactive-tenant") mocks.active.mockResolvedValue(false);
+    if (condition === "trial") deny("trial");
     await runReconcile();
-    expect(mocks.tenant).toHaveBeenCalledWith("tenant", condition === "inactive-tenant" ? "TENANT_INACTIVE" : "ORGANIZATION_DISABLED");
+    expect(mocks.tenant).toHaveBeenCalledWith("tenant", reason);
   });
   it("forces a full membership check after an Organization deletion despite unchanged fingerprints", async () => {
     await runReconcile();

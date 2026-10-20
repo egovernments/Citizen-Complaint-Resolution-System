@@ -4,7 +4,7 @@ import { currentPersonLease, LeaseBusyError, LeaseLostError, personLeaseKey, wit
 import { privateRef } from "../citizen-otp/otp-store.js";
 import { deleteIdentitySession, getIdentitySession, getSelectedIdentityContext, listPersonSessions, personSessionsKey, revocationGenerationKey, sessionKey } from "../sessions/session-store.js";
 import type { IdentitySession } from "../sessions/types.js";
-import { accountId, forgetToken, key, parseAccountId, personTokensKey, readToken, revokeInventoriedToken, tokenHoldersKey, type AccountRef, type TokenRecord } from "./inventory.js";
+import { accountId, forgetToken, key, parseAccountId, personTokensKey, readToken, revokeInventoriedToken, tokenHoldersKey, tokenSubjectsForTenant, type AccountRef, type TokenRecord } from "./inventory.js";
 import { getRevocationUser, listRevocationUsers, listOrganizationMembers, endKeycloakSession, keycloakSessionStarts } from "./keycloak.js";
 import { accountEntries, type AccountEntry } from "../sync/state.js";
 import { bindingsFor } from "../bindings/store.js";
@@ -15,7 +15,7 @@ export { cachedToken, recordToken, holdToken, drainTokenRetries } from "./invent
 export type RevocationReason =
   | "KEYCLOAK_DISABLED" | "KEYCLOAK_DELETED" | "LOGOUT_ALL" | "CREDENTIAL_CHANGED"
   | "MEMBERSHIP_REMOVED" | "BINDING_REMOVED" | "DIGIT_INACTIVE" | "ROLE_CHANGED"
-  | "ORGANIZATION_DISABLED" | "TENANT_INACTIVE" | "DIGIT_ACCOUNT_MISSING" | "LOGOUT";
+  | "ORGANIZATION_DISABLED" | "TENANT_INACTIVE" | "TRIAL_EXPIRED" | "DIGIT_ACCOUNT_MISSING" | "LOGOUT";
 
 /** `eventId` is `<time>:<id>` for a Keycloak event; `eventType` names it (user event type, or admin operation and resource). */
 interface JobOptions {
@@ -275,13 +275,18 @@ export async function drainRevocationJobs(limit = 100): Promise<void> {
   }
 }
 
-/** All jobs are recorded before taking a person lease; repeats repair interrupted fan-out. */
-export async function revokeTenantMembers(tenantId: string, reason: "ORGANIZATION_DISABLED" | "TENANT_INACTIVE"): Promise<void> {
+/**
+ * All jobs are recorded before taking a person lease; repeats repair interrupted fan-out.
+ * Citizens are neither members nor bound, so they are found by their DIGIT tokens at the tenant.
+ * Each job is scoped to the tenant: the person's sessions and tokens elsewhere survive.
+ */
+export async function revokeTenantMembers(tenantId: string, reason: "ORGANIZATION_DISABLED" | "TENANT_INACTIVE" | "TRIAL_EXPIRED"): Promise<void> {
   if (currentPersonLease()) throw new Error("Tenant fan-out must run outside the person lease");
   const organization = await readOrganizationByTenant(tenantId);
   const members = organization ? await listOrganizationMembers(organization.id) : [];
   const bindings = await bindingsFor(tenantId);
-  const subjects = new Set([...members.map(member => member.id), ...bindings.map(binding => binding.subject)]);
+  const citizens = await tokenSubjectsForTenant(tenantId, "citizen");
+  const subjects = new Set([...members.map(member => member.id), ...bindings.map(binding => binding.subject), ...citizens]);
   for (const subject of subjects) await enqueueRevocation(subject, reason, { tenantId, eventId: `tenant:${tenantId}` });
   await drainRevocationJobs();
 }

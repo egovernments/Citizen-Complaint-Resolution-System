@@ -28,6 +28,22 @@ export async function readToken(account: AccountRef): Promise<TokenRecord | null
   return raw ? JSON.parse(raw) as TokenRecord : null;
 }
 
+/** People holding an inventoried DIGIT token at this tenant: how a tenant fan-out reaches citizens. */
+export async function tokenSubjectsForTenant(tenantId: string, kind?: TokenRecord["kind"]): Promise<string[]> {
+  const pattern = `${key(`token:${tenantId}:`).replace(/[*?[\]\\]/g, "\\$&")}*`;
+  const subjects = new Set<string>();
+  let cursor = "0";
+  do {
+    const [next, names] = await getRedis().scan(cursor, "MATCH", pattern, "COUNT", 100);
+    cursor = next;
+    for (const raw of names.length ? await getRedis().mget(...names) : []) {
+      const token = raw ? JSON.parse(raw) as TokenRecord : null;
+      if (token && (!kind || token.kind === kind)) subjects.add(token.subject);
+    }
+  } while (cursor !== "0");
+  return [...subjects];
+}
+
 /** Queue before the external effect. A crash or failed logout leaves a retry until actual expiry. */
 export async function revokeInventoriedToken(account: AccountRef, token: TokenRecord, reason: string): Promise<void> {
   if (token.expiresAt <= Date.now()) return;
