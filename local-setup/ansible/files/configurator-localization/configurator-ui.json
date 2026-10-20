@@ -10278,6 +10278,12 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.signup_errors.WORKSPACE_TRIAL_EXPIRED",
+    "message": "This workspace’s trial has ended. Contact the platform team to continue.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.signup_fields.accepted_terms_version",
     "message": "Agree to the terms of service to continue.",
     "module": "configurator-ui",

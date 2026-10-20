@@ -910,6 +910,62 @@ describe('workspace readiness gate', () => {
   });
 });
 
+describe('expired trial workspace', () => {
+  // A locked founder lands here from a magic link, which returns to /configurator/signup.
+  const notice = { title: 'Your trial has ended', message: 'Talk to us to continue.' };
+  const locked = { organizationAlias: 'demo', tenantId: 'ke.demo', name: 'Demo Workspace', roles: [], code: 'WORKSPACE_TRIAL_EXPIRED' as const };
+  const open = { organizationAlias: 'kisumu-county', tenantId: 'kisumucounty', name: 'Kisumu County', roles: ['MDMS_ADMIN'] };
+
+  it('opens the dialog on load when every workspace is locked, and starts no signup', async () => {
+    vi.mocked(api.session).mockResolvedValue(signedIn);
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [locked], selectionRequired: false, onboardingRequired: false, notice });
+    render(<SignupPage />);
+
+    expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
+    expect(screen.getByText(notice.title)).toBeInTheDocument();
+    expect(screen.getByText(notice.message)).toBeInTheDocument();
+    expect(api.selectContext).not.toHaveBeenCalled();
+    expect(api.findSignup).not.toHaveBeenCalled();
+  });
+
+  it('labels a locked option and opens the dialog on click without selecting it', async () => {
+    vi.mocked(api.session).mockResolvedValue(signedIn);
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [open, locked], selectionRequired: true, onboardingRequired: false, notice });
+    render(<SignupPage />);
+
+    const lockedButton = await screen.findByRole('button', { name: /demo workspace/i });
+    expect(lockedButton).toHaveTextContent(/trial ended/i);
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    fireEvent.click(lockedButton);
+    expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
+    expect(screen.getByText(notice.title)).toBeInTheDocument();
+    expect(api.selectContext).not.toHaveBeenCalled();
+  });
+
+  it('opens the dialog when _select answers 403 WORKSPACE_TRIAL_EXPIRED', async () => {
+    vi.mocked(api.session).mockResolvedValue(signedIn);
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [open], selectionRequired: false, onboardingRequired: false });
+    vi.mocked(api.selectContext).mockRejectedValue(new api.OnboardingError(403, 'WORKSPACE_TRIAL_EXPIRED', 'Trial ended', { notice }));
+    render(<SignupPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /kisumu county/i }));
+    expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
+    expect(screen.getByText(notice.title)).toBeInTheDocument();
+    expect(screen.queryByText(/something went wrong/i)).not.toBeInTheDocument();
+  });
+
+  it('says so in plain words when the 403 carries no notice', async () => {
+    vi.mocked(api.session).mockResolvedValue(signedIn);
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [open], selectionRequired: false, onboardingRequired: false });
+    vi.mocked(api.selectContext).mockRejectedValue(new api.OnboardingError(403, 'WORKSPACE_TRIAL_EXPIRED', 'Trial ended'));
+    render(<SignupPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /kisumu county/i }));
+    expect(await screen.findByText(/this workspace’s trial has ended/i)).toBeInTheDocument();
+    expect(screen.queryByText(/WORKSPACE_TRIAL_EXPIRED/)).not.toBeInTheDocument();
+  });
+});
+
 describe('resuming a run that was already going', () => {
   const resumable = (status: 'SUBMITTED' | 'PROVISIONING') => ({
     id: 's1',

@@ -1008,6 +1008,7 @@
 {"code": "app.onboarding.signup_errors.TENANT_ROLES_MISSING", "message": "This workspace isn’t fully set up yet. Try again in a few minutes.", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.signup_errors.UNSUPPORTED_RETURN_TO", "message": "Sign-up can’t be started from this address. Open the sign-up page from the main site and try again.", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.signup_errors.UNTRUSTED_ORIGIN", "message": "Sign-up can’t be started from this address. Open the sign-up page from the main site and try again.", "module": "configurator-ui", "locale": "en_IN"},
+{"code": "app.onboarding.signup_errors.WORKSPACE_TRIAL_EXPIRED", "message": "This workspace’s trial has ended. Contact the platform team to continue.", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.signup_fields.accepted_terms_version", "message": "Agree to the terms of service to continue.", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.signup_fields.account_code", "message": "The account code must be 2 to 32 characters, using A–Z, 0–9 and hyphens.", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.signup_fields.account_name", "message": "Enter a name for your account.", "module": "configurator-ui", "locale": "en_IN"},
