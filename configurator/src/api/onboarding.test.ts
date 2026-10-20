@@ -15,6 +15,7 @@ import {
   isValidUrlSlug,
   RESERVED_URL_SLUGS,
   newIdempotencyKey,
+  selectContext,
   session,
   slugifyAccountName,
   submitSignup,
@@ -93,6 +94,20 @@ describe('transport', () => {
     expect(caught).toBeInstanceOf(OnboardingError);
     expect((caught as OnboardingError).code).toBe('ONBOARDING_IDENTIFIER_TAKEN');
     expect((caught as OnboardingError).status).toBe(409);
+  });
+});
+
+describe('trial-expired notice', () => {
+  it('keeps the structured notice from a 403 body on the error', async () => {
+    const notice = { title: 'Trial ended', message: 'Contact us.', linkLabel: 'Contact', linkUrl: 'https://example.org' };
+    stubFetch(() => ({
+      status: 403,
+      body: { code: 'WORKSPACE_TRIAL_EXPIRED', error: 'Trial ended', notice },
+    }));
+    const caught = (await selectContext('ke.demo').catch((e) => e)) as OnboardingError;
+    expect(caught).toBeInstanceOf(OnboardingError);
+    expect(caught.code).toBe('WORKSPACE_TRIAL_EXPIRED');
+    expect(caught.details?.notice).toEqual(notice);
   });
 });
 
