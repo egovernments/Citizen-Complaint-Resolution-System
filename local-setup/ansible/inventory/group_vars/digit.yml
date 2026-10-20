@@ -538,10 +538,6 @@ identity_route_backfill_roots: >-
 enable_sherlog: false
 sherlog_image: ghcr.io/singhalkarun/sherlog
 sherlog_version: "0.6.6"
-# The image's digest for sherlog_version (its multi-arch index, from the release build). The deploy extracts Sherlog's
-# scripts from this image and runs them on the host as root, so they come from the digest, not the movable tag.
-# Bump it together with sherlog_version.
-sherlog_image_digest: "sha256:0c46e87051aa355eaf5bb92b258be86c218a12bd06583a2ae8105844d153ed4e"
 sherlog_mode: shadow
 sherlog_model_api_key: ""          # secret: OpenBao
 sherlog_model_provider: ""          # empty: Sherlog's default (openai)

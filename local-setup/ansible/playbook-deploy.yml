@@ -3081,8 +3081,8 @@
       when: enable_sherlog | default(false) | bool
 
     # What else Sherlog needs: Loki (its log rules, the journal, the logs investigations read) and Tempo, which only
-    # observability_level traces runs; somewhere for live mode's reports (in CCRS, GitHub issues: the Slack webhook
-    # carries alerts, not reports); and an image digest to extract its scripts from.
+    # observability_level traces runs; and somewhere for live mode's reports (in CCRS, GitHub issues: the Slack
+    # webhook carries alerts, not reports).
     - name: "Sherlog — needs observability_level traces (Loki and Tempo)"
       ansible.builtin.assert:
         that: (observability_level | default('traces')) == 'traces'
@@ -3104,21 +3104,11 @@
         quiet: true
       when: enable_sherlog | default(false) | bool
 
-    - name: "Sherlog — its image is pinned by digest"
-      ansible.builtin.assert:
-        that: sherlog_image_digest | default('') is match('^sha256:[0-9a-f]{64}$')
-        fail_msg: >-
-          sherlog_image_digest must be the sha256 digest of {{ sherlog_image }}:{{ sherlog_version }} (its release
-          build prints it); set it together with sherlog_version.
-        quiet: true
-      when: enable_sherlog | default(false) | bool
-
-    # Extracted once per image (.bundle-version records the reference), not on every deploy. By digest: these
-    # scripts run on the host as root, so a re-pushed tag must not change them.
-    - name: "Sherlog — its compose bundle for sherlog_version (from the image, by digest)"
+    # Extracted once per image (.bundle-version records the reference), not on every deploy.
+    - name: "Sherlog — its compose bundle for sherlog_version (from the image)"
       ansible.builtin.shell: |
         set -e
-        ref="{{ sherlog_image }}:{{ sherlog_version }}@{{ sherlog_image_digest }}"
+        ref="{{ sherlog_image }}:{{ sherlog_version }}"
         stamp={{ digit_dir }}/sherlog/.bundle-version
         if [ "$(cat "$stamp" 2>/dev/null)" = "$ref" ] && [ -x {{ digit_dir }}/sherlog/sherlog.sh ]; then
           echo NOCHANGE; exit 0
