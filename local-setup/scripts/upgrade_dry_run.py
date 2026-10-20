@@ -71,6 +71,7 @@ EXCLUDED_PATTERNS = (
 SENSITIVE_KEY = re.compile(
     r"(?i)(password|passwd|secret|token|api[_-]?key|private[_-]?key|credential|unseal)"
 )
+REDACTED = "<REDACTED>"
 RENDER_DESTINATION_PREFIXES = (
     "/.build",
     "/.env",
@@ -111,6 +112,7 @@ JSON_SECRET = re.compile(
     r'(?i)("[^"\n]*(?:password|passwd|secret|token|api[_-]?key|private[_-]?key|credential|unseal)[^"\n]*"\s*:\s*)'
     r'("(?:\\.|[^"\\])*"|[^,}\n]+)'
 )
+JSON_STRING = re.compile(r'"(?:\\.|[^"\\])*"')
 
 
 class DryRunError(RuntimeError):
@@ -467,6 +469,33 @@ def redact_text(
     return text
 
 
+def redact_json_text(text: str, exact_values: Iterable[bytes] = ()) -> str:
+    """Redact valid JSON without replacing raw bytes outside string tokens."""
+    json.loads(text)
+    clean = JSON_SECRET.sub(lambda match: match.group(1) + '"<REDACTED>"', text)
+    encoded_values: list[str] = []
+    for raw in sorted(exact_values, key=len, reverse=True):
+        try:
+            value = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            continue
+        # Remove only the surrounding JSON quotes. The encoded content keeps
+        # escapes intact, so replacing it cannot break the JSON token.
+        encoded_values.append(json.dumps(value, ensure_ascii=False)[1:-1])
+
+    def redact_string(match: re.Match[str]) -> str:
+        token = match.group(0)
+        body = token[1:-1]
+        for value in encoded_values:
+            if value:
+                body = body.replace(value, REDACTED)
+        return '"' + body + '"'
+
+    clean = JSON_STRING.sub(redact_string, clean)
+    json.loads(clean)
+    return clean
+
+
 def normalize_tree(
     source: Path,
     destination: Path,
@@ -506,12 +535,19 @@ def normalize_tree(
                 target.write_bytes(data)
                 entry["binary"] = True
             else:
-                clean = redact_text(
-                    data.decode("utf-8"),
-                    exact_secret_values,
-                    redact_assignments=path.suffix.lower()
-                    not in SOURCE_CODE_SUFFIXES,
-                )
+                text = data.decode("utf-8")
+                if path.suffix.lower() == ".json":
+                    try:
+                        clean = redact_json_text(text, exact_secret_values)
+                    except json.JSONDecodeError:
+                        clean = redact_text(text, exact_secret_values)
+                else:
+                    clean = redact_text(
+                        text,
+                        exact_secret_values,
+                        redact_assignments=path.suffix.lower()
+                        not in SOURCE_CODE_SUFFIXES,
+                    )
                 target.write_text(clean, encoding="utf-8", newline="")
                 entry["binary"] = False
             try:

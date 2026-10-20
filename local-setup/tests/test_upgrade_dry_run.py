@@ -66,6 +66,22 @@ class RedactionAndNormalizationTests(unittest.TestCase):
         )
         self.assertEqual("A documented default is <REDACTED>.\n", clean)
 
+    def test_json_exact_secret_redaction_preserves_valid_escaped_json(self):
+        value = 'quote-"-and-backslash-\\-secret'
+        source = json.dumps(
+            {
+                "message": f"prefix {value} suffix",
+                "token": value,
+                "number": 123456,
+            },
+            indent=2,
+        )
+        clean = dry.redact_json_text(source, {value.encode(), b"123456"})
+        parsed = json.loads(clean)
+        self.assertEqual("prefix <REDACTED> suffix", parsed["message"])
+        self.assertEqual("<REDACTED>", parsed["token"])
+        self.assertEqual(123456, parsed["number"])
+
     def test_secret_change_is_blocked_without_exposing_value_or_digest(self):
         with temp_directory() as name:
             root = Path(name)
