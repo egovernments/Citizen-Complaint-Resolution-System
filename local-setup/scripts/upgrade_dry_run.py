@@ -96,8 +96,10 @@ RENDER_DESTINATION_PREFIXES = (
     "/novu-mint-key.sh",
     "/novu-worker-providers",
     "/opensre",
+    "/otel",
     "/repair-tenant-masters.py",
     "/scripts",
+    "/sherlog",
     "/test_onboarding_regressions.py",
 )
 SECRET_FIELD_ASSIGNMENT = re.compile(
