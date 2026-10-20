@@ -50,7 +50,10 @@ function useAccountSummary() {
   if (!user) return null;
 
   const name = present(user.name);
-  const identifier = present(user.userName) || present(user.mobileNumber) || present(user.emailId);
+  // A citizen's userName is internal (a `kcbffc-` key under Keycloak sign-in),
+  // so citizens are identified by their mobile number instead.
+  const userName = user.type === "CITIZEN" ? null : present(user.userName);
+  const identifier = userName || present(user.mobileNumber) || present(user.emailId);
   const tenant = present(user.tenantId);
 
   if (!name && !identifier) return null;

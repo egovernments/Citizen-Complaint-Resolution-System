@@ -368,6 +368,18 @@ test("logout dialog keeps a failed sign-out visible for retry", async () => {
   view.unmount();
 });
 
+// #2594: a citizen's userName is an internal key, so neither page shows it.
+test("citizen profile and logout dialog do not show the internal userName", async () => {
+  browser("citizen", () => assert.fail("no BFF reads"));
+  const profile = await render(ui.Profile, { userType: "citizen", stateCode: "ke", cityDetails: { name: "Bomet" } });
+  assert.doesNotMatch(text(profile.root), /opaque/);
+  profile.unmount();
+  const dialog = await render(ui.LogoutDialog, { onSelect: async () => {} });
+  assert.doesNotMatch(text(dialog.root), /opaque/);
+  assert.match(text(dialog.root), /711111111/);
+  dialog.unmount();
+});
+
 // Medium 4 (Dhruv, #2271 review 2): a login page reached on a tenantless
 // /digit-ui/... URL (legacy ingress, preserved vhost, Kong /digit-ui) has no
 // route tenant. It used to throw a TypeError reading tenant.appBasePath.

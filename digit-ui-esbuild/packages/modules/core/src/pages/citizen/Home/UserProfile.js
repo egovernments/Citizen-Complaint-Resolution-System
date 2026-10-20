@@ -947,7 +947,6 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
             {identityManaged && <V2Button type="button" variant="secondary" onClick={() => history.push(`/${window.contextPath}/${userType}/user/account`)}>
               {tr("CORE_IDENTITY_ACCOUNT", "Account and security")}
             </V2Button>}
-            {identityManaged && <p>{userInfo.userName} · {mobileNumber}</p>}
             <V2Field
               label={t("CORE_COMMON_PROFILE_NAME")}
               required
