@@ -221,7 +221,7 @@ describe("token inventory and revocation", () => {
     if (duplicate) expect(await readToken(alias)).toBeNull();
     expect(await getRedis().smembers(tokenHoldersKey(account))).toEqual([]);
     // A token only the current session holds is not the other device's to lose.
-    expect((await withPersonLease(subject, lease => cachedToken(lease, third)))?.accessToken).toBe("current-only-token");
+    expect((await readToken(third))?.accessToken).toBe("current-only-token");
     expect(await getRedis().zcard(key("revoke-retry"))).toBe(0);
   });
   it("logout deletes the BFF session during a Keycloak outage and ends Keycloak's session later", async () => {
