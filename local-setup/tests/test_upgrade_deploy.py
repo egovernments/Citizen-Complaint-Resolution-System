@@ -189,16 +189,21 @@ class CandidateComposeValidationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir=Path.cwd()) as name:
             root = Path(name)
             candidate = root / "run" / "candidate"
+            overlay = root / "run" / "deployment-overlay"
             candidate.mkdir(parents=True)
+            overlay.mkdir()
             for compose_name in (
                 "docker-compose.egov-digit.yaml",
                 "docker-compose.migrations.yml",
                 "docker-compose.monitoring.yml",
                 "docker-compose.matomo.yml",
                 "docker-compose.opensre.yml",
-                "docker-compose.upgrade-safe.yml",
             ):
                 (candidate / compose_name).write_text("services: {}\n")
+            (root / "controller" / "local-setup").mkdir(parents=True)
+            (root / "controller" / "local-setup" / "docker-compose.upgrade-safe.yml").write_text("services: {}\n")
+            (root / "digit").mkdir()
+            (root / "digit" / ".env").write_text("VALUE=test\n")
             runner = Runner()
             upgrade = deploy.UpgradeDeployment(
                 root / "run",
@@ -212,7 +217,7 @@ class CandidateComposeValidationTests(unittest.TestCase):
                 digit_dir=root / "digit",
                 controller_repo=root / "controller",
             )
-            upgrade._validate_candidate_compose()
+            upgrade._validate_candidate_compose(overlay)
 
         args, kwargs = runner.calls[-1]
         self.assertEqual(["docker", "compose"], args[:2])
@@ -227,6 +232,7 @@ class CandidateComposeValidationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir=Path.cwd()) as name:
             root = Path(name)
             (root / "run" / "candidate").mkdir(parents=True)
+            (root / "run" / "deployment-overlay").mkdir()
             upgrade = deploy.UpgradeDeployment(
                 root / "run",
                 root / "repo",
@@ -242,7 +248,7 @@ class CandidateComposeValidationTests(unittest.TestCase):
             with self.assertRaisesRegex(
                 deploy.DeployError, "missing deployment Compose file"
             ):
-                upgrade._validate_candidate_compose()
+                upgrade._validate_candidate_compose(root / "run" / "deployment-overlay")
 
 
 class MdmsSnapshotTests(unittest.TestCase):

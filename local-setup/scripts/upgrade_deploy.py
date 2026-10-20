@@ -670,7 +670,7 @@ class UpgradeDeployment:
                 f"insufficient backup space: need at least {required} bytes, have {free}"
             )
 
-    def _validate_candidate_compose(self) -> None:
+    def _validate_candidate_compose(self, overlay: Path) -> None:
         """Reject an internally inconsistent candidate before production stops."""
         candidate = self.run_dir / "candidate"
         names = (
@@ -679,7 +679,6 @@ class UpgradeDeployment:
             "docker-compose.monitoring.yml",
             "docker-compose.matomo.yml",
             "docker-compose.opensre.yml",
-            "docker-compose.upgrade-safe.yml",
         )
         missing = [name for name in names if not (candidate / name).is_file()]
         if missing:
@@ -687,9 +686,23 @@ class UpgradeDeployment:
                 "candidate is missing deployment Compose file(s): "
                 + ", ".join(missing)
             )
-        args = ["docker", "compose"]
+        safety_overlay = (
+            self.controller_repo / "local-setup/docker-compose.upgrade-safe.yml"
+        )
+        if not safety_overlay.is_file():
+            raise DeployError(f"controller safety overlay is missing: {safety_overlay}")
+        live_env = self.digit_dir / ".env"
+        if not live_env.is_file():
+            raise DeployError(f"live Compose environment is missing: {live_env}")
+        args = [
+            "docker", "compose",
+            "--env-file", str(live_env),
+            "--project-directory", str(candidate),
+        ]
         for name in names:
-            args.extend(["-f", name])
+            materialized = overlay / name
+            args.extend(["-f", str(materialized if materialized.is_file() else candidate / name)])
+        args.extend(["-f", str(safety_overlay)])
         # Validate every profiled service, not only the services enabled for
         # this tenant. This catches cross-file contracts such as an overlay
         # service referring to a network removed by a whole-file conflict
@@ -984,7 +997,7 @@ class UpgradeDeployment:
             self.source_backup,
             self.repo / "local-setup",
         )
-        self._validate_candidate_compose()
+        self._validate_candidate_compose(overlay)
         self.backup_parent.mkdir(parents=True, exist_ok=True)
         lock_path = self.backup_parent / ".digit-upgrade.lock"
         with lock_path.open("w", encoding="utf-8") as lock:
