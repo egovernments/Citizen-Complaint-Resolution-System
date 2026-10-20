@@ -3,8 +3,9 @@ import { useTranslation } from "react-i18next";
 import { PopUp, Timeline, TimelineMolecule, Loader } from '@egovernments/digit-ui-components';
 import { useMyContext } from "../utils/context";
 import { convertEpochFormateToDate } from '../utils';
+import { channelFiler } from '../utils/filedBy';
 
-const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPrefix = "" }) => {
+const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPrefix = "", service }) => {
     const { state } = useMyContext();
     const { t } = useTranslation();
 
@@ -61,12 +62,20 @@ const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPre
                 return `${t('CS_COMMON_EMPLOYEE_COMMENTS')} : "${raw}"`;
             };
 
+            // A WhatsApp complaint's APPLY actor is the chatbot's service account, so that
+            // row shows the complainant instead, never the bot account (#2503). A name
+            // pgr-services redacted falls back to a plain "Citizen" label.
+            const filer = channelFiler(service);
+            const filerRecord = filer && { name: filer.name || t("ACCESSCONTROL_ROLES_ROLES_CITIZEN", "Citizen"), mobileNumber: filer.mobileNumber };
+
             // Map API response to timeline steps
             const steps = workflowData.ProcessInstances.map((instance, index) => {
                 const assignee = instance?.assignes?.[0];
-                const personRecord = isAssigningAction(instance?.action) ? assignee : instance?.assigner;
+                const personRecord = filerRecord && instance?.action === "APPLY"
+                    ? filerRecord
+                    : isAssigningAction(instance?.action) ? assignee : instance?.assigner;
                 const personLine = formatPerson(personRecord);
-                const mobile = isAssigningAction(instance?.action) ? assignee?.mobileNumber : instance?.assigner?.mobileNumber;
+                const mobile = personRecord?.mobileNumber;
                 const contactLine = mobile ? `${t("ES_COMMON_CONTACT_DETAILS")}: ${mobile}` : null;
 
                 return {
@@ -83,7 +92,7 @@ const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPre
             });
             setTimelineSteps(steps);
         }
-    }, [workflowData]);
+    }, [workflowData, service]);
 
     return (
         isWorkFlowLoading ? <Loader /> :

@@ -4519,6 +4519,7 @@ ab210868-6c64-48ce-9788-6b3b4e5506ff	en_IN	SERVICEDFS.WATERNOTCOMING	Water not c
 1c2c8de9-6a10-40fa-9946-7165e9d01d03	en_IN	ACCESSCONTROL_ROLES_ROLES_PGR_VIEWER	Complaint Viewer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 2ead2471-82e3-41c2-86d9-3394e19a3179	en_IN	ACTION_TEST_9HRMS	HRMS	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 bd92853c-c021-416d-a202-222a6bbb6b6e	en_IN	ACTION_TEST_COMPLAINTS	Complaint Management System	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8cc44da6-241a-5b72-9db2-f59973bd05f1	en_IN	ACCESSCONTROL_ROLES_ROLES_CITIZEN	Citizen	pg	rainmaker-common	1	2026-10-20 00:00:00	\N	\N
 6472bb87-be92-46ff-a17d-f9fa182a9fab	en_IN	ACTION_TEST_COMPLAINT_TYPES	Complaint Types	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 dfb01257-68e3-4b87-bc44-cdcd1d36e4b7	en_IN	ACTION_TEST_CREATE_COMPLAINT	Create Complaint	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 d254e8e0-0e46-4d54-994a-e02c4d9c42e6	en_IN	ACTION_TEST_HOME	Home	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
@@ -6574,6 +6575,7 @@ aa1ac4d7-9e8b-4166-999c-4b90003ded58	default	sms.register.otp.msg	Dear Citizen, 
 4206b3dd-fa80-432d-964d-29b8214fa409	en_IN	sms.login.otp.msg	Dear Citizen, Your Login OTP is %s.\n\nEGOVS	pg	egov-user	128	2026-02-09 05:28:02.141	\N	\N
 57770145-d60c-44e8-894f-48e895565855	en_IN	sms.pwd.reset.otp.msg	Dear Citizen, Your OTP for recovering password is %s.\n\nEGOVS	pg	egov-user	128	2026-02-09 05:28:02.141	\N	\N
 e0302fe2-c05d-4f52-8976-ef3647f98f41	en_IN	sms.register.otp.msg	Dear Citizen, Your OTP to complete your DIGIT Registration is %s.\n\nEGOVS	pg	egov-user	128	2026-02-09 05:28:02.141	\N	\N
+1a10067b-d91b-5f00-bf4c-68884f381e26	fr_FR	ACCESSCONTROL_ROLES_ROLES_CITIZEN	Citoyen	pg	rainmaker-common	1	2026-10-20 00:00:00	\N	\N
 164ef7db-6b7c-51cb-a79c-129d80a2b62a	fr_FR	ACTION_TEST_COMPLAINT_TYPES	Catégories de réclamation	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
 16f5efca-e75a-598c-afc4-69b71e2453a7	fr_FR	ACTION_TEST_HOME	Accueil	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
 729e75e2-bc47-56f9-80ed-d8f5afc55f5f	fr_FR	ACTION_TEST_SEARCH	Recherche	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
@@ -7144,6 +7146,7 @@ b6253c93-b29a-5838-bb06-66a23135df80	fr_FR	WF_PGR_REASSIGN	Réattribuée	pg	rain
 b414f181-3944-5ea0-9b9a-e7d9de9bd407	fr_FR	HR_EMP_ID_LABEL	ID de l'employé	pg	rainmaker-hr	1	2026-10-14 00:00:00	\N	\N
 c573e981-d861-5bdb-9d25-a7d9d1d127b0	fr_FR	HR_EMP_NAME_LABEL	Nom de l'employé	pg	rainmaker-hr	1	2026-10-14 00:00:00	\N	\N
 522e8bcc-d191-5f71-b819-946726857d4c	fr_FR	HR_ROLE_NO_LABEL	Nombre de rôles	pg	rainmaker-hr	1	2026-10-14 00:00:00	\N	\N
+bfaa0b2e-779f-5be9-9814-ff7be625f5a5	pt_BR	ACCESSCONTROL_ROLES_ROLES_CITIZEN	Cidadão	pg	rainmaker-common	1	2026-10-20 00:00:00	\N	\N
 d8d9f558-b459-5005-a24b-b67bfb24de3b	pt_BR	ACTION_TEST_COMPLAINT_TYPES	Categorias de reclamação	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
 a4e55d5d-d334-559b-b2a7-ef4a6a658d89	pt_BR	ACTION_TEST_HOME	Início	pg	rainmaker-common	1	2026-10-14 00:00:00	\N	\N
 4c57ee6b-31bf-5669-a7f9-7113372b9357	pt_BR	ACTION_TEST_SEARCH	Pesquisar	pg	rainmaker-common	1	2026-10-14 00:00:00	1	2026-10-16 00:00:00

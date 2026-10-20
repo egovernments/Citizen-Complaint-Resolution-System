@@ -1,5 +1,11 @@
 [
     {
+        "code": "ACCESSCONTROL_ROLES_ROLES_CITIZEN",
+        "message": "Citoyen",
+        "module": "rainmaker-common",
+        "locale": "fr_FR"
+    },
+    {
         "code": "ACTION_TEST_COMPLAINT_TYPES",
         "message": "Catégories de réclamation",
         "module": "rainmaker-common",

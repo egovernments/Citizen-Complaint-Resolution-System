@@ -3,6 +3,7 @@ import React, { Fragment, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { LOCALIZATION_KEY } from "../constants/Localization";
 import { formatLocaleDate } from "../utils/localeDate";
+import { channelFiler } from "../utils/filedBy";
 import PendingAtLME from "./timelineInstances/pendingAtLme";
 import PendingForAssignment from "./timelineInstances/PendingForAssignment";
 import PendingForReassignment from "./timelineInstances/PendingForReassignment";
@@ -90,6 +91,14 @@ const TimeLine = ({ isLoading, data, serviceRequestId, complaintWorkflow, rating
       status: "COMPLAINT_FILED",
     });
   }, [timeline]);
+
+  // A WhatsApp complaint's APPLY actor is the chatbot's service account, so the
+  // filing rows show the complainant instead, never the bot account (#2503).
+  const filer = channelFiler(complaintDetails?.service);
+  const filingRowPerson = (status, performedAction, assigner) =>
+    filer && (performedAction === "APPLY" || status === "COMPLAINT_FILED")
+      ? { name: filer.name || t("ACCESSCONTROL_ROLES_ROLES_CITIZEN", "Citizen"), mobileNumber: filer.mobileNumber }
+      : assigner;
 
   const getCommentsInCustomChildComponent = ({ comment, thumbnailsToShow, auditDetails, assigner, status }) => {
     const captionDetails = {
@@ -189,6 +198,7 @@ const TimeLine = ({ isLoading, data, serviceRequestId, complaintWorkflow, rating
       {timeline && totalTimelineLength > 0 ? (
         <ConnectingCheckPoints>
           {timeline.map(({ status, caption, auditDetails, timeLineActions, performedAction, wfComment: comment, thumbnailsToShow, assigner }, index, array) => {
+            assigner = filingRowPerson(status, performedAction, assigner);
             return getCheckPoint({ status, caption, auditDetails, timeLineActions, index, array, performedAction, comment, thumbnailsToShow, assigner, totalTimelineLength });
           })}
         </ConnectingCheckPoints>
