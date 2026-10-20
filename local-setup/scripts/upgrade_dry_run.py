@@ -112,7 +112,6 @@ JSON_SECRET = re.compile(
     r'(?i)("[^"\n]*(?:password|passwd|secret|token|api[_-]?key|private[_-]?key|credential|unseal)[^"\n]*"\s*:\s*)'
     r'("(?:\\.|[^"\\])*"|[^,}\n]+)'
 )
-JSON_STRING = re.compile(r'"(?:\\.|[^"\\])*"')
 
 
 class DryRunError(RuntimeError):
@@ -470,30 +469,32 @@ def redact_text(
 
 
 def redact_json_text(text: str, exact_values: Iterable[bytes] = ()) -> str:
-    """Redact valid JSON without replacing raw bytes outside string tokens."""
-    json.loads(text)
-    clean = JSON_SECRET.sub(lambda match: match.group(1) + '"<REDACTED>"', text)
-    encoded_values: list[str] = []
+    """Structurally redact and canonicalize valid JSON."""
+    parsed = json.loads(text)
+    decoded_values: list[str] = []
     for raw in sorted(exact_values, key=len, reverse=True):
         try:
             value = raw.decode("utf-8")
         except UnicodeDecodeError:
             continue
-        # Remove only the surrounding JSON quotes. The encoded content keeps
-        # escapes intact, so replacing it cannot break the JSON token.
-        encoded_values.append(json.dumps(value, ensure_ascii=False)[1:-1])
+        if value:
+            decoded_values.append(value)
 
-    def redact_string(match: re.Match[str]) -> str:
-        token = match.group(0)
-        body = token[1:-1]
-        for value in encoded_values:
-            if value:
-                body = body.replace(value, REDACTED)
-        return '"' + body + '"'
+    def redact(value: Any, key: str = "") -> Any:
+        if key and is_secret_key(key) and not isinstance(value, (dict, list)):
+            return REDACTED
+        if isinstance(value, dict):
+            return {str(child_key): redact(child, str(child_key)) for child_key, child in value.items()}
+        if isinstance(value, list):
+            return [redact(child, key) for child in value]
+        if isinstance(value, str):
+            for secret_value in decoded_values:
+                value = value.replace(secret_value, REDACTED)
+        return value
 
-    clean = JSON_STRING.sub(redact_string, clean)
-    json.loads(clean)
-    return clean
+    return json.dumps(
+        redact(parsed), indent=2, sort_keys=True, ensure_ascii=False
+    ) + "\n"
 
 
 def normalize_tree(
@@ -538,9 +539,11 @@ def normalize_tree(
                 text = data.decode("utf-8")
                 if path.suffix.lower() == ".json":
                     try:
-                        clean = redact_json_text(text, exact_secret_values)
+                        json.loads(text)
                     except json.JSONDecodeError:
                         clean = redact_text(text, exact_secret_values)
+                    else:
+                        clean = redact_json_text(text, exact_secret_values)
                 else:
                     clean = redact_text(
                         text,
