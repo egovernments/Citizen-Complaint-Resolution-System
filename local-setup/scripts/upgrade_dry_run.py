@@ -453,12 +453,14 @@ def redact_text(
     exact_values: Iterable[bytes] = (),
     *,
     redact_assignments: bool = True,
+    redact_json_fields: bool = True,
 ) -> str:
     if redact_assignments:
         text = TEXT_SECRET_ASSIGNMENT.sub(
             lambda match: match.group("prefix") + "<REDACTED>", text
         )
-    text = JSON_SECRET.sub(lambda match: match.group(1) + '"<REDACTED>"', text)
+    if redact_json_fields:
+        text = JSON_SECRET.sub(lambda match: match.group(1) + '"<REDACTED>"', text)
     for raw in sorted(exact_values, key=len, reverse=True):
         try:
             value = raw.decode("utf-8")
@@ -545,11 +547,12 @@ def normalize_tree(
                     else:
                         clean = redact_json_text(text, exact_secret_values)
                 else:
+                    is_source_code = path.suffix.lower() in SOURCE_CODE_SUFFIXES
                     clean = redact_text(
                         text,
                         exact_secret_values,
-                        redact_assignments=path.suffix.lower()
-                        not in SOURCE_CODE_SUFFIXES,
+                        redact_assignments=not is_source_code,
+                        redact_json_fields=not is_source_code,
                     )
                 target.write_text(clean, encoding="utf-8", newline="")
                 entry["binary"] = False

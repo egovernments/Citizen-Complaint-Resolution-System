@@ -197,6 +197,22 @@ class RedactionAndNormalizationTests(unittest.TestCase):
             self.assertIn("self.password = password", rendered)
             self.assertNotIn("literal-secret", rendered)
 
+    def test_source_code_dict_expression_keeps_python_semantics(self):
+        with temp_directory() as name:
+            root = Path(name)
+            source = root / "source"
+            normalized = root / "normalized"
+            write(
+                source,
+                "request.py",
+                'payload = {"authToken": self.auth_token, "enabled": True}\n',
+            )
+            dry.normalize_tree(source, normalized)
+            rendered = (normalized / "request.py").read_text()
+            compile(rendered, "request.py", "exec")
+            self.assertIn('"authToken": self.auth_token', rendered)
+            self.assertNotIn("<REDACTED>", rendered)
+
     def test_secret_metadata_keys_are_not_treated_as_secret_values(self):
         values = dry.sensitive_values(
             {"secrets_path": "secret/digit/city", "token_user_type": "EMPLOYEE"}
