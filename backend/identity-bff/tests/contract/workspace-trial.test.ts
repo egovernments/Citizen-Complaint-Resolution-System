@@ -3,6 +3,7 @@ import { createFakeDigitUser } from "../../mocks/fake-digit-user.js";
 import { config } from "../../src/infrastructure/config.js";
 import { resetIdentityMethodCatalog } from "../../src/modules/authentication/methods.js";
 import { ensureActive } from "../../src/modules/bindings/store.js";
+import { managedIdentity } from "../../src/modules/managed-accounts/managed-account-service.js";
 import { otpSender, setOtpSender, type OtpMessage } from "../../src/modules/citizen-otp/otp-sender.js";
 import { clearTenantMappingCache, ensureOrganizationMembership } from "../../src/modules/organizations/organization-service.js";
 import { createIdentitySession } from "../../src/modules/sessions/session-store.js";
@@ -68,8 +69,7 @@ async function workspace(slug: string, trial: Record<string, string[]>) {
   }]);
 }
 
-async function staffCookie(slug: string, surface: "configurator" | "employee"): Promise<string> {
-  const subject = `founder-${slug}`;
+async function staffCookie(slug: string, surface: "configurator" | "employee", subject = `founder-${slug}`): Promise<string> {
   const { sessionId } = await createIdentitySession({ accessToken: "trial-contract-token", accessExpiresIn: 3600 },
     { sub: subject, email: `${subject}@example.test` },
     surface === "employee" ? config.keycloakEmployeeClientId : config.keycloakBffClientId,
@@ -150,6 +150,28 @@ describe("a workspace whose trial ended", () => {
     expect(body.notice).toEqual(config.workspaceTrialNotice);
     expect((body.notice as { message: string }).message).toBeTruthy();
     expect(digit.tokens.size).toBe(tokens);
+  });
+
+  it("locks a managed-account member too: listed with the code, refused at _select, no DIGIT token minted", async () => {
+    // A pre-trial member with no binding signs in through the managed account;
+    // an operator _extend can put that workspace on trial.
+    const subject = "managed-acme";
+    const identity = managedIdentity(config.keycloakIssuer, subject, "acme");
+    expect((await kc("POST", "/users", { id: subject, username: subject, email: `${subject}@example.test`, emailVerified: true, enabled: true })).status)
+      .toBe(201);
+    await ensureOrganizationMembership({ organizationId: "org-acme", userId: subject });
+    digit.addAccount({ userName: identity.username, name: "Managed admin", mobileNumber: "712000002", emailId: null, tenantId: "acme",
+      type: "EMPLOYEE", active: true, identificationMark: identity.marker, password: "Managed@123",
+      roles: ["EMPLOYEE", "ACCOUNT_ADMIN"].map((code) => ({ code, tenantId: "acme" })) });
+    const listed = await (await get(routes.tenants.path, await staffCookie("acme", "configurator", subject))).json();
+    expect(listed).toMatchObject({ tenants: [{ tenantId: "acme", code: "WORKSPACE_TRIAL_EXPIRED", roles: [] }],
+      onboardingRequired: false, notice: config.workspaceTrialNotice });
+    for (const surface of ["configurator", "employee"] as const) {
+      const tokens = digit.tokens.size;
+      const response = await post(routes.select.path, { surface, tenantId: "acme" }, await staffCookie("acme", surface, subject));
+      expect((await expectContractError(response, routes.select, "WORKSPACE_TRIAL_EXPIRED")).notice).toEqual(config.workspaceTrialNotice);
+      expect(digit.tokens.size).toBe(tokens);
+    }
   });
 
   it("reports the lock on its public tenant context, keeping the tenant and the cache header", async () => {

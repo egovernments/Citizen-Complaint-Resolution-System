@@ -13,7 +13,7 @@ vi.mock("../../src/modules/access-context/tenant-directory.js", () => ({ isActiv
 vi.mock("../../src/modules/managed-accounts/managed-account-service.js", () => ({
   managedIdentity: vi.fn(), findManagedAccount: vi.fn(async () => f.managed),
 }));
-vi.mock("../../src/modules/bindings/managed-fallback.js", () => ({ managedFallbackAccess: vi.fn(async () => f.managed ? { allowed: true } : { allowed: false, denial: "NO_ACTIVE_BINDING" }) }));
+vi.mock("../../src/modules/bindings/managed-fallback.js", () => ({ managedFallbackAccess: vi.fn(async () => f.managed ? { allowed: true, trial: f.org.trial } : { allowed: false, denial: "NO_ACTIVE_BINDING" }) }));
 import { citizenAccess, staffAccess } from "../../src/modules/bindings/predicate.js";
 function binding(state = "active") {
   f.user.attributes!["digit.bindings"] = [JSON.stringify({ v: 1, bindings: [{
@@ -40,6 +40,13 @@ describe("fresh identity-side access predicate", () => {
   });
   it("uses managed fallback only when no binding exists", async () => {
     f.managed = { active: true };
+    expect(await staffAccess("person", "pg")).toEqual({ allowed: true, via: "managed" });
+  });
+  it("denies managed access to a workspace whose trial ended unless it was approved", async () => {
+    f.managed = { active: true }; const ended = { endsAt: "2020-01-01T00:00:00.000Z", approvedAt: null, approvedBy: null };
+    f.org.trial = ended;
+    expect(await staffAccess("person", "pg")).toEqual({ allowed: false, denial: "WORKSPACE_TRIAL_EXPIRED", via: "managed" });
+    f.org.trial = { ...ended, approvedAt: "2020-02-01T00:00:00.000Z", approvedBy: "ops" };
     expect(await staffAccess("person", "pg")).toEqual({ allowed: true, via: "managed" });
   });
   it.each(["PROVISIONING", "FAILED"])("denies %s Organizations", async (state) => {

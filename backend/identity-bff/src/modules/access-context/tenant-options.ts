@@ -24,7 +24,12 @@ export async function resolveTenantOption(subject: string, tenantId: string): Pr
   if (!access.allowed && access.denial !== "WORKSPACE_TRIAL_EXPIRED") return null;
   if (access.via === "managed") {
     const fallback = await managedFallbackAccess(subject, tenantId);
-    return fallback.allowed ? tenantOption({ ...fallback.mapping, roles: [] }, fallback.account) : null;
+    if (!fallback.allowed) return null;
+    if (!access.allowed) {
+      const { organizationId, alias, name } = fallback.mapping;
+      return { organizationId, organizationAlias: alias, tenantId: fallback.mapping.tenantId, name, roles: [], code: "WORKSPACE_TRIAL_EXPIRED" };
+    }
+    return tenantOption({ ...fallback.mapping, roles: [] }, fallback.account);
   }
   const org = await readOrganizationByTenant(tenantId);
   if (!org?.enabled || (org.lifecycle !== null && org.lifecycle !== "ACTIVE")) return null;

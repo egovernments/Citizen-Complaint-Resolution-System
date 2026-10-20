@@ -26,7 +26,9 @@ export async function staffAccess(subject: string, tenantId: string): Promise<St
   if (binding && binding.state !== "active") return deny("NO_ACTIVE_BINDING");
   if (!binding) {
     const fallback = await managedFallbackAccess(subject, tenantId);
-    return fallback.allowed ? { ...base, allowed: true } : deny(fallback.denial);
+    if (!fallback.allowed) return deny(fallback.denial);
+    // An operator _extend can put a pre-trial workspace with managed staff on trial.
+    return isTrialLocked(fallback.trial, Date.now()) ? deny("WORKSPACE_TRIAL_EXPIRED") : { ...base, allowed: true };
   }
   const org = await readOrganizationByTenant(tenantId);
   if (!org || !org.enabled || (org.lifecycle !== null && org.lifecycle !== "ACTIVE")) return deny("ORGANIZATION_INACTIVE");
