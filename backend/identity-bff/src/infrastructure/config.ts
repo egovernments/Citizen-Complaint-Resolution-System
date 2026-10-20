@@ -47,6 +47,16 @@ function trialDays(value: string | undefined): number {
 function trialNotice() {
   const linkLabel = (process.env.IDENTITY_WORKSPACE_TRIAL_NOTICE_LINK_LABEL || "").trim();
   const linkUrl = (process.env.IDENTITY_WORKSPACE_TRIAL_NOTICE_LINK_URL || "").trim();
+  if (linkUrl) {
+    let ok = false;
+    try {
+      const u = new URL(linkUrl);
+      ok = u.protocol === "http:" || u.protocol === "https:";
+    } catch { /* not absolute */ }
+    if (!ok) {
+      throw new Error("IDENTITY_WORKSPACE_TRIAL_NOTICE_LINK_URL must be an absolute http or https URL");
+    }
+  }
   return {
     title: process.env.IDENTITY_WORKSPACE_TRIAL_NOTICE_TITLE || "This workspace's trial has ended",
     message: process.env.IDENTITY_WORKSPACE_TRIAL_NOTICE_MESSAGE ||

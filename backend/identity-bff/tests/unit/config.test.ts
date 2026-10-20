@@ -71,6 +71,19 @@ describe("identity configuration", () => {
       }
     });
 
+    it("refuses a notice link that is not an absolute http(s) URL", async () => {
+      for (const bad of ["javascript:alert(1)", "/relative"]) {
+        await expect(load({ IDENTITY_WORKSPACE_TRIAL_NOTICE_LINK_URL: bad }))
+          .rejects.toThrow(/IDENTITY_WORKSPACE_TRIAL_NOTICE_LINK_URL/);
+      }
+      expect((await load({ IDENTITY_WORKSPACE_TRIAL_NOTICE_LINK_URL: "https://x.org/help" })).workspaceTrialNotice)
+        .not.toHaveProperty("linkUrl");
+      expect((await load({
+        IDENTITY_WORKSPACE_TRIAL_NOTICE_LINK_LABEL: "Help",
+        IDENTITY_WORKSPACE_TRIAL_NOTICE_LINK_URL: "https://x.org/help",
+      })).workspaceTrialNotice).toMatchObject({ linkUrl: "https://x.org/help" });
+    });
+
     it("keeps the notice link only when both label and url are set", async () => {
       expect((await load({ IDENTITY_WORKSPACE_TRIAL_NOTICE_LINK_LABEL: "Contact us" })).workspaceTrialNotice)
         .not.toHaveProperty("linkLabel");
