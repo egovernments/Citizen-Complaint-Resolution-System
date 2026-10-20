@@ -281,6 +281,9 @@
       ansible.builtin.shell: |
         set -eo pipefail
         cd "{{ digit_dir }}"
+        # Sherlog is its own compose project but joins the network of the stack: stop it first, or `down` cannot
+        # remove the network and fails. Its data volume is kept (no -v).
+        if [ -x sherlog/sherlog.sh ] && [ -f sherlog/.env ]; then sherlog/sherlog.sh down --timeout 30; fi
         docker compose -f docker-compose.egov-digit.yaml down --remove-orphans --timeout 30
       args:
         chdir: "{{ digit_dir }}"
@@ -2205,7 +2208,8 @@
     # {{ digit_dir }}/sherlog/rendered on every tenant; it is filled here, before
     # "Start DIGIT stack", and emptied by `sherlog.sh uninstall` when the tenant
     # turns Sherlog off. The containers start after the stack (they join its
-    # network): "Sherlog — start".
+    # network): "Sherlog — start". Its bundle, settings and render come after
+    # the OpenBao read (its secrets are there): "Sherlog — its secrets".
     - name: "Sherlog — the commit being deployed (for the deploy marker)"
       ansible.builtin.command: git -C {{ playbook_dir }} log -1 --format=%H%n%D
       delegate_to: localhost
@@ -2215,57 +2219,6 @@
       failed_when: false
       when: enable_sherlog | default(false) | bool
 
-    # Extracted once per sherlog_version (.bundle-version records it), not on every deploy.
-    - name: "Sherlog — its compose bundle for sherlog_version (from the image)"
-      ansible.builtin.shell: |
-        set -e
-        stamp={{ digit_dir }}/sherlog/.bundle-version
-        if [ "$(cat "$stamp" 2>/dev/null)" = "{{ sherlog_image }}:{{ sherlog_version }}" ] && [ -x {{ digit_dir }}/sherlog/sherlog.sh ]; then
-          echo NOCHANGE; exit 0
-        fi
-        docker run --rm -u 0 -v {{ digit_dir }}/sherlog:/out {{ sherlog_image }}:{{ sherlog_version }} python -m sherlog.bundle --out /out
-        echo "{{ sherlog_image }}:{{ sherlog_version }}" > "$stamp"
-      args:
-        executable: /bin/bash
-      register: sherlog_bundle
-      changed_when: "'NOCHANGE' not in sherlog_bundle.stdout"
-      when: enable_sherlog | default(false) | bool
-
-    - name: "Sherlog — settings (.env) and this tenant's overrides"
-      ansible.builtin.template:
-        src: "templates/{{ item.src }}"
-        dest: "{{ digit_dir }}/sherlog/{{ item.dest }}"
-        mode: "{{ item.mode }}"
-      loop:
-        - {src: sherlog.env.j2, dest: .env, mode: "0600"}           # holds the model key and tokens
-        - {src: sherlog-override.yaml.j2, dest: override.yaml, mode: "0644"}
-      when: enable_sherlog | default(false) | bool
-
-    # Rendered on every deploy (sherlog.yaml or a tenant's overrides may have changed); "changed" only when the
-    # rendered files did.
-    - name: "Sherlog — render the rules, Alertmanager config and investigation settings"
-      ansible.builtin.shell: |
-        set -eo pipefail
-        cd {{ digit_dir }}/sherlog
-        digest() { [ -d rendered ] && find rendered -type f -print0 | sort -z | xargs -0r sha256sum | sha256sum || echo none; }
-        before=$(digest)
-        ./sherlog.sh render
-        [ "$before" = "$(digest)" ] && echo NOCHANGE || true
-      args:
-        executable: /bin/bash
-      register: sherlog_render
-      changed_when: "'NOCHANGE' not in sherlog_render.stdout"
-      when: enable_sherlog | default(false) | bool
-
-    - name: "Sherlog — off: stop it and remove its rules (no-op if it never ran)"
-      ansible.builtin.shell: |
-        [ -x {{ digit_dir }}/sherlog/sherlog.sh ] && [ -f {{ digit_dir }}/sherlog/.env ] || { echo NOCHANGE; exit 0; }
-        {{ digit_dir }}/sherlog/sherlog.sh uninstall
-      args:
-        executable: /bin/bash
-      register: sherlog_uninstall
-      changed_when: "'NOCHANGE' not in sherlog_uninstall.stdout"
-      when: not (enable_sherlog | default(false) | bool)
     # A tag passed with --image-tag lives only in that run. The next plain
     # `./deploy.sh <tenant>` falls back to the compose defaults — by design
     # (#1729), but it is a silent downgrade if nobody meant it. digit.env.j2
@@ -3074,6 +3027,87 @@
       loop: "{{ _optin_secret_checks }}"
       loop_control:
         label: "{{ item.feature }} / {{ item.var }}"
+
+    # ==================== Sherlog: bundle, settings and render ====================
+    # Here, after the OpenBao read: the model key and tokens are tenant secrets, read like POSTGRES_PASSWORD
+    # (`bao kv put <secrets_path> sherlog_model_api_key=...`), with host_vars as the fallback. Before "Start DIGIT
+    # stack", whose Prometheus and Loki load the rendered rules.
+    - name: "Sherlog — its secrets (OpenBao, host_vars as the fallback)"
+      ansible.builtin.set_fact:
+        sherlog_secret:
+          model_api_key: "{{ bao_secrets.json.data.data.sherlog_model_api_key | default('', true) or sherlog_model_api_key | default('') }}"
+          github_issues_token: "{{ bao_secrets.json.data.data.sherlog_github_issues_token | default('', true) or sherlog_github_issues_token | default('') }}"
+          alert_slack_webhook_url: "{{ bao_secrets.json.data.data.sherlog_alert_slack_webhook_url | default('', true) or sherlog_alert_slack_webhook_url | default('') }}"
+          deadman_url: "{{ bao_secrets.json.data.data.sherlog_deadman_url | default('', true) or sherlog_deadman_url | default('') }}"
+      no_log: true
+      when: enable_sherlog | default(false) | bool
+
+    # Without a model key every investigation fails at the model call; without the token, live mode cannot open
+    # its issues. Refuse rather than start Sherlog half-configured.
+    - name: "Sherlog — its secrets are set"
+      ansible.builtin.assert:
+        that:
+          - sherlog_secret.model_api_key | length > 0
+          - not (sherlog_github_issues_repo | default('') | length > 0) or (sherlog_secret.github_issues_token | length > 0)
+        fail_msg: >-
+          enable_sherlog is on, but sherlog_model_api_key is empty, or sherlog_github_issues_repo is set and
+          sherlog_github_issues_token is empty. Set them in OpenBao (`bao kv patch {{ secrets_path }}
+          sherlog_model_api_key=<key>`) or in host_vars.
+        quiet: true
+      when: enable_sherlog | default(false) | bool
+
+    # Extracted once per sherlog_version (.bundle-version records it), not on every deploy.
+    - name: "Sherlog — its compose bundle for sherlog_version (from the image)"
+      ansible.builtin.shell: |
+        set -e
+        stamp={{ digit_dir }}/sherlog/.bundle-version
+        if [ "$(cat "$stamp" 2>/dev/null)" = "{{ sherlog_image }}:{{ sherlog_version }}" ] && [ -x {{ digit_dir }}/sherlog/sherlog.sh ]; then
+          echo NOCHANGE; exit 0
+        fi
+        docker run --rm -u 0 -v {{ digit_dir }}/sherlog:/out {{ sherlog_image }}:{{ sherlog_version }} python -m sherlog.bundle --out /out
+        echo "{{ sherlog_image }}:{{ sherlog_version }}" > "$stamp"
+      args:
+        executable: /bin/bash
+      register: sherlog_bundle
+      changed_when: "'NOCHANGE' not in sherlog_bundle.stdout"
+      when: enable_sherlog | default(false) | bool
+
+    - name: "Sherlog — settings (.env) and this tenant's overrides"
+      ansible.builtin.template:
+        src: "templates/{{ item.src }}"
+        dest: "{{ digit_dir }}/sherlog/{{ item.dest }}"
+        mode: "{{ item.mode }}"
+      loop:
+        - {src: sherlog.env.j2, dest: .env, mode: "0600"}           # holds the model key and tokens
+        - {src: sherlog-override.yaml.j2, dest: override.yaml, mode: "0644"}
+      no_log: true   # .env holds the model key and tokens; --diff would print them
+      when: enable_sherlog | default(false) | bool
+
+    # Rendered on every deploy (sherlog.yaml or a tenant's overrides may have changed); "changed" only when the
+    # rendered files did.
+    - name: "Sherlog — render the rules, Alertmanager config and investigation settings"
+      ansible.builtin.shell: |
+        set -eo pipefail
+        cd {{ digit_dir }}/sherlog
+        digest() { [ -d rendered ] && find rendered -type f -print0 | sort -z | xargs -0r sha256sum | sha256sum || echo none; }
+        before=$(digest)
+        ./sherlog.sh render
+        [ "$before" = "$(digest)" ] && echo NOCHANGE || true
+      args:
+        executable: /bin/bash
+      register: sherlog_render
+      changed_when: "'NOCHANGE' not in sherlog_render.stdout"
+      when: enable_sherlog | default(false) | bool
+
+    - name: "Sherlog — off: stop it and remove its rules (no-op if it never ran)"
+      ansible.builtin.shell: |
+        [ -x {{ digit_dir }}/sherlog/sherlog.sh ] && [ -f {{ digit_dir }}/sherlog/.env ] || { echo NOCHANGE; exit 0; }
+        {{ digit_dir }}/sherlog/sherlog.sh uninstall
+      args:
+        executable: /bin/bash
+      register: sherlog_uninstall
+      changed_when: "'NOCHANGE' not in sherlog_uninstall.stdout"
+      when: not (enable_sherlog | default(false) | bool)
 
     # Grafana admin password. Tenants seeded BEFORE this key existed can't get
     # it from the bootstrap seed above (that write is cas:0 — it only fires when
@@ -4245,6 +4279,33 @@
       changed_when: true
       when: enable_sherlog | default(false) | bool
 
+    # Sherlog: record this deploy, right after the stack (and Sherlog) came up with the new containers, so a deploy
+    # that fails later (a CI test) is still on record: those are the deploys most likely to have caused an alert.
+    # deploy_timestamp_seconds lands in node-exporter's textfile directory; Sherlog's pre-checks read it ("what
+    # changed before this alert?") and its verifier names the deploy an alert resolved after
+    # (docs/operations/monitoring/sherlog.md). A marker that cannot be written warns; it never fails a deploy.
+    - name: "Sherlog — record this deploy for the pre-checks and the verifier"
+      ansible.builtin.command: >-
+        {{ digit_dir }}/sherlog/sherlog-deploy-mark --dir {{ digit_dir }}/sherlog/textfile
+        --repo egovernments/Citizen-Complaint-Resolution-System
+        --sha {{ ((sherlog_commit.stdout_lines | default([])) + ['unknown'])[0] | default('unknown', true) }}
+        --ref {{ ((sherlog_commit.stdout_lines | default([])) + ['', ''])[1] | regex_replace('^HEAD -> ', '') | regex_replace(',.*$', '') | default('unknown', true) }}
+        --deployment {{ inventory_hostname }} --product ccrs
+      register: sherlog_deploy_mark
+      changed_when: sherlog_deploy_mark.rc == 0
+      failed_when: false
+      when: enable_sherlog | default(false) | bool
+
+    - name: "Sherlog — warn when the deploy marker could not be written"
+      ansible.builtin.debug:
+        msg: >-
+          WARNING: the Sherlog deploy marker was not written (rc {{ sherlog_deploy_mark.rc }}):
+          {{ (sherlog_deploy_mark.stderr | default('') or sherlog_deploy_mark.msg | default('')) | truncate(300) }}.
+          The deploy continues; Sherlog's investigations will not see this deploy as a change.
+      when:
+        - enable_sherlog | default(false) | bool
+        - sherlog_deploy_mark.rc | default(0) != 0
+
     # ==================== Wait for Persister (Kafka consumer) ====================
     - name: Wait for egov-persister to be healthy
       shell: docker inspect --format '{{ "{{" }}.State.Health.Status{{ "}}" }}' egov-persister
@@ -4743,11 +4804,17 @@
         state: absent
       when: not (enable_keycloak | default(false) | bool)
 
+    # psql prints the CREATE EXTENSION tag even when IF NOT EXISTS skips it, so "changed" comes from pg_extension.
     - name: "Postgres — pg_stat_statements extension (postgres_stat_statements)"
-      ansible.builtin.command: docker exec docker-postgres psql -U egov -d egov -tAc "CREATE EXTENSION IF NOT EXISTS pg_stat_statements"
+      ansible.builtin.shell: |
+        set -eo pipefail
+        q() { docker exec docker-postgres psql -U egov -d egov -v ON_ERROR_STOP=1 -tAc "$1"; }
+        [ "$(q "SELECT 1 FROM pg_extension WHERE extname = 'pg_stat_statements'")" = 1 ] && { echo NOCHANGE; exit 0; }
+        q "CREATE EXTENSION IF NOT EXISTS pg_stat_statements"
+      args:
+        executable: /bin/bash
       register: pgss
-      changed_when: "'CREATE EXTENSION' in pgss.stdout"
-      failed_when: pgss.rc != 0 and 'already exists' not in pgss.stderr
+      changed_when: "'NOCHANGE' not in pgss.stdout"
       when: postgres_stat_statements | default(false) | bool
 
     # Same drift as egov above, on the MCP session-store postgres:
@@ -9820,20 +9887,6 @@
       when:
         - run_ci_tests | default(false)
         - xlsx_rc|int != 0 or dl_rc|int != 0 or pw_rc|int != 0
-
-    # ==================== Sherlog: record this deploy ====================
-    # Last, so the marker means "this deploy finished". deploy_timestamp_seconds lands in node-exporter's textfile
-    # directory; Sherlog's pre-checks read it ("what changed before this alert?") and its verifier names the deploy
-    # an alert resolved after (docs/operations/monitoring/sherlog.md).
-    - name: "Sherlog — record this deploy for the pre-checks and the verifier"
-      ansible.builtin.command: >-
-        {{ digit_dir }}/sherlog/sherlog-deploy-mark --dir {{ digit_dir }}/sherlog/textfile
-        --repo egovernments/Citizen-Complaint-Resolution-System
-        --sha {{ ((sherlog_commit.stdout_lines | default([])) + ['unknown'])[0] | default('unknown', true) }}
-        --ref {{ ((sherlog_commit.stdout_lines | default([])) + ['', ''])[1] | regex_replace('^HEAD -> ', '') | regex_replace(',.*$', '') | default('unknown', true) }}
-        --deployment {{ inventory_hostname }} --product ccrs
-      changed_when: true
-      when: enable_sherlog | default(false) | bool
 
   handlers:
     - name: Reload nginx

@@ -9,7 +9,9 @@ option, cost, and what leaves the box: [Sherlog's standard](https://github.com/s
 
 1. On the host, once: `docker login ghcr.io` with a token that has `read:packages` (Sherlog's images are private
    for now).
-2. In host_vars: `enable_sherlog: true` and `sherlog_model_api_key` (from OpenBao). The other settings and their
+2. In OpenBao: `bao kv patch <secrets_path> sherlog_model_api_key=<key>` (and `sherlog_github_issues_token`,
+   `sherlog_alert_slack_webhook_url`, `sherlog_deadman_url` when used; host_vars of the same names are only the
+   fallback). In host_vars: `enable_sherlog: true`. The deploy stops if the model key is empty. The other settings and their
    defaults are in `ansible/inventory/group_vars/digit.yml`; this tenant's differences from `sherlog.yaml` go in
    `sherlog_overrides`.
 3. Deploy. Sherlog runs from `/opt/digit/sherlog` as its own compose project (`/opt/digit/sherlog/sherlog.sh ps`).
@@ -19,8 +21,8 @@ option, cost, and what leaves the box: [Sherlog's standard](https://github.com/s
 Optional, per tenant: `sherlog_actions: true` lets a collaborator with write access approve a restart of a
 service's containers by labelling the Sherlog issue `sherlog-action:restart` (the allowlist is in `sherlog.yaml`);
 `postgres_stat_statements: true` adds statement statistics per query id (no query text; one Postgres restart). The
-host's journal (kernel OOM kills, unit failures) is in Loki as `job=journal` on a Linux host with a persistent journal
-(`/var/log/journal`; elsewhere promtail reads an empty folder and there is no journal); Keycloak's metrics (management
+host's journal (kernel OOM kills, unit failures) is in Loki as `job=journal` with Sherlog on, on a Linux host with a persistent journal
+(`/var/log/journal`; otherwise promtail reads an empty folder and nothing is shipped); Keycloak's metrics (management
 port 9000) are scraped when `enable_keycloak` is on, from an identity-keycloak image built with `--metrics-enabled`.
 
 What the deploy gives Sherlog to work with: the host's journal in Loki (kernel OOM kills, unit failures), Tempo's traces

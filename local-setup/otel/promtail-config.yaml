@@ -63,6 +63,12 @@ scrape_configs:
     relabel_configs:
       - source_labels: ['__journal__systemd_unit']
         target_label: 'unit'
+      # Login sessions are transient units with a new name each time (session-1234.scope): one label value for all,
+      # or every SSH login would open a new stream in Loki.
+      - source_labels: ['unit']
+        regex: 'session-.+\.scope'
+        target_label: 'unit'
+        replacement: 'session.scope'
       - source_labels: ['__journal__transport']
         target_label: 'transport'
       - source_labels: ['__journal_syslog_identifier']
