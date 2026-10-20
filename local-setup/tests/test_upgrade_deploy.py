@@ -342,6 +342,11 @@ class OverlayTests(unittest.TestCase):
         live = ': "first"\nunchanged\n: "second"\n'
         self.assertEqual(live, deploy.materialize_redactions(candidate, live, "seed.sh"))
 
+    def test_materializes_multiple_secrets_on_one_unique_shell_line(self):
+        candidate = "mc alias set store http://minio <REDACTED> <REDACTED>;\n"
+        live = "mc alias set store http://minio live-user live-password;\n"
+        self.assertEqual(live, deploy.materialize_redactions(candidate, live, "compose.yml"))
+
     def test_materializes_unique_inline_json_field_after_target_edit(self):
         candidate = 'BODY="{\\"authToken\\":\\"<REDACTED>\\",\\"newField\\":true}"\n'
         live = 'BODY="{\\"authToken\\":\\"live-token\\",\\"oldField\\":true}"\n'

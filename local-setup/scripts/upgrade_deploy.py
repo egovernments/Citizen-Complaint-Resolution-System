@@ -290,6 +290,24 @@ def materialize_redactions(candidate: str, live: str, path: str) -> str:
             output.append(match.group("prefix") + live_values[match.group("key").lower()] + ending)
             continue
 
+        # A shell command can carry more than one secret on the same line
+        # (for example an object-store user and password). Restore the whole
+        # line only when every unchanged span around the markers identifies
+        # exactly one source line.
+        if candidate_line.count(REDACTED) > 1:
+            spans = candidate_line.split(REDACTED)
+            line_pattern = "\\A" + ".*?".join(
+                re.escape(span) for span in spans
+            ) + "\\Z"
+            multi_matches = [
+                live_line
+                for live_line in live_lines
+                if re.fullmatch(line_pattern, live_line)
+            ]
+            if len(multi_matches) == 1:
+                output.append(multi_matches[0] + ending)
+                continue
+
         # Redaction also finds assignments embedded in shell commands, such as
         # `docker run -e POSTGRES_PASSWORD=...`.  They are not top-level
         # assignments, so restore the live value only when the unchanged text
