@@ -44,6 +44,16 @@ public class WorkspaceRouteTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.Workspace.legacy").value(true)).andExpect(jsonPath("$.Workspace.status").value("DONE"));
         assertEquals(2,lookups.get());verifyNoInteractions(client,mdms);
     }
+    /** A root that predates 2.20 has no workspace row: the configurator's _update reads it as legacy DONE, never a 500, and writes nothing. */
+    @Test public void updateWithoutAWorkspaceRowReadsAsLegacyAndWritesNothing() throws Exception {
+        mvc.perform(post("/v2/onboarding/workspaces/_update").contentType("application/json").content(request()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.Workspace.legacy").value(true))
+                .andExpect(jsonPath("$.Workspace.status").value("DONE")).andExpect(jsonPath("$.Workspace.version").value(0));
+        mvc.perform(post("/v2/onboarding/workspaces/_update").contentType("application/json").content(request().replace("\"version\":0","\"version\":1")))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.Errors[0].code").value("WORKSPACE_VERSION_CONFLICT"));
+        verify(repository,never()).materializeLegacy(any());verify(repository,never()).update(any(),anyLong(),any());
+        verify(repository,never()).event(any(),any(),anyLong(),any(),any());verifyNoInteractions(client,mdms);
+    }
     @Test public void allRoutesRejectForgedCallerRoleAndCrossTenantAdmin() throws Exception {
         for(Map<String,Object> user:List.of(Map.<String,Object>of("uuid","admin","roles",List.of(Map.of("code","EMPLOYEE","tenantId","example"))),
                 Map.<String,Object>of("uuid","admin","roles",List.of(Map.of("code","ACCOUNT_ADMIN","tenantId","other"))))) {
