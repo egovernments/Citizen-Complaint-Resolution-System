@@ -21,9 +21,16 @@
 //   TURBOPASS_URL          Turbopass suggestions base. Blank => "/turbopass".
 //   BOUNDARY_SEARCH_LIMIT  boundary-service page cap. Must be a positive
 //                          number — blank, non-numeric or <= 0 => 300.
+//   SENTRY_DSN             this console's own Sentry project. Blank => off.
+//   POSTHOG_KEY            this console's own PostHog project key (phc_…).
+//                          Blank => off.
+//   POSTHOG_HOST           PostHog API host. Blank => https://us.i.posthog.com.
 window.__CONFIGURATOR_CONFIG__ = {
   STATE_TENANT_ID: '',
   OVERPASS_URL: '',
   TURBOPASS_URL: '',
   BOUNDARY_SEARCH_LIMIT: '',
+  SENTRY_DSN: '',
+  POSTHOG_KEY: '',
+  POSTHOG_HOST: '',
 };

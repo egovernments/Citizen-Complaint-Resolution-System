@@ -5,35 +5,44 @@ import posthog from 'posthog-js'
 import './index.css'
 import App from './App.tsx'
 
+// Where telemetry goes is the build's choice (VITE_SENTRY_DSN, VITE_POSTHOG_KEY,
+// VITE_POSTHOG_HOST); without a value that one stays off.
+const sentryDsn = (import.meta.env.VITE_SENTRY_DSN as string | undefined)?.trim()
+const posthogKey = (import.meta.env.VITE_POSTHOG_KEY as string | undefined)?.trim()
+
 // Initialize Sentry for error tracking
-Sentry.init({
-  dsn: 'https://9858dc027b16081569d8e1a491c42efc@o4510791908720640.ingest.us.sentry.io/4510791969210368',
-  integrations: [
-    Sentry.browserTracingIntegration(),
-    Sentry.replayIntegration(),
-  ],
-  // Performance Monitoring
-  tracesSampleRate: 1.0, // Capture 100% of transactions
-  // Session Replay
-  replaysSessionSampleRate: 0.1, // Sample 10% of sessions
-  replaysOnErrorSampleRate: 1.0, // Sample 100% of sessions with errors
-  // Send default PII data
-  sendDefaultPii: true,
-  environment: import.meta.env.MODE,
-})
+if (sentryDsn) {
+  Sentry.init({
+    dsn: sentryDsn,
+    integrations: [
+      Sentry.browserTracingIntegration(),
+      Sentry.replayIntegration(),
+    ],
+    // Performance Monitoring
+    tracesSampleRate: 1.0, // Capture 100% of transactions
+    // Session Replay
+    replaysSessionSampleRate: 0.1, // Sample 10% of sessions
+    replaysOnErrorSampleRate: 1.0, // Sample 100% of sessions with errors
+    // Send default PII data
+    sendDefaultPii: true,
+    environment: import.meta.env.MODE,
+  })
+}
 
 // Initialize PostHog for analytics
-posthog.init('phc_NsoEDZg2dvgulUBNHAlf0GeRxmEgncH5L79yUvOhuwZ', {
-  api_host: 'https://us.i.posthog.com',
-  person_profiles: 'identified_only',
-  capture_pageview: true,
-  capture_pageleave: true,
-  autocapture: true,
-  // Respect Do Not Track
-  respect_dnt: true,
-  // Enable session recording
-  enable_recording_console_log: true,
-})
+if (posthogKey) {
+  posthog.init(posthogKey, {
+    api_host: (import.meta.env.VITE_POSTHOG_HOST as string | undefined)?.trim() || 'https://us.i.posthog.com',
+    person_profiles: 'identified_only',
+    capture_pageview: true,
+    capture_pageleave: true,
+    autocapture: true,
+    // Respect Do Not Track
+    respect_dnt: true,
+    // Enable session recording
+    enable_recording_console_log: true,
+  })
+}
 
 // Wrap App with Sentry Error Boundary
 const SentryApp = Sentry.withProfiler(App)
