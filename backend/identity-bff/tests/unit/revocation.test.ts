@@ -4,7 +4,7 @@ import { closeCache, getRedis, initCache } from "../../src/infrastructure/redis.
 import { currentPersonLease, personLeaseKey, withPersonLease } from "../../src/modules/accounts/person-lease.js";
 import { createIdentitySession, getIdentitySession, requireCurrentSession, saveSelectedIdentityContext } from "../../src/modules/sessions/session-store.js";
 import { privateRef } from "../../src/modules/citizen-otp/otp-store.js";
-import { cachedToken, drainKeycloakLogoutRetries, drainRevocationJobs, enqueueRevocation, runPendingRevocations, drainTokenRetries, endKeycloakSessions, endPhoneSessions, holdToken, logoutSessions, recordToken, revokeAccount, revokePerson, revokeTenantMembers } from "../../src/modules/revocation/index.js";
+import { cachedToken, drainKeycloakLogoutRetries, drainRevocationJobs, enqueueRevocation, runPendingRevocations, drainTokenRetries, endPhoneSessions, holdToken, logoutSessions, recordToken, revokeAccount, revokePerson, revokeTenantMembers } from "../../src/modules/revocation/index.js";
 import { key, personTokensKey, readToken, tokenKey, tokenHoldersKey } from "../../src/modules/revocation/inventory.js";
 import * as keycloak from "../../src/modules/revocation/keycloak.js";
 import * as credentials from "../../src/modules/accounts/credential-service.js";
@@ -192,39 +192,37 @@ describe("token inventory and revocation", () => {
     expect(digit.revokeToken).toHaveBeenCalledWith("digit-token");
     expect(keycloak.endKeycloakSession).toHaveBeenCalledTimes(2);
   });
-  it.each([false, true])("logout others keeps the current shared token usable (duplicate inventory: %s)", async duplicate => {
+  it.each([false, true])("logout others revokes a token the current session shares (duplicate inventory: %s)", async duplicate => {
     const current = await session("current-device"), other = await session("other-device");
     const alias = { tenantId: "legacy-tenant-alias", uuid: account.uuid };
-    const tokens = new Set(["shared-account-token", "unshared-account-token"]);
+    const tokens = new Set(["shared-account-token", "unshared-account-token", "current-only-token"]);
     vi.mocked(digit.revokeToken).mockImplementation(async token => { tokens.delete(token); });
     vi.spyOn(globalThis, "fetch").mockImplementation(async input => {
       const token = new URL(String(input)).searchParams.get("access_token");
       return tokens.has(token || "") ? new Response(JSON.stringify(login().user)) : new Response("{}", { status: 401 });
     });
+    // #2592: egov-user hands both devices the same token, so keeping it for the
+    // current session would leave the signed-out device able to call DIGIT.
     await inventory(account, login(account, "shared-account-token"), current);
     await withPersonLease(subject, lease => holdToken(lease, account, other));
     // The same egov-user account/token can be inventoried through an older tenant alias.
-    // Even an alias held only by the other device must not revoke the current token.
     if (duplicate) await inventory(alias, login(alias, "shared-account-token"), other);
     await inventory(second, login(second, "unshared-account-token"), other);
+    const third = { tenantId: "ke.third", uuid: "third-uuid" };
+    await inventory(third, login(third, "current-only-token"), current);
     await logoutSessions(subject, "others", current);
     expect(await getIdentitySession(current)).not.toBeNull();
     expect(await getIdentitySession(other)).toBeNull();
     expect(keycloak.endKeycloakSession).toHaveBeenCalledExactlyOnceWith("other-device");
-    expect(digit.revokeToken).toHaveBeenCalledExactlyOnceWith("unshared-account-token");
-    expect((await withPersonLease(subject, lease => cachedToken(lease, account)))?.accessToken).toBe("shared-account-token");
+    expect(vi.mocked(digit.revokeToken).mock.calls.map(([token]) => token).sort())
+      .toEqual(["shared-account-token", "unshared-account-token"]);
+    expect(await readToken(account)).toBeNull();
     expect(await readToken(second)).toBeNull();
     if (duplicate) expect(await readToken(alias)).toBeNull();
-    expect(await getRedis().smembers(tokenHoldersKey(account))).toEqual([privateRef("session", current)]);
-    // Retried logout must not schedule revocation of the protected token either.
-    await logoutSessions(subject, "others", current);
-    await endKeycloakSessions("other-device", undefined, subject);
+    expect(await getRedis().smembers(tokenHoldersKey(account))).toEqual([]);
+    // A token only the current session holds is not the other device's to lose.
+    expect((await withPersonLease(subject, lease => cachedToken(lease, third)))?.accessToken).toBe("current-only-token");
     expect(await getRedis().zcard(key("revoke-retry"))).toBe(0);
-    await drainTokenRetries();
-    expect(tokens.has("shared-account-token")).toBe(true);
-    await logoutSessions(subject, "all", current);
-    expect(tokens.has("shared-account-token")).toBe(false);
-    expect(await getIdentitySession(current)).toBeNull();
   });
   it("logout deletes the BFF session during a Keycloak outage and ends Keycloak's session later", async () => {
     const sid = await session("kc-outage");

@@ -422,7 +422,7 @@ Query: `surface`; `include=account` (optional).
 Body or query `{surface, scope?: "current" | "others" | "all"}`, default `current` → **`204`**, and clears the cookie for `current` and `all`.
 
 - `current`: ends this session and its Keycloak session, and revokes this session's DIGIT token claim.
-- `others`: ends every **other** BFF and Keycloak session of the person. It skips DIGIT logout for accounts whose token is held by the current session; tokens used only by the ended sessions are revoked. See the shared-token limitation in §8.
+- `others`: ends every **other** BFF and Keycloak session of the person and revokes every DIGIT token those sessions held, including one the current session shares; the current session then selects again for a fresh token (§8).
 - `all`: both, and raises the person's revocation generation (§6).
 - Failed DIGIT logouts go on the revocation retry set. They never fail the request.
 - The BFF session is deleted before Keycloak is called. Ending the Keycloak session is best-effort: the request waits at most 2 s for it, and one that fails or times out goes on the Keycloak logout retry set (§7.4). A Keycloak outage never fails the request.
@@ -1027,17 +1027,17 @@ Reference implementation and unit tests: `src/modules/accounts/credential.ts`, `
 
 egov-user can return the same live access token for repeated grants of one
 account. The BFF cannot revoke only the copies held by other consumers of that
-token. `logout {scope: "others"}` therefore preserves every current-session-held
-account token while ending the other BFF/Keycloak sessions. Other consumers who
-already possess that shared DIGIT token can use it until expiry or a later
-account-wide revocation (including logout-all), including consumers that obtained
-the same token directly from egov-user outside the BFF. Tokens belonging only to ended
-sessions are still revoked. This limitation also applies when staff use the
-derived credential; deterministic credentials do not create per-session DIGIT
-tokens. Logout-current releases its claim and preserves tokens with remaining
+token. Logout-current releases its claim and preserves tokens with remaining
 holders; logout-all ends all claims and revokes the shared token.
 
-A credential change (§10) does **not** keep shared tokens. A DIGIT token
+`logout {scope: "others"}` does **not** keep shared tokens (#2592). It revokes
+every token an ended session held, including one the current session also holds,
+so the signed-out devices lose DIGIT access at once. The current session keeps its
+BFF and Keycloak sessions and gets a fresh token at its next `_select`; digit-ui's
+account page selects again right after the sign-out. Tokens only the current
+session holds are kept.
+
+A credential change (§10) does **not** keep shared tokens either. A DIGIT token
 survives it only if sessions that survive are its **only** holders. That
 includes the B3 initiating session. If any ended session also held the token,
 the BFF revokes it with an egov-user logout, because that copy may sit on the
@@ -1219,7 +1219,7 @@ Removed by item 14/15: the `DIGIT_PROVISIONER_*` variables, the onboarding worke
 | `trigger` | `eventId` (`<time>:<id>` for a Keycloak event), `eventType` (the user event type, e.g. `UPDATE_CREDENTIAL`, or the admin event's operation and resource, e.g. `UPDATE USER`), `eventTime` (ISO). A job the BFF started itself has only a generated `eventId` (`tenant:<tenantId>` for a tenant fan-out); a logout line not caused by a Keycloak event has an empty `trigger` |
 | `sessionsEnded`, `sessions.ended` | Count, and a `privateRef` per ended BFF session (the same keyed hash the `token-holders:*` sets store) |
 | `sessionsKept`, `sessions.kept` | Every session of the person the run left alive, each with `reason`: `B3_INITIATOR` (the session that made a self password change), `INITIATOR` (the session that asked for the logout or phone change), `OTHER_TENANT` (a tenant-scoped job and the session is at another tenant), `NOT_TARGETED` (a logout that did not cover it), `CHANGING_SESSION` (the Keycloak session that made a credential change, §10), `AUTHENTICATED_AFTER_CHANGE` (Keycloak authenticated it at or after a credential change, §10) |
-| `tokensRevoked`, `tokensKept`, `tokens[]` | Each DIGIT token decision: `account`, `tokenRef` (first 12 hex digits of SHA-256 of the token, matching the `revoke-retry:*` key), `outcome` `revoked` \| `kept`, and `why`. Revoked: `IN_SCOPE`, `SHARED_WITH_ENDED_SESSION` (a kept session also held it; it gets a fresh token at its next `_select`, §8), `RECOVERED` (not in Redis; found by a staff login, §8), `NO_LIVE_HOLDER` (logout ended its last holder). Kept: `KEPT_SESSIONS_ONLY_HOLDERS`, `STILL_HELD` (another live session holds it), `RETAINED_BY_CURRENT` (logout of other sessions), `OTHER_PERSON` (the account's token belongs to another subject) |
+| `tokensRevoked`, `tokensKept`, `tokens[]` | Each DIGIT token decision: `account`, `tokenRef` (first 12 hex digits of SHA-256 of the token, matching the `revoke-retry:*` key), `outcome` `revoked` \| `kept`, and `why`. Revoked: `IN_SCOPE`, `SHARED_WITH_ENDED_SESSION` (a kept session also held it, after a credential change or logout of other sessions; it gets a fresh token at its next `_select`, §8), `RECOVERED` (not in Redis; found by a staff login, §8), `NO_LIVE_HOLDER` (logout ended its last holder). Kept: `KEPT_SESSIONS_ONLY_HOLDERS`, `STILL_HELD` (another live session holds it), `OTHER_PERSON` (the account's token belongs to another subject) |
 | `durationMs` | Run time |
 
 No line contains a token, cookie, session id or Keycloak session id.

@@ -1557,7 +1557,7 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
     })).status).toBe(401);
   });
 
-  it.each([false, true])("preserves a managed rotate token after public logout-others (alias: %s)", async (alias) => {
+  it.each([false, true])("#2592: public logout-others revokes the shared managed rotate token; the current session re-selects (alias: %s)", async (alias) => {
     const subject = `managed-logout-${alias}`;
     const tenantId = "ke.bomet";
     const identity = managedIdentity(config.keycloakIssuer, subject, tenantId);
@@ -1623,19 +1623,25 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       expect(await getIdentitySession(current.sessionId)).not.toBeNull();
       expect((await fetch(`${app()}/identity/v1/session?surface=employee`, { headers: { Cookie: current.cookie } })).status).toBe(200);
       expect((await fetch(`${app()}/identity/v1/session?surface=employee`, { headers: { Cookie: other.cookie } })).status).toBe(401);
-      // Validate the original token before any new selection could mint a replacement.
-      expect((await details()).status).toBe(200);
-      expect(digit.stats.logouts).toBe(logouts);
-      expect(await getRedis().smembers(tokenHoldersKey(account))).toEqual([sessionTokenRef(current.sessionId)]);
+      // The other device's copy (its localStorage) no longer reaches DIGIT, and an alias is revoked only once.
+      expect((await details()).status).toBe(401);
+      expect(digit.stats.logouts).toBe(logouts + 1);
+      expect(await getRedis().get(tokenKey(account))).toBeNull();
       if (alias) expect(await getRedis().get(tokenKey(aliasRef))).toBeNull();
       const adminLog = await (await fetch(`${config.keycloakAdminUrl}/__test/admin-log`)).json();
       const ended = `DELETE /admin/realms/${config.keycloakOrganizationRealm}/sessions/${subject}-`;
       expect(adminLog).toContain(`${ended}other`);
       expect(adminLog).not.toContain(`${ended}current`);
+      // The current session keeps working with a fresh token.
+      const reselected = await select(current.cookie);
+      expect(reselected.status).toBe(200);
+      const fresh = (await reselected.json()).access_token;
+      expect(fresh).not.toBe(selected.access_token);
+      expect(await getRedis().smembers(tokenHoldersKey(account))).toEqual([sessionTokenRef(current.sessionId)]);
+      expect((await select(other.cookie)).status).toBe(401);
       expect((await logout("all")).status).toBe(204);
       expect(await getIdentitySession(current.sessionId)).toBeNull();
-      expect((await details()).status).toBe(401);
-      expect(digit.stats.logouts).toBe(logouts + 1);
+      expect(digit.stats.logouts).toBe(logouts + 2);
     } finally {
       config.identityStaffCredentialMode = previousMode;
     }

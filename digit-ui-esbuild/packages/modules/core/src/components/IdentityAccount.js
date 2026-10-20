@@ -1,4 +1,5 @@
 import { setCitizenDetail } from "./citizenSession";
+import { setEmployeeDetail } from "./employeeSession";
 import React, { useEffect, useRef, useState } from "react";
 import { Redirect } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -14,6 +15,16 @@ const ACTIONS = {
   UPDATE_EMAIL: "Change email address",
 };
 const fetchImpl = (...args) => window.fetch(...args);
+
+// The same writes as the login pages make for a selected session.
+const storeSelectedUser = (surface, user, tenant) => {
+  Digit.SessionStorage.set("citizen.userRequestObject", user);
+  Digit.UserService.setUser(user);
+  if (surface === "employee") {
+    Digit.SessionStorage.set("Employee.tenantId", tenant.tenantId);
+    setEmployeeDetail(user.info, user.access_token);
+  } else setCitizenDetail(user.info, user.access_token, tenant.tenantId);
+};
 
 // The session cache is per tab, while these legacy aliases are shared between
 // tabs. Both must still belong to the person who opened the phone form.
@@ -196,6 +207,12 @@ const IdentityAccount = ({ surface }) => {
       return;
     }
     if (scope === "others") {
+      // The other sessions shared this session's DIGIT token, so the BFF
+      // revoked it (#2592). Select again for a fresh one; if that fails, the
+      // next DIGIT call's InvalidAccessTokenException sends this tab through
+      // the login page, which selects silently.
+      const selected = await establishIdentityBffSession({ surface, tenant, fetchImpl });
+      if (selected.status === "authenticated") storeSelectedUser(surface, selected.user, tenant);
       await refresh();
       setMessage(tr("CORE_IDENTITY_OTHER_SESSIONS_ENDED", "Your other sessions have been signed out."));
     }

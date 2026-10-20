@@ -40,7 +40,7 @@ export type KeptSessionReason = "B3_INITIATOR" | "INITIATOR" | "OTHER_TENANT" | 
 /** Why a DIGIT token was revoked or kept (§12 revocation log). */
 export type TokenDecisionReason =
   | "IN_SCOPE" | "SHARED_WITH_ENDED_SESSION" | "RECOVERED" | "NO_LIVE_HOLDER"
-  | "KEPT_SESSIONS_ONLY_HOLDERS" | "STILL_HELD" | "RETAINED_BY_CURRENT" | "OTHER_PERSON";
+  | "KEPT_SESSIONS_ONLY_HOLDERS" | "STILL_HELD" | "OTHER_PERSON";
 interface TokenDecision { account: string; tokenRef: string; outcome: "revoked" | "kept"; why: TokenDecisionReason }
 interface RevocationReport { ended: string[]; kept: Array<{ ref: string; reason: KeptSessionReason }>; tokens: TokenDecision[] }
 const newReport = (): RevocationReport => ({ ended: [], kept: [], tokens: [] });
@@ -286,55 +286,39 @@ export async function revokeTenantMembers(tenantId: string, reason: "ORGANIZATIO
   await drainRevocationJobs();
 }
 
-interface RetainedSessionTokens {
-  sessionRef: string;
-  accounts: Set<string>;
-  accessTokens: Set<string>;
-}
-
-/** Snapshot before external session termination can trigger Keycloak logout events. */
-async function retainedSessionTokens(lease: PersonLease, sessionId: string): Promise<RetainedSessionTokens | undefined> {
-  const session = await getIdentitySession(sessionId);
-  if (session?.claims.sub !== lease.subject) return undefined;
-  const retained: RetainedSessionTokens = { sessionRef: privateRef("session", sessionId), accounts: new Set(), accessTokens: new Set() };
-  for (const id of await getRedis().smembers(personTokensKey(lease.subject))) {
-    await lease.assertHeld();
-    const account = parseAccountId(id);
-    if (!await getRedis().sismember(tokenHoldersKey(account), retained.sessionRef)) continue;
-    const token = await readToken(account);
-    if (token?.subject !== lease.subject) continue;
-    retained.accounts.add(id);
-    retained.accessTokens.add(token.accessToken);
-  }
-  return retained;
-}
-
-/** Drop only the holders being logged out. Shared DIGIT tokens survive while another live session holds them. */
-async function releaseSessionTokens(lease: PersonLease, ended: string[], retained?: RetainedSessionTokens): Promise<TokenDecision[]> {
+/**
+ * Drop only the holders being logged out. Shared DIGIT tokens survive while another live session holds them,
+ * except under `lockOut` (logout others): a token an ended session held may sit on the device being locked out,
+ * so it is revoked even though a surviving session holds it too, as a self password change does (B3). egov-user
+ * hands every session of one account the same token, so this is the only way to end the other devices' access;
+ * the surviving session gets a fresh token at its next _select.
+ */
+async function releaseSessionTokens(lease: PersonLease, ended: string[], lockOut = false): Promise<TokenDecision[]> {
   const decisions: TokenDecision[] = [];
+  const endedRefs = ended.map(sid => privateRef("session", sid));
   const liveRefs = new Set((await listPersonSessions(lease.subject)).map(item => privateRef("session", item.sessionId)));
-  if (retained) liveRefs.add(retained.sessionRef);
+  const revoked = new Set<string>();
   for (const id of await getRedis().smembers(personTokensKey(lease.subject))) {
     const account = parseAccountId(id);
     await lease.assertHeld();
     const holders = await getRedis().smembers(tokenHoldersKey(account));
+    const lockedOut = lockOut && holders.some(ref => endedRefs.includes(ref));
     const stale = holders.filter(ref => !liveRefs.has(ref));
-    const remove = [...new Set([...stale, ...ended.map(sid => privateRef("session", sid))])];
+    const remove = [...new Set([...stale, ...endedRefs])];
     const released = remove.length ? await getRedis().srem(tokenHoldersKey(account), ...remove) : 0;
-    const retainedAccount = retained?.accounts.has(id);
-    if (retainedAccount || await getRedis().scard(tokenHoldersKey(account))) {
+    const stillHeld = await getRedis().scard(tokenHoldersKey(account)) > 0;
+    if (stillHeld && !lockedOut) {
       const token = released ? await readToken(account) : null;
-      if (token?.subject === lease.subject) decisions.push(tokenDecision(account, token.accessToken, "kept", retainedAccount ? "RETAINED_BY_CURRENT" : "STILL_HELD"));
+      if (token?.subject === lease.subject) decisions.push(tokenDecision(account, token.accessToken, "kept", "STILL_HELD"));
       continue;
     }
     const token = await readToken(account);
     if (token?.subject === lease.subject) {
-      // A duplicate inventory entry may name the same shared token. Forget
-      // its ended claims without invalidating the retained account or queuing logout.
-      const keep = retained?.accessTokens.has(token.accessToken);
-      if (!keep) await revokeInventoriedToken(account, token, "LOGOUT");
+      // A duplicate inventory entry (an older tenant alias) may name the same token.
+      if (!revoked.has(token.accessToken)) await revokeInventoriedToken(account, token, "LOGOUT");
+      revoked.add(token.accessToken);
       await forgetToken(lease, account, token.accessToken);
-      decisions.push(tokenDecision(account, token.accessToken, keep ? "kept" : "revoked", keep ? "RETAINED_BY_CURRENT" : "NO_LIVE_HOLDER"));
+      decisions.push(tokenDecision(account, token.accessToken, "revoked", stillHeld ? "SHARED_WITH_ENDED_SESSION" : "NO_LIVE_HOLDER"));
     }
   }
   return decisions;
@@ -398,7 +382,7 @@ export async function drainKeycloakLogoutRetries(limit = 100): Promise<void> {
 interface LogoutLog { reason: "LOGOUT" | "PHONE_CHANGED" | "KEYCLOAK_LOGOUT"; scope?: string; initiator?: string; trigger?: { eventId: string; eventType: string } }
 
 async function endSessions(lease: PersonLease, ends: (item: { sessionId: string; session: IdentitySession }) => boolean,
-  options: { keycloak: boolean; bump?: boolean; retained?: RetainedSessionTokens; log: LogoutLog }): Promise<string[]> {
+  options: { keycloak: boolean; bump?: boolean; lockOut?: boolean; log: LogoutLog }): Promise<string[]> {
   const report = newReport();
   const started = Date.now();
   const { reason, scope, initiator, trigger } = options.log;
@@ -420,7 +404,7 @@ async function endSessions(lease: PersonLease, ends: (item: { sessionId: string;
       report.ended.push(sessionRef(sessionId));
     }
     if (options.bump) await bumpGeneration(lease);
-    report.tokens.push(...await releaseSessionTokens(lease, ended.map(item => item.sessionId), options.retained));
+    report.tokens.push(...await releaseSessionTokens(lease, ended.map(item => item.sessionId), options.lockOut));
     logRevocation("identity.revocation.logout", fields, report, started);
     return [...kcSessions];
   } catch (error) {
@@ -430,11 +414,9 @@ async function endSessions(lease: PersonLease, ends: (item: { sessionId: string;
 }
 
 export async function logoutSessions(subject: string, scope: "current" | "others" | "all", currentSessionId: string): Promise<void> {
-  const kcSessions = await withPersonLease(subject, async lease => {
-    const retained = scope === "others" ? await retainedSessionTokens(lease, currentSessionId) : undefined;
-    return endSessions(lease, item => scope === "all" || (scope === "current" ? item.sessionId === currentSessionId : item.sessionId !== currentSessionId),
-      { keycloak: true, bump: scope === "all", retained, log: { reason: "LOGOUT", scope, initiator: currentSessionId } });
-  });
+  const kcSessions = await withPersonLease(subject, lease =>
+    endSessions(lease, item => scope === "all" || (scope === "current" ? item.sessionId === currentSessionId : item.sessionId !== currentSessionId),
+      { keycloak: true, bump: scope === "all", lockOut: scope === "others", log: { reason: "LOGOUT", scope, initiator: currentSessionId } }));
   await endKeycloakSessionsBestEffort(kcSessions);
 }
 export async function endPhoneSessions(subject: string, oldPhoneRef: string, keepSessionId?: string): Promise<void> {
