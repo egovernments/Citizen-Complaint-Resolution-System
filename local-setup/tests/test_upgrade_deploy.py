@@ -176,7 +176,9 @@ class OverlayTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            overlay, deleted, hashes = deploy.materialize_overlay(run_dir, live, live)
+            overlay, deleted, hashes = deploy.materialize_overlay(
+                run_dir, live, live, live
+            )
             self.assertFalse((overlay / ".env").exists())
             self.assertEqual(["obsolete.yml"], deleted)
             self.assertIn("config.yml", hashes)

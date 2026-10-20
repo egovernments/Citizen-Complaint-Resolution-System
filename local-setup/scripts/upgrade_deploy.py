@@ -404,7 +404,7 @@ def effective_deployment_changes(
 
 
 def materialize_overlay(
-    run_dir: Path, live_digit: Path, source_backup: Path
+    run_dir: Path, live_digit: Path, source_backup: Path, target_source: Path
 ) -> tuple[Path, list[str], dict[str, str]]:
     report = json.loads((run_dir / "report.json").read_text(encoding="utf-8"))
     candidate = run_dir / "candidate"
@@ -442,10 +442,21 @@ def materialize_overlay(
             backup_text = (
                 backup_path.read_text(encoding="utf-8") if backup_path.is_file() else ""
             )
-            try:
-                materialized = materialize_redactions(candidate_text, backup_text, rel_raw)
-            except DeployError:
-                materialized = materialize_redactions(candidate_text, live_text, rel_raw)
+            target_path = target_source / rel
+            target_text = (
+                target_path.read_text(encoding="utf-8") if target_path.is_file() else ""
+            )
+            failures: list[DeployError] = []
+            for restoration_source in (backup_text, target_text, live_text):
+                try:
+                    materialized = materialize_redactions(
+                        candidate_text, restoration_source, rel_raw
+                    )
+                    break
+                except DeployError as exc:
+                    failures.append(exc)
+            else:
+                raise failures[-1]
             destination.write_text(materialized, encoding="utf-8", newline="")
             shutil.copymode(source, destination)
         hashes[rel.as_posix()] = sha256_file(destination)
@@ -884,7 +895,10 @@ class UpgradeDeployment:
     def execute(self) -> dict[str, Any]:
         manifest = self.validate()
         overlay, deleted, overlay_hashes = materialize_overlay(
-            self.run_dir, self.digit_dir, self.source_backup
+            self.run_dir,
+            self.digit_dir,
+            self.source_backup,
+            self.repo / "local-setup",
         )
         self.backup_parent.mkdir(parents=True, exist_ok=True)
         lock_path = self.backup_parent / ".digit-upgrade.lock"
