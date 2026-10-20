@@ -13,7 +13,7 @@
 
 import posthog from 'posthog-js';
 import * as Sentry from '@sentry/react';
-import { isTelemetryKilled } from './telemetryGate';
+import { isPosthogOn, isTelemetryKilled } from './telemetryGate';
 import { looksPersonal } from './personalData';
 import { getConfiguredRootTenant, ENDPOINTS } from '@/api/config';
 import { validateProviderRecord, type AnalyticsProviderRecord } from '@/admin/analytics/analyticsProviderRules';
@@ -152,7 +152,7 @@ export function errorCode(error: unknown): string {
 
 /** The workspace (or city) the admin is working in, sent with every PostHog event as `tenant_id`. */
 export function setAnalyticsTenant(tenant: string): void {
-  if (isTelemetryKilled()) return;
+  if (!isPosthogOn()) return;
   if (tenant) posthog.register({ app: 'console', tenant_id: tenant });
   else posthog.register({ app: 'console' });
 }
@@ -275,7 +275,7 @@ export async function startMatomo(): Promise<void> {
 export function track(event: AnalyticsEvent, props?: AnalyticsProps): void {
   if (isTelemetryKilled()) return;
   const clean = safeProps(props);
-  posthog.capture(event, clean);
+  if (isPosthogOn()) posthog.capture(event, clean);
   Sentry.addBreadcrumb({ category: 'user-action', message: event, data: clean, level: 'info' });
 
   const [category, action] = event.split(':');
@@ -289,7 +289,7 @@ export function track(event: AnalyticsEvent, props?: AnalyticsProps): void {
 export function trackPageView(pathname: string): void {
   if (isTelemetryKilled()) return;
   const path = scrubPath(pathname);
-  posthog.capture('$pageview', { $current_url: window.location.origin + path, path });
+  if (isPosthogOn()) posthog.capture('$pageview', { $current_url: window.location.origin + path, path });
   if (pageViewsOff) return;
   toMatomo(['setCustomUrl', window.location.origin + path]);
   toMatomo(['setDocumentTitle', path]);

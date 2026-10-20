@@ -169,7 +169,10 @@ Do not point a new destination at an existing stream:
 
 - `unified-demo.digit.org/matomo` **site 5** is consumed by three server-side ops
   emitters (digit-mcp, the telemetry sidecar, the jupyter dataloader).
-- The PostHog project `phc_NsoE…` and the Sentry DSN hardcoded in the
-  configurator and digit-ui-v2 bundles are their own pre-existing streams.
+- The configurator's own PostHog and Sentry are set per deployment
+  (`configurator_posthog_key` and `configurator_sentry_dsn` in host_vars,
+  rendered into its `config.js`); unset means off. It can share the portal's
+  PostHog project: every event carries `app` (`console`, or the portal
+  surface) and `tenant_id`.
 
 Give the portal its own site/project so the data stays attributable.

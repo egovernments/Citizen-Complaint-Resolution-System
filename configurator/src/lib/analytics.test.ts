@@ -124,6 +124,21 @@ describe('sending', () => {
     expect(window._paq).toBeUndefined();
   });
 
+  it('leaves PostHog alone when the deployment gave no key, and still sends to Matomo', async () => {
+    const ph = posthog as unknown as { __loaded: boolean };
+    ph.__loaded = false;
+    try {
+      mdmsAnswers([row(MATOMO)]);
+      await startMatomo();
+      track('app:help_open');
+      trackPageView('/configurator/onboarding/home');
+      expect(posthog.capture).not.toHaveBeenCalled();
+      expect(paq().some((c) => c[0] === 'trackEvent')).toBe(true);
+    } finally {
+      ph.__loaded = true;
+    }
+  });
+
   it('maps events onto Matomo: category and action from the name, the label as Name, count as Value', async () => {
     mdmsAnswers([row(MATOMO)]);
     await startMatomo();
