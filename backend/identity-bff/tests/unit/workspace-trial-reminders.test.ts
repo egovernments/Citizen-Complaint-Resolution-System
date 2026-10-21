@@ -50,17 +50,28 @@ describe("dueReminder", () => {
 describe("sendTrialReminder", () => {
   const saved = { ...config };
   const org = { id: "org", alias: "acme", name: 'Acme "<b>"', lifecycle: "ACTIVE" as const, enabled: true, trial: trial() };
-  const staff = (...roles: string[]) => ({ "digit.accounts": [JSON.stringify({ v: 1, entries: [{ kind: "staff",
-    tenantId: "acme", uuid: "u", boundAt: 1, active: true, roles: roles.map((code) => ({ code, tenantId: "acme" })) }] })] });
+  const account = (roles: Array<[string, string]>, { tenantId = "acme", active = true } = {}) => ({ "digit.accounts": [
+    JSON.stringify({ v: 1, entries: [{ kind: "staff", tenantId, uuid: "u", boundAt: 1, active,
+      roles: roles.map(([code, at]) => ({ code, tenantId: at })) }] })] });
+  const ADMIN: Array<[string, string]> = [["ACCOUNT_ADMIN", "acme"]];
   const members = [
-    { id: "founder", email: "founder@example.org", enabled: true, attributes: staff("ACCOUNT_ADMIN", "EMPLOYEE") },
-    { id: "admin-without-email", enabled: true, attributes: staff("ACCOUNT_ADMIN") },
-    { id: "employee", email: "employee@example.org", enabled: true, attributes: staff("EMPLOYEE") },
+    { id: "founder", email: "founder@example.org", enabled: true, attributes: account([...ADMIN, ["EMPLOYEE", "acme"]]) },
+    { id: "admin-without-email", enabled: true, attributes: account(ADMIN) },
+    { id: "employee", email: "employee@example.org", enabled: true, attributes: account([["EMPLOYEE", "acme"]]) },
+    { id: "disabled-admin", email: "disabled@example.org", enabled: false, attributes: account(ADMIN) },
+    { id: "inactive-admin", email: "inactive@example.org", enabled: true, attributes: account(ADMIN, { active: false }) },
+    { id: "admin-elsewhere", email: "elsewhere@example.org", enabled: true,
+      attributes: account([["EMPLOYEE", "acme"], ["ACCOUNT_ADMIN", "other"]]) },
+    { id: "account-at-another-root", email: "other@example.org", enabled: true, attributes: account(ADMIN, { tenantId: "other" }) },
+    { id: "unreadable", email: "unreadable@example.org", enabled: true, attributes: { "digit.accounts": ["{"] } },
   ];
   let sent: NotificationEnvelope[];
+  let warn: ReturnType<typeof vi.spyOn>;
+  const warned = (outcome: string) => warn.mock.calls.some(([line]) => String(line).includes(`"outcome":"${outcome}"`));
 
   beforeEach(() => {
     vi.resetAllMocks();
+    warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     Object.assign(config, { workspaceTrialDays: 30, workspaceTrialReminderDays: schedule,
       novuBridgeUrl: "http://bridge", novuBridgeToken: "token", digitAdminTenantId: "pg",
       workspaceTrialNotice: { title: "Ended", message: 'Call "us"', linkLabel: "Contact", linkUrl: "https://example.org/?a=1&b=2" } });
@@ -74,33 +85,51 @@ describe("sendTrialReminder", () => {
   afterAll(() => {
     Object.assign(config, saved);
     setNotificationDispatcher();
+    vi.restoreAllMocks();
   });
 
-  it("emails the workspace's admins that have an email, through the platform tenant, then records it", async () => {
-    await sendTrialReminder("acme", org, day(23));
-    expect(sent).toHaveLength(1);
+  it("emails only the workspace's enabled, active admins at its own root, through the platform tenant, then records it", async () => {
+    await sendTrialReminder("acme", org, "active", day(23));
+    expect(sent.map((envelope) => (envelope.contact as { email: string }).email)).toEqual(["founder@example.org"]);
     expect(sent[0]).toMatchObject({ eventType: "WORKSPACE_TRIAL", tenantId: "pg", entityId: "acme", channel: "EMAIL",
-      contact: { email: "founder@example.org" }, subject: "The trial of Acme '<b>' ends in 7 days",
-      transactionId: `workspace-trial:acme:${endsAt}:7:founder` });
+      subject: "The trial of Acme '<b>' ends in 7 days", transactionId: `workspace-trial:acme:${endsAt}:7:founder` });
     expect(sent[0].renderedBody).toContain("Acme &#34;&#60;b&#62;&#34;");
     expect(sent[0].renderedBody).toContain("<a href='https://example.org/?a=1&#38;b=2'>Contact</a>");
     // Novu 2.3.0 fails the email step on a double quote anywhere in the payload.
     expect(`${sent[0].subject}${sent[0].renderedBody}`).not.toContain('"');
+    expect(warned("NO_EMAIL") && warned("ACCOUNTS_UNREADABLE")).toBe(true);
     const attributes: Record<string, string[]> = {};
     mocks.update.mock.calls[0][1](attributes);
     expect(attributes["digit.trialReminderSent"]).toEqual([`${endsAt}|7`]);
   });
 
-  it("records nothing when a send fails, and does nothing when trials are off or nothing is due", async () => {
+  it("records nothing when a send fails or the bridge skips it, so the next pass retries", async () => {
     setNotificationDispatcher(async () => { throw new Error("down"); });
-    await sendTrialReminder("acme", org, day(23));
+    await sendTrialReminder("acme", org, "active", day(23));
+    setNotificationDispatcher(async () => ({ status: "SKIPPED", diagnostics: ["no provider"] }));
+    await sendTrialReminder("acme", org, "active", day(23));
     expect(mocks.update).not.toHaveBeenCalled();
+    expect(warned("SKIPPED")).toBe(true);
+  });
 
+  it("warns, and records once, when no admin could be emailed", async () => {
+    mocks.request.mockImplementation(async () => new Response(JSON.stringify([members[2]])));
+    await sendTrialReminder("acme", org, "active", day(23));
+    expect(sent).toHaveLength(0);
+    expect(mocks.update).toHaveBeenCalledTimes(1);
+    expect(warned("NO_RECIPIENT")).toBe(true);
+  });
+
+  it("sends nothing while trials are off, for an inactive tenant or an unfinished Organization, or when nothing is due", async () => {
     config.workspaceTrialDays = 0;
-    await sendTrialReminder("acme", org, day(23));
+    await sendTrialReminder("acme", org, "active", day(23));
     config.workspaceTrialDays = 30;
-    await sendTrialReminder("acme", org, day(10));
-    await sendTrialReminder("acme", { ...org, trial: trial(reminderMarker(endsAt, 7)) }, day(23));
-    expect(mocks.request).toHaveBeenCalledTimes(1);
+    await sendTrialReminder("acme", org, "TENANT_INACTIVE", day(23));
+    await sendTrialReminder("acme", { ...org, enabled: false }, "active", day(23));
+    await sendTrialReminder("acme", { ...org, lifecycle: "PROVISIONING" as const }, "active", day(23));
+    await sendTrialReminder("acme", org, "active", day(10));
+    await sendTrialReminder("acme", { ...org, trial: trial(reminderMarker(endsAt, 7)) }, "active", day(23));
+    expect(mocks.request).not.toHaveBeenCalled();
+    expect(sent).toHaveLength(0);
   });
 });

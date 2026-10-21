@@ -113,7 +113,7 @@ export async function runReconcile(): Promise<ReconcileResult> {
       try {
         const organization = await inspectTenant(tenantId);
         // Trial reminder emails: never throws, so never a reconcile failure.
-        if (organization) await sendTrialReminder(tenantId, organization);
+        if (organization) await sendTrialReminder(tenantId, organization, tenantStates.get(tenantId));
         const name = organization && await digitTenantName(tenantId);
         if (organization && name && name !== organization.name) {
           await assertHeld();

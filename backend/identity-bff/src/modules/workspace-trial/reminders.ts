@@ -6,7 +6,7 @@ import type { RawTenantOrganization } from "../onboarding/organization-reader.js
 import type { UserRepresentation } from "../sync/keycloak-writer.js";
 import { accountEntries } from "../sync/state.js";
 import { updateTrial } from "./routes.js";
-import { TRIAL_ATTRIBUTES, trialNotice, type WorkspaceTrial } from "./trial.js";
+import { TRIAL_ATTRIBUTES, trialNotice, trialsEnabled, type WorkspaceTrial } from "./trial.js";
 
 const DAY = 86_400_000;
 
@@ -71,6 +71,8 @@ async function workspaceAdmins(organizationId: string, tenantId: string): Promis
       return accountEntries(member).some((entry) => entry.kind === "staff" && entry.tenantId === tenantId &&
         entry.active && entry.roles.some((role) => role.code === "ACCOUNT_ADMIN" && role.tenantId === tenantId));
     } catch {
+      console.warn(JSON.stringify({ trial: "identity.workspace_trial.reminder", tenantId, subject: member.id,
+        outcome: "ACCOUNTS_UNREADABLE" }));
       return false;
     }
   });
@@ -79,13 +81,15 @@ async function workspaceAdmins(organizationId: string, tenantId: string): Promis
 let warnedOff = false;
 
 /**
- * Reconcile calls this for every workspace on every pass. A due reminder goes to the workspace's
- * admins, then is recorded on the Organization. It never throws: email never holds up reconcile or
+ * Reconcile calls this for every workspace on every pass, with the tenant state it just observed. A
+ * due reminder goes to the workspace's admins, then is recorded on the Organization. It reads the
+ * same switch as the lock (trialsEnabled) and never throws: email never holds up reconcile or
  * sign-in. A pass that could not reach every admin records nothing, so the next pass tries again,
  * and novu-bridge's ledger never sends one (workspace, end date, reminder, admin) twice.
  */
-export async function sendTrialReminder(tenantId: string, org: RawTenantOrganization, now = Date.now()): Promise<void> {
-  if (config.workspaceTrialDays <= 0 || !org.trial || !org.enabled ||
+export async function sendTrialReminder(tenantId: string, org: RawTenantOrganization, tenantState?: string,
+  now = Date.now()): Promise<void> {
+  if (!trialsEnabled() || !org.trial || !org.enabled || tenantState === "TENANT_INACTIVE" ||
       (org.lifecycle !== null && org.lifecycle !== "ACTIVE")) return;
   const days = dueReminder(org.trial, now, config.workspaceTrialReminderDays);
   if (days === null) return;
@@ -130,7 +134,11 @@ export async function sendTrialReminder(tenantId: string, org: RawTenantOrganiza
         attributes[TRIAL_ATTRIBUTES.reminderSent] = [reminderMarker(endsAt, days)];
       });
     }
-    console.info(JSON.stringify({ ...log, sent, recorded: complete }));
+    // Recorded even when nobody could be emailed, so it is said once, loudly, not on every pass.
+    if (sent === 0) {
+      console.warn(JSON.stringify({ ...log, sent, recorded: complete, outcome: complete ? "NO_RECIPIENT" : "NOT_SENT" }));
+    }
+    else console.info(JSON.stringify({ ...log, sent, recorded: complete }));
   } catch (error) {
     console.warn(JSON.stringify({ ...log, outcome: "FAILED", error: (error as Error).message }));
   }
