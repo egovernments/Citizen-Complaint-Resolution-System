@@ -12,8 +12,8 @@
 # Keep the two close: the suite's pg profile (tests/integration-tests/deploy/
 # pg.env, expectations/pg.json) assumes the dump-seeded `pg` tenants slim boots.
 #
-# Do not use it for anything else: it acknowledges the DB fast-path data wipe
-# and accepts the fixed citizen OTP 123456.
+# Do not use it for anything else: it accepts the fixed citizen OTP 123456,
+# and on the runner the workflow acknowledges the DB fast-path data wipe.
 # ═══════════════════════════════════════════════════════════════════════════
 
 ansible_host: localhost
@@ -71,8 +71,10 @@ identity_dev_fixed_otp: true
 identity_citizen_signin_methods: [phone_otp]
 enable_search_stack: false
 enable_mcp: true
-# MCP from this checkout, so a PR that changes digit-mcp/ is what gets tested.
-build_mcp: true
+# CI: MCP from this checkout, so a PR that changes digit-mcp/ is what gets
+# tested. The workflow's cached build job builds it with the other images and
+# pins it (mcp_image), so the deploy does not build it again on every shard.
+build_mcp: false
 tolerate_bootstrap_failures: true
 enable_turbopass: false
 
@@ -95,8 +97,10 @@ identity_smtp_starttls: false
 
 requires_nairobi_mdms: false
 db_fast_path: true
-# CI: a brand-new runner has no Postgres data to lose.
-db_fast_path_ack_data_wipe: true
+# CI: a brand-new runner has no Postgres data to lose, so the workflow's
+# "Write the CI inventory" step sets this to true there. It ships false like
+# every other example: copied anywhere else, the deploy must ask first.
+db_fast_path_ack_data_wipe: false
 force_clean: false
 install_claude_code: false
 
@@ -129,5 +133,7 @@ bootstrap_secrets:
   keycloak_google_client_secret: ""
   identity_digit_admin_password: "eGov@123"
 
-# Image pins the workflow appends for images the PR rebuilt, e.g.
-#   pgr_services_image: ci.local/pgr-services:pr
+# Image pins the workflow appends for every image it built from the checkout
+# (tests/integration-tests/scripts/ci-plan.mjs IMAGES), e.g.
+#   pgr_services_image: ci.local/pgr-services:ci
+#   mcp_image: ci.local/digit-mcp:ci

@@ -18,7 +18,8 @@
  * summary says so and only lists results.
  *
  * Tests are matched by project + file + describe path + title, not line: a PR
- * that edits a spec moves lines, and the test is still the same test.
+ * that edits a spec moves lines, and the test is still the same test. A setup
+ * test that every shard runs is one test, as bad as its worst copy.
  * Retries are on in CI, so `flaky` (failed, then passed) counts as a pass.
  *
  * Usage:
@@ -29,21 +30,12 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-
-/** Run-level errors that mean the run stopped before every test ran (build-catalog.ts). */
-const CUT_SHORT = [
-  /^Timed out waiting [\d.]+s for the .+ to run/,
-  /^Testing stopped early after \d+ maximum allowed failures/,
-];
+// The dashboard's own copy (build-catalog.ts uses it too): the global timeout
+// or --max-failures message that stopped the run before every test ran.
+import { cutShortOf } from './run-errors.cjs';
 
 function stripAnsi(s) {
   return String(s || '').replace(/\x1b\[[0-9;]*m/g, '');
-}
-
-export function cutShort(report) {
-  return (report.errors || [])
-    .map(e => stripAnsi(e.message).split('\n')[0].trim())
-    .find(m => CUT_SHORT.some(re => re.test(m))) ?? null;
 }
 
 /**
@@ -60,10 +52,19 @@ export function verdict(test) {
   return 'pass';
 }
 
+/** Worst first: what one key is when its copies disagree (see index). */
+const WORST = ['fail', 'notrun', 'skip', 'flaky', 'pass'];
+
 /**
  * Map of test key → { verdict, error, title, file, duration } for a Playwright
  * JSON report. `duration` is every attempt's time added up (ms): what the test
  * cost the run, retries included. scripts/ci-shards.mjs packs shards by it.
+ *
+ * A key can be in a report more than once. Every shard runs the setup projects
+ * its specs depend on (profile-setup, setup, lifecycle-setup, ...), so a report
+ * merged from N shards holds each setup test N times. The copies are one entry
+ * with the WORST verdict among them and their times added up: a setup that
+ * failed in one shard fails the key, whatever the other shards did.
  */
 export function index(report) {
   const rootDir = report.config?.rootDir || '';
@@ -78,13 +79,17 @@ export function index(report) {
         const key = `${t.projectName || ''} | ${file} | ${title}`;
         const results = t.results || [];
         const err = results.map(r => r.error?.message).filter(Boolean).pop();
-        out.set(key, {
+        const entry = {
           verdict: verdict(t),
           file,
           duration: results.reduce((ms, r) => ms + (r.duration || 0), 0),
           title: `${file} › ${title}${t.projectName ? ` [${t.projectName}]` : ''}`,
           error: err ? stripAnsi(err).split('\n').find(l => l.trim())?.trim().slice(0, 200) : '',
-        });
+        };
+        const seen = out.get(key);
+        if (!seen) { out.set(key, entry); continue; }
+        const worse = WORST.indexOf(entry.verdict) < WORST.indexOf(seen.verdict) ? entry : seen;
+        out.set(key, { ...worse, duration: seen.duration + entry.duration });
       }
     }
     for (const child of suite.suites || []) walk(child, here);
@@ -114,8 +119,8 @@ export function compare(current, baseline) {
   // Passed on develop and missing from this run entirely (deleted or renamed):
   // listed with "now skipped" so a silently vanished test is visible.
   if (base) for (const [key, b] of base) if (!cur.has(key) && PASSED.has(b.verdict)) groups.nowSkipped.push({ ...b, verdict: 'missing' });
-  const curCut = cutShort(current);
-  const baseCut = baseline ? cutShort(baseline) : null;
+  const curCut = cutShortOf(current);
+  const baseCut = baseline ? cutShortOf(baseline) : null;
   const reasons = [];
   if (base && groups.regressed.length) reasons.push(`${groups.regressed.length} test(s) passed on develop and fail here`);
   if (base && curCut && !baseCut) reasons.push(`the run was cut short (${curCut}) and develop's was not`);

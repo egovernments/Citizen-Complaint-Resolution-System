@@ -268,13 +268,15 @@ shared server: each shard deploys a fresh stack on its own GitHub runner.
    (k8s/Helm, notifications, chatbot, …), nothing else runs. Unknown paths
    always run. Draft PRs wait until they are marked ready.
 2. **Build.** Every CCRS image in the stack (pgr-services and its `-db`,
-   identity-bff, identity-keycloak, digit-ui-esbuild, configurator) is built
-   from the checkout, in parallel, with a layer cache; digit-mcp is built by
-   the deploy (`build_mcp`).
+   identity-bff, identity-keycloak, digit-ui-esbuild, configurator,
+   digit-mcp) is built from the checkout, in parallel, with a layer cache
+   that only develop runs write (PRs read it).
 3. **Split.** While the images build, `scripts/ci-shards.mjs` packs the spec
-   files into 4 lists of about equal time on the latest develop run (the
-   newest run on any branch before develop has one; test count before any). Playwright's own `--shard` splits by count in
-   file order, and the slow specs sit together.
+   files into 4 lists of about equal time on the latest complete develop run
+   (the newest run on any branch before develop has one; test count before
+   any). Playwright's own `--shard` splits by count in file order, and the
+   slow specs sit together. The suite is listed with `deploy/pg.env`, as the
+   shards run it, so `@local-only` specs are in the lists.
 4. **Deploy and test, in 4 shards.** Each shard runs
    `local-setup/ansible/deploy.sh ci` (~10 min) with
    `host_vars/ci.yml.example` (the localhost-slim profile: dump-seeded `pg`
@@ -289,13 +291,21 @@ shared server: each shard deploys a fresh stack on its own GitHub runner.
    `develop` run the split used (`scripts/ci-compare.mjs`). It fails when a test that passed
    on develop fails here (a pass on retry counts as a pass), or when an image
    does not build or a shard does not finish. Tests that also fail on develop
-   are listed in the summary but do not block. Until a develop run exists,
-   it only reports.
+   are listed in the summary but do not block. A setup test runs in every
+   shard and counts once, as its worst copy. Until a develop run exists, it
+   only reports; once one has, a run that cannot find or fetch a baseline
+   fails.
 
-Artifacts: `integration-report` (merged report.json, kept 30 days as later
-runs' baseline), `playwright-report` (HTML report with traces of failures),
-`stack-diagnostics-<shard>` (container status and logs). Run it by hand from
-the Actions tab (workflow_dispatch) on any branch.
+Artifacts: `integration-report` (merged report.json of a run in which every
+shard finished, kept 90 days as later runs' baseline; `integration-report-partial`
+when one did not, which is never a baseline), `playwright-report` (HTML report
+with traces of failures), `stack-diagnostics-<shard>` (container status and
+logs).
+
+Running it by hand (Actions tab → "Run workflow", workflow_dispatch) needs the
+workflow on the default branch, `master`: GitHub offers the button only for
+workflows there. Until a copy lands on master, a PR to `develop` is the way to
+run it.
 
 ## Prerequisites
 

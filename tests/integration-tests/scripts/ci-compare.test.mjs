@@ -88,3 +88,31 @@ test('keys carry the project, and errors are one clean line', () => {
   assert.equal(idx.get(key).error, 'Error: failed');
   assert.match(markdown(compare(report({ a: FAIL }), report({ a: PASS }))), /Regressed.*\(1\)[\s\S]*Error: failed/);
 });
+
+// After merge-reports every shard's copy of a setup test is in the report,
+// each with its own id but the same project + file + title.
+function sharded(...copies) {
+  return {
+    config: { rootDir: '/repo/tests' },
+    suites: copies.map(([status, results]) => ({
+      title: 'fixtures/lifecycle.setup.ts', file: 'fixtures/lifecycle.setup.ts',
+      specs: [{ title: 'seed', file: 'fixtures/lifecycle.setup.ts', tests: [{ projectName: 'lifecycle-setup', status, results }] }],
+    })),
+  };
+}
+
+test('a setup that fails in one shard fails, whichever shard comes last', () => {
+  const base = sharded(PASS, PASS, PASS, PASS);
+  for (const cur of [sharded(PASS, FAIL, PASS, PASS), sharded(FAIL, PASS, PASS, PASS), sharded(PASS, PASS, PASS, FAIL)]) {
+    const r = compare(cur, base);
+    assert.equal(r.failed, true);
+    assert.deepEqual(r.groups.regressed.map(t => t.title), ['fixtures/lifecycle.setup.ts › seed [lifecycle-setup]']);
+    assert.equal(r.groups.regressed[0].error, 'Error: failed');
+    assert.deepEqual(r.counts, { pass: 0, flaky: 0, fail: 1, skip: 0, notrun: 0 });
+  }
+  // One copy that never ran (its shard timed out) is not a pass either.
+  assert.equal(index(sharded(PASS, NOTRUN, PASS)).get('lifecycle-setup | fixtures/lifecycle.setup.ts | seed').verdict, 'notrun');
+  assert.equal(index(sharded(PASS, FLAKY, PASS)).get('lifecycle-setup | fixtures/lifecycle.setup.ts | seed').verdict, 'flaky');
+  // Every copy's time counts: what the setup cost the whole run.
+  assert.equal(index(sharded(PASS, PASS, PASS)).get('lifecycle-setup | fixtures/lifecycle.setup.ts | seed').duration, 3);
+});

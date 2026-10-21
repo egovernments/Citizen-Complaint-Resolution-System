@@ -15,15 +15,18 @@ name: Integration tests
 #   push → develop          every merge, never cancelled: its report is the
 #                           baseline PRs are compared with, and a regression it
 #                           finds points at that merge.
-#   workflow_dispatch       any branch, on demand.
+#   workflow_dispatch       any branch, on demand, but only once this file is on
+#                           the default branch (master): GitHub offers "Run
+#                           workflow" for workflows there and nowhere else.
 # The plan job skips the rest when no changed file can affect the stack or the
 # suite: docs, unit tests, other CI, code the CI stack does not deploy
 # (tests/integration-tests/scripts/ci-plan.mjs; unknown paths always run).
 #
 # Pass / fail: the deploy must succeed, and no test that passed on the latest
-# develop run may fail here (scripts/ci-compare.mjs). Tests that fail on develop
-# too are listed in the summary but do not fail the check. Before the first
-# develop run exists the check only reports.
+# complete develop run may fail here (scripts/ci-compare.mjs). Tests that fail
+# on develop too are listed in the summary but do not fail the check. Before
+# the first develop run exists the check only reports; once one has, a run that
+# cannot get a baseline fails.
 #
 # Fork PRs (most PRs here) get a read-only token and no secrets; nothing in this
 # workflow needs either.
@@ -106,9 +109,19 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
+      # build-images.yml does the same before it builds digit-mcp: the image
+      # bakes in PGR's platform baseline, which lives outside digit-mcp/.
+      - name: Stage MCP platform baseline
+        if: matrix.image.image == 'digit-mcp'
+        run: node digit-mcp/scripts/stage-platform-baseline.mjs
+
       # Same context / Dockerfile / build args as build-images.yml, so CI tests
       # what the nightly would publish. Layers are cached per image: PRs read
       # develop's cache, so an image the PR did not touch rebuilds in seconds.
+      # Only develop writes it. Every PR writing every image's build stages
+      # (mode=max) would take the repo past its 10 GB cache limit, and GitHub
+      # evicts the oldest entries first, often develop's: every PR would then
+      # build cold (~11 min for pgr-services alone).
       - name: Build
         uses: docker/build-push-action@v6
         env:
@@ -122,7 +135,7 @@ jobs:
           tags: ci.local/${{ matrix.image.image }}:ci
           outputs: type=docker,dest=${{ runner.temp }}/image.tar
           cache-from: type=gha,scope=integration-tests-${{ matrix.image.image }}
-          cache-to: type=gha,mode=max,scope=integration-tests-${{ matrix.image.image }}
+          cache-to: ${{ github.ref == 'refs/heads/develop' && format('type=gha,mode=max,scope=integration-tests-{0}', matrix.image.image) || '' }}
 
       - uses: actions/upload-artifact@v4
         with:
@@ -177,19 +190,35 @@ jobs:
           RUN_ID: ${{ github.run_id }}
         run: |
           set -euo pipefail
-          # The newest completed develop push run of this workflow that left a
-          # report. For a develop run that is the merge before it.
-          for id in $(gh run list --repo "$REPO" --workflow integration-tests.yml --branch develop \
-                        --event push --status completed --limit 20 --json databaseId --jq '.[].databaseId'); do
-            [ "$id" = "$RUN_ID" ] && continue
-            if gh run download "$id" --repo "$REPO" --name "$REPORT_ARTIFACT" --dir "$RUNNER_TEMP/baseline" 2>/dev/null; then
-              sha=$(gh run view "$id" --repo "$REPO" --json headSha --jq '.headSha[0:8]')
-              { echo "run=$id"; echo "label=develop @ $sha (run $id)"; } >> "$GITHUB_OUTPUT"
-              echo "Baseline: run $id (develop @ $sha)"
-              exit 0
-            fi
-          done
-          echo "No develop run with a report yet."
+          # Every report a develop run of this repo left (not a fork's branch
+          # that happens to be called develop), newest first. Only a complete
+          # run uploads one under this name (see Verdict), so the newest that
+          # has not expired is the baseline. For a develop run that is the
+          # merge before it. However far back it is: docs-only merges skip the
+          # suite and leave none.
+          #
+          # Assigned before use, so an API error fails this step instead of
+          # reading as "no baseline" and turning the check report-only.
+          reports=$(gh api --paginate "repos/$REPO/actions/artifacts?name=$REPORT_ARTIFACT&per_page=100" \
+            --jq '.artifacts[] | select(.workflow_run.head_branch == "develop"
+                    and .workflow_run.head_repository_id == .workflow_run.repository_id)
+                  | [.created_at, .workflow_run.id, .expired, .workflow_run.head_sha[0:8]] | @tsv')
+          reports=$(sort -r <<<"$reports")
+          live=$(awk -F'\t' -v self="$RUN_ID" '$3 == "false" && $2 != self' <<<"$reports" | head -n1)
+          if [ -n "$live" ]; then
+            IFS=$'\t' read -r _ id _ sha <<<"$live"
+            gh run download "$id" --repo "$REPO" --name "$REPORT_ARTIFACT" --dir "$RUNNER_TEMP/baseline"
+            { echo "run=$id"; echo "label=develop @ $sha (run $id)"; } >> "$GITHUB_OUTPUT"
+            echo "Baseline: run $id (develop @ $sha)"
+          elif [ -n "$reports" ]; then
+            # A baseline existed, so judging without one would wave through
+            # whatever regressed. The next develop merge that runs the suite
+            # leaves a new one.
+            echo "::error::Every develop report has expired, so there is no baseline to compare with. The next develop merge that runs the suite makes one."
+            exit 1
+          else
+            echo "No develop run with a report yet: this run only reports."
+          fi
 
       # For timing only. Until develop has a run, the newest earlier run of
       # this workflow on any branch (a PR's) times the specs well enough to
@@ -207,16 +236,22 @@ jobs:
             { echo "file=$RUNNER_TEMP/baseline/report.json"; echo "label=$BASELINE_LABEL"; } >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          for id in $(gh run list --repo "$REPO" --workflow integration-tests.yml --status completed \
-                        --limit 20 --json databaseId --jq '.[].databaseId'); do
-            [ "$id" = "$RUN_ID" ] && continue
-            if gh run download "$id" --repo "$REPO" --name "$REPORT_ARTIFACT" --dir "$RUNNER_TEMP/timing" 2>/dev/null; then
-              { echo "file=$RUNNER_TEMP/timing/report.json"; echo "label=run $id"; } >> "$GITHUB_OUTPUT"
-              echo "Timings from run $id"
-              exit 0
-            fi
-          done
-          echo "No earlier run with a report: splitting by test count."
+          # Only the shards' balance depends on this, so a failed lookup warns
+          # and splits by test count rather than failing the run.
+          if ! reports=$(gh api "repos/$REPO/actions/artifacts?name=$REPORT_ARTIFACT&per_page=100" \
+                           --jq '.artifacts[] | select(.expired | not) | [.created_at, .workflow_run.id] | @tsv'); then
+            echo "::warning::Could not list earlier reports: splitting by test count."
+            exit 0
+          fi
+          id=$(sort -r <<<"$reports" | awk -F'\t' -v self="$RUN_ID" '$2 != self { print $2; exit }')
+          if [ -z "$id" ]; then
+            echo "No earlier run with a report: splitting by test count."
+          elif gh run download "$id" --repo "$REPO" --name "$REPORT_ARTIFACT" --dir "$RUNNER_TEMP/timing"; then
+            { echo "file=$RUNNER_TEMP/timing/report.json"; echo "label=run $id"; } >> "$GITHUB_OUTPUT"
+            echo "Timings from run $id"
+          else
+            echo "::warning::Could not download run $id's report: splitting by test count."
+          fi
 
       - name: Split
         id: split
@@ -225,6 +260,10 @@ jobs:
           TIMING_LABEL: ${{ steps.timing.outputs.label }}
         run: |
           set -euo pipefail
+          # The env the shards run with, so the list is what they will run:
+          # without LOCAL_STACK=1 the config drops every @local-only spec, and
+          # --test-list cannot bring back a file the list never had.
+          set -a; source deploy/pg.env; set +a
           npx playwright test --config playwright.ci.config.ts --list --reporter=json > "$RUNNER_TEMP/list.json"
           node scripts/ci-shards.mjs --list "$RUNNER_TEMP/list.json" --shards "$SHARDS" \
             --baseline "${TIMING_FILE:-none}" --baseline-label "$TIMING_LABEL" --github
@@ -237,8 +276,11 @@ jobs:
     # installs Docker and packages for the release it finds, and 24.04 is the
     # one this was proven on. Move it deliberately.
     runs-on: ubuntu-24.04
-    # Deploy ~10 min + the shard's share of the suite (capped below at 45).
-    timeout-minutes: 75
+    # Above the sum of the step caps below (deploy 40, identities 15, suite 50,
+    # which holds its 45-minute --global-timeout) plus ~10 for the rest, so a
+    # slow deploy and a slow shard together still reach "Upload the shard's
+    # report". A shard normally takes ~40 (2026-10-15: deploy 10, suite 24-26).
+    timeout-minutes: 120
     strategy:
       # A shard that fails keeps the others going: their results still count.
       fail-fast: false
@@ -290,6 +332,10 @@ jobs:
           set -euo pipefail
           hv=local-setup/ansible/inventory/host_vars
           cp "$hv/ci.yml.example" "$hv/ci.yml"
+          # A fresh runner has no data to lose. The example ships the ack
+          # false, like every example (local-setup/tests/static).
+          sed -i 's/^db_fast_path_ack_data_wipe: false$/db_fast_path_ack_data_wipe: true/' "$hv/ci.yml"
+          grep -qx 'db_fast_path_ack_data_wipe: true' "$hv/ci.yml"
           echo "$BUILD" | jq -r '.[] | "\(.var): ci.local/\(.image):ci"' >> "$hv/ci.yml"
           tail -n "$(echo "$BUILD" | jq length)" "$hv/ci.yml"
 
@@ -317,11 +363,13 @@ jobs:
       # workspace, an admin and the seeded employees (scripts/ci-identities.sh).
       - name: Provision test identities
         working-directory: tests/integration-tests
+        timeout-minutes: 15
         run: bash scripts/ci-identities.sh > "$RUNNER_TEMP/identities.env"
 
       - name: Run the suite (shard ${{ matrix.shard }}/${{ strategy.job-total }})
         id: suite
         working-directory: tests/integration-tests
+        timeout-minutes: 50
         env:
           CI_SHARD: ${{ matrix.shard }} # names the blob report (playwright.ci.config.ts)
           LISTS: ${{ needs.split.outputs.lists }}
@@ -334,8 +382,8 @@ jobs:
           source deploy/pg.env
           source "$RUNNER_TEMP/identities.env"
           set +a
-          # --global-timeout fires before the job timeout, so the blob report
-          # is still written with what finished.
+          # --global-timeout fires before this step's and the job's timeouts,
+          # so the blob report is still written with what finished.
           npx playwright test --config playwright.ci.config.ts --test-list "$RUNNER_TEMP/tests.txt" --global-timeout=2700000 \
             || echo "Playwright exited $?; the Verdict job decides."
           ls blob-report/*.zip
@@ -372,7 +420,9 @@ jobs:
   verdict:
     name: Verdict
     needs: [plan, build, split, integration]
-    if: always() && needs.plan.outputs.run == 'true'
+    # Not on a cancelled run (a newer push superseded it): there is nothing to
+    # judge, and a red "No shard produced a report" would only be noise.
+    if: ${{ !cancelled() && needs.plan.outputs.run == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
@@ -401,13 +451,27 @@ jobs:
 
       - name: Merge the shards
         id: merge
+        env:
+          MATRIX: ${{ needs.split.outputs.matrix }}
+          SHARDS: ${{ needs.integration.result }}
         run: |
           shopt -s nullglob
           blobs=(all-blob-reports/*.zip)
-          echo "${#blobs[@]} shard report(s)"
+          expected=$(jq length <<<"${MATRIX:-[]}")
+          echo "${#blobs[@]} of $expected shard report(s)"
           [ "${#blobs[@]}" -gt 0 ] || { echo "No shard produced a report."; exit 1; }
           npx playwright merge-reports --config playwright.ci-merge.config.ts all-blob-reports
           test -f report.json
+          # Complete: every shard deployed, ran and uploaded its report. Only
+          # a complete run's report may be a later run's baseline: with a shard
+          # missing on develop, that shard's tests would read as "new failing"
+          # instead of "regressed" for every PR compared with it.
+          if [ "$SHARDS" = success ] && [ "${#blobs[@]}" -eq "$expected" ]; then
+            echo "complete=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "complete=false" >> "$GITHUB_OUTPUT"
+            echo "Incomplete run: its report is uploaded as $REPORT_ARTIFACT-partial, never a baseline."
+          fi
 
       # The one the split job picked, so the shards were timed by the same run.
       - name: Download the develop baseline
@@ -418,16 +482,18 @@ jobs:
           BASELINE_RUN: ${{ needs.split.outputs.baseline-run }}
         run: gh run download "$BASELINE_RUN" --repo "$REPO" --name "$REPORT_ARTIFACT" --dir "$RUNNER_TEMP/baseline"
 
+      # The split job finds baselines by this name, so an incomplete run's
+      # report goes up under another.
       - name: Upload the report (baseline for later runs)
-        if: steps.merge.outcome == 'success'
+        if: ${{ !cancelled() && steps.merge.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.REPORT_ARTIFACT }}
+          name: ${{ steps.merge.outputs.complete == 'true' && env.REPORT_ARTIFACT || format('{0}-partial', env.REPORT_ARTIFACT) }}
           path: tests/integration-tests/report.json
-          retention-days: 30
+          retention-days: 90
 
       - name: Upload the HTML report
-        if: steps.merge.outcome == 'success'
+        if: ${{ !cancelled() && steps.merge.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
@@ -436,7 +502,7 @@ jobs:
 
       # Last, so the reports above are uploaded whatever it decides.
       - name: Judge
-        if: always()
+        if: ${{ !cancelled() }}
         env:
           BUILD: ${{ needs.build.result }}
           SPLIT: ${{ needs.split.result }}

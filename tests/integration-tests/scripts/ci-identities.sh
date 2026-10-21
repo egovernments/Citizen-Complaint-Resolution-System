@@ -29,6 +29,8 @@
 # Idempotent enough for a re-run on the same stack (existing users and
 # memberships are kept), but it is written for one run on a fresh one.
 set -euo pipefail
+# set -e also inside $(...), which bash otherwise drops there.
+shopt -s inherit_errexit
 
 DIGIT_DIR=${DIGIT_DIR:-/opt/digit}
 TENANT=${CI_TENANT:-pg}
@@ -81,14 +83,21 @@ docker exec keycloak sh -c '/opt/keycloak/bin/kcadm.sh config credentials --conf
 kc() { docker exec keycloak /opt/keycloak/bin/kcadm.sh "$@" --config /tmp/ci-kcadm.config; }
 
 # Keycloak user <username> with the stock password; prints its id.
+#
+# Every step checks its own status. Callers run it as `id=$(kc_user ...) || die`,
+# and on the left of || bash ignores set -e, inherit_errexit or not: a failed
+# set-password would still print an id, and the account would be bound anyway.
+# Its persona then cannot sign in, on the PR run and the develop baseline alike,
+# which Verdict reads as "still failing" instead of a broken setup.
 kc_user() {
   local id
-  id=$(kc get users -r digit -q "username=$1" -q exact=true --fields id --format csv --noquotes | head -n1)
+  id=$(kc get users -r digit -q "username=$1" -q exact=true --fields id --format csv --noquotes | head -n1) || return 1
   if [ -z "$id" ]; then
     id=$(kc create users -r digit -i -s "username=$1" -s "email=$1@ci.example.org" -s emailVerified=true \
-      -s enabled=true -s "firstName=$1" -s lastName=CI)
+      -s enabled=true -s "firstName=$1" -s lastName=CI) || return 1
   fi
-  kc set-password -r digit --userid "$id" --new-password "$PASSWORD" >/dev/null
+  [ -n "$id" ] || return 1
+  kc set-password -r digit --userid "$id" --new-password "$PASSWORD" >/dev/null || return 1
   echo "$id"
 }
 
@@ -130,14 +139,16 @@ bind() { # <keycloak user id> <digit uuid> <label>
   bff bindings/_ensure "$payload" >/dev/null
   log "bound $3"
 }
-bind "$(kc_user "$ADMIN_LOGIN")" "$admin_uuid" "$ADMIN_LOGIN → $DIGIT_ADMIN"
+kc_id=$(kc_user "$ADMIN_LOGIN") || die "could not set up Keycloak user $ADMIN_LOGIN"
+bind "$kc_id" "$admin_uuid" "$ADMIN_LOGIN → $DIGIT_ADMIN"
 
 employees=$(docker exec docker-postgres psql -U egov -d egov -Atc \
   "select code, uuid from eg_hrms_employee where tenantid = '$TENANT' and active order by code")
 [ -n "$employees" ] || log "WARNING: no active HRMS employees at $TENANT; persona specs will skip"
 while IFS='|' read -r code uuid; do
   [ -n "$code" ] || continue
-  bind "$(kc_user "$code")" "$uuid" "$code"
+  kc_id=$(kc_user "$code") || die "could not set up Keycloak user $code"
+  bind "$kc_id" "$uuid" "$code"
 done <<<"$employees"
 
 # 4. Open the workspace for sign-in (PROVISIONING refuses context selection).

@@ -11,8 +11,10 @@
  * longest file first into the emptiest list. A test's time is what it cost on
  * an earlier run (its report.json, every attempt added up): the develop run
  * Verdict compares with or, before develop has one, the newest run on any
- * branch. A test that run has no time for (new, or not run) counts as its
- * median; with no earlier run every test counts the same. Files are never split: a serial
+ * branch. A test that run has no time for counts as its median: a new test,
+ * one that did not run, and one it skipped (0 ms there, and the change may
+ * make it run; at 0 ms every such file would land in the same list). With no
+ * earlier run every test counts the same. Files are never split: a serial
  * describe or a beforeAll belongs to one run.
  *
  * Setup files (*.setup.ts) are left out: Playwright runs a project's setup
@@ -33,18 +35,20 @@ import fs from 'node:fs';
 import { index } from './ci-compare.mjs';
 
 const SETUP = /\.setup\.[cm]?[jt]s$/;
+/** Verdicts whose duration is what the test costs when it runs. */
+const RAN = new Set(['pass', 'flaky', 'fail']);
 
 /** [{ shard, files: [path], tests, ms }] for N shards. */
 export function split(list, baseline, shards) {
   const base = baseline ? index(baseline) : new Map();
-  const timed = [...base.values()].filter(t => t.verdict !== 'notrun').map(t => t.duration).sort((a, b) => a - b);
+  const timed = [...base.values()].filter(t => RAN.has(t.verdict)).map(t => t.duration).sort((a, b) => a - b);
   const fallback = timed.length ? timed[Math.floor(timed.length / 2)] : 1;
 
   const files = new Map();
   for (const [key, t] of index(list)) {
     if (SETUP.test(t.file)) continue;
     const b = base.get(key);
-    const ms = b && b.verdict !== 'notrun' ? b.duration : fallback;
+    const ms = b && RAN.has(b.verdict) ? b.duration : fallback;
     if (!files.has(t.file)) files.set(t.file, { file: t.file, order: files.size, tests: 0, ms: 0 });
     const f = files.get(t.file);
     f.tests++;

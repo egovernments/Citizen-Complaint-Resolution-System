@@ -38,8 +38,7 @@ import fs from 'node:fs';
  * `dockerfile` / `buildArgs` mirror build/build-config.yml (what the nightly
  * builds); `var` is the host_vars pin from ccrs_image_catalog in
  * local-setup/ansible/inventory/group_vars/digit.yml, which outranks the
- * compose default. digit-mcp is not here: the CI profile sets build_mcp, so the
- * deploy builds it from the checkout itself.
+ * compose default.
  *
  * Images whose compose profile the CI profile leaves off (novu-bridge,
  * digit-config-service, digit-user-preferences-service, xstate-chatbot) are in
@@ -89,6 +88,14 @@ export const IMAGES = [
     context: '.',
     dockerfile: 'configurator/Dockerfile',
   },
+  {
+    image: 'digit-mcp',
+    var: 'mcp_image',
+    // The image bakes in PGR's platform baseline: the build job stages it into
+    // digit-mcp/data/ first (stage-platform-baseline.mjs), as build-images.yml does.
+    match: [/^digit-mcp\//, /^backend\/pgr-services\/src\/main\/resources\/onboarding\/platform-baseline-v1\.json$/],
+    context: 'digit-mcp',
+  },
 ];
 
 /** [pattern, why] — paths that cannot change what a run of this suite sees. */
@@ -132,6 +139,7 @@ export const IGNORED = [
 export const RUNTIME_FIRST = [
   /^\.github\/workflows\/integration-tests\.yml$/,
   /^tests\/integration-tests\/scripts\/ci-(plan|compare|shards)\.mjs$/,
+  /^tests\/integration-tests\/scripts\/run-errors\.(cjs|d\.cts)$/,
   /^tests\/integration-tests\/scripts\/ci-identities\.sh$/,
 ];
 

@@ -78,7 +78,6 @@ export async function enterHostedUsername(page: Page, value: string): Promise<vo
  */
 const KEYCLOAK_SSO_COOKIES = /^(KEYCLOAK_(IDENTITY|SESSION)(_LEGACY)?|AUTH_SESSION_ID(_LEGACY)?|KC_RESTART)$/;
 
-
 /** Keycloak refused the credentials. Retrying only feeds its brute-force detection. */
 export class KeycloakSignInError extends Error {}
 

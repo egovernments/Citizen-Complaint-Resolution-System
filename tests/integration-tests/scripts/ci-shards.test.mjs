@@ -73,3 +73,17 @@ test('with no baseline every test counts the same', () => {
   assert.deepEqual(bins.map(b => b.tests), [4, 3]);
   assert.match(summary(bins, { timed: false }), /No earlier run to time the specs by[\s\S]*\| 1 \| 2 \| 4 \| – \|/);
 });
+
+test('a test the baseline skipped counts as the median too, so those files spread over the lists', () => {
+  const list = listed({ 'a.spec.ts': ['a1'], 'b.spec.ts': ['b1'], 'c.spec.ts': ['c1'], 'd.spec.ts': ['d1'], 'e.spec.ts': ['e1'], 'f.spec.ts': ['f1'] });
+  const base = report({ 'a.spec.ts': [['a1', 60_000]], 'b.spec.ts': [['b1', 60_000]] });
+  // c..f skipped on develop: one 0 ms `skipped` result each.
+  for (const f of ['c', 'd', 'e', 'f']) {
+    base.suites.push({ title: `${f}.spec.ts`, file: `${f}.spec.ts`, specs: [{ title: `${f}1`, file: `${f}.spec.ts`,
+      tests: [{ projectName: 'chromium', status: 'skipped', results: [{ status: 'skipped', duration: 0 }] }] }] });
+  }
+  const bins = split(list, base, 2);
+  // At 0 ms all four would join the first list (5 files and 1).
+  assert.deepEqual(files(bins), [['a.spec.ts', 'c.spec.ts', 'e.spec.ts'], ['b.spec.ts', 'd.spec.ts', 'f.spec.ts']]);
+  assert.deepEqual(bins.map(b => b.ms), [180_000, 180_000]);
+});
