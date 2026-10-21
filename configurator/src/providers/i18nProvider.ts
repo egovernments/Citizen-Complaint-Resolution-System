@@ -239,6 +239,7 @@ const customEnglishMessages: TranslationMessages = {
       citizen_hint: 'Share this with citizens to file and track complaints',
       copy: 'Copy',
       copied: 'Link copied.',
+      copy_failed: 'Could not copy the link. Select it and copy it manually.',
       open: 'Open',
     },
     providers: {

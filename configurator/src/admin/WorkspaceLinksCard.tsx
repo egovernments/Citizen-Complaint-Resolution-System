@@ -8,8 +8,9 @@ import { useApp } from '../App';
 
 /**
  * The two links a partner shares with their people: the employee app (staff
- * sign-in) and the citizen app. Shown as soon as the workspace slug is known,
- * not only after onboarding, because sign-in links matter from day one.
+ * sign-in) and the citizen app. Shown on the dashboard once the workspace slug
+ * is known. The dashboard opens only after setup, so this appears together with
+ * the sidebar's complaint-desk link.
  */
 export function WorkspaceLinksCard() {
   const t = useTranslate();
@@ -25,7 +26,8 @@ export function WorkspaceLinksCard() {
       await navigator.clipboard.writeText(url);
       notify(t('app.workspace_links.copied', { _: 'Link copied.' }));
     } catch {
-      notify(t('app.providers.copy_failed', { _: 'Could not copy to clipboard.' }), undefined, 'destructive');
+      // No clipboard outside a secure context (a plain-http box): the URL above stays selectable.
+      notify(t('app.workspace_links.copy_failed', { _: 'Could not copy the link. Select it and copy it manually.' }), undefined, 'destructive');
     }
   };
 

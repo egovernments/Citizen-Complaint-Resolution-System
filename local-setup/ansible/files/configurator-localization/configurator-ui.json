@@ -5676,6 +5676,60 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.workspace_links.title",
+    "message": "Workspace links",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.workspace_links.employee_label",
+    "message": "Employee app",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.workspace_links.employee_hint",
+    "message": "Where your staff sign in and handle complaints",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.workspace_links.citizen_label",
+    "message": "Citizen app",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.workspace_links.citizen_hint",
+    "message": "Share this with citizens to file and track complaints",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.workspace_links.copy",
+    "message": "Copy",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.workspace_links.copied",
+    "message": "Link copied.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.workspace_links.copy_failed",
+    "message": "Could not copy the link. Select it and copy it manually.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.workspace_links.open",
+    "message": "Open",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.nav.open_digit_docs",
     "message": "Open DIGIT Docs",
     "module": "configurator-ui",
@@ -11246,6 +11300,168 @@
   {
     "code": "app.nav.open_complaint_desk",
     "message": "Abrir central de reclamações",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.workspace_links.title",
+    "message": "वर्कस्पेस लिंक",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.workspace_links.title",
+    "message": "Liens de l'espace de travail",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.workspace_links.title",
+    "message": "Links do espaço de trabalho",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.workspace_links.employee_label",
+    "message": "कर्मचारी ऐप",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.workspace_links.employee_label",
+    "message": "Application employé",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.workspace_links.employee_label",
+    "message": "App do funcionário",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.workspace_links.employee_hint",
+    "message": "जहाँ आपके कर्मचारी साइन इन करके शिकायतें संभालते हैं",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.workspace_links.employee_hint",
+    "message": "Là où votre personnel se connecte et traite les plaintes",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.workspace_links.employee_hint",
+    "message": "Onde sua equipe entra e atende às reclamações",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.workspace_links.citizen_label",
+    "message": "नागरिक ऐप",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.workspace_links.citizen_label",
+    "message": "Application citoyen",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.workspace_links.citizen_label",
+    "message": "App do cidadão",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.workspace_links.citizen_hint",
+    "message": "इसे नागरिकों के साथ साझा करें, ताकि वे शिकायतें दर्ज और ट्रैक कर सकें",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.workspace_links.citizen_hint",
+    "message": "Partagez ce lien avec les citoyens pour déposer et suivre leurs plaintes",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.workspace_links.citizen_hint",
+    "message": "Compartilhe com os cidadãos para registrar e acompanhar reclamações",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.workspace_links.copy",
+    "message": "कॉपी करें",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.workspace_links.copy",
+    "message": "Copier",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.workspace_links.copy",
+    "message": "Copiar",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.workspace_links.copied",
+    "message": "लिंक कॉपी हो गया।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.workspace_links.copied",
+    "message": "Lien copié.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.workspace_links.copied",
+    "message": "Link copiado.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.workspace_links.copy_failed",
+    "message": "लिंक कॉपी नहीं हो सका। इसे चुनें और स्वयं कॉपी करें।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.workspace_links.copy_failed",
+    "message": "Impossible de copier le lien. Sélectionnez-le et copiez-le manuellement.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.workspace_links.copy_failed",
+    "message": "Não foi possível copiar o link. Selecione-o e copie manualmente.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.workspace_links.open",
+    "message": "खोलें",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.workspace_links.open",
+    "message": "Ouvrir",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.workspace_links.open",
+    "message": "Abrir",
     "module": "configurator-ui",
     "locale": "pt_BR"
   },
