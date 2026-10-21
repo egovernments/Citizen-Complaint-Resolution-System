@@ -91,8 +91,9 @@ export function validateLadder(
 /**
  * Validates stored complaint-type overrides the way pgr-services reads them
  * (EscalationConfigurationService.override()). A ladder it rejects is ignored, and the
- * type silently falls back to the default ladder. Overrides written straight to MDMS
- * skip the edit dialog, so check them here too. Returns the first error per code.
+ * type runs on whichever ladder is left: the override's other one, or the default.
+ * Overrides written straight to MDMS skip the edit dialog, so check them here too.
+ * Returns the first error per code, prefixed with the ladder it is about.
  */
 export function validateOverrides(overrides: Record<string, unknown> = {}): Record<string, string> {
   const errors: Record<string, string> = {};
@@ -112,15 +113,16 @@ export function validateOverrides(overrides: Record<string, unknown> = {}): Reco
       continue;
     }
     const res = validateLadder(pcts as number[], fallbacks as number[]);
-    const message = firstLevelError(res.pctErrors) ?? firstLevelError(res.fallbackErrors);
+    const message =
+      firstLevelError(res.pctErrors, 'SLA %') ?? firstLevelError(res.fallbackErrors, 'ms');
     if (message) errors[code] = message;
   }
   return errors;
 }
 
-function firstLevelError(levelErrors: (string | null)[]): string | null {
+function firstLevelError(levelErrors: (string | null)[], ladder: string): string | null {
   const i = levelErrors.findIndex((e) => e !== null);
-  return i < 0 ? null : `L${i + 1}: ${levelErrors[i]}`;
+  return i < 0 ? null : `${ladder} L${i + 1}: ${levelErrors[i]}`;
 }
 
 /**

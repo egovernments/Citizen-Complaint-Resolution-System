@@ -22,6 +22,7 @@ import {
   Layers,
   ShieldAlert,
   Loader2,
+  Trash2,
 } from 'lucide-react';
 import type {
   CatalogueItem,
@@ -731,12 +732,25 @@ export function EscalationPolicyEditor() {
               <Alert variant="destructive">
                 <AlertTriangle className="w-4 h-4" />
                 <AlertDescription className="text-xs">
-                  The server ignores these overrides, so their complaint types use the default
-                  ladder. Fix or remove them before saving.
+                  pgr-services ignores the ladder flagged below for each of these complaint types.
+                  Fix or remove them before saving.
                   <ul className="mt-1 list-disc pl-4">
                     {invalidOverrideCodes.map((code) => (
                       <li key={code}>
                         <code>{code}</code>: {overrideErrors[code]}
+                        {/* A value that isn't a ladder shows as Default in the catalogue, so this is its only Remove. */}
+                        {isStateAdmin && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleApplyOverride(code, null)}
+                            aria-label={`Remove override ${code}`}
+                            className="h-6 ml-1 px-1.5 text-xs text-destructive hover:text-destructive gap-1"
+                          >
+                            <Trash2 className="w-3 h-3" /> Remove
+                          </Button>
+                        )}
                       </li>
                     ))}
                   </ul>
