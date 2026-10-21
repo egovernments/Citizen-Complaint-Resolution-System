@@ -179,6 +179,22 @@
       delegate_to: localhost
       become: false
 
+    # A string would be joined one character at a time: `-e turbopass_countries=KE`
+    # or `turbopass_countries: KE,IN` becomes COUNTRIES=K,E, which the bootstrap
+    # rejects on every deploy (Dhruv review on #2608). Fail once, before anything
+    # changes.
+    - name: "preflight — turbopass_countries is a list"
+      ansible.builtin.assert:
+        that: turbopass_countries is sequence and turbopass_countries is not string
+        fail_msg: >-
+          turbopass_countries must be a list of ISO 3166-1 alpha-2 codes, e.g.
+          turbopass_countries: [KE, IN] in host_vars, or
+          -e '{"turbopass_countries": ["KE"]}' on the command line. Got
+          {{ turbopass_countries | to_json }}.
+        quiet: true
+      when: enable_turbopass | default(false)
+      tags: [turbopass]
+
     # ==================== One-tag deploys (#1729) ====================
     # Turn `image_tag` (usually `./deploy.sh <tenant> --image-tag=<tag>`) into
     # the ref each catalog image would get from it. Resolved HERE, first, because

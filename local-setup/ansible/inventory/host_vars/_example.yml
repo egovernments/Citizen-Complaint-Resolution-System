@@ -520,11 +520,14 @@ enable_turbopass: false
 # deploy builds it on this box for turbopass_countries when the DB doesn't hold
 # them yet, then mounts it read-only (#2600). Defaults are in
 # group_vars/digit.yml: every country signup offers, under <digit_dir>/turbopass-data.
-# The first build takes minutes per country and needs outbound HTTPS to
-# Overture's S3 bucket, HDX and geoBoundaries; a failure is a deploy WARNING and
-# the previous DB stays served. A single-country box can narrow the list:
+# The first build takes minutes per country and needs outbound HTTPS to Docker
+# Hub, PyPI, extensions.duckdb.org, Overture's S3 bucket, HDX and geoBoundaries
+# (group_vars/digit.yml lists them); a failure is a deploy WARNING and the
+# previous DB stays served. A single-country box can narrow the list:
 # turbopass_countries: [KE]
 # turbopass_overture_data_dir: /opt/digit/turbopass-data
+# turbopass_overture_release: 2026-09-23.1      # blank (default) = the newest
+# turbopass_official_sources: cod,geoboundaries # none = Overture only, no Preconfigured boundaries
 # Rebuild one that already holds them (e.g. for a newer Overture release):
 #   ./deploy.sh <tenant> --tags=turbopass -e '{"turbopass_rebuild_boundary_db": true}'
 #

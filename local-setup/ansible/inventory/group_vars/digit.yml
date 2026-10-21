@@ -64,10 +64,19 @@ enable_search_stack: false
 # turbopass_overture_data_dir doesn't hold all of them yet (#2600). The default
 # is every country the configurator's signup offers (SignupPage.tsx COUNTRIES),
 # so each self-serve workspace finds its own; a single-country box can narrow it.
-# The build needs outbound HTTPS to Overture's S3 bucket, HDX and geoBoundaries.
+# The build needs outbound HTTPS to Docker Hub (python:3.11-slim) and PyPI for
+# the bootstrap image, extensions.duckdb.org (DuckDB's spatial, httpfs and
+# sqlite extensions, installed on every run), and, for the data, Overture's S3
+# bucket (overturemaps-us-west-2), HDX (data.humdata.org) and geoBoundaries
+# (www.geoboundaries.org, which serves its files from GitHub). Nothing it
+# downloads is pinned: a build takes the newest Overture release (unless
+# turbopass_overture_release names one) and whatever sets HDX and geoBoundaries
+# serve that day, so two builds can differ.
 # Measured 2026-10: these four take ~11 min, peak ~3.6 GiB and make a 320 MB DB
 # (India is most of all three); KE alone takes ~2.5 min and makes 29 MB.
-# [] = never build here (a DB copied into the directory is still served).
+# [] = never build here. A box without that outbound access can serve a DB
+# built elsewhere: copy it into turbopass_overture_data_dir, and a DB that
+# already holds these countries is never rebuilt.
 # Rebuild a DB that already holds them with
 # -e '{"turbopass_rebuild_boundary_db": true}'.
 turbopass_countries: [KE, IN, ET, MZ]
