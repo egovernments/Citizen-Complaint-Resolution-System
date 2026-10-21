@@ -170,10 +170,10 @@ const KPIS = Object.fromEntries(CATALOG.map((def) => [def.id, def]));
 const RESULTS = Object.fromEntries(CATALOG.map((def) => [def.id, resultFor(def)]));
 const NOW = Date.UTC(2026, 9, 16, 10, 30);
 
-function exportAll({ errors = {}, loading = false, results = RESULTS } = {}) {
+function exportAll({ errors = {}, loading = false, results = RESULTS, kpis = KPIS, tiles = CATALOG.map((def) => def.id) } = {}) {
   return buildDashboardExport({
-    tiles: CATALOG.map((def) => def.id),
-    kpis: KPIS,
+    tiles,
+    kpis,
     results,
     assemble: (kpiId) => results[kpiId] ?? null,
     errorFor: (kpiId) => errors[kpiId] ?? null,
@@ -251,7 +251,9 @@ for (const { name, mask, seps } of MASKS) {
           const html = render(def);
           const [, value, change, description] = row;
           assert.ok(html.includes(`>${escapeHtml(value.text)}<`), `${def.id}: card shows ${value.text}`);
-          if (change.text) assert.ok(html.includes(`>${escapeHtml(change.text)}<`), `${def.id}: card shows ${change.text}`);
+          // Every card has a prior here, so every card shows a change.
+          assert.ok(change.text, `${def.id}: exports its change`);
+          assert.ok(html.includes(`>${escapeHtml(change.text)}<`), `${def.id}: card shows ${change.text}`);
           const subtitle = resolveSubtitle(def.viz);
           if (kind.includes("sparkline")) {
             assert.equal(description.text, "", `${def.id}: sparkline cards show no subtitle`);
@@ -290,6 +292,27 @@ for (const { name, mask, seps } of MASKS) {
   });
 }
 
+// The parity check above compares each cell with its own text, so it can't
+// see a chart sheet that prints a raw count. Under the English mask the
+// charts group thousands (2033 shows as "2,033"), so their counts must too.
+test("English mask: chart, map and pie counts are exported grouped, as the charts show them", () => {
+  setNumberFormatMask("#,##0.00");
+  try {
+    const model = exportAll();
+    const charts = CATALOG.filter((def) => !CARD_KINDS.has(def.viz.kind) && !TABLE_KINDS.has(def.viz.kind) && def.viz.kind !== "sla-risk-table");
+    for (const kind of new Set(charts.filter((def) => def.viz.format === "integer").map((def) => def.viz.kind))) {
+      const counts = charts
+        .filter((def) => def.viz.kind === kind)
+        .flatMap((def) => sheetFor(model, def).rows.flat())
+        .filter((cell) => typeof cell.value === "number" && Math.abs(cell.value) >= 1000);
+      assert.ok(counts.length > 0, `${kind}: has counts of 1,000 or more`);
+      for (const cell of counts) assert.match(cell.text, /\d,\d{3}/, `${kind}: ${cell.text}`);
+    }
+  } finally {
+    setNumberFormatMask(null);
+  }
+});
+
 /* ------------------------------------------------------------------ */
 /* Cards in detail                                                     */
 /* ------------------------------------------------------------------ */
@@ -301,6 +324,21 @@ test("rates, durations and ratings are exported as shown, not as raw values", ()
   assert.deepEqual(cell("cl_avg_resolution_time"), { text: "0 hrs", value: 0, numFmt: '0" hrs"' });
   assert.deepEqual(cell("cl_csat_avg"), { text: "4.0/5", value: 4, numFmt: '0.0"/5"' });
   assert.deepEqual(cell("cl_new_created_count"), { text: "2,033", value: 2033, numFmt: "#,##0" });
+});
+
+test("a duration column that switches between hours and days stays text", () => {
+  const sheet = sheetFor(exportAll(), KPIS.cl_table_complaint_type_details);
+  const durations = sheet.rows.flat().filter((cell) => / (hrs?|days?)$/.test(cell.text));
+  assert.ok(durations.some((c) => /hrs?$/.test(c.text)) && durations.some((c) => /days?$/.test(c.text)), "hours and days in one table");
+  for (const cell of durations) assert.deepEqual(cell, { text: cell.text });
+});
+
+test("a value in a format applyFormat doesn't know is written as it is, not read as grouped digits", () => {
+  const base = KPIS.cl_total_complaints_count;
+  const def = { ...base, viz: { ...base.viz, format: undefined } };
+  const result = { ...RESULTS[base.id], value: 0.4567 };
+  const model = exportAll({ kpis: { [def.id]: def }, tiles: [def.id], results: { [def.id]: result } });
+  assert.deepEqual(model.sheets[0].rows[0][1], { text: "0.4567", value: 0.4567 });
 });
 
 test("a failed tile exports its error and a loading tile says so", () => {

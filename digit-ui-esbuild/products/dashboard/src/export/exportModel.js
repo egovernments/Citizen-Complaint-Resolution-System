@@ -60,7 +60,30 @@ import { resolveSubtitle, resolveTitle } from "../i18n/textResolver";
 import { linkCell, numberCell, textCell } from "./exportCells";
 
 // Table column types whose text is a number (DashboardTable's formatters).
-const NUMERIC_CELL_TYPES = new Set(["integer", "percent", "hours", "hoursDays", "rating"]);
+// Not hoursDays: it switches from hours to days at 48 h, so as bare numbers
+// one column would hold 40 for "40 hrs" and 3 for "3 days", and sort and sum
+// wrong. Those cells stay text, like the at-risk breach duration.
+const NUMERIC_CELL_TYPES = new Set(["integer", "percent", "hours", "rating"]);
+
+// The formats applyFormat prints. Any other format prints String(value),
+// whose decimals numberCell can't tell from digit grouping (0.4567 would be
+// read as 4,567), so that value is written as it is, with no format.
+const APPLY_FORMATS = new Set([
+  "integer", "percentInteger", "percentNoDecimal", "percentOneDecimal", "percent", "decimalOne",
+  "decimalTwo", "ratingOutOfFive", "hoursDays", "hoursDecimal", "signedInteger", "ordinal",
+]);
+
+/** A cell for a value the tile prints with applyFormat. */
+function formattedCell(value, format, locale) {
+  const text = applyFormat(value, format, locale);
+  if (APPLY_FORMATS.has(format)) return numberCell(text);
+  return text === "—" ? textCell(text) : { text, value: Number(value) };
+}
+
+/** The same, for a column of values: hoursDays stays text (see NUMERIC_CELL_TYPES). */
+function formattedColumnCell(value, format, locale) {
+  return format === "hoursDays" ? textCell(applyFormat(value, format, locale)) : formattedCell(value, format, locale);
+}
 
 // Card kinds KpiTile draws with KpiCard, which shows the subtitle; the
 // sparkline cards don't.
@@ -169,7 +192,7 @@ function cardRow({ title, viz, kind, result, results, state, note, locale }) {
   const delta = computeDelta(value, prior, viz.format, viz.delta?.mode);
   return [
     textCell(title),
-    numberCell(applyFormat(value, viz.format, locale)),
+    formattedCell(value, viz.format, locale),
     textCell(formatDeltaDisplay(delta, viz.format, viz.delta?.mode) ?? ""),
     textCell(subtitle),
     textCell(note),
@@ -380,7 +403,7 @@ function rankedContent(ctx) {
     rows: rows.map((row, i) => [
       numberCell(String(i + 1)),
       textCell(row.label),
-      numberCell(applyFormat(row.value, format, ctx.locale)),
+      formattedColumnCell(row.value, format, ctx.locale),
     ]),
   };
 }
@@ -393,7 +416,7 @@ function dowContent(ctx) {
     columns: [t("DASHBOARD_EXPORT_COL_DATE", "Date"), valueHeader()],
     rows: rows.map((row) => [
       textCell(labels[row.dow] ?? row.dow),
-      numberCell(applyFormat(row.value, format, ctx.locale)),
+      formattedColumnCell(row.value, format, ctx.locale),
     ]),
   };
 }
