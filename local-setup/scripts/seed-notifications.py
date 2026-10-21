@@ -277,6 +277,14 @@ ACL_ROLES_ABSENT = {}
 # test_acl_dump_parity.py re-derives the next free ids from the dump and asserts the
 # tuples below and the dump rows agree field-for-field — run it after any edit here.
 #
+# The ids are what a tenant gets when they are FREE there, not a promise. A tenant whose
+# own actions table outgrew the dump (bomet's `ke`: 4623-4640 are pgr-services analytics
+# and inbox, ACCESSCONTROL-ACTIONS and common-masters rows from 2025-12) already holds
+# them for other URLs. actions-test is x-unique on `id`, so creating the notification
+# action there is a duplicate, never an error. Granting roles to the fixed id then means
+# granting the OTHER URL. plan_notif_actions therefore matches by URL first and moves a
+# colliding action to a free id (ACL-ID-COLLISION).
+#
 # Roles mirror what the existing rows use: the MDMS masters follow
 # NotificationRouting/Template (MDMS_ADMIN, ACCOUNT_ADMIN) plus SUPERUSER; the
 # read-only bridge endpoint follows the existing /novu-adapter/ actions 4582-4589
@@ -1233,6 +1241,49 @@ def tenant_roles(tok, tenant=None):
             if active} - {""}
 
 
+def _action_id(data):
+    try:
+        return int(str(data.get("id")).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def plan_notif_actions(existing):
+    """Where each NOTIF_ACTIONS row lives at this tenant, from its actions-test rows.
+
+    `existing` is [(data, active)] (_record_rows). Returns one (fixed id, action id, create,
+    held_by) per NOTIF_ACTIONS row, in order:
+      - the URL is already an action here → that action (active first, then the fixed id,
+        then the lowest id); nothing is created, so a re-run and a dump-seeded tenant are
+        no-ops;
+      - the URL is absent and the fixed id is free → created at the fixed id;
+      - the fixed id is held by ANOTHER URL (held_by) → created at the next id above every
+        id the tenant has and every fixed id, so it can never take a fixed id another row
+        of this table still needs.
+    Role-actions are granted to the action id, never to a fixed id held by another URL.
+    """
+    ids_by_url, url_by_id = {}, {}
+    for data, active in existing:
+        aid = _action_id(data)
+        if aid is None:
+            continue
+        url = str(data.get("url") or "").strip()
+        url_by_id.setdefault(aid, url)
+        ids_by_url.setdefault(url, []).append((aid, active))
+    next_free = max(list(url_by_id) + [a[0] for a in NOTIF_ACTIONS]) + 1
+    plan = []
+    for fixed, url, *_ in NOTIF_ACTIONS:
+        held = sorted(ids_by_url.get(url, []), key=lambda h: (not h[1], h[0] != fixed, h[0]))
+        if held:
+            plan.append((fixed, held[0][0], False, None))
+        elif fixed not in url_by_id:
+            plan.append((fixed, fixed, True, None))
+        else:
+            plan.append((fixed, next_free, True, url_by_id[fixed]))
+            next_free += 1
+    return plan
+
+
 def seed_access_control(tok):
     """Upsert the notification actions + roleactions. Returns (created, dup, failed).
 
@@ -1244,6 +1295,11 @@ def seed_access_control(tok):
     is its own and this does not invent roles, so those grants are skipped and listed
     (ACL-ROLES-ABSENT). An action row, or a role-action for a role the tenant has, still
     fails the phase.
+
+    Each action goes where plan_notif_actions puts it, so the grants follow the URL. Until
+    2026-10 the action was created at its fixed id unconditionally; a tenant that already
+    used the id for another URL read that as "already present" and got these grants on the
+    other URL (bomet `ke`, deploy of 2026-10-19).
     """
     created = dup = failed = 0
     for schema in (ACTION_SCHEMA, ROLEACTION_SCHEMA, ROLES_SCHEMA):
@@ -1265,14 +1321,38 @@ def seed_access_control(tok):
         print("  access-control: could not read %s at %s — nothing written (cannot tell "
               "which role-actions this tenant can hold)" % (ROLES_SCHEMA, TENANT))
         return 0, 0, 1
+    existing = search_rows(tok, ACTION_SCHEMA)
+    if existing is None:
+        print("  access-control: could not read %s at %s — nothing written (cannot tell "
+              "which action ids are free)" % (ACTION_SCHEMA, TENANT))
+        return 0, 0, 1
     absent = ACL_ROLES_ABSENT  # role -> [action id, ...] not granted: the tenant lacks the role
     absent.clear()
 
-    for aid, url, name, enabled, disp, svc, roles in NOTIF_ACTIONS:
-        action = {"id": aid, "url": url, "code": "null", "name": name, "path": "",
-                  "enabled": enabled, "displayName": disp, "orderNumber": 0,
-                  "serviceCode": svc, "parentModule": ""}
-        r = create_row(tok, ACTION_SCHEMA, action)
+    plan = plan_notif_actions(_record_rows(existing))
+    for (fixed, url, name, enabled, disp, svc, roles), (_, aid, create, held_by) in zip(
+            NOTIF_ACTIONS, plan):
+        if held_by is not None:
+            print("ACL-ID-COLLISION: action %d is %s at %s, not %s — creating it as action %d"
+                  % (fixed, held_by or "(no url)", TENANT, url, aid))
+        elif aid != fixed:
+            print("  access-control: %s is already action %d at %s (not %d) — granting that one"
+                  % (url, aid, TENANT, fixed))
+        if create:
+            action = {"id": aid, "url": url, "code": "null", "name": name, "path": "",
+                      "enabled": enabled, "displayName": disp, "orderNumber": 0,
+                      "serviceCode": svc, "parentModule": ""}
+            r = create_row(tok, ACTION_SCHEMA, action)
+            if r == "dup":
+                # The read missed a row holding this id (mdms-v2's search does not return
+                # every inactive row: 45 of bomet ke's 254 never come back). Granting it
+                # would grant whatever URL that row has, so grant nothing and fail.
+                print("ACL-ID-TAKEN: action id %d at %s was not free (MDMS answered "
+                      "duplicate) — no role-action granted for %s" % (aid, TENANT, url))
+                failed += 1
+                continue
+        else:
+            r = "dup"
         created += (r == "created"); dup += (r == "dup"); failed += r in ("failed", "forbidden")
         for role in roles:
             if role not in roles_here:

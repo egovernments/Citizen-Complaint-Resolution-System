@@ -681,6 +681,121 @@ class ProviderOwnerNotes(unittest.TestCase):
         self.assertIn("only an admin of ke or mz may create one.", notes["pg"])
 
 
+def action(aid, url):
+    return {"id": aid, "url": url, "name": "x", "enabled": True}
+
+
+FIXED = [a[0] for a in sn.NOTIF_ACTIONS]
+URLS = [a[1] for a in sn.NOTIF_ACTIONS]
+
+
+class NotificationActionIds(unittest.TestCase):
+    """bomet `ke`, deploy of 2026-10-19: the tenant's own actions-test table already used
+    4623-4640 for other URLs (pgr-services analytics, ACCESSCONTROL-ACTIONS, ...). Creating
+    the notification actions there came back DUPLICATE, the role-actions were granted to the
+    other URLs, and every NOTIFICATIONS.* write stayed 403, so the tenant could not be
+    migrated."""
+
+    # The shape of bomet ke: every fixed id (and one past them) held by another URL, plus
+    # the high ids pgr-services' onboarding uses.
+    BOMET_KE = [(action(aid, "/pgr-services/other/%d" % aid), True) for aid in range(4620, 4641)] + [
+        (action(900000, "/pgr-services/v2/onboarding/workspaces/_search"), True),
+        (action(901000, "/pgr-services/v2/onboarding/workspaces/_rename"), True)]
+
+    def test_a_fresh_tenant_gets_the_fixed_ids(self):
+        self.assertEqual(sn.plan_notif_actions([]), [(aid, aid, True, None) for aid in FIXED])
+
+    def test_a_seeded_tenant_creates_nothing(self):
+        seeded = [(action(aid, url), True) for aid, url in zip(FIXED, URLS)]
+        self.assertEqual(sn.plan_notif_actions(seeded), [(aid, aid, False, None) for aid in FIXED])
+
+    def test_an_id_held_by_another_url_moves_to_a_free_id(self):
+        plan = sn.plan_notif_actions(self.BOMET_KE)
+        self.assertEqual([p[1] for p in plan], list(range(901001, 901001 + len(FIXED))))
+        self.assertTrue(all(p[2] for p in plan), "each one is created")
+        self.assertEqual([p[3] for p in plan], ["/pgr-services/other/%d" % aid for aid in FIXED])
+
+    def test_the_next_free_id_never_takes_a_fixed_id(self):
+        # Only 4623 collides, and the tenant's highest id is below the fixed range: the moved
+        # action must not land on 4624-4639, which the rows after it still need.
+        plan = sn.plan_notif_actions([(action(4623, "/elsewhere"), True)])
+        self.assertEqual(plan[0], (4623, max(FIXED) + 1, True, "/elsewhere"))
+        self.assertEqual(plan[1:], [(aid, aid, True, None) for aid in FIXED[1:]])
+
+    def test_a_url_already_held_at_another_id_is_reused(self):
+        url = "/mdms-v2/v2/_create/NOTIFICATIONS.Routing"
+        fixed = FIXED[URLS.index(url)]
+        plan = sn.plan_notif_actions(self.BOMET_KE + [(action(777, url), True)])
+        self.assertEqual(plan[URLS.index(url)], (fixed, 777, False, None))
+
+    def test_an_active_action_wins_over_an_inactive_one(self):
+        url = URLS[0]
+        plan = sn.plan_notif_actions([(action(FIXED[0], url), False), (action(800, url), True)])
+        self.assertEqual(plan[0], (FIXED[0], 800, False, None))
+        plan = sn.plan_notif_actions([(action(900, url), False), (action(FIXED[0], url), False)])
+        self.assertEqual(plan[0], (FIXED[0], FIXED[0], False, None), "then the fixed id")
+
+    def seed(self, existing, hidden_ids=(), failures=0):
+        """seed_access_control against a fake MDMS holding `existing` actions (plus
+        `hidden_ids`, rows its search does not return); returns the rows it asked MDMS to
+        create and what it printed."""
+        import contextlib
+        import io
+        writes = []
+
+        def create_row(_tok, code, row, is_active=None, tenant=None):
+            if code == sn.ACTION_SCHEMA and row["id"] in hidden_ids:
+                return "dup"
+            writes.append((code, dict(row)))
+            return "created"
+
+        patches = {"TENANT": "ke", "find_schema": lambda _tok, _code, tenant=None: {},
+                   "tenant_roles": lambda _tok, tenant=None: {"MDMS_ADMIN", "ACCOUNT_ADMIN", "SUPERUSER",
+                                                              "CSR", "GRO", "PGR_LME"},
+                   "search_rows": lambda _tok, code, tenant=None: [rec(d, a) for d, a in existing],
+                   "create_row": create_row}
+        for name, value in patches.items():
+            self.addCleanup(setattr, sn, name, getattr(sn, name))
+            setattr(sn, name, value)
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            _created, _dup, failed = sn.seed_access_control("tok")
+        self.assertEqual(failed, failures)
+        actions = {row["id"]: row["url"] for code, row in writes if code == sn.ACTION_SCHEMA}
+        grants = [(row["rolecode"], row["actionid"]) for code, row in writes if code == sn.ROLEACTION_SCHEMA]
+        return actions, grants, out.getvalue()
+
+    def test_grants_follow_the_url_on_a_colliding_tenant(self):
+        actions, grants, out = self.seed(self.BOMET_KE)
+        self.assertEqual(sorted(actions.values()), sorted(URLS), "every notification URL is created")
+        self.assertFalse(set(actions) & set(FIXED), "never at an id another URL holds")
+        self.assertFalse([g for g in grants if g[1] in FIXED], "no grant on another URL's action")
+        self.assertEqual({aid for _role, aid in grants}, set(actions))
+        self.assertEqual(out.count("ACL-ID-COLLISION"), len(FIXED))
+        self.assertIn("ACL-ID-COLLISION: action 4630 is /pgr-services/other/4630 at ke, not "
+                      "/mdms-v2/v2/_create/NOTIFICATIONS.Routing — creating it as action", out)
+
+    def test_an_id_the_search_missed_gets_no_grant(self):
+        # mdms-v2's search drops some inactive rows (45 of 254 on bomet ke). If the free id
+        # turns out to be taken, its row's URL is unknown: grant nothing there, fail the phase.
+        actions, grants, out = self.seed(self.BOMET_KE, hidden_ids={901001}, failures=1)
+        self.assertNotIn(901001, {aid for _role, aid in grants})
+        self.assertNotIn(901001, actions)
+        self.assertIn("ACL-ID-TAKEN: action id 901001 at ke was not free", out)
+        self.assertEqual(len(actions), len(FIXED) - 1, "the other actions still land")
+
+    def test_a_fresh_tenant_is_seeded_exactly_as_the_dump(self):
+        actions, grants, out = self.seed([])
+        self.assertEqual(actions, dict(zip(FIXED, URLS)))
+        self.assertEqual(sorted(grants), sorted((role, a[0]) for a in sn.NOTIF_ACTIONS for role in a[6]))
+        self.assertNotIn("ACL-ID-COLLISION", out)
+
+    def test_a_seeded_tenant_only_re_asserts_its_grants(self):
+        actions, grants, _out = self.seed([(action(aid, url), True) for aid, url in zip(FIXED, URLS)])
+        self.assertEqual(actions, {}, "no action is created again")
+        self.assertEqual({aid for _role, aid in grants}, set(FIXED))
+
+
 
 @unittest.skipIf(jinja2 is None, "needs jinja2 + PyYAML (ansible's own dependencies)")
 class WorkspaceRootsAreNotSeededByTheDeploy(unittest.TestCase):
