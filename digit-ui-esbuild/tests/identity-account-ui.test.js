@@ -380,6 +380,26 @@ test("citizen profile and logout dialog do not show the internal userName", asyn
   dialog.unmount();
 });
 
+// #2594 review: a BFF-managed staff key is internal too, and a citizen whose
+// name is their number sees it once.
+test("managed staff key is hidden and a name that is the number is not repeated", async () => {
+  const staff = browser("employee", () => assert.fail("no BFF reads"));
+  staff.replaceUser({ access_token: "old-token", info: { ...staff.getUser().info, userName: "kcbff-0123456789abcdef" } });
+  const profile = await render(ui.Profile, { userType: "employee", stateCode: "ke", cityDetails: { name: "Bomet" } });
+  assert.doesNotMatch(text(profile.root), /kcbff/);
+  profile.unmount();
+  const staffDialog = await render(ui.LogoutDialog, { onSelect: async () => {} });
+  assert.doesNotMatch(text(staffDialog.root), /kcbff/);
+  assert.match(text(staffDialog.root), /711111111/);
+  staffDialog.unmount();
+
+  const citizen = browser("citizen", () => assert.fail("no BFF reads"));
+  citizen.replaceUser({ access_token: "old-token", info: { ...citizen.getUser().info, name: "711111111" } });
+  const dialog = await render(ui.LogoutDialog, { onSelect: async () => {} });
+  assert.equal(text(dialog.root).split("711111111").length - 1, 1);
+  dialog.unmount();
+});
+
 // Medium 4 (Dhruv, #2271 review 2): a login page reached on a tenantless
 // /digit-ui/... URL (legacy ingress, preserved vhost, Kong /digit-ui) has no
 // route tenant. It used to throw a TypeError reading tenant.appBasePath.

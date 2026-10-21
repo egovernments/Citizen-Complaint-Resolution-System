@@ -1145,6 +1145,9 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
     const v = t(key);
     return v === key ? fallback : v;
   };
+  // A BFF-managed staff account's userName is an internal `kcbff-` key; bound
+  // staff see their HRMS code.
+  const visibleUserName = /^kcbff/.test(userInfo?.userName || "") ? null : userInfo?.userName;
   const genderOptions = (menu || []).map((g) => ({
     value: g.code,
     label: t(g.i18nKey),
@@ -1306,8 +1309,8 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
                 wordBreak: "break-word",
               }}
             >
-              {userInfo?.userName ? userInfo.userName : ""}
-              {userInfo?.userName && (mobileNumber || email) ? "  ·  " : ""}
+              {visibleUserName || ""}
+              {visibleUserName && (mobileNumber || email) ? "  ·  " : ""}
               {mobileNumber ? `${countryCode} ${mobileNumber}` : ""}
               {mobileNumber && email ? "  ·  " : ""}
               {email || ""}
