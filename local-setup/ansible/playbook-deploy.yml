@@ -192,7 +192,7 @@
           -e '{"turbopass_countries": ["KE"]}' on the command line. Got
           {{ turbopass_countries | to_json }}.
         quiet: true
-      when: enable_turbopass | default(false)
+      when: enable_turbopass | default(false) | bool
       tags: [turbopass]
 
     # ==================== One-tag deploys (#1729) ====================
