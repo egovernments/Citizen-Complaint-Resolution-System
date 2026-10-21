@@ -90,6 +90,14 @@ a named assignee. `PENDINGFORREASSIGNMENT` has one when the resolver's
 `REASSIGN` names a grievance officer. `PENDINGFORASSIGNMENT` straight after
 filing never does.
 
+The complaint stays in the state, and its new holder is the grievance officer's
+`reportingTo`. Nothing checks that person's roles, and Take Action lists only
+the actions whose roles the user holds. In the shipped graph the working
+actions on `PENDINGFORREASSIGNMENT` (`ASSIGN`, `REJECT`) carry `GRO` and
+`PGR_VIEWER` only, so an escalation target who holds neither sees no Take
+Action and the complaint waits for the next rung. Every grievance officer's
+`reportingTo` must hold `GRO` or `PGR_VIEWER`.
+
 **1. Check the state.** This read-only query lists every `ESCALATE` on the
 target state, including inactive ones, which `_search` hides. Expect no rows.
 
@@ -109,10 +117,11 @@ as returned, cut down to the one state, carrying only the new action. The action
 has the same shape as the seeded `ESCALATE` on `PENDINGATLME`:
 `nextState` is the state's own `uuid`, and the roles are the employee roles that
 already act on the state plus `SYSTEM` for the scheduler. Use `["SYSTEM"]` for
-automatic escalation only.
+automatic escalation only; no employee is then offered Escalate, so skip the
+Take Action check under Verify.
 
 ```bash
-HOST=https://<gateway> TENANT=ke STATE=PENDINGFORREASSIGNMENT TOKEN=<admin auth token>
+HOST=https://<gateway> TENANT=ke STATE=PENDINGFORREASSIGNMENT TOKEN=<token of a SUPERUSER or WORKFLOW_ADMIN on $TENANT>
 curl -s -X POST "$HOST/egov-workflow-v2/egov-wf/businessservice/_search?tenantId=$TENANT&businessServices=PGR" \
   -H 'Content-Type: application/json' -d "{\"RequestInfo\":{\"authToken\":\"$TOKEN\"}}" > pgr-bs.json
 
@@ -144,7 +153,8 @@ after step 3; automatic escalation needs both.
 
 **Verify.** A `_search` at the state root and at one city shows exactly one
 `ESCALATE` on the state: `active`, `nextState` equal to the state's `uuid`,
-roles including `SYSTEM`. On a complaint in that state with a named assignee,
+roles including `SYSTEM`. Each grievance officer's `reportingTo` holds `GRO` or
+`PGR_VIEWER`. On a complaint in that state with a named assignee,
 the assignee sees Escalate in Take Action, and it lands on their `reportingTo`
 without changing state. Once due, the scheduler records an `ESCALATE` by the
 internal `SYSTEM` user, `escalationLevel` increases, and pgr-services logs no
