@@ -52,9 +52,10 @@ leaving **~56 containers running persistently** in steady state.
 | **API gateway** | 1 | kong |
 | **Observability base** | 2 | otel-collector, gatus |
 | **Secrets** | 1 | openbao |
+| **Identity** *(`keycloak` profile, always on)* | 3 | keycloak-postgres, keycloak, identity-bff |
 | **Init containers** *(exit after startup)* | 4 | db-migrations, minio-init, hrms-prereq-gate, user-seed |
 | **Monitoring exporters** *(docker-compose.monitoring.yml)* | 2 | node-exporter, postgres-exporter |
-| **Default total** | **35** | |
+| **Default total** | **38** | |
 
 ### Profile-gated (opt-in)
 
@@ -69,7 +70,6 @@ playbook. Each profile is independent — enable any combination.
 | `search` | `enable_search_stack: true` | 3 | elasticsearch, egov-indexer, inbox |
 | `otp` | `enable_otp_services: true` (requires `enable_novu: true`) | 2 | egov-otp, user-otp (their SMS goes out through novu-bridge) |
 | `notifications` | `enable_novu: true` | 8 | novu-mongo, novu-api, novu-worker, novu-ws, novu-dashboard, digit-config-service, digit-user-preferences-service, novu-bridge |
-| `keycloak` | always on (mandatory) | 3 | keycloak-postgres, keycloak, identity-bff |
 | `mcp` | `enable_mcp: true` | 2 | mcp-postgres, digit-mcp |
 
 **Full stack (all profiles): 57 persistent + 4 init = 61 total.**

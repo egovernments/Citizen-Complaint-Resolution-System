@@ -77,10 +77,14 @@ bootstrap_secrets:
   identity_smtp_password: "<SMTP password>"
 ```
 
-The deploy derives separate stable BFF-client and workload secrets from the
-Keycloak admin secret and writes them only to the mode-0600 Compose environment.
-A Keycloak admin-password rotation therefore also rotates those credentials on
-the next converge.
+The BFF-client and workload secrets (`keycloak_*_client_secret`,
+`identity_control_plane_token`, `identity_session_introspection_token`,
+`identity_onboarding_token`, `identity_citizen_otp_secret`) are not derived from
+anything. The first deploy generates each one independently and stores it in
+OpenBao, and every deploy writes them only to the mode-0600 Compose environment.
+Rotating the Keycloak admin password therefore rotates nothing else. To rotate
+one of them, `bao kv put` a new value; the next deploy pushes it into Keycloak
+and the BFF.
 
 ### Staff password reset needs an email address
 

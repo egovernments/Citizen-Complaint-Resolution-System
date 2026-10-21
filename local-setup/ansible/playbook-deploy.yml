@@ -1814,27 +1814,27 @@
 
     # D26: legacy native identity endpoints default closed. An explicit
     # identity_legacy_user_endpoints:true is the rollback switch for a
-    # non-complete deployment.
+    # non-complete deployment. `| bool`: `-e ...=false` is the string "false".
     - name: "Kong — remove legacy identity endpoints from AUTH_OPTIONAL"
       ansible.builtin.replace:
         path: "{{ digit_dir }}/kong/.kong.yml.pinned"
         regexp: '(?m)^.*-- identity-legacy-user-endpoint\n'
         replace: ''
-      when: not (identity_legacy_user_endpoints | default(false))
+      when: not (identity_legacy_user_endpoints | default(false) | bool)
 
     - name: "Kong — remove the legacy OTP validation mock route"
       ansible.builtin.replace:
         path: "{{ digit_dir }}/kong/.kong.yml.pinned"
         regexp: '(?ms)^# identity-legacy-otp-mock-start\n.*?^# identity-legacy-otp-mock-end\n'
         replace: ''
-      when: not (identity_legacy_user_endpoints | default(false))
+      when: not (identity_legacy_user_endpoints | default(false) | bool)
 
     - name: "Kong — reopen legacy identity endpoints only when explicitly enabled"
       ansible.builtin.replace:
         path: "{{ digit_dir }}/kong/.kong.yml.pinned"
         regexp: '(?ms)^- name: identity-legacy-user-endpoints-denied # identity-legacy-user-deny-start\n.*?^# identity-legacy-user-deny-end\n'
         replace: ''
-      when: identity_legacy_user_endpoints | default(false)
+      when: identity_legacy_user_endpoints | default(false) | bool
 
     - name: "Kong — write the pinned config back IN PLACE (preserves the inode)"
       ansible.builtin.shell: |

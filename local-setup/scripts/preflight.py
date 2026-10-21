@@ -109,11 +109,11 @@ def as_bool(val):
     return str(val).strip().lower() in ("yes", "on", "true", "1")
 
 
-# The two rules below mirror refusals in playbook-deploy.yml ("preflight —
-# Keycloak is mandatory (refuse enable_keycloak: false)" and "preflight —
-# refuse retired digit-ui-v2 citizen identity"), so a host_vars copied from an
-# example fails here in seconds instead of at the start of the play. Keep them
-# in step.
+# The three rules below mirror refusals in playbook-deploy.yml ("preflight —
+# Keycloak is mandatory (refuse enable_keycloak: false)", "preflight — refuse
+# retired digit-ui-v2 citizen identity" and "preflight — refuse the retired
+# auth_provider: keycloak"), so a host_vars copied from an example fails here in
+# seconds instead of at the start of the play. Keep them in step.
 @rule(
     "identity-needs-keycloak",
     "Since D26 every DIGIT UI sign-in goes through Keycloak and the Identity "
@@ -138,6 +138,19 @@ def r_digit_ui_v2_retired(cfg):
     if as_bool(get(cfg, "enable_digit_ui_v2", False)):
         yield (FAIL, "enable_digit_ui_v2 is no longer supported (D26). Set it false and publish "
                      "/<tenant-slug>/digit-ui/citizen instead.")
+
+
+@rule(
+    "auth-provider-retired",
+    "auth_provider: keycloak selected the browser Keycloak adapter that #2088 "
+    "and D26 removed; the playbook refuses it on any of the three keys.",
+)
+def r_auth_provider_retired(cfg):
+    keys = [k for k in ("auth_provider", "citizen_auth_provider", "employee_auth_provider")
+            if cfg.get(k) == "keycloak"]
+    if keys:
+        yield (FAIL, ", ".join(keys) + ": keycloak is retired (D26). Delete the key(s); every sign-in "
+                     "already goes through Keycloak and the Identity BFF.")
 
 
 @rule(
@@ -440,6 +453,10 @@ SELF_TEST_CASES = [
     ("enable_digit_ui_v2 'yes' fires", {"enable_digit_ui_v2": "yes"},
      {"digit-ui-v2-retired"}),
     ("enable_digit_ui_v2 false is clean", {"enable_digit_ui_v2": False}, set()),
+    ("auth_provider keycloak fires", {"auth_provider": "keycloak"}, {"auth-provider-retired"}),
+    ("employee_auth_provider keycloak fires", {"employee_auth_provider": "keycloak"},
+     {"auth-provider-retired"}),
+    ("auth_provider digit is clean", {"auth_provider": "digit"}, set()),
     ("ui-v2 nginx without enable fires", {"nginx_features": {"digit_ui_v2": True}},
      {"digit-ui-v2-combo"}),
     ("mcp without registry fires", {"enable_mcp": True, "docker_registry": ""},

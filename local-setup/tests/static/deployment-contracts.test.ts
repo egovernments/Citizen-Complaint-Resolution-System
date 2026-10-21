@@ -2141,7 +2141,10 @@ describe('D26 legacy identity paths are retired', () => {
     expect(kong).toContain('["/user/oauth/token"]=true');
     expect(kong).toContain('isInternal is not accepted at the public gateway');
     expect(playbook).toContain('identity_legacy_user_endpoints');
-    expect(playbook).toContain('when: identity_legacy_user_endpoints | default(false)');
+    // `| bool` on all three: `-e identity_legacy_user_endpoints=false` is the truthy string "false".
+    expect(playbook.split('when: not (identity_legacy_user_endpoints | default(false) | bool)\n')).toHaveLength(3);
+    expect(playbook.split('when: identity_legacy_user_endpoints | default(false) | bool\n')).toHaveLength(2);
+    expect(playbook).not.toMatch(/identity_legacy_user_endpoints \| default\([^)]*\)(?! \| bool)/);
 
     // Mirror the two Ansible replacements for the Keycloak/default-false
     // configuration: the three native calls leave AUTH_OPTIONAL, the mock
