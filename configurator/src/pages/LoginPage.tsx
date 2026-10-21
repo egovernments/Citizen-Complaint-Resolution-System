@@ -1,9 +1,12 @@
 import { enterWorkspace } from '@/identity/entry';
 import { Invitations } from '@/identity/Invitations';
+import { complaintDeskUrl } from '@/identity/workspaceSlug';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { AlertCircle, ArrowRight, CheckCircle2, Loader2, LogOut, Mail } from 'lucide-react';
 import {
+  API_ORIGIN,
+  OnboardingError,
   type AuthMethod,
   type SessionUser,
   type TenantOption,
@@ -53,6 +56,8 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [sending, setSending] = useState(false);
   const [incompleteSignOut, setIncompleteSignOut] = useState(false);
+  // Set when a workspace refuses the Configurator to this account: its staff work in the employee app.
+  const [employeeAppUrl, setEmployeeAppUrl] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -89,10 +94,21 @@ export default function LoginPage() {
 
   const enter = async (option: TenantOption) => {
     setError(null);
+    setEmployeeAppUrl(null);
     setPhase('entering');
     try {
       await enterWorkspace(option.tenantId, identityUser);
     } catch (caught) {
+      // The identity session ended (expired, or signed out elsewhere): retrying can't work, so sign in again.
+      if (caught instanceof OnboardingError && caught.isUnauthenticated) {
+        setError('Your session ended. Sign in again to continue.');
+        setPhase('loading');
+        await load();
+        return;
+      }
+      if (caught instanceof OnboardingError && caught.code === 'CONFIGURATOR_ROLE_REQUIRED') {
+        setEmployeeAppUrl(complaintDeskUrl(API_ORIGIN || window.location.origin, option.organizationAlias.toLowerCase()));
+      }
       setError(describeSignupError(caught).message);
       setPhase('tenants');
     }
@@ -187,6 +203,11 @@ export default function LoginPage() {
             </p>
           </div>
           {banner}
+          {employeeAppUrl && (
+            <Button asChild className="h-11 w-full">
+              <a href={employeeAppUrl}>Open the employee app</a>
+            </Button>
+          )}
           <div className="space-y-3">
             {tenantOptions.map((option) => (
               <Button

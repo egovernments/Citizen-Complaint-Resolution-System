@@ -179,6 +179,28 @@ describe('configurator sign in', () => {
     fireEvent.click(await screen.findByRole('button', { name: /bomet county/i }));
 
     expect(await screen.findByText(/the configurator is for workspace admins/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /open the employee app/i })).toHaveAttribute(
+      'href',
+      `${window.location.origin}/ke/digit-ui/employee`,
+    );
+    expect(localSession.installDigitContext).not.toHaveBeenCalled();
+  });
+
+  it('returns to sign-in when the identity session ended before a workspace was chosen', async () => {
+    vi.mocked(api.session).mockResolvedValueOnce(signedIn).mockResolvedValue({ authenticated: false });
+    vi.mocked(api.tenants).mockResolvedValue({
+      tenants: [{ tenantId: 'ke', name: 'Bomet County', organizationAlias: 'ke', roles: ['MDMS_ADMIN'] }],
+      selectionRequired: false,
+      onboardingRequired: false,
+    });
+    vi.mocked(api.selectContext).mockRejectedValue(new api.OnboardingError(401, 'SESSION_REVOKED', 'Identity session revoked'));
+    renderPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: /bomet county/i }));
+
+    expect(await screen.findByText(/your session ended\. sign in again/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^log in$/i })).toBeInTheDocument();
+    expect(screen.queryByText(/contact support/i)).not.toBeInTheDocument();
     expect(localSession.installDigitContext).not.toHaveBeenCalled();
   });
 
