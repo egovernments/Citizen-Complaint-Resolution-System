@@ -310,6 +310,7 @@ export function registerCitizenOtpRoutes(app: express.Application, phoneEffects:
       ...base, event: "SESSION_CREATE", outcome: "SUCCESS", subject: user.id,
       sessionRef: privateRef("session", sessionId),
       ...(user.created && { reason: "IDENTITY_CREATED" }),
+      ...(user.staffProved && { reason: "STAFF_PHONE_PROVED" }),
     });
     response.setHeader("Set-Cookie", sessionCookie(sessionId, maxAge, "citizen"));
     return response.json({

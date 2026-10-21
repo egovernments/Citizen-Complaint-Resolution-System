@@ -71,6 +71,7 @@ export interface ManagedIdentity {
 export interface ManagedProfile {
   name: string;
   emailId?: string;
+  gender?: string;
   mobileNumber?: string;
   countryCode?: string;
 }
@@ -389,6 +390,7 @@ export async function ensureManagedAccount(
         mobileNumber: profile.mobileNumber.trim(),
         countryCode: profile.countryCode?.trim() || null,
         emailId: profile.emailId || null,
+        ...(profile.gender && { gender: profile.gender }),
         tenantId: identity.tenantId,
         type: identity.userType,
         active: true,

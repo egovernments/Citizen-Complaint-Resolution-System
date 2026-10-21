@@ -9,7 +9,7 @@ import { drainRevocationJobs, holdToken, recordToken } from "../../src/modules/r
 import { applyKeycloakEvent } from "../../src/modules/revocation/event-effects.js";
 import { propagateIdentifiers } from "../../src/modules/sync/identifiers.js";
 import { tokenKey, tokenHoldersKey, personTokensKey, accountId } from "../../src/modules/revocation/inventory.js";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { config } from "../../src/infrastructure/config.js";
 import { getIssuer } from "../helpers.js";
 import { createFakeDigitUser } from "../../mocks/fake-digit-user.js";
@@ -3076,6 +3076,90 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       expect(ambiguous.status).toBe(409);
       expect((await ambiguous.json()).code).toBe("CITIZEN_ACCOUNT_AMBIGUOUS");
       expect(digit.stats.creates).toBe(creates);
+    });
+
+    describe("an employee's registered mobile on the citizen portal (#2595)", () => {
+      const staff = "identity-user-unlinked";
+      const signInByOtp = async (mobileNumber: string) => {
+        const { challengeId } = await (await fetch(`${app()}/identity/v1/citizen/otp/_send`, {
+          method: "POST", headers: { Origin: "http://localhost:3000", "Content-Type": "application/json" },
+          body: JSON.stringify({ tenantSlug: "bomet-county", mobileNumber }),
+        })).json();
+        const verified = await fetch(`${app()}/identity/v1/citizen/otp/_verify`, {
+          method: "POST", headers: { Origin: "http://localhost:3000", "Content-Type": "application/json" },
+          body: JSON.stringify({ tenantSlug: "bomet-county", challengeId, code: sent[sent.length - 1].code }),
+        });
+        expect(verified.status).toBe(200);
+        return cookieFrom(verified, "digit_identity_session_citizen")!;
+      };
+      const sessionOf = async (cookie: string, surface: string) => (await fetch(
+        `${app()}/identity/v1/session?surface=${surface}&include=account`, { headers: { Cookie: cookie } },
+      ));
+      const employee = (mobileNumber: string) => digit.addAccount({
+        userName: `EMP-${mobileNumber}`, name: "Garry", mobileNumber, emailId: "garry@example.com", gender: "MALE",
+        tenantId: "ke.bomet", type: "EMPLOYEE", active: true, identificationMark: null,
+        roles: [{ code: "EMPLOYEE", tenantId: "ke.bomet" }, { code: "GRO", tenantId: "ke.bomet" }], password: "Legacy@123",
+      });
+      let bound = "";
+      const bindStaff = async (mobileNumber: string, attributes: Record<string, string[]> = {}) => {
+        bound = employee(mobileNumber).uuid;
+        await bindLegacyEmployeeFixture(bound);
+        const user = await (await fetch(`${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/${staff}`)).json();
+        await kcUpdate(`/users/${staff}`, { attributes: { ...user.attributes, ...attributes } });
+      };
+      afterEach(async () => {
+        if (bound) await removeLegacyEmployeeFixture(bound);
+        bound = "";
+        const user = await (await fetch(`${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/${staff}`)).json();
+        const attributes = { ...user.attributes };
+        for (const name of ["phoneNumber", "phoneNumberVerified", "digit.citizenRegistrations", "digit.accounts"]) delete attributes[name];
+        await kcUpdate(`/users/${staff}`, { attributes });
+      });
+
+      it("signs in as the employee: one person, one session list, and a citizen profile from the employee record", async () => {
+        await bindStaff("799002595");
+        const staffCookie = await signIn("employee", "unlinked");
+        const citizenCookie = await signInByOtp("799002595");
+
+        const citizen = await (await sessionOf(citizenCookie, "citizen")).json();
+        expect(citizen.user).toMatchObject({ id: staff, name: "Garry", phoneNumber: "+254799002595", phoneNumberVerified: true });
+        const surfaces = (body: { sessions: Array<{ surface: string; current: boolean }> }) =>
+          body.sessions.map((s) => `${s.surface}${s.current ? " (current)" : ""}`);
+        expect(surfaces(citizen)).toEqual(expect.arrayContaining(["citizen (current)", "employee"]));
+        expect(surfaces(await (await sessionOf(staffCookie, "employee")).json()))
+          .toEqual(expect.arrayContaining(["citizen", "employee (current)"]));
+        expect((await auditRecords()).filter((r) => r.event === "SESSION_CREATE" && r.subject === staff).at(-1))
+          .toMatchObject({ outcome: "SUCCESS", reason: "STAFF_PHONE_PROVED" });
+
+        const selected = await citizenSelect(citizenCookie);
+        expect(selected.status).toBe(200);
+        const { UserRequest } = await selected.json();
+        expect(UserRequest).toMatchObject({ type: "CITIZEN", tenantId: "ke", mobileNumber: "799002595" });
+        expect(digit.accounts.get(UserRequest.uuid)).toMatchObject({ name: "Garry", gender: "MALE", emailId: "garry@example.com" });
+
+        // "Sign out everywhere" from the citizen portal reaches the employee portal too.
+        const logout = await fetch(`${app()}/identity/v1/logout`, {
+          method: "POST",
+          headers: { Cookie: citizenCookie, Origin: "http://localhost:3000", "Content-Type": "application/json" },
+          body: JSON.stringify({ surface: "citizen", scope: "all" }),
+        });
+        expect(logout.status).toBe(204);
+        expect((await sessionOf(staffCookie, "employee")).status).toBe(401);
+      });
+
+      it("keeps a separate phone identity when the employee record is ambiguous or the employee proved another number", async () => {
+        await bindStaff("799002596");
+        employee("799002596");
+        const ambiguous = await (await sessionOf(await signInByOtp("799002596"), "citizen")).json();
+        expect(ambiguous.user.id).not.toBe(staff);
+        await removeLegacyEmployeeFixture(bound);
+
+        await bindStaff("799002597", { phoneNumber: ["+254799002598"], phoneNumberVerified: ["true"] });
+        const proved = await (await sessionOf(await signInByOtp("799002597"), "citizen")).json();
+        expect(proved.user.id).not.toBe(staff);
+        const user = await (await fetch(`${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/${staff}`)).json();
+        expect(user.attributes.phoneNumber).toEqual(["+254799002598"]);
+      });
     });
 
     it("trusts a phone OTP session only for the number it proved, not a later Keycloak phone", async () => {

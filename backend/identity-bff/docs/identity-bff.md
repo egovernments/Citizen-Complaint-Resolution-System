@@ -381,6 +381,7 @@ change_phone → 200 {phoneNumber, phoneNumberVerified: true}
 
 - Identity resolution and creation run under the **phone lock** (§2.5).
 - New phone identities get an **opaque** Keycloak username. Existing usernames stay, and lookup always follows the current verified phone (design §8).
+- **An employee's own number** (#2595): a number no Keycloak user has verified, on exactly one active EMPLOYEE record at the route's tenant, signs in as the staff person actively bound to that record, when they still have staff access there and have no verified phone yet. The code proves the number and the record says whose it is, so the number becomes that person's verified phone instead of a new identity. Their citizen and staff sessions then list and sign out together (§6), and the audit's `SESSION_CREATE` says `STAFF_PHONE_PROVED`. Two such records, two bound people, a person without access, or a person who already proved a phone: a new phone identity, as for any new number. The employee lookup needs DIGIT; an outage is `IDENTITY_UNAVAILABLE`, never a new identity.
 - A **phone change** keeps the citizen account's uuid. It updates Keycloak, then DIGIT. It ends the person's other sessions that carry the old number.
 - A new citizen without a given name gets the national mobile number as their DIGIT name (D17).
 - Errors: `INVALID_REQUEST`, `PHONE_OTP_DISABLED`, `OTP_EXPIRED`, `OTP_INVALID` (+ `attemptsRemaining`) (400); `SESSION_REQUIRED` 401; `UNTRUSTED_ORIGIN`, `IDENTITY_DISABLED` (403); `TENANT_ROUTE_NOT_FOUND` 404; `IDENTITY_CONFLICT`, `PHONE_IN_USE` (409); `TENANT_ROUTE_UNAVAILABLE`, `IDENTITY_UNAVAILABLE` (503).
@@ -472,6 +473,7 @@ Body `{surface?: "citizen"}`. The tenant comes only from the session's bound ten
 
 - The same steps as staff `_select`, with the citizen predicate. Issuance is the egov-otp-backed citizen grant.
 - Resolution: the `digit.accounts` citizen entry, then the citizen link, then a CITIZEN search by the verified phone. An ambiguous match → `CITIZEN_ACCOUNT_AMBIGUOUS`.
+- A citizen account the BFF creates for a person with an active staff entry at the tenant starts with that employee record's gender and email (#2595). Existing accounts are never changed.
 - The per-tenant registration `DISABLED` status is removed (D6). Blocking a citizen = disabling their Keycloak user.
 - Errors: as staff `_select`, plus `PHONE_NOT_VERIFIED`, `CITIZEN_CONTEXT_UNAVAILABLE` (403); `CITIZEN_ACCOUNT_AMBIGUOUS`, `CITIZEN_ACCOUNT_LINK_BLOCKED` (409); `DIGIT_ACCOUNT_MISMATCH` 502; `CITIZEN_SIGNIN_NOT_CONFIGURED`, `ACCOUNT_LINK_BUSY` (503).
 
