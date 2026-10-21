@@ -28,6 +28,8 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -142,20 +144,36 @@ class TenantAccountControllersTest {
                 .andExpect(jsonPath("$.data.transactionId").value("otp-1"));
     }
 
+    private static final String TRIAL_EMAIL = "{\"eventId\":\"e\",\"eventType\":\"WORKSPACE_TRIAL\",\"channel\":\"EMAIL\"}";
+
     @Test
     void dispatch_answersTheLedgerStatus_andARejectedEnvelopeIs400() throws Exception {
         DerivedContext context = DerivedContext.builder().transactionId("txn-1").channel("EMAIL").subscriberId("identity:person").build();
         when(pipeline.processInternal(any())).thenReturn(DispatchResult.builder().novuTriggered(false).derivedContext(context)
                 .diagnostics(List.of("Already SENT for this transaction; not sent again")).build());
         when(ledger.findStatus("txn-1", "EMAIL", "identity:person")).thenReturn("SENT");
-        mvc.perform(post("/novu-adapter/v1/messages/_dispatch").contentType(MediaType.APPLICATION_JSON).content("{\"eventId\":\"e\"}"))
+        mvc.perform(post("/novu-adapter/v1/messages/_dispatch").contentType(MediaType.APPLICATION_JSON).content(TRIAL_EMAIL))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("SENT"))
                 .andExpect(jsonPath("$.data.transactionId").value("txn-1"));
 
-        when(pipeline.processInternal(any())).thenThrow(new CustomException("NB_UNSUPPORTED_EVENT_TYPE", "x"));
-        mvc.perform(post("/novu-adapter/v1/messages/_dispatch").contentType(MediaType.APPLICATION_JSON).content("{}"))
+        when(pipeline.processInternal(any())).thenThrow(new CustomException("NB_INVALID_EVENT", "x"));
+        mvc.perform(post("/novu-adapter/v1/messages/_dispatch").contentType(MediaType.APPLICATION_JSON).content(TRIAL_EMAIL))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.Errors[0].code").value("NB_UNSUPPORTED_EVENT_TYPE"));
+                .andExpect(jsonPath("$.Errors[0].code").value("NB_INVALID_EVENT"));
+    }
+
+    @Test
+    void dispatch_refusesAnythingButWorkspaceTrialEmail_beforeThePipeline() throws Exception {
+        for (String body : new String[] {
+                "{\"eventId\":\"e\",\"eventType\":\"CORE_SMS\",\"channel\":\"SMS\"}",
+                "{\"eventId\":\"e\",\"eventType\":\"COMPLAINTS_WORKFLOW_TRANSITIONED\",\"channel\":\"EMAIL\"}",
+                "{\"eventId\":\"e\",\"eventType\":\"WORKSPACE_TRIAL\",\"channel\":\"SMS\"}",
+                "{\"eventId\":\"e\"}"}) {
+            mvc.perform(post("/novu-adapter/v1/messages/_dispatch").contentType(MediaType.APPLICATION_JSON).content(body))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.Errors[0].code").value("NB_UNSUPPORTED_EVENT_TYPE"));
+        }
+        verify(pipeline, never()).processInternal(any());
     }
 }

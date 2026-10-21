@@ -28,7 +28,7 @@ import java.util.Map;
  *   <li>{@code POST /messages/_send} (#2203): an OTP, sent now through the tenant's own Novu
  *       account; outcomes in {@link MessageSendService}.</li>
  *   <li>{@code POST /messages/_dispatch}: one pre-rendered envelope, the v1 contract of the Kafka
- *       topics, sent now for a caller with no Kafka client.</li>
+ *       topics, sent now; only the Identity BFF's workspace-trial emails.</li>
  * </ul>
  */
 @RestController
@@ -53,8 +53,9 @@ public class MessageController {
     }
 
     /**
-     * The same pipeline as the topics (eventType allowlist, replay guard, channel policy, provider
-     * checks, tenant account, one ledger row), consent aside: {@link DispatchPipelineService#processInternal}.
+     * WORKSPACE_TRIAL email only. The same pipeline as the topics (eventType allowlist, replay guard,
+     * provider checks, tenant account, one ledger row), consent and channel policy aside:
+     * {@link DispatchPipelineService#processInternal}.
      * {@code status} is what the ledger row says: {@code SENT} (now, or earlier for the same
      * transactionId, channel and subscriber), {@code SKIPPED} or {@code FAILED}.
      */
@@ -62,6 +63,11 @@ public class MessageController {
     public ResponseEntity<Map<String, Object>> dispatch(@RequestBody(required = false) NotificationEvent event) {
         if (event == null) {
             throw new AccountException(HttpStatus.BAD_REQUEST, "NB_INVALID_EVENT", "Event payload is required");
+        }
+        // The consent and channel-policy exemptions stay this narrow: the trial reminder is the only caller.
+        if (!"WORKSPACE_TRIAL".equalsIgnoreCase(event.getEventType()) || !"EMAIL".equalsIgnoreCase(event.getChannel())) {
+            throw new AccountException(HttpStatus.BAD_REQUEST, "NB_UNSUPPORTED_EVENT_TYPE",
+                    "messages/_dispatch sends WORKSPACE_TRIAL email only");
         }
         DispatchResult result;
         try {

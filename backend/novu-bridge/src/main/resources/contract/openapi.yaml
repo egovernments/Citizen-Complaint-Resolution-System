@@ -1134,15 +1134,17 @@ paths:
   /novu-bridge/novu-adapter/v1/messages/_dispatch:
     post:
       tags: [messages]
-      summary: Send one pre-rendered envelope now, for an internal caller with no Kafka client
+      summary: Send one workspace-trial email now (the Identity BFF's reminders)
       security: [{ internalSendToken: [] }]
       description: |
         The body is one v1 envelope, the contract of the Kafka topics (`/contract/envelope`),
-        and it goes down the same pipeline: the `eventType` allowlist, the replay guard, the
-        tenant's channel policy and provider checks, its own Novu account if it has one, and one
-        `nb_dispatch_log` row. The consent gate is skipped: the caller holds the send token, the
-        trust `_send` already has, and sends account notices to the account's own holders. First
-        caller: the Identity BFF's workspace-trial reminders (`eventType: WORKSPACE_TRIAL`).
+        with `eventType: WORKSPACE_TRIAL` and `channel: EMAIL`; anything else is
+        `400 NB_UNSUPPORTED_EVENT_TYPE` before the pipeline runs. It goes down the same pipeline:
+        the replay guard, the provider checks (an active email integration is required), the
+        tenant's own Novu account if it has one, and one `nb_dispatch_log` row. Two gates are
+        skipped: consent, and the tenant's Channels policy. It is a platform notice to a
+        workspace's own admins, from the send-token holder (the trust `_send` already has), and
+        turning EMAIL on at the platform root would also start that root's complaint emails.
 
         `data.status` is what the ledger row says: `SENT` (now, or earlier for the same
         `transactionId`, channel and `subscriberId`, so a repeated call never sends twice),
@@ -1166,7 +1168,7 @@ paths:
                       status: { type: string, enum: [SENT, DELIVERED, SKIPPED, FAILED, NOT_SENT] }
                       transactionId: { type: string }
                       diagnostics: { type: array, items: { type: string } }
-        "400": { $ref: "#/components/responses/InternalError", description: "Envelope rejected (`NB_INVALID_EVENT`, `NB_UNSUPPORTED_*`); a `REJECTED` row is written" }
+        "400": { $ref: "#/components/responses/InternalError", description: "Not a WORKSPACE_TRIAL email (`NB_UNSUPPORTED_EVENT_TYPE`, nothing written), or an envelope rejected (`NB_INVALID_EVENT`; a `REJECTED` row is written)" }
         "401": { $ref: "#/components/responses/InternalUnauthorized" }
         "403": { $ref: "#/components/responses/InternalDisabled" }
         "502": { $ref: "#/components/responses/InternalError", description: "Delivery failed; a `FAILED` row is written" }

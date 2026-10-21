@@ -78,7 +78,7 @@ public class InternalAuthFilter extends OncePerRequestFilter {
         String required = messages ? send : admin;
         if (!StringUtils.hasText(required) && !(statusRead && StringUtils.hasText(send))) {
             write(response, HttpStatus.FORBIDDEN, "NB_INTERNAL_API_DISABLED", messages
-                    ? "messages/_send is off: novu.bridge.internal.send.token is not set"
+                    ? "messages/_send and messages/_dispatch are off: novu.bridge.internal.send.token is not set"
                     : "The tenant account admin API is off: novu.bridge.internal.admin.token is not set");
             return;
         }

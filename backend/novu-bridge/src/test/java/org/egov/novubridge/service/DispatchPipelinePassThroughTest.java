@@ -217,6 +217,23 @@ class DispatchPipelinePassThroughTest {
     }
 
     @Test
+    void internalDispatch_skipsTheChannelPolicy_onlyOnTheInternalPath() {
+        // EMAIL off at the platform root: the topics skip it, the trial email still goes (through Novu).
+        config.setChannelsEnabled(List.of("SMS"));
+        NotificationEvent event = smsEvent();
+        event.setEventType("WORKSPACE_TRIAL");
+        event.setChannel("EMAIL");
+        event.setTransactionId("workspace-trial:acme:3:person");
+
+        assertFalse(service.process(event, true, null).getNovuTriggered());
+        ArgumentCaptor<DispatchLogEntry> row = ArgumentCaptor.forClass(DispatchLogEntry.class);
+        verify(dispatchLogRepository).upsert(row.capture());
+        assertEquals("NB_NO_PROVIDER", row.getValue().getLastErrorCode());
+
+        assertTrue(service.processInternal(event).getNovuTriggered());
+    }
+
+    @Test
     void novuTriggerThrows_persistsFailed_thenRethrows() {
         when(novuClient.identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any(), any(), any(), any()))
                 .thenThrow(new CustomException("NB_NOVU_TRIGGER_FAILED", "boom"));

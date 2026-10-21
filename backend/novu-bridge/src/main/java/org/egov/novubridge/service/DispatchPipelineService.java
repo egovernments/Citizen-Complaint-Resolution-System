@@ -109,10 +109,12 @@ public class DispatchPipelineService {
     }
 
     /**
-     * An envelope from {@code POST /messages/_dispatch}, sent now. Its caller holds the internal send
-     * token (the Identity BFF), the trust {@code messages/_send} already has, and sends account notices
-     * to the account's own holders, so the consent gate is skipped. Like the core-SMS exemption it is
-     * an in-process fact (the authenticated route), never an envelope field; every other gate applies.
+     * A workspace-trial email from {@code POST /messages/_dispatch}, sent now. Its caller holds the
+     * internal send token (the Identity BFF), the trust {@code messages/_send} already has, and it is a
+     * platform notice to a workspace's own admins. So the consent gate is skipped, and so is the
+     * tenant's channel policy: enabling EMAIL at the platform root would also start that root's
+     * complaint emails. It still needs a usable Novu integration for the channel. Like the core-SMS
+     * exemption this is an in-process fact (the authenticated route), never an envelope field.
      */
     public DispatchResult processInternal(NotificationEvent event) {
         return process(event, true, null, null, false, true);
@@ -172,7 +174,7 @@ public class DispatchPipelineService {
             return skip(event, context, "NB_UNSUPPORTED_CHANNEL", "Unknown channel: " + channel,
                     "Unsupported channel " + channel + " skipped");
         }
-        if (!channelPolicy.isEnabled(event.getTenantId(), channel)) {
+        if (!internal && !channelPolicy.isEnabled(event.getTenantId(), channel)) {
             return skip(event, context, "NB_NO_PROVIDER",
                     "Channel " + channel + " is not enabled for tenant " + event.getTenantId(),
                     "Channel " + channel + " has no enabled provider; skipped");
