@@ -197,6 +197,26 @@ class DispatchPipelinePassThroughTest {
     }
 
     @Test
+    void internalDispatch_skipsOnlyTheConsentGate() {
+        // messages/_dispatch: a workspace owner has no consent record, which denies on the topics.
+        when(preferenceServiceClient.isChannelAllowed(anyString(), any(), any(), anyString())).thenReturn(false);
+        NotificationEvent event = smsEvent();
+        event.setEventType("WORKSPACE_TRIAL");
+        event.setChannel("EMAIL");
+        event.setSubject("Your workspace trial ends in 7 days");
+        event.setTransactionId("workspace-trial:acme:7:person");
+
+        assertFalse(service.process(event, true, null).getNovuTriggered());
+        assertTrue(service.processInternal(event).getNovuTriggered());
+        verify(novuClient).identifyThenTrigger(eq("ke.bomet:uuid-123"), any(), eq("EMAIL"), any(),
+                eq("Your workspace trial ends in 7 days"), eq("workspace-trial:acme:7:person"), any(), any(), any(), any());
+
+        // Every other gate still applies.
+        event.setChannel("WHATSAPP");
+        assertFalse(service.processInternal(event).getNovuTriggered());
+    }
+
+    @Test
     void novuTriggerThrows_persistsFailed_thenRethrows() {
         when(novuClient.identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any(), any(), any(), any()))
                 .thenThrow(new CustomException("NB_NOVU_TRIGGER_FAILED", "boom"));

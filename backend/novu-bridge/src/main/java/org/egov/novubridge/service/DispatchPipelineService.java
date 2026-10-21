@@ -95,7 +95,7 @@ public class DispatchPipelineService {
     /** @param sourcePath {@link DispatchLogEntry#SOURCE_PATH_RESOLVED}, or null for pre-rendered */
     public DispatchResult process(NotificationEvent event, boolean send, RequestInfo requestInfo,
                                   String sourcePath) {
-        return process(event, send, requestInfo, sourcePath, false);
+        return process(event, send, requestInfo, sourcePath, false, false);
     }
 
     /**
@@ -105,13 +105,23 @@ public class DispatchPipelineService {
      * topics, or a {@code /dispatch/_dry-run} caller, can write.
      */
     public DispatchResult processCoreSms(NotificationEvent event) {
-        return process(event, true, null, null, true);
+        return process(event, true, null, null, true, false);
+    }
+
+    /**
+     * An envelope from {@code POST /messages/_dispatch}, sent now. Its caller holds the internal send
+     * token (the Identity BFF), the trust {@code messages/_send} already has, and sends account notices
+     * to the account's own holders, so the consent gate is skipped. Like the core-SMS exemption it is
+     * an in-process fact (the authenticated route), never an envelope field; every other gate applies.
+     */
+    public DispatchResult processInternal(NotificationEvent event) {
+        return process(event, true, null, null, false, true);
     }
 
     private DispatchResult process(NotificationEvent event, boolean send, RequestInfo requestInfo,
-                                   String sourcePath, boolean coreSms) {
+                                   String sourcePath, boolean coreSms, boolean internal) {
         log.info("Processing {} envelope: eventId={}, eventName={}, tenant={}, channel={}, send={}",
-                sourcePath != null ? "resolved" : coreSms ? "core-SMS" : "pre-rendered",
+                sourcePath != null ? "resolved" : coreSms ? "core-SMS" : internal ? "internal" : "pre-rendered",
                 event.getEventId(), event.getEventName(), event.getTenantId(), event.getChannel(), send);
 
         // Rejections are written down BEFORE they are thrown; the consumer still DLQs the event.
@@ -144,7 +154,7 @@ public class DispatchPipelineService {
                     .build();
         }
 
-        if (!(coreSms && CoreSmsTranslator.isConsentExempt(event))
+        if (!internal && !(coreSms && CoreSmsTranslator.isConsentExempt(event))
                 && !preferenceServiceClient.isChannelAllowed(event.getTenantId(), context.getRecipientUserId(),
                         context.getRecipientMobile(), context.getChannel())) {
             persist(event, context, "SKIPPED", "NB_PREFERENCE_DENIED", context.getChannel() + " preference denied");

@@ -23,7 +23,7 @@ info:
     | Workspace admin, its OWN account (#2203) | the provider calls above with `?tenantId=<workspace>`, when that workspace has its own Novu organization | the broad gate **and** a role from `novu.bridge.proxy.admin.roles` held at THAT workspace's root tenant. No `NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS` listing is needed, and nobody else may act on it, an owning state's admin included (`403 NB_TENANT_NOT_ALLOWED`). Reads with the selector need the workspace among the caller's tenants |
     | Machine callback | `/receipts/{provider}` | shared secret `novu.bridge.receipts.secret`, header `X-Receipt-Secret` or query `secret`. `403` while the secret is blank |
     | Internal: tenant account admin (#2203) | `/tenants/**` | header `X-Novu-Bridge-Token` = `novu.bridge.internal.admin.token` (pgr-services onboarding, operators). Never a DIGIT token. Not routed by Kong (it answers 404). `403 NB_INTERNAL_API_DISABLED` while the token is blank |
-    | Internal: send (#2203) | `POST /messages/_send`, and `GET /tenants/{tenantId}` | header `X-Novu-Bridge-Token` = `novu.bridge.internal.send.token` (the Identity BFF). Not routed by Kong. `403 NB_INTERNAL_API_DISABLED` while the token is blank |
+    | Internal: send (#2203) | `POST /messages/_send`, `POST /messages/_dispatch`, and `GET /tenants/{tenantId}` | header `X-Novu-Bridge-Token` = `novu.bridge.internal.send.token` (the Identity BFF). Not routed by Kong. `403 NB_INTERNAL_API_DISABLED` while the token is blank |
     | Unauthenticated | `/contract/envelope`, `/contract/thin-event`, `/contract/openapi` | anyone who can reach the service |
 
     **Tenant scope.** egov-user returns every role with its own `tenantId`. The caller's
@@ -1130,6 +1130,46 @@ paths:
                         message: { type: string }
                   total: { type: integer }
                   failed: { type: integer }
+
+  /novu-bridge/novu-adapter/v1/messages/_dispatch:
+    post:
+      tags: [messages]
+      summary: Send one pre-rendered envelope now, for an internal caller with no Kafka client
+      security: [{ internalSendToken: [] }]
+      description: |
+        The body is one v1 envelope, the contract of the Kafka topics (`/contract/envelope`),
+        and it goes down the same pipeline: the `eventType` allowlist, the replay guard, the
+        tenant's channel policy and provider checks, its own Novu account if it has one, and one
+        `nb_dispatch_log` row. The consent gate is skipped: the caller holds the send token, the
+        trust `_send` already has, and sends account notices to the account's own holders. First
+        caller: the Identity BFF's workspace-trial reminders (`eventType: WORKSPACE_TRIAL`).
+
+        `data.status` is what the ledger row says: `SENT` (now, or earlier for the same
+        `transactionId`, channel and `subscriberId`, so a repeated call never sends twice),
+        `SKIPPED` (a gate refused it; `diagnostics` says which) or `FAILED`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NotificationEvent" }
+      responses:
+        "200":
+          description: The pipeline ran; the outcome is in `data.status`
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      status: { type: string, enum: [SENT, DELIVERED, SKIPPED, FAILED, NOT_SENT] }
+                      transactionId: { type: string }
+                      diagnostics: { type: array, items: { type: string } }
+        "400": { $ref: "#/components/responses/InternalError", description: "Envelope rejected (`NB_INVALID_EVENT`, `NB_UNSUPPORTED_*`); a `REJECTED` row is written" }
+        "401": { $ref: "#/components/responses/InternalUnauthorized" }
+        "403": { $ref: "#/components/responses/InternalDisabled" }
+        "502": { $ref: "#/components/responses/InternalError", description: "Delivery failed; a `FAILED` row is written" }
 
   /novu-bridge/novu-adapter/v1/messages/_send:
     post:

@@ -23,7 +23,7 @@ import java.security.MessageDigest;
  *   <li>{@code /novu-adapter/v1/tenants/**}, the tenant account admin API (provision, provider
  *       credentials, status, deprovision): the platform's onboarding worker and operators, with
  *       {@code novu.bridge.internal.admin.token};</li>
- *   <li>{@code POST /novu-adapter/v1/messages/_send}: the Identity BFF, with
+ *   <li>{@code POST /novu-adapter/v1/messages/**} ({@code _send}, {@code _dispatch}): the Identity BFF, with
  *       {@code novu.bridge.internal.send.token}. That token also reads a tenant's status
  *       ({@code GET /tenants/{id}}), the capability lookup a sender needs, and nothing else.</li>
  * </ul>
