@@ -367,6 +367,69 @@ Run `plan --all` again: every tenant you applied is `migrated` with nothing to c
 `/config/source` ([below](#where-is-a-tenant)) reports `NOTIFICATIONS.Routing` for it. Then send
 one real complaint transition per migrated tenant and check Logs.
 
+### Access-control actions
+
+The deploy's access phase gives the Notifications screens and the provider, `/config/source` and
+`/dispatch/_resolve` endpoints their 17 access-control actions (`NOTIF_ACTIONS` in
+`local-setup/scripts/seed-notifications.py`) and grants them to the roles the tenant has. On a
+fresh or `full-dump.sql` install they are actions 4623–4639. The seed matches each one **by URL**:
+
+- an action that already has the URL is reused, whatever its id, so a re-run creates nothing and
+  restarts nothing;
+- a missing one is created at its usual id when that id is free;
+- when the usual id is already another endpoint's at the tenant (a 2.12 tenant whose own actions
+  table outgrew the dump), it is created at the next free id above 9000000 and the deploy prints
+  `ACL-ID-COLLISION: action 4630 is <that endpoint> at ke, not /mdms-v2/v2/_create/NOTIFICATIONS.Routing
+  — creating it as action 9000008`. This is not a failure; the role-actions go to the new id. No seed
+  that creates actions by a fixed id uses ids above 9000000 (the platform baseline uses
+  900000–901017).
+
+egov-accesscontrol only sees new role-actions after a restart. The deploy restarts it whenever the
+seed prints `ACL-CHANGED`; by hand, see [setup-guide.md §8.2](./setup-guide.md#82-whatsapp-server-side).
+
+Two lines fail the step at that root:
+
+- `ACL-ID-TAKEN: action id N at ke was not free` (exit 2). MDMS answered "duplicate" for an id the
+  seed had read as free (mdms-v2's search does not return every inactive row), so nothing was
+  granted to it. Look at the row:
+
+  ```sql
+  select uniqueidentifier, isactive, data->>'url' from eg_mdms_data
+  where tenantid = 'ke' and schemacode = 'ACCESSCONTROL-ACTIONS-TEST.actions-test' and data->>'id' = 'N';
+  ```
+
+  If it holds the notification URL, it was deactivated: reactivate it if the screens should work
+  there. If it is another endpoint, create the notification action yourself (an
+  `ACCESSCONTROL-ACTIONS-TEST.actions-test` row with that `url` at an unused id above 9000000).
+  Either way, re-run `--tags notifications`: the seed finds the action by URL and grants it.
+- `ACL-ACTION-INACTIVE: <url> is action N at ke and it is INACTIVE`, then a 403 (exit 3). The action
+  exists but is deactivated. Its grants are written, but requests to it are refused until it is
+  reactivated.
+
+**Upgraded with a 2.20 build older than this behaviour
+([#2603](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/2603))?** Those
+builds created the 17 actions at 4623–4639 regardless. Where an id was another endpoint's, the
+create counted as "already present", the role-actions were granted to that other endpoint
+(`MDMS_ADMIN` / `ACCOUNT_ADMIN` / `SUPERUSER`, plus `CSR` / `GRO` / `PGR_LME` on 4625 and 4638),
+and the step failed with a 403 on `RAINMAKER-PGR.NotificationChannel`. Redeploying adds the
+missing actions but never removes a grant. List the grants on those ids with the URL each one
+opens:
+
+```sql
+select r.data->>'rolecode' as role, r.data->>'actionid' as action, a.data->>'url' as url,
+       r.isactive, to_timestamp(r.createdtime / 1000) as created
+from eg_mdms_data r
+left join eg_mdms_data a on a.tenantid = r.tenantid
+  and a.schemacode = 'ACCESSCONTROL-ACTIONS-TEST.actions-test' and a.data->>'id' = r.data->>'actionid'
+where r.tenantid = 'ke' and r.schemacode = 'ACCESSCONTROL-ROLEACTIONS.roleactions'
+  and r.data->>'actionid' in (select generate_series(4623, 4639)::text)
+order by r.createdtime desc;
+```
+
+An active row whose `url` is not a notification URL and that was created by the 2.20 deploy is one
+of those grants. Deactivate it (`isActive: false` through
+`/mdms-v2/v2/_update/ACCESSCONTROL-ROLEACTIONS.roleactions`), then restart egov-accesscontrol.
+
 ### Channel rows: what happens to an existing tenant
 
 Channel rows switch delivery on and off the moment they exist: a tenant with **any** active
