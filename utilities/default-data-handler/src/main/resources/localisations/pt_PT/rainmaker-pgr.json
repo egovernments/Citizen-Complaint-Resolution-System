@@ -60,6 +60,12 @@
         "locale": "pt_PT"
     },
     {
+        "code": "CORE_COMMON_SKIP_CONTINUE",
+        "message": "Ignorar e continuar",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
         "code": "CS_ACTION_ASSIGN",
         "message": "Atribuir reclamação",
         "module": "rainmaker-pgr",
@@ -90,6 +96,12 @@
         "locale": "pt_PT"
     },
     {
+        "code": "CS_ADDCOMPLAINT_ADDITIONAL_DETAILS_TEXT",
+        "message": "Se considera que, além das informações fornecidas até agora, são necessários mais detalhes para resolver a reclamação, indique-os abaixo:",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
         "code": "CS_ADDCOMPLAINT_COMPLAINT_SUB_TYPE",
         "message": "Subcategoria da reclamação",
         "module": "rainmaker-pgr",
@@ -102,14 +114,38 @@
         "locale": "pt_PT"
     },
     {
+        "code": "CS_ADDCOMPLAINT_ERROR_REOPEN_REASON",
+        "message": "Selecione o motivo para reabrir a reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
         "code": "CS_ADDCOMPLAINT_LANDMARK",
         "message": "Ponto de referência",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
     {
+        "code": "CS_ADDCOMPLAINT_PROVIDE_ADDITIONAL_DETAILS",
+        "message": "Fornecer detalhes adicionais",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
         "code": "CS_ADDCOMPLAINT_SELECT_GEOLOCATION_TEXT",
         "message": "Clique sem soltar para colocar o marcador na localização da reclamação. Se não conseguir marcar a localização, pode ignorar este passo e continuar.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_ADDCOMPLAINT_UPLOAD_ERROR_MESSAGE",
+        "message": "Carregar imagem",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_ADDCOMPLAINT_UPLOAD_PHOTO",
+        "message": "Adicionar fotografias da reclamação",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
@@ -1020,6 +1056,12 @@
         "locale": "pt_PT"
     },
     {
+        "code": "CS_HEADER_REOPEN_COMPLAINT",
+        "message": "Reabrir reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
         "code": "CS_HOME_MY_COMPLAINTS",
         "message": "As minhas reclamações",
         "module": "rainmaker-pgr",
@@ -1344,6 +1386,36 @@
         "locale": "pt_PT"
     },
     {
+        "code": "CS_REOPEN_COMPLAINT",
+        "message": "Escolha o motivo para reabrir a reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_REOPEN_OPTION_FOUR",
+        "message": "Nenhuma solução definitiva",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_REOPEN_OPTION_ONE",
+        "message": "Não foi feito nenhum trabalho",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_REOPEN_OPTION_THREE",
+        "message": "O funcionário não compareceu",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_REOPEN_OPTION_TWO",
+        "message": "O trabalho foi feito apenas parcialmente",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
         "code": "CS_SEARCH_ERROR",
         "message": "A pesquisa não funcionou. Tente novamente.",
         "module": "rainmaker-pgr",
@@ -1370,6 +1442,12 @@
     {
         "code": "CS_VOICE_LANGUAGE_NOT_SUPPORTED",
         "message": "A entrada por voz não está disponível neste idioma. Escreva a sua reclamação.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_VOICE_LISTENING_IN",
+        "message": "A ouvir em {language}",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },

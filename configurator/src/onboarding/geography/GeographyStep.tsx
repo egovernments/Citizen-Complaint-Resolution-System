@@ -18,6 +18,7 @@ import BoundaryImport, { type BoundarySource } from './BoundaryImport';
 import { plural } from '@/utils/plural';
 import { PreconfiguredCard } from './PreconfiguredCard';
 import { useOnboardingT, type OnboardingT } from '../i18n';
+import { trackMethod } from '../telemetry';
 
 const STEP = stepById('geography');
 const { previous, next } = adjacentSteps('geography');
@@ -150,7 +151,10 @@ export default function GeographyStep() {
           sourceChoices={boundarySources}
           preconfigured={preconfiguredSet}
           workspaceName={preconfigured.workspaceName}
-          onCancel={close}
+          onCancel={() => {
+            trackMethod('geography', preconfiguredSet ? 'preconfigured' : source === 'osm' ? 'fetch' : 'excel', true);
+            close();
+          }}
           onDone={() => {
             close();
             reload();
@@ -181,13 +185,17 @@ export default function GeographyStep() {
               if (preconfigured.state.status !== 'ready') return;
               setPreconfiguredSet(preconfigured.state.set);
               setSource('osm');
+              trackMethod('geography', 'preconfigured');
             }}
           />
           <OptionCard
             icon={MapPin}
             title={t('geography.fetch_title', 'Fetch boundaries')}
             action={t('geography.fetch_action', 'Search boundaries')}
-            onClick={() => setSource('osm')}
+            onClick={() => {
+              setSource('osm');
+              trackMethod('geography', 'fetch');
+            }}
             disabledReason={
               boundarySources?.length === 0 ? t('geography.turbopass_unavailable', TURBOPASS_UNAVAILABLE_MESSAGE) : undefined
             }
@@ -201,7 +209,10 @@ export default function GeographyStep() {
             icon={Download}
             title={t('geography.excel_title', 'Upload from Excel')}
             action={t('common.upload_file', 'Upload a file')}
-            onClick={() => setSource('excel')}
+            onClick={() => {
+              setSource('excel');
+              trackMethod('geography', 'excel');
+            }}
           >
             {t('geography.excel_body', 'Bring in your own levels and areas from a spreadsheet.')}
           </OptionCard>

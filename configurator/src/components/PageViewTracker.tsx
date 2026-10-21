@@ -1,30 +1,22 @@
 /**
  * PageViewTracker
  *
- * Tracks page views using PostHog when routes change.
+ * Sends a page view to PostHog and Matomo on every route change, the first
+ * included (PostHog's own page view capture is off, so each is counted once).
  * Must be used inside a Router component.
  */
 
 import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import posthog from 'posthog-js';
-import { isTelemetryKilled } from '@/lib/telemetryGate';
+import { trackPageView } from '@/lib/analytics';
 
 export default function PageViewTracker() {
   const location = useLocation();
 
   useEffect(() => {
-    // This capture does NOT go through lib/telemetry, so it needs the gate
-    // explicitly — otherwise switching telemetry off would still leak a page
-    // view on every route change.
-    if (isTelemetryKilled()) return;
-    // Track page view on route change
-    posthog.capture('$pageview', {
-      $current_url: window.location.href,
-      path: location.pathname,
-      search: location.search,
-    });
-  }, [location]);
+    // The path only: queries can carry sign-in tokens, and ids are scrubbed inside.
+    trackPageView(window.location.pathname);
+  }, [location.pathname]);
 
   return null;
 }

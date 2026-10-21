@@ -21,6 +21,9 @@ public class OnboardingProvisionerClientTest {
     private ObjectNode user; private JsonNode lastWrite; private int detailsStatus=200, writeStatus=200, loginStatus=200, writes, details, logins;
     private String malformedDetails, writeError="{\"Errors\":[{\"code\":\"EMPLOYEE_ALREADY_EXISTS\"}]}"; private OnboardingSignup signup; private OnboardingOperation operation;
     private static final List<String> ROLES=List.of("MDMS_ADMIN","ACCOUNT_ADMIN","LOC_ADMIN","HRMS_ADMIN");
+    /** Inline mocks keep every call they record, platform-baseline payloads included, until cleared:
+     *  without this the onboarding package outgrows a 512 MB test heap. */
+    @After public void releaseMocks() { framework().clearInlineMocks(); }
     @Before public void setup() throws Exception {
         user=mapper.valueToTree(Map.of("uuid","live-provisioner","userName","fixture","tenantId","pg","type","EMPLOYEE","active",true,
                 "roles",ROLES.stream().map(code->Map.of("code",code,"tenantId","pg")).toList()));

@@ -42,6 +42,7 @@ import { Stepper } from '@/components/ui/stepper';
 import { AuthShell } from '@/components/signup/AuthPanel';
 import { useAuthResult } from '@/hooks/useAuthResult';
 import { clearSignOutIncomplete, signOutIncomplete } from '@/lib/session';
+import { track } from '@/lib/analytics';
 import { useOnboardingT } from '@/onboarding/i18n';
 import { MOBILE_RULES, mobileHint, nationalMobile } from '@/onboarding/signup/mobileRules';
 import {
@@ -532,6 +533,14 @@ function SignupFlow() {
     return next;
   }, [accountName, accountCode, urlSlug, countryCode, languages, timeZone, financialYearPolicy, acceptedTerms, tenantAdminMobile, mobileNational]);
 
+  /** Preferences' choices as analytics gets them: never the mobile number. */
+  const preferenceChoices = {
+    country: countryCode,
+    languages: languages.join(','),
+    time_zone: timeZone,
+    financial_year: financialYearPolicy,
+  };
+
   /** Create on first save, update thereafter — one signup per founder. */
   const persist = useCallback(async (): Promise<Signup> => {
     if (signup) {
@@ -579,6 +588,7 @@ function SignupFlow() {
     setError(null);
     try {
       await persist();
+      track('signup:step_complete', step === 'preferences' ? { step, ...preferenceChoices } : { step });
       setStep(next);
     } catch (caught) {
       await handleFailure(caught);
@@ -593,6 +603,7 @@ function SignupFlow() {
     try {
       const record = await persist();
       const started = await submitSignup(record.id, submitKey.current);
+      track('signup:account_submit', { country: countryCode });
       setOperation(started);
       setPhase('provisioning');
     } catch (caught) {
@@ -607,6 +618,7 @@ function SignupFlow() {
     authResult.clear();
     setSaving(true);
     setError(null);
+    track('signup:method_select', { method: 'magic_link' });
     try {
       clearSignOutIncomplete();
       await requestMagicLinkSignup({
@@ -614,6 +626,7 @@ function SignupFlow() {
         lastName: signupLastName.trim(),
         email: signupEmail.trim(),
       });
+      track('signup:link_send');
       setPhase('checkEmail');
     } catch (caught) {
       setError(describe(caught, true).message);
@@ -799,6 +812,7 @@ function SignupFlow() {
       }
       // The one case where the country may change: it is what the run refused.
       if (refused === 'COUNTRY_NOT_SUPPORTED') setCountryCode('');
+      track('signup:details_change', { error_code: operation?.errorCode ?? undefined });
       setOperation(null);
       setReopened(false);
       setReopenCheck('pending');
@@ -810,6 +824,24 @@ function SignupFlow() {
       setSaving(false);
     }
   };
+
+  // The funnel's steps: the sign-in gate, the emailed link, then the wizard's three.
+  const viewed = phase === 'signedOut' ? 'sign_in' : phase === 'checkEmail' ? 'check_email' : phase === 'wizard' ? step : null;
+  useEffect(() => {
+    if (viewed) track('signup:step_view', { step: viewed });
+  }, [viewed]);
+
+  // How the run ended, once per operation and outcome.
+  const runStatus = operation?.status;
+  const runError = operation?.errorCode;
+  useEffect(() => {
+    if (runStatus === 'TERMINAL_FAILED' || runStatus === 'RETRYABLE_FAILED') {
+      track('signup:provision_fail', { error_code: runError ?? 'UNKNOWN', retryable: runStatus === 'RETRYABLE_FAILED' });
+    }
+  }, [operationId, runStatus, runError]);
+  useEffect(() => {
+    if (ready) track('signup:provision_complete');
+  }, [ready]);
 
   const accountReady =
     accountName.trim().length > 0 && codeValid && codeState?.available !== false;
@@ -920,7 +952,11 @@ function SignupFlow() {
                     key={method.id}
                     variant="outline"
                     className="w-full"
-                    onClick={() => { clearSignOutIncomplete(); startSignIn(method.id, 'signup'); }}
+                    onClick={() => {
+                      clearSignOutIncomplete();
+                      track('signup:method_select', { method: method.id });
+                      startSignIn(method.id, 'signup');
+                    }}
                   >
                     <SignupMethodIcon method={method} />
                     {method.label}
@@ -1227,7 +1263,14 @@ function SignupFlow() {
             />
           </Field>
 
-          <Button className="w-full" disabled={!accountReady} onClick={() => setStep('preferences')}>
+          <Button
+            className="w-full"
+            disabled={!accountReady}
+            onClick={() => {
+              track('signup:step_complete', { step: 'account' });
+              setStep('preferences');
+            }}
+          >
             Continue
           </Button>
         </section>

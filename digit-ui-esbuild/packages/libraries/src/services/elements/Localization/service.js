@@ -3,6 +3,7 @@ import { PersistantStorage } from "../../atoms/Utils/Storage";
 import i18next from "i18next";
 import { Request } from "../../atoms/Utils/Request";
 import { ApiCacheService } from "../../atoms/ApiCacheService";
+import { rememberLanguage } from "./rememberedLanguage";
 
 const LOCALE_LIST = (locale) => `Locale.${locale}.List`;
 const LOCALE_ALL_LIST = () => `Locale.List`;
@@ -85,22 +86,35 @@ function getUniqueData(data1, data2) {
   return data2.filter(item => !data1Codes.has(item.code));
 }
 
+const loadLocale = async (modules, locale, tenantId) => {
+  // Earlier code appended `globalConfigs.LOCALE_REGION` (default "IN")
+  // whenever the given locale didn't already contain it. On Nai Pepea
+  // (region still "IN", locales en_IN + sw_KE) this turned "sw_KE" into
+  // "sw_KEIN" — the fetch then returned 0 messages and i18next silently
+  // fell back to en_IN, so picking Swahili in the UI did nothing.
+  // Locale codes already carry their region (xx_YY), so the append is
+  // never correct. Drop it.
+  const [newModules, messages] = LocalizationStore.get(locale, modules);
+  if (newModules.length > 0) {
+    const data = await Request({ url: Urls.localization, params: { module: newModules.join(","), locale, tenantId }, useCache: false });
+    messages.push(...data.messages);
+    setTimeout(() => LocalizationStore.store(locale, newModules, data.messages), 100);
+  }
+  LocalizationStore.updateResources(locale, messages);
+  return messages;
+};
+
 export const LocalizationService = {
   getLocale: async ({ modules = [], locale = Digit.Utils.getDefaultLanguage(), tenantId }) => {
-    // Earlier code appended `globalConfigs.LOCALE_REGION` (default "IN")
-    // whenever the given locale didn't already contain it. On Nai Pepea
-    // (region still "IN", locales en_IN + sw_KE) this turned "sw_KE" into
-    // "sw_KEIN" — the fetch then returned 0 messages and i18next silently
-    // fell back to en_IN, so picking Swahili in the UI did nothing.
-    // Locale codes already carry their region (xx_YY), so the append is
-    // never correct. Drop it.
-    const [newModules, messages] = LocalizationStore.get(locale, modules);
-    if (newModules.length > 0) {
-      const data = await Request({ url: Urls.localization, params: { module: newModules.join(","), locale, tenantId }, useCache: false });
-      messages.push(...data.messages);
-      setTimeout(() => LocalizationStore.store(locale, newModules, data.messages), 100);
-    }
-    LocalizationStore.updateResources(locale, messages);
+    // i18next shows the default language's message for a key this locale lacks
+    // (fallbackLng), so load the default's messages too. A tab can open straight
+    // in a remembered language whose pack is partial; without this, every key the
+    // pack lacks would show as its raw code.
+    const fallback = Digit.Utils.getDefaultLanguage();
+    const [messages] = await Promise.all([
+      loadLocale(modules, locale, tenantId),
+      locale !== fallback ? loadLocale(modules, fallback, tenantId) : null,
+    ]);
     return messages;
   },
   getUpdatedMessages: async ({ modules = [], locale = Digit.Utils.getDefaultLanguage(), tenantId }) => {
@@ -117,8 +131,7 @@ export const LocalizationService = {
     const allModules = LocalizationStore.getAllList();
     const uniqueModules = allModules.filter((module) => !modules.includes(module));
     LocalizationService.getLocale({ modules: uniqueModules, locale, tenantId });
-    localStorage.setItem("Employee.locale", locale);
-    localStorage.setItem("Citizen.locale", locale);
+    rememberLanguage(locale);
     Digit.SessionStorage.set("locale", locale);
     i18next.changeLanguage(locale);
   },

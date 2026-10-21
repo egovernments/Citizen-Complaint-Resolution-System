@@ -66,7 +66,8 @@ import { ThemeProvider } from '@/providers/ThemeProvider';
 import HelpModal from './components/ui/HelpModal';
 import { Toaster } from './components/ui/toaster';
 import { apiClient, getApiBaseUrl, getConfiguredRootTenant } from './api';
-import { identifyUser, trackEvent } from './lib/telemetry';
+import { identifyUser } from './lib/telemetry';
+import { setAnalyticsTenant, track } from './lib/analytics';
 import { clearLocalSession, SESSION_EXPIRED_KEY, signOutThisDevice } from './lib/session';
 import PageViewTracker from './components/PageViewTracker';
 import './App.css';
@@ -373,16 +374,15 @@ function App() {
   // Track session restoration and identify user on initial load
   useEffect(() => {
     if (state.isAuthenticated && state.user) {
-      identifyUser({
-        id: state.user.email || state.user.name,
-        name: state.user.name,
-        email: state.user.email,
-        tenant: state.tenant,
-        roles: state.user.roles,
-      });
-      trackEvent('session_restored', { tenant: state.tenant });
+      void identifyUser({ uuid: state.user.uuid, tenant: state.tenant, roles: state.user.roles });
+      track('app:session_restore');
     }
   }, []); // Only run once on mount
+
+  // Every event carries the workspace being worked on.
+  useEffect(() => {
+    setAnalyticsTenant(state.isAuthenticated ? state.targetTenant || state.tenant : '');
+  }, [state.isAuthenticated, state.targetTenant, state.tenant]);
 
   // Sync onboarding progress from backend on session restore
   useEffect(() => {
@@ -425,11 +425,10 @@ function App() {
 
   const setTargetTenant = (code: string) => {
     setState(s => ({ ...s, targetTenant: code }));
-    trackEvent('target_tenant_set', { targetTenant: code });
   };
 
   const logout = async () => {
-    trackEvent('logout', { tenant: state.tenant });
+    track('app:sign_out');
     // Storage, both API clients and the cached providers first, then the BFF
     // session best-effort, so sign-out never fails closed.
     await signOutThisDevice();
@@ -445,8 +444,8 @@ function App() {
       const completedPhases = completedSteps(updated.Workspace);
       setState(s => ({ ...s, completedPhases, currentPhase: Math.min(phase + 1, ONBOARDING_STEPS.length) }));
       const step = ONBOARDING_STEPS.find(candidate => candidate.number === phase);
-      trackEvent('phase_complete', { phase, step: step?.id, tenant: state.tenant });
-      if (finishesOnboarding(phase, state.completedPhases)) trackEvent('onboarding_complete', { tenant: state.tenant });
+      track('onboarding:step_complete', { step: step?.id, skipped: skip });
+      if (finishesOnboarding(phase, state.completedPhases)) track('onboarding:flow_complete');
       return true;
     } catch (error) {
       // App sits above the onboarding pages' translator, so it reads the provider directly.
@@ -462,7 +461,6 @@ function App() {
 
   const goToPhase = (phase: number) => {
     setState(s => ({ ...s, currentPhase: phase }));
-    trackEvent('phase_start', { phase, tenant: state.tenant });
   };
 
   const addUndo = (action: string, description: string) => {
@@ -491,7 +489,7 @@ function App() {
   const toggleHelp = useCallback(() => {
     setState(s => {
       if (!s.showHelp) {
-        trackEvent('help_open');
+        track('app:help_open');
       }
       return { ...s, showHelp: !s.showHelp };
     });
@@ -579,7 +577,8 @@ function App() {
         </Routes>
 
         {/* Global modals and toasts */}
-        {state.showHelp && <HelpModal onClose={toggleHelp} />}
+        {/* Outside both route trees, so it gets onboarding's translator here. */}
+        {state.showHelp && <OnboardingI18n><HelpModal onClose={toggleHelp} /></OnboardingI18n>}
         <Toaster />
       </BrowserRouter>
       </ThemeProvider>

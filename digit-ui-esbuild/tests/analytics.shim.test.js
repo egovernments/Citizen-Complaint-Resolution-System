@@ -503,6 +503,32 @@ test("a tagged click keeps its event name as the Matomo action", () => {
   );
 });
 
+test("a tracking-plan click tag is Matomo's category and action", () => {
+  const enabled = Object.assign({}, MATOMO_OK, { trackClicks: true });
+  const t = loadShim({ respond: (tenant) => (tenant === "mz" ? [row("mz", enabled)] : []) });
+  const attrs = { "data-analytics-event": "complaint:file_step_back", "data-analytics-label": "location" };
+  t.dispatchDocument("click", { target: { getAttribute: (name) => attrs[name] || null, parentNode: null } });
+  assert.ok(
+    t.sandbox._paq.some((c) => c[0] === "trackEvent" && c[1] === "complaint" && c[2] === "file_step_back" && c[3] === "location"),
+    JSON.stringify(t.sandbox._paq.filter((c) => c[0] === "trackEvent"))
+  );
+});
+
+test("a tracking-plan trackEvent name decides the category, whatever the caller passed", () => {
+  const t = loadShim({ respond: (tenant) => (tenant === "mz" ? [row("mz", MATOMO_OK)] : []) });
+  t.api.trackEvent("complaint:photo_reject", { category: "pgr", action: "other", label: "size" });
+  t.api.trackEvent("complaint:voice_transcribe_success", { value: 12 });
+  const events = t.sandbox._paq.filter((c) => c[0] === "trackEvent");
+  assert.deepEqual(events.map((c) => c.slice(1, 4)), [["complaint", "photo_reject", "size"], ["complaint", "voice_transcribe_success", ""]]);
+  assert.equal(events[1][4], 12);
+});
+
+test("an older dotted name keeps the caller's category, as before", () => {
+  const t = loadShim({ respond: (tenant) => (tenant === "mz" ? [row("mz", MATOMO_OK)] : []) });
+  t.api.trackEvent("pgr.test.event", { category: "pgr" });
+  assert.ok(t.sandbox._paq.some((c) => c[0] === "trackEvent" && c[1] === "pgr" && c[2] === "pgr.test.event"));
+});
+
 test("a record whose script host is not allowlisted loads nothing", () => {
   const bad = Object.assign({}, MATOMO_OK, { code: "evil", scriptUrl: "https://evil.example.com/m.js" });
   const t = loadShim({ respond: (tenant) => (tenant === "mz" ? [row("mz", bad)] : []) });
@@ -604,6 +630,20 @@ test("a pageview emitted before array.js lands is replayed, not dropped", () => 
   // is what PostHog links back to, and /employee/... 404s under a /digit-ui
   // entrance. {{page}} keeps the stripped form for grouping.
   assert.equal(captured[0].props.$current_url, "/digit-ui/employee/pgr/inbox");
+});
+
+test("PostHog events and page views carry app and tenant_id", () => {
+  const t = loadShim({ deferScriptLoad: true, respond: (tenant) => (tenant === "mz" ? [row("mz", POSTHOG_OK)] : []) });
+  const captured = [];
+  t.sandbox.posthog = { init: () => {}, capture: (name, props) => captured.push({ name, props }) };
+  t.loadScripts();
+  t.api.trackEvent("complaint:action_select", { label: "RESOLVE" });
+  assert.deepEqual(captured.map((c) => c.name), ["$pageview", "complaint:action_select"]);
+  for (const { props } of captured) {
+    assert.equal(props.app, "employee");
+    assert.equal(props.tenant_id, props.tenant);
+  }
+  assert.equal(captured[1].props.category, "complaint");
 });
 
 test("PostHog init forces every restraint, and no record can loosen them", () => {
@@ -974,4 +1014,87 @@ test("a redirect chain gated on async work records every hop it passes through",
   t.flush();
   const after = t.sandbox._paq.filter((c) => c[0] === "trackPageView").length;
   assert.equal(after - before, 2, "each settled hop is its own pageview today");
+});
+
+/* ───────────────────────── tenant routes (#2582) ───────────────────────── */
+
+// A PostHog record at the deployment's state tenant, with the SDK arriving the
+// way it really does: after the shim has booted.
+function tenantRouteShim(pathname, local) {
+  const t = loadShim({
+    pathname,
+    local,
+    deferScriptLoad: true,
+    respond: (tenant) => (tenant === "mz" ? [row("mz", POSTHOG_OK)] : []),
+  });
+  const captured = [];
+  t.sandbox.posthog = { init: () => {}, capture: (name, props) => captured.push({ name, props }) };
+  t.loadScripts();
+  return { t, captured };
+}
+
+test("a tenant route (/<slug>/digit-ui/) is tracked, not turned off", () => {
+  const { t, captured } = tenantRouteShim("/ke/digit-ui/employee/pgr/inbox");
+  assert.equal(t.internal.providers(), 1, "the provider initialises on a tenant route");
+  const view = captured.find((c) => c.name === "$pageview");
+  assert.ok(view, "the page view is sent");
+  // Served URL as in the address bar; the entrance is still the context path.
+  assert.equal(view.props.$current_url, "/ke/digit-ui/employee/pgr/inbox");
+  assert.equal(view.props.entrance, "digit-ui");
+  // The slug is not part of the page's identity: the title comes from the same
+  // grouping key as on /digit-ui/, so one page is one report row across workspaces.
+  assert.equal(view.props.page_title, t.internal.pageTitle("/employee/pgr/inbox"));
+});
+
+test("on a tenant route, events belong to the route's workspace once the app resolves it", () => {
+  // Another workspace's city tenant left in localStorage, which is origin-wide.
+  const { t, captured } = tenantRouteShim("/ke/digit-ui/citizen/pgr/complaints", { "Citizen.tenant-id": "other.city" });
+  t.sandbox.__digitTenantContext = { urlSlug: "ke", tenantId: "ke" };
+  t.api.trackEvent("pgr.my-complaints.open", { category: "pgr" });
+  const event = captured.find((c) => c.name === "pgr.my-complaints.open");
+  assert.equal(event.props.tenant, "ke", "the stale tenant from another workspace is not used");
+});
+
+test("on a tenant route, a city within the workspace is kept", () => {
+  const { t, captured } = tenantRouteShim("/ke/digit-ui/employee/pgr/inbox", { "Employee.tenant-id": "ke.nairobi" });
+  t.sandbox.__digitTenantContext = { urlSlug: "ke", tenantId: "ke" };
+  t.api.trackEvent("pgr.complaint.action-selected", { category: "pgr" });
+  assert.equal(captured.find((c) => c.name === "pgr.complaint.action-selected").props.tenant, "ke.nairobi");
+});
+
+test("a context for another slug is ignored", () => {
+  const { t, captured } = tenantRouteShim("/ke/digit-ui/citizen/pgr/complaints");
+  t.sandbox.__digitTenantContext = { urlSlug: "bomet", tenantId: "bomet" };
+  t.api.trackEvent("pgr.my-complaints.open", { category: "pgr" });
+  assert.equal(captured.find((c) => c.name === "pgr.my-complaints.open").props.tenant, "", "not the deployment tenant: missing beats wrong");
+});
+
+test("a deep link's landing page view is not attributed to a stale tenant before the route resolves", () => {
+  // No live context yet, and another workspace's city tenant in localStorage.
+  const { captured } = tenantRouteShim("/ke/digit-ui/citizen/pgr/complaints", { "Citizen.tenant-id": "other.city" });
+  assert.equal(captured.find((c) => c.name === "$pageview").props.tenant, "");
+});
+
+test("before the route resolves, the app's saved context for the same slug answers", () => {
+  const saved = JSON.stringify({ tenant: { urlSlug: "ke", tenantId: "ke" }, savedAt: 1 });
+  const { captured } = tenantRouteShim("/ke/digit-ui/citizen/pgr/complaints", {
+    "Citizen.tenant-id": "other.city",
+    "Digit.tenantContext.ke": saved,
+    "Digit.tenantContext.bomet": JSON.stringify({ tenant: { urlSlug: "bomet", tenantId: "bomet" }, savedAt: 1 }),
+  });
+  assert.equal(captured.find((c) => c.name === "$pageview").props.tenant, "ke");
+});
+
+test("a reserved word or a non-slug before the context path is not a tenant route", () => {
+  for (const p of ["/configurator/digit-ui/employee/pgr/inbox", "/Ke/digit-ui/citizen", "/k/digit-ui/citizen", "/digit-ui-test/digit-ui/citizen"]) {
+    const t = loadShim({ pathname: p, respond: () => [] });
+    assert.equal(t.xhrCalls.length, 0, p);
+  }
+});
+
+test("the shim's reserved slugs are exactly the app's", () => {
+  const source = fs.readFileSync(path.resolve(__dirname, "../packages/libraries/src/services/tenant/tenantRoute.js"), "utf8");
+  const app = [...source.match(/RESERVED_TENANT_SLUGS = Object\.freeze\(\[([\s\S]*?)\]\)/)[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+  const shim = [...SHIM.match(/var RESERVED_TENANT_SLUGS = \[([\s\S]*?)\];/)[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(shim, app);
 });

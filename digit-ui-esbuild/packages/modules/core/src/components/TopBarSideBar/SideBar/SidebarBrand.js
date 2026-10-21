@@ -56,7 +56,7 @@ export const RailToggle = ({ t, expanded, onToggle }) => {
       aria-label={label}
       title={label}
       onClick={onToggle}
-      data-analytics-event="shell.rail.toggle"
+      data-analytics-event="app:nav_toggle"
       data-analytics-label={expanded ? "collapse" : "expand"}
     >
       <Chevron open={expanded} />
@@ -75,7 +75,7 @@ export const SidebarFoot = ({ t, expanded, onLogout }) => (
         type="button"
         className="digit-sidebar-logout"
         onClick={onLogout}
-        data-analytics-event="shell.rail.logout"
+        data-analytics-event="app:sign_out"
         title={t ? t("CORE_COMMON_LOGOUT", "Logout") : "Logout"}
       >
         <LogoutGlyph />

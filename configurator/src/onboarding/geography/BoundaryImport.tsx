@@ -30,7 +30,8 @@ import { SubmitBar } from '@/components/digit/SubmitBar';
 import { apiClient, boundaryService, localizationService, mdmsService, ApiClientError } from '@/api';
 import { WORKSPACE_HIERARCHY_TYPE, getConfiguredHierarchyType } from '@/api/services/boundary';
 import { loadTenantHierarchies } from '@/api/services/tenantHierarchy';
-import { reportStepError, trackStepAction } from '../telemetry';
+import { reportStepError, trackImport, trackTemplateDownload, trackUploadRefused, type OnboardingMethod } from '../telemetry';
+import { track } from '@/lib/analytics';
 import { labelLocales } from '../labelLocales';
 import { parseExcelFile, parseBoundaryExcel } from '@/utils/excelParser';
 import { downloadBoundaryTemplate } from '@/utils/templateBuilder';
@@ -308,6 +309,12 @@ export default function BoundaryImport({
     preconfigured || source === 'osm' ? 'osm-search' : hasHierarchies ? 'excel-landing' : 'create-hierarchy',
   );
   const [path] = useState<BoundaryPath>(source);
+  // Which of Geography's three ways this is, on every event it sends.
+  const method: OnboardingMethod = preconfigured ? 'preconfigured' : source === 'osm' ? 'fetch' : 'excel';
+  const trackLevels = (levels: number, hierarchy: 'new' | 'existing' | 'fetched') =>
+    track('onboarding:geography_levels_select', { method, levels, hierarchy });
+  const trackSearch = (outcome: string, from: string, levels?: number) =>
+    track('onboarding:geography_area_search', { method, outcome, source: from, levels });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -537,12 +544,7 @@ export default function BoundaryImport({
       setSelectedHierarchy(newHierarchy);
       setExistingHierarchies(prev => [...prev, newHierarchy]);
       addUndo('create_hierarchy', `Created hierarchy: ${hierarchyType}`);
-      trackStepAction('geography', 'entity_create', 'boundary', {
-        tenant: boundaryTenant,
-        source: 'excel',
-        kind: 'hierarchy',
-        levels: validLevels.length,
-      });
+      trackLevels(validLevels.length, 'new');
       setStep('template');
     } catch (err) {
       console.error('Hierarchy creation error:', err);
@@ -564,6 +566,7 @@ export default function BoundaryImport({
       setError(t('geography.excel.select_required', 'Please select a hierarchy'));
       return;
     }
+    trackLevels(selectedHierarchy.boundaryHierarchy?.length ?? 0, 'existing');
     setStep('template');
   };
 
@@ -603,10 +606,12 @@ export default function BoundaryImport({
           );
         const others = errors.filter(e => e.code !== 'DUPLICATE_CODE').map(e => e.message).join(', ');
         setError([...repeated, others].filter(Boolean).join(' '));
+        trackUploadRefused('geography', 'boundary', errors[0]?.code || 'INVALID_SHEET', errors.length);
       }
     } catch (err) {
       console.error('Excel parse error:', err);
       setError(t('geography.excel.parse_failed', 'Failed to parse Excel file. Please ensure it is a valid .xlsx file.'));
+      trackUploadRefused('geography', 'boundary', 'UNREADABLE');
     } finally {
       setLoading(false);
     }
@@ -691,6 +696,7 @@ export default function BoundaryImport({
       const existing = await boundaryService.existingBoundaries(boundaryTenant, selectedHierarchy.hierarchyType);
       const { toCreate, alreadyThere, toLabel, conflicts } = compareWithExisting(validBoundaries, existing);
       if (conflicts.length > 0) {
+        trackUploadRefused('geography', 'boundary', 'EXISTING_CONFLICT', conflicts.length);
         const none = t('geography.excel.no_parent', 'none');
         setError([
           t(
@@ -754,11 +760,11 @@ export default function BoundaryImport({
       );
 
       addUndo('create_boundaries', `Created ${result.success.length} boundaries`);
-      trackStepAction('geography', 'entity_import', 'boundary', {
-        tenant: boundaryTenant,
-        source: 'excel',
+      trackImport('geography', 'boundary', {
+        method,
         count: result.success.length,
         failed: result.failed.length,
+        already_there: alreadyThere.length,
       });
       setStep('complete');
 
@@ -795,6 +801,7 @@ export default function BoundaryImport({
       : hierarchyLevels;
     const type = selectedHierarchy?.hierarchyType || hierarchyType || 'ADMIN';
     downloadBoundaryTemplate(type, levels);
+    trackTemplateDownload('geography', 'boundary');
   };
 
   // ============================================
@@ -813,6 +820,7 @@ export default function BoundaryImport({
     suggestion: SuggestionFeature;
   }): Promise<boolean> => {
     const { source } = place;
+    const searched = (outcome: string, levels?: number) => trackSearch(outcome, source, levels);
     // An official set carries its agreement with the other official source.
     // The country is known up front, so look it up alongside the fetch (best
     // effort: the level screen works without it; fetchOfficialSet never throws).
@@ -823,6 +831,7 @@ export default function BoundaryImport({
       setError(turbopassErrorMessage({
         kind: 'fetch', source, status: res.status, serverMessage: await serverMessage(res), place: place.name,
       }));
+      searched('fetch_failed');
       return false;
     }
     const geojson = await res.json();
@@ -835,6 +844,7 @@ export default function BoundaryImport({
 
     if (extractedLevels.length === 0) {
       setError(t('geography.search.no_boundaries', 'No administrative boundaries came back for "%{place}". Try a different place.', { place: place.name }));
+      searched('no_boundaries', 0);
       return false;
     }
     // A hierarchy needs two levels. Stop here with the reason rather than
@@ -842,6 +852,7 @@ export default function BoundaryImport({
     // the check that covers Geoapify, which can't say so up front.
     if (extractedLevels.length < 2) {
       setError(tooFewLevelsMessage(place.suggestion, (geojson.features ?? []).length));
+      searched('too_few_levels', extractedLevels.length);
       return false;
     }
 
@@ -859,6 +870,7 @@ export default function BoundaryImport({
     }
     setAdminLevels(extractedLevels);
     setStep('map-levels');
+    searched('found', extractedLevels.length);
     return true;
   };
 
@@ -896,12 +908,14 @@ export default function BoundaryImport({
           // Same country scope as the search above (a server that predates `country` ignores it).
           const leaf = inScope((all?.features ?? []) as SuggestionFeature[])[0];
           setError(leaf ? deadEndMessage(leaf) : pickPromptMessage(result, term));
+          trackSearch(leaf ? 'nothing_inside' : 'no_results', turbopassSource);
           return;
         }
         if (!result.pick) {
           setSuggestions(result.candidates.slice(0, 5));
           setShowSuggestions(result.candidates.length > 0);
           setError(pickPromptMessage(result, term));
+          trackSearch(result.candidates.length ? 'choose_one' : 'no_results', turbopassSource);
           return;
         }
         suggestion = result.pick;
@@ -917,6 +931,7 @@ export default function BoundaryImport({
       // Overture says up front when nothing lies inside the place (#1016 point 3).
       if (suggestion.properties.descendant_count === 0) {
         setError(deadEndMessage(suggestion));
+        trackSearch('nothing_inside', turbopassSource);
         return;
       }
 
@@ -1029,6 +1044,7 @@ export default function BoundaryImport({
 
     setPendingBoundaries(boundaries);
     setSkippedFeatures(skipped);
+    trackLevels(sortedLevels.length, 'fetched');
 
     if (skipped.length > 0) {
       setStep('osm-review');
@@ -1119,9 +1135,8 @@ export default function BoundaryImport({
         t,
       );
 
-      trackStepAction('geography', 'entity_import', 'boundary', {
-        tenant: boundaryTenant,
-        source: 'osm',
+      trackImport('geography', 'boundary', {
+        method,
         count: result.success.length,
         failed: result.failed.length,
         levels: levelNames.length,

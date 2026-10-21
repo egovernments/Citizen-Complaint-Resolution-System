@@ -9708,18 +9708,6 @@
     "locale": "en_IN"
   },
   {
-    "code": "app.onboarding.home.videos.cms.summary",
-    "message": "How complaints flow end to end",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
-    "code": "app.onboarding.home.videos.cms.title",
-    "message": "What is CMS?",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
     "code": "app.onboarding.home.videos.complaints.summary",
     "message": "Categories, routing and resolution time",
     "module": "configurator-ui",

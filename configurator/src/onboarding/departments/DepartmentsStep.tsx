@@ -14,7 +14,7 @@ import { EmptyState, OptionCard, StepActions } from '../StepParts';
 import { adjacentSteps, stepById } from '../steps';
 import { probeGate, useStepProbe } from '../stepProbe';
 import { describeSaveError } from '../errors';
-import { reportStepError, trackStepAction } from '../telemetry';
+import { reportStepError, trackImport, trackMethod, trackRecordSave } from '../telemetry';
 import { useOnboardingT, type OnboardingT } from '../i18n';
 import { blockingError, refreshWorkspace, stepKeys, STEP_QUERY_OPTIONS } from '../stepQueries';
 import { RefreshNotice } from '../RefreshNotice';
@@ -202,6 +202,10 @@ export default function DepartmentsStep() {
 
   const queryClient = useQueryClient();
   const [bulk, setBulk] = useState(false);
+  const openBulk = () => {
+    setBulk(true);
+    trackMethod('departments', 'bulk');
+  };
   const [dialog, setDialog] = useState<{ kind: MasterKind; record?: MdmsRecord } | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -243,7 +247,7 @@ export default function DepartmentsStep() {
       reportStepError('departments', record ? `update_${kind}` : `create_${kind}`, err, tenant);
       throw err;
     }
-    trackStepAction('departments', record ? 'entity_update' : 'entity_create', kind, { tenant, source: 'form' });
+    trackRecordSave('departments', kind, record ? 'update' : 'create');
     toast({ title: record ? t('common.updated_named', '%{name} updated', { name: input.name }) : t('common.added_named', '%{name} added', { name: input.name }) });
     reload();
   };
@@ -256,7 +260,7 @@ export default function DepartmentsStep() {
       reportStepError('departments', `delete_${kind}`, err, tenant);
       throw new Error(describeSaveError(err, t('common.remove_failed', 'Removing failed. Try again.'), t));
     }
-    trackStepAction('departments', 'entity_delete', kind, { tenant });
+    trackRecordSave('departments', kind, 'delete');
     toast({ title: t('common.removed_named', '%{name} removed', { name: recordName(record) }) });
     reload();
   };
@@ -304,14 +308,16 @@ export default function DepartmentsStep() {
           tenantId={tenant}
           existingDepartments={codes(departments)}
           existingDesignations={codes(designations)}
-          onCancel={() => setBulk(false)}
+          onCancel={() => {
+            setBulk(false);
+            trackMethod('departments', 'bulk', true);
+          }}
           onDone={(summary) => {
             setBulk(false);
             for (const kind of ['department', 'designation'] as const) {
               const result = kind === 'department' ? summary.departments : summary.designations;
-              trackStepAction('departments', 'entity_import', kind, {
-                tenant,
-                source: 'bulk',
+              trackImport('departments', kind, {
+                method: 'bulk',
                 count: result.created,
                 skipped: result.skipped,
                 failed: result.failed.length,
@@ -341,11 +347,14 @@ export default function DepartmentsStep() {
                 icon={FileText}
                 title={t('common.create_manually', 'Create manually')}
                 action={t('common.start_adding', 'Start adding')}
-                onClick={() => setDialog({ kind: 'department' })}
+                onClick={() => {
+                  setDialog({ kind: 'department' });
+                  trackMethod('departments', 'form');
+                }}
               >
                 {t('departments.manual_body', 'Name them one at a time.')}
               </OptionCard>
-              <OptionCard icon={LayoutGrid} title={t('common.bulk_upload', 'Bulk upload')} action={t('common.upload_file', 'Upload a file')} onClick={() => setBulk(true)}>
+              <OptionCard icon={LayoutGrid} title={t('common.bulk_upload', 'Bulk upload')} action={t('common.upload_file', 'Upload a file')} onClick={openBulk}>
                 {t('departments.bulk_body', 'Upload a list and we will bring them in.')}
               </OptionCard>
             </div>
@@ -363,7 +372,7 @@ export default function DepartmentsStep() {
             records={departments}
             departmentNames={departmentNames}
             onAdd={() => setDialog({ kind: 'department' })}
-            onUpload={() => setBulk(true)}
+            onUpload={openBulk}
             onEdit={(record) => setDialog({ kind: 'department', record })}
             onRemove={(record) => remove('department', record)}
           />
@@ -372,7 +381,7 @@ export default function DepartmentsStep() {
             records={designations}
             departmentNames={departmentNames}
             onAdd={() => setDialog({ kind: 'designation' })}
-            onUpload={() => setBulk(true)}
+            onUpload={openBulk}
             onEdit={(record) => setDialog({ kind: 'designation', record })}
             onRemove={(record) => remove('designation', record)}
           />
