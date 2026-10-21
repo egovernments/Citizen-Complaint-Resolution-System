@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.response.ResponseInfo;
 import org.egov.pgr.service.DashboardService;
+import org.egov.pgr.service.DashboardTenantGuard;
 import org.egov.pgr.service.PGRService;
 import org.egov.pgr.service.VisibilityService;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -41,15 +42,18 @@ public class RequestsApiController{
 
     private VisibilityService visibilityService;
 
+    private DashboardTenantGuard dashboardTenantGuard;
+
     @Autowired
     public RequestsApiController(ObjectMapper objectMapper, PGRService pgrService,
                                  ResponseInfoFactory responseInfoFactory, DashboardService dashboardService,
-                                 VisibilityService visibilityService) {
+                                 VisibilityService visibilityService, DashboardTenantGuard dashboardTenantGuard) {
         this.objectMapper = objectMapper;
         this.pgrService = pgrService;
         this.responseInfoFactory = responseInfoFactory;
         this.dashboardService = dashboardService;
         this.visibilityService = visibilityService;
+        this.dashboardTenantGuard = dashboardTenantGuard;
     }
 
     /**
@@ -147,15 +151,29 @@ public class RequestsApiController{
         return requestsCountPost(requestInfoWrapper, criteria);
     }
 
+    /**
+     * Legacy PGR dashboard aggregates. The requested tenant is authorized against the caller's
+     * own tenant (see {@link DashboardTenantGuard}); the token is read from the same places the
+     * gateway reads it for a GET. The credential-free public dashboard is a separate surface
+     * ({@code /v2/analytics/public/*}) and is unaffected.
+     *
+     * <p>The response is per caller now, so it is {@code private}: a shared cache must not hand
+     * one tenant's aggregates to another caller asking for the same URL. A refused request
+     * throws before any Cache-Control is set.
+     */
     @GetMapping("/dashboard")
     public ResponseEntity<DashboardResponse> dashboard(
             @RequestParam String tenantId,
             @RequestParam(required = false) Long fromDate,
-            @RequestParam(required = false) Long toDate) {
+            @RequestParam(required = false) Long toDate,
+            @RequestHeader(value = "auth-token", required = false) String authTokenHeader,
+            @RequestParam(value = "access_token", required = false) String accessToken) {
+        String authToken = authTokenHeader != null && !authTokenHeader.isBlank() ? authTokenHeader : accessToken;
+        dashboardTenantGuard.requireAuthorizedTenant(authToken, tenantId);
         DashboardResponse response = dashboardService.getDashboardData(tenantId, fromDate, toDate);
         CacheControl cacheControl = CacheControl
                 .maxAge(fromDate != null ? 30 : 60, TimeUnit.SECONDS)
-                .cachePublic();
+                .cachePrivate();
         return ResponseEntity.ok()
                 .cacheControl(cacheControl)
                 .body(response);
