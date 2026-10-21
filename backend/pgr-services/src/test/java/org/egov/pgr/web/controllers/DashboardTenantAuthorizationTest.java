@@ -107,9 +107,30 @@ class DashboardTenantAuthorizationTest {
     }
 
     @Test
-    void noTokenOrAnUnverifiableTokenIsRefused() {
+    void theHeaderTokenDecidesWhenBothAreSentLikeTheGateway() throws Exception {
+        // The gateway authenticates and RBAC-checks the auth-token header when there is one, so
+        // the guard must authorize the same caller, not the access_token's.
+        callerTenant("ke-token", "ke");
+        callerTenant("kenya-token", "kenya");
+
+        CustomException e = assertThrows(CustomException.class,
+                () -> controller.dashboard("kenya", null, null, "ke-token", "kenya-token"));
+        assertEquals("TENANT_NOT_AUTHORIZED", e.getCode());
+        assertEquals(200, controller.dashboard("ke", null, null, "ke-token", "kenya-token").getStatusCode().value());
+
+        verify(restTemplate, never()).postForObject(contains("access_token=kenya-token"), any(), eq(JsonNode.class));
+        verify(dashboardService, never()).getDashboardData(eq("kenya"), any(), any());
+    }
+
+    @Test
+    void noTokenOrAnUnverifiableTokenIsRefused() throws Exception {
         assertThrows(CustomException.class, () -> controller.dashboard("ke", null, null, null, null));
         assertThrows(CustomException.class, () -> controller.dashboard("ke", null, null, " ", null));
+
+        // egov-user answers, but with no tenantId: nothing to authorize against.
+        when(restTemplate.postForObject(contains("access_token=no-tenant-token"), any(), eq(JsonNode.class)))
+                .thenReturn(mapper.readTree("{\"uuid\":\"u-1\"}"));
+        assertThrows(CustomException.class, () -> controller.dashboard("ke", null, null, "no-tenant-token", null));
 
         when(restTemplate.postForObject(anyString(), any(), eq(JsonNode.class)))
                 .thenThrow(new ResourceAccessException("egov-user down"));

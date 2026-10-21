@@ -142,8 +142,9 @@ public class DashboardQueryBuilder {
     }
 
     public String getFilteredDepartmentQuery(String tenantId, Long fromDate, Long toDate, List<Object> preparedStmtList) {
-        // The department masters are read from the tenant's own state root, exactly as MDMSUtils
-        // reads them for complaints (getStateLevelTenant). Unfiltered, both CTEs read every
+        // The department masters are read from the tenant's own state root. MDMSUtils tries the
+        // city first and falls back to the state root; the seed and tenant bootstrap write these
+        // masters at the state root, so the two agree there. Unfiltered, both CTEs read every
         // tenant's rows and DISTINCT ON picked one arbitrarily, so if ke and kenya both define
         // STREETLIGHT, ke's breakdown could show kenya's department mapping and names.
         String stateRoot = stateRoot(tenantId);
