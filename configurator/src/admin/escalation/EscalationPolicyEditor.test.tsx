@@ -47,6 +47,12 @@ describe('EscalationPolicyEditor invalid overrides', () => {
 
     expect(await screen.findByText(/pgr-services ignores the ladder flagged below/)).toBeInTheDocument();
     expect(screen.getByText(/ms L2: Must be greater than L1 \(2 ms\)/)).toBeInTheDocument();
+
+    // A real change elsewhere: Save stays blocked while the bad override is there.
+    fireEvent.change(screen.getByPlaceholderText(/ADD STATE/), {
+      target: { value: 'PENDINGFORREASSIGNMENT' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
     expect(saveButton()).toBeDisabled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Remove override PWTESTESCALATION' }));
