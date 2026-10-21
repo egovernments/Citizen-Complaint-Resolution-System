@@ -198,6 +198,12 @@ export const config = {
     process.env.DIGIT_MANAGED_ROLE_ALLOWLIST ||
       "EMPLOYEE,GRO,PGR_LME,DGRO,CSR,SUPERVISOR,AUTO_ESCALATE,PGR_VIEWER,TICKET_REPORT_VIEWER,ACCOUNT_ADMIN,MDMS_ADMIN,LOC_ADMIN,SUPERUSER",
   ),
+  // DIGIT roles that open the Configurator (#2599): the admin roles a workspace
+  // founder is given. Operational staff (CSR, GRO, ...) use the employee app.
+  digitConfiguratorRoles: csv(
+    process.env.DIGIT_CONFIGURATOR_ROLES ||
+      "SUPERUSER,ACCOUNT_ADMIN,MDMS_ADMIN,LOC_ADMIN,HRMS_ADMIN,WORKFLOW_ADMIN",
+  ),
   digitRoleClientId:
     process.env.DIGIT_ROLE_CLIENT_ID || process.env.DIGIT_IDENTITY_CLIENT_ID || "digit-ui",
   digitTimeoutMs: parseInt(process.env.DIGIT_TIMEOUT_MS || "10000"),

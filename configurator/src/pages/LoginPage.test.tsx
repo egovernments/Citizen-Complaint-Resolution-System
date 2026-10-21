@@ -164,6 +164,24 @@ describe('configurator sign in', () => {
     expect(localSession.installDigitContext).toHaveBeenCalledWith(context, signedIn.user, [1, 2, 3, 4, 5]);
   });
 
+  it('explains a refusal for staff without a Configurator role and installs nothing (#2599)', async () => {
+    vi.mocked(api.session).mockResolvedValue(signedIn);
+    vi.mocked(api.tenants).mockResolvedValue({
+      tenants: [{ tenantId: 'ke', name: 'Bomet County', organizationAlias: 'ke', roles: [] }],
+      selectionRequired: false,
+      onboardingRequired: false,
+    });
+    vi.mocked(api.selectContext).mockRejectedValue(
+      new api.OnboardingError(403, 'CONFIGURATOR_ROLE_REQUIRED', 'This account has no Configurator access in this workspace'),
+    );
+    renderPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: /bomet county/i }));
+
+    expect(await screen.findByText(/the configurator is for workspace admins/i)).toBeInTheDocument();
+    expect(localSession.installDigitContext).not.toHaveBeenCalled();
+  });
+
   it('signs out through the fail-open helper and returns to sign-in', async () => {
     vi.mocked(api.session).mockResolvedValueOnce(signedIn).mockResolvedValue({ authenticated: false });
     vi.mocked(api.tenants).mockResolvedValue({

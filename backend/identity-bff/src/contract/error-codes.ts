@@ -78,6 +78,7 @@ export const ERROR_CODES = {
   PENDING_INVITATION: { status: 403, retry: "after-change", meaning: "The binding at this tenant is pending; accept the invitation first" },
   ACCOUNT_LOCKED: { status: 403, retry: "after-change", meaning: "egov-user reports the DIGIT account locked; no credential repair" },
   DIGIT_ACCOUNT_INACTIVE: { status: 403, retry: "after-change", meaning: "The DIGIT account is inactive (D4); reactivate it in HRMS" },
+  CONFIGURATOR_ROLE_REQUIRED: { status: 403, retry: "after-change", meaning: "The DIGIT account holds no Configurator role at the tenant (DIGIT_CONFIGURATOR_ROLES)" },
   TENANT_ROLES_MISSING: { status: 503, retry: "after-change", meaning: "egov-user INVALID_ROLE: the tenant baseline is not seeded" },
   DIGIT_PII_MASKED: { status: 503, retry: "after-change", meaning: "The DIGIT writer refused a write because a read came back masked" },
   DIGIT_ACCOUNT_INVALID: { status: 503, retry: "after-change", meaning: "egov-user rejected a stored field on read-modify-write" },

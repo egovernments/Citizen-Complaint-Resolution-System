@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { SESSION_EXPIRED_KEY, clearSignOutIncomplete, signOutIncomplete, signOutThisDevice } from '@/lib/session';
 import { useAuthResult } from '@/hooks/useAuthResult';
+import { describeSignupError } from '@/onboarding/signup/signupErrors';
 
 type Phase = 'loading' | 'methods' | 'tenants' | 'noAccess' | 'invitations' | 'entering';
 
@@ -92,7 +93,7 @@ export default function LoginPage() {
     try {
       await enterWorkspace(option.tenantId, identityUser);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not open that workspace.');
+      setError(describeSignupError(caught).message);
       setPhase('tenants');
     }
   };

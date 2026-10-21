@@ -454,6 +454,7 @@ Body `{surface: "configurator" | "employee", tenantId}`. An employee's `tenantId
 1. Re-read the session. Gone → `SESSION_EXPIRED`; generation behind → `SESSION_REVOKED`.
 2. The staff predicate and Organization `ACTIVE`, else `TENANT_CONTEXT_UNAVAILABLE`. A `pending` binding → `PENDING_INVITATION`. No binding (and no managed account until item 14), or no membership → `EMPLOYEE_ACCOUNT_NOT_LINKED`. An entry marked `missing` → `DIGIT_ACCOUNT_NOT_FOUND`.
 3. DIGIT `active`, else `DIGIT_ACCOUNT_INACTIVE`.
+   On the `configurator` surface the account must also hold one of `DIGIT_CONFIGURATOR_ROLES` at the tenant (default: the founder's admin roles SUPERUSER, ACCOUNT_ADMIN, MDMS_ADMIN, LOC_ADMIN, HRMS_ADMIN, WORKFLOW_ADMIN), else `CONFIGURATOR_ROLE_REQUIRED`. The `employee` surface doesn't check roles.
 4. Return the cached token if egov-user still accepts it. A dependency error is not treated as an invalid token.
 5. Otherwise mint with the derived credential (§8). The typed login outcomes are:
    - invalid credentials → one repair per lease, then retry;
@@ -464,7 +465,7 @@ Body `{surface: "configurator" | "employee", tenantId}`. An employee's `tenantId
 7. Mirror DIGIT→Keycloak, and write the verified email Keycloak→DIGIT.
 
 - The BFF never returns a refresh token (D25/B7). Clients call `_select` again on expiry.
-- Errors: `INVALID_REQUEST`, `UNSUPPORTED_SURFACE` (400); `SESSION_REQUIRED`, `SESSION_EXPIRED`, `SESSION_REVOKED` (401); `UNTRUSTED_ORIGIN`, `TENANT_CONTEXT_UNAVAILABLE`, `EMPLOYEE_ACCOUNT_NOT_LINKED`, `PENDING_INVITATION`, `ACCOUNT_LOCKED`, `DIGIT_ACCOUNT_INACTIVE` (403); `DIGIT_ACCOUNT_NOT_FOUND` 404; `TENANT_ROLES_MISSING`, `DIGIT_PII_MASKED`, `DIGIT_ACCOUNT_INVALID`, `DIGIT_UNAVAILABLE`, `IDENTITY_UNAVAILABLE`, `IDENTITY_BUSY` (503).
+- Errors: `INVALID_REQUEST`, `UNSUPPORTED_SURFACE` (400); `SESSION_REQUIRED`, `SESSION_EXPIRED`, `SESSION_REVOKED` (401); `UNTRUSTED_ORIGIN`, `TENANT_CONTEXT_UNAVAILABLE`, `EMPLOYEE_ACCOUNT_NOT_LINKED`, `PENDING_INVITATION`, `ACCOUNT_LOCKED`, `DIGIT_ACCOUNT_INACTIVE`, `CONFIGURATOR_ROLE_REQUIRED` (403); `DIGIT_ACCOUNT_NOT_FOUND` 404; `TENANT_ROLES_MISSING`, `DIGIT_PII_MASKED`, `DIGIT_ACCOUNT_INVALID`, `DIGIT_UNAVAILABLE`, `IDENTITY_UNAVAILABLE`, `IDENTITY_BUSY` (503).
 
 #### 3.3.5 `POST /identity/v1/contexts/citizen/_select` (items 6, 10, 12, 13)
 
@@ -744,6 +745,7 @@ The console calls HRMS first, then the BFF. The BFF never writes HRMS (§1), and
 | `PENDING_INVITATION` | 403 | after-change | The binding at this tenant is pending; accept the invitation first |
 | `ACCOUNT_LOCKED` | 403 | after-change | egov-user reports the DIGIT account locked; no credential repair |
 | `DIGIT_ACCOUNT_INACTIVE` | 403 | after-change | The DIGIT account is inactive (D4); reactivate it in HRMS |
+| `CONFIGURATOR_ROLE_REQUIRED` | 403 | after-change | The DIGIT account holds no Configurator role at the tenant (DIGIT_CONFIGURATOR_ROLES) |
 | `TENANT_ROLES_MISSING` | 503 | after-change | egov-user INVALID_ROLE: the tenant baseline is not seeded |
 | `DIGIT_PII_MASKED` | 503 | after-change | The DIGIT writer refused a write because a read came back masked |
 | `DIGIT_ACCOUNT_INVALID` | 503 | after-change | egov-user rejected a stored field on read-modify-write |

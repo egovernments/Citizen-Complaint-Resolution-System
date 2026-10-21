@@ -12,7 +12,8 @@ export async function enterWorkspace(tenantId: string, identity?: Pick<SessionUs
   const previousEnvironment = apiClient.getEnvironment();
   apiClient.setEnvironment(API_ORIGIN || window.location.origin);
   apiClient.setAuth(context.access_token, context.UserRequest as UserInfo);
-  // Workspace setup belongs to ACCOUNT_ADMIN. Other staff enter their existing workspace.
+  // Workspace setup belongs to ACCOUNT_ADMIN. Other admins (MDMS_ADMIN, …) enter their existing workspace;
+  // the BFF refuses the Configurator to staff with no admin role (CONFIGURATOR_ROLE_REQUIRED).
   const admin = context.UserRequest.roles.some(role => role.code === 'ACCOUNT_ADMIN' && role.tenantId === tenantId);
   try {
     const progress = admin ? completedSteps((await searchWorkspace(tenantId)).Workspace) : [1, 2, 3, 4, 5];

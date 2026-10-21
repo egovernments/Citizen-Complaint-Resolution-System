@@ -10176,6 +10176,12 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.signup_errors.CONFIGURATOR_ROLE_REQUIRED",
+    "message": "The Configurator is for workspace admins, and your account here has no admin role. Use the employee app, or ask an admin for access.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.signup_errors.DIGIT_ACCOUNT_INACTIVE",
     "message": "Your account in this workspace isn’t active. Ask its admin to turn it back on.",
     "module": "configurator-ui",
