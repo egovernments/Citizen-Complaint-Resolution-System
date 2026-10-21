@@ -3155,8 +3155,7 @@ services:
   #
   # Both services are profile-gated — they don't start on a default
   # `docker compose up`. Opt in with `COMPOSE_PROFILES=keycloak`. The
-  # Ansible playbook flips this on when `enable_keycloak: true` in
-  # host_vars.
+  # Ansible playbook always turns the profile on: every sign-in needs it.
   #
   # Keycloak has its OWN Postgres instance (keycloak-postgres) rather
   # than sharing the DIGIT postgres-db. Two reasons:

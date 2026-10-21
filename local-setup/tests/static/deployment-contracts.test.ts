@@ -353,10 +353,10 @@ describe('example host_vars pass preflight.py (#2271)', () => {
     expect(unexpected).toEqual([]);
   });
 
-  test('preflight.py mirrors both D26 refusals in the playbook', () => {
+  test('preflight.py mirrors both refusals in the playbook', () => {
     const script = read('local-setup/scripts/preflight.py');
     const playbook = read('local-setup/ansible/playbook-deploy.yml');
-    expect(playbook).toContain('- name: "preflight — identity requires enable_keycloak: true"');
+    expect(playbook).toContain('- name: "preflight — Keycloak is mandatory (refuse enable_keycloak: false)"');
     expect(playbook).toContain('- name: "preflight — refuse retired digit-ui-v2 citizen identity"');
     expect(script).toMatch(/"identity-needs-keycloak"/);
     expect(script).toMatch(/"digit-ui-v2-retired"/);
@@ -682,11 +682,10 @@ describe('Keycloak realm proxy client address', () => {
   test('Keycloak public paths win over the stock Novu dashboard /auth/ catch-all', () => {
     const stock = nginx.slice(nginx.indexOf('# Novu dashboard (SPA) — STOCK image.'));
     expect(stock).toMatch(/\n  location \/auth\/ \{\n    proxy_pass http:\/\/127\.0\.0\.1:14000;/);
-    expect(nginx.indexOf('{% if enable_keycloak | default(false) %}\n  # Keycloak\'s public surface'))
-      .toBeGreaterThan(-1);
+    expect(nginx.indexOf("\n\n  # Keycloak's public surface")).toBeGreaterThan(-1);
+    expect(nginx).not.toContain('enable_keycloak');
     expect(nginx).not.toContain('unsafe to combine with Keycloak');
     const playbook = read('local-setup/ansible/playbook-deploy.yml');
-    expect(playbook).toContain("nginx routes Keycloak's /auth/realms/ and\n          /auth/resources/ ahead of the stock dashboard's /auth/ paths");
     expect(playbook).not.toContain('until the frontend cutover');
   });
 });
@@ -1928,8 +1927,7 @@ describe('standalone Identity BFF and Keycloak deployment contract', () => {
     const task = playbook.slice(start, playbook.indexOf('\n\n', start));
     expect(task).toContain('ansible.builtin.debug:');
     expect(task).not.toMatch(/assert:|fail:/);
-    for (const guard of ['enable_keycloak | default(false) | bool',
-      'not (enable_otp_services | default(false) | bool)',
+    for (const guard of ['not (enable_otp_services | default(false) | bool)',
       'not (identity_dev_fixed_otp | default(false) | bool)',
       "not (identity_citizen_otp_sender | default('', true) | length > 0)"]) {
       expect(task).toContain(guard);
@@ -2143,7 +2141,7 @@ describe('D26 legacy identity paths are retired', () => {
     expect(kong).toContain('["/user/oauth/token"]=true');
     expect(kong).toContain('isInternal is not accepted at the public gateway');
     expect(playbook).toContain('identity_legacy_user_endpoints');
-    expect(playbook).toContain('default(not (enable_keycloak | default(false)))');
+    expect(playbook).toContain('when: identity_legacy_user_endpoints | default(false)');
 
     // Mirror the two Ansible replacements for the Keycloak/default-false
     // configuration: the three native calls leave AUTH_OPTIONAL, the mock
@@ -2162,18 +2160,21 @@ describe('D26 legacy identity paths are retired', () => {
   });
 
   // High 3 (Dhruv, #2271 review 2): with Keycloak off there is no Identity
-  // BFF, so no tenant route resolves and nobody can sign in.
-  test('the deploy refuses enable_keycloak: false and every shipped example turns it on', () => {
-    const preflight = playbook.slice(playbook.indexOf('- name: "preflight — identity requires enable_keycloak: true"'));
-    expect(preflight).toMatch(/^- name: "preflight — identity requires enable_keycloak: true"\n\s+ansible\.builtin\.fail:/);
-    expect(preflight.slice(0, 1500)).toContain("when: not (enable_keycloak | default(false) | bool)");
+  // BFF, so no tenant route resolves and nobody can sign in. Keycloak is now
+  // always deployed; a leftover enable_keycloak: false must stop the deploy.
+  test('Keycloak is unconditional, a leftover enable_keycloak: false is refused, and no example sets it', () => {
+    const name = '- name: "preflight — Keycloak is mandatory (refuse enable_keycloak: false)"';
+    const preflight = playbook.slice(playbook.indexOf(name));
+    expect(preflight.startsWith(`${name}\n      ansible.builtin.fail:`)).toBe(true);
+    expect(preflight.slice(0, 1500)).toContain('when: enable_keycloak is defined and not (enable_keycloak | bool)');
+    expect(playbook).not.toMatch(/enable_keycloak \| default/);
     const dir = 'local-setup/ansible/inventory/host_vars';
     const examples = fs.readdirSync(path.join(REPO_ROOT, dir))
       .filter((f) => f.endsWith('.example') || f === '_example.yml');
     expect(examples.length).toBeGreaterThanOrEqual(6);
     for (const example of examples) {
       const text = read(`${dir}/${example}`);
-      expect([example, text.match(/^enable_keycloak: (\S+)/m)?.[1]]).toEqual([example, 'true']);
+      expect([example, /^enable_keycloak:/m.test(text)]).toEqual([example, false]);
       expect([example, /^\s+keycloak: true\b/m.test(text)]).toEqual([example, true]);
       expect([example, /OTP login works without|inert while enable_keycloak is false|DIGIT keeps working on OTP login/.test(text)])
         .toEqual([example, false]);

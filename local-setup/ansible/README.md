@@ -69,7 +69,7 @@ playbook. Each profile is independent — enable any combination.
 | `search` | `enable_search_stack: true` | 3 | elasticsearch, egov-indexer, inbox |
 | `otp` | `enable_otp_services: true` (requires `enable_novu: true`) | 2 | egov-otp, user-otp (their SMS goes out through novu-bridge) |
 | `notifications` | `enable_novu: true` | 8 | novu-mongo, novu-api, novu-worker, novu-ws, novu-dashboard, digit-config-service, digit-user-preferences-service, novu-bridge |
-| `keycloak` | `enable_keycloak: true` | 3 | keycloak-postgres, keycloak, token-exchange-svc |
+| `keycloak` | always on (mandatory) | 3 | keycloak-postgres, keycloak, identity-bff |
 | `mcp` | `enable_mcp: true` | 2 | mcp-postgres, digit-mcp |
 
 **Full stack (all profiles): 57 persistent + 4 init = 61 total.**
