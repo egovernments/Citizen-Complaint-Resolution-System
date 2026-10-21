@@ -687,6 +687,36 @@ def action(aid, url):
 
 FIXED = [a[0] for a in sn.NOTIF_ACTIONS]
 URLS = [a[1] for a in sn.NOTIF_ACTIONS]
+FLOOR = sn.RELOCATED_ACTION_ID_FLOOR
+FULL_DUMP = os.path.join(REPO, "local-setup", "db", "full-dump.sql")
+PLATFORM_BASELINE = os.path.join(REPO, "backend", "pgr-services", "src", "main", "resources",
+                                 "onboarding", "platform-baseline-v1.json")
+DDH_ACTIONS = os.path.join(REPO, "utilities", "default-data-handler", "src", "main", "resources",
+                           "mdmsData", "ACCESSCONTROL-ACTIONS-TEST",
+                           "ACCESSCONTROL-ACTIONS-TEST.actions-test.json")
+
+
+def dump_rows(schema, tenant):
+    """The data of every full-dump.sql eg_mdms_data row of `schema` at `tenant`."""
+    out, columns = [], None
+    with open(FULL_DUMP, encoding="utf-8") as fh:
+        for line in fh:
+            if columns is None:
+                if line.startswith("COPY public.eg_mdms_data ("):
+                    columns = [c.strip() for c in line.split("(", 1)[1].split(")", 1)[0].split(",")]
+                continue
+            if line.startswith("\\."):
+                break
+            row = dict(zip(columns, line.rstrip("\n").split("\t")))
+            if row.get("schemacode") == schema and row.get("tenantid") == tenant:
+                out.append(json.loads(row["data"]))
+    return out
+
+
+def baseline_actions():
+    with open(PLATFORM_BASELINE, encoding="utf-8") as fh:
+        return {int(r["data"]["id"]): r["data"]["url"] for r in json.load(fh)["records"]
+                if r["schemaCode"] == sn.ACTION_SCHEMA}
 
 
 class NotificationActionIds(unittest.TestCase):
@@ -697,7 +727,7 @@ class NotificationActionIds(unittest.TestCase):
     migrated."""
 
     # The shape of bomet ke: every fixed id (and one past them) held by another URL, plus
-    # the high ids pgr-services' onboarding uses.
+    # the high ids pgr-services' onboarding uses. Its highest id was 901000.
     BOMET_KE = [(action(aid, "/pgr-services/other/%d" % aid), True) for aid in range(4620, 4641)] + [
         (action(900000, "/pgr-services/v2/onboarding/workspaces/_search"), True),
         (action(901000, "/pgr-services/v2/onboarding/workspaces/_rename"), True)]
@@ -711,7 +741,7 @@ class NotificationActionIds(unittest.TestCase):
 
     def test_an_id_held_by_another_url_moves_to_a_free_id(self):
         plan = sn.plan_notif_actions(self.BOMET_KE)
-        self.assertEqual([p[1] for p in plan], list(range(901001, 901001 + len(FIXED))))
+        self.assertEqual([p[1] for p in plan], list(range(FLOOR + 1, FLOOR + 1 + len(FIXED))))
         self.assertTrue(all(p[2] for p in plan), "each one is created")
         self.assertEqual([p[3] for p in plan], ["/pgr-services/other/%d" % aid for aid in FIXED])
 
@@ -719,8 +749,33 @@ class NotificationActionIds(unittest.TestCase):
         # Only 4623 collides, and the tenant's highest id is below the fixed range: the moved
         # action must not land on 4624-4639, which the rows after it still need.
         plan = sn.plan_notif_actions([(action(4623, "/elsewhere"), True)])
-        self.assertEqual(plan[0], (4623, max(FIXED) + 1, True, "/elsewhere"))
+        self.assertEqual(plan[0], (4623, FLOOR + 1, True, "/elsewhere"))
         self.assertEqual(plan[1:], [(aid, aid, True, None) for aid in FIXED[1:]])
+
+    def test_a_moved_id_never_takes_a_platform_baseline_id(self):
+        # The platform baseline creates its actions by fixed id at state_root on every deploy
+        # (digit-mcp's tenant bootstrap) and skips one whose id is taken, then grants its
+        # roles to it. "Above the tenant's highest id" put bomet ke's actions on 901001-901017
+        # (its highest was 901000): the baseline's cache-bust, ComplaintHierarchy, ... ids.
+        baseline = baseline_actions()
+        partial = [(action(aid, url), True) for aid, url in baseline.items() if aid <= 901000]
+        full = [(action(aid, url), True) for aid, url in baseline.items()]
+        for label, tenant in (("highest id 901000, as bomet ke", partial),
+                              ("the whole baseline already applied", full)):
+            colliding = [(action(aid, "/tenant/own/%d" % aid), True) for aid in FIXED]
+            moved = [p[1] for p in sn.plan_notif_actions(tenant + colliding)]
+            self.assertFalse(set(moved) & set(baseline), label)
+            self.assertTrue(all(aid > FLOOR for aid in moved), label)
+
+    def test_every_fixed_id_seed_stays_below_the_relocation_floor(self):
+        # The floor is only safe while no seed that writes actions by fixed id reaches it.
+        with open(DDH_ACTIONS, encoding="utf-8") as fh:
+            ddh = [int(a["id"]) for a in json.load(fh)]
+        dump = [int(a["id"]) for a in dump_rows(sn.ACTION_SCHEMA, "pg") if str(a.get("id")).isdigit()]
+        for label, ids in (("platform baseline", list(baseline_actions())), ("full-dump.sql", dump),
+                           ("default-data-handler", ddh), ("NOTIF_ACTIONS", FIXED)):
+            self.assertTrue(ids, label)
+            self.assertLess(max(ids), FLOOR, "%s reaches RELOCATED_ACTION_ID_FLOOR" % label)
 
     def test_a_url_already_held_at_another_id_is_reused(self):
         url = "/mdms-v2/v2/_create/NOTIFICATIONS.Routing"
@@ -778,22 +833,71 @@ class NotificationActionIds(unittest.TestCase):
     def test_an_id_the_search_missed_gets_no_grant(self):
         # mdms-v2's search drops some inactive rows (45 of 254 on bomet ke). If the free id
         # turns out to be taken, its row's URL is unknown: grant nothing there, fail the phase.
-        actions, grants, out = self.seed(self.BOMET_KE, hidden_ids={901001}, failures=1)
-        self.assertNotIn(901001, {aid for _role, aid in grants})
-        self.assertNotIn(901001, actions)
-        self.assertIn("ACL-ID-TAKEN: action id 901001 at ke was not free", out)
+        actions, grants, out = self.seed(self.BOMET_KE, hidden_ids={FLOOR + 1}, failures=1)
+        self.assertNotIn(FLOOR + 1, {aid for _role, aid in grants})
+        self.assertNotIn(FLOOR + 1, actions)
+        self.assertIn("ACL-ID-TAKEN: action id %d at ke was not free" % (FLOOR + 1), out)
         self.assertEqual(len(actions), len(FIXED) - 1, "the other actions still land")
 
     def test_a_fresh_tenant_is_seeded_exactly_as_the_dump(self):
+        # Dump-seeded and script-seeded tenants must agree, or a dump-seeded tenant would read
+        # as colliding with itself. The dump's `pg` is the reference.
+        dump_actions = {int(a["id"]): a["url"] for a in dump_rows(sn.ACTION_SCHEMA, "pg")
+                        if str(a.get("id")).isdigit() and int(a["id"]) in FIXED}
+        dump_grants = sorted((g["rolecode"], int(g["actionid"])) for g in dump_rows(sn.ROLEACTION_SCHEMA, "pg")
+                             if str(g.get("actionid")).isdigit() and int(g["actionid"]) in FIXED)
         actions, grants, out = self.seed([])
-        self.assertEqual(actions, dict(zip(FIXED, URLS)))
-        self.assertEqual(sorted(grants), sorted((role, a[0]) for a in sn.NOTIF_ACTIONS for role in a[6]))
+        self.assertEqual(actions, dump_actions)
+        self.assertEqual(sorted(grants), dump_grants)
         self.assertNotIn("ACL-ID-COLLISION", out)
 
     def test_a_seeded_tenant_only_re_asserts_its_grants(self):
-        actions, grants, _out = self.seed([(action(aid, url), True) for aid, url in zip(FIXED, URLS)])
+        actions, grants, out = self.seed([(action(aid, url), True) for aid, url in zip(FIXED, URLS)])
         self.assertEqual(actions, {}, "no action is created again")
         self.assertEqual({aid for _role, aid in grants}, set(FIXED))
+        self.assertNotIn("ACL-ACTION-INACTIVE", out)
+
+    def test_an_inactive_action_is_kept_and_named(self):
+        # Re-creating it active would undo whoever deactivated it, so its grants go to it as
+        # before; but the 403s that follow must not read as a missing MDMS_ADMIN.
+        seeded = [(action(aid, url), aid != FIXED[0]) for aid, url in zip(FIXED, URLS)]
+        actions, grants, out = self.seed(seeded)
+        self.assertEqual(actions, {}, "nothing is created for it")
+        self.assertIn(FIXED[0], {aid for _role, aid in grants})
+        self.assertEqual(out.count("ACL-ACTION-INACTIVE"), 1)
+        self.assertIn("ACL-ACTION-INACTIVE: %s is action %d at ke and it is INACTIVE" % (URLS[0], FIXED[0]), out)
+
+    @unittest.skipIf(jinja2 is None, "needs jinja2 + PyYAML (ansible's own dependencies)")
+    def test_the_deploy_failure_shows_why(self):
+        # The access task's output is never printed; the failure and the WARNING show only the
+        # seeder lines that match one filter. Without ACL- in it, a state_root that failed on
+        # an inactive action read as a missing MDMS_ADMIN.
+        import re
+        with open(os.path.join(REPO, "local-setup", "ansible", "playbook-deploy.yml"), encoding="utf-8") as fh:
+            tasks = {t.get("name"): t for p in yaml.safe_load(fh) for t in p.get("tasks", []) or []}
+        env = jinja2.Environment()
+        env.tests["search"] = lambda value, pattern: re.search(pattern, value) is not None  # ansible's test
+        fail = env.from_string(tasks["notif-seed — fail: state_root could not be seeded"]
+                               ["ansible.builtin.fail"]["msg"])
+        warn = env.from_string(tasks["notif-seed — WARNING: a complaint root other than state_root could not be seeded"]
+                               ["ansible.builtin.debug"]["msg"])
+
+        def shown(out, acl_rc, data_rc):
+            acl = {"rc": acl_rc, "stdout": out, "stdout_lines": out.splitlines()}
+            fin = {} if data_rc is None else {"rc": data_rc, "stdout": "", "stdout_lines": []}
+            values = dict(notif_seed_failed_roots=["ke"], notif_acl_by_root={"ke": acl},
+                          notif_seed_final_by_root={"ke": fin} if fin else {},
+                          notif_acl_ok_roots=[] if data_rc is None else ["ke"],
+                          inventory_hostname="box", item="ke", notif_seed_tenant="other",
+                          notif_complaint_counts={"ke": "12"})
+            return fail.render(**values), warn.render(**values)
+
+        _a, _g, out = self.seed(self.BOMET_KE, hidden_ids={FLOOR + 1}, failures=1)
+        for msg in shown(out, 2, None):
+            self.assertIn("ACL-ID-TAKEN: action id %d at ke was not free" % (FLOOR + 1), msg)
+        _a, _g, out = self.seed([(action(aid, url), aid != FIXED[0]) for aid, url in zip(FIXED, URLS)])
+        for msg in shown(out, 0, 3):
+            self.assertIn("ACL-ACTION-INACTIVE: %s is action %d at ke" % (URLS[0], FIXED[0]), msg)
 
 
 

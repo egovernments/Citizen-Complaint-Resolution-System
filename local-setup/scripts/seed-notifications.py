@@ -164,8 +164,8 @@ except ImportError:  # not staged: the catalogue comes from the committed file
     gec = None
 
 # Read lazily-ish: an empty value is validated in main(). Kept as module constants so
-# test_acl_dump_parity.py can import this file and diff NOTIF_ACTIONS against the dump
-# without a live DIGIT. migrate-notifications.py imports this module too and sets URL /
+# test_notification_seed_decisions.py can import this file and diff NOTIF_ACTIONS against
+# the dump without a live DIGIT. migrate-notifications.py imports this module too and sets URL /
 # USERNAME / PASSWORD / LOGIN_TENANT / DATA_DIR itself; every I/O helper below takes the
 # tenant as an argument (defaulting to TENANT) so one process can serve many tenants.
 URL = os.environ.get("DIGIT_URL", "").rstrip("/")
@@ -274,8 +274,8 @@ ACL_ROLES_ABSENT = {}
 # for fresh dump-based installs. A tenant seeded by the dump and a tenant seeded by
 # this script must end up with the same action ids, because roleactions reference an
 # action by numeric id. 4620-4622 were already taken; these start at 4623.
-# test_acl_dump_parity.py re-derives the next free ids from the dump and asserts the
-# tuples below and the dump rows agree field-for-field — run it after any edit here.
+# test_notification_seed_decisions.py (NotificationActionIds) asserts that the dump's
+# `pg` rows hold these URLs at these ids with these grants — run it after any edit here.
 #
 # The ids are what a tenant gets when they are FREE there, not a promise. A tenant whose
 # own actions table outgrew the dump (bomet's `ke`: 4623-4640 are pgr-services analytics
@@ -283,7 +283,7 @@ ACL_ROLES_ABSENT = {}
 # them for other URLs. actions-test is x-unique on `id`, so creating the notification
 # action there is a duplicate, never an error. Granting roles to the fixed id then means
 # granting the OTHER URL. plan_notif_actions therefore matches by URL first and moves a
-# colliding action to a free id (ACL-ID-COLLISION).
+# colliding action to a free id above RELOCATED_ACTION_ID_FLOOR (ACL-ID-COLLISION).
 #
 # Roles mirror what the existing rows use: the MDMS masters follow
 # NotificationRouting/Template (MDMS_ADMIN, ACCOUNT_ADMIN) plus SUPERUSER; the
@@ -378,6 +378,21 @@ NOTIF_ACTIONS = [
     (4639, "/novu-bridge/novu-adapter/v1/dispatch/_resolve", "Novu Bridge", False,
      "Resolve Thin Notification Event", "novu-bridge", PROVIDER_ADMIN_ROLES),
 ]
+
+# Where an action goes when its fixed id belongs to another URL at the tenant: the next id
+# above every id the tenant has AND above this floor. "Above the tenant's highest id"
+# alone lands in other seeds' ranges. The platform baseline
+# (backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json) creates
+# its actions by FIXED id too, at 900000-900059 and 901000-901017 so far, growing upward
+# from there. It is applied by pgr-services onboarding and by digit-mcp's tenant
+# bootstrap, which the deploy runs at state_root every time. Both skip an action whose id
+# is already there and then grant their roles to that id: this module's own bug, reversed.
+# A tenant whose highest id was 901000 (bomet's `ke`) would get 901001-901017, which are
+# the baseline's cache-bust, ComplaintHierarchy, ThemeConfig, MapConfig, invitationPolicy
+# and DashboardConfig actions. Every fixed-id seed (full-dump.sql and default-data-handler
+# below 5000, the platform baseline) stays far below this floor;
+# test_notification_seed_decisions.py fails if one of them reaches it.
+RELOCATED_ACTION_ID_FLOOR = 9000000
 
 
 
@@ -1258,8 +1273,9 @@ def plan_notif_actions(existing):
         no-ops;
       - the URL is absent and the fixed id is free → created at the fixed id;
       - the fixed id is held by ANOTHER URL (held_by) → created at the next id above every
-        id the tenant has and every fixed id, so it can never take a fixed id another row
-        of this table still needs.
+        id the tenant has and above RELOCATED_ACTION_ID_FLOOR, so it can never take a fixed
+        id another row of this table still needs, nor an id another seed creates by fixed
+        id later (the platform baseline's 900000+ actions).
     Role-actions are granted to the action id, never to a fixed id held by another URL.
     """
     ids_by_url, url_by_id = {}, {}
@@ -1270,7 +1286,7 @@ def plan_notif_actions(existing):
         url = str(data.get("url") or "").strip()
         url_by_id.setdefault(aid, url)
         ids_by_url.setdefault(url, []).append((aid, active))
-    next_free = max(list(url_by_id) + [a[0] for a in NOTIF_ACTIONS]) + 1
+    next_free = max(list(url_by_id) + [a[0] for a in NOTIF_ACTIONS] + [RELOCATED_ACTION_ID_FLOOR]) + 1
     plan = []
     for fixed, url, *_ in NOTIF_ACTIONS:
         held = sorted(ids_by_url.get(url, []), key=lambda h: (not h[1], h[0] != fixed, h[0]))
@@ -1329,7 +1345,9 @@ def seed_access_control(tok):
     absent = ACL_ROLES_ABSENT  # role -> [action id, ...] not granted: the tenant lacks the role
     absent.clear()
 
-    plan = plan_notif_actions(_record_rows(existing))
+    rows = _record_rows(existing)
+    active_ids = {_action_id(data) for data, active in rows if active}
+    plan = plan_notif_actions(rows)
     for (fixed, url, name, enabled, disp, svc, roles), (_, aid, create, held_by) in zip(
             NOTIF_ACTIONS, plan):
         if held_by is not None:
@@ -1338,6 +1356,13 @@ def seed_access_control(tok):
         elif aid != fixed:
             print("  access-control: %s is already action %d at %s (not %d) — granting that one"
                   % (url, aid, TENANT, fixed))
+        if not create and aid not in active_ids:
+            # Someone deactivated it. The grants below still go to it (re-creating it active
+            # would override that), but egov-accesscontrol loads active rows only, so requests
+            # to it (the data phase's writes, the Notifications screens) stay 403 however often
+            # it is restarted. Say so, or the failure reads as a missing MDMS_ADMIN.
+            print("ACL-ACTION-INACTIVE: %s is action %d at %s and it is INACTIVE — requests "
+                  "to it stay refused (403) until it is reactivated" % (url, aid, TENANT))
         if create:
             action = {"id": aid, "url": url, "code": "null", "name": name, "path": "",
                       "enabled": enabled, "displayName": disp, "orderNumber": 0,
@@ -1348,7 +1373,8 @@ def seed_access_control(tok):
                 # every inactive row: 45 of bomet ke's 254 never come back). Granting it
                 # would grant whatever URL that row has, so grant nothing and fail.
                 print("ACL-ID-TAKEN: action id %d at %s was not free (MDMS answered "
-                      "duplicate) — no role-action granted for %s" % (aid, TENANT, url))
+                      "duplicate) — no role-action granted for %s (docs/releases/2.20/"
+                      "notifications/migration.md#access-control-actions)" % (aid, TENANT, url))
                 failed += 1
                 continue
         else:
