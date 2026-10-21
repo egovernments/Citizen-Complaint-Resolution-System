@@ -58,6 +58,25 @@ digit_ui_mode: static
 # Off by default; tenants that use the inbox opt in via host_vars.
 enable_search_stack: false
 
+# Turbopass's offline boundary DB (enable_turbopass, set in host_vars). It backs
+# the configurator's "Fetch boundaries" and "Preconfigured boundaries", and the
+# deploy builds it for these countries (ISO 3166-1 alpha-2) whenever the DB in
+# turbopass_overture_data_dir doesn't hold all of them yet (#2600). The default
+# is every country the configurator's signup offers (SignupPage.tsx COUNTRIES),
+# so each self-serve workspace finds its own; a single-country box can narrow it.
+# The build needs outbound HTTPS to Overture's S3 bucket, HDX and geoBoundaries.
+# Measured 2026-10: these four take ~11 min, peak ~3.6 GiB and make a 320 MB DB
+# (India is most of all three); KE alone takes ~2.5 min and makes 29 MB.
+# [] = never build here (a DB copied into the directory is still served).
+# Rebuild a DB that already holds them with
+# -e '{"turbopass_rebuild_boundary_db": true}'.
+turbopass_countries: [KE, IN, ET, MZ]
+turbopass_overture_data_dir: "{{ digit_dir }}/turbopass-data"
+turbopass_rebuild_boundary_db: false
+# Memory cap for the build container, so it can't starve the stack on the box.
+# DuckDB (the Overture download step) sizes itself to it.
+turbopass_bootstrap_memory: 4g
+
 # Bring up self-hosted Matomo + its MariaDB + the report archiver
 # (~1 GB RAM; #1254). Off by default — analytics is opt-in, and on a
 # 16 GB box with no swap this is a real allocation.

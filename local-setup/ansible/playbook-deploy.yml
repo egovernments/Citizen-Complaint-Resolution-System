@@ -5034,21 +5034,23 @@
     # templates/nginx-site.conf.j2; the trailing slash strips the prefix).
     #
     # What it serves:
-    #   - the offline Overture boundary DB (the configurator's default source)
-    #     when turbopass_overture_data_dir names a directory holding
-    #     boundaries.sqlite. The DB is built separately by
-    #     turbopass/overture-scraper — it is NOT part of this deploy;
+    #   - the offline boundary DB in turbopass_overture_data_dir: Overture plus
+    #     the official sets, which back Phase 2's "Fetch boundaries" and
+    #     "Preconfigured boundaries". tasks/turbopass-boundary-db.yml builds it
+    #     for turbopass_countries when it doesn't hold them yet (#2600);
     #   - Geoapify passthrough when turbopass_geoapify_api_key is set;
     #   - the vendored name hierarchies (turbopass/data) for the legacy /search.
     # Turbopass is meant to run as its own central service; this on-box path
     # suits a single box or local testing. Default off → zero behaviour
-    # change: no image, no container, no nginx block.
+    # change: no image, no container, no nginx block. `--tags=turbopass`
+    # reruns only this part.
     - name: "Turbopass — ensure build workspace on target"
       ansible.builtin.file:
         path: "{{ digit_dir }}/.build"
         state: directory
         mode: "0755"
       when: enable_turbopass | default(false)
+      tags: [turbopass]
 
     - name: "Turbopass — sync vendored source + scraped data to target"
       ansible.builtin.synchronize:
@@ -5063,6 +5065,7 @@
           - "--exclude=node_modules"
           - "--exclude=venv"
       when: enable_turbopass | default(false)
+      tags: [turbopass]
 
     - name: "Turbopass — build search-api image (turbopass-search:local)"
       ansible.builtin.command: >-
@@ -5073,6 +5076,17 @@
       register: turbopass_build_run
       changed_when: true
       when: enable_turbopass | default(false)
+      tags: [turbopass]
+
+    - name: "Turbopass — boundary DB for turbopass_countries"
+      ansible.builtin.include_tasks:
+        file: tasks/turbopass-boundary-db.yml
+        apply:
+          tags: [turbopass]
+      when:
+        - enable_turbopass | default(false)
+        - turbopass_overture_data_dir | default('') | length > 0
+      tags: [turbopass]
 
     - name: "Turbopass — (re)create the turbopass-search container"
       ansible.builtin.shell: |
@@ -5094,6 +5108,7 @@
       register: turbopass_run
       changed_when: true
       when: enable_turbopass | default(false)
+      tags: [turbopass]
 
     # If a tenant just flipped enable_turbopass: true → false, the
     # previously-running container isn't managed by compose, so nothing
@@ -5108,6 +5123,7 @@
       register: turbopass_sweep
       changed_when: turbopass_sweep.stdout | length > 0
       when: not (enable_turbopass | default(false))
+      tags: [turbopass]
 
     # ---- Self-hosted Overpass: retired ----
     # Phase 2 no longer queries Overpass — boundaries come from turbopass
