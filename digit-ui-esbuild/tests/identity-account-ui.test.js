@@ -151,6 +151,34 @@ test("a failed sign-out everywhere is reported, not presented as success", async
   view.unmount();
 });
 
+// #2592 review: after "Sign out other sessions" the tab adopts a fresh token
+// only for the same person, and the phone form picks up that token.
+for (const selectedUuid of ["same-uuid", "another-uuid"]) {
+  test(`sign out other sessions, then change phone (select returns ${selectedUuid})`, async () => {
+    const calls = [];
+    const state = browser("citizen", async (url) => {
+      calls.push(url);
+      if (url.endsWith("_send")) return json(202, { challengeId: "new-phone", resendAfter: 0, expiresIn: 300 });
+      if (url.endsWith("_select")) return json(200, { access_token: "fresh-token", tenant,
+        UserRequest: { uuid: selectedUuid, type: "CITIZEN", tenantId: "ke", mobileNumber: "711111111" } });
+      return json(200, { authenticated: true, tenant, user: {}, account: { actions: [], credentials: [], providers: [] },
+        sessions: [{ id: "current", current: true, surface: "citizen" }, { id: "other", current: false, surface: "citizen" }] });
+    });
+    const view = await render(ui.Account, { surface: "citizen" });
+    await click(button(view, "Sign out other sessions"));
+    assert.equal(state.stored.logoutScope, "others");
+    const adopted = selectedUuid === "same-uuid";
+    assert.equal(state.getUser().access_token, adopted ? "fresh-token" : "old-token");
+    assert.equal(state.stored["Citizen.token"], adopted ? "fresh-token" : "old-token");
+    if (!adopted) { view.unmount(); return; }
+    await ui.act(async () => view.root.findByProps({ id: "account-phone" }).props.onChange({ target: { value: "722222222" } }));
+    await click(button(view, "Send code"));
+    assert.ok(calls.some((url) => url.endsWith("_send")), "the phone form still works");
+    assert.doesNotMatch(text(view.root), /signed-in account has changed/);
+    view.unmount();
+  });
+}
+
 test("phone-only account hides credential actions and offers phone change", async () => {
   browser("citizen", async () => json(200, { user: {}, account: { actions: [], credentials: [], providers: [] }, sessions: [] }));
   const view = await render(ui.Account, { surface: "citizen" });

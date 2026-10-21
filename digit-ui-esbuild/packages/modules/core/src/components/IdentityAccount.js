@@ -153,6 +153,8 @@ const IdentityAccount = ({ surface }) => {
   const [methods, setMethods] = useState([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  // Bumped when this tab adopts a fresh token, so ChangePhone captures it.
+  const [sessionVersion, setSessionVersion] = useState(0);
   const tenant = window.__digitTenantContext;
   const tr = (key, fallback) => t(key, { defaultValue: fallback });
   // Session times in the language the page is in, not the browser's.
@@ -211,8 +213,12 @@ const IdentityAccount = ({ surface }) => {
       // revoked it (#2592). Select again for a fresh one; if that fails, the
       // next DIGIT call's InvalidAccessTokenException sends this tab through
       // the login page, which selects silently.
+      // The surface cookie is shared across tabs, so adopt only the same person.
       const selected = await establishIdentityBffSession({ surface, tenant, fetchImpl });
-      if (selected.status === "authenticated") storeSelectedUser(surface, selected.user, tenant);
+      if (selected.status === "authenticated" && selected.user.info?.uuid === Digit.UserService.getUser()?.info?.uuid) {
+        storeSelectedUser(surface, selected.user, tenant);
+        setSessionVersion(version => version + 1);
+      }
       await refresh();
       setMessage(tr("CORE_IDENTITY_OTHER_SESSIONS_ENDED", "Your other sessions have been signed out."));
     }
@@ -240,7 +246,7 @@ const IdentityAccount = ({ surface }) => {
           {tr("CORE_IDENTITY_UNLINK_PROVIDER", "Unlink provider")}: {provider.alias}
         </Button>)}
       </Card>
-      {surface === "citizen" && <ChangePhone t={t} tenant={tenant} onChanged={() => run(refresh)} />}
+      {surface === "citizen" && <ChangePhone key={sessionVersion} t={t} tenant={tenant} onChanged={() => run(refresh)} />}
       <Card style={{ padding: "24px", display: "grid", gap: "16px" }}>
         <h2>{tr("CORE_IDENTITY_SESSIONS", "Signed-in sessions")}</h2>
         <ul>{session.sessions?.map((item) => <li key={item.id}>

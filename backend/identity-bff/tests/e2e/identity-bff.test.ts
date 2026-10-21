@@ -1617,7 +1617,7 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
         method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
       });
       expect((await details()).status).toBe(200);
-      const logouts = digit.stats.logouts;
+      const logouts = digit.stats.logouts, logoutCalls = digit.stats.logoutCalls;
       expect((await logout("others")).status).toBe(204);
       expect(await getIdentitySession(other.sessionId)).toBeNull();
       expect(await getIdentitySession(current.sessionId)).not.toBeNull();
@@ -1626,6 +1626,7 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       // The other device's copy (its localStorage) no longer reaches DIGIT, and an alias is revoked only once.
       expect((await details()).status).toBe(401);
       expect(digit.stats.logouts).toBe(logouts + 1);
+      expect(digit.stats.logoutCalls).toBe(logoutCalls + 1);
       expect(await getRedis().get(tokenKey(account))).toBeNull();
       if (alias) expect(await getRedis().get(tokenKey(aliasRef))).toBeNull();
       const adminLog = await (await fetch(`${config.keycloakAdminUrl}/__test/admin-log`)).json();

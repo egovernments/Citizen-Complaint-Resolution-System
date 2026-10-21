@@ -422,7 +422,9 @@ export async function logoutSessions(subject: string, scope: "current" | "others
 export async function endPhoneSessions(subject: string, oldPhoneRef: string, keepSessionId?: string): Promise<void> {
   const kcSessions = await withPersonLease(subject, lease => endSessions(lease,
     item => item.sessionId !== keepSessionId && item.session.phoneRef === oldPhoneRef,
-    { keycloak: true, log: { reason: "PHONE_CHANGED", initiator: keepSessionId } }));
+    // As for logout-others (#2592): a token the keeper shares with an old-number
+    // session is revoked too; ChangePhone selects a fresh one after verify.
+    { keycloak: true, lockOut: true, log: { reason: "PHONE_CHANGED", initiator: keepSessionId } }));
   await endKeycloakSessionsBestEffort(kcSessions);
 }
 

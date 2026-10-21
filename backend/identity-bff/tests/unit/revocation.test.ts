@@ -253,6 +253,16 @@ describe("token inventory and revocation", () => {
     expect(await getIdentitySession(old)).toBeNull(); expect(await getIdentitySession(keep)).not.toBeNull();
     expect(await getIdentitySession(fresh)).not.toBeNull();
   });
+  it("phone change revokes a token the keeper shares with an old-number session", async () => {
+    const keep = await session("keep", "+254700000001"); const old = await session("old", "+254700000001");
+    await inventory(account, login(account, "shared-token"), keep);
+    await withPersonLease(subject, lease => holdToken(lease, account, old));
+    await inventory(second, login(second, "keeper-only-token"), keep);
+    await endPhoneSessions(subject, privateRef("phone", "+254700000001"), keep);
+    expect(digit.revokeToken).toHaveBeenCalledExactlyOnceWith("shared-token");
+    expect(await readToken(account)).toBeNull();
+    expect((await readToken(second))?.accessToken).toBe("keeper-only-token");
+  });
   it("tenant fanout queues union before sequential person work and is repeatable", async () => {
     vi.spyOn(organizations, "readOrganizationByTenant").mockResolvedValue({ id: "org", alias: "org", name: "Org", lifecycle: "FAILED", enabled: false });
     vi.spyOn(keycloak, "listOrganizationMembers").mockResolvedValue([{ id: "member" }]);
