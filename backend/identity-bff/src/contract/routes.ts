@@ -156,9 +156,9 @@ export const ROUTES: RouteContract[] = [
   { method: "GET", path: "/internal/identity/v1/workspace-trials", auth: "operator", state: "live", items: [],
     codes: [...WORKLOAD_AUTH, "IDENTITY_UNAVAILABLE"] },
   { method: "POST", path: "/internal/identity/v1/workspace-trials/_approve", auth: "operator", state: "live", items: [],
-    codes: [...WORKLOAD_AUTH, "WORKSPACE_NOT_FOUND", "IDENTITY_UNAVAILABLE"] },
+    codes: [...WORKLOAD_AUTH, "WORKSPACE_NOT_FOUND", "IDENTITY_BUSY", "IDENTITY_UNAVAILABLE"] },
   { method: "POST", path: "/internal/identity/v1/workspace-trials/_extend", auth: "operator", state: "live", items: [],
-    codes: [...WORKLOAD_AUTH, "WORKSPACE_NOT_FOUND", "IDENTITY_UNAVAILABLE"] },
+    codes: [...WORKLOAD_AUTH, "WORKSPACE_NOT_FOUND", "IDENTITY_BUSY", "IDENTITY_UNAVAILABLE"] },
   // Kept by item 14: the only writer of routes for root tenants that predate signup (e.g. `ke`).
   { method: "POST", path: "/internal/identity/v1/tenant-routes/_backfill", auth: "operator", state: "live", items: [],
     codes: [...WORKLOAD_AUTH, "DIGIT_UNAVAILABLE", "IDENTITY_UNAVAILABLE"] },

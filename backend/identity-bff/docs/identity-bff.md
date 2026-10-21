@@ -695,8 +695,8 @@ Organization membership **only**, and idempotent. The role projection and the ma
 - **`POST /internal/identity/v1/reconciliation/_run`** (item 12) → `200 | 202 {acquired, subjects, mirrored, revoked, propagated, unchanged, failures: [{subject, code}], lagSeconds}`. It **never** writes DIGIT `active`, and never creates or restores a membership or binding. `deactivated` and `unprovisioned` are removed.
 - **`account-links/_link`, `_unlink`, `GET account-links`** keep today's shapes. After item 14 they accept `userType: "CITIZEN"` only, and `EMPLOYEE` → `INVALID_REQUEST`. They are how an admin resolves `CITIZEN_ACCOUNT_AMBIGUOUS`. Until item 14, an `EMPLOYEE` link writes an `active` binding (item 19 runs the bulk conversion).
 - **`GET /internal/identity/v1/workspace-trials`** → `200 {workspaces: [{tenantId, urlSlug, name, trialEndsAt, approvedAt, approvedBy, state: TRIAL | APPROVED | EXPIRED}]}`, one row per Organization with a trial end.
-- **`POST /internal/identity/v1/workspace-trials/_approve`** `{tenantId, actor?}` → `200 {workspace}`. Sets `trialApprovedAt` and `trialApprovedBy` (`control-plane:<actor>`); a second call keeps the first approval. No Organization → `WORKSPACE_NOT_FOUND` (404).
-- **`POST /internal/identity/v1/workspace-trials/_extend`** `{tenantId, endsAt, actor?}` → `200 {workspace}`. Sets `trialEndsAt` to `endsAt` (ISO 8601, else `INVALID_REQUEST`); works on a workspace with no trial. Both writes re-read the Organization before the PUT, under the onboarding lock its primitives take (`op` by `digit.operationId`, else `tenant`), and clear the tenant mapping cache. Keycloak failure → `IDENTITY_UNAVAILABLE` (retry).
+- **`POST /internal/identity/v1/workspace-trials/_approve`** `{tenantId, actor?}` → `200 {workspace}`. Sets `trialApprovedAt` and `trialApprovedBy` (`control-plane:<actor>`); a second call keeps the first approval, on a workspace without a trial too. No Organization → `WORKSPACE_NOT_FOUND` (404).
+- **`POST /internal/identity/v1/workspace-trials/_extend`** `{tenantId, endsAt, actor?}` → `200 {workspace}`. Sets `trialEndsAt` to `endsAt` (a full ISO 8601 timestamp with an offset, else `INVALID_REQUEST`); works on a workspace with no trial. Both writes re-read the Organization before the PUT, under the onboarding lock its primitives take (`op` by `digit.operationId`, else `tenant`), and clear the tenant mapping cache. Both are audited (`WORKSPACE_TRIAL_APPROVED` / `_EXTENDED`, actor, `{from, to}`). A held onboarding lock → `IDENTITY_BUSY`, Keycloak failure → `IDENTITY_UNAVAILABLE` (both retry).
 - **`POST /internal/identity/v1/tenant-routes/_backfill`** `{dryRun?: boolean, actor?: string}` → `200 {created: [tenantId], skipped: [{tenantId, reason: NOT_ROOT | NOT_ACTIVE | ALREADY_MAPPED}], conflicts: [{tenantId, reason: INVALID_SLUG | SLUG_TAKEN | ALIAS_TAKEN}]}`. It gives every active DIGIT root tenant in `IDENTITY_TENANT_ROUTE_BACKFILL_ROOTS` (unset: the root of `DIGIT_ADMIN_TENANT_ID`; set but empty: none, which is how a deployment opts out; the Helm chart leaves an empty value unset) that no Organization maps an Organization whose alias and URL slug are the tenant id (`ke` → `/ke/digit-ui/...`). Idempotent; it never renames or overwrites a mapping. `IDENTITY_TENANT_ROUTE_BACKFILL=true` runs the same backfill at startup. It is kept after item 14 because it is the only way a root tenant that predates signup gets a route; signup's `organizations/_ensure` covers new tenants. Keycloak or DIGIT failures → `IDENTITY_UNAVAILABLE` / `DIGIT_UNAVAILABLE`. The Ansible deploy is a regular caller: every converge POSTs it on the loopback port for the roots it renders from `identity_tenant_route_backfill_roots` (empty when it routes none, never `pg`), and compares `created`/`skipped`/`conflicts` with those roots to report any left without a route (#2398).
 
 ### 3.6 Console employee flows
@@ -1203,7 +1203,7 @@ Probed on Keycloak 26.7.3 on 2026-10-04; the event shapes the poller matches are
 | `IDENTITY_STAFF_CREDENTIAL_MODE` | `rotate` \| `derived`, per box (D24) |
 | `IDENTITY_OTP_SENDER` = `log` \| `http`, `IDENTITY_OTP_SENDER_URL` | `HttpOtpSender` (item 3) |
 | `IDENTITY_POLLER_MAX_LAG_SECONDS` | Readiness threshold for the event poller |
-| `IDENTITY_WORKSPACE_TRIAL_DAYS` | Trial length for new self-serve workspaces; integer, default 0 (off) |
+| `IDENTITY_WORKSPACE_TRIAL_DAYS` | Trial length for new self-serve workspaces; integer, default 0. 0 turns trials off: nothing is stamped and no workspace locks, whatever its `digit.trialEndsAt` |
 | `IDENTITY_WORKSPACE_TRIAL_NOTICE_TITLE`, `_MESSAGE` | Text of the `WORKSPACE_TRIAL_EXPIRED` notice (defaults: "This workspace's trial has ended" / "Sign-in is paused until the workspace is approved. Contact the platform team to continue.") |
 | `IDENTITY_WORKSPACE_TRIAL_NOTICE_LINK_LABEL`, `_LINK_URL` | Optional notice link; sent only when both are set |
 | `IDENTITY_RECONCILIATION_INTERVAL_SECONDS` | Unchanged (default 300); reported by `/readyz` |
@@ -1245,7 +1245,7 @@ No line contains a token, cookie, session id or Keycloak session id.
 
 **Documented limits** (design §6): native refresh tokens issued before binding (up to 14 days) can't be revoked without an egov-user change; revocation pauses while the BFF is down; after Redis loss, citizen tokens, inactive or locked staff tokens, and tokens of a Keycloak user deleted in the same window live until they expire.
 
-**Workspace trials.** A self-serve workspace can be locked 30 days (or `IDENTITY_WORKSPACE_TRIAL_DAYS`) after signup unless an operator approves it. Off when the value is 0.
+**Workspace trials.** A self-serve workspace can be locked 30 days (or `IDENTITY_WORKSPACE_TRIAL_DAYS`) after signup unless an operator approves it. 0 turns the feature off: no new trial is stamped, and no gate or reconcile pass treats any workspace as locked, whatever its end date. `_approve` and `_extend` still write the attributes, which apply once trials are on again.
 - **Gates that refuse:** employee and configurator `contexts/_select`, citizen `contexts/citizen/_select`, and citizen OTP `_send` and `_verify`. Each answers `403 {code: "WORKSPACE_TRIAL_EXPIRED", error, notice}`, where `notice` is `{title, message, linkLabel?, linkUrl?}` from the deployment settings.
 - **`GET /identity/v1/tenants`** keeps the locked workspace listed with `code: "WORKSPACE_TRIAL_EXPIRED"` and no roles, so a founder is not sent to signup.
 - **Open sessions** end within one reconcile pass. Expiry is a new tenant state (`TRIAL_EXPIRED`) and revokes only that workspace's sessions. Only this fan-out also reaches citizens, found through the DIGIT token inventory (`token:<tenantId>:*`) after the members and bindings are queued; a disabled Organization or an inactive tenant still reaches only members and bindings, as before.
@@ -1267,10 +1267,12 @@ curl -s -X POST -H "Authorization: Bearer $IDENTITY_CONTROL_PLANE_TOKEN" \
 # extend (also starts a trial on a workspace that has none)
 curl -s -X POST -H "Authorization: Bearer $IDENTITY_CONTROL_PLANE_TOKEN" \
   -H 'Content-Type: application/json' \
-  -d '{"tenantId":"<tenant-id>","endsAt":"2026-12-31T00:00:00Z","actor":"ops@example.org"}' \
+  -d '{"tenantId":"<tenant-id>","endsAt":"2026-12-31T23:59:59Z","actor":"ops@example.org"}' \
   http://127.0.0.1:<bff-port>/internal/identity/v1/workspace-trials/_extend
 ```
 
+- `endsAt` must be a full ISO 8601 timestamp with an offset (`2026-12-31T23:59:59Z`, `2026-12-31T23:59:59+03:00`) on a real calendar day; anything else, a date alone included, is `INVALID_REQUEST`.
+- Both writes are audited in the identity audit stream: `WORKSPACE_TRIAL_APPROVED` / `WORKSPACE_TRIAL_EXTENDED`, with `actor` and `detail` `{"from","to"}`. A second approval keeps the first, on a workspace without a trial too. A held onboarding lock answers `IDENTITY_BUSY` (retry).
 - `approvedBy` is stored as `control-plane:<actor>`. `actor` may use letters, digits and `_ . @ : -`, up to 100 characters; any other value is dropped and stored as plain `control-plane`.
 - An approval shows at once on the replica that served it, and on other replicas within the 60 s tenant cache.
 - Fallback: a master-realm admin can edit the same Organization attributes in the Keycloak admin console, reached through an SSH tunnel.

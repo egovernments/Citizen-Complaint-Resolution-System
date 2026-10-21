@@ -32,9 +32,10 @@ export async function staffAccess(subject: string, tenantId: string): Promise<St
   }
   const org = await readOrganizationByTenant(tenantId);
   if (!org || !org.enabled || (org.lifecycle !== null && org.lifecycle !== "ACTIVE")) return deny("ORGANIZATION_INACTIVE");
-  if (isTrialLocked(org.trial, Date.now())) return deny("WORKSPACE_TRIAL_EXPIRED");
   if (!await isActiveDigitTenant(tenantId)) return deny("TENANT_INACTIVE");
   if (!await isOrganizationMember(org.id, subject)) return deny("NOT_A_MEMBER");
+  // Last, so a non-member is told the real denial, never the trial notice.
+  if (isTrialLocked(org.trial, Date.now())) return deny("WORKSPACE_TRIAL_EXPIRED");
   return { ...base, allowed: true };
 }
 

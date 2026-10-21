@@ -27,7 +27,7 @@ let account: any;
 let organization: any;
 let puts: Array<{ path: string; body: any }>;
 beforeAll(() => {
-  Object.assign(config, { cachePrefix: `reconcile-${process.pid}`, identityReconciliationIntervalSeconds: 300,
+  Object.assign(config, { cachePrefix: `reconcile-${process.pid}`, identityReconciliationIntervalSeconds: 300, workspaceTrialDays: 30,
     identityReconciliationLeaseSeconds: 300 });
   initCache(`redis://127.0.0.1:${process.env.REDIS_PORT || 16379}`);
 });

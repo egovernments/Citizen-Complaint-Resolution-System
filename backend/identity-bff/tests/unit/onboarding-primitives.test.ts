@@ -77,6 +77,17 @@ describe("onboarding primitives with Redis locks", () => {
       await service.lifecycle({ ...input, state: "ACTIVE" });
       expect(trialOf()).toEqual(["2027-01-01T00:00:00.000Z"]);
     }));
+    it("never stamps a workspace that was already ACTIVE, even when the replay writes its lifecycle", async () => {
+      await service.ensure(input);
+      await withDays(0, async () => { await service.lifecycle({ ...input, state: "ACTIVE" }); });
+      // An older record without the restart marker: the replayed ACTIVE rewrites the lifecycle.
+      const org = [...records.values()][0];
+      const { "digit.lifecycleRestartNo": _, ...attributes } = org.attributes ?? {};
+      records.set(org.id, { ...org, attributes });
+      await withDays(30, async () => { await service.lifecycle({ ...input, state: "ACTIVE" }); });
+      expect(deps.update).toHaveBeenCalledTimes(2);
+      expect(trialOf()).toBeUndefined();
+    });
   });
 
   it("repeats ACTIVE and refuses reopening or a different terminal decision", async () => {

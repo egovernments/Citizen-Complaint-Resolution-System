@@ -62,7 +62,15 @@ async function routeTenant(
     response.status(route.status).json({ error: route.error, code: route.code });
     return null;
   }
-  if (await isSlugTrialLocked(route.urlSlug)) {
+  let locked: boolean;
+  try {
+    locked = await isSlugTrialLocked(route.urlSlug);
+  } catch {
+    // The same answer as a slug that cannot be resolved.
+    response.status(503).json({ error: "Tenant routes are temporarily unavailable", code: "TENANT_ROUTE_UNAVAILABLE" });
+    return null;
+  }
+  if (locked) {
     sendTrialExpired(response);
     return null;
   }

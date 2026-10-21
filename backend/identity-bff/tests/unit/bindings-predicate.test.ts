@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BindingUser } from "../../src/modules/bindings/types.js";
+import { config } from "../../src/infrastructure/config.js";
 const f = vi.hoisted(() => ({
   user: { enabled: true, attributes: {} } as BindingUser,
   org: { id: "org", enabled: true, lifecycle: null as string | null, trial: null as object | null },
@@ -24,7 +25,7 @@ function binding(state = "active") {
 }
 beforeEach(() => {
   f.user = { enabled: true, attributes: {} }; f.org = { id: "org", enabled: true, lifecycle: null, trial: null };
-  f.member = true; f.tenant = true; f.managed = null;
+  f.member = true; f.tenant = true; f.managed = null; config.workspaceTrialDays = 30;
 });
 describe("fresh identity-side access predicate", () => {
   it("allows an active binding with live membership and lifecycle-less Organization", async () => {
@@ -52,6 +53,10 @@ describe("fresh identity-side access predicate", () => {
   it.each(["PROVISIONING", "FAILED"])("denies %s Organizations", async (state) => {
     binding(); f.org.lifecycle = state;
     expect(await staffAccess("person", "pg")).toMatchObject({ allowed: false, denial: "ORGANIZATION_INACTIVE" });
+  });
+  it("tells a non-member of a locked workspace the real denial, not the trial notice", async () => {
+    binding(); f.member = false; f.org.trial = { endsAt: "2020-01-01T00:00:00.000Z", approvedAt: null, approvedBy: null };
+    expect(await staffAccess("person", "pg")).toMatchObject({ allowed: false, denial: "NOT_A_MEMBER" });
   });
   it("denies an Organization whose trial ended unless it was approved", async () => {
     binding(); const ended = { endsAt: "2020-01-01T00:00:00.000Z", approvedAt: null, approvedBy: null };

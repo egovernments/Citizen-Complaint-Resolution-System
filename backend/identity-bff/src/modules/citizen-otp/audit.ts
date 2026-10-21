@@ -4,7 +4,7 @@ import { getRedis } from "../../infrastructure/redis.js";
 export type CitizenOtpAuditEvent =
   | "OTP_SEND" | "OTP_VERIFY" | "SESSION_CREATE"
   | "ACCOUNT_LINK_CREATE" | "ACCOUNT_LINK_REFUSED" | "ACCOUNT_LINK_REVOKE"
-  | "TENANT_ROUTE_BACKFILL";
+  | "TENANT_ROUTE_BACKFILL" | "WORKSPACE_TRIAL_APPROVED" | "WORKSPACE_TRIAL_EXTENDED";
 
 export interface CitizenOtpAuditRecord {
   event: CitizenOtpAuditEvent;

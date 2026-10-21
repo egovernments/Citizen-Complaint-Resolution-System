@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createFakeDigitUser } from "../../mocks/fake-digit-user.js";
 import { config } from "../../src/infrastructure/config.js";
+import { getRedis } from "../../src/infrastructure/redis.js";
+import { auditStreamKey } from "../../src/modules/citizen-otp/audit.js";
 import { resetIdentityMethodCatalog } from "../../src/modules/authentication/methods.js";
 import { ensureActive } from "../../src/modules/bindings/store.js";
 import { otpSender, setOtpSender, type OtpMessage } from "../../src/modules/citizen-otp/otp-sender.js";
@@ -18,7 +20,7 @@ import { contractRoute, expectContractError } from "./harness.js";
 
 const TRUSTED = "http://localhost:5173";
 const ENDED = "2020-01-01T00:00:00.000Z";
-const digit = createFakeDigitUser({ tenants: ["acme", "bravo", "charlie"] });
+const digit = createFakeDigitUser({ tenants: ["acme", "bravo", "charlie", "delta"] });
 const sent: OtpMessage[] = [];
 const originalSender = otpSender();
 const saved: Record<string, unknown> = {};
@@ -91,6 +93,7 @@ beforeAll(async () => {
   digit.addAccount({ userName: "BFF-ADMIN", name: "BFF admin", mobileNumber: "0700000000", emailId: null, tenantId: "pg",
     type: "EMPLOYEE", active: true, identificationMark: null, roles: [{ code: "ACCOUNT_ADMIN", tenantId: "pg" }], password: "Adm1n@Secret" });
   const overrides = {
+    workspaceTrialDays: 30,
     identityControlPlaneToken: OPS,
     cachePrefix: `identity-trial-contract-${process.pid}`,
     keycloakOrganizationRealm: "workspace-trial-contract",
@@ -117,6 +120,7 @@ beforeAll(async () => {
   await workspace("bravo", { [TRIAL_ATTRIBUTES.endsAt]: [ENDED], [TRIAL_ATTRIBUTES.approvedAt]: ["2020-01-15T00:00:00.000Z"],
     [TRIAL_ATTRIBUTES.approvedBy]: ["ops@example.org"] });
   await workspace("charlie", {});
+  await workspace("delta", {});
   clearTenantMappingCache();
 });
 
@@ -157,6 +161,16 @@ describe("a workspace whose trial ended", () => {
     expect((await expectContractError(response, routes.citizenSelect, "WORKSPACE_TRIAL_EXPIRED")).notice).toEqual(config.workspaceTrialNotice);
     expect(digit.tokens.size).toBe(tokens);
   });
+
+  it("is not refused while trials are off (IDENTITY_WORKSPACE_TRIAL_DAYS=0), whatever its end date", async () => {
+    config.workspaceTrialDays = 0;
+    try {
+      const response = await post(routes.select.path, { surface: "configurator", tenantId: "acme" }, await staffCookie("acme", "configurator"));
+      expect(response.status).toBe(200);
+    } finally {
+      config.workspaceTrialDays = 30;
+    }
+  });
 });
 
 describe("an approved trial workspace", () => {
@@ -188,10 +202,21 @@ describe("operator trial routes", () => {
     const { workspace } = await response.json();
     expect(workspace).toMatchObject({ tenantId: "acme", state: "APPROVED", approvedBy: "control-plane:ops@example.org" });
     expect((await post(routes.select.path, { surface: "configurator", tenantId: "acme" }, await staffCookie("acme", "configurator"))).status).toBe(200);
+    // The OTP gate reads the cached tenant directory (warmed above while acme was locked): the approval clears it.
+    const before = sent.length;
+    expect((await post(routes.send.path, { tenantSlug: "acme", mobileNumber: "712000202" })).ok).toBe(true);
+    expect(sent.length).toBe(before + 1);
     const again = await (await ops(routes.approve.path, { tenantId: "acme", actor: "someone-else" })).json();
     expect(again.workspace).toMatchObject({ approvedAt: workspace.approvedAt, approvedBy: "control-plane:ops@example.org" });
     const { workspaces } = await (await ops(routes.list.path)).json();
     expect(workspaces.find((w: { urlSlug: string }) => w.urlSlug === "acme")).toMatchObject({ state: "APPROVED", trialEndsAt: ENDED });
+  });
+
+  it("a second approval keeps the first on a workspace with no trial too", async () => {
+    expect((await ops(routes.approve.path, { tenantId: "delta", actor: "alice" })).status).toBe(200);
+    expect((await ops(routes.approve.path, { tenantId: "delta", actor: "bob" })).status).toBe(200);
+    const org = await (await kc("GET", "/organizations/org-delta", undefined)).json();
+    expect(org.attributes[TRIAL_ATTRIBUTES.approvedBy]).toEqual(["control-plane:alice"]);
   });
 
   it("extend stores the new end and refuses an invalid one", async () => {
@@ -199,7 +224,16 @@ describe("operator trial routes", () => {
     const response = await ops(routes.extend.path, { tenantId: "charlie", endsAt, actor: "ops@example.org" });
     expect(response.status).toBe(200);
     expect((await response.json()).workspace).toMatchObject({ tenantId: "charlie", trialEndsAt: endsAt, state: "TRIAL" });
-    await expectContractError(await ops(routes.extend.path, { tenantId: "charlie", endsAt: "not a date" }), routes.extend, "INVALID_REQUEST");
+    // Only a full timestamp with an offset, on a real day: "7" would otherwise read as 2001-07-01.
+    for (const bad of ["not a date", "7", "2026-02-30T00:00:00Z", "2026-12-31", "Dec 31 2026"]) {
+      await expectContractError(await ops(routes.extend.path, { tenantId: "charlie", endsAt: bad }), routes.extend, "INVALID_REQUEST");
+    }
+    const records = (await getRedis().xrange(auditStreamKey(), "-", "+")).map(([, fields]) =>
+      Object.fromEntries(Array.from({ length: fields.length / 2 }, (_, i) => [fields[2 * i], fields[2 * i + 1]])));
+    expect(records).toContainEqual(expect.objectContaining({ event: "WORKSPACE_TRIAL_EXTENDED", tenantId: "charlie",
+      actor: "control-plane:ops@example.org", detail: JSON.stringify({ from: null, to: endsAt }) }));
+    expect(records).toContainEqual(expect.objectContaining({ event: "WORKSPACE_TRIAL_APPROVED", tenantId: "acme",
+      actor: "control-plane:ops@example.org" }));
   });
 
   it("answers an unknown tenant with 404", async () => {

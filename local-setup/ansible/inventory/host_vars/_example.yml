@@ -884,8 +884,9 @@ identity_magic_link_enabled: false
 identity_reconcile_on_startup: true
 identity_reconciliation_interval_seconds: 900
 # Workspace trial: a self-serve workspace signs in for this many days after creation, then
-# sign-in is paused until the platform team approves it. 0 (the default) turns the lock off;
-# use 30 for self-serve SaaS deployments.
+# sign-in is paused until the platform team approves it. Use 30 for self-serve SaaS. 0 (the
+# default) turns trials off: nothing new is stamped and no workspace locks, whatever its end
+# date. Approvals and extensions made meanwhile apply when trials are on again.
 # identity_workspace_trial_days: 0
 # The notice a locked-out user sees. Empty (the default) uses the BFF's built-in text. The
 # link shows only when both its label and its URL are set. Free text: $, quotes, & and # are safe.

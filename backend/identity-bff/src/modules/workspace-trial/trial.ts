@@ -50,8 +50,17 @@ export function workspaceTrialState(trial: WorkspaceTrial | null, now: number): 
   return ends > now ? "TRIAL" : "EXPIRED";
 }
 
+/**
+ * The trial feature's one switch: IDENTITY_WORKSPACE_TRIAL_DAYS above 0. Off, nothing is stamped
+ * and no workspace locks, whatever its end date; `_approve` and `_extend` still write, and take
+ * effect once trials are on again.
+ */
+export function trialsEnabled(): boolean {
+  return config.workspaceTrialDays > 0;
+}
+
 export function isTrialLocked(trial: WorkspaceTrial | null, now: number): boolean {
-  return workspaceTrialState(trial, now) === "EXPIRED";
+  return trialsEnabled() && workspaceTrialState(trial, now) === "EXPIRED";
 }
 
 export function trialNotice(): WorkspaceTrialNotice {

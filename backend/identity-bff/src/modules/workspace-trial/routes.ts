@@ -5,7 +5,20 @@ import { OnboardingError } from "../onboarding/errors.js";
 import { withOnboardingLock } from "../onboarding/locks.js";
 import { onboardingAdminRequest, readOnboardingOrganizations } from "../onboarding/organization-reader.js";
 import { organizationAttribute, type OnboardingOrganization } from "../onboarding/primitives.js";
+import { audit } from "../citizen-otp/audit.js";
 import { readWorkspaceTrial, TRIAL_ATTRIBUTES, workspaceTrialState } from "./trial.js";
+
+// A full ISO 8601 timestamp with an offset, on a real calendar day: Date.parse alone reads "7" as
+// 2001-07-01 and rolls 2026-02-30 over to 2 March.
+const INSTANT = /^(\d{4})-(\d{2})-(\d{2})T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/;
+function parseInstant(value: unknown): number {
+  const raw = typeof value === "string" ? value.trim() : "";
+  const match = INSTANT.exec(raw);
+  if (!match) return NaN;
+  const [year, month, day] = match.slice(1, 4).map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCMonth() === month - 1 && date.getUTCDate() === day ? Date.parse(raw) : NaN;
+}
 
 /** One workspace as the operator sees it. */
 function view(org: OnboardingOrganization) {
@@ -53,9 +66,14 @@ async function updateTrial(tenantId: string, change: (attributes: Record<string,
 export function registerWorkspaceTrialRoutes(app: express.Application, actorOf: (value: unknown) => string): void {
   const base = "/internal/identity/v1/workspace-trials";
   const unavailable = (res: express.Response, error: unknown) => {
-    if (error instanceof OnboardingError) return sendError(res, "IDENTITY_UNAVAILABLE", error.message);
+    if (error instanceof OnboardingError) {
+      return sendError(res, error.code === "IDENTITY_BUSY" ? "IDENTITY_BUSY" : "IDENTITY_UNAVAILABLE", error.message);
+    }
     throw error;
   };
+  const trialAudit = (event: "WORKSPACE_TRIAL_APPROVED" | "WORKSPACE_TRIAL_EXTENDED", tenantId: string, actor: string,
+    from: string | null, to: string | null) =>
+    audit({ event, outcome: "SUCCESS", tenantId, actor, detail: JSON.stringify({ from, to }) });
 
   app.get(base, asyncRoute(async (_req, res) => {
     try {
@@ -71,13 +89,16 @@ export function registerWorkspaceTrialRoutes(app: express.Application, actorOf: 
     if (!tenantId) return sendError(res, "INVALID_REQUEST", "tenantId is required");
     const actor = actorOf(req.body?.actor);
     try {
+      let from: string | null = null;
       const org = await updateTrial(tenantId, (attributes) => {
-        // A second approval keeps the first.
-        if (readWorkspaceTrial(attributes)?.approvedAt) return;
+        // A second approval keeps the first, on a workspace with no trial too.
+        from = attributes[TRIAL_ATTRIBUTES.approvedAt]?.[0] || null;
+        if (from) return;
         attributes[TRIAL_ATTRIBUTES.approvedAt] = [new Date().toISOString()];
         attributes[TRIAL_ATTRIBUTES.approvedBy] = [actor];
       });
       if (!org) return sendError(res, "WORKSPACE_NOT_FOUND", "No workspace for this tenant");
+      await trialAudit("WORKSPACE_TRIAL_APPROVED", tenantId, actor, from, org.attributes?.[TRIAL_ATTRIBUTES.approvedAt]?.[0] ?? null);
       return res.json({ workspace: view(org) });
     } catch (error) {
       return unavailable(res, error);
@@ -87,13 +108,19 @@ export function registerWorkspaceTrialRoutes(app: express.Application, actorOf: 
   app.post(`${base}/_extend`, asyncRoute(async (req, res) => {
     const tenantId = typeof req.body?.tenantId === "string" ? req.body.tenantId.trim() : "";
     if (!tenantId) return sendError(res, "INVALID_REQUEST", "tenantId is required");
-    const ends = typeof req.body?.endsAt === "string" ? Date.parse(req.body.endsAt) : NaN;
-    if (Number.isNaN(ends)) return sendError(res, "INVALID_REQUEST", "endsAt must be a date");
+    const ends = parseInstant(req.body?.endsAt);
+    if (Number.isNaN(ends)) {
+      return sendError(res, "INVALID_REQUEST", "endsAt must be an ISO 8601 timestamp with an offset, e.g. 2026-12-31T23:59:59Z");
+    }
+    const actor = actorOf(req.body?.actor);
     try {
+      let from: string | null = null;
       const org = await updateTrial(tenantId, (attributes) => {
+        from = attributes[TRIAL_ATTRIBUTES.endsAt]?.[0] || null;
         attributes[TRIAL_ATTRIBUTES.endsAt] = [new Date(ends).toISOString()];
       });
       if (!org) return sendError(res, "WORKSPACE_NOT_FOUND", "No workspace for this tenant");
+      await trialAudit("WORKSPACE_TRIAL_EXTENDED", tenantId, actor, from, new Date(ends).toISOString());
       return res.json({ workspace: view(org) });
     } catch (error) {
       return unavailable(res, error);
