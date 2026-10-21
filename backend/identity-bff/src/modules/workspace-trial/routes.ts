@@ -46,7 +46,7 @@ function serves(org: OnboardingOrganization, tenantId: string): boolean {
  * under the onboarding lock the primitives take for this Organization, so a
  * concurrent lifecycle write is not lost. Null when the tenant has no Organization.
  */
-async function updateTrial(tenantId: string, change: (attributes: Record<string, string[]>) => void) {
+export async function updateTrial(tenantId: string, change: (attributes: Record<string, string[]>) => void) {
   const found = (await readOnboardingOrganizations()).find((org) => serves(org, tenantId));
   if (!found) return null;
   const operationId = organizationAttribute(found, "operationId");

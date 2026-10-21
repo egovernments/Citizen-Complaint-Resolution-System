@@ -184,6 +184,13 @@ export const config = {
   // digit.trialEndsAt is never locked.
   workspaceTrialDays: parseInt(process.env.IDENTITY_WORKSPACE_TRIAL_DAYS || "0"),
   workspaceTrialNotice: trialNotice(),
+  // Reminder emails, in days before the trial ends; the "locked" email at the end always goes too.
+  workspaceTrialReminderDays: csv(process.env.IDENTITY_WORKSPACE_TRIAL_REMINDER_DAYS || "14,7,3,2,1")
+    .map(Number).filter((days) => Number.isInteger(days) && days > 0),
+  // novu-bridge's internal send API (messages/_dispatch, X-Novu-Bridge-Token). The BFF holds no
+  // Novu key; either value empty = no emails.
+  novuBridgeUrl: (process.env.IDENTITY_NOVU_BRIDGE_URL || "").replace(/\/$/, ""),
+  novuBridgeToken: process.env.IDENTITY_NOVU_BRIDGE_TOKEN || "",
 
   // Existing DIGIT user-service contract. The BFF owns only the accounts it
   // created (see managed-account-service.ts); the admin credential is used solely

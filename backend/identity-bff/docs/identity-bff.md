@@ -889,6 +889,7 @@ A pending binding past `expiresAt` counts as `removed` everywhere, even before a
 | `digit.trialEndsAt` | ISO-8601 UTC string | Present means the workspace is on trial. Written by the BFF at the first `PROVISIONING` → `ACTIVE` when `IDENTITY_WORKSPACE_TRIAL_DAYS` > 0 (never over an existing value), or by the operator's `_extend` |
 | `digit.trialApprovedAt` | ISO-8601 UTC string | Present means approved. Written by the operator's `_approve` |
 | `digit.trialApprovedBy` | `control-plane:<actor>` | Audit only. Written by `_approve` |
+| `digit.trialReminderSent` | `<trialEndsAt>\|<days>` | The last reminder email sent and the end date it was for. Written by reconcile after a reminder reached every admin |
 | `digit.supersededBy` | Organization id | On a `FAILED` Organization replaced after a slug change |
 | `digit.replacementPending` | single JSON value `{restartNo,operationHash,tenantId,slug,name}` | Durable changed-slug attempt, written before changing the old Organization and cleared after supersession finishes (§9.3) |
 | `digit.accountCode`, `digit.fallbackTenantIds` | as today | Read-only legacy; not written by new code |
@@ -1206,6 +1207,8 @@ Probed on Keycloak 26.7.3 on 2026-10-04; the event shapes the poller matches are
 | `IDENTITY_WORKSPACE_TRIAL_DAYS` | Trial length for new self-serve workspaces; integer, default 0. 0 turns trials off: nothing is stamped and no workspace locks, whatever its `digit.trialEndsAt` |
 | `IDENTITY_WORKSPACE_TRIAL_NOTICE_TITLE`, `_MESSAGE` | Text of the `WORKSPACE_TRIAL_EXPIRED` notice (defaults: "This workspace's trial has ended" / "Sign-in is paused until the workspace is approved. Contact the platform team to continue.") |
 | `IDENTITY_WORKSPACE_TRIAL_NOTICE_LINK_LABEL`, `_LINK_URL` | Optional notice link; sent only when both are set |
+| `IDENTITY_WORKSPACE_TRIAL_REMINDER_DAYS` | Reminder emails, in days before a trial ends; comma-separated, default `14,7,3,2,1`. The "locked" email at the end is always sent |
+| `IDENTITY_NOVU_BRIDGE_URL`, `IDENTITY_NOVU_BRIDGE_TOKEN` | novu-bridge base URL (`http://novu-bridge:8080/novu-bridge`) and its `NOVU_BRIDGE_INTERNAL_SEND_TOKEN`, for `messages/_dispatch`. Either empty: no reminder emails |
 | `IDENTITY_RECONCILIATION_INTERVAL_SECONDS` | Unchanged (default 300); reported by `/readyz` |
 
 Removed by item 14/15: the `DIGIT_PROVISIONER_*` variables, the onboarding worker variables, the role allowlist, and the `admin/admin` Keycloak fallback.
@@ -1250,6 +1253,10 @@ No line contains a token, cookie, session id or Keycloak session id.
 - **`GET /identity/v1/tenants`** keeps the locked workspace listed with `code: "WORKSPACE_TRIAL_EXPIRED"` and no roles, so a founder is not sent to signup.
 - **Open sessions** end within one reconcile pass. Expiry is a new tenant state (`TRIAL_EXPIRED`) and revokes only that workspace's sessions. Only this fan-out also reaches citizens, found through the DIGIT token inventory (`token:<tenantId>:*`) after the members and bindings are queued; a disabled Organization or an inactive tenant still reaches only members and bindings, as before.
 - **Approval** moves the reconcile checkpoint back to the active state without revoking anyone.
+- **Reminder emails.** Each reconcile pass emails a trial workspace's admins (Organization members whose mirrored account holds `ACCOUNT_ADMIN` there; anyone without an email is skipped and logged) `IDENTITY_WORKSPACE_TRIAL_REMINDER_DAYS` days before the end, and once more when it locks. A 30-day trial gets them on days 16, 23, 27, 28, 29 and 30. Only the latest threshold crossed is sent, so a BFF that was down sends one email, not a backlog. Approved and trial-less workspaces get none, nor does any workspace while `IDENTITY_WORKSPACE_TRIAL_DAYS` is 0.
+  - **Delivery** is novu-bridge's internal `POST /novu-adapter/v1/messages/_dispatch` (header `X-Novu-Bridge-Token`): one pre-rendered email envelope (`eventType: WORKSPACE_TRIAL`) per admin, at the root of `DIGIT_ADMIN_TENANT_ID`, so it goes through the deployment's own email provider. The BFF holds no Novu key.
+  - **Once only.** After every admin's send answers `SENT`, the Organization records `digit.trialReminderSent`. The bridge's ledger also never sends the same `transactionId` (`workspace-trial:<tenant>:<end>:<days>:<subject>`) twice. Moving the end date with `_extend` starts the schedule again.
+  - **Fails soft.** A failed or skipped send is logged (`identity.workspace_trial.reminder`), records nothing, and is retried on the next pass; reconcile and sign-in never wait on it.
 
 **Approving a trial workspace.** The control plane is never published by Kong or nginx. Run these on the server itself, against the BFF's loopback port.
 

@@ -23,7 +23,7 @@ const NOT_USER_ATTRIBUTES = new Set([
   "digit.accountCode", "digit.fallbackTenantIds", "digit.lifecycle", "digit.lifecycleRestartNo",
   "digit.operationHash", "digit.operationId", "digit.replacementPending", "digit.restartNo",
   "digit.rootTenantId", "digit.supersededBy", "digit.urlSlug",
-  "digit.trialApprovedAt", "digit.trialApprovedBy", "digit.trialEndsAt",
+  "digit.trialApprovedAt", "digit.trialApprovedBy", "digit.trialEndsAt", "digit.trialReminderSent",
   "digit.displayName", "digit.organizationId", "digit.parentTenantId", "digit.tenantId",
   "digit.auth.account.actions", "digit.auth.signin.methods", "digit.auth.signup.methods", "digit.auth.surface",
 ]);
