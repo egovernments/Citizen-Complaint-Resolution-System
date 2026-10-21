@@ -9,7 +9,7 @@
 #
 # FULL means every optional subsystem this profile knows about is on:
 # notifications (Novu), MCP, the configurator wizard, and the DIGIT UI
-# (employee at /digit-ui/, citizen at /digit-ui/citizen/).
+# (employee at /digit-ui/, citizen at /<tenant-slug>/digit-ui/citizen/).
 #
 # SIZING. Needs ~16 GB for the containers alone. On a 16 GB box the notification
 # stack is what tips it over — use localhost-slim.yml.example instead, which is
@@ -178,8 +178,6 @@ asset_s3_bucket: "pg-egov-assets"
 #         `static`    — host nginx serves a bundle built on the box at deploy time;
 #         `hmr`       — esbuild dev server in tmux, live-reload on save.
 digit_ui_mode: container
-
-
 
 # Branch of the digit-ui-esbuild repo used when digit_ui_mode builds on the box.
 # Inert while digit_ui_mode is `container` and build_digit_ui is false.

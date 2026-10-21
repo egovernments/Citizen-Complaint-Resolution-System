@@ -132,7 +132,7 @@ def r_identity_needs_keycloak(cfg):
     "The digit-ui-v2 citizen SPA (/citizen) was removed. Tenant host_vars are "
     "gitignored, so existing boxes still carry enable_digit_ui_v2 / "
     "nginx_features.digit_ui_v2 — warn (never fail) so the operator can drop "
-    "the stale keys. The citizen app at /digit-ui/citizen is unaffected.",
+    "the stale keys. The citizen app at /<tenant-slug>/digit-ui/citizen is unaffected.",
 )
 def r_digit_ui_v2_removed(cfg):
     stale = [k for k in ("enable_digit_ui_v2", "nginx_features.digit_ui_v2",
@@ -140,7 +140,7 @@ def r_digit_ui_v2_removed(cfg):
              if get(cfg, k) not in (None, False, "")]
     if stale:
         yield (WARN, f"{', '.join(stale)} ignored: digit-ui-v2 was removed and /citizen is no "
-                     "longer served (use /digit-ui/citizen). Delete these keys.")
+                     "longer served (use /<tenant-slug>/digit-ui/citizen). Delete these keys.")
 
 
 @rule(

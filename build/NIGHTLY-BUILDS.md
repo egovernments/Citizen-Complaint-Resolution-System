@@ -125,8 +125,9 @@ pipeline owns only CCRS-repo services.
 ### Vite SPA — `configurator`
 
 `configurator` has a build-arg-parameterized Dockerfile and is built nightly.
-It reads no `VITE_*` build-env (only `import.meta.env.MODE`), so **one image
-serves every tenant** — configuration is runtime (login + tenant pick). Its
+Its few `VITE_*` build-env values are flags and fallbacks behind the runtime
+`config.js`, so **one image serves every tenant** — configuration is runtime
+(login + tenant pick). Its
 `nightly-develop` image is fully deployable as-is. The build mirrors its proven
 on-box recipe: file: sub-packages (`data-provider`) built first, then
 `vite build` directly (its root `tsc -b` has upstream type errors).

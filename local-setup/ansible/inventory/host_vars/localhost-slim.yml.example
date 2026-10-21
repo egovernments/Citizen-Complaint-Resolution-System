@@ -15,7 +15,7 @@
 # (novu-mongo/api/worker/ws/dashboard/bridge, ~1.5-2 GB
 # resident) is the one piece that risks freezing a 12 GB VM. Everything else is
 # identical to full: core services, PGR, the employee UI, the citizen UI at
-# /digit-ui/citizen/, the configurator at /configurator/, MCP (so the wizard's tenant
+# /<tenant-slug>/digit-ui/citizen/, the configurator at /configurator/, MCP (so the wizard's tenant
 # bootstrap works), Kong, Gatus and the seeded pg / pg.citya tenants.
 #
 # What you give up: no SMS / email / WhatsApp is sent. Everything else in the
@@ -182,8 +182,6 @@ asset_s3_bucket: "pg-egov-assets"
 #         `static`    — host nginx serves a bundle built on the box at deploy time;
 #         `hmr`       — esbuild dev server in tmux, live-reload on save.
 digit_ui_mode: container
-
-
 
 # Branch of the digit-ui-esbuild repo used when digit_ui_mode builds on the box.
 # Inert while digit_ui_mode is `container` and build_digit_ui is false.

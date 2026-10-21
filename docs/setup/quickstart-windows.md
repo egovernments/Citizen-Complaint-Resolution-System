@@ -196,7 +196,7 @@ Type the URLs exactly as written, trailing slash included.
 | What | Port 80 (recommended) | Direct port (fallback) | Log in with |
 |------|-----------------------|------------------------|-------------|
 | Employee UI | http://localhost/digit-ui/ | http://localhost:18000/digit-ui/ | `ADMIN` / `eGov@123`, city **City A** |
-| Citizen UI | http://localhost/digit-ui/citizen/ | http://localhost:18000/digit-ui/citizen/ | — |
+| Citizen UI | `http://localhost/<tenant-slug>/digit-ui/citizen/` | http://localhost:18000/digit-ui/citizen/ | — |
 | Configurator (DIGIT Studio) | http://localhost/configurator/ | http://localhost:18890/configurator/ (see note below) | `ADMIN` / `eGov@123`, tenant code **`pg`** |
 | Grafana | http://localhost/grafana/ | http://localhost:13000/grafana/ | `admin` / generated password (below) |
 | Gatus health board | http://localhost/status/ | http://localhost:18889/ | `digit-status` / generated password (below); no password on the direct port |

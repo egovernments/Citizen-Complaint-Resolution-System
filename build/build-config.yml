@@ -100,7 +100,7 @@ config:
       - work-dir: "digit-ui-esbuild"
         dockerfile: "digit-ui-esbuild/docker/Dockerfile"
         image-name: "digit-ui-esbuild"
-  # Vite SPA. configurator is tenant-neutral (no VITE_* baked).
+  # Vite SPA. configurator is tenant-neutral (its VITE_* values are flags and fallbacks behind runtime config.js).
   - name: "builds/Citizen-Complaint-Resolution-System/configurator"
     build:
       - work-dir: "."

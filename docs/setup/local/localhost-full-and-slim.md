@@ -37,7 +37,7 @@ delivery path that is not running.
 Everything else is byte-identical between the two files. Both give you:
 
 - all core DIGIT services and `pgr-services`
-- the employee UI at `/digit-ui/` and the citizen UI at `/digit-ui/citizen/`
+- the employee UI at `/digit-ui/` and the citizen UI at `/<tenant-slug>/digit-ui/citizen/`
 - the configurator wizard at `/configurator/`
 - MCP, so the wizard's tenant bootstrap works
 - Kong, and the Gatus health dashboard at `/status/`
@@ -155,7 +155,7 @@ watch -n5 "docker ps --format '{{.Names}}\t{{.Status}}' | grep -E 'healthy|Exite
 | What | URL |
 |---|---|
 | Employee UI | http://localhost/digit-ui/employee |
-| Citizen UI | http://localhost/digit-ui/citizen/ |
+| Citizen UI | `http://localhost/<tenant-slug>/digit-ui/citizen/` |
 | Configurator wizard | http://localhost/configurator/ |
 | Gatus health dashboard | http://localhost/status/ |
 | Grafana | http://localhost/grafana/ |

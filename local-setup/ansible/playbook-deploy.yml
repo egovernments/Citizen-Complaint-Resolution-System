@@ -192,7 +192,7 @@
           WARNING (deprecated): {{ _v2_keys | join(', ') }} {{ 'is' if (_v2_keys | length) == 1 else 'are' }}
           set in host_vars but IGNORED. The digit-ui-v2 citizen SPA was removed, so
           /citizen is no longer served (it falls through to the default route). Citizens
-          use /digit-ui/citizen, which is unaffected. Delete
+          use /{{ digit_ui_default_tenant_slug | default('<tenant-slug>', true) }}/digit-ui/citizen, which is unaffected. Delete
           {{ 'this key' if (_v2_keys | length) == 1 else 'these keys' }} from
           host_vars/{{ inventory_hostname }}.yml; this deploy removes the leftover
           /opt/digit-ui-v2 and /var/www/citizen.
