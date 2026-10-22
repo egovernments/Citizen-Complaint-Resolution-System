@@ -84,7 +84,6 @@ build_novu_dashboard: false
 novu_api_key: ""
 pgr_notification_config_driven: false
 
-enable_keycloak: true
 keycloak_google_client_id: ""
 # CI: Keycloak mails through the Mailpit container in
 # local-setup/docker-compose.ci.yml (the deploy refuses Keycloak without SMTP).
