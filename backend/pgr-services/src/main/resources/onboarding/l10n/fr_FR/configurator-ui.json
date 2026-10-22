@@ -231,5 +231,15 @@
 {"code": "app.resources.notifications_event_catalogue", "message": "Événements de notification", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.resources.notifications_routing", "message": "Routage des notifications", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.resources.notifications_template", "message": "Modèles de notification", "module": "configurator-ui", "locale": "fr_FR"},
-{"code": "app.resources.notifications_provider_template", "message": "Modèles fournisseur de notification", "module": "configurator-ui", "locale": "fr_FR"}
+{"code": "app.resources.notifications_provider_template", "message": "Modèles fournisseur de notification", "module": "configurator-ui", "locale": "fr_FR"},
+{"code": "app.nav.open_complaint_desk", "message": "Ouvrir le bureau des plaintes", "module": "configurator-ui", "locale": "fr_FR"},
+{"code": "app.workspace_links.title", "message": "Liens de l'espace de travail", "module": "configurator-ui", "locale": "fr_FR"},
+{"code": "app.workspace_links.employee_label", "message": "Application employé", "module": "configurator-ui", "locale": "fr_FR"},
+{"code": "app.workspace_links.employee_hint", "message": "Là où votre personnel se connecte et traite les plaintes", "module": "configurator-ui", "locale": "fr_FR"},
+{"code": "app.workspace_links.citizen_label", "message": "Application citoyen", "module": "configurator-ui", "locale": "fr_FR"},
+{"code": "app.workspace_links.citizen_hint", "message": "Partagez ce lien avec les citoyens pour déposer et suivre leurs plaintes", "module": "configurator-ui", "locale": "fr_FR"},
+{"code": "app.workspace_links.copy", "message": "Copier", "module": "configurator-ui", "locale": "fr_FR"},
+{"code": "app.workspace_links.copied", "message": "Lien copié.", "module": "configurator-ui", "locale": "fr_FR"},
+{"code": "app.workspace_links.copy_failed", "message": "Impossible de copier le lien. Sélectionnez-le et copiez-le manuellement.", "module": "configurator-ui", "locale": "fr_FR"},
+{"code": "app.workspace_links.open", "message": "Ouvrir", "module": "configurator-ui", "locale": "fr_FR"}
 ]

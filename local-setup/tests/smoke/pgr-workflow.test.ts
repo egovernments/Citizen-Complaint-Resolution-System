@@ -14,59 +14,69 @@
 import { api, createRequestInfo } from '../utils/api';
 import { db } from '../utils/db';
 import { config } from '../utils/config';
-import { fixedMobile } from '../utils/mobile';
+import { fixedMobile, uniqueMobile } from '../utils/mobile';
+import { adminLogin, createHrmsEmployee, employeeUserInfo } from '../utils/hrms';
 import { LoginResponseSchema } from '../schemas/user';
 import { SearchServiceResponseSchema } from '../schemas/pgr';
+
+const SERVICE_CODE = 'StreetLightNotWorking';
 
 describe('PGR End-to-End Workflow', () => {
   const { ports, tenant } = config;
   const timestamp = Date.now();
+  const EMPLOYEE_ROLES = ['EMPLOYEE', 'GRO', 'DGRO', 'CSR'];
+  const roleRefs = (codes: string[]) => codes.map((code) => ({ code, name: code, tenantId: tenant.city }));
+  // These requests go straight to PGR, so userInfo must identify the HRMS employee.
+  const userInfo = (codes: string[]) => employeeUserInfo(userUuid, userName, tenant.city, roleRefs(codes));
 
   // Test data that persists across tests
   let accessToken: string;
   let userUuid: string;
   let userName: string;
+  let localityCode: string;
   let serviceRequestId: string;
 
-  // Create a test employee first
+  // A real HRMS employee: PGR scopes an employee's search to their HRMS record, so a plain
+  // user can file a complaint but never find it (see utils/hrms.ts).
   beforeAll(async () => {
     userName = `pgr-test-${timestamp}`;
+    const { state, city } = tenant;
+    const admin = await adminLogin(state);
 
-    // Create test employee
-    const createResponse = await api.post(ports.user, '/user/users/_createnovalidate', {
-      RequestInfo: createRequestInfo(),
-      User: {
-        userName,
-        name: 'PGR Test Employee',
-        mobileNumber: fixedMobile(999900002),
-        gender: 'MALE',
-        active: true,
-        type: 'EMPLOYEE',
-        tenantId: tenant.city,
-        password: 'eGov@123',
-        roles: [
-          { code: 'EMPLOYEE', name: 'Employee', tenantId: tenant.city },
-          { code: 'GRO', name: 'Grievance Routing Officer', tenantId: tenant.city },
-          { code: 'DGRO', name: 'Department GRO', tenantId: tenant.city },
-          { code: 'CSR', name: 'Customer Service Representative', tenantId: tenant.city },
+    // The employee assigns the complaint to itself below, and PGR only accepts an assignee
+    // from the complaint type's department.
+    const mdms = await api.post(ports.mdms, '/mdms-v2/v1/_search', {
+      RequestInfo: createRequestInfo({ authToken: admin.token }),
+      MdmsCriteria: {
+        tenantId: city,
+        moduleDetails: [
+          { moduleName: 'RAINMAKER-PGR', masterDetails: [{ name: 'ComplaintHierarchy' }] },
+          { moduleName: 'common-masters', masterDetails: [{ name: 'Designation' }] },
         ],
       },
     });
-
-    // Log for debugging if creation fails
-    if (!createResponse.ok) {
-      console.log('User creation failed:', JSON.stringify(createResponse.data, null, 2));
+    const res = (mdms.data as any)?.MdmsRes || {};
+    const leaf = (res['RAINMAKER-PGR']?.ComplaintHierarchy || []).find((r: any) => r.code === SERVICE_CODE);
+    const designation = (res['common-masters']?.Designation || [])[0]?.code;
+    if (!leaf?.department || !designation) {
+      throw new Error(`MDMS for ${city} has no department for ${SERVICE_CODE} or no Designation`);
     }
+    // The complaint is filed at this leaf (Step 3); the jurisdiction is the root of its tree.
+    localityCode = await db.leafBoundaryCode(city);
+    const root = await db.rootBoundaryOf(city, localityCode);
 
-    // User creation should succeed, or user might already exist
-    const userData = createResponse.data as { user?: Array<{ uuid: string }>; Errors?: Array<{ code: string }> };
-    if (userData.user && userData.user[0]) {
-      userUuid = userData.user[0].uuid;
-    } else if (userData.Errors?.[0]?.code === 'DuplicateUserName') {
-      // User exists, login to get UUID
-      console.log('User already exists, will login to get token');
-    }
-  });
+    ({ uuid: userUuid } = await createHrmsEmployee(admin, {
+      tenantId: city,
+      userName,
+      name: 'PGR Test Employee',
+      mobileNumber: uniqueMobile(),
+      roles: roleRefs(EMPLOYEE_ROLES),
+      department: leaf.department,
+      designation,
+      jurisdiction: root,
+    }));
+    console.log(`HRMS employee ${userName} (dept ${leaf.department}, jurisdiction ${root.code})`);
+  }, 120000);
 
   describe('Step 1: Employee Authentication', () => {
     test('should login and get access token', async () => {
@@ -131,28 +141,17 @@ describe('PGR End-to-End Workflow', () => {
 
   describe('Step 3: Create PGR Complaint', () => {
     test('should create a new complaint', async () => {
-      const localityCode = await db.leafBoundaryCode(tenant.city);
       const response = await api.post(
         ports.pgr,
         `/pgr-services/v2/request/_create?tenantId=${tenant.city}`,
         {
           RequestInfo: {
             ...createRequestInfo({ authToken: accessToken }),
-            userInfo: {
-              uuid: userUuid,
-              type: 'EMPLOYEE',
-              tenantId: tenant.city,
-              roles: [
-                { code: 'EMPLOYEE', name: 'Employee', tenantId: tenant.city },
-                { code: 'GRO', name: 'Grievance Routing Officer', tenantId: tenant.city },
-                { code: 'DGRO', name: 'Department GRO', tenantId: tenant.city },
-                { code: 'CSR', name: 'Customer Service Representative', tenantId: tenant.city },
-              ],
-            },
+            userInfo: userInfo(['EMPLOYEE', 'GRO', 'DGRO', 'CSR']),
           },
           service: {
             tenantId: tenant.city,
-            serviceCode: 'StreetLightNotWorking',
+            serviceCode: SERVICE_CODE,
             description: `E2E test complaint - ${timestamp}`,
             source: 'web',
             address: {
@@ -213,7 +212,7 @@ describe('PGR End-to-End Workflow', () => {
       expect(dbRecord).not.toBeNull();
       expect(dbRecord?.servicerequestid).toBe(serviceRequestId);
       expect(dbRecord?.tenantid).toBe(tenant.city);
-      expect(dbRecord?.servicecode).toBe('StreetLightNotWorking');
+      expect(dbRecord?.servicecode).toBe(SERVICE_CODE);
     });
   });
 
@@ -226,16 +225,7 @@ describe('PGR End-to-End Workflow', () => {
         {
           RequestInfo: {
             ...createRequestInfo({ authToken: accessToken }),
-            userInfo: {
-              uuid: userUuid,
-              type: 'EMPLOYEE',
-              tenantId: tenant.city,
-              roles: [
-                { code: 'EMPLOYEE', name: 'Employee', tenantId: tenant.city },
-                { code: 'GRO', name: 'Grievance Routing Officer', tenantId: tenant.city },
-                { code: 'DGRO', name: 'Department GRO', tenantId: tenant.city },
-              ],
-            },
+            userInfo: userInfo(['EMPLOYEE', 'GRO', 'DGRO']),
           },
         }
       );
@@ -254,16 +244,7 @@ describe('PGR End-to-End Workflow', () => {
         {
           RequestInfo: {
             ...createRequestInfo({ authToken: accessToken }),
-            userInfo: {
-              uuid: userUuid,
-              type: 'EMPLOYEE',
-              tenantId: tenant.city,
-              roles: [
-                { code: 'EMPLOYEE', name: 'Employee', tenantId: tenant.city },
-                { code: 'GRO', name: 'Grievance Routing Officer', tenantId: tenant.city },
-                { code: 'DGRO', name: 'Department GRO', tenantId: tenant.city },
-              ],
-            },
+            userInfo: userInfo(['EMPLOYEE', 'GRO', 'DGRO']),
           },
           service: currentService,
           workflow: {
@@ -287,16 +268,7 @@ describe('PGR End-to-End Workflow', () => {
         {
           RequestInfo: {
             ...createRequestInfo({ authToken: accessToken }),
-            userInfo: {
-              uuid: userUuid,
-              type: 'EMPLOYEE',
-              tenantId: tenant.city,
-              roles: [
-                { code: 'EMPLOYEE', name: 'Employee', tenantId: tenant.city },
-                { code: 'GRO', name: 'Grievance Routing Officer', tenantId: tenant.city },
-                { code: 'DGRO', name: 'Department GRO', tenantId: tenant.city },
-              ],
-            },
+            userInfo: userInfo(['EMPLOYEE', 'GRO', 'DGRO']),
           },
         }
       );
@@ -324,16 +296,7 @@ describe('PGR End-to-End Workflow', () => {
         {
           RequestInfo: {
             ...createRequestInfo({ authToken: accessToken }),
-            userInfo: {
-              uuid: userUuid,
-              type: 'EMPLOYEE',
-              tenantId: tenant.city,
-              roles: [
-                { code: 'EMPLOYEE', name: 'Employee', tenantId: tenant.city },
-                { code: 'GRO', name: 'Grievance Routing Officer', tenantId: tenant.city },
-                { code: 'DGRO', name: 'Department GRO', tenantId: tenant.city },
-              ],
-            },
+            userInfo: userInfo(['EMPLOYEE', 'GRO', 'DGRO']),
           },
         }
       );

@@ -6,6 +6,7 @@ import { getDedicatedResources } from '@/providers/bridge';
 import { ResourceLabel } from '@/providers/ResourceLabel';
 import { resourceLabelKey, useResourceLabel } from '@/providers/useResourceLabel';
 import { useMastersCapability } from '@/hooks/useMastersCapability';
+import { WorkspaceLinksCard } from './WorkspaceLinksCard';
 import { AVAILABLE_LOCALES } from '@/providers/i18nProvider';
 import {
   Building2,
@@ -102,6 +103,7 @@ export function DigitDashboard() {
       <h1 className="text-2xl sm:text-3xl font-bold font-condensed text-foreground">
         <T i18nKey="app.header.title" />
       </h1>
+      <WorkspaceLinksCard />
       <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">
         {resources.map((resource) => (
           <ResourceCard key={resource} resource={resource} />

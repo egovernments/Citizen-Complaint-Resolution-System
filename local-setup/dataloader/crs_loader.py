@@ -195,6 +195,7 @@ class CRSLoader:
 
         if tenant_code.lower() in existing_tenants:
             print(f"✅ Tenant '{tenant_code}' already exists")
+            self._ensure_enc_keys(root_tenant, tenant_code)
             return self._ensure_stateinfo_for_tenant(tenant_code, display_name)
 
         print(f"📝 Creating tenant '{tenant_code}'...")
@@ -242,6 +243,7 @@ class CRSLoader:
 
         if resp.ok:
             print(f"✅ Tenant '{tenant_code}' created successfully!")
+            self._ensure_enc_keys(root_tenant, tenant_code)
 
             # Ensure tenant has branding metadata used by UI localization bootstrap
             if not self._ensure_stateinfo_for_tenant(tenant_code, display_name):
@@ -292,6 +294,32 @@ class CRSLoader:
             except:
                 print(f"   Response: {resp.text[:200]}")
             return False
+
+    def _ensure_enc_keys(self, *tenant_ids: str) -> None:
+        """Give each tenant an egov-enc-service key, so its users' PII can be encrypted.
+
+        enc-service discovers tenants through an MDMS search scoped to its own
+        STATE_LEVEL_TENANT_ID, so it never learns about a new root (e.g. "ciboot"),
+        and every user/HRMS create there fails with "Unknown error occurred in
+        encryption process". _generatekey is create-if-missing: a tenant that already
+        has a key gets the same key back, so this is safe to repeat. Same call as the
+        configurator's ensureEncKey (configurator/src/api/services/tenantBootstrap.ts).
+        Non-fatal: if it fails, the user/HRMS create that needs the key reports it.
+        """
+        for tid in dict.fromkeys(tenant_ids):
+            try:
+                resp = requests.post(f"{self.base_url}/egov-enc-service/crypto/v1/_generatekey",
+                    json={"RequestInfo": {"apiId": "Rainmaker", "authToken": self.auth_token,
+                                          "userInfo": self.user_info},
+                          "tenantId": tid},
+                    headers={"Content-Type": "application/json"}, timeout=REQUEST_TIMEOUT)
+                if resp.ok:
+                    created = (resp.json() or {}).get("created")
+                    print(f"   Encryption key for '{tid}': {'created' if created else 'present'}")
+                else:
+                    print(f"   Warning: encryption key for '{tid}' (HTTP {resp.status_code}): {resp.text[:200]}")
+            except Exception as e:
+                print(f"   Warning: encryption key for '{tid}' failed: {e}")
 
     def _bootstrap_tenant_root(self, target_root: str, source_tenant: str = "pg") -> bool:
         """Bootstrap a new tenant root by copying schemas and essential data from an existing root.
@@ -414,6 +442,11 @@ class CRSLoader:
             'egov-hrms.EmployeeType',
             'egov-hrms.DeactivationReason',
             'ACCESSCONTROL-ROLES.roles',
+            # The gateway authorizes every action against these on the caller's root; without
+            # them a new root's users get 403 AccessDeniedException on everything (e.g. PGR
+            # create). Same set and order as the configurator's tenantBootstrap.ts.
+            'ACCESSCONTROL-ACTIONS-TEST.actions-test',
+            'ACCESSCONTROL-ROLEACTIONS.roleactions',
             'RAINMAKER-PGR.ComplaintHierarchyDefinition',
             'RAINMAKER-PGR.ComplaintHierarchy',
             'Workflow.BusinessService',
@@ -1203,7 +1236,10 @@ class CRSLoader:
     def create_employee(self, tenant: str, username: str, password: str,
                         name: str = None, mobile: str = "9999999999",
                         roles: list = None, department: str = None,
-                        designation: str = None) -> bool:
+                        designation: str = None,
+                        jurisdiction_boundary: str = None,
+                        jurisdiction_boundary_type: str = None,
+                        jurisdiction_hierarchy: str = "ADMIN") -> bool:
         """Create a single HRMS employee programmatically.
 
         Creates both the user account AND the HRMS employee record.
@@ -1218,6 +1254,15 @@ class CRSLoader:
             roles: List of role codes (defaults to ["EMPLOYEE"])
             department: Department code (auto-detected if not provided)
             designation: Designation code (auto-detected if not provided)
+            jurisdiction_boundary: Boundary code the employee's jurisdiction covers
+                (defaults to the tenant). PGR scopes employee search to it, so a
+                complaint outside it is invisible to this employee.
+            jurisdiction_boundary_type: Level of jurisdiction_boundary (e.g. "Locality").
+                Defaults to "City", which is only right for the tenant default.
+            jurisdiction_hierarchy: Boundary hierarchy jurisdiction_boundary belongs to.
+                PGR expands the jurisdiction to its descendants in THIS hierarchy, so it
+                must be the tree the boundary sits in. Defaults to "ADMIN", the hierarchy
+                the seed dump and the CI loaders build.
 
         Returns:
             bool: True if employee was created or already exists
@@ -1252,8 +1297,10 @@ class CRSLoader:
             'dateOfAppointment': 1704067200000,
             'assignments': [{'fromDate': 1704067200000, 'isCurrentAssignment': True,
                              'department': department, 'designation': designation}],
-            'jurisdictions': [{'hierarchy': 'REVENUE', 'boundaryType': 'City',
-                               'boundary': tenant, 'tenantId': tenant, 'roles': role_objects}],
+            'jurisdictions': [{'hierarchy': jurisdiction_hierarchy,
+                               'boundaryType': jurisdiction_boundary_type or 'City',
+                               'boundary': jurisdiction_boundary or tenant, 'tenantId': tenant,
+                               'roles': role_objects}],
             'user': {'name': name, 'userName': username, 'mobileNumber': mobile,
                      'active': True, 'type': 'EMPLOYEE', 'tenantId': tenant,
                      'roles': role_objects, 'password': 'TempHRMS@999', 'otpReference': '12345'},
@@ -1303,13 +1350,43 @@ class CRSLoader:
                                 f"dept {prev_dept} -> {department}, "
                                 f"desig {prev_desig} -> {designation}"
                             )
-                    requests.post(f"{self.base_url}{hrms_svc}/employees/_update",
+                    # Same for the jurisdiction: _create being a no-op leaves the
+                    # seed's boundary in place, which PGR search scoping reads.
+                    # Retarget ONE active jurisdiction (the one already on the
+                    # boundary, else the first) so others aren't duplicated onto it.
+                    if jurisdiction_boundary:
+                        active = [j for j in emp.get("jurisdictions") or []
+                                  if j.get("isActive", True)]
+                        target = next((j for j in active
+                                       if j.get("boundary") == jurisdiction_boundary),
+                                      active[0] if active else None)
+                        wanted = (jurisdiction_boundary, jurisdiction_boundary_type or "City",
+                                  jurisdiction_hierarchy)
+                        current = (target.get("boundary"), target.get("boundaryType"),
+                                   target.get("hierarchy")) if target else None
+                        if target and current != wanted:
+                            print(f"   Reconciling jurisdiction: {current[0]} ({current[1]}, {current[2]}) "
+                                  f"-> {wanted[0]} ({wanted[1]}, {wanted[2]})")
+                            target["boundary"], target["boundaryType"], target["hierarchy"] = wanted
+                    ur = requests.post(f"{self.base_url}{hrms_svc}/employees/_update",
                         json={"RequestInfo": {"apiId": "Rainmaker", "authToken": self.auth_token,
                               "userInfo": self.user_info}, "Employees": [emp]},
                         headers=headers, timeout=REQUEST_TIMEOUT)
+                    # The password, assignment and jurisdiction all ride on this one
+                    # call: if HRMS rejects it, none of them took, and a later login
+                    # with `password` would fail with no hint why.
+                    if not ur.ok:
+                        print(f"   ERROR: HRMS _update for '{username}' failed "
+                              f"(HTTP {ur.status_code}): {ur.text[:500]}")
+                        return False
                     print(f"   Password set for '{username}'")
+                else:
+                    print(f"   ERROR: HRMS _search found no employee '{username}' to set the "
+                          f"password on (HTTP {sr.status_code}): {sr.text[:300]}")
+                    return False
             except Exception as e:
-                print(f"   Warning: password update failed: {e}")
+                print(f"   ERROR: password update for '{username}' failed: {e}")
+                return False
 
         return created
 

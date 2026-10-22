@@ -15,6 +15,7 @@ import {
 } from "@egovernments/digit-ui-libraries";
 
 import Header from "./Header";
+import WorkspaceTrialNotice, { WorkspaceTrialNoticeBody } from "./WorkspaceTrialNotice";
 
 const cleanAuthResult = () => {
   const url = new URL(window.location.href);
@@ -43,6 +44,8 @@ export const useIdentityBffSignIn = ({ surface, t, onAuthenticated, onSignedOut 
   const [status, setStatus] = useState(hasTenant ? "checking" : "no-tenant");
   const [message, setMessage] = useState("");
   const [invitation, setInvitation] = useState(null);
+  // Set with status "trial-expired": the workspace's operator notice.
+  const [notice, setNotice] = useState(null);
   const destination = hasTenant
     ? restrictIdentityBffDestination(
         location.state?.from || new URLSearchParams(location.search).get("from"),
@@ -81,6 +84,11 @@ export const useIdentityBffSignIn = ({ surface, t, onAuthenticated, onSignedOut 
 
     if (result.status === "signed-out" && !result.fromAuthResult && !result.messageKey) {
       await (onSignedOut || beginSignIn)();
+      return;
+    }
+    if (result.status === "trial-expired") {
+      setNotice(result.notice);
+      setStatus("trial-expired");
       return;
     }
     if (result.status !== "authenticated") {
@@ -152,14 +160,29 @@ export const useIdentityBffSignIn = ({ surface, t, onAuthenticated, onSignedOut 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return { tenant, status, setStatus, message, setMessage, tr, unavailable, beginSignIn, establishSession, complete, retry, invitation, acceptInvitation, signInAfterIncompleteSignOut, declineInvitation };
+  return { tenant, status, setStatus, notice, setNotice, message, setMessage, tr, unavailable, beginSignIn, establishSession, complete, retry, invitation, acceptInvitation, signInAfterIncompleteSignOut, declineInvitation };
 };
 
 /** The card shown when sign-in stops: retry, sign in again, or sign out. */
 export const SignInFailureCard = ({ signIn, Shell, onSignIn }) => {
   const { tenant, status, message, tr, beginSignIn, establishSession, retry, invitation, acceptInvitation, signInAfterIncompleteSignOut, declineInvitation } = signIn;
   const [confirmDecline, setConfirmDecline] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
   if (status === "no-tenant") return <ChooseOrganisationCard tr={tr} Shell={Shell} />;
+  // Closing the modal leaves the notice inline; sign-in stays blocked.
+  if (status === "trial-expired" && signIn.notice) {
+    return dismissed ? (
+      <Shell>
+        <V2Card style={{ width: "100%", maxWidth: "420px", padding: "32px", display: "flex", flexDirection: "column", gap: "16px", borderRadius: "14px", border: "none", boxShadow: "0 12px 32px rgba(8, 20, 40, 0.18), 0 2px 8px rgba(8, 20, 40, 0.10)" }}>
+          <div style={{ display: "flex", justifyContent: "center" }}><Header /></div>
+          <h1 style={{ margin: 0, fontSize: "1.5rem", textAlign: "center", color: "var(--color-text-heading, #1D2433)" }}>{signIn.notice.title}</h1>
+          <WorkspaceTrialNoticeBody notice={signIn.notice} />
+        </V2Card>
+      </Shell>
+    ) : (
+      <Shell><WorkspaceTrialNotice notice={signIn.notice} onClose={() => setDismissed(true)} /></Shell>
+    );
+  }
   return (
     <Shell>
       <V2Card

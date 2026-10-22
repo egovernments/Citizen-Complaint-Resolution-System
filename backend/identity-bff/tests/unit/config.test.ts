@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { parseAllowedOrigins } from "../../src/infrastructure/config.js";
+import { parseAllowedOrigins, parseTrialDays } from "../../src/infrastructure/config.js";
 import { safeIdentityReturnTo, withAuthResult } from "../../src/modules/authentication/redirects.js";
 
 describe("identity configuration", () => {
@@ -27,6 +27,26 @@ describe("identity configuration", () => {
     expect(await roots(undefined)).toEqual(["pg"]);
     expect(await roots("")).toEqual([]); // an explicit opt-out, never the admin tenant's root
     expect(await roots(" ke , mz,ke")).toEqual(["ke", "mz"]);
+  });
+
+  it("reads the trial length as whole days from 0 to 3650 and refuses anything else at startup", async () => {
+    expect(parseTrialDays(undefined)).toBe(0);
+    expect(parseTrialDays("")).toBe(0);
+    expect(parseTrialDays(" 30 ")).toBe(30);
+    expect(parseTrialDays("3650")).toBe(3650);
+    // The only switch: a value parseInt can't read must not silently turn every lock off.
+    for (const bad of ["thirty", "true", "-1", "1.5", "NaN", "30d", "3651"]) {
+      expect(() => parseTrialDays(bad)).toThrow(/IDENTITY_WORKSPACE_TRIAL_DAYS/);
+    }
+    const saved = process.env.IDENTITY_WORKSPACE_TRIAL_DAYS;
+    process.env.IDENTITY_WORKSPACE_TRIAL_DAYS = "thirty";
+    try {
+      vi.resetModules();
+      await expect(import("../../src/infrastructure/config.js")).rejects.toThrow(/IDENTITY_WORKSPACE_TRIAL_DAYS/);
+    } finally {
+      if (saved === undefined) delete process.env.IDENTITY_WORKSPACE_TRIAL_DAYS; else process.env.IDENTITY_WORKSPACE_TRIAL_DAYS = saved;
+      vi.resetModules();
+    }
   });
 
   it("rejects paths, credentials, and non-http schemes in the origin allowlist", () => {

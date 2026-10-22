@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { track } from '@/lib/analytics';
 import { useOnboardingT } from '../i18n';
 import { welcomeSlides } from './homeContent';
 
@@ -14,9 +15,16 @@ export function WelcomeDialog({ open, onOpenChange }: { open: boolean; onOpenCha
   const last = index === slides.length - 1;
   const Icon = slide.icon;
 
+  useEffect(() => {
+    if (open) track('onboarding:tour_page_view', { page: slide.id });
+  }, [open, slide.id]);
+
   const change = (next: boolean) => {
     // Each opening starts from the welcome slide.
-    if (!next) setIndex(0);
+    if (!next) {
+      track('onboarding:tour_close', { page: slide.id, finished: last });
+      setIndex(0);
+    }
     onOpenChange(next);
   };
 

@@ -1,4 +1,5 @@
 import { setCitizenDetail } from "./citizenSession";
+import { setEmployeeDetail } from "./employeeSession";
 import React, { useEffect, useRef, useState } from "react";
 import { Redirect } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -14,6 +15,16 @@ const ACTIONS = {
   UPDATE_EMAIL: "Change email address",
 };
 const fetchImpl = (...args) => window.fetch(...args);
+
+// The same writes as the login pages make for a selected session.
+const storeSelectedUser = (surface, user, tenant) => {
+  Digit.SessionStorage.set("citizen.userRequestObject", user);
+  Digit.UserService.setUser(user);
+  if (surface === "employee") {
+    Digit.SessionStorage.set("Employee.tenantId", tenant.tenantId);
+    setEmployeeDetail(user.info, user.access_token);
+  } else setCitizenDetail(user.info, user.access_token, tenant.tenantId);
+};
 
 // The session cache is per tab, while these legacy aliases are shared between
 // tabs. Both must still belong to the person who opened the phone form.
@@ -142,6 +153,8 @@ const IdentityAccount = ({ surface }) => {
   const [methods, setMethods] = useState([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  // Bumped when this tab adopts a fresh token, so ChangePhone captures it.
+  const [sessionVersion, setSessionVersion] = useState(0);
   const tenant = window.__digitTenantContext;
   const tr = (key, fallback) => t(key, { defaultValue: fallback });
   // Session times in the language the page is in, not the browser's.
@@ -196,6 +209,16 @@ const IdentityAccount = ({ surface }) => {
       return;
     }
     if (scope === "others") {
+      // The other sessions shared this session's DIGIT token, so the BFF
+      // revoked it (#2592). Select again for a fresh one; if that fails, the
+      // next DIGIT call's InvalidAccessTokenException sends this tab through
+      // the login page, which selects silently.
+      // The surface cookie is shared across tabs, so adopt only the same person.
+      const selected = await establishIdentityBffSession({ surface, tenant, fetchImpl });
+      if (selected.status === "authenticated" && selected.user.info?.uuid === Digit.UserService.getUser()?.info?.uuid) {
+        storeSelectedUser(surface, selected.user, tenant);
+        setSessionVersion(version => version + 1);
+      }
       await refresh();
       setMessage(tr("CORE_IDENTITY_OTHER_SESSIONS_ENDED", "Your other sessions have been signed out."));
     }
@@ -223,7 +246,7 @@ const IdentityAccount = ({ surface }) => {
           {tr("CORE_IDENTITY_UNLINK_PROVIDER", "Unlink provider")}: {provider.alias}
         </Button>)}
       </Card>
-      {surface === "citizen" && <ChangePhone t={t} tenant={tenant} onChanged={() => run(refresh)} />}
+      {surface === "citizen" && <ChangePhone key={sessionVersion} t={t} tenant={tenant} onChanged={() => run(refresh)} />}
       <Card style={{ padding: "24px", display: "grid", gap: "16px" }}>
         <h2>{tr("CORE_IDENTITY_SESSIONS", "Signed-in sessions")}</h2>
         <ul>{session.sessions?.map((item) => <li key={item.id}>

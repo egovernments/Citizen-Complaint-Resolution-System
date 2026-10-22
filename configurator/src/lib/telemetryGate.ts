@@ -1,11 +1,11 @@
 /**
  * Kill switch for the Configurator's OWN telemetry.
  *
- * The Configurator ships hardcoded PostHog and Sentry credentials and starts
- * sending at module scope, before login, with session replay and
- * `sendDefaultPii: true`. This module does not change that default — it gives
- * operators a way to switch it off without a rebuild, and gives every call site
- * one predicate to consult.
+ * The Configurator starts PostHog and Sentry at module scope, before login,
+ * when its deployment gives it a key (config.js or VITE_* at build time; see
+ * main.tsx). This module does not change that default — it gives operators a
+ * way to switch it off without a rebuild, and gives every call site one
+ * predicate to consult.
  *
  * POLARITY: absent flag, absent file, unreadable storage and any thrown error
  * all mean NOT KILLED. That is deliberate. Every environment currently running
@@ -28,6 +28,8 @@
  *      next deploy, which rsyncs dist over it.
  *   3. permanently for a build — VITE_CFG_TELEMETRY_KILL=true at build time.
  */
+
+import posthog from 'posthog-js';
 
 declare global {
   interface Window {
@@ -66,4 +68,13 @@ export function isTelemetryKilled(): boolean {
 /** Convenience inverse, for readability at call sites. */
 export function isTelemetryEnabled(): boolean {
   return !isTelemetryKilled();
+}
+
+/**
+ * True when PostHog is running: telemetry is on and main.tsx started it with
+ * this deployment's key. Without a key it is never started, and posthog-js logs
+ * an error for every call made before init, so PostHog calls check this.
+ */
+export function isPosthogOn(): boolean {
+  return !isTelemetryKilled() && posthog.__loaded === true;
 }

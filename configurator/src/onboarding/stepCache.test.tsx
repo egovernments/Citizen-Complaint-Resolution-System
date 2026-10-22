@@ -16,7 +16,14 @@ const app = {
 };
 vi.mock('@/App', () => ({ useApp: () => app }));
 vi.mock('@/identity/workspace', () => ({ searchWorkspace: vi.fn(async () => ({ Probes: {}, Workspace: { legacy: true } })) }));
-vi.mock('./telemetry', () => ({ reportStepError: vi.fn(), trackStepAction: vi.fn() }));
+vi.mock('./telemetry', () => ({
+  reportStepError: vi.fn(),
+  trackImport: vi.fn(),
+  trackMethod: vi.fn(),
+  trackRecordSave: vi.fn(),
+  trackTemplateDownload: vi.fn(),
+  trackUploadRefused: vi.fn(),
+}));
 vi.mock('./departments/mastersApi', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./departments/mastersApi')>()),
   listMasters: vi.fn(),

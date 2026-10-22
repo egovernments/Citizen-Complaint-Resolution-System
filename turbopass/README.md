@@ -63,6 +63,11 @@ CI (`.github/workflows/turbopass-build.yml`, which runs only when this directory
 publishes `egovio/turbopass-search` and `egovio/turbopass-bootstrap`. Add `--build` to build
 from the checkout instead.
 
+On a DIGIT box deployed with Ansible, `enable_turbopass` does both steps: the deploy builds the DB
+for `turbopass_countries` (default: every country the configurator's signup offers) into
+`turbopass_overture_data_dir` whenever the DB there doesn't hold all of them, then starts
+search-api on it. See `local-setup/ansible/tasks/turbopass-boundary-db.yml`.
+
 ## Build the boundary DB
 
 `overture-scraper/bootstrap.sh`, the bootstrap image's entrypoint, runs five steps and exits
@@ -186,4 +191,5 @@ the comparison existed — rebuild to get it. `other` describes the source it wa
 ## Adding countries
 
 Add ISO codes to `TURBOPASS_COUNTRIES` (or `COUNTRIES`) and re-run the bootstrap; it rebuilds
-the DB from scratch. Check `coverage.py` first.
+the DB from scratch. Check `coverage.py` first. On an Ansible-deployed box, add them to
+`turbopass_countries` in host_vars and run `./deploy.sh <tenant> --tags=turbopass`.

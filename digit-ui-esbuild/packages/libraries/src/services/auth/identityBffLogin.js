@@ -106,6 +106,7 @@ export const requestJson = async (fetchImpl, url, init) => {
  *   { status: "authenticated", user: { info, ...tokens } }
  *   { status: "signed-out", fromAuthResult, messageKey?, message? }
  *   { status: "pending-invitation", invitation, messageKey, message }
+ *   { status: "trial-expired", notice } (workspace trial ended; see WorkspaceTrialNotice)
  *   { status: "forbidden" | "error", messageKey, message, params? }
  * `message` is a local English fallback; BFF display text is never rendered.
  * `params` fills the translated message's {{placeholders}}.
@@ -172,6 +173,9 @@ export async function establishIdentityBffSession({ surface, tenant, authResultI
       invitation,
       ...identityMessage("PENDING_INVITATION"),
     };
+  }
+  if (selected.response.status === 403 && selected.body?.code === "WORKSPACE_TRIAL_EXPIRED" && selected.body.notice) {
+    return { status: "trial-expired", notice: selected.body.notice };
   }
   if (selected.response.status === 403) {
     return {

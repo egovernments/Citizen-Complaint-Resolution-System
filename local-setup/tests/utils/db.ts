@@ -93,6 +93,25 @@ class DatabaseClient {
     if (!code) throw new Error(`No ADMIN boundary seeded for ${tenantId}`);
     return code;
   }
+
+  /**
+   * Root of the ADMIN tree that `leafCode` sits in, for an employee's HRMS jurisdiction.
+   * PGR scopes an employee's search to the descendants of their jurisdiction boundaries,
+   * so the root of the complaint's own tree covers it. Derived from the leaf's
+   * materialized path, not picked separately: a tenant can have several ADMIN roots.
+   * The tenant id itself (e.g. 'pg.citya') is not a boundary code and matches nothing.
+   */
+  async rootBoundaryOf(tenantId: string, leafCode: string): Promise<{ code: string; boundaryType: string }> {
+    const row = await this.queryOne<{ code: string; boundarytype: string }>(
+      `SELECT r.code, r.boundarytype FROM boundary_relationship l
+         JOIN boundary_relationship r ON r.tenantid = l.tenantid AND r.hierarchytype = l.hierarchytype
+                                     AND r.code = split_part(l.ancestralmaterializedpath, '|', 1)
+        WHERE l.tenantid = $1 AND l.hierarchytype = 'ADMIN' AND l.code = $2`,
+      [tenantId, leafCode]
+    );
+    if (!row) throw new Error(`No ADMIN root found above ${leafCode} on ${tenantId}`);
+    return { code: row.code, boundaryType: row.boundarytype };
+  }
 }
 
 export const db = new DatabaseClient();
