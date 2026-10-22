@@ -755,6 +755,20 @@ test("legibility: a light brand stays the fill but never becomes text or the foc
   } finally { restore(); }
 });
 
+test("legibility: secondary buttons take the brand text, not the vendored orange, unless the record states them", () => {
+  const { props, restore } = stubDocument();
+  try {
+    freshApply()(GREEN_AND_GOLD_V1);
+    assert.equal(props["--color-button-secondary-text"], "#204F37");
+    assert.equal(props["--color-button-secondary-border"], "#204F37");
+  } finally { restore(); }
+  const blue = stubDocument();
+  try {
+    freshApply()(require("./cms-blue.json"));
+    assert.equal(blue.props["--color-button-secondary-border"], "#2563EB");
+  } finally { blue.restore(); }
+});
+
 test("legibility: captions, success text and field borders reach their floors", () => {
   const { props, restore } = stubDocument();
   try {

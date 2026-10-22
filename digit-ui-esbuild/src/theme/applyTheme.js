@@ -420,11 +420,6 @@ function applyLegibilityFloors(vars) {
     effectiveValue(vars, "--color-grey-light") || DEFAULT_PAGE_GREY,
     effectiveValue(vars, "--color-grey-mid") || DEFAULT_PAGE_MID,
   ];
-  for (const [name, min] of LEGIBILITY_FLOORS) {
-    const value = effectiveValue(vars, name);
-    const fixed = value && darkenUntilReadable(value, page, min);
-    if (fixed && fixed.toUpperCase() !== String(value).toUpperCase()) vars[name] = fixed;
-  }
 
   const brandCandidates = [
     "--color-primary-2",
@@ -442,6 +437,20 @@ function applyLegibilityFloors(vars) {
     : brandCandidates.find((hex) => worstContrast(hex, page) >= AA_NORMAL_TEXT)
       || (accent && darkenUntilReadable(accent, page, AA_NORMAL_TEXT));
   if (brandText && !("--color-brand-text" in vars)) vars["--color-brand-text"] = brandText;
+  // The vendored :root hard-defines the secondary button's text and border as
+  // DIGIT orange, so a record that doesn't state them (v1/v2: Green and Gold,
+  // DIGIT Orange) never reached the brand-text fallback in the CSS and painted
+  // orange on a green workspace. They are brand text, so they take it.
+  for (const name of ["--color-button-secondary-text", "--color-button-secondary-border"]) {
+    if (brandText && !(name in vars)) vars[name] = brandText;
+  }
+
+  for (const [name, min] of LEGIBILITY_FLOORS) {
+    const value = effectiveValue(vars, name);
+    const fixed = value && darkenUntilReadable(value, page, min);
+    if (fixed && fixed.toUpperCase() !== String(value).toUpperCase()) vars[name] = fixed;
+  }
+
   // Focus ring: 3:1 against the page so keyboard users can see where they are.
   const focusCandidates = [
     effectiveValue(vars, "--color-primary-1"),
