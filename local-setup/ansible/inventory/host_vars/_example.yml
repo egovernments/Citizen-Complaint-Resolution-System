@@ -907,6 +907,13 @@ identity_reconciliation_interval_seconds: 900
 # default) turns trials off: nothing new is stamped and no workspace locks, whatever its end
 # date. Approvals and extensions made meanwhile apply when trials are on again.
 # identity_workspace_trial_days: 0
+# Reminder emails to the workspace's admins, in days before the trial ends, plus one when it
+# locks; [0] sends only that one. Off while trials are. They need an active email integration
+# in Novu; the Notifications Channels policy does not apply to them, so EMAIL can stay off at
+# the platform root (turning it on there would also start that root's complaint emails).
+# identity_workspace_trial_reminder_days: [14, 7, 3, 2, 1]
+# false stops the reminder emails while trials stay on (e.g. before an email integration exists).
+# identity_workspace_trial_reminders_enabled: true
 # The notice a locked-out user sees. Empty (the default) uses the BFF's built-in text. The
 # link shows only when both its label and its URL are set. Free text: $, quotes, & and # are safe.
 # identity_workspace_trial_notice_title: ''

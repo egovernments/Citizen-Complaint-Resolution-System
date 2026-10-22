@@ -44,7 +44,7 @@ function view(org: OnboardingOrganization) {
  * under the onboarding lock the primitives take for this Organization, so a
  * concurrent lifecycle write is not lost. Null when no live Organization serves the tenant.
  */
-async function updateTrial(tenantId: string, change: (attributes: Record<string, string[]>) => void) {
+export async function updateTrial(tenantId: string, change: (attributes: Record<string, string[]>) => void) {
   const authority = await readOrganizationByTenant(tenantId);
   if (!authority || authority.lifecycle === "FAILED") return null;
   const path = `/organizations/${encodeURIComponent(authority.id)}`;

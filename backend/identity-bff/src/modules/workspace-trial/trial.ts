@@ -5,12 +5,15 @@ export const TRIAL_ATTRIBUTES = {
   endsAt: "digit.trialEndsAt",
   approvedAt: "digit.trialApprovedAt",
   approvedBy: "digit.trialApprovedBy",
+  /** `<trialEndsAt>|<days>`: the last reminder email sent, and the end date it was for. */
+  reminderSent: "digit.trialReminderSent",
 } as const;
 
 export interface WorkspaceTrial {
   endsAt: string;
   approvedAt: string | null;
   approvedBy: string | null;
+  reminderSent?: string | null;
 }
 
 export type WorkspaceTrialState = "NONE" | "TRIAL" | "APPROVED" | "EXPIRED";
@@ -38,6 +41,7 @@ export function readWorkspaceTrial(
     endsAt,
     approvedAt: first(attributes, TRIAL_ATTRIBUTES.approvedAt),
     approvedBy: first(attributes, TRIAL_ATTRIBUTES.approvedBy),
+    reminderSent: first(attributes, TRIAL_ATTRIBUTES.reminderSent),
   };
 }
 

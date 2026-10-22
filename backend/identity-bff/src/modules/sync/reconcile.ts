@@ -11,6 +11,7 @@ import { propagateIdentifiers } from "./identifiers.js";
 import { canonical } from "./state.js";
 import { DigitUnavailableError } from "../managed-accounts/digit-user-client.js";
 import { isTrialLocked } from "../workspace-trial/trial.js";
+import { sendTrialReminder } from "../workspace-trial/reminders.js";
 
 export interface ReconcileResult {
   acquired: boolean;
@@ -111,6 +112,8 @@ export async function runReconcile(): Promise<ReconcileResult> {
     for (const tenantId of await listOrganizationTenants()) {
       try {
         const organization = await inspectTenant(tenantId);
+        // Trial reminder emails: never throws, so never a reconcile failure.
+        if (organization) await sendTrialReminder(tenantId, organization, tenantStates.get(tenantId));
         const name = organization && await digitTenantName(tenantId);
         if (organization && name && name !== organization.name) {
           await assertHeld();

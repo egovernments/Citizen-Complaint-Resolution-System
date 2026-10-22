@@ -100,7 +100,8 @@ securityContext:
 #   identity-session-introspection-token, identity-onboarding-token,
 #   pgr-onboarding-worker-token, identity-citizen-otp-secret,
 #   identity-credential-keys, identity-credential-key-current,
-#   digit-provisioner-password, identity-surfaces-json
+#   digit-provisioner-password, identity-surfaces-json,
+#   novu-bridge-send-token (novu-bridge's internal-send-token, for trial reminder emails)
 secret:
   existingSecret: ""
   values: {}
@@ -187,6 +188,11 @@ config:
   IDENTITY_WORKSPACE_TRIAL_NOTICE_MESSAGE: ""
   IDENTITY_WORKSPACE_TRIAL_NOTICE_LINK_LABEL: ""
   IDENTITY_WORKSPACE_TRIAL_NOTICE_LINK_URL: ""
+  # Trial reminder emails, in days before the end (BFF default 14,7,3,2,1), sent through
+  # novu-bridge's messages/_dispatch: e.g. http://novu-bridge:8080/novu-bridge, with the
+  # novu-bridge-send-token Secret key. Empty URL = no reminder emails.
+  IDENTITY_WORKSPACE_TRIAL_REMINDER_DAYS: ""
+  IDENTITY_NOVU_BRIDGE_URL: ""
   IDENTITY_RECONCILIATION_LEASE_SECONDS: ""  # BFF default: 300
   # Give each active ROOT tenant listed here (default: DIGIT_ADMIN_TENANT_ID's
   # root) without an Organization one whose URL slug is the tenant id.
