@@ -8652,6 +8652,10 @@
         #   python3 migrate-notifications.py plan --all
         # The deploy itself never runs it.
         - "{{ playbook_dir }}/../scripts/migrate-notifications.py"
+        # The platform baseline's action ids, so the access phase never treats one of them as
+        # a notification action's home and can hand one back (seed-notifications.py,
+        # give_back_baseline_id).
+        - "{{ playbook_dir }}/../../backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json"
 
     # The allowlist novu-bridge falls back to for a tenant with no channel rows. Read
     # from the RUNNING container, not host_vars: a per-tenant overlay can override the
@@ -8904,6 +8908,21 @@
         label: "{{ item.item }}"
       ansible.builtin.debug:
         msg: "{{ item.stdout_lines | default([]) | select('search', 'ACL-ROLES-ABSENT') | list }}"
+
+    # Lines to read even when the access phase succeeded: a grant an older build wrote on an
+    # id that holds another URL (ACL-STALE-GRANT, left in place: the tenant may have made it
+    # itself), a notification action that is switched off (ACL-ACTION-INACTIVE), and a
+    # platform-baseline id handed back or not (ACL-BASELINE-ID-RETURNED / -KEPT).
+    - name: "notif-seed — WARNING: access-control rows to review"
+      when:
+        - seed_notifications | default(enable_novu | default(false))
+        - (item.stdout | default('')) is search('ACL-(STALE-GRANT|ACTION-INACTIVE|BASELINE-ID)')
+      tags: ['notifications', 'notification-seed']
+      loop: "{{ notif_seed_acl.results | default([]) | selectattr('rc', 'defined') | list }}"
+      loop_control:
+        label: "{{ item.item }}"
+      ansible.builtin.debug:
+        msg: "{{ item.stdout_lines | default([]) | select('search', 'ACL-(STALE-GRANT|ACTION-INACTIVE|BASELINE-ID)') | list }}"
 
     # egov-accesscontrol loads ACCESSCONTROL-ROLEACTIONS into an in-memory cache at
     # startup. Rows created just now are invisible to the running process, so Kong's
