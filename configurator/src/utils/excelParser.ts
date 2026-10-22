@@ -946,6 +946,18 @@ export const toPascal = (s: string): string =>
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
     .join('');
 
+/**
+ * A readable label from a level code, for a hierarchy definition's
+ * `levels[].label`: AUTHORITY_TYPE gives "Authority Type". digit-ui shows it
+ * when the level has no localized name, so a raw code there reads as a bug.
+ */
+export const levelLabel = (code: string): string =>
+  code
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
+
 // One row of the single 2-master ComplaintHierarchy adjacency list. Interior
 // nodes and leaves share this shape; LEAF rows ALSO carry the leaf fields
 // (department/departments/slaHours/keywords). `menuPath` is gone — grouping is
