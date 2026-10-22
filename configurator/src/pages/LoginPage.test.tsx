@@ -204,6 +204,40 @@ describe('configurator sign in', () => {
     expect(localSession.installDigitContext).not.toHaveBeenCalled();
   });
 
+  describe('expired trial workspace', () => {
+    const notice = { title: 'Your trial has ended', message: 'Talk to us to continue.', linkLabel: 'Contact sales', linkUrl: 'https://example.org/sales' };
+    const locked = { tenantId: 'ke.demo', name: 'Demo Workspace', organizationAlias: 'demo', roles: ['ACCOUNT_ADMIN'], code: 'WORKSPACE_TRIAL_EXPIRED' as const };
+    const open = { tenantId: 'ke.bomet', name: 'Bomet County', organizationAlias: 'bomet', roles: ['EMPLOYEE'] };
+
+    it('opens the dialog on load for a sole locked workspace without redirecting to signup', async () => {
+      vi.mocked(api.session).mockResolvedValue(signedIn);
+      vi.mocked(api.tenants).mockResolvedValue({ tenants: [locked], selectionRequired: false, onboardingRequired: false, notice });
+      const assign = vi.fn();
+      vi.stubGlobal('location', { ...window.location, assign });
+      renderPage();
+
+      expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
+      expect(screen.getByText(notice.title)).toBeInTheDocument();
+      expect(screen.getByText(notice.message)).toBeInTheDocument();
+      expect(assign).not.toHaveBeenCalled();
+      vi.unstubAllGlobals();
+    });
+
+    it('opens the dialog when _select answers 403 WORKSPACE_TRIAL_EXPIRED', async () => {
+      vi.mocked(api.session).mockResolvedValue(signedIn);
+      vi.mocked(api.tenants).mockResolvedValue({ tenants: [open], selectionRequired: false, onboardingRequired: false });
+      vi.mocked(api.selectContext).mockRejectedValue(
+        new api.OnboardingError(403, 'WORKSPACE_TRIAL_EXPIRED', 'Trial ended', { notice }),
+      );
+      renderPage();
+
+      fireEvent.click(await screen.findByRole('button', { name: /bomet county/i }));
+      expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
+      expect(screen.getByText(notice.title)).toBeInTheDocument();
+      expect(screen.queryByText(/could not sign in/i)).not.toBeInTheDocument();
+    });
+  });
+
   it('signs out through the fail-open helper and returns to sign-in', async () => {
     vi.mocked(api.session).mockResolvedValueOnce(signedIn).mockResolvedValue({ authenticated: false });
     vi.mocked(api.tenants).mockResolvedValue({

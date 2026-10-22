@@ -231,5 +231,15 @@
 {"code": "app.resources.notifications_event_catalogue", "message": "Eventos de notificação", "module": "configurator-ui", "locale": "pt_BR"},
 {"code": "app.resources.notifications_routing", "message": "Roteamento de notificações", "module": "configurator-ui", "locale": "pt_BR"},
 {"code": "app.resources.notifications_template", "message": "Modelos de notificação", "module": "configurator-ui", "locale": "pt_BR"},
-{"code": "app.resources.notifications_provider_template", "message": "Modelos de provedor de notificação", "module": "configurator-ui", "locale": "pt_BR"}
+{"code": "app.resources.notifications_provider_template", "message": "Modelos de provedor de notificação", "module": "configurator-ui", "locale": "pt_BR"},
+{"code": "app.nav.open_complaint_desk", "message": "Abrir central de reclamações", "module": "configurator-ui", "locale": "pt_BR"},
+{"code": "app.workspace_links.title", "message": "Links do espaço de trabalho", "module": "configurator-ui", "locale": "pt_BR"},
+{"code": "app.workspace_links.employee_label", "message": "App do funcionário", "module": "configurator-ui", "locale": "pt_BR"},
+{"code": "app.workspace_links.employee_hint", "message": "Onde sua equipe entra e atende às reclamações", "module": "configurator-ui", "locale": "pt_BR"},
+{"code": "app.workspace_links.citizen_label", "message": "App do cidadão", "module": "configurator-ui", "locale": "pt_BR"},
+{"code": "app.workspace_links.citizen_hint", "message": "Compartilhe com os cidadãos para registrar e acompanhar reclamações", "module": "configurator-ui", "locale": "pt_BR"},
+{"code": "app.workspace_links.copy", "message": "Copiar", "module": "configurator-ui", "locale": "pt_BR"},
+{"code": "app.workspace_links.copied", "message": "Link copiado.", "module": "configurator-ui", "locale": "pt_BR"},
+{"code": "app.workspace_links.copy_failed", "message": "Não foi possível copiar o link. Selecione-o e copie manualmente.", "module": "configurator-ui", "locale": "pt_BR"},
+{"code": "app.workspace_links.open", "message": "Abrir", "module": "configurator-ui", "locale": "pt_BR"}
 ]

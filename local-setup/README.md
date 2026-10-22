@@ -513,12 +513,12 @@ want soon:
 - `enable_novu` — SMS, email and WhatsApp notifications. Eight more containers.
   There is a turn-key installer, `scripts/enable-notifications.sh`, rather than
   just the flag.
-- `enable_keycloak` — Keycloak and the Identity BFF. **Not optional any more:**
-  every employee and citizen sign-in goes through them, the old DIGIT
-  OTP/password login pages are gone, and the deploy refuses `false`. The
-  shipped examples set it to `true`. It also turns on self-service tenant onboarding: PGR's onboarding runner
-  (`pgr_onboarding_runner_enabled`, default `true`, rendered on only with
-  Keycloak) provisions each signup as a platform provisioner account. The
+- Keycloak and the Identity BFF are **always deployed** (there is no
+  `enable_keycloak` switch any more; the deploy refuses one set to `false`):
+  every employee and citizen sign-in goes through them, and the old DIGIT
+  OTP/password login pages are gone. They also bring self-service tenant
+  onboarding: PGR's onboarding runner (`pgr_onboarding_runner_enabled`,
+  default `true`) provisions each signup as a platform provisioner account. The
   deploy creates that account if absent (`PGR_PROVISIONER` on `state_root`,
   with MDMS_ADMIN, ACCOUNT_ADMIN, LOC_ADMIN and HRMS_ADMIN there), keeps its
   generated password in OpenBao as `pgr_digit_provisioner_password`, and fails

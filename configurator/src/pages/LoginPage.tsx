@@ -10,6 +10,7 @@ import {
   type AuthMethod,
   type SessionUser,
   type TenantOption,
+  type WorkspaceTrialNotice,
   authMethods,
   requestPasswordSetup,
   session,
@@ -21,6 +22,7 @@ import { AuthShell } from '@/components/signup/AuthPanel';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { WorkspaceTrialDialog } from '@/components/WorkspaceTrialDialog';
 import { SESSION_EXPIRED_KEY, clearSignOutIncomplete, signOutIncomplete, signOutThisDevice } from '@/lib/session';
 import { useAuthResult } from '@/hooks/useAuthResult';
 import { describeSignupError } from '@/onboarding/signup/signupErrors';
@@ -58,6 +60,8 @@ export default function LoginPage() {
   const [incompleteSignOut, setIncompleteSignOut] = useState(false);
   // Set when a workspace refuses the Configurator to this account: its staff work in the employee app.
   const [employeeAppUrl, setEmployeeAppUrl] = useState<string | null>(null);
+  const [trialNotice, setTrialNotice] = useState<WorkspaceTrialNotice | null>(null);
+  const [trialOpen, setTrialOpen] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -71,7 +75,15 @@ export default function LoginPage() {
         const available = await tenants();
         setTenantOptions(available.tenants);
         setInvitations(current.pendingInvitations ?? []);
-        if (available.tenants.length) setPhase('tenants');
+        if (available.tenants.length) {
+          setPhase('tenants');
+          // A locked workspace stays listed so it is not mistaken for no workspace.
+          // With nothing else to choose, say so now; otherwise wait for the click.
+          if (available.notice && available.tenants.some((t) => t.code === 'WORKSPACE_TRIAL_EXPIRED')) {
+            setTrialNotice(available.notice);
+            setTrialOpen(available.tenants.every((t) => t.code === 'WORKSPACE_TRIAL_EXPIRED'));
+          }
+        }
         else if (current.pendingInvitations?.length) setPhase('invitations');
         else window.location.assign('/configurator/signup');
         return;
@@ -95,6 +107,10 @@ export default function LoginPage() {
   const enter = async (option: TenantOption) => {
     setError(null);
     setEmployeeAppUrl(null);
+    if (option.code === 'WORKSPACE_TRIAL_EXPIRED') {
+      if (trialNotice) setTrialOpen(true);
+      return;
+    }
     setPhase('entering');
     try {
       await enterWorkspace(option.tenantId, identityUser);
@@ -104,6 +120,15 @@ export default function LoginPage() {
         setError('Your session ended. Sign in again to continue.');
         setPhase('loading');
         await load();
+        return;
+      }
+      const notice = caught instanceof OnboardingError && caught.code === 'WORKSPACE_TRIAL_EXPIRED'
+        ? (caught.details?.notice as WorkspaceTrialNotice | undefined)
+        : undefined;
+      if (notice) {
+        setTrialNotice(notice);
+        setTrialOpen(true);
+        setPhase('tenants');
         return;
       }
       if (caught instanceof OnboardingError && caught.code === 'CONFIGURATOR_ROLE_REQUIRED') {
@@ -219,7 +244,7 @@ export default function LoginPage() {
               >
                 <span>
                   <span className="block font-semibold text-foreground">{option.name}</span>
-                  <span className="block text-xs font-normal text-muted-foreground">{option.tenantId}{option.code ? ' — account inactive' : ''}</span>
+                  <span className="block text-xs font-normal text-muted-foreground">{option.tenantId}{option.code === 'DIGIT_ACCOUNT_INACTIVE' ? ' — account inactive' : option.code === 'WORKSPACE_TRIAL_EXPIRED' ? ' — trial ended' : ''}</span>
                 </span>
                 <span aria-hidden="true">→</span>
               </Button>
@@ -239,6 +264,7 @@ export default function LoginPage() {
             <LogOut className="mr-2" /> Sign out
           </Button>
         </section>
+        {trialNotice && <WorkspaceTrialDialog notice={trialNotice} open={trialOpen} onClose={() => setTrialOpen(false)} />}
       </AuthShell>
     );
   }

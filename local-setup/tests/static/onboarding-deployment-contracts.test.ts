@@ -112,7 +112,7 @@ describe('PGR onboarding cutover deployment contract', () => {
   test('Ansible ensures the provisioner account with the roles PGR re-verifies', () => {
     const playbook = read('local-setup/ansible/playbook-deploy.yml');
     const groupVars = read('local-setup/ansible/inventory/group_vars/digit.yml');
-    expect(groupVars).toContain("pgr_onboarding_runner_effective: \"{{ (pgr_onboarding_runner_enabled | default(true) | bool) and (enable_keycloak | default(false) | bool) }}\"");
+    expect(groupVars).toContain("pgr_onboarding_runner_effective: \"{{ pgr_onboarding_runner_enabled | default(true) | bool }}\"");
     expect(groupVars).toMatch(/^pgr_provisioner_username: .*or 'PGR_PROVISIONER' }}"$/m);
     expect(groupVars).toMatch(/^pgr_provisioner_tenant_id: .*or state_root \| default\('', true\) or 'pg' }}"$/m);
 

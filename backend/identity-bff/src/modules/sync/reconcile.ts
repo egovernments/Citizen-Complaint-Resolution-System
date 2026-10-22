@@ -10,6 +10,7 @@ import { applyMirrorSnapshot, readMirrorSnapshot } from "./mirror.js";
 import { propagateIdentifiers } from "./identifiers.js";
 import { canonical } from "./state.js";
 import { DigitUnavailableError } from "../managed-accounts/digit-user-client.js";
+import { isTrialLocked } from "../workspace-trial/trial.js";
 
 export interface ReconcileResult {
   acquired: boolean;
@@ -86,7 +87,7 @@ export async function runReconcile(): Promise<ReconcileResult> {
     const force = observedGeneration > Number(stats.completedGeneration || 0);
     const tenants = new Map<string, Promise<Awaited<ReturnType<typeof readOrganizationByTenant>>>>();
     const tenantActivity = new Map<string, boolean>();
-    const tenantStates = new Map<string, "active" | "ORGANIZATION_DISABLED" | "TENANT_INACTIVE">();
+    const tenantStates = new Map<string, "active" | "ORGANIZATION_DISABLED" | "TENANT_INACTIVE" | "TRIAL_EXPIRED">();
     const inspectTenant = (tenantId: string) => {
       if (!tenants.has(tenantId)) tenants.set(tenantId, (async () => {
         await assertHeld();
@@ -98,6 +99,9 @@ export async function runReconcile(): Promise<ReconcileResult> {
           tenantStates.set(tenantId, "ORGANIZATION_DISABLED");
         } else if (!active) {
           tenantStates.set(tenantId, "TENANT_INACTIVE");
+        } else if (isTrialLocked(organization.trial, Date.now())) {
+          // Time-based: no Keycloak event marks it, so this pass's observation is the trigger.
+          tenantStates.set(tenantId, "TRIAL_EXPIRED");
         } else tenantStates.set(tenantId, "active");
         return organization;
       })());
@@ -168,6 +172,7 @@ export async function runReconcile(): Promise<ReconcileResult> {
                 } else if (!organization.enabled || (organization.lifecycle !== null && organization.lifecycle !== "ACTIVE")) {
                   await revoke(entry, "ORGANIZATION_DISABLED");
                 } else if (tenantActivity.get(entry.tenantId) === false) await revoke(entry, "TENANT_INACTIVE");
+                else if (tenantStates.get(entry.tenantId) === "TRIAL_EXPIRED") await revoke(entry, "TRIAL_EXPIRED");
               }
               await assertHeld();
               if (await applyMirrorSnapshot(subject, snapshot, lease, force)) result.mirrored++;

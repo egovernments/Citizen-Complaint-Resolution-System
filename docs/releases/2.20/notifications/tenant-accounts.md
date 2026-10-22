@@ -184,8 +184,8 @@ in its tenant's own organization. A `{tenant}` with a dot (`acme.city`) means it
 
 ## Turning it on
 
-**Compose (Ansible).** On by default wherever self-serve signup and Novu both run
-(`enable_novu` and `enable_keycloak`); `novu_tenant_accounts: true|false` in host_vars overrides.
+**Compose (Ansible).** On by default wherever Novu runs (`enable_novu`; self-serve signup always
+runs); `novu_tenant_accounts: true|false` in host_vars overrides.
 The deploy then:
 
 1. generates four secrets into OpenBao the first time (never into host_vars or the repository):

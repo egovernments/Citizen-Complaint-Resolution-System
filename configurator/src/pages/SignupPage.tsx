@@ -8,6 +8,8 @@ import {
   type Signup,
   type SignupDraftInput,
   type TenantOption,
+  type TenantsResponse,
+  type WorkspaceTrialNotice,
   OnboardingError,
   PROVISIONING_STEPS,
   PROVISIONING_STEP_LABELS,
@@ -40,6 +42,7 @@ import { Input } from '@/components/ui/input';
 import { RequiredMark } from '@/components/ui/required-mark';
 import { Stepper } from '@/components/ui/stepper';
 import { AuthShell } from '@/components/signup/AuthPanel';
+import { WorkspaceTrialDialog } from '@/components/WorkspaceTrialDialog';
 import { useAuthResult } from '@/hooks/useAuthResult';
 import { clearSignOutIncomplete, signOutIncomplete } from '@/lib/session';
 import { track } from '@/lib/analytics';
@@ -258,6 +261,8 @@ function SignupFlow() {
   const [signupEmail, setSignupEmail] = useState('');
   const [sessionUser, setSessionUser] = useState<{ email: string; name: string } | null>(null);
   const [tenantOptions, setTenantOptions] = useState<TenantOption[]>([]);
+  const [trialNotice, setTrialNotice] = useState<WorkspaceTrialNotice | null>(null);
+  const [trialOpen, setTrialOpen] = useState(false);
   // The tenant the operator picked and how far it has actually been built. Set
   // only when the pick is refused, so the gate can name what it is holding.
   const [invitations, setInvitations] = useState<Invitation[]>([]);
@@ -346,6 +351,20 @@ function SignupFlow() {
     setPhase('signedOut');
   }, [t]);
 
+  /**
+   * A locked workspace stays listed so it is not mistaken for no workspace (and
+   * a locked founder sent into a second signup). With nothing else to choose,
+   * say so now; otherwise wait for the click.
+   */
+  const offerTenants = useCallback((view: TenantsResponse) => {
+    setTenantOptions(view.tenants);
+    const locked = view.tenants.filter((option) => option.code === 'WORKSPACE_TRIAL_EXPIRED');
+    if (view.notice && locked.length) {
+      setTrialNotice(view.notice);
+      setTrialOpen(locked.length === view.tenants.length);
+    }
+  }, []);
+
   /** Session → tenants → onboarding or chooser. The contract's own order. */
   // No synchronous setState in here: it runs from an effect on mount, where
   // `loading` is already the initial phase. The two re-entry points below want
@@ -364,7 +383,7 @@ function SignupFlow() {
       }
       const view = await tenants();
       if (view.tenants.length) {
-        setTenantOptions(view.tenants);
+        offerTenants(view);
         setPhase('chooseTenant');
         return;
       }
@@ -443,7 +462,7 @@ function SignupFlow() {
       setError(describeSignupError(caught, t).message);
       setPhase('failed');
     }
-  }, [seedFrom, t, restartSignIn]);
+  }, [seedFrom, t, restartSignIn, offerTenants]);
 
   useEffect(() => {
     // Load on mount. Every setState inside `bootstrap` happens after an await,
@@ -729,13 +748,27 @@ function SignupFlow() {
   }, [phase, seedFrom, restart]);
 
   const enter = useCallback(async (option: TenantOption): Promise<boolean> => {
-    setSaving(true);
     setError(null);
+    if (option.code === 'WORKSPACE_TRIAL_EXPIRED') {
+      // The dialog renders only with a notice. `enter` doesn't read it, so a new
+      // notice per tenant read never re-creates `enter` or re-runs the effect below.
+      setTrialOpen(true);
+      return false;
+    }
+    setSaving(true);
     try {
       await enterWorkspace(option.tenantId, sessionUser);
       return true;
     } catch (caught) {
-      setError(describe(caught).message);
+      const notice = caught instanceof OnboardingError && caught.code === 'WORKSPACE_TRIAL_EXPIRED'
+        ? (caught.details?.notice as WorkspaceTrialNotice | undefined)
+        : undefined;
+      if (notice) {
+        setTrialNotice(notice);
+        setTrialOpen(true);
+      } else {
+        setError(describe(caught).message);
+      }
       setSaving(false);
       return false;
     }
@@ -750,7 +783,7 @@ function SignupFlow() {
       try {
         const view = await tenants();
         if (!live) return;
-        setTenantOptions(view.tenants);
+        offerTenants(view);
         if (view.tenants.length === 1) {
           const ok = await enter(view.tenants[0]);
           if (!live) return;
@@ -767,7 +800,7 @@ function SignupFlow() {
     return () => {
       live = false;
     };
-  }, [ready, enter, describe]);
+  }, [ready, enter, describe, offerTenants]);
 
   // A run that failed on the founder's own input hands the draft back (PGR's
   // user-correctable codes) rather than closing it. The signup, not a list of
@@ -1018,10 +1051,13 @@ function SignupFlow() {
               onClick={() => enter(option)}
             >
               <span>{option.name}</span>
-              <span className="text-xs text-muted-foreground">{option.tenantId}</span>
+              <span className="text-xs text-muted-foreground">
+                {option.tenantId}{option.code === 'WORKSPACE_TRIAL_EXPIRED' ? ' — trial ended' : ''}
+              </span>
             </Button>
           ))}
         </div>
+        {trialNotice && <WorkspaceTrialDialog notice={trialNotice} open={trialOpen} onClose={() => setTrialOpen(false)} />}
       </div>
     );
   }
