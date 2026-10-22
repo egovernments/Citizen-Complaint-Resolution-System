@@ -196,11 +196,23 @@ describe("operator trial routes", () => {
     ...(body !== undefined && { body: JSON.stringify(body) }),
   });
 
+  it("lists a past end date as locked only while trials are on", async () => {
+    const acme = async () => (await (await ops(routes.list.path)).json()).workspaces
+      .find((w: { urlSlug: string }) => w.urlSlug === "acme");
+    expect(await acme()).toMatchObject({ state: "EXPIRED", locked: true });
+    config.workspaceTrialDays = 0;
+    try {
+      expect(await acme()).toMatchObject({ state: "EXPIRED", locked: false });
+    } finally {
+      config.workspaceTrialDays = 30;
+    }
+  });
+
   it("approve unlocks an expired workspace at once and keeps the first approval", async () => {
     const response = await ops(routes.approve.path, { tenantId: "acme", actor: "ops@example.org" });
     expect(response.status).toBe(200);
     const { workspace } = await response.json();
-    expect(workspace).toMatchObject({ tenantId: "acme", state: "APPROVED", approvedBy: "control-plane:ops@example.org" });
+    expect(workspace).toMatchObject({ tenantId: "acme", state: "APPROVED", locked: false, approvedBy: "control-plane:ops@example.org" });
     expect((await post(routes.select.path, { surface: "configurator", tenantId: "acme" }, await staffCookie("acme", "configurator"))).status).toBe(200);
     // The OTP gate reads the cached tenant directory (warmed above while acme was locked): the approval clears it.
     const before = sent.length;
@@ -223,7 +235,7 @@ describe("operator trial routes", () => {
     const endsAt = new Date(Date.now() + 3600_000).toISOString();
     const response = await ops(routes.extend.path, { tenantId: "charlie", endsAt, actor: "ops@example.org" });
     expect(response.status).toBe(200);
-    expect((await response.json()).workspace).toMatchObject({ tenantId: "charlie", trialEndsAt: endsAt, state: "TRIAL" });
+    expect((await response.json()).workspace).toMatchObject({ tenantId: "charlie", trialEndsAt: endsAt, state: "TRIAL", locked: false });
     // Only a full timestamp with an offset, on a real day: "7" would otherwise read as 2001-07-01.
     for (const bad of ["not a date", "7", "2026-02-30T00:00:00Z", "2026-12-31", "Dec 31 2026"]) {
       await expectContractError(await ops(routes.extend.path, { tenantId: "charlie", endsAt: bad }), routes.extend, "INVALID_REQUEST");

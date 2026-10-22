@@ -6,7 +6,7 @@ import { withOnboardingLock } from "../onboarding/locks.js";
 import { onboardingAdminRequest, readOnboardingOrganizations } from "../onboarding/organization-reader.js";
 import { organizationAttribute, type OnboardingOrganization } from "../onboarding/primitives.js";
 import { audit } from "../citizen-otp/audit.js";
-import { readWorkspaceTrial, TRIAL_ATTRIBUTES, workspaceTrialState } from "./trial.js";
+import { isTrialLocked, readWorkspaceTrial, TRIAL_ATTRIBUTES, workspaceTrialState } from "./trial.js";
 
 // A full ISO 8601 timestamp with an offset, on a real calendar day: Date.parse alone reads "7" as
 // 2001-07-01 and rolls 2026-02-30 over to 2 March.
@@ -31,6 +31,8 @@ function view(org: OnboardingOrganization) {
     approvedAt: trial?.approvedAt ?? null,
     approvedBy: trial?.approvedBy ?? null,
     state: workspaceTrialState(trial, Date.now()),
+    // What the gates do: false for every workspace while trials are off, whatever `state` says.
+    locked: isTrialLocked(trial, Date.now()),
   };
 }
 
