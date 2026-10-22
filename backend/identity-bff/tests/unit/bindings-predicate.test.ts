@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BindingUser } from "../../src/modules/bindings/types.js";
+import { config } from "../../src/infrastructure/config.js";
 const f = vi.hoisted(() => ({
   user: { enabled: true, attributes: {} } as BindingUser,
-  org: { id: "org", enabled: true, lifecycle: null as string | null },
+  org: { id: "org", enabled: true, lifecycle: null as string | null, trial: null as object | null },
   member: true, tenant: true, managed: null as object | null,
 }));
 vi.mock("../../src/modules/organizations/organization-service.js", () => ({
@@ -13,7 +14,7 @@ vi.mock("../../src/modules/access-context/tenant-directory.js", () => ({ isActiv
 vi.mock("../../src/modules/managed-accounts/managed-account-service.js", () => ({
   managedIdentity: vi.fn(), findManagedAccount: vi.fn(async () => f.managed),
 }));
-vi.mock("../../src/modules/bindings/managed-fallback.js", () => ({ managedFallbackAccess: vi.fn(async () => f.managed ? { allowed: true } : { allowed: false, denial: "NO_ACTIVE_BINDING" }) }));
+vi.mock("../../src/modules/bindings/managed-fallback.js", () => ({ managedFallbackAccess: vi.fn(async () => f.managed ? { allowed: true, trial: f.org.trial } : { allowed: false, denial: "NO_ACTIVE_BINDING" }) }));
 import { citizenAccess, staffAccess } from "../../src/modules/bindings/predicate.js";
 function binding(state = "active") {
   f.user.attributes!["digit.bindings"] = [JSON.stringify({ v: 1, bindings: [{
@@ -23,8 +24,8 @@ function binding(state = "active") {
   }] })];
 }
 beforeEach(() => {
-  f.user = { enabled: true, attributes: {} }; f.org = { id: "org", enabled: true, lifecycle: null };
-  f.member = true; f.tenant = true; f.managed = null;
+  f.user = { enabled: true, attributes: {} }; f.org = { id: "org", enabled: true, lifecycle: null, trial: null };
+  f.member = true; f.tenant = true; f.managed = null; config.workspaceTrialDays = 30;
 });
 describe("fresh identity-side access predicate", () => {
   it("allows an active binding with live membership and lifecycle-less Organization", async () => {
@@ -42,9 +43,27 @@ describe("fresh identity-side access predicate", () => {
     f.managed = { active: true };
     expect(await staffAccess("person", "pg")).toEqual({ allowed: true, via: "managed" });
   });
+  it("denies managed access to a workspace whose trial ended unless it was approved", async () => {
+    f.managed = { active: true }; const ended = { endsAt: "2020-01-01T00:00:00.000Z", approvedAt: null, approvedBy: null };
+    f.org.trial = ended;
+    expect(await staffAccess("person", "pg")).toEqual({ allowed: false, denial: "WORKSPACE_TRIAL_EXPIRED", via: "managed" });
+    f.org.trial = { ...ended, approvedAt: "2020-02-01T00:00:00.000Z", approvedBy: "ops" };
+    expect(await staffAccess("person", "pg")).toEqual({ allowed: true, via: "managed" });
+  });
   it.each(["PROVISIONING", "FAILED"])("denies %s Organizations", async (state) => {
     binding(); f.org.lifecycle = state;
     expect(await staffAccess("person", "pg")).toMatchObject({ allowed: false, denial: "ORGANIZATION_INACTIVE" });
+  });
+  it("tells a non-member of a locked workspace the real denial, not the trial notice", async () => {
+    binding(); f.member = false; f.org.trial = { endsAt: "2020-01-01T00:00:00.000Z", approvedAt: null, approvedBy: null };
+    expect(await staffAccess("person", "pg")).toMatchObject({ allowed: false, denial: "NOT_A_MEMBER" });
+  });
+  it("denies an Organization whose trial ended unless it was approved", async () => {
+    binding(); const ended = { endsAt: "2020-01-01T00:00:00.000Z", approvedAt: null, approvedBy: null };
+    f.org.trial = ended;
+    expect(await staffAccess("person", "pg")).toMatchObject({ allowed: false, denial: "WORKSPACE_TRIAL_EXPIRED" });
+    f.org.trial = { ...ended, approvedAt: "2020-02-01T00:00:00.000Z", approvedBy: "ops" };
+    expect(await staffAccess("person", "pg")).toMatchObject({ allowed: true, via: "binding" });
   });
   it("rechecks live membership on every call", async () => {
     binding(); expect((await staffAccess("person", "pg")).allowed).toBe(true); f.member = false;

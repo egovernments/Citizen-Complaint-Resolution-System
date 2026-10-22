@@ -176,6 +176,8 @@ beforeAll(async () => {
     digitAdminTenantId: "ke",
     digitManagedBaseRoles: ["EMPLOYEE"],
     digitManagedRoleAllowlist: ["EMPLOYEE", "GRO", "PGR_VIEWER"],
+    // The legacy managed-account fixtures open the configurator as GRO, their only Organization role.
+    digitConfiguratorRoles: [...config.digitConfiguratorRoles, "GRO"],
     digitRoleClientId: "digit-ui",
     identityOrganizationAdminRoles: ["TENANT_ADMIN"],
     identityOrganizationMemberGroup: "employees",
@@ -1559,7 +1561,7 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
     })).status).toBe(401);
   });
 
-  it.each([false, true])("preserves a managed rotate token after public logout-others (alias: %s)", async (alias) => {
+  it.each([false, true])("#2592: public logout-others revokes the shared managed rotate token; the current session re-selects (alias: %s)", async (alias) => {
     const subject = `managed-logout-${alias}`;
     const tenantId = "ke.bomet";
     const identity = managedIdentity(config.keycloakIssuer, subject, tenantId);
@@ -1619,25 +1621,32 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
         method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
       });
       expect((await details()).status).toBe(200);
-      const logouts = digit.stats.logouts;
+      const logouts = digit.stats.logouts, logoutCalls = digit.stats.logoutCalls;
       expect((await logout("others")).status).toBe(204);
       expect(await getIdentitySession(other.sessionId)).toBeNull();
       expect(await getIdentitySession(current.sessionId)).not.toBeNull();
       expect((await fetch(`${app()}/identity/v1/session?surface=employee`, { headers: { Cookie: current.cookie } })).status).toBe(200);
       expect((await fetch(`${app()}/identity/v1/session?surface=employee`, { headers: { Cookie: other.cookie } })).status).toBe(401);
-      // Validate the original token before any new selection could mint a replacement.
-      expect((await details()).status).toBe(200);
-      expect(digit.stats.logouts).toBe(logouts);
-      expect(await getRedis().smembers(tokenHoldersKey(account))).toEqual([sessionTokenRef(current.sessionId)]);
+      // The other device's copy (its localStorage) no longer reaches DIGIT, and an alias is revoked only once.
+      expect((await details()).status).toBe(401);
+      expect(digit.stats.logouts).toBe(logouts + 1);
+      expect(digit.stats.logoutCalls).toBe(logoutCalls + 1);
+      expect(await getRedis().get(tokenKey(account))).toBeNull();
       if (alias) expect(await getRedis().get(tokenKey(aliasRef))).toBeNull();
       const adminLog = await (await fetch(`${config.keycloakAdminUrl}/__test/admin-log`)).json();
       const ended = `DELETE /admin/realms/${config.keycloakOrganizationRealm}/sessions/${subject}-`;
       expect(adminLog).toContain(`${ended}other`);
       expect(adminLog).not.toContain(`${ended}current`);
+      // The current session keeps working with a fresh token.
+      const reselected = await select(current.cookie);
+      expect(reselected.status).toBe(200);
+      const fresh = (await reselected.json()).access_token;
+      expect(fresh).not.toBe(selected.access_token);
+      expect(await getRedis().smembers(tokenHoldersKey(account))).toEqual([sessionTokenRef(current.sessionId)]);
+      expect((await select(other.cookie)).status).toBe(401);
       expect((await logout("all")).status).toBe(204);
       expect(await getIdentitySession(current.sessionId)).toBeNull();
-      expect((await details()).status).toBe(401);
-      expect(digit.stats.logouts).toBe(logouts + 1);
+      expect(digit.stats.logouts).toBe(logouts + 2);
     } finally {
       config.identityStaffCredentialMode = previousMode;
     }
@@ -3422,6 +3431,7 @@ describe("binding workspace public routes", () => {
     expect(linked.status).toBe(201);
     const result = await linked.json();
     expect(result).toMatchObject({ identityUserCreated: true, activationEmailSent: true, binding: { state: "active" } });
+    account.roles.push({ code: "HRMS_ADMIN", tenantId: "ug" }); // the configurator needs an admin role (#2599)
     const cookie = await cookieFor(result.binding.subject);
     expect(await (await read("/session", cookie)).json()).toMatchObject({ pendingInvitations: [] });
     expect(await (await read("/tenants", cookie)).json()).toMatchObject({ onboardingRequired: false, selectionRequired: false,
@@ -3437,6 +3447,21 @@ describe("binding workspace public routes", () => {
     expect((await post("/contexts/_select", cookie, { tenantId: "ug" })).status).toBe(200);
   });
 
+  it("refuses the configurator to staff without a Configurator role at the tenant, but not the employee app (#2599)", async () => {
+    const account = employee("BINDING-CSR");
+    account.roles.push({ code: "CSR", tenantId: "ug" });
+    const { binding } = await (await post("/workspace-members/_link", adminCookie, { tenantId: "ug", digitUuid: account.uuid, email: "binding-csr@example.test" })).json();
+    account.roles.push({ code: "MDMS_ADMIN", tenantId: "ke.bomet" });
+    const refused = await post("/contexts/_select", await cookieFor(binding.subject), { tenantId: "ug" });
+    expect(refused.status).toBe(403);
+    expect(await refused.json()).toMatchObject({ code: "CONFIGURATOR_ROLE_REQUIRED" });
+    expect([...digit.tokens.values()].some(token => token.uuid === account.uuid)).toBe(false);
+    const employeeApp = await post("/contexts/_select", await cookieFor(binding.subject, "employee"), { tenantId: "ug", surface: "employee" });
+    expect(employeeApp.status).toBe(200);
+    account.roles.push({ code: "HRMS_ADMIN", tenantId: "ug" });
+    expect((await post("/contexts/_select", await cookieFor(binding.subject), { tenantId: "ug" })).status).toBe(200);
+  });
+
   it.each(["configurator", "employee"] as const)("shows and accepts an existing person's invitation on %s, then selects its DIGIT account", async (surface) => {
     const subject = `binding-existing-${surface}`;
     await kcAdmin("/users", { id: subject, username: subject, email: `${subject}@example.test`, emailVerified: true, enabled: true });
@@ -3445,6 +3470,7 @@ describe("binding workspace public routes", () => {
     expect(response.status).toBe(200);
     const invite = await response.json();
     expect(invite).toMatchObject({ identityUserCreated: false, binding: { state: "pending" } });
+    account.roles.push({ code: "HRMS_ADMIN", tenantId: "ug" }); // the configurator needs an admin role (#2599)
     const cookie = await cookieFor(subject, surface);
     expect(await (await read(`/session?surface=${surface}`, cookie)).json()).toMatchObject({ pendingInvitations: [{ tenantId: "ug", invitationVersion: invite.binding.invitationVersion }] });
     expect(await (await post("/contexts/_select", cookie, { tenantId: "ug", surface })).json()).toMatchObject({ code: "PENDING_INVITATION" });
@@ -3496,6 +3522,7 @@ describe("binding workspace public routes", () => {
     const account = employee("BINDING-CLEANUP");
     const linked = await post("/workspace-members/_link", adminCookie, { tenantId: "ug", digitUuid: account.uuid, email: "binding-cleanup@example.test" });
     const { binding } = await linked.json();
+    account.roles.push({ code: "HRMS_ADMIN", tenantId: "ug" }); // the configurator needs an admin role (#2599)
     const cookie = await cookieFor(binding.subject);
     const spy = vi.spyOn(syncMirror, "mirrorPerson").mockRejectedValueOnce(new BindingError("IDENTITY_UNAVAILABLE", "Injected mirror failure"));
     try {

@@ -31,6 +31,7 @@ export const SIGNUP_ERRORS: Record<string, string> = {
   PENDING_INVITATION: 'Accept your invitation to this workspace first.',
   ACCOUNT_LOCKED: 'Your account in this workspace is locked. Ask its admin to unlock it.',
   DIGIT_ACCOUNT_INACTIVE: 'Your account in this workspace isn’t active. Ask its admin to turn it back on.',
+  CONFIGURATOR_ROLE_REQUIRED: 'The Configurator is for workspace admins, and your account here has no admin role. Use the employee app, or ask an admin for access.',
   TENANT_ROLES_MISSING: 'This workspace isn’t fully set up yet. Try again in a few minutes.',
 };
 

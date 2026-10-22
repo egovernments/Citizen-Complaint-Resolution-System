@@ -25,6 +25,7 @@ import {
 import { onboardingAuthorization, registerOnboardingRoutes } from "../onboarding/routes.js";
 import { onboardingDependencies } from "../onboarding/production.js";
 import { backfillTenantRoutes } from "../tenant-routes/backfill.js";
+import { registerWorkspaceTrialRoutes } from "../workspace-trial/routes.js";
 
 function requiredString(value: unknown, name: string): string {
   if (typeof value !== "string" || !value.trim()) {
@@ -80,6 +81,8 @@ export function registerControlPlaneRoutes(app: express.Application): void {
     }
     next();
   });
+
+  registerWorkspaceTrialRoutes(app, actorOf);
 
   // Existing-tenant routes (#2167). Idempotent; never renames a slug. Kept
   // after item 14: it is the only writer of routes for root tenants that

@@ -3155,8 +3155,7 @@ services:
   #
   # Both services are profile-gated — they don't start on a default
   # `docker compose up`. Opt in with `COMPOSE_PROFILES=keycloak`. The
-  # Ansible playbook flips this on when `enable_keycloak: true` in
-  # host_vars.
+  # Ansible playbook always turns the profile on: every sign-in needs it.
   #
   # Keycloak has its OWN Postgres instance (keycloak-postgres) rather
   # than sharing the DIGIT postgres-db. Two reasons:
@@ -3294,6 +3293,16 @@ services:
       IDENTITY_ONBOARDING_TOKEN: ${IDENTITY_ONBOARDING_TOKEN:-}
       IDENTITY_RECONCILE_ON_STARTUP: ${IDENTITY_RECONCILE_ON_STARTUP:-true}
       IDENTITY_RECONCILIATION_INTERVAL_SECONDS: ${IDENTITY_RECONCILIATION_INTERVAL_SECONDS:-900}
+      IDENTITY_WORKSPACE_TRIAL_DAYS: ${IDENTITY_WORKSPACE_TRIAL_DAYS:-0}
+      IDENTITY_WORKSPACE_TRIAL_REMINDER_DAYS: ${IDENTITY_WORKSPACE_TRIAL_REMINDER_DAYS:-}
+      # Trial reminder emails go through novu-bridge's internal send API (no Novu key here).
+      # Single dash: an explicitly empty value (identity_workspace_trial_reminders_enabled: false) turns them off.
+      IDENTITY_NOVU_BRIDGE_URL: ${IDENTITY_NOVU_BRIDGE_URL-http://novu-bridge:8080/novu-bridge}
+      IDENTITY_NOVU_BRIDGE_TOKEN: ${NOVU_BRIDGE_INTERNAL_SEND_TOKEN:-}
+      IDENTITY_WORKSPACE_TRIAL_NOTICE_TITLE: ${IDENTITY_WORKSPACE_TRIAL_NOTICE_TITLE:-}
+      IDENTITY_WORKSPACE_TRIAL_NOTICE_MESSAGE: ${IDENTITY_WORKSPACE_TRIAL_NOTICE_MESSAGE:-}
+      IDENTITY_WORKSPACE_TRIAL_NOTICE_LINK_LABEL: ${IDENTITY_WORKSPACE_TRIAL_NOTICE_LINK_LABEL:-}
+      IDENTITY_WORKSPACE_TRIAL_NOTICE_LINK_URL: ${IDENTITY_WORKSPACE_TRIAL_NOTICE_LINK_URL:-}
       DIGIT_USER_SERVICE_URL: http://kong:8000/user
       # Citizen DIGIT-token mint. Internal only, never via Kong: the response carries the OTP.
       DIGIT_OTP_CREATE_URL: ${DIGIT_OTP_CREATE_URL:-http://egov-otp:8089/otp/v1/_create}
@@ -3308,6 +3317,8 @@ services:
       DIGIT_ADMIN_USER_TYPE: EMPLOYEE
       DIGIT_MANAGED_BASE_ROLES: EMPLOYEE
       DIGIT_MANAGED_ROLE_ALLOWLIST: EMPLOYEE,GRO,PGR_LME,DGRO,CSR,SUPERVISOR,AUTO_ESCALATE,PGR_VIEWER,TICKET_REPORT_VIEWER,ACCOUNT_ADMIN,MDMS_ADMIN,LOC_ADMIN,SUPERUSER
+      # Roles that open the Configurator (#2599); empty = identity-bff's default, the founder's admin roles.
+      DIGIT_CONFIGURATOR_ROLES: ${IDENTITY_CONFIGURATOR_ROLES:-}
       DIGIT_ROLE_CLIENT_ID: digit-ui
       REDIS_HOST: redis
       REDIS_PORT: '6379'
