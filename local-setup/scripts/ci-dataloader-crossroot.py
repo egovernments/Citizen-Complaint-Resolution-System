@@ -153,7 +153,14 @@ def create_boundary(loader, tenant):
         # Add parent only if it exists (root boundary has no parent)
         if bnd["parent"]:
             rel_payload["BoundaryRelationship"]["parent"] = bnd["parent"]
-        resp = requests.post(relation_url, json=rel_payload, headers=headers, timeout=REQUEST_TIMEOUT)
+        # boundary-service persists a relationship asynchronously (Kafka + persister), so the
+        # parent created on the previous iteration may not be readable yet: PARENT_NOT_FOUND
+        # then means "not yet", not "never". Retry that one error for up to 30s.
+        for _ in range(15):
+            resp = requests.post(relation_url, json=rel_payload, headers=headers, timeout=REQUEST_TIMEOUT)
+            if resp.ok or "PARENT_NOT_FOUND" not in resp.text:
+                break
+            time.sleep(2)
         if not resp.ok and "already exists" not in resp.text.lower() and "duplicate" not in resp.text.lower():
             print(f"   Error: relationship {bnd['code']}: {resp.text[:150]}")
             relationship_failures += 1
@@ -293,6 +300,10 @@ def main():
         mobile=CI_MOBILE,
         roles=CI_ROLES,
         department=dept_code,
+        # PGR scopes employee search to the jurisdiction, so it must cover the locality the
+        # complaints-demo collection files under (same as ci-dataloader.py's CI-ADMIN).
+        jurisdiction_boundary=LOCALITY_CODE,
+        jurisdiction_boundary_type="Locality",
     ):
         print("FATAL: Failed to create HRMS employee")
         return 1

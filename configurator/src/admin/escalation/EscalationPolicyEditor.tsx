@@ -22,6 +22,7 @@ import {
   Layers,
   ShieldAlert,
   Loader2,
+  Trash2,
 } from 'lucide-react';
 import type {
   CatalogueItem,
@@ -33,6 +34,7 @@ import {
   buildHierarchyCatalogue,
   diffEscalationPolicy,
   validateLadder,
+  validateOverrides,
 } from './escalationPolicyUtils';
 import { EscalationLevelTable } from './EscalationLevelTable';
 import { ComplaintTypeOverridesTable } from './ComplaintTypeOverridesTable';
@@ -202,6 +204,14 @@ export function EscalationPolicyEditor() {
     );
   }, [draft.maxDepth, draft.defaultSlaPercentageByLevel, draft.defaultSlaByLevel]);
 
+  // Overrides saved outside the editor can hold a ladder pgr-services ignores.
+  // Like the default ladder, they don't block switching escalation off.
+  const overrideErrors = useMemo(
+    () => (draft.maxDepth === 0 ? {} : validateOverrides(draft.overrides)),
+    [draft.maxDepth, draft.overrides]
+  );
+  const invalidOverrideCodes = Object.keys(overrideErrors);
+
   // Handle maxDepth change
   const handleMaxDepthChange = (newDepth: number) => {
     if (isNaN(newDepth) || !Number.isInteger(newDepth) || newDepth < 0 || newDepth > 5) return;
@@ -362,6 +372,14 @@ export function EscalationPolicyEditor() {
       });
       return;
     }
+    if (invalidOverrideCodes.length > 0) {
+      toast({
+        variant: 'destructive',
+        title: 'Validation Error',
+        description: 'Please fix or remove the invalid complaint-type overrides.',
+      });
+      return;
+    }
     if (!hasFunctionalChanges) {
       toast({
         title: 'No Changes',
@@ -490,7 +508,13 @@ export function EscalationPolicyEditor() {
               type="button"
               size="sm"
               onClick={handleInitiateSave}
-              disabled={loading || saving || !ladderValidation.valid || !hasFunctionalChanges}
+              disabled={
+                loading ||
+                saving ||
+                !ladderValidation.valid ||
+                invalidOverrideCodes.length > 0 ||
+                !hasFunctionalChanges
+              }
               className="gap-1.5 h-9"
             >
               <Save className="w-3.5 h-3.5" /> Save policy
@@ -703,6 +727,36 @@ export function EscalationPolicyEditor() {
                 Complaint-type Catalogue & Custom Overrides
               </h2>
             </div>
+
+            {invalidOverrideCodes.length > 0 && (
+              <Alert variant="destructive">
+                <AlertTriangle className="w-4 h-4" />
+                <AlertDescription className="text-xs">
+                  pgr-services ignores the ladder flagged below for each of these complaint types.
+                  Fix or remove them before saving.
+                  <ul className="mt-1 list-disc pl-4">
+                    {invalidOverrideCodes.map((code) => (
+                      <li key={code}>
+                        <code>{code}</code>: {overrideErrors[code]}
+                        {/* A value that isn't a ladder shows as Default in the catalogue, so this is its only Remove. */}
+                        {isStateAdmin && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleApplyOverride(code, null)}
+                            aria-label={`Remove override ${code}`}
+                            className="h-6 ml-1 px-1.5 text-xs text-destructive hover:text-destructive gap-1"
+                          >
+                            <Trash2 className="w-3 h-3" /> Remove
+                          </Button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </AlertDescription>
+              </Alert>
+            )}
 
             <ComplaintTypeOverridesTable
               catalogue={catalogue}

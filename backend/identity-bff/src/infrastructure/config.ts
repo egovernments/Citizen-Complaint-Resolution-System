@@ -35,6 +35,30 @@ function cookieSameSite(value: string): "Lax" | "None" | "Strict" {
   throw new Error("IDENTITY_COOKIE_SAME_SITE must be Lax, None, or Strict");
 }
 
+/**
+ * The trial's only switch, so a value that isn't a whole number of days from 0 to 3650 stops
+ * startup instead of silently turning every lock off. The cap keeps the end date representable.
+ */
+export function parseTrialDays(value: string | undefined): number {
+  const text = (value ?? "").trim() || "0";
+  if (!/^\d+$/.test(text) || Number(text) > 3650) {
+    throw new Error(`IDENTITY_WORKSPACE_TRIAL_DAYS must be a whole number of days from 0 to 3650, not "${value}"`);
+  }
+  return Number(text);
+}
+
+function trialNotice() {
+  const linkLabel = process.env.IDENTITY_WORKSPACE_TRIAL_NOTICE_LINK_LABEL;
+  const linkUrl = process.env.IDENTITY_WORKSPACE_TRIAL_NOTICE_LINK_URL;
+  return {
+    title: process.env.IDENTITY_WORKSPACE_TRIAL_NOTICE_TITLE || "This workspace's trial has ended",
+    message: process.env.IDENTITY_WORKSPACE_TRIAL_NOTICE_MESSAGE ||
+      "Sign-in is paused until the workspace is approved. Contact the platform team to continue.",
+    // The link is shown only when both halves are set.
+    ...(linkLabel && linkUrl ? { linkLabel, linkUrl } : {}),
+  };
+}
+
 function keycloakIssuerRealm(): string {
   const issuer = process.env.KEYCLOAK_ISSUER ||
     "http://localhost:8180/auth/realms/digit-sandbox";
@@ -168,6 +192,18 @@ export const config = {
     process.env.IDENTITY_RECONCILIATION_INTERVAL_SECONDS || "300",
   ),
 
+  // Self-serve workspace trial: 0 turns it off; a workspace without
+  // digit.trialEndsAt is never locked.
+  workspaceTrialDays: parseTrialDays(process.env.IDENTITY_WORKSPACE_TRIAL_DAYS),
+  workspaceTrialNotice: trialNotice(),
+  // Reminder emails, in days before the trial ends; the "locked" email at the end always goes too.
+  workspaceTrialReminderDays: csv(process.env.IDENTITY_WORKSPACE_TRIAL_REMINDER_DAYS || "14,7,3,2,1")
+    .map(Number).filter((days) => Number.isInteger(days) && days > 0),
+  // novu-bridge's internal send API (messages/_dispatch, X-Novu-Bridge-Token). The BFF holds no
+  // Novu key; either value empty = no emails.
+  novuBridgeUrl: (process.env.IDENTITY_NOVU_BRIDGE_URL || "").replace(/\/$/, ""),
+  novuBridgeToken: process.env.IDENTITY_NOVU_BRIDGE_TOKEN || "",
+
   // Existing DIGIT user-service contract. The BFF owns only the accounts it
   // created (see managed-account-service.ts); the admin credential is used solely
   // for those accounts' lifecycle, never for business calls.
@@ -197,6 +233,12 @@ export const config = {
   digitManagedRoleAllowlist: csv(
     process.env.DIGIT_MANAGED_ROLE_ALLOWLIST ||
       "EMPLOYEE,GRO,PGR_LME,DGRO,CSR,SUPERVISOR,AUTO_ESCALATE,PGR_VIEWER,TICKET_REPORT_VIEWER,ACCOUNT_ADMIN,MDMS_ADMIN,LOC_ADMIN,SUPERUSER",
+  ),
+  // DIGIT roles that open the Configurator (#2599): the admin roles a workspace
+  // founder is given. Operational staff (CSR, GRO, ...) use the employee app.
+  digitConfiguratorRoles: csv(
+    process.env.DIGIT_CONFIGURATOR_ROLES ||
+      "SUPERUSER,ACCOUNT_ADMIN,MDMS_ADMIN,LOC_ADMIN,HRMS_ADMIN,WORKFLOW_ADMIN",
   ),
   digitRoleClientId:
     process.env.DIGIT_ROLE_CLIENT_ID || process.env.DIGIT_IDENTITY_CLIENT_ID || "digit-ui",

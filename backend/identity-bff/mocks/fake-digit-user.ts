@@ -49,7 +49,7 @@ export function createFakeDigitUser(options: { tenants: string[]; validateRoles?
   const accounts = new Map<string, Account>();
   const tokens = new Map<string, { uuid: string; expiresAt: number }>();
   const stats = {
-    adminLogins: 0, userLogins: 0, creates: 0, updates: 0, passwordUpdates: 0, logouts: 0,
+    adminLogins: 0, userLogins: 0, creates: 0, updates: 0, passwordUpdates: 0, logouts: 0, logoutCalls: 0,
     otpCreates: 0, citizenOtpLogins: 0, internalLogins: 0, localizationSearches: 0,
   };
   // egov-user can mask PII in search responses; tests turn this on to prove
@@ -267,6 +267,7 @@ export function createFakeDigitUser(options: { tenants: string[]; validateRoles?
 
   app.post("/user/_logout", (req, res) => {
     // Mirrors egov-user's TokenWrapper body plus Kong's RequestInfo authorization.
+    stats.logoutCalls += 1;
     const token = req.body?.access_token;
     if (!token || req.body?.RequestInfo?.authToken !== token) return res.status(400).json({ error: "Logout failed" });
     if (!tokens.delete(token)) return res.status(401).json({ error: "invalid token" });

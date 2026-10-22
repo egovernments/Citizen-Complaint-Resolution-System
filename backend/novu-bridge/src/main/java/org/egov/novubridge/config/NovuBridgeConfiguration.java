@@ -34,7 +34,7 @@ public class NovuBridgeConfiguration {
     private String coreSmsCountryCode;
 
     // The eventType allowlist. Add a producer here, never a shape-sniffing branch in the consumer.
-    @Value("#{'${novu.bridge.event.types:COMPLAINTS_WORKFLOW_TRANSITIONED,CORE_SMS}'.split(',')}")
+    @Value("#{'${novu.bridge.event.types:COMPLAINTS_WORKFLOW_TRANSITIONED,CORE_SMS,WORKSPACE_TRIAL}'.split(',')}")
     private List<String> eventTypes;
 
     @Value("${novu.bridge.kafka.dlq.topic:novu-bridge.dlq}")

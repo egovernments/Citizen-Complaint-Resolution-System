@@ -8,6 +8,8 @@ import {
   type Signup,
   type SignupDraftInput,
   type TenantOption,
+  type TenantsResponse,
+  type WorkspaceTrialNotice,
   OnboardingError,
   PROVISIONING_STEPS,
   PROVISIONING_STEP_LABELS,
@@ -40,8 +42,10 @@ import { Input } from '@/components/ui/input';
 import { RequiredMark } from '@/components/ui/required-mark';
 import { Stepper } from '@/components/ui/stepper';
 import { AuthShell } from '@/components/signup/AuthPanel';
+import { WorkspaceTrialDialog } from '@/components/WorkspaceTrialDialog';
 import { useAuthResult } from '@/hooks/useAuthResult';
 import { clearSignOutIncomplete, signOutIncomplete } from '@/lib/session';
+import { track } from '@/lib/analytics';
 import { useOnboardingT } from '@/onboarding/i18n';
 import { MOBILE_RULES, mobileHint, nationalMobile } from '@/onboarding/signup/mobileRules';
 import {
@@ -103,6 +107,12 @@ const FINANCIAL_YEARS = [
   { code: 'OCT_SEP', label: 'October to September' },
 ];
 
+/**
+ * The terms version every signup records. Continuing past sign-in is the
+ * agreement ("By continuing, you agree to the Terms of Service and Privacy
+ * Notice"), so Review has no checkbox; pgr-services still needs the version to
+ * submit.
+ */
 const TERMS_VERSION = '2026-09';
 
 /**
@@ -257,6 +267,8 @@ function SignupFlow() {
   const [signupEmail, setSignupEmail] = useState('');
   const [sessionUser, setSessionUser] = useState<{ email: string; name: string } | null>(null);
   const [tenantOptions, setTenantOptions] = useState<TenantOption[]>([]);
+  const [trialNotice, setTrialNotice] = useState<WorkspaceTrialNotice | null>(null);
+  const [trialOpen, setTrialOpen] = useState(false);
   // The tenant the operator picked and how far it has actually been built. Set
   // only when the pick is refused, so the gate can name what it is holding.
   const [invitations, setInvitations] = useState<Invitation[]>([]);
@@ -283,7 +295,6 @@ function SignupFlow() {
   // Whether a TERMINAL_FAILED run's signup was handed back is read from the signup. Until that
   // read answers, neither "Change my details" nor "contact support" is shown.
   const [reopenCheck, setReopenCheck] = useState<'pending' | 'failed' | 'done'>('pending');
-  const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   const [codeState, setCodeState] = useState<AvailabilityResult | null>(null);
   const [codeChecking, setCodeChecking] = useState(false);
@@ -319,7 +330,6 @@ function SignupFlow() {
     setTimeZone(record.timeZone || '');
     setFinancialYearPolicy(record.financialYearPolicy || '');
     setTenantAdminMobile(String(record.tenantMetadata?.tenantAdmin?.mobileNumber || ''));
-    setAcceptedTerms(Boolean(record.acceptedTermsVersion));
     // Only a value the operator typed stops following the name. A saved value
     // that is still what the saved name derives was never edited by hand, so
     // it keeps updating when the name changes after a resume.
@@ -345,6 +355,20 @@ function SignupFlow() {
     setPhase('signedOut');
   }, [t]);
 
+  /**
+   * A locked workspace stays listed so it is not mistaken for no workspace (and
+   * a locked founder sent into a second signup). With nothing else to choose,
+   * say so now; otherwise wait for the click.
+   */
+  const offerTenants = useCallback((view: TenantsResponse) => {
+    setTenantOptions(view.tenants);
+    const locked = view.tenants.filter((option) => option.code === 'WORKSPACE_TRIAL_EXPIRED');
+    if (view.notice && locked.length) {
+      setTrialNotice(view.notice);
+      setTrialOpen(locked.length === view.tenants.length);
+    }
+  }, []);
+
   /** Session → tenants → onboarding or chooser. The contract's own order. */
   // No synchronous setState in here: it runs from an effect on mount, where
   // `loading` is already the initial phase. The two re-entry points below want
@@ -363,7 +387,7 @@ function SignupFlow() {
       }
       const view = await tenants();
       if (view.tenants.length) {
-        setTenantOptions(view.tenants);
+        offerTenants(view);
         setPhase('chooseTenant');
         return;
       }
@@ -442,7 +466,7 @@ function SignupFlow() {
       setError(describeSignupError(caught, t).message);
       setPhase('failed');
     }
-  }, [seedFrom, t, restartSignIn]);
+  }, [seedFrom, t, restartSignIn, offerTenants]);
 
   useEffect(() => {
     // Load on mount. Every setState inside `bootstrap` happens after an await,
@@ -524,13 +548,21 @@ function SignupFlow() {
     if (languages.length) next.languages = languages;
     if (timeZone) next.timeZone = timeZone;
     if (financialYearPolicy) next.financialYearPolicy = financialYearPolicy;
-    if (acceptedTerms) next.acceptedTermsVersion = TERMS_VERSION;
+    next.acceptedTermsVersion = TERMS_VERSION;
     if (tenantAdminMobile.trim()) {
       // The bare national number when it passes the rule: the backend's parser and egov-user then see the same digits.
       next.tenantMetadata = { schemaVersion: 1, tenantAdmin: { mobileNumber: mobileNational ?? tenantAdminMobile.trim() } };
     }
     return next;
-  }, [accountName, accountCode, urlSlug, countryCode, languages, timeZone, financialYearPolicy, acceptedTerms, tenantAdminMobile, mobileNational]);
+  }, [accountName, accountCode, urlSlug, countryCode, languages, timeZone, financialYearPolicy, tenantAdminMobile, mobileNational]);
+
+  /** Preferences' choices as analytics gets them: never the mobile number. */
+  const preferenceChoices = {
+    country: countryCode,
+    languages: languages.join(','),
+    time_zone: timeZone,
+    financial_year: financialYearPolicy,
+  };
 
   /** Create on first save, update thereafter — one signup per founder. */
   const persist = useCallback(async (): Promise<Signup> => {
@@ -579,6 +611,7 @@ function SignupFlow() {
     setError(null);
     try {
       await persist();
+      track('signup:step_complete', step === 'preferences' ? { step, ...preferenceChoices } : { step });
       setStep(next);
     } catch (caught) {
       await handleFailure(caught);
@@ -593,6 +626,7 @@ function SignupFlow() {
     try {
       const record = await persist();
       const started = await submitSignup(record.id, submitKey.current);
+      track('signup:account_submit', { country: countryCode });
       setOperation(started);
       setPhase('provisioning');
     } catch (caught) {
@@ -607,6 +641,7 @@ function SignupFlow() {
     authResult.clear();
     setSaving(true);
     setError(null);
+    track('signup:method_select', { method: 'magic_link' });
     try {
       clearSignOutIncomplete();
       await requestMagicLinkSignup({
@@ -614,6 +649,7 @@ function SignupFlow() {
         lastName: signupLastName.trim(),
         email: signupEmail.trim(),
       });
+      track('signup:link_send');
       setPhase('checkEmail');
     } catch (caught) {
       setError(describe(caught, true).message);
@@ -716,13 +752,27 @@ function SignupFlow() {
   }, [phase, seedFrom, restart]);
 
   const enter = useCallback(async (option: TenantOption): Promise<boolean> => {
-    setSaving(true);
     setError(null);
+    if (option.code === 'WORKSPACE_TRIAL_EXPIRED') {
+      // The dialog renders only with a notice. `enter` doesn't read it, so a new
+      // notice per tenant read never re-creates `enter` or re-runs the effect below.
+      setTrialOpen(true);
+      return false;
+    }
+    setSaving(true);
     try {
       await enterWorkspace(option.tenantId, sessionUser);
       return true;
     } catch (caught) {
-      setError(describe(caught).message);
+      const notice = caught instanceof OnboardingError && caught.code === 'WORKSPACE_TRIAL_EXPIRED'
+        ? (caught.details?.notice as WorkspaceTrialNotice | undefined)
+        : undefined;
+      if (notice) {
+        setTrialNotice(notice);
+        setTrialOpen(true);
+      } else {
+        setError(describe(caught).message);
+      }
       setSaving(false);
       return false;
     }
@@ -737,7 +787,7 @@ function SignupFlow() {
       try {
         const view = await tenants();
         if (!live) return;
-        setTenantOptions(view.tenants);
+        offerTenants(view);
         if (view.tenants.length === 1) {
           const ok = await enter(view.tenants[0]);
           if (!live) return;
@@ -754,7 +804,7 @@ function SignupFlow() {
     return () => {
       live = false;
     };
-  }, [ready, enter, describe]);
+  }, [ready, enter, describe, offerTenants]);
 
   // A run that failed on the founder's own input hands the draft back (PGR's
   // user-correctable codes) rather than closing it. The signup, not a list of
@@ -799,6 +849,7 @@ function SignupFlow() {
       }
       // The one case where the country may change: it is what the run refused.
       if (refused === 'COUNTRY_NOT_SUPPORTED') setCountryCode('');
+      track('signup:details_change', { error_code: operation?.errorCode ?? undefined });
       setOperation(null);
       setReopened(false);
       setReopenCheck('pending');
@@ -810,6 +861,24 @@ function SignupFlow() {
       setSaving(false);
     }
   };
+
+  // The funnel's steps: the sign-in gate, the emailed link, then the wizard's three.
+  const viewed = phase === 'signedOut' ? 'sign_in' : phase === 'checkEmail' ? 'check_email' : phase === 'wizard' ? step : null;
+  useEffect(() => {
+    if (viewed) track('signup:step_view', { step: viewed });
+  }, [viewed]);
+
+  // How the run ended, once per operation and outcome.
+  const runStatus = operation?.status;
+  const runError = operation?.errorCode;
+  useEffect(() => {
+    if (runStatus === 'TERMINAL_FAILED' || runStatus === 'RETRYABLE_FAILED') {
+      track('signup:provision_fail', { error_code: runError ?? 'UNKNOWN', retryable: runStatus === 'RETRYABLE_FAILED' });
+    }
+  }, [operationId, runStatus, runError]);
+  useEffect(() => {
+    if (ready) track('signup:provision_complete');
+  }, [ready]);
 
   const accountReady =
     accountName.trim().length > 0 && codeValid && codeState?.available !== false;
@@ -920,7 +989,11 @@ function SignupFlow() {
                     key={method.id}
                     variant="outline"
                     className="w-full"
-                    onClick={() => { clearSignOutIncomplete(); startSignIn(method.id, 'signup'); }}
+                    onClick={() => {
+                      clearSignOutIncomplete();
+                      track('signup:method_select', { method: method.id });
+                      startSignIn(method.id, 'signup');
+                    }}
                   >
                     <SignupMethodIcon method={method} />
                     {method.label}
@@ -982,10 +1055,13 @@ function SignupFlow() {
               onClick={() => enter(option)}
             >
               <span>{option.name}</span>
-              <span className="text-xs text-muted-foreground">{option.tenantId}</span>
+              <span className="text-xs text-muted-foreground">
+                {option.tenantId}{option.code === 'WORKSPACE_TRIAL_EXPIRED' ? ' — trial ended' : ''}
+              </span>
             </Button>
           ))}
         </div>
+        {trialNotice && <WorkspaceTrialDialog notice={trialNotice} open={trialOpen} onClose={() => setTrialOpen(false)} />}
       </div>
     );
   }
@@ -1227,7 +1303,14 @@ function SignupFlow() {
             />
           </Field>
 
-          <Button className="w-full" disabled={!accountReady} onClick={() => setStep('preferences')}>
+          <Button
+            className="w-full"
+            disabled={!accountReady}
+            onClick={() => {
+              track('signup:step_complete', { step: 'account' });
+              setStep('preferences');
+            }}
+          >
             Continue
           </Button>
         </section>
@@ -1467,21 +1550,11 @@ function SignupFlow() {
             ))}
           </dl>
 
-          <label className="flex items-start gap-2 text-sm">
-            <input
-              type="checkbox"
-              className="mt-1"
-              checked={acceptedTerms}
-              onChange={(e) => setAcceptedTerms(e.target.checked)}
-            />
-            <span className="text-muted-foreground">I agree to the terms of service.</span>
-          </label>
-
           <div className="flex gap-3">
             <Button variant="outline" onClick={() => setStep('preferences')}>
               Back
             </Button>
-            <Button className="flex-1" disabled={!acceptedTerms || saving} onClick={submit}>
+            <Button className="flex-1" disabled={saving} onClick={submit}>
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Create account
             </Button>
           </div>

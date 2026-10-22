@@ -6,7 +6,8 @@
  * production — nothing errors, data just stops (or keeps) flowing.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { isTelemetryKilled, isTelemetryEnabled } from './telemetryGate';
+import posthog from 'posthog-js';
+import { isPosthogOn, isTelemetryKilled, isTelemetryEnabled } from './telemetryGate';
 
 describe('telemetryGate', () => {
   beforeEach(() => {
@@ -77,5 +78,19 @@ describe('telemetryGate', () => {
     window.__CFG_TELEMETRY__ = { kill: false };
     window.localStorage.setItem('digit.analytics.off', '1');
     expect(isTelemetryKilled()).toBe(true);
+  });
+
+  it('has PostHog on only once it was started and telemetry is not killed', () => {
+    const ph = posthog as unknown as { __loaded: boolean };
+    expect(isPosthogOn()).toBe(true);
+    window.__CFG_TELEMETRY__ = { kill: true };
+    expect(isPosthogOn()).toBe(false);
+    delete window.__CFG_TELEMETRY__;
+    ph.__loaded = false;
+    try {
+      expect(isPosthogOn()).toBe(false);
+    } finally {
+      ph.__loaded = true;
+    }
   });
 });

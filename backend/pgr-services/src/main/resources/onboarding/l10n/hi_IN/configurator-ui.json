@@ -231,5 +231,15 @@
 {"code": "app.resources.notifications_event_catalogue", "message": "अधिसूचना इवेंट", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.resources.notifications_routing", "message": "अधिसूचना रूटिंग", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.resources.notifications_template", "message": "अधिसूचना टेम्पलेट", "module": "configurator-ui", "locale": "hi_IN"},
-{"code": "app.resources.notifications_provider_template", "message": "अधिसूचना प्रदाता टेम्पलेट", "module": "configurator-ui", "locale": "hi_IN"}
+{"code": "app.resources.notifications_provider_template", "message": "अधिसूचना प्रदाता टेम्पलेट", "module": "configurator-ui", "locale": "hi_IN"},
+{"code": "app.nav.open_complaint_desk", "message": "शिकायत डेस्क खोलें", "module": "configurator-ui", "locale": "hi_IN"},
+{"code": "app.workspace_links.title", "message": "वर्कस्पेस लिंक", "module": "configurator-ui", "locale": "hi_IN"},
+{"code": "app.workspace_links.employee_label", "message": "कर्मचारी ऐप", "module": "configurator-ui", "locale": "hi_IN"},
+{"code": "app.workspace_links.employee_hint", "message": "जहाँ आपके कर्मचारी साइन इन करके शिकायतें संभालते हैं", "module": "configurator-ui", "locale": "hi_IN"},
+{"code": "app.workspace_links.citizen_label", "message": "नागरिक ऐप", "module": "configurator-ui", "locale": "hi_IN"},
+{"code": "app.workspace_links.citizen_hint", "message": "इसे नागरिकों के साथ साझा करें, ताकि वे शिकायतें दर्ज और ट्रैक कर सकें", "module": "configurator-ui", "locale": "hi_IN"},
+{"code": "app.workspace_links.copy", "message": "कॉपी करें", "module": "configurator-ui", "locale": "hi_IN"},
+{"code": "app.workspace_links.copied", "message": "लिंक कॉपी हो गया।", "module": "configurator-ui", "locale": "hi_IN"},
+{"code": "app.workspace_links.copy_failed", "message": "लिंक कॉपी नहीं हो सका। इसे चुनें और स्वयं कॉपी करें।", "module": "configurator-ui", "locale": "hi_IN"},
+{"code": "app.workspace_links.open", "message": "खोलें", "module": "configurator-ui", "locale": "hi_IN"}
 ]

@@ -128,6 +128,12 @@ const STEPS = [
   { id: "review", key: "CS_FILE_STEP_REVIEW", fallback: "Review" },
 ] as const;
 
+/** Each step's Next, a funnel step of its own (docs/analytics/tracking-plan.md); Review's is Submit. */
+const NEXT_EVENT: Record<string, string> = {
+  details: "complaint:file_details_complete",
+  location: "complaint:file_location_complete",
+};
+
 /** The description's ceiling: eg_pgr_service_v2.description is varchar(4000). */
 const DESCRIPTION_MAX = 4000;
 
@@ -904,7 +910,8 @@ function FlowStepper({ index, t, onGo }: { index: number; t: (k: string) => stri
                 disabled={i >= index}
                 aria-current={i === index ? "step" : undefined}
                 onClick={() => onGo(i)}
-                data-analytics-event={`pgr.file-complaint.stepper.${step.id}`}
+                data-analytics-event="complaint:file_stepper_click"
+                data-analytics-label={step.id}
               >
                 <span className="cms-step-dot">{i < index ? <CheckMark /> : i + 1}</span>
                 <span className="cms-step-label">{tr(t, step.key, step.fallback)}</span>
@@ -1175,13 +1182,13 @@ const CreatePGRFlowV2: React.FC = () => {
           // Outcome, not intent. The submit click is already tagged; whether the
           // complaint was actually created happens later and a click listener
           // cannot see it. Without this pair the funnel ends at "pressed submit".
-          trackEvent("pgr.file-complaint.submit-failed", { category: "pgr" });
+          trackEvent("complaint:file_submit_fail");
           dispatch({ type: "CREATE_COMPLAINT", payload: { responseInfo: { status: "failed" } } });
           setSubmitting(false);
           history.push(`/${window?.contextPath}/citizen/pgr/response`);
         },
         onSuccess: async (responseData: any) => {
-          trackEvent("pgr.file-complaint.submitted", { category: "pgr" });
+          trackEvent("complaint:file_submit_success");
           dispatch({ type: "CREATE_COMPLAINT", payload: responseData });
           await client.refetchQueries(["complaintsList"]);
           setSubmitting(false);
@@ -1315,9 +1322,8 @@ const CreatePGRFlowV2: React.FC = () => {
               disabled={submitting}
               aria-label={say("CS_COMMON_BACK", "Back")}
               leading={<ChevronLeft />}
-              data-analytics-event={
-                stepIndex === 0 ? "pgr.file-complaint.cancel" : `pgr.file-complaint.back.${STEPS[stepIndex]?.id ?? "unknown"}`
-              }
+              data-analytics-event={stepIndex === 0 ? "complaint:file_cancel" : "complaint:file_step_back"}
+              data-analytics-label={stepIndex === 0 ? undefined : STEPS[stepIndex]?.id}
             >
               <span className="cms-back-label">{say("CS_COMMON_BACK", "Back")}</span>
             </Button>
@@ -1328,7 +1334,7 @@ const CreatePGRFlowV2: React.FC = () => {
               disabled={!stepIsValid}
               loading={submitting}
               trailing={<ArrowRight />}
-              data-analytics-event={isLast ? "pgr.file-complaint.submit" : `pgr.file-complaint.${STEPS[stepIndex]?.id ?? "unknown"}`}
+              data-analytics-event={isLast ? "complaint:file_submit" : NEXT_EVENT[STEPS[stepIndex]?.id ?? ""] ?? "complaint:file_step_complete"}
             >
               {isLast ? say("CS_ADDCOMPLAINT_ADDITIONAL_DETAILS_SUBMIT_COMPLAINT", "Submit complaint") : say("CS_COMMON_NEXT", "Next")}
             </Button>

@@ -4,11 +4,12 @@ import { findManagedAccount, managedIdentity } from "../managed-accounts/managed
 import { isOrganizationGroupMember, isOrganizationMember, liveTenantMapping, readTenantMappingForTenant, type TenantMapping } from "../organizations/organization-service.js";
 import { readOrganizationByTenant } from "../onboarding/organization-reader.js";
 import type { DigitAccount } from "../managed-accounts/digit-user-client.js";
+import type { WorkspaceTrial } from "../workspace-trial/trial.js";
 import type { AccessDenial } from "./predicate.js";
 
 /** Item 14 deletes this managed-account/group fallback after D13. Never call it for a binding key, even a removed one. */
 export async function managedFallbackAccess(subject: string, tenantId: string): Promise<
-  { allowed: true; mapping: TenantMapping; account: DigitAccount } | { allowed: false; denial: AccessDenial }
+  { allowed: true; mapping: TenantMapping; account: DigitAccount; trial: WorkspaceTrial | null } | { allowed: false; denial: AccessDenial }
 > {
   const cached = await readTenantMappingForTenant(tenantId);
   const mapping = cached && await liveTenantMapping(cached);
@@ -21,5 +22,5 @@ export async function managedFallbackAccess(subject: string, tenantId: string): 
     : await isOrganizationMember(mapping.organizationId, subject);
   if (!member) return { allowed: false, denial: "NOT_A_MEMBER" };
   const account = await findManagedAccount(managedIdentity(config.keycloakIssuer, subject, tenantId));
-  return account ? { allowed: true, mapping, account } : { allowed: false, denial: "NO_ACTIVE_BINDING" };
+  return account ? { allowed: true, mapping, account, trial: org.trial } : { allowed: false, denial: "NO_ACTIVE_BINDING" };
 }

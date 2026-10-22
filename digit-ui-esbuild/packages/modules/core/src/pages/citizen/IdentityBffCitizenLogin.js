@@ -53,7 +53,14 @@ const IdentityBffCitizenLogin = ({ t }) => {
     },
     onSignedOut: () => startSignIn(),
   });
-  const { tenant, status, setStatus, setMessage, tr, unavailable } = signIn;
+  const { tenant, status, setStatus, setNotice, setMessage, tr, unavailable } = signIn;
+  // A locked workspace answers OTP send/verify with its notice: show it.
+  const showTrialNotice = (failure) => {
+    if (failure?.code !== "WORKSPACE_TRIAL_EXPIRED" || !failure.notice) return false;
+    setNotice(failure.notice);
+    setStatus("trial-expired");
+    return true;
+  };
 
   // A BFF OTP failure in the user's language, with its seconds/attempts.
   const failureText = (failure) => {
@@ -99,6 +106,7 @@ const IdentityBffCitizenLogin = ({ t }) => {
     const sent = await sendCode().catch(() => null);
     setBusy(false);
     if (!sent?.ok) {
+      if (showTrialNotice(sent)) return;
       setPhoneAlert(sent ? failureText(sent) : unavailable());
       if (sent?.retryAfter) {
         setPhoneWait(true);
@@ -127,6 +135,7 @@ const IdentityBffCitizenLogin = ({ t }) => {
       setOtpError("");
       return sent.resendAfter;
     }
+    if (showTrialNotice(sent)) return 0;
     setOtpError(sent ? failureText(sent) : unavailable());
     return sent?.retryAfter ?? 0;
   };
@@ -145,6 +154,7 @@ const IdentityBffCitizenLogin = ({ t }) => {
     try {
       const verified = await verifyCitizenOtp({ tenant, challengeId, code: otp, fetchImpl });
       if (!verified.ok) {
+        if (showTrialNotice(verified)) return;
         if (verified.attemptsRemaining === 0 || ["IDENTITY_DISABLED", "IDENTITY_CONFLICT", "OTP_LOCKED"].includes(verified.code)) {
           // The challenge is spent or the account can't sign in: start again
           // from the number.
@@ -167,6 +177,11 @@ const IdentityBffCitizenLogin = ({ t }) => {
       const result = await establishIdentityBffSession({ surface: "citizen", tenant, fetchImpl });
       if (result.status === "authenticated") {
         signIn.complete(result.user);
+        return;
+      }
+      if (result.status === "trial-expired") {
+        setNotice(result.notice);
+        setStatus("trial-expired");
         return;
       }
       setStatus(result.status === "signed-out" ? "error" : result.status);

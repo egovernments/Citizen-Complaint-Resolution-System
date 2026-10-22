@@ -1,10 +1,14 @@
 package org.egov.novubridge.web.controllers;
 
+import org.egov.novubridge.repository.DispatchLogRepository;
+import org.egov.novubridge.service.DispatchPipelineService;
 import org.egov.novubridge.service.account.AccountException;
 import org.egov.novubridge.service.account.ChannelReadiness;
 import org.egov.novubridge.service.account.MessageSendService;
 import org.egov.novubridge.service.account.NovuAccount;
 import org.egov.novubridge.service.account.TenantAccountService;
+import org.egov.novubridge.web.models.DerivedContext;
+import org.egov.novubridge.web.models.DispatchResult;
 import org.egov.tracer.model.CustomException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,6 +28,8 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -36,6 +42,8 @@ class TenantAccountControllersTest {
     private TenantAccountService accounts;
     private ChannelReadiness readiness;
     private MessageSendService sender;
+    private DispatchPipelineService pipeline;
+    private DispatchLogRepository ledger;
     private MockMvc mvc;
 
     @BeforeEach
@@ -43,9 +51,11 @@ class TenantAccountControllersTest {
         accounts = mock(TenantAccountService.class);
         readiness = mock(ChannelReadiness.class);
         sender = mock(MessageSendService.class);
+        pipeline = mock(DispatchPipelineService.class);
+        ledger = mock(DispatchLogRepository.class);
         ProviderController providers = mock(ProviderController.class);
         mvc = MockMvcBuilders.standaloneSetup(new TenantAccountController(accounts, readiness, providers),
-                new MessageController(sender)).build();
+                new MessageController(sender, pipeline, ledger)).build();
         when(accounts.enabled()).thenReturn(true);
     }
 
@@ -132,5 +142,38 @@ class TenantAccountControllersTest {
         mvc.perform(post("/novu-adapter/v1/messages/_send").contentType(MediaType.APPLICATION_JSON).content("{}"))
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.data.transactionId").value("otp-1"));
+    }
+
+    private static final String TRIAL_EMAIL = "{\"eventId\":\"e\",\"eventType\":\"WORKSPACE_TRIAL\",\"channel\":\"EMAIL\"}";
+
+    @Test
+    void dispatch_answersTheLedgerStatus_andARejectedEnvelopeIs400() throws Exception {
+        DerivedContext context = DerivedContext.builder().transactionId("txn-1").channel("EMAIL").subscriberId("identity:person").build();
+        when(pipeline.processInternal(any())).thenReturn(DispatchResult.builder().novuTriggered(false).derivedContext(context)
+                .diagnostics(List.of("Already SENT for this transaction; not sent again")).build());
+        when(ledger.findStatus("txn-1", "EMAIL", "identity:person")).thenReturn("SENT");
+        mvc.perform(post("/novu-adapter/v1/messages/_dispatch").contentType(MediaType.APPLICATION_JSON).content(TRIAL_EMAIL))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("SENT"))
+                .andExpect(jsonPath("$.data.transactionId").value("txn-1"));
+
+        when(pipeline.processInternal(any())).thenThrow(new CustomException("NB_INVALID_EVENT", "x"));
+        mvc.perform(post("/novu-adapter/v1/messages/_dispatch").contentType(MediaType.APPLICATION_JSON).content(TRIAL_EMAIL))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.Errors[0].code").value("NB_INVALID_EVENT"));
+    }
+
+    @Test
+    void dispatch_refusesAnythingButWorkspaceTrialEmail_beforeThePipeline() throws Exception {
+        for (String body : new String[] {
+                "{\"eventId\":\"e\",\"eventType\":\"CORE_SMS\",\"channel\":\"SMS\"}",
+                "{\"eventId\":\"e\",\"eventType\":\"COMPLAINTS_WORKFLOW_TRANSITIONED\",\"channel\":\"EMAIL\"}",
+                "{\"eventId\":\"e\",\"eventType\":\"WORKSPACE_TRIAL\",\"channel\":\"SMS\"}",
+                "{\"eventId\":\"e\"}"}) {
+            mvc.perform(post("/novu-adapter/v1/messages/_dispatch").contentType(MediaType.APPLICATION_JSON).content(body))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.Errors[0].code").value("NB_UNSUPPORTED_EVENT_TYPE"));
+        }
+        verify(pipeline, never()).processInternal(any());
     }
 }

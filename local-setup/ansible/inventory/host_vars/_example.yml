@@ -273,6 +273,14 @@ enable_legacy_pgr_dashboard: false
 # rebuild. The citizen app draws the banner only with citizen_banner_enabled.
 configurator_banner_enabled: false
 
+# The Configurator's own Sentry and PostHog, rendered into its config.js at
+# deploy time, so changing them needs no rebuild. Unset means off: the repo
+# ships no project. The citizen app's analytics are MDMS rows instead
+# (configurator → System → Analytics Providers).
+# configurator_sentry_dsn: ""
+# configurator_posthog_key: ""          # phc_…, the project's write-only key
+# configurator_posthog_host: ""         # default https://us.i.posthog.com
+
 # Optional external git source for the citizen SPA, for transitional or
 # standalone use. LEAVE UNSET on normal deploys: the default builds the
 # vendored in-tree digit-ui-v2/ (with ui-shared/) so the deployed bundle
@@ -385,7 +393,7 @@ enable_otp_services: false
 # Fixed citizen OTP (123456, CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE) for egov-user
 # and the identity BFF, plus the BFF's `log` sender. DEVELOPMENT ONLY: anyone can
 # sign in as any citizen number with it. Off by default, never derived from
-# enable_otp_services. With enable_keycloak and neither this nor real OTP nor
+# enable_otp_services. With neither this nor real OTP nor
 # identity_citizen_otp_sender, citizen phone sign-in is unavailable (the deploy
 # warns).
 # identity_dev_fixed_otp: false
@@ -507,10 +515,21 @@ enable_mcp: true
 enable_turbopass: false
 # turbopass_port: 13301        # loopback port the search-api publishes on
 #
-# Offline Overture boundaries — the configurator's default source. Build the
-# DB separately (turbopass/README.md, "Build the boundary DB"); it is not part
-# of this deploy. The directory holding boundaries.sqlite, mounted read-only:
-# turbopass_overture_data_dir: /opt/turbopass/overture-data
+# Offline boundary DB (Overture plus the official COD-AB / geoBoundaries sets):
+# Phase 2's "Fetch boundaries" and "Preconfigured boundaries" read it. The
+# deploy builds it on this box for turbopass_countries when the DB doesn't hold
+# them yet, then mounts it read-only (#2600). Defaults are in
+# group_vars/digit.yml: every country signup offers, under <digit_dir>/turbopass-data.
+# The first build takes minutes per country and needs outbound HTTPS to Docker
+# Hub, PyPI, extensions.duckdb.org, Overture's S3 bucket, HDX and geoBoundaries
+# (group_vars/digit.yml lists them); a failure is a deploy WARNING and the
+# previous DB stays served. A single-country box can narrow the list:
+# turbopass_countries: [KE]
+# turbopass_overture_data_dir: /opt/digit/turbopass-data
+# turbopass_overture_release: 2026-09-23.1      # blank (default) = the newest
+# turbopass_official_sources: cod,geoboundaries # none = Overture only, no Preconfigured boundaries
+# Rebuild one that already holds them (e.g. for a newer Overture release):
+#   ./deploy.sh <tenant> --tags=turbopass -e '{"turbopass_rebuild_boundary_db": true}'
 #
 # Optional Geoapify passthrough (source=geoapify). Prefer an ansible-vault var
 # over a plain value in this file:
@@ -835,14 +854,14 @@ novu_bridge_smscountry_password: ""
 # novu_front_base_url:  "https://pilot.example.org/novu"
 # novu_node_env: "production"
 
-# ────────── Keycloak + Identity BFF (REQUIRED) ──────────
-# Adds Keycloak 26.7.3 and the Identity BFF. Public browser routes are /auth/
+# ────────── Keycloak + Identity BFF (always deployed) ──────────
+# Keycloak 26.7.3 and the Identity BFF. Public browser routes are /auth/
 # and /identity/v1/; internal provisioning routes stay on the Docker network.
 #
-# REQUIRED since D26: every employee and citizen sign-in goes through the
+# Mandatory since D26: every employee and citizen sign-in goes through the
 # Identity BFF (the /<tenant-slug>/digit-ui/ routes resolve their tenant
-# through it), the old DIGIT OTP/password login pages are gone, and the
-# deploy refuses `enable_keycloak: false`.
+# through it) and the old DIGIT OTP/password login pages are gone. There is
+# no enable_keycloak switch any more; the deploy refuses one set to false.
 #
 # Workflow:
 #   1. The deploy creates one shared realm (`digit` by default) with
@@ -859,11 +878,11 @@ novu_bridge_smscountry_password: ""
 # identity_onboarding_token and identity_citizen_otp_secret — are generated independently on first deploy
 # and stored in OpenBao, so none of them is derivable from another. Read one
 # back with `bao kv get -field=<key> kv/digit/<tenant>`; rotate one with
-# `bao kv put`, and the next deploy pushes it into Keycloak.
-enable_keycloak: true
-# Rollback switch for D26. Defaults to false when Keycloak is enabled and true
-# otherwise. Keep false after identity completion; it closes native create,
-# reset and OTP endpoints at Kong while preserving /user/oauth/token.
+# `bao kv patch`, and the next deploy pushes it into Keycloak.
+#
+# Rollback switch for D26. Defaults to false. Keep false after identity
+# completion; it closes native create, reset and OTP endpoints at Kong while
+# preserving /user/oauth/token.
 # identity_legacy_user_endpoints: false
 keycloak_organization_realm: "digit"
 identity_bff_image: ""
@@ -883,8 +902,26 @@ identity_citizen_signin_methods: []
 identity_magic_link_enabled: false
 identity_reconcile_on_startup: true
 identity_reconciliation_interval_seconds: 900
-# PGR is the only onboarding runner (the BFF worker is gone). Rendered on only
-# with enable_keycloak: signups arrive through the identity BFF.
+# Workspace trial: a self-serve workspace signs in for this many days after creation, then
+# sign-in is paused until the platform team approves it. Use 30 for self-serve SaaS. 0 (the
+# default) turns trials off: nothing new is stamped and no workspace locks, whatever its end
+# date. Approvals and extensions made meanwhile apply when trials are on again.
+# identity_workspace_trial_days: 0
+# Reminder emails to the workspace's admins, in days before the trial ends, plus one when it
+# locks; [0] sends only that one. Off while trials are. They need an active email integration
+# in Novu; the Notifications Channels policy does not apply to them, so EMAIL can stay off at
+# the platform root (turning it on there would also start that root's complaint emails).
+# identity_workspace_trial_reminder_days: [14, 7, 3, 2, 1]
+# false stops the reminder emails while trials stay on (e.g. before an email integration exists).
+# identity_workspace_trial_reminders_enabled: true
+# The notice a locked-out user sees. Empty (the default) uses the BFF's built-in text. The
+# link shows only when both its label and its URL are set. Free text: $, quotes, & and # are safe.
+# identity_workspace_trial_notice_title: ''
+# identity_workspace_trial_notice_message: ''
+# identity_workspace_trial_notice_link_label: ''
+# identity_workspace_trial_notice_link_url: ''
+# PGR is the only onboarding runner (the BFF worker is gone): signups arrive
+# through the identity BFF.
 pgr_onboarding_runner_enabled: true
 # Idle runner ticks bring workspaces onboarded on an older platform seed up to
 # the current one (create-if-absent; founder edits are kept).
@@ -894,6 +931,10 @@ pgr_onboarding_baseline_upgrade_enabled: true
 # pgr_onboarding_notification_defaults_enabled: false
 identity_digit_admin_username: "ADMIN"  # use a dedicated ACCOUNT_ADMIN in production
 identity_digit_admin_tenant_id: "pg"
+# Roles that may sign in to the Configurator (#2599). Unset = the founder's admin
+# roles (SUPERUSER, ACCOUNT_ADMIN, MDMS_ADMIN, LOC_ADMIN, HRMS_ADMIN, WORKFLOW_ADMIN);
+# operational staff use the employee app. A list, or one comma-separated string.
+# identity_configurator_roles: [SUPERUSER, ACCOUNT_ADMIN, MDMS_ADMIN, LOC_ADMIN, HRMS_ADMIN, WORKFLOW_ADMIN, SUPERVISOR]
 # Root tenants this deploy seeds, comma-separated. Each gets an Identity BFF
 # Organization route (alias and URL slug = the tenant id) when nothing maps it
 # yet; an existing route is never renamed. Unset (or a bare key) = state_root;
@@ -922,7 +963,7 @@ identity_smtp_starttls: true
 
 # Retired (D26): auth_provider, citizen_auth_provider, employee_auth_provider
 # and keycloak_client_id no longer change anything. Every employee and citizen
-# sign-in goes through the Identity BFF (enable_keycloak above). The deploy
+# sign-in goes through the Identity BFF (Keycloak section above). The deploy
 # still refuses `keycloak` in the first three, because that meant the removed
 # browser-adapter path. Leave them unset.
 
@@ -1093,7 +1134,7 @@ grafana_anonymous_enabled: false
 # ── Per-tenant Novu accounts (#2203) ──
 # Each signup workspace gets its own Novu ORGANIZATION (its own provider credentials, managed by
 # its own admins in the Configurator); every other tenant keeps the shared account. Default: on
-# when both enable_novu and enable_keycloak are (self-serve signup); set it to override either way.
+# with enable_novu (self-serve signup always runs); set it to override either way.
 # Secrets (generated into OpenBao on first use, never in host_vars):
 #   novu_bridge_tenant_key_encryption_key, novu_bridge_internal_admin_token,
 #   novu_bridge_internal_send_token, novu_admin_password
@@ -1331,22 +1372,6 @@ hrms_dev_mode: false
 # which is arbitrary code by design, and is reachable through nginx /tests/api/.
 # integration_tests_runner_user: digit-tests
 
-# ==================== Keycloak dev redirect URIs ====================
-# Only consumed when enable_keycloak: true. EMPTY by default, deliberately.
-#
-# The realm template used to hardcode `http://localhost:*` as a redirect URI on
-# a PUBLIC client. On a public client the redirect list is the only thing
-# binding an authorization code to a legitimate destination, so a localhost
-# wildcard lets anything listening on the victim's own machine receive a real
-# code for that user. The wildcard `https://*.egov.theflywheel.in/*` origin is
-# gone for the same reason: any subdomain, including one an attacker controls.
-#
-# Set these on a DEV tenant only:
-# keycloak_dev_redirect_uris:
-#   - "http://localhost:5173/*"
-# keycloak_dev_web_origins:
-#   - "http://localhost:5173"
-
 # ==================== Host firewall ====================
 # The playbook installs and enables ufw on Debian/Ubuntu (default deny
 # incoming; 22/ansible_port, 80 and 443 allowed) and firewalld on RHEL.
@@ -1369,7 +1394,7 @@ nginx_features:
                              #   bao kv get -field=status_basic_auth_password <secrets_path>
   api_pgr: false             # /api/pgr/ — proxied to MCP server
   mcp: true                  # /mcp + /v1/* — MCP HTTP transport + REST shim (requires enable_mcp: true)
-  keycloak: true             # /auth/ + /identity/v1/ — requires enable_keycloak: true
+  keycloak: true             # validates /auth/ and /identity/v1/ after the deploy
   digit_ui_v2: false         # /citizen/ — retired by D26 (the deploy refuses enable_digit_ui_v2: true); leave false
   integration_tests: false   # /tests/ + -v2/ — test dashboards (requires enable_integration_tests: true)
   integration_tests_runner: false  # /tests/api/ — RUN-button daemon proxy (requires enable_integration_tests_runner: true)
@@ -1460,10 +1485,8 @@ bootstrap_secrets:
   #
   # (Anonymous/logged-out Grafana access is a separate, top-level knob —
   #  `grafana_anonymous_enabled`, documented further down. It is not a secret.)
-  # Keycloak secrets — only consumed when enable_keycloak: true.
-  # Leave empty on tenants without Keycloak; the playbook only resolves
-  # these via `| mandatory` inside the digit.env.j2 keycloak block,
-  # which is itself gated on enable_keycloak.
+  # Keycloak secrets. keycloak_admin_password is required: the deploy
+  # fails closed without it.
   keycloak_admin_password: ""               # master realm admin login
   keycloak_db_password: ""                  # Keycloak's Postgres connection
   keycloak_google_client_secret: ""         # only if keycloak_google_client_id is set

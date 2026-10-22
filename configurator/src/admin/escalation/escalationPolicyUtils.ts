@@ -89,6 +89,43 @@ export function validateLadder(
 }
 
 /**
+ * Validates stored complaint-type overrides the way pgr-services reads them
+ * (EscalationConfigurationService.override()). A ladder it rejects is ignored, and the
+ * type runs on whichever ladder is left: the override's other one, or the default.
+ * Overrides written straight to MDMS skip the edit dialog, so check them here too.
+ * Returns the first error per code, prefixed with the ladder it is about.
+ */
+export function validateOverrides(overrides: Record<string, unknown> = {}): Record<string, string> {
+  const errors: Record<string, string> = {};
+  for (const [code, raw] of Object.entries(overrides)) {
+    if (raw == null) continue;
+    let pcts: unknown[] = [];
+    let fallbacks: unknown[] = [];
+    if (Array.isArray(raw)) {
+      fallbacks = raw;
+    } else if (typeof raw === 'object') {
+      const obj = raw as Record<string, unknown>;
+      if (Array.isArray(obj.slaPercentageByLevel)) pcts = obj.slaPercentageByLevel;
+      if (Array.isArray(obj.slaByLevel)) fallbacks = obj.slaByLevel;
+    } else {
+      errors[code] =
+        'Must be a list of milliseconds or an object with slaPercentageByLevel or slaByLevel';
+      continue;
+    }
+    const res = validateLadder(pcts as number[], fallbacks as number[]);
+    const message =
+      firstLevelError(res.pctErrors, 'SLA %') ?? firstLevelError(res.fallbackErrors, 'ms');
+    if (message) errors[code] = message;
+  }
+  return errors;
+}
+
+function firstLevelError(levelErrors: (string | null)[], ladder: string): string | null {
+  const i = levelErrors.findIndex((e) => e !== null);
+  return i < 0 ? null : `${ladder} L${i + 1}: ${levelErrors[i]}`;
+}
+
+/**
  * Determines whether an MDMS ComplaintHierarchy record is a leaf row.
  */
 export function isLeafHierarchyRow(data: Record<string, unknown>): boolean {

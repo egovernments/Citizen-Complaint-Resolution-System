@@ -5,7 +5,7 @@ description: Use when an operator says "deploy DIGIT to a new server", "set up a
 
 # DIGIT Ansible Onboard
 
-End-to-end guided onboarding for a new server — an Ubuntu 24.04 box reachable over SSH, **or macOS (Apple Silicon) locally via the thin Mac-port** (see "macOS target" below). Probes the target, asks the operator ≤ 10 questions, generates an inventory file, runs the playbook, and verifies infra. Designed so an operator who has the repo and SSH access can stand up a full DIGIT stack (services + UI + configurator) without writing YAML by hand.
+End-to-end guided onboarding for a new server — an Ubuntu 24.04 box reachable over SSH, **or macOS (Apple Silicon) locally via the thin Mac-port** (see "macOS target" below). Probes the target, asks the operator ≤ 11 questions, generates an inventory file, runs the playbook, and verifies infra. Designed so an operator who has the repo and SSH access can stand up a full DIGIT stack (services + UI + configurator) without writing YAML by hand.
 
 ## IRON LAW
 
@@ -29,7 +29,7 @@ acking it anyway does not get past the check.
 
 - An SSH alias (or `user@host`) for the target. The skill assumes you can `ssh <alias>` non-interactively.
 - The CCRS repo checked out locally with `local-setup/ansible/` present.
-- The operator at the keyboard (for the 10 questions).
+- The operator at the keyboard (for the 11 questions).
 
 ## Procedure
 
@@ -54,9 +54,9 @@ Capture results. Use to pre-fill defaults below and to refuse if the box is unsu
 
 ### Step 2 — Read the example to know what to ask
 
-`local-setup/ansible/inventory/host_vars/_example.yml` is the source of truth for *what* an inventory file contains. Open it and note every key that an operator typically overrides. The 10 questions below cover all required ones; the rest get defaults.
+`local-setup/ansible/inventory/host_vars/_example.yml` is the source of truth for *what* an inventory file contains. Open it and note every key that an operator typically overrides. The 11 questions below cover all required ones; the rest get defaults.
 
-### Step 3 — Ask the operator 10 questions
+### Step 3 — Ask the operator 11 questions
 
 Ask **one at a time**, in order. Show the default in parentheses. Don't proceed past a question without an answer or an explicit "use default".
 
@@ -72,12 +72,13 @@ Ask **one at a time**, in order. Show the default in parentheses. Don't proceed 
 | 8 | **Enable opt-in features?** Multi-select from {`mcp`, `configurator`, `search`, `claude_code`, `ci_tests`, `db_fast_path`, `nairobi_mdms`}. Choosing `db_fast_path` means the shipped dump REPLACES any database already on the target — ask the operator to confirm the box holds none they want to keep, then write the ack too. Without it `deploy.sh` stops at preflight. | `mcp`, `configurator`, `db_fast_path`, `ci_tests` (the four that make a deploy genuinely *usable* + verified) | `enable_mcp`, `nginx_features.configurator`, `enable_search_stack`, `install_claude_code`, `run_ci_tests`, `db_fast_path`, `db_fast_path_ack_data_wipe`, `requires_nairobi_mdms` |
 | 9 | **db_fast_path-pinned secrets.** When `db_fast_path: true`, THREE `bootstrap_secrets` are pinned to the dump/compose defaults — they are NOT free choices and a custom value silently breaks the deploy (see "IRON LAW exception" below). Confirm the operator understands, don't invent. | `elasticsearch_master_password: asd@#$@$!132123`, `postgres_password: egov123`, `minio_root_password: minioadmin` (+ `minio_root_user: minioadmin`) | `bootstrap_secrets.{elasticsearch_master_password,postgres_password,minio_root_password,minio_root_user}` |
 | 10 | **Target reach.** Linux: SSH alias / `user@host` (verify `ssh <alias>` works). **macOS**: not SSH — set `ansible_connection: local` (see "macOS target" below). | Linux: from ssh config · macOS: `localhost` + `ansible_connection: local` | `ansible_host`, `ansible_connection` |
+| 11 | **Identity (Keycloak is always deployed).** (a) `keycloak_admin_password` and `keycloak_db_password`: operator supplies them, or agrees to `openssl rand -base64 24` for each. On a box where Keycloak already ran, `keycloak_admin_password` MUST be the existing value. (b) `identity_digit_admin_password`: the real DIGIT password of `identity_digit_admin_username` (default `ADMIN` on `state_tenant_id`), i.e. `bootstrap_password` (default `eGov@123`). (c) SMTP for password setup and invitations: host, from address, user and password, or `identity_smtp_auth: false` for an open relay. Without (a) and (c) the deploy stops at "Keycloak — refuse to deploy without an admin password" or the identity email assert. | must ask; no `CHANGE_ME` | `bootstrap_secrets.{keycloak_admin_password,keycloak_db_password,identity_digit_admin_password,identity_smtp_password}`, `identity_smtp_{host,port,from,user,auth}` |
 
-After asking all 10, summarise the answers back and confirm before writing the file.
+After asking all 11, summarise the answers back and confirm before writing the file.
 
 ### macOS target (thin Mac-port)
 
-macOS (Apple Silicon) is a first-class target as of the thin Mac-port (validated end-to-end: `./deploy.sh` → `PLAY RECAP failed=0`, configurator + digit-ui served, employee login works). The old "Mac → spin up an Ubuntu VM" guidance is obsolete. Differences from the Linux/SSH path:
+macOS (Apple Silicon) is a first-class target as of the thin Mac-port (validated end-to-end: `./deploy.sh` → `PLAY RECAP failed=0`, configurator + digit-ui served). The old "Mac → spin up an Ubuntu VM" guidance is obsolete. Differences from the Linux/SSH path:
 
 - **Probe, not SSH**: instead of the Step-1 SSH probe, verify locally — Docker Desktop **or OrbStack running with Rosetta enabled**, and **≥ 40 GB free in the Docker VM** (full stack + db_fast_path dump; a 30 GB VM PANICs Postgres with "no space left").
 - **host_vars additions** (the playbook is OS-gated; these only matter on Darwin):
@@ -87,9 +88,9 @@ macOS (Apple Silicon) is a first-class target as of the thin Mac-port (validated
   - `digit_ui_mode: container` (the digit-ui container serves the SPA; no host-node esbuild on Mac)
   - `enable_mcp: false` (MCP image is VPC-only — mandatory off-VPC)
   - `nginx_features.configurator: true` + build the dist first: from a `digit-configurator` clone on `main`, `npx vite build --base=/configurator/` (NOT `npm run build` — `tsc -b` has blocking type errors) and drop `dist/*` into `{{ digit_dir }}/configurator` (the Mac nginx container bind-mounts it).
-  - `bootstrap_secrets`: the Q9-pinned values (egov123 / minioadmin / asd@#$@$!132123).
+  - `bootstrap_secrets`: the Q9-pinned values (egov123 / minioadmin / asd@#$@$!132123) plus the Q11 identity secrets.
 - **Deploy behaviour**: `./deploy.sh <tenant>` is genuinely one-shot and idempotent. Under Rosetta it self-converges (two passes; `mac-stack-up.sh`), so it's slow — **~25–35 min** — but unattended. Stream only at task boundaries.
-- **Endpoints**: served via the Mac `digit-nginx` container at `http://localhost/configurator/` and `/digit-ui/` (port from `nginx_host_port`, default 80).
+- **Endpoints**: served via the Mac `digit-nginx` container at `http://localhost/configurator/` and `/<tenant-slug>/digit-ui/` (port from `nginx_host_port`, default 80).
 
 ### Step 4 — Write `host_vars/<tenant>.yml`
 
@@ -108,7 +109,7 @@ Common substitutions:
 - `enable_mcp: true|false`
 - `ansible_host: <ip-or-alias>` (Q10)
 
-For the Q9-pinned `bootstrap_secrets` under `db_fast_path: true`, set all of them verbatim — `elasticsearch_master_password: asd@#$@$!132123`, `postgres_password: egov123`, `minio_root_user: minioadmin`, `minio_root_password: minioadmin`. These are dump/compose constants (see IRON LAW exception); a custom value here is the single most common cause of a deploy that comes up then fails the post-OpenBao recreate. Don't echo them in summaries — show `***`.
+For the Q9-pinned `bootstrap_secrets` under `db_fast_path: true`, set all of them verbatim — `elasticsearch_master_password: asd@#$@$!132123`, `postgres_password: egov123`, `minio_root_user: minioadmin`, `minio_root_password: minioadmin`. These are dump/compose constants (see IRON LAW exception); a custom value here is the single most common cause of a deploy that comes up then fails the post-OpenBao recreate. Write the Q11 identity secrets into `bootstrap_secrets` and set the `identity_smtp_*` keys the same way. Don't echo any of them in summaries — show `***`.
 
 ### Step 5 — Deploy
 
@@ -153,9 +154,11 @@ in from their answers and the actual probe results. Mark each line with
 
 ▼ URLs you can hit right now
 
-  UI                    <scheme>://<host>/digit-ui/
-                        — login as ADMIN / eGov@123 on tenantId=pg
-                          (see "Login caveat" below)
+  UI                    <scheme>://<host>/<tenant-slug>/digit-ui/employee
+                        — staff sign in through Keycloak + the Identity BFF
+                          (the deploy-seeded root's slug is its tenant id).
+                          Tenantless /digit-ui/ pages only redirect to
+                          digit_ui_default_tenant_slug, or 404 when unset.
 
   Configurator          <scheme>://<host>/configurator/
                         — only if Q8 enabled it; 404 otherwise
@@ -177,8 +180,9 @@ in from their answers and the actual probe results. Mark each line with
 
 ▼ Login caveat
 
-  ADMIN / eGov@123 logs in fine on tenantId=pg (the dump's seed tenant).
-  It does NOT yet log in on tenantId=<state_tenant_id> until you bootstrap:
+  ADMIN / eGov@123 is a DIGIT API credential (the MCP `auth` envelope,
+  /user/oauth/token), not a UI sign-in. It works on tenantId=pg (the dump's
+  seed tenant), and NOT on tenantId=<state_tenant_id> until you bootstrap:
 
     curl -X POST <scheme>://<host>/v1/tenant/bootstrap \
       -H "Content-Type: application/json" \
@@ -228,7 +232,7 @@ The operator should be able to immediately retry whichever ones are ❌.
 
 - It doesn't write secrets to the repo. `host_vars/<tenant>.yml` is gitignored; the operator keeps it locally.
 - It doesn't auto-pick a domain for the operator. DNS is out-of-band.
-- It doesn't bypass the 10-question gate. If the operator asks you to "just figure it out", refuse and walk through the questions — most fields don't have safe inferences for a brand-new tenant.
+- It doesn't bypass the 11-question gate. If the operator asks you to "just figure it out", refuse and walk through the questions — most fields don't have safe inferences for a brand-new tenant.
 
 ## Useful references
 
