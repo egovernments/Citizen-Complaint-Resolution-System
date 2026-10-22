@@ -3271,6 +3271,8 @@ services:
       # Off unless .env turns it on (identity_dev_fixed_otp: true).
       CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED: ${CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED:-false}
       CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE: ${CITIZEN_OTP_FIXED_VALUE:-123456}
+      # Off unless .env turns it on (identity_staff_phone_join: true; #2595, off until #2631).
+      IDENTITY_STAFF_PHONE_JOIN: ${IDENTITY_STAFF_PHONE_JOIN:-false}
       IDENTITY_POLLER_MAX_LAG_SECONDS: ${IDENTITY_POLLER_MAX_LAG_SECONDS:-60}
       KEYCLOAK_ADMIN_URL: http://keycloak:8180
       KEYCLOAK_ADMIN_REALM: ${KEYCLOAK_ORGANIZATION_REALM:-digit}
