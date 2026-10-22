@@ -113,3 +113,26 @@ stood before the flag, and this migration brings existing schemas level with
 
 Guarded and idempotent: a definition that already has `VOICE_INPUT` is skipped,
 so a fresh box and a re-run are no-ops.
+
+## V20261022000000__workspace_route_grants
+
+Grants `ACCOUNT_ADMIN` the Configurator's workspace routes
+(`/pgr-services/v2/onboarding/workspaces/_search`, `_update`, `_rename`) on every
+tenant that defines the `ACCOUNT_ADMIN` role. A root seeded before v2.20 has no
+action or role-action for them, so the Configurator gets
+`AccessDeniedException` there. New roots already get them: `full-dump.sql` for
+`pg`, the platform baseline for signup workspaces, and the MCP root bootstrap
+when MCP is on. This reaches the rest on their next deploy.
+
+The rows are `platform-baseline-v1.json`'s (ids 900000, 900001, 901000). The
+guards follow the MCP access floor:
+
+- An action is added only when the root has no action with that url and none
+  with that id. If an unrelated action already holds the id, that route is
+  left for a hand fix rather than granting `ACCOUNT_ADMIN` on the wrong endpoint.
+- `ACCOUNT_ADMIN` is granted the root's action for each workspace url, whatever
+  its id, so an action added by hand with a fresh id gets its grant too.
+
+A root that already holds the rows, and a re-run, are no-ops. `egov-accesscontrol`
+caches role-actions for 15 minutes (`cache.expiry.role.action.minutes`), so the
+grant takes effect after that, or after a restart.

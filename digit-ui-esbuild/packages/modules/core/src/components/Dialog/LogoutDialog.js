@@ -50,11 +50,17 @@ function useAccountSummary() {
   if (!user) return null;
 
   const name = present(user.name);
-  const identifier = present(user.userName) || present(user.mobileNumber) || present(user.emailId);
+  // A citizen's userName is internal (a `kcbffc-` key under Keycloak sign-in),
+  // and so is a BFF-managed staff account's (`kcbff-`), so those people are
+  // identified by their mobile number instead. Bound staff keep their HRMS code.
+  const userName = user.type === "CITIZEN" || /^kcbff/.test(user.userName || "") ? null : present(user.userName);
+  const identifier = userName || present(user.mobileNumber) || present(user.emailId);
   const tenant = present(user.tenantId);
 
   if (!name && !identifier) return null;
-  return { name, identifier, tenant };
+  // A phone-OTP citizen who never set a name is registered with their number as
+  // the name; show it once.
+  return { name, identifier: identifier === name ? null : identifier, tenant };
 }
 
 const LogoutDialog = ({ onSelect, onCancel, onDismiss, PopupStyles, isDisabled, hideSubmit }) => {

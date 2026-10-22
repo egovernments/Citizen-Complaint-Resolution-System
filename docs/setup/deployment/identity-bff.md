@@ -45,12 +45,12 @@ a Keycloak token or Keycloak admin credential.
 
 ## Enable the deployment
 
-This is required, not an add-on: since the legacy identity paths were removed
-(D26) every employee and citizen sign-in goes through the BFF, and the deploy
-refuses `enable_keycloak: false`. Set the following in the target host vars:
+This is not an add-on: since the legacy identity paths were removed (D26)
+every employee and citizen sign-in goes through the BFF, so the deploy always
+runs Keycloak and the BFF, and refuses a leftover `enable_keycloak: false`.
+Set the following in the target host vars:
 
 ```yaml
-enable_keycloak: true
 nginx_features:
   keycloak: true
 
@@ -77,10 +77,14 @@ bootstrap_secrets:
   identity_smtp_password: "<SMTP password>"
 ```
 
-The deploy derives separate stable BFF-client and workload secrets from the
-Keycloak admin secret and writes them only to the mode-0600 Compose environment.
-A Keycloak admin-password rotation therefore also rotates those credentials on
-the next converge.
+The BFF-client and workload secrets (`keycloak_*_client_secret`,
+`identity_control_plane_token`, `identity_session_introspection_token`,
+`identity_onboarding_token`, `identity_citizen_otp_secret`) are not derived from
+anything. The first deploy generates each one independently and stores it in
+OpenBao, and every deploy writes them only to the mode-0600 Compose environment.
+Rotating the Keycloak admin password therefore rotates nothing else. To rotate
+one of them, `bao kv patch` a new value; the next deploy pushes it into Keycloak
+and the BFF.
 
 ### Staff password reset needs an email address
 
@@ -91,9 +95,9 @@ action). So a self-service reset needs the employee's own email address on
 their Keycloak account, plus working realm SMTP (`identity_smtp_*`).
 
 The legacy SMS-OTP reset is gone. It was the employee "Forgot password" page
-calling `/user/password/nologin/_update`, which Kong closes when Keycloak is
-enabled. An employee known only by mobile number therefore cannot reset their
-own password. An administrator can:
+calling `/user/password/nologin/_update`, which Kong closes. An employee known
+only by mobile number therefore cannot reset their own password. An
+administrator can:
 
 - give the employee an email address in the configurator. For an active
   member use Members → "Change email"; the employee verifies it, then uses

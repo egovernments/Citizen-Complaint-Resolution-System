@@ -221,6 +221,16 @@ test("employee 403 from _select is surfaced as forbidden", async () => {
   assert.match(result.message, /Bomet County Government/);
 });
 
+test("employee 403 WORKSPACE_TRIAL_EXPIRED from _select returns the notice", async () => {
+  const notice = { title: "Trial ended", message: "Contact us." };
+  const { fetchImpl } = stubBff({
+    "GET /identity/v1/session?surface=employee": json(200, SESSION),
+    "POST /identity/v1/contexts/_select": json(403, { code: "WORKSPACE_TRIAL_EXPIRED", error: "x", notice }),
+  });
+  const result = await establishIdentityBffSession({ surface: "employee", tenant: TENANT, fetchImpl });
+  assert.deepEqual(result, { status: "trial-expired", notice });
+});
+
 test("signed-out without an authResult is eligible for a direct Keycloak redirect", async () => {
   const { calls, fetchImpl } = stubBff({
     "GET /identity/v1/session?surface=employee": json(401, null),

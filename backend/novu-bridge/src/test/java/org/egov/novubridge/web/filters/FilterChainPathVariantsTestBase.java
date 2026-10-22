@@ -4,6 +4,7 @@ import org.egov.novubridge.config.MainConfiguration;
 import org.egov.novubridge.config.NovuBridgeConfiguration;
 import org.egov.novubridge.config.TenantAccountsConfiguration;
 import org.egov.novubridge.repository.DispatchLogRepository;
+import org.egov.novubridge.service.DispatchPipelineService;
 import org.egov.novubridge.service.NovuClient;
 import org.egov.novubridge.service.TwilioTemplateSyncService;
 import org.egov.novubridge.service.account.ChannelReadiness;
@@ -112,6 +113,8 @@ abstract class FilterChainPathVariantsTestBase {
     @MockBean
     DispatchLogRepository dispatchLogRepository;
     @MockBean
+    DispatchPipelineService pipeline;
+    @MockBean
     TwilioTemplateSyncService twilioTemplateSyncService;
     @MockBean
     ProviderCatalog catalog;
@@ -142,7 +145,8 @@ abstract class FilterChainPathVariantsTestBase {
             new Route("POST", "/novu-adapter/v1/tenants/acme/providers", ADMIN, SEND),
             new Route("POST", "/novu-adapter/v1/tenants/acme/providers/_update", ADMIN, SEND),
             new Route("POST", "/novu-adapter/v1/tenants/acme/providers/_delete", ADMIN, SEND),
-            new Route("POST", "/novu-adapter/v1/messages/_send", SEND, ADMIN));
+            new Route("POST", "/novu-adapter/v1/messages/_send", SEND, ADMIN),
+            new Route("POST", "/novu-adapter/v1/messages/_dispatch", SEND, ADMIN));
 
     /** Configurator routes ProxyAuthFilter must authenticate (and, for _update, hold to the admin tier). */
     static final List<Route> CONFIGURATOR_ROUTES = List.of(
@@ -228,7 +232,7 @@ abstract class FilterChainPathVariantsTestBase {
     private List<String> reached() {
         List<String> calls = new ArrayList<>();
         for (Object mock : new Object[] {accounts, readiness, sender, novuClient, providerRegistry, dispatchLogRepository,
-                twilioTemplateSyncService, catalog, channelPolicy, providerAvailability, availabilities}) {
+                twilioTemplateSyncService, catalog, channelPolicy, providerAvailability, availabilities, pipeline}) {
             Mockito.mockingDetails(mock).getInvocations().forEach(i -> calls.add(i.toString()));
         }
         return calls;
@@ -238,7 +242,7 @@ abstract class FilterChainPathVariantsTestBase {
         String what = method + " " + target + " (" + who + ")";
         List<String> calls = reached();
         Mockito.clearInvocations(accounts, readiness, sender, novuClient, providerRegistry, dispatchLogRepository,
-                twilioTemplateSyncService, catalog, channelPolicy, providerAvailability, availabilities);
+                twilioTemplateSyncService, catalog, channelPolicy, providerAvailability, availabilities, pipeline);
         if (!calls.isEmpty()) {
             fail(what + " reached a controller (HTTP " + reply.status() + "): " + calls);
         }

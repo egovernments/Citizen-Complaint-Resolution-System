@@ -2,6 +2,7 @@ import { config } from "../../infrastructure/config.js";
 import { getAdminToken } from "../../integrations/keycloak/admin-session.js";
 import { OnboardingError } from "./errors.js";
 import { operationAuthority, organizationAttribute, type OnboardingOrganization } from "./primitives.js";
+import { readWorkspaceTrial, type WorkspaceTrial } from "../workspace-trial/trial.js";
 
 /** Raw reads deliberately include disabled, FAILED and PROVISIONING records. */
 export async function onboardingAdminRequest(path: string, init: RequestInit = {}, accepted?: number[]): Promise<Response> {
@@ -35,6 +36,7 @@ export interface RawTenantOrganization {
   name: string;
   lifecycle: "PROVISIONING" | "ACTIVE" | "FAILED" | null;
   enabled: boolean;
+  trial: WorkspaceTrial | null;
 }
 
 /** Inventory for sync/revocation; visibility filtering must never hide a tenant here. */
@@ -64,5 +66,6 @@ export async function readOrganizationByTenant(tenantId: string): Promise<RawTen
     throw new OnboardingError("IDENTITY_UNAVAILABLE", "Invalid Organization lifecycle");
   }
   return { id: org.id, alias: org.alias, name: org.name, enabled: org.enabled !== false,
-    lifecycle: lifecycle as RawTenantOrganization["lifecycle"] ?? null };
+    lifecycle: lifecycle as RawTenantOrganization["lifecycle"] ?? null,
+    trial: readWorkspaceTrial(org.attributes) };
 }

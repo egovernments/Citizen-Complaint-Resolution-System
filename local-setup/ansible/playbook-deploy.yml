@@ -60,12 +60,11 @@
           no OTP can be sent. Set enable_novu: true (and enable SMS for the tenant under
           Configurator -> Notifications -> Channels), or leave enable_otp_services false.
 
-    # The fixed OTP (123456) and log delivery are opt-in only, so a Keycloak box
+    # The fixed OTP (123456) and log delivery are opt-in only, so a box
     # with no SMS stack and neither opt-in has no way to deliver a citizen code.
     # Warn, never fail: staff sign-in and citizen password sign-in still work.
     - name: "preflight — warn when citizen phone sign-in has no OTP channel"
       when:
-        - enable_keycloak | default(false) | bool
         - not (enable_otp_services | default(false) | bool)
         - not (identity_dev_fixed_otp | default(false) | bool)
         - not (identity_citizen_otp_sender | default('', true) | length > 0)
@@ -178,6 +177,22 @@
       when: host_vars_file.stat.exists
       delegate_to: localhost
       become: false
+
+    # A string would be joined one character at a time: `-e turbopass_countries=KE`
+    # or `turbopass_countries: KE,IN` becomes COUNTRIES=K,E, which the bootstrap
+    # rejects on every deploy (review on #2608). Fail once, before anything
+    # changes.
+    - name: "preflight — turbopass_countries is a list"
+      ansible.builtin.assert:
+        that: turbopass_countries is sequence and turbopass_countries is not string
+        fail_msg: >-
+          turbopass_countries must be a list of ISO 3166-1 alpha-2 codes, e.g.
+          turbopass_countries: [KE, IN] in host_vars, or
+          -e '{"turbopass_countries": ["KE"]}' on the command line. Got
+          {{ turbopass_countries | to_json }}.
+        quiet: true
+      when: enable_turbopass | default(false) | bool
+      tags: [turbopass]
 
     # ==================== One-tag deploys (#1729) ====================
     # Turn `image_tag` (usually `./deploy.sh <tenant> --image-tag=<tag>`) into
@@ -584,34 +599,25 @@
           these keys.
 
           Delete these keys (or set them to 'digit'). Every employee and
-          citizen sign-in already goes through Keycloak and the Identity BFF;
-          `enable_keycloak: true` is what stands them up.
+          citizen sign-in already goes through Keycloak and the Identity BFF.
       when: _keycloak_login_surfaces | length > 0
 
-    # D26 removed every sign-in path that did not go through the Identity BFF:
-    # the tenantless /digit-ui/user/* pages, the legacy citizen OTP and
-    # employee password pages, and (with Keycloak on) the native create/reset/
-    # OTP endpoints at Kong. Tenant routes resolve through
-    # /identity/v1/tenant-contexts/<slug>, which only exists in the `keycloak`
-    # compose profile. identity_legacy_user_endpoints reopens Kong endpoints,
-    # not the UI pages, so it is no way around this. (Dhruv, #2271 review 2.)
-    - name: "preflight — identity requires enable_keycloak: true"
+    # Keycloak and the Identity BFF are always deployed: since D26 every DIGIT
+    # UI sign-in goes through them, so the enable_keycloak switch is gone. A
+    # host_vars that still sets it false expects a box without Keycloak; stop
+    # rather than silently stand one up. `| bool`: `-e enable_keycloak=false`
+    # arrives as the string "false".
+    - name: "preflight — Keycloak is mandatory (refuse enable_keycloak: false)"
       ansible.builtin.fail:
         msg: >-
-          enable_keycloak is false on {{ inventory_hostname }}, but since D26
-          every DIGIT UI sign-in (employee and citizen) goes through the
-          Identity BFF, which only runs with Keycloak. Without it the
-          /<tenant-slug>/digit-ui/ routes cannot resolve their tenant and
-          nobody can sign in; the old DIGIT OTP/password login pages are gone.
-          Set `enable_keycloak: true` (and `nginx_features.keycloak: true`)
-          in host_vars/{{ inventory_hostname }}.yml, with keycloak_admin_password,
-          keycloak_db_password and identity_digit_admin_password in
-          bootstrap_secrets (or OpenBao). See the Keycloak section of
-          host_vars/_example.yml. With enable_novu, either Novu dashboard
-          works alongside it: nginx routes Keycloak's /auth/realms/ and
-          /auth/resources/ ahead of the stock dashboard's /auth/ paths, though
-          `build_novu_dashboard: true` remains the cleaner setup.
-      when: not (enable_keycloak | default(false) | bool)
+          enable_keycloak is false for {{ inventory_hostname }}, but Keycloak
+          is now mandatory: every DIGIT UI sign-in goes through it and the
+          Identity BFF, so the switch was removed. Delete enable_keycloak from
+          host_vars/{{ inventory_hostname }}.yml (or -e), and put
+          keycloak_admin_password, keycloak_db_password and
+          identity_digit_admin_password in bootstrap_secrets (or OpenBao). See
+          the Keycloak section of host_vars/_example.yml.
+      when: enable_keycloak is defined and not (enable_keycloak | bool)
 
     - name: "preflight — refuse retired digit-ui-v2 citizen identity"
       ansible.builtin.fail:
@@ -1822,35 +1828,29 @@
       register: kong_otp_unmock
       when: enable_otp_services | default(false)
 
-    # D26: with Keycloak enabled, legacy native identity endpoints default
-    # closed. An explicit identity_legacy_user_endpoints:true is the rollback
-    # switch for a non-complete deployment.
+    # D26: legacy native identity endpoints default closed. An explicit
+    # identity_legacy_user_endpoints:true is the rollback switch for a
+    # non-complete deployment. `| bool`: `-e ...=false` is the string "false".
     - name: "Kong — remove legacy identity endpoints from AUTH_OPTIONAL"
       ansible.builtin.replace:
         path: "{{ digit_dir }}/kong/.kong.yml.pinned"
         regexp: '(?m)^.*-- identity-legacy-user-endpoint\n'
         replace: ''
-      when: >-
-        not (identity_legacy_user_endpoints
-             | default(not (enable_keycloak | default(false))))
+      when: not (identity_legacy_user_endpoints | default(false) | bool)
 
     - name: "Kong — remove the legacy OTP validation mock route"
       ansible.builtin.replace:
         path: "{{ digit_dir }}/kong/.kong.yml.pinned"
         regexp: '(?ms)^# identity-legacy-otp-mock-start\n.*?^# identity-legacy-otp-mock-end\n'
         replace: ''
-      when: >-
-        not (identity_legacy_user_endpoints
-             | default(not (enable_keycloak | default(false))))
+      when: not (identity_legacy_user_endpoints | default(false) | bool)
 
     - name: "Kong — reopen legacy identity endpoints only when explicitly enabled"
       ansible.builtin.replace:
         path: "{{ digit_dir }}/kong/.kong.yml.pinned"
         regexp: '(?ms)^- name: identity-legacy-user-endpoints-denied # identity-legacy-user-deny-start\n.*?^# identity-legacy-user-deny-end\n'
         replace: ''
-      when: >-
-        identity_legacy_user_endpoints
-        | default(not (enable_keycloak | default(false)))
+      when: identity_legacy_user_endpoints | default(false) | bool
 
     - name: "Kong — write the pinned config back IN PLACE (preserves the inode)"
       ansible.builtin.shell: |
@@ -1959,7 +1959,7 @@
               + (['mcp-readonly']  if enable_mcp_readonly  | default(false) else [])
               + (['notifications'] if enable_novu          | default(false) else [])
               + (['chatbot']       if enable_chatbot       | default(false) else [])
-              + (['keycloak']      if enable_keycloak      | default(false) else [])
+              + ['keycloak']
               + (['otp']           if enable_otp_services  | default(false) else [])
               + (['matomo']        if enable_matomo        | default(false) else [])
               + (['opensre']       if enable_opensre       | default(false) else [])
@@ -1969,7 +1969,7 @@
 
     - name: "Show active compose profiles"
       ansible.builtin.debug:
-        msg: "Active compose profiles for {{ inventory_hostname }}: {{ compose_profiles or '(none — lean stack)' }}"
+        msg: "Active compose profiles for {{ inventory_hostname }}: {{ compose_profiles }}"
 
     # ==================== One-tag deploys (#1729): resolve + verify ====================
     # A per-tenant overlay (docker-compose.<tenant>.yml, layered last with -f)
@@ -2241,7 +2241,7 @@
       ansible.builtin.set_fact:
         novu_tenant_accounts_on: >-
           {{ (enable_novu | default(false) | bool)
-             and (novu_tenant_accounts | default(enable_keycloak | default(false)) | bool) }}
+             and (novu_tenant_accounts | default(true) | bool) }}
 
     - name: Write per-tenant compose .env
       template:
@@ -2311,8 +2311,8 @@
       register: configurator_config_render
     # The template above regenerates .env from scratch, which used to WIPE the
     # marked secret blocks the OpenBao section appends much later in the play
-    # (TENANT SECRETS: POSTGRES_PASSWORD, MINIO creds, …; KEYCLOAK SECRETS
-    # behind enable_keycloak). Fresh box: fine — the blocks don't exist yet and
+    # (TENANT SECRETS: POSTGRES_PASSWORD, MINIO creds, …; KEYCLOAK SECRETS).
+    # Fresh box: fine — the blocks don't exist yet and
     # the first `up -d` runs postgres on the compose default before the OpenBao
     # section ALTERs the role to the vault password. RERUN: fatal — the role's
     # password in the persisted volume is already the vault value, but the
@@ -2731,11 +2731,10 @@
     # rotating a secret in vault out-of-band without also touching the running
     # DB), but are no longer load-bearing for the common path.
     #
-    # Bringing OpenBao (+ keycloak-postgres, when enable_keycloak) up here, ahead
-    # of the main stack, is what "Keycloak prep" used to do — gated on
-    # enable_keycloak, because only Keycloak's own converge-abort problem was
-    # recognized. It's unconditional now: every tenant needs its Postgres/MCP
-    # secrets synced this early, not just Keycloak ones.
+    # Bringing OpenBao and keycloak-postgres up here, ahead of the main stack,
+    # is what "Keycloak prep" used to do, for Keycloak alone, because only
+    # Keycloak's own converge-abort problem was recognized. Every tenant needs
+    # its Postgres/MCP secrets synced this early, not just Keycloak ones.
     #
     # docker-compose.egov-digit.yaml resolves GF_SECURITY_ADMIN_PASSWORD from
     # ${GF_ADMIN_PASSWORD:?} — no default. Compose interpolates the WHOLE file
@@ -2777,10 +2776,10 @@
         label: "{{ item.k }}"
       no_log: true
 
-    - name: "Secrets prep — bring up OpenBao (+ keycloak-postgres when enable_keycloak) first"
+    - name: "Secrets prep — bring up OpenBao and keycloak-postgres first"
       ansible.builtin.shell: >-
         COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }}
-        up -d openbao{{ ' keycloak-postgres' if (enable_keycloak | default(false)) else '' }}
+        up -d openbao keycloak-postgres
       args:
         chdir: "{{ digit_dir }}"
       changed_when: true
@@ -2951,8 +2950,8 @@
           - { feature: "Novu (enable_novu)",       enabled: "{{ enable_novu | default(false) }}",     var: "novu_store_encryption_key",  bad: "change-this-key-32-characters!!!" }
           - { feature: "Novu (enable_novu)",       enabled: "{{ enable_novu | default(false) }}",     var: "novu_secret_key",            bad: "dev-novu-secret-key-change-in-production" }
           - { feature: "Novu (enable_novu)",       enabled: "{{ enable_novu | default(false) }}",     var: "novu_mongo_password",        bad: "secret" }
-          - { feature: "Keycloak (enable_keycloak)", enabled: "{{ enable_keycloak | default(false) }}", var: "keycloak_admin_password",  bad: "admin" }
-          - { feature: "Identity BFF (enable_keycloak)", enabled: "{{ enable_keycloak | default(false) }}", var: "identity_digit_admin_password", bad: "CHANGE_ME" }
+          - { feature: "Keycloak",                 enabled: true,                                      var: "keycloak_admin_password",    bad: "admin" }
+          - { feature: "Identity BFF",             enabled: true,                                      var: "identity_digit_admin_password", bad: "CHANGE_ME" }
           - { feature: "MCP (enable_mcp)",         enabled: "{{ enable_mcp | default(false) }}",      var: "mcp_db_password",            bad: "mcp123" }
           - { feature: "Search (enable_search_stack)", enabled: "{{ enable_search_stack | default(false) }}", var: "elasticsearch_password", bad: "changeme-elastic" }
 
@@ -2966,7 +2965,7 @@
           the published default in OpenBao — so .env gets an empty value and
           compose falls back to the public default from
           docker-compose.egov-digit.yaml. Set it with
-          `bao kv put {{ secrets_path }} {{ item.var }}=<value>` (or put it in
+          `bao kv patch {{ secrets_path }} {{ item.var }}=<value>` (or put it in
           bootstrap_secrets in host_vars/{{ inventory_hostname }}.yml on a tenant
           whose OpenBao has not been seeded yet). These values are in a public
           repo, so the default is equivalent to no secret at all.
@@ -2984,7 +2983,7 @@
           the published default in OpenBao on this already-deployed box. The
           deploy is CONTINUING so an existing tenant is not bricked, but this
           credential is public and equivalent to no secret at all — rotate it:
-          `bao kv put {{ secrets_path }} {{ item.var }}=<value>` and rotate the
+          `bao kv patch {{ secrets_path }} {{ item.var }}=<value>` and rotate the
           live service to match. Fresh deploys fail closed on this.
       when:
         - item.enabled | bool
@@ -3382,7 +3381,6 @@
           X-Vault-Token: "{{ bao_root_token }}"
         status_code: [200]
       register: bao_secrets_identity
-      when: enable_keycloak | default(false)
       no_log: true
 
     # The one identity credential that CANNOT be generated here: Keycloak bakes
@@ -3397,13 +3395,12 @@
         that:
           - (bao_secrets_identity.json.data.data.keycloak_admin_password | default('', true)) | length > 0
         fail_msg: >-
-          enable_keycloak is on but `keycloak_admin_password` is empty in
-          OpenBao, so .env would hand compose an empty KC_ADMIN_PASSWORD and
-          Keycloak would fall back to the published default `admin`. Set it
-          with `bao kv put {{ secrets_path }} keycloak_admin_password=<value>`
+          `keycloak_admin_password` is empty in OpenBao, so .env would hand
+          compose an empty KC_ADMIN_PASSWORD and Keycloak would fall back to
+          the published default `admin`. Set it with
+          `bao kv patch {{ secrets_path }} keycloak_admin_password=<value>`
           (and, on a box where Keycloak already bootstrapped, change the
           admin user's password in Keycloak to match).
-      when: enable_keycloak | default(false)
 
     - name: "Identity BFF — validate staff credential mode"
       ansible.builtin.assert:
@@ -3417,7 +3414,6 @@
           identity_staff_credential_mode must be rotate or derived. Derived mode
           also requires identity_credential_keys and identity_credential_key_current
           in OpenBao; rotate mode requires neither.
-      when: enable_keycloak | default(false)
 
     # `or`, not `ternary`: Jinja evaluates every filter argument up front, so a
     # ternary would run the generator on every deploy and discard it whenever
@@ -3464,7 +3460,6 @@
             {{ _identity_stored.pgr_digit_provisioner_password | default('', true)
                or _identity_stored.identity_digit_provisioner_password | default('', true)
                or (lookup('password', '/dev/null length=11 chars=ascii_letters,digits') ~ 'Pq7@') }}
-      when: enable_keycloak | default(false)
       no_log: true
 
     # One merged, cas-guarded write — same shape and same reasoning as the
@@ -3483,7 +3478,6 @@
               'data': bao_secrets_identity.json.data.data | combine(identity_secrets)} }}
         status_code: [200]
       when:
-        - enable_keycloak | default(false)
         # Exactly "the merge would change something", i.e. at least one of the
         # resolved identity secrets was absent or empty and has just been generated.
         - (bao_secrets_identity.json.data.data | combine(identity_secrets))
@@ -3491,10 +3485,10 @@
       no_log: true
 
     # Identity-tier secrets — appended as a separate marked block so the
-    # main TENANT SECRETS block stays untouched on Keycloak-free tenants.
+    # main TENANT SECRETS block stays untouched.
     # KC_ADMIN_PASSWORD is asserted non-empty above; the rest come from the
     # resolved dict, so an operator can rotate any of them independently with
-    # `bao kv put` without touching the others.
+    # `bao kv patch` without touching the others.
     - name: "OpenBao — write Keycloak and Identity BFF secrets into compose .env"
       ansible.builtin.blockinfile:
         path: "{{ digit_dir }}/.env"
@@ -3521,10 +3515,9 @@
         create: false
         mode: '0600'
       no_log: true
-      when: enable_keycloak | default(false)
 
-    # keycloak-postgres is already up (brought up alongside openbao above, when
-    # enable_keycloak), so — unlike the main egov/mcp Postgres ALTERs further
+    # keycloak-postgres is already up (brought up alongside openbao above),
+    # so — unlike the main egov/mcp Postgres ALTERs further
     # down, which need the main stack running — this can sync right here,
     # before the main compose-up ever touches keycloak.
     - name: "Secrets prep — align keycloak DB-user password to OpenBao value"
@@ -3535,7 +3528,6 @@
       changed_when: true
       failed_when: false
       when:
-        - enable_keycloak | default(false)
         - bao_secrets.json.data.data.keycloak_db_password | default('') | length > 0
 
     # Same ordering trap as the KEYCLOAK SECRETS block above, for Novu (CCRS#1551).
@@ -5034,21 +5026,23 @@
     # templates/nginx-site.conf.j2; the trailing slash strips the prefix).
     #
     # What it serves:
-    #   - the offline Overture boundary DB (the configurator's default source)
-    #     when turbopass_overture_data_dir names a directory holding
-    #     boundaries.sqlite. The DB is built separately by
-    #     turbopass/overture-scraper — it is NOT part of this deploy;
+    #   - the offline boundary DB in turbopass_overture_data_dir: Overture plus
+    #     the official sets, which back Phase 2's "Fetch boundaries" and
+    #     "Preconfigured boundaries". tasks/turbopass-boundary-db.yml builds it
+    #     for turbopass_countries when it doesn't hold them yet (#2600);
     #   - Geoapify passthrough when turbopass_geoapify_api_key is set;
     #   - the vendored name hierarchies (turbopass/data) for the legacy /search.
     # Turbopass is meant to run as its own central service; this on-box path
     # suits a single box or local testing. Default off → zero behaviour
-    # change: no image, no container, no nginx block.
+    # change: no image, no container, no nginx block. `--tags=turbopass`
+    # reruns only this part.
     - name: "Turbopass — ensure build workspace on target"
       ansible.builtin.file:
         path: "{{ digit_dir }}/.build"
         state: directory
         mode: "0755"
       when: enable_turbopass | default(false)
+      tags: [turbopass]
 
     - name: "Turbopass — sync vendored source + scraped data to target"
       ansible.builtin.synchronize:
@@ -5063,6 +5057,7 @@
           - "--exclude=node_modules"
           - "--exclude=venv"
       when: enable_turbopass | default(false)
+      tags: [turbopass]
 
     - name: "Turbopass — build search-api image (turbopass-search:local)"
       ansible.builtin.command: >-
@@ -5073,6 +5068,17 @@
       register: turbopass_build_run
       changed_when: true
       when: enable_turbopass | default(false)
+      tags: [turbopass]
+
+    - name: "Turbopass — boundary DB for turbopass_countries"
+      ansible.builtin.include_tasks:
+        file: tasks/turbopass-boundary-db.yml
+        apply:
+          tags: [turbopass]
+      when:
+        - enable_turbopass | default(false)
+        - turbopass_overture_data_dir | default('') | length > 0
+      tags: [turbopass]
 
     - name: "Turbopass — (re)create the turbopass-search container"
       ansible.builtin.shell: |
@@ -5094,6 +5100,7 @@
       register: turbopass_run
       changed_when: true
       when: enable_turbopass | default(false)
+      tags: [turbopass]
 
     # If a tenant just flipped enable_turbopass: true → false, the
     # previously-running container isn't managed by compose, so nothing
@@ -5108,6 +5115,7 @@
       register: turbopass_sweep
       changed_when: turbopass_sweep.stdout | length > 0
       when: not (enable_turbopass | default(false))
+      tags: [turbopass]
 
     # ---- Self-hosted Overpass: retired ----
     # Phase 2 no longer queries Overpass — boundaries come from turbopass
@@ -7376,7 +7384,6 @@
         timeout 300 bash -c 'until [ "$(docker inspect -f "{{ '{{' }}.State.Health.Status{{ '}}' }}" keycloak 2>/dev/null)" = "healthy" ]; do sleep 5; done && echo ready'
       register: kc_wait
       changed_when: false
-      when: enable_keycloak | default(false)
 
     - name: "identity-bootstrap — validate identity email configuration"
       ansible.builtin.assert:
@@ -7389,8 +7396,6 @@
           optional magic links require identity_smtp_host, identity_smtp_from,
           and an OpenBao identity_smtp_password when SMTP authentication is
           enabled.
-      when:
-        - enable_keycloak | default(false)
 
     - name: "identity-bootstrap — reconcile Organizations realm and BFF clients"
       ansible.builtin.command: "{{ digit_dir }}/configure-identity-keycloak.sh"
@@ -7430,7 +7435,6 @@
         KEYCLOAK_BFF_SIGNUP_METHODS: "{{ identity_signup_methods | default(['magic_link', 'google', 'github']) | join(',') }}"
         # digit-ui citizen client (#2189): empty = no citizen sign-in method, the script's default.
         KEYCLOAK_CITIZEN_SIGNIN_METHODS: "{{ identity_citizen_signin_methods | default([]) | join(',') }}"
-      when: enable_keycloak | default(false)
       no_log: true
       changed_when: true
 
@@ -7461,7 +7465,6 @@
       delay: 5
       failed_when: false
       when:
-        - enable_keycloak | default(false)
         - nginx_features.keycloak | default(false)
 
     - name: "validate — /auth/ answers with the realm's OIDC discovery document"
@@ -7481,7 +7484,6 @@
           {{ (keycloak_oidc_discovery.content | default(keycloak_oidc_discovery.msg | default('')))[:160] }}
         quiet: true
       when:
-        - enable_keycloak | default(false)
         - nginx_features.keycloak | default(false)
 
     - name: "validate — Identity BFF browser API is ready"
@@ -7492,7 +7494,6 @@
         validate_certs: "{{ tls_enabled | default(true) }}"
         headers: "{{ {} if (tls_enabled | default(true)) else {'Host': domain} }}"
       when:
-        - enable_keycloak | default(false)
         - nginx_features.keycloak | default(false)
 
     # Deploy-seeded roots (#2398). A root the deploy seeds (state_root) never went
@@ -7530,7 +7531,6 @@
       failed_when: false
       no_log: true
       when:
-        - enable_keycloak | default(false)
         - identity_route_backfill_roots | length > 0
 
     - name: "identity-bootstrap — fail: identity-bff rejected the control-plane token"
