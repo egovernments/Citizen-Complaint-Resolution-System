@@ -189,9 +189,8 @@ nginx_features:
   integration_tests_runner: false  # pair with enable_integration_tests_runner above
 
 # ── auth (Keycloak) ──
-# REQUIRED: every sign-in goes through Keycloak and the Identity BFF since
-# D26, and the deploy refuses `false`.
-enable_keycloak: true
+# Always deployed: every sign-in goes through Keycloak and the Identity BFF
+# since D26.
 # auth_provider and keycloak_client_id are retired (D26): leave them unset.
 enable_digit_ui_v2: false          # retired by D26; the deploy refuses true
 digit_ui_esbuild_branch: feat/keycloak-auth-adapter

@@ -1199,7 +1199,7 @@ Removed by item 14/15: the `DIGIT_PROVISIONER_*` variables, the onboarding worke
 - `GET /identity/v1/tenants` carries no readiness fields.
 - A tenant without a workspace row counts as ready (legacy).
 
-**Deployment.** The canonical CCRS deployment is `local-setup/docker-compose.egov-digit.yaml`. Setting `enable_keycloak: true` starts the BFF, Keycloak 26.7.3 and its own Postgres. Ansible runs `configure-keycloak.sh` with task-scoped secrets once Keycloak is healthy. Realm SMTP is mandatory, because password setup, invitation activation and email proof all depend on it. Kong publishes `/identity/v1` and `/auth`; `/internal/identity/v1` is never published. Production uses a dedicated DIGIT employee holding only `ACCOUNT_ADMIN` for the BFF's DIGIT admin calls.
+**Deployment.** The canonical CCRS deployment is `local-setup/docker-compose.egov-digit.yaml`. Its `keycloak` compose profile, which the Ansible deploy always turns on, starts the BFF, Keycloak 26.7.3 and its own Postgres. Ansible runs `configure-keycloak.sh` with task-scoped secrets once Keycloak is healthy. Realm SMTP is mandatory, because password setup, invitation activation and email proof all depend on it. Kong publishes `/identity/v1` and `/auth`; `/internal/identity/v1` is never published. Production uses a dedicated DIGIT employee holding only `ACCOUNT_ADMIN` for the BFF's DIGIT admin calls.
 
 **Failure behaviour.**
 - Missing Redis or Keycloak stops the identity operation that needs it.

@@ -4,6 +4,5 @@
 --
 -- Idempotent guard: SELECT … \gexec only fires the CREATE when the row
 -- is missing. If a sibling deploy already created it, this no-ops.
--- Inert when `enable_keycloak: false` — nothing else references the DB.
 SELECT 'CREATE DATABASE keycloak'
 WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'keycloak')\gexec
