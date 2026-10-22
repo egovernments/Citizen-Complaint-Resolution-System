@@ -2,6 +2,8 @@ import { ensureActive, remove as removeBinding } from "../../src/modules/binding
 import { mirrorPerson } from "../../src/modules/sync/mirror.js";
 import * as syncMirror from "../../src/modules/sync/mirror.js";
 import * as sessionStore from "../../src/modules/sessions/session-store.js";
+import * as bindingStore from "../../src/modules/bindings/store.js";
+import * as digitUserClient from "../../src/modules/managed-accounts/digit-user-client.js";
 import { BindingError } from "../../src/modules/bindings/types.js";
 import { staffAccess } from "../../src/modules/bindings/predicate.js";
 import { withPersonLease } from "../../src/modules/accounts/person-lease.js";
@@ -3113,7 +3115,7 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
         const user = await (await fetch(`${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/${staff}`)).json();
         const attributes = { ...user.attributes };
         for (const name of ["phoneNumber", "phoneNumberVerified", "digit.citizenRegistrations", "digit.accounts"]) delete attributes[name];
-        await kcUpdate(`/users/${staff}`, { attributes });
+        await kcUpdate(`/users/${staff}`, { enabled: true, attributes });
       });
 
       it("signs in as the employee: one person, one session list, and a citizen profile from the employee record", async () => {
@@ -3159,6 +3161,65 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
         expect(proved.user.id).not.toBe(staff);
         const user = await (await fetch(`${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/${staff}`)).json();
         expect(user.attributes.phoneNumber).toEqual(["+254799002598"]);
+      });
+
+      const kcUser = async (id: string) => (await fetch(`${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/${id}`)).json();
+
+      it("keeps a separate phone identity when two people are bound to the employee record", async () => {
+        await bindStaff("799002601");
+        const second = "identity-user-second-binding";
+        const { attributes } = await kcUser(staff);
+        await kcAdmin("/users", {
+          id: second, username: "second.binding", enabled: true,
+          attributes: { "digit.bindings": attributes["digit.bindings"], "digit.boundUuids": attributes["digit.boundUuids"] },
+        });
+        await ensureOrganizationMembership({ organizationId: "org-bomet-id", userId: second });
+        try {
+          const signedIn = await (await sessionOf(await signInByOtp("799002601"), "citizen")).json();
+          expect([staff, second]).not.toContain(signedIn.user.id);
+          expect((await kcUser(staff)).attributes.phoneNumber).toBeUndefined();
+        } finally {
+          await fetch(`${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/organizations/org-bomet-id/members/${second}`, { method: "DELETE" });
+          await fetch(`${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/${second}`, { method: "DELETE" });
+        }
+      });
+
+      it("keeps a separate phone identity when the bound person may not use the tenant or is bound to another record", async () => {
+        await bindStaff("799002602");
+        await kcUpdate(`/users/${staff}`, { enabled: false });
+        const disabled = await (await sessionOf(await signInByOtp("799002602"), "citizen")).json();
+        expect(disabled.user.id).not.toBe(staff);
+        expect((await kcUser(staff)).attributes.phoneNumber).toBeUndefined();
+        await kcUpdate(`/users/${staff}`, { enabled: true });
+        await removeLegacyEmployeeFixture(bound);
+
+        // The owner lookup names the staff person for a record their binding no longer points at.
+        await bindStaff("799002603");
+        const other = employee("799002604");
+        const original = bindingStore.ownersOf;
+        const spy = vi.spyOn(bindingStore, "ownersOf").mockImplementation(async (tenantId, uuid) =>
+          uuid === other.uuid ? [staff] : original(tenantId, uuid));
+        try {
+          const moved = await (await sessionOf(await signInByOtp("799002604"), "citizen")).json();
+          expect(spy).toHaveBeenCalledWith("ke.bomet", other.uuid);
+          expect(moved.user.id).not.toBe(staff);
+          expect((await kcUser(staff)).attributes.phoneNumber).toBeUndefined();
+        } finally { spy.mockRestore(); }
+      });
+
+      it("re-checks the employee record under the phone lock", async () => {
+        await bindStaff("799002605");
+        // The record loses the number between the first read and the one under the lock.
+        const original = digitUserClient.searchAccounts;
+        let searches = 0;
+        const spy = vi.spyOn(digitUserClient, "searchAccounts").mockImplementation(async (token, criteria) =>
+          criteria.userType === "EMPLOYEE" && criteria.mobileNumber === "799002605" && ++searches === 2 ? [] : original(token, criteria));
+        try {
+          const signedIn = await (await sessionOf(await signInByOtp("799002605"), "citizen")).json();
+          expect(signedIn.user.id).not.toBe(staff);
+          expect(searches).toBe(2);
+          expect((await kcUser(staff)).attributes.phoneNumber).toBeUndefined();
+        } finally { spy.mockRestore(); }
       });
     });
 
