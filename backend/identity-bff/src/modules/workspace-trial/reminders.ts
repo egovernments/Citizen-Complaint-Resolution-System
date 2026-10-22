@@ -78,7 +78,17 @@ async function workspaceAdmins(organizationId: string, tenantId: string): Promis
   });
 }
 
-let warnedOff = false;
+/** The bridge URL and token, and a platform tenant to send from. An empty URL is the off switch. */
+export function remindersEnabled(): boolean {
+  return novuBridgeConfigured() && Boolean(config.digitAdminTenantId.split(".")[0]);
+}
+
+/** One line at startup says whether reminders go out, so an off switch costs no warning per pass. */
+export function logTrialReminderMode(): void {
+  if (!trialsEnabled()) return;
+  console.info(JSON.stringify({ trial: "identity.workspace_trial.reminders", enabled: remindersEnabled(),
+    ...(!remindersEnabled() && { reason: "IDENTITY_NOVU_BRIDGE_URL, IDENTITY_NOVU_BRIDGE_TOKEN or DIGIT_ADMIN_TENANT_ID is empty" }) }));
+}
 
 /**
  * Reconcile calls this for every workspace on every pass, with the tenant state it just observed. A
@@ -89,18 +99,12 @@ let warnedOff = false;
  */
 export async function sendTrialReminder(tenantId: string, org: RawTenantOrganization, tenantState?: string,
   now = Date.now()): Promise<void> {
-  if (!trialsEnabled() || !org.trial || !org.enabled || tenantState === "TENANT_INACTIVE" ||
+  if (!trialsEnabled() || !remindersEnabled() || !org.trial || !org.enabled || tenantState === "TENANT_INACTIVE" ||
       (org.lifecycle !== null && org.lifecycle !== "ACTIVE")) return;
   const days = dueReminder(org.trial, now, config.workspaceTrialReminderDays);
   if (days === null) return;
   // The platform sends it, through the deployment's own providers: a trial workspace has none.
   const platformTenant = config.digitAdminTenantId.split(".")[0];
-  if (!novuBridgeConfigured() || !platformTenant) {
-    if (!warnedOff) console.warn(JSON.stringify({ trial: "identity.workspace_trial.reminders_off",
-      reason: "IDENTITY_NOVU_BRIDGE_URL, IDENTITY_NOVU_BRIDGE_TOKEN and DIGIT_ADMIN_TENANT_ID are required" }));
-    warnedOff = true;
-    return;
-  }
   const endsAt = new Date(Date.parse(org.trial.endsAt)).toISOString();
   const log = { trial: "identity.workspace_trial.reminder", tenantId, endsAt, days };
   try {

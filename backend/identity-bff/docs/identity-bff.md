@@ -1208,7 +1208,7 @@ Probed on Keycloak 26.7.3 on 2026-10-04; the event shapes the poller matches are
 | `IDENTITY_WORKSPACE_TRIAL_NOTICE_TITLE`, `_MESSAGE` | Text of the `WORKSPACE_TRIAL_EXPIRED` notice (defaults: "This workspace's trial has ended" / "Sign-in is paused until the workspace is approved. Contact the platform team to continue.") |
 | `IDENTITY_WORKSPACE_TRIAL_NOTICE_LINK_LABEL`, `_LINK_URL` | Optional notice link; sent only when both are set |
 | `IDENTITY_WORKSPACE_TRIAL_REMINDER_DAYS` | Reminder emails, in days before a trial ends; comma-separated, default `14,7,3,2,1`. The "locked" email at the end is always sent |
-| `IDENTITY_NOVU_BRIDGE_URL`, `IDENTITY_NOVU_BRIDGE_TOKEN` | novu-bridge base URL (`http://novu-bridge:8080/novu-bridge`) and its `NOVU_BRIDGE_INTERNAL_SEND_TOKEN`, for `messages/_dispatch`. Either empty: no reminder emails |
+| `IDENTITY_NOVU_BRIDGE_URL`, `IDENTITY_NOVU_BRIDGE_TOKEN` | novu-bridge base URL (`http://novu-bridge:8080/novu-bridge`) and its `NOVU_BRIDGE_INTERNAL_SEND_TOKEN`, for `messages/_dispatch`. Either empty: no reminder emails, said once at startup (`identity.workspace_trial.reminders`, `enabled: false`). An empty URL is the off switch (`identity_workspace_trial_reminders_enabled: false` on Ansible) |
 | `IDENTITY_RECONCILIATION_INTERVAL_SECONDS` | Unchanged (default 300); reported by `/readyz` |
 
 Removed by item 14/15: the `DIGIT_PROVISIONER_*` variables, the onboarding worker variables, the role allowlist, and the `admin/admin` Keycloak fallback.

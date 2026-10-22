@@ -3297,7 +3297,8 @@ services:
       IDENTITY_WORKSPACE_TRIAL_DAYS: ${IDENTITY_WORKSPACE_TRIAL_DAYS:-0}
       IDENTITY_WORKSPACE_TRIAL_REMINDER_DAYS: ${IDENTITY_WORKSPACE_TRIAL_REMINDER_DAYS:-}
       # Trial reminder emails go through novu-bridge's internal send API (no Novu key here).
-      IDENTITY_NOVU_BRIDGE_URL: ${IDENTITY_NOVU_BRIDGE_URL:-http://novu-bridge:8080/novu-bridge}
+      # Single dash: an explicitly empty value (identity_workspace_trial_reminders_enabled: false) turns them off.
+      IDENTITY_NOVU_BRIDGE_URL: ${IDENTITY_NOVU_BRIDGE_URL-http://novu-bridge:8080/novu-bridge}
       IDENTITY_NOVU_BRIDGE_TOKEN: ${NOVU_BRIDGE_INTERNAL_SEND_TOKEN:-}
       IDENTITY_WORKSPACE_TRIAL_NOTICE_TITLE: ${IDENTITY_WORKSPACE_TRIAL_NOTICE_TITLE:-}
       IDENTITY_WORKSPACE_TRIAL_NOTICE_MESSAGE: ${IDENTITY_WORKSPACE_TRIAL_NOTICE_MESSAGE:-}

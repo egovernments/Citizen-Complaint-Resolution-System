@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { config } from "../../src/infrastructure/config.js";
 import { setNotificationDispatcher, type NotificationEnvelope } from "../../src/integrations/novu-bridge.js";
-import { dueReminder, reminderMarker, sendTrialReminder } from "../../src/modules/workspace-trial/reminders.js";
+import { dueReminder, logTrialReminderMode, reminderMarker, sendTrialReminder } from "../../src/modules/workspace-trial/reminders.js";
 
 const mocks = vi.hoisted(() => ({ request: vi.fn(), update: vi.fn() }));
 vi.mock("../../src/modules/organizations/organization-service.js", () => ({ request: mocks.request }));
@@ -118,6 +118,19 @@ describe("sendTrialReminder", () => {
     expect(sent).toHaveLength(0);
     expect(mocks.update).toHaveBeenCalledTimes(1);
     expect(warned("NO_RECIPIENT")).toBe(true);
+  });
+
+  it("is off with an empty bridge URL: one line at startup, then nothing on each pass, not even a warning", async () => {
+    config.novuBridgeUrl = "";
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    logTrialReminderMode();
+    expect(info).toHaveBeenCalledTimes(1);
+    expect(String(info.mock.calls[0][0])).toContain('"enabled":false');
+    await sendTrialReminder("acme", org, "active", day(23));
+    await sendTrialReminder("acme", org, "active", day(23));
+    expect(mocks.request).not.toHaveBeenCalled();
+    expect(sent).toHaveLength(0);
+    expect(warn).not.toHaveBeenCalled();
   });
 
   it("sends nothing while trials are off, for an inactive tenant or an unfinished Organization, or when nothing is due", async () => {
