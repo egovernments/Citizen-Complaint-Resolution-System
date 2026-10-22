@@ -1900,6 +1900,8 @@ describe('standalone Identity BFF and Keycloak deployment contract', () => {
       expect(bff).toContain(`${setting}:`);
     }
     // Empty falls back to identity-bff's default (#2599); a list or a comma string both render as CSV.
+    // A bare host_vars key (None) counts as unset, not as a list to join.
+    expect(env).toContain("{% set configurator_roles = identity_configurator_roles | default('', true) %}");
     expect(env).toContain('IDENTITY_CONFIGURATOR_ROLES={{ configurator_roles if configurator_roles is string else configurator_roles | join(\',\') }}');
     expect(bff).toContain('DIGIT_CONFIGURATOR_ROLES: ${IDENTITY_CONFIGURATOR_ROLES:-}');
     expect(bff).not.toMatch(/^ +(?:PGR_)?ONBOARDING_WORKER_\w*:/m);
