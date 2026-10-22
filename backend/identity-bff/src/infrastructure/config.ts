@@ -35,6 +35,18 @@ function cookieSameSite(value: string): "Lax" | "None" | "Strict" {
   throw new Error("IDENTITY_COOKIE_SAME_SITE must be Lax, None, or Strict");
 }
 
+/**
+ * The trial's only switch, so a value that isn't a whole number of days from 0 to 3650 stops
+ * startup instead of silently turning every lock off. The cap keeps the end date representable.
+ */
+export function parseTrialDays(value: string | undefined): number {
+  const text = (value ?? "").trim() || "0";
+  if (!/^\d+$/.test(text) || Number(text) > 3650) {
+    throw new Error(`IDENTITY_WORKSPACE_TRIAL_DAYS must be a whole number of days from 0 to 3650, not "${value}"`);
+  }
+  return Number(text);
+}
+
 function trialNotice() {
   const linkLabel = process.env.IDENTITY_WORKSPACE_TRIAL_NOTICE_LINK_LABEL;
   const linkUrl = process.env.IDENTITY_WORKSPACE_TRIAL_NOTICE_LINK_URL;
@@ -182,7 +194,7 @@ export const config = {
 
   // Self-serve workspace trial: 0 turns it off; a workspace without
   // digit.trialEndsAt is never locked.
-  workspaceTrialDays: parseInt(process.env.IDENTITY_WORKSPACE_TRIAL_DAYS || "0"),
+  workspaceTrialDays: parseTrialDays(process.env.IDENTITY_WORKSPACE_TRIAL_DAYS),
   workspaceTrialNotice: trialNotice(),
   // Reminder emails, in days before the trial ends; the "locked" email at the end always goes too.
   workspaceTrialReminderDays: csv(process.env.IDENTITY_WORKSPACE_TRIAL_REMINDER_DAYS || "14,7,3,2,1")

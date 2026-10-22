@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, Compass } from 'lucide-react';
 import { useApp } from '../../App';
 import { Button } from '@/components/ui/button';
+import { track } from '@/lib/analytics';
 import { ONBOARDING_STEPS } from '../steps';
 import { completedCount, resumeStep } from '../progress';
 import { useOnboardingT } from '../i18n';
@@ -52,6 +53,22 @@ export default function HomePage() {
   const [welcomeOpen, setWelcomeOpen] = useState(() => !welcomeSeen(tenant));
   const [video, setVideo] = useState<number | null>(null);
 
+  useEffect(() => {
+    track('onboarding:home_view', { done });
+    if (welcomeOpen) track('onboarding:tour_open', { auto: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per visit to Home
+  }, []);
+
+  const openTour = () => {
+    setWelcomeOpen(true);
+    track('onboarding:tour_open', { auto: false });
+  };
+
+  const playVideo = (index: number | null) => {
+    setVideo(index);
+    if (index !== null && videos[index]) track('onboarding:video_play', { video: videos[index].id });
+  };
+
   const closeWelcome = (open: boolean) => {
     setWelcomeOpen(open);
     if (!open) rememberWelcomeSeen(tenant);
@@ -64,7 +81,7 @@ export default function HomePage() {
           <p className="text-xs font-medium uppercase tracking-[0.5px] text-muted-foreground">{t('layout.home', 'Home')}</p>
           <h2 className="text-3xl font-bold font-condensed text-foreground">{t('layout.setup_account', 'Let’s set up your account')}</h2>
         </div>
-        <Button variant="outline" onClick={() => setWelcomeOpen(true)} className="h-10 gap-2 text-primary hover:text-primary">
+        <Button variant="outline" onClick={openTour} className="h-10 gap-2 text-primary hover:text-primary">
           <Compass className="h-4 w-4" />
           {t('home.take_tour', 'Take a tour')}
         </Button>
@@ -99,10 +116,10 @@ export default function HomePage() {
         </Button>
       </section>
 
-      <LearnTheBasics videos={videos} onOpen={setVideo} />
+      <LearnTheBasics videos={videos} onOpen={playVideo} />
 
       <WelcomeDialog open={welcomeOpen} onOpenChange={closeWelcome} />
-      <VideoDialog videos={videos} index={video} onIndexChange={setVideo} onClose={() => setVideo(null)} />
+      <VideoDialog videos={videos} index={video} onIndexChange={playVideo} onClose={() => setVideo(null)} />
     </div>
   );
 }

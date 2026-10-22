@@ -385,7 +385,7 @@ change_phone → 200 {phoneNumber, phoneNumberVerified: true}
 
 - Identity resolution and creation run under the **phone lock** (§2.5).
 - New phone identities get an **opaque** Keycloak username. Existing usernames stay, and lookup always follows the current verified phone (design §8).
-- A **phone change** keeps the citizen account's uuid. It updates Keycloak, then DIGIT. It ends the person's other sessions that carry the old number.
+- A **phone change** keeps the citizen account's uuid. It updates Keycloak, then DIGIT. It ends the person's other sessions that carry the old number and revokes every DIGIT token they held, including one the changing session shares; digit-ui's phone form selects again right after verify.
 - A new citizen without a given name gets the national mobile number as their DIGIT name (D17).
 - A workspace whose trial ended unapproved gets `WORKSPACE_TRIAL_EXPIRED` with its `notice` before the code is checked, as in `_send`.
 - Errors: `INVALID_REQUEST`, `PHONE_OTP_DISABLED`, `OTP_EXPIRED`, `OTP_INVALID` (+ `attemptsRemaining`) (400); `SESSION_REQUIRED` 401; `UNTRUSTED_ORIGIN`, `IDENTITY_DISABLED`, `WORKSPACE_TRIAL_EXPIRED` (403); `TENANT_ROUTE_NOT_FOUND` 404; `IDENTITY_CONFLICT`, `PHONE_IN_USE` (409); `TENANT_ROUTE_UNAVAILABLE`, `IDENTITY_UNAVAILABLE` (503).
@@ -427,7 +427,7 @@ Query: `surface`; `include=account` (optional).
 Body or query `{surface, scope?: "current" | "others" | "all"}`, default `current` → **`204`**, and clears the cookie for `current` and `all`.
 
 - `current`: ends this session and its Keycloak session, and revokes this session's DIGIT token claim.
-- `others`: ends every **other** BFF and Keycloak session of the person. It skips DIGIT logout for accounts whose token is held by the current session; tokens used only by the ended sessions are revoked. See the shared-token limitation in §8.
+- `others`: ends every **other** BFF and Keycloak session of the person and revokes every DIGIT token those sessions held, including one the current session shares; the current session then selects again for a fresh token (§8).
 - `all`: both, and raises the person's revocation generation (§6).
 - Failed DIGIT logouts go on the revocation retry set. They never fail the request.
 - The BFF session is deleted before Keycloak is called. Ending the Keycloak session is best-effort: the request waits at most 2 s for it, and one that fails or times out goes on the Keycloak logout retry set (§7.4). A Keycloak outage never fails the request.
@@ -694,7 +694,7 @@ Organization membership **only**, and idempotent. The role projection and the ma
 
 - **`POST /internal/identity/v1/reconciliation/_run`** (item 12) → `200 | 202 {acquired, subjects, mirrored, revoked, propagated, unchanged, failures: [{subject, code}], lagSeconds}`. It **never** writes DIGIT `active`, and never creates or restores a membership or binding. `deactivated` and `unprovisioned` are removed.
 - **`account-links/_link`, `_unlink`, `GET account-links`** keep today's shapes. After item 14 they accept `userType: "CITIZEN"` only, and `EMPLOYEE` → `INVALID_REQUEST`. They are how an admin resolves `CITIZEN_ACCOUNT_AMBIGUOUS`. Until item 14, an `EMPLOYEE` link writes an `active` binding (item 19 runs the bulk conversion).
-- **`GET /internal/identity/v1/workspace-trials`** → `200 {workspaces: [{tenantId, urlSlug, name, trialEndsAt, approvedAt, approvedBy, state: TRIAL | APPROVED | EXPIRED}]}`, one row per Organization with a trial end.
+- **`GET /internal/identity/v1/workspace-trials`** → `200 {workspaces: [{tenantId, urlSlug, name, trialEndsAt, approvedAt, approvedBy, state: TRIAL | APPROVED | EXPIRED, locked}]}`, one row per Organization with a trial end. `state` reads the attributes alone; `locked` is what the gates do, so it is `false` for every workspace while `IDENTITY_WORKSPACE_TRIAL_DAYS` is 0. `_approve` and `_extend` answer the same `workspace` view.
 - **`POST /internal/identity/v1/workspace-trials/_approve`** `{tenantId, actor?}` → `200 {workspace}`. Sets `trialApprovedAt` and `trialApprovedBy` (`control-plane:<actor>`); a second call keeps the first approval, on a workspace without a trial too. No Organization → `WORKSPACE_NOT_FOUND` (404).
 - **`POST /internal/identity/v1/workspace-trials/_extend`** `{tenantId, endsAt, actor?}` → `200 {workspace}`. Sets `trialEndsAt` to `endsAt` (a full ISO 8601 timestamp with an offset, else `INVALID_REQUEST`); works on a workspace with no trial. Both writes re-read the Organization before the PUT, under the onboarding lock its primitives take (`op` by `digit.operationId`, else `tenant`), and clear the tenant mapping cache. Both are audited (`WORKSPACE_TRIAL_APPROVED` / `_EXTENDED`, actor, `{from, to}`). A held onboarding lock → `IDENTITY_BUSY`, Keycloak failure → `IDENTITY_UNAVAILABLE` (both retry).
 - **`POST /internal/identity/v1/tenant-routes/_backfill`** `{dryRun?: boolean, actor?: string}` → `200 {created: [tenantId], skipped: [{tenantId, reason: NOT_ROOT | NOT_ACTIVE | ALREADY_MAPPED}], conflicts: [{tenantId, reason: INVALID_SLUG | SLUG_TAKEN | ALIAS_TAKEN}]}`. It gives every active DIGIT root tenant in `IDENTITY_TENANT_ROUTE_BACKFILL_ROOTS` (unset: the root of `DIGIT_ADMIN_TENANT_ID`; set but empty: none, which is how a deployment opts out; the Helm chart leaves an empty value unset) that no Organization maps an Organization whose alias and URL slug are the tenant id (`ke` → `/ke/digit-ui/...`). Idempotent; it never renames or overwrites a mapping. `IDENTITY_TENANT_ROUTE_BACKFILL=true` runs the same backfill at startup. It is kept after item 14 because it is the only way a root tenant that predates signup gets a route; signup's `organizations/_ensure` covers new tenants. Keycloak or DIGIT failures → `IDENTITY_UNAVAILABLE` / `DIGIT_UNAVAILABLE`. The Ansible deploy is a regular caller: every converge POSTs it on the loopback port for the roots it renders from `identity_tenant_route_backfill_roots` (empty when it routes none, never `pg`), and compares `created`/`skipped`/`conflicts` with those roots to report any left without a route (#2398).
@@ -1044,17 +1044,17 @@ Reference implementation and unit tests: `src/modules/accounts/credential.ts`, `
 
 egov-user can return the same live access token for repeated grants of one
 account. The BFF cannot revoke only the copies held by other consumers of that
-token. `logout {scope: "others"}` therefore preserves every current-session-held
-account token while ending the other BFF/Keycloak sessions. Other consumers who
-already possess that shared DIGIT token can use it until expiry or a later
-account-wide revocation (including logout-all), including consumers that obtained
-the same token directly from egov-user outside the BFF. Tokens belonging only to ended
-sessions are still revoked. This limitation also applies when staff use the
-derived credential; deterministic credentials do not create per-session DIGIT
-tokens. Logout-current releases its claim and preserves tokens with remaining
+token. Logout-current releases its claim and preserves tokens with remaining
 holders; logout-all ends all claims and revokes the shared token.
 
-A credential change (§10) does **not** keep shared tokens. A DIGIT token
+`logout {scope: "others"}` does **not** keep shared tokens (#2592). It revokes
+every token an ended session held, including one the current session also holds,
+so the signed-out devices lose DIGIT access at once. The current session keeps its
+BFF and Keycloak sessions and gets a fresh token at its next `_select`; digit-ui's
+account page selects again right after the sign-out. Tokens only the current
+session holds are kept.
+
+A credential change (§10) does **not** keep shared tokens either. A DIGIT token
 survives it only if sessions that survive are its **only** holders. That
 includes the B3 initiating session. If any ended session also held the token,
 the BFF revokes it with an egov-user logout, because that copy may sit on the
@@ -1204,7 +1204,7 @@ Probed on Keycloak 26.7.3 on 2026-10-04; the event shapes the poller matches are
 | `IDENTITY_STAFF_CREDENTIAL_MODE` | `rotate` \| `derived`, per box (D24) |
 | `IDENTITY_OTP_SENDER` = `log` \| `http`, `IDENTITY_OTP_SENDER_URL` | `HttpOtpSender` (item 3) |
 | `IDENTITY_POLLER_MAX_LAG_SECONDS` | Readiness threshold for the event poller |
-| `IDENTITY_WORKSPACE_TRIAL_DAYS` | Trial length for new self-serve workspaces; integer, default 0. 0 turns trials off: nothing is stamped and no workspace locks, whatever its `digit.trialEndsAt` |
+| `IDENTITY_WORKSPACE_TRIAL_DAYS` | Trial length for new self-serve workspaces; a whole number from 0 to 3650, default 0 (empty = 0). Anything else stops startup. 0 turns trials off: nothing is stamped and no workspace locks, whatever its `digit.trialEndsAt` |
 | `IDENTITY_WORKSPACE_TRIAL_NOTICE_TITLE`, `_MESSAGE` | Text of the `WORKSPACE_TRIAL_EXPIRED` notice (defaults: "This workspace's trial has ended" / "Sign-in is paused until the workspace is approved. Contact the platform team to continue.") |
 | `IDENTITY_WORKSPACE_TRIAL_NOTICE_LINK_LABEL`, `_LINK_URL` | Optional notice link; sent only when both are set |
 | `IDENTITY_WORKSPACE_TRIAL_REMINDER_DAYS` | Reminder emails, in days before a trial ends; comma-separated, default `14,7,3,2,1`. The "locked" email at the end is always sent |
@@ -1221,7 +1221,7 @@ Removed by item 14/15: the `DIGIT_PROVISIONER_*` variables, the onboarding worke
 - `GET /identity/v1/tenants` carries no readiness fields.
 - A tenant without a workspace row counts as ready (legacy).
 
-**Deployment.** The canonical CCRS deployment is `local-setup/docker-compose.egov-digit.yaml`. Setting `enable_keycloak: true` starts the BFF, Keycloak 26.7.3 and its own Postgres. Ansible runs `configure-keycloak.sh` with task-scoped secrets once Keycloak is healthy. Realm SMTP is mandatory, because password setup, invitation activation and email proof all depend on it. Kong publishes `/identity/v1` and `/auth`; `/internal/identity/v1` is never published. Production uses a dedicated DIGIT employee holding only `ACCOUNT_ADMIN` for the BFF's DIGIT admin calls.
+**Deployment.** The canonical CCRS deployment is `local-setup/docker-compose.egov-digit.yaml`. Its `keycloak` compose profile, which the Ansible deploy always turns on, starts the BFF, Keycloak 26.7.3 and its own Postgres. Ansible runs `configure-keycloak.sh` with task-scoped secrets once Keycloak is healthy. Realm SMTP is mandatory, because password setup, invitation activation and email proof all depend on it. Kong publishes `/identity/v1` and `/auth`; `/internal/identity/v1` is never published. Production uses a dedicated DIGIT employee holding only `ACCOUNT_ADMIN` for the BFF's DIGIT admin calls.
 
 **Failure behaviour.**
 - Missing Redis or Keycloak stops the identity operation that needs it.
@@ -1241,7 +1241,7 @@ Removed by item 14/15: the `DIGIT_PROVISIONER_*` variables, the onboarding worke
 | `trigger` | `eventId` (`<time>:<id>` for a Keycloak event), `eventType` (the user event type, e.g. `UPDATE_CREDENTIAL`, or the admin event's operation and resource, e.g. `UPDATE USER`), `eventTime` (ISO). A job the BFF started itself has only a generated `eventId` (`tenant:<tenantId>` for a tenant fan-out); a logout line not caused by a Keycloak event has an empty `trigger` |
 | `sessionsEnded`, `sessions.ended` | Count, and a `privateRef` per ended BFF session (the same keyed hash the `token-holders:*` sets store) |
 | `sessionsKept`, `sessions.kept` | Every session of the person the run left alive, each with `reason`: `B3_INITIATOR` (the session that made a self password change), `INITIATOR` (the session that asked for the logout or phone change), `OTHER_TENANT` (a tenant-scoped job and the session is at another tenant), `NOT_TARGETED` (a logout that did not cover it), `CHANGING_SESSION` (the Keycloak session that made a credential change, §10), `AUTHENTICATED_AFTER_CHANGE` (Keycloak authenticated it at or after a credential change, §10) |
-| `tokensRevoked`, `tokensKept`, `tokens[]` | Each DIGIT token decision: `account`, `tokenRef` (first 12 hex digits of SHA-256 of the token, matching the `revoke-retry:*` key), `outcome` `revoked` \| `kept`, and `why`. Revoked: `IN_SCOPE`, `SHARED_WITH_ENDED_SESSION` (a kept session also held it; it gets a fresh token at its next `_select`, §8), `RECOVERED` (not in Redis; found by a staff login, §8), `NO_LIVE_HOLDER` (logout ended its last holder). Kept: `KEPT_SESSIONS_ONLY_HOLDERS`, `STILL_HELD` (another live session holds it), `RETAINED_BY_CURRENT` (logout of other sessions), `OTHER_PERSON` (the account's token belongs to another subject) |
+| `tokensRevoked`, `tokensKept`, `tokens[]` | Each DIGIT token decision: `account`, `tokenRef` (first 12 hex digits of SHA-256 of the token, matching the `revoke-retry:*` key), `outcome` `revoked` \| `kept`, and `why`. Revoked: `IN_SCOPE`, `SHARED_WITH_ENDED_SESSION` (a kept session also held it, after a credential change, a phone change or logout of other sessions; it gets a fresh token at its next `_select`, §8), `RECOVERED` (not in Redis; found by a staff login, §8), `NO_LIVE_HOLDER` (logout ended its last holder). Kept: `KEPT_SESSIONS_ONLY_HOLDERS`, `STILL_HELD` (another live session holds it), `OTHER_PERSON` (the account's token belongs to another subject) |
 | `durationMs` | Run time |
 
 No line contains a token, cookie, session id or Keycloak session id.
@@ -1279,6 +1279,7 @@ curl -s -X POST -H "Authorization: Bearer $IDENTITY_CONTROL_PLANE_TOKEN" \
   http://127.0.0.1:<bff-port>/internal/identity/v1/workspace-trials/_extend
 ```
 
+- Each answer's `locked` says whether the gates refuse the workspace now. `state` reads only its attributes, so while trials are off a workspace past its end date shows `state: EXPIRED, locked: false`.
 - `endsAt` must be a full ISO 8601 timestamp with an offset (`2026-12-31T23:59:59Z`, `2026-12-31T23:59:59+03:00`) on a real calendar day; anything else, a date alone included, is `INVALID_REQUEST`.
 - Both writes are audited in the identity audit stream: `WORKSPACE_TRIAL_APPROVED` / `WORKSPACE_TRIAL_EXTENDED`, with `actor` and `detail` `{"from","to"}`. A second approval keeps the first, on a workspace without a trial too. A held onboarding lock answers `IDENTITY_BUSY` (retry).
 - `approvedBy` is stored as `control-plane:<actor>`. `actor` may use letters, digits and `_ . @ : -`, up to 100 characters; any other value is dropped and stored as plain `control-plane`.

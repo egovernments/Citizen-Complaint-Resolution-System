@@ -511,7 +511,7 @@ Changed defaults worth checking: `NOVU_BRIDGE_CHANNEL_POLICY_SCHEMA` is `NOTIFIC
 ## Per-tenant notification accounts
 
 New in this release ([tenant-accounts.md](./tenant-accounts.md)): each signup workspace gets its
-own Novu organization at tenant creation. On a box with `enable_novu` and `enable_keycloak` it is
+own Novu organization at tenant creation. On a box with `enable_novu` it is
 on by default (Helm: off unless `tenant-accounts.enabled: true`); the upgrade deploy then
 generates its secrets into OpenBao and moves the Novu admin off its old password (dashboard login
 included: read the new one with `bao kv get -field=novu_admin_password <secrets_path>`). Nothing

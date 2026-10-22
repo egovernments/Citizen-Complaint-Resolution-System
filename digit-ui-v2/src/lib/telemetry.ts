@@ -8,6 +8,10 @@
 import posthog from 'posthog-js';
 import * as Sentry from '@sentry/react';
 
+// PostHog only once main.tsx started it, which it does only when the build set
+// VITE_POSTHOG_KEY; posthog-js logs an error for every call made before init.
+const ph = () => (posthog.__loaded ? posthog : undefined);
+
 // ============================================
 // User Identification
 // ============================================
@@ -25,7 +29,7 @@ export interface TelemetryUser {
  */
 export function identifyUser(user: TelemetryUser) {
   // PostHog identification
-  posthog.identify(user.id, {
+  ph()?.identify(user.id, {
     name: user.name,
     email: user.email,
     tenant: user.tenant,
@@ -50,7 +54,7 @@ export function identifyUser(user: TelemetryUser) {
  * Clear user identification (on logout)
  */
 export function clearUser() {
-  posthog.reset();
+  ph()?.reset();
   Sentry.setUser(null);
 }
 
@@ -99,7 +103,7 @@ interface EventProperties {
  * Track a custom event
  */
 export function trackEvent(event: EventName, properties?: EventProperties) {
-  posthog.capture(event, properties);
+  ph()?.capture(event, properties);
 
   // Also add breadcrumb to Sentry for context
   Sentry.addBreadcrumb({
@@ -132,7 +136,7 @@ export function captureError(error: Error, context?: ErrorContext) {
   });
 
   // Also track in PostHog
-  posthog.capture('error', {
+  ph()?.capture('error', {
     error_message: error.message,
     error_name: error.name,
     ...context,
@@ -163,7 +167,7 @@ export function captureApiError(
     },
   });
 
-  posthog.capture('api_error', {
+  ph()?.capture('api_error', {
     endpoint,
     status,
     message,
@@ -182,7 +186,7 @@ export function startMeasure(name: string): () => void {
 
   return () => {
     const duration = performance.now() - start;
-    posthog.capture('performance', {
+    ph()?.capture('performance', {
       metric_name: name,
       duration_ms: Math.round(duration),
     });
@@ -198,7 +202,7 @@ export function trackPagePerformance() {
     const loadTime = timing.loadEventEnd - timing.navigationStart;
     const domReady = timing.domContentLoadedEventEnd - timing.navigationStart;
 
-    posthog.capture('page_performance', {
+    ph()?.capture('page_performance', {
       load_time_ms: loadTime,
       dom_ready_ms: domReady,
       path: window.location.pathname,
@@ -214,14 +218,14 @@ export function trackPagePerformance() {
  * Check if a feature flag is enabled
  */
 export function isFeatureEnabled(flagName: string): boolean {
-  return posthog.isFeatureEnabled(flagName) ?? false;
+  return ph()?.isFeatureEnabled(flagName) ?? false;
 }
 
 /**
  * Get feature flag value
  */
 export function getFeatureFlag<T>(flagName: string): T | undefined {
-  return posthog.getFeatureFlag(flagName) as T | undefined;
+  return ph()?.getFeatureFlag(flagName) as T | undefined;
 }
 
 // ============================================
@@ -232,14 +236,14 @@ export function getFeatureFlag<T>(flagName: string): T | undefined {
  * Start session recording
  */
 export function startRecording() {
-  posthog.startSessionRecording();
+  ph()?.startSessionRecording();
 }
 
 /**
  * Stop session recording
  */
 export function stopRecording() {
-  posthog.stopSessionRecording();
+  ph()?.stopSessionRecording();
 }
 
 // ============================================
@@ -250,7 +254,7 @@ export function stopRecording() {
  * Enable debug mode for development
  */
 export function enableDebugMode() {
-  posthog.debug();
+  ph()?.debug();
   console.log('[Telemetry] Debug mode enabled');
 }
 

@@ -1137,6 +1137,26 @@ describe('a success that is not yet published', () => {
     expect(screen.getByRole('button', { name: /nairobi city/i })).toBeInTheDocument();
   });
 
+  it('opens the trial dialog, not the workspace, when the only published workspace is locked', async () => {
+    vi.mocked(findOperation).mockResolvedValue({ ...succeeded, lifecyclePublishedAt: 1 } as never);
+    const locked = { ...kisumu, code: 'WORKSPACE_TRIAL_EXPIRED' as const };
+
+    render(<SignupPage />);
+    await screen.findByText(/finishing setup/i);
+    // A fresh notice per read, as the network gives.
+    vi.mocked(api.tenants).mockImplementation(async () => ({
+      tenants: [locked], selectionRequired: false, onboardingRequired: false,
+      notice: { title: 'Your trial has ended', message: 'Talk to us to continue.' },
+    }));
+    await tick(3000);
+
+    expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
+    await tick(3000);
+    // Bootstrap's read and the one after publication, and no more.
+    expect(api.tenants).toHaveBeenCalledTimes(2);
+    expect(api.selectContext).not.toHaveBeenCalled();
+  });
+
   it('falls back to the workspace picker if automatic entry fails for a single workspace', async () => {
     vi.mocked(findOperation).mockResolvedValue({ ...succeeded, lifecyclePublishedAt: 1 } as never);
     vi.mocked(api.selectContext).mockRejectedValue(new Error('Network failure'));

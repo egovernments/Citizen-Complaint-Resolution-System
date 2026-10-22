@@ -113,7 +113,8 @@ test("staff account offers advertised actions, second factors, providers and sco
     calls.push({ url, init });
     if (url.includes("_unlink")) return json(409, { code: "LAST_SIGNIN_METHOD" });
     if (url.includes("auth-methods")) return json(200, { methods: [{ id: "github", type: "idp", idpHint: "github" }] });
-    return json(200, { authenticated: true, user: { email: "ada@example.test" },
+    if (url.endsWith("_select")) return json(200, { access_token: "fresh-token", UserRequest: { uuid: "same-uuid", type: "EMPLOYEE", tenantId: "ke.bomet", roles: [] } });
+    return json(200, { authenticated: true, tenant, user: { email: "ada@example.test" },
       account: { actions: ["UPDATE_PASSWORD", "CONFIGURE_TOTP", "UPDATE_EMAIL", "delete_credential", "idp_link"],
         credentials: [{ id: "pass", type: "password" }, { id: "otp", type: "otp", label: "My authenticator" }], providers: [{ alias: "google" }] },
       sessions: [{ id: "current", current: true, surface: "employee" }, { id: "other", current: false, surface: "configurator" }] });
@@ -132,6 +133,9 @@ test("staff account offers advertised actions, second factors, providers and sco
   assert.match(text(view.root.findByProps({ role: "status" })), /another sign-in method/);
   await click(button(view, "Sign out other sessions"));
   assert.equal(state.stored.logoutScope, "others");
+  // #2592: the BFF revoked the token the other sessions shared; this tab selects a fresh one.
+  assert.equal(state.getUser().access_token, "fresh-token");
+  assert.equal(state.stored["Employee.token"], "fresh-token");
   await click(button(view, "Sign out everywhere"));
   assert.equal(state.stored.logoutScope, "all");
   view.unmount();
@@ -146,6 +150,34 @@ test("a failed sign-out everywhere is reported, not presented as success", async
   assert.match(text(view.root.findByProps({ role: "status" })), /could not be confirmed\. Other devices may still be signed in/);
   view.unmount();
 });
+
+// #2592 review: after "Sign out other sessions" the tab adopts a fresh token
+// only for the same person, and the phone form picks up that token.
+for (const selectedUuid of ["same-uuid", "another-uuid"]) {
+  test(`sign out other sessions, then change phone (select returns ${selectedUuid})`, async () => {
+    const calls = [];
+    const state = browser("citizen", async (url) => {
+      calls.push(url);
+      if (url.endsWith("_send")) return json(202, { challengeId: "new-phone", resendAfter: 0, expiresIn: 300 });
+      if (url.endsWith("_select")) return json(200, { access_token: "fresh-token", tenant,
+        UserRequest: { uuid: selectedUuid, type: "CITIZEN", tenantId: "ke", mobileNumber: "711111111" } });
+      return json(200, { authenticated: true, tenant, user: {}, account: { actions: [], credentials: [], providers: [] },
+        sessions: [{ id: "current", current: true, surface: "citizen" }, { id: "other", current: false, surface: "citizen" }] });
+    });
+    const view = await render(ui.Account, { surface: "citizen" });
+    await click(button(view, "Sign out other sessions"));
+    assert.equal(state.stored.logoutScope, "others");
+    const adopted = selectedUuid === "same-uuid";
+    assert.equal(state.getUser().access_token, adopted ? "fresh-token" : "old-token");
+    assert.equal(state.stored["Citizen.token"], adopted ? "fresh-token" : "old-token");
+    if (!adopted) { view.unmount(); return; }
+    await ui.act(async () => view.root.findByProps({ id: "account-phone" }).props.onChange({ target: { value: "722222222" } }));
+    await click(button(view, "Send code"));
+    assert.ok(calls.some((url) => url.endsWith("_send")), "the phone form still works");
+    assert.doesNotMatch(text(view.root), /signed-in account has changed/);
+    view.unmount();
+  });
+}
 
 test("phone-only account hides credential actions and offers phone change", async () => {
   browser("citizen", async () => json(200, { user: {}, account: { actions: [], credentials: [], providers: [] }, sessions: [] }));
@@ -366,6 +398,38 @@ test("logout dialog keeps a failed sign-out visible for retry", async () => {
   assert.match(text(view.root.findByProps({ role: "alert" })), /could not be completed/);
   assert.equal(button(view, "CORE_LOGOUT_CONFIRM_ACTION").props.isDisabled, false);
   view.unmount();
+});
+
+// #2594: a citizen's userName is an internal key, so neither page shows it.
+test("citizen profile and logout dialog do not show the internal userName", async () => {
+  browser("citizen", () => assert.fail("no BFF reads"));
+  const profile = await render(ui.Profile, { userType: "citizen", stateCode: "ke", cityDetails: { name: "Bomet" } });
+  assert.doesNotMatch(text(profile.root), /opaque/);
+  profile.unmount();
+  const dialog = await render(ui.LogoutDialog, { onSelect: async () => {} });
+  assert.doesNotMatch(text(dialog.root), /opaque/);
+  assert.match(text(dialog.root), /711111111/);
+  dialog.unmount();
+});
+
+// #2594 review: a BFF-managed staff key is internal too, and a citizen whose
+// name is their number sees it once.
+test("managed staff key is hidden and a name that is the number is not repeated", async () => {
+  const staff = browser("employee", () => assert.fail("no BFF reads"));
+  staff.replaceUser({ access_token: "old-token", info: { ...staff.getUser().info, userName: "kcbff-0123456789abcdef" } });
+  const profile = await render(ui.Profile, { userType: "employee", stateCode: "ke", cityDetails: { name: "Bomet" } });
+  assert.doesNotMatch(text(profile.root), /kcbff/);
+  profile.unmount();
+  const staffDialog = await render(ui.LogoutDialog, { onSelect: async () => {} });
+  assert.doesNotMatch(text(staffDialog.root), /kcbff/);
+  assert.match(text(staffDialog.root), /711111111/);
+  staffDialog.unmount();
+
+  const citizen = browser("citizen", () => assert.fail("no BFF reads"));
+  citizen.replaceUser({ access_token: "old-token", info: { ...citizen.getUser().info, name: "711111111" } });
+  const dialog = await render(ui.LogoutDialog, { onSelect: async () => {} });
+  assert.equal(text(dialog.root).split("711111111").length - 1, 1);
+  dialog.unmount();
 });
 
 // Medium 4 (Dhruv, #2271 review 2): a login page reached on a tenantless

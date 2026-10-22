@@ -168,14 +168,16 @@ else
   test_result fail "no tenants found"
 fi
 
-# Test 17: PGR search API works (requires userInfo)
+# Test 17: PGR search API works (requires userInfo with roles — PGR's ABAC lookup
+# rejects a RequestInfo with no roles: "no roles on RequestInfo")
 echo -n "17. PGR search API... "
 PGR_SEARCH=$(curl -sS -X POST "$BASE_URL:18083/pgr-services/v2/request/_search?tenantId=pg.citya" \
   -H 'Content-Type: application/json' \
   -d '{
     "RequestInfo":{
       "apiId":"Rainmaker",
-      "userInfo":{"uuid":"'"$USER_UUID"'","type":"EMPLOYEE","tenantId":"pg.citya"}
+      "userInfo":{"uuid":"'"$USER_UUID"'","type":"EMPLOYEE","tenantId":"pg.citya",
+                  "roles":[{"code":"EMPLOYEE","tenantId":"pg.citya"}]}
     }
   }' 2>&1)
 

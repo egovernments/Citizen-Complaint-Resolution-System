@@ -28,6 +28,9 @@ export interface ConfiguratorRuntimeConfig {
   OVERPASS_URL?: string;
   TURBOPASS_URL?: string;
   BOUNDARY_SEARCH_LIMIT?: string | number;
+  SENTRY_DSN?: string;
+  POSTHOG_KEY?: string;
+  POSTHOG_HOST?: string;
 }
 
 declare global {
