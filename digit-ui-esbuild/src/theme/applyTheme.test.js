@@ -706,3 +706,82 @@ test("text ramp: a flat v3 key wins over the nested v1 block of the same record"
     assert.equal(props["--color-text-muted"], "#6B7280");
   } finally { restore(); }
 });
+
+// #2635: a v1 record (onboarding's "Green and Gold") never reached the shell's
+// own tokens, which the vendored :root hard-defines, so the header stayed navy,
+// the sidebar teal and the selected item orange.
+const GREEN_AND_GOLD = {
+  version: "1",
+  colors: {
+    primary: { dark: "#204F37", main: "#FEC931", light: "#FFF4D6", accent: "#204F37", "selected-bg": "#FFF4D6" },
+    secondary: "#1D2433",
+    text: { heading: "#204F37", primary: "#1D2433" },
+    digitv2: { "header-sidenav": "#204F37", "primary-bg": "#FFF4D6" },
+  },
+};
+
+test("v1 shell: header and sidebar take the record's header-sidenav colour", () => {
+  const { props, restore } = stubDocument();
+  try {
+    freshApply()(GREEN_AND_GOLD);
+    assert.equal(props["--color-header-bg"], "#204F37");
+    assert.equal(props["--color-sidebar-bg"], "#204F37");
+  } finally { restore(); }
+});
+
+test("v1 shell: the selected item takes the main brand colour, with text that reads on it", () => {
+  const { props, restore } = stubDocument();
+  try {
+    freshApply()(GREEN_AND_GOLD);
+    assert.equal(props["--color-sidebar-selected-bg"], "#FEC931");
+    assert.equal(props["--color-sidebar-selected-text"], "#0B0C0C");
+  } finally { restore(); }
+});
+
+test("v1 shell: a main colour that would vanish on the sidebar gives way to one that stands out in lightness", () => {
+  // Kenya Green: main = sidebar green. The red accent has the same lightness as
+  // that green, so it would not stand out for anyone who can't tell red from
+  // green; the light tone does.
+  const { props, restore } = stubDocument();
+  try {
+    freshApply()({
+      version: "1",
+      colors: {
+        primary: { dark: "#004D2C", main: "#006B3F", light: "#4DA87A", accent: "#BB0000" },
+        digitv2: { "header-sidenav": "#006B3F" },
+      },
+    });
+    assert.equal(props["--color-sidebar-bg"], "#006B3F");
+    assert.equal(props["--color-sidebar-selected-bg"], "#4DA87A");
+    assert.equal(props["--color-sidebar-selected-text"], "#0B0C0C");
+  } finally { restore(); }
+});
+
+test("v1 shell: digit-ui's own palette (the default theme, DIGIT Orange) keeps today's shell", () => {
+  const { props, restore } = stubDocument();
+  try {
+    freshApply()(require("./default.json"));
+    for (const name of ["--color-header-bg", "--color-sidebar-bg", "--color-sidebar-selected-bg", "--color-sidebar-selected-text"]) {
+      assert.equal(props[name], undefined, `${name} must stay the vendored value`);
+    }
+  } finally { restore(); }
+});
+
+test("v1 shell: a v3 record states its own shell and is left alone", () => {
+  const { props, restore } = stubDocument();
+  try {
+    freshApply()(require("./cms-blue.json"));
+    assert.equal(props["--color-header-bg"], "#0B1F3A");
+    assert.equal(props["--color-sidebar-bg"], "#0B1F3A");
+    assert.equal(props["--color-sidebar-selected-bg"], "#2563EB");
+    assert.equal(props["--color-sidebar-selected-text"], "#FFFFFF");
+  } finally { restore(); }
+});
+
+test("v1 shell: the header reads as dark, so the white logo variant is used", () => {
+  const { restore } = stubDocument();
+  try {
+    freshApply()(GREEN_AND_GOLD);
+    assert.equal(global.document.documentElement.dataset.headerTone, "dark");
+  } finally { restore(); }
+});
