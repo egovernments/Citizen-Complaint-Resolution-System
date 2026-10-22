@@ -385,6 +385,7 @@ change_phone → 200 {phoneNumber, phoneNumberVerified: true}
 
 - Identity resolution and creation run under the **phone lock** (§2.5).
 - New phone identities get an **opaque** Keycloak username. Existing usernames stay, and lookup always follows the current verified phone (design §8).
+- **An employee's own number** (#2595), only when `IDENTITY_STAFF_PHONE_JOIN=true` (off by default, §11): a number no Keycloak user has verified, on exactly one active EMPLOYEE record at the route's tenant, signs in as the staff person actively bound to that record, when they still have staff access there and have no verified phone yet. The code proves the number and the record says whose it is, so the number becomes that person's verified phone instead of a new identity. Their citizen and staff sessions then list and sign out together (§6), and the audit's `SESSION_CREATE` says `STAFF_PHONE_PROVED`. Two such records, two bound people, a person without access, or a person who already proved a phone: a new phone identity, as for any new number. The employee lookup needs DIGIT; an outage is `IDENTITY_UNAVAILABLE`, never a new identity.
 - A **phone change** keeps the citizen account's uuid. It updates Keycloak, then DIGIT. It ends the person's other sessions that carry the old number and revokes every DIGIT token they held, including one the changing session shares; digit-ui's phone form selects again right after verify.
 - A new citizen without a given name gets the national mobile number as their DIGIT name (D17).
 - A workspace whose trial ended unapproved gets `WORKSPACE_TRIAL_EXPIRED` with its `notice` before the code is checked, as in `_send`.
@@ -479,6 +480,7 @@ Body `{surface?: "citizen"}`. The tenant comes only from the session's bound ten
 
 - The same steps as staff `_select`, with the citizen predicate. Issuance is the egov-otp-backed citizen grant.
 - Resolution: the `digit.accounts` citizen entry, then the citizen link, then a CITIZEN search by the verified phone. An ambiguous match → `CITIZEN_ACCOUNT_AMBIGUOUS`.
+- A citizen account the BFF creates for a person with an active staff entry at the tenant starts with that employee record's gender and email (#2595). Existing accounts are never changed.
 - The per-tenant registration `DISABLED` status is removed (D6). Blocking a citizen = disabling their Keycloak user.
 - The bound workspace's trial comes from the same live Organization read that re-checks the route: ended unapproved → `WORKSPACE_TRIAL_EXPIRED` with its `notice`.
 - Errors: as staff `_select`, plus `PHONE_NOT_VERIFIED`, `CITIZEN_CONTEXT_UNAVAILABLE` (403); `CITIZEN_ACCOUNT_AMBIGUOUS`, `CITIZEN_ACCOUNT_LINK_BLOCKED` (409); `DIGIT_ACCOUNT_MISMATCH` 502; `CITIZEN_SIGNIN_NOT_CONFIGURED`, `ACCOUNT_LINK_BUSY` (503).
@@ -1212,6 +1214,7 @@ Probed on Keycloak 26.7.3 on 2026-10-04; the event shapes the poller matches are
 | `IDENTITY_WORKSPACE_TRIAL_REMINDER_DAYS` | Reminder emails, in days before a trial ends; comma-separated, default `14,7,3,2,1`. The "locked" email at the end is always sent |
 | `IDENTITY_NOVU_BRIDGE_URL`, `IDENTITY_NOVU_BRIDGE_TOKEN` | novu-bridge base URL (`http://novu-bridge:8080/novu-bridge`) and its `NOVU_BRIDGE_INTERNAL_SEND_TOKEN`, for `messages/_dispatch`. Either empty: no reminder emails, said once at startup (`identity.workspace_trial.reminders`, `enabled: false`). An empty URL is the off switch (`identity_workspace_trial_reminders_enabled: false` on Ansible) |
 | `IDENTITY_RECONCILIATION_INTERVAL_SECONDS` | Unchanged (default 300); reported by `/readyz` |
+| `IDENTITY_STAFF_PHONE_JOIN` | `true` signs an employee's own number in as that staff person (§3.2.10, #2595). Default `false` until #2631: whoever can write an employee's mobile could otherwise take over that number's citizen sign-in |
 
 Removed by item 14/15: the `DIGIT_PROVISIONER_*` variables, the onboarding worker variables, the role allowlist, and the `admin/admin` Keycloak fallback.
 

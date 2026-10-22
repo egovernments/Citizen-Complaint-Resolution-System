@@ -249,8 +249,7 @@ describe('wizard', () => {
     expect(key).toBeTruthy();
   });
 
-  it('leaves terms out of the payload until the operator agrees', async () => {
-    // A blank value is rejected where an absent field is accepted.
+  it('records the terms version without a checkbox: continuing past sign-in is the agreement', async () => {
     vi.mocked(api.createSignup).mockResolvedValue({ id: 'signup-1', status: 'DRAFT' } as never);
     render(<SignupPage />);
     await completeAccountStep();
@@ -260,7 +259,7 @@ describe('wizard', () => {
 
     await waitFor(() => expect(api.createSignup).toHaveBeenCalledTimes(1));
     const [draft] = vi.mocked(api.createSignup).mock.calls[0];
-    expect('acceptedTermsVersion' in draft).toBe(false);
+    expect(draft.acceptedTermsVersion).toBe('2026-09');
   });
 
   it('resumes an existing draft rather than starting a second', async () => {
@@ -415,8 +414,7 @@ describe('provisioning', () => {
     fireEvent.click(screen.getByRole('button', { name: /continue/i }));
     await waitFor(() => expect(screen.getByRole('button', { name: /continue/i })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: /continue/i }));
-    fireEvent.click(await screen.findByRole('checkbox'));
-    fireEvent.click(screen.getByRole('button', { name: /create account/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /create account/i }));
   }
 
   const spinning = (label: RegExp) => !!screen.getByText(label).closest('li')?.querySelector('.animate-spin');

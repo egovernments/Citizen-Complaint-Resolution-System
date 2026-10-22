@@ -155,6 +155,10 @@ export const config = {
   // when on, the fixed code is accepted for any challenge. Development only.
   citizenLoginPasswordOtpFixedEnabled: process.env.CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED === "true",
   citizenLoginPasswordOtpFixedValue: process.env.CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE || "123456",
+  // When true, a citizen sign-in with a number nobody has verified signs in as the staff person
+  // whose employee record carries it (#2595). Off until #2631: whoever can write an employee's
+  // mobile could otherwise take over that number's citizen sign-in.
+  identityStaffPhoneJoin: process.env.IDENTITY_STAFF_PHONE_JOIN === "true",
   // Existing-tenant routes (#2167): when true, startup gives every active
   // DIGIT ROOT tenant in IDENTITY_TENANT_ROUTE_BACKFILL_ROOTS that has no
   // Organization one whose URL slug is the tenant id. Never renames a slug.
