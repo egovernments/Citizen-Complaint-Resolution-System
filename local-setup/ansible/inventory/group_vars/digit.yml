@@ -439,7 +439,7 @@ digit_ui_esbuild_branch: main
 # instead, which then needs digit_ui_esbuild_repo pointed at a source tree.
 digit_ui_bundle_image: >-
   {{ (ccrs_tagged_images | default({})).get('digit-ui-esbuild')
-     or 'egovio/digit-ui-esbuild:2.12.1-7a38661' }}
+     or 'egovio/digit-ui-esbuild:master-b4adf0d' }}
 
 # ──────────────────────────────────────────────────────────────────────
 # One-tag deploys (#1729)
