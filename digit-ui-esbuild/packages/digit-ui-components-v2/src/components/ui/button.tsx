@@ -107,9 +107,9 @@ const PRIMARY_HOVER_BG =
  * is placed on.
  */
 const SECONDARY_BORDER =
-  "var(--color-button-secondary-border, var(--color-primary-2, var(--color-primary-1, #2563EB)))";
+  "var(--color-button-secondary-border, var(--color-brand-text, var(--color-primary-2, var(--color-primary-1, #2563EB))))";
 const SECONDARY_TEXT =
-  "var(--color-button-secondary-text, var(--color-primary-2, var(--color-primary-1, #2563EB)))";
+  "var(--color-button-secondary-text, var(--color-brand-text, var(--color-primary-2, var(--color-primary-1, #2563EB))))";
 const SECONDARY_INLINE_STYLE: React.CSSProperties = {
   borderColor: SECONDARY_BORDER,
   color: SECONDARY_TEXT,

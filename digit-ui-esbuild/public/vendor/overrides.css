@@ -6138,7 +6138,9 @@ button[role="combobox"],
 .digit-multiselectdropdown-wrap,
 .digit-multi-dropdown-wrap,
 .digit-select {
-  border: 1px solid var(--color-border, #d6d5d4) !important;
+  /* A field's edge is how people find it (WCAG 1.4.11, 3:1); applyTheme
+   * holds --color-input-border to that. The card border is decoration. */
+  border: 1px solid var(--color-input-border, var(--color-border, #d6d5d4)) !important;
   border-radius: 6px !important;
   background-color: var(--v2-surface-color, var(--color-surface, #ffffff)) !important;
   box-shadow: none !important;
