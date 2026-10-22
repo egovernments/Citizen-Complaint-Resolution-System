@@ -950,7 +950,7 @@ services:
   pgr-services-migration:
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
-    image: ${PGR_SERVICES_DB_IMAGE:-egovio/pgr-services-db:2.12.1-7a38661}
+    image: ${PGR_SERVICES_DB_IMAGE:-egovio/pgr-services-db:master-b4adf0d}
     container_name: pgr-services-migration
     depends_on:
       postgres-db:
@@ -981,7 +981,7 @@ services:
       - egov-network
 
   pgr-services:
-    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:2.12.1-7a38661}
+    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:master-b4adf0d}
     container_name: pgr-services
     depends_on:
       pgr-services-migration:
@@ -1064,7 +1064,7 @@ services:
       - egov-network
 
   digit-ui:
-    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:2.12.1-7a38661}
+    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:master-b4adf0d}
     container_name: digit-ui
     restart: on-failure
     ports:
