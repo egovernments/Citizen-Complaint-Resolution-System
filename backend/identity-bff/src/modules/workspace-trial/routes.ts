@@ -3,7 +3,7 @@ import { asyncRoute, sendError } from "../../app/async-route.js";
 import { clearTenantCaches } from "../access-context/tenant-directory.js";
 import { OnboardingError } from "../onboarding/errors.js";
 import { withOnboardingLock } from "../onboarding/locks.js";
-import { onboardingAdminRequest, readOnboardingOrganizations } from "../onboarding/organization-reader.js";
+import { onboardingAdminRequest, readOnboardingOrganizations, readOrganizationByTenant } from "../onboarding/organization-reader.js";
 import { organizationAttribute, type OnboardingOrganization } from "../onboarding/primitives.js";
 import { audit } from "../citizen-otp/audit.js";
 import { isTrialLocked, readWorkspaceTrial, TRIAL_ATTRIBUTES, workspaceTrialState } from "./trial.js";
@@ -36,25 +36,22 @@ function view(org: OnboardingOrganization) {
   };
 }
 
-/** The Organization serving a tenant: not superseded and not FAILED (a failed attempt may share the tenant id). */
-function serves(org: OnboardingOrganization, tenantId: string): boolean {
-  return organizationAttribute(org, "rootTenantId") === tenantId &&
-    !organizationAttribute(org, "supersededBy") && organizationAttribute(org, "lifecycle") !== "FAILED";
-}
-
 /**
- * Writes `change` into the trial attributes of a tenant's Organization.
+ * Writes `change` into the trial attributes of a tenant's Organization: the one
+ * the sign-in gates read (`readOrganizationByTenant`), so an approval never lands
+ * on an older attempt whose supersession a crash left unpublished.
  * Stock Keycloak requires the complete representation, so it is read again
  * under the onboarding lock the primitives take for this Organization, so a
- * concurrent lifecycle write is not lost. Null when the tenant has no Organization.
+ * concurrent lifecycle write is not lost. Null when no live Organization serves the tenant.
  */
 async function updateTrial(tenantId: string, change: (attributes: Record<string, string[]>) => void) {
-  const found = (await readOnboardingOrganizations()).find((org) => serves(org, tenantId));
-  if (!found) return null;
-  const operationId = organizationAttribute(found, "operationId");
+  const authority = await readOrganizationByTenant(tenantId);
+  if (!authority || authority.lifecycle === "FAILED") return null;
+  const path = `/organizations/${encodeURIComponent(authority.id)}`;
+  const read = async () => await (await onboardingAdminRequest(path)).json() as OnboardingOrganization;
+  const operationId = organizationAttribute(await read(), "operationId");
   return withOnboardingLock(operationId ? "op" : "tenant", operationId ?? tenantId, async (fence) => {
-    const path = `/organizations/${encodeURIComponent(found.id)}`;
-    const fresh = await (await onboardingAdminRequest(path)).json() as OnboardingOrganization;
+    const fresh = await read();
     const next = { ...fresh, attributes: { ...fresh.attributes } };
     change(next.attributes);
     await fence.assertHeld();

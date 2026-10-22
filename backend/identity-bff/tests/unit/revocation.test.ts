@@ -10,6 +10,7 @@ import * as keycloak from "../../src/modules/revocation/keycloak.js";
 import * as credentials from "../../src/modules/accounts/credential-service.js";
 import * as bindings from "../../src/modules/bindings/store.js";
 import * as organizations from "../../src/modules/onboarding/organization-reader.js";
+import * as mappings from "../../src/modules/organizations/organization-service.js";
 import * as digit from "../../src/modules/managed-accounts/digit-user-client.js";
 import { applyKeycloakEvent } from "../../src/modules/revocation/event-effects.js";
 
@@ -269,21 +270,30 @@ describe("token inventory and revocation", () => {
     expect(new Set(observed)).toEqual(new Set(["member", "bound"])); expect(await getRedis().zcard(key("revoke-jobs"))).toBe(0);
     await revokeTenantMembers(account.tenantId, "ORGANIZATION_DISABLED"); expect(observed).toHaveLength(4);
   });
-  it("trial expiry fans out to members, bindings and citizens holding a token at that tenant only", async () => {
+  it("trial expiry fans out to members, bindings and citizens at that tenant and the cities its groups map only", async () => {
     vi.spyOn(organizations, "readOrganizationByTenant").mockResolvedValue({ id: "org", alias: "acme", name: "Acme", lifecycle: "ACTIVE", enabled: true,
       trial: { endsAt: "2020-01-01T00:00:00.000Z", approvedAt: null, approvedBy: null } });
+    vi.spyOn(mappings, "listTenantMappings").mockResolvedValue([
+      { mappingType: "organization-group", organizationId: "org", tenantId: "acme.city1" },
+      { mappingType: "organization-group", organizationId: "another-org", tenantId: "other.city1" },
+    ] as never);
     vi.spyOn(keycloak, "listOrganizationMembers").mockResolvedValue([{ id: "member" }]);
     vi.spyOn(bindings, "bindingsFor").mockResolvedValue([{ subject: "bound", binding: { tenantId: "acme", uuid: "staff" } }]);
-    for (const [holder, tenantId] of [["citizen", "acme"], ["elsewhere", "other"]]) {
+    for (const [holder, tenantId] of [["citizen", "acme"], ["city-citizen", "acme.city1"], ["elsewhere", "other"], ["other-city", "other.city1"]]) {
       const ref = { tenantId, uuid: `${holder}-uuid` };
       await withPersonLease(holder, lease => recordToken(lease, ref, login(ref, `${tenantId}-citizen-token`), "citizen"));
     }
+    // A group member working in the city: the job scoped to the root alone would keep this.
+    const cityStaff = { tenantId: "acme.city1", uuid: "member-uuid" };
+    await withPersonLease("member", lease => recordToken(lease, cityStaff, login(cityStaff, "city-staff-token"), "staff"));
     const observed: string[] = [];
     vi.mocked(keycloak.getRevocationUser).mockImplementation(async sub => { observed.push(sub); return { id: sub }; });
     await revokeTenantMembers("acme", "TRIAL_EXPIRED");
-    expect(new Set(observed)).toEqual(new Set(["member", "bound", "citizen"]));
-    expect(digit.revokeToken).toHaveBeenCalledExactlyOnceWith("acme-citizen-token");
+    expect(new Set(observed)).toEqual(new Set(["member", "bound", "citizen", "city-citizen"]));
+    expect(new Set(vi.mocked(digit.revokeToken).mock.calls.map(([token]) => token)))
+      .toEqual(new Set(["acme-citizen-token", "acme.city1-citizen-token", "city-staff-token"]));
     expect(await readToken({ tenantId: "other", uuid: "elsewhere-uuid" })).not.toBeNull();
+    expect(await readToken({ tenantId: "other.city1", uuid: "other-city-uuid" })).not.toBeNull();
   });
   it("runPendingRevocations runs only the lease holder's queued jobs, including ones waiting to retry (#2286)", async () => {
     const sid = await session(); await inventory(account, login(), sid);

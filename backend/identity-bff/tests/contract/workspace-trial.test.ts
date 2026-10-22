@@ -231,6 +231,19 @@ describe("operator trial routes", () => {
     expect(org.attributes[TRIAL_ATTRIBUTES.approvedBy]).toEqual(["control-plane:alice"]);
   });
 
+  it("approve writes the attempt sign-in reads when a crash left an older one unsuperseded", async () => {
+    const attempt = (restartNo: number) => kc("POST", "/organizations", { id: `org-echo-${restartNo}`, alias: `echo-${restartNo}`,
+      name: "echo workspace", enabled: true, attributes: { "digit.rootTenantId": ["echo"], "digit.urlSlug": ["echo"],
+        "digit.lifecycle": ["ACTIVE"], "digit.operationId": ["op-echo"], "digit.restartNo": [String(restartNo)],
+        "digit.operationHash": ["a".repeat(64)], [TRIAL_ATTRIBUTES.endsAt]: [ENDED] } });
+    for (const restartNo of [0, 1]) expect((await attempt(restartNo)).status).toBe(201);
+    expect((await ops(routes.approve.path, { tenantId: "echo", actor: "ops@example.org" })).status).toBe(200);
+    const approvedAt = async (id: string) =>
+      (await (await kc("GET", `/organizations/${id}`, undefined)).json()).attributes[TRIAL_ATTRIBUTES.approvedAt];
+    expect(await approvedAt("org-echo-1")).toHaveLength(1);
+    expect(await approvedAt("org-echo-0")).toBeUndefined();
+  });
+
   it("extend stores the new end and refuses an invalid one", async () => {
     const endsAt = new Date(Date.now() + 3600_000).toISOString();
     const response = await ops(routes.extend.path, { tenantId: "charlie", endsAt, actor: "ops@example.org" });

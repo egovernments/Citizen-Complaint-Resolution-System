@@ -737,7 +737,9 @@ function SignupFlow() {
   const enter = useCallback(async (option: TenantOption): Promise<boolean> => {
     setError(null);
     if (option.code === 'WORKSPACE_TRIAL_EXPIRED') {
-      if (trialNotice) setTrialOpen(true);
+      // The dialog renders only with a notice. `enter` doesn't read it, so a new
+      // notice per tenant read never re-creates `enter` or re-runs the effect below.
+      setTrialOpen(true);
       return false;
     }
     setSaving(true);
@@ -757,7 +759,7 @@ function SignupFlow() {
       setSaving(false);
       return false;
     }
-  }, [sessionUser, describe, trialNotice]);
+  }, [sessionUser, describe]);
 
   // Provisioning done and published: the new tenant appears without another
   // sign-in. Acting on SUCCEEDED alone reads an empty tenant list (CCRS#2303).

@@ -10,6 +10,7 @@ import { accountEntries, type AccountEntry } from "../sync/state.js";
 import { bindingsFor } from "../bindings/store.js";
 import { findLiveStaffToken } from "../accounts/credential-service.js";
 import { readOrganizationByTenant } from "../onboarding/organization-reader.js";
+import { listTenantMappings } from "../organizations/organization-service.js";
 export { cachedToken, recordToken, holdToken, drainTokenRetries } from "./inventory.js";
 
 export type RevocationReason =
@@ -279,18 +280,26 @@ export async function drainRevocationJobs(limit = 100): Promise<void> {
  * All jobs are recorded before taking a person lease; repeats repair interrupted fan-out.
  * Only an expired trial reaches citizens: they are neither members nor bound, so they are
  * found by their DIGIT tokens at the tenant, after the staff jobs are queued.
- * Each job is scoped to the tenant: the person's sessions and tokens elsewhere survive.
+ * Each job is scoped to one tenant: the person's sessions and tokens elsewhere survive.
+ * An expired trial also covers the cities the Organization's groups map, which carry its trial.
  */
 export async function revokeTenantMembers(tenantId: string, reason: "ORGANIZATION_DISABLED" | "TENANT_INACTIVE" | "TRIAL_EXPIRED"): Promise<void> {
   if (currentPersonLease()) throw new Error("Tenant fan-out must run outside the person lease");
   const organization = await readOrganizationByTenant(tenantId);
   const members = organization ? await listOrganizationMembers(organization.id) : [];
   const bindings = await bindingsFor(tenantId);
-  const enqueue = async (subjects: Iterable<string>) => {
-    for (const subject of subjects) await enqueueRevocation(subject, reason, { tenantId, eventId: `tenant:${tenantId}` });
+  const scopes = [tenantId];
+  if (reason === "TRIAL_EXPIRED" && organization) {
+    for (const mapping of await listTenantMappings()) {
+      if (mapping.mappingType === "organization-group" && mapping.organizationId === organization.id) scopes.push(mapping.tenantId);
+    }
+  }
+  const enqueue = async (subjects: Iterable<string>, scope: string) => {
+    for (const subject of subjects) await enqueueRevocation(subject, reason, { tenantId: scope, eventId: `tenant:${tenantId}` });
   };
-  await enqueue(new Set([...members.map(member => member.id), ...bindings.map(binding => binding.subject)]));
-  if (reason === "TRIAL_EXPIRED") await enqueue(await tokenSubjectsForTenant(tenantId, "citizen"));
+  const staff = new Set([...members.map(member => member.id), ...bindings.map(binding => binding.subject)]);
+  for (const scope of scopes) await enqueue(staff, scope);
+  if (reason === "TRIAL_EXPIRED") for (const scope of scopes) await enqueue(await tokenSubjectsForTenant(scope, "citizen"), scope);
   await drainRevocationJobs();
 }
 

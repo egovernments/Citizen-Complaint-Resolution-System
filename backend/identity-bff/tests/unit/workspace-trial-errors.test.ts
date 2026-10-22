@@ -12,8 +12,9 @@ vi.mock("../../src/modules/access-context/tenant-route.js", async (original) =>
 vi.mock("../../src/modules/workspace-trial/access.js", async (original) =>
   ({ ...await original<object>(), isSlugTrialLocked: mocks.locked }));
 vi.mock("../../src/modules/onboarding/locks.js", () => ({ withOnboardingLock: mocks.lock }));
-vi.mock("../../src/modules/onboarding/organization-reader.js", async (original) =>
-  ({ ...await original<object>(), readOnboardingOrganizations: mocks.organizations }));
+vi.mock("../../src/modules/onboarding/organization-reader.js", async (original) => ({ ...await original<object>(),
+  readOrganizationByTenant: mocks.organizations,
+  onboardingAdminRequest: async () => new Response(JSON.stringify({ id: "org-acme", attributes: { "digit.rootTenantId": ["acme"] } })) }));
 const { registerCitizenOtpRoutes } = await import("../../src/modules/citizen-otp/routes.js");
 const { registerWorkspaceTrialRoutes } = await import("../../src/modules/workspace-trial/routes.js");
 
@@ -36,7 +37,7 @@ afterAll(() => new Promise<void>((done) => server.close(() => done())));
 
 describe("workspace trial failure answers", () => {
   it("answers a held onboarding lock on _approve and _extend with IDENTITY_BUSY and Retry-After", async () => {
-    mocks.organizations.mockResolvedValue([{ id: "org-acme", alias: "acme", name: "Acme", attributes: { "digit.rootTenantId": ["acme"] } }]);
+    mocks.organizations.mockResolvedValue({ id: "org-acme", alias: "acme", name: "Acme", enabled: true, lifecycle: "ACTIVE", trial: null });
     mocks.lock.mockRejectedValue(new OnboardingError("IDENTITY_BUSY", "Onboarding is busy; retry the same request"));
     for (const [path, body] of [["_approve", { tenantId: "acme" }], ["_extend", { tenantId: "acme", endsAt: "2026-12-31T23:59:59Z" }]] as const) {
       const response = await post(`/internal/identity/v1/workspace-trials/${path}`, body);

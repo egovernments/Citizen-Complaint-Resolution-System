@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({ request: vi.fn(), read: vi.fn(), bindings: vi.
   organizations: vi.fn(), active: vi.fn(), name: vi.fn(), member: vi.fn(), revoke: vi.fn(), person: vi.fn(),
   tenant: vi.fn(), identifiers: vi.fn(), bindingUser: vi.fn() }));
 vi.mock("../../src/modules/organizations/organization-service.js", () => ({ request: mocks.request,
-  isOrganizationMember: mocks.member, IdentityAdminError: class extends Error {} }));
+  isOrganizationMember: mocks.member, listTenantMappings: async () => [], IdentityAdminError: class extends Error {} }));
 vi.mock("../../src/modules/sync/digit-reader.js", () => ({ readDigitAccount: mocks.read }));
 vi.mock("../../src/modules/bindings/store.js", () => ({ readBindings: mocks.bindings, readBindingUser: mocks.bindingUser, bindingsFor: vi.fn(), indexBindingTenants: vi.fn() }));
 vi.mock("../../src/modules/revocation/index.js", () => ({ revokeAccount: mocks.revoke,
