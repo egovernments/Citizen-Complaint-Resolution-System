@@ -2949,7 +2949,7 @@
           the published default in OpenBao — so .env gets an empty value and
           compose falls back to the public default from
           docker-compose.egov-digit.yaml. Set it with
-          `bao kv put {{ secrets_path }} {{ item.var }}=<value>` (or put it in
+          `bao kv patch {{ secrets_path }} {{ item.var }}=<value>` (or put it in
           bootstrap_secrets in host_vars/{{ inventory_hostname }}.yml on a tenant
           whose OpenBao has not been seeded yet). These values are in a public
           repo, so the default is equivalent to no secret at all.
@@ -2967,7 +2967,7 @@
           the published default in OpenBao on this already-deployed box. The
           deploy is CONTINUING so an existing tenant is not bricked, but this
           credential is public and equivalent to no secret at all — rotate it:
-          `bao kv put {{ secrets_path }} {{ item.var }}=<value>` and rotate the
+          `bao kv patch {{ secrets_path }} {{ item.var }}=<value>` and rotate the
           live service to match. Fresh deploys fail closed on this.
       when:
         - item.enabled | bool
@@ -3382,7 +3382,7 @@
           `keycloak_admin_password` is empty in OpenBao, so .env would hand
           compose an empty KC_ADMIN_PASSWORD and Keycloak would fall back to
           the published default `admin`. Set it with
-          `bao kv put {{ secrets_path }} keycloak_admin_password=<value>`
+          `bao kv patch {{ secrets_path }} keycloak_admin_password=<value>`
           (and, on a box where Keycloak already bootstrapped, change the
           admin user's password in Keycloak to match).
 
@@ -3472,7 +3472,7 @@
     # main TENANT SECRETS block stays untouched.
     # KC_ADMIN_PASSWORD is asserted non-empty above; the rest come from the
     # resolved dict, so an operator can rotate any of them independently with
-    # `bao kv put` without touching the others.
+    # `bao kv patch` without touching the others.
     - name: "OpenBao — write Keycloak and Identity BFF secrets into compose .env"
       ansible.builtin.blockinfile:
         path: "{{ digit_dir }}/.env"

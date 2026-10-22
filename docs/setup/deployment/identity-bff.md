@@ -83,7 +83,7 @@ The BFF-client and workload secrets (`keycloak_*_client_secret`,
 anything. The first deploy generates each one independently and stores it in
 OpenBao, and every deploy writes them only to the mode-0600 Compose environment.
 Rotating the Keycloak admin password therefore rotates nothing else. To rotate
-one of them, `bao kv put` a new value; the next deploy pushes it into Keycloak
+one of them, `bao kv patch` a new value; the next deploy pushes it into Keycloak
 and the BFF.
 
 ### Staff password reset needs an email address
