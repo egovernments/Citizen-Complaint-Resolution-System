@@ -3,8 +3,10 @@ import type { BoundTenant } from "../authentication/surfaces.js";
 import { withPersonLease } from "../accounts/person-lease.js";
 import { staffAccess } from "../bindings/predicate.js";
 import { ownersOf } from "../bindings/store.js";
+import { BindingError } from "../bindings/types.js";
 import { withDigitAdmin } from "../managed-accounts/digit-admin-session.js";
-import { searchAccounts } from "../managed-accounts/digit-user-client.js";
+import { DigitUnavailableError, searchAccounts } from "../managed-accounts/digit-user-client.js";
+import { OnboardingError } from "../onboarding/errors.js";
 import { findVerifiedPhoneUsers, ensurePhoneIdentityUser, IdentityAdminError } from "../organizations/organization-service.js";
 import { readUser } from "../../integrations/keycloak/admin-api.js";
 import { requireCurrentSession, touchIdentitySession, SessionRevokedError, createPhoneOtpSession } from "../sessions/session-store.js";
@@ -62,14 +64,22 @@ export async function completePhoneProof(challenge: OtpChallenge, sessionId: str
  * phone identity as before.
  */
 async function staffPhoneOwner(tenantId: string, mobileNumber: string): Promise<string | null> {
-  const employees = (await withDigitAdmin(token => searchAccounts(token, { tenantId, userType: "EMPLOYEE", active: true, mobileNumber })))
-    .filter(account => account.type === "EMPLOYEE" && account.active && account.tenantId === tenantId);
-  if (employees.length !== 1) return null;
-  const owners = await ownersOf(tenantId, employees[0].uuid);
-  if (owners.length !== 1) return null;
-  const access = await staffAccess(owners[0], tenantId);
-  if (!access.allowed || access.binding?.uuid !== employees[0].uuid) return null;
-  return (await readUser(owners[0])).attributes?.phoneNumberVerified?.includes("true") ? null : owners[0];
+  try {
+    const employees = (await withDigitAdmin(token => searchAccounts(token, { tenantId, userType: "EMPLOYEE", active: true, mobileNumber })))
+      .filter(account => account.type === "EMPLOYEE" && account.active && account.tenantId === tenantId);
+    if (employees.length !== 1) return null;
+    const owners = await ownersOf(tenantId, employees[0].uuid);
+    if (owners.length !== 1) return null;
+    const access = await staffAccess(owners[0], tenantId);
+    if (!access.allowed || access.binding?.uuid !== employees[0].uuid) return null;
+    return (await readUser(owners[0])).attributes?.phoneNumberVerified?.includes("true") ? null : owners[0];
+  } catch (error) {
+    // A failed lookup is an outage, never "no staff owner": null would split the person for good.
+    if (error instanceof BindingError || error instanceof OnboardingError || error instanceof DigitUnavailableError) {
+      throw new IdentityAdminError(`Employee lookup failed: ${error.message}`);
+    }
+    throw error;
+  }
 }
 
 /** Anonymous creation holds a prospective lease; only the actual owner lease may issue a session. */

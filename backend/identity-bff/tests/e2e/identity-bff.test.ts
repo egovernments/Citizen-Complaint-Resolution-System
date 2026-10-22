@@ -3091,15 +3091,13 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
 
     describe("an employee's registered mobile on the citizen portal (#2595)", () => {
       const staff = "identity-user-unlinked";
+      const otp = (path: "_send" | "_verify", body: object) => fetch(`${app()}/identity/v1/citizen/otp/${path}`, {
+        method: "POST", headers: { Origin: "http://localhost:3000", "Content-Type": "application/json" },
+        body: JSON.stringify({ tenantSlug: "bomet-county", ...body }),
+      });
       const signInByOtp = async (mobileNumber: string) => {
-        const { challengeId } = await (await fetch(`${app()}/identity/v1/citizen/otp/_send`, {
-          method: "POST", headers: { Origin: "http://localhost:3000", "Content-Type": "application/json" },
-          body: JSON.stringify({ tenantSlug: "bomet-county", mobileNumber }),
-        })).json();
-        const verified = await fetch(`${app()}/identity/v1/citizen/otp/_verify`, {
-          method: "POST", headers: { Origin: "http://localhost:3000", "Content-Type": "application/json" },
-          body: JSON.stringify({ tenantSlug: "bomet-county", challengeId, code: sent[sent.length - 1].code }),
-        });
+        const { challengeId } = await (await otp("_send", { mobileNumber })).json();
+        const verified = await otp("_verify", { challengeId, code: sent[sent.length - 1].code });
         expect(verified.status).toBe(200);
         return cookieFrom(verified, "digit_identity_session_citizen")!;
       };
@@ -3229,6 +3227,36 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
           expect(searches).toBe(2);
           expect((await kcUser(staff)).attributes.phoneNumber).toBeUndefined();
         } finally { spy.mockRestore(); }
+      });
+
+      // An outage is IDENTITY_UNAVAILABLE, never a new identity: that would split the person for good.
+      it.each([
+        ["egov-user is down", "799002606", () => vi.spyOn(digitUserClient, "searchAccounts")
+          .mockRejectedValue(new digitUserClient.DigitUnavailableError("Injected egov-user outage"))],
+        ["the binding cannot be read", "799002607", () => vi.spyOn(bindingStore, "ownersOf")
+          .mockRejectedValue(new BindingError("IDENTITY_UNAVAILABLE", "Injected binding failure"))],
+      ])("answers IDENTITY_UNAVAILABLE and keeps the code when %s", async (_, mobileNumber, fail) => {
+        await bindStaff(mobileNumber);
+        const { challengeId } = await (await otp("_send", { mobileNumber })).json();
+        const code = sent[sent.length - 1].code;
+        const spy = fail();
+        try {
+          const failed = await otp("_verify", { challengeId, code });
+          expect([failed.status, (await failed.json()).code]).toEqual([503, "IDENTITY_UNAVAILABLE"]);
+        } finally { spy.mockRestore(); }
+        const holders = await (await fetch(
+          `${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users?q=phoneNumber:%2B254${mobileNumber}`,
+          { headers: { Authorization: "Bearer mock-kc-admin-token" } },
+        )).json();
+        expect(holders).toEqual([]);
+        expect((await kcUser(staff)).attributes.phoneNumber).toBeUndefined();
+        expect((await auditRecords()).find((r) => r.event === "SESSION_CREATE" && r.challengeId === challengeId))
+          .toMatchObject({ outcome: "FAILED", reason: "IDENTITY_UNAVAILABLE" });
+
+        const retried = await otp("_verify", { challengeId, code });
+        expect(retried.status).toBe(200);
+        const citizen = await (await sessionOf(cookieFrom(retried, "digit_identity_session_citizen")!, "citizen")).json();
+        expect(citizen.user).toMatchObject({ id: staff, phoneNumber: `+254${mobileNumber}`, phoneNumberVerified: true });
       });
     });
 
