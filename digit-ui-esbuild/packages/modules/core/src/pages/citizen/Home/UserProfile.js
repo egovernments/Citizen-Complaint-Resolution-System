@@ -947,7 +947,6 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
             {identityManaged && <V2Button type="button" variant="secondary" onClick={() => history.push(`/${window.contextPath}/${userType}/user/account`)}>
               {tr("CORE_IDENTITY_ACCOUNT", "Account and security")}
             </V2Button>}
-            {identityManaged && <p>{userInfo.userName} · {mobileNumber}</p>}
             <V2Field
               label={t("CORE_COMMON_PROFILE_NAME")}
               required
@@ -1146,6 +1145,9 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
     const v = t(key);
     return v === key ? fallback : v;
   };
+  // A BFF-managed staff account's userName is an internal `kcbff-` key; bound
+  // staff see their HRMS code.
+  const visibleUserName = /^kcbff/.test(userInfo?.userName || "") ? null : userInfo?.userName;
   const genderOptions = (menu || []).map((g) => ({
     value: g.code,
     label: t(g.i18nKey),
@@ -1307,8 +1309,8 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
                 wordBreak: "break-word",
               }}
             >
-              {userInfo?.userName ? userInfo.userName : ""}
-              {userInfo?.userName && (mobileNumber || email) ? "  ·  " : ""}
+              {visibleUserName || ""}
+              {visibleUserName && (mobileNumber || email) ? "  ·  " : ""}
               {mobileNumber ? `${countryCode} ${mobileNumber}` : ""}
               {mobileNumber && email ? "  ·  " : ""}
               {email || ""}

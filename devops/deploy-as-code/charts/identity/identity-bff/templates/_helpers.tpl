@@ -23,6 +23,7 @@ identity-credential-keys: IDENTITY_CREDENTIAL_KEYS
 identity-credential-key-current: IDENTITY_CREDENTIAL_KEY_CURRENT
 digit-provisioner-password: DIGIT_PROVISIONER_PASSWORD
 identity-surfaces-json: IDENTITY_SURFACES_JSON
+novu-bridge-send-token: IDENTITY_NOVU_BRIDGE_TOKEN
 {{- end -}}
 
 {{- /* The container environment: derived Keycloak/redirect settings, the

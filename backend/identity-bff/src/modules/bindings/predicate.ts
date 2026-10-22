@@ -3,9 +3,10 @@ import { managedFallbackAccess } from "./managed-fallback.js";
 import { isOrganizationMember } from "../organizations/organization-service.js";
 import { bindingsFromUser, effectiveBinding, readBindingUser, type Binding } from "./store.js";
 import { readOrganizationByTenant } from "../onboarding/organization-reader.js";
+import { isTrialLocked } from "../workspace-trial/trial.js";
 
 export type AccessDenial = "KEYCLOAK_DISABLED" | "NO_ACTIVE_BINDING" | "NOT_A_MEMBER" |
-  "ORGANIZATION_INACTIVE" | "TENANT_INACTIVE" | "PHONE_NOT_VERIFIED";
+  "ORGANIZATION_INACTIVE" | "WORKSPACE_TRIAL_EXPIRED" | "TENANT_INACTIVE" | "PHONE_NOT_VERIFIED";
 export interface StaffAccess {
   allowed: boolean;
   denial?: AccessDenial;
@@ -25,12 +26,16 @@ export async function staffAccess(subject: string, tenantId: string): Promise<St
   if (binding && binding.state !== "active") return deny("NO_ACTIVE_BINDING");
   if (!binding) {
     const fallback = await managedFallbackAccess(subject, tenantId);
-    return fallback.allowed ? { ...base, allowed: true } : deny(fallback.denial);
+    if (!fallback.allowed) return deny(fallback.denial);
+    // An operator _extend can put a pre-trial workspace with managed staff on trial.
+    return isTrialLocked(fallback.trial, Date.now()) ? deny("WORKSPACE_TRIAL_EXPIRED") : { ...base, allowed: true };
   }
   const org = await readOrganizationByTenant(tenantId);
   if (!org || !org.enabled || (org.lifecycle !== null && org.lifecycle !== "ACTIVE")) return deny("ORGANIZATION_INACTIVE");
   if (!await isActiveDigitTenant(tenantId)) return deny("TENANT_INACTIVE");
   if (!await isOrganizationMember(org.id, subject)) return deny("NOT_A_MEMBER");
+  // Last, so a non-member is told the real denial, never the trial notice.
+  if (isTrialLocked(org.trial, Date.now())) return deny("WORKSPACE_TRIAL_EXPIRED");
   return { ...base, allowed: true };
 }
 

@@ -22,6 +22,14 @@ export function complaintDeskUrl(environment: string, slug: string | null | unde
 }
 
 /**
+ * The workspace's citizen app: the tenant-scoped digit-ui where citizens file
+ * and track complaints. `null` until the slug is known.
+ */
+export function citizenAppUrl(environment: string, slug: string | null | undefined): string | null {
+  return slug ? `${environment.replace(/\/+$/, '')}/${slug}/digit-ui/citizen` : null;
+}
+
+/**
  * The public route slug of the workspace this session has selected, for links
  * into the tenant-scoped digit-ui (`/<slug>/digit-ui/...`). The slug is the
  * workspace's Keycloak Organization alias (identity-bff.md §2.4), which the

@@ -5,11 +5,13 @@ import { createIdentityApp } from "./create-app.js";
 import { initJwks } from "../modules/authentication/token-verifier.js";
 import { startReconcile } from "../modules/sync/reconcile.js";
 import { warnAboutInsecureOtpModes } from "../modules/citizen-otp/otp-sender.js";
+import { logTrialReminderMode } from "../modules/workspace-trial/reminders.js";
 import { backfillTenantRoutes } from "../modules/tenant-routes/backfill.js";
 
 initJwks();
 initCache();
 warnAboutInsecureOtpModes();
+logTrialReminderMode();
 
 const app = createIdentityApp();
 const stopEventPoller = startKeycloakEventPoller();

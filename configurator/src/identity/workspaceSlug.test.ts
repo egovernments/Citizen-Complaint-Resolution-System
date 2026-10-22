@@ -1,7 +1,7 @@
 import { renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { session } from '@/api/onboarding';
-import { analyticsShimPath, complaintDeskUrl, useWorkspaceSlug } from './workspaceSlug';
+import { analyticsShimPath, citizenAppUrl, complaintDeskUrl, useWorkspaceSlug } from './workspaceSlug';
 
 vi.mock('@/api/onboarding', () => ({ session: vi.fn() }));
 beforeEach(() => { vi.mocked(session).mockReset(); });
@@ -39,4 +39,10 @@ it('links the complaint desk to the tenant-scoped employee app once the slug is 
   expect(complaintDeskUrl('https://naipepea.digit.org/', 'acme')).toBe('https://naipepea.digit.org/acme/digit-ui/employee');
   expect(complaintDeskUrl('https://naipepea.digit.org', null)).toBeNull();
   expect(complaintDeskUrl('https://naipepea.digit.org', undefined)).toBeNull();
+});
+
+it('builds the citizen app url, stripping trailing slashes from the environment', () => {
+  expect(citizenAppUrl('https://x.org/', 'acme')).toBe('https://x.org/acme/digit-ui/citizen');
+  expect(citizenAppUrl('https://x.org', null)).toBeNull();
+  expect(citizenAppUrl('https://x.org', undefined)).toBeNull();
 });
