@@ -3172,6 +3172,17 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
 
       const kcUser = async (id: string) => (await fetch(`${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/${id}`)).json();
 
+      it("signs in as the employee even when the phone write is not visible to the owner search yet", async () => {
+        await bindStaff("799002603");
+        // The write "succeeds" but does not land, as when an admin-console save races it.
+        await fetch(`${config.keycloakAdminUrl}/__test/faults`, {
+          method: "PUT", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ method: "PUT", path: `/users/${staff}`, status: 204, count: 1 }),
+        });
+        const signedIn = await (await sessionOf(await signInByOtp("799002603"), "citizen")).json();
+        expect(signedIn.user.id).toBe(staff);
+      });
+
       it("keeps a separate phone identity when two people are bound to the employee record", async () => {
         await bindStaff("799002601");
         const second = "identity-user-second-binding";

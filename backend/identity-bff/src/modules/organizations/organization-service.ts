@@ -977,7 +977,7 @@ function verifiedPhoneOwner(user: UserRepresentation, phoneNumber: string): bool
     user.attributes?.[PHONE_VERIFIED_ATTRIBUTE]?.includes("true") === true;
 }
 
-function phoneIdentityUser(user: UserRepresentation, created: boolean): PhoneIdentityUser {
+export function phoneIdentityUser(user: UserRepresentation, created: boolean): PhoneIdentityUser {
   if (!user.id || user.enabled === false) {
     throw new IdentityAdminError("The Keycloak user for this phone number is disabled", 403);
   }
