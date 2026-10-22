@@ -2294,6 +2294,12 @@ button[class*="toast-close"] svg,
   background-color: var(--color-sidebar-selected-bg, var(--color-primary-1, #c84c0e)) !important;
   color: var(--color-sidebar-selected-text, #FFFFFF) !important;
 }
+/* The vendored stylesheet paints the selected row's label #FFFFFF directly,
+ * so the row's colour above never reached it: on a light selected fill (Green
+ * and Gold's gold) the label stayed white. Hover already follows the token. */
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.selected:not(:hover) .item-label {
+  color: var(--color-sidebar-selected-text, #FFFFFF) !important;
+}
 /* SVG icon colours follow the row's foreground via the fallback
  * chain. Hover state matches the dark hover text; idle/selected
  * matches the white selected text. */
@@ -2317,7 +2323,9 @@ button[class*="toast-close"] svg,
 :is(.employee, .citizen) .digit-sidebar .digit-sidebar-search-container,
 :is(.employee, .citizen) .digit-sidebar .digit-sidebar-search-container input {
   background: rgba(255, 255, 255, 0.06) !important;
-  color: var(--color-sidebar-selected-text, #FFFFFF) !important;
+  /* Text on the rail itself, not on the selected row: selected-text is chosen
+   * against the selected fill (dark on a gold row), which vanishes here. */
+  color: var(--color-sidebar-text-active, #FFFFFF) !important;
   border-color: rgba(255, 255, 255, 0.18) !important;
 }
 :is(.employee, .citizen) .digit-sidebar .digit-sidebar-search-container ::placeholder {
