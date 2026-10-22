@@ -304,7 +304,7 @@ moves the check earlier). Check them before you run it (`$HV` and `$T` from 1.1)
 ```bash
 grep -E '^identity_smtp_(host|from|auth):' "$HV"     # host and from must be set
 docker exec -e BAO_TOKEN="$T" -e BAO_ADDR=http://127.0.0.1:8200 openbao \
-  bao kv get -field=identity_smtp_password kv/digit/<tenant> >/dev/null && echo smtp-password-present
+  bao kv get -field=identity_smtp_password kv/digit/<tenant> | grep -q . && echo smtp-password-present
 ```
 
 Keycloak sends every identity email
@@ -461,8 +461,11 @@ docker exec -e BAO_TOKEN="$T" -e BAO_ADDR=http://127.0.0.1:8200 openbao \
 - **Configurator workspace endpoints.** After
   sign-in the configurator calls `/pgr-services/v2/onboarding/workspaces/_search`
   (and `_update` and `_rename` later). Signup seeds these permissions for the
-  workspaces it creates, but nothing seeds them for a root that existed before
-  2.20. Without them the admin signs in, picks the workspace, and sees
+  workspaces it creates, and an Ansible deploy that reaches a current MCP adds
+  them to a root other than `pg`. Add them by hand on an existing `pg` root, a
+  k8s install, or a box whose deploy doesn't reach a current MCP (MCP off, or an
+  image without `data/platform-baseline-v1.json`). Without them the admin signs
+  in, picks the workspace, and sees
   `AccessDeniedException`, and Kong logs a 403 on `workspaces/_search`.
   Add the three actions and their `ACCOUNT_ADMIN` role-actions at the root,
   through the MDMS v2 `_create` API as `ADMIN`. The shapes and ids come from
@@ -726,9 +729,8 @@ their DIGIT account by verified phone number, after its own records:
   This can happen when a stored phone was encrypted under another tenant's key
   (4.4) **(unverified)**.
 
-Proven on the first production upgrade: phone + code at
-`/<slug>/digit-ui/citizen` → `_send` 202, `_verify` 200, citizen context at the
-root, "My complaints" and PGR search 200.
+To check: phone + code at `/<slug>/digit-ui/citizen` → `_send` 202, `_verify`
+200, citizen context at the root, "My complaints" and PGR search 200.
 
 ### 4.3 Citizens who used Google
 
