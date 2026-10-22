@@ -910,6 +910,37 @@ describe('workspace readiness gate', () => {
   });
 });
 
+describe('expired trial workspace', () => {
+  // A locked founder lands here from a magic link, which returns to /configurator/signup.
+  const notice = { title: 'Your trial has ended', message: 'Talk to us to continue.' };
+  const locked = { organizationAlias: 'demo', tenantId: 'ke.demo', name: 'Demo Workspace', roles: [], code: 'WORKSPACE_TRIAL_EXPIRED' as const };
+  const open = { organizationAlias: 'kisumu-county', tenantId: 'kisumucounty', name: 'Kisumu County', roles: ['MDMS_ADMIN'] };
+
+  it('opens the dialog on load when every workspace is locked, and starts no signup', async () => {
+    vi.mocked(api.session).mockResolvedValue(signedIn);
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [locked], selectionRequired: false, onboardingRequired: false, notice });
+    render(<SignupPage />);
+
+    expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
+    expect(screen.getByText(notice.title)).toBeInTheDocument();
+    expect(screen.getByText(notice.message)).toBeInTheDocument();
+    expect(api.selectContext).not.toHaveBeenCalled();
+    expect(api.findSignup).not.toHaveBeenCalled();
+  });
+
+  it('opens the dialog when _select answers 403 WORKSPACE_TRIAL_EXPIRED', async () => {
+    vi.mocked(api.session).mockResolvedValue(signedIn);
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [open], selectionRequired: false, onboardingRequired: false });
+    vi.mocked(api.selectContext).mockRejectedValue(new api.OnboardingError(403, 'WORKSPACE_TRIAL_EXPIRED', 'Trial ended', { notice }));
+    render(<SignupPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /kisumu county/i }));
+    expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
+    expect(screen.getByText(notice.title)).toBeInTheDocument();
+    expect(screen.queryByText(/something went wrong/i)).not.toBeInTheDocument();
+  });
+});
+
 describe('resuming a run that was already going', () => {
   const resumable = (status: 'SUBMITTED' | 'PROVISIONING') => ({
     id: 's1',
@@ -1104,6 +1135,26 @@ describe('a success that is not yet published', () => {
     expect(await screen.findByText(/choose a workspace/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /kisumu county/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /nairobi city/i })).toBeInTheDocument();
+  });
+
+  it('opens the trial dialog, not the workspace, when the only published workspace is locked', async () => {
+    vi.mocked(findOperation).mockResolvedValue({ ...succeeded, lifecyclePublishedAt: 1 } as never);
+    const locked = { ...kisumu, code: 'WORKSPACE_TRIAL_EXPIRED' as const };
+
+    render(<SignupPage />);
+    await screen.findByText(/finishing setup/i);
+    // A fresh notice per read, as the network gives.
+    vi.mocked(api.tenants).mockImplementation(async () => ({
+      tenants: [locked], selectionRequired: false, onboardingRequired: false,
+      notice: { title: 'Your trial has ended', message: 'Talk to us to continue.' },
+    }));
+    await tick(3000);
+
+    expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
+    await tick(3000);
+    // Bootstrap's read and the one after publication, and no more.
+    expect(api.tenants).toHaveBeenCalledTimes(2);
+    expect(api.selectContext).not.toHaveBeenCalled();
   });
 
   it('falls back to the workspace picker if automatic entry fails for a single workspace', async () => {

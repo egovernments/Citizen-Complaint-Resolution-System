@@ -633,7 +633,9 @@ export function createKcAdminMock() {
     const realm = getOrCreateRealm(req.params.realm);
     const organization = realm.organizations.get(req.params.organizationId);
     if (!organization) return res.status(404).json({ error: "not found" });
-    Object.assign(organization, req.body);
+    // The mock's GET serializes its Maps and Sets as `{}`; a full-representation PUT must not store them back.
+    const { groups, members, groupMembers, groupClientRoles, ...fields } = req.body;
+    Object.assign(organization, fields);
     res.status(204).end();
   });
 

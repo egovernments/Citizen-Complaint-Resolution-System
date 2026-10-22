@@ -218,6 +218,9 @@ All locks are Redis leases: `SET key token NX PX ttl`, released by compare-and-d
 | POST | `/internal/identity/v1/account-links/_link` | operator | changing | 14 |
 | POST | `/internal/identity/v1/account-links/_unlink` | operator | changing | 14 |
 | GET | `/internal/identity/v1/account-links` | operator | changing | 14 |
+| GET | `/internal/identity/v1/workspace-trials` | operator | live | — |
+| POST | `/internal/identity/v1/workspace-trials/_approve` | operator | live | — |
+| POST | `/internal/identity/v1/workspace-trials/_extend` | operator | live | — |
 | POST | `/internal/identity/v1/tenant-routes/_backfill` | operator | live | — |
 
 **Dropped from the design:** `memberships/_remove` (D25/B9: a signup's founder can't change).
@@ -358,7 +361,8 @@ Answers `303` to the attempt's `returnTo` with a result: `PASSWORD_SETUP_COMPLET
 - The challenge is bound to `(challengeId, phone, tenant, purpose)`, plus the session and person for `stepup` and `change_phone`.
 - The answer does not depend on whether the number has an account, for any `purpose`. A `stepup` or `change_phone` code for a number another person owns is still sent (and charged to the send limits); `_verify` refuses it with 409 `PHONE_IN_USE`, checked under the phone lock.
 - Delivery goes through `HttpOtpSender` (item 3, see below), or `log` on dev boxes.
-- Errors: `INVALID_REQUEST`, `PHONE_OTP_DISABLED`, `INVALID_MOBILE_NUMBER` (400); `SESSION_REQUIRED` 401; `UNTRUSTED_ORIGIN` 403; `TENANT_ROUTE_NOT_FOUND` 404; `OTP_RESEND_TOO_SOON`, `OTP_RATE_LIMITED` (429, `Retry-After`); `TENANT_ROUTE_UNAVAILABLE`, `CITIZEN_SIGNIN_NOT_CONFIGURED`, `OTP_CHANNEL_UNAVAILABLE`, `IDENTITY_UNAVAILABLE` (503).
+- A workspace whose trial ended unapproved gets `WORKSPACE_TRIAL_EXPIRED` with its `notice`, for every `purpose`, and no code is sent (read from the cached tenant directory).
+- Errors: `INVALID_REQUEST`, `PHONE_OTP_DISABLED`, `INVALID_MOBILE_NUMBER` (400); `SESSION_REQUIRED` 401; `UNTRUSTED_ORIGIN`, `WORKSPACE_TRIAL_EXPIRED` (403); `TENANT_ROUTE_NOT_FOUND` 404; `OTP_RESEND_TOO_SOON`, `OTP_RATE_LIMITED` (429, `Retry-After`); `TENANT_ROUTE_UNAVAILABLE`, `CITIZEN_SIGNIN_NOT_CONFIGURED`, `OTP_CHANNEL_UNAVAILABLE`, `IDENTITY_UNAVAILABLE` (503).
 
 **`HttpOtpSender`** POSTs to `IDENTITY_OTP_SENDER_URL`:
 
@@ -383,7 +387,8 @@ change_phone → 200 {phoneNumber, phoneNumberVerified: true}
 - New phone identities get an **opaque** Keycloak username. Existing usernames stay, and lookup always follows the current verified phone (design §8).
 - A **phone change** keeps the citizen account's uuid. It updates Keycloak, then DIGIT. It ends the person's other sessions that carry the old number and revokes every DIGIT token they held, including one the changing session shares; digit-ui's phone form selects again right after verify.
 - A new citizen without a given name gets the national mobile number as their DIGIT name (D17).
-- Errors: `INVALID_REQUEST`, `PHONE_OTP_DISABLED`, `OTP_EXPIRED`, `OTP_INVALID` (+ `attemptsRemaining`) (400); `SESSION_REQUIRED` 401; `UNTRUSTED_ORIGIN`, `IDENTITY_DISABLED` (403); `TENANT_ROUTE_NOT_FOUND` 404; `IDENTITY_CONFLICT`, `PHONE_IN_USE` (409); `TENANT_ROUTE_UNAVAILABLE`, `IDENTITY_UNAVAILABLE` (503).
+- A workspace whose trial ended unapproved gets `WORKSPACE_TRIAL_EXPIRED` with its `notice` before the code is checked, as in `_send`.
+- Errors: `INVALID_REQUEST`, `PHONE_OTP_DISABLED`, `OTP_EXPIRED`, `OTP_INVALID` (+ `attemptsRemaining`) (400); `SESSION_REQUIRED` 401; `UNTRUSTED_ORIGIN`, `IDENTITY_DISABLED`, `WORKSPACE_TRIAL_EXPIRED` (403); `TENANT_ROUTE_NOT_FOUND` 404; `IDENTITY_CONFLICT`, `PHONE_IN_USE` (409); `TENANT_ROUTE_UNAVAILABLE`, `IDENTITY_UNAVAILABLE` (503).
 
 ### 3.3 Browser, signed in
 
@@ -433,12 +438,13 @@ Body or query `{surface, scope?: "current" | "others" | "all"}`, default `curren
 Configurator surface.
 
 ```
-200 {tenants: [{organizationAlias, tenantId, name, roles: string[], code?: "DIGIT_ACCOUNT_INACTIVE"}], selectionRequired, onboardingRequired}
+200 {tenants: [{organizationAlias, tenantId, name, roles: string[], code?: "DIGIT_ACCOUNT_INACTIVE" | "WORKSPACE_TRIAL_EXPIRED"}], selectionRequired, onboardingRequired, notice?}
 ```
 
 - It lists the `ACTIVE` Organizations where the staff predicate holds. The read is targeted from `digit.bindings` and memberships; it no longer probes every Organization (item 15).
 - `roles` are the role codes of the mirrored `digit.accounts` entry.
 - **Inactive staff** (DIGIT `active=false`) still see the tenant, with `code: "DIGIT_ACCOUNT_INACTIVE"`, and can't select it.
+- A workspace whose **trial ended** unapproved stays listed with `code: "WORKSPACE_TRIAL_EXPIRED"` and `roles: []`, and the response carries the `notice`. A locked founder is never sent to signup (`onboardingRequired` stays false).
 - Pending invitations are **not** listed here; they are in `/session`.
 - Errors: `SESSION_REQUIRED` / `SESSION_REVOKED` 401, `DIGIT_UNAVAILABLE` / `IDENTITY_UNAVAILABLE` 503.
 
@@ -452,7 +458,7 @@ Body `{surface: "configurator" | "employee", tenantId}`. An employee's `tenantId
 
 **Order (design §6), all inside the person lease:**
 1. Re-read the session. Gone → `SESSION_EXPIRED`; generation behind → `SESSION_REVOKED`.
-2. The staff predicate and Organization `ACTIVE`, else `TENANT_CONTEXT_UNAVAILABLE`. A `pending` binding → `PENDING_INVITATION`. No binding (and no managed account until item 14), or no membership → `EMPLOYEE_ACCOUNT_NOT_LINKED`. An entry marked `missing` → `DIGIT_ACCOUNT_NOT_FOUND`.
+2. The staff predicate and Organization `ACTIVE`, else `TENANT_CONTEXT_UNAVAILABLE`. A trial that ended unapproved (read live) → `WORKSPACE_TRIAL_EXPIRED` with its `notice`. A `pending` binding → `PENDING_INVITATION`. No binding (and no managed account until item 14), or no membership → `EMPLOYEE_ACCOUNT_NOT_LINKED`. An entry marked `missing` → `DIGIT_ACCOUNT_NOT_FOUND`.
 3. DIGIT `active`, else `DIGIT_ACCOUNT_INACTIVE`.
 4. Return the cached token if egov-user still accepts it. A dependency error is not treated as an invalid token.
 5. Otherwise mint with the derived credential (§8). The typed login outcomes are:
@@ -464,7 +470,7 @@ Body `{surface: "configurator" | "employee", tenantId}`. An employee's `tenantId
 7. Mirror DIGIT→Keycloak, and write the verified email Keycloak→DIGIT.
 
 - The BFF never returns a refresh token (D25/B7). Clients call `_select` again on expiry.
-- Errors: `INVALID_REQUEST`, `UNSUPPORTED_SURFACE` (400); `SESSION_REQUIRED`, `SESSION_EXPIRED`, `SESSION_REVOKED` (401); `UNTRUSTED_ORIGIN`, `TENANT_CONTEXT_UNAVAILABLE`, `EMPLOYEE_ACCOUNT_NOT_LINKED`, `PENDING_INVITATION`, `ACCOUNT_LOCKED`, `DIGIT_ACCOUNT_INACTIVE` (403); `DIGIT_ACCOUNT_NOT_FOUND` 404; `TENANT_ROLES_MISSING`, `DIGIT_PII_MASKED`, `DIGIT_ACCOUNT_INVALID`, `DIGIT_UNAVAILABLE`, `IDENTITY_UNAVAILABLE`, `IDENTITY_BUSY` (503).
+- Errors: `INVALID_REQUEST`, `UNSUPPORTED_SURFACE` (400); `SESSION_REQUIRED`, `SESSION_EXPIRED`, `SESSION_REVOKED` (401); `UNTRUSTED_ORIGIN`, `TENANT_CONTEXT_UNAVAILABLE`, `EMPLOYEE_ACCOUNT_NOT_LINKED`, `PENDING_INVITATION`, `ACCOUNT_LOCKED`, `DIGIT_ACCOUNT_INACTIVE`, `WORKSPACE_TRIAL_EXPIRED` (403); `DIGIT_ACCOUNT_NOT_FOUND` 404; `TENANT_ROLES_MISSING`, `DIGIT_PII_MASKED`, `DIGIT_ACCOUNT_INVALID`, `DIGIT_UNAVAILABLE`, `IDENTITY_UNAVAILABLE`, `IDENTITY_BUSY` (503).
 
 #### 3.3.5 `POST /identity/v1/contexts/citizen/_select` (items 6, 10, 12, 13)
 
@@ -473,6 +479,7 @@ Body `{surface?: "citizen"}`. The tenant comes only from the session's bound ten
 - The same steps as staff `_select`, with the citizen predicate. Issuance is the egov-otp-backed citizen grant.
 - Resolution: the `digit.accounts` citizen entry, then the citizen link, then a CITIZEN search by the verified phone. An ambiguous match → `CITIZEN_ACCOUNT_AMBIGUOUS`.
 - The per-tenant registration `DISABLED` status is removed (D6). Blocking a citizen = disabling their Keycloak user.
+- The bound workspace's trial comes from the same live Organization read that re-checks the route: ended unapproved → `WORKSPACE_TRIAL_EXPIRED` with its `notice`.
 - Errors: as staff `_select`, plus `PHONE_NOT_VERIFIED`, `CITIZEN_CONTEXT_UNAVAILABLE` (403); `CITIZEN_ACCOUNT_AMBIGUOUS`, `CITIZEN_ACCOUNT_LINK_BLOCKED` (409); `DIGIT_ACCOUNT_MISMATCH` 502; `CITIZEN_SIGNIN_NOT_CONFIGURED`, `ACCOUNT_LINK_BUSY` (503).
 
 #### 3.3.6 `POST /identity/v1/workspace-members/_link` (items 8, 9)
@@ -687,6 +694,9 @@ Organization membership **only**, and idempotent. The role projection and the ma
 
 - **`POST /internal/identity/v1/reconciliation/_run`** (item 12) → `200 | 202 {acquired, subjects, mirrored, revoked, propagated, unchanged, failures: [{subject, code}], lagSeconds}`. It **never** writes DIGIT `active`, and never creates or restores a membership or binding. `deactivated` and `unprovisioned` are removed.
 - **`account-links/_link`, `_unlink`, `GET account-links`** keep today's shapes. After item 14 they accept `userType: "CITIZEN"` only, and `EMPLOYEE` → `INVALID_REQUEST`. They are how an admin resolves `CITIZEN_ACCOUNT_AMBIGUOUS`. Until item 14, an `EMPLOYEE` link writes an `active` binding (item 19 runs the bulk conversion).
+- **`GET /internal/identity/v1/workspace-trials`** → `200 {workspaces: [{tenantId, urlSlug, name, trialEndsAt, approvedAt, approvedBy, state: TRIAL | APPROVED | EXPIRED, locked}]}`, one row per Organization with a trial end. `state` reads the attributes alone; `locked` is what the gates do, so it is `false` for every workspace while `IDENTITY_WORKSPACE_TRIAL_DAYS` is 0. `_approve` and `_extend` answer the same `workspace` view.
+- **`POST /internal/identity/v1/workspace-trials/_approve`** `{tenantId, actor?}` → `200 {workspace}`. Sets `trialApprovedAt` and `trialApprovedBy` (`control-plane:<actor>`); a second call keeps the first approval, on a workspace without a trial too. No Organization → `WORKSPACE_NOT_FOUND` (404).
+- **`POST /internal/identity/v1/workspace-trials/_extend`** `{tenantId, endsAt, actor?}` → `200 {workspace}`. Sets `trialEndsAt` to `endsAt` (a full ISO 8601 timestamp with an offset, else `INVALID_REQUEST`); works on a workspace with no trial. Both writes re-read the Organization before the PUT, under the onboarding lock its primitives take (`op` by `digit.operationId`, else `tenant`), and clear the tenant mapping cache. Both are audited (`WORKSPACE_TRIAL_APPROVED` / `_EXTENDED`, actor, `{from, to}`). A held onboarding lock → `IDENTITY_BUSY`, Keycloak failure → `IDENTITY_UNAVAILABLE` (both retry).
 - **`POST /internal/identity/v1/tenant-routes/_backfill`** `{dryRun?: boolean, actor?: string}` → `200 {created: [tenantId], skipped: [{tenantId, reason: NOT_ROOT | NOT_ACTIVE | ALREADY_MAPPED}], conflicts: [{tenantId, reason: INVALID_SLUG | SLUG_TAKEN | ALIAS_TAKEN}]}`. It gives every active DIGIT root tenant in `IDENTITY_TENANT_ROUTE_BACKFILL_ROOTS` (unset: the root of `DIGIT_ADMIN_TENANT_ID`; set but empty: none, which is how a deployment opts out; the Helm chart leaves an empty value unset) that no Organization maps an Organization whose alias and URL slug are the tenant id (`ke` → `/ke/digit-ui/...`). Idempotent; it never renames or overwrites a mapping. `IDENTITY_TENANT_ROUTE_BACKFILL=true` runs the same backfill at startup. It is kept after item 14 because it is the only way a root tenant that predates signup gets a route; signup's `organizations/_ensure` covers new tenants. Keycloak or DIGIT failures → `IDENTITY_UNAVAILABLE` / `DIGIT_UNAVAILABLE`. The Ansible deploy is a regular caller: every converge POSTs it on the loopback port for the roots it renders from `identity_tenant_route_backfill_roots` (empty when it routes none, never `pg`), and compares `created`/`skipped`/`conflicts` with those roots to report any left without a route (#2398).
 
 ### 3.6 Console employee flows
@@ -744,6 +754,7 @@ The console calls HRMS first, then the BFF. The BFF never writes HRMS (§1), and
 | `PENDING_INVITATION` | 403 | after-change | The binding at this tenant is pending; accept the invitation first |
 | `ACCOUNT_LOCKED` | 403 | after-change | egov-user reports the DIGIT account locked; no credential repair |
 | `DIGIT_ACCOUNT_INACTIVE` | 403 | after-change | The DIGIT account is inactive (D4); reactivate it in HRMS |
+| `WORKSPACE_TRIAL_EXPIRED` | 403 | after-change | The workspace's trial ended and it is not approved; body carries notice |
 | `TENANT_ROLES_MISSING` | 503 | after-change | egov-user INVALID_ROLE: the tenant baseline is not seeded |
 | `DIGIT_PII_MASKED` | 503 | after-change | The DIGIT writer refused a write because a read came back masked |
 | `DIGIT_ACCOUNT_INVALID` | 503 | after-change | egov-user rejected a stored field on read-modify-write |
@@ -785,6 +796,7 @@ The console calls HRMS first, then the BFF. The BFF never writes HRMS (§1), and
 | `SUBJECT_ALREADY_LINKED` | 409 | no | The person already has a link of that type at the tenant |
 | `ACCOUNT_LINK_BUSY` | 503 | yes | The account-link lock wait timed out (citizen links) |
 | `TENANT_NOT_FOUND` | 404 | no | Unknown or inactive DIGIT tenant |
+| `WORKSPACE_NOT_FOUND` | 404 | no | No Organization exists for the tenant |
 | `IDENTITY_NOT_FOUND` | 404 | no | No enabled Keycloak user with that subject |
 | `WORKLOAD_UNAUTHORIZED` | 401 | no | Missing or wrong bearer token for this internal route |
 | `CONTROL_PLANE_NOT_CONFIGURED` | 503 | after-change | The token for this internal route is not configured |
@@ -874,10 +886,14 @@ A pending binding past `expiresAt` counts as `removed` everywhere, even before a
 | `digit.operationHash` | 64 hex characters | §9 |
 | `digit.lifecycle` | `PROVISIONING` \| `ACTIVE` \| `FAILED` | **Absent = `ACTIVE`** |
 | `digit.lifecycleRestartNo` | integer, as a string | The `restartNo` the lifecycle was set at, so a repeated `_lifecycle` call is recognized |
+| `digit.trialEndsAt` | ISO-8601 UTC string | Present means the workspace is on trial. Written by the BFF at the first `PROVISIONING` → `ACTIVE` when `IDENTITY_WORKSPACE_TRIAL_DAYS` > 0 (never over an existing value), or by the operator's `_extend` |
+| `digit.trialApprovedAt` | ISO-8601 UTC string | Present means approved. Written by the operator's `_approve` |
+| `digit.trialApprovedBy` | `control-plane:<actor>` | Audit only. Written by `_approve` |
 | `digit.supersededBy` | Organization id | On a `FAILED` Organization replaced after a slug change |
 | `digit.replacementPending` | single JSON value `{restartNo,operationHash,tenantId,slug,name}` | Durable changed-slug attempt, written before changing the old Organization and cleared after supersession finishes (§9.3) |
 | `digit.accountCode`, `digit.fallbackTenantIds` | as today | Read-only legacy; not written by new code |
 
+- **Trial state:** no `trialEndsAt` means not a trial (every workspace that predates trials). `trialApprovedAt` set means approved, and approval wins over the end date. Otherwise before `trialEndsAt` is a trial and on or after it is expired. An unparseable `trialEndsAt` counts as expired (fail closed).
 - The Organization `name` mirrors MDMS `tenant.tenants.name` (D21). The BFF updates it on rename (reconcile).
 - Organization **names and aliases are unique in the realm**. When a slug change creates a new Organization, the old one is renamed `<name> [failed <first 8 characters of its id>]` before the create.
 - The visibility filter (lifecycle absent or `ACTIVE`, and enabled) runs **before** tenant-collision detection.
@@ -1187,6 +1203,9 @@ Probed on Keycloak 26.7.3 on 2026-10-04; the event shapes the poller matches are
 | `IDENTITY_STAFF_CREDENTIAL_MODE` | `rotate` \| `derived`, per box (D24) |
 | `IDENTITY_OTP_SENDER` = `log` \| `http`, `IDENTITY_OTP_SENDER_URL` | `HttpOtpSender` (item 3) |
 | `IDENTITY_POLLER_MAX_LAG_SECONDS` | Readiness threshold for the event poller |
+| `IDENTITY_WORKSPACE_TRIAL_DAYS` | Trial length for new self-serve workspaces; a whole number from 0 to 3650, default 0 (empty = 0). Anything else stops startup. 0 turns trials off: nothing is stamped and no workspace locks, whatever its `digit.trialEndsAt` |
+| `IDENTITY_WORKSPACE_TRIAL_NOTICE_TITLE`, `_MESSAGE` | Text of the `WORKSPACE_TRIAL_EXPIRED` notice (defaults: "This workspace's trial has ended" / "Sign-in is paused until the workspace is approved. Contact the platform team to continue.") |
+| `IDENTITY_WORKSPACE_TRIAL_NOTICE_LINK_LABEL`, `_LINK_URL` | Optional notice link; sent only when both are set |
 | `IDENTITY_RECONCILIATION_INTERVAL_SECONDS` | Unchanged (default 300); reported by `/readyz` |
 
 Removed by item 14/15: the `DIGIT_PROVISIONER_*` variables, the onboarding worker variables, the role allowlist, and the `admin/admin` Keycloak fallback.
@@ -1213,7 +1232,7 @@ Removed by item 14/15: the `DIGIT_PROVISIONER_*` variables, the onboarding worke
 
 | Field | Meaning |
 |---|---|
-| `reason` | The job's reason: `CREDENTIAL_CHANGED`, `KEYCLOAK_DISABLED`, `KEYCLOAK_DELETED`, `LOGOUT_ALL`, `MEMBERSHIP_REMOVED`, `BINDING_REMOVED`, `ROLE_CHANGED`, `DIGIT_INACTIVE`, `DIGIT_ACCOUNT_MISSING`, `ORGANIZATION_DISABLED`, `TENANT_INACTIVE`, or a logout reason above |
+| `reason` | The job's reason: `CREDENTIAL_CHANGED`, `KEYCLOAK_DISABLED`, `KEYCLOAK_DELETED`, `LOGOUT_ALL`, `MEMBERSHIP_REMOVED`, `BINDING_REMOVED`, `ROLE_CHANGED`, `DIGIT_INACTIVE`, `DIGIT_ACCOUNT_MISSING`, `ORGANIZATION_DISABLED`, `TENANT_INACTIVE`, `TRIAL_EXPIRED`, or a logout reason above |
 | `subject` | Keycloak subject |
 | `tenantId`, `account` | The tenant (and `tenantId:uuid` DIGIT account) a scoped job targets; absent for person-wide jobs |
 | `trigger` | `eventId` (`<time>:<id>` for a Keycloak event), `eventType` (the user event type, e.g. `UPDATE_CREDENTIAL`, or the admin event's operation and resource, e.g. `UPDATE USER`), `eventTime` (ISO). A job the BFF started itself has only a generated `eventId` (`tenant:<tenantId>` for a tenant fan-out); a logout line not caused by a Keycloak event has an empty `trigger` |
@@ -1225,5 +1244,43 @@ Removed by item 14/15: the `DIGIT_PROVISIONER_*` variables, the onboarding worke
 No line contains a token, cookie, session id or Keycloak session id.
 
 **Documented limits** (design §6): native refresh tokens issued before binding (up to 14 days) can't be revoked without an egov-user change; revocation pauses while the BFF is down; after Redis loss, citizen tokens, inactive or locked staff tokens, and tokens of a Keycloak user deleted in the same window live until they expire.
+
+**Workspace trials.** A self-serve workspace can be locked 30 days (or `IDENTITY_WORKSPACE_TRIAL_DAYS`) after signup unless an operator approves it. 0 turns the feature off: no new trial is stamped, and no gate or reconcile pass treats any workspace as locked, whatever its end date. `_approve` and `_extend` still write the attributes, which apply once trials are on again.
+- **Gates that refuse:** employee and configurator `contexts/_select`, citizen `contexts/citizen/_select`, and citizen OTP `_send` and `_verify`. Each answers `403 {code: "WORKSPACE_TRIAL_EXPIRED", error, notice}`, where `notice` is `{title, message, linkLabel?, linkUrl?}` from the deployment settings.
+- **`GET /identity/v1/tenants`** keeps the locked workspace listed with `code: "WORKSPACE_TRIAL_EXPIRED"` and no roles, so a founder is not sent to signup.
+- **Open sessions** end within one reconcile pass. Expiry is a new tenant state (`TRIAL_EXPIRED`) and revokes only that workspace's sessions. Only this fan-out also reaches citizens, found through the DIGIT token inventory (`token:<tenantId>:*`) after the members and bindings are queued; a disabled Organization or an inactive tenant still reaches only members and bindings, as before.
+- **Approval** moves the reconcile checkpoint back to the active state without revoking anyone.
+
+**Approving a trial workspace.** The control plane is never published by Kong or nginx. Run these on the server itself, against the BFF's loopback port.
+
+```
+# list every workspace with a trial end
+curl -s -H "Authorization: Bearer $IDENTITY_CONTROL_PLANE_TOKEN" \
+  http://127.0.0.1:<bff-port>/internal/identity/v1/workspace-trials
+
+# approve
+curl -s -X POST -H "Authorization: Bearer $IDENTITY_CONTROL_PLANE_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"tenantId":"<tenant-id>","actor":"ops@example.org"}' \
+  http://127.0.0.1:<bff-port>/internal/identity/v1/workspace-trials/_approve
+
+# extend (also starts a trial on a workspace that has none)
+curl -s -X POST -H "Authorization: Bearer $IDENTITY_CONTROL_PLANE_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"tenantId":"<tenant-id>","endsAt":"2026-12-31T23:59:59Z","actor":"ops@example.org"}' \
+  http://127.0.0.1:<bff-port>/internal/identity/v1/workspace-trials/_extend
+```
+
+- Each answer's `locked` says whether the gates refuse the workspace now. `state` reads only its attributes, so while trials are off a workspace past its end date shows `state: EXPIRED, locked: false`.
+- `endsAt` must be a full ISO 8601 timestamp with an offset (`2026-12-31T23:59:59Z`, `2026-12-31T23:59:59+03:00`) on a real calendar day; anything else, a date alone included, is `INVALID_REQUEST`.
+- Both writes are audited in the identity audit stream: `WORKSPACE_TRIAL_APPROVED` / `WORKSPACE_TRIAL_EXTENDED`, with `actor` and `detail` `{"from","to"}`. A second approval keeps the first, on a workspace without a trial too. A held onboarding lock answers `IDENTITY_BUSY` (retry).
+- `approvedBy` is stored as `control-plane:<actor>`. `actor` may use letters, digits and `_ . @ : -`, up to 100 characters; any other value is dropped and stored as plain `control-plane`.
+- An approval shows at once on the replica that served it, and on other replicas within the 60 s tenant cache.
+- Fallback: a master-realm admin can edit the same Organization attributes in the Keycloak admin console, reached through an SSH tunnel.
+
+**Known gaps (workspace trials).**
+- `/user/oauth/token` is public at Kong, so anyone who knows a DIGIT password can get a token without the BFF.
+- Open sessions end within one reconcile interval (900 s on Ansible deploys), not instantly.
+- In the compose `.env`, a notice message cannot end with a backslash or contain a backslash directly before an apostrophe.
 
 The configuration reference for each variable is `deploy/digit-compose/identity-bff.env.example`. The deployment walkthrough is `docs/setup/deployment/identity-bff.md` at the repository root.

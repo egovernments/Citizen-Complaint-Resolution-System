@@ -78,6 +78,7 @@ export const ERROR_CODES = {
   PENDING_INVITATION: { status: 403, retry: "after-change", meaning: "The binding at this tenant is pending; accept the invitation first" },
   ACCOUNT_LOCKED: { status: 403, retry: "after-change", meaning: "egov-user reports the DIGIT account locked; no credential repair" },
   DIGIT_ACCOUNT_INACTIVE: { status: 403, retry: "after-change", meaning: "The DIGIT account is inactive (D4); reactivate it in HRMS" },
+  WORKSPACE_TRIAL_EXPIRED: { status: 403, retry: "after-change", meaning: "The workspace's trial ended and it is not approved; body carries notice" },
   TENANT_ROLES_MISSING: { status: 503, retry: "after-change", meaning: "egov-user INVALID_ROLE: the tenant baseline is not seeded" },
   DIGIT_PII_MASKED: { status: 503, retry: "after-change", meaning: "The DIGIT writer refused a write because a read came back masked" },
   DIGIT_ACCOUNT_INVALID: { status: 503, retry: "after-change", meaning: "egov-user rejected a stored field on read-modify-write" },
@@ -124,6 +125,7 @@ export const ERROR_CODES = {
   DIGIT_ACCOUNT_MANAGED: { status: 409, retry: "no", meaning: "A kcbff- managed account cannot be bound" },
   SUBJECT_ALREADY_LINKED: { status: 409, retry: "no", meaning: "The person already has a link of that type at the tenant" },
   ACCOUNT_LINK_BUSY: { status: 503, retry: "yes", meaning: "The account-link lock wait timed out (citizen links)" },
+  WORKSPACE_NOT_FOUND: { status: 404, retry: "no", meaning: "No Organization exists for the tenant" },
   TENANT_NOT_FOUND: { status: 404, retry: "no", meaning: "Unknown or inactive DIGIT tenant" },
   IDENTITY_NOT_FOUND: { status: 404, retry: "no", meaning: "No enabled Keycloak user with that subject" },
 

@@ -178,6 +178,15 @@ config:
   IDENTITY_POLLER_MAX_LAG_SECONDS: "60"
   IDENTITY_RECONCILE_ON_STARTUP: "true"
   IDENTITY_RECONCILIATION_INTERVAL_SECONDS: "900"
+  # Workspace trial: days a self-serve workspace may sign in before approval;
+  # "30" for self-serve SaaS. "0" = trials off: no new trial, and no workspace
+  # locks whatever its end date. The notice texts are optional (empty
+  # = BFF built-in text); the link shows only when label and URL are both set.
+  IDENTITY_WORKSPACE_TRIAL_DAYS: "0"
+  IDENTITY_WORKSPACE_TRIAL_NOTICE_TITLE: ""
+  IDENTITY_WORKSPACE_TRIAL_NOTICE_MESSAGE: ""
+  IDENTITY_WORKSPACE_TRIAL_NOTICE_LINK_LABEL: ""
+  IDENTITY_WORKSPACE_TRIAL_NOTICE_LINK_URL: ""
   IDENTITY_RECONCILIATION_LEASE_SECONDS: ""  # BFF default: 300
   # Give each active ROOT tenant listed here (default: DIGIT_ADMIN_TENANT_ID's
   # root) without an Organization one whose URL slug is the tenant id.

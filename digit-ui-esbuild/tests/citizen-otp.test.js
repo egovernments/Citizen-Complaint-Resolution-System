@@ -17,7 +17,7 @@ esbuild.buildSync({
 process.on("exit", () => {
   try { fs.unlinkSync(OUT); } catch (_) { /* already removed */ }
 });
-const { fetchCitizenSigninMethods, sendCitizenOtp, verifyCitizenOtp } = require(OUT);
+const { citizenOtpFailure, fetchCitizenSigninMethods, sendCitizenOtp, verifyCitizenOtp } = require(OUT);
 
 const TENANT = { urlSlug: "kd", tenantId: "kd" };
 
@@ -143,4 +143,16 @@ test("no attempts left gets its own message, whatever the code", async () => {
     assert.equal(verified.messageKey, "CORE_IDENTITY_OTP_NO_ATTEMPTS_LEFT", code);
     assert.equal(verified.attemptsRemaining, 0);
   }
+});
+
+test("a trial-expired 403 keeps its code and notice on _send and _verify", async () => {
+  const notice = { title: "Trial ended", message: "Contact us." };
+  const body = { code: "WORKSPACE_TRIAL_EXPIRED", error: "expired", notice };
+  const sent = await sendCitizenOtp({ tenant: TENANT, mobileNumber: "7", fetchImpl: fakeFetch(403, body).fetchImpl });
+  assert.equal(sent.ok, false);
+  assert.equal(sent.code, "WORKSPACE_TRIAL_EXPIRED");
+  assert.deepEqual(sent.notice, notice);
+  const verified = await verifyCitizenOtp({ tenant: TENANT, challengeId: "c", code: "1", fetchImpl: fakeFetch(403, body).fetchImpl });
+  assert.deepEqual(verified.notice, notice);
+  assert.equal(citizenOtpFailure({ status: 403, headers: { get: () => null } }, {}).notice, undefined);
 });

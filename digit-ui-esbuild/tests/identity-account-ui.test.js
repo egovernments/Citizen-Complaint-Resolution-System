@@ -493,3 +493,22 @@ test("pending invitation decline asks for confirmation, then leaves the person s
   assert.ok(button(view, "Try again"));
   view.unmount();
 });
+
+test("a trial-expired _select shows the notice; closing the modal keeps it inline and sign-in blocked", async () => {
+  const notice = { title: "Trial ended", message: "Contact us.", linkLabel: "Upgrade", linkUrl: "https://example.org/up" };
+  browser("employee", async (url) => url.includes("/session")
+    ? json(200, { authenticated: true, tenant })
+    : json(403, { code: "WORKSPACE_TRIAL_EXPIRED", notice }));
+  const Shell = ({ children }) => ui.React.createElement("section", null, children);
+  const Login = () => ui.React.createElement(ui.SignInFailureCard, {
+    signIn: ui.useIdentityBffSignIn({ surface: "employee", t, onAuthenticated: () => assert.fail("a locked workspace cannot sign in") }), Shell,
+  });
+  const view = await render(Login);
+  const popup = view.root.findByProps({ className: "digit-workspace-trial-popup" });
+  await ui.act(async () => { popup.props.onClose(); });
+  assert.equal(view.root.findAllByProps({ className: "digit-workspace-trial-popup" }).length, 0);
+  assert.equal(button(view, "Sign in"), undefined);
+  assert.match(text(view.root), /Trial ended/);
+  assert.match(text(view.root.findByProps({ className: "digit-workspace-trial-notice" })), /Contact us\./);
+  assert.equal(view.root.findByType("a").props.href, "https://example.org/up");
+});
