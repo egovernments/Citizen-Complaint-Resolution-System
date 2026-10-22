@@ -23,6 +23,30 @@ import { useAuthResult } from '@/hooks/useAuthResult';
 
 type Phase = 'loading' | 'methods' | 'tenants' | 'noAccess' | 'invitations' | 'entering';
 
+const DEEP_LINK_KEY = 'crs-deep-link-tenant';
+
+/**
+ * `/login?tenant=<code>` opens that tenant directly once the identity session exists (a tenant node below the
+ * workspace, which the chooser does not list). Kept for the identity sign-in round trip; the server decides
+ * whether the caller may enter it (contexts/_select).
+ */
+function rememberDeepLink(tenant: string | null): string | null {
+  try {
+    if (tenant) sessionStorage.setItem(DEEP_LINK_KEY, tenant);
+    return tenant || sessionStorage.getItem(DEEP_LINK_KEY);
+  } catch {
+    return tenant;
+  }
+}
+
+function forgetDeepLink(): void {
+  try {
+    sessionStorage.removeItem(DEEP_LINK_KEY);
+  } catch {
+    // Storage can be unavailable; the link was only a convenience.
+  }
+}
+
 function expiredSessionMessage(): string | null {
   try {
     if (sessionStorage.getItem(SESSION_EXPIRED_KEY)) {
@@ -52,6 +76,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [sending, setSending] = useState(false);
   const [incompleteSignOut, setIncompleteSignOut] = useState(false);
+  const [deepLinkTenant] = useState(() => rememberDeepLink(searchParams.get('tenant')));
 
   const load = useCallback(async () => {
     try {
@@ -62,6 +87,25 @@ export default function LoginPage() {
       const current = incomplete ? null : await session();
       if (current?.authenticated && current.user) {
         setIdentityUser(current.user);
+        if (deepLinkTenant) {
+          forgetDeepLink();
+          setPhase('entering');
+          try {
+            try {
+              await enterWorkspace(deepLinkTenant, current.user);
+            } catch (refused) {
+              // ours (#1778): `?tenant=ke` names the state workspace the identity service lists as KE, and only KE is
+              // accepted: retry under the session's own option of the same name in another case, if there is one
+              const wanted = deepLinkTenant.trim().toLowerCase();
+              const own = (await tenants()).tenants.find((option) => option.tenantId.toLowerCase() === wanted && option.tenantId !== deepLinkTenant);
+              if (!own) throw refused;
+              await enterWorkspace(own.tenantId, current.user);
+            }
+            return;
+          } catch (caught) {
+            setError(caught instanceof Error ? caught.message : 'Could not open that workspace.');
+          }
+        }
         const available = await tenants();
         setTenantOptions(available.tenants);
         setInvitations(current.pendingInvitations ?? []);
@@ -77,7 +121,7 @@ export default function LoginPage() {
       setError(caught instanceof Error ? caught.message : 'Sign-in is temporarily unavailable.');
       setPhase('methods');
     }
-  }, []);
+  }, [deepLinkTenant]);
 
   useEffect(() => {
     // `load` only updates state after its session request settles. The rule
