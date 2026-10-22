@@ -83,6 +83,11 @@ async function staffPhoneOwner(tenantId: string, mobileNumber: string): Promise<
   }
 }
 
+/** One line at startup says whether an employee's own number joins their staff identity (#2595). */
+export function logStaffPhoneJoinMode(): void {
+  console.info(JSON.stringify({ identity: "identity.citizen_otp.staff_phone_join", enabled: config.identityStaffPhoneJoin }));
+}
+
 /** Anonymous creation holds a prospective lease; only the actual owner lease may issue a session. */
 export async function phoneSignIn(phone: string, tenant: BoundTenant, nationalNumber: string) {
   let created = false;
