@@ -107,6 +107,12 @@ const FINANCIAL_YEARS = [
   { code: 'OCT_SEP', label: 'October to September' },
 ];
 
+/**
+ * The terms version every signup records. Continuing past sign-in is the
+ * agreement ("By continuing, you agree to the Terms of Service and Privacy
+ * Notice"), so Review has no checkbox; pgr-services still needs the version to
+ * submit.
+ */
 const TERMS_VERSION = '2026-09';
 
 /**
@@ -289,7 +295,6 @@ function SignupFlow() {
   // Whether a TERMINAL_FAILED run's signup was handed back is read from the signup. Until that
   // read answers, neither "Change my details" nor "contact support" is shown.
   const [reopenCheck, setReopenCheck] = useState<'pending' | 'failed' | 'done'>('pending');
-  const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   const [codeState, setCodeState] = useState<AvailabilityResult | null>(null);
   const [codeChecking, setCodeChecking] = useState(false);
@@ -325,7 +330,6 @@ function SignupFlow() {
     setTimeZone(record.timeZone || '');
     setFinancialYearPolicy(record.financialYearPolicy || '');
     setTenantAdminMobile(String(record.tenantMetadata?.tenantAdmin?.mobileNumber || ''));
-    setAcceptedTerms(Boolean(record.acceptedTermsVersion));
     // Only a value the operator typed stops following the name. A saved value
     // that is still what the saved name derives was never edited by hand, so
     // it keeps updating when the name changes after a resume.
@@ -544,13 +548,13 @@ function SignupFlow() {
     if (languages.length) next.languages = languages;
     if (timeZone) next.timeZone = timeZone;
     if (financialYearPolicy) next.financialYearPolicy = financialYearPolicy;
-    if (acceptedTerms) next.acceptedTermsVersion = TERMS_VERSION;
+    next.acceptedTermsVersion = TERMS_VERSION;
     if (tenantAdminMobile.trim()) {
       // The bare national number when it passes the rule: the backend's parser and egov-user then see the same digits.
       next.tenantMetadata = { schemaVersion: 1, tenantAdmin: { mobileNumber: mobileNational ?? tenantAdminMobile.trim() } };
     }
     return next;
-  }, [accountName, accountCode, urlSlug, countryCode, languages, timeZone, financialYearPolicy, acceptedTerms, tenantAdminMobile, mobileNational]);
+  }, [accountName, accountCode, urlSlug, countryCode, languages, timeZone, financialYearPolicy, tenantAdminMobile, mobileNational]);
 
   /** Preferences' choices as analytics gets them: never the mobile number. */
   const preferenceChoices = {
@@ -1546,21 +1550,11 @@ function SignupFlow() {
             ))}
           </dl>
 
-          <label className="flex items-start gap-2 text-sm">
-            <input
-              type="checkbox"
-              className="mt-1"
-              checked={acceptedTerms}
-              onChange={(e) => setAcceptedTerms(e.target.checked)}
-            />
-            <span className="text-muted-foreground">I agree to the terms of service.</span>
-          </label>
-
           <div className="flex gap-3">
             <Button variant="outline" onClick={() => setStep('preferences')}>
               Back
             </Button>
-            <Button className="flex-1" disabled={!acceptedTerms || saving} onClick={submit}>
+            <Button className="flex-1" disabled={saving} onClick={submit}>
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Create account
             </Button>
           </div>
