@@ -115,16 +115,26 @@
 
 # verify_db.py exits 0 when a country got no official set (it stays Overture
 # only) and says so in a WARNING line; surface those, or every later deploy just
-# reports "Not rebuilding".
+# reports "Not rebuilding". This shows once: the DB now lists the country, so
+# later deploys don't retry it.
 - name: "Turbopass — boundary DB built, with warnings"
   ansible.builtin.debug:
-    msg: "{{ turbopass_bootstrap_run.stdout_lines | select('match', '^WARNING:') | list }}"
+    msg: "{{ turbopass_bootstrap_run.stdout_lines | select('match', '^WARNING:') | list + [_retry_note] }}"
+  vars:
+    _retry_note: >-
+      Later deploys won't retry these countries: the DB now holds them, so they
+      report "Not rebuilding". Once the official source is back, rebuild with
+      ./deploy.sh <tenant> --tags=turbopass -e '{"turbopass_rebuild_boundary_db": true}'.
   when:
     - turbopass_db_build | bool
     - turbopass_bootstrap_run.rc | default(1) == 0
     - turbopass_bootstrap_run.stdout_lines | default([]) | select('match', '^WARNING:') | list | length > 0
 
-# The ~720 MB build image is only used for a build, and a build makes it again.
+# The build image is only used for a build, and a build makes it again. This
+# removes its tag only: its layers (most of the ~720 MB is the pip install
+# layer) stay in BuildKit's build cache until the builder's GC or
+# `docker builder prune` frees them. No prune here, as that would also drop
+# other builds' cache on the box.
 - name: "Turbopass — remove the bootstrap image"
   ansible.builtin.command: docker image rm turbopass-bootstrap:local
   changed_when: true

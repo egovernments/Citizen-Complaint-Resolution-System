@@ -181,7 +181,7 @@
 
     # A string would be joined one character at a time: `-e turbopass_countries=KE`
     # or `turbopass_countries: KE,IN` becomes COUNTRIES=K,E, which the bootstrap
-    # rejects on every deploy (Dhruv review on #2608). Fail once, before anything
+    # rejects on every deploy (review on #2608). Fail once, before anything
     # changes.
     - name: "preflight — turbopass_countries is a list"
       ansible.builtin.assert:
