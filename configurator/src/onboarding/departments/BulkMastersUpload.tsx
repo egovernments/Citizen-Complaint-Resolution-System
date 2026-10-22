@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { parseDepartmentExcel, parseDesignationExcel, parseExcelFile } from '@/utils/excelParser';
 import { downloadCommonMastersTemplate } from '@/utils/templateBuilder';
 import { describeSaveError } from '../errors';
-import { reportStepError } from '../telemetry';
+import { reportStepError, trackTemplateDownload, trackUploadRefused } from '../telemetry';
 import { useOnboardingT } from '../i18n';
 import { importMasters, type ImportResult, type MasterInput } from './mastersApi';
 
@@ -58,6 +58,7 @@ export function BulkMastersUpload({
       if (!departments.data.length && !designations.data.length) {
         setError(t('departments.bulk.none_found', 'No departments or designations found. Use the template’s Department and Designation sheets.'));
         setParsed(null);
+        trackUploadRefused('departments', 'department', 'NOTHING_FOUND');
         return;
       }
       setParsed({
@@ -72,6 +73,7 @@ export function BulkMastersUpload({
       });
     } catch {
       setError(t('departments.bulk.unreadable', 'That file couldn’t be read. Upload the filled-in .xlsx template.'));
+      trackUploadRefused('departments', 'department', 'UNREADABLE');
     } finally {
       setReading(false);
     }
@@ -110,7 +112,10 @@ export function BulkMastersUpload({
             {t('common.choose_file', 'Choose a file')}
           </Button>
           <p className="mt-4 text-xs text-muted-foreground">{t('common.template_hint', 'Not sure of the columns? Start from ours.')}</p>
-          <Button variant="ghost" size="sm" className="mt-1 gap-1.5 text-primary" onClick={downloadCommonMastersTemplate}>
+          <Button variant="ghost" size="sm" className="mt-1 gap-1.5 text-primary" onClick={() => {
+            downloadCommonMastersTemplate();
+            trackTemplateDownload('departments', 'department');
+          }}>
             <Download className="w-4 h-4" />
             {t('common.download_template', 'Download template')}
           </Button>

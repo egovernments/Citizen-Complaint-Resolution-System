@@ -13,7 +13,7 @@ import { StepHeader } from './StepHeader';
 import { EmptyState, OptionCard, StepActions } from './StepParts';
 import { adjacentSteps, stepById } from './steps';
 import { describeSaveError } from './errors';
-import { reportStepError, trackStepAction } from './telemetry';
+import { reportStepError, trackImport, trackMethod, trackRecordSave } from './telemetry';
 import { useOnboardingT } from './i18n';
 import { listMasters, recordName } from './departments/mastersApi';
 import { TypeDialog } from './complaints/TypeDialog';
@@ -172,13 +172,11 @@ export default function ComplaintsStep() {
     setSaveError(null);
     try {
       const filable = await saveComplaints(tenant, loaded, draft);
-      trackStepAction('complaints', 'entity_update', 'complaint_type', {
-        tenant,
-        source: 'form',
+      trackRecordSave('complaints', 'complaint_type', 'update', {
         count: draft.types.length,
         subtypes: draft.types.reduce((total, type) => total + type.subtypes.length, 0),
         filable,
-        slaHours: draft.slaHours,
+        sla_hours: draft.slaHours,
       });
       writeDraft(tenant, null);
       toast({
@@ -249,7 +247,7 @@ export default function ComplaintsStep() {
               setSaveError(message);
             }}
             onDone={({ defs }) => {
-              trackStepAction('complaints', 'entity_import', 'complaint_type', { tenant, source: 'bulk', count: defs });
+              trackImport('complaints', 'complaint_type', { method: 'bulk', count: defs });
               setBulk(false);
               writeDraft(tenant, null);
               toast({
@@ -262,7 +260,13 @@ export default function ComplaintsStep() {
             }}
           />
         </DigitCard>
-        <Button variant="ghost" onClick={() => setBulk(false)}>
+        <Button
+          variant="ghost"
+          onClick={() => {
+            setBulk(false);
+            trackMethod('complaints', 'bulk', true);
+          }}
+        >
           {t('common.cancel', 'Cancel')}
         </Button>
       </div>
@@ -336,11 +340,17 @@ export default function ComplaintsStep() {
                 icon={FileText}
                 title={t('complaints.from_scratch', 'Start from scratch')}
                 action={t('common.start_adding', 'Start adding')}
-                onClick={() => setEditing({ index: null })}
+                onClick={() => {
+                  setEditing({ index: null });
+                  trackMethod('complaints', 'form');
+                }}
               >
                 {t('complaints.from_scratch_body', 'Name each category and its subcategories yourself.')}
               </OptionCard>
-              <OptionCard icon={LayoutGrid} title={t('common.bulk_upload', 'Bulk upload')} action={t('common.upload_file', 'Upload a file')} onClick={() => setBulk(true)}>
+              <OptionCard icon={LayoutGrid} title={t('common.bulk_upload', 'Bulk upload')} action={t('common.upload_file', 'Upload a file')} onClick={() => {
+                setBulk(true);
+                trackMethod('complaints', 'bulk');
+              }}>
                 {t('complaints.bulk_body', 'Upload a list and we will bring them in.')}
               </OptionCard>
             </div>

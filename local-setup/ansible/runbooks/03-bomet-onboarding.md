@@ -49,7 +49,6 @@ tenant_id: ke
 boot_tenant: ke.bomet          # the SPA lands on the wizard-created city
 ui_state_tenant_id: ke.bomet
 hierarchy_type: BOMET-Hierarchy  # MUST match the wizard's hierarchy name
-auth_provider: ""              # keep '' unless enable_keycloak: true
 
 enable_mcp: true               # REQUIRED on a cold box — bootstraps ke.
 build_mcp: true                #   (kit has false because the real Bomet DB
@@ -77,8 +76,8 @@ What the current playbook guarantees / known issues:
    workflow / pgr / hrms. (Before: services stayed on `pg`, enc-service had
    no `ke` keys, every `ke` login 500'd, and the ADMIN probe killed the play
    with the evidence hidden behind `no_log`.)
-2. **Keycloak password ping-pong — KNOWN, not yet fixed in the playbook**
-   (only bites when `enable_keycloak: true`): `.env` is re-rendered each
+2. **Keycloak password ping-pong — KNOWN, not yet fixed in the playbook**:
+   `.env` is re-rendered each
    deploy, wiping `KC_DB_PASSWORD` until the OpenBao block re-appends it
    after the first `up -d` — so keycloak-postgres and the keycloak container
    disagree on the password in one direction on first enable (dies at the

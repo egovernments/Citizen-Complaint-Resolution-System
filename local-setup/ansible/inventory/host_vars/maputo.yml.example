@@ -88,9 +88,6 @@ enable_mcp: true
 build_mcp: true
 enable_search_stack: false
 enable_novu: false
-# REQUIRED: every sign-in goes through Keycloak and the Identity BFF since
-# D26, and the deploy refuses `false`.
-enable_keycloak: true
 requires_nairobi_mdms: false
 db_fast_path: true
 # Ships as `false` on purpose (issue #2082). preflight.py refuses

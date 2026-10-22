@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useTheme } from '@/providers/ThemeProvider';
 import { THEMES } from '@/themes';
-import { trackEvent } from '@/lib/telemetry';
+import { track } from '@/lib/analytics';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -45,7 +45,7 @@ export function LocaleSwitcher() {
     <Select
       value={locale}
       onValueChange={(next) => {
-        trackEvent('locale_change', { from: locale, to: next });
+        track('app:locale_change', { from: locale, to: next });
         setLocale(next);
       }}
     >
@@ -75,7 +75,7 @@ export function ThemeSwitcher() {
     <Select
       value={theme}
       onValueChange={(next) => {
-        trackEvent('theme_change', { from: theme, to: next });
+        track('app:theme_change', { from: theme, to: next });
         setTheme(next);
       }}
     >
@@ -153,7 +153,7 @@ export function AccountMenu({
             href="https://docs.digit.org"
             target="_blank"
             rel="noopener noreferrer"
-            onClick={() => trackEvent('docs_click', { from: 'account_menu' })}
+            onClick={() => track('app:docs_open', { from: 'account_menu', link: 'digit_docs' })}
           >
             <ExternalLink />
             {docsLabel}

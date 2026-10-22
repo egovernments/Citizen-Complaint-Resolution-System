@@ -45,12 +45,12 @@ so an old copy keeps serving. Use the switches.
 
 ## The Configurator's own telemetry
 
-Separate from everything above. The Configurator ships hardcoded PostHog and
-Sentry credentials and starts sending at module scope, before login, with session
-replay and `sendDefaultPii: true`. This work did not change that default — it
-added a switch, because every environment running it today is already sending and
-flipping the default would silently change behaviour on machines nobody has looked
-at.
+Separate from everything above. The Configurator sends to the PostHog and Sentry
+projects its deployment sets (`configurator_posthog_key`, `configurator_posthog_host`
+and `configurator_sentry_dsn` in host_vars, rendered into its `config.js`; or
+`VITE_POSTHOG_KEY`, `VITE_POSTHOG_HOST` and `VITE_SENTRY_DSN` at build time).
+Unset means off: the repo ships no project. When set, it starts at module scope,
+before login.
 
 Three ways to switch it off, all gating **all three** vendor call sites
 (`main.tsx`, `PageViewTracker`, and every export of `lib/telemetry.ts`):

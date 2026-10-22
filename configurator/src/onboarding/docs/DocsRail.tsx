@@ -1,7 +1,7 @@
 import { useEffect, useId, useState } from 'react';
 import { BookOpen, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
-import { trackEvent } from '@/lib/telemetry';
+import { track } from '@/lib/analytics';
 import { useOnboardingT } from '../i18n';
 import { DIGIT_DOCS, docsFor, type DocsSection } from './docsLinks';
 import { DOCS_BESIDE_PX, useMinWidth } from './useMinWidth';
@@ -47,7 +47,7 @@ function DocsContent({ section }: { section: DocsSection }) {
                       target="_blank"
                       rel="noopener noreferrer"
                       aria-label={`${link.title} ${newTab}`}
-                      onClick={() => trackEvent('docs_click', { from: 'onboarding_docs', section, link: link.id })}
+                      onClick={() => track('app:docs_open', { from: 'onboarding_docs', section, link: link.id })}
                       className="group flex items-start justify-between gap-2 rounded-md p-2 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     >
                       <span className="min-w-0">
@@ -68,7 +68,7 @@ function DocsContent({ section }: { section: DocsSection }) {
           href={DIGIT_DOCS}
           target="_blank"
           rel="noopener noreferrer"
-          onClick={() => trackEvent('docs_click', { from: 'onboarding_docs', section, link: 'digit_docs' })}
+          onClick={() => track('app:docs_open', { from: 'onboarding_docs', section, link: 'digit_docs' })}
           className="flex items-center gap-2 rounded-sm px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         >
           <ExternalLink aria-hidden="true" className="h-3 w-3" />

@@ -1,0 +1,35 @@
+# Restart policies for Tilt only. Every Tiltfile loads this file, in every mode.
+#
+# Tilt starts each service with `docker compose up --no-deps`, so the `depends_on:
+# condition: service_healthy` gates in docker-compose.yml are never applied under Tilt. A
+# service that boots before its dependency is ready (egov-hrms racing egov-user is the usual
+# one) exits, and without a restart policy it stays down. These policies let it retry.
+#
+# Under a plain `docker compose up` the depends_on gates do apply, so docker-compose.yml
+# carries no restart policy: a service with a real boot fault (bad env, schema mismatch) exits
+# once with its first stack trace, instead of restarting quietly up to 10 times.
+#
+# One-shot jobs are not listed: pgr-services-migration and minio-init wait for their
+# dependency in their own entrypoint and exit with the real result.
+
+services:
+  mdms-backend: {restart: "on-failure:10"}
+  egov-mdms-service: {restart: "on-failure:10"}
+  egov-enc-service: {restart: "on-failure:10"}
+  egov-idgen: {restart: "on-failure:10"}
+  egov-user: {restart: "on-failure:10"}
+  egov-user-proxy: {restart: "on-failure:10"}
+  egov-otp: {restart: "on-failure:10"}
+  user-otp: {restart: "on-failure:10"}
+  egov-workflow-v2: {restart: "on-failure:10"}
+  egov-workflow-proxy: {restart: "on-failure:10"}
+  egov-localization: {restart: "on-failure:10"}
+  boundary-service: {restart: "on-failure:10"}
+  egov-accesscontrol: {restart: "on-failure:10"}
+  egov-persister: {restart: "on-failure:10"}
+  egov-filestore: {restart: "on-failure:10"}
+  egov-hrms: {restart: "on-failure:10"}
+  egov-bndry-mgmnt: {restart: "on-failure:10"}
+  egov-url-shortening: {restart: "on-failure:10"}
+  pgr-services: {restart: "on-failure:10"}
+  kong: {restart: "on-failure:10"}

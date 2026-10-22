@@ -312,7 +312,7 @@ export const MicButton = ({ label, onClick }: { label: string; onClick: () => vo
     onClick={onClick}
     aria-label={label}
     title={label}
-    data-analytics-event="pgr.file-complaint.voice.open"
+    data-analytics-event="complaint:voice_recorder_open"
   >
     <MicGlyph size={20} />
   </button>
@@ -343,9 +343,9 @@ export function VoiceSheet({ open, onClose, onUse, tr, locale }: VoiceSheetProps
   React.useEffect(() => {
     if (!open) return;
     if (state === "ready") {
-      trackEvent("pgr.file-complaint.voice.transcribed", { category: "pgr", value: seconds });
+      trackEvent("complaint:voice_transcribe_success", { value: seconds });
     } else if (state === "error") {
-      trackEvent("pgr.file-complaint.voice.failed", { category: "pgr", label: errorCode || "unknown" });
+      trackEvent("complaint:voice_transcribe_fail", { label: errorCode || "unknown" });
     }
     // Once per state change; seconds and errorCode are read as they stand then.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -452,10 +452,10 @@ export function VoiceSheet({ open, onClose, onUse, tr, locale }: VoiceSheetProps
 
         {recording ? (
           <div className="cms-sheet-actions">
-            <Button variant="outline" onClick={onClose} data-analytics-event="pgr.file-complaint.voice.cancel">
+            <Button variant="outline" onClick={onClose} data-analytics-event="complaint:voice_recorder_cancel">
               {tr("CS_COMMON_CANCEL", "Cancel")}
             </Button>
-            <Button variant="destructive" leading={<StopGlyph />} onClick={stop} data-analytics-event="pgr.file-complaint.voice.stop">
+            <Button variant="destructive" leading={<StopGlyph />} onClick={stop} data-analytics-event="complaint:voice_record_stop">
               {tr("CS_VOICE_STOP", "Stop")}
             </Button>
           </div>
@@ -467,12 +467,12 @@ export function VoiceSheet({ open, onClose, onUse, tr, locale }: VoiceSheetProps
                 onUse(transcript);
                 onClose();
               }}
-              data-analytics-event="pgr.file-complaint.voice.use"
+              data-analytics-event="complaint:voice_transcript_use"
             >
               {tr("CS_VOICE_USE", "Upload")}
             </Button>
             <div className="cms-sheet-actions">
-              <Button variant="outline" leading={<RetakeGlyph />} onClick={start} data-analytics-event="pgr.file-complaint.voice.retake">
+              <Button variant="outline" leading={<RetakeGlyph />} onClick={start} data-analytics-event="complaint:voice_retake">
                 {tr("CS_VOICE_RETAKE", "Retake")}
               </Button>
               <Button
@@ -480,21 +480,21 @@ export function VoiceSheet({ open, onClose, onUse, tr, locale }: VoiceSheetProps
                 leading={<TrashGlyph />}
                 onClick={onClose}
                 style={DANGER_OUTLINE}
-                data-analytics-event="pgr.file-complaint.voice.delete"
+                data-analytics-event="complaint:voice_delete"
               >
                 {tr("CS_INFO_DELETE", "Delete")}
               </Button>
             </div>
-            <Button variant="ghost" width="full" onClick={onClose} data-analytics-event="pgr.file-complaint.voice.cancel">
+            <Button variant="ghost" width="full" onClick={onClose} data-analytics-event="complaint:voice_recorder_cancel">
               {tr("CS_COMMON_CANCEL", "Cancel")}
             </Button>
           </div>
         ) : failed ? (
           <div className="cms-sheet-actions">
-            <Button variant="outline" onClick={onClose} data-analytics-event="pgr.file-complaint.voice.cancel">
+            <Button variant="outline" onClick={onClose} data-analytics-event="complaint:voice_recorder_cancel">
               {tr("CS_COMMON_CANCEL", "Cancel")}
             </Button>
-            <Button onClick={start} data-analytics-event="pgr.file-complaint.voice.retry">
+            <Button onClick={start} data-analytics-event="complaint:voice_retry">
               {tr("CS_VOICE_RETRY", "Try again")}
             </Button>
           </div>
