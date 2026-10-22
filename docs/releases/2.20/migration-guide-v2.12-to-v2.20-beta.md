@@ -461,18 +461,19 @@ docker exec -e BAO_TOKEN="$T" -e BAO_ADDR=http://127.0.0.1:8200 openbao \
 - **Configurator workspace endpoints.** After
   sign-in the configurator calls `/pgr-services/v2/onboarding/workspaces/_search`
   (and `_update` and `_rename` later). Signup seeds these permissions for the
-  workspaces it creates, and an Ansible deploy that reaches a current MCP adds
-  them to a root other than `pg`. Add them by hand on an existing `pg` root, a
-  k8s install, or a box whose deploy doesn't reach a current MCP (MCP off, or an
-  image without `data/platform-baseline-v1.json`). Without them the admin signs
-  in, picks the workspace, and sees
+  workspaces it creates. Every Ansible deploy from a checkout that has #2590
+  adds them to an existing root, MCP on or off, through the egov-mdms migration
+  `V20261022000000__workspace_route_grants.sql`. Add them by hand only on a k8s
+  install, on a box deployed from an older checkout, or for a route the
+  migration skipped because an unrelated action already holds its id. Without
+  them the admin signs in, picks the workspace, and sees
   `AccessDeniedException`, and Kong logs a 403 on `workspaces/_search`.
   Add the three actions and their `ACCOUNT_ADMIN` role-actions at the root,
   through the MDMS v2 `_create` API as `ADMIN`. The shapes and ids come from
   `backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json`;
   check first that ids 900000, 900001 and 901000 are free at the root.
   - `ACCESSCONTROL-ACTIONS-TEST.actions-test`:
-    `{"id": 900000, "url": "/pgr-services/v2/onboarding/workspaces/_search", "name": "platform-900000", "displayName": "/pgr-services/v2/onboarding/workspaces/_search", "orderNumber": 0, "enabled": true, "serviceCode": "PLATFORM", "path": "", "method": "POST"}`,
+    `{"id": 900000, "url": "/pgr-services/v2/onboarding/workspaces/_search", "name": "platform-900000", "displayName": "/pgr-services/v2/onboarding/workspaces/_search", "orderNumber": 0, "enabled": true, "serviceCode": "PLATFORM", "path": ""}`,
     and the same for `_update` (900001) and `_rename` (901000).
   - `ACCESSCONTROL-ROLEACTIONS.roleactions`, one per action:
     `{"id": 900000, "rolecode": "ACCOUNT_ADMIN", "actionid": 900000, "actioncode": "", "tenantId": "<root>"}`.
