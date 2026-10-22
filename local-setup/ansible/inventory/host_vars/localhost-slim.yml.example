@@ -246,10 +246,12 @@ build_digit_ui: false
 # steps are already satisfied and would otherwise abort the run.
 tolerate_bootstrap_failures: true
 
-# Turbopass: on-box OSM location autocomplete for the configurator's Phase 2.
-# Needs scraped OSM data under turbopass/data on the controller.
-# Values: true | false.
+# Turbopass: on-box boundary search and fetch for the configurator's Phase 2.
+# When on, the deploy builds its boundary DB for turbopass_countries
+# (group_vars/digit.yml) on the first run: minutes per country, and it needs
+# outbound HTTPS. Values: true | false.
 enable_turbopass: false
+# turbopass_countries: [IN]
 
 # ────────── Notifications (the full-vs-slim dividing line) ──────────
 #

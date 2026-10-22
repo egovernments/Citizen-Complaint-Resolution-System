@@ -58,6 +58,36 @@ digit_ui_mode: static
 # Off by default; tenants that use the inbox opt in via host_vars.
 enable_search_stack: false
 
+# Turbopass's offline boundary DB (enable_turbopass, set in host_vars). It backs
+# the configurator's "Fetch boundaries" and "Preconfigured boundaries", and the
+# deploy builds it for these countries (ISO 3166-1 alpha-2) whenever the DB in
+# turbopass_overture_data_dir doesn't hold all of them yet (#2600). The default
+# is every country the configurator's signup offers (SignupPage.tsx COUNTRIES),
+# so each self-serve workspace finds its own; a single-country box can narrow it.
+# The build needs outbound HTTPS to Docker Hub (python:3.11-slim) and PyPI for
+# the bootstrap image, extensions.duckdb.org (DuckDB's spatial, httpfs and
+# sqlite extensions, installed on every run), and, for the data, Overture's S3
+# bucket (overturemaps-us-west-2), HDX (data.humdata.org, whose downloads
+# redirect to s3.us-east-1.amazonaws.com) and geoBoundaries
+# (www.geoboundaries.org, whose files come from github.com, which redirects to
+# media.githubusercontent.com). Nothing it
+# downloads is pinned: a build takes the newest Overture release (unless
+# turbopass_overture_release names one) and whatever sets HDX and geoBoundaries
+# serve that day, so two builds can differ.
+# Measured 2026-10: these four take ~11 min, peak ~3.6 GiB and make a 320 MB DB
+# (India is most of all three); KE alone takes ~2.5 min and makes 29 MB.
+# [] = never build here. A box without that outbound access can serve a DB
+# built elsewhere: copy it into turbopass_overture_data_dir, and a DB that
+# already holds these countries is never rebuilt.
+# Rebuild a DB that already holds them with
+# -e '{"turbopass_rebuild_boundary_db": true}'.
+turbopass_countries: [KE, IN, ET, MZ]
+turbopass_overture_data_dir: "{{ digit_dir }}/turbopass-data"
+turbopass_rebuild_boundary_db: false
+# Memory cap for the build container, so it can't starve the stack on the box.
+# DuckDB (the Overture download step) sizes itself to it.
+turbopass_bootstrap_memory: 4g
+
 # Bring up self-hosted Matomo + its MariaDB + the report archiver
 # (~1 GB RAM; #1254). Off by default — analytics is opt-in, and on a
 # 16 GB box with no swap this is a real allocation.
