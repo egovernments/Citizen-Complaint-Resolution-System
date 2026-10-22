@@ -66,6 +66,10 @@ describe('EscalationPolicyEditor invalid overrides', () => {
     render(<EscalationPolicyEditor />);
 
     await screen.findByText(/pgr-services ignores the ladder flagged below/);
+    fireEvent.change(screen.getByPlaceholderText(/ADD STATE/), {
+      target: { value: 'PENDINGFORREASSIGNMENT' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
     expect(saveButton()).toBeDisabled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Remove override PWTESTESCALATION' }));
