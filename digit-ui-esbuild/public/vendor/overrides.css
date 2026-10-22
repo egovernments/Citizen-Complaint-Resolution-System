@@ -954,7 +954,10 @@ html .header-dropdown-option:hover * {
  * sidebar-icon white via background-color, so it works on the yellow
  * selected indicator and the dark green non-selected items alike. */
 .digit-sidebar-item .icon:empty {
-  background-color: var(--color-sidebar-selected-text, #FFFFFF);
+  /* Idle rows take the idle icon colour; the selected row's own rule below
+   * takes the selected text colour. The selected colour here made the idle
+   * glyphs vanish once a theme paired a light selected row with dark text (#2635). */
+  background-color: var(--color-sidebar-icon-default, var(--color-sidebar-text-default, #D1D5DB));
   -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z'/></svg>");
   mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z'/></svg>");
   -webkit-mask-size: 20px 20px;
@@ -8886,14 +8889,14 @@ html .header-dropdown-option:focus-visible {
  * the same as the rows above it. */
 :is(.employee, .citizen) .digit-msb-sidebar .digit-msb-sidebar-bottom .digit-button-secondary {
   border-color: rgba(255, 255, 255, 0.5) !important;
-  color: var(--color-sidebar-selected-text, #FFFFFF) !important;
+  color: var(--color-sidebar-text-default, #D1D5DB) !important;
 }
 :is(.employee, .citizen) .digit-msb-sidebar .digit-msb-sidebar-bottom .digit-button-secondary .digit-button-label {
-  color: var(--color-sidebar-selected-text, #FFFFFF) !important;
+  color: var(--color-sidebar-text-default, #D1D5DB) !important;
 }
 :is(.employee, .citizen) .digit-msb-sidebar .digit-msb-sidebar-bottom .digit-button-secondary svg,
 :is(.employee, .citizen) .digit-msb-sidebar .digit-msb-sidebar-bottom .digit-button-secondary svg path {
-  fill: var(--color-sidebar-selected-text, #FFFFFF) !important;
+  fill: var(--color-sidebar-text-default, #D1D5DB) !important;
 }
 :is(.employee, .citizen) .digit-msb-sidebar .digit-msb-sidebar-bottom .digit-button-secondary:hover {
   background-color: rgba(255, 255, 255, 0.08) !important;

@@ -345,6 +345,57 @@ function readableForegroundAcross(hexes) {
   return white >= black ? WHITE : NEAR_BLACK;
 }
 
+/**
+ * The shell's own colours for a record without them (v1, as onboarding's
+ * Branding step saves for its "Green and Gold" and "DIGIT Orange" choices).
+ *
+ * The vendored `:root` hard-defines the header (#22394D), the sidebar
+ * (#0B4B66) and the selected sidebar item (#c84c0e), so the CSS fallbacks that
+ * would follow the record's palette are never reached: a green-and-gold
+ * workspace got a navy header, a teal sidebar and an orange selected item
+ * (#2635). They are derived here from the record's own palette instead:
+ *
+ *   header and sidebar   its `digitv2.header-sidenav`
+ *   selected item        its main brand colour, or failing that its accent or
+ *                        light tone, whichever stands out on the sidebar,
+ *                        with whichever of white or near-black reads on it
+ *
+ * Only where the record chose its own colour: the vendored values ARE
+ * digit-ui's default palette, so the default theme and DIGIT Orange keep
+ * exactly the shell they have today.
+ */
+const VENDORED_HEADER_SIDENAV = "#0B4B66";
+const VENDORED_PRIMARY_MAIN = "#C84C0E";
+/** Enough for a selected row to read as different from the rows around it. */
+const SELECTED_MIN_CONTRAST = 1.5;
+
+function sameHex(a, b) {
+  return typeof a === "string" && typeof b === "string" && a.trim().toUpperCase() === b.trim().toUpperCase();
+}
+
+function backfillShell(vars) {
+  const shell = vars["--color-digitv2-header-sidenav"];
+  if (shell && !sameHex(shell, VENDORED_HEADER_SIDENAV)) {
+    for (const name of ["--color-header-bg", "--color-sidebar-bg"]) {
+      if (!(name in vars)) vars[name] = shell;
+    }
+  }
+
+  const main = vars["--color-primary-main"];
+  if (!main || sameHex(main, VENDORED_PRIMARY_MAIN) || "--color-sidebar-selected-bg" in vars) return;
+  const sidebarLum = relativeLuminance(vars["--color-sidebar-bg"] || shell || VENDORED_HEADER_SIDENAV);
+  const selected = [main, vars["--color-primary-accent"], vars["--color-primary-light"]].find((hex) => {
+    const lum = relativeLuminance(hex);
+    return lum !== null && (sidebarLum === null || contrastWithLuminance(lum, sidebarLum) >= SELECTED_MIN_CONTRAST);
+  });
+  if (!selected) return;
+  vars["--color-sidebar-selected-bg"] = selected;
+  if (!("--color-sidebar-selected-text" in vars)) {
+    const fg = readableForegroundAcross([selected]);
+    if (fg) vars["--color-sidebar-selected-text"] = fg;
+  }
+}
+
 function hexToHslTriplet(hex) {
   if (typeof hex !== "string") return null;
   const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(hex.trim());
@@ -471,6 +522,7 @@ function applyTheme(config) {
     for (const [name, value] of Object.entries(backfill)) {
       if (typeof value === "string" && !(name in vars)) vars[name] = value;
     }
+    backfillShell(vars);
   }
 
   // Pass 5: semantic tokens the vendored :root also defines, which means a CSS
