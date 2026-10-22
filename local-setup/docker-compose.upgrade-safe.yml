@@ -1,0 +1,24 @@
+# Existing-install upgrade guard.
+#
+# This overlay is layered LAST only by the explicit upgrade workflow.  It keeps
+# PostgreSQL on the real, existing PGDATA volume while removing every
+# /docker-entrypoint-initdb.d bind from the fast-path overlay.  It also turns
+# the compose-level user seed into a no-op; API seed/bootstrap tasks are gated
+# separately in playbook-deploy.yml.
+services:
+  # Preserve the history-table setting normally supplied by fast-path without
+  # inheriting fast-path's initdb dump mounts.
+  egov-url-shortening:
+    environment:
+      SPRING_FLYWAY_TABLE: egov_url_shortening_schema_version
+
+  postgres-db:
+    volumes: !override
+      - postgres_data:/var/lib/postgresql/data
+
+  user-seed:
+    entrypoint:
+      - sh
+      - -c
+      - "echo 'upgrade-safe mode: user reseeding disabled'"
+    volumes: !override []

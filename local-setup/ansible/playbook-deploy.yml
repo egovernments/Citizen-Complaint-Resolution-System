@@ -27,6 +27,35 @@
     DOCKER_DEFAULT_PLATFORM: "{{ docker_default_platform | default('') }}"
 
   pre_tasks:
+    - name: "upgrade-safe — validate explicit deployment inputs"
+      ansible.builtin.assert:
+        that:
+          - not (force_clean | default(false) | bool)
+          - upgrade_overlay_dir is defined
+          - upgrade_overlay_dir | length > 0
+          - upgrade_deleted_paths is defined
+        fail_msg: >-
+          upgrade_safe_mode requires upgrade_overlay_dir and
+          upgrade_deleted_paths, and it cannot be combined with force_clean.
+      when: upgrade_safe_mode | default(false) | bool
+
+    - name: "upgrade-safe — verify the materialized overlay exists on the controller"
+      ansible.builtin.stat:
+        path: "{{ upgrade_overlay_dir }}"
+      register: upgrade_overlay_stat
+      delegate_to: localhost
+      become: false
+      when: upgrade_safe_mode | default(false) | bool
+
+    - name: "upgrade-safe — reject a missing materialized overlay"
+      ansible.builtin.assert:
+        that:
+          - upgrade_overlay_stat.stat.isdir | default(false)
+        fail_msg: "materialized upgrade overlay does not exist: {{ upgrade_overlay_dir }}"
+      delegate_to: localhost
+      become: false
+      when: upgrade_safe_mode | default(false) | bool
+
     # ── host_vars naming preflight ─────────────────────────────────────────
     # Ansible variables are lowercase (every key in inventory/host_vars/ is).
     # The env-var names on the LEFT of `=` in templates/digit.env.j2 are
@@ -1494,6 +1523,15 @@
         - compose_version.stdout | length > 0
         - compose_version.stdout is version('2.20', '<')
 
+    - name: "upgrade-safe — require Compose list override support"
+      ansible.builtin.assert:
+        that:
+          - compose_version.stdout is version('2.24.4', '>=')
+        fail_msg: >-
+          upgrade_safe_mode requires Docker Compose >= 2.24.4 so !override can
+          remove every initdb and legacy PostgreSQL mount deterministically.
+      when: upgrade_safe_mode | default(false) | bool
+
     # ==================== Deploy Directory ====================
     - name: Create DIGIT directory
       file:
@@ -1551,6 +1589,12 @@
       copy:
         src: ../docker-compose.fast-path.yml
         dest: "{{ digit_dir }}/docker-compose.fast-path.yml"
+
+    - name: Copy existing-install upgrade safety overlay
+      copy:
+        src: ../docker-compose.upgrade-safe.yml
+        dest: "{{ digit_dir }}/docker-compose.upgrade-safe.yml"
+      when: upgrade_safe_mode | default(false) | bool
 
     # ── DB-migration overlay (item #10) ────────────────────────────────────────
     # Per-service Flyway init containers + the db-history-normalize guard that
@@ -2617,12 +2661,13 @@
         compose_files: >-
           {{
             '-f docker-compose.egov-digit.yaml' +
-            (' -f docker-compose.fast-path.yml' if (db_fast_path | default(false)) else '') +
+            (' -f docker-compose.fast-path.yml' if ((db_fast_path | default(false)) and not (upgrade_safe_mode | default(false) | bool)) else '') +
             ' -f docker-compose.migrations.yml' +
             ' -f docker-compose.monitoring.yml' +
             ' -f docker-compose.matomo.yml' +
             ' -f docker-compose.opensre.yml' +
-            (' -f docker-compose.' ~ inventory_hostname ~ '.yml' if per_tenant_overlay.stat.exists else '')
+            (' -f docker-compose.' ~ inventory_hostname ~ '.yml' if per_tenant_overlay.stat.exists else '') +
+            (' -f docker-compose.upgrade-safe.yml' if (upgrade_safe_mode | default(false) | bool) else '')
           }}
 
     - name: "Show compose file stack"
@@ -2754,6 +2799,43 @@
       when:
         - build_digit_ui | default(false)
 
+    # The analyser's candidate is sanitized and deliberately non-deployable.
+    # The explicit deployment command materializes only the resolved local
+    # delta, fills secret fields from the existing deployment/OpenBao path, and
+    # passes that private overlay here.  Apply it after the normal target render
+    # and tenant rewrites, but before OpenBao or any application container starts.
+    - name: "upgrade-safe — apply resolved local configuration overlay"
+      ansible.posix.synchronize:
+        src: "{{ upgrade_overlay_dir }}/"
+        dest: "{{ digit_dir }}/"
+        archive: true
+        delete: false
+        delay_updates: false
+        rsync_opts:
+          - "--inplace"
+      when: upgrade_safe_mode | default(false) | bool
+
+    - name: "upgrade-safe — apply resolved local deletions"
+      ansible.builtin.file:
+        path: "{{ digit_dir }}/{{ item }}"
+        state: absent
+      loop: "{{ upgrade_deleted_paths }}"
+      when: upgrade_safe_mode | default(false) | bool
+
+    - name: "upgrade-safe — reject unresolved redaction markers before startup"
+      ansible.builtin.shell: |
+        set -euo pipefail
+        if grep -RIl --exclude-dir=.git -- '<REDACTED>' "{{ upgrade_overlay_dir }}" | head -n 1 | grep -q .; then
+          echo "unresolved <REDACTED> marker remains under {{ upgrade_overlay_dir }}" >&2
+          exit 1
+        fi
+      args:
+        executable: /bin/bash
+      changed_when: false
+      delegate_to: localhost
+      become: false
+      when: upgrade_safe_mode | default(false) | bool
+
     # ==================== Secrets prep (OpenBao) — BEFORE the first compose-up ====================
     # Per-tenant secrets backend. Initialized once; subsequent runs auto-unseal
     # using the keys captured at init. The init JSON lives at
@@ -2856,6 +2938,21 @@
         url: http://127.0.0.1:18200/v1/sys/init
         status_code: [200]
       register: bao_init_status
+      when: not (upgrade_safe_mode | default(false) | bool)
+
+    # During an existing-install upgrade Docker may briefly accept the TCP
+    # connection while OpenBao is still restarting around its restored data.
+    # Keep the normal deployment path unchanged; only the guarded upgrade
+    # waits through that short readiness race.
+    - name: "OpenBao — check init status (upgrade-safe retry)"
+      ansible.builtin.uri:
+        url: http://127.0.0.1:18200/v1/sys/init
+        status_code: [200]
+      register: bao_init_status
+      retries: 12
+      delay: 5
+      until: bao_init_status.status | default(0) == 200
+      when: upgrade_safe_mode | default(false) | bool
 
     - name: "OpenBao — initialize if first deploy (writes init.json with 0600)"
       when: not bao_init_status.json.initialized
@@ -3870,6 +3967,32 @@
         path: "{{ compose_progress_file }}"
         state: touch
         mode: "0644"
+
+    # Completed one-shot containers are otherwise reused by Compose, and the
+    # repo-built MDMS data migrator is otherwise left on its previous image.
+    # Recreate/rebuild only in the guarded existing-install workflow so every
+    # versioned migration represented by the clone preflight is actually run.
+    - name: "upgrade-safe — rebuild the versioned MDMS data migrator"
+      ansible.builtin.shell: >-
+        COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} build db-migrations
+      args:
+        chdir: "{{ digit_dir }}"
+      changed_when: true
+      when: upgrade_safe_mode | default(false) | bool
+
+    - name: "upgrade-safe — remove completed migration guards so they rerun"
+      ansible.builtin.shell: |
+        set -euo pipefail
+        services=$(COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} config --services |
+          grep -E '(^db-history-normalize$|^db-migrations$|-migration$)' || true)
+        if [ -n "$services" ]; then
+          COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} rm -sf $services
+        fi
+      args:
+        chdir: "{{ digit_dir }}"
+        executable: /bin/bash
+      changed_when: true
+      when: upgrade_safe_mode | default(false) | bool
 
     - name: Pull all images from VPC registry
       shell: |
@@ -6362,6 +6485,7 @@
       register: mcp_reachability
       failed_when: false
       changed_when: false
+      when: not (upgrade_safe_mode | default(false) | bool)
 
     - name: "mcp-bootstrap — root tenant via /v1/tenant/bootstrap"
       ansible.builtin.uri:
@@ -6397,6 +6521,7 @@
       retries: 10
       delay: 30
       when:
+        - not (upgrade_safe_mode | default(false) | bool)
         - state_root != 'pg'
         - mcp_reachability.status | default(0) == 200
       ignore_errors: true
@@ -6428,6 +6553,7 @@
       retries: 10
       delay: 30
       when:
+        - not (upgrade_safe_mode | default(false) | bool)
         - state_root != 'pg'
         - mcp_reachability.status | default(0) == 200
       ignore_errors: true
@@ -6438,7 +6564,9 @@
           - "MCP reachable: {{ (mcp_reachability.status | default(0)) == 200 }}"
           - "Root  bootstrap (target={{ state_root }}): {{ (mcp_root_bootstrap.json.summary | default('skipped')) if mcp_root_bootstrap is defined else 'skipped' }}"
           - "City  bootstrap (target={{ tenant_id }}): {{ (mcp_city_bootstrap.json.summary | default('skipped')) if mcp_city_bootstrap is defined else 'skipped' }}"
-      when: state_root != 'pg'
+      when:
+        - not (upgrade_safe_mode | default(false) | bool)
+        - state_root != 'pg'
 
     # MCP returns success=false when any seed step failed (schemas, data,
     # workflows, or localizations). Surfacing only counts ('data_failed: 4')
@@ -6667,7 +6795,9 @@
       register: internal_user_seed
       changed_when: "'CHANGED' in (internal_user_seed.stdout | default(''))"
       no_log: true
-      when: state_root != 'pg'
+      when:
+        - not (upgrade_safe_mode | default(false) | bool)
+        - state_root != 'pg'
 
     # The MCP tenant bootstrap is supposed to create an ADMIN eg_user on
     # state_root, but if it ran during the async UserValidation window (above)
@@ -6707,7 +6837,9 @@
       register: admin_state_seed
       changed_when: "'CHANGED' in (admin_state_seed.stdout | default(''))"
       no_log: true
-      when: state_root != 'pg'
+      when:
+        - not (upgrade_safe_mode | default(false) | bool)
+        - state_root != 'pg'
 
     # PGR onboarding provisioner (#2269 review item 7). With the runner on, PGR
     # provisions every self-service signup as this account; without it the
@@ -6986,7 +7118,9 @@
       register: mcp_rekey_root
       changed_when: "'CHANGED' in (mcp_rekey_root.stdout | default(''))"
       failed_when: mcp_rekey_root.rc != 0
-      when: state_root != 'pg'
+      when:
+        - not (upgrade_safe_mode | default(false) | bool)
+        - state_root != 'pg'
       no_log: true
 
     - name: "post-bootstrap — re-provision ADMIN with city enc key (user_only)"
@@ -7013,7 +7147,10 @@
       register: mcp_rekey_city
       changed_when: "'CHANGED' in (mcp_rekey_city.stdout | default(''))"
       failed_when: mcp_rekey_city.rc != 0
-      when: state_root != 'pg' and tenant_id != state_root
+      when:
+        - not (upgrade_safe_mode | default(false) | bool)
+        - state_root != 'pg'
+        - tenant_id != state_root
       no_log: true
 
     # ────────────────────────────────────────────────────────────────
@@ -7053,7 +7190,9 @@
       delay: 10
       until: cfg_i18n_auth.status == 200
       no_log: true
-      when: state_root != 'pg'
+      when:
+        - not (upgrade_safe_mode | default(false) | bool)
+        - state_root != 'pg'
 
     - name: "configurator-i18n — upsert configurator-ui bundle (per locale)"
       ansible.builtin.uri:
@@ -7077,7 +7216,9 @@
       vars:
         configurator_i18n_bundle: "{{ lookup('file', playbook_dir ~ '/files/configurator-localization/configurator-ui.json') | from_json }}"
       loop: "{{ configurator_i18n_bundle | map(attribute='locale') | unique | list }}"
-      when: state_root != 'pg'
+      when:
+        - not (upgrade_safe_mode | default(false) | bool)
+        - state_root != 'pg'
 
     # ────────────────────────────────────────────────────────────────
     # Novu Twilio bootstrap. Runs only when:
@@ -8829,7 +8970,9 @@
     #     (state_root / digit_dir / upstream_kong_port are group/host vars and
     #     compose_files is computed by an `always` task, so all resolve under --tags).
     - name: "notif-seed — stage schemas, defaults, seeder and migration script on target"
-      when: seed_notifications | default(enable_novu | default(false))
+      when:
+        - not (upgrade_safe_mode | default(false) | bool)
+        - seed_notifications | default(enable_novu | default(false))
       tags: ['notifications', 'notification-seed']
       ansible.builtin.copy:
         src: "{{ item }}"
@@ -8927,7 +9070,9 @@
     # notifications_seed_exclude (default: the Playwright suite's PW_/pwt junk, the same
     # default as migrate-notifications.py --exclude) is listed and skipped.
     - name: "notif-seed — list the state roots complaints are filed under (and count them)"
-      when: seed_notifications | default(enable_novu | default(false))
+      when:
+        - not (upgrade_safe_mode | default(false) | bool)
+        - seed_notifications | default(enable_novu | default(false))
       tags: ['notifications', 'notification-seed']
       ansible.builtin.shell: |
         set -o pipefail
@@ -9042,7 +9187,9 @@
                     | map('string') | map('trim') | reject('equalto', '') | list)) }}
 
     - name: "notif-seed — roots"
-      when: seed_notifications | default(enable_novu | default(false))
+      when:
+        - not (upgrade_safe_mode | default(false) | bool)
+        - seed_notifications | default(enable_novu | default(false))
       tags: ['notifications', 'notification-seed']
       ansible.builtin.debug:
         msg: >-
