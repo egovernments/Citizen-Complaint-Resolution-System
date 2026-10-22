@@ -203,6 +203,10 @@ export function registerAccessContextRoutes(app: express.Application): void {
           await cachedToken(lease, account); // Invalidates any already-issued inactive account token; never mints.
           throw new BindingError("DIGIT_ACCOUNT_INACTIVE", "This account is not active");
         }
+        if (surfaceContextKind(surface) === "configurator" &&
+            !account.roles.some((r) => r.tenantId === tenantId && config.digitConfiguratorRoles.includes(r.code))) {
+          throw new BindingError("CONFIGURATOR_ROLE_REQUIRED", "This account has no Configurator access in this workspace");
+        }
         let minted: DigitLogin | null = null;
         try {
           let token = await cachedToken(lease, account);

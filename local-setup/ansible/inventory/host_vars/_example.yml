@@ -931,6 +931,10 @@ pgr_onboarding_baseline_upgrade_enabled: true
 # pgr_onboarding_notification_defaults_enabled: false
 identity_digit_admin_username: "ADMIN"  # use a dedicated ACCOUNT_ADMIN in production
 identity_digit_admin_tenant_id: "pg"
+# Roles that may sign in to the Configurator (#2599). Unset = the founder's admin
+# roles (SUPERUSER, ACCOUNT_ADMIN, MDMS_ADMIN, LOC_ADMIN, HRMS_ADMIN, WORKFLOW_ADMIN);
+# operational staff use the employee app. A list, or one comma-separated string.
+# identity_configurator_roles: [SUPERUSER, ACCOUNT_ADMIN, MDMS_ADMIN, LOC_ADMIN, HRMS_ADMIN, WORKFLOW_ADMIN, SUPERVISOR]
 # Root tenants this deploy seeds, comma-separated. Each gets an Identity BFF
 # Organization route (alias and URL slug = the tenant id) when nothing maps it
 # yet; an existing route is never renamed. Unset (or a bare key) = state_root;

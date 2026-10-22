@@ -174,6 +174,8 @@ beforeAll(async () => {
     digitAdminTenantId: "ke",
     digitManagedBaseRoles: ["EMPLOYEE"],
     digitManagedRoleAllowlist: ["EMPLOYEE", "GRO", "PGR_VIEWER"],
+    // The legacy managed-account fixtures open the configurator as GRO, their only Organization role.
+    digitConfiguratorRoles: [...config.digitConfiguratorRoles, "GRO"],
     digitRoleClientId: "digit-ui",
     identityOrganizationAdminRoles: ["TENANT_ADMIN"],
     identityOrganizationMemberGroup: "employees",
@@ -3284,6 +3286,7 @@ describe("binding workspace public routes", () => {
     expect(linked.status).toBe(201);
     const result = await linked.json();
     expect(result).toMatchObject({ identityUserCreated: true, activationEmailSent: true, binding: { state: "active" } });
+    account.roles.push({ code: "HRMS_ADMIN", tenantId: "ug" }); // the configurator needs an admin role (#2599)
     const cookie = await cookieFor(result.binding.subject);
     expect(await (await read("/session", cookie)).json()).toMatchObject({ pendingInvitations: [] });
     expect(await (await read("/tenants", cookie)).json()).toMatchObject({ onboardingRequired: false, selectionRequired: false,
@@ -3299,6 +3302,21 @@ describe("binding workspace public routes", () => {
     expect((await post("/contexts/_select", cookie, { tenantId: "ug" })).status).toBe(200);
   });
 
+  it("refuses the configurator to staff without a Configurator role at the tenant, but not the employee app (#2599)", async () => {
+    const account = employee("BINDING-CSR");
+    account.roles.push({ code: "CSR", tenantId: "ug" });
+    const { binding } = await (await post("/workspace-members/_link", adminCookie, { tenantId: "ug", digitUuid: account.uuid, email: "binding-csr@example.test" })).json();
+    account.roles.push({ code: "MDMS_ADMIN", tenantId: "ke.bomet" });
+    const refused = await post("/contexts/_select", await cookieFor(binding.subject), { tenantId: "ug" });
+    expect(refused.status).toBe(403);
+    expect(await refused.json()).toMatchObject({ code: "CONFIGURATOR_ROLE_REQUIRED" });
+    expect([...digit.tokens.values()].some(token => token.uuid === account.uuid)).toBe(false);
+    const employeeApp = await post("/contexts/_select", await cookieFor(binding.subject, "employee"), { tenantId: "ug", surface: "employee" });
+    expect(employeeApp.status).toBe(200);
+    account.roles.push({ code: "HRMS_ADMIN", tenantId: "ug" });
+    expect((await post("/contexts/_select", await cookieFor(binding.subject), { tenantId: "ug" })).status).toBe(200);
+  });
+
   it.each(["configurator", "employee"] as const)("shows and accepts an existing person's invitation on %s, then selects its DIGIT account", async (surface) => {
     const subject = `binding-existing-${surface}`;
     await kcAdmin("/users", { id: subject, username: subject, email: `${subject}@example.test`, emailVerified: true, enabled: true });
@@ -3307,6 +3325,7 @@ describe("binding workspace public routes", () => {
     expect(response.status).toBe(200);
     const invite = await response.json();
     expect(invite).toMatchObject({ identityUserCreated: false, binding: { state: "pending" } });
+    account.roles.push({ code: "HRMS_ADMIN", tenantId: "ug" }); // the configurator needs an admin role (#2599)
     const cookie = await cookieFor(subject, surface);
     expect(await (await read(`/session?surface=${surface}`, cookie)).json()).toMatchObject({ pendingInvitations: [{ tenantId: "ug", invitationVersion: invite.binding.invitationVersion }] });
     expect(await (await post("/contexts/_select", cookie, { tenantId: "ug", surface })).json()).toMatchObject({ code: "PENDING_INVITATION" });
@@ -3358,6 +3377,7 @@ describe("binding workspace public routes", () => {
     const account = employee("BINDING-CLEANUP");
     const linked = await post("/workspace-members/_link", adminCookie, { tenantId: "ug", digitUuid: account.uuid, email: "binding-cleanup@example.test" });
     const { binding } = await linked.json();
+    account.roles.push({ code: "HRMS_ADMIN", tenantId: "ug" }); // the configurator needs an admin role (#2599)
     const cookie = await cookieFor(binding.subject);
     const spy = vi.spyOn(syncMirror, "mirrorPerson").mockRejectedValueOnce(new BindingError("IDENTITY_UNAVAILABLE", "Injected mirror failure"));
     try {
