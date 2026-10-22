@@ -13,8 +13,7 @@ const phone = "+254712345678";
 const user = (subject: string, attributes = {}) => fetch(`${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: subject, username: subject, enabled: true, attributes }) });
 const readUser = async (subject: string) => (await fetch(`${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/${subject}`)).json();
 const effects = { endPhoneSessions, propagateIdentifiers: vi.fn().mockResolvedValue({ written: 1 }) };
-// Sign-in looks up the number's employee record (#2595); the mock egov-user has none here.
-beforeAll(() => { Object.assign(config, { cachePrefix: prefix, keycloakOrganizationRealm: "phone-proof", identityCitizenOtpSecret: "test-proof-secret", digitAdminUsername: "ADMIN", digitAdminPassword: "unused", digitAdminTenantId: "ke" }); initCache(`redis://localhost:${process.env.REDIS_PORT || 16379}`); });
+beforeAll(() => { Object.assign(config, { cachePrefix: prefix, keycloakOrganizationRealm: "phone-proof", identityCitizenOtpSecret: "test-proof-secret" }); initCache(`redis://localhost:${process.env.REDIS_PORT || 16379}`); });
 afterAll(async () => { const keys = await getRedis().keys(`${prefix}:*`); if (keys.length) await getRedis().del(...keys); await closeCache(); Object.assign(config, saved); });
 describe("phone ownership and proof", () => {
   it("concurrent first-time sign-ins create one opaque identity with a national default name", async () => {

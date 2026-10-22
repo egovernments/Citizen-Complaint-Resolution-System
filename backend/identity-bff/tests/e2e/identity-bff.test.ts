@@ -3124,6 +3124,26 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
         for (const name of ["phoneNumber", "phoneNumberVerified", "digit.citizenRegistrations", "digit.accounts"]) delete attributes[name];
         await kcUpdate(`/users/${staff}`, { enabled: true, attributes });
       });
+      // The join is opt-in until #2631.
+      beforeAll(() => { config.identityStaffPhoneJoin = true; });
+      afterAll(() => { config.identityStaffPhoneJoin = false; });
+
+      it("keeps a separate phone identity, without an employee lookup, when IDENTITY_STAFF_PHONE_JOIN is off", async () => {
+        await bindStaff("799002608");
+        const before = (await kcUser(staff)).attributes;
+        const searches = vi.spyOn(digitUserClient, "searchAccounts");
+        config.identityStaffPhoneJoin = false;
+        try {
+          const cookie = await signInByOtp("799002608");
+          expect(searches).not.toHaveBeenCalled();
+          const citizen = await (await sessionOf(cookie, "citizen")).json();
+          expect(citizen.user.id).not.toBe(staff);
+          expect(citizen.user).toMatchObject({ phoneNumber: "+254799002608", phoneNumberVerified: true });
+          expect((await auditRecords()).filter((r) => r.event === "SESSION_CREATE" && r.subject === citizen.user.id).at(-1))
+            .toMatchObject({ outcome: "SUCCESS", reason: "IDENTITY_CREATED" });
+        } finally { config.identityStaffPhoneJoin = true; searches.mockRestore(); }
+        expect((await kcUser(staff)).attributes).toEqual(before);
+      });
 
       it("signs in as the employee: one person, one session list, and a citizen profile from the employee record", async () => {
         await bindStaff("799002595");

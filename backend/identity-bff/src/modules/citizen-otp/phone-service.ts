@@ -8,6 +8,7 @@ import { withDigitAdmin } from "../managed-accounts/digit-admin-session.js";
 import { DigitUnavailableError, searchAccounts } from "../managed-accounts/digit-user-client.js";
 import { OnboardingError } from "../onboarding/errors.js";
 import { findVerifiedPhoneUsers, ensurePhoneIdentityUser, IdentityAdminError, phoneIdentityUser } from "../organizations/organization-service.js";
+import { config } from "../../infrastructure/config.js";
 import { readUser } from "../../integrations/keycloak/admin-api.js";
 import { requireCurrentSession, touchIdentitySession, SessionRevokedError, createPhoneOtpSession } from "../sessions/session-store.js";
 import { updateKeycloakUser } from "../sync/keycloak-writer.js";
@@ -88,7 +89,8 @@ export async function phoneSignIn(phone: string, tenant: BoundTenant, nationalNu
   for (let retry = 0; retry < 5; retry += 1) {
     const advisory = await findVerifiedPhoneUsers(phone);
     if (advisory.length > 1) throw new IdentityAdminError("Multiple phone owners", 409);
-    const staff = advisory.length ? null : await staffPhoneOwner(tenant.tenantId, nationalNumber);
+    // Off by default (IDENTITY_STAFF_PHONE_JOIN): the number then gets its own identity, with no DIGIT call.
+    const staff = advisory.length || !config.identityStaffPhoneJoin ? null : await staffPhoneOwner(tenant.tenantId, nationalNumber);
     const subject = advisory[0]?.id || staff || randomUUID();
     const result = await withPersonLease(subject, async () => withPhoneLock(phone, async lock => {
       const owners = await findVerifiedPhoneUsers(phone);
