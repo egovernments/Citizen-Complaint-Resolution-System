@@ -1,14 +1,17 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { closeCache, getRedis, initCache } from "../../src/infrastructure/redis.js";
 import { config } from "../../src/infrastructure/config.js";
 import { resetDigitAdminToken } from "../../src/modules/managed-accounts/digit-admin-session.js";
 import {
+  citizenIdentity,
   ensureManagedAccount,
+  findManagedAccount,
   ManagedAccountError,
   managedIdentity,
   managedUserLogin,
   oneTimePassword,
 } from "../../src/modules/managed-accounts/managed-account-service.js";
+import * as digitUserClient from "../../src/modules/managed-accounts/digit-user-client.js";
 import { logoutSessions } from "../../src/modules/revocation/index.js";
 import { createFakeDigitUser } from "../../mocks/fake-digit-user.js";
 
@@ -265,5 +268,74 @@ describe("managed DIGIT accounts", () => {
     expect(fake.tokens.has(phone.accessToken)).toBe(false);
     expect(await getRedis().get(tokenKey(identity))).toBeNull();
     expect(await getRedis().scard(holdersKey(identity))).toBe(0);
+  });
+});
+
+describe("citizen accounts named by a proved number (#2640)", () => {
+  // One number per test: the fake keeps every account it was given.
+  const number = (n = 0) => `7992${n}${String(run).padStart(4, "0")}`;
+  const citizen = (n = 0) => ({ name: "Citizen", mobileNumber: number(n), countryCode: "+254" });
+  const named = (userName: string) => ({ createOnly: true, userName });
+  const addCitizen = (userName: string, mobileNumber: string, identificationMark: string | null = null) => fake.addAccount({
+    userName, name: "Complainant", mobileNumber, emailId: null, tenantId: "pg", type: "CITIZEN",
+    active: true, identificationMark, roles: [{ code: "CITIZEN", tenantId: "pg" }], password: "Citizen@123",
+  });
+
+  it("names the new account by the number, keeps the marker, and finds it only by the recorded uuid", async () => {
+    const identity = citizenIdentity(ISSUER, subject(), "pg");
+    const created = await ensureManagedAccount(identity, [], citizen(), named(number()));
+    expect(created).toMatchObject({ created: true, account: {
+      userName: number(), identificationMark: identity.marker, type: "CITIZEN", tenantId: "pg", mobileNumber: number(),
+    } });
+    const uuid = created.account!.uuid;
+    // The username is no longer derived from the person, so only the uuid finds it.
+    expect(await findManagedAccount(identity)).toBeNull();
+    const recorded = citizenIdentity(ISSUER, subject(), "pg", uuid);
+    expect((await findManagedAccount(recorded))?.uuid).toBe(uuid);
+    // Someone else's recorded uuid is not theirs: the marker must match too.
+    expect(await findManagedAccount(citizenIdentity(ISSUER, `${subject()}-other`, "pg", uuid))).toBeNull();
+    const creates = fake.stats.creates;
+    expect((await ensureManagedAccount(recorded, [], citizen(), named(number()))).account?.uuid).toBe(uuid);
+    expect(fake.stats.creates).toBe(creates);
+  });
+
+  it("keeps the derived kcbffc- name when no number is given", async () => {
+    const identity = citizenIdentity(ISSUER, subject(), "pg");
+    const created = await ensureManagedAccount(identity, [], citizen(), { createOnly: true });
+    expect(created.account?.userName).toBe(identity.username);
+    expect(identity.username).toMatch(/^kcbffc-[0-9a-f]{40}$/);
+  });
+
+  it("never takes over an account that already holds the number, even one carrying the marker", async () => {
+    const identity = citizenIdentity(ISSUER, subject(), "pg");
+    const creates = fake.stats.creates;
+    // pgr-services named the citizen of an employee-filed complaint first.
+    const filed = addCitizen(number(), number());
+    await expect(ensureManagedAccount(identity, [], citizen(), named(number())))
+      .rejects.toMatchObject({ status: 409, code: "DIGIT_USERNAME_TAKEN" });
+    // Whoever holds an account can write the marker onto it: that alone is not ownership.
+    const forged = addCitizen(number(1), "799999999", identity.marker);
+    await expect(ensureManagedAccount(identity, [], citizen(1), named(number(1))))
+      .rejects.toMatchObject({ code: "DIGIT_USERNAME_TAKEN" });
+    expect(fake.stats.creates).toBe(creates);
+    expect(fake.accounts.get(filed.uuid)).toMatchObject({ userName: number(), identificationMark: null });
+    expect(fake.accounts.get(forged.uuid)).toMatchObject({ userName: number(1), mobileNumber: "799999999" });
+  });
+
+  it("recovers its own account when the create's answer was lost", async () => {
+    const identity = citizenIdentity(ISSUER, subject(), "pg");
+    const original = digitUserClient.createAccount;
+    const create = vi.spyOn(digitUserClient, "createAccount").mockImplementationOnce(async (token, user) => {
+      await original(token, user);
+      throw new digitUserClient.DigitUnavailableError("DIGIT user create request failed");
+    });
+    try {
+      const creates = fake.stats.creates;
+      const recovered = await ensureManagedAccount(identity, [], citizen(), named(number()));
+      expect(fake.stats.creates).toBe(creates + 1);
+      expect(recovered.account).toMatchObject({ userName: number(), identificationMark: identity.marker });
+    } finally {
+      create.mockRestore();
+    }
   });
 });

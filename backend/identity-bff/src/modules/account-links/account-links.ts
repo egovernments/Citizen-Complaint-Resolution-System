@@ -193,14 +193,16 @@ export async function removeAccountLink(input: AccountLink & {
  * subject's own managed account, if it already has one; then, only for a
  * trusted phone, exactly one unlinked, non-managed CITIZEN with that mobile
  * number at egov-user's citizen tenant. Two or more fail closed.
+ * `accountUuid` is the account recorded on the person's registration.
  */
 export async function resolveCitizenLink(input: {
   subject: string;
   routeTenantId: string;
   mobileNumber: string;
   phoneTrusted: boolean;
+  accountUuid?: string;
 }): Promise<ManagedIdentity | null> {
-  const managed = citizenIdentity(config.keycloakIssuer, input.subject, input.routeTenantId);
+  const managed = citizenIdentity(config.keycloakIssuer, input.subject, input.routeTenantId, input.accountUuid);
   const citizenTenantId = managed.tenantId;
   const existing = await linkedIdentityFor(input.subject, CITIZEN_USER_TYPE, citizenTenantId);
   if (existing) return existing;

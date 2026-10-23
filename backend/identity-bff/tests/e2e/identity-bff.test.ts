@@ -1795,9 +1795,14 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       },
       tenant: { urlSlug: "bomet-county", tenantId: "ke.bomet" },
     });
-    expect(body.UserRequest.userName).toMatch(/^kcbffc-[0-9a-f]{40}$/);
+    // A proved number names the account, as DIGIT names citizens (#2640).
+    expect(body.UserRequest.userName).toBe("712345678");
     expect(JSON.stringify(body)).not.toContain("must-not-leak");
     const account = digit.accounts.get(body.UserRequest.uuid)!;
+    // pgr-services' lookup for an employee-filed complaint (userName = mobile,
+    // CITIZEN, state tenant) finds the account this citizen signs in with.
+    expect([...digit.accounts.values()].filter((candidate) => candidate.userName === "712345678" &&
+      candidate.type === "CITIZEN" && candidate.tenantId === "ke").map((candidate) => candidate.uuid)).toEqual([account.uuid]);
     expect(account.tenantId).toBe("ke");
     expect(account.roles).toEqual([{ code: "CITIZEN", name: "CITIZEN", tenantId: "ke" }]);
     expect(account.identificationMark).toMatch(/^keycloak-bff:citizen:v1:/);
@@ -1971,9 +1976,9 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
 
   it("answers a stable 503 when the tenant has no CITIZEN role, without seeding one", async () => {
     const identity = citizenIdentity(config.keycloakIssuer, "citizen-user-1", "ke.bomet");
-    const removedAccounts = [...digit.accounts.entries()].filter(([, account]) => account.userName === identity.username);
+    const removedAccounts = [...digit.accounts.entries()].filter(([, account]) => account.identificationMark === identity.marker);
     for (const [key, account] of digit.accounts) {
-      if (account.userName === identity.username) digit.accounts.delete(key);
+      if (account.identificationMark === identity.marker) digit.accounts.delete(key);
     }
     await clearTokenInventory(identity);
     const creates = digit.stats.creates;
@@ -2124,9 +2129,11 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
     await clearTokenInventory(identity);
     const moved = await citizenSelect(await signIn("citizen", "newphone"));
     expect(moved.status).toBe(200);
-    const account = [...digit.accounts.values()].find((candidate) => candidate.userName === identity.username)!;
+    const account = [...digit.accounts.values()].find((candidate) => candidate.identificationMark === identity.marker)!;
     expect(account.mobileNumber).toBe("712345679");
     expect(account.countryCode).toBe("+254");
+    // egov-user never renames an account: the username keeps the number it was created with (#2640).
+    expect(account.userName).toBe("712345678");
 
     // The number is changed in DIGIT behind the BFF's back. The comparison is
     // with what DIGIT stores, not with what the BFF last wrote, so the next
@@ -3087,6 +3094,93 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       expect(ambiguous.status).toBe(409);
       expect((await ambiguous.json()).code).toBe("CITIZEN_ACCOUNT_AMBIGUOUS");
       expect(digit.stats.creates).toBe(creates);
+    });
+
+    describe("citizen accounts named by the proved number (#2640)", () => {
+      const otpPost = (path: string, body: unknown) => fetch(`${app()}/identity/v1/citizen/otp/${path}`, {
+        method: "POST",
+        // Its own address, so these sends do not spend the shared per-IP budget.
+        headers: { Origin: "http://localhost:3000", "Content-Type": "application/json", "X-Forwarded-For": "203.0.113.64" },
+        body: JSON.stringify({ tenantSlug: "bomet-county", ...body as object }),
+      });
+      const signInByOtp = async (mobileNumber: string) => {
+        const { challengeId } = await (await otpPost("_send", { mobileNumber })).json();
+        const verified = await otpPost("_verify", { challengeId, code: sent[sent.length - 1].code });
+        expect(verified.status).toBe(200);
+        return cookieFrom(verified, "digit_identity_session_citizen")!;
+      };
+      // pgr-services' upsertUser looks the complainant up by userName = mobile, CITIZEN, at the state tenant.
+      const pgrLookup = (mobileNumber: string) => [...digit.accounts.values()]
+        .filter((account) => account.userName === mobileNumber && account.type === "CITIZEN" && account.tenantId === "ke")
+        .map((account) => account.uuid);
+
+      it("names a citizen who signs in before any complaint by the number, so an employee filing finds them", async () => {
+        const selected = await citizenSelect(await signInByOtp("799026400"));
+        expect(selected.status).toBe(200);
+        const { UserRequest } = await selected.json();
+        expect(UserRequest).toMatchObject({ userName: "799026400", mobileNumber: "799026400", type: "CITIZEN", tenantId: "ke" });
+        expect(digit.accounts.get(UserRequest.uuid)!.identificationMark).toMatch(/^keycloak-bff:citizen:v1:/);
+        expect(pgrLookup("799026400")).toEqual([UserRequest.uuid]);
+
+        const creates = digit.stats.creates;
+        const again = await citizenSelect(await signInByOtp("799026400"));
+        expect((await again.json()).UserRequest.uuid).toBe(UserRequest.uuid);
+        expect(digit.stats.creates).toBe(creates);
+      });
+
+      it("links, never duplicates, an account an employee filing created after the phone search", async () => {
+        const cookie = await signInByOtp("799026401");
+        const original = digitUserClient.createAccount;
+        let filed: { uuid: string } | undefined;
+        const create = vi.spyOn(digitUserClient, "createAccount").mockImplementationOnce(async (token, user) => {
+          // pgr-services creates the complainant between the BFF's phone search and its create.
+          filed = legacy({ userName: "799026401", tenantId: "ke", type: "CITIZEN", mobileNumber: "799026401", roles: ["CITIZEN"] });
+          return original(token, user);
+        });
+        try {
+          const selected = await citizenSelect(cookie);
+          expect(selected.status).toBe(200);
+          expect((await selected.json()).UserRequest.uuid).toBe(filed!.uuid);
+          expect(create).toHaveBeenCalledTimes(1);
+        } finally {
+          create.mockRestore();
+        }
+        expect(pgrLookup("799026401")).toEqual([filed!.uuid]);
+        expect([...digit.accounts.values()].filter((account) => account.mobileNumber === "799026401")).toHaveLength(1);
+        expect((await auditRecords()).some((record) => record.event === "ACCOUNT_LINK_CREATE" &&
+          record.method === "VERIFIED_PHONE" && record.digitUserUuid === filed!.uuid)).toBe(true);
+      });
+
+      it("keeps the kcbffc- name when the number is a username another account kept from an old number", async () => {
+        const stale = legacy({ userName: "799026402", tenantId: "ke", type: "CITIZEN", mobileNumber: "799026492", roles: ["CITIZEN"] });
+        const selected = await citizenSelect(await signInByOtp("799026402"));
+        expect(selected.status).toBe(200);
+        const { UserRequest } = await selected.json();
+        expect(UserRequest.uuid).not.toBe(stale.uuid);
+        expect(UserRequest.userName).toMatch(/^kcbffc-[0-9a-f]{40}$/);
+        expect(pgrLookup("799026402")).toEqual([stale.uuid]);
+      });
+
+      it("keeps the opaque kcbffc- name when the phone is not proved", async () => {
+        const subject = "citizen-unproved-2640";
+        await kcAdmin("/users", { id: subject, username: subject, enabled: true,
+          attributes: { phoneNumber: ["+254799026403"], phoneNumberVerified: ["true"] } });
+        // Users can edit their phone, and this session never proved it with a BFF code.
+        await setProfile({ unmanagedAttributePolicy: "ENABLED", attributes: [] });
+        try {
+          const { sessionId } = await createIdentitySession({ accessToken: "access", accessExpiresIn: 600 },
+            { sub: subject, email: "", name: "Unproved", azp: config.keycloakCitizenClientId }, config.keycloakCitizenClientId,
+            { surface: "citizen", boundTenant: { urlSlug: "bomet-county", tenantId: "ke.bomet", rootTenantId: "ke.bomet", name: "Bomet" } });
+          const selected = await citizenSelect(`${config.identityCitizenCookieName}=${sessionId}`);
+          expect(selected.status).toBe(200);
+          const { UserRequest } = await selected.json();
+          expect(UserRequest.mobileNumber).toBe("799026403");
+          expect(UserRequest.userName).toMatch(/^kcbffc-[0-9a-f]{40}$/);
+          expect(pgrLookup("799026403")).toEqual([]);
+        } finally {
+          await setProfile({ unmanagedAttributePolicy: "ADMIN_EDIT", attributes: [] });
+        }
+      });
     });
 
     describe("an employee's registered mobile on the citizen portal (#2595)", () => {
