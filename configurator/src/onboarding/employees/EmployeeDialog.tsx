@@ -89,10 +89,10 @@ function CheckList({
   );
 }
 
-type Errors = Partial<Record<'code' | 'name' | 'mobile' | 'email' | 'departments' | 'designation' | 'jurisdictions', string>>;
+type Errors = Partial<Record<'code' | 'name' | 'mobile' | 'email' | 'department' | 'designation' | 'jurisdictions', string>>;
 
 /**
- * Add one employee: who they are, how to reach them, the departments and
+ * Add one employee: who they are, how to reach them, the department and
  * designation they hold, what they can do, and where they can act. Everything
  * they choose from comes from the earlier steps.
  *
@@ -133,7 +133,7 @@ export function EmployeeDialog({
   const [name, setName] = useState('');
   const [mobile, setMobile] = useState('');
   const [email, setEmail] = useState('');
-  const [departments, setDepartments] = useState<string[]>([]);
+  const [department, setDepartment] = useState('');
   const [designation, setDesignation] = useState('');
   const [roles, setRoles] = useState<string[]>([]);
   const [jurisdictions, setJurisdictions] = useState<string[]>([]);
@@ -154,7 +154,7 @@ export function EmployeeDialog({
       setName(employee.user?.name ?? '');
       setMobile(employee.user?.mobileNumber ?? '');
       setEmail(employee.user?.emailId ?? '');
-      setDepartments(assignment?.department ? [assignment.department] : []);
+      setDepartment(assignment?.department ?? '');
       setDesignation(assignment?.designation ?? '');
       setRoles(
         (employee.user?.roles ?? [])
@@ -170,7 +170,7 @@ export function EmployeeDialog({
       setName('');
       setMobile('');
       setEmail('');
-      setDepartments([]);
+      setDepartment('');
       setDesignation('');
       setRoles(options.roles.some((role) => role.code === 'EMPLOYEE') ? ['EMPLOYEE'] : []);
       setJurisdictions(tops.length === 1 ? [tops[0].code] : []);
@@ -210,11 +210,7 @@ export function EmployeeDialog({
     if (!mobile.trim()) next.mobile = t('employees.mobile_required', 'Enter their mobile number.');
     else if (!options.mobilePattern.test(mobile.trim())) next.mobile = t('employees.mobile_format', 'That number doesn’t match this workspace’s mobile format.');
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) next.email = t('employees.email_required', 'Enter a valid email to invite this employee.');
-    if (!departments.length) {
-      next.departments = editing
-        ? t('employees.department_required', 'Choose a department.')
-        : t('employees.departments_required', 'Choose at least one department.');
-    }
+    if (!department) next.department = t('employees.department_required', 'Choose a department.');
     if (!designation) next.designation = t('employees.designation_required', 'Choose a designation.');
     if (!jurisdictions.length) next.jurisdictions = t('employees.jurisdictions_required', 'Choose where they can act.');
     setErrors(next);
@@ -228,7 +224,7 @@ export function EmployeeDialog({
           name: name.trim(),
           mobileNumber: mobile.trim(),
           emailId: email.trim(),
-          department: departments[0],
+          department,
           designation,
           roles: roles.length ? roles : ['EMPLOYEE'],
           jurisdictions,
@@ -241,7 +237,7 @@ export function EmployeeDialog({
         name: name.trim(),
         mobileNumber: mobile.trim(),
         emailId: email.trim() || undefined,
-        departments,
+        department,
         designation,
         roles: roles.length ? roles : ['EMPLOYEE'],
         jurisdictions,
@@ -340,13 +336,17 @@ export function EmployeeDialog({
             )}
           </div>
 
-          {editing ? (
-            field(
-              'departments',
-              t('departments.department', 'Department'),
-              <>
-                <Select value={departments[0] ?? ''} onValueChange={(code) => setDepartments([code])}>
-                  <SelectTrigger id={`${id}-departments`} aria-required="true" className="bg-card">
+          {field(
+            'department',
+            t('departments.department', 'Department'),
+            <>
+              {departmentChoices.length === 0 ? (
+                <p className="rounded-md border border-dashed border-border px-3 py-2 text-sm text-muted-foreground">
+                  {t('employees.departments_empty', 'Add departments first.')}
+                </p>
+              ) : (
+                <Select value={department} onValueChange={setDepartment}>
+                  <SelectTrigger id={`${id}-department`} aria-required="true" className="bg-card">
                     <SelectValue placeholder={t('common.choose_department', 'Choose a department')} />
                   </SelectTrigger>
                   <SelectContent>
@@ -357,24 +357,13 @@ export function EmployeeDialog({
                     ))}
                   </SelectContent>
                 </Select>
-                {pastDepartments.length > 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    {t('employees.past_departments', 'Also on their record from before: %{departments}.', { departments: pastDepartments.join(', ') })}
-                  </p>
-                )}
-              </>,
-            )
-          ) : (
-            <CheckList
-              legend={t('departments.departments', 'Departments')}
-              hint={t('employees.departments_hint', 'Choose one or more. The first is their main one.')}
-              choices={departmentChoices}
-              picked={departments}
-              onChange={setDepartments}
-              error={errors.departments}
-              required
-              empty={t('employees.departments_empty', 'Add departments first.')}
-            />
+              )}
+              {pastDepartments.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  {t('employees.past_departments', 'Also on their record from before: %{departments}.', { departments: pastDepartments.join(', ') })}
+                </p>
+              )}
+            </>,
           )}
 
           {field(
