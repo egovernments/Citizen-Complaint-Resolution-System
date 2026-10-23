@@ -19,6 +19,21 @@ export function employeeReturnTo(slug: string | undefined): string | undefined {
     return slug ? `/${slug}/digit-ui/employee/` : undefined;
 }
 
+/**
+ * The tenant's employee sign-in, on the origin of `base` (the client's
+ * baseUrl, which honours IDENTITY_DIGIT_UI_BASE_URL) rather than Keycloak's
+ * own, so it holds when digit-ui and Keycloak are on different origins.
+ */
+export function employeeSignInUrl(slug: string | undefined, base: string | undefined): string | undefined {
+    const app = employeeReturnTo(slug);
+    if (app === undefined) return undefined;
+    try {
+        return new URL(`${app}user/login`, base).href;
+    } catch {
+        return `${app}user/login`;
+    }
+}
+
 export async function requestPasswordSetup(params: {
     baseUrl?: string;
     email: string;

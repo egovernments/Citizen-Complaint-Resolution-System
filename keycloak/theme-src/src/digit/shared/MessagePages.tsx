@@ -2,6 +2,7 @@ import { kcSanitize } from "keycloakify/lib/kcSanitize";
 import type { KcContext } from "../../login/KcContext";
 import { useBranding } from "../branding/BrandingContext";
 import type { DigitPageProps } from "./kc";
+import { isLostSessionMessage } from "./lostSession";
 
 /**
  * info.ftl — "we have sent you something" / "you are done here", in the
@@ -61,27 +62,24 @@ export function Info(props: DigitPageProps<Extract<KcContext, { pageId: "info.ft
 }
 
 /**
- * Keycloak's errors for a sign-in this tab started but the browser no longer
- * holds, e.g. after an emailed password link finished in another tab (#2644).
- * Going back cannot resume it; a new sign-in can.
- */
-const LOST_SESSION_MESSAGES = ["cookieNotFoundMessage", "expiredCodeMessage", "invalidCodeMessage"] as const;
-
-/**
  * error.ftl — raised as the legacy error toast, with the way back. A lost
- * sign-in session offers to start again: at the tenant's own sign-in when this
- * tab knows the tenant, else at the client's base URL.
+ * sign-in session (lostSession.ts) offers to start again: at the tenant's own
+ * sign-in (`signInUrl`, given by the surface's page) when this tab knows the
+ * tenant, else at the client's base URL.
  */
-export function ErrorPage(props: DigitPageProps<Extract<KcContext, { pageId: "error.ftl" }>>) {
-    const { kcContext, i18n, doUseDefaultCss, Template, classes } = props;
+export function ErrorPage(
+    props: DigitPageProps<Extract<KcContext, { pageId: "error.ftl" }>> & {
+        signInUrl?: (slug: string, baseUrl: string | undefined) => string | undefined;
+    }
+) {
+    const { kcContext, i18n, doUseDefaultCss, Template, classes, signInUrl } = props;
     const { message, client, skipLink } = kcContext;
     const { msg, msgStr } = i18n;
     const { slug } = useBranding();
-    const lostSession = LOST_SESSION_MESSAGES.some(key => message.summary === msgStr(key));
-    const next = lostSession
+    const next = isLostSessionMessage(message.summary, msgStr)
         ? {
               id: "restartSignIn",
-              href: slug ? `/${slug}/digit-ui/employee/user/login` : client?.baseUrl,
+              href: (slug && signInUrl?.(slug, client?.baseUrl)) || client?.baseUrl,
               label: msg("digitStartSignInAgain")
           }
         : { id: "backToApplication", href: client?.baseUrl, label: msg("backToApplication") };

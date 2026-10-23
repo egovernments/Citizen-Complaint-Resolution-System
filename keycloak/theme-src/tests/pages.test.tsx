@@ -3,6 +3,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import KcPage from "../src/login/KcPage";
 import { getKcContextMock } from "../src/login/KcContextMock";
 import { withFieldErrors } from "../src/login/mockStates";
+import { LOST_SESSION_MESSAGE_KEYS, lostSessionThemeProperties } from "../src/digit/shared/lostSession";
 
 /** Every page this theme claims to cover, i.e. the supported password journey. */
 const COVERED_PAGES = [
@@ -181,7 +182,13 @@ describe("error.ftl", () => {
 
 describe("digit-employee error.ftl", () => {
     const COOKIE_NOT_FOUND = "Cookie not found. Please make sure cookies are enabled in your browser.";
+    // Keycloak 26.7.3's own wording, which differs from keycloakify's bundled copy above.
+    const KC_COOKIE_NOT_FOUND =
+        "Restart login cookie not found. It may have expired; it may have been deleted or cookies are disabled in your browser. If cookies are disabled then enable them. Click Back to Application to login again.";
+    const KC_COOKIE_NOT_FOUND_FR =
+        "Cookie de redémarrage de la connexion non trouvé. Il peut avoir expiré, il peut avoir été supprimé ou les cookies peuvent avoir été sur votre navigateur. Assurez-vous que les cookies soient activés dans votre navigateur. Cliquez sur Retour à l'application pour vous connecter à nouveau.";
     const BASE_URL = "https://digit.example.org/digit-ui/employee/user/login";
+    const TENANT_SIGN_IN = "https://digit.example.org/testj01/digit-ui/employee/user/login";
 
     afterEach(() => {
         vi.unstubAllGlobals();
@@ -191,7 +198,13 @@ describe("digit-employee error.ftl", () => {
 
     // Keycloak renders a lost sign-in's error page with no form action, as the
     // answer to the sign-in form's post: only the page address carries tab_id.
-    async function renderEmployeeError(summary: string) {
+    // `serverMessages` stands for what keycloakify had the server resolve for
+    // the keys theme.properties names (lostSession.ts): Keycloak's own wording,
+    // a realm override, in the page's locale.
+    async function renderEmployeeError(
+        summary: string,
+        options: { serverMessages?: Record<string, string>; languageTag?: string; baseUrl?: string } = {}
+    ) {
         vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
         window.history.replaceState(null, "", "/auth/realms/digit/login-actions/authenticate?client_id=digit-ui-employee&tab_id=tab-1");
         const base = getKcContextMock({ pageId: "error.ftl" });
@@ -199,19 +212,22 @@ describe("digit-employee error.ftl", () => {
             ...base,
             themeName: "digit-employee",
             url: { ...base.url, loginAction: undefined },
-            client: { ...base.client, baseUrl: BASE_URL },
-            message: { type: "error", summary }
+            client: { ...base.client, baseUrl: options.baseUrl ?? BASE_URL },
+            message: { type: "error", summary },
+            locale: { ...base.locale, currentLanguageTag: options.languageTag ?? "en" },
+            "x-keycloakify": { ...base["x-keycloakify"], messages: options.serverMessages ?? {} }
         };
         render(<KcPage kcContext={kcContext as never} />);
         await waitFor(() => expect(document.querySelector("#kc-error-message")).not.toBeNull());
     }
 
-    it("starts a lost sign-in again at the tenant this tab signed in to", async () => {
+    it("starts a lost sign-in again at the tenant this tab signed in to, on the client's origin", async () => {
         sessionStorage.setItem("digit_tenant:tab-1", "testj01");
         await renderEmployeeError(COOKIE_NOT_FOUND);
         const link = document.querySelector("#restartSignIn");
         expect(link).toHaveTextContent("Start sign-in again");
-        expect(link).toHaveAttribute("href", "/testj01/digit-ui/employee/user/login");
+        // Not Keycloak's origin (the page's): digit-ui may be elsewhere.
+        expect(link).toHaveAttribute("href", TENANT_SIGN_IN);
         expect(document.querySelector("#backToApplication")).toBeNull();
     });
 
@@ -220,11 +236,51 @@ describe("digit-employee error.ftl", () => {
         expect(document.querySelector("#restartSignIn")).toHaveAttribute("href", BASE_URL);
     });
 
+    it("recognises the text this Keycloak rendered, not only keycloakify's copy", async () => {
+        sessionStorage.setItem("digit_tenant:tab-1", "testj01");
+        await renderEmployeeError(KC_COOKIE_NOT_FOUND, { serverMessages: { cookieNotFoundMessage: KC_COOKIE_NOT_FOUND } });
+        expect(document.querySelector("#restartSignIn")).toHaveAttribute("href", TENANT_SIGN_IN);
+    });
+
+    it("recognises a realm override of the message", async () => {
+        const reworded = "Your sign-in was interrupted. Please sign in again.";
+        await renderEmployeeError(reworded, { serverMessages: { expiredCodeMessage: reworded } });
+        expect(document.querySelector("#restartSignIn")).toHaveAttribute("href", BASE_URL);
+    });
+
+    it("recognises the server's French text", async () => {
+        await renderEmployeeError(KC_COOKIE_NOT_FOUND_FR, {
+            languageTag: "fr",
+            serverMessages: { cookieNotFoundMessage: KC_COOKIE_NOT_FOUND_FR }
+        });
+        expect(document.querySelector("#restartSignIn")).toHaveTextContent("Recommencer la connexion");
+    });
+
+    it("falls back to keycloakify's French copy when the server resolved none", async () => {
+        await renderEmployeeError("Connexion expirée. Veuillez vous reconnecter.", { languageTag: "fr" });
+        await waitFor(() => expect(document.querySelector("#restartSignIn")).toHaveAttribute("href", BASE_URL));
+    });
+
     it("keeps Back to Application for other errors", async () => {
         sessionStorage.setItem("digit_tenant:tab-1", "testj01");
-        await renderEmployeeError("Invalid parameter: redirect_uri");
+        await renderEmployeeError("Invalid parameter: redirect_uri", {
+            serverMessages: { cookieNotFoundMessage: KC_COOKIE_NOT_FOUND }
+        });
         expect(document.querySelector("#restartSignIn")).toBeNull();
         expect(document.querySelector("#backToApplication")).toHaveAttribute("href", BASE_URL);
+    });
+});
+
+describe("lost-session theme properties", () => {
+    it("name every key as a value keycloakify asks the server to resolve", () => {
+        expect(lostSessionThemeProperties).toHaveLength(LOST_SESSION_MESSAGE_KEYS.length);
+        LOST_SESSION_MESSAGE_KEYS.forEach((key, i) => {
+            const [name, value] = lostSessionThemeProperties[i]!.split("=");
+            expect(value).toBe(key);
+            // keycloakify resolves values matching this; it drops kc* properties.
+            expect(value).toMatch(/^[a-zA-Z0-9-_.]*$/);
+            expect(name).not.toMatch(/^kc/);
+        });
     });
 });
 
