@@ -119,12 +119,6 @@ const countLabel = (t, n, singularKey, pluralKey, singular, plural) =>
   `${n} ${n === 1 ? label(t, singularKey, singular) : label(t, pluralKey, plural)}`;
 
 /**
- * Boundaries are localized per hierarchy — `ADMIN_<BOUNDARY>` for the ADMIN
- * hierarchy, and the same shape for others. Falls back to the raw code, which
- * is also the safety net for the seeded records that carry a tenant code in
- * `boundary` instead of a real boundary.
- */
-/**
  * City name for the tenant the *context* belongs to. cityDetails describes
  * whichever tenant the route context currently identifies, which for a
  * state-level employee need not be that tenant — using it blindly would label
@@ -135,7 +129,7 @@ const cityLabel = (t, cityDetails, tenantId) => {
   return label(t, cityDetails?.i18nKey, tenantId);
 };
 
-const jurisdictionLabel = (t, j, cityDetails, tenantId) => {
+export const jurisdictionLabel = (t, j, cityDetails, tenantId) => {
   const hierarchy = String(j?.hierarchy || "").toUpperCase();
   const boundary = j?.boundary;
   if (!boundary) return null;
@@ -144,8 +138,16 @@ const jurisdictionLabel = (t, j, cityDetails, tenantId) => {
   // cascade). Rendering it raw shows an operator "pg.citest" as if it were a
   // place; show the city they are already looking at instead.
   if (boundary === tenantId) return cityLabel(t, cityDetails, tenantId);
-  return label(t, `${hierarchy}_${String(boundary).toUpperCase()}`, boundary);
+  // Boundary names are seeded under the bare boundary code (`CITY_001`) in
+  // rainmaker-boundary-<hierarchy>, the key BoundaryComponent uses. The
+  // `<HIERARCHY>_<TYPE>` shape is only for boundary-type labels. Keep the
+  // hierarchy-prefixed key as a fallback, then the raw code (also the safety
+  // net for seeded records that carry something else in `boundary`).
+  return label(t, boundary, label(t, `${hierarchy}_${String(boundary).toUpperCase()}`, boundary));
 };
+
+/** Localization module holding a hierarchy's boundary names (see pgr Module.js). */
+const boundaryModule = (hierarchy) => `rainmaker-boundary-${String(hierarchy).toLowerCase()}`;
 
 export function EmployeeWorkingContextSummary({ t, context, cityDetails, tenantId, isError }) {
   if (isError) {
@@ -217,6 +219,26 @@ export function EmployeeWorkingContextPanel({ t, context, cityDetails, tenantId,
   // overflow or stacking context can hide it, and the shared header container
   // (which the city and language controls also live in) is left alone.
   const [pos, setPos] = useState(null);
+
+  // The boundary-name pack is otherwise loaded only when the PGR module mounts,
+  // so on any other route the jurisdictions would echo their codes. Load it
+  // here and re-render once it is in i18n (an already-cached pack resolves fast).
+  const [packLoaded, setPackLoaded] = useState(0);
+  const hierarchyKey = [...new Set((context?.jurisdictions || []).map((j) => j?.hierarchy).filter(Boolean))].join(",");
+  useEffect(() => {
+    if (!hierarchyKey || !Digit?.LocalizationService) return;
+    let live = true;
+    Digit.LocalizationService.getLocale({
+      modules: hierarchyKey.split(",").map(boundaryModule),
+      locale: Digit.StoreData?.getCurrentLanguage?.(),
+      tenantId: Digit.ULBService?.getStateId?.() || tenantId,
+    })
+      .then(() => live && setPackLoaded((n) => n + 1))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [hierarchyKey, tenantId]);
 
   // Layout effect: position before the browser paints, so the panel never
   // shows a frame in the wrong place.
@@ -294,7 +316,7 @@ export function EmployeeWorkingContextPanel({ t, context, cityDetails, tenantId,
         .map((j) => ({ name: jurisdictionLabel(t, j, cityDetails, context.tenantId || tenantId), type: j?.boundaryType }))
         .filter((j) => j.name),
     };
-  }, [t, context, cityDetails, tenantId]);
+  }, [t, context, cityDetails, tenantId, packLoaded]);
 
   if (!rows) return null;
 
