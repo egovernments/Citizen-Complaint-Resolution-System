@@ -480,6 +480,7 @@ Body `{surface?: "citizen"}`. The tenant comes only from the session's bound ten
 
 - The same steps as staff `_select`, with the citizen predicate. Issuance is the egov-otp-backed citizen grant.
 - Resolution: the `digit.accounts` citizen entry, then the citizen link, then a CITIZEN search by the verified phone. An ambiguous match → `CITIZEN_ACCOUNT_AMBIGUOUS`.
+- **Only a proved phone reaches DIGIT** (#2640). The phone is trusted when this session's phone OTP proved it and Keycloak still holds that number, or when users cannot edit `phoneNumber`/`phoneNumberVerified` in Keycloak (the shipped realm: `unmanagedAttributePolicy` `ADMIN_EDIT`, so only BFF code proofs and admins write them). An untrusted phone → `PHONE_NOT_VERIFIED`, with no DIGIT write. The phone write-through after a phone proof and in reconciliation follows the same rule. So every BFF-created citizen account (`keycloak-bff:citizen:` marker) holds a proved number, and pgr-services attaches an employee-filed complaint to the one such account holding the typed number when no `userName = mobile` citizen exists.
 - A citizen account the BFF creates for a person with an active staff entry at the tenant starts with that employee record's gender and email (#2595). Existing accounts are never changed.
 - The per-tenant registration `DISABLED` status is removed (D6). Blocking a citizen = disabling their Keycloak user.
 - The bound workspace's trial comes from the same live Organization read that re-checks the route: ended unapproved → `WORKSPACE_TRIAL_EXPIRED` with its `notice`.

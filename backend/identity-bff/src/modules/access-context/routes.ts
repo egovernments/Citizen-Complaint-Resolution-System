@@ -301,6 +301,11 @@ export function registerAccessContextRoutes(app: express.Application): void {
           // the live Keycloak phone only while the two are the same number.
           const phoneTrusted = (current.session.authMethod === "phone_otp" && claims.phone_number === livePhone) ||
             await keycloakPhoneIsAdminControlled();
+          // An untrusted number must not reach a DIGIT citizen account either:
+          // the account is created with it and every sign-in writes it
+          // through, and pgr-services attaches an employee-filed complaint to
+          // the one BFF-created citizen holding the number (#2640).
+          if (!phoneTrusted) return send(response, "PHONE_NOT_VERIFIED", "A verified phone number is required");
           const { identity, registration } = await ensureCitizenRegistration({
             phoneTrusted,
             subject: claims.sub,

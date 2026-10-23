@@ -1,6 +1,7 @@
 package org.egov.pgr.service;
 
 
+import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.common.contract.request.Role;
 import org.egov.pgr.config.PGRConfiguration;
@@ -20,8 +21,12 @@ import java.util.stream.Collectors;
 
 import static org.egov.pgr.util.PGRConstants.USERTYPE_CITIZEN;
 
+@Slf4j
 @org.springframework.stereotype.Service
 public class UserService {
+
+    /** The identificationMark prefix identity-bff writes on every DIGIT citizen account it creates (#2167). */
+    static final String BFF_CITIZEN_MARKER_PREFIX = "keycloak-bff:citizen:";
 
 
     private UserUtils userUtils;
@@ -70,15 +75,18 @@ public class UserService {
 
 
     /**
-     * Resolves the citizen an employee files a complaint for, by userName = mobileNumber,
-     * creating that citizen when absent.
+     * Resolves the citizen an employee files a complaint for, creating that citizen when absent.
      *
-     * Only the userName = mobileNumber account is ever used. A citizen found merely by
-     * mobile number is never attached: identity-bff citizens may carry a phone they
-     * never proved (#2167), so attaching by mobile would hand the complaint to whoever
-     * registered the number first. The userName = mobileNumber account is the one the
-     * identity BFF links to a citizen only after a verified phone, so a complaint filed
-     * here reaches the real owner of the number when they sign in.
+     * 1. The userName = mobileNumber account, as before: the account pgr-services creates, and
+     *    the one the identity BFF links to a citizen after a verified phone.
+     * 2. Otherwise the one identity-bff citizen account holding the number (#2640). A citizen
+     *    whose first sign-in came before any complaint for their number has only that account,
+     *    named kcbffc-…, and their token covers only it.
+     * 3. Otherwise a new userName = mobileNumber account.
+     *
+     * Any other citizen found merely by mobile number is never attached: its number may be one
+     * nobody proved (#2167), and attaching by it would hand the complaint to whoever registered
+     * the number first.
      *
      * An existing account is never modified: the name typed by the employee is not
      * evidence of who owns the account, so it must not rename it.
@@ -88,15 +96,17 @@ public class UserService {
 
         User user = request.getService().getCitizen();
         String tenantId = request.getService().getTenantId();
+        String stateLevelTenant = userUtils.getStateLevelTenant(tenantId);
         User userServiceResponse;
 
         // Search on mobile number as user name
-        UserDetailResponse userDetailResponse = searchUser(userUtils.getStateLevelTenant(tenantId),null, user.getMobileNumber(),request.getRequestInfo());
+        UserDetailResponse userDetailResponse = searchUser(stateLevelTenant,null, user.getMobileNumber(),request.getRequestInfo());
         if (!userDetailResponse.getUser().isEmpty()) {
             userServiceResponse = userDetailResponse.getUser().get(0);
         }
         else {
-            userServiceResponse = createUser(request.getRequestInfo(),tenantId,user);
+            User bffCitizen = bffCitizenByMobile(stateLevelTenant, user.getMobileNumber(), request.getRequestInfo());
+            userServiceResponse = bffCitizen != null ? bffCitizen : createUser(request.getRequestInfo(),tenantId,user);
         }
 
         // Enrich the accountId
@@ -111,6 +121,39 @@ public class UserService {
 
     private static boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
+    }
+
+    /**
+     * The one active identity-bff citizen account holding this mobile number at the state tenant,
+     * or null when there is none or more than one.
+     *
+     * identity-bff writes a number onto its own citizen accounts only once the phone is proved
+     * (identity-bff.md §3.3.5), and a citizen cannot change their own number through egov-user's
+     * profile update. egov-user matches the number itself, encrypting the criterion on tenants that
+     * encrypt PII, so no possibly masked value from the response is compared here: only the active
+     * flag and the marker, which the User security policy does not mask (a masked one would fail
+     * the prefix test, and the complaint would get a new account as before).
+     */
+    private User bffCitizenByMobile(String stateLevelTenant, String mobileNumber, RequestInfo requestInfo) {
+        if (isBlank(mobileNumber)) return null;
+        UserSearchRequest userSearchRequest = new UserSearchRequest();
+        userSearchRequest.setActive(true);
+        userSearchRequest.setUserType(USERTYPE_CITIZEN);
+        userSearchRequest.setTenantId(stateLevelTenant);
+        userSearchRequest.setMobileNumber(mobileNumber);
+        userSearchRequest.setRequestInfo(requestInfo);
+
+        StringBuilder uri = new StringBuilder(config.getUserHost()).append(config.getUserSearchEndpoint());
+        List<User> users = userUtils.userCall(userSearchRequest, uri).getUser();
+        List<User> bffCitizens = users == null ? Collections.emptyList() : users.stream()
+                .filter(candidate -> Boolean.TRUE.equals(candidate.getActive())
+                        && candidate.getIdentificationMark() != null
+                        && candidate.getIdentificationMark().startsWith(BFF_CITIZEN_MARKER_PREFIX))
+                .collect(Collectors.toList());
+        if (bffCitizens.size() > 1)
+            log.warn("{} identity-bff citizen accounts at {} hold the complainant's mobile number; creating a separate account",
+                    bffCitizens.size(), stateLevelTenant);
+        return bffCitizens.size() == 1 ? bffCitizens.get(0) : null;
     }
 
 
@@ -142,6 +185,8 @@ public class UserService {
      */
     private User createUser(RequestInfo requestInfo,String tenantId, User userInfo) {
 
+        // The marker is identity-bff's ownership record; a request never supplies one.
+        userInfo.setIdentificationMark(null);
         userUtils.addUserDefaultFields(userInfo.getMobileNumber(),tenantId, userInfo);
         StringBuilder uri = new StringBuilder(config.getUserHost())
                 .append(config.getUserContextPath())

@@ -30,9 +30,9 @@ import { ROOT_TENANT, TENANT, DEFAULT_PASSWORD } from './env';
 import { fetchEmployees, type DiscoveredEmployee } from './probes';
 import { getProfile, type DeploymentProfile, type PersonaSummary } from './profile';
 
-export type PersonaKey = 'employee' | 'gro' | 'gro-with-department' | 'lme' | 'ward-scoped-csr' | 'inbox-viewer';
+export type PersonaKey = 'employee' | 'gro' | 'gro-with-department' | 'lme' | 'csr' | 'ward-scoped-csr' | 'inbox-viewer';
 
-export const PERSONA_KEYS: PersonaKey[] = ['employee', 'gro', 'gro-with-department', 'lme', 'ward-scoped-csr', 'inbox-viewer'];
+export const PERSONA_KEYS: PersonaKey[] = ['employee', 'gro', 'gro-with-department', 'lme', 'csr', 'ward-scoped-csr', 'inbox-viewer'];
 
 /**
  * The tenant pair every lookup here is relative to.
@@ -371,6 +371,10 @@ async function matches(key: PersonaKey, p: ResolvedPersona, profile: DeploymentP
       return p.roles.includes('GRO') && p.departments.length > 0;
     case 'lme':
       return p.roles.includes('PGR_LME');
+    case 'csr':
+      // Files a complaint on a citizen's behalf: APPLY's roles past CITIZEN,
+      // which is CSR on the shipped workflows.
+      return (profile.workflow.pgr.actionRoles.APPLY ?? []).some((r) => r !== 'CITIZEN' && p.roles.includes(r));
     case 'ward-scoped-csr':
       return isWardScopedCsr(p, hrms, profile);
     case 'inbox-viewer': {
@@ -428,6 +432,7 @@ function whyUnresolved(key: PersonaKey, tried: ResolvedPersona[], profile?: Depl
     gro: 'the GRO role',
     'gro-with-department': 'the GRO role AND an HRMS department assignment',
     lme: 'the PGR_LME role',
+    csr: 'a PGR APPLY role other than CITIZEN (CSR), to file a complaint on a citizen\'s behalf',
     'ward-scoped-csr': 'the CSR role AND an HRMS jurisdiction below the hierarchy root',
     // Must state exactly what matches() checks, or the reader onboards the
     // wrong thing: it said "GRO (or PGR_LME)" when PGR_LME alone never

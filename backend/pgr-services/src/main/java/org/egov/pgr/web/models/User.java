@@ -37,4 +37,10 @@ public class User {
     @SafeHtml
     private String uuid;
     private Boolean active;
+    /**
+     * identity-bff's ownership marker, read by UserService.bffCitizenByMobile. Carried so a
+     * contact-details update, which egov-user saves field by field as sent, keeps it.
+     */
+    @SafeHtml
+    private String identificationMark;
 }

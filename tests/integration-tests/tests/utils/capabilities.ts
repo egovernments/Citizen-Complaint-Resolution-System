@@ -29,6 +29,7 @@ export const CAPABILITY_KEYS = [
   'pgr.citizenCreate',
   'ui.citizen.attachmentDetailRender',
   'personas.gro-with-department',
+  'personas.csr',
   'personas.ward-scoped-csr',
   'locales.multi',
   'tenant.citySubTenant',
@@ -159,6 +160,8 @@ export function isPresent(key: CapabilityKey, profile?: DeploymentProfile): bool
       return declared(key) !== 'absent';
     case 'personas.gro-with-department':
       return p.personas.resolved['gro-with-department'] != null;
+    case 'personas.csr':
+      return p.personas.resolved.csr != null;
     case 'personas.ward-scoped-csr':
       return p.personas.resolved['ward-scoped-csr'] != null;
     case 'locales.multi':
@@ -192,6 +195,7 @@ function evidence(key: CapabilityKey, p: DeploymentProfile): string {
     case 'ui.citizen.attachmentDetailRender':
       return 'not probeable — presence follows the declaration in the expectations file';
     case 'personas.gro-with-department':
+    case 'personas.csr':
     case 'personas.ward-scoped-csr': {
       const personaKey = key.slice('personas.'.length);
       const hit = p.personas.resolved[personaKey];
