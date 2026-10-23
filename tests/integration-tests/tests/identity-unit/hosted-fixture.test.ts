@@ -6,6 +6,9 @@ import { enterHostedUsername, hostedSignIn, IdentityHttpError, isContextRefusal,
 import { getDigitToken } from '../utils/auth';
 import { makeAttempt } from '../utils/profile';
 
+// Employee sign-in routes through the workspace slug.
+process.env.IDENTITY_TEST_TENANT_SLUG = 'fixture';
+
 // Browser fixture checks only; the hosted form and landing application are doubles.
 let browser: Awaited<ReturnType<typeof chromium.launch>>;
 before(async () => { browser = await chromium.launch(); });
