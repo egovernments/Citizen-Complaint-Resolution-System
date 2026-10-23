@@ -31,9 +31,7 @@ import {
  * lives AT that tenant: DIGIT's gateway authorizes a token only for its
  * account's home tenant, so one account cannot serve several tenants.
  * An account is managed only when BOTH its username and its
- * identificationMark are derived from that (issuer, subject, tenant), or,
- * for a citizen named by a proved number (#2640), when it carries the marker
- * and is the account this BFF recorded for the person.
+ * identificationMark are derived from that (issuer, subject, tenant).
  * Anything else, including every locally managed legacy employee, is never
  * updated, rotated or deactivated here.
  *
@@ -46,10 +44,7 @@ export const MANAGED_USER_TYPE = "EMPLOYEE";
 /**
  * Citizen accounts (#2167) follow the same ownership rule in their own
  * namespace: `kcbffc-` usernames and a `keycloak-bff:citizen:v1:` marker,
- * derived from a key that can never equal an employee key. A citizen whose
- * phone is proved is instead named by its national mobile number (#2640),
- * DIGIT's own citizen convention, so pgr-services finds the account the
- * person signs in with; the marker still says whose it is. A legacy citizen
+ * derived from a key that can never equal an employee key. A legacy citizen
  * whose username is a mobile number is never adopted. Unlike employees, a
  * citizen account lives at egov-user's citizen tenant (the state root, see
  * `digitCitizenTenantId`), shared by every city route under it.
@@ -71,12 +66,6 @@ export interface ManagedIdentity {
    * and profile are the account's own and are never rewritten.
    */
   linkedUuid?: string;
-  /**
-   * The uuid this BFF recorded for the subject's own citizen account. One
-   * named by its proved number (#2640) has no derived username, so it is
-   * found by this uuid, and only while it carries the subject's marker.
-   */
-  accountUuid?: string;
 }
 
 export interface ManagedProfile {
@@ -199,9 +188,7 @@ export function digitCitizenTenantId(tenantId: string): string {
  * marker and token cache are all derived from `digitCitizenTenantId`, not
  * from the route tenant. The route tenant stays on the CitizenRegistration.
  */
-export function citizenIdentity(
-  issuer: string, subject: string, routeTenantId: string, accountUuid?: string,
-): ManagedIdentity {
+export function citizenIdentity(issuer: string, subject: string, routeTenantId: string): ManagedIdentity {
   const tenantId = digitCitizenTenantId(routeTenantId);
   const subjectKey = createHash("sha256").update(`${issuer}\n${subject}`).digest("hex");
   const key = createHash("sha256")
@@ -215,7 +202,6 @@ export function citizenIdentity(
     username: `kcbffc-${key.slice(0, 40)}`,
     marker: `keycloak-bff:citizen:v1:${subjectKey}:${tenantId}`,
     userType: CITIZEN_USER_TYPE,
-    ...(accountUuid && { accountUuid }),
   };
 }
 
@@ -259,35 +245,19 @@ const citizenMobileHint = (countryCode: string | null | undefined, mobileNumber:
 export const managedAccountsKey = () => `${config.cachePrefix}:digit-managed-accounts`;
 const indexField = (identity: ManagedIdentity) => `${identity.subject}|${identity.tenantId}`;
 
-async function accountNamed(
-  adminToken: string, identity: ManagedIdentity, userName: string,
-): Promise<DigitAccount | null> {
+async function findAccount(adminToken: string, identity: ManagedIdentity): Promise<DigitAccount | null> {
   for (const active of [true, false]) {
     const accounts = await searchAccounts(adminToken, {
-      userName, tenantId: identity.tenantId, userType: identity.userType, active,
+      userName: identity.username, tenantId: identity.tenantId, userType: identity.userType, active,
     });
-    const account = accounts.find((candidate) => candidate.userName === userName);
-    if (account) return account;
+    const account = accounts.find((candidate) => candidate.userName === identity.username);
+    if (!account) continue;
+    if (account.identificationMark !== identity.marker) {
+      throw new ManagedAccountError("A DIGIT account with this username is not managed by the identity BFF");
+    }
+    return account;
   }
   return null;
-}
-
-async function findAccount(adminToken: string, identity: ManagedIdentity): Promise<DigitAccount | null> {
-  if (identity.accountUuid) {
-    for (const active of [true, false]) {
-      const accounts = await searchAccounts(adminToken, {
-        uuid: [identity.accountUuid], tenantId: identity.tenantId, userType: identity.userType, active,
-      });
-      const account = accounts.find((candidate) => candidate.uuid === identity.accountUuid &&
-        candidate.identificationMark === identity.marker);
-      if (account) return account;
-    }
-  }
-  const account = await accountNamed(adminToken, identity, identity.username);
-  if (account && account.identificationMark !== identity.marker) {
-    throw new ManagedAccountError("A DIGIT account with this username is not managed by the identity BFF");
-  }
-  return account;
 }
 
 /** Base roles plus allowlisted codes, all scoped to the account's own tenant. */
@@ -390,15 +360,13 @@ export interface EnsureResult {
  * A missing account is created only when `profile` is supplied. With
  * `createOnly`, an existing account is returned untouched: callers holding
  * possibly stale session claims must not grant or revoke roles. Role or
- * activation changes revoke the cached user token. `userName` names a new
- * citizen account by its proved number instead of the derived username; when
- * another account already holds it, this throws `DIGIT_USERNAME_TAKEN`.
+ * activation changes revoke the cached user token.
  */
 export async function ensureManagedAccount(
   identity: ManagedIdentity,
   roleCodes: string[] | null,
   profile?: ManagedProfile,
-  options: { createOnly?: boolean; userName?: string } = {},
+  options: { createOnly?: boolean } = {},
 ): Promise<EnsureResult> {
   return withPersonLease(identity.subject, () => withDigitAdmin(async (adminToken) => {
     const account = await findAccount(adminToken, identity);
@@ -416,36 +384,20 @@ export async function ensureManagedAccount(
         throw new ManagedAccountError("A name and mobile number are required to create the DIGIT account");
       }
       const password = oneTimePassword();
-      const userName = options.userName ?? identity.username;
-      let created: DigitAccount;
-      try {
-        created = await createAccount(adminToken, {
-          userName,
-          name: profile.name.trim().slice(0, 50),
-          mobileNumber: profile.mobileNumber.trim(),
-          countryCode: profile.countryCode?.trim() || null,
-          emailId: profile.emailId || null,
-          ...(profile.gender && { gender: profile.gender }),
-          tenantId: identity.tenantId,
-          type: identity.userType,
-          active: true,
-          identificationMark: identity.marker,
-          roles,
-          password,
-        });
-      } catch (error) {
-        // egov-user keeps (userName, type, tenant) unique, and a mobile number
-        // is a username other services create too: pgr-services names the
-        // citizen of an employee-filed complaint after it.
-        const taken = userName !== identity.username && await accountNamed(adminToken, identity, userName);
-        if (!taken) throw error;
-        // This BFF's own create whose answer was lost: the marker is derived
-        // from the person, and the account holds the number they proved.
-        if (taken.identificationMark === identity.marker && taken.mobileNumber === profile.mobileNumber.trim()) {
-          return { account: taken, created: false, changed: false };
-        }
-        throw new ManagedAccountError("Another DIGIT account already uses this username", 409, "DIGIT_USERNAME_TAKEN");
-      }
+      const created = await createAccount(adminToken, {
+        userName: identity.username,
+        name: profile.name.trim().slice(0, 50),
+        mobileNumber: profile.mobileNumber.trim(),
+        countryCode: profile.countryCode?.trim() || null,
+        emailId: profile.emailId || null,
+        ...(profile.gender && { gender: profile.gender }),
+        tenantId: identity.tenantId,
+        type: identity.userType,
+        active: true,
+        identificationMark: identity.marker,
+        roles,
+        password,
+      });
       // No login here. Cached DIGIT tokens belong to a BFF session and
       // provisioning has none to attribute one to, so logging in now would
       // mint a token no logout could ever revoke. The first

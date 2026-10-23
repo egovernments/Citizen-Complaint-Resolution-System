@@ -2,13 +2,11 @@ import { config } from "../../infrastructure/config.js";
 import type { MobileValidation } from "../citizen-otp/mobile-validation.js";
 import {
   citizenIdentity,
-  digitCitizenTenantId,
   ensureManagedAccount,
   ManagedAccountError,
   type ManagedIdentity,
   type ManagedProfile,
 } from "../managed-accounts/managed-account-service.js";
-import type { DigitAccount } from "../managed-accounts/digit-user-client.js";
 import { AccountLinkError, resolveCitizenLink } from "../account-links/account-links.js";
 import {
   citizenRegistrationValues,
@@ -146,8 +144,7 @@ export function splitE164(
  *
  * An EXISTING DIGIT citizen with the same number is linked instead of a new
  * account being created (#2167), but only when `phoneTrusted`: the number was
- * proved by a BFF OTP, or users cannot edit it in Keycloak. The same trust
- * names a new account by its national number (#2640).
+ * proved by a BFF OTP, or users cannot edit it in Keycloak.
  */
 export async function ensureCitizenRegistration(input: {
   subject: string;
@@ -158,60 +155,32 @@ export async function ensureCitizenRegistration(input: {
   phoneTrusted: boolean;
 }): Promise<{ identity: ManagedIdentity; registration: CitizenRegistration }> {
   const { subject, tenant } = input;
-  const registrations = await citizenRegistrations(subject);
-  const existing = registrations.find((candidate) =>
+  const existing = (await citizenRegistrations(subject)).find((candidate) =>
     candidate.rootTenantId === tenant.rootTenantId && candidate.tenantId === tenant.tenantId);
   if (existing?.status === "DISABLED") {
     throw new CitizenContextError("Citizen access is disabled for this tenant", 403);
   }
-  // Every route under one citizen tenant shares its account.
-  const citizenTenantId = digitCitizenTenantId(tenant.tenantId);
-  const accountUuid = (existing ?? registrations.find((candidate) =>
-    digitCitizenTenantId(candidate.tenantId) === citizenTenantId))?.digitUserUuid;
-  const link = () => resolveCitizenLink({
-    subject, routeTenantId: tenant.tenantId, mobileNumber: input.mobileNumber, phoneTrusted: input.phoneTrusted,
-    accountUuid,
-  });
   let identity: ManagedIdentity;
   let digitUserUuid: string;
   try {
-    let linked = await link();
-    let account: DigitAccount | null = null;
-    if (!linked) {
-      const profile: ManagedProfile = {
-        name: input.name,
-        mobileNumber: input.mobileNumber,
-        countryCode: input.countryCode,
-        ...(!existing && await staffProfile(subject, tenant.tenantId)),
-      };
-      const create = async (userName?: string) => (await ensureManagedAccount(
-        citizenIdentity(config.keycloakIssuer, subject, tenant.tenantId, accountUuid), [], profile,
-        { createOnly: true, userName },
-      )).account;
-      try {
-        // A proved number names the new account, as DIGIT names its citizens,
-        // so pgr-services' userName = mobile lookup finds the account this
-        // person signs in with (#2640).
-        account = await create(input.phoneTrusted ? input.mobileNumber : undefined);
-      } catch (error) {
-        if (!(error instanceof ManagedAccountError && error.code === "DIGIT_USERNAME_TAKEN")) throw error;
-        // Another account took the number after the phone search, e.g. one
-        // pgr-services created for an employee-filed complaint: the legacy-link
-        // rules decide again. One they do not link (a username left on an old
-        // number) keeps this person on the opaque `kcbffc-` name.
-        linked = await link();
-        if (!linked) account = await create();
-      }
-    }
+    const linked = await resolveCitizenLink({
+      subject, routeTenantId: tenant.tenantId, mobileNumber: input.mobileNumber, phoneTrusted: input.phoneTrusted,
+    });
     if (linked) {
       identity = linked;
       digitUserUuid = linked.linkedUuid!;
     } else {
-      if (!account?.active) {
+      identity = citizenIdentity(config.keycloakIssuer, subject, tenant.tenantId);
+      const outcome = await ensureManagedAccount(identity, [], {
+        name: input.name,
+        mobileNumber: input.mobileNumber,
+        countryCode: input.countryCode,
+        ...(!existing && await staffProfile(subject, tenant.tenantId)),
+      }, { createOnly: true });
+      if (!outcome.account?.active) {
         throw new CitizenContextError("Citizen access is not available for this tenant", 403);
       }
-      digitUserUuid = account.uuid;
-      identity = citizenIdentity(config.keycloakIssuer, subject, tenant.tenantId, digitUserUuid);
+      digitUserUuid = outcome.account.uuid;
     }
   } catch (error) {
     if (error instanceof AccountLinkError) {
