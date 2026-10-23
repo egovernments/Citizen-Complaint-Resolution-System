@@ -56,12 +56,62 @@ public class WorkspaceServiceTest {
         assertEquals("WORKSPACE_VERSION_CONFLICT",assertThrows(ResponseStatusException.class,()->service.update(request("BRANDING","SKIPPED",0))).getReason());
         verify(gateway,never()).probes(any(),any());
     }
-    @Test public void overallDoneRequiresEveryStepDoneOrBrandingSkipped(){
+    @Test public void lastStepLeavesSetupOpenUntilFinish(){
         row.put("steps",WorkspaceRepository.initialSteps("DONE",1L,"admin"));
         when(repository.find("test",true)).thenReturn(Optional.of(row));
+        doAnswer(i->{row.put("version",(long)i.getArgument(1)+1);return null;}).when(repository).update(any(),anyLong(),any());
         Map<String,Object> result=service.update(request("BRANDING","SKIPPED",1));
-        assertEquals("DONE",((Map<?,?>)result.get("Workspace")).get("status"));
+        assertEquals("IN_PROGRESS",((Map<?,?>)result.get("Workspace")).get("status"));
         verify(repository).event(eq("test"),eq("STEP_UPDATED"),eq(2L),any(),eq("admin"));
+        when(gateway.probe(eq("test"),anyString())).thenReturn(true);
+        result=service.update(Map.of("tenantId","test","action","FINISH","version",2));
+        assertEquals("DONE",((Map<?,?>)result.get("Workspace")).get("status"));
+        assertEquals(Map.of("DEPARTMENTS",true,"GEOGRAPHY",true,"EMPLOYEES",true,"COMPLAINT_TYPES",true),result.get("Probes"));
+        verify(repository).event(eq("test"),eq("FINISHED"),eq(3L),any(),eq("admin"));
+        verify(gateway,never()).probe("test","BRANDING");verify(gateway,never()).probes(any());
+    }
+    @Test public void finishRechecksEveryDoneStepSoStaleEvidenceCannotFinish(){
+        row.put("steps",WorkspaceRepository.initialSteps("DONE",1L,"admin"));when(repository.find("test",true)).thenReturn(Optional.of(row));
+        when(gateway.probe(eq("test"),anyString())).thenReturn(true);when(gateway.probe("test","COMPLAINT_TYPES")).thenReturn(false);
+        assertEquals("WORKSPACE_PROBE_INCOMPLETE",assertThrows(ResponseStatusException.class,()->service.update(finish(1))).getReason());
+        when(gateway.probe("test","COMPLAINT_TYPES")).thenThrow(new OnboardingFailure("HRMS_DOWN",true));
+        assertThrows(OnboardingFailure.class,()->service.update(finish(1)));
+        verify(repository,never()).update(any(),anyLong(),any());verify(repository,never()).event(any(),eq("FINISHED"),anyLong(),any(),any());
+    }
+    @Test public void finishChecksVersionBeforeStepsOrProbes(){
+        row.put("steps",WorkspaceRepository.initialSteps("DONE",1L,"admin"));when(repository.find("test",true)).thenReturn(Optional.of(row));
+        assertEquals("WORKSPACE_VERSION_CONFLICT",assertThrows(ResponseStatusException.class,()->service.update(finish(0))).getReason());
+        assertEquals("WORKSPACE_INVALID_REQUEST",assertThrows(ResponseStatusException.class,()->service.update(Map.of("tenantId","test","action","FINISH"))).getReason());
+        verify(gateway,never()).probe(any(),any());verify(repository,never()).update(any(),anyLong(),any());
+    }
+    @Test public void aNullActionIsAStepWriteAndFinishCannotCarryAStep(){
+        when(repository.find("test",true)).thenReturn(Optional.of(row));
+        Map<String,Object> typed=new HashMap<>(request("EMPLOYEES","IN_PROGRESS",1));typed.put("action",null);
+        assertEquals("IN_PROGRESS",((Map<?,?>)service.update(typed).get("Workspace")).get("status"));
+        verify(repository).event(eq("test"),eq("STEP_UPDATED"),eq(2L),any(),eq("admin"));
+        Map<String,Object> both=new HashMap<>(request("EMPLOYEES","DONE",1));both.put("action","FINISH");
+        assertEquals("WORKSPACE_INVALID_REQUEST",assertThrows(ResponseStatusException.class,()->service.update(both)).getReason());
+        verify(repository,never()).event(any(),eq("FINISHED"),anyLong(),any(),any());
+    }
+    @Test public void finishOnAMissingRowIsTheLegacyNoOp(){
+        when(repository.find("test",true)).thenReturn(Optional.empty());
+        Map<?,?> workspace=(Map<?,?>)service.update(Map.of("tenantId","test","action","FINISH")).get("Workspace");
+        assertEquals("DONE",workspace.get("status"));assertEquals(true,workspace.get("legacy"));
+        verify(repository,never()).update(any(),anyLong(),any());verify(gateway,never()).probe(any(),any());
+    }
+    @Test public void finishNeedsEveryStepAndAValidAction(){
+        when(repository.find("test",true)).thenReturn(Optional.of(row));
+        assertEquals("WORKSPACE_STEPS_INCOMPLETE",assertThrows(ResponseStatusException.class,()->service.update(Map.of("tenantId","test","action","FINISH","version",1))).getReason());
+        assertEquals("WORKSPACE_INVALID_REQUEST",assertThrows(ResponseStatusException.class,()->service.update(Map.of("tenantId","test","action","DONE","version",1))).getReason());
+        verify(repository,never()).update(any(),anyLong(),any());
+    }
+    @Test public void finishedStaysFinished(){
+        row.put("status","DONE");row.put("version",4L);when(repository.find("test",true)).thenReturn(Optional.of(row));
+        assertEquals("DONE",((Map<?,?>)service.update(finish(1)).get("Workspace")).get("status"));
+        // A retry or double-click without a version is the same no-op, as the contract says.
+        assertEquals("DONE",((Map<?,?>)service.update(Map.of("tenantId","test","action","FINISH")).get("Workspace")).get("status"));
+        verify(repository,never()).update(any(),anyLong(),any());verify(gateway,never()).probe(any(),any());
+        assertEquals("DONE",((Map<?,?>)service.update(request("EMPLOYEES","IN_PROGRESS",4)).get("Workspace")).get("status"));
     }
     @Test public void renameReplayPrecedesVersionConflictAndReturnsCurrentState(){
         row.put("version",5L);when(repository.find("test",true)).thenReturn(Optional.of(row));
@@ -121,5 +171,6 @@ public class WorkspaceServiceTest {
         assertEquals("WORKSPACE_NAME_TAKEN",assertThrows(ResponseStatusException.class,()->service.rename(Map.of("tenantId","test","name","New Name","version",1))).getReason());
         verify(repository,never()).reserveName(any(),any());verify(repository,never()).update(any(),anyLong(),any());
     }
+    private Map<String,Object> finish(long version){return Map.of("tenantId","test","action","FINISH","version",version);}
     private Map<String,Object> request(String step,String state,long version){return Map.of("tenantId","test","step",step,"state",state,"version",version);}
 }
