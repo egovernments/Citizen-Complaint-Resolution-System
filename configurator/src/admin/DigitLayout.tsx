@@ -28,6 +28,7 @@ import { useRailDrawer } from '@/components/layout/useRailDrawer';
 import { AccountMenu, HelpButton, LocaleSwitcher, ThemeSwitcher } from '@/components/layout/HeaderControls';
 import { isOnboardingComplete } from '@/onboarding/progress';
 import { complaintDeskUrl, useWorkspaceSlug } from '@/identity/workspaceSlug';
+import { TenantSwitcher } from './TenantSwitcher';
 
 /** The links above the groups, always shown first */
 const mainLinks = [
@@ -346,12 +347,17 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
             >
               <T i18nKey="app.header.management_mode" />
             </Badge>
-            <Badge
-              variant="secondary"
-              className="text-xs bg-primary/10 text-primary border-primary/20"
-            >
-              {envName}
-            </Badge>
+            {/* ours (cfgreview F04, #1551): which tenant you work at, and a switcher; the environment badge only where it
+                names a known dev / staging host ("custom" meant nothing to a county admin) */}
+            <TenantSwitcher />
+            {envName !== 'custom' && (
+              <Badge
+                variant="secondary"
+                className="hidden md:inline-flex text-xs bg-primary/10 text-primary border-primary/20"
+              >
+                {envName}
+              </Badge>
+            )}
           </div>
 
           {/* Right: help, locale, theme, and the account */}

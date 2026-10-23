@@ -103,6 +103,8 @@ interface AppContextType {
   /** Point subsequent onboarding writes/reads at a child tenant. Called by
    *  Phase 1 after `tenant.tenants` create succeeds. */
   setTargetTenant: (code: string) => void;
+  /** ours (cfgreview F04, #1551): work at another tenant of the admin's subtree; reloads /manage there. */
+  switchTenant: (code: string) => void;
   completePhase: (phase: number, skip?: boolean) => Promise<boolean>;
   goToPhase: (phase: number) => void;
   addUndo: (action: string, description: string) => void;
@@ -423,6 +425,18 @@ function App() {
     }
   }, [state.isAuthenticated, state.user, state.environment, state.tenant, state.targetTenant, state.currentPhase, state.completedPhases]);
 
+  // ours (cfgreview F04, #1551): the header's tenant switcher. The saved session moves to the new tenant and /manage
+  // reloads, so the restore path re-points both API clients and no cache or open record of the old tenant survives.
+  const switchTenant = (code: string) => {
+    try {
+      const raw = localStorage.getItem(AUTH_STORAGE_KEY);
+      if (raw) localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ ...JSON.parse(raw), tenant: code, targetTenant: code }));
+    } catch { /* storage blocked: this tab still switches below */ }
+    setState(s => ({ ...s, tenant: code, targetTenant: code }));
+    trackEvent('tenant_switch', { tenant: code });
+    window.location.assign(`${import.meta.env.BASE_URL}manage`);
+  };
+
   const setTargetTenant = (code: string) => {
     setState(s => ({ ...s, targetTenant: code }));
   };
@@ -522,6 +536,7 @@ function App() {
     state,
     logout,
     setTargetTenant,
+    switchTenant,
     completePhase,
     goToPhase,
     addUndo,
