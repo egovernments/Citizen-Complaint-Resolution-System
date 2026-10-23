@@ -40,6 +40,7 @@ REALM = os.environ["KEYCLOAK_ORGANIZATION_REALM"]
 REDIRECT = os.environ["IDENTITY_REDIRECT_URI"]
 EMPLOYEE = (os.environ.get("KEYCLOAK_EMPLOYEE_CLIENT_ID", "digit-ui-employee"),
             os.environ["KEYCLOAK_EMPLOYEE_CLIENT_SECRET"])
+CITIZEN_CLIENT_ID = os.environ.get("KEYCLOAK_CITIZEN_CLIENT_ID", "digit-ui-citizen")
 BFF = ("digit-identity-bff", os.environ["KEYCLOAK_BFF_CLIENT_SECRET"])
 ADMIN_CLIENT = ("digit-identity-admin", os.environ["KEYCLOAK_ADMIN_CLIENT_SECRET"])
 REALM_JSON = os.path.join(os.path.dirname(CONFIGURE), "realm.json")
@@ -373,10 +374,25 @@ def _():
 
 @check("surface client policy: CSV action allowlist and password-setup redirect")
 def _():
-    for client in (BFF[0], EMPLOYEE[0], "digit-ui-citizen"):
+    for client in (BFF[0], EMPLOYEE[0], CITIZEN_CLIENT_ID):
         [stored] = admin("GET", "/clients?clientId=" + client)
         assert stored["attributes"]["digit.auth.account.actions"] == ",".join(DECLARED["clientPolicy"]["accountActions"])
         assert REDIRECT.removesuffix("/callback") + DECLARED["clientPolicy"]["passwordSetupRedirectPath"] in stored["redirectUris"]
+
+
+@check("digit-ui clients: Back to Application is the surface's sign-in, also on an existing client (#2644)")
+def _():
+    # configure-keycloak.sh's DIGIT_UI_BASE_URL: the override, else the redirect's site.
+    site = os.environ.get("IDENTITY_DIGIT_UI_BASE_URL", REDIRECT.split("/identity/", 1)[0] + "/").rstrip("/")
+    wanted = {EMPLOYEE[0]: f"{site}/digit-ui/employee/user/login",
+              CITIZEN_CLIENT_ID: f"{site}/digit-ui/citizen/login"}
+    for client in wanted:
+        [stored] = admin("GET", "/clients?clientId=" + client)
+        admin("PUT", f"/clients/{stored['id']}", {**stored, "baseUrl": f"{site}/"})  # what earlier runs set
+    configure()
+    for client, base_url in wanted.items():
+        [stored] = admin("GET", "/clients?clientId=" + client)
+        assert stored["baseUrl"] == base_url, stored["baseUrl"]
 
 
 # ------------------------------------------ sign-in and self-service (§8)

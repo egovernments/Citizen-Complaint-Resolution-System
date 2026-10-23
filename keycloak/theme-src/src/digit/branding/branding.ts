@@ -60,7 +60,9 @@ export function tabIdOf(loginAction: string | undefined, base = window.location.
  * 2. `digit_tenant` on the current URL — present on the first page, which
  *    Keycloak renders straight off the authorization request — remembered in
  *    sessionStorage under this tab's `tab_id` so the pages that follow a
- *    form post (errors, further steps) still know it.
+ *    form post (errors, further steps) still know it. A page Keycloak gives
+ *    no form action (error.ftl when the sign-in session is gone, #2644) is
+ *    the answer to that tab's form post, so its own address carries `tab_id`.
  */
 export function resolveTenantSlug(params: {
     digitTenant?: string;
@@ -85,7 +87,8 @@ function rememberedPerTab(
     isValid: (value: string | null | undefined) => value is string
 ): string | undefined {
     const storage = safeSession();
-    const tabId = tabIdOf(loginAction);
+    // Error pages carry no form action; their tab_id is only in the page URL (#2644).
+    const tabId = tabIdOf(loginAction) ?? tabIdOf(window.location.href);
     const key = tabId === undefined || storage === undefined ? undefined : prefix + tabId;
     try {
         if (isValid(candidate)) {

@@ -2,6 +2,7 @@ import { kcSanitize } from "keycloakify/lib/kcSanitize";
 import type { KcContext } from "../../login/KcContext";
 import { useBranding } from "../branding/BrandingContext";
 import type { DigitPageProps } from "./kc";
+import { isLostSessionMessage } from "./lostSession";
 
 /**
  * info.ftl — "we have sent you something" / "you are done here", in the
@@ -60,11 +61,28 @@ export function Info(props: DigitPageProps<Extract<KcContext, { pageId: "info.ft
     );
 }
 
-/** error.ftl — raised as the legacy error toast, with the way back. */
-export function ErrorPage(props: DigitPageProps<Extract<KcContext, { pageId: "error.ftl" }>>) {
-    const { kcContext, i18n, doUseDefaultCss, Template, classes } = props;
+/**
+ * error.ftl — raised as the legacy error toast, with the way back. A lost
+ * sign-in session (lostSession.ts) offers to start again: at the tenant's own
+ * sign-in (`signInUrl`, given by the surface's page) when this tab knows the
+ * tenant, else at the client's base URL.
+ */
+export function ErrorPage(
+    props: DigitPageProps<Extract<KcContext, { pageId: "error.ftl" }>> & {
+        signInUrl?: (slug: string, baseUrl: string | undefined) => string | undefined;
+    }
+) {
+    const { kcContext, i18n, doUseDefaultCss, Template, classes, signInUrl } = props;
     const { message, client, skipLink } = kcContext;
-    const { msg } = i18n;
+    const { msg, msgStr } = i18n;
+    const { slug } = useBranding();
+    const next = isLostSessionMessage(message.summary, msgStr)
+        ? {
+              id: "restartSignIn",
+              href: (slug && signInUrl?.(slug, client?.baseUrl)) || client?.baseUrl,
+              label: msg("digitStartSignInAgain")
+          }
+        : { id: "backToApplication", href: client?.baseUrl, label: msg("backToApplication") };
 
     return (
         <Template
@@ -80,9 +98,9 @@ export function ErrorPage(props: DigitPageProps<Extract<KcContext, { pageId: "er
                     className="dg-text"
                     dangerouslySetInnerHTML={{ __html: kcSanitize(message.summary) }}
                 />
-                {!skipLink && !!client?.baseUrl && (
-                    <a id="backToApplication" className="dg-button" href={client.baseUrl}>
-                        {msg("backToApplication")}
+                {!skipLink && !!next.href && (
+                    <a id={next.id} className="dg-button" href={next.href}>
+                        {next.label}
                     </a>
                 )}
             </div>
