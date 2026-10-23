@@ -315,8 +315,8 @@ export default function GeographyStep() {
             }
           >
             {t(
-              'geography.fetch_body',
-              'Pull administrative boundaries, with map polygons, from the official sets (OCHA COD-AB, geoBoundaries) or OpenStreetMap.',
+              'geography.fetch_body_plain',
+              'Search for your area and bring in its administrative boundaries, with map outlines.',
             )}
           </OptionCard>
           <OptionCard

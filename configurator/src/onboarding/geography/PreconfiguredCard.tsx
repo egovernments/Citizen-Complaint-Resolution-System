@@ -7,7 +7,6 @@ import {
   confidenceHeadline,
   confidenceLevel,
   countryName,
-  sourceLine,
   type OfficialSet,
 } from '@/utils/officialBoundaries';
 import { ConfidenceTag } from './OfficialConfidence';
@@ -151,7 +150,6 @@ export function PreconfiguredCard({
               </p>
             </div>
             <Confidence set={state.set} />
-            <p className="text-xs text-muted-foreground">{t('geography.source_line', 'Source: %{source}', { source: sourceLine(state.set) })}</p>
           </>
         )}
       </div>

@@ -1549,7 +1549,11 @@ export default function BoundaryImport({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {(sourceChoices.includes(turbopassSource) ? sourceChoices : [turbopassSource, ...sourceChoices]).map((s) => (
+                    {/* "Official" already picks the better official set per country, so its parts aren't offered. */}
+                    {(() => {
+                      const offered = sourceChoices.filter((s) => s !== 'cod' && s !== 'geoboundaries');
+                      return offered.includes(turbopassSource) ? offered : [turbopassSource, ...offered];
+                    })().map((s) => (
                       <SelectItem key={s} value={s}>{sourceOptionLabel(s)}</SelectItem>
                     ))}
                   </SelectContent>
@@ -1681,12 +1685,8 @@ export default function BoundaryImport({
                 { count: adminLevels.length, place: fetchedPlace?.label || searchTerm },
               )}
             </SubHeader>
-            {fetchedAttribution && (
-              <p className="text-xs text-muted-foreground" data-testid="boundary-attribution">{fetchedAttribution}</p>
-            )}
-
-            {/* Source, confidence and the data check, out of the way until asked for. */}
-            {(officialSet || boundaryQuality) && (
+            {/* Source, confidence, the data check and the data credit, out of the way until asked for. */}
+            {(officialSet || boundaryQuality || fetchedAttribution) && (
               <details className="rounded-lg border border-border px-4 py-3" data-testid="validation-report">
                 <summary className="cursor-pointer text-sm font-medium">
                   {t('geography.validation_report', 'Geographic Boundary Validation Report')}
@@ -1740,6 +1740,10 @@ export default function BoundaryImport({
                         </p>
                       )}
                     </div>
+                  )}
+
+                  {fetchedAttribution && (
+                    <p className="text-xs text-muted-foreground" data-testid="boundary-attribution">{fetchedAttribution}</p>
                   )}
                 </div>
               </details>
@@ -1861,7 +1865,7 @@ export default function BoundaryImport({
                 {skippedFeatures.map((s, i) => (
                   <li key={i}>
                     •{' '}
-                    {withNodes(t('geography.review.item', '%{name} — %{level} (OSM level %{osmLevel}) — %{reason}', { level: s.levelName, osmLevel: s.osmLevel }), {
+                    {withNodes(t('geography.review.item_plain', '%{name} — %{level} — %{reason}', { level: s.levelName }), {
                       name: <span className="font-medium">{s.name}</span>,
                       reason: <span className="text-destructive">{s.reason}</span>,
                     })}

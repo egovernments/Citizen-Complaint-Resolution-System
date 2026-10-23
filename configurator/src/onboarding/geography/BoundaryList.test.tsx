@@ -75,7 +75,9 @@ describe('BoundaryList', () => {
     expect(items[0].textContent).toContain('County → Ward');
     expect(items[1].textContent).toContain('wards.xlsx');
     expect(screen.getAllByText('Not saved yet')).toHaveLength(2);
-    expect(screen.getByTestId('boundary-attribution').textContent).toBe('Boundary data: geoBoundaries (CC BY 4.0)');
+    // The data credit lives in the map screen's validation report, not here.
+    expect(screen.queryByTestId('boundary-attribution')).toBeNull();
+    expect(items[0].textContent).not.toContain('geoBoundaries');
     // No per-area actions.
     expect(screen.queryByRole('table')).toBeNull();
   });

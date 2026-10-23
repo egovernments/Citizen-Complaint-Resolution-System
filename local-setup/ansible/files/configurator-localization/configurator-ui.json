@@ -8754,8 +8754,8 @@
     "locale": "en_IN"
   },
   {
-    "code": "app.onboarding.geography.fetch_body",
-    "message": "Pull administrative boundaries, with map polygons, from the official sets (OCHA COD-AB, geoBoundaries) or OpenStreetMap.",
+    "code": "app.onboarding.geography.fetch_body_plain",
+    "message": "Search for your area and bring in its administrative boundaries, with map outlines.",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -9240,8 +9240,8 @@
     "locale": "en_IN"
   },
   {
-    "code": "app.onboarding.geography.review.item",
-    "message": "%{name} — %{level} (OSM level %{osmLevel}) — %{reason}",
+    "code": "app.onboarding.geography.review.item_plain",
+    "message": "%{name} — %{level} — %{reason}",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -9344,12 +9344,6 @@
   {
     "code": "app.onboarding.geography.source_excel",
     "message": "your Excel upload",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
-    "code": "app.onboarding.geography.source_line",
-    "message": "Source: %{source}",
     "module": "configurator-ui",
     "locale": "en_IN"
   },

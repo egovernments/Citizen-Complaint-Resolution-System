@@ -49,11 +49,6 @@ export function BoundaryList({
               </p>
               <p className="text-sm text-muted-foreground">{summarize(selection)}</p>
               <p className="mt-1 text-xs text-muted-foreground">{selection.levels.join(' → ')}</p>
-              {selection.attribution && (
-                <p className="mt-1 text-xs text-muted-foreground" data-testid="boundary-attribution">
-                  {selection.attribution}
-                </p>
-              )}
             </div>
             <div className="flex flex-shrink-0 items-center whitespace-nowrap">
               <Button

@@ -14,7 +14,8 @@ describe('PreconfiguredCard', () => {
     expect(screen.getByTestId('preconfigured-country').textContent).toBe('Mozambique');
     expect(screen.getByText('Province → District → Administrative Post → Locality')).toBeTruthy();
     expect(screen.getByTestId('confidence-tag').textContent).toBe('Medium');
-    expect(screen.getByText('Source: OCHA COD-AB · Jan 2025')).toBeTruthy();
+    // Which dataset and when is for the validation report, not the card.
+    expect(screen.queryByText(/OCHA COD-AB/)).toBeNull();
     // The country is the tenant's: nothing on the card can change it.
     expect(screen.queryByRole('combobox')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /use these boundaries/i }));
