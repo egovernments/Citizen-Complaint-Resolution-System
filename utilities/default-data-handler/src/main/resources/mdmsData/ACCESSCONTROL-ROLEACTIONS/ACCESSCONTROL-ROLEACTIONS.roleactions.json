@@ -1470,13 +1470,6 @@
     "actioncode": ""
   },
   {
-    "id": 251,
-    "actionid": 1752,
-    "rolecode": "CITIZEN",
-    "tenantId": "{tenantid}",
-    "actioncode": ""
-  },
-  {
     "id": 249,
     "actionid": 1779,
     "rolecode": "SUPERUSER",
