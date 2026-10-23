@@ -459,11 +459,11 @@ Give at least one person `EMPLOYEE,CSR` if you want to test the whole flow.
 > **How they log in:** with their **email address** (`emailId`), not the
 > employee code. Keycloak knows an employee only by email, so the code
 > (`EMP001`) is rejected as an unknown user. Employees invited from the
-> Configurator set their own password from the invitation email. Employees
-> migrated from legacy DIGIT sign in as `<digit-username>@staff.<host>`. HRMS
+> Configurator set their own password from the invitation email. HRMS
 > still overwrites whatever `userName` you supplied with the employee code, but
-> that is the HRMS record's identifier, not the sign-in name. The default
-> password comes from `bootstrap_secrets.egov_hrms_default_password` in the
+> that is the HRMS record's identifier, not the sign-in name. The HRMS account
+> itself is created with the default password `eGov@123` unless you changed it;
+> that value comes from `bootstrap_secrets.egov_hrms_default_password` in the
 > deployment config, and can only be set before the first deploy.
 
 <details>

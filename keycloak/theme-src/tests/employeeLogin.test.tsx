@@ -21,8 +21,10 @@ describe("digit-employee login.ftl (#2646)", () => {
 
         fireEvent.change(field, { target: { value: "EMP-0001" } });
         expect(screen.getByRole("note")).toHaveTextContent(/email address, not your employee code/i);
+        expect(field).toHaveAccessibleDescription(/email address, not your employee code/i);
 
         fireEvent.change(field, { target: { value: "asha@example.org" } });
         expect(screen.queryByRole("note")).toBeNull();
+        expect(field).not.toHaveAttribute("aria-describedby");
     });
 });

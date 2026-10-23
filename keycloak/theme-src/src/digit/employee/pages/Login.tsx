@@ -50,6 +50,7 @@ export default function Login(props: DigitPageProps<Extract<KcContext, { pageId:
 
     const policy = pickPrivacyPolicy(branding?.privacyPolicy) ?? NO_POLICY;
     const texts = textsOf(branding?.loginConfig);
+    const showEmailHint = !usernameHidden && username.trim() !== "" && !username.includes("@");
     const invalidCredentials = messagesPerField.existsError("username", "password");
 
     const canSubmit =
@@ -105,13 +106,14 @@ export default function Login(props: DigitPageProps<Extract<KcContext, { pageId:
                             name: "username",
                             type: "text",
                             autoComplete: "username",
+                            "aria-describedby": showEmailHint ? "username-hint" : undefined,
                             value: username,
                             onChange: event => setUsername(event.target.value)
                         }}
                     />
                 )}
-                {!usernameHidden && username.trim() !== "" && !username.includes("@") && (
-                    <p className="dg-text" role="note">
+                {showEmailHint && (
+                    <p id="username-hint" className="dg-text" role="note">
                         {digit.t("CORE_LOGIN_EMAIL_HINT")}
                     </p>
                 )}

@@ -6,6 +6,7 @@ import { RolesEditor } from './RolesEditor';
 import { JurisdictionEditor } from './JurisdictionEditor';
 import { AssignmentEditor } from './AssignmentEditor';
 import { useGenderChoices } from '../useGenderChoices';
+import { useOnboardingT } from '../../onboarding/i18n';
 
 const STATUS_CHOICES = [
   { value: 'EMPLOYED', label: 'Employed' },
@@ -34,6 +35,7 @@ export function EmployeeCreate() {
   const tenantId = state.tenant;
   const { validator: mobileValidate, rules: mobileRules } = useMobileValidator();
   const genderChoices = useGenderChoices();
+  const t = useOnboardingT();
 
   const defaults = {
     tenantId,
@@ -53,7 +55,7 @@ export function EmployeeCreate() {
   // Employees sign in with their email (the Keycloak username), not the employee code.
   const describeCreated = (data: Record<string, unknown>): string | undefined => {
     const email = (data.user as { emailId?: string } | undefined)?.emailId;
-    return email ? `${String(data.code ?? '')} signs in with ${email}.` : undefined;
+    return email ? t('employees.signs_in_with_email', 'They sign in with %{email}.', { email }) : undefined;
   };
 
   const transform = (data: Record<string, unknown>): Record<string, unknown> => {

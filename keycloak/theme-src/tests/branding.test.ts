@@ -133,9 +133,6 @@ describe("public MDMS branding (replacement for the BFF relay)", () => {
     it("keeps display-only tenant slugs isolated by login tab", () => {
         expect(resolveTenantSlug({ search: "?digit_tenant=bomet-county", loginAction: "/login?tab_id=a" })).toBe("bomet-county");
         expect(resolveTenantSlug({ search: "", loginAction: "/login?tab_id=a" })).toBe("bomet-county");
-        // A timeout restart brings a new tab_id and no digit_tenant: the tab's last slug still applies.
-        expect(resolveTenantSlug({ search: "", loginAction: "/login?tab_id=b" })).toBe("bomet-county");
-        sessionStorage.clear();
         expect(resolveTenantSlug({ search: "", loginAction: "/login?tab_id=b" })).toBeUndefined();
     });
 

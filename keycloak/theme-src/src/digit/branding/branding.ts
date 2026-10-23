@@ -27,7 +27,6 @@ export type Branding = {
 
 const SLUG_PATTERN = /^[a-z0-9-]{2,63}$/;
 const STORAGE_PREFIX = "digit_tenant:";
-const LAST_SLUG_KEY = "digit_tenant:last";
 const CACHE_PREFIX = "digit_branding:";
 const CACHE_TTL_MS = 10 * 60 * 1000;
 
@@ -74,7 +73,6 @@ export function resolveTenantSlug(params: {
         if (tabId === undefined || storage === undefined) return;
         try {
             storage.setItem(STORAGE_PREFIX + tabId, slug);
-            storage.setItem(LAST_SLUG_KEY, slug);
         } catch {
             // Private mode or quota: later pages fall back to the default look.
         }
@@ -93,9 +91,6 @@ export function resolveTenantSlug(params: {
         try {
             const stored = storage.getItem(STORAGE_PREFIX + tabId);
             if (isValidSlug(stored)) return stored;
-            // A login-timeout restart gets a new tab_id and drops digit_tenant: use this tab's last slug.
-            const last = storage.getItem(LAST_SLUG_KEY);
-            if (isValidSlug(last)) return last;
         } catch {
             return undefined;
         }
