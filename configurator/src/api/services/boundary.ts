@@ -497,7 +497,8 @@ export const boundaryService = {
   // entity visibility, and retrying the residual lag closes that race.
   async createBoundaries(
     boundaries: Boundary[],
-    onProgress?: (created: number, total: number) => void
+    // Writes done of all the writes: an entity and a relationship per boundary.
+    onProgress?: (done: number, total: number) => void
   ): Promise<{
     success: Boundary[];
     failed: { boundary: Boundary; error: string }[];
@@ -518,6 +519,8 @@ export const boundaryService = {
 
     const tenantId = boundaries[0].tenantId;
     const byLevel = this.groupByLevel(boundaries);
+    const work = total * 2;
+    let done = 0;
 
     // Pass 1: create ALL entities first (every level). Forward each row's
     // geometry (from GeoJSON sidecar or lat/long) so the citizen UI gets
@@ -534,6 +537,7 @@ export const boundaryService = {
             error: error instanceof Error ? error.message : 'Unknown error (entity)',
           });
         }
+        onProgress?.(++done, work);
       }
     }
 
@@ -554,14 +558,16 @@ export const boundaryService = {
     const hierarchyType = boundaries.find((b) => b.hierarchyType)?.hierarchyType;
     for (const levelBoundaries of byLevel) {
       for (const b of levelBoundaries) {
-        if (failedEntities.has(b.code) || !b.hierarchyType || !b.boundaryType) continue;
-        try {
-          await this.createBoundaryRelationship(
-            b.tenantId, b.hierarchyType, b.code, b.boundaryType, b.parent
-          );
-        } catch {
-          // deferred to verify — the next pass re-checks ACTUAL presence
+        if (!failedEntities.has(b.code) && b.hierarchyType && b.boundaryType) {
+          try {
+            await this.createBoundaryRelationship(
+              b.tenantId, b.hierarchyType, b.code, b.boundaryType, b.parent
+            );
+          } catch {
+            // deferred to verify — the next pass re-checks ACTUAL presence
+          }
         }
+        onProgress?.(++done, work);
       }
     }
 
@@ -586,7 +592,6 @@ export const boundaryService = {
           // transient search failure — next round re-checks
         }
         const missing = expectedRel.filter((b) => !present.has(b.code));
-        onProgress?.(total - missing.length, total);
         if (missing.length === 0) break;
         await new Promise((r) => setTimeout(r, 2000 * Math.min(round + 1, 4)));
         for (const levelBoundaries of this.groupByLevel(missing)) {

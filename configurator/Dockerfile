@@ -53,6 +53,9 @@ ENV VITE_ENABLE_LEGACY_PGR_DASHBOARD=${VITE_ENABLE_LEGACY_PGR_DASHBOARD}
 # The citizen-banner upload in the Branding step (#2358). Off until it goes live.
 ARG VITE_ENABLE_CITIZEN_BANNER=false
 ENV VITE_ENABLE_CITIZEN_BANNER=${VITE_ENABLE_CITIZEN_BANNER}
+# More than one boundary selection in Geography's list. Off: one at a time.
+ARG VITE_ENABLE_GEOGRAPHY_MULTIPLE_SELECTIONS=false
+ENV VITE_ENABLE_GEOGRAPHY_MULTIPLE_SELECTIONS=${VITE_ENABLE_GEOGRAPHY_MULTIPLE_SELECTIONS}
 RUN npx vite build --base="${BASE_PATH}" \
  && test -f dist/index.html
 
