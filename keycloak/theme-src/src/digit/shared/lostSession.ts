@@ -13,18 +13,30 @@
  * finds in the page data, and `msgStr` prefers that answer to its bundled
  * copy, which stays the fallback.
  *
- * Kept free of imports: vite.config.ts reads it.
+ * Kept free of imports: vite.config.ts reads it (only the constants run there).
  */
 export const LOST_SESSION_MESSAGE_KEYS = ["cookieNotFoundMessage", "expiredCodeMessage", "invalidCodeMessage"] as const;
 
 /** theme.properties lines whose values are the keys above. */
 export const lostSessionThemeProperties = LOST_SESSION_MESSAGE_KEYS.map(key => `digitLostSessionMessage.${key}=${key}`);
 
-/** Whether `summary` is one of the lost-session messages, as `msgStr` resolves them. */
+/**
+ * Whether `summary` is one of the lost-session messages, as `msgStr` resolves
+ * them. keycloakify entity-decodes the server-resolved messages but not
+ * `message.summary`, so both sides are decoded alike (an override written
+ * with `&mdash;` or `&amp;` still matches).
+ */
 export function isLostSessionMessage(
     summary: string | undefined,
     msgStr: (key: (typeof LOST_SESSION_MESSAGE_KEYS)[number]) => string
 ): boolean {
-    const text = summary?.trim();
-    return !!text && LOST_SESSION_MESSAGE_KEYS.some(key => msgStr(key).trim() === text);
+    const text = summary === undefined ? "" : decodeEntities(summary).trim();
+    return !!text && LOST_SESSION_MESSAGE_KEYS.some(key => decodeEntities(msgStr(key)).trim() === text);
+}
+
+/** HTML entities to text, as keycloakify's decodeHtmlEntities does. */
+function decodeEntities(value: string): string {
+    const element = document.createElement("textarea");
+    element.innerHTML = value;
+    return element.value;
 }

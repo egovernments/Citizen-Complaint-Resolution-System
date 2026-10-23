@@ -42,8 +42,9 @@ describe("employeeSignInUrl", () => {
             .toBe("http://localhost/testj01/digit-ui/employee/user/login");
     });
 
-    it("stays a path without a base URL, and gives nothing without a tenant", () => {
-        expect(employeeSignInUrl("testj01", undefined)).toBe("/testj01/digit-ui/employee/user/login");
+    it("gives nothing without a usable base URL (a path would land on Keycloak's origin) or a tenant", () => {
+        expect(employeeSignInUrl("testj01", undefined)).toBeUndefined();
+        expect(employeeSignInUrl("testj01", "/digit-ui/employee/user/login")).toBeUndefined();
         expect(employeeSignInUrl(undefined, "https://digit.example.org/")).toBeUndefined();
     });
 });

@@ -248,6 +248,14 @@ describe("digit-employee error.ftl", () => {
         expect(document.querySelector("#restartSignIn")).toHaveAttribute("href", BASE_URL);
     });
 
+    it("recognises an override written with HTML entities", async () => {
+        // keycloakify entity-decodes the server-resolved message, not the summary.
+        await renderEmployeeError("Session lost &mdash; please sign in again", {
+            serverMessages: { cookieNotFoundMessage: "Session lost \u2014 please sign in again" }
+        });
+        expect(document.querySelector("#restartSignIn")).toHaveAttribute("href", BASE_URL);
+    });
+
     it("recognises the server's French text", async () => {
         await renderEmployeeError(KC_COOKIE_NOT_FOUND_FR, {
             languageTag: "fr",
@@ -259,6 +267,12 @@ describe("digit-employee error.ftl", () => {
     it("falls back to keycloakify's French copy when the server resolved none", async () => {
         await renderEmployeeError("Connexion expirée. Veuillez vous reconnecter.", { languageTag: "fr" });
         await waitFor(() => expect(document.querySelector("#restartSignIn")).toHaveAttribute("href", BASE_URL));
+    });
+
+    it("shows no restart link without the client's base URL, rather than one on Keycloak's origin", async () => {
+        sessionStorage.setItem("digit_tenant:tab-1", "testj01");
+        await renderEmployeeError(COOKIE_NOT_FOUND, { baseUrl: "" });
+        expect(document.querySelector("#restartSignIn")).toBeNull();
     });
 
     it("keeps Back to Application for other errors", async () => {
