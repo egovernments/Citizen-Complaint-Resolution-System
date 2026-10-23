@@ -14,12 +14,7 @@
 // prettified levelCode.
 
 import { complaintLabel } from "./complaintLabel";
-
-const prettify = (code) =>
-  String(code || "")
-    .replace(/[_-]+/g, " ")
-    .toLowerCase()
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+import { levelLabel } from "./levelLabel";
 
 export function buildComplaintPath(args = {}) {
   // Hard guarantee: any failure (missing hierarchy, unexpected data shape, etc.)
@@ -57,13 +52,7 @@ function resolveComplaintPath({ serviceCode, def, nodes, t } = {}) {
     }
   }
 
-  const labelFor = (lvl) => {
-    const key = (String(def.hierarchyType) + "_" + String(lvl.levelCode)).toUpperCase();
-    const v = tr(key);
-    if (v && v !== key) return v;
-    if (lvl.label && lvl.label !== lvl.levelCode) return lvl.label;
-    return prettify(lvl.levelCode);
-  };
+  const labelFor = (lvl) => levelLabel(tr, def, lvl);
 
   // Emit one row per level from the top down to the selected node. Levels DEEPER
   // than the selected node (never reached on this branch) are omitted entirely,
