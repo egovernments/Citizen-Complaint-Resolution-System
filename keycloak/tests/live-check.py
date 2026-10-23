@@ -421,6 +421,23 @@ def _():
     assert SignIn().password("emp-nameless", "Changed-pass-2").done
 
 
+@check("#2645 UPDATE_PASSWORD as the BFF asks for it: prefilled password check, then the action")
+def _():
+    create_user("emp-reauth", "reauth@example.test")
+    # The identity BFF's action request: prompt=login and login_hint (#2645).
+    signin = SignIn(kc_action="UPDATE_PASSWORD", prompt="login", login_hint="emp-reauth",
+                    digit_tenant="bomet-county")
+    _, fields = signin.page.form("username", "password")
+    assert fields["username"] == "emp-reauth", f"username not prefilled from login_hint: {fields}"
+    signin.password("emp-reauth")
+    signin.submit(("password-new", "password-confirm"),
+                  {"password-new": "Reauth-pass-2", "password-confirm": "Reauth-pass-2"})
+    status = urllib.parse.parse_qs(urllib.parse.urlparse(signin.page.location or "").query).get("kc_action_status")
+    assert status == ["success"], f"no kc_action_status=success in {signin.page.location}"
+    signin.tokens()
+    assert SignIn().password("emp-reauth", "Reauth-pass-2").done, "new password not accepted"
+
+
 @check("§8 UPDATE_EMAIL: saved only after the new address is verified")
 def _():
     started = time.time()

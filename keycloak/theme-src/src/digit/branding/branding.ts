@@ -98,6 +98,38 @@ export function resolveTenantSlug(params: {
     return undefined;
 }
 
+const ACTION_STORAGE_PREFIX = "digit_kc_action:";
+const ACTION_PATTERN = /^[A-Za-z_]{1,64}$/;
+
+/**
+ * The account action this sign-in confirms the person for (#2645): the
+ * identity BFF sends `kc_action` when someone signed in asks to change their
+ * password, authenticator or email, and Keycloak first asks for the password
+ * again. Read and remembered per tab like `digit_tenant`, so the page after a
+ * wrong password still reads as the confirmation. Only the action name is
+ * kept (`delete_credential:<id>` gives `delete_credential`).
+ */
+export function resolveAccountAction(params: { loginAction?: string; search?: string }): string | undefined {
+    const storage = safeSession();
+    const tabId = tabIdOf(params.loginAction);
+    const key = tabId === undefined ? undefined : ACTION_STORAGE_PREFIX + tabId;
+    const fromQuery = new URLSearchParams(params.search ?? window.location.search).get("kc_action")?.split(":")[0];
+    if (fromQuery !== undefined && ACTION_PATTERN.test(fromQuery)) {
+        try {
+            if (key !== undefined) storage?.setItem(key, fromQuery);
+        } catch {
+            // Private mode or quota: only a retry after a wrong password reads as a plain sign-in.
+        }
+        return fromQuery;
+    }
+    try {
+        const stored = key === undefined ? null : storage?.getItem(key);
+        return stored && ACTION_PATTERN.test(stored) ? stored : undefined;
+    } catch {
+        return undefined;
+    }
+}
+
 /** Bare English uses the configured deployment default locale. */
 export function digitLocaleOf(languageTag: string | undefined): string | undefined {
     try {

@@ -223,6 +223,7 @@ export function registerAuthenticationRoutes(app: express.Application): void {
 
     let accountAction: { sid: string; sub: string; action: string } | undefined;
     let kcAction: string | undefined;
+    let loginHint: string | undefined;
     let method: { id: string; type: import("./types.js").IdentityAuthMethod["type"]; idpHint?: string };
     if (action !== undefined) {
       const current = await currentSession(request.headers.cookie, surface);
@@ -238,6 +239,9 @@ export function registerAuthenticationRoutes(app: express.Application): void {
         throw error;
       }
       accountAction = { sid: current.sessionId, sub: current.session.claims.sub, action: String(action) };
+      // Keycloak asks for the password again first (prompt=login); naming the
+      // signed-in person lets the page read as a confirmation, not a fresh sign-in (#2645).
+      loginHint = current.session.claims.preferred_username || current.session.claims.email;
       method = { id: "account_action", type: "hosted" };
     } else {
       let methods;
@@ -277,6 +281,7 @@ export function registerAuthenticationRoutes(app: express.Application): void {
     const prompt = surfaceConfig(surface).prompt;
     if (prompt) extraParams.prompt = prompt;
     if (kcAction) extraParams.kc_action = kcAction;
+    if (loginHint) extraParams.login_hint = loginHint;
     if (typeof uiLocales === "string") extraParams.ui_locales = uiLocales;
     response.setHeader("Set-Cookie", loginCookie(state, surface));
     return response.redirect(
