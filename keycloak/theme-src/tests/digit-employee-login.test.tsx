@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, waitFor } from "@testing-library/react";
 import KcPage from "../src/login/KcPage";
 import { getKcContextMock } from "../src/login/KcContextMock";
 
@@ -20,6 +20,9 @@ async function renderLogin(path: string, username?: string) {
     await waitFor(() => expect(view.container.querySelector("#kc-form-login")).not.toBeNull());
     return view;
 }
+
+/** Keycloak's own field name, not its label, which tenants and #2646 change. */
+const usernameInput = () => document.querySelector<HTMLInputElement>("input[name='username']");
 
 const authorize = (query: string) => `/auth/realms/digit/protocol/openid-connect/auth?client_id=digit-ui-employee&digit_tenant=testj01${query}`;
 
@@ -42,8 +45,8 @@ describe("digit-employee login.ftl before an account action (#2645)", () => {
         const { container } = await renderLogin(authorize(`&kc_action=${action}&login_hint=purity`), "purity");
 
         expect(container.querySelector("#kc-page-title")).toHaveTextContent(heading);
-        expect(screen.getByLabelText(/Username/)).toHaveValue("purity");
-        expect(screen.getByLabelText(/Username/)).toHaveAttribute("readonly");
+        expect(usernameInput()).toHaveValue("purity");
+        expect(usernameInput()).toHaveAttribute("readonly");
         expect(container.querySelector("#kc-cancel")).toHaveAttribute("href", "/testj01/digit-ui/employee/user/account");
     });
 
@@ -60,14 +63,14 @@ describe("digit-employee login.ftl before an account action (#2645)", () => {
     it("leaves the username editable when Keycloak had no hint to fill in", async () => {
         await renderLogin(authorize("&kc_action=UPDATE_PASSWORD"));
 
-        expect(screen.getByLabelText(/Username/)).not.toHaveAttribute("readonly");
+        expect(usernameInput()).not.toHaveAttribute("readonly");
     });
 
     it("leaves a normal sign-in unchanged", async () => {
         const { container } = await renderLogin(authorize(""));
 
         expect(container.querySelector("#kc-page-title")).toHaveTextContent("Login");
-        expect(screen.getByLabelText(/Username/)).not.toHaveAttribute("readonly");
+        expect(usernameInput()).not.toHaveAttribute("readonly");
         expect(container.querySelector("#kc-cancel")).toBeNull();
     });
 });
