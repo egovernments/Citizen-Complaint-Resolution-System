@@ -139,12 +139,45 @@ export const jurisdictionLabel = (t, j, cityDetails, tenantId) => {
   if (boundary === tenantId) return cityLabel(t, cityDetails, tenantId);
   // Boundary names are the bare boundary code in rainmaker-boundary-<hierarchy>
   // (#1002; see buildBoundaryLocalizations), as BoundaryComponent reads them.
+  // Accepted limitation of that convention: a code shared across hierarchies,
+  // or equal to a common key, resolves to whichever message was loaded last.
   // Falls back to the raw code, also the net for records carrying something else.
   return label(t, boundary, boundary);
 };
 
 /** Localization module holding a hierarchy's boundary names (see pgr Module.js). */
 const boundaryModule = (hierarchy) => `rainmaker-boundary-${String(hierarchy).toLowerCase()}`;
+
+/**
+ * Hierarchies whose boundary pack the panel needs: city-wide jurisdictions
+ * (boundary === tenant) are labelled by cityLabel and never read a pack.
+ */
+export const boundaryHierarchies = (jurisdictions, tenantId) => [
+  ...new Set((jurisdictions || []).filter((j) => j?.boundary && j.boundary !== tenantId).map((j) => j?.hierarchy).filter(Boolean)),
+];
+
+// One load per (modules, locale, tenant): getLocale re-parses every cached
+// module and re-adds all messages to i18next, so repeating it per panel open
+// is wasteful, and concurrent opens must share one request.
+const packLoads = new Map();
+
+export const loadBoundaryPacks = ({ hierarchies, locale, tenantId }) => {
+  if (!hierarchies?.length || !tenantId || !globalThis.Digit?.LocalizationService) return Promise.resolve(false);
+  const modules = hierarchies.map(boundaryModule);
+  const key = JSON.stringify([modules, locale, tenantId]);
+  if (!packLoads.has(key)) {
+    const p = Promise.resolve()
+      .then(() => globalThis.Digit.LocalizationService.getLocale({ modules, locale, tenantId }))
+      .then(() => true)
+      .catch((e) => {
+        packLoads.delete(key); // let the next open retry
+        console.warn(`EmployeeWorkingContext: failed to load ${modules.join(",")} for tenant ${tenantId}`, e);
+        return false;
+      });
+    packLoads.set(key, p);
+  }
+  return packLoads.get(key);
+};
 
 export function EmployeeWorkingContextSummary({ t, context, cityDetails, tenantId, isError }) {
   if (isError) {
@@ -221,17 +254,15 @@ export function EmployeeWorkingContextPanel({ t, context, cityDetails, tenantId,
   // so on any other route the jurisdictions would echo their codes. Load it
   // here and re-render once it is in i18n (an already-cached pack resolves fast).
   const [packLoaded, setPackLoaded] = useState(0);
-  const hierarchyKey = [...new Set((context?.jurisdictions || []).map((j) => j?.hierarchy).filter(Boolean))].join(",");
+  const hierarchyKey = boundaryHierarchies(context?.jurisdictions, context?.tenantId || tenantId).join(",");
   useEffect(() => {
-    if (!hierarchyKey || !Digit?.LocalizationService) return;
+    if (!hierarchyKey) return;
     let live = true;
-    Digit.LocalizationService.getLocale({
-      modules: hierarchyKey.split(",").map(boundaryModule),
+    loadBoundaryPacks({
+      hierarchies: hierarchyKey.split(","),
       locale: Digit.StoreData?.getCurrentLanguage?.(),
       tenantId: Digit.ULBService?.getStateId?.() || tenantId,
-    })
-      .then(() => live && setPackLoaded((n) => n + 1))
-      .catch(() => {});
+    }).then((ok) => ok && live && setPackLoaded((n) => n + 1));
     return () => {
       live = false;
     };

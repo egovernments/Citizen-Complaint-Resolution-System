@@ -33,7 +33,7 @@ process.on("exit", () => {
   }
 });
 
-const { jurisdictionLabel } = require(OUT);
+const { jurisdictionLabel, boundaryHierarchies, loadBoundaryPacks } = require(OUT);
 const dict = (entries) => (key) => entries[key] || key;
 const J = { hierarchy: "admin", boundary: "CITY_001", boundaryType: "City" };
 
@@ -52,4 +52,44 @@ test("falls back to the raw code when nothing is seeded", () => {
 test("a city-wide jurisdiction stored as the tenant code shows the city name", () => {
   const j = { hierarchy: "admin", boundary: "testj" };
   assert.equal(jurisdictionLabel(dict({ TENANT_TESTJ: "Bomet" }), j, { code: "testj", i18nKey: "TENANT_TESTJ" }, "testj"), "Bomet");
+});
+
+test("city-wide jurisdictions do not request a boundary pack", () => {
+  const js = [{ hierarchy: "workspace", boundary: "testj" }, { hierarchy: "ADMIN", boundary: "CITY_001" }, { hierarchy: "ADMIN", boundary: "W1" }];
+  assert.deepEqual(boundaryHierarchies(js, "testj"), ["ADMIN"]);
+});
+
+test("loadBoundaryPacks loads the pack once, merges parallel calls, warns on failure and retries", async () => {
+  const calls = [];
+  let fail = false;
+  globalThis.Digit = {
+    LocalizationService: {
+      getLocale: async (a) => {
+        calls.push(a);
+        if (fail) throw new Error("401");
+      },
+    },
+  };
+  const warns = [];
+  const origWarn = console.warn;
+  console.warn = (...a) => warns.push(a);
+  try {
+    const args = { hierarchies: ["ADMIN"], locale: "en_IN", tenantId: "pg" };
+    const [a, b] = await Promise.all([loadBoundaryPacks(args), loadBoundaryPacks(args)]);
+    await loadBoundaryPacks(args);
+    assert.deepEqual([a, b], [true, true]);
+    assert.equal(calls.length, 1);
+    assert.deepEqual(calls[0], { modules: ["rainmaker-boundary-admin"], locale: "en_IN", tenantId: "pg" });
+
+    fail = true;
+    const other = { hierarchies: ["REVENUE"], locale: "en_IN", tenantId: "pg" };
+    assert.equal(await loadBoundaryPacks(other), false);
+    assert.match(String(warns[0][0]), /rainmaker-boundary-revenue.*pg/);
+    fail = false;
+    assert.equal(await loadBoundaryPacks(other), true);
+    assert.equal(calls.length, 3);
+  } finally {
+    console.warn = origWarn;
+    delete globalThis.Digit;
+  }
 });
