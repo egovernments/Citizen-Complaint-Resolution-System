@@ -240,9 +240,12 @@ test("public language switch and persistence never touch employee storage keys",
   assert.equal(global.document.documentElement.lang, "pt");
   assert.deepEqual(writes, [[mod.PUBLIC_LOCALE_KEY, "pt_PT"]]);
   assert.ok(!reads.some((k) => /^Employee\./.test(k)), `employee keys read: ${reads}`);
-  // Bundle request follows the tenant's boundary hierarchy, and carries no token.
-  assert.match(fetched[0], /module=rainmaker-dashboard%2Crainmaker-pgr%2Crainmaker-common%2Crainmaker-boundary-revenue/);
-  assert.match(fetched[0], /locale=pt_PT/);
+  // Bundle request follows the tenant's boundary hierarchy, and carries no token. The tenant's
+  // CMS-BOUNDARY.HierarchySchema row is read first (anonymously); with none, HIERARCHY_TYPE decides.
+  assert.match(fetched[0], /\/v1\/_search$/);
+  const bundle = fetched.find((u) => /\/localization\/messages\/v1\/_search/.test(u));
+  assert.match(bundle, /module=rainmaker-dashboard%2Crainmaker-pgr%2Crainmaker-common%2Crainmaker-boundary-revenue/);
+  assert.match(bundle, /locale=pt_PT/);
 
   // Layout / filter slots live in the public namespace, disjoint from every
   // employee slot (which end in a user uuid / carry no suffix).
@@ -251,6 +254,38 @@ test("public language switch and persistence never touch employee storage keys",
   assert.match(mod.getFiltersStorageKey(), /-public$/);
   assert.match(mod.getLayoutStorageKey(), /-public$/);
   delete global.document;
+});
+
+// bug: ours#950 - the public page loaded the boundary labels of globalConfigs HIERARCHY_TYPE even where the tenant's
+// CMS-BOUNDARY.HierarchySchema names another hierarchy (upstream #2287 fixed the employee mount only).
+test("public bundle follows the tenant's HierarchySchema row over HIERARCHY_TYPE", async () => {
+  global.window = {
+    globalConfigs: { getConfig: (key) => ({ STATE_LEVEL_TENANT_ID: "ke", HIERARCHY_TYPE: "ADMIN" })[key] },
+    localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+    sessionStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+    dispatchEvent: () => {},
+  };
+  global.document = { documentElement: {} };
+  const calls = [];
+  global.fetch = async (url, init) => {
+    calls.push({ url, body: init && init.body ? JSON.parse(init.body) : null });
+    if (/\/v1\/_search$/.test(url)) {
+      return { ok: true, json: async () => ({ MdmsRes: { "CMS-BOUNDARY": { HierarchySchema: [
+        { moduleName: "HRMS", hierarchy: "ADMIN" }, { moduleName: "CMS", hierarchy: "REVENUE" }] } } }) };
+    }
+    return { ok: true, json: async () => ({ messages: [] }) };
+  };
+  delete require.cache[require.resolve(LOCALE_OUT)];
+  const mod = require(LOCALE_OUT);
+  mod.configurePublicDashboardRuntime();
+  await mod.setLanguage("pt_PT");
+  const mdms = calls.find((c) => /\/v1\/_search$/.test(c.url));
+  assert.ok(mdms, "the tenant's HierarchySchema is read");
+  assert.equal(mdms.body.MdmsCriteria.tenantId, "ke");
+  assert.equal(mdms.body.RequestInfo.authToken, undefined, "anonymous");
+  const bundle = calls.find((c) => /\/localization\/messages\/v1\/_search/.test(c.url));
+  assert.match(bundle.url, /rainmaker-boundary-revenue/);
+  assert.doesNotMatch(bundle.url, /rainmaker-boundary-admin/);
 });
 
 test("public grid reflows instead of squeezing desktop columns on small screens", () => {
