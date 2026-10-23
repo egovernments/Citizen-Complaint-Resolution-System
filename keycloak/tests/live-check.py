@@ -369,7 +369,8 @@ def _():
 
 @check("digit-ui clients: Back to Application is the surface's sign-in, also on an existing client (#2644)")
 def _():
-    site = REDIRECT.split("/identity/", 1)[0]
+    # configure-keycloak.sh's DIGIT_UI_BASE_URL: the override, else the redirect's site.
+    site = os.environ.get("IDENTITY_DIGIT_UI_BASE_URL", REDIRECT.split("/identity/", 1)[0] + "/").rstrip("/")
     wanted = {EMPLOYEE[0]: f"{site}/digit-ui/employee/user/login",
               CITIZEN_CLIENT_ID: f"{site}/digit-ui/citizen/login"}
     for client in wanted:
