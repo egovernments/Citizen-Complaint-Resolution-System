@@ -116,6 +116,9 @@ readonly BFF_SIGNUP_METHODS=${KEYCLOAK_BFF_SIGNUP_METHODS:-magic_link,google,git
 readonly PASSWORD_SETUP_REDIRECT="${IDENTITY_REDIRECT_URI%/callback}$PASSWORD_SETUP_PATH"
 readonly POST_LOGIN_REDIRECT=${IDENTITY_POST_LOGIN_REDIRECT:-/}
 # digit-ui lives at /{tenantSlug}/digit-ui/... on the same origin as the BFF.
+# IDENTITY_DIGIT_UI_BASE_URL is the site origin digit-ui is served from (e.g.
+# https://site/), not a /digit-ui/ path: the digit-ui clients' baseUrl appends
+# /digit-ui/<surface sign-in> to it (configure_digit_ui_client, #2644).
 readonly DIGIT_UI_BASE_URL=${IDENTITY_DIGIT_UI_BASE_URL:-${IDENTITY_REDIRECT_URI%%/identity/*}/}
 readonly ALLOWED_ORIGINS=${IDENTITY_ALLOWED_ORIGINS:-${IDENTITY_ALLOWED_ORIGIN:-}}
 ALLOWED_ORIGINS_JSON=$(printf '%s' "$ALLOWED_ORIGINS" | jq -Rc \
