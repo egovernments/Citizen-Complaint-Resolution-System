@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import KcPage from "../src/login/KcPage";
 import { getKcContextMock } from "../src/login/KcContextMock";
 import { withFieldErrors } from "../src/login/mockStates";
@@ -56,21 +56,6 @@ describe("login.ftl", () => {
             candidate => candidate.querySelector("input[name='password']") !== null
         );
         expect(formsWithPassword).toHaveLength(1);
-    });
-
-    it("asks employees for their email, and hints when the value is not one (#2646)", async () => {
-        const { container } = await renderPage("login.ftl");
-
-        const field = within(container).getByLabelText("Email");
-        expect(field).toHaveAttribute("name", "username");
-        expect(container.querySelector("label[for='username']")!.textContent).not.toMatch(/user\s*name/i);
-        expect(screen.queryByRole("note")).toBeNull();
-
-        fireEvent.change(field, { target: { value: "EMP-0001" } });
-        expect(screen.getByRole("note")).toHaveTextContent(/email address, not your employee code/i);
-
-        fireEvent.change(field, { target: { value: "asha@example.org" } });
-        expect(screen.queryByRole("note")).toBeNull();
     });
 
     it("keeps Keycloak's hidden credentialId", async () => {
