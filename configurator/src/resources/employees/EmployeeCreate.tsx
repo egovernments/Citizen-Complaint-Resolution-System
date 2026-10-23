@@ -50,6 +50,12 @@ export function EmployeeCreate() {
     assignments: [],
   };
 
+  // Employees sign in with their email (the Keycloak username), not the employee code.
+  const describeCreated = (data: Record<string, unknown>): string | undefined => {
+    const email = (data.user as { emailId?: string } | undefined)?.emailId;
+    return email ? `${String(data.code ?? '')} signs in with ${email}.` : undefined;
+  };
+
   const transform = (data: Record<string, unknown>): Record<string, unknown> => {
     // Prefer the form-picked tenantId over the session tenant. The outer
     // closure `tenantId` is the session tenant (e.g. root `ke` for ADMIN);
@@ -91,7 +97,7 @@ export function EmployeeCreate() {
   };
 
   return (
-    <DigitCreate title="Create Employee" record={defaults} transform={transform}>
+    <DigitCreate title="Create Employee" record={defaults} transform={transform} describeCreated={describeCreated}>
       <FieldSection title="Tenant">
         <DigitFormSelect
           source="tenantId"
