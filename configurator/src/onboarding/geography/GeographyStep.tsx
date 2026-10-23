@@ -425,7 +425,8 @@ export default function GeographyStep() {
           }}
           busy={saving}
           disabled={gate.disabled}
-          hint={gate.hint}
+          // The server's check runs while the saved boundaries settle, so here it reads as saving.
+          hint={!draft && hasBoundaries && probe.status === 'checking' ? t('geography.probe_saving', 'Saving') : gate.hint}
         />
         {gate.canRecheck && (
           <Button variant="ghost" size="sm" onClick={recheck}>

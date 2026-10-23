@@ -17,6 +17,13 @@ function writeWorkbook(wb: XLSX.WorkBook): Blob {
   });
 }
 
+/** The boundaries on screen as a sheet: one column per level, one row per area path. */
+export function downloadBoundaryList(levels: string[], rows: string[][], filename: string) {
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, buildSheet(levels, rows), 'Boundaries');
+  triggerDownload(writeWorkbook(wb), filename);
+}
+
 export function downloadBoundaryTemplate(hierarchyType: string, levels: string[]) {
   const safeLevels = levels.length > 0 ? levels : ['Country', 'State', 'City', 'Ward'];
   const header = ['code', 'name', 'boundaryType', 'parentCode', 'latitude', 'longitude'];

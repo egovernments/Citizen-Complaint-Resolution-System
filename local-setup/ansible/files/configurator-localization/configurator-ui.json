@@ -8946,6 +8946,12 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.geography.levels.download_list",
+    "message": "Download boundary list",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.geography.levels.examples",
     "message": "Examples: %{examples}",
     "module": "configurator-ui",
@@ -9176,6 +9182,12 @@
   {
     "code": "app.onboarding.geography.preconfigured_use",
     "message": "Use these boundaries",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.probe_saving",
+    "message": "Saving",
     "module": "configurator-ui",
     "locale": "en_IN"
   },

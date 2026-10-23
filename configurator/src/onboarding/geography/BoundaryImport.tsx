@@ -33,11 +33,11 @@ import { loadTenantHierarchies } from '@/api/services/tenantHierarchy';
 import { reportStepError, trackTemplateDownload, trackUploadRefused, type OnboardingMethod } from '../telemetry';
 import { track } from '@/lib/analytics';
 import { parseExcelFile, parseBoundaryExcel } from '@/utils/excelParser';
-import { downloadBoundaryTemplate } from '@/utils/templateBuilder';
+import { downloadBoundaryList, downloadBoundaryTemplate } from '@/utils/templateBuilder';
 import { parseGeoJsonSidecar, geometryForBoundary, type ParsedGeoJsonSidecar } from '@/utils/boundaryGeoJson';
 import { compareWithExisting } from '@/utils/boundaryReconcile';
 import { TURBOPASS_BASE } from '@/hooks/useTurbopassSources';
-import { buildOsmBoundaries, computeContainingParents, groupFetchedLevels, type OsmAdminLevel, type SkippedOsmFeature } from '@/utils/osmBoundaries';
+import { boundaryPathRows, buildOsmBoundaries, computeContainingParents, groupFetchedLevels, type OsmAdminLevel, type SkippedOsmFeature } from '@/utils/osmBoundaries';
 import {
   deadEndMessage,
   formatSuggestionLabel,
@@ -908,6 +908,17 @@ export default function BoundaryImport({
     }
   };
 
+  // The ticked levels' areas as a sheet: a column per level, a row per area path.
+  const handleDownloadList = () => {
+    const levels = getSelectedLevels(adminLevels);
+    const place = (fetchedPlace?.name || searchTerm).normalize('NFKD').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    downloadBoundaryList(
+      levels.map((l) => l.mappedName.trim() || t('geography.levels.level_n', 'Level %{n}', { n: l.level })),
+      boundaryPathRows(levels, containingParents),
+      `${place || 'boundary'}-list.xlsx`,
+    );
+  };
+
   // Build the boundary payload from the mapped levels. Features that are
   // unnamed or whose centroid lands in no immediate-parent polygon are
   // EXCLUDED (never silently re-parented) — if any were dropped, show the
@@ -1750,6 +1761,16 @@ export default function BoundaryImport({
             )}
 
             <BoundaryMap data={selectedFeatures} height="320px" google={mapProvider.google} />
+            <Button
+              variant="link"
+              size="sm"
+              onClick={handleDownloadList}
+              disabled={!adminLevels.some((l) => l.selected)}
+              className="-mt-3 h-auto gap-1.5 px-0 no-underline hover:underline"
+            >
+              <Download className="w-4 h-4" />
+              {t('geography.levels.download_list', 'Download boundary list')}
+            </Button>
 
             <div className="space-y-4 pt-4">
               {adminLevels.map((lvl, index) => {
