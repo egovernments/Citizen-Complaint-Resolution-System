@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
-import { useResourceContext } from 'ra-core';
+import { useListContext, useResourceContext } from 'ra-core';
+import { CountyOverrideNotice } from './countyOverride'; // ours (#1945)
 import type { RaRecord } from 'ra-core';
 import {
   DigitList as BaseDigitList,
@@ -60,5 +61,12 @@ export function DigitDatagrid<RecordType extends RaRecord = RaRecord>(props: Dig
     () => ({ ...mutationOptions, meta: { ...MASTER_SCREEN_META, ...mutationOptions?.meta } }),
     [mutationOptions],
   );
-  return <BaseDigitDatagrid {...props} columns={columns} mutationOptions={masterMutationOptions} />;
+  // ours (#1945): at the state, rows that a county overrides with its own copy are not used there
+  const list = useListContext();
+  return (
+    <>
+      <CountyOverrideNotice resource={contextResource} rows={list?.data as Record<string, unknown>[] | undefined} />
+      <BaseDigitDatagrid {...props} columns={columns} mutationOptions={masterMutationOptions} />
+    </>
+  );
 }
