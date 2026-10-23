@@ -169,22 +169,21 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
           console.warn('[ComplaintHierarchy] state-root dual-write failed (non-fatal):', e)
         );
       }
-      // Seed SERVICEDEFS.<code> for EVERY node — interior nodes (category /
-      // sector) too, not just leaves. The inbox and complaint lists label a
-      // complaint by its PARENT group key (SERVICEDEFS.<parentCode>), and a
-      // leaf-less branch is now filed against an interior node directly, so
-      // both must be localized or they render the raw key. Written under every
-      // workspace language, as the typed-in route does, or the others show none.
+      // Seed COMPLAINT_HIERARCHY.<code> for EVERY node — interior nodes
+      // (category / sector) too, not just leaves — since a leaf-less branch is
+      // filed against an interior node directly and would render the raw key.
+      // Written under every workspace language, as the typed-in route does;
+      // non-English languages only get keys they lack (no overwrite).
       const labels = nodes.map((s) => ({
         serviceCode: s.code,
         name: s.name,
         department: s.isLeaf ? s.department : undefined,
       }));
-      for (const locale of await labelLocales(targetTenant)) {
-        await localizationService
-          .uploadComplaintTypeLocalizations(targetTenant, labels, locale)
-          .catch((e) => console.warn(`[ComplaintHierarchy] ${locale} localization failed (non-fatal):`, e));
-      }
+      await localizationService.uploadComplaintTypeLocalizationsForLocales(
+        targetTenant,
+        labels,
+        await labelLocales(targetTenant)
+      );
       await localizationService.cacheBust().catch(() => undefined);
       onDone({ nodes: nodes.length, defs: leaves.length });
     } catch (err) {

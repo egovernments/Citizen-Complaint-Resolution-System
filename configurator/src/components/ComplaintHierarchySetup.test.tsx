@@ -7,7 +7,7 @@ import { ComplaintHierarchySetup } from './ComplaintHierarchySetup';
 vi.mock('@/api', () => ({
   mdmsService: { create: vi.fn(async () => ({})), getStateInfoLocales: vi.fn(async () => ['pt_MZ', 'hi_IN']) },
   localizationService: {
-    uploadComplaintTypeLocalizations: vi.fn(async () => ({ success: 1, failed: 0 })),
+    uploadComplaintTypeLocalizationsForLocales: vi.fn(async () => undefined),
     cacheBust: vi.fn(async () => undefined),
   },
 }));
@@ -19,7 +19,7 @@ vi.mock('@/utils/excelParser', async (importOriginal) => ({
 }));
 
 const create = vi.mocked(mdmsService.create);
-const upload = vi.mocked(localizationService.uploadComplaintTypeLocalizations);
+const upload = vi.mocked(localizationService.uploadComplaintTypeLocalizationsForLocales);
 
 const node = (code: string, levelCode: string, extra: Partial<ComplaintHierarchyRow> = {}): ComplaintHierarchyRow => ({
   hierarchyType: 'PGR',
@@ -68,7 +68,7 @@ describe('ComplaintHierarchySetup: ingesting a sheet', () => {
       ['AUTHORITY_TYPE', 'Authority Type'],
       ['MAIN_CATEGORY', 'Main Category'],
       ['SECTOR', 'Sector'],
-      ['SUB_TYPE', 'Sub Type'],
+      ['SUB_TYPE', 'Complaint Subcategory'],
     ]);
   });
 
@@ -79,11 +79,7 @@ describe('ComplaintHierarchySetup: ingesting a sheet', () => {
       { serviceCode: 'Water', name: 'Water', department: undefined },
       { serviceCode: 'WaterLeak', name: 'Leak', department: 'WATER' },
     ];
-    expect(upload.mock.calls).toEqual([
-      ['mz.maputo', labels, 'en_IN'],
-      ['mz.maputo', labels, 'pt_MZ'],
-      ['mz.maputo', labels, 'hi_IN'],
-    ]);
+    expect(upload.mock.calls).toEqual([['mz.maputo', labels, ['en_IN', 'pt_MZ', 'hi_IN']]]);
     expect(mdmsService.getStateInfoLocales).toHaveBeenCalledWith('mz.maputo');
   });
 });
