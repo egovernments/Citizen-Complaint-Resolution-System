@@ -82,6 +82,17 @@ describe('BoundaryList', () => {
     expect(screen.queryByRole('table')).toBeNull();
   });
 
+  it('says what a names-only sheet does, rather than "nothing in it"', () => {
+    const names: BoundarySelection = { ...sheet, id: 'selection-3', boundaries: [], unnamed: [{ code: 'A', name: 'A' }, { code: 'B', name: 'B' }] };
+    render(
+      <ul>
+        <BoundaryList draft={{ selections: [names] }} summarize={() => 'Nothing in it yet'} onEdit={vi.fn()} onRemove={vi.fn()} />
+      </ul>,
+    );
+    expect(screen.getByText('Adds names to 2 areas already saved.')).toBeTruthy();
+    expect(screen.queryByText('Nothing in it yet')).toBeNull();
+  });
+
   it('Edit reopens the item', () => {
     const onEdit = vi.fn();
     renderList(onEdit);

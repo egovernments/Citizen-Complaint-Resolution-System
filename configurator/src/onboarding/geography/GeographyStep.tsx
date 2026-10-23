@@ -30,10 +30,10 @@ import BoundaryImport, { type BoundarySource } from './BoundaryImport';
 import { BoundaryList } from './BoundaryList';
 import {
   addSelection,
+  keepUnsaved,
   listHierarchy,
   removeSelection,
   saveBoundaryDraft,
-  setBoundaryDraft,
   useBoundaryDraft,
   type BoundaryDraft,
   type BoundarySelection,
@@ -120,6 +120,8 @@ export default function GeographyStep() {
   const [saveError, setSaveError] = useState<string | null>(null);
   // Save and continue asks first when it would save new boundaries: they can't be changed after.
   const [confirmSave, setConfirmSave] = useState(false);
+  // Set once this visit saves: the server's check that follows reads as part of saving.
+  const [justSaved, setJustSaved] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -143,15 +145,18 @@ export default function GeographyStep() {
   };
 
   const hasBoundaries = !!hierarchies?.some((hierarchy) => hierarchy.total > 0);
-  // One set of boundaries unless the build allows more: the sources wait until
-  // the unsaved one is removed, and stay closed once boundaries are saved.
-  const listFullReason = GEOGRAPHY_MULTIPLE_SELECTIONS_ENABLED
-    ? undefined
-    : draft
-      ? t('geography.list.one_at_a_time', 'Remove the boundaries below to choose different ones.')
-      : hasBoundaries
-        ? t('geography.list.saved_already', 'Your boundaries are saved, so no more can be added.')
-        : undefined;
+  // Nothing can be added while a save runs. Otherwise one set of boundaries unless
+  // the build allows more: the sources wait until the unsaved one is removed, and
+  // stay closed once boundaries are saved.
+  const listFullReason = saving
+    ? t('geography.saving', 'Saving your boundaries…')
+    : GEOGRAPHY_MULTIPLE_SELECTIONS_ENABLED
+      ? undefined
+      : draft
+        ? t('geography.list.one_at_a_time', 'Remove the boundaries below to choose different ones.')
+        : hasBoundaries
+          ? t('geography.list.saved_already', 'Your boundaries are saved, so no more can be added.')
+          : undefined;
   const { probe, recheck } = useStepProbe(
     state.tenant,
     'GEOGRAPHY',
@@ -176,20 +181,24 @@ export default function GeographyStep() {
     setSaveError(null);
     try {
       const result = await saveBoundaryDraft(tenant, toSave, t, setSaveProgress);
-      if (result.created.length === 0) {
+      // Whatever didn't land stays in the list for another try; the hierarchy is fixed now either way.
+      keepUnsaved(tenant, toSave, result.created);
+      setJustSaved(true);
+      reload();
+      const wanted = toSave.selections.reduce((count, selection) => count + selection.boundaries.length, 0);
+      if (wanted > 0 && result.created.length === 0) {
         setSaveError(
           [t('geography.osm.create_failed', 'Failed to create boundaries.'), result.failed[0]?.error].filter(Boolean).join(' '),
         );
-        reload();
         return false;
       }
-      // Saved areas can't be removed, so the list goes either way.
-      setBoundaryDraft(tenant, null);
-      addUndo('create_boundaries', `Created ${result.created.length} boundaries`);
-      reload();
+      if (result.created.length) addUndo('create_boundaries', `Created ${result.created.length} boundaries`);
       const failures = [
         result.failed.length > 0
-          ? t('geography.create_failures', '%{count} boundaries failed to create.', { count: result.failed.length })
+          ? `${t('geography.create_failures', '%{count} boundaries failed to create.', { count: result.failed.length })} ${t(
+              'geography.save_retry',
+              'They are still in the list below: Save and continue tries them again.',
+            )}`
           : null,
         result.schemaError,
       ].filter(Boolean);
@@ -425,8 +434,8 @@ export default function GeographyStep() {
           }}
           busy={saving}
           disabled={gate.disabled}
-          // The server's check runs while the saved boundaries settle, so here it reads as saving.
-          hint={!draft && hasBoundaries && probe.status === 'checking' ? t('geography.probe_saving', 'Saving') : gate.hint}
+          // Right after a save the server's check runs while the boundaries settle, so it reads as saving.
+          hint={justSaved && !draft && hasBoundaries && probe.status === 'checking' ? t('geography.probe_saving', 'Saving') : gate.hint}
         />
         {gate.canRecheck && (
           <Button variant="ghost" size="sm" onClick={recheck}>

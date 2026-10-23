@@ -8454,6 +8454,12 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.geography.excel.hierarchies_loading",
+    "message": "Still reading your hierarchies. Try again in a moment.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.geography.excel.hierarchy_and_levels",
     "message": "Hierarchy: %{hierarchy} • Levels: %{levels}",
     "module": "configurator-ui",
@@ -8522,6 +8528,12 @@
   {
     "code": "app.onboarding.geography.excel.none_found",
     "message": "No hierarchies found for this tenant.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.nothing_new",
+    "message": "Every area in this sheet is already in the hierarchy as listed, so there is nothing to add.",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -9024,6 +9036,12 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.geography.list.code_clash",
+    "message": "These codes are already in your list for other areas: %{codes}. Give them their own codes in the sheet.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.geography.list.duplicates_one",
     "message": "1 boundary was already in your list, so it was left out.",
     "module": "configurator-ui",
@@ -9050,6 +9068,18 @@
   {
     "code": "app.onboarding.geography.list.levels_mismatch",
     "message": "Your list uses the levels %{levels}. Name these levels the same way, starting from the top, to add them to it.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.list.names_one",
+    "message": "Adds a name to 1 area already saved.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.list.names_other",
+    "message": "Adds names to %{count} areas already saved.",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -9272,6 +9302,12 @@
   {
     "code": "app.onboarding.geography.save_confirm_title",
     "message": "Save these boundaries?",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.save_retry",
+    "message": "They are still in the list below: Save and continue tries them again.",
     "module": "configurator-ui",
     "locale": "en_IN"
   },

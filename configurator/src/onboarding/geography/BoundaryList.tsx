@@ -47,7 +47,16 @@ export function BoundaryList({
                 {name}
                 <span className="ml-2 text-xs font-normal text-muted-foreground">{t('geography.list.not_saved', 'Not saved yet')}</span>
               </p>
-              <p className="text-sm text-muted-foreground">{summarize(selection)}</p>
+              {selection.boundaries.length > 0 && <p className="text-sm text-muted-foreground">{summarize(selection)}</p>}
+              {selection.unnamed.length > 0 && (
+                <p className="text-sm text-muted-foreground">
+                  {selection.unnamed.length === 1
+                    ? t('geography.list.names_one', 'Adds a name to 1 area already saved.')
+                    : t('geography.list.names_other', 'Adds names to %{count} areas already saved.', {
+                        count: selection.unnamed.length.toLocaleString('en-US'),
+                      })}
+                </p>
+              )}
               <p className="mt-1 text-xs text-muted-foreground">{selection.levels.join(' → ')}</p>
             </div>
             <div className="flex flex-shrink-0 items-center whitespace-nowrap">

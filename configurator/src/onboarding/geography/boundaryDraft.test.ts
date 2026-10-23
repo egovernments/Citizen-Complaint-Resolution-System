@@ -5,6 +5,7 @@ import type { Boundary } from '@/api/types';
 import {
   addSelection,
   areasInside,
+  keepUnsaved,
   listHierarchy,
   removeSelection,
   saveBoundaryDraft,
@@ -108,6 +109,65 @@ describe('the unsaved list', () => {
     });
     expect(result).toEqual({ added: 2, duplicates: 1, error: null });
     expect(codes()).toEqual(['NBI', 'NBI_W1', 'NBI_W2', 'MSA', 'MSA_W1']);
+  });
+
+  it('gives a different area with a taken code the next free one, and moves its children with it', () => {
+    act(() => {
+      addSelection(TENANT, selection([area('NBI', 'County'), area('CENTRAL', 'Ward', 'NBI')]));
+    });
+    let result;
+    act(() => {
+      // Another county's "Central": same code, other parent.
+      result = addSelection(TENANT, selection([area('MSA', 'County'), area('CENTRAL', 'Ward', 'MSA')]));
+    });
+    expect(result).toEqual({ added: 2, duplicates: 0, error: null });
+    const second = current().selections[1].boundaries;
+    expect(second.map((b) => [b.code, b.parent])).toEqual([['MSA', undefined], ['CENTRAL_2', 'MSA']]);
+  });
+
+  it('follows a renamed parent down to its children', () => {
+    act(() => {
+      addSelection(TENANT, selection([area('NBI', 'County'), area('CENTRAL', 'Ward', 'NBI')], { levels: ['County', 'Ward'] }));
+    });
+    act(() => {
+      // A different county that happens to be coded NBI too, with a ward of its own.
+      addSelection(TENANT, selection([{ ...area('NBI', 'County'), name: 'Nairobi North' }, area('NBI_W7', 'Ward', 'NBI')]));
+    });
+    expect(current().selections[1].boundaries.map((b) => [b.code, b.parent])).toEqual([['NBI_2', undefined], ['NBI_W7', 'NBI_2']]);
+  });
+
+  it('refuses a sheet whose codes are taken by other areas: its codes are the operator\'s', () => {
+    act(() => {
+      addSelection(TENANT, selection([area('NBI', 'County'), area('CENTRAL', 'Ward', 'NBI')]));
+    });
+    const result = addSelection(TENANT, selection([area('MSA', 'County'), area('CENTRAL', 'Ward', 'MSA')], { source: 'excel', method: 'excel' }));
+    expect(result.error).toBe('These codes are already in your list for other areas: CENTRAL. Give them their own codes in the sheet.');
+    expect(current().selections).toHaveLength(1);
+  });
+
+  it('takes a sheet that only names areas already saved', () => {
+    let result;
+    act(() => {
+      result = addSelection(TENANT, selection([], { source: 'excel', method: 'excel', unnamed: [{ code: 'OLD', name: 'Old ward' }] }));
+    });
+    expect(result).toEqual({ added: 0, duplicates: 0, error: null });
+    expect(current().selections[0].unnamed).toEqual([{ code: 'OLD', name: 'Old ward' }]);
+  });
+
+  it('keeps what a save left behind, now in a hierarchy that exists', () => {
+    act(() => {
+      addSelection(TENANT, selection(NAIROBI, { unnamed: [{ code: 'OLD', name: 'Old ward' }] }));
+      addSelection(TENANT, selection(MOMBASA));
+    });
+    const before = current();
+    act(() => keepUnsaved(TENANT, before, [...NAIROBI, MOMBASA[0]]));
+    expect(current().selections).toHaveLength(1);
+    expect(current().selections[0].boundaries.map((b) => b.code)).toEqual(['MSA_W1']);
+    expect(current().selections[0].hierarchyExists).toBe(true);
+    expect(current().selections[0].unnamed).toEqual([]);
+    const left = current();
+    act(() => keepUnsaved(TENANT, left, MOMBASA));
+    expect(renderHook(() => useBoundaryDraft(TENANT)).result.current).toBeNull();
   });
 
   it('refuses a selection whose levels are named differently, and keeps the list as it was', () => {
@@ -216,9 +276,21 @@ describe('saveBoundaryDraft', () => {
     expect(createBoundaries).not.toHaveBeenCalled();
   });
 
+  it('uploads the names of a names-only sheet, though it creates nothing', async () => {
+    act(() => {
+      addSelection(TENANT, selection([], { source: 'excel', method: 'excel', hierarchyExists: true, unnamed: [{ code: 'OLD', name: 'Old ward' }] }));
+    });
+    await saveBoundaryDraft(TENANT, current());
+    expect(createHierarchy).not.toHaveBeenCalled();
+    expect(boundaryLabels.mock.calls[0][1]).toEqual([{ code: 'OLD', name: 'Old ward' }]);
+  });
+
   it('writes nothing alongside the areas when none of them landed', async () => {
     createBoundaries.mockImplementation(async (boundaries) => ({ success: [], failed: boundaries.map((boundary) => ({ boundary, error: 'refused' })) }));
-    const result = await saveBoundaryDraft(TENANT, twoCounties());
+    act(() => {
+      addSelection(TENANT, selection(NAIROBI));
+    });
+    const result = await saveBoundaryDraft(TENANT, current());
     expect(result.created).toEqual([]);
     expect(ensureSchema).not.toHaveBeenCalled();
     expect(boundaryLabels).not.toHaveBeenCalled();

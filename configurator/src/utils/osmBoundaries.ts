@@ -281,28 +281,25 @@ export function computeContainingParents(levels: OsmAdminLevel[]): ContainingPar
 }
 
 /**
- * The ticked levels as rows of names, broadest first: one row per area with
- * nothing below it, after the areas it sits in (the smallest containing area of
- * the level above, as the create step picks). An area in no area of the level
- * above still gets a row, with those columns blank. Unnamed areas are left out.
+ * buildOsmBoundaries' output as rows of names, one column per level, broadest
+ * first: a row per area with nothing below it, after the areas it sits in. An
+ * area left out for having no parent still gets a row, with those columns blank;
+ * one left out as unnamed or not romanizable doesn't, as Save leaves it out.
  */
-export function boundaryPathRows(sortedLevels: OsmAdminLevel[], containingParents: ContainingParents): string[][] {
-  const path = new Map<object, string[]>();
-  const hasChild = new Set<object>();
-  for (let i = 0; i < sortedLevels.length; i++) {
-    const above = new Set(i > 0 ? sortedLevels[i - 1].features : []);
-    for (const feature of sortedLevels[i].features) {
-      const { displayName } = resolveNameAndCode(feature?.properties);
-      if (!displayName) continue;
-      const parent = i > 0 ? containingParents.get(feature)?.find((p) => above.has(p) && path.has(p)) : undefined;
-      if (parent) hasChild.add(parent);
-      path.set(feature, [...(parent ? path.get(parent)! : Array<string>(i).fill('')), displayName]);
-    }
-  }
-  const width = sortedLevels.length;
-  const rows = [...path.entries()]
-    .filter(([feature]) => !hasChild.has(feature))
-    .map(([, names]) => [...names, ...Array<string>(width - names.length).fill('')]);
+export function boundaryPathRows(boundaries: Boundary[], skipped: SkippedOsmFeature[], levelNames: string[]): string[][] {
+  const width = levelNames.length;
+  const byCode = new Map(boundaries.map((b) => [b.code, b]));
+  const hasChild = new Set(boundaries.map((b) => b.parent).filter(Boolean));
+  const pathOf = (b: Boundary): string[] => {
+    const parent = b.parent ? byCode.get(b.parent) : undefined;
+    return parent ? [...pathOf(parent), b.name] : [...Array<string>(Math.max(levelNames.indexOf(b.boundaryType), 0)).fill(''), b.name];
+  };
+  const rows = [
+    ...boundaries.filter((b) => !hasChild.has(b.code)).map(pathOf),
+    ...skipped
+      .filter((s) => s.reason === 'no parent found')
+      .map((s) => [...Array<string>(Math.max(levelNames.indexOf(s.levelName), 0)).fill(''), s.name]),
+  ].map((names) => [...names, ...Array<string>(Math.max(width - names.length, 0)).fill('')]);
   return rows.sort((a, b) => {
     for (let c = 0; c < width; c++) {
       const order = a[c].localeCompare(b[c]);

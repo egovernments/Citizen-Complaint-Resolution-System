@@ -84,7 +84,7 @@ export interface ListHierarchy {
 }
 
 // One unsaved list per workspace, held in this tab's memory only: a reload
-// drops it, and Geography warns before that happens.
+// drops it.
 const drafts = new Map<string, BoundaryDraft>();
 const listeners = new Set<() => void>();
 let lastSelectionId = 0;
@@ -160,16 +160,19 @@ export function selectionMismatch(
 export interface AddResult {
   /** Areas that joined the list. */
   added: number;
-  /** Areas left out because their code is already in the list. */
+  /** Areas left out because the same area (code, name, level and parent) is already in the list. */
   duplicates: number;
   /** Why nothing changed, for the import screen to show. */
   error: string | null;
 }
 
 /**
- * Adds a selection to the list, or puts it in place of `replaces` (Edit). Codes
- * already in the list are left out: the area is there already, and
- * createBoundaries refuses a code twice.
+ * Adds a selection to the list, or puts it in place of `replaces` (Edit). An
+ * area already in the list (same code, name, level and parent) is left out. A
+ * different area whose code is taken (codes come from names, so two counties'
+ * "Central" share one) gets the next free code, and its children follow it;
+ * a sheet's codes are the operator's own, so a sheet with such a code is
+ * refused instead.
  */
 export function addSelection(tenantId: string, selection: NewSelection, t: OnboardingT = englishT, replaces?: string): AddResult {
   const draft = drafts.get(tenantId) ?? { selections: [] };
@@ -177,9 +180,41 @@ export function addSelection(tenantId: string, selection: NewSelection, t: Onboa
   if (error) return { added: 0, duplicates: 0, error };
 
   const others = draft.selections.filter((s) => s.id !== replaces);
-  const taken = new Set(others.flatMap((s) => s.boundaries.map((b) => b.code)));
-  const boundaries = selection.boundaries.filter((b) => !taken.has(b.code));
-  const duplicates = selection.boundaries.length - boundaries.length;
+  const listed = new Map(others.flatMap((s) => s.boundaries.map((b) => [b.code, b] as const)));
+  const used = new Set([...listed.keys(), ...selection.boundaries.map((b) => b.code)]);
+  const renamed = new Map<string, string>();
+  const clashes: string[] = [];
+  const boundaries: Boundary[] = [];
+  let duplicates = 0;
+  // Parents before children, so a parent's new code reaches its children.
+  const depth = (b: Boundary) => selection.levels.indexOf(b.boundaryType);
+  for (const b of [...selection.boundaries].sort((x, y) => depth(x) - depth(y))) {
+    const parent = b.parent ? (renamed.get(b.parent) ?? b.parent) : b.parent;
+    const there = listed.get(b.code);
+    if (!there) {
+      boundaries.push({ ...b, parent });
+    } else if (there.name === b.name && there.boundaryType === b.boundaryType && (there.parent ?? '') === (parent ?? '')) {
+      duplicates++;
+    } else if (selection.source === 'excel') {
+      clashes.push(b.code);
+    } else {
+      let n = 2;
+      while (used.has(`${b.code}_${n}`)) n++;
+      const code = `${b.code}_${n}`;
+      used.add(code);
+      renamed.set(b.code, code);
+      boundaries.push({ ...b, code, parent });
+    }
+  }
+  if (clashes.length) {
+    return {
+      added: 0,
+      duplicates: 0,
+      error: t('geography.list.code_clash', 'These codes are already in your list for other areas: %{codes}. Give them their own codes in the sheet.', {
+        codes: clashes.join(', '),
+      }),
+    };
+  }
 
   // An Edit may not drop an area that another selection's areas sit inside.
   const replaced = draft.selections.find((s) => s.id === replaces);
@@ -197,13 +232,29 @@ export function addSelection(tenantId: string, selection: NewSelection, t: Onboa
       };
     }
   }
-  if (boundaries.length === 0) return { added: 0, duplicates, error: null };
+  // A sheet that only names areas already saved still joins: Save and continue uploads the names.
+  if (boundaries.length === 0 && selection.unnamed.length === 0) return { added: 0, duplicates, error: null };
 
   const entry: BoundarySelection = { ...selection, boundaries, id: replaces ?? `selection-${++lastSelectionId}` };
   setBoundaryDraft(tenantId, {
     selections: replaced ? draft.selections.map((s) => (s.id === replaces ? entry : s)) : [...draft.selections, entry],
   });
   return { added: boundaries.length, duplicates, error: null };
+}
+
+/**
+ * What's left after a save: the areas that didn't land, kept so Save and
+ * continue can try them again. The save fixed the hierarchy on the server, so
+ * they're marked as going into an existing one (its levels can't change now).
+ * Names were uploaded with it.
+ */
+export function keepUnsaved(tenantId: string, draft: BoundaryDraft, created: Boundary[]) {
+  const saved = new Set(created.map((b) => b.code));
+  setBoundaryDraft(tenantId, {
+    selections: draft.selections
+      .map((s) => ({ ...s, hierarchyExists: true, unnamed: [], boundaries: s.boundaries.filter((b) => !saved.has(b.code)) }))
+      .filter((s) => s.boundaries.length > 0),
+  });
 }
 
 /** Takes a selection off the list. Refused while areas from other selections sit inside its areas. */
@@ -215,10 +266,20 @@ export function removeSelection(tenantId: string, id: string): boolean {
 }
 
 /**
- * Defines the hierarchy. One already there is used when its levels match; with
- * other levels every area create would fail slowly (validation retries) with a
- * misleading error, so it stops here instead.
+ * Why areas can't go into a hierarchy already defined with these levels, or
+ * null when they match. With other levels every area create would fail slowly
+ * (validation retries) with a misleading error, so it stops before that.
  */
+export function levelsMismatch(tenantId: string, hierarchyType: string, existing: string[], mapped: string[]): MessageError | null {
+  if (existing.length === mapped.length && existing.every((name, idx) => name === mapped[idx])) return null;
+  return new MessageError(
+    'geography.osm.levels_mismatch',
+    'A "%{type}" hierarchy already exists on %{tenant} with levels [%{existing}], which do not match your mapped levels [%{mapped}]. Boundaries cannot be created against mismatched level names. Either rename your mapped levels to match the existing hierarchy, or use the Excel path\'s "use existing hierarchy" option.',
+    { type: hierarchyType, tenant: tenantId, existing: existing.join(' → '), mapped: mapped.join(' → ') },
+  );
+}
+
+/** Defines the hierarchy, or uses the one already there when its levels match. */
 async function ensureHierarchy(tenantId: string, hierarchyType: string, levelNames: string[]) {
   try {
     await boundaryService.createHierarchyFromLevels(tenantId, hierarchyType, levelNames);
@@ -226,15 +287,8 @@ async function ensureHierarchy(tenantId: string, hierarchyType: string, levelNam
     const msg = String((e as Error)?.message || e);
     if (!msg.toLowerCase().includes('already exist') && !msg.includes('DUPLICATE')) throw e;
     const existing = (await boundaryService.getHierarchies(tenantId)).find((h) => h.hierarchyType === hierarchyType);
-    const existingLevels = (existing?.boundaryHierarchy ?? []).map((l) => l.boundaryType);
-    const sameLevels = existingLevels.length === levelNames.length && existingLevels.every((name, idx) => name === levelNames[idx]);
-    if (!sameLevels) {
-      throw new MessageError(
-        'geography.osm.levels_mismatch',
-        'A "%{type}" hierarchy already exists on %{tenant} with levels [%{existing}], which do not match your mapped levels [%{mapped}]. Boundaries cannot be created against mismatched level names. Either rename your mapped levels to match the existing hierarchy, or use the Excel path\'s "use existing hierarchy" option.',
-        { type: hierarchyType, tenant: tenantId, existing: existingLevels.join(' → '), mapped: levelNames.join(' → ') },
-      );
-    }
+    const mismatch = levelsMismatch(tenantId, hierarchyType, (existing?.boundaryHierarchy ?? []).map((l) => l.boundaryType), levelNames);
+    if (mismatch) throw mismatch;
   }
 }
 
@@ -380,14 +434,15 @@ export async function saveBoundaryDraft(
     onProgress?.(2 + Math.floor((done / total) * 88)),
   );
   onProgress?.(92);
-  const schemaError = result.success.length
+  const unnamed = draft.selections.flatMap((selection) => selection.unnamed);
+  const schemaError = result.success.length || unnamed.length
     ? await runPostCreatePipeline(
         tenantId,
         result.success,
         hierarchy.hierarchyType,
         hierarchy.levels.map((boundaryType) => ({ boundaryType })),
         t,
-        draft.selections.flatMap((selection) => selection.unnamed),
+        unnamed,
       )
     : null;
   const created = new Set(result.success.map((b) => b.code));

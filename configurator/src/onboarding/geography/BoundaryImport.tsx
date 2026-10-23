@@ -61,7 +61,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useMapProviderConfig } from '@/hooks/useMapProviderConfig';
 import { BoundaryMap } from '@/components/ui/BoundaryMap';
 import { countryName, datasetName, fetchOfficialSet, statusDetail, type OfficialSet } from '@/utils/officialBoundaries';
-import type { ImportResume, ListHierarchy, NewSelection } from './boundaryDraft';
+import { levelsMismatch, type ImportResume, type ListHierarchy, type NewSelection } from './boundaryDraft';
 import { LevelStatusBadge, OfficialSetSummary } from './OfficialConfidence';
 import { englishT, useOnboardingT, withNodes, type OnboardingT } from '../i18n';
 import type { BoundaryHierarchy, Boundary, BoundaryExcelRow } from '@/api/types';
@@ -218,8 +218,9 @@ export default function BoundaryImport({
   const [hierarchyLevels, setHierarchyLevels] = useState(['Country', 'State', 'City', 'Ward']);
   const [hierarchyType, setHierarchyType] = useState('ADMIN');
   const [loadingHierarchies, setLoadingHierarchies] = useState(false);
-  // Hierarchies already defined on the server, as opposed to only in Geography's list.
-  const [serverHierarchyTypes, setServerHierarchyTypes] = useState<Set<string>>(new Set());
+  // Hierarchies already defined on the server, as opposed to only in Geography's list;
+  // null until read, so the checks against them don't run on an empty set.
+  const [serverHierarchyTypes, setServerHierarchyTypes] = useState<Set<string> | null>(null);
   // Why the hierarchy list couldn't be read. Kept apart from an empty list so a
   // failed walk isn't shown as "no hierarchies, create one".
   const [hierarchiesError, setHierarchiesError] = useState<string | null>(null);
@@ -340,6 +341,15 @@ export default function BoundaryImport({
     : fetchedPlace
       ? t('geography.source_place', '%{source} for %{place}', { source: sourceLabel(turbopassSource), place: fetchedPlace.label })
       : sourceLabel(turbopassSource);
+
+  // The checks against the server's hierarchies need its list: until it's read
+  // they wait, and a list that couldn't be read is said so, not taken as empty.
+  const hierarchiesUnknown = (): string | null =>
+    serverHierarchyTypes
+      ? null
+      : hierarchiesError
+        ? t('geography.excel.hierarchies_load_failed', 'Couldn’t load your hierarchies. %{reason}', { reason: hierarchiesError })
+        : t('geography.excel.hierarchies_loading', 'Still reading your hierarchies. Try again in a moment.');
 
   // Fetch existing hierarchies on mount
   useEffect(() => {
@@ -591,6 +601,11 @@ export default function BoundaryImport({
       setError(t('geography.excel.nothing_valid', 'No valid boundaries to upload'));
       return;
     }
+    const unknown = hierarchiesUnknown();
+    if (unknown || !serverHierarchyTypes) {
+      setError(unknown);
+      return;
+    }
 
     setLoading(true);
     setError(null);
@@ -623,6 +638,10 @@ export default function BoundaryImport({
             }),
           ),
         ].join(' '));
+        return;
+      }
+      if (toCreate.length === 0 && toLabel.length === 0) {
+        setError(t('geography.excel.nothing_new', 'Every area in this sheet is already in the hierarchy as listed, so there is nothing to add.'));
         return;
       }
 
@@ -908,15 +927,20 @@ export default function BoundaryImport({
     }
   };
 
-  // The ticked levels' areas as a sheet: a column per level, a row per area path.
+  // The ticked levels' areas as a sheet: a column per level, a row per area
+  // path, by the rules the save uses.
   const handleDownloadList = () => {
+    const { valid, error: selError } = validateLevelSelection(adminLevels, t);
+    if (!valid) {
+      setError(selError);
+      return;
+    }
+    setError(null);
     const levels = getSelectedLevels(adminLevels);
+    const levelNames = levels.map((l) => l.mappedName.trim());
+    const { boundaries, skipped } = buildOsmBoundaries(levels, boundaryTenant, OSM_HIERARCHY_TYPE, containingParents);
     const place = (fetchedPlace?.name || searchTerm).normalize('NFKD').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-    downloadBoundaryList(
-      levels.map((l) => l.mappedName.trim() || t('geography.levels.level_n', 'Level %{n}', { n: l.level })),
-      boundaryPathRows(levels, containingParents),
-      `${place || 'boundary'}-list.xlsx`,
-    );
+    downloadBoundaryList(levelNames, boundaryPathRows(boundaries, skipped, levelNames), `${place || 'boundary'}-list.xlsx`);
   };
 
   // Build the boundary payload from the mapped levels. Features that are
@@ -969,21 +993,20 @@ export default function BoundaryImport({
     }
 
     // An ADMIN hierarchy already on the server is only usable when its level
-    // names match the operator's mapping — if they differ, every boundary
-    // create fails slowly (validation retries) with a misleading error.
-    // Compare order-sensitively and stop with a clear message when they diverge.
+    // names match the operator's mapping: say so here, before the list.
+    const unknown = hierarchiesUnknown();
+    if (unknown || !serverHierarchyTypes) {
+      setError(unknown);
+      setStep('map-levels');
+      return;
+    }
     const existing = serverHierarchyTypes.has(OSM_HIERARCHY_TYPE)
       ? existingHierarchies.find(h => h.hierarchyType === OSM_HIERARCHY_TYPE)
       : undefined;
-    const existingLevels = (existing?.boundaryHierarchy ?? []).map(l => l.boundaryType);
-    if (existing && !(existingLevels.length === levelNames.length && existingLevels.every((lvlName, idx) => lvlName === levelNames[idx]))) {
-      setError(
-        t(
-          'geography.osm.levels_mismatch',
-          'A "%{type}" hierarchy already exists on %{tenant} with levels [%{existing}], which do not match your mapped levels [%{mapped}]. Boundaries cannot be created against mismatched level names. Either rename your mapped levels to match the existing hierarchy, or use the Excel path\'s "use existing hierarchy" option.',
-          { type: OSM_HIERARCHY_TYPE, tenant: boundaryTenant, existing: existingLevels.join(' → '), mapped: levelNames.join(' → ') },
-        ),
-      );
+    const mismatch = existing
+      && levelsMismatch(boundaryTenant, OSM_HIERARCHY_TYPE, (existing.boundaryHierarchy ?? []).map(l => l.boundaryType), levelNames);
+    if (mismatch) {
+      setError(t(mismatch.key, mismatch.english, mismatch.params));
       setStep('map-levels');
       return;
     }
@@ -1514,7 +1537,7 @@ export default function BoundaryImport({
                     : t('geography.excel.upload_n', 'Upload %{count} Boundaries', { count: validBoundaries.length })
                 }
                 onSubmit={handleUploadBoundaries}
-                disabled={loading || validBoundaries.length === 0}
+                disabled={loading || validBoundaries.length === 0 || (!serverHierarchyTypes && !hierarchiesError)}
                 icon={loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
               />
             </div>
@@ -1560,9 +1583,11 @@ export default function BoundaryImport({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {/* "Official" already picks the better official set per country, so its parts aren't offered. */}
+                    {/* "Official" already picks the better official set per country, so its parts aren't offered beside it. */}
                     {(() => {
-                      const offered = sourceChoices.filter((s) => s !== 'cod' && s !== 'geoboundaries');
+                      const offered = sourceChoices.includes('official')
+                        ? sourceChoices.filter((s) => s !== 'cod' && s !== 'geoboundaries')
+                        : sourceChoices;
                       return offered.includes(turbopassSource) ? offered : [turbopassSource, ...offered];
                     })().map((s) => (
                       <SelectItem key={s} value={s}>{sourceOptionLabel(s)}</SelectItem>
@@ -1863,7 +1888,7 @@ export default function BoundaryImport({
               <SubmitBar
                 label={loading ? t('geography.creating', 'Creating...') : t('geography.levels.create', 'Create Hierarchy & Boundaries')}
                 onSubmit={handlePrepareOsmCreate}
-                disabled={loading || !levelSel.valid}
+                disabled={loading || !levelSel.valid || (!serverHierarchyTypes && !hierarchiesError)}
               />
             </div>
           </div>
