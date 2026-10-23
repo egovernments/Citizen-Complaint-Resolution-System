@@ -30,7 +30,7 @@ import {
   DepartmentList, DepartmentShow, DepartmentEdit, DepartmentCreate, DepartmentBulkImport,
   DesignationList, DesignationShow, DesignationEdit, DesignationCreate, DesignationBulkImport,
   ComplaintTypeList, ComplaintTypeShow, ComplaintTypeEdit, ComplaintTypeCreate,
-  TenantList, TenantShow, TenantEdit,
+  TenantList, TenantShow, TenantEdit, TenantCreate,
   EmployeeList, EmployeeShow, EmployeeEdit, EmployeeCreate, EmployeeBulkImport,
   ComplaintList, ComplaintShow, ComplaintEdit, ComplaintCreate,
   BoundaryList, BoundaryShow, BoundaryEdit, BoundaryCreate,
@@ -155,7 +155,7 @@ function ManagementAdminResources() {
     >
       <CoreAdminUI layout={DigitLayout} dashboard={DigitDashboard}>
         {/* Core entities with List/Show/Edit/Create */}
-        {canViewResource('tenants') && <Resource name="tenants" list={TenantList} show={TenantShow} edit={TenantEdit} />}
+        {canViewResource('tenants') && <Resource name="tenants" list={TenantList} show={TenantShow} edit={TenantEdit} create={TenantCreate} />}
         {canViewResource('departments') && <Resource name="departments" list={DepartmentList} show={DepartmentShow} edit={DepartmentEdit} create={DepartmentCreate} />}
         {canViewResource('designations') && <Resource name="designations" list={DesignationList} show={DesignationShow} edit={DesignationEdit} create={DesignationCreate} />}
         {/* Complaint types are the LEAF rows of the single ComplaintHierarchy
