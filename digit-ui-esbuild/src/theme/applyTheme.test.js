@@ -488,6 +488,33 @@ test("v3 backfill: v1 record feeds button + primary-N tokens from palette", () =
   } finally { restore(); }
 });
 
+test("v3 backfill: a primary.dark lighter than main isn't the hover; DIGIT Orange keeps white labels", () => {
+  const { props, restore } = stubDocument();
+  try {
+    const applyTheme = freshApply();
+    // DIGIT Orange, the built-in default and an onboarding preset. Its "dark"
+    // #C8602B is lighter than main; as the hover, white failed on it (4.07:1)
+    // and the label went near-black on every state.
+    applyTheme(require("./default.json"));
+    const hover = props["--color-button-primary-bg-hover"];
+    assert.equal(props["--color-button-primary-bg-default"], "#c84c0e");
+    assert.equal(hover, "#B4440D");
+    assert.equal(props["--color-button-primary-bg-pressed"], hover);
+    assert.equal(props["--color-button-primary-text"], "#FFFFFF");
+    for (const bg of ["#c84c0e", hover]) assert.ok(contrast("#FFFFFF", bg) >= 4.5, `white on ${bg}`);
+  } finally { restore(); }
+});
+
+test("v3 backfill: no primary.dark keeps the flat hover", () => {
+  const { props, restore } = stubDocument();
+  try {
+    const applyTheme = freshApply();
+    applyTheme({ version: "1", colors: { primary: { main: "#2563EB" } } });
+    assert.equal(props["--color-button-primary-bg-hover"], "#2563EB");
+    assert.equal(props["--color-button-primary-bg-pressed"], "#2563EB");
+  } finally { restore(); }
+});
+
 test("v3 backfill: record's own button background wins over any derived one", () => {
   const { props, restore } = stubDocument();
   try {

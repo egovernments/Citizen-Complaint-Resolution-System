@@ -562,6 +562,23 @@ function backfillShell(vars) {
   }
 }
 
+/**
+ * The button's hover and pressed fill for a v1/v2 record: its `primary.dark`,
+ * when that really is darker than `primary.main`. A record's "dark" isn't
+ * always: DIGIT Orange's is #C8602B against a #C84C0E main. As the hover it
+ * fails white text (4.07:1), and Pass 5, which judges the label on every state,
+ * then paints the label near-black on the resting orange too, where white reads
+ * at 4.67:1. In that case hover on main taken 10% darker, which keeps the
+ * feedback and the white label. A record with no "dark" keeps the flat hover.
+ */
+function darkerShadeOf(main, dark) {
+  if (!dark) return main;
+  const mainLum = relativeLuminance(main);
+  const darkLum = relativeLuminance(dark);
+  if (mainLum === null || darkLum === null || darkLum < mainLum) return dark;
+  return channelsToHex(hexChannels(main).map((c) => c * 0.9));
+}
+
 function hexToHslTriplet(hex) {
   if (typeof hex !== "string") return null;
   const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(hex.trim());
@@ -686,12 +703,13 @@ function applyTheme(config) {
   if (!v3Active) {
     const primaryMain = vars["--color-primary-main"];
     const primaryDark = vars["--color-primary-dark"];
+    const pressed = darkerShadeOf(primaryMain, primaryDark);
     const backfill = {
       "--color-primary-1": primaryDark || primaryMain,
       "--color-primary-2": primaryMain,
       "--color-button-primary-bg-default": primaryMain,
-      "--color-button-primary-bg-hover": primaryDark || primaryMain,
-      "--color-button-primary-bg-pressed": primaryDark || primaryMain,
+      "--color-button-primary-bg-hover": pressed,
+      "--color-button-primary-bg-pressed": pressed,
     };
     for (const [name, value] of Object.entries(backfill)) {
       if (typeof value === "string" && !(name in vars)) vars[name] = value;
