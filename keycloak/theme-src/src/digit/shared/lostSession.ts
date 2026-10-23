@@ -6,12 +6,12 @@
  * error.ftl carries no message key. Keycloak formats the message into
  * `message.summary` and keeps only that text and the type
  * (FreeMarkerLoginFormsProvider.handleMessages, MessageBean), so the page can
- * only match text. To match what this Keycloak rendered (its own wording,
- * which differs from keycloakify's bundled copy for cookieNotFoundMessage,
- * any realm override, the page's locale), the theme names each key in
- * theme.properties (vite.config.ts). keycloakify has the server resolve every
- * message key it finds in the page data, and `msgStr` prefers that answer to
- * its bundled copy, which stays the fallback.
+ * only match text. To match what this Keycloak rendered (its message bundle,
+ * any realm override, the page's locale) rather than keycloakify's
+ * client-side copy, the theme names each key in theme.properties
+ * (vite.config.ts). keycloakify has the server resolve every message key it
+ * finds in the page data, and `msgStr` prefers that answer to its bundled
+ * copy, which stays the fallback.
  *
  * Kept free of imports: vite.config.ts reads it.
  */

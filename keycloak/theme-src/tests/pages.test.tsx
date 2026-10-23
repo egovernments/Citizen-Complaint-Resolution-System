@@ -182,7 +182,7 @@ describe("error.ftl", () => {
 
 describe("digit-employee error.ftl", () => {
     const COOKIE_NOT_FOUND = "Cookie not found. Please make sure cookies are enabled in your browser.";
-    // Keycloak 26.7.3's own wording, which differs from keycloakify's bundled copy above.
+    // Keycloak's base-theme wording: server text that differs from keycloakify's client-side copy.
     const KC_COOKIE_NOT_FOUND =
         "Restart login cookie not found. It may have expired; it may have been deleted or cookies are disabled in your browser. If cookies are disabled then enable them. Click Back to Application to login again.";
     const KC_COOKIE_NOT_FOUND_FR =
