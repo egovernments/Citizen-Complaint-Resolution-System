@@ -12,7 +12,7 @@ export interface ProvisionedCitizen {
   mobile: string;
   prefix: string | undefined;
   name: string;
-  /** The DIGIT account's userName: the national number for a new phone-OTP citizen (#2640). */
+  /** The DIGIT account's userName, as the citizen's token carries it. */
   userName: string;
   token: string;
   uuid: string;

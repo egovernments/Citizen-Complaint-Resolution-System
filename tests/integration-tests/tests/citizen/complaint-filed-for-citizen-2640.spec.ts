@@ -3,13 +3,14 @@
  * own account, and so their My Complaints, in either order (#2640).
  *
  * pgr-services finds the citizen of an employee-filed complaint by
- * userName = mobile number, and creates one when there is none. The identity
- * BFF used to give a new phone-OTP citizen an opaque `kcbffc-` userName, so a
- * complaint filed AFTER the citizen's first sign-in went to a second CITIZEN
- * account that pgr-services created, and never reached the citizen. The BFF
- * now names that account by the proved national number. A complaint filed
- * BEFORE the first sign-in already worked: the BFF links the account
- * pgr-services created (#2167). Both orders are covered here.
+ * userName = mobile number, and creates one when there is none. A phone-OTP
+ * citizen's DIGIT account is the identity BFF's own, named `kcbffc-…`, so a
+ * complaint filed AFTER the citizen's first sign-in used to go to a second
+ * CITIZEN account that pgr-services created, and never reached the citizen.
+ * pgr-services now attaches it to the one BFF-created citizen account holding
+ * the number. A complaint filed BEFORE the first sign-in already worked: the
+ * BFF links the account pgr-services created (#2167). Both orders are covered
+ * here, and neither depends on the account's userName.
  *
  * Each test signs in its own new number (one BFF OTP each) and files as the
  * `csr` persona, an employee holding a PGR APPLY role other than CITIZEN.
@@ -81,24 +82,21 @@ test.describe('PGR — a complaint filed for a citizen reaches their My Complain
   test('filed after the citizen signed in by OTP', {
     annotation: {
       type: 'description',
-      description: `The #2640 order. A new citizen signs in by phone OTP through the identity BFF, which creates their DIGIT account. Then an employee holding CSR files a complaint for that phone. pgr-services looks the citizen up by userName = mobile number, so the complaint attaches to the citizen's own account only when the BFF named that account by the proved number; with the old opaque kcbffc- name pgr-services created a second CITIZEN and the complaint never appeared.
+      description: `The #2640 order. A new citizen signs in by phone OTP through the identity BFF, which creates their DIGIT account (userName kcbffc-…, marker keycloak-bff:citizen:). Then an employee holding CSR files a complaint for that phone. No userName = mobile citizen exists, so pgr-services must attach the complaint to the one BFF-created citizen holding the number; before #2640 it created a second CITIZEN and the complaint never appeared.
 
 Steps:
 1. requires personas.csr (an employee holding a PGR APPLY role other than CITIZEN).
 2. provisionFreshCitizen(): a new valid number signs in by BFF OTP (_send, _verify, citizen _select).
-3. Assert the account's userName is the national number the citizen proved.
-4. As the csr persona, pgrCreate for that number (no accountId, citizen = {name, mobileNumber}).
-5. Assert the created complaint's accountId is the citizen's uuid.
-6. Poll the citizen's own PGR _search for the complaint id.
-7. Reuse the citizen's BFF session in the browser, open /citizen/pgr/complaints, and assert the complaint id is listed.`,
+3. As the csr persona, pgrCreate for that number (no accountId, citizen = {name, mobileNumber}).
+4. Assert the created complaint's accountId is the citizen's uuid.
+5. Poll the citizen's own PGR _search for the complaint id.
+6. Reuse the citizen's BFF session in the browser, open /citizen/pgr/complaints, and assert the complaint id is listed.`,
     },
     tag: ['@area:pgr', '@ccrs:2640', '@kind:regression', '@layer:ui', '@persona:cross'] }, async ({ page }) => {
     requires(test, 'personas.csr');
     test.setTimeout(180_000);
 
     const citizen = await provisionFreshCitizen();
-    expect(citizen.userName, 'a citizen who proved their phone is named by the national number, as DIGIT names citizens (#2640)')
-      .toBe(citizen.mobile);
 
     const { srid, accountId } = await fileAsCsr(citizen.mobile);
     expect(accountId, `${srid} must attach to the account the citizen signs in with, not a second CITIZEN (#2640)`)
@@ -117,7 +115,7 @@ Steps:
 2. freshCitizenMobile(): a new number valid for the deployment's mobile rule.
 3. As the csr persona, pgrCreate for that number; keep the accountId pgr-services attached.
 4. provisionFreshCitizen({ mobile }): the number signs in by BFF OTP.
-5. Assert the citizen's uuid is that accountId and the account's userName is the number.
+5. Assert the citizen's uuid is that accountId.
 6. Poll the citizen's own PGR _search for the complaint id.
 7. Reuse the citizen's BFF session in the browser, open /citizen/pgr/complaints, and assert the complaint id is listed.`,
     },
@@ -130,7 +128,6 @@ Steps:
 
     const citizen = await provisionFreshCitizen({ mobile });
     expect(citizen.uuid, `the citizen's sign-in must take the account ${srid} was filed under`).toBe(accountId);
-    expect(citizen.userName).toBe(mobile);
 
     await expectInMyComplaints(page, citizen, srid);
   });
