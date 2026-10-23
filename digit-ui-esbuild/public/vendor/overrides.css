@@ -10661,10 +10661,14 @@ html[data-sidebar-pinned] .citizen .main.center-container.citizen-home-container
 .cms-complaints-table tbody tr:hover td {
   background: var(--color-table-hover, #F9FAFB);
 }
+/* A number carries its workspace's code (IN-CHANDIGARH-DEMO-PGR-2026-10-23-…),
+ * so it can be wider than its column. Wrap it, after a hyphen where one fits,
+ * rather than letting it run into Concern or cutting off the part that tells
+ * complaints apart. */
 .cms-complaints-number {
   color: var(--cms-accent);
   font-weight: 500;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
   text-decoration: underline;
   text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
   text-underline-offset: 3px;
