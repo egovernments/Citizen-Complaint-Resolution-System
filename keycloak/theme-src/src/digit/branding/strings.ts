@@ -29,7 +29,13 @@ export const LOGIN_MESSAGE_FALLBACKS = {
     CORE_LOGIN_EMAIL_HINT: "Sign in with your email address, not your employee code.",
     CORE_LOGIN_FORGOT_PASSWORD_TEXT: "Enter the email address of your account and we'll send you a link to set a new password.",
     CORE_LOGIN_RESET_LINK_SENT: "If an account exists for that email address, we've sent it a link to set a new password.",
-    CORE_LOGIN_RESET_LINK_FAILED: "Could not send the link. Please try again."
+    CORE_LOGIN_RESET_LINK_FAILED: "Could not send the link. Please try again.",
+    // The password check before an account action (#2645)
+    CORE_LOGIN_CONFIRM_UPDATE_PASSWORD: "Confirm it's you to change your password",
+    CORE_LOGIN_CONFIRM_CONFIGURE_TOTP: "Confirm it's you to set up an authenticator",
+    CORE_LOGIN_CONFIRM_UPDATE_EMAIL: "Confirm it's you to change your email",
+    CORE_LOGIN_CONFIRM_ACTION: "Confirm it's you to continue",
+    CORE_COMMON_CANCEL: "Cancel"
 } as const;
 
 export type LoginMessageKey = keyof typeof LOGIN_MESSAGE_FALLBACKS;

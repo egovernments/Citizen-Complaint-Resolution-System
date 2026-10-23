@@ -53,6 +53,14 @@ describe("account self-service", () => {
       expect(new URL(response.headers.get("location")!).searchParams.get("kc_action")).toBe(action);
     }
   });
+  it("never puts the person's username or email in the authorize URL (#2645)", async () => {
+    const { sessionId } = await createIdentitySession(tokens, { sub: "identity-user-1", email: "test@example.test", preferred_username: "self-service-user" }, config.keycloakBffClientId);
+    const response = await fetch(`${base}/identity/v1/authorize?action=UPDATE_PASSWORD`, { redirect: "manual", headers: { Cookie: cookie(sessionId) } });
+    const location = response.headers.get("location")!;
+    expect(new URL(location).searchParams.has("login_hint")).toBe(false);
+    expect(location).not.toContain("self-service-user");
+    expect(location).not.toContain("example.test");
+  });
   it.each(["success", "cancelled", "error"])("updates the same session for action result %s", async status => {
     const { sessionId } = await session();
     const count = (await listPersonSessions("identity-user-1")).length;
