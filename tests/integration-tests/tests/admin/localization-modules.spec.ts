@@ -61,7 +61,6 @@ test.describe('Configurator localization modules (#636)', () => {
       tenant: ROOT_TENANT,
       username: ADMIN_USER,
       password: ADMIN_PASS,
-      surface: 'configurator',
     });
     accessToken = tokenResponse.access_token;
   });

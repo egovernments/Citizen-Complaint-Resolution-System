@@ -85,7 +85,7 @@ export function loadAuth(authFile: string = DEFAULT_AUTH_FILE): AuthInfo {
 
 /** Obtain a fresh BFF-selected operator context for API assertions and teardown. */
 export async function apiAuth(): Promise<AuthInfo> {
-  const context = await getDigitToken({ tenant: ROOT_TENANT, username: ADMIN_USER, password: ADMIN_PASS, surface: 'configurator' });
+  const context = await getDigitToken({ tenant: ROOT_TENANT, username: ADMIN_USER, password: ADMIN_PASS });
   return { token: context.access_token, user: context.UserRequest || null, tenant: ROOT_TENANT, baseUrl: BASE_URL };
 }
 

@@ -32,12 +32,6 @@ export interface AuthConfig {
   username: string;
   password: string;
   userType?: 'EMPLOYEE' | 'CITIZEN';
-  /**
-   * Where the token is selected. Employee unless the caller needs a Configurator
-   * context: the BFF refuses that (CONFIGURATOR_ROLE_REQUIRED) to anyone without
-   * a configurator role, so only admin and configurator specs ask for it.
-   */
-  surface?: StaffSurface;
 }
 
 type StaffSurface = 'configurator' | 'employee';
@@ -112,16 +106,25 @@ async function withSession<T>(run: (fresh: boolean) => Promise<T>): Promise<T> {
   }
 }
 
-/** Acquire a DIGIT token through hosted sign-in and the BFF context exchange. */
+/** Persona credentials the BFF has refused the Configurator (CONFIGURATOR_ROLE_REQUIRED): they go straight to the employee surface. */
+const employeeOnly = new Set<string>();
+
+/**
+ * Acquire a DIGIT token through hosted sign-in and the BFF context exchange.
+ *
+ * The Configurator surface comes first: it is not bound to a workspace, so one
+ * admin can select any tenant. Staff without a configurator role are refused
+ * with exactly CONFIGURATOR_ROLE_REQUIRED (#2607) and fall back to the employee
+ * surface, which is bound to the workspace IDENTITY_TEST_TENANT_SLUG names.
+ */
 export async function getDigitToken(config: AuthConfig): Promise<TokenResponse> {
   if (config.userType === 'CITIZEN') throw new Error('Use citizenSignIn for citizen phone possession');
   const baseURL = config.baseURL || BASE_URL;
   const tenant = config.authTenant || config.tenant;
-  const surface = config.surface ?? 'employee';
-  const key = JSON.stringify([baseURL, surface, tenant, config.username, digest(config.password)]);
+  const key = JSON.stringify([baseURL, tenant, config.username, digest(config.password)]);
   const hit = tokens.get(key);
   if (hit && hit.expiresAt - EXPIRY_MARGIN_MS > Date.now()) return hit.token;
-  const token = await withSession(async (fresh) => {
+  const select = (surface: StaffSurface) => withSession(async (fresh) => {
     const cookies = await signIn(baseURL, surface, config.username, config.password, { fresh });
     const api = await playwrightRequest.newContext({ storageState: { cookies, origins: [] }, ignoreHTTPSErrors: process.env.IGNORE_HTTPS_ERRORS === '1' });
     try {
@@ -130,6 +133,18 @@ export async function getDigitToken(config: AuthConfig): Promise<TokenResponse> 
       await api.dispose();
     }
   });
+  const personaKey = JSON.stringify([baseURL, config.username, digest(config.password)]);
+  let token: TokenResponse;
+  if (employeeOnly.has(personaKey)) token = await select('employee');
+  else {
+    try {
+      token = await select('configurator');
+    } catch (err) {
+      if (!(err instanceof IdentityHttpError && err.code === 'CONFIGURATOR_ROLE_REQUIRED')) throw err;
+      employeeOnly.add(personaKey);
+      token = await select('employee');
+    }
+  }
   tokens.set(key, { token, expiresAt: Date.now() + token.expires_in * 1000 });
   return token;
 }
