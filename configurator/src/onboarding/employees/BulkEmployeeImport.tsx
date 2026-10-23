@@ -678,6 +678,11 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
       {/* Preview */}
       {step === 'preview' && (
         <DigitCard>
+          <Alert variant="info" className="mb-3 sm:mb-4">
+            <AlertDescription>
+              {t('bulk_employees.csr_role_note', 'Every employee also gets the Complaint Registrar (CSR) role, so they can file complaints on behalf of citizens.')}
+            </AlertDescription>
+          </Alert>
           <div className="flex items-center gap-2 text-primary mb-3 sm:mb-4">
             <Check className="w-4 h-4 sm:w-5 sm:h-5" />
             <span className="font-medium text-sm sm:text-base truncate">
