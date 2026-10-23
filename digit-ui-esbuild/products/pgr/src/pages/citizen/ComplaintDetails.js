@@ -8,7 +8,7 @@
 // (TimeLine with its reopen / rate actions, ComplaintPhotos,
 // ComplaintLocationMap) as before; only the layout changed.
 
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { Link, useHistory, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
@@ -18,18 +18,12 @@ import { AlertCircle } from "lucide-react";
 
 import { buildComplaintPath } from "../../utils/complaintHierarchyPath";
 import { complaintLabel } from "../../utils/complaintLabel";
-import { translateOr } from "../../utils/selectPlaceholder";
 import TimeLine from "../../components/TimeLine";
+import { timelineState } from "../../utils/timelineState";
 import ComplaintPhotos from "../../components/ComplaintPhotos";
 import ComplaintLocationMap from "../../components/ComplaintLocationMap";
 import useReopenWindow from "../../hooks/pgr/useReopenWindow";
 import { hasUsableGeoLocation } from "../../utils/geoLocation";
-
-// An empty detail row, in the user's language.
-const notAvailable = (t) => {
-  const value = t("CS_NA");
-  return value && value !== "CS_NA" ? value : "N/A";
-};
 
 function renderRowValue(val, t) {
   if (Array.isArray(val)) {
@@ -38,12 +32,13 @@ function renderRowValue(val, t) {
       .filter(Boolean)
       .join(", ");
   }
-  if (val == null || val === "") return notAvailable(t);
-  if (typeof val === "object") return t(val?.code ?? "") || notAvailable(t);
-  return t(String(val)) || notAvailable(t);
+  if (val == null || val === "") return "N/A";
+  if (typeof val === "object") return t(val?.code ?? "") || "N/A";
+  return t(String(val)) || "N/A";
 }
 
 function WorkflowComponent({ complaintDetails, id }) {
+  const { t } = useTranslation();
   const tenantId =
     Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code ||
     complaintDetails.service.tenantId;
@@ -59,7 +54,32 @@ function WorkflowComponent({ complaintDetails, id }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (workFlowDetails.isLoading) return null;
+  // ours#770: retry is off app-wide, so a cancelled or failed workflow search left no data and nothing in flight,
+  // and TimeLine kept its spinner for good (the Rate / Re-open links live in it). Retry once by itself, then offer
+  // a Retry button instead of the endless spinner.
+  const state = timelineState(workFlowDetails);
+  const autoRetried = useRef(false);
+  useEffect(() => {
+    if (state === "failed" && !autoRetried.current && workFlowDetails.refetch) {
+      autoRetried.current = true;
+      workFlowDetails.refetch();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state]);
+
+  if (state === "loading") return null;
+  if (state === "failed") {
+    const msg = t("CS_COMPLAINT_TIMELINE_LOAD_FAILED");
+    const retry = t("CS_COMMON_RETRY");
+    return (
+      <div className="cms-timeline-failed" role="alert" style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+        <span>{msg === "CS_COMPLAINT_TIMELINE_LOAD_FAILED" ? "The timeline could not be loaded." : msg}</span>
+        <Button onClick={() => workFlowDetails.refetch && workFlowDetails.refetch()} data-analytics-event="pgr.complaint.details-timeline-retry">
+          {retry === "CS_COMMON_RETRY" ? "Retry" : retry}
+        </Button>
+      </div>
+    );
+  }
   return (
     <TimeLine
       data={workFlowDetails.data}
@@ -144,7 +164,7 @@ const ComplaintDetailsPage = () => {
     address?.buildingName,
     address?.street,
     address?.landmark,
-    address?.locality?.code ? translateOr(t, address.locality.code, address.locality.name || address.locality.code) : address?.locality?.name,
+    address?.locality?.name || address?.locality?.code,
     address?.pincode,
   ]
     .filter(Boolean)
@@ -159,7 +179,7 @@ const ComplaintDetailsPage = () => {
   let classificationPlaced = false;
   const pushClassification = () => {
     if (classificationPlaced || !classification || classification.length === 0) return;
-    classification.forEach((r) => detailRows.push({ key: r.levelCode, label: r.label, value: r.value || notAvailable(t) }));
+    classification.forEach((r) => detailRows.push({ key: r.levelCode, label: r.label, value: r.value || "N/A" }));
     classificationPlaced = true;
   };
   Object.keys(complaintDetails?.details || {}).forEach((flag) => {
