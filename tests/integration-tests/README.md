@@ -188,7 +188,7 @@ against a real stack, at API level through the public origin:
 3. The configurator's step calls, in order: Branding (logo upload,
    ThemeConfig), Geography (2-level hierarchy), Departments (2 departments,
    1 designation), Employees (two GROs and an LME via HRMS `_create` then BFF
-   `_link`; the water GRO and the LME follow their activation mail and set a
+   `_link`; before that, one browser step downloads the Employees step's template and checks its Codes sheet and sample row against the departments, designation and boundaries just created (#2648; needs `npx playwright install chromium`); the water GRO and the LME follow their activation mail and set a
    password; the roads GRO exists only so every routed department has a GRO,
    and is never activated), Complaint types (2 leaves
    with department and SLA). Every step is marked DONE and the workspace ends

@@ -5,6 +5,8 @@ import * as XLSX from 'xlsx';
 import { Button } from '@/components/ui/button';
 import { BulkImportPanel, triggerDownload, type BulkRow, type BulkColumn } from '@/admin/bulk/BulkImportPanel';
 import { parseEmployeeExcel } from '@/utils/excelParser';
+import { useOnboardingT } from '@/onboarding/i18n';
+import { buildEmployeeTemplate, employeeTemplateFilename } from '@/utils/templateBuilder';
 import { hrmsService, mdmsService, boundaryService } from '@/api';
 import { loadTenantHierarchies } from '@/api/services/tenantHierarchy';
 import type {
@@ -19,91 +21,10 @@ import { useApp } from '../../App';
 
 type EmployeeBulkRow = EmployeeExcelRow & BulkRow;
 
-const TEMPLATE_COLUMNS = [
-  'employeeCode',
-  'name',
-  'mobileNumber',
-  'emailId',
-  'gender',
-  'dob',
-  'department',
-  'designation',
-  'roles',
-  'jurisdictions',
-  'dateOfAppointment',
-];
-
-const TEMPLATE_SAMPLE = {
-  employeeCode: 'EMP_001',
-  name: 'Jane Kamau',
-  mobileNumber: '0712345678',
-  emailId: 'jane.kamau@example.com',
-  gender: 'FEMALE',
-  dob: '1990-05-14',
-  department: 'DEPT_07',
-  designation: 'DESIG_1004',
-  roles: 'PGR_LME',
-  jurisdictions: 'NAIROBI_CITY_VIWANDANI',
-  dateOfAppointment: '2026-01-15',
-};
-
-function buildTemplate(
-  tenant: string,
-  depts: Department[],
-  desigs: Designation[],
-  boundaries: Boundary[],
-  roles: { code: string; name: string }[],
-): Blob {
-  const wb = XLSX.utils.book_new();
-  const primary = XLSX.utils.aoa_to_sheet([
-    TEMPLATE_COLUMNS,
-    TEMPLATE_COLUMNS.map((c) => TEMPLATE_SAMPLE[c as keyof typeof TEMPLATE_SAMPLE] ?? ''),
-  ]);
-  primary['!cols'] = TEMPLATE_COLUMNS.map((c) => ({ wch: Math.max(12, c.length + 2) }));
-  XLSX.utils.book_append_sheet(wb, primary, 'Employee');
-
-  const maxLen = Math.max(depts.length, desigs.length, roles.length, boundaries.length);
-  const rows: (string | undefined)[][] = [
-    ['departments (code : name)', 'designations (code : name)', 'roles (code)', 'boundaries (code : type)'],
-  ];
-  for (let i = 0; i < maxLen; i += 1) {
-    rows.push([
-      depts[i] ? `${depts[i].code} : ${depts[i].name}` : '',
-      desigs[i] ? `${desigs[i].code} : ${desigs[i].name}` : '',
-      roles[i] ? roles[i].code : '',
-      boundaries[i] ? `${boundaries[i].code} : ${boundaries[i].boundaryType ?? ''}` : '',
-    ]);
-  }
-  const ref = XLSX.utils.aoa_to_sheet(rows);
-  ref['!cols'] = [{ wch: 36 }, { wch: 36 }, { wch: 20 }, { wch: 36 }];
-  XLSX.utils.book_append_sheet(wb, ref, 'Codes');
-
-  const notes = XLSX.utils.aoa_to_sheet([
-    ['Employee bulk import template'],
-    [`Tenant: ${tenant}`],
-    [''],
-    ['Required columns: name, mobileNumber (per the tenant mobile rule),'],
-    ['department (from Codes), designation (from Codes).'],
-    ['Required: emailId. Optional: employeeCode (blank = the next free EMP_ code),'],
-    ['gender, dob (YYYY-MM-DD),'],
-    ['roles (comma-separated), jurisdictions (comma-separated boundary codes),'],
-    ['dateOfAppointment (YYYY-MM-DD).'],
-    [''],
-    ['Email is required. New employees receive a secure password setup email.'],
-    ['Each employee signs in with their employee code as username.'],
-  ]);
-  notes['!cols'] = [{ wch: 80 }];
-  XLSX.utils.book_append_sheet(wb, notes, 'Instructions');
-
-  const buf = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
-  return new Blob([buf], {
-    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  });
-}
-
 export function EmployeeBulkImport() {
   const { state } = useApp();
   const tenantId = state.tenant;
+  const t = useOnboardingT();
 
   const [departments, setDepartments] = useState<Department[]>([]);
   const [designations, setDesignations] = useState<Designation[]>([]);
@@ -333,9 +254,9 @@ export function EmployeeBulkImport() {
         { label: 'Boundaries', value: templateBoundaries.length },
       ]}
       buildTemplate={() =>
-        buildTemplate(tenantId, departments, designations, templateBoundaries, roles)
+        buildEmployeeTemplate(tenantId, departments, designations, templateBoundaries, roles, t)
       }
-      templateFilename={`employees-template-${tenantId}.xlsx`}
+      templateFilename={employeeTemplateFilename(tenantId)}
       parseWorkbook={parseWorkbook}
       validateRow={validateRow}
       columns={columns}

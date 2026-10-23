@@ -2,7 +2,7 @@ import { test, expect, request as playwright, type APIRequestContext } from '@pl
 import { citizenSignIn, identityJson, selectContext } from '../utils/identity-bff';
 import {
   BOUNDARIES, COMPLAINT_TYPES, DEPARTMENTS, DESIGNATION, Digit, act, activateAccount, allowing, baseURL, brandingStep, commandOtp,
-  complaint, complaintTypesStep, departmentsStep, emailDomain, employeeSignIn, fileComplaint, geographyStep, hireAndLink, history,
+  complaint, complaintTypesStep, departmentsStep, downloadEmployeeTemplate, emailDomain, employeeSignIn, fileComplaint, geographyStep, hireAndLink, history,
   inbox, labelLocales, mailedLink, markDone, missingConfig, removeMember, runSlug, signupFounder, strict, testMobile, testPassword,
   unresolvedLabels, workspace, type Hired,
 } from '../utils/workspace-setup';
@@ -57,6 +57,16 @@ test('signup -> workspace DONE -> complaint lifecycle -> member removal on a fre
     });
     await test.step('3c. Departments: 2 departments + 1 designation, step DONE', async () => {
       await departmentsStep(founder, locales);
+    });
+
+    await test.step('3d0. Employees template download carries this workspace\'s codes (#2648)', async () => {
+      const template = await downloadEmployeeTemplate(founder, base);
+      expect(template.fileName).toBe(`Employee_Master_Dynamic_${tenantId.toUpperCase()}.xlsx`);
+      expect(template.codes).toEqual(expect.arrayContaining([
+        ...DEPARTMENTS.map(d => d.code), DESIGNATION.code, ...BOUNDARIES.map(b => b.code), 'GRO', 'PGR_LME']));
+      expect(DEPARTMENTS.map(d => d.code), 'sample row department').toContain(template.sample.department);
+      expect(template.sample.designation).toBe(DESIGNATION.code);
+      expect(BOUNDARIES.map(b => b.code), 'sample row jurisdiction').toContain(template.sample.jurisdictions);
     });
 
     const passwords = new Map<string, string>();
