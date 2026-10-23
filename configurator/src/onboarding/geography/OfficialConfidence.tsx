@@ -111,27 +111,25 @@ export function OfficialSetSummary({ set, place = null }: { set: OfficialSet; pl
             })}
           </p>
         )}
-        <p className="text-xs leading-5 text-muted-foreground">
-          {set.agreement_measured
-            ? set.other
-              ? t(
-                  'geography.confirmed_means_second',
-                  'Confirmed means a second, independently drawn set has nearly the same areas. It doesn\'t mean your government has endorsed this exact file, and “one source only” means a level couldn\'t be checked, not that it is wrong.',
-                )
+        {/* Boundary data built before the agreement check says nothing about it. */}
+        {(set.agreement_measured || set.agreement_failed) && (
+          <p className="text-xs leading-5 text-muted-foreground">
+            {set.agreement_measured
+              ? set.other
+                ? t(
+                    'geography.confirmed_means_second',
+                    'Confirmed means a second, independently drawn set has nearly the same areas. It doesn\'t mean your government has endorsed this exact file, and “one source only” means a level couldn\'t be checked, not that it is wrong.',
+                  )
+                : t(
+                    'geography.confirmed_means_other',
+                    'Confirmed means another source has nearly the same areas. It doesn\'t mean your government has endorsed this exact file, and “one source only” means a level couldn\'t be checked, not that it is wrong.',
+                  )
               : t(
-                  'geography.confirmed_means_other',
-                  'Confirmed means another source has nearly the same areas. It doesn\'t mean your government has endorsed this exact file, and “one source only” means a level couldn\'t be checked, not that it is wrong.',
-                )
-            : set.agreement_failed
-              ? t(
                   'geography.agreement_failed',
                   'The agreement check failed when this boundary data was built, so it can\'t say how far the set is confirmed. Rebuilding the boundary data may fix it.',
-                )
-              : t(
-                  'geography.agreement_predates',
-                  'This server\'s boundary data predates the agreement check, so it can\'t say how far the set is confirmed.',
                 )}
-        </p>
+          </p>
+        )}
       </div>
     </section>
   );

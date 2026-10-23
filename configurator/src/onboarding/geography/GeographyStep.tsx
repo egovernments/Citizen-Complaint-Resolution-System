@@ -3,22 +3,45 @@ import { useNavigate } from 'react-router-dom';
 import { Download, MapPin } from 'lucide-react';
 import { useApp } from '../../App';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { boundaryService } from '@/api';
+import { Progress } from '@/components/ui/progress';
+import { boundaryService, ApiClientError } from '@/api';
 import { toast } from '@/hooks/use-toast';
 import { StepHeader } from '../StepHeader';
 import { EmptyState, OptionCard, StepActions } from '../StepParts';
 import { adjacentSteps, stepById } from '../steps';
 import { probeGate, useStepProbe } from '../stepProbe';
+import { GEOGRAPHY_MULTIPLE_SELECTIONS_ENABLED } from '@/config/featureFlags';
 import { useTurbopassHealth } from '@/hooks/useTurbopassSources';
 import { usePreconfiguredBoundaries } from '@/hooks/usePreconfiguredBoundaries';
 import { countryName, type OfficialSet } from '@/utils/officialBoundaries';
 import { TURBOPASS_UNAVAILABLE_MESSAGE } from '@/utils/turbopassSuggestions';
 import BoundaryImport, { type BoundarySource } from './BoundaryImport';
+import { BoundaryList } from './BoundaryList';
+import {
+  addSelection,
+  listHierarchy,
+  removeSelection,
+  saveBoundaryDraft,
+  setBoundaryDraft,
+  useBoundaryDraft,
+  type BoundaryDraft,
+  type BoundarySelection,
+} from './boundaryDraft';
 import { plural } from '@/utils/plural';
 import { PreconfiguredCard } from './PreconfiguredCard';
-import { useOnboardingT, type OnboardingT } from '../i18n';
-import { trackMethod } from '../telemetry';
+import { MessageError, useOnboardingT, type OnboardingT } from '../i18n';
+import { reportStepError, trackMethod } from '../telemetry';
 
 const STEP = stepById('geography');
 const { previous, next } = adjacentSteps('geography');
@@ -61,8 +84,15 @@ function summaryLine(hierarchy: HierarchySummary, t: OnboardingT): string {
   return parts.length ? parts.join(' · ') : t('geography.nothing_in_it_yet', 'Nothing in it yet');
 }
 
+/** One unsaved selection, summarised like a saved hierarchy. */
+function selectionSummary(selection: BoundarySelection): HierarchySummary {
+  const counts: Record<string, number> = {};
+  for (const boundary of selection.boundaries) counts[boundary.boundaryType] = (counts[boundary.boundaryType] ?? 0) + 1;
+  return { hierarchyType: selection.hierarchyType, levels: selection.levels, counts, total: selection.boundaries.length };
+}
+
 export default function GeographyStep() {
-  const { state, completePhase } = useApp();
+  const { state, completePhase, addUndo } = useApp();
   const navigate = useNavigate();
   const t = useOnboardingT();
   // Boundaries live at the workspace tenant, which every later step reads them from.
@@ -80,6 +110,16 @@ export default function GeographyStep() {
   // "Preconfigured": the official set turbopass holds for the tenant's country.
   const preconfigured = usePreconfiguredBoundaries(tenant, health?.officialCountries ?? null);
   const [preconfiguredSet, setPreconfiguredSet] = useState<OfficialSet | null>(null);
+  // Boundaries added but not saved: kept in this tab until Save and continue writes them.
+  const draft = useBoundaryDraft(tenant);
+  // The list's selection an Edit reopened.
+  const [editing, setEditing] = useState<BoundarySelection | null>(null);
+  const [saving, setSaving] = useState(false);
+  // How far Save and continue has got, 0–100, while it writes the list.
+  const [saveProgress, setSaveProgress] = useState(0);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  // Save and continue asks first when it would save new boundaries: they can't be changed after.
+  const [confirmSave, setConfirmSave] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -103,24 +143,84 @@ export default function GeographyStep() {
   };
 
   const hasBoundaries = !!hierarchies?.some((hierarchy) => hierarchy.total > 0);
+  // One set of boundaries unless the build allows more: the sources wait until
+  // the unsaved one is removed, and stay closed once boundaries are saved.
+  const listFullReason = GEOGRAPHY_MULTIPLE_SELECTIONS_ENABLED
+    ? undefined
+    : draft
+      ? t('geography.list.one_at_a_time', 'Remove the boundaries below to choose different ones.')
+      : hasBoundaries
+        ? t('geography.list.saved_already', 'Your boundaries are saved, so no more can be added.')
+        : undefined;
   const { probe, recheck } = useStepProbe(
     state.tenant,
     'GEOGRAPHY',
     (hierarchies ?? []).map((hierarchy) => `${hierarchy.hierarchyType}:${hierarchy.total}`).join(','),
   );
-  const gate = probeGate(
-    'GEOGRAPHY',
-    {
-      ready: hasBoundaries,
-      hint: hierarchies && !hasBoundaries ? t('geography.gate_hint', 'Bring in a boundary hierarchy to continue.') : undefined,
-    },
-    probe,
-  );
+  // With unsaved boundaries, Save and continue saves them first, so the server's check can't pass yet.
+  const gate = draft
+    ? { disabled: saving, hint: undefined, canRecheck: false }
+    : probeGate(
+        'GEOGRAPHY',
+        {
+          ready: hasBoundaries,
+          hint: hierarchies && !hasBoundaries ? t('geography.gate_hint', 'Bring in a boundary hierarchy to continue.') : undefined,
+        },
+        probe,
+      );
+
+  /** Writes the unsaved list. True when everything landed; otherwise the reason stays on screen. */
+  const saveDraft = async (toSave: BoundaryDraft): Promise<boolean> => {
+    setSaving(true);
+    setSaveProgress(0);
+    setSaveError(null);
+    try {
+      const result = await saveBoundaryDraft(tenant, toSave, t, setSaveProgress);
+      if (result.created.length === 0) {
+        setSaveError(
+          [t('geography.osm.create_failed', 'Failed to create boundaries.'), result.failed[0]?.error].filter(Boolean).join(' '),
+        );
+        reload();
+        return false;
+      }
+      // Saved areas can't be removed, so the list goes either way.
+      setBoundaryDraft(tenant, null);
+      addUndo('create_boundaries', `Created ${result.created.length} boundaries`);
+      reload();
+      const failures = [
+        result.failed.length > 0
+          ? t('geography.create_failures', '%{count} boundaries failed to create.', { count: result.failed.length })
+          : null,
+        result.schemaError,
+      ].filter(Boolean);
+      if (failures.length) {
+        setSaveError(failures.join(' '));
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.error(err);
+      reportStepError('geography', 'save_boundaries', err, tenant);
+      setSaveError(
+        err instanceof MessageError
+          ? t(err.key, err.english, err.params)
+          : err instanceof ApiClientError
+            ? err.firstError
+            : err instanceof Error
+              ? err.message
+              : t('geography.osm.create_failed', 'Failed to create boundaries.'),
+      );
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (source) {
     const close = () => {
       setSource(null);
       setPreconfiguredSet(null);
+      setEditing(null);
     };
     return (
       <div className="space-y-6">
@@ -150,15 +250,28 @@ export default function GeographyStep() {
           hasHierarchies={!!hierarchies?.length}
           sourceChoices={boundarySources}
           preconfigured={preconfiguredSet}
-          workspaceName={preconfigured.workspaceName}
+          resume={editing?.resume ?? null}
+          list={listHierarchy(draft, editing?.id)}
           onCancel={() => {
             trackMethod('geography', preconfiguredSet ? 'preconfigured' : source === 'osm' ? 'fetch' : 'excel', true);
             close();
           }}
-          onDone={() => {
+          onDone={(selection) => {
+            const added = addSelection(tenant, selection, t, editing?.id);
+            if (added.error) return added.error;
             close();
-            reload();
-            toast({ title: t('geography.imported', 'Boundaries imported') });
+            setSaveError(null);
+            if (added.duplicates > 0) {
+              toast({
+                title:
+                  added.duplicates === 1
+                    ? t('geography.list.duplicates_one', '1 boundary was already in your list, so it was left out.')
+                    : t('geography.list.duplicates_other', '%{count} boundaries were already in your list, so they were left out.', {
+                        count: added.duplicates.toLocaleString('en-US'),
+                      }),
+              });
+            }
+            return null;
           }}
         />
       </div>
@@ -181,6 +294,7 @@ export default function GeographyStep() {
           <PreconfiguredCard
             state={preconfigured.state}
             onRetry={preconfigured.retry}
+            disabledReason={listFullReason}
             onUse={() => {
               if (preconfigured.state.status !== 'ready') return;
               setPreconfiguredSet(preconfigured.state.set);
@@ -197,7 +311,7 @@ export default function GeographyStep() {
               trackMethod('geography', 'fetch');
             }}
             disabledReason={
-              boundarySources?.length === 0 ? t('geography.turbopass_unavailable', TURBOPASS_UNAVAILABLE_MESSAGE) : undefined
+              boundarySources?.length === 0 ? t('geography.turbopass_unavailable', TURBOPASS_UNAVAILABLE_MESSAGE) : listFullReason
             }
           >
             {t(
@@ -213,6 +327,7 @@ export default function GeographyStep() {
               setSource('excel');
               trackMethod('geography', 'excel');
             }}
+            disabledReason={listFullReason}
           >
             {t('geography.excel_body', 'Bring in your own levels and areas from a spreadsheet.')}
           </OptionCard>
@@ -230,7 +345,7 @@ export default function GeographyStep() {
         </Alert>
       ) : !hierarchies ? (
         <div className="h-40 rounded-lg border border-dashed border-border bg-muted/40 animate-pulse" aria-busy="true" />
-      ) : hierarchies.length === 0 ? (
+      ) : hierarchies.length === 0 && !draft ? (
         <EmptyState icon={MapPin} title={t('geography.empty_title', 'No boundaries yet')}>
           {t(
             'geography.empty_body',
@@ -239,11 +354,13 @@ export default function GeographyStep() {
         </EmptyState>
       ) : (
         <section className="space-y-3">
-          <p className="text-sm text-muted-foreground">
-            {hierarchies.length === 1
-              ? t('geography.hierarchy_count_one', '%{count} hierarchy', { count: 1 })
-              : t('geography.hierarchy_count_other', '%{count} hierarchies', { count: hierarchies.length })}
-          </p>
+          {hierarchies.length > 0 && (
+            <p className="text-sm text-muted-foreground">
+              {hierarchies.length === 1
+                ? t('geography.hierarchy_count_one', '%{count} hierarchy', { count: 1 })
+                : t('geography.hierarchy_count_other', '%{count} hierarchies', { count: hierarchies.length })}
+            </p>
+          )}
           <ul className="space-y-3">
             {hierarchies.map((hierarchy) => (
               <li key={hierarchy.hierarchyType} className="flex items-start gap-3 rounded-lg border border-border bg-card p-4">
@@ -259,17 +376,54 @@ export default function GeographyStep() {
                 </div>
               </li>
             ))}
+            {draft && (
+              <BoundaryList
+                draft={draft}
+                summarize={(selection) => summaryLine(selectionSummary(selection), t)}
+                disabled={saving}
+                onEdit={(selection) => {
+                  setEditing(selection);
+                  setPreconfiguredSet(selection.preconfigured);
+                  setSource(selection.source);
+                }}
+                onRemove={(selection) => removeSelection(tenant, selection.id)}
+              />
+            )}
           </ul>
         </section>
       )}
 
+      {saving && (
+        <div className="rounded-lg border border-border bg-card p-4" aria-busy="true" data-testid="geography-saving">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs sm:text-sm font-medium">{t('geography.saving', 'Saving your boundaries…')}</span>
+            <span className="text-xs sm:text-sm text-primary font-medium">{saveProgress}%</span>
+          </div>
+          <Progress value={saveProgress} className="h-2" />
+          <p className="text-xs sm:text-sm text-muted-foreground mt-2">
+            {t('geography.saving_keep_open', 'A large set can take a few minutes. Keep this page open.')}
+          </p>
+        </div>
+      )}
+
+      {saveError && (
+        <Alert variant="destructive">
+          <AlertDescription>{saveError}</AlertDescription>
+        </Alert>
+      )}
+
       <div className="flex flex-wrap items-center gap-3">
         <StepActions
-          onBack={previous ? () => navigate(previous.path) : undefined}
+          onBack={previous && !saving ? () => navigate(previous.path) : undefined}
           onContinue={async () => {
+            if (draft) {
+              setConfirmSave(true);
+              return;
+            }
             if (!await completePhase(STEP.number)) return;
             if (next) navigate(next.path);
           }}
+          busy={saving}
           disabled={gate.disabled}
           hint={gate.hint}
         />
@@ -279,6 +433,30 @@ export default function GeographyStep() {
           </Button>
         )}
       </div>
+
+      <AlertDialog open={confirmSave} onOpenChange={setConfirmSave}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('geography.save_confirm_title', 'Save these boundaries?')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('geography.save_confirm_body', 'Once saved, you won’t be able to edit or remove them.')}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('common.cancel', 'Cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                setConfirmSave(false);
+                if (!draft || !(await saveDraft(draft))) return;
+                if (!await completePhase(STEP.number)) return;
+                if (next) navigate(next.path);
+              }}
+            >
+              {t('step.save_continue', 'Save and continue')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

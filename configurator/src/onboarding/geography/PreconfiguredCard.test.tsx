@@ -21,6 +21,19 @@ describe('PreconfiguredCard', () => {
     expect(onUse).toHaveBeenCalledOnce();
   });
 
+  it('says why the set can\'t be used right now in place of its button', () => {
+    render(
+      <PreconfiguredCard
+        state={{ status: 'ready', country: 'MZ', set: MZ }}
+        onUse={vi.fn()}
+        onRetry={vi.fn()}
+        disabledReason="Remove the boundaries below to choose different ones."
+      />,
+    );
+    expect(screen.queryByRole('button', { name: /Use these boundaries/ })).toBeNull();
+    expect(screen.getByTestId('option-unavailable').textContent).toBe('Remove the boundaries below to choose different ones.');
+  });
+
   it('explains the confidence, and this set\'s, from the (i)', () => {
     render(<PreconfiguredCard state={{ status: 'ready', country: 'MZ', set: MZ }} onUse={vi.fn()} onRetry={vi.fn()} />);
     expect(screen.queryByRole('tooltip')).toBeNull();

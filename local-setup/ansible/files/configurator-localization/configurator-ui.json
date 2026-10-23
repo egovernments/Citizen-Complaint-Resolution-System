@@ -8190,12 +8190,6 @@
     "locale": "en_IN"
   },
   {
-    "code": "app.onboarding.geography.agreement_predates",
-    "message": "This server's boundary data predates the agreement check, so it can't say how far the set is confirmed.",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
     "code": "app.onboarding.geography.confidence_explain",
     "message": "What confidence means",
     "module": "configurator-ui",
@@ -8292,116 +8286,8 @@
     "locale": "en_IN"
   },
   {
-    "code": "app.onboarding.geography.created.already_there_one",
-    "message": "%{count} area was already in the hierarchy as listed, so it was left as it is.",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
-    "code": "app.onboarding.geography.created.already_there_other",
-    "message": "%{count} areas were already in the hierarchy as listed, so they were left as they are.",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
-    "code": "app.onboarding.geography.created.area_one",
-    "message": "%{count} area",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
-    "code": "app.onboarding.geography.created.area_other",
-    "message": "%{count} areas",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
-    "code": "app.onboarding.geography.created.areas",
-    "message": "Areas",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
-    "code": "app.onboarding.geography.created.back",
-    "message": "Back to Geography",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
-    "code": "app.onboarding.geography.created.body",
-    "message": "%{areas} in the %{hierarchy} hierarchy on %{workspace}, from %{source}.",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
-    "code": "app.onboarding.geography.created.body_failed",
-    "message": "All %{areas} from %{source} were refused by the boundary service. Nothing was added to the %{hierarchy} hierarchy on %{workspace}.",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
-    "code": "app.onboarding.geography.created.body_partial",
-    "message": "%{areas} could not be created.",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
-    "code": "app.onboarding.geography.created.level",
-    "message": "Level",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
-    "code": "app.onboarding.geography.created.skipped_one",
-    "message": "%{count} area was left out: unnamed, or lying in no area of the level above. The review step listed them.",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
-    "code": "app.onboarding.geography.created.skipped_other",
-    "message": "%{count} areas were left out: unnamed, or lying in no area of the level above. The review step listed them.",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
-    "code": "app.onboarding.geography.created.title",
-    "message": "Boundaries created",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
-    "code": "app.onboarding.geography.created.title_failed",
-    "message": "No boundaries were created",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
-    "code": "app.onboarding.geography.created.title_partial",
-    "message": "Some boundaries were not created",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
-    "code": "app.onboarding.geography.created.total",
-    "message": "Total",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
     "code": "app.onboarding.geography.creating",
     "message": "Creating...",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
-    "code": "app.onboarding.geography.creating_body",
-    "message": "Building geographic hierarchy and writing polygons to the database...",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
-    "code": "app.onboarding.geography.creating_title",
-    "message": "Creating Boundaries",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -8474,12 +8360,6 @@
   {
     "code": "app.onboarding.geography.excel.common_types",
     "message": "Common types: ADMIN, REVENUE, ADMIN1, ADMIN2",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
-    "code": "app.onboarding.geography.excel.create_failed",
-    "message": "Failed to create hierarchy. Please try again.",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -8784,6 +8664,12 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.geography.excel.type_exists",
+    "message": "A \"%{type}\" hierarchy already exists. Choose it under \"Use an existing hierarchy\", or pick another name.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.geography.excel.type_name",
     "message": "Hierarchy Type Name",
     "module": "configurator-ui",
@@ -9006,12 +8892,6 @@
     "locale": "en_IN"
   },
   {
-    "code": "app.onboarding.geography.imported",
-    "message": "Boundaries imported",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
     "code": "app.onboarding.geography.intro",
     "message": "The boundary hierarchies your complaint services work in. Bring them in from one of three sources.",
     "module": "configurator-ui",
@@ -9134,6 +9014,72 @@
   {
     "code": "app.onboarding.geography.levels.unnamed",
     "message": "Name every selected level (missing: %{levels}).",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.list.duplicates_one",
+    "message": "1 boundary was already in your list, so it was left out.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.list.duplicates_other",
+    "message": "%{count} boundaries were already in your list, so they were left out.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.list.inside_one",
+    "message": "1 area from another item in your list sits inside these. Remove that first.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.list.inside_other",
+    "message": "%{count} areas from another item in your list sit inside these. Remove those first.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.list.levels_mismatch",
+    "message": "Your list uses the levels %{levels}. Name these levels the same way, starting from the top, to add them to it.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.list.not_saved",
+    "message": "Not saved yet",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.list.one_at_a_time",
+    "message": "Remove the boundaries below to choose different ones.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.list.orphans",
+    "message": "This leaves out areas that %{count} other areas in your list sit inside. Remove those first.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.list.remove_body",
+    "message": "These boundaries haven’t been saved, so nothing else changes.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.list.saved_already",
+    "message": "Your boundaries are saved, so no more can be added.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.list.type_mismatch",
+    "message": "Your list is in the \"%{listType}\" hierarchy, and these boundaries go into \"%{type}\". Everything you add goes into one hierarchy.",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -9306,6 +9252,30 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.geography.save_confirm_body",
+    "message": "Once saved, you won’t be able to edit or remove them.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.save_confirm_title",
+    "message": "Save these boundaries?",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.saving",
+    "message": "Saving your boundaries…",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.saving_keep_open",
+    "message": "A large set can take a few minutes. Keep this page open.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.geography.schema_not_saved",
     "message": "Boundaries were created, but the hierarchy record didn't save: %{reason}",
     "module": "configurator-ui",
@@ -9434,6 +9404,12 @@
   {
     "code": "app.onboarding.geography.turbopass_unavailable",
     "message": "Boundary search isn't set up on this deployment: the turbopass boundary service isn't reachable, or has no boundary data loaded. An administrator can enable it (enable_turbopass, with a boundary DB — see turbopass/README.md). Until then, use Upload from Excel.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.validation_report",
+    "message": "Geographic Boundary Validation Report",
     "module": "configurator-ui",
     "locale": "en_IN"
   },

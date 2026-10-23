@@ -25,6 +25,13 @@ export const LEGACY_PGR_DASHBOARD_ENABLED = isEnabledFlag(legacyPgrDashboardRaw)
  */
 export const CITIZEN_BANNER_ENABLED = isEnabledFlag(import.meta.env.VITE_ENABLE_CITIZEN_BANNER ?? '');
 
+/**
+ * Geography's list takes more than one boundary selection (several places, or
+ * a fetch plus a sheet), all into one hierarchy. Off: one selection at a time.
+ * Absent or malformed fails closed.
+ */
+export const GEOGRAPHY_MULTIPLE_SELECTIONS_ENABLED = isEnabledFlag(import.meta.env.VITE_ENABLE_GEOGRAPHY_MULTIPLE_SELECTIONS ?? '');
+
 
 // E2E runs against an already-built image. Publish the baked value so the test
 // can verify its expected build contract instead of guessing from a separate
