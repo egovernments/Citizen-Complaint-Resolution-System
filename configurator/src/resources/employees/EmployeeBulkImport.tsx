@@ -5,7 +5,8 @@ import * as XLSX from 'xlsx';
 import { Button } from '@/components/ui/button';
 import { BulkImportPanel, triggerDownload, type BulkRow, type BulkColumn } from '@/admin/bulk/BulkImportPanel';
 import { parseEmployeeExcel } from '@/utils/excelParser';
-import { buildEmployeeTemplate } from '@/utils/templateBuilder';
+import { useOnboardingT } from '@/onboarding/i18n';
+import { buildEmployeeTemplate, employeeTemplateFilename } from '@/utils/templateBuilder';
 import { hrmsService, mdmsService, boundaryService } from '@/api';
 import { loadTenantHierarchies } from '@/api/services/tenantHierarchy';
 import type {
@@ -23,6 +24,7 @@ type EmployeeBulkRow = EmployeeExcelRow & BulkRow;
 export function EmployeeBulkImport() {
   const { state } = useApp();
   const tenantId = state.tenant;
+  const t = useOnboardingT();
 
   const [departments, setDepartments] = useState<Department[]>([]);
   const [designations, setDesignations] = useState<Designation[]>([]);
@@ -252,9 +254,9 @@ export function EmployeeBulkImport() {
         { label: 'Boundaries', value: templateBoundaries.length },
       ]}
       buildTemplate={() =>
-        buildEmployeeTemplate(tenantId, departments, designations, templateBoundaries, roles)
+        buildEmployeeTemplate(tenantId, departments, designations, templateBoundaries, roles, t)
       }
-      templateFilename={`employees-template-${tenantId}.xlsx`}
+      templateFilename={employeeTemplateFilename(tenantId)}
       parseWorkbook={parseWorkbook}
       validateRow={validateRow}
       columns={columns}
