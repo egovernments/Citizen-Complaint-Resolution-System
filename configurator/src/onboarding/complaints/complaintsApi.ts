@@ -66,7 +66,11 @@ function mostCommon(values: number[]): number | undefined {
 }
 
 export type LoadedComplaints =
-  | { editable: true; draft: ComplaintDraft; records: MdmsRecord[]; hasDefinition: boolean }
+  /**
+   * `levels`: the two level codes the rows carry. The definition's own when it has two levels (a state that names
+   * them CATEGORY > SUB_TYPE keeps them), else LEVELS for a hierarchy this step defines.
+   */
+  | { editable: true; draft: ComplaintDraft; records: MdmsRecord[]; hasDefinition: boolean; levels?: readonly string[] }
   /** Set up some other way (a spreadsheet with its own levels): shown, not edited, here. */
   | { editable: false; leafCount: number; levels: string[]; departments: string[] };
 
@@ -100,7 +104,10 @@ export async function loadComplaints(tenantId: string): Promise<LoadedComplaints
     : [];
   const active = records.filter((record) => record.isActive !== false && text(dataOf(record).hierarchyType) === HIERARCHY_TYPE);
 
-  if (definition && definedLevels.join('|') !== LEVELS.join('|')) {
+  // Two levels under other codes are still a type and its subtypes: edit them under those codes.
+  const twoLevels = definedLevels.length === 2 && definedLevels.every(Boolean);
+  const levels: readonly string[] = definition && twoLevels ? definedLevels : LEVELS;
+  if (definition && !twoLevels) {
     const leafCount = active.filter((record) => dataOf(record).department != null || dataOf(record).slaHours != null).length;
     // A leaf is a row no other row names as its parent; complaints filed on it go to its department.
     const parents = new Set(active.map((record) => text(dataOf(record).parentCode)));
@@ -112,8 +119,8 @@ export async function loadComplaints(tenantId: string): Promise<LoadedComplaints
   }
 
   const byOrder = (a: MdmsRecord, b: MdmsRecord) => Number(dataOf(a).order ?? 0) - Number(dataOf(b).order ?? 0);
-  const typeRows = active.filter((record) => dataOf(record).levelCode === LEVELS[0]).sort(byOrder);
-  const subtypeRows = active.filter((record) => dataOf(record).levelCode === LEVELS[1]).sort(byOrder);
+  const typeRows = active.filter((record) => dataOf(record).levelCode === levels[0]).sort(byOrder);
+  const subtypeRows = active.filter((record) => dataOf(record).levelCode === levels[1]).sort(byOrder);
   const hoursOf = (record: MdmsRecord) => {
     const hours = Number(dataOf(record).slaHours);
     return hours > 0 ? hours : undefined;
@@ -154,6 +161,7 @@ export async function loadComplaints(tenantId: string): Promise<LoadedComplaints
     draft: { types, slaHours: defaultHours },
     records,
     hasDefinition: !!definition,
+    levels,
   };
 }
 
@@ -167,7 +175,11 @@ function uniqueCode(base: string, taken: Set<string>): string {
 }
 
 /** Every hierarchy row the draft describes, codes kept where they exist. */
-export function rowsFor(draft: ComplaintDraft, existingCodes: Iterable<string>): { code: string; data: Record<string, unknown> }[] {
+export function rowsFor(
+  draft: ComplaintDraft,
+  existingCodes: Iterable<string>,
+  levels: readonly string[] = LEVELS,
+): { code: string; data: Record<string, unknown> }[] {
   const taken = new Set(existingCodes);
   const draftCodes = new Set<string>();
   for (const type of draft.types) {
@@ -187,7 +199,7 @@ export function rowsFor(draft: ComplaintDraft, existingCodes: Iterable<string>):
       code: typeCode,
       data: {
         hierarchyType: HIERARCHY_TYPE,
-        levelCode: LEVELS[0],
+        levelCode: levels[0],
         code: typeCode,
         name: type.name.trim(),
         parentCode: null,
@@ -205,7 +217,7 @@ export function rowsFor(draft: ComplaintDraft, existingCodes: Iterable<string>):
         code: subCode,
         data: {
           hierarchyType: HIERARCHY_TYPE,
-          levelCode: LEVELS[1],
+          levelCode: levels[1],
           code: subCode,
           name: sub.name.trim(),
           parentCode: typeCode,
@@ -230,9 +242,13 @@ const LEAF_FIELDS = ['department', 'slaHours', 'keywords'];
  * type that now has subtypes loses the leaf fields it had as a leaf: digit-ui
  * and the analytics decide "fileable" from exactly those fields.
  */
-export function nextData(current: Record<string, unknown>, row: { data: Record<string, unknown> }): Record<string, unknown> {
+export function nextData(
+  current: Record<string, unknown>,
+  row: { data: Record<string, unknown> },
+  levels: readonly string[] = LEVELS,
+): Record<string, unknown> {
   const next = { ...current, ...row.data };
-  if (row.data.levelCode === LEVELS[0] && !('department' in row.data)) {
+  if (row.data.levelCode === levels[0] && !('department' in row.data)) {
     for (const field of LEAF_FIELDS) delete next[field];
   }
   return next;
@@ -265,7 +281,7 @@ async function sync(
   tenantId: string,
   rows: { code: string; data: Record<string, unknown> }[],
   hasDefinition: boolean,
-  { shared = false }: { shared?: boolean } = {},
+  { shared = false, levels = LEVELS }: { shared?: boolean; levels?: readonly string[] } = {},
 ): Promise<void> {
   // Re-read before creating: a save whose step update then failed has already created the definition, and the page
   // still holds the stale `hasDefinition` from when it loaded, so a blind create fails as a duplicate on the retry.
@@ -294,9 +310,9 @@ async function sync(
   for (const row of rows) {
     const record = byCode.get(row.code);
     if (!record) await mdmsService.create(tenantId, HIERARCHY_SCHEMA, row.code, row.data);
-    else if (record.isActive === false) await mdmsService.setActive(record, true, shared ? undefined : nextData(dataOf(record), row));
+    else if (record.isActive === false) await mdmsService.setActive(record, true, shared ? undefined : nextData(dataOf(record), row, levels));
     else if (!shared) {
-      const next = nextData(dataOf(record), row);
+      const next = nextData(dataOf(record), row, levels);
       if (!sameData(dataOf(record), next)) await mdmsService.update(record, next);
     }
   }
@@ -311,8 +327,9 @@ export async function saveComplaints(
   loaded: Extract<LoadedComplaints, { editable: true }>,
   draft: ComplaintDraft,
 ): Promise<number> {
-  const rows = rowsFor(draft, loaded.records.map(codeOf));
-  await sync(tenantId, rows, loaded.hasDefinition);
+  const levels = loaded.levels ?? LEVELS;
+  const rows = rowsFor(draft, loaded.records.map(codeOf), levels);
+  await sync(tenantId, rows, loaded.hasDefinition, { levels });
 
   // pgr-services validates serviceCode at the state root, so a city keeps a
   // copy there too, as the spreadsheet route does. Not fatal: the city's own
@@ -324,7 +341,7 @@ export async function saveComplaints(
       stateRoot,
       rows,
       rootDefinitions.some((record) => record.tenantId === stateRoot && text(dataOf(record).hierarchyType) === HIERARCHY_TYPE),
-      { shared: true },
+      { shared: true, levels },
     ).catch(() => undefined);
   }
 
