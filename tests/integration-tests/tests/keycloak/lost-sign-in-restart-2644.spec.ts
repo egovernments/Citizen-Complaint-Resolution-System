@@ -12,8 +12,9 @@
  * not to "Back to Application" at the site root.
  *
  * Needs the isolated realm fixture (IDENTITY_TEST_KEYCLOAK_ADMIN_URL/_TOKEN)
- * for a throwaway employee login with an email, and the mail sink the realm's
- * mail reaches (ONBOARDING_E2E_MAILPIT_URL, as the onboarding e2e uses).
+ * for a throwaway employee login with an email, the mail sink the realm's
+ * mail reaches (ONBOARDING_E2E_MAILPIT_URL, as the onboarding e2e uses), and
+ * the workspace (IDENTITY_TEST_TENANT_SLUG).
  */
 import { randomUUID } from 'node:crypto';
 import { test, expect } from '@playwright/test';
@@ -31,7 +32,8 @@ test.describe('lost employee sign-in restarts at the workspace sign-in #2644', (
   const replacement = `Reset@${randomUUID()}`;
 
   test.beforeAll(async () => {
-    if (!process.env.ONBOARDING_E2E_MAILPIT_URL || !process.env.IDENTITY_TEST_KEYCLOAK_ADMIN_URL || !process.env.IDENTITY_TEST_KEYCLOAK_ADMIN_TOKEN) return;
+    if (!process.env.ONBOARDING_E2E_MAILPIT_URL || !process.env.IDENTITY_TEST_KEYCLOAK_ADMIN_URL || !process.env.IDENTITY_TEST_KEYCLOAK_ADMIN_TOKEN
+      || !process.env.IDENTITY_TEST_TENANT_SLUG) return;
     const admin = keycloakAdmin();
     const username = `e2e-lost-${randomUUID()}`;
     email = `${username}@example.test`;
@@ -52,7 +54,7 @@ test.describe('lost employee sign-in restarts at the workspace sign-in #2644', (
   });
 
   test('"Start sign-in again" leads to the workspace sign-in', { tag: ['@area:keycloak', '@persona:employee'] }, async ({ context }) => {
-    test.skip(!userUrl, 'needs the Keycloak admin fixture and ONBOARDING_E2E_MAILPIT_URL');
+    test.skip(!userUrl, 'needs the Keycloak admin fixture, ONBOARDING_E2E_MAILPIT_URL and IDENTITY_TEST_TENANT_SLUG');
 
     const tabA = await context.newPage();
     await tabA.goto(authorizeUrl(BASE_URL, 'employee'));
@@ -81,6 +83,7 @@ test.describe('lost employee sign-in restarts at the workspace sign-in #2644', (
 
     const signIn = tabA.waitForRequest(r => new URL(r.url()).pathname === surfacePath('employee', 'user/login').replace(/\/$/, ''));
     await restart.click();
-    await signIn;
+    // On digit-ui's origin, not Keycloak's: a relative link would keep the path but 404 there.
+    expect(new URL((await signIn).url()).origin).toBe(new URL(BASE_URL).origin);
   });
 });
