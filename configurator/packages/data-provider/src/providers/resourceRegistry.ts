@@ -346,10 +346,33 @@ export function getMdmsResources(): Record<string, ResourceConfig> {
   return result;
 }
 
+/**
+ * ours#854 / #855: generic screens whose master nothing on DIGIT 3.x reads, so an edit there changes nothing (and
+ * several of these schemas are absent, so Create fails). Not offered in Advanced or as a route; the registry entry
+ * stays for any code that reads the config. Kept: Workflow Auto Escalation / Escalation Ignore (pgr-services'
+ * escalation guard reads them) and Security Policy (the employee app's unmask reads it).
+ *  - inbox-config: INBOX.InboxQueryConfiguration - /inbox is gone on 3.x; the inbox calls pgr-services.
+ *  - workflow-services / workflow-config / workflow-bs-master: Workflow.* masters read only by 2.x egov-workflow-v2.
+ *  - id-formats: idgen on 3.x uses pre-registered templates; the compat layer drops the format.
+ *  - cron-jobs: no scheduler reads CronJobAPIConfig.
+ *  - encryption-policy / decryption-abac / masking-patterns: masking on 3.x is fixed in the compat layer.
+ *  - tenant-boundary: egov-location.TenantBoundary is read only by the HRMS UI module, which is not built.
+ *  - sla-config: common-masters.wfSlaConfig is dashboard colour slabs read only by 2.x egov-workflow-v2 (nearing-SLA
+ *    inbox filter); the employee apps fetch it at boot and never read it (cfgreview F06, #1553).
+ */
+export const NO_CONSUMER_ON_3X: ReadonlySet<string> = new Set([
+  'inbox-config',
+  'workflow-services', 'workflow-config', 'workflow-bs-master',
+  'id-formats', 'cron-jobs',
+  'encryption-policy', 'decryption-abac', 'masking-patterns',
+  'tenant-boundary',
+  'sla-config',
+]);
+
 export function getGenericMdmsResources(): Record<string, ResourceConfig> {
   const result: Record<string, ResourceConfig> = {};
   for (const [name, config] of Object.entries(REGISTRY)) {
-    if (config.type === 'mdms' && !config.dedicated) result[name] = config;
+    if (config.type === 'mdms' && !config.dedicated && !NO_CONSUMER_ON_3X.has(name)) result[name] = config;
   }
   return result;
 }
