@@ -136,6 +136,14 @@ bootstrap_secrets:
   keycloak_github_client_secret: "<secret>"
 ```
 
+Register the broker endpoint with each provider before the deploy, or its
+sign-in fails with `redirect_uri_mismatch`. The URI is per realm:
+`https://<domain>/auth/realms/<keycloak_organization_realm>/broker/google/endpoint`
+(and `.../broker/github/endpoint`). The deploy prints the exact URI for each
+configured provider. A provider that is not in `identity_signin_methods` stays
+configured but is hidden on Keycloak's own login pages; adding it to the list
+shows it on the next deploy.
+
 The provisioning script writes these ordered lists to
 `digit.auth.signin.methods` and `digit.auth.signup.methods` attributes on the
 `digit-identity-bff` Keycloak client. The BFF reads them and Keycloak's provider
