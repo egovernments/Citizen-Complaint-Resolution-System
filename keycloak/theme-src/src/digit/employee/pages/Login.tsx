@@ -99,7 +99,7 @@ export default function Login(props: DigitPageProps<Extract<KcContext, { pageId:
                 {!usernameHidden && (
                     <TextField
                         id="username"
-                        label={digit.t("CORE_LOGIN_USERNAME")}
+                        label={digit.t("CORE_LOGIN_EMAIL")}
                         required
                         input={{
                             name: "username",
@@ -109,6 +109,11 @@ export default function Login(props: DigitPageProps<Extract<KcContext, { pageId:
                             onChange: event => setUsername(event.target.value)
                         }}
                     />
+                )}
+                {!usernameHidden && username.trim() !== "" && !username.includes("@") && (
+                    <p className="dg-text" role="note">
+                        {digit.t("CORE_LOGIN_EMAIL_HINT")}
+                    </p>
                 )}
                 <div className="dg-field">
                     <label className="dg-label" htmlFor="password">

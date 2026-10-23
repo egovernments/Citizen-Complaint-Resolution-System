@@ -90,7 +90,7 @@ function buildTemplate(
     ['dateOfAppointment (YYYY-MM-DD).'],
     [''],
     ['Email is required. New employees receive a secure password setup email.'],
-    ['Each employee signs in with their employee code as username.'],
+    ['Each employee signs in with their email address.'],
   ]);
   notes['!cols'] = [{ wch: 80 }];
   XLSX.utils.book_append_sheet(wb, notes, 'Instructions');
