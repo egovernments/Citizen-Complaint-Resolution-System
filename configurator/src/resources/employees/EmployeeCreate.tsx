@@ -44,7 +44,7 @@ export function EmployeeCreate() {
     user: {
       type: 'EMPLOYEE',
       active: true,
-      gender: 'MALE',
+      // ours (cfgreview F17, #1563): no gender is assumed; the admin picks one
       tenantId,
       roles: [],
     },
@@ -107,10 +107,10 @@ export function EmployeeCreate() {
           disabled
           reference="tenants"
           optionValue="code"
-          optionText="code"
+          optionText="name"
           validate={v.codeRequired}
           placeholder="Select tenant"
-          help="Employees are invited to this workspace."
+          help={`Employees are invited to this workspace (${tenantId}). The roles below are held here.`}
         />
       </FieldSection>
 
@@ -162,7 +162,7 @@ export function EmployeeCreate() {
       </FieldSection>
 
       <FieldSection title="Roles">
-        <RolesEditor tenantId={tenantId} help="Pick one or more. GRO, DGRO, PGR_LME, CSR are typical for PGR." />
+        <RolesEditor tenantId={tenantId} help={`Held at ${tenantId}. Pick one or more; for complaints, Grievance Routing Officer (GRO), Last Mile Employee (PGR_LME) and Customer Support (CSR) are typical.`} />
       </FieldSection>
 
       <FieldSection title="Assignments">
