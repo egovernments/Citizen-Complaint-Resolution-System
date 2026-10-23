@@ -275,7 +275,9 @@ const PGRDetails = () => {
   const [selectedAction, setSelectedAction] = useState(null);
   const [toast, setToast] = useState({ show: false, label: "", type: "" });
   // Derived address levels (County / Sub-County / Ward …) for the summary card.
-  const [boundaryRows, setBoundaryRows] = useState([]);
+  // null = the locality chain is still loading (the page waits for it, so the rows do not push the timeline and the
+  // Take Action bar down after they are on screen); [] = none / failed (plain locality row)
+  const [boundaryRows, setBoundaryRows] = useState(null);
   const userInfo = Digit.UserService.getUser();
 
   // Service definitions (leaf complaint types) adapted from the single
@@ -366,7 +368,8 @@ const PGRDetails = () => {
     let cancelled = false;
     (async () => {
       if (!complaintTenantId || !complaintLocalityCode) {
-        if (!cancelled) setBoundaryRows([]);
+        // only a LOADED complaint without a locality settles to []; while it loads the rows stay null
+        if (!cancelled && pgrData) setBoundaryRows([]);
         return;
       }
       const { hierarchyType } = await getTenantHierarchy(complaintTenantId);
@@ -393,7 +396,7 @@ const PGRDetails = () => {
     return () => {
       cancelled = true;
     };
-  }, [complaintTenantId, complaintLocalityCode, t]);
+  }, [complaintTenantId, complaintLocalityCode, t, !!pgrData]);
 
   // Hook to update the complaint
   const { mutate: UpdateComplaintMutation } = Digit.Hooks.pgr.usePGRUpdate(complaintTenantId);
@@ -626,7 +629,7 @@ const PGRDetails = () => {
   };
 
   // Display loader until required data loads
-  if (isLoading || isMDMSLoading || isWorkflowLoading) return <Loader />;
+  if (isLoading || isMDMSLoading || isWorkflowLoading || boundaryRows === null) return <Loader />;
 
   // Full hierarchy breakdown for the selected complaint type (null => flat).
   const complaintServiceCode = pgrData?.ServiceWrappers?.[0]?.service?.serviceCode;
@@ -692,7 +695,7 @@ const PGRDetails = () => {
                   // Full address: County / Sub-County / Ward derived from the
                   // boundary hierarchy (CCRS#927). Falls back to the single
                   // locality row if the lookup hasn't resolved.
-                  ...(boundaryRows.length > 0
+                  ...((boundaryRows || []).length > 0
                     ? boundaryRows.map((r) => ({
                         inline: true,
                         label: r.label,
