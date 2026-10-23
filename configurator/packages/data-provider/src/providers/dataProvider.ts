@@ -588,6 +588,21 @@ async function mdmsSearchAll(client: DigitApiClient, tenant: string, schema: str
   return all;
 }
 
+/**
+ * Every ACTIVE tenant.tenants row under `tenant`, paged. One 200-row page missed real tenants once the state held more
+ * rows than that (deactivated test tenants come back first): the child-tenant fallbacks below then skipped counties.
+ * Tolerant like the single page it replaces - no count check, stops at a short page.
+ */
+async function activeTenantRows(client: DigitApiClient, tenant: string): Promise<MdmsRecord[]> {
+  const out: MdmsRecord[] = [];
+  for (let offset = 0; offset < 20_000; offset += 500) {
+    const page = await client.mdmsSearch(tenant, 'tenant.tenants', { limit: 500, offset, isActive: true });
+    out.push(...page);
+    if (page.length < 500) break;
+  }
+  return out;
+}
+
 async function mdmsGetList(
   client: DigitApiClient,
   config: ResourceConfig,
@@ -622,7 +637,7 @@ async function hrmsGetList(client: DigitApiClient, config: ResourceConfig, tenan
 
   // If root tenant returned 0 results, search all city-level sub-tenants
   if (!tenant.includes('.')) {
-    const tenantRecords = await client.mdmsSearch(tenant, 'tenant.tenants', { limit: 200 });
+    const tenantRecords = await activeTenantRows(client, tenant);
     const cityTenants = tenantRecords
       .filter((r) => r.isActive && r.data?.code && String(r.data.code).startsWith(`${tenant}.`))
       .map((r) => String(r.data.code));
@@ -657,7 +672,7 @@ async function hrmsFindOne(
   const direct = await searchAt(tenantId);
   if (direct) return direct;
   if (!tenantId.includes('.')) {
-    const tenantRecords = await client.mdmsSearch(tenantId, 'tenant.tenants', { limit: 200 });
+    const tenantRecords = await activeTenantRows(client, tenantId);
     const cityTenants = tenantRecords
       .filter((r) => r.isActive && r.data?.code && String(r.data.code).startsWith(`${tenantId}.`))
       .map((r) => String(r.data.code));
@@ -749,7 +764,7 @@ async function boundaryGetList(client: DigitApiClient, config: ResourceConfig, t
   // `ke.nairobi` (and peers). Each tenant's tree is concatenated; duplicates
   // are avoided because tenants own disjoint boundary code-spaces.
   if (!tenantId.includes('.')) {
-    const tenantRecords = await client.mdmsSearch(tenantId, 'tenant.tenants', { limit: 200 });
+    const tenantRecords = await activeTenantRows(client, tenantId);
     const cityTenants = tenantRecords
       .filter((r) => r.isActive && r.data?.code && String(r.data.code).startsWith(`${tenantId}.`))
       .map((r) => String(r.data.code));
@@ -834,9 +849,7 @@ async function resolveComplaintAddressTenant(
   localityCode: string | undefined,
 ): Promise<string> {
   if (sessionTenant.includes('.')) return sessionTenant;
-  const tenantRecords = await client
-    .mdmsSearch(sessionTenant, 'tenant.tenants', { limit: 200 })
-    .catch(() => [] as MdmsRecord[]);
+  const tenantRecords = await activeTenantRows(client, sessionTenant).catch(() => [] as MdmsRecord[]);
   const cityTenants = tenantRecords
     .filter((r) => r.isActive && r.data?.code && String(r.data.code).startsWith(`${sessionTenant}.`))
     .map((r) => String(r.data.code));
@@ -1141,7 +1154,7 @@ async function boundaryHierarchyGetList(client: DigitApiClient, config: Resource
   const rootHierarchies = await client.boundaryHierarchySearch(tenantId).catch(() => []);
   let all = rootHierarchies;
   if (!tenantId.includes('.')) {
-    const tenantRecords = await client.mdmsSearch(tenantId, 'tenant.tenants', { limit: 200 });
+    const tenantRecords = await activeTenantRows(client, tenantId);
     const cityTenants = tenantRecords
       .filter((r) => r.isActive && r.data?.code && String(r.data.code).startsWith(`${tenantId}.`))
       .map((r) => String(r.data.code));
