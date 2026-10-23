@@ -92,7 +92,7 @@ function CheckList({
 type Errors = Partial<Record<'code' | 'name' | 'mobile' | 'email' | 'departments' | 'designation' | 'jurisdictions', string>>;
 
 /**
- * Add one employee: who they are, how to reach them, the departments and
+ * Add one employee: who they are, how to reach them, the department and
  * designation they hold, what they can do, and where they can act. Everything
  * they choose from comes from the earlier steps.
  *
@@ -210,11 +210,7 @@ export function EmployeeDialog({
     if (!mobile.trim()) next.mobile = t('employees.mobile_required', 'Enter their mobile number.');
     else if (!options.mobilePattern.test(mobile.trim())) next.mobile = t('employees.mobile_format', 'That number doesn’t match this workspace’s mobile format.');
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) next.email = t('employees.email_required', 'Enter a valid email to invite this employee.');
-    if (!departments.length) {
-      next.departments = editing
-        ? t('employees.department_required', 'Choose a department.')
-        : t('employees.departments_required', 'Choose at least one department.');
-    }
+    if (!departments.length) next.departments = t('employees.department_required', 'Choose a department.');
     if (!designation) next.designation = t('employees.designation_required', 'Choose a designation.');
     if (!jurisdictions.length) next.jurisdictions = t('employees.jurisdictions_required', 'Choose where they can act.');
     setErrors(next);
@@ -241,7 +237,7 @@ export function EmployeeDialog({
         name: name.trim(),
         mobileNumber: mobile.trim(),
         emailId: email.trim() || undefined,
-        departments,
+        department: departments[0],
         designation,
         roles: roles.length ? roles : ['EMPLOYEE'],
         jurisdictions,
@@ -340,41 +336,28 @@ export function EmployeeDialog({
             )}
           </div>
 
-          {editing ? (
-            field(
-              'departments',
-              t('departments.department', 'Department'),
-              <>
-                <Select value={departments[0] ?? ''} onValueChange={(code) => setDepartments([code])}>
-                  <SelectTrigger id={`${id}-departments`} aria-required="true" className="bg-card">
-                    <SelectValue placeholder={t('common.choose_department', 'Choose a department')} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {departmentChoices.map((choice) => (
-                      <SelectItem key={choice.code} value={choice.code}>
-                        {choice.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {pastDepartments.length > 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    {t('employees.past_departments', 'Also on their record from before: %{departments}.', { departments: pastDepartments.join(', ') })}
-                  </p>
-                )}
-              </>,
-            )
-          ) : (
-            <CheckList
-              legend={t('departments.departments', 'Departments')}
-              hint={t('employees.departments_hint', 'Choose one or more. The first is their main one.')}
-              choices={departmentChoices}
-              picked={departments}
-              onChange={setDepartments}
-              error={errors.departments}
-              required
-              empty={t('employees.departments_empty', 'Add departments first.')}
-            />
+          {field(
+            'departments',
+            t('departments.department', 'Department'),
+            <>
+              <Select value={departments[0] ?? ''} onValueChange={(code) => setDepartments([code])}>
+                <SelectTrigger id={`${id}-departments`} aria-required="true" className="bg-card">
+                  <SelectValue placeholder={t('common.choose_department', 'Choose a department')} />
+                </SelectTrigger>
+                <SelectContent>
+                  {departmentChoices.map((choice) => (
+                    <SelectItem key={choice.code} value={choice.code}>
+                      {choice.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {pastDepartments.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  {t('employees.past_departments', 'Also on their record from before: %{departments}.', { departments: pastDepartments.join(', ') })}
+                </p>
+              )}
+            </>,
           )}
 
           {field(

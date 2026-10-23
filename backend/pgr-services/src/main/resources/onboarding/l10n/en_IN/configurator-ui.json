@@ -586,8 +586,6 @@
 {"code": "app.onboarding.employees.continue_hint", "message": "Add at least one employee to continue.", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.employees.department_required", "message": "Choose a department.", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.employees.departments_empty", "message": "Add departments first.", "module": "configurator-ui", "locale": "en_IN"},
-{"code": "app.onboarding.employees.departments_hint", "message": "Choose one or more. The first is their main one.", "module": "configurator-ui", "locale": "en_IN"},
-{"code": "app.onboarding.employees.departments_required", "message": "Choose at least one department.", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.employees.designation_required", "message": "Choose a designation.", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.employees.edit_intro", "message": "Changes apply the next time they sign in.", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.employees.email", "message": "Email", "module": "configurator-ui", "locale": "en_IN"},
