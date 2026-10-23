@@ -9,6 +9,11 @@ const i18nextConfig = () => ({
   ns: ["translations"],
   defaultNS: "translations",
   keySeparator: false,
+  // One namespace, so a ":" is never a namespace prefix. Left at i18next's
+  // default, t() on text with a colon dropped everything before it: a
+  // complaint described as "Note: the drain is blocked" showed " the drain is
+  // blocked", and "since 10:30 am" showed "30 am".
+  nsSeparator: false,
   saveMissing: true,
   saveMissingTo: "current",
   missingKeyHandler: (lngs, ns, key, fallbackValue) => {
