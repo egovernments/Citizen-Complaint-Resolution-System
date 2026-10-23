@@ -9114,6 +9114,18 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.geography.list.saved_one",
+    "message": "1 boundary is already saved, so it was left out.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.list.saved_other",
+    "message": "%{count} boundaries are already saved, so they were left out.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.geography.list.type_mismatch",
     "message": "Your list is in the \"%{listType}\" hierarchy, and these boundaries go into \"%{type}\". Everything you add goes into one hierarchy.",
     "module": "configurator-ui",

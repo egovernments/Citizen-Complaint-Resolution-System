@@ -265,8 +265,8 @@ export default function GeographyStep() {
             trackMethod('geography', preconfiguredSet ? 'preconfigured' : source === 'osm' ? 'fetch' : 'excel', true);
             close();
           }}
-          onDone={(selection) => {
-            const added = addSelection(tenant, selection, t, editing?.id);
+          onDone={(selection, saved) => {
+            const added = addSelection(tenant, selection, t, editing?.id, saved);
             if (added.error) return added.error;
             close();
             setSaveError(null);
@@ -277,6 +277,16 @@ export default function GeographyStep() {
                     ? t('geography.list.duplicates_one', '1 boundary was already in your list, so it was left out.')
                     : t('geography.list.duplicates_other', '%{count} boundaries were already in your list, so they were left out.', {
                         count: added.duplicates.toLocaleString('en-US'),
+                      }),
+              });
+            }
+            if (added.alreadySaved > 0) {
+              toast({
+                title:
+                  added.alreadySaved === 1
+                    ? t('geography.list.saved_one', '1 boundary is already saved, so it was left out.')
+                    : t('geography.list.saved_other', '%{count} boundaries are already saved, so they were left out.', {
+                        count: added.alreadySaved.toLocaleString('en-US'),
                       }),
               });
             }

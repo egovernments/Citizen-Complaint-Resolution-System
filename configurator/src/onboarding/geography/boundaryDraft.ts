@@ -157,9 +157,14 @@ export function selectionMismatch(
       });
 }
 
+/** An area already saved in the hierarchy, as boundaryService.existingBoundaries reads it. */
+export type SavedArea = { code: string; name?: string; parent?: string };
+
 export interface AddResult {
   /** Areas that joined the list. */
   added: number;
+  /** Areas left out because they're already saved in the hierarchy. */
+  alreadySaved: number;
   /** Areas left out because the same area (code, name, level and parent) is already in the list. */
   duplicates: number;
   /** Why nothing changed, for the import screen to show. */
@@ -168,33 +173,44 @@ export interface AddResult {
 
 /**
  * Adds a selection to the list, or puts it in place of `replaces` (Edit). An
- * area already in the list (same code, name, level and parent) is left out. A
- * different area whose code is taken (codes come from names, so two counties'
- * "Central" share one) gets the next free code, and its children follow it;
- * a sheet's codes are the operator's own, so a sheet with such a code is
- * refused instead.
+ * area already in the list (same code, name, level and parent), or already
+ * saved (`saved`: same code and parent), is left out. A different area whose
+ * code is taken (codes come from names, so two counties' "Central" share one)
+ * gets the next free code, and its children follow it; a sheet's codes are the
+ * operator's own, so a sheet with such a code is refused instead.
  */
-export function addSelection(tenantId: string, selection: NewSelection, t: OnboardingT = englishT, replaces?: string): AddResult {
+export function addSelection(
+  tenantId: string,
+  selection: NewSelection,
+  t: OnboardingT = englishT,
+  replaces?: string,
+  saved: SavedArea[] = [],
+): AddResult {
   const draft = drafts.get(tenantId) ?? { selections: [] };
   const error = selectionMismatch(listHierarchy(draft, replaces), selection, t);
-  if (error) return { added: 0, duplicates: 0, error };
+  if (error) return { added: 0, alreadySaved: 0, duplicates: 0, error };
 
   const others = draft.selections.filter((s) => s.id !== replaces);
   const listed = new Map(others.flatMap((s) => s.boundaries.map((b) => [b.code, b] as const)));
-  const used = new Set([...listed.keys(), ...selection.boundaries.map((b) => b.code)]);
+  const savedByCode = new Map(saved.map((area) => [area.code, area]));
+  const used = new Set([...listed.keys(), ...savedByCode.keys(), ...selection.boundaries.map((b) => b.code)]);
   const renamed = new Map<string, string>();
   const clashes: string[] = [];
   const boundaries: Boundary[] = [];
   let duplicates = 0;
+  let alreadySaved = 0;
   // Parents before children, so a parent's new code reaches its children.
   const depth = (b: Boundary) => selection.levels.indexOf(b.boundaryType);
   for (const b of [...selection.boundaries].sort((x, y) => depth(x) - depth(y))) {
     const parent = b.parent ? (renamed.get(b.parent) ?? b.parent) : b.parent;
     const there = listed.get(b.code);
-    if (!there) {
+    const savedThere = there ? undefined : savedByCode.get(b.code);
+    if (!there && !savedThere) {
       boundaries.push({ ...b, parent });
-    } else if (there.name === b.name && there.boundaryType === b.boundaryType && (there.parent ?? '') === (parent ?? '')) {
+    } else if (there && there.name === b.name && there.boundaryType === b.boundaryType && (there.parent ?? '') === (parent ?? '')) {
       duplicates++;
+    } else if (savedThere && (savedThere.parent ?? '') === (parent ?? '') && (!savedThere.name || savedThere.name === b.name)) {
+      alreadySaved++;
     } else if (selection.source === 'excel') {
       clashes.push(b.code);
     } else {
@@ -209,6 +225,7 @@ export function addSelection(tenantId: string, selection: NewSelection, t: Onboa
   if (clashes.length) {
     return {
       added: 0,
+      alreadySaved: 0,
       duplicates: 0,
       error: t('geography.list.code_clash', 'These codes are already in your list for other areas: %{codes}. Give them their own codes in the sheet.', {
         codes: clashes.join(', '),
@@ -225,6 +242,7 @@ export function addSelection(tenantId: string, selection: NewSelection, t: Onboa
     if (orphaned) {
       return {
         added: 0,
+        alreadySaved: 0,
         duplicates: 0,
         error: t('geography.list.orphans', 'This leaves out areas that %{count} other areas in your list sit inside. Remove those first.', {
           count: orphaned.toLocaleString('en-US'),
@@ -233,13 +251,13 @@ export function addSelection(tenantId: string, selection: NewSelection, t: Onboa
     }
   }
   // A sheet that only names areas already saved still joins: Save and continue uploads the names.
-  if (boundaries.length === 0 && selection.unnamed.length === 0) return { added: 0, duplicates, error: null };
+  if (boundaries.length === 0 && selection.unnamed.length === 0) return { added: 0, alreadySaved, duplicates, error: null };
 
   const entry: BoundarySelection = { ...selection, boundaries, id: replaces ?? `selection-${++lastSelectionId}` };
   setBoundaryDraft(tenantId, {
     selections: replaced ? draft.selections.map((s) => (s.id === replaces ? entry : s)) : [...draft.selections, entry],
   });
-  return { added: boundaries.length, duplicates, error: null };
+  return { added: boundaries.length, alreadySaved, duplicates, error: null };
 }
 
 /**

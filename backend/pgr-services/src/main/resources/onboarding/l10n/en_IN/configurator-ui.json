@@ -814,6 +814,8 @@
 {"code": "app.onboarding.geography.list.orphans", "message": "This leaves out areas that %{count} other areas in your list sit inside. Remove those first.", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.geography.list.remove_body", "message": "These boundaries haven’t been saved, so nothing else changes.", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.geography.list.saved_already", "message": "Your boundaries are saved, so no more can be added.", "module": "configurator-ui", "locale": "en_IN"},
+{"code": "app.onboarding.geography.list.saved_one", "message": "1 boundary is already saved, so it was left out.", "module": "configurator-ui", "locale": "en_IN"},
+{"code": "app.onboarding.geography.list.saved_other", "message": "%{count} boundaries are already saved, so they were left out.", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.geography.list.type_mismatch", "message": "Your list is in the \"%{listType}\" hierarchy, and these boundaries go into \"%{type}\". Everything you add goes into one hierarchy.", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.geography.load_failed", "message": "Couldn’t load your boundaries. %{reason}", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.geography.nothing_in_it_yet", "message": "Nothing in it yet", "module": "configurator-ui", "locale": "en_IN"},

@@ -107,7 +107,7 @@ describe('the unsaved list', () => {
     act(() => {
       result = addSelection(TENANT, selection([...NAIROBI.slice(0, 1), ...MOMBASA]));
     });
-    expect(result).toEqual({ added: 2, duplicates: 1, error: null });
+    expect(result).toEqual({ added: 2, alreadySaved: 0, duplicates: 1, error: null });
     expect(codes()).toEqual(['NBI', 'NBI_W1', 'NBI_W2', 'MSA', 'MSA_W1']);
   });
 
@@ -120,7 +120,7 @@ describe('the unsaved list', () => {
       // Another county's "Central": same code, other parent.
       result = addSelection(TENANT, selection([area('MSA', 'County'), area('CENTRAL', 'Ward', 'MSA')]));
     });
-    expect(result).toEqual({ added: 2, duplicates: 0, error: null });
+    expect(result).toEqual({ added: 2, alreadySaved: 0, duplicates: 0, error: null });
     const second = current().selections[1].boundaries;
     expect(second.map((b) => [b.code, b.parent])).toEqual([['MSA', undefined], ['CENTRAL_2', 'MSA']]);
   });
@@ -134,6 +134,23 @@ describe('the unsaved list', () => {
       addSelection(TENANT, selection([{ ...area('NBI', 'County'), name: 'Nairobi North' }, area('NBI_W7', 'Ward', 'NBI')]));
     });
     expect(current().selections[1].boundaries.map((b) => [b.code, b.parent])).toEqual([['NBI_2', undefined], ['NBI_W7', 'NBI_2']]);
+  });
+
+  it('checks a fetch against the areas already saved in the hierarchy', () => {
+    let result;
+    act(() => {
+      result = addSelection(
+        TENANT,
+        selection([area('NBI', 'County'), area('CENTRAL', 'Ward', 'NBI')]),
+        undefined,
+        undefined,
+        // Saved earlier: Nairobi itself, and two other counties' Centrals.
+        [{ code: 'NBI', name: 'NBI' }, { code: 'CENTRAL', name: 'Central', parent: 'MSA' }, { code: 'CENTRAL_2', name: 'Central', parent: 'KSM' }],
+      );
+    });
+    expect(result).toEqual({ added: 1, alreadySaved: 1, duplicates: 0, error: null });
+    // Nairobi is left out as saved; its Central skips the saved CENTRAL_2 too.
+    expect(current().selections[0].boundaries.map((b) => [b.code, b.parent])).toEqual([['CENTRAL_3', 'NBI']]);
   });
 
   it('refuses a sheet whose codes are taken by other areas: its codes are the operator\'s', () => {
@@ -150,7 +167,7 @@ describe('the unsaved list', () => {
     act(() => {
       result = addSelection(TENANT, selection([], { source: 'excel', method: 'excel', unnamed: [{ code: 'OLD', name: 'Old ward' }] }));
     });
-    expect(result).toEqual({ added: 0, duplicates: 0, error: null });
+    expect(result).toEqual({ added: 0, alreadySaved: 0, duplicates: 0, error: null });
     expect(current().selections[0].unnamed).toEqual([{ code: 'OLD', name: 'Old ward' }]);
   });
 

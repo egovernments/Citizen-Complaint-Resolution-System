@@ -61,7 +61,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useMapProviderConfig } from '@/hooks/useMapProviderConfig';
 import { BoundaryMap } from '@/components/ui/BoundaryMap';
 import { countryName, datasetName, fetchOfficialSet, statusDetail, type OfficialSet } from '@/utils/officialBoundaries';
-import { levelsMismatch, type ImportResume, type ListHierarchy, type NewSelection } from './boundaryDraft';
+import { levelsMismatch, type ImportResume, type ListHierarchy, type NewSelection, type SavedArea } from './boundaryDraft';
 import { LevelStatusBadge, OfficialSetSummary } from './OfficialConfidence';
 import { englishT, useOnboardingT, withNodes, type OnboardingT } from '../i18n';
 import type { BoundaryHierarchy, Boundary, BoundaryExcelRow } from '@/api/types';
@@ -173,8 +173,9 @@ export default function BoundaryImport({
   resume?: ImportResume | null;
   /** The hierarchy of the boundaries already in Geography's list, if any. */
   list?: ListHierarchy | null;
-  /** Adds the chosen boundaries to Geography's list; a message comes back when they can't join it. */
-  onDone: (selection: NewSelection) => string | null;
+  /** Adds the chosen boundaries to Geography's list, checked against the areas
+   *  already saved in their hierarchy; a message comes back when they can't join it. */
+  onDone: (selection: NewSelection, saved?: SavedArea[]) => string | null;
   onCancel: () => void;
 }) {
   const { state } = useApp();
@@ -975,11 +976,11 @@ export default function BoundaryImport({
     if (skipped.length > 0) {
       setStep('osm-review');
     } else {
-      runOsmCreate(boundaries, 0);
+      void runOsmCreate(boundaries, 0);
     }
   };
 
-  const runOsmCreate = (boundariesToCreate: Boundary[], skipped: number) => {
+  const runOsmCreate = async (boundariesToCreate: Boundary[], skipped: number) => {
     const validLevels = getSelectedLevels(adminLevels);
     const levelNames = validLevels.map(l => l.mappedName.trim());
 
@@ -1012,6 +1013,25 @@ export default function BoundaryImport({
     }
 
     if (!fetchedPlace) return;
+    // Codes come from names, so one may already belong to a different saved area:
+    // the list checks the new areas against those already in the hierarchy.
+    let saved: SavedArea[] = [];
+    if (existing) {
+      setLoading(true);
+      try {
+        saved = await boundaryService.existingBoundaries(boundaryTenant, OSM_HIERARCHY_TYPE);
+      } catch (e) {
+        setError(
+          t('geography.load_failed', 'Couldn’t load your boundaries. %{reason}', {
+            reason: e instanceof ApiClientError ? e.firstError : e instanceof Error ? e.message : String(e),
+          }),
+        );
+        setStep('map-levels');
+        return;
+      } finally {
+        setLoading(false);
+      }
+    }
     const refused = onDone({
       source: 'osm',
       method,
@@ -1035,7 +1055,7 @@ export default function BoundaryImport({
         attribution: fetchedAttribution,
         officialSet,
       },
-    });
+    }, saved);
     if (refused) {
       setError(refused);
       setStep('map-levels');
@@ -1939,7 +1959,7 @@ export default function BoundaryImport({
                   ? t('geography.creating', 'Creating...')
                   : t('geography.review.create_n', 'Create %{count} Boundaries', { count: pendingBoundaries.length })
               }
-              onSubmit={() => runOsmCreate(pendingBoundaries, skippedFeatures.length)}
+              onSubmit={() => void runOsmCreate(pendingBoundaries, skippedFeatures.length)}
               disabled={loading}
               icon={loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
             />
