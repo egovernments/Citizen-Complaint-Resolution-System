@@ -13,8 +13,8 @@
  */
 import { createHash } from 'node:crypto';
 import { BASE_URL } from './env';
-import { request as playwrightRequest, type Page } from '@playwright/test';
-import { IdentityHttpError, KeycloakSessionExpiredError, KeycloakSignInError, passwordSignIn, selectContext, surfacePath, type SignInCookie } from './identity-bff';
+import { request as playwrightRequest, type APIRequestContext, type Page } from '@playwright/test';
+import { IdentityHttpError, KeycloakSessionExpiredError, KeycloakSignInError, passwordSignIn, resolveTenant, selectContext, surfacePath, type SignInCookie } from './identity-bff';
 
 export interface TokenResponse {
   access_token: string;
@@ -106,16 +106,26 @@ async function withSession<T>(run: (fresh: boolean) => Promise<T>): Promise<T> {
   }
 }
 
-/** Persona credentials the BFF has refused the Configurator (CONFIGURATOR_ROLE_REQUIRED): they go straight to the employee surface. */
-const employeeOnly = new Set<string>();
+/**
+ * (tenant, person) pairs the BFF refused the Configurator (CONFIGURATOR_ROLE_REQUIRED
+ * is per tenant), kept as long as a refusal is: a role granted mid-run is picked up.
+ */
+const employeeOnly = new Map<string, number>();
+
+/** Forget every cached token, session, refusal and surface choice; for tests that stand up servers on reused ports. */
+export function resetAuthCaches() {
+  tokens.clear(); refusals.clear(); sessions.clear(); signInQueue.clear(); employeeOnly.clear();
+}
 
 /**
  * Acquire a DIGIT token through hosted sign-in and the BFF context exchange.
  *
  * The Configurator surface comes first: it is not bound to a workspace, so one
- * admin can select any tenant. Staff without a configurator role are refused
- * with exactly CONFIGURATOR_ROLE_REQUIRED (#2607) and fall back to the employee
- * surface, which is bound to the workspace IDENTITY_TEST_TENANT_SLUG names.
+ * admin can select any tenant. Staff without a configurator role at the tenant
+ * are refused with exactly CONFIGURATOR_ROLE_REQUIRED (#2607) and fall back to
+ * the employee surface, which is bound to the workspace IDENTITY_TEST_TENANT_SLUG
+ * names. For any other tenant the role refusal is the answer: the employee
+ * surface would only say TENANT_CONTEXT_UNAVAILABLE and hide why.
  */
 export async function getDigitToken(config: AuthConfig): Promise<TokenResponse> {
   if (config.userType === 'CITIZEN') throw new Error('Use citizenSignIn for citizen phone possession');
@@ -124,25 +134,29 @@ export async function getDigitToken(config: AuthConfig): Promise<TokenResponse> 
   const key = JSON.stringify([baseURL, tenant, config.username, digest(config.password)]);
   const hit = tokens.get(key);
   if (hit && hit.expiresAt - EXPIRY_MARGIN_MS > Date.now()) return hit.token;
-  const select = (surface: StaffSurface) => withSession(async (fresh) => {
+  const select = (surface: StaffSurface, beforeSelect?: (api: APIRequestContext) => Promise<void>) => withSession(async (fresh) => {
     const cookies = await signIn(baseURL, surface, config.username, config.password, { fresh });
     const api = await playwrightRequest.newContext({ storageState: { cookies, origins: [] }, ignoreHTTPSErrors: process.env.IGNORE_HTTPS_ERRORS === '1' });
     try {
+      await beforeSelect?.(api);
       return await selectContext(api, baseURL, surface, tenant);
     } finally {
       await api.dispose();
     }
   });
-  const personaKey = JSON.stringify([baseURL, config.username, digest(config.password)]);
+  const employee = (refused?: IdentityHttpError) => select('employee', async (api) => {
+    if ((await resolveTenant(api, baseURL)).tenantId !== tenant) throw refused ?? new IdentityHttpError(403, 'CONFIGURATOR_ROLE_REQUIRED');
+  });
+  const refusedAt = employeeOnly.get(key);
   let token: TokenResponse;
-  if (employeeOnly.has(personaKey)) token = await select('employee');
+  if (refusedAt !== undefined && Date.now() - refusedAt < REFUSAL_MS) token = await employee();
   else {
     try {
       token = await select('configurator');
     } catch (err) {
       if (!(err instanceof IdentityHttpError && err.code === 'CONFIGURATOR_ROLE_REQUIRED')) throw err;
-      employeeOnly.add(personaKey);
-      token = await select('employee');
+      token = await employee(err);
+      employeeOnly.set(key, Date.now());
     }
   }
   tokens.set(key, { token, expiresAt: Date.now() + token.expires_in * 1000 });

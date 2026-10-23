@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { chromium, type Page } from '@playwright/test';
 import { enterHostedUsername, hostedSignIn, IdentityHttpError, KeycloakSessionExpiredError, KeycloakSignInError, selectContext } from '../utils/identity-bff';
-import { getDigitToken } from '../utils/auth';
+import { getDigitToken, resetAuthCaches } from '../utils/auth';
 import { makeAttempt } from '../utils/profile';
 
 // Browser fixture checks only; the hosted form and landing application are doubles.
@@ -20,6 +20,7 @@ type Options = { split?: boolean; result?: 'complete' | 'failed'; existingSessio
 async function fixture(options: Options, run: (page: Page, baseURL: string, state: {
   paths: string[]; submissions: string[][]; resultReads: number; surfaces: string[];
 }) => Promise<void>) {
+  resetAuthCaches();
   const state = { paths: [] as string[], submissions: [] as string[][], resultReads: 0, surfaces: [] as string[] };
   const formPage = (passwordOnly = false) => `<form method="post" action="${passwordOnly ? '/auth/realms/test/password' : '/auth/realms/test/login'}">
     ${passwordOnly ? '' : '<input id="username" name="username">'}
@@ -88,6 +89,7 @@ async function fixture(options: Options, run: (page: Page, baseURL: string, stat
       if (state.resultReads > 1) { response.writeHead(404).end('{"code":"AUTH_RESULT_NOT_FOUND"}'); return; }
       setTimeout(() => response.end(JSON.stringify({ status: options.result, code: options.result === 'failed' ? 'SIGN_IN_FAILED' : 'ACTION_COMPLETE' })), 80);
     } else if (request.headers.cookie !== 'identity=fixture-session') response.writeHead(401).end('{"code":"SESSION_REQUIRED"}');
+    else if (path === '/identity/v1/tenant-contexts/fixture') response.end(JSON.stringify({ tenant: { tenantId: 'fixture', urlSlug: 'fixture' } }));
     else if (path === '/identity/v1/session') response.end(JSON.stringify({ authenticated: !options.denySession }));
     else if (path === '/identity/v1/contexts/_select') {
       const chunks = [];
@@ -209,18 +211,21 @@ for (const split of [false, true]) {
 const tokenAt = (base: string, tenant: string) =>
   getDigitToken({ baseURL: base, tenant, username: 'fixture-user', password: 'fixture-password' });
 
-test('an admin selects any tenant on the Configurator surface, with no employee sign-in', async () => fixture({}, async (_page, base, state) => {
+test('an admin selects any tenant on the Configurator surface and signs in once', async () => fixture({}, async (_page, base, state) => {
   assert.equal((await tokenAt(base, 'other')).UserRequest?.tenantId, 'other');
   assert.deepEqual(state.surfaces, ['configurator']);
+  assert.equal(state.submissions.length, 1);
 }));
 
-test('only CONFIGURATOR_ROLE_REQUIRED falls back to the employee surface, which stays bound to the workspace', async () => fixture({ staffOnly: true }, async (_page, base, state) => {
+test('only CONFIGURATOR_ROLE_REQUIRED falls back to the employee surface, for the workspace tenant only', async () => fixture({ staffOnly: true }, async (_page, base, state) => {
   assert.equal((await tokenAt(base, 'fixture')).UserRequest?.tenantId, 'fixture');
   assert.deepEqual(state.surfaces, ['configurator', 'employee']);
-  // Remembered: the next tenant goes straight to the employee surface, where another tenant is refused as the BFF does.
+  assert.equal(state.submissions.length, 2, 'one Keycloak post per surface');
+  // Another tenant keeps the BFF's own answer instead of the employee surface's TENANT_CONTEXT_UNAVAILABLE ...
   await assert.rejects(tokenAt(base, 'other'), (err: Error) =>
-    err instanceof IdentityHttpError && err.status === 403 && err.code === 'TENANT_CONTEXT_UNAVAILABLE');
-  assert.deepEqual(state.surfaces, ['configurator', 'employee', 'employee']);
+    err instanceof IdentityHttpError && err.status === 403 && err.code === 'CONFIGURATOR_ROLE_REQUIRED');
+  assert.deepEqual(state.surfaces, ['configurator', 'employee', 'configurator']);
+  assert.equal(state.submissions.length, 2, 'the sessions of both surfaces are reused');
 }));
 
 test('a refused password costs one Keycloak post; the next caller fails from the refusal cache', async () => fixture({ refuse: true }, async (_page, base, state) => {
