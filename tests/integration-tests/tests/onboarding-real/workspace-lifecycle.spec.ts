@@ -1,4 +1,4 @@
-import { test, expect, request as playwright, type APIRequestContext } from '@playwright/test';
+import { test, expect, chromium, request as playwright, type APIRequestContext } from '@playwright/test';
 import { authorizeUrl, citizenSignIn, hostedSignIn, identityJson, selectContext } from '../utils/identity-bff';
 import {
   BOUNDARIES, COMPLAINT_TYPES, DEPARTMENTS, DESIGNATION, Digit, act, activateAccount, allowing, baseURL, brandingStep, commandOtp,
@@ -15,7 +15,7 @@ test.use({ trace: 'off' });
  * removed member. Runs leave the tenant behind (no tenant delete API exists);
  * its slug starts with `e2e-`.
  */
-test('signup -> workspace DONE -> complaint lifecycle -> member removal on a fresh tenant', async ({ browser }) => {
+test('signup -> workspace DONE -> complaint lifecycle -> member removal on a fresh tenant', async () => {
   const missing = missingConfig();
   test.skip(missing.length > 0, `Real-stack onboarding gate; unset: ${missing.join(', ')}`);
   test.setTimeout(20 * 60_000);
@@ -121,6 +121,8 @@ test('signup -> workspace DONE -> complaint lifecycle -> member removal on a fre
 
     await test.step('4b. #2646: an onboarded employee signs out and signs in again with their email', async () => {
       const member = staff.find(m => m.key === 'gro-water')!;
+      // Launched here, not through the `browser` fixture, so an unset gate never needs a browser.
+      const browser = await chromium.launch();
       const context = await browser.newContext({ ignoreHTTPSErrors: process.env.ONBOARDING_E2E_IGNORE_HTTPS_ERRORS === '1' });
       try {
         const page = await context.newPage();
@@ -143,6 +145,7 @@ test('signup -> workspace DONE -> complaint lifecycle -> member removal on a fre
         expect(session.authenticated).toBe(true);
       } finally {
         await context.close();
+        await browser.close();
       }
     });
 
