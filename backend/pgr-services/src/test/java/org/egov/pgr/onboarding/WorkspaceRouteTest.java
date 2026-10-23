@@ -76,6 +76,15 @@ public class WorkspaceRouteTest {
                 .thenReturn(mapper.readTree("{\"TenantBoundary\":[{\"boundary\":[{\"code\":\"COUNTY\",\"children\":"+children+"}]}]}"));
     }
     private static final String WATER="{\"tenantId\":\"example\",\"data\":{\"code\":\"WATER\",\"active\":true}}";
+    @Test public void brandingProbeAcceptsSavedThemeWithoutLogo() throws Exception {
+        when(mdms.records(eq("example"),anyString(),any())).thenReturn(mapper.readTree("[]"));
+        mdms("tenant.tenants","[{\"data\":{\"imageId\":null}}]");
+        assertFalse(gateway.probe("example","BRANDING",null));
+        mdms("common-masters.ThemeConfig","[{\"tenantId\":\"example\",\"data\":{\"code\":\"themeconfig\"}}]");
+        assertTrue(gateway.probe("example","BRANDING",null));
+        mdms("common-masters.ThemeConfig","[{\"tenantId\":\"parent\",\"data\":{\"code\":\"themeconfig\"}},{\"isActive\":false,\"tenantId\":\"example\",\"data\":{}}]");
+        assertFalse(gateway.probe("example","BRANDING",null));
+    }
     @Test public void probesExcludePlatformPrerequisitesAndInactiveRows() throws Exception {
         when(mdms.records(eq("example"),anyString(),any())).thenReturn(mapper.readTree("[]"));
         mdms("tenant.tenants","[{\"data\":{\"imageId\":null}}]");

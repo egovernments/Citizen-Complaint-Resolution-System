@@ -16,6 +16,7 @@ import { useSelector } from "react-redux";
 import { useTranslation } from "react-i18next";
 import { Button } from "@egovernments/digit-ui-components-v2";
 import { formatLocaleParts } from "../../utils/localeDate";
+import { TRACK_COMPLAINT_TEXT_KEY, TRACK_COMPLAINT_TEXT_FALLBACK } from "../../utils/trackComplaintText";
 
 // PGR `_update` returns `ResponseInfo` (capital R); accept either casing.
 const hasUpdatePayload = (complaints) =>
@@ -137,14 +138,14 @@ const Response = () => {
   const supportingKey = success
     ? action === "RATE"
       ? "CS_COMMON_RATING_SUBMIT_TEXT"
-      : "CS_COMMON_TRACK_COMPLAINT_TEXT"
+      : TRACK_COMPLAINT_TEXT_KEY
     : "CS_COMMON_COMPLAINT_SUBMIT_RETRY";
   const supporting = tr(
     supportingKey,
     success
       ? action === "RATE"
         ? "Your rating has been submitted."
-        : "The notification along with complaint number is sent to your registered mobile number. You can track the complaint status using mobile or web app."
+        : TRACK_COMPLAINT_TEXT_FALLBACK
       : "Something went wrong while submitting your complaint. Please try again."
   );
 

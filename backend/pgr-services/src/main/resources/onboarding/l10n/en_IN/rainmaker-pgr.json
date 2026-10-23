@@ -230,6 +230,7 @@
 {"code": "CS_COMMON_SWEEPERS_ABSENT", "message": "Absenteeism of Sweepers", "module": "rainmaker-pgr", "locale": "en_IN"},
 {"code": "CS_COMMON_THANK_YOU", "message": "Thank You", "module": "rainmaker-pgr", "locale": "en_IN"},
 {"code": "CS_COMMON_TRACK_COMPLAINT_TEXT", "message": "The notification along with complaint number is sent to your registered mobile number. You can track the complaint status using mobile or web app.", "module": "rainmaker-pgr", "locale": "en_IN"},
+{"code": "CS_COMMON_TRACK_COMPLAINT_NEUTRAL_TEXT", "message": "Keep the complaint number to track the complaint on the web or mobile app.", "module": "rainmaker-pgr", "locale": "en_IN"},
 {"code": "CS_COMMON_UPLOAD_PHOTOS", "message": "UPLOAD PHOTOS", "module": "rainmaker-pgr", "locale": "en_IN"},
 {"code": "CS_COMPLAINTDETAILS_HOUSE", "message": "House/Street No", "module": "rainmaker-pgr", "locale": "en_IN"},
 {"code": "CS_COMPLAINTDETAILS_LANDMARK", "message": "Landmark", "module": "rainmaker-pgr", "locale": "en_IN"},

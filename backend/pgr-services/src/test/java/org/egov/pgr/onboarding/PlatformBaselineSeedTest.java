@@ -26,10 +26,11 @@ public class PlatformBaselineSeedTest {
      * v8 the fr_FR and pt_BR citizen and employee packs, and the en_IN keys those screens ask for;
      * v9 the dashboard's workspace links card and complaint-desk link in the hi_IN, fr_FR and pt_BR packs (#2589);
      * v10 the employee email sign-in strings, under new keys, in the en_IN, hi_IN, fr_FR and pt_BR configurator-ui packs (#2646);
-     * v11 the employee home's Dashboard card title in the en_IN, fr_FR and pt_BR rainmaker-common packs.
+     * v11 the employee home's Dashboard card title in the en_IN, fr_FR and pt_BR rainmaker-common packs;
+     * v12 the bulk-upload CSR-role note (en_IN configurator-ui) and the channel-neutral complaint success text (en_IN rainmaker-pgr).
      */
-    private static final String VERSION = "11";
-    private static final String SHA256 = "4488a5a5418d77539641097771fb1957d411c0ec22635df2c00b51603aa945a7";
+    private static final String VERSION = "12";
+    private static final String SHA256 = "8c3e9e3266e34c746cebcaf030d5e6275f9640b0d35114bb477f628111022854";
     @Test public void contentChangesComeWithAVersionBump() throws Exception {
         byte[] bytes;
         try (var in = PlatformBaselineSeedTest.class.getResourceAsStream("/onboarding/platform-baseline-v1.json")) { bytes = in.readAllBytes(); }
