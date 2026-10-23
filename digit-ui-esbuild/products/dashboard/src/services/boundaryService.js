@@ -49,6 +49,77 @@ export function fetchTenantHierarchyType(tenantId = getTenantId()) {
   return hierarchyTypes.get(tenantId);
 }
 
+// ours (#1754, 2026-10-14): the tenants whose boundaries the dashboard reads.
+const boundaryTenantLists = new Map();
+
+/** The tenant has a boundary hierarchy definition of its own (200 either way, so no 4xx on a state). */
+async function hasHierarchyDefinition(tenantId) {
+  try {
+    const hierarchyType = await fetchTenantHierarchyType(tenantId);
+    const response = await authFetch(`/boundary-service/boundary-hierarchy-definition/_search`, {
+      headers: withTraceHeaders({}),
+      sessionCritical: false,
+      buildBody: () => ({
+        RequestInfo: buildRequestInfo("dashboard-boundary"),
+        BoundaryTypeHierarchySearchCriteria: { tenantId, hierarchyType, limit: 1, offset: 0 },
+      }),
+    });
+    if (!response.ok) return true; // unknown: keep reading the tenant itself, as before
+    return Number((await response.json())?.totalCount ?? 0) > 0;
+  } catch (error) {
+    console.warn("boundary-hierarchy-definition/_search error", error);
+    return true;
+  }
+}
+
+/** The tenant's direct child tenants (tenant.tenants codes `<tenantId>.<x>`). */
+async function childTenants(tenantId) {
+  try {
+    const response = await authFetch(getMdmsSearchUrl(), {
+      headers: withTraceHeaders({}),
+      sessionCritical: false,
+      buildBody: () => ({
+        RequestInfo: buildRequestInfo("dashboard-boundary"),
+        MdmsCriteria: { tenantId, moduleDetails: [{ moduleName: "tenant", masterDetails: [{ name: "tenants" }] }] },
+      }),
+    });
+    if (!response.ok) return [];
+    const rows = (await response.json())?.MdmsRes?.tenant?.tenants;
+    const prefix = `${tenantId}.`;
+    return [...new Set((Array.isArray(rows) ? rows : [])
+      .map((row) => String(row?.code ?? ""))
+      .filter((code) => code.startsWith(prefix) && !code.slice(prefix.length).includes(".")))];
+  } catch (error) {
+    console.warn("tenant.tenants _search error", error);
+    return [];
+  }
+}
+
+/**
+ * Where the tenant's boundaries live: the tenant itself when it has a hierarchy definition (a county, or a state in
+ * the legacy flat layout), else its direct child tenants that have one (a state in the county layout: Bomet's and
+ * Nairobi's boundaries live at ke.bomet / ke.nairobi, and boundary-relationships at the state answers 400
+ * HIERARCHY_DEFINITION_DOES_NOT_EXIST). Falls back to the tenant itself. Resolved once per tenant per page load.
+ * The public dashboard keeps reading its configured tenant (its anonymous calls stay minimal).
+ */
+export function resolveBoundaryTenants(tenantId = getTenantId()) {
+  if (isPublicDashboardRuntime()) return Promise.resolve([tenantId]);
+  if (!boundaryTenantLists.has(tenantId)) {
+    boundaryTenantLists.set(
+      tenantId,
+      (async () => {
+        if (await hasHierarchyDefinition(tenantId)) return [tenantId];
+        const owners = [];
+        for (const child of await childTenants(tenantId)) {
+          if (await hasHierarchyDefinition(child)) owners.push(child);
+        }
+        return owners.length ? owners : [tenantId];
+      })()
+    );
+  }
+  return boundaryTenantLists.get(tenantId);
+}
+
 
 /**
  * Fetch boundary entities with GeoJSON geometry.
@@ -60,13 +131,15 @@ export async function fetchBoundariesByCodes(codes = []) {
   // runtime must never do (publicRuntimeIsolation.test.js).
   if ((!isPublicDashboardRuntime() && !hasAuth()) || !codes.length) return [];
 
-  const tenantId = getTenantId();
+  const tenants = await resolveBoundaryTenants(getTenantId());
   const uniqueCodes = [...new Set(codes.filter(Boolean))];
   const all = [];
   let lastError = null;
   let successfulChunks = 0;
 
-  const outcomes = await runSequentialChunks(chunkValues(uniqueCodes, 100), async (chunk) => {
+  // ours (#1754): one chunk list per tenant holding boundaries (a county-layout state reads its counties)
+  const jobs = tenants.flatMap((tenantId) => chunkValues(uniqueCodes, 100).map((chunk) => ({ tenantId, chunk })));
+  const outcomes = await runSequentialChunks(jobs, async ({ tenantId, chunk }) => {
     const params = new URLSearchParams({
       tenantId,
       codes: chunk.join(","),
@@ -172,37 +245,41 @@ export async function fetchBoundaryRelationshipsByCodes(codes = [], { hierarchyT
   if (!rootCode) return {};
 
   const index = {};
+  // ours (#1754): a county-layout state reads each county's whole tree (its ward codes span the counties)
+  const tenants = await resolveBoundaryTenants(tenantId);
 
-  try {
-    hierarchyType = hierarchyType || (await fetchTenantHierarchyType(tenantId));
-    const params = new URLSearchParams({
-      tenantId,
-      codes: rootCode,
-      hierarchyType,
-      includeChildren: "true",
-      limit: "500",
-    });
+  for (const boundaryTenant of tenants) {
+    try {
+      const type = hierarchyType || (await fetchTenantHierarchyType(boundaryTenant));
+      const params = new URLSearchParams({
+        tenantId: boundaryTenant,
+        ...(boundaryTenant === tenantId ? { codes: rootCode } : {}),
+        hierarchyType: type,
+        includeChildren: "true",
+        limit: "500",
+      });
 
-    const response = await authFetch(
-      `/boundary-service/boundary-relationships/_search?${params}`,
-      {
-        headers: withTraceHeaders({}),
-        buildBody: () => ({ RequestInfo: buildRequestInfo("dashboard-boundary") }),
-        sessionCritical: false,
+      const response = await authFetch(
+        `/boundary-service/boundary-relationships/_search?${params}`,
+        {
+          headers: withTraceHeaders({}),
+          buildBody: () => ({ RequestInfo: buildRequestInfo("dashboard-boundary") }),
+          sessionCritical: false,
+        }
+      );
+
+      if (!response.ok) {
+        console.warn(`boundary-relationships/_search failed (${response.status})`);
+        continue;
       }
-    );
 
-    if (!response.ok) {
-      console.warn(`boundary-relationships/_search failed (${response.status})`);
-      return index;
+      const payload = await response.json();
+      for (const tenantBoundary of payload?.TenantBoundary ?? []) {
+        flattenRelationshipTree(tenantBoundary?.boundary, [], index);
+      }
+    } catch (error) {
+      console.warn("boundary-relationships/_search error", error);
     }
-
-    const payload = await response.json();
-    for (const tenantBoundary of payload?.TenantBoundary ?? []) {
-      flattenRelationshipTree(tenantBoundary?.boundary, [], index);
-    }
-  } catch (error) {
-    console.warn("boundary-relationships/_search error", error);
   }
 
   return index;
