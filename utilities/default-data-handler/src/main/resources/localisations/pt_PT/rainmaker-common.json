@@ -1278,6 +1278,12 @@
         "locale": "pt_PT"
     },
     {
+        "code": "DASHBOARD_CARD_HEADER",
+        "message": "Painel",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
         "code": "DIGIT_I_ACCEPT",
         "message": "Aceito",
         "module": "rainmaker-common",

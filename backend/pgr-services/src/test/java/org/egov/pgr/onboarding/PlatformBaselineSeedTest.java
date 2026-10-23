@@ -25,10 +25,11 @@ public class PlatformBaselineSeedTest {
      * v7 drops CSR's /user/users/_createnovalidate grant, which BaselineUpgrader also deactivates (#2239);
      * v8 the fr_FR and pt_BR citizen and employee packs, and the en_IN keys those screens ask for;
      * v9 the dashboard's workspace links card and complaint-desk link in the hi_IN, fr_FR and pt_BR packs (#2589);
-     * v10 the employee email sign-in strings, under new keys, in the en_IN, hi_IN, fr_FR and pt_BR configurator-ui packs (#2646).
+     * v10 the employee email sign-in strings, under new keys, in the en_IN, hi_IN, fr_FR and pt_BR configurator-ui packs (#2646);
+     * v11 the employee home's Dashboard card title in the en_IN, fr_FR and pt_BR rainmaker-common packs.
      */
-    private static final String VERSION = "10";
-    private static final String SHA256 = "0c0af81d0efe06929ceb26bfe478008ff5c80c02a813625fc3224b9f34503ebd";
+    private static final String VERSION = "11";
+    private static final String SHA256 = "4488a5a5418d77539641097771fb1957d411c0ec22635df2c00b51603aa945a7";
     @Test public void contentChangesComeWithAVersionBump() throws Exception {
         byte[] bytes;
         try (var in = PlatformBaselineSeedTest.class.getResourceAsStream("/onboarding/platform-baseline-v1.json")) { bytes = in.readAllBytes(); }

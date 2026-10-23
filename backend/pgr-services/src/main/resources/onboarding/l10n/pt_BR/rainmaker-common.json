@@ -212,6 +212,7 @@
 {"code": "CS_WORKING_CONTEXT_SUBTITLE", "message": "Estas são suas atribuições", "module": "rainmaker-common", "locale": "pt_BR"},
 {"code": "CS_WORKING_CONTEXT_UNAVAILABLE", "message": "Contexto de trabalho indisponível", "module": "rainmaker-common", "locale": "pt_BR"},
 {"code": "Clear", "message": "Limpar", "module": "rainmaker-common", "locale": "pt_BR"},
+{"code": "DASHBOARD_CARD_HEADER", "message": "Painel", "module": "rainmaker-common", "locale": "pt_BR"},
 {"code": "DIGIT_I_ACCEPT", "message": "Aceito", "module": "rainmaker-common", "locale": "pt_BR"},
 {"code": "DIGIT_I_DO_NOT_ACCEPT", "message": "Não aceito", "module": "rainmaker-common", "locale": "pt_BR"},
 {"code": "DIGIT_TABLE_OF_CONTENTS", "message": "Política de privacidade", "module": "rainmaker-common", "locale": "pt_BR"},

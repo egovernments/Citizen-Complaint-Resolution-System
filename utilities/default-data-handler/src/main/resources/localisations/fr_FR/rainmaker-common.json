@@ -1278,6 +1278,12 @@
         "locale": "fr_FR"
     },
     {
+        "code": "DASHBOARD_CARD_HEADER",
+        "message": "Tableau de bord",
+        "module": "rainmaker-common",
+        "locale": "fr_FR"
+    },
+    {
         "code": "DIGIT_I_ACCEPT",
         "message": "J'accepte",
         "module": "rainmaker-common",
