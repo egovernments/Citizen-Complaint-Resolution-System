@@ -186,7 +186,7 @@ export default function EmployeesStep() {
           }
         : {
             title: t('common.added_named', '%{name} added', { name: created.user.name }),
-            description: t('employees.signs_in_as', 'They sign in with %{email}.', { email: input.emailId || created.user.emailId || '' }),
+            description: t('employees.signs_in_with_email', 'They sign in with %{email}.', { email: input.emailId || created.user.emailId || '' }),
           },
     );
     reload();

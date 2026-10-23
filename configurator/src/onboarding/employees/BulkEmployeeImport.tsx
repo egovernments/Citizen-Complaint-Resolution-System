@@ -951,7 +951,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
               </p>
               <ul className="space-y-1">
                 <li>• {t('bulk_employees.got_record', 'HRMS employee record')}</li>
-                <li>• {t('bulk_employees.got_account', 'User account (sign in with email)')}</li>
+                <li>• {t('bulk_employees.got_account_email', 'User account (sign in with email)')}</li>
                 <li>• {t('bulk_employees.got_email', 'New employees receive a secure password setup email.')}</li>
                 <li>• {t('bulk_employees.got_roles', 'Role assignments')}</li>
                 <li>• {t('bulk_employees.got_jurisdiction', 'Boundary jurisdiction')}</li>
