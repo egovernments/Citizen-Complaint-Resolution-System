@@ -88,12 +88,11 @@ describe('employee', () => {
 
   it('marks everything it checks before saving, and not the optional roles', () => {
     dialog();
-    for (const label of [/^Employee code/, /^Full name/, /^Mobile number/, /^Email/, /^Designation/]) {
+    for (const label of [/^Employee code/, /^Full name/, /^Mobile number/, /^Email/, /^Department/, /^Designation/]) {
       const { control, marked } = field(label);
       expect(marked, String(label)).toBe(true);
       expect(control, String(label)).toHaveAttribute('aria-required', 'true');
     }
-    expect(group(/^Departments/)).toBe(true);
     expect(group(/^Jurisdictions/)).toBe(true);
     expect(group(/^System roles/)).toBe(false);
   });

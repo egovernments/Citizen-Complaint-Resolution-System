@@ -169,7 +169,7 @@ export default function EmployeesStep() {
       inviteError = err.reason;
     }
     trackRecordSave('employees', 'employee', 'create', {
-      departments: input.departments.length,
+      departments: 1,
       roles: input.roles.length,
       jurisdictions: input.jurisdictions.length,
       has_email: !!input.emailId,
