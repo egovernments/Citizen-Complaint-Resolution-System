@@ -12,6 +12,8 @@ export interface ProvisionedCitizen {
   mobile: string;
   prefix: string | undefined;
   name: string;
+  /** The DIGIT account's userName, as the citizen's token carries it. */
+  userName: string;
   token: string;
   uuid: string;
   tenantId: string;
@@ -77,10 +79,16 @@ async function resolveMobileRule(tenant: string): Promise<MobileRule> {
   return getMobileValidationRule(ROOT_TENANT);
 }
 
-export async function provisionFreshCitizen(opts?: { tenant?: string }): Promise<ProvisionedCitizen> {
+/** A new number this deployment's mobile rule accepts. */
+export async function freshCitizenMobile(tenant = TENANT): Promise<string> {
+  return generateValidMobile(await resolveMobileRule(tenant));
+}
+
+/** Signs a citizen in by BFF OTP: a new number unless `mobile` is given. */
+export async function provisionFreshCitizen(opts?: { tenant?: string; mobile?: string }): Promise<ProvisionedCitizen> {
   const tenant = opts?.tenant ?? TENANT;
   const rule = await resolveMobileRule(tenant);
-  const mobile = generateValidMobile(rule);
+  const mobile = opts?.mobile ?? generateValidMobile(rule);
   const request = await playwrightRequest.newContext();
   try {
     const context = await citizenSignIn(request, BASE_URL, mobile);
@@ -88,7 +96,7 @@ export async function provisionFreshCitizen(opts?: { tenant?: string }): Promise
     const name = context.UserRequest.name;
     if (typeof name !== 'string' || !name) throw new Error('Provisioned citizen has no name');
     return {
-      mobile, prefix: rule.prefix, name, token: context.access_token,
+      mobile, prefix: rule.prefix, name, userName: String(context.UserRequest.userName), token: context.access_token,
       uuid: context.UserRequest.uuid, tenantId: context.UserRequest.tenantId,
       pgrIdPrefix: await getPgrIdPrefix(),
       sessionCookies: (await request.storageState()).cookies,

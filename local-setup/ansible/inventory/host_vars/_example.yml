@@ -273,6 +273,11 @@ enable_legacy_pgr_dashboard: false
 # rebuild. The citizen app draws the banner only with citizen_banner_enabled.
 configurator_banner_enabled: false
 
+# Lets the Configurator's Geography step take more than one boundary selection
+# (several places, or a fetch plus a sheet) into its list before saving. Baked
+# in at build time (VITE_ENABLE_GEOGRAPHY_MULTIPLE_SELECTIONS). Off: one at a time.
+configurator_geography_multiple_selections: false
+
 # The Configurator's own Sentry and PostHog, rendered into its config.js at
 # deploy time, so changing them needs no rebuild. Unset means off: the repo
 # ships no project. The citizen app's analytics are MDMS rows instead

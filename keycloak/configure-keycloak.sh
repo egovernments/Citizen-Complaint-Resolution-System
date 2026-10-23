@@ -214,8 +214,20 @@ ensure_client() {
   printf '%s' "$client_uuid_value"
 }
 
+# The Keycloak-hosted login pages list every enabled identity provider, whatever
+# a client's sign-in methods say (CCRS #2647). A provider that no client offers
+# is hidden from them; hideOnLogin does not affect kc_idp_hint, which is how the
+# BFF starts a social sign-in.
+social_provider_offered() {
+  case ",$BFF_SIGNIN_METHODS,$EMPLOYEE_SIGNIN_METHODS,$CITIZEN_SIGNIN_METHODS," in
+    *",$1,"*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 ensure_social_provider() {
-  local alias=$1 provider=$2 client_id=$3 client_secret=$4 display_name
+  local alias=$1 provider=$2 client_id=$3 client_secret=$4 display_name hide=true
+  social_provider_offered "$alias" && hide=false
   case "$alias" in
     google) display_name=Google ;;
     github) display_name=GitHub ;;
@@ -228,16 +240,20 @@ ensure_social_provider() {
   }
   if kc get "identity-provider/instances/$alias" -r "$REALM" >/dev/null 2>&1; then
     kc update "identity-provider/instances/$alias" -r "$REALM" \
-      -s enabled=true -s "displayName=$display_name" -s trustEmail=false -s storeToken=false \
+      -s enabled=true -s "hideOnLogin=$hide" -s "displayName=$display_name" -s trustEmail=false -s storeToken=false \
       -s "firstBrokerLoginFlowAlias=$FIRST_BROKER_FLOW" -s "config.syncMode=$IDP_SYNC_MODE" \
       -s "config.clientId=$client_id" -s "config.clientSecret=$client_secret" >/dev/null
   else
     kc create identity-provider/instances -r "$REALM" \
       -s "alias=$alias" -s "providerId=$provider" -s "displayName=$display_name" -s enabled=true \
-      -s trustEmail=false -s storeToken=false \
+      -s "hideOnLogin=$hide" -s trustEmail=false -s storeToken=false \
       -s "firstBrokerLoginFlowAlias=$FIRST_BROKER_FLOW" -s "config.syncMode=$IDP_SYNC_MODE" \
       -s "config.clientId=$client_id" -s "config.clientSecret=$client_secret" >/dev/null
   fi
+  # Providers reject an unregistered redirect URI (redirect_uri_mismatch), and it
+  # differs per realm. Keycloak serves under /auth on the public origin.
+  printf '%s identity provider: register redirect URI %s/auth/realms/%s/broker/%s/endpoint with the provider (hideOnLogin=%s)\n' \
+    "$alias" "${IDENTITY_REDIRECT_URI%%/identity/*}" "$REALM" "$alias" "$hide" >&2
 }
 
 ensure_mapper() {

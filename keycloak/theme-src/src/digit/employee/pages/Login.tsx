@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useScript } from "keycloakify/login/pages/Login.useScript";
 import type { KcContext } from "../../../login/KcContext";
+import { resolveAccountAction } from "../../branding/branding";
 import { useBranding } from "../../branding/BrandingContext";
+import type { LoginMessageKey } from "../../branding/strings";
 import { PasswordInput, TextField } from "../../components/Fields";
 import { PrivacyConsent, pickPrivacyPolicy, type PrivacyPolicy } from "../../components/Privacy";
 import type { DigitPageProps } from "../../shared/kc";
@@ -13,6 +15,13 @@ import { employeeReturnTo, requestPasswordSetup } from "../../shared/passwordHel
  * popup then carries only its title.
  */
 const NO_POLICY: PrivacyPolicy = { contents: [] };
+
+/** Headings for the password check Keycloak runs before an account action (#2645). */
+const CONFIRM_HEADINGS = new Map<string, LoginMessageKey>([
+    ["UPDATE_PASSWORD", "CORE_LOGIN_CONFIRM_UPDATE_PASSWORD"],
+    ["CONFIGURE_TOTP", "CORE_LOGIN_CONFIRM_CONFIGURE_TOTP"],
+    ["UPDATE_EMAIL", "CORE_LOGIN_CONFIRM_UPDATE_EMAIL"]
+]);
 
 type LoginTexts = { header?: string; submitButtonLabel?: string; secondaryButtonLabel?: string };
 
@@ -34,6 +43,12 @@ function textsOf(loginConfig: unknown): LoginTexts {
  * "Forgot password?" is always shown, as in login.js. It opens an email form
  * that asks the identity BFF for a password link (shared/passwordHelp.ts);
  * the answer never reveals whether the account exists.
+ *
+ * When the identity BFF sends someone already signed in here to change their
+ * password, authenticator or email (`kc_action`), Keycloak first asks for the
+ * password again. The card then says so and offers a way back to the account
+ * page. No username is passed in the URL (it would reach access logs), so the
+ * person types it as for any sign-in.
  */
 export default function Login(props: DigitPageProps<Extract<KcContext, { pageId: "login.ftl" }>>) {
     const { kcContext, i18n, doUseDefaultCss, Template, classes } = props;
@@ -45,11 +60,15 @@ export default function Login(props: DigitPageProps<Extract<KcContext, { pageId:
     const [consented, setConsented] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [forgot, setForgot] = useState(false);
+    const [accountAction] = useState(() => resolveAccountAction({ loginAction: url.loginAction }));
+    const confirming = accountAction !== undefined;
+    const accountPage = slug ? `${employeeReturnTo(slug)}user/account` : undefined;
 
     useScript({ webAuthnButtonId: "authenticateWebAuthnButton", kcContext, i18n });
 
     const policy = pickPrivacyPolicy(branding?.privacyPolicy) ?? NO_POLICY;
     const texts = textsOf(branding?.loginConfig);
+    const showEmailHint = !usernameHidden && username.trim() !== "" && !username.includes("@");
     const invalidCredentials = messagesPerField.existsError("username", "password");
 
     const canSubmit =
@@ -76,7 +95,11 @@ export default function Login(props: DigitPageProps<Extract<KcContext, { pageId:
             doUseDefaultCss={doUseDefaultCss}
             classes={classes}
             displayMessage={!invalidCredentials}
-            headerNode={digit.tr(texts.header, digit.t("CORE_COMMON_LOGIN"))}
+            headerNode={
+                confirming
+                    ? digit.t(CONFIRM_HEADINGS.get(accountAction) ?? "CORE_LOGIN_CONFIRM_ACTION")
+                    : digit.tr(texts.header, digit.t("CORE_COMMON_LOGIN"))
+            }
             toast={invalidCredentials ? digit.t("INVALID_LOGIN_CREDENTIALS") : undefined}
         >
             <form
@@ -99,16 +122,22 @@ export default function Login(props: DigitPageProps<Extract<KcContext, { pageId:
                 {!usernameHidden && (
                     <TextField
                         id="username"
-                        label={digit.t("CORE_LOGIN_USERNAME")}
+                        label={digit.t("CORE_LOGIN_EMAIL")}
                         required
                         input={{
                             name: "username",
                             type: "text",
                             autoComplete: "username",
+                            "aria-describedby": showEmailHint ? "username-hint" : undefined,
                             value: username,
                             onChange: event => setUsername(event.target.value)
                         }}
                     />
+                )}
+                {showEmailHint && (
+                    <p id="username-hint" className="dg-text" role="note">
+                        {digit.t("CORE_LOGIN_EMAIL_HINT")}
+                    </p>
                 )}
                 <div className="dg-field">
                     <label className="dg-label" htmlFor="password">
@@ -143,6 +172,11 @@ export default function Login(props: DigitPageProps<Extract<KcContext, { pageId:
                 >
                     {digit.tr(texts.secondaryButtonLabel, digit.t("CORE_COMMON_FORGOT_PASSWORD"))}
                 </button>
+                {confirming && accountPage && (
+                    <a className="dg-link dg-forgot" id="kc-cancel" href={accountPage}>
+                        {digit.t("CORE_COMMON_CANCEL")}
+                    </a>
+                )}
             </form>
         </Template>
     );

@@ -188,12 +188,14 @@ against a real stack, at API level through the public origin:
 3. The configurator's step calls, in order: Branding (logo upload,
    ThemeConfig), Geography (2-level hierarchy), Departments (2 departments,
    1 designation), Employees (two GROs and an LME via HRMS `_create` then BFF
-   `_link`; the water GRO and the LME follow their activation mail and set a
+   `_link`; before that, one browser step downloads the Employees step's template and checks its Codes sheet and sample row against the departments, designation and boundaries just created (#2648; needs `npx playwright install chromium`); the water GRO and the LME follow their activation mail and set a
    password; the roads GRO exists only so every routed department has a GRO,
    and is never activated), Complaint types (2 leaves
    with department and SLA). Every step is marked DONE and the workspace ends
    `DONE` with every probe true. The labels the steps wrote resolve for `en_IN`.
-4. GRO and LME sign in through Keycloak; a citizen signs in by OTP at `/{slug}/`
+4. GRO and LME sign in through Keycloak with their email (#2646); in a
+   browser the water GRO signs out and back in, and the login field reads
+   "Email" (needs `npx playwright install chromium`). A citizen signs in by OTP at `/{slug}/`
    and files a complaint.
 5. The GRO sees it in the TEAM inbox and assigns it, the LME sees it in the MINE
    inbox and resolves it, the citizen rates and closes it, and the workflow

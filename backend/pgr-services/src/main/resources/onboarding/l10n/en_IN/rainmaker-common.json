@@ -1292,6 +1292,7 @@
 {"code": "Code", "message": "code", "module": "rainmaker-common", "locale": "en_IN"},
 {"code": "CollectionOperator", "message": "Collection Operator", "module": "rainmaker-common", "locale": "en_IN"},
 {"code": "CollectionOperator_PLACE", "message": "Collection Operator", "module": "rainmaker-common", "locale": "en_IN"},
+{"code": "DASHBOARD_CARD_HEADER", "message": "Dashboard", "module": "rainmaker-common", "locale": "en_IN"},
 {"code": "DASHBOARD_CITIZEN_SERVICES_LABEL", "message": "Citizen Services", "module": "rainmaker-common", "locale": "en_IN"},
 {"code": "DASHBOARD_LOCAL_INFORMATION_LABEL", "message": "Local Information", "module": "rainmaker-common", "locale": "en_IN"},
 {"code": "DASHBOARD_TITLE_FINANCE_ROLLOUT_ADOPTION", "message": "Finance Rollout & Adoption Dashboard", "module": "rainmaker-common", "locale": "en_IN"},

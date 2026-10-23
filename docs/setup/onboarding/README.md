@@ -428,11 +428,11 @@ Staff who receive, assign and resolve complaints. Sheet name: `Employee`.
 
 | Column | Required | What it means | Example |
 |---|---|---|---|
-| `employeeCode` | yes | Staff id. **This is what they log in with** — see the note below | `EMP001` |
+| `employeeCode` | yes | Staff id. **Not** the sign-in name: employees log in with their email, see the note below | `EMP001` |
 | `name` | yes | Full name | `Amina Otieno` |
 | `userName` | no | Derived as `firstname.lastname` when blank | `amina.otieno` |
 | `mobileNumber` | yes | Must satisfy your deployment's phone rule (`core_mobile_configs.mobileNumberRegex`) | `712345001` |
-| `emailId` | no | | `amina@example.com` |
+| `emailId` | yes, to sign in | The employee's sign-in name | `amina@example.com` |
 | `gender` | no | `MALE` / `FEMALE` / … | `FEMALE` |
 | `dob` | **yes** | Date of birth, `YYYY-MM-DD`. Must make them at least 18 | `1988-04-12` |
 | `department` | yes | `code` from the Department sheet. **Comma-separated** for several — the first is current, the rest historical, and they can be assigned complaints in any of them | `WATER,ROADS` |
@@ -456,12 +456,15 @@ Staff who receive, assign and resolve complaints. Sheet name: `Employee`.
 hidden, so a `GRO`-only employee can process complaints but cannot raise one.
 Give at least one person `EMPLOYEE,CSR` if you want to test the whole flow.
 
-> **How they log in:** username = the **employee code** (`EMP001`), password =
-> `eGov@123` by default. HRMS overwrites whatever `userName` you supplied with
-> the employee code when it creates the record, and that is the value that
-> actually authenticates. Tell staff to change it on first login. The default
-> comes from `bootstrap_secrets.egov_hrms_default_password` in the deployment
-> config, and can only be set before the first deploy.
+> **How they log in:** with their **email address** (`emailId`), not the
+> employee code. Keycloak knows an employee only by email, so the code
+> (`EMP001`) is rejected as an unknown user. Employees invited from the
+> Configurator set their own password from the invitation email. HRMS
+> still overwrites whatever `userName` you supplied with the employee code, but
+> that is the HRMS record's identifier, not the sign-in name. The HRMS account
+> itself is created with the default password `eGov@123` unless you changed it;
+> that value comes from `bootstrap_secrets.egov_hrms_default_password` in the
+> deployment config, and can only be set before the first deploy.
 
 <details>
 <summary><b>Under the hood — dates and phone numbers</b></summary>

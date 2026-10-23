@@ -128,7 +128,7 @@ describe('addEmployee', () => {
         name: ' Anita Wanjiru ',
         mobileNumber: '9876543210',
         emailId: 'anita@example.org',
-        departments: ['ROADS', 'PARKS'],
+        department: 'ROADS',
         designation: 'ENGINEER',
         roles: ['EMPLOYEE', 'GRO'],
         jurisdictions: ['WARD_1'],
@@ -142,7 +142,7 @@ describe('addEmployee', () => {
         name: 'Anita Wanjiru',
         userName: 'EMP_0001',
         emailId: 'anita@example.org',
-        department: 'ROADS,PARKS',
+        department: 'ROADS',
         designation: 'ENGINEER',
         roles: [
           { code: 'EMPLOYEE', name: 'Employee' },
@@ -154,11 +154,21 @@ describe('addEmployee', () => {
     expect(hrms.createEmployee).toHaveBeenCalled();
   });
 
+  // One department, one current assignment: no comma list for buildEmployee to turn into one-day past rows (#2649).
+  it('sends a single department, never a list', async () => {
+    await addEmployee(
+      'acme',
+      { code: 'EMP_0002', name: 'Joy', emailId: 'joy@example.org', mobileNumber: '9876543210', department: 'PARKS', designation: 'ENGINEER', roles: ['EMPLOYEE'], jurisdictions: ['WARD_1'] },
+      options,
+    );
+    expect(vi.mocked(hrms.buildEmployee).mock.calls.at(-1)?.[0].department).toBe('PARKS');
+  });
+
   // HRMS makes every employee's username their code, so there is no name to check (#2456).
   it('sends the code as the username without a username look-up', async () => {
     await addEmployee(
       'acme',
-      { code: 'EMP_0007', name: 'Anita Wanjiru', emailId: 'anita@example.org', mobileNumber: '9876543210', departments: ['ROADS'], designation: 'ENGINEER', roles: ['EMPLOYEE'], jurisdictions: ['WARD_1'] },
+      { code: 'EMP_0007', name: 'Anita Wanjiru', emailId: 'anita@example.org', mobileNumber: '9876543210', department: 'ROADS', designation: 'ENGINEER', roles: ['EMPLOYEE'], jurisdictions: ['WARD_1'] },
       options,
     );
     expect(hrms.buildEmployee).toHaveBeenCalledWith(expect.objectContaining({ userName: 'EMP_0007' }));

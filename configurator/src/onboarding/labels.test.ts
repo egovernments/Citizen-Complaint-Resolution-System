@@ -59,6 +59,16 @@ function staticCalls(): Map<string, string> {
   return found;
 }
 
+/**
+ * Keys the code no longer uses, with the text they were seeded with. Workspaces keep what they were
+ * seeded with and the upgrader never rewrites a key, so the pack keeps these unchanged and the
+ * reworded text lives under a new key.
+ */
+const RETIRED: Record<string, string> = {
+  'employees.signs_in_as': 'They sign in as %{username}.',
+  'bulk_employees.got_account': 'User account (username: employee code)',
+};
+
 /** The keys built at runtime, from the lists they come from. */
 function dynamicKeys(): Map<string, string> {
   const keys = new Map<string, string>();
@@ -84,6 +94,7 @@ function dynamicKeys(): Map<string, string> {
   for (const [level, english] of Object.entries(CONFIDENCE_HINT)) keys.set(`geography.confidence_hint.${level}`, english);
   for (const [status, english] of Object.entries(STATUS_LABEL)) keys.set(`geography.level_status.${status}`, english);
   keys.set('geography.turbopass_unavailable', TURBOPASS_UNAVAILABLE_MESSAGE);
+  for (const [key, english] of Object.entries(RETIRED)) keys.set(key, english);
   return keys;
 }
 

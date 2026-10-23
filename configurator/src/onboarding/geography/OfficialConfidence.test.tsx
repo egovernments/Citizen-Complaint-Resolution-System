@@ -14,8 +14,10 @@ describe('OfficialSetSummary', () => {
     expect(text).not.toContain('predates');
   });
 
-  it('says the data predates the check on an old DB', () => {
+  it('says nothing about the check on boundary data built before it', () => {
     render(<OfficialSetSummary set={{ ...KE, agreement_measured: false }} />);
-    expect(screen.getByTestId('official-set-summary').textContent).toContain('predates the agreement check');
+    const text = screen.getByTestId('official-set-summary').textContent ?? '';
+    expect(text).not.toContain('predates');
+    expect(text).not.toContain('agreement check');
   });
 });

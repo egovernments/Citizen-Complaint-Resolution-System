@@ -6905,6 +6905,11 @@ header.digit-header .digit-dropdown-master {
   font-size: 1rem !important;
   font-weight: 600 !important;
   line-height: 1.4 !important;
+  /* The vendored title is one line with "…": on a phone "Citizen Complaint
+   * Resolution System" read "Citizen Complaint Resolution Sy…". Wrap it. */
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+  text-overflow: clip !important;
 }
 
 .employee .digit-landing-page-card .digit-landingpage-divider {
@@ -7063,6 +7068,18 @@ header.digit-header .digit-dropdown-master {
   border-right: 0 !important;
   font-size: 0.875rem !important;
   color: var(--color-table-row-text, #363636) !important;
+}
+/* The table library cuts a plain-text cell to one line with "…", and there is
+ * no tooltip, so a long locality, a translated status ("En attente
+ * d'attribution…") or an owner's full name could not be read anywhere. Wrap
+ * them, as the complaint number column already does. Desktop only: phones get
+ * the cards below. */
+@media (min-width: 48rem) {
+  .employee .v2-pgr-inbox .rdt_TableCell > div[data-tag="allowRowEvents"] {
+    white-space: normal;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
+  }
 }
 .employee .v2-pgr-inbox .rdt_TableRow {
   border-bottom: 1px solid var(--color-table-border, #E5E7EB) !important;
@@ -10661,10 +10678,14 @@ html[data-sidebar-pinned] .citizen .main.center-container.citizen-home-container
 .cms-complaints-table tbody tr:hover td {
   background: var(--color-table-hover, #F9FAFB);
 }
+/* A number carries its workspace's code (IN-CHANDIGARH-DEMO-PGR-2026-10-23-…),
+ * so it can be wider than its column. Wrap it, after a hyphen where one fits,
+ * rather than letting it run into Concern or cutting off the part that tells
+ * complaints apart. */
 .cms-complaints-number {
   color: var(--cms-accent);
   font-weight: 500;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
   text-decoration: underline;
   text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
   text-underline-offset: 3px;
@@ -10681,6 +10702,16 @@ html[data-sidebar-pinned] .citizen .main.center-container.citizen-home-container
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* In the table the Concern column narrows on a laptop (about 230px at
+ * 1024px), where one line cut real categories ("YOUTH PROGRAMME COMPL…").
+ * Two lines, then "…", with the full text in the title. */
+.cms-complaints-table .cms-complaints-concern {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .cms-complaints-desc {
   display: block;
@@ -10705,6 +10736,9 @@ svg.cms-complaints-go {
   width: 18px;
   height: 18px;
   vertical-align: middle;
+  /* In a phone row the chevron is a flex item next to the text; it shrank to
+   * 3px beside a long status or number. */
+  flex: none;
 }
 
 /* Status, in the theme's status colours, toned by where the complaint is. */
@@ -10714,13 +10748,17 @@ svg.cms-complaints-go {
   gap: 6px;
   max-width: 100%;
   padding: 3px 10px;
-  border-radius: 999px;
+  /* Half a one-line pill's height, so it still reads as a pill, and a
+   * two-line one stays a rounded box. */
+  border-radius: 12px;
   font-size: 12.5px;
   font-weight: 600;
   line-height: 1.4;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* A translated status can outgrow the column ("En attente d'attribution à
+   * un agent de terrain"). The text is a bare flex item, so an ellipsis never
+   * applied and it was cut mid-word with no way to read the rest. Wrap it. */
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .cms-status-pill::before {
   content: "";

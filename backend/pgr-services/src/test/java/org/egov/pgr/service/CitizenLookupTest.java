@@ -20,18 +20,21 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
- * An employee-filed complaint resolves its citizen by userName = mobileNumber only.
- * A citizen found merely by mobile number (an identity-bff account whose phone may be
- * unverified, #2167) is never attached, and no existing account is ever renamed.
+ * An employee-filed complaint resolves its citizen by userName = mobileNumber first, then by
+ * the one identity-bff citizen account holding the number (#2640), and creates one otherwise.
+ * Any other citizen found merely by mobile number (#2167) is never attached, and no existing
+ * account is ever renamed.
  */
 public class CitizenLookupTest {
     private static final String MOBILE = "9876543210";
+    private static final String MARKER = "keycloak-bff:citizen:v1:0f1e2d:test";
 
     private UserUtils utils;
     private PGRConfiguration config;
     private final RequestInfo info = new RequestInfo();
     private final List<Object> calls = new ArrayList<>();
     private List<User> byUserName;
+    private List<User> byMobile = List.of();
     private final User created = User.builder().uuid("created").userName(MOBILE).mobileNumber(MOBILE).name("Victim").build();
 
     @Before
@@ -51,11 +54,11 @@ public class CitizenLookupTest {
                 assertSame(info, search.getRequestInfo());
                 assertEquals("test", search.getTenantId());
                 assertEquals("CITIZEN", search.getUserType());
-                // An identity-bff citizen (userName "kcbff...") with this mobile exists, so a
-                // search by mobile number alone WOULD find it.
+                assertEquals(Boolean.TRUE, search.getActive());
                 if (search.getMobileNumber() != null) {
-                    return new UserDetailResponse(null, List.of(User.builder().uuid("unverified-bff-citizen")
-                            .userName("kcbff-attacker").mobileNumber(MOBILE).name("Attacker").build()));
+                    assertEquals(MOBILE, search.getMobileNumber());
+                    assertNull("the number is matched by egov-user, never by userName", search.getUserName());
+                    return new UserDetailResponse(null, byMobile);
                 }
                 assertEquals(MOBILE, search.getUserName());
                 return new UserDetailResponse(null, byUserName);
@@ -73,21 +76,78 @@ public class CitizenLookupTest {
         return request;
     }
 
+    /** An identity-bff citizen account as egov-user returns it; the mobile may come back masked. */
+    private static User bffCitizen(String uuid) {
+        return User.builder().uuid(uuid).userName("kcbffc-" + uuid).mobileNumber("******3210").name("Citizen")
+                .active(true).identificationMark(MARKER).build();
+    }
+
+    private long creates() {
+        return calls.stream().filter(call -> call instanceof CreateUserRequest).count();
+    }
+
+    // #2640: the citizen signed in by phone OTP before any complaint for their number, so their
+    // only account is the BFF's kcbffc-… one, and their token covers only it.
     @Test
-    public void citizenFoundOnlyByMobileIsNeverAttached() {
+    public void theOneBffCitizenWithTheNumberIsUsed() {
         byUserName = List.of();
-        ServiceRequest request = fileFor("Victim");
-        assertEquals("created", request.getService().getAccountId());
-        assertTrue(calls.stream().noneMatch(call -> call instanceof UserSearchRequest search && search.getMobileNumber() != null));
-        assertEquals(1, calls.stream().filter(call -> call instanceof CreateUserRequest).count());
+        User account = bffCitizen("bff-citizen");
+        byMobile = List.of(account);
+        ServiceRequest request = fileFor("Someone Else");
+        assertEquals("bff-citizen", request.getService().getAccountId());
+        assertEquals(0, creates());
+        assertEquals("the account is never renamed", "Citizen", account.getName());
+        assertEquals(2, calls.size());
+    }
+
+    @Test
+    public void noBffCitizenCreatesTheAccount() {
+        byUserName = List.of();
+        User inactive = bffCitizen("inactive");
+        inactive.setActive(false);
+        byMobile = List.of(inactive);
+        assertEquals("created", fileFor("Victim").getService().getAccountId());
+        assertEquals(1, creates());
         verify(utils).addUserDefaultFields(eq(MOBILE), eq("test"), any());
+    }
+
+    @Test
+    public void severalBffCitizensWithTheNumberCreateTheAccount() {
+        byUserName = List.of();
+        byMobile = List.of(bffCitizen("bff-a"), bffCitizen("bff-b"));
+        assertEquals("ambiguous: neither is chosen", "created", fileFor("Victim").getService().getAccountId());
+        assertEquals(1, creates());
+    }
+
+    @Test
+    public void citizenWithoutTheBffMarkerIsNeverAttached() {
+        byUserName = List.of();
+        // Found by mobile only, with no identity-bff marker: its number may be one nobody proved (#2167).
+        byMobile = List.of(User.builder().uuid("unverified").userName("kcbff-attacker").mobileNumber(MOBILE)
+                        .name("Attacker").active(true).build(),
+                User.builder().uuid("other-marker").userName("someone").mobileNumber(MOBILE).active(true)
+                        .identificationMark("keycloak-bff:v1:employee:test").build());
+        assertEquals("created", fileFor("Victim").getService().getAccountId());
+        assertEquals(1, creates());
     }
 
     @Test
     public void legacyUsernameAccountIsUsed() {
         byUserName = List.of(User.builder().uuid("existing").userName(MOBILE).mobileNumber(MOBILE).name("Citizen").build());
-        assertEquals("existing", fileFor("Citizen").getService().getAccountId());
-        assertEquals(1, calls.size());
+        byMobile = List.of(bffCitizen("bff-citizen"));
+        assertEquals("the userName = mobile account comes first", "existing", fileFor("Citizen").getService().getAccountId());
+        assertEquals("no mobile search once it is found", 1, calls.size());
+    }
+
+    @Test
+    public void aMarkerInTheRequestIsNeverForwarded() {
+        byUserName = List.of();
+        ServiceRequest request = ServiceRequest.builder().requestInfo(info).service(Service.builder().tenantId("test")
+                .citizen(User.builder().mobileNumber(MOBILE).name("Victim").identificationMark(MARKER).build()).build()).build();
+        new UserService(utils, config).callUserService(request);
+        CreateUserRequest create = (CreateUserRequest) calls.stream().filter(call -> call instanceof CreateUserRequest)
+                .findFirst().orElseThrow();
+        assertNull(create.getUser().getIdentificationMark());
     }
 
     @Test

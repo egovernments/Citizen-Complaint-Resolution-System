@@ -140,13 +140,13 @@ export function availableSources(sources: Record<string, unknown> | null | undef
 export function sourceOptionLabel(source: string): string {
   switch (source) {
     case 'official':
-      return 'Official — best of COD-AB / geoBoundaries per country';
+      return 'Official boundaries';
     case 'cod':
       return 'OCHA COD-AB';
     case 'geoboundaries':
       return 'geoBoundaries';
     case 'overture':
-      return 'Overture Maps (OpenStreetMap-derived)';
+      return 'OpenStreetMap';
     case 'geoapify':
       return 'Geoapify (hosted)';
     default:
@@ -246,7 +246,7 @@ export function tooFewLevelsMessage(item: SuggestionFeature | null | undefined, 
 
 export function sourceLabel(source: string): string {
   if (source === 'overture') return 'the offline boundary service';
-  if (source === 'official') return 'the official boundary sets (OCHA COD-AB / geoBoundaries)';
+  if (source === 'official') return 'the official boundaries';
   if (source === 'cod') return 'OCHA COD-AB';
   if (source === 'geoboundaries') return 'geoBoundaries';
   if (source === 'geoapify') return 'Geoapify';

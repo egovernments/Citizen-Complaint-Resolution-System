@@ -8053,6 +8053,9 @@ fab843d1-3a28-572f-8337-782797f26578	en_IN	PGR_CATEGORY	Complaint Category	pg	ra
 73502114-6c23-5996-ba62-20f47575d5ad	en_IN	WF_PGR_ESCALATE	Escalated	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
 88ca0d46-72ab-57e1-acc5-85d9b077392e	en_IN	WF_PGR_FORWARD	Forwarded to Supervisor	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
 bf1858ca-4a73-572a-bd80-93bc1aedbf09	en_IN	WF_PGR_RESOLVEBYSUPERVISOR	Resolved by Supervisor	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+73ff0ee4-ac61-5c3f-b102-108f0566808d	en_IN	DASHBOARD_CARD_HEADER	Dashboard	pg	rainmaker-common	1	2026-10-23 00:00:00	\N	\N
+af94ad16-70e6-51f0-ba42-064d89f8ef04	fr_FR	DASHBOARD_CARD_HEADER	Tableau de bord	pg	rainmaker-common	1	2026-10-23 00:00:00	\N	\N
+63dfc8b5-a136-554b-9ac2-cdf34c7bd6dd	pt_BR	DASHBOARD_CARD_HEADER	Painel	pg	rainmaker-common	1	2026-10-23 00:00:00	\N	\N
 \.
 
 

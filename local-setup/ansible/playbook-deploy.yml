@@ -4916,6 +4916,9 @@
         # The citizen-banner upload in the Branding step (#2358). Default false
         # hides it; the citizen side has its own switch, citizen_banner_enabled.
         VITE_ENABLE_CITIZEN_BANNER: "{{ configurator_banner_enabled | default(false) | bool | ternary('true', 'false') }}"
+        # Geography's list takes more than one boundary selection. Default
+        # false: one selection at a time.
+        VITE_ENABLE_GEOGRAPHY_MULTIPLE_SELECTIONS: "{{ configurator_geography_multiple_selections | default(false) | bool | ternary('true', 'false') }}"
       register: configurator_build_run
       changed_when: true
       when:
