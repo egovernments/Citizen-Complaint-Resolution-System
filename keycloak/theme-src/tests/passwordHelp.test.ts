@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { employeeReturnTo, requestPasswordSetup } from "../src/digit/shared/passwordHelp";
+import { employeeReturnTo, employeeSignInUrl, requestPasswordSetup } from "../src/digit/shared/passwordHelp";
 
 function capture() {
     const calls: Array<{ url: string; body: unknown }> = [];
@@ -32,5 +32,19 @@ describe("requestPasswordSetup", () => {
         const { calls, fetchImpl } = capture();
         await requestPasswordSetup({ email: "asha@example.org", surface: "employee", fetchImpl });
         expect(calls[0]!.body).toEqual({ email: "asha@example.org" });
+    });
+});
+
+describe("employeeSignInUrl", () => {
+    it("puts the tenant's sign-in on the client base URL's origin, not Keycloak's", () => {
+        // local-setup: Keycloak on :18180, digit-ui (the client baseUrl) on :80.
+        expect(employeeSignInUrl("testj01", "http://localhost/digit-ui/employee/user/login"))
+            .toBe("http://localhost/testj01/digit-ui/employee/user/login");
+    });
+
+    it("gives nothing without a usable base URL (a path would land on Keycloak's origin) or a tenant", () => {
+        expect(employeeSignInUrl("testj01", undefined)).toBeUndefined();
+        expect(employeeSignInUrl("testj01", "/digit-ui/employee/user/login")).toBeUndefined();
+        expect(employeeSignInUrl(undefined, "https://digit.example.org/")).toBeUndefined();
     });
 });

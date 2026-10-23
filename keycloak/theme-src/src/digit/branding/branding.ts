@@ -60,42 +60,64 @@ export function tabIdOf(loginAction: string | undefined, base = window.location.
  * 2. `digit_tenant` on the current URL — present on the first page, which
  *    Keycloak renders straight off the authorization request — remembered in
  *    sessionStorage under this tab's `tab_id` so the pages that follow a
- *    form post (errors, further steps) still know it.
+ *    form post (errors, further steps) still know it. A page Keycloak gives
+ *    no form action (error.ftl when the sign-in session is gone, #2644) is
+ *    the answer to that tab's form post, so its own address carries `tab_id`.
  */
 export function resolveTenantSlug(params: {
     digitTenant?: string;
     loginAction?: string;
     search?: string;
 }): string | undefined {
-    const storage = safeSession();
-    const tabId = tabIdOf(params.loginAction);
-    const remember = (slug: string) => {
-        if (tabId === undefined || storage === undefined) return;
-        try {
-            storage.setItem(STORAGE_PREFIX + tabId, slug);
-        } catch {
-            // Private mode or quota: later pages fall back to the default look.
-        }
-    };
+    const candidate = isValidSlug(params.digitTenant)
+        ? params.digitTenant
+        : new URLSearchParams(params.search ?? window.location.search).get("digit_tenant");
+    return rememberedPerTab(STORAGE_PREFIX, params.loginAction, candidate, isValidSlug);
+}
 
-    if (isValidSlug(params.digitTenant)) {
-        remember(params.digitTenant);
-        return params.digitTenant;
-    }
-    const fromQuery = new URLSearchParams(params.search ?? window.location.search).get("digit_tenant");
-    if (isValidSlug(fromQuery)) {
-        remember(fromQuery);
-        return fromQuery;
-    }
-    if (tabId !== undefined && storage !== undefined) {
-        try {
-            const stored = storage.getItem(STORAGE_PREFIX + tabId);
-            if (isValidSlug(stored)) return stored;
-        } catch {
-            return undefined;
+/**
+ * A value that is valid now is remembered in sessionStorage under this tab's
+ * `tab_id`; without one, the remembered value is returned, so the pages that
+ * follow a form post (errors, further steps) still know it.
+ */
+function rememberedPerTab(
+    prefix: string,
+    loginAction: string | undefined,
+    candidate: string | null | undefined,
+    isValid: (value: string | null | undefined) => value is string
+): string | undefined {
+    const storage = safeSession();
+    // Error pages carry no form action; their tab_id is only in the page URL (#2644).
+    const tabId = tabIdOf(loginAction) ?? tabIdOf(window.location.href);
+    const key = tabId === undefined || storage === undefined ? undefined : prefix + tabId;
+    try {
+        if (isValid(candidate)) {
+            if (key !== undefined) storage!.setItem(key, candidate);
+            return candidate;
         }
+        const stored = key === undefined ? null : storage?.getItem(key);
+        return isValid(stored) ? stored : undefined;
+    } catch {
+        // Private mode or quota: later pages fall back to the default look.
+        return isValid(candidate) ? candidate : undefined;
     }
-    return undefined;
+}
+
+const ACTION_STORAGE_PREFIX = "digit_kc_action:";
+const ACTION_PATTERN = /^[A-Za-z_]{1,64}$/;
+const isValidAction = (value: string | null | undefined): value is string => !!value && ACTION_PATTERN.test(value);
+
+/**
+ * The account action this sign-in confirms the person for (#2645): the
+ * identity BFF sends `kc_action` when someone signed in asks to change their
+ * password, authenticator or email, and Keycloak first asks for the password
+ * again. Read and remembered per tab like `digit_tenant`, so the page after a
+ * wrong password still reads as the confirmation. Only the action name is
+ * kept (`delete_credential:<id>` gives `delete_credential`).
+ */
+export function resolveAccountAction(params: { loginAction?: string; search?: string }): string | undefined {
+    const fromQuery = new URLSearchParams(params.search ?? window.location.search).get("kc_action")?.split(":")[0];
+    return rememberedPerTab(ACTION_STORAGE_PREFIX, params.loginAction, fromQuery, isValidAction);
 }
 
 /** Bare English uses the configured deployment default locale. */

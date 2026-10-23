@@ -3310,9 +3310,14 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       const subject = (await getIdentitySession(cookie.split("=")[1]))!.claims.sub;
       const user = await (await fetch(`${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/${subject}`)).json();
       await kcUpdate(`/users/${subject}`, { attributes: { ...user.attributes, phoneNumber: ["+254799000776"], phoneNumberVerified: ["true"] } });
+      const creates = digit.stats.creates;
       const selected = await citizenSelect(cookie);
-      if (selected.status === 200) expect((await selected.json()).UserRequest.uuid).not.toBe(victim.uuid);
-      else expect(selected.status).toBeGreaterThanOrEqual(400);
+      // Nor may that number reach a DIGIT citizen account (#2640).
+      expect(selected.status).toBe(403);
+      expect((await selected.json()).code).toBe("PHONE_NOT_VERIFIED");
+      expect(digit.stats.creates).toBe(creates);
+      expect([...digit.accounts.values()].filter((account) => account.mobileNumber === "799000776")
+        .map((account) => account.uuid)).toEqual([victim.uuid]);
     });
 
     it("trusts a Keycloak-verified phone only when users cannot edit it", async () => {
@@ -3332,16 +3337,22 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
 
       const a = legacy({ userName: "799000881", tenantId: "ke", type: "CITIZEN", mobileNumber: "799000881", roles: ["CITIZEN"] });
       const b = legacy({ userName: "799000882", tenantId: "ke", type: "CITIZEN", mobileNumber: "799000882", roles: ["CITIZEN"] });
-      // Users can edit their phone: the claim proves nothing, so no link.
+      // Users can edit their phone: the claim proves nothing, so no link, and
+      // no DIGIT account carries the number either (#2640).
       await setProfile({ unmanagedAttributePolicy: "ENABLED", attributes: [] });
+      const creates = digit.stats.creates;
       const untrusted = await citizenSelect(await signIn("citizen", "legacya"));
-      expect(untrusted.status).toBe(200);
-      expect((await untrusted.json()).UserRequest.uuid).not.toBe(a.uuid);
+      expect(untrusted.status).toBe(403);
+      expect((await untrusted.json()).code).toBe("PHONE_NOT_VERIFIED");
+      expect(digit.stats.creates).toBe(creates);
       // Admin-only phone: the verified claim links the existing account.
       await setProfile({ unmanagedAttributePolicy: "ADMIN_EDIT", attributes: [] });
       const trusted = await citizenSelect(await signIn("citizen", "legacyb"));
       expect(trusted.status).toBe(200);
       expect((await trusted.json()).UserRequest.uuid).toBe(b.uuid);
+      // The refusal left nothing behind: with the phone trusted, a links.
+      const retried = await citizenSelect(await signIn("citizen", "legacya"));
+      expect((await retried.json()).UserRequest.uuid).toBe(a.uuid);
     });
 
     it("answers 503 when the phone-trust check fails, and links on the retry instead of splitting the citizen", async () => {

@@ -1,5 +1,6 @@
 import { DigitCreate, DigitFormInput, v } from '@/admin';
 import { FieldSection } from '@/admin/fields';
+import { levelLabel } from '@/utils/excelParser';
 import { ComplaintLevelEditor } from './ComplaintLevelEditor';
 
 interface EditorLevel {
@@ -33,7 +34,7 @@ export function ComplaintHierarchyCreate() {
             parentLevel: i === 0 ? null : l.parentLevel || null,
             isFreeText: false,
             isLeafServiceCode: !!l.isLeafServiceCode,
-            label: (l.levelCode as string),
+            label: levelLabel(l.levelCode as string),
           }));
         return {
           hierarchyType: data.hierarchyType,

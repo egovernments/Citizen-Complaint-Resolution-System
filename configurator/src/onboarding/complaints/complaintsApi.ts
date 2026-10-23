@@ -1,6 +1,6 @@
 import { localizationService, mdmsService } from '@/api';
 import type { MdmsRecord } from '@/api/types';
-import { toPascal } from '@/utils/excelParser';
+import { KNOWN_LEVEL_LABELS, toPascal } from '@/utils/excelParser';
 import { labelLocales } from '../labelLocales';
 
 /**
@@ -16,8 +16,8 @@ export const HIERARCHY_TYPE = 'PGR';
 export const LEVELS = ['COMPLAINT_TYPE', 'SUB_TYPE'] as const;
 /** Display labels stored on the definition's levels; the level codes stay as they are. */
 const LEVEL_LABELS: Record<(typeof LEVELS)[number], string> = {
-  COMPLAINT_TYPE: 'Complaint Category',
-  SUB_TYPE: 'Complaint Subcategory',
+  COMPLAINT_TYPE: KNOWN_LEVEL_LABELS.COMPLAINT_TYPE,
+  SUB_TYPE: KNOWN_LEVEL_LABELS.SUB_TYPE,
 };
 const DEFINITION_SCHEMA = 'RAINMAKER-PGR.ComplaintHierarchyDefinition';
 const HIERARCHY_SCHEMA = 'RAINMAKER-PGR.ComplaintHierarchy';

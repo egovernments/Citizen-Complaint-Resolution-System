@@ -7,6 +7,7 @@ import {
   parseBoundaryExcel,
   parseTenantExcel,
   parseEmployeeExcel,
+  levelLabel,
 } from './excelParser';
 
 // LibreOffice / Google Sheets convert TRUE / FALSE cells to JS booleans
@@ -231,5 +232,19 @@ describe('Employee dob is optional (egovernments/CCRS#1949)', () => {
     expect(validation.errors).toContainEqual(
       expect.objectContaining({ field: 'dob', code: 'INVALID_FORMAT' })
     );
+  });
+});
+
+describe('levelLabel', () => {
+  it('prettifies level codes, keeping acronyms and splitting camelCase', () => {
+    expect(levelLabel('AUTHORITY_TYPE')).toBe('Authority Type');
+    expect(levelLabel('ULB_TYPE')).toBe('ULB Type');
+    expect(levelLabel('PGR_SECTOR')).toBe('PGR Sector');
+    expect(levelLabel('subType')).toBe('Sub Type');
+    expect(levelLabel('SUB_AREA')).toBe('Sub Area');
+  });
+  it('uses the typed route captions for its two levels', () => {
+    expect(levelLabel('COMPLAINT_TYPE')).toBe('Complaint Category');
+    expect(levelLabel('SUB_TYPE')).toBe('Complaint Subcategory');
   });
 });

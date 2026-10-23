@@ -315,7 +315,8 @@ export const localizationService = {
   async uploadComplaintTypeLocalizations(
     tenantId: string,
     types: { serviceCode: string; name: string; department?: string }[],
-    locale: string = 'en_IN'
+    locale: string = 'en_IN',
+    skipCodes?: ReadonlySet<string>
   ): Promise<{ success: number; failed: number }> {
     const raw = types.flatMap((t) =>
       this.buildComplaintTypeLocalizations(tenantId, t.serviceCode, t.name, locale, {
@@ -327,16 +328,43 @@ export const localizationService = {
     // DUPLICATE_MESSAGE_IDENTITY.
     const seen = new Set<string>();
     const messages = raw.filter((m) => {
-      if (seen.has(m.code)) return false;
+      if (seen.has(m.code) || skipCodes?.has(m.code)) return false;
       seen.add(m.code);
       return true;
     });
     // Static PGR form label — not derived from any MDMS data, never copied
     // by bootstrap, must be seeded explicitly on every tenant.
-    if (!seen.has('CS_COMPLAINT_LOCATION')) {
+    // English only: the packs translate it, so a write under another language
+    // would replace "Localização da reclamação" with the English text.
+    if (locale === 'en_IN' && !seen.has('CS_COMPLAINT_LOCATION')) {
       messages.push({ code: 'CS_COMPLAINT_LOCATION', message: 'Complaint Location', module: 'rainmaker-pgr', locale });
     }
     return this.upsertMessages(tenantId, locale, messages);
+  },
+
+  // Complaint-type labels for every workspace language, in parallel. en_IN is
+  // always written; the other languages only get keys they have no value for
+  // yet, so a re-upload never overwrites an admin's translation.
+  async uploadComplaintTypeLocalizationsForLocales(
+    tenantId: string,
+    types: { serviceCode: string; name: string; department?: string }[],
+    locales: string[]
+  ): Promise<void> {
+    const results = await Promise.allSettled(
+      locales.map(async (locale) => {
+        if (locale === 'en_IN') return this.uploadComplaintTypeLocalizations(tenantId, types, locale);
+        const existing = await this.searchMessages(tenantId, locale, 'rainmaker-pgr');
+        return this.uploadComplaintTypeLocalizations(
+          tenantId,
+          types,
+          locale,
+          new Set(existing.map((m) => m.code))
+        );
+      })
+    );
+    results.forEach((r, i) => {
+      if (r.status === 'rejected') console.warn(`[ComplaintHierarchy] ${locales[i]} localization failed (non-fatal):`, r.reason);
+    });
   },
 
   // Upload localizations for all boundaries

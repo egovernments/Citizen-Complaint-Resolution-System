@@ -40,6 +40,7 @@ REALM = os.environ["KEYCLOAK_ORGANIZATION_REALM"]
 REDIRECT = os.environ["IDENTITY_REDIRECT_URI"]
 EMPLOYEE = (os.environ.get("KEYCLOAK_EMPLOYEE_CLIENT_ID", "digit-ui-employee"),
             os.environ["KEYCLOAK_EMPLOYEE_CLIENT_SECRET"])
+CITIZEN_CLIENT_ID = os.environ.get("KEYCLOAK_CITIZEN_CLIENT_ID", "digit-ui-citizen")
 BFF = ("digit-identity-bff", os.environ["KEYCLOAK_BFF_CLIENT_SECRET"])
 ADMIN_CLIENT = ("digit-identity-admin", os.environ["KEYCLOAK_ADMIN_CLIENT_SECRET"])
 REALM_JSON = os.path.join(os.path.dirname(CONFIGURE), "realm.json")
@@ -115,9 +116,9 @@ def totp(secret, step_offset=0):
 class SignIn:
     """One browser signing in to one client, optionally with kc_action."""
 
-    def __init__(self, client=EMPLOYEE, **params):
+    def __init__(self, client=EMPLOYEE, browser=None, **params):
         self.client = client
-        self.browser = Browser()
+        self.browser = browser or Browser()
         self.verifier, challenge = pkce_pair()
         query = {"client_id": client[0], "redirect_uri": REDIRECT, "response_type": "code",
                  "scope": "openid", "code_challenge": challenge, "code_challenge_method": "S256"}
@@ -373,10 +374,25 @@ def _():
 
 @check("surface client policy: CSV action allowlist and password-setup redirect")
 def _():
-    for client in (BFF[0], EMPLOYEE[0], "digit-ui-citizen"):
+    for client in (BFF[0], EMPLOYEE[0], CITIZEN_CLIENT_ID):
         [stored] = admin("GET", "/clients?clientId=" + client)
         assert stored["attributes"]["digit.auth.account.actions"] == ",".join(DECLARED["clientPolicy"]["accountActions"])
         assert REDIRECT.removesuffix("/callback") + DECLARED["clientPolicy"]["passwordSetupRedirectPath"] in stored["redirectUris"]
+
+
+@check("digit-ui clients: Back to Application is the surface's sign-in, also on an existing client (#2644)")
+def _():
+    # configure-keycloak.sh's DIGIT_UI_BASE_URL: the override, else the redirect's site.
+    site = os.environ.get("IDENTITY_DIGIT_UI_BASE_URL", REDIRECT.split("/identity/", 1)[0] + "/").rstrip("/")
+    wanted = {EMPLOYEE[0]: f"{site}/digit-ui/employee/user/login",
+              CITIZEN_CLIENT_ID: f"{site}/digit-ui/citizen/login"}
+    for client in wanted:
+        [stored] = admin("GET", "/clients?clientId=" + client)
+        admin("PUT", f"/clients/{stored['id']}", {**stored, "baseUrl": f"{site}/"})  # what earlier runs set
+    configure()
+    for client, base_url in wanted.items():
+        [stored] = admin("GET", "/clients?clientId=" + client)
+        assert stored["baseUrl"] == base_url, stored["baseUrl"]
 
 
 # ------------------------------------------ sign-in and self-service (§8)
@@ -432,6 +448,24 @@ def _():
     signin.tokens()
     assert not SignIn().password("emp-nameless").done, "old password still accepted"
     assert SignIn().password("emp-nameless", "Changed-pass-2").done
+
+
+@check("#2645 UPDATE_PASSWORD as the BFF asks for it: password check, then the action")
+def _():
+    create_user("emp-reauth", "reauth@example.test")
+    # Signed in first, so the browser holds an SSO session as in #2645, then the
+    # identity BFF's action request: prompt=login and kc_action, no hint.
+    first = SignIn(digit_tenant="bomet-county").password("emp-reauth")
+    assert first.done, "initial sign-in"
+    signin = SignIn(browser=first.browser, kc_action="UPDATE_PASSWORD", prompt="login", digit_tenant="bomet-county")
+    assert signin.has_form("username", "password"), "prompt=login must show the password form despite the SSO session"
+    signin.password("emp-reauth")
+    signin.submit(("password-new", "password-confirm"),
+                  {"password-new": "Reauth-pass-2", "password-confirm": "Reauth-pass-2"})
+    status = urllib.parse.parse_qs(urllib.parse.urlparse(signin.page.location or "").query).get("kc_action_status")
+    assert status == ["success"], f"no kc_action_status=success in {signin.page.location}"
+    signin.tokens()
+    assert SignIn().password("emp-reauth", "Reauth-pass-2").done, "new password not accepted"
 
 
 @check("§8 UPDATE_EMAIL: saved only after the new address is verified")

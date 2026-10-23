@@ -4,6 +4,7 @@ import React, { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { selectPlaceholder, translateOr } from "../utils/selectPlaceholder";
 import { complaintLabel } from "../utils/complaintLabel";
+import { levelLabel } from "../utils/levelLabel";
 
 /**
  * Employee-side complaint-type picker driven by the configurable complaint
@@ -86,11 +87,7 @@ const ComplaintHierarchyComponent = ({ onSelect }) => {
 
   const leafIdx = levels.length - 1;
 
-  const labelFor = (lvl) => {
-    const key = (def.hierarchyType + "_" + lvl.levelCode).toUpperCase();
-    const v = t(key);
-    return v === key ? lvl.label || lvl.levelCode : v;
-  };
+  const labelFor = (lvl) => levelLabel(t, def, lvl);
 
   // Options for level `i` computed against an explicit selection array — lets
   // handleChange inspect a just-picked node's children before setSel commits.

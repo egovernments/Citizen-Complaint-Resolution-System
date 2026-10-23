@@ -7,7 +7,6 @@ import {
   confidenceHeadline,
   confidenceLevel,
   countryName,
-  sourceLine,
   type OfficialSet,
 } from '@/utils/officialBoundaries';
 import { ConfidenceTag } from './OfficialConfidence';
@@ -83,14 +82,17 @@ export function PreconfiguredCard({
   state,
   onUse,
   onRetry,
+  disabledReason,
 }: {
   state: PreconfiguredState;
   onUse: () => void;
   onRetry: () => void;
+  /** Why the set can't be used right now; shown instead of the action, as OptionCard does. */
+  disabledReason?: string;
 }) {
   const t = useOnboardingT();
   return (
-    <div className="flex flex-col rounded-lg border border-border bg-card p-4" data-testid="preconfigured-card">
+    <div className={`flex flex-col rounded-lg border border-border bg-card p-4 ${disabledReason ? 'opacity-75' : ''}`} data-testid="preconfigured-card">
       <div className="w-10 h-10 rounded-md bg-primary/10 text-primary flex items-center justify-center">
         <LayoutGrid className="w-5 h-5" />
       </div>
@@ -148,17 +150,20 @@ export function PreconfiguredCard({
               </p>
             </div>
             <Confidence set={state.set} />
-            <p className="text-xs text-muted-foreground">{t('geography.source_line', 'Source: %{source}', { source: sourceLine(state.set) })}</p>
           </>
         )}
       </div>
 
       {state.status === 'ready' && (
         <div className="mt-4">
-          <Button variant="outline" size="sm" onClick={onUse} className="h-9 gap-1.5 px-3">
-            {t('geography.preconfigured_use', 'Use these boundaries')}
-            <ArrowRight className="w-4 h-4" />
-          </Button>
+          {disabledReason ? (
+            <p className="text-xs leading-5 text-muted-foreground" data-testid="option-unavailable">{disabledReason}</p>
+          ) : (
+            <Button variant="outline" size="sm" onClick={onUse} className="h-9 gap-1.5 px-3">
+              {t('geography.preconfigured_use', 'Use these boundaries')}
+              <ArrowRight className="w-4 h-4" />
+            </Button>
+          )}
         </div>
       )}
     </div>

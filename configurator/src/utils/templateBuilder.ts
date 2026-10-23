@@ -20,6 +20,13 @@ function writeWorkbook(wb: XLSX.WorkBook): Blob {
   });
 }
 
+/** The boundaries on screen as a sheet: one column per level, one row per area path. */
+export function downloadBoundaryList(levels: string[], rows: string[][], filename: string) {
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, buildSheet(levels, rows), 'Boundaries');
+  triggerDownload(writeWorkbook(wb), filename);
+}
+
 export function downloadBoundaryTemplate(hierarchyType: string, levels: string[]) {
   const safeLevels = levels.length > 0 ? levels : ['Country', 'State', 'City', 'Ward'];
   const header = ['code', 'name', 'boundaryType', 'parentCode', 'latitude', 'longitude'];
@@ -210,6 +217,7 @@ export function buildEmployeeTemplate(
     [''],
     [t('bulk_employees.instr_email', 'Email is required. New employees receive a secure password setup email.')],
     [t('bulk_employees.instr_signin', 'Each employee signs in with their email address.')],
+    [t('bulk_employees.instr_csr_role', 'Every employee also gets the Complaint Registrar (CSR) role, so they can file complaints on behalf of citizens.')],
   ]);
   notes['!cols'] = [{ wch: 80 }];
   XLSX.utils.book_append_sheet(wb, notes, 'Instructions');

@@ -76,6 +76,14 @@ describe('buildEmployeeTemplate', () => {
     expect(text).toContain('ONE department code');
   });
 
+  it('tells the user every employee also gets the CSR role', async () => {
+    const wb = await read(buildEmployeeTemplate('ke.test', depts, desigs, boundaries, roles));
+    const text = XLSX.utils.sheet_to_json<string[]>(wb.Sheets.Instructions, { header: 1 }).flat().join('\n');
+    expect(text).toContain('Complaint Registrar (CSR) role');
+    const t = await read(buildEmployeeTemplate('ke.test', depts, desigs, boundaries, roles, (_k, en) => `T:${en}`));
+    expect(XLSX.utils.sheet_to_json<string[]>(t.Sheets.Instructions, { header: 1 }).flat().join('\n')).toContain('T:Every employee also gets');
+  });
+
   it('translates the Instructions and Codes headers through the passed translator', async () => {
     const wb = await read(buildEmployeeTemplate('ke.test', depts, desigs, boundaries, roles, (_k, en) => `T:${en}`));
     const text = XLSX.utils.sheet_to_json<string[]>(wb.Sheets.Instructions, { header: 1 }).flat().join('\n');

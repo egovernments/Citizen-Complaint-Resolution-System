@@ -160,7 +160,8 @@ configure:
   # KEYCLOAK_EMPLOYEE_SIGNIN_METHODS,
   # KEYCLOAK_EMPLOYEE_CLIENT_ID, KEYCLOAK_CITIZEN_CLIENT_ID,
   # KEYCLOAK_MAGIC_LINK_CLIENT_ID, KEYCLOAK_LOGIN_THEME,
-  # KEYCLOAK_EMPLOYEE_LOGIN_THEME, IDENTITY_DIGIT_UI_BASE_URL.
+  # KEYCLOAK_EMPLOYEE_LOGIN_THEME, IDENTITY_DIGIT_UI_BASE_URL (the site
+  # origin, e.g. https://site/; /digit-ui/... is appended to it).
   # Client ids must match the identity-bff chart's config.
   extraEnv: {}
   resources: |
