@@ -1,8 +1,8 @@
-import { test, expect, request as playwright, type APIRequestContext } from '@playwright/test';
-import { citizenSignIn, identityJson, selectContext } from '../utils/identity-bff';
+import { test, expect, chromium, request as playwright, type APIRequestContext } from '@playwright/test';
+import { authorizeUrl, citizenSignIn, hostedSignIn, identityJson, selectContext } from '../utils/identity-bff';
 import {
   BOUNDARIES, COMPLAINT_TYPES, DEPARTMENTS, DESIGNATION, Digit, act, activateAccount, allowing, baseURL, brandingStep, commandOtp,
-  complaint, complaintTypesStep, departmentsStep, emailDomain, employeeSignIn, fileComplaint, geographyStep, hireAndLink, history,
+  complaint, complaintTypesStep, departmentsStep, downloadEmployeeTemplate, emailDomain, employeeSignIn, fileComplaint, geographyStep, hireAndLink, history,
   inbox, labelLocales, mailedLink, markDone, missingConfig, removeMember, runSlug, signupFounder, strict, testMobile, testPassword,
   unresolvedLabels, workspace, type Hired,
 } from '../utils/workspace-setup';
@@ -57,6 +57,16 @@ test('signup -> workspace DONE -> complaint lifecycle -> member removal on a fre
     });
     await test.step('3c. Departments: 2 departments + 1 designation, step DONE', async () => {
       await departmentsStep(founder, locales);
+    });
+
+    await test.step('3d0. Employees template download carries this workspace\'s codes (#2648)', async () => {
+      const template = await downloadEmployeeTemplate(founder, base);
+      expect(template.fileName).toBe(`Employee_Master_Dynamic_${tenantId.toUpperCase()}.xlsx`);
+      expect(template.codes).toEqual(expect.arrayContaining([
+        ...DEPARTMENTS.map(d => d.code), DESIGNATION.code, ...BOUNDARIES.map(b => b.code), 'GRO', 'PGR_LME']));
+      expect(DEPARTMENTS.map(d => d.code), 'sample row department').toContain(template.sample.department);
+      expect(template.sample.designation).toBe(DESIGNATION.code);
+      expect(BOUNDARIES.map(b => b.code), 'sample row jurisdiction').toContain(template.sample.jurisdictions);
     });
 
     const passwords = new Map<string, string>();
@@ -117,6 +127,36 @@ test('signup -> workspace DONE -> complaint lifecycle -> member removal on a fre
       lme = await staffSession('lme');
       expect(gro.digit.user.roles as Array<{ code: string }>).toEqual(expect.arrayContaining([expect.objectContaining({ code: 'GRO' })]));
       expect(lme.digit.user.roles as Array<{ code: string }>).toEqual(expect.arrayContaining([expect.objectContaining({ code: 'PGR_LME' })]));
+    });
+
+    await test.step('4b. #2646: an onboarded employee signs out and signs in again with their email', async () => {
+      const member = staff.find(m => m.key === 'gro-water')!;
+      // Launched here, not through the `browser` fixture, so an unset gate never needs a browser.
+      const browser = await chromium.launch();
+      const context = await browser.newContext({ ignoreHTTPSErrors: process.env.ONBOARDING_E2E_IGNORE_HTTPS_ERRORS === '1' });
+      try {
+        const page = await context.newPage();
+        const signIn = () => hostedSignIn(page, { baseURL: base, surface: 'employee', tenantSlug: slug, username: member.email, password: passwords.get(member.key)! });
+        await signIn();
+        const logout = await page.request.post(`${base}/identity/v1/logout`, { headers: { Origin: new URL(base).origin }, data: { surface: 'employee', scope: 'current' } });
+        expect(logout.status()).toBe(204);
+        expect((await page.request.get(`${base}/identity/v1/session?surface=employee`)).status()).toBe(401);
+        // The hosted form asks for the email, not for a user name or the employee code.
+        await page.goto(authorizeUrl(base, 'employee', 'password', slug));
+        await expect(page.locator('label[for="username"]'), 'login field is labelled Email').toHaveText(/^Email\s*\*?$/);
+        await expect(page.locator('label[for="username"]')).not.toContainText(/user\s*name/i);
+        // A value without "@" (the employee code) draws the hint; the email does not.
+        await page.locator('#username').fill(member.code);
+        await expect(page.getByRole('note').filter({ hasText: /email/i }), 'hint for a value without @').toBeVisible();
+        await page.locator('#username').fill(member.email);
+        await expect(page.getByRole('note').filter({ hasText: /email/i })).toHaveCount(0);
+        await signIn();
+        const session = await identityJson<{ authenticated: boolean }>(await page.request.get(`${base}/identity/v1/session?surface=employee`));
+        expect(session.authenticated).toBe(true);
+      } finally {
+        await context.close();
+        await browser.close();
+      }
     });
 
     await test.step('5. citizen OTP sign-in at /{slug}/ and files a complaint', async () => {

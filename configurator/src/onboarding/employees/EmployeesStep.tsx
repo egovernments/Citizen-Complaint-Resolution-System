@@ -169,7 +169,6 @@ export default function EmployeesStep() {
       inviteError = err.reason;
     }
     trackRecordSave('employees', 'employee', 'create', {
-      departments: input.departments.length,
       roles: input.roles.length,
       jurisdictions: input.jurisdictions.length,
       has_email: !!input.emailId,
@@ -186,7 +185,7 @@ export default function EmployeesStep() {
           }
         : {
             title: t('common.added_named', '%{name} added', { name: created.user.name }),
-            description: t('employees.signs_in_as', 'They sign in as %{username}.', { username: created.user.userName }),
+            description: t('employees.signs_in_with_email', 'They sign in with %{email}.', { email: created.user.emailId || input.emailId || '' }),
           },
     );
     reload();
