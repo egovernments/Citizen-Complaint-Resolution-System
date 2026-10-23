@@ -5,111 +5,32 @@ import {
   getDataTableThClass,
 } from "../config/visualizationStyles";
 import { buildRedSeverityStyle } from "../config/tablePresentation";
-import { formatOfficerLabel, dimensionKindForName } from "../config/kpiDisplay";
 import useDashboardT from "../i18n/useDashboardT";
-import { dimensionLabel } from "../i18n/dimensionLabel";
 import { translate as t } from "../i18n/localeRuntime";
-import { seriesEntryLabel } from "../i18n/textResolver";
 import useTableSort from "../hooks/useTableSort";
 import TableSortHeader from "./TableSortHeader";
 import DashboardTableFrame, { SrOnlyTableHead } from "./DashboardTableFrame";
-import { formatNumber } from "../utils/numberFormat";
+import {
+  annotateRowsFromThresholds,
+  CELL_TEXT,
+  formatTrend,
+  statusTagItems,
+} from "../utils/tableCellText";
 
-// Cell formatters route their NUMERIC part through the tenant mask
-// (formatNumber, null when unconfigured -> each `??` fallback keeps the
-// pre-#1213 expression byte-for-byte); unit suffixes (%, h, hr/hrs/day/days,
-// /5) stay here.
 const TrendCell = ({ value }) => {
   const { muted, trendUp, trendDown } = DATA_TABLE_STYLES;
-  if (value == null || !Number.isFinite(value)) {
-    return <span className={muted}>—</span>;
+  if (value == null || !Number.isFinite(value) || value === 0) {
+    return <span className={muted}>{formatTrend(value)}</span>;
   }
-  if (value === 0) {
-    return <span className={muted}>{formatNumber(0, { decimals: 1 }) ?? "0.0"}%</span>;
-  }
-  const up = value > 0;
-  return (
-    <span className={up ? trendUp : trendDown}>
-      {up ? "↑" : "↓"} {formatNumber(Math.abs(value), { decimals: 1 }) ?? Math.abs(value).toFixed(1)}%
-    </span>
-  );
+  return <span className={value > 0 ? trendUp : trendDown}>{formatTrend(value)}</span>;
 };
 
-const formatPercent = (value, decimals = 1) => {
-  if (value == null || !Number.isFinite(value)) return "—";
-  const pct = value <= 1 ? value * 100 : value;
-  return `${formatNumber(pct, { decimals }) ?? pct.toFixed(decimals)}%`;
-};
-
-const formatHours = (ms) => {
-  if (ms == null || !Number.isFinite(ms)) return "—";
-  const hours = ms / 3600000;
-  const nearWhole = Math.abs(hours - Math.round(hours)) < 0.05;
-  const formatted =
-    formatNumber(nearWhole ? Math.round(hours) : hours, { decimals: nearWhole ? 0 : 1 }) ??
-    (nearWhole ? String(Math.round(hours)) : hours.toFixed(1));
-  return `${formatted}h`;
-};
-
-const MS_PER_HOUR = 3600000;
-const MS_PER_DAY = 86400000;
-
-const formatHoursDays = (ms) => {
-  if (ms == null || !Number.isFinite(ms)) return "—";
-  const hours = ms / MS_PER_HOUR;
-  if (hours < 48) {
-    const rounded = Math.round(hours * 10) / 10;
-    const formatted =
-      formatNumber(rounded, { decimals: 1, trim: true }) ??
-      (Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1));
-    return `${formatted} ${rounded === 1 ? t("DASHBOARD_UNIT_HR", "hr") : t("DASHBOARD_UNIT_HRS", "hrs")}`;
-  }
-  const days = ms / MS_PER_DAY;
-  const rounded = Math.round(days * 10) / 10;
-  const formatted =
-    formatNumber(rounded, { decimals: 1, trim: true }) ??
-    (Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1));
-  return `${formatted} ${rounded === 1 ? t("DASHBOARD_UNIT_DAY", "day") : t("DASHBOARD_UNIT_DAYS", "days")}`;
-};
-
-const formatRating = (value) => {
-  if (value == null || !Number.isFinite(value)) return "—";
-  return `${formatNumber(value, { decimals: 1 }) ?? Number(value).toFixed(1)}/5`;
-};
-
-const formatInteger = (value) => {
-  if (value == null || !Number.isFinite(value)) return "—";
-  // Masked path adds thousands grouping — the ungrouped String(Math.round())
-  // was part of bug #1251; unconfigured tenants keep it unchanged.
-  return formatNumber(value, { decimals: 0 }) ?? String(Math.round(value));
-};
-
-// Legacy humaniser — retained verbatim as the dimensionLabel fallback so
-// unseeded environments render exactly what they render today.
-const humanizeCellCode = (value) =>
-  String(value).replace(/[_.]+/g, " ").trim().replace(/\b\w/g, (c) => c.toUpperCase());
-
+// Cell text comes from utils/tableCellText (shared with the export); only the
+// trend and tags cells add markup here.
 const CELL_RENDERERS = {
-  text: (value) => value ?? "—",
-  integer: (value) => formatInteger(value),
-  percent: (value) => formatPercent(value),
-  hours: (value) => formatHours(value),
-  hoursDays: (value) => formatHoursDays(value),
-  rating: (value) => formatRating(value),
+  ...CELL_TEXT,
   trend: (value) => <TrendCell value={value} />,
   tags: (value) => value,
-  officer: (value) => formatOfficerLabel(value),
-  department: (value) =>
-    !value || value === "null" || value === "undefined"
-      ? "—"
-      : dimensionLabel(String(value), "department", humanizeCellCode(value)),
-  dimension: (value, col) => {
-    if (!value || value === "null" || value === "undefined") return "—";
-    const kind = dimensionKindForName(col?.dimension ?? col?.id);
-    return kind
-      ? dimensionLabel(String(value), kind, humanizeCellCode(value))
-      : humanizeCellCode(value);
-  },
 };
 
 function resolveToneClass(tone, styles) {
@@ -131,12 +52,7 @@ function resolveStatusTagClass(tone, styles) {
 }
 
 function renderStatusTags(row, styles) {
-  const items = row.statusTagItems?.length
-    ? row.statusTagItems
-    : (Array.isArray(row.statusTags) ? row.statusTags : []).map((label) => ({
-        label,
-        tone: String(label).toLowerCase().includes("on track") ? "good" : "watch",
-      }));
+  const items = statusTagItems(row);
 
   if (!items.length) return <span className={styles.muted}>—</span>;
 
@@ -158,55 +74,6 @@ function renderStatusTags(row, styles) {
       )}
     </span>
   );
-}
-
-// Config-driven cell tinting: a column declares
-//   threshold: { higherIsBetter, watch, breach, tag?: { watch, breach } }
-// and the table derives the per-cell tone (+ status tags) itself — so any catalog
-// table gets threshold coloring from MDMS with no per-KPI code. Mirrors the reference
-// watch/breach band model (TYPE_DETAILS_THRESHOLDS / EMPLOYEE_THRESHOLDS).
-function evaluateThresholdTone(value, t) {
-  const v = Number(value);
-  if (!t || !Number.isFinite(v)) return null;
-  if (t.higherIsBetter) {
-    if (v <= t.breach) return "breach";
-    if (v <= t.watch) return "watch";
-  } else {
-    if (v >= t.breach) return "breach";
-    if (v >= t.watch) return "watch";
-  }
-  return null;
-}
-
-function annotateRowsFromThresholds(rows, columns) {
-  const tcols = columns.filter((c) => c.threshold);
-  const hasTagsCol = columns.some((c) => c.type === "tags");
-  if (!tcols.length) return rows;
-  return rows.map((row) => {
-    if (row.cellTones || row.statusTagItems) return row; // already annotated upstream
-    const cellTones = {};
-    const tags = [];
-    for (const c of tcols) {
-      const tone = evaluateThresholdTone(row[c.id], c.threshold);
-      if (!tone) continue;
-      cellTones[c.id] = tone;
-      // threshold.tagKey.{watch,breach} (DASHBOARD_BADGE_*) wins when seeded,
-      // else the descriptor's literal threshold.tag.{watch,breach}.
-      const label = seriesEntryLabel(
-        { labelKey: c.threshold.tagKey?.[tone] },
-        c.threshold.tag?.[tone]
-      );
-      if (label) tags.push({ label, tone });
-    }
-    if (!Object.keys(cellTones).length && !hasTagsCol) return row;
-    const next = { ...row, cellTones };
-    if (hasTagsCol) {
-      next.statusTagItems = tags.length
-        ? tags
-        : [{ label: t("DASHBOARD_BADGE_ON_TRACK", "On track"), tone: null }];
-    }
-    return next;
-  });
 }
 
 const DashboardTable = ({ columns, rows, emptyMessage }) => {

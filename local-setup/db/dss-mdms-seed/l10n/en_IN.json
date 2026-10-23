@@ -330,6 +330,71 @@
     "module": "rainmaker-dashboard"
   },
   {
+    "code": "DASHBOARD_EXPORT_COL_AGE",
+    "message": "Age",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_EXPORT_COL_CHANGE",
+    "message": "Change vs previous period",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_EXPORT_COL_DATE",
+    "message": "Date",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_EXPORT_COL_DESCRIPTION",
+    "message": "Description",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_EXPORT_COL_ITEM",
+    "message": "Item",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_EXPORT_COL_NOTE",
+    "message": "Note",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_EXPORT_COL_SHARE",
+    "message": "Share",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_EXPORT_EXPORTED_AT",
+    "message": "Exported at",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_EXPORT_FAILED",
+    "message": "Couldn't create the export file. Try again.",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_EXPORT_PERIOD",
+    "message": "Period",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_EXPORT_SHEET_SUMMARY",
+    "message": "Summary",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_EXPORT_TIME_ZONE",
+    "message": "Time zone",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_EXPORT_WORKSPACE",
+    "message": "Workspace",
+    "module": "rainmaker-dashboard"
+  },
+  {
     "code": "DASHBOARD_FILTERS_ALL_TYPES",
     "message": "All categories",
     "module": "rainmaker-dashboard"
