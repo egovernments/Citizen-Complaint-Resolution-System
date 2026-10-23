@@ -53,7 +53,8 @@ export function EmployeeBulkImport() {
       try {
         // Only the boundaries wait for the hierarchy walk.
         const boundariesInDefaultHierarchy = loadTenantHierarchies(tenantId).then(({ hierarchyType }) =>
-          boundaryService.searchBoundaries(tenantId, hierarchyType ? { hierarchyType } : undefined),
+          // no hierarchy at this tenant (a state whose boundaries live at its child tenants) -> no boundaries, not an unscoped search (400)
+          hierarchyType ? boundaryService.searchBoundaries(tenantId, { hierarchyType }) : Promise.resolve([]),
         );
 
         const [depts, desigs, bounds, fetchedRoles, mobile, employees] = await Promise.all([
