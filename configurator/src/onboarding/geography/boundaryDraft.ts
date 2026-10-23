@@ -3,7 +3,8 @@ import { apiClient, boundaryService, localizationService, mdmsService, ApiClient
 import { reportStepError, trackImport, type OnboardingMethod } from '../telemetry';
 import { labelLocales } from '../labelLocales';
 import { englishT, MessageError, type OnboardingT } from '../i18n';
-import { deriveMapPosition } from '@/utils/mapConfigFromBoundaries';
+import { deriveMapPosition, widenMapPosition, type BoundingBox } from '@/utils/mapConfigFromBoundaries';
+import { MDMS_SCHEMAS } from '@/api/config';
 import type { OsmAdminLevel } from '@/utils/osmBoundaries';
 import type { ParsedGeoJsonSidecar } from '@/utils/boundaryGeoJson';
 import type { SuggestionFeature } from '@/utils/turbopassSuggestions';
@@ -86,6 +87,11 @@ export interface ListHierarchy {
 // One unsaved list per workspace, held in this tab's memory only: a reload
 // drops it.
 const drafts = new Map<string, BoundaryDraft>();
+// A save in flight, as its progress (0–100), so the step shows it after leaving and coming back.
+const saves = new Map<string, number>();
+// The hierarchy record (CMS-BOUNDARY.HierarchySchema) a save couldn't write: the
+// step can't complete without it, so Save and continue writes it again.
+const pendingRecords = new Map<string, { hierarchy: string; highestHierarchy: string; lowestHierarchy: string }>();
 const listeners = new Set<() => void>();
 let lastSelectionId = 0;
 
@@ -104,6 +110,24 @@ export function setBoundaryDraft(tenantId: string, draft: BoundaryDraft | null) 
 
 export function useBoundaryDraft(tenantId: string): BoundaryDraft | null {
   return useSyncExternalStore(subscribe, () => drafts.get(tenantId) ?? null);
+}
+
+/** How far a running save has got (0–100), or null when none is running. */
+export function saveProgressOf(tenantId: string): number | null {
+  return saves.get(tenantId) ?? null;
+}
+
+export function useBoundarySave(tenantId: string): number | null {
+  return useSyncExternalStore(subscribe, () => saveProgressOf(tenantId));
+}
+
+/** Whether a save left the hierarchy record unwritten. */
+export function usePendingHierarchyRecord(tenantId: string): boolean {
+  return useSyncExternalStore(subscribe, () => pendingRecords.has(tenantId));
+}
+
+function notify() {
+  listeners.forEach((listener) => listener());
 }
 
 /** Every area in the list, selection by selection. */
@@ -174,7 +198,8 @@ export interface AddResult {
 /**
  * Adds a selection to the list, or puts it in place of `replaces` (Edit). An
  * area already in the list (same code, name, level and parent), or already
- * saved (`saved`: same code and parent), is left out. A different area whose
+ * saved (`saved`: same code and parent; its label may have been edited since),
+ * is left out. A different area whose
  * code is taken (codes come from names, so two counties' "Central" share one)
  * gets the next free code, and its children follow it; a sheet's codes are the
  * operator's own, so a sheet with such a code is refused instead.
@@ -209,7 +234,7 @@ export function addSelection(
       boundaries.push({ ...b, parent });
     } else if (there && there.name === b.name && there.boundaryType === b.boundaryType && (there.parent ?? '') === (parent ?? '')) {
       duplicates++;
-    } else if (savedThere && (savedThere.parent ?? '') === (parent ?? '') && (!savedThere.name || savedThere.name === b.name)) {
+    } else if (savedThere && (savedThere.parent ?? '') === (parent ?? '')) {
       alreadySaved++;
     } else if (selection.source === 'excel') {
       clashes.push(b.code);
@@ -251,7 +276,18 @@ export function addSelection(
     }
   }
   // A sheet that only names areas already saved still joins: Save and continue uploads the names.
-  if (boundaries.length === 0 && selection.unnamed.length === 0) return { added: 0, alreadySaved, duplicates, error: null };
+  if (boundaries.length === 0 && selection.unnamed.length === 0) {
+    // An Edit to nothing new says so and leaves the item as it was.
+    if (replaced) {
+      return {
+        added: 0,
+        alreadySaved: 0,
+        duplicates: 0,
+        error: t('geography.list.edit_nothing_new', 'Everything in this selection is already in your list or saved, so nothing changed.'),
+      };
+    }
+    return { added: 0, alreadySaved, duplicates, error: null };
+  }
 
   const entry: BoundarySelection = { ...selection, boundaries, id: replaces ?? `selection-${++lastSelectionId}` };
   setBoundaryDraft(tenantId, {
@@ -262,15 +298,25 @@ export function addSelection(
 
 /**
  * What's left after a save: the areas that didn't land, kept so Save and
- * continue can try them again. The save fixed the hierarchy on the server, so
- * they're marked as going into an existing one (its levels can't change now).
- * Names were uploaded with it.
+ * continue can try them again. Read from the list as it is now (it may have
+ * changed while the save ran). The save fixed the hierarchy on the server, so
+ * they're marked as going into an existing one, with its levels. Names were
+ * uploaded with it.
  */
-export function keepUnsaved(tenantId: string, draft: BoundaryDraft, created: Boundary[]) {
+export function keepUnsaved(tenantId: string, created: Boundary[]) {
+  const draft = drafts.get(tenantId);
+  if (!draft) return;
+  const levels = listHierarchy(draft)?.levels;
   const saved = new Set(created.map((b) => b.code));
   setBoundaryDraft(tenantId, {
     selections: draft.selections
-      .map((s) => ({ ...s, hierarchyExists: true, unnamed: [], boundaries: s.boundaries.filter((b) => !saved.has(b.code)) }))
+      .map((s) => ({
+        ...s,
+        hierarchyExists: true,
+        levels: levels ?? s.levels,
+        unnamed: [],
+        boundaries: s.boundaries.filter((b) => !saved.has(b.code)),
+      }))
       .filter((s) => s.boundaries.length > 0),
   });
 }
@@ -322,6 +368,8 @@ async function runPostCreatePipeline(
   t: OnboardingT = englishT,
   // Boundaries already there without a name, which the upload labels but doesn't create.
   unnamed: { code: string; name: string }[] = [],
+  // Areas were saved in the hierarchy before: the map keeps covering them.
+  keepSavedExtent = false,
 ): Promise<string | null> {
   // Make this the tenant's PGR hierarchy (CMS-BOUNDARY.HierarchySchema) when it
   // has none yet: digit-ui, the dashboard and PGR read it in place of the
@@ -384,7 +432,12 @@ async function runPostCreatePipeline(
   // over a map default would be a poor trade. An unwritten MapConfig just means
   // the map keeps its built-in defaults.
   try {
-    const derived = deriveMapPosition(created);
+    let derived = deriveMapPosition(created);
+    if (derived && keepSavedExtent) {
+      const rows = await mdmsService.searchRecords(tenantId, MDMS_SCHEMAS.MAP_CONFIG).catch(() => []);
+      const own = rows.find((r) => r.tenantId === tenantId && r.isActive !== false);
+      derived = widenMapPosition(derived, (own?.data as { searchViewbox?: BoundingBox } | undefined)?.searchViewbox);
+    }
     if (derived) {
       await mdmsService.upsertMapConfig(tenantId, {
         ...derived,
@@ -435,45 +488,81 @@ export interface DraftSaveResult {
  * Writes the list: the hierarchy, its areas, then what the rest of the platform
  * reads alongside them. Throws when nothing could be written (the list is still
  * good to edit and retry); a partial save comes back with its failures.
- * `onProgress` gets 0–100 as it goes: the areas' writes are most of the time.
+ * While it runs, useBoundarySave has its progress (0–100); the areas' writes are most of it.
  */
 export async function saveBoundaryDraft(
   tenantId: string,
   draft: BoundaryDraft,
   t: OnboardingT = englishT,
-  onProgress?: (percent: number) => void,
+  // Areas were already saved in the hierarchy: the map keeps covering them.
+  hadSavedAreas = false,
 ): Promise<DraftSaveResult> {
   const hierarchy = listHierarchy(draft);
   if (!hierarchy) return { created: [], failed: [], schemaError: null };
-  onProgress?.(0);
-  if (!hierarchy.hierarchyExists) await ensureHierarchy(tenantId, hierarchy.hierarchyType, hierarchy.levels);
-  onProgress?.(2);
-  const result = await boundaryService.createBoundaries(draftBoundaries(draft), (done, total) =>
-    onProgress?.(2 + Math.floor((done / total) * 88)),
-  );
-  onProgress?.(92);
-  const unnamed = draft.selections.flatMap((selection) => selection.unnamed);
-  const schemaError = result.success.length || unnamed.length
-    ? await runPostCreatePipeline(
-        tenantId,
-        result.success,
-        hierarchy.hierarchyType,
-        hierarchy.levels.map((boundaryType) => ({ boundaryType })),
-        t,
-        unnamed,
-      )
-    : null;
-  const created = new Set(result.success.map((b) => b.code));
-  for (const selection of draft.selections) {
-    const count = selection.boundaries.filter((b) => created.has(b.code)).length;
-    trackImport('geography', 'boundary', {
-      method: selection.method,
-      count,
-      failed: selection.boundaries.length - count,
-      levels: selection.levels.length,
-      already_there: selection.alreadyThere,
-    });
+  const progress = (percent: number) => {
+    saves.set(tenantId, percent);
+    notify();
+  };
+  progress(0);
+  try {
+    if (!hierarchy.hierarchyExists) await ensureHierarchy(tenantId, hierarchy.hierarchyType, hierarchy.levels);
+    progress(2);
+    const result = await boundaryService.createBoundaries(draftBoundaries(draft), (done, total) =>
+      progress(2 + Math.floor((done / total) * 88)),
+    );
+    progress(92);
+    const unnamed = draft.selections.flatMap((selection) => selection.unnamed);
+    const schemaError = result.success.length || unnamed.length
+      ? await runPostCreatePipeline(
+          tenantId,
+          result.success,
+          hierarchy.hierarchyType,
+          hierarchy.levels.map((boundaryType) => ({ boundaryType })),
+          t,
+          unnamed,
+          hadSavedAreas,
+        )
+      : null;
+    if (schemaError) {
+      pendingRecords.set(tenantId, {
+        hierarchy: hierarchy.hierarchyType,
+        highestHierarchy: hierarchy.levels[0],
+        lowestHierarchy: hierarchy.levels[hierarchy.levels.length - 1],
+      });
+    } else if (result.success.length || unnamed.length) {
+      pendingRecords.delete(tenantId);
+    }
+    const created = new Set(result.success.map((b) => b.code));
+    for (const selection of draft.selections) {
+      const count = selection.boundaries.filter((b) => created.has(b.code)).length;
+      trackImport('geography', 'boundary', {
+        method: selection.method,
+        count,
+        failed: selection.boundaries.length - count,
+        levels: selection.levels.length,
+        already_there: selection.alreadyThere,
+      });
+    }
+    progress(100);
+    return { created: result.success, failed: result.failed, schemaError };
+  } finally {
+    saves.delete(tenantId);
+    notify();
   }
-  onProgress?.(100);
-  return { created: result.success, failed: result.failed, schemaError };
+}
+
+/** Writes the hierarchy record a save couldn't. Returns why it failed again, or null. */
+export async function retryHierarchyRecord(tenantId: string, t: OnboardingT = englishT): Promise<string | null> {
+  const record = pendingRecords.get(tenantId);
+  if (!record) return null;
+  try {
+    await mdmsService.ensureHierarchySchema(tenantId, record);
+    pendingRecords.delete(tenantId);
+    notify();
+    return null;
+  } catch (e) {
+    reportStepError('geography', 'hierarchy_schema', e, tenantId);
+    const reason = e instanceof ApiClientError ? e.firstError : e instanceof Error ? e.message : String(e);
+    return t('geography.schema_not_saved_retry', 'The hierarchy record didn\'t save: %{reason} Save and continue tries it again.', { reason });
+  }
 }

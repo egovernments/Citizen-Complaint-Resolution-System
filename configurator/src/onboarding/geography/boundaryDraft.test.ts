@@ -7,6 +7,9 @@ import {
   areasInside,
   keepUnsaved,
   listHierarchy,
+  retryHierarchyRecord,
+  saveProgressOf,
+  usePendingHierarchyRecord,
   removeSelection,
   saveBoundaryDraft,
   setBoundaryDraft,
@@ -23,7 +26,11 @@ vi.mock('@/api', () => ({
     getHierarchies: vi.fn(),
     createBoundaries: vi.fn(),
   },
-  mdmsService: { ensureHierarchySchema: vi.fn(async () => undefined), upsertMapConfig: vi.fn(async () => undefined) },
+  mdmsService: {
+    ensureHierarchySchema: vi.fn(async () => undefined),
+    upsertMapConfig: vi.fn(async () => undefined),
+    searchRecords: vi.fn(async () => []),
+  },
   localizationService: {
     uploadBoundaryLocalizations: vi.fn(async () => ({ success: 1, failed: 0 })),
     uploadHierarchyLevelLocalizations: vi.fn(async () => ({ success: 1, failed: 0 })),
@@ -176,15 +183,45 @@ describe('the unsaved list', () => {
       addSelection(TENANT, selection(NAIROBI, { unnamed: [{ code: 'OLD', name: 'Old ward' }] }));
       addSelection(TENANT, selection(MOMBASA));
     });
-    const before = current();
-    act(() => keepUnsaved(TENANT, before, [...NAIROBI, MOMBASA[0]]));
+    act(() => keepUnsaved(TENANT, [...NAIROBI, MOMBASA[0]]));
     expect(current().selections).toHaveLength(1);
     expect(current().selections[0].boundaries.map((b) => b.code)).toEqual(['MSA_W1']);
     expect(current().selections[0].hierarchyExists).toBe(true);
     expect(current().selections[0].unnamed).toEqual([]);
-    const left = current();
-    act(() => keepUnsaved(TENANT, left, MOMBASA));
+    act(() => keepUnsaved(TENANT, MOMBASA));
     expect(renderHook(() => useBoundaryDraft(TENANT)).result.current).toBeNull();
+  });
+
+  it('gives what a save left behind the hierarchy\'s levels, not its own shorter ones', () => {
+    act(() => {
+      addSelection(TENANT, selection([area('NBI', 'County'), area('NBI_S1', 'Sub-county', 'NBI')], { levels: ['County', 'Sub-county'] }));
+      addSelection(TENANT, selection([area('MSA', 'County')], { levels: ['County', 'Sub-county', 'Ward'] }));
+    });
+    act(() => keepUnsaved(TENANT, [area('MSA', 'County')]));
+    expect(current().selections[0].levels).toEqual(['County', 'Sub-county', 'Ward']);
+    expect(listHierarchy(current())?.levels).toEqual(['County', 'Sub-county', 'Ward']);
+  });
+
+  it('takes an area saved under the same code and parent as already saved, whatever its label now says', () => {
+    let result;
+    act(() => {
+      result = addSelection(TENANT, selection([area('NBI', 'County'), area('NBI_W1', 'Ward', 'NBI')]), undefined, undefined, [
+        { code: 'NBI', name: 'Nairobi City County' },
+      ]);
+    });
+    expect(result).toEqual({ added: 1, alreadySaved: 1, duplicates: 0, error: null });
+    expect(current().selections[0].boundaries.map((b) => [b.code, b.parent])).toEqual([['NBI_W1', 'NBI']]);
+  });
+
+  it('says so when an Edit brings nothing new, and leaves the item as it was', () => {
+    act(() => {
+      addSelection(TENANT, selection(NAIROBI));
+      addSelection(TENANT, selection(MOMBASA));
+    });
+    const reopened = current().selections[1];
+    const result = addSelection(TENANT, selection([NAIROBI[0]]), undefined, reopened.id);
+    expect(result.error).toBe('Everything in this selection is already in your list or saved, so nothing changed.');
+    expect(current().selections[1].boundaries).toEqual(MOMBASA);
   });
 
   it('refuses a selection whose levels are named differently, and keeps the list as it was', () => {
@@ -256,17 +293,51 @@ describe('saveBoundaryDraft', () => {
     expect(result).toEqual({ created: [...NAIROBI, ...MOMBASA], failed: [], schemaError: null });
   });
 
-  it('reports progress that only rises, ending at 100', async () => {
+  it('shows its progress while it runs, rising, and none once it\'s done', async () => {
+    const progress: (number | null)[] = [];
     createBoundaries.mockImplementation(async (boundaries, onProgress) => {
-      for (let done = 1; done <= boundaries.length * 2; done++) onProgress?.(done, boundaries.length * 2);
+      progress.push(saveProgressOf(TENANT));
+      for (let done = 1; done <= boundaries.length * 2; done++) {
+        onProgress?.(done, boundaries.length * 2);
+        progress.push(saveProgressOf(TENANT));
+      }
       return { success: boundaries, failed: [] };
     });
-    const progress: number[] = [];
-    await saveBoundaryDraft(TENANT, twoCounties(), undefined, (percent) => progress.push(percent));
-    expect(progress[0]).toBe(0);
-    expect(progress.at(-1)).toBe(100);
-    expect(progress.every((percent, i) => i === 0 || percent >= progress[i - 1])).toBe(true);
-    expect(progress.length).toBeGreaterThan(10);
+    await saveBoundaryDraft(TENANT, twoCounties());
+    expect(progress[0]).toBe(2);
+    expect(progress.at(-1)).toBe(90);
+    expect(progress.every((percent, i) => i === 0 || (percent ?? 0) >= (progress[i - 1] ?? 0))).toBe(true);
+    expect(saveProgressOf(TENANT)).toBeNull();
+  });
+
+  it('keeps a hierarchy record that didn\'t save, and writes it on retry', async () => {
+    ensureSchema.mockRejectedValueOnce(new Error('MDMS down'));
+    const pending = renderHook(() => usePendingHierarchyRecord(TENANT));
+    const result = await saveBoundaryDraft(TENANT, twoCounties());
+    expect(result.schemaError).toMatch(/MDMS down/);
+    pending.rerender();
+    expect(pending.result.current).toBe(true);
+    ensureSchema.mockRejectedValueOnce(new Error('still down'));
+    expect(await retryHierarchyRecord(TENANT)).toBe("The hierarchy record didn't save: still down Save and continue tries it again.");
+    expect(await retryHierarchyRecord(TENANT)).toBeNull();
+    pending.rerender();
+    expect(pending.result.current).toBe(false);
+    expect(ensureSchema).toHaveBeenLastCalledWith(TENANT, { hierarchy: 'ADMIN', highestHierarchy: 'County', lowestHierarchy: 'Ward' });
+  });
+
+  it('keeps the map covering areas saved before when it saves more', async () => {
+    const upsertMap = vi.mocked(mdmsService.upsertMapConfig);
+    const searchRecords = vi.mocked(mdmsService.searchRecords);
+    searchRecords.mockResolvedValue([
+      { tenantId: TENANT, isActive: true, data: { searchViewbox: { minLon: 30, minLat: -2, maxLon: 32, maxLat: 0 } } } as never,
+    ]);
+    act(() => {
+      addSelection(TENANT, selection([{ ...area('MSA', 'County'), geometry: { type: 'Polygon', coordinates: [[[39, -5], [40, -5], [40, -4], [39, -4], [39, -5]]] } }]));
+    });
+    await saveBoundaryDraft(TENANT, current(), undefined, true);
+    const box = (upsertMap.mock.calls[0][1] as { searchViewbox: { minLon: number; maxLon: number } }).searchViewbox;
+    expect(box.minLon).toBe(30);
+    expect(box.maxLon).toBeGreaterThan(40);
   });
 
   it('nothing is written before it is called', () => {

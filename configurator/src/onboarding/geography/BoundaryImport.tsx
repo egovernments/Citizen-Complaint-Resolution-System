@@ -435,6 +435,13 @@ export default function BoundaryImport({
   // Defines the hierarchy here only: it is created on the server with its
   // areas, when Geography's Save and continue saves them.
   const handleCreateHierarchy = () => {
+    // Whether the name is taken depends on the server's list: wait for it.
+    const unknown = hierarchiesUnknown();
+    if (unknown) {
+      setError(unknown);
+      if (hierarchiesError) void fetchHierarchies();
+      return;
+    }
     if (!hierarchyType.trim()) {
       setError(t('geography.excel.type_required', 'Hierarchy type name is required'));
       return;
@@ -605,6 +612,7 @@ export default function BoundaryImport({
     const unknown = hierarchiesUnknown();
     if (unknown || !serverHierarchyTypes) {
       setError(unknown);
+      if (hierarchiesError) void fetchHierarchies();
       return;
     }
 
@@ -998,6 +1006,7 @@ export default function BoundaryImport({
     const unknown = hierarchiesUnknown();
     if (unknown || !serverHierarchyTypes) {
       setError(unknown);
+      if (hierarchiesError) void fetchHierarchies();
       setStep('map-levels');
       return;
     }
@@ -1221,14 +1230,14 @@ export default function BoundaryImport({
           </div>
 
           <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-0 mt-6">
-            <Button variant="ghost" size="sm" onClick={hasHierarchies ? () => setStep('excel-landing') : onCancel} className="gap-1.5 text-primary hover:text-primary">
+            <Button variant="ghost" size="sm" onClick={hasHierarchies || list ? () => setStep('excel-landing') : onCancel} className="gap-1.5 text-primary hover:text-primary">
               <ArrowLeft className="w-4 h-4" />
               {t('step.back', 'Back')}
             </Button>
             <SubmitBar
               label={loading ? t('geography.creating', 'Creating...') : t('geography.excel.create_hierarchy', 'Create Hierarchy')}
               onSubmit={handleCreateHierarchy}
-              disabled={loading}
+              disabled={loading || (!serverHierarchyTypes && !hierarchiesError)}
               icon={loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
             />
           </div>

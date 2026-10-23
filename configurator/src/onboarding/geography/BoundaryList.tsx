@@ -19,6 +19,7 @@ export function BoundaryList({
   draft,
   summarize,
   disabled = false,
+  removeBody,
   onEdit,
   onRemove,
 }: {
@@ -27,6 +28,8 @@ export function BoundaryList({
   summarize: (selection: BoundarySelection) => string;
   /** While the list is being saved. */
   disabled?: boolean;
+  /** What Remove's confirmation says, when more than that nothing is saved. */
+  removeBody?: string;
   onEdit: (selection: BoundarySelection) => void;
   onRemove: (selection: BoundarySelection) => void;
 }) {
@@ -94,7 +97,7 @@ export function BoundaryList({
               ) : (
                 <DeleteConfirmDialog
                   title={t('common.remove_confirm', 'Remove %{name}?', { name })}
-                  description={t('geography.list.remove_body', 'These boundaries haven’t been saved, so nothing else changes.')}
+                  description={removeBody ?? t('geography.list.remove_body', 'These boundaries haven’t been saved, so nothing else changes.')}
                   onConfirm={() => onRemove(selection)}
                   disabled={disabled}
                   trigger={

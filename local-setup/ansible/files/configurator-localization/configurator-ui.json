@@ -9036,6 +9036,12 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.geography.list.checking_saved",
+    "message": "Checking your saved boundaries…",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.geography.list.code_clash",
     "message": "These codes are already in your list for other areas: %{codes}. Give them their own codes in the sheet.",
     "module": "configurator-ui",
@@ -9050,6 +9056,12 @@
   {
     "code": "app.onboarding.geography.list.duplicates_other",
     "message": "%{count} boundaries were already in your list, so they were left out.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.list.edit_nothing_new",
+    "message": "Everything in this selection is already in your list or saved, so nothing changed.",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -9104,6 +9116,12 @@
   {
     "code": "app.onboarding.geography.list.remove_body",
     "message": "These boundaries haven’t been saved, so nothing else changes.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.list.remove_final",
+    "message": "These boundaries haven’t been saved. Your other boundaries are, so once these are removed they can’t be added again.",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -9338,6 +9356,18 @@
   {
     "code": "app.onboarding.geography.schema_not_saved",
     "message": "Boundaries were created, but the hierarchy record didn't save: %{reason}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.schema_not_saved_retry",
+    "message": "The hierarchy record didn't save: %{reason} Save and continue tries it again.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.schema_retry",
+    "message": "Save and continue tries it again.",
     "module": "configurator-ui",
     "locale": "en_IN"
   },

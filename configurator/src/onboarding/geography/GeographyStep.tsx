@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Download, MapPin } from 'lucide-react';
 import { useApp } from '../../App';
@@ -33,7 +33,10 @@ import {
   keepUnsaved,
   listHierarchy,
   removeSelection,
+  retryHierarchyRecord,
   saveBoundaryDraft,
+  useBoundarySave,
+  usePendingHierarchyRecord,
   useBoundaryDraft,
   type BoundaryDraft,
   type BoundarySelection,
@@ -57,9 +60,8 @@ async function loadHierarchies(tenant: string): Promise<HierarchySummary[]> {
   const hierarchies = await boundaryService.getHierarchies(tenant);
   return Promise.all(
     hierarchies.map(async (hierarchy) => {
-      const boundaries = await boundaryService
-        .searchBoundaries(tenant, { hierarchyType: hierarchy.hierarchyType })
-        .catch(() => []);
+      // A failed read fails the load: read as empty, it would reopen the sources on a saved hierarchy.
+      const boundaries = await boundaryService.searchBoundaries(tenant, { hierarchyType: hierarchy.hierarchyType });
       const counts: Record<string, number> = {};
       for (const boundary of boundaries) counts[boundary.boundaryType] = (counts[boundary.boundaryType] ?? 0) + 1;
       return {
@@ -114,9 +116,18 @@ export default function GeographyStep() {
   const draft = useBoundaryDraft(tenant);
   // The list's selection an Edit reopened.
   const [editing, setEditing] = useState<BoundarySelection | null>(null);
-  const [saving, setSaving] = useState(false);
-  // How far Save and continue has got, 0–100, while it writes the list.
-  const [saveProgress, setSaveProgress] = useState(0);
+  // A running save, kept in the store so it's still shown after leaving the step and coming back.
+  const saveProgress = useBoundarySave(tenant);
+  const saving = saveProgress !== null;
+  // A save left the hierarchy record unwritten: Save and continue writes it.
+  const pendingRecord = usePendingHierarchyRecord(tenant);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const [saveError, setSaveError] = useState<string | null>(null);
   // Save and continue asks first when it would save new boundaries: they can't be changed after.
   const [confirmSave, setConfirmSave] = useState(false);
@@ -146,24 +157,27 @@ export default function GeographyStep() {
 
   const hasBoundaries = !!hierarchies?.some((hierarchy) => hierarchy.total > 0);
   // Nothing can be added while a save runs. Otherwise one set of boundaries unless
-  // the build allows more: the sources wait until the unsaved one is removed, and
-  // stay closed once boundaries are saved.
+  // the build allows more: the sources wait for the saved ones to be read, stay
+  // closed once boundaries are saved, and wait until an unsaved one is removed.
   const listFullReason = saving
     ? t('geography.saving', 'Saving your boundaries…')
     : GEOGRAPHY_MULTIPLE_SELECTIONS_ENABLED
       ? undefined
-      : draft
-        ? t('geography.list.one_at_a_time', 'Remove the boundaries below to choose different ones.')
+      : !hierarchies
+        ? t('geography.list.checking_saved', 'Checking your saved boundaries…')
         : hasBoundaries
           ? t('geography.list.saved_already', 'Your boundaries are saved, so no more can be added.')
-          : undefined;
+          : draft
+            ? t('geography.list.one_at_a_time', 'Remove the boundaries below to choose different ones.')
+            : undefined;
   const { probe, recheck } = useStepProbe(
     state.tenant,
     'GEOGRAPHY',
     (hierarchies ?? []).map((hierarchy) => `${hierarchy.hierarchyType}:${hierarchy.total}`).join(','),
   );
-  // With unsaved boundaries, Save and continue saves them first, so the server's check can't pass yet.
-  const gate = draft
+  // With unsaved boundaries, or a hierarchy record still to write, Save and continue
+  // writes them first, so the server's check can't pass yet.
+  const gate = draft || pendingRecord
     ? { disabled: saving, hint: undefined, canRecheck: false }
     : probeGate(
         'GEOGRAPHY',
@@ -176,19 +190,20 @@ export default function GeographyStep() {
 
   /** Writes the unsaved list. True when everything landed; otherwise the reason stays on screen. */
   const saveDraft = async (toSave: BoundaryDraft): Promise<boolean> => {
-    setSaving(true);
-    setSaveProgress(0);
     setSaveError(null);
     try {
-      const result = await saveBoundaryDraft(tenant, toSave, t, setSaveProgress);
+      const result = await saveBoundaryDraft(tenant, toSave, t, hasBoundaries);
       // Whatever didn't land stays in the list for another try; the hierarchy is fixed now either way.
-      keepUnsaved(tenant, toSave, result.created);
+      keepUnsaved(tenant, result.created);
       setJustSaved(true);
       reload();
       const wanted = toSave.selections.reduce((count, selection) => count + selection.boundaries.length, 0);
       if (wanted > 0 && result.created.length === 0) {
         setSaveError(
-          [t('geography.osm.create_failed', 'Failed to create boundaries.'), result.failed[0]?.error].filter(Boolean).join(' '),
+          `${t('geography.osm.create_failed', 'Failed to create boundaries.')} ${t(
+            'geography.save_retry',
+            'They are still in the list below: Save and continue tries them again.',
+          )}`,
         );
         return false;
       }
@@ -200,7 +215,9 @@ export default function GeographyStep() {
               'They are still in the list below: Save and continue tries them again.',
             )}`
           : null,
-        result.schemaError,
+        result.schemaError
+          ? `${result.schemaError} ${t('geography.schema_retry', 'Save and continue tries it again.')}`
+          : null,
       ].filter(Boolean);
       if (failures.length) {
         setSaveError(failures.join(' '));
@@ -220,8 +237,6 @@ export default function GeographyStep() {
               : t('geography.osm.create_failed', 'Failed to create boundaries.'),
       );
       return false;
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -297,6 +312,29 @@ export default function GeographyStep() {
     );
   }
 
+  const unsavedList = draft && (
+    <BoundaryList
+      draft={draft}
+      summarize={(selection) => summaryLine(selectionSummary(selection), t)}
+      disabled={saving}
+      // With the flag off and boundaries saved, a removed leftover can't be brought back.
+      removeBody={
+        !GEOGRAPHY_MULTIPLE_SELECTIONS_ENABLED && hasBoundaries
+          ? t(
+              'geography.list.remove_final',
+              'These boundaries haven’t been saved. Your other boundaries are, so once these are removed they can’t be added again.',
+            )
+          : undefined
+      }
+      onEdit={(selection) => {
+        setEditing(selection);
+        setPreconfiguredSet(selection.preconfigured);
+        setSource(selection.source);
+      }}
+      onRemove={(selection) => removeSelection(tenant, selection.id)}
+    />
+  );
+
   return (
     <div className="space-y-8">
       <StepHeader eyebrow={t('step.your_account', 'Your account')} title={t('steps.geography', 'Geography')} done={done}>
@@ -354,14 +392,17 @@ export default function GeographyStep() {
       </section>
 
       {loadError ? (
-        <Alert variant="destructive">
-          <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
-            <span>{t('geography.load_failed', 'Couldn’t load your boundaries. %{reason}', { reason: loadError })}</span>
-            <Button variant="outline" size="sm" onClick={reload}>
-              {t('common.try_again', 'Try again')}
-            </Button>
-          </AlertDescription>
-        </Alert>
+        <div className="space-y-3">
+          <Alert variant="destructive">
+            <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
+              <span>{t('geography.load_failed', 'Couldn’t load your boundaries. %{reason}', { reason: loadError })}</span>
+              <Button variant="outline" size="sm" onClick={reload}>
+                {t('common.try_again', 'Try again')}
+              </Button>
+            </AlertDescription>
+          </Alert>
+          {unsavedList && <ul className="space-y-3">{unsavedList}</ul>}
+        </div>
       ) : !hierarchies ? (
         <div className="h-40 rounded-lg border border-dashed border-border bg-muted/40 animate-pulse" aria-busy="true" />
       ) : hierarchies.length === 0 && !draft ? (
@@ -395,19 +436,7 @@ export default function GeographyStep() {
                 </div>
               </li>
             ))}
-            {draft && (
-              <BoundaryList
-                draft={draft}
-                summarize={(selection) => summaryLine(selectionSummary(selection), t)}
-                disabled={saving}
-                onEdit={(selection) => {
-                  setEditing(selection);
-                  setPreconfiguredSet(selection.preconfigured);
-                  setSource(selection.source);
-                }}
-                onRemove={(selection) => removeSelection(tenant, selection.id)}
-              />
-            )}
+            {unsavedList}
           </ul>
         </section>
       )}
@@ -418,7 +447,7 @@ export default function GeographyStep() {
             <span className="text-xs sm:text-sm font-medium">{t('geography.saving', 'Saving your boundaries…')}</span>
             <span className="text-xs sm:text-sm text-primary font-medium">{saveProgress}%</span>
           </div>
-          <Progress value={saveProgress} className="h-2" />
+          <Progress value={saveProgress ?? 0} className="h-2" />
           <p className="text-xs sm:text-sm text-muted-foreground mt-2">
             {t('geography.saving_keep_open', 'A large set can take a few minutes. Keep this page open.')}
           </p>
@@ -438,6 +467,14 @@ export default function GeographyStep() {
             if (draft) {
               setConfirmSave(true);
               return;
+            }
+            if (pendingRecord) {
+              setSaveError(null);
+              const failed = await retryHierarchyRecord(tenant, t);
+              if (failed) {
+                setSaveError(failed);
+                return;
+              }
             }
             if (!await completePhase(STEP.number)) return;
             if (next) navigate(next.path);
@@ -468,6 +505,8 @@ export default function GeographyStep() {
               onClick={async () => {
                 setConfirmSave(false);
                 if (!draft || !(await saveDraft(draft))) return;
+                // Left the step while it saved: don't pull the operator back.
+                if (!mounted.current) return;
                 if (!await completePhase(STEP.number)) return;
                 if (next) navigate(next.path);
               }}
