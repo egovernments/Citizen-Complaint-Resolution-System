@@ -23,6 +23,7 @@ import { finishesOnboarding, isOnboardingComplete } from './onboarding/progress'
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
 import RootLanding from './pages/RootLanding';
+import { NoAccessPage } from './admin/NoAccessPage';
 import { CoreAdminContext, CoreAdminUI, Resource, CustomRoutes } from 'ra-core';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { DigitLayout, DigitDashboard, MdmsResourcePage, MdmsResourceShow, MdmsResourceEdit, MdmsResourceCreate } from '@/admin';
@@ -153,7 +154,8 @@ function ManagementAdminResources() {
       queryClient={queryClient}
       basename="/manage"
     >
-      <CoreAdminUI layout={DigitLayout} dashboard={DigitDashboard}>
+      {/* a screen the role may not use says so instead of an empty page */}
+      <CoreAdminUI layout={DigitLayout} dashboard={DigitDashboard} catchAll={NoAccessPage}>
         {/* Core entities with List/Show/Edit/Create */}
         {canViewResource('tenants') && <Resource name="tenants" list={TenantList} show={TenantShow} edit={TenantEdit} />}
         {canViewResource('departments') && <Resource name="departments" list={DepartmentList} show={DepartmentShow} edit={DepartmentEdit} create={DepartmentCreate} />}
