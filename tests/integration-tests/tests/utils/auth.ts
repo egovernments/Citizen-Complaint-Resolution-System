@@ -32,6 +32,12 @@ export interface AuthConfig {
   username: string;
   password: string;
   userType?: 'EMPLOYEE' | 'CITIZEN';
+  /**
+   * Where the token is selected. Employee unless the caller needs a Configurator
+   * context: the BFF refuses that (CONFIGURATOR_ROLE_REQUIRED) to anyone without
+   * a configurator role, so only admin and configurator specs ask for it.
+   */
+  surface?: StaffSurface;
 }
 
 type StaffSurface = 'configurator' | 'employee';
@@ -111,14 +117,15 @@ export async function getDigitToken(config: AuthConfig): Promise<TokenResponse> 
   if (config.userType === 'CITIZEN') throw new Error('Use citizenSignIn for citizen phone possession');
   const baseURL = config.baseURL || BASE_URL;
   const tenant = config.authTenant || config.tenant;
-  const key = JSON.stringify([baseURL, 'configurator', tenant, config.username, digest(config.password)]);
+  const surface = config.surface ?? 'employee';
+  const key = JSON.stringify([baseURL, surface, tenant, config.username, digest(config.password)]);
   const hit = tokens.get(key);
   if (hit && hit.expiresAt - EXPIRY_MARGIN_MS > Date.now()) return hit.token;
   const token = await withSession(async (fresh) => {
-    const cookies = await signIn(baseURL, 'configurator', config.username, config.password, { fresh });
+    const cookies = await signIn(baseURL, surface, config.username, config.password, { fresh });
     const api = await playwrightRequest.newContext({ storageState: { cookies, origins: [] }, ignoreHTTPSErrors: process.env.IGNORE_HTTPS_ERRORS === '1' });
     try {
-      return await selectContext(api, baseURL, 'configurator', tenant);
+      return await selectContext(api, baseURL, surface, tenant);
     } finally {
       await api.dispose();
     }

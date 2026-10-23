@@ -34,6 +34,7 @@ async function adminToken(): Promise<string> {
     tenant: ROOT_TENANT,
     username: ADMIN_USER,
     password: ADMIN_PASS,
+    surface: 'configurator',
   });
   return t.access_token;
 }

@@ -295,7 +295,7 @@ export function citizenAccountTenantId(tenantId: string) {
 }
 
 /** `_select` refusals that say this person has no context at the tenant, not that the BFF failed. */
-const CONTEXT_REFUSALS = new Set(['TENANT_CONTEXT_UNAVAILABLE', 'EMPLOYEE_ACCOUNT_NOT_LINKED', 'PENDING_INVITATION', 'DIGIT_ACCOUNT_NOT_FOUND', 'DIGIT_ACCOUNT_INACTIVE']);
+const CONTEXT_REFUSALS = new Set(['TENANT_CONTEXT_UNAVAILABLE', 'EMPLOYEE_ACCOUNT_NOT_LINKED', 'PENDING_INVITATION', 'DIGIT_ACCOUNT_NOT_FOUND', 'DIGIT_ACCOUNT_INACTIVE', 'CONFIGURATOR_ROLE_REQUIRED']);
 export const isContextRefusal = (err: unknown) => err instanceof IdentityHttpError && CONTEXT_REFUSALS.has(err.code);
 
 export async function selectContext(request: APIRequestContext, baseURL: string, surface: Surface, tenantId: string) {

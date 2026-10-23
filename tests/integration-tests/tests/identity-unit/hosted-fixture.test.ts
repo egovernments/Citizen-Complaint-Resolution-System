@@ -2,7 +2,7 @@ import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { chromium, type Page } from '@playwright/test';
-import { enterHostedUsername, hostedSignIn, KeycloakSessionExpiredError, KeycloakSignInError, selectContext } from '../utils/identity-bff';
+import { enterHostedUsername, hostedSignIn, IdentityHttpError, isContextRefusal, KeycloakSessionExpiredError, KeycloakSignInError, selectContext } from '../utils/identity-bff';
 import { getDigitToken } from '../utils/auth';
 import { makeAttempt } from '../utils/profile';
 
@@ -11,11 +11,11 @@ let browser: Awaited<ReturnType<typeof chromium.launch>>;
 before(async () => { browser = await chromium.launch(); });
 after(async () => { await browser?.close(); });
 
-type Options = { split?: boolean; result?: 'complete' | 'failed'; existingSession?: boolean; denySession?: boolean; consent?: boolean; refuse?: boolean; expire?: number };
+type Options = { split?: boolean; result?: 'complete' | 'failed'; existingSession?: boolean; denySession?: boolean; consent?: boolean; refuse?: boolean; expire?: number; staffOnly?: boolean };
 async function fixture(options: Options, run: (page: Page, baseURL: string, state: {
-  paths: string[]; submissions: string[][]; resultReads: number;
+  paths: string[]; submissions: string[][]; resultReads: number; surfaces: string[];
 }) => Promise<void>) {
-  const state = { paths: [] as string[], submissions: [] as string[][], resultReads: 0 };
+  const state = { paths: [] as string[], submissions: [] as string[][], resultReads: 0, surfaces: [] as string[] };
   const formPage = (passwordOnly = false) => `<form method="post" action="${passwordOnly ? '/auth/realms/test/password' : '/auth/realms/test/login'}">
     ${passwordOnly ? '' : '<input id="username" name="username">'}
     ${passwordOnly || !options.split ? '<input id="password" name="password" type="password" autocomplete="current-password">' : ''}
@@ -84,10 +84,18 @@ async function fixture(options: Options, run: (page: Page, baseURL: string, stat
       setTimeout(() => response.end(JSON.stringify({ status: options.result, code: options.result === 'failed' ? 'SIGN_IN_FAILED' : 'ACTION_COMPLETE' })), 80);
     } else if (request.headers.cookie !== 'identity=fixture-session') response.writeHead(401).end('{"code":"SESSION_REQUIRED"}');
     else if (path === '/identity/v1/session') response.end(JSON.stringify({ authenticated: !options.denySession }));
-    else if (path === '/identity/v1/contexts/_select') response.end(JSON.stringify({
-      access_token: 'fixture-token', token_type: 'bearer', expires_in: 300, scope: 'read',
-      UserRequest: { uuid: 'fixture-uuid', tenantId: 'fixture', type: 'EMPLOYEE' },
-    }));
+    else if (path === '/identity/v1/contexts/_select') {
+      const chunks = [];
+      for await (const chunk of request) chunks.push(chunk);
+      const surface = JSON.parse(Buffer.concat(chunks).toString() || '{}').surface;
+      state.surfaces.push(surface);
+      // As #2607: a person without a configurator role is refused the Configurator only.
+      if (options.staffOnly && surface === 'configurator') { response.writeHead(403).end('{"code":"CONFIGURATOR_ROLE_REQUIRED"}'); return; }
+      response.end(JSON.stringify({
+        access_token: 'fixture-token', token_type: 'bearer', expires_in: 300, scope: 'read',
+        UserRequest: { uuid: 'fixture-uuid', tenantId: 'fixture', type: 'EMPLOYEE' },
+      }));
+    }
     else response.writeHead(404).end();
   });
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -190,6 +198,15 @@ for (const split of [false, true]) {
     assert.equal(state.resultReads, 1, 'the one-use auth result is consumed and checked');
   }));
 }
+
+test('a token is selected on the employee surface unless the caller asks for the Configurator', async () => fixture({ staffOnly: true, result: 'complete' }, async (_page, base, state) => {
+  assert.equal((await token(base, 'fixture-password')).access_token, 'fixture-token');
+  assert.deepEqual(state.surfaces, ['employee']);
+  await assert.rejects(
+    getDigitToken({ baseURL: base, tenant: 'fixture', username: 'fixture-user', password: 'fixture-password', surface: 'configurator' }),
+    (err: Error) => err instanceof IdentityHttpError && err.status === 403 && isContextRefusal(err));
+  assert.deepEqual(state.surfaces, ['employee', 'configurator']);
+}));
 
 test('a refused password costs one Keycloak post; the next caller fails from the refusal cache', async () => fixture({ refuse: true }, async (_page, base, state) => {
   for (let call = 0; call < 2; call++) {

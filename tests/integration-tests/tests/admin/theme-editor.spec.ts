@@ -40,7 +40,7 @@ interface ThemeRecord {
 
 /** Raw MDMS _search for ThemeConfig on ROOT_TENANT. Returns records as stored. */
 async function searchThemeConfigs(uniqueIdentifiers?: string[]): Promise<ThemeRecord[]> {
-  const t = await getDigitToken({ tenant: ROOT_TENANT, username: ADMIN_USER, password: ADMIN_PASS });
+  const t = await getDigitToken({ tenant: ROOT_TENANT, username: ADMIN_USER, password: ADMIN_PASS, surface: 'configurator' });
   const criteria: Record<string, unknown> = {
     tenantId: ROOT_TENANT,
     schemaCode: 'common-masters.ThemeConfig',
