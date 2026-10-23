@@ -2,6 +2,8 @@ import { ensureActive, remove as removeBinding } from "../../src/modules/binding
 import { mirrorPerson } from "../../src/modules/sync/mirror.js";
 import * as syncMirror from "../../src/modules/sync/mirror.js";
 import * as sessionStore from "../../src/modules/sessions/session-store.js";
+import * as bindingStore from "../../src/modules/bindings/store.js";
+import * as digitUserClient from "../../src/modules/managed-accounts/digit-user-client.js";
 import { BindingError } from "../../src/modules/bindings/types.js";
 import { staffAccess } from "../../src/modules/bindings/predicate.js";
 import { withPersonLease } from "../../src/modules/accounts/person-lease.js";
@@ -9,7 +11,7 @@ import { drainRevocationJobs, holdToken, recordToken } from "../../src/modules/r
 import { applyKeycloakEvent } from "../../src/modules/revocation/event-effects.js";
 import { propagateIdentifiers } from "../../src/modules/sync/identifiers.js";
 import { tokenKey, tokenHoldersKey, personTokensKey, accountId } from "../../src/modules/revocation/inventory.js";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { config } from "../../src/infrastructure/config.js";
 import { getIssuer } from "../helpers.js";
 import { createFakeDigitUser } from "../../mocks/fake-digit-user.js";
@@ -3085,6 +3087,208 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       expect(ambiguous.status).toBe(409);
       expect((await ambiguous.json()).code).toBe("CITIZEN_ACCOUNT_AMBIGUOUS");
       expect(digit.stats.creates).toBe(creates);
+    });
+
+    describe("an employee's registered mobile on the citizen portal (#2595)", () => {
+      const staff = "identity-user-unlinked";
+      const otp = (path: "_send" | "_verify", body: object) => fetch(`${app()}/identity/v1/citizen/otp/${path}`, {
+        method: "POST", headers: { Origin: "http://localhost:3000", "Content-Type": "application/json" },
+        body: JSON.stringify({ tenantSlug: "bomet-county", ...body }),
+      });
+      const signInByOtp = async (mobileNumber: string) => {
+        const { challengeId } = await (await otp("_send", { mobileNumber })).json();
+        const verified = await otp("_verify", { challengeId, code: sent[sent.length - 1].code });
+        expect(verified.status).toBe(200);
+        return cookieFrom(verified, "digit_identity_session_citizen")!;
+      };
+      const sessionOf = async (cookie: string, surface: string) => (await fetch(
+        `${app()}/identity/v1/session?surface=${surface}&include=account`, { headers: { Cookie: cookie } },
+      ));
+      const employee = (mobileNumber: string) => digit.addAccount({
+        userName: `EMP-${mobileNumber}`, name: "Garry", mobileNumber, emailId: "garry@example.com", gender: "MALE",
+        tenantId: "ke.bomet", type: "EMPLOYEE", active: true, identificationMark: null,
+        roles: [{ code: "EMPLOYEE", tenantId: "ke.bomet" }, { code: "GRO", tenantId: "ke.bomet" }], password: "Legacy@123",
+      });
+      let bound = "";
+      const bindStaff = async (mobileNumber: string, attributes: Record<string, string[]> = {}) => {
+        bound = employee(mobileNumber).uuid;
+        await bindLegacyEmployeeFixture(bound);
+        const user = await (await fetch(`${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/${staff}`)).json();
+        await kcUpdate(`/users/${staff}`, { attributes: { ...user.attributes, ...attributes } });
+      };
+      afterEach(async () => {
+        if (bound) await removeLegacyEmployeeFixture(bound);
+        bound = "";
+        const user = await (await fetch(`${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/${staff}`)).json();
+        const attributes = { ...user.attributes };
+        for (const name of ["phoneNumber", "phoneNumberVerified", "digit.citizenRegistrations", "digit.accounts"]) delete attributes[name];
+        await kcUpdate(`/users/${staff}`, { enabled: true, attributes });
+      });
+      // The join is opt-in until #2631.
+      beforeAll(() => { config.identityStaffPhoneJoin = true; });
+      afterAll(() => { config.identityStaffPhoneJoin = false; });
+
+      it("keeps a separate phone identity, without an employee lookup, when IDENTITY_STAFF_PHONE_JOIN is off", async () => {
+        await bindStaff("799002608");
+        const before = (await kcUser(staff)).attributes;
+        const searches = vi.spyOn(digitUserClient, "searchAccounts");
+        config.identityStaffPhoneJoin = false;
+        try {
+          const cookie = await signInByOtp("799002608");
+          expect(searches).not.toHaveBeenCalled();
+          const citizen = await (await sessionOf(cookie, "citizen")).json();
+          expect(citizen.user.id).not.toBe(staff);
+          expect(citizen.user).toMatchObject({ phoneNumber: "+254799002608", phoneNumberVerified: true });
+          expect((await auditRecords()).filter((r) => r.event === "SESSION_CREATE" && r.subject === citizen.user.id).at(-1))
+            .toMatchObject({ outcome: "SUCCESS", reason: "IDENTITY_CREATED" });
+        } finally { config.identityStaffPhoneJoin = true; searches.mockRestore(); }
+        expect((await kcUser(staff)).attributes).toEqual(before);
+      });
+
+      it("signs in as the employee: one person, one session list, and a citizen profile from the employee record", async () => {
+        await bindStaff("799002595");
+        const staffCookie = await signIn("employee", "unlinked");
+        const citizenCookie = await signInByOtp("799002595");
+
+        const citizen = await (await sessionOf(citizenCookie, "citizen")).json();
+        expect(citizen.user).toMatchObject({ id: staff, name: "Garry", phoneNumber: "+254799002595", phoneNumberVerified: true });
+        const surfaces = (body: { sessions: Array<{ surface: string; current: boolean }> }) =>
+          body.sessions.map((s) => `${s.surface}${s.current ? " (current)" : ""}`);
+        expect(surfaces(citizen)).toEqual(expect.arrayContaining(["citizen (current)", "employee"]));
+        expect(surfaces(await (await sessionOf(staffCookie, "employee")).json()))
+          .toEqual(expect.arrayContaining(["citizen", "employee (current)"]));
+        expect((await auditRecords()).filter((r) => r.event === "SESSION_CREATE" && r.subject === staff).at(-1))
+          .toMatchObject({ outcome: "SUCCESS", reason: "STAFF_PHONE_PROVED" });
+
+        const selected = await citizenSelect(citizenCookie);
+        expect(selected.status).toBe(200);
+        const { UserRequest } = await selected.json();
+        expect(UserRequest).toMatchObject({ type: "CITIZEN", tenantId: "ke", mobileNumber: "799002595" });
+        expect(digit.accounts.get(UserRequest.uuid)).toMatchObject({ name: "Garry", gender: "MALE", emailId: "garry@example.com" });
+
+        // "Sign out everywhere" from the citizen portal reaches the employee portal too.
+        const logout = await fetch(`${app()}/identity/v1/logout`, {
+          method: "POST",
+          headers: { Cookie: citizenCookie, Origin: "http://localhost:3000", "Content-Type": "application/json" },
+          body: JSON.stringify({ surface: "citizen", scope: "all" }),
+        });
+        expect(logout.status).toBe(204);
+        expect((await sessionOf(staffCookie, "employee")).status).toBe(401);
+      });
+
+      it("keeps a separate phone identity when the employee record is ambiguous or the employee proved another number", async () => {
+        await bindStaff("799002596");
+        employee("799002596");
+        const ambiguous = await (await sessionOf(await signInByOtp("799002596"), "citizen")).json();
+        expect(ambiguous.user.id).not.toBe(staff);
+        await removeLegacyEmployeeFixture(bound);
+
+        await bindStaff("799002597", { phoneNumber: ["+254799002598"], phoneNumberVerified: ["true"] });
+        const proved = await (await sessionOf(await signInByOtp("799002597"), "citizen")).json();
+        expect(proved.user.id).not.toBe(staff);
+        const user = await (await fetch(`${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/${staff}`)).json();
+        expect(user.attributes.phoneNumber).toEqual(["+254799002598"]);
+      });
+
+      const kcUser = async (id: string) => (await fetch(`${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/${id}`)).json();
+
+      it("signs in as the employee even when the phone write is not visible to the owner search yet", async () => {
+        await bindStaff("799002603");
+        // The write "succeeds" but does not land, as when an admin-console save races it.
+        await fetch(`${config.keycloakAdminUrl}/__test/faults`, {
+          method: "PUT", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ method: "PUT", path: `/users/${staff}`, status: 204, count: 1 }),
+        });
+        const signedIn = await (await sessionOf(await signInByOtp("799002603"), "citizen")).json();
+        expect(signedIn.user.id).toBe(staff);
+      });
+
+      it("keeps a separate phone identity when two people are bound to the employee record", async () => {
+        await bindStaff("799002601");
+        const second = "identity-user-second-binding";
+        const { attributes } = await kcUser(staff);
+        await kcAdmin("/users", {
+          id: second, username: "second.binding", enabled: true,
+          attributes: { "digit.bindings": attributes["digit.bindings"], "digit.boundUuids": attributes["digit.boundUuids"] },
+        });
+        await ensureOrganizationMembership({ organizationId: "org-bomet-id", userId: second });
+        try {
+          const signedIn = await (await sessionOf(await signInByOtp("799002601"), "citizen")).json();
+          expect([staff, second]).not.toContain(signedIn.user.id);
+          expect((await kcUser(staff)).attributes.phoneNumber).toBeUndefined();
+        } finally {
+          await fetch(`${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/organizations/org-bomet-id/members/${second}`, { method: "DELETE" });
+          await fetch(`${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/${second}`, { method: "DELETE" });
+        }
+      });
+
+      it("keeps a separate phone identity when the bound person may not use the tenant or is bound to another record", async () => {
+        await bindStaff("799002602");
+        await kcUpdate(`/users/${staff}`, { enabled: false });
+        const disabled = await (await sessionOf(await signInByOtp("799002602"), "citizen")).json();
+        expect(disabled.user.id).not.toBe(staff);
+        expect((await kcUser(staff)).attributes.phoneNumber).toBeUndefined();
+        await kcUpdate(`/users/${staff}`, { enabled: true });
+        await removeLegacyEmployeeFixture(bound);
+
+        // The owner lookup names the staff person for a record their binding no longer points at.
+        await bindStaff("799002603");
+        const other = employee("799002604");
+        const original = bindingStore.ownersOf;
+        const spy = vi.spyOn(bindingStore, "ownersOf").mockImplementation(async (tenantId, uuid) =>
+          uuid === other.uuid ? [staff] : original(tenantId, uuid));
+        try {
+          const moved = await (await sessionOf(await signInByOtp("799002604"), "citizen")).json();
+          expect(spy).toHaveBeenCalledWith("ke.bomet", other.uuid);
+          expect(moved.user.id).not.toBe(staff);
+          expect((await kcUser(staff)).attributes.phoneNumber).toBeUndefined();
+        } finally { spy.mockRestore(); }
+      });
+
+      it("re-checks the employee record under the phone lock", async () => {
+        await bindStaff("799002605");
+        // The record loses the number between the first read and the one under the lock.
+        const original = digitUserClient.searchAccounts;
+        let searches = 0;
+        const spy = vi.spyOn(digitUserClient, "searchAccounts").mockImplementation(async (token, criteria) =>
+          criteria.userType === "EMPLOYEE" && criteria.mobileNumber === "799002605" && ++searches === 2 ? [] : original(token, criteria));
+        try {
+          const signedIn = await (await sessionOf(await signInByOtp("799002605"), "citizen")).json();
+          expect(signedIn.user.id).not.toBe(staff);
+          expect(searches).toBe(2);
+          expect((await kcUser(staff)).attributes.phoneNumber).toBeUndefined();
+        } finally { spy.mockRestore(); }
+      });
+
+      // An outage is IDENTITY_UNAVAILABLE, never a new identity: that would split the person for good.
+      it.each([
+        ["egov-user is down", "799002606", () => vi.spyOn(digitUserClient, "searchAccounts")
+          .mockRejectedValue(new digitUserClient.DigitUnavailableError("Injected egov-user outage"))],
+        ["the binding cannot be read", "799002607", () => vi.spyOn(bindingStore, "ownersOf")
+          .mockRejectedValue(new BindingError("IDENTITY_UNAVAILABLE", "Injected binding failure"))],
+      ])("answers IDENTITY_UNAVAILABLE and keeps the code when %s", async (_, mobileNumber, fail) => {
+        await bindStaff(mobileNumber);
+        const { challengeId } = await (await otp("_send", { mobileNumber })).json();
+        const code = sent[sent.length - 1].code;
+        const spy = fail();
+        try {
+          const failed = await otp("_verify", { challengeId, code });
+          expect([failed.status, (await failed.json()).code]).toEqual([503, "IDENTITY_UNAVAILABLE"]);
+        } finally { spy.mockRestore(); }
+        const holders = await (await fetch(
+          `${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users?q=phoneNumber:%2B254${mobileNumber}`,
+          { headers: { Authorization: "Bearer mock-kc-admin-token" } },
+        )).json();
+        expect(holders).toEqual([]);
+        expect((await kcUser(staff)).attributes.phoneNumber).toBeUndefined();
+        expect((await auditRecords()).find((r) => r.event === "SESSION_CREATE" && r.challengeId === challengeId))
+          .toMatchObject({ outcome: "FAILED", reason: "IDENTITY_UNAVAILABLE" });
+
+        const retried = await otp("_verify", { challengeId, code });
+        expect(retried.status).toBe(200);
+        const citizen = await (await sessionOf(cookieFrom(retried, "digit_identity_session_citizen")!, "citizen")).json();
+        expect(citizen.user).toMatchObject({ id: staff, phoneNumber: `+254${mobileNumber}`, phoneNumberVerified: true });
+      });
     });
 
     it("trusts a phone OTP session only for the number it proved, not a later Keycloak phone", async () => {

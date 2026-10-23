@@ -26,6 +26,7 @@ export const LOGIN_MESSAGE_FALLBACKS = {
     CORE_LOGIN_CONFIRM_NEW_PASSWORD: "Confirm New Password",
     CORE_COMMON_GO_BACK: "Go Back",
     CORE_LOGIN_EMAIL: "Email",
+    CORE_LOGIN_EMAIL_HINT: "Sign in with your email address, not your employee code.",
     CORE_LOGIN_FORGOT_PASSWORD_TEXT: "Enter the email address of your account and we'll send you a link to set a new password.",
     CORE_LOGIN_RESET_LINK_SENT: "If an account exists for that email address, we've sent it a link to set a new password.",
     CORE_LOGIN_RESET_LINK_FAILED: "Could not send the link. Please try again."

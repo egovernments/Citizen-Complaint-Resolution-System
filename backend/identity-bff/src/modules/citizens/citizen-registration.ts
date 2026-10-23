@@ -5,6 +5,7 @@ import {
   ensureManagedAccount,
   ManagedAccountError,
   type ManagedIdentity,
+  type ManagedProfile,
 } from "../managed-accounts/managed-account-service.js";
 import { AccountLinkError, resolveCitizenLink } from "../account-links/account-links.js";
 import {
@@ -12,6 +13,9 @@ import {
   updateCitizenRegistrationValues,
 } from "../organizations/organization-service.js";
 import type { BoundTenant } from "../authentication/surfaces.js";
+import { readUser } from "../../integrations/keycloak/admin-api.js";
+import { accountEntries } from "../sync/state.js";
+import { readDigitAccount } from "../workspace-members/authority.js";
 
 /**
  * A citizen's service relationship with one tenant root (#2071, #2167).
@@ -91,6 +95,20 @@ export async function citizenRegistrations(subject: string): Promise<CitizenRegi
   });
 }
 
+/**
+ * What a staff person's first citizen account at this tenant starts with from their employee
+ * record (#2595). It only seeds a new account; the citizen edits it from then on.
+ */
+async function staffProfile(subject: string, tenantId: string): Promise<Pick<ManagedProfile, "emailId" | "gender">> {
+  const entry = accountEntries(await readUser(subject))
+    .find((candidate) => candidate.kind === "staff" && candidate.tenantId === tenantId && candidate.active && !candidate.missing);
+  const account = entry && await readDigitAccount(tenantId, entry.uuid);
+  if (!account) return {};
+  // A masked value (`ga****@…`) is a search artefact, not the person's email.
+  const emailId = account.emailId?.trim() && !/\*{2,}/.test(account.emailId) ? account.emailId.trim() : undefined;
+  return { ...(emailId && { emailId }), ...(account.gender && { gender: account.gender }) };
+}
+
 const E164 = /^\+[1-9]\d{6,14}$/;
 
 /**
@@ -157,6 +175,7 @@ export async function ensureCitizenRegistration(input: {
         name: input.name,
         mobileNumber: input.mobileNumber,
         countryCode: input.countryCode,
+        ...(!existing && await staffProfile(subject, tenant.tenantId)),
       }, { createOnly: true });
       if (!outcome.account?.active) {
         throw new CitizenContextError("Citizen access is not available for this tenant", 403);

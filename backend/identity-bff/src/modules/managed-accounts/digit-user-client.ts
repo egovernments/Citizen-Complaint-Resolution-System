@@ -54,6 +54,7 @@ export interface DigitAccount {
   mobileNumber?: string | null;
   countryCode?: string | null;
   emailId?: string | null;
+  gender?: string | null;
   tenantId: string;
   type: string;
   active: boolean;

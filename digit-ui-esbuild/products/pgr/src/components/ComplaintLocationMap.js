@@ -222,13 +222,17 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
 
           {/* Open in Google Maps Button */}
           <button
+            type="button"
+            className="cms-map-navigate"
             onClick={handleOpenInGoogleMaps}
             style={{
               position: "absolute",
               bottom: "20px",
               right: "20px",
               zIndex: 999,
-              backgroundColor: "#4285F4",
+              // White on Google's #4285F4 is 3.6:1; #1A73E8 is the same blue at
+              // 4.5:1 (WCAG 1.4.3).
+              backgroundColor: "#1A73E8",
               color: "white",
               padding: "12px 20px",
               borderRadius: "8px",
@@ -243,11 +247,11 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
               transition: "all 0.2s",
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = "#3367D6";
+              e.currentTarget.style.backgroundColor = "#1557B0";
               e.currentTarget.style.transform = "scale(1.05)";
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = "#4285F4";
+              e.currentTarget.style.backgroundColor = "#1A73E8";
               e.currentTarget.style.transform = "scale(1)";
             }}
             title={t("CS_OPEN_IN_GOOGLE_MAPS")}

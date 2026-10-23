@@ -75,9 +75,9 @@ def admin(method, path, body=None, token=None, realm=REALM):
         return json.loads(raw) if raw else None
 
 
-def configure(realm_config=None):
-    """Re-runs configure-keycloak.sh, optionally with another realm.json."""
-    env = dict(os.environ)
+def configure(realm_config=None, **extra_env):
+    """Re-runs configure-keycloak.sh, optionally with another realm.json or env."""
+    env = {**os.environ, **extra_env}
     if realm_config is not None:
         handle = tempfile.NamedTemporaryFile("w", suffix=".json", dir=os.path.dirname(CONFIGURE), delete=False)
         json.dump(realm_config, handle)
@@ -332,6 +332,19 @@ def _():
         assert provider["firstBrokerLoginFlowAlias"] == "digit-first-broker-login", provider
         for mapper in admin("GET", f"/identity-provider/instances/{provider['alias']}/mappers"):
             assert mapper["config"].get("syncMode") == "IMPORT", mapper
+
+
+@check("§12 social providers outside every client's sign-in methods are hidden on login pages")
+def _():
+    def hidden():
+        return {p["alias"]: p.get("hideOnLogin") for p in admin("GET", "/identity-provider/instances")}
+    assert hidden() == {"google": False, "github": False}, hidden()
+    try:
+        configure(KEYCLOAK_BFF_SIGNIN_METHODS="password,github")
+        assert hidden() == {"google": True, "github": False}, hidden()
+    finally:
+        configure()
+    assert hidden() == {"google": False, "github": False}, hidden()
 
 
 @check("§12 employee flow: password, then a conditional one-time code")

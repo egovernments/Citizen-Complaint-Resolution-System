@@ -7770,6 +7770,12 @@
         "locale": "en_IN"
     },
     {
+        "code": "DASHBOARD_CARD_HEADER",
+        "message": "Dashboard",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
         "code": "DASHBOARD_CITIZEN_SERVICES_LABEL",
         "message": "Citizen Services",
         "module": "rainmaker-common",

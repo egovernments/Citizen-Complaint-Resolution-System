@@ -273,6 +273,11 @@ enable_legacy_pgr_dashboard: false
 # rebuild. The citizen app draws the banner only with citizen_banner_enabled.
 configurator_banner_enabled: false
 
+# Lets the Configurator's Geography step take more than one boundary selection
+# (several places, or a fetch plus a sheet) into its list before saving. Baked
+# in at build time (VITE_ENABLE_GEOGRAPHY_MULTIPLE_SELECTIONS). Off: one at a time.
+configurator_geography_multiple_selections: false
+
 # The Configurator's own Sentry and PostHog, rendered into its config.js at
 # deploy time, so changing them needs no rebuild. Unset means off: the repo
 # ships no project. The citizen app's analytics are MDMS rows instead
@@ -899,6 +904,8 @@ identity_signup_methods: [magic_link, google, github]
 # Empty (the default) offers none. [phone_otp] needs an OTP channel: enable_otp_services,
 # identity_citizen_otp_sender or, on a development box only, identity_dev_fixed_otp.
 identity_citizen_signin_methods: []
+# true: an employee's HRMS mobile signs in as that staff person (#2595). Off until #2631 lands.
+# identity_staff_phone_join: false
 identity_magic_link_enabled: false
 identity_reconcile_on_startup: true
 identity_reconciliation_interval_seconds: 900

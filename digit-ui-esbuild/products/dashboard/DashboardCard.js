@@ -18,11 +18,11 @@ const DashboardCard = () => {
 
   const propsForModuleCard = {
     Icon: "Dashboard",
-    moduleName: t("DASHBOARD_CARD_HEADER"),
+    moduleName: t("DASHBOARD_CARD_HEADER", "Dashboard"),
     kpis: [],
     links: [
       {
-        label: t("DASHBOARD_CARD_HEADER"),
+        label: t("DASHBOARD_CARD_HEADER", "Dashboard"),
         link: link,
       },
     ],

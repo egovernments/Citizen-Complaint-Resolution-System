@@ -216,6 +216,26 @@ describe('boundaryService.createBoundaries', () => {
     );
     expect(post).not.toHaveBeenCalled();
   });
+
+  it('reports each write as it goes: an entity, then a relationship, per boundary', async () => {
+    const row = (code: string, boundaryType: string, parent?: string): Boundary =>
+      ({ tenantId: 'ke', code, name: code, boundaryType, hierarchyType: 'ADMIN', parent }) as Boundary;
+    const rows = [row('C1', 'County'), row('W1', 'Ward', 'C1'), row('W2', 'Ward', 'C1')];
+    const spies = [
+      vi.spyOn(boundaryService, 'createBoundaryEntity').mockResolvedValue(undefined as never),
+      vi.spyOn(boundaryService, 'waitForEntityVisibility').mockResolvedValue(undefined as never),
+      vi.spyOn(boundaryService, 'createBoundaryRelationship').mockResolvedValue(undefined as never),
+      vi.spyOn(boundaryService, 'searchBoundaries').mockResolvedValue(rows),
+    ];
+    try {
+      const progress: [number, number][] = [];
+      const result = await boundaryService.createBoundaries(rows, (done, total) => progress.push([done, total]));
+      expect(progress).toEqual([1, 2, 3, 4, 5, 6].map((done) => [done, 6]));
+      expect(result.success).toHaveLength(3);
+    } finally {
+      spies.forEach((spy) => spy.mockRestore());
+    }
+  });
 });
 
 describe('boundaryService.existingBoundaries', () => {

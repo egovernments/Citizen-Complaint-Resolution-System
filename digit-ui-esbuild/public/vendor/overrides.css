@@ -954,7 +954,10 @@ html .header-dropdown-option:hover * {
  * sidebar-icon white via background-color, so it works on the yellow
  * selected indicator and the dark green non-selected items alike. */
 .digit-sidebar-item .icon:empty {
-  background-color: var(--color-sidebar-selected-text, #FFFFFF);
+  /* Idle rows take the idle icon colour; the selected row's own rule below
+   * takes the selected text colour. The selected colour here made the idle
+   * glyphs vanish once a theme paired a light selected row with dark text (#2635). */
+  background-color: var(--color-sidebar-icon-default, var(--color-sidebar-text-default, #D1D5DB));
   -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z'/></svg>");
   mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z'/></svg>");
   -webkit-mask-size: 20px 20px;
@@ -2291,6 +2294,12 @@ button[class*="toast-close"] svg,
   background-color: var(--color-sidebar-selected-bg, var(--color-primary-1, #c84c0e)) !important;
   color: var(--color-sidebar-selected-text, #FFFFFF) !important;
 }
+/* The vendored stylesheet paints the selected row's label #FFFFFF directly,
+ * so the row's colour above never reached it: on a light selected fill (Green
+ * and Gold's gold) the label stayed white. Hover already follows the token. */
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.selected:not(:hover) .item-label {
+  color: var(--color-sidebar-selected-text, #FFFFFF) !important;
+}
 /* SVG icon colours follow the row's foreground via the fallback
  * chain. Hover state matches the dark hover text; idle/selected
  * matches the white selected text. */
@@ -2314,7 +2323,9 @@ button[class*="toast-close"] svg,
 :is(.employee, .citizen) .digit-sidebar .digit-sidebar-search-container,
 :is(.employee, .citizen) .digit-sidebar .digit-sidebar-search-container input {
   background: rgba(255, 255, 255, 0.06) !important;
-  color: var(--color-sidebar-selected-text, #FFFFFF) !important;
+  /* Text on the rail itself, not on the selected row: selected-text is chosen
+   * against the selected fill (dark on a gold row), which vanishes here. */
+  color: var(--color-sidebar-text-active, #FFFFFF) !important;
   border-color: rgba(255, 255, 255, 0.18) !important;
 }
 :is(.employee, .citizen) .digit-sidebar .digit-sidebar-search-container ::placeholder {
@@ -6127,7 +6138,9 @@ button[role="combobox"],
 .digit-multiselectdropdown-wrap,
 .digit-multi-dropdown-wrap,
 .digit-select {
-  border: 1px solid var(--color-border, #d6d5d4) !important;
+  /* A field's edge is how people find it (WCAG 1.4.11, 3:1); applyTheme
+   * holds --color-input-border to that. The card border is decoration. */
+  border: 1px solid var(--color-input-border, var(--color-border, #d6d5d4)) !important;
   border-radius: 6px !important;
   background-color: var(--v2-surface-color, var(--color-surface, #ffffff)) !important;
   box-shadow: none !important;
@@ -8886,14 +8899,14 @@ html .header-dropdown-option:focus-visible {
  * the same as the rows above it. */
 :is(.employee, .citizen) .digit-msb-sidebar .digit-msb-sidebar-bottom .digit-button-secondary {
   border-color: rgba(255, 255, 255, 0.5) !important;
-  color: var(--color-sidebar-selected-text, #FFFFFF) !important;
+  color: var(--color-sidebar-text-default, #D1D5DB) !important;
 }
 :is(.employee, .citizen) .digit-msb-sidebar .digit-msb-sidebar-bottom .digit-button-secondary .digit-button-label {
-  color: var(--color-sidebar-selected-text, #FFFFFF) !important;
+  color: var(--color-sidebar-text-default, #D1D5DB) !important;
 }
 :is(.employee, .citizen) .digit-msb-sidebar .digit-msb-sidebar-bottom .digit-button-secondary svg,
 :is(.employee, .citizen) .digit-msb-sidebar .digit-msb-sidebar-bottom .digit-button-secondary svg path {
-  fill: var(--color-sidebar-selected-text, #FFFFFF) !important;
+  fill: var(--color-sidebar-text-default, #D1D5DB) !important;
 }
 :is(.employee, .citizen) .digit-msb-sidebar .digit-msb-sidebar-bottom .digit-button-secondary:hover {
   background-color: rgba(255, 255, 255, 0.08) !important;
@@ -10648,10 +10661,14 @@ html[data-sidebar-pinned] .citizen .main.center-container.citizen-home-container
 .cms-complaints-table tbody tr:hover td {
   background: var(--color-table-hover, #F9FAFB);
 }
+/* A number carries its workspace's code (IN-CHANDIGARH-DEMO-PGR-2026-10-23-…),
+ * so it can be wider than its column. Wrap it, after a hyphen where one fits,
+ * rather than letting it run into Concern or cutting off the part that tells
+ * complaints apart. */
 .cms-complaints-number {
   color: var(--cms-accent);
   font-weight: 500;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
   text-decoration: underline;
   text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
   text-underline-offset: 3px;

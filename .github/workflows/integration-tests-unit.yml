@@ -18,7 +18,10 @@ permissions:
 
 jobs:
   unit:
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest moved to 26.04, where Playwright 1.59 cannot install
+    # Chromium ("Playwright does not support chromium on ubuntu26.04-x64").
+    # Move back once @playwright/test supports it.
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     defaults:
       run:

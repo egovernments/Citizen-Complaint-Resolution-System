@@ -68,6 +68,8 @@ export interface DigitCreateProps {
    * (see resources/notification-configure/useNotificationGuard.ts).
    */
   validate?: FormValidate;
+  /** Toast description for the created record, when the record's label alone isn't enough. */
+  describeCreated?: (data: RaRecord) => string | undefined;
 }
 
 function DigitCreateContent({
@@ -160,7 +162,7 @@ function DigitCreateContent({
   );
 }
 
-export function DigitCreate({ title, children, resource, record, redirect = 'list', transform, afterCreate, validate }: DigitCreateProps) {
+export function DigitCreate({ title, children, resource, record, redirect = 'list', transform, afterCreate, validate, describeCreated }: DigitCreateProps) {
   const { info, capture, clear } = useMutationError();
   const contextResource = useResourceContext();
   const redirectTo = useRedirect();
@@ -185,7 +187,7 @@ export function DigitCreate({ title, children, resource, record, redirect = 'lis
           const label = pickRecordLabel(data);
           toast({
             title: `${prettyResourceSingular(effectiveResource)} created`,
-            description: label !== 'Record' ? label : undefined,
+            description: (data && describeCreated?.(data as RaRecord)) ?? (label !== 'Record' ? label : undefined),
           });
           // Run any per-resource post-create side-effect (e.g. seeding
           // localization rows for the new record). Errors don't block the

@@ -47,12 +47,13 @@ export async function resolveTenant(request: APIRequestContext, baseURL: string,
   return result.tenant;
 }
 
-export function authorizeUrl(baseURL: string, surface: Surface, method = 'password'): string {
+export function authorizeUrl(baseURL: string, surface: Surface, method = 'password', slug?: string): string {
   const params = new URLSearchParams({ surface, method, intent: 'signin' });
   if (surface === 'configurator') params.set('returnTo', '/configurator/login');
   else {
-    params.set('tenantSlug', tenantSlug());
-    params.set('returnTo', surfacePath(surface, surface === 'employee' ? 'user/login' : 'login'));
+    const tenant = slug ?? tenantSlug();
+    params.set('tenantSlug', tenant);
+    params.set('returnTo', `/${tenant}/digit-ui/${surface}/${surface === 'employee' ? 'user/login' : 'login'}`);
   }
   return `${baseURL}/identity/v1/authorize?${params}`;
 }
@@ -238,6 +239,8 @@ function assertUntracedOrThrowaway(password: string): void {
  */
 export async function hostedSignIn(page: Page, config: {
   baseURL: string; surface: Surface; username: string; password: string;
+  /** Tenant to sign in to when the run created it (default: IDENTITY_TEST_TENANT_SLUG). */
+  tenantSlug?: string;
 }): Promise<void> {
   assertUntracedOrThrowaway(config.password);
   const origin = new URL(config.baseURL).origin;
@@ -258,7 +261,7 @@ export async function hostedSignIn(page: Page, config: {
   page.on('request', navigation);
   page.on('response', response);
   try {
-    await page.goto(authorizeUrl(config.baseURL, config.surface));
+    await page.goto(authorizeUrl(config.baseURL, config.surface, 'password', config.tenantSlug));
     await enterHostedUsername(page, config.username);
     await page.locator('#password').fill(config.password);
     const consent = page.locator('#privacy-component-check');

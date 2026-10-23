@@ -30,6 +30,10 @@ const SOURCE_DIRS = [
   "packages/libraries/src/services/auth",
   "packages/digit-ui-components-v2/src",
   "src",
+  // The dashboard's own pages load rainmaker-dashboard and pass English to
+  // every t(). Its card on the employee home renders before that module
+  // loads, so the card's title comes from these packs.
+  "products/dashboard/DashboardCard.js",
 ];
 
 // Keys from upstream DIGIT screens that CCRS bundles but never routes to
@@ -63,6 +67,7 @@ const RUNTIME_KEYS = [
 ];
 
 function sourceFiles(dir) {
+  if (fs.statSync(dir).isFile()) return [dir];
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) return sourceFiles(full);

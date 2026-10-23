@@ -36,7 +36,7 @@ import {
 } from '@/api';
 import { loadTenantHierarchies } from '@/api/services/tenantHierarchy';
 import { parseExcelFile, parseEmployeeExcel } from '@/utils/excelParser';
-import { downloadEmployeeTemplate } from '@/utils/templateBuilder';
+import { downloadEmployeeTemplate, employeeTemplateFilename } from '@/utils/templateBuilder';
 import { codeProblem, employeesByCode, withEmployeeCodes, type EmployeeRecord } from './employeesApi';
 import { reportStepError, trackImport, trackTemplateDownload, trackUploadRefused } from '../telemetry';
 import { useOnboardingT } from '../i18n';
@@ -439,7 +439,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
   };
 
   const handleDownloadTemplate = () => {
-    downloadEmployeeTemplate();
+    downloadEmployeeTemplate(targetTenant, departments, designations, boundaries, roles, t);
     trackTemplateDownload('employees', 'employee');
   };
 
@@ -541,7 +541,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
 
           <div className="bg-primary/5 border border-primary/20 rounded p-3 sm:p-4 mb-4 sm:mb-6">
             <p className="font-condensed font-medium text-foreground mb-2 text-sm sm:text-base">
-              {t('bulk_employees.template_file', 'Template: %{file}', { file: 'Employee_Master_Dynamic.xlsx' })}
+              {t('bulk_employees.template_file', 'Template: %{file}', { file: employeeTemplateFilename(targetTenant) })}
             </p>
             <p className="text-xs sm:text-sm text-muted-foreground">
               {loadingRefs ? t('bulk_employees.loading_refs', 'Loading reference data...') : t('bulk_employees.available', 'Available data from DIGIT:')}
@@ -586,7 +586,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
               <strong className="text-sm font-condensed">{t('bulk_employees.generated', 'Template Generated!')}</strong>
             </div>
             <p className="text-xs sm:text-sm mb-2 text-foreground">
-              Employee_Master_Dynamic_{targetTenant.toUpperCase()}.xlsx
+              {employeeTemplateFilename(targetTenant)}
             </p>
 
             <div className="grid grid-cols-2 gap-2 sm:gap-4 text-xs sm:text-sm mb-3 sm:mb-4">
@@ -951,7 +951,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
               </p>
               <ul className="space-y-1">
                 <li>• {t('bulk_employees.got_record', 'HRMS employee record')}</li>
-                <li>• {t('bulk_employees.got_account', 'User account (username: employee code)')}</li>
+                <li>• {t('bulk_employees.got_account_email', 'User account (sign in with email)')}</li>
                 <li>• {t('bulk_employees.got_email', 'New employees receive a secure password setup email.')}</li>
                 <li>• {t('bulk_employees.got_roles', 'Role assignments')}</li>
                 <li>• {t('bulk_employees.got_jurisdiction', 'Boundary jurisdiction')}</li>

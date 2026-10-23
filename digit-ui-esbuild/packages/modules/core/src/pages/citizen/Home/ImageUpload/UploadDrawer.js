@@ -35,7 +35,7 @@ const tr = (t, key, fallback) => {
 function ActionRow({ Icon, label, onClick, danger }) {
   const accent = danger
     ? "var(--color-error, #d4351c)"
-    : "var(--color-button-secondary-text, var(--color-primary-2, var(--color-primary-1, #2563EB)))";
+    : "var(--color-button-secondary-text, var(--color-brand-text, var(--color-primary-2, var(--color-primary-1, #2563EB))))";
   return (
     <button
       type="button"
