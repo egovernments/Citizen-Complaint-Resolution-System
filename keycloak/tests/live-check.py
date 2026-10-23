@@ -366,6 +366,20 @@ def _():
         assert REDIRECT.removesuffix("/callback") + DECLARED["clientPolicy"]["passwordSetupRedirectPath"] in stored["redirectUris"]
 
 
+@check("digit-ui clients: Back to Application is the surface's sign-in, also on an existing client (#2644)")
+def _():
+    site = REDIRECT.split("/identity/", 1)[0]
+    wanted = {EMPLOYEE[0]: f"{site}/digit-ui/employee/user/login",
+              "digit-ui-citizen": f"{site}/digit-ui/citizen/login"}
+    for client in wanted:
+        [stored] = admin("GET", "/clients?clientId=" + client)
+        admin("PUT", f"/clients/{stored['id']}", {**stored, "baseUrl": f"{site}/"})  # what earlier runs set
+    configure()
+    for client, base_url in wanted.items():
+        [stored] = admin("GET", "/clients?clientId=" + client)
+        assert stored["baseUrl"] == base_url, stored["baseUrl"]
+
+
 # ------------------------------------------ sign-in and self-service (§8)
 
 STATE = {}

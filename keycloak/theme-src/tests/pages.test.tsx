@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import KcPage from "../src/login/KcPage";
 import { getKcContextMock } from "../src/login/KcContextMock";
@@ -176,6 +176,55 @@ describe("error.ftl", () => {
         const { container } = await renderPage("error.ftl");
         expect(container.querySelector(".digit-alert--error")).not.toBeNull();
         expect(container.querySelector("#backToApplication")).not.toBeNull();
+    });
+});
+
+describe("digit-employee error.ftl", () => {
+    const COOKIE_NOT_FOUND = "Cookie not found. Please make sure cookies are enabled in your browser.";
+    const BASE_URL = "https://digit.example.org/digit-ui/employee/user/login";
+
+    afterEach(() => {
+        vi.unstubAllGlobals();
+        sessionStorage.clear();
+        window.history.replaceState(null, "", "/");
+    });
+
+    // Keycloak renders a lost sign-in's error page with no form action, as the
+    // answer to the sign-in form's post: only the page address carries tab_id.
+    async function renderEmployeeError(summary: string) {
+        vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
+        window.history.replaceState(null, "", "/auth/realms/digit/login-actions/authenticate?client_id=digit-ui-employee&tab_id=tab-1");
+        const base = getKcContextMock({ pageId: "error.ftl" });
+        const kcContext = {
+            ...base,
+            themeName: "digit-employee",
+            url: { ...base.url, loginAction: undefined },
+            client: { ...base.client, baseUrl: BASE_URL },
+            message: { type: "error", summary }
+        };
+        render(<KcPage kcContext={kcContext as never} />);
+        await waitFor(() => expect(document.querySelector("#kc-error-message")).not.toBeNull());
+    }
+
+    it("starts a lost sign-in again at the tenant this tab signed in to", async () => {
+        sessionStorage.setItem("digit_tenant:tab-1", "testj01");
+        await renderEmployeeError(COOKIE_NOT_FOUND);
+        const link = document.querySelector("#restartSignIn");
+        expect(link).toHaveTextContent("Start sign-in again");
+        expect(link).toHaveAttribute("href", "/testj01/digit-ui/employee/user/login");
+        expect(document.querySelector("#backToApplication")).toBeNull();
+    });
+
+    it("starts it at the client's base URL when the tab's tenant is unknown", async () => {
+        await renderEmployeeError(COOKIE_NOT_FOUND);
+        expect(document.querySelector("#restartSignIn")).toHaveAttribute("href", BASE_URL);
+    });
+
+    it("keeps Back to Application for other errors", async () => {
+        sessionStorage.setItem("digit_tenant:tab-1", "testj01");
+        await renderEmployeeError("Invalid parameter: redirect_uri");
+        expect(document.querySelector("#restartSignIn")).toBeNull();
+        expect(document.querySelector("#backToApplication")).toHaveAttribute("href", BASE_URL);
     });
 });
 
