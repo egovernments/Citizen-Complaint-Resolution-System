@@ -130,7 +130,6 @@ const cityLabel = (t, cityDetails, tenantId) => {
 };
 
 export const jurisdictionLabel = (t, j, cityDetails, tenantId) => {
-  const hierarchy = String(j?.hierarchy || "").toUpperCase();
   const boundary = j?.boundary;
   if (!boundary) return null;
   // HRMS stores a city-wide jurisdiction as the tenant code itself rather than
@@ -138,12 +137,10 @@ export const jurisdictionLabel = (t, j, cityDetails, tenantId) => {
   // cascade). Rendering it raw shows an operator "pg.citest" as if it were a
   // place; show the city they are already looking at instead.
   if (boundary === tenantId) return cityLabel(t, cityDetails, tenantId);
-  // Boundary names are seeded under the bare boundary code (`CITY_001`) in
-  // rainmaker-boundary-<hierarchy>, the key BoundaryComponent uses. The
-  // `<HIERARCHY>_<TYPE>` shape is only for boundary-type labels. Keep the
-  // hierarchy-prefixed key as a fallback, then the raw code (also the safety
-  // net for seeded records that carry something else in `boundary`).
-  return label(t, boundary, label(t, `${hierarchy}_${String(boundary).toUpperCase()}`, boundary));
+  // Boundary names are the bare boundary code in rainmaker-boundary-<hierarchy>
+  // (#1002; see buildBoundaryLocalizations), as BoundaryComponent reads them.
+  // Falls back to the raw code, also the net for records carrying something else.
+  return label(t, boundary, boundary);
 };
 
 /** Localization module holding a hierarchy's boundary names (see pgr Module.js). */

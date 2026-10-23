@@ -41,13 +41,8 @@ test("uses the bare boundary code, as the seeded rows and Create Complaint do", 
   assert.equal(jurisdictionLabel(dict({ CITY_001: "Bomet Town" }), J, null, "testj"), "Bomet Town");
 });
 
-test("prefers the bare code over a hierarchy-prefixed key", () => {
-  const t = dict({ CITY_001: "Bomet Town", ADMIN_CITY_001: "Other" });
-  assert.equal(jurisdictionLabel(t, J, null, "testj"), "Bomet Town");
-});
-
-test("falls back to the hierarchy-prefixed key when the bare code is unseeded", () => {
-  assert.equal(jurisdictionLabel(dict({ ADMIN_CITY_001: "Bomet Town" }), J, null, "testj"), "Bomet Town");
+test("does not read a hierarchy-prefixed key; nothing writes it", () => {
+  assert.equal(jurisdictionLabel(dict({ ADMIN_CITY_001: "Bomet Town" }), J, null, "testj"), "CITY_001");
 });
 
 test("falls back to the raw code when nothing is seeded", () => {
