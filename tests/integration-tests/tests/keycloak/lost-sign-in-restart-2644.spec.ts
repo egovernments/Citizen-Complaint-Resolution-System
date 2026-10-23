@@ -2,21 +2,22 @@
  * A sign-in the browser no longer holds offers a way back to a sign-in (#2644).
  *
  * Two tabs of one browser: tab A holds the employee sign-in page; tab B
- * finishes a password reset from the emailed link, which replaces the browser's
- * Keycloak session. Tab A's form post then hits Keycloak's lost-session error.
+ * finishes a password reset the way the Configurator's "Set up or reset your
+ * password" does (BFF password/setup-requests, an UPDATE_PASSWORD email for the
+ * BFF client), which replaces the browser's Keycloak session. Tab A's form post then hits Keycloak's lost-session error.
  * It must say "Start sign-in again" and lead to the workspace's own sign-in,
  * not to "Back to Application" at the site root.
  *
  * Needs the isolated realm fixture (IDENTITY_TEST_KEYCLOAK_ADMIN_URL/_TOKEN)
- * for a throwaway employee login with an email, and a mail sink the realm's
- * mail reaches (IDENTITY_TEST_MAILPIT_URL).
+ * for a throwaway employee login with an email, and the mail sink the realm's
+ * mail reaches (ONBOARDING_E2E_MAILPIT_URL, as the onboarding e2e uses).
  */
 import { randomUUID } from 'node:crypto';
 import { test, expect } from '@playwright/test';
 import { BASE_URL, KC_REALM } from '../utils/env';
 import { authorizeUrl, surfacePath } from '../utils/identity-bff';
 import { keycloakAdmin } from '../utils/keycloak-admin';
-import { emailedLink, mailpitUrl } from '../utils/mailpit';
+import { mailedLink } from '../utils/workspace-setup';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
@@ -27,7 +28,7 @@ test.describe('lost employee sign-in restarts at the workspace sign-in #2644', (
   const replacement = `Reset@${randomUUID()}`;
 
   test.beforeAll(async () => {
-    if (!mailpitUrl() || !process.env.IDENTITY_TEST_KEYCLOAK_ADMIN_URL || !process.env.IDENTITY_TEST_KEYCLOAK_ADMIN_TOKEN) return;
+    if (!process.env.ONBOARDING_E2E_MAILPIT_URL || !process.env.IDENTITY_TEST_KEYCLOAK_ADMIN_URL || !process.env.IDENTITY_TEST_KEYCLOAK_ADMIN_TOKEN) return;
     const admin = keycloakAdmin();
     const username = `e2e-lost-${randomUUID()}`;
     email = `${username}@example.test`;
@@ -48,20 +49,20 @@ test.describe('lost employee sign-in restarts at the workspace sign-in #2644', (
   });
 
   test('"Start sign-in again" leads to the workspace sign-in', { tag: ['@area:keycloak', '@persona:employee'] }, async ({ context }) => {
-    test.skip(!userUrl, 'needs the Keycloak admin fixture and IDENTITY_TEST_MAILPIT_URL');
+    test.skip(!userUrl, 'needs the Keycloak admin fixture and ONBOARDING_E2E_MAILPIT_URL');
 
     const tabA = await context.newPage();
     await tabA.goto(authorizeUrl(BASE_URL, 'employee'));
     await expect(tabA.locator('#username')).toBeVisible();
 
-    // Tab B: a password reset from the emailed link, in the same browser.
+    // Tab B: the emailed password-setup link, opened in the same browser.
     const tabB = await context.newPage();
-    await tabB.goto(authorizeUrl(BASE_URL, 'employee'));
-    await tabB.locator('#kc-forgot-password').click();
-    await tabB.locator('#email').fill(email);
-    await tabB.locator('#kc-reset-password-form button[type="submit"]').click();
-    await expect(tabB.getByRole('status')).toBeVisible();
-    await tabB.goto(await emailedLink(email));
+    const requested = await context.request.post(`${BASE_URL}/identity/v1/password/setup-requests`, {
+      headers: { Origin: new URL(BASE_URL).origin },
+      data: { email, surface: 'configurator', returnTo: '/configurator/login' },
+    });
+    expect(requested.status()).toBe(202);
+    await tabB.goto((await mailedLink(email)).link);
     await tabB.locator('#password-new').fill(replacement);
     await tabB.locator('#password-confirm').fill(replacement);
     await tabB.locator('form button[type="submit"]').first().click();
