@@ -99,52 +99,104 @@ export function downloadComplaintHierarchyTemplate(hierarchyType: string, levelC
   triggerDownload(writeWorkbook(wb), `Complaint_Hierarchy_${hierarchyType || 'PGR'}.xlsx`);
 }
 
-export function downloadEmployeeTemplate() {
-  const header = [
-    'employeeCode',
-    'name',
-    'mobileNumber',
-    'emailId',
-    'gender',
-    'dob',
-    'department',
-    'designation',
-    'roles',
-    'jurisdictions',
-    'dateOfAppointment',
-  ];
-  // `department` accepts a comma-separated list — each extra department
-  // becomes a historical HRMS assignment (bootstrap-ADMIN pattern), letting
-  // one employee qualify as assignee for complaints in all of them.
-  const rows: Row[] = [
-    [
-      'EMP001',
-      'Jane Doe',
-      '777777701',
-      'jane@example.com',
-      'FEMALE',
-      '1990-01-15',
-      'ENV',
-      'OFFICER',
-      'EMPLOYEE,PGR_LME',
-      'WARD_001',
-      '2024-06-01',
-    ],
-    [
-      'EMP002',
-      'John Admin',
-      '777777702',
-      'john.admin@example.com',
-      'MALE',
-      '1985-03-10',
-      'ENV,WORKS',
-      'OFFICER',
-      'EMPLOYEE,GRO,DGRO',
-      'COUNTY_001',
-      '2024-06-01',
-    ],
-  ];
+const EMPLOYEE_TEMPLATE_COLUMNS = [
+  'employeeCode',
+  'name',
+  'mobileNumber',
+  'emailId',
+  'gender',
+  'dob',
+  'department',
+  'designation',
+  'roles',
+  'jurisdictions',
+  'dateOfAppointment',
+];
+
+type CodeName = { code: string; name?: string };
+type CodeBoundary = { code: string; boundaryType?: string };
+
+/**
+ * Employee bulk-import workbook: an `Employee` sheet with one sample row, a
+ * `Codes` reference sheet listing the workspace's departments, designations,
+ * roles and boundaries, and an `Instructions` sheet. The sample row uses codes
+ * from the passed-in data (blank when a list is empty) so it never references
+ * codes that do not exist in the workspace.
+ */
+export function buildEmployeeTemplate(
+  tenant: string,
+  depts: CodeName[],
+  desigs: CodeName[],
+  boundaries: CodeBoundary[],
+  roles: { code: string; name?: string }[],
+): Blob {
+  const sample: Record<string, string> = {
+    employeeCode: 'EMP_001',
+    name: 'Jane Kamau',
+    mobileNumber: '0712345678',
+    emailId: 'jane.kamau@example.com',
+    gender: 'FEMALE',
+    dob: '1990-05-14',
+    department: depts[0]?.code ?? '',
+    designation: desigs[0]?.code ?? '',
+    roles: (roles.find((r) => r.code === 'PGR_LME') ?? roles[0])?.code ?? '',
+    jurisdictions: boundaries[0]?.code ?? '',
+    dateOfAppointment: '2026-01-15',
+  };
+
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, buildSheet(header, rows), 'Employee');
-  triggerDownload(writeWorkbook(wb), 'Employee_Template.xlsx');
+  const primary = XLSX.utils.aoa_to_sheet([
+    EMPLOYEE_TEMPLATE_COLUMNS,
+    EMPLOYEE_TEMPLATE_COLUMNS.map((c) => sample[c] ?? ''),
+  ]);
+  primary['!cols'] = EMPLOYEE_TEMPLATE_COLUMNS.map((c) => ({ wch: Math.max(12, c.length + 2) }));
+  XLSX.utils.book_append_sheet(wb, primary, 'Employee');
+
+  const maxLen = Math.max(depts.length, desigs.length, roles.length, boundaries.length);
+  const rows: (string | undefined)[][] = [
+    ['departments (code : name)', 'designations (code : name)', 'roles (code)', 'boundaries (code : type)'],
+  ];
+  for (let i = 0; i < maxLen; i += 1) {
+    rows.push([
+      depts[i] ? `${depts[i].code} : ${depts[i].name ?? ''}` : '',
+      desigs[i] ? `${desigs[i].code} : ${desigs[i].name ?? ''}` : '',
+      roles[i] ? roles[i].code : '',
+      boundaries[i] ? `${boundaries[i].code} : ${boundaries[i].boundaryType ?? ''}` : '',
+    ]);
+  }
+  const ref = XLSX.utils.aoa_to_sheet(rows);
+  ref['!cols'] = [{ wch: 36 }, { wch: 36 }, { wch: 20 }, { wch: 36 }];
+  XLSX.utils.book_append_sheet(wb, ref, 'Codes');
+
+  const notes = XLSX.utils.aoa_to_sheet([
+    ['Employee bulk import template'],
+    [`Tenant: ${tenant}`],
+    [''],
+    ['Required columns: name, mobileNumber (per the tenant mobile rule),'],
+    ['department (from Codes), designation (from Codes).'],
+    ['Required: emailId. Optional: employeeCode (blank = the next free EMP_ code),'],
+    ['gender, dob (YYYY-MM-DD),'],
+    ['roles (comma-separated), jurisdictions (comma-separated boundary codes),'],
+    ['dateOfAppointment (YYYY-MM-DD).'],
+    [''],
+    ['Email is required. New employees receive a secure password setup email.'],
+    ['Each employee signs in with their employee code as username.'],
+  ]);
+  notes['!cols'] = [{ wch: 80 }];
+  XLSX.utils.book_append_sheet(wb, notes, 'Instructions');
+
+  return writeWorkbook(wb);
+}
+
+export function downloadEmployeeTemplate(
+  tenant: string,
+  depts: CodeName[],
+  desigs: CodeName[],
+  boundaries: CodeBoundary[],
+  roles: { code: string; name?: string }[],
+) {
+  triggerDownload(
+    buildEmployeeTemplate(tenant, depts, desigs, boundaries, roles),
+    `Employee_Master_Dynamic_${tenant.toUpperCase()}.xlsx`,
+  );
 }

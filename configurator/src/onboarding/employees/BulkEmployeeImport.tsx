@@ -439,7 +439,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
   };
 
   const handleDownloadTemplate = () => {
-    downloadEmployeeTemplate();
+    downloadEmployeeTemplate(targetTenant, departments, designations, boundaries, roles);
     trackTemplateDownload('employees', 'employee');
   };
 
@@ -541,7 +541,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
 
           <div className="bg-primary/5 border border-primary/20 rounded p-3 sm:p-4 mb-4 sm:mb-6">
             <p className="font-condensed font-medium text-foreground mb-2 text-sm sm:text-base">
-              {t('bulk_employees.template_file', 'Template: %{file}', { file: 'Employee_Master_Dynamic.xlsx' })}
+              {t('bulk_employees.template_file', 'Template: %{file}', { file: `Employee_Master_Dynamic_${targetTenant.toUpperCase()}.xlsx` })}
             </p>
             <p className="text-xs sm:text-sm text-muted-foreground">
               {loadingRefs ? t('bulk_employees.loading_refs', 'Loading reference data...') : t('bulk_employees.available', 'Available data from DIGIT:')}
