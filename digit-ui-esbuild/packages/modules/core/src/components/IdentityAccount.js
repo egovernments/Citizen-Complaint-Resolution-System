@@ -15,6 +15,16 @@ const ACTIONS = {
   UPDATE_EMAIL: "Change email address",
 };
 const fetchImpl = (...args) => window.fetch(...args);
+// English for a session's surface where a tenant hasn't loaded the labels.
+const SURFACE_NAMES = { citizen: "Citizen portal", employee: "Employee portal", configurator: "Configurator" };
+
+// Layout. Every card spans the column, so their edges line up; account actions
+// are a wrapping row of secondary buttons rather than a stack of full-width
+// primaries, which read as one block of equal-weight calls to action.
+const CARD_STYLE = { width: "100%", boxSizing: "border-box", padding: "24px", display: "flex", flexDirection: "column", gap: "16px" };
+const CARD_TITLE_STYLE = { margin: 0, fontSize: "1.125rem", fontWeight: 600, color: "var(--color-text-heading, var(--color-text-primary, #0B0C0C))", overflowWrap: "anywhere" };
+const ACTION_ROW_STYLE = { display: "flex", flexWrap: "wrap", gap: "12px" };
+const MUTED_STYLE = { color: "var(--color-text-secondary, #505A5F)", fontSize: "0.875rem" };
 
 // The same writes as the login pages make for a selected session.
 const storeSelectedUser = (surface, user, tenant) => {
@@ -121,9 +131,9 @@ export const ChangePhone = ({ t, tenant, onChanged }) => {
     }
     return result;
   });
-  return <Card style={{ padding: "24px", display: "grid", gap: "16px" }}>
-    <h2>{tr("CORE_IDENTITY_CHANGE_PHONE", "Change phone number")}</h2>
-    <p>{tr("CORE_IDENTITY_PHONE_HELP", "Enter the new number without the country code. We will send a verification code to it.")}</p>
+  return <Card style={CARD_STYLE}>
+    <h2 style={CARD_TITLE_STYLE}>{tr("CORE_IDENTITY_CHANGE_PHONE", "Change phone number")}</h2>
+    <p style={{ ...MUTED_STYLE, margin: 0 }}>{tr("CORE_IDENTITY_PHONE_HELP", "Enter the new number without the country code. We will send a verification code to it.")}</p>
     <Field label={tr("CORE_IDENTITY_NEW_PHONE", "New phone number")} htmlFor="account-phone">
       <Input id="account-phone" type="tel" inputMode="numeric" autoComplete="tel-national"
         value={mobileNumber} disabled={busy || !!challenge} onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g, ""))} />
@@ -132,16 +142,18 @@ export const ChangePhone = ({ t, tenant, onChanged }) => {
       <Input id="account-code" inputMode="numeric" autoComplete="one-time-code" value={code}
         onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} />
     </Field>}
-    {message && <p role="status">{message}</p>}
-    <Button type="button" disabled={busy || !mobileNumber || (!!challenge && !code)} onClick={challenge ? verify : send}>
-      {challenge ? tr("CORE_IDENTITY_VERIFY_PHONE", "Verify and change phone") : tr("CORE_IDENTITY_SEND_CODE", "Send code")}
-    </Button>
-    {challenge && <>
-      <Button type="button" variant="secondary" disabled={busy} onClick={send}>{tr("CORE_IDENTITY_RESEND", "Resend code")}</Button>
-      <Button type="button" variant="secondary" disabled={busy} onClick={() => { setChallenge(null); setCode(""); }}>
-        {tr("CORE_COMMON_CANCEL", "Cancel")}
+    {message && <p role="status" style={{ margin: 0 }}>{message}</p>}
+    <div style={ACTION_ROW_STYLE}>
+      <Button type="button" disabled={busy || !mobileNumber || (!!challenge && !code)} onClick={challenge ? verify : send}>
+        {challenge ? tr("CORE_IDENTITY_VERIFY_PHONE", "Verify and change phone") : tr("CORE_IDENTITY_SEND_CODE", "Send code")}
       </Button>
-    </>}
+      {challenge && <>
+        <Button type="button" variant="secondary" disabled={busy} onClick={send}>{tr("CORE_IDENTITY_RESEND", "Resend code")}</Button>
+        <Button type="button" variant="secondary" disabled={busy} onClick={() => { setChallenge(null); setCode(""); }}>
+          {tr("CORE_COMMON_CANCEL", "Cancel")}
+        </Button>
+      </>}
+    </div>
   </Card>;
 };
 
@@ -223,40 +235,51 @@ const IdentityAccount = ({ surface }) => {
       setMessage(tr("CORE_IDENTITY_OTHER_SESSIONS_ENDED", "Your other sessions have been signed out."));
     }
   });
-  return <main className="v2-scope" style={{ maxWidth: "720px", margin: "24px auto", display: "grid", gap: "20px" }} aria-busy={busy}>
-    <h1>{tr("CORE_IDENTITY_ACCOUNT", "Account and security")}</h1>
-    {message && <p role="status">{message}</p>}
-    {!session && <Button type="button" disabled={busy} onClick={() => run(refresh)}>{tr("CORE_IDENTITY_TRY_AGAIN", "Try again")}</Button>}
+  const accountButtons = session ? [
+    ...Object.entries(ACTIONS).filter(([name]) => session.account?.actions?.includes(name)).map(([name, label]) =>
+      <Button key={name} type="button" variant="secondary" disabled={busy} onClick={() => action(name)}>{tr(`CORE_IDENTITY_${name}`, label)}</Button>),
+    ...(session.account?.actions?.includes("delete_credential") ? (session.account.credentials || []).filter((c) =>
+      ["otp", "webauthn"].includes(c.type)).map((c) =>
+      <Button key={c.id} type="button" variant="secondary" disabled={busy} onClick={() => action("delete_credential", { credentialId: c.id })}>
+        {tr("CORE_IDENTITY_REMOVE_FACTOR", "Remove second factor")}: {c.label || c.type}
+      </Button>) : []),
+    ...(session.account?.actions?.includes("idp_link") ? api.availableProviders(methods, session.account).map((provider) =>
+      <Button key={provider.id} type="button" variant="secondary" disabled={busy} onClick={() => action("idp_link", { provider: provider.idpHint })}>
+        {tr("CORE_IDENTITY_LINK_PROVIDER", "Link provider")}: {provider.label || provider.id}
+      </Button>) : []),
+    ...(session.account?.providers || []).map((provider) => <Button key={provider.alias} type="button" variant="secondary" disabled={busy}
+      onClick={() => run(async () => { await api.unlinkIdentityProvider({ surface, alias: provider.alias, fetchImpl }); await refresh(); })}>
+      {tr("CORE_IDENTITY_UNLINK_PROVIDER", "Unlink provider")}: {provider.alias}
+    </Button>),
+  ] : [];
+  // Starts where other pages start (24px in from the menu), not centred in
+  // the space beside it.
+  return <main className="v2-scope" style={{ width: "100%", maxWidth: "768px", margin: "24px 0", padding: "0 24px", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: "20px" }} aria-busy={busy}>
+    <h1 style={{ margin: 0, fontSize: "1.5rem", fontWeight: 700, color: "var(--color-text-heading, var(--color-text-primary, #0B0C0C))" }}>{tr("CORE_IDENTITY_ACCOUNT", "Account and security")}</h1>
+    {message && <p role="status" style={{ margin: 0 }}>{message}</p>}
+    {!session && <div><Button type="button" disabled={busy} onClick={() => run(refresh)}>{tr("CORE_IDENTITY_TRY_AGAIN", "Try again")}</Button></div>}
     {session && <>
-      <Card style={{ padding: "24px", display: "grid", gap: "16px" }}>
-        <p>{session.user?.email || session.user?.phoneNumber}</p>
-        {Object.entries(ACTIONS).filter(([name]) => session.account?.actions?.includes(name)).map(([name, label]) =>
-          <Button key={name} type="button" disabled={busy} onClick={() => action(name)}>{tr(`CORE_IDENTITY_${name}`, label)}</Button>)}
-        {session.account?.actions?.includes("delete_credential") && session.account.credentials?.filter((c) =>
-          ["otp", "webauthn"].includes(c.type)).map((c) =>
-          <Button key={c.id} type="button" disabled={busy} onClick={() => action("delete_credential", { credentialId: c.id })}>
-            {tr("CORE_IDENTITY_REMOVE_FACTOR", "Remove second factor")}: {c.label || c.type}
-          </Button>)}
-        {session.account?.actions?.includes("idp_link") && api.availableProviders(methods, session.account).map((provider) =>
-          <Button key={provider.id} type="button" disabled={busy} onClick={() => action("idp_link", { provider: provider.idpHint })}>
-            {tr("CORE_IDENTITY_LINK_PROVIDER", "Link provider")}: {provider.label || provider.id}
-          </Button>)}
-        {session.account?.providers?.map((provider) => <Button key={provider.alias} type="button" disabled={busy}
-          onClick={() => run(async () => { await api.unlinkIdentityProvider({ surface, alias: provider.alias, fetchImpl }); await refresh(); })}>
-          {tr("CORE_IDENTITY_UNLINK_PROVIDER", "Unlink provider")}: {provider.alias}
-        </Button>)}
+      <Card style={CARD_STYLE}>
+        <h2 style={CARD_TITLE_STYLE}>{session.user?.email || session.user?.phoneNumber}</h2>
+        {accountButtons.length > 0 && <div style={ACTION_ROW_STYLE}>{accountButtons}</div>}
       </Card>
       {surface === "citizen" && <ChangePhone key={sessionVersion} t={t} tenant={tenant} onChanged={() => run(refresh)} />}
-      <Card style={{ padding: "24px", display: "grid", gap: "16px" }}>
-        <h2>{tr("CORE_IDENTITY_SESSIONS", "Signed-in sessions")}</h2>
-        <ul>{session.sessions?.map((item) => <li key={item.id}>
-          {item.surface ? tr(`CORE_IDENTITY_SURFACE_${String(item.surface).toUpperCase()}`, item.surface) : ""}{" "}
-          {item.current ? tr("CORE_IDENTITY_CURRENT_SESSION", "(this session)") : ""}
-          {item.lastSeenAt ? ` — ${new Date(item.lastSeenAt).toLocaleString(sessionLocale)}` : ""}
-        </li>)}</ul>
-        <Button type="button" disabled={busy} onClick={() => logout("others")}>{tr("CORE_IDENTITY_LOGOUT_OTHERS", "Sign out other sessions")}</Button>
-        <Button type="button" disabled={busy} onClick={() => logout("all")}>{tr("CORE_IDENTITY_LOGOUT_ALL", "Sign out everywhere")}</Button>
-        <Button type="button" disabled={busy} onClick={() => logout("current")}>{tr("CORE_COMMON_LOGOUT", "Sign out")}</Button>
+      <Card style={CARD_STYLE}>
+        <h2 style={CARD_TITLE_STYLE}>{tr("CORE_IDENTITY_SESSIONS", "Signed-in sessions")}</h2>
+        <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>{session.sessions?.map((item, index) =>
+          <li key={item.id} style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", columnGap: "12px", rowGap: "2px", padding: "10px 0",
+            borderTop: index ? "1px solid var(--color-border, #D6D5D4)" : "none" }}>
+            <span style={{ fontWeight: 600 }}>
+              {item.surface ? tr(`CORE_IDENTITY_SURFACE_${String(item.surface).toUpperCase()}`, SURFACE_NAMES[item.surface] || item.surface) : ""}
+              {item.current ? ` ${tr("CORE_IDENTITY_CURRENT_SESSION", "(this session)")}` : ""}
+            </span>
+            {item.lastSeenAt ? <span style={MUTED_STYLE}>{new Date(item.lastSeenAt).toLocaleString(sessionLocale)}</span> : null}
+          </li>)}</ul>
+        <div style={ACTION_ROW_STYLE}>
+          <Button type="button" variant="secondary" disabled={busy} onClick={() => logout("others")}>{tr("CORE_IDENTITY_LOGOUT_OTHERS", "Sign out other sessions")}</Button>
+          <Button type="button" variant="secondary" disabled={busy} onClick={() => logout("all")}>{tr("CORE_IDENTITY_LOGOUT_ALL", "Sign out everywhere")}</Button>
+          <Button type="button" variant="secondary" disabled={busy} onClick={() => logout("current")}>{tr("CORE_COMMON_LOGOUT", "Sign out")}</Button>
+        </div>
       </Card>
     </>}
   </main>;
