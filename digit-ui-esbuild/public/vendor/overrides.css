@@ -10703,6 +10703,16 @@ html[data-sidebar-pinned] .citizen .main.center-container.citizen-home-container
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* In the table the Concern column narrows on a laptop (about 230px at
+ * 1024px), where one line cut real categories ("YOUTH PROGRAMME COMPL…").
+ * Two lines, then "…", with the full text in the title. */
+.cms-complaints-table .cms-complaints-concern {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 .cms-complaints-desc {
   display: block;
   margin-top: 3px;
@@ -10726,6 +10736,9 @@ svg.cms-complaints-go {
   width: 18px;
   height: 18px;
   vertical-align: middle;
+  /* In a phone row the chevron is a flex item next to the text; it shrank to
+   * 3px beside a long status or number. */
+  flex: none;
 }
 
 /* Status, in the theme's status colours, toned by where the complaint is. */
@@ -10735,13 +10748,17 @@ svg.cms-complaints-go {
   gap: 6px;
   max-width: 100%;
   padding: 3px 10px;
-  border-radius: 999px;
+  /* Half a one-line pill's height, so it still reads as a pill, and a
+   * two-line one stays a rounded box. */
+  border-radius: 12px;
   font-size: 12.5px;
   font-weight: 600;
   line-height: 1.4;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* A translated status can outgrow the column ("En attente d'attribution à
+   * un agent de terrain"). The text is a bare flex item, so an ellipsis never
+   * applied and it was cut mid-word with no way to read the rest. Wrap it. */
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .cms-status-pill::before {
   content: "";
