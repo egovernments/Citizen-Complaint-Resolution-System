@@ -24,6 +24,9 @@
 import { Project, Node, SyntaxKind, CallExpression } from 'ts-morph';
 import * as fs from 'fs';
 import * as path from 'path';
+// Shared with scripts/ci-compare.mjs, so the dashboard and the PR check agree
+// on which runs were cut short.
+import { cutShortOf, runErrors } from './run-errors.cjs';
 
 /**
  * How many runs history.json and catalog.json remember: the run summaries, and
@@ -530,27 +533,8 @@ function recount(stored: RunSummary, report: PwReport): RunSummary {
   return { ...stored, ...counts, excluded: stored.excluded ?? 0, cutShort: cutShortOf(report) };
 }
 
-/**
- * Playwright's run-level message when the run stopped before every test got a
- * turn — the global timeout or --max-failures — else null. Matched on those
- * two messages only, so an unrelated run-level error (a fixture, a teardown)
- * isn't read as cut short. The global timeout names whichever task was running
- * when it fired (taskRunner.js: `for the ${currentTaskName} to run`): "test
- * suite", "global setup", "start dev server", "teardown for test suite"…
- */
-const CUT_SHORT = [
-  /^Timed out waiting [\d.]+s for the .+ to run/,
-  /^Testing stopped early after \d+ maximum allowed failures/,
-];
-function cutShortOf(report: PwReport): string | null {
-  return runErrors(report).find(m => CUT_SHORT.some(re => re.test(m))) ?? null;
-}
-
-/** First line of each run-level error, colour codes stripped. */
-function runErrors(report: PwReport): string[] {
-  return (report.errors || [])
-    .map(e => (e.message || '').replace(/\x1b\[[0-9;]*m/g, '').split('\n')[0].trim());
-}
+// cutShortOf (the global timeout or --max-failures message, else null) and
+// runErrors (each run-level error's first line) live in run-errors.cjs.
 
 /**
  * Why a run that planned no test at all stopped, e.g. "Error: Cannot find

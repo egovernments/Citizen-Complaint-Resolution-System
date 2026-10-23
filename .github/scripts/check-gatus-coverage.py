@@ -88,6 +88,10 @@ LS = ROOT / "local-setup"
 #                               (same call as grafana/prometheus/otel-collector) -- but the
 #                               file still has to be listed here, or find_unlisted_compose_files
 #                               fails it as a compose file the guard does not scan.
+#   docker-compose.ci.yml       per-tenant overlay of the throwaway `ci` stack the
+#                               "Integration tests" workflow deploys on a GitHub runner
+#                               (#2030). Its one new service, mailpit, is CI-only and
+#                               EXEMPT below; the rest only sets env on existing services.
 #
 # This list is the guard's whole perimeter. Anything not in it is unwatched, so it is
 # checked against the directory listing below rather than maintained by memory.
@@ -115,6 +119,7 @@ COMPOSE_FILES = [
     LS / "docker-compose.monitoring.yml",
     LS / "docker-compose.matomo.yml",
     LS / "docker-compose.opensre.yml",
+    LS / "docker-compose.ci.yml",
 ]
 K8S_DIR = LS / "k8s"
 GATUS_COMPOSE = LS / "gatus/config.yaml"
@@ -180,6 +185,11 @@ EXEMPT = {
     # calls Gatus's API and the OpenSRE CLI; it opens no listener, so there is
     # nothing to probe, and it being down costs diagnoses, not service.
     "opensre": "no port: diagnose-only agent loop, calls out to gatus/grafana/tempo/redpanda and listens on nothing",
+    # The SMTP sink Keycloak needs on the integration-tests runner
+    # (docker-compose.ci.yml). It exists only on that throwaway stack, which
+    # runs no Gatus page (nginx_features.status: false), and nothing the
+    # platform serves depends on it.
+    "mailpit": "CI-only SMTP sink for Keycloak on the throwaway integration-tests stack (docker-compose.ci.yml), which runs no Gatus page",
 }
 
 # Suffixes that mark generated one-shot migration containers. These are created

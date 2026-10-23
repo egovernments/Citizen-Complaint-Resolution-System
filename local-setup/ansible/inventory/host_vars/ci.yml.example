@@ -1,0 +1,138 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# ci — the throwaway stack the "Integration tests" workflow deploys
+#
+# .github/workflows/integration-tests.yml copies this file to host_vars/ci.yml
+# on a fresh GitHub runner, adds an image pin for every image the PR rebuilt,
+# runs `./deploy.sh ci`, then runs tests/integration-tests against
+# http://localhost. The runner is discarded afterwards, so nothing here is a
+# secret and nothing needs to survive a redeploy.
+#
+# It is localhost-slim.yml.example (read that file for what each key does)
+# with the differences a disposable CI box needs, each marked "CI:" below.
+# Keep the two close: the suite's pg profile (tests/integration-tests/deploy/
+# pg.env, expectations/pg.json) assumes the dump-seeded `pg` tenants slim boots.
+#
+# Do not use it for anything else: it accepts the fixed citizen OTP 123456,
+# and on the runner the workflow acknowledges the DB fast-path data wipe.
+# ═══════════════════════════════════════════════════════════════════════════
+
+ansible_host: localhost
+ansible_connection: local
+manage_host_firewall: false
+# CI: nothing to add; every image comes from Docker Hub / ghcr.io over TLS,
+# or was built on the runner.
+insecure_registries: []
+# Tag prefix for the one image fallback that still uses it (see
+# maputo.yml.example); preflight requires it with enable_mcp.
+docker_registry: "egovio"
+
+domain: localhost
+tls_enabled: false
+
+# Dump-seeded tenants (db/full-dump.sql).
+state_root: pg
+state_tenant_id: pg
+boot_tenant: pg.citya
+tenant_id: pg
+ui_state_tenant_id: pg.citya
+map_center:
+  lat: 30.7333
+  lng: 76.7794
+employee_module_denylist: []
+pgr_boundary_highest_level: "State"
+pgr_boundary_lowest_level: "Locality"
+boundary_type: "Locality"
+hierarchy_type: "ADMIN"
+core_mobile_configs:
+  countryCode: "+91"
+  mobileNumberRegex: "^[6-9][0-9]{9}$"
+core_postal_configs:
+  postalCodePattern: "^[0-9]{6}$"
+  postalCodeLength: 6
+  postalCodeErrorMessage: "CS_COMPLAINT_POSTALCODE_INVALID_ERROR"
+asset_s3_bucket: "pg-egov-assets"
+
+digit_ui_mode: container
+enable_digit_ui_v2: false
+build_digit_ui: false
+# CI: the configurator runs as the egovio/configurator container, or the image
+# the PR rebuilt (configurator_image pin), never a vite build on the runner.
+build_configurator: false
+
+enable_integration_tests: false
+enable_integration_tests_runner: false
+run_ci_tests: false
+
+enable_otp_services: false
+# Development only: citizens sign in with the fixed OTP 123456.
+identity_dev_fixed_otp: true
+# CI: phone OTP is the citizen sign-in the suite drives (citizen-setup);
+# without it the BFF answers PHONE_OTP_DISABLED.
+identity_citizen_signin_methods: [phone_otp]
+enable_search_stack: false
+enable_mcp: true
+# CI: MCP from this checkout, so a PR that changes digit-mcp/ is what gets
+# tested. The workflow's cached build job builds it with the other images and
+# pins it (mcp_image), so the deploy does not build it again on every shard.
+build_mcp: false
+tolerate_bootstrap_failures: true
+enable_turbopass: false
+
+# Notifications off, as in slim: the suite does not assert on delivery.
+enable_novu: false
+build_novu_dashboard: false
+novu_api_key: ""
+pgr_notification_config_driven: false
+
+keycloak_google_client_id: ""
+# CI: Keycloak mails through the Mailpit container in
+# local-setup/docker-compose.ci.yml (the deploy refuses Keycloak without SMTP).
+identity_smtp_host: mailpit
+identity_smtp_port: 1025
+identity_smtp_from: "digit-ci@example.test"
+identity_smtp_auth: false
+identity_smtp_ssl: false
+identity_smtp_starttls: false
+
+requires_nairobi_mdms: false
+db_fast_path: true
+# CI: a brand-new runner has no Postgres data to lose, so the workflow's
+# "Write the CI inventory" step sets this to true there. It ships false like
+# every other example: copied anywhere else, the deploy must ask first.
+db_fast_path_ack_data_wipe: false
+force_clean: false
+install_claude_code: false
+
+nginx_features:
+  brand_assets: false
+  configurator: true
+  configurator_caching: false
+  # CI: no Gatus page; nobody looks at it on a runner.
+  status: false
+  api_pgr: false
+  mcp: true
+  keycloak: true
+  digit_ui_v2: false
+  integration_tests: false
+  integration_tests_runner: false
+nginx_preserve_vhost: false
+
+secrets_path: kv/digit/pg.citya
+# Pinned by the db_fast_path dump (see localhost-slim.yml.example); public
+# development values on a runner that is thrown away after the run.
+bootstrap_secrets:
+  postgres_password: egov123
+  mcp_db_password: egov123
+  minio_root_user: minioadmin
+  minio_root_password: minioadmin
+  elasticsearch_master_password: "asd@#$@$!132123"
+  egov_hrms_default_password: "eGov@123"
+  keycloak_admin_password: "eGov@123"
+  keycloak_db_password: "eGov@123"
+  keycloak_google_client_secret: ""
+  identity_digit_admin_password: "eGov@123"
+
+# Image pins the workflow appends for every image it built from the checkout
+# (tests/integration-tests/scripts/ci-plan.mjs IMAGES), e.g.
+#   pgr_services_image: ci.local/pgr-services:ci
+#   mcp_image: ci.local/digit-mcp:ci
