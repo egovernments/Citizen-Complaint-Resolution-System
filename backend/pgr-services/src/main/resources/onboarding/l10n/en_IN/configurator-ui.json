@@ -1077,6 +1077,5 @@
 {"code": "app.onboarding.steps.departments", "message": "Departments", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.steps.employees", "message": "Employees", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.steps.geography", "message": "Geography", "module": "configurator-ui", "locale": "en_IN"},
-{"code": "app.onboarding.bulk_employees.instr_csr_role", "message": "Every employee also gets the Complaint Registrar (CSR) role, so they can file complaints on behalf of citizens.", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.bulk_employees.csr_role_note", "message": "Every employee also gets the Complaint Registrar (CSR) role, so they can file complaints on behalf of citizens.", "module": "configurator-ui", "locale": "en_IN"}
 ]
