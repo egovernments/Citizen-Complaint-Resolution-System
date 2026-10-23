@@ -110,6 +110,9 @@ export function buildDefaultFilters(timeZone) {
   // (leaf → serviceCode, interior → complaintPath).
   defaults.complaintTypePath = null;
   defaults.complaintTypeLeaf = false;
+  // #637: an interior node whose subtree complaint_node_path cannot match
+  // (dotted codes) is sent as its codes (serviceCodes); null otherwise.
+  defaults.complaintTypeCodes = null;
   return defaults;
 }
 
@@ -197,6 +200,7 @@ function sanitizeComplaintTypeSelection(raw, options) {
     code: raw.complaintType,
     path: raw.complaintTypePath,
     leaf: raw.complaintTypeLeaf,
+    codes: raw.complaintTypeCodes,
   });
   let selection = stored;
 
@@ -212,5 +216,6 @@ function sanitizeComplaintTypeSelection(raw, options) {
     complaintType: selection.code,
     complaintTypePath: selection.path,
     complaintTypeLeaf: selection.leaf,
+    complaintTypeCodes: selection.codes ?? null,
   };
 }

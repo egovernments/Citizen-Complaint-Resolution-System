@@ -59,6 +59,9 @@ import java.util.regex.Pattern;
  *       {@code paramsIgnored:["complaintPath"]} on the result envelope) so the FE can flag the
  *       widget as unfiltered. Rows with a NULL path (nodes whose own code contains '.', see the
  *       #1111 migration; flat tenants) never match a subtree filter.</li>
+ *   <li>{@code serviceCodes} (#637) — an INTERIOR node given as its leaf codes (an array): narrows to
+ *       {@code service_code IN (...)} on every grain. The FE sends it instead of {@code complaintPath}
+ *       for subtrees whose path rows are NULL (a dotted code in the chain).</li>
  *   <li>{@code compare: "prior"} — instead of the selected/default range, apply the
  *       <em>immediately-preceding equal-duration</em> range on the def's time column. Mirrors the FE
  *       {@code priorPeriodCreatedAtFilter()} (~1586) / {@code priorPeriodEndDateIso()} (~1360) and the
@@ -123,6 +126,8 @@ public class KpiQueryComposer {
     static final String SUPPRESSED = "__suppressed";
     /** {@code complaintPath} length cap — live paths are short dot-joined UPPER_SNAKE codes. */
     static final int MAX_COMPLAINT_PATH_LENGTH = 256;
+    /** {@code serviceCodes} size cap (#637): a category's leaf types; live categories have a few dozen at most. */
+    static final int MAX_SERVICE_CODES = 200;
     /**
      * The complaint-hierarchy path alphabet: dot-joined MDMS node codes (alnum/underscore/dash,
      * occasionally slash). Anything outside it — quotes, whitespace, LIKE metachars, SQL syntax —
@@ -275,6 +280,7 @@ public class KpiQueryComposer {
             String path = params.get("complaintPath").asText();
             if (!path.isEmpty()) applyComplaintPath(next, g, path, paramsIgnoredOut);
         }
+        if (params.hasNonNull("serviceCodes")) applyServiceCodes(next, g, params.get("serviceCodes"));
 
         // ---- hierarchy-level rollup (#1111): rewrite service_code dimensions to the level expr ----
         if (params.hasNonNull("hierLevel")) {
@@ -759,6 +765,45 @@ public class KpiQueryComposer {
             return;
         }
         mergeableFilterObject(query, "complaint_node_path").put("subtree", path);
+    }
+
+    /**
+     * {@code serviceCodes} (#637) — an INTERIOR selection given as its leaf service codes: {@code service_code IN
+     * (...)}. For subtrees that {@code complaintPath} cannot match: the grains leave {@code complaint_node_path}
+     * (and {@code service_parent_code}, derived from it) NULL when any code in the chain contains a '.', e.g.
+     * {@code complaints.categories.NoStreetlight}, so a subtree filter on such a category empties every tile.
+     * {@code service_code} is set on every row of every grain, daily included. It is ANDed with any {@code eq}
+     * the def bakes on {@code service_code} (a separate op on the same column) and intersected with a baked
+     * {@code in}, so it only ever narrows.
+     * Same alphabet as complaintPath; at most {@link #MAX_SERVICE_CODES} codes; anything else is a hard
+     * {@code invalid_param}.
+     */
+    private void applyServiceCodes(ObjectNode query, Grain g, JsonNode codes) {
+        if (!codes.isArray() || codes.isEmpty() || codes.size() > MAX_SERVICE_CODES)
+            throw new IllegalArgumentException("invalid_param: serviceCodes must be a non-empty array of at most "
+                    + MAX_SERVICE_CODES + " service codes");
+        ArrayNode in = query.arrayNode();
+        for (JsonNode c : codes) {
+            if (!c.isTextual() || !COMPLAINT_PATH_VALUE.matcher(c.asText()).matches())
+                throw new IllegalArgumentException("invalid_param: serviceCodes entries must be service codes over"
+                        + " [A-Za-z0-9._/-], at most " + MAX_COMPLAINT_PATH_LENGTH + " chars");
+            in.add(c.asText());
+        }
+        if (!g.filterable.contains("service_code")) {
+            log.debug("grain '{}' does not allow filtering on service_code; skipping serviceCodes", g.name);
+            return;
+        }
+        ObjectNode f = mergeableFilterObject(query, "service_code");
+        JsonNode baked = f.get("in");
+        if (baked != null && baked.isArray()) {   // a def's own IN list: intersect, never replace (only narrows)
+            java.util.Set<String> keep = new java.util.HashSet<>();
+            baked.forEach(b -> keep.add(b.asText()));
+            ArrayNode both = query.arrayNode();
+            in.forEach(c -> { if (keep.contains(c.asText())) both.add(c); });
+            if (both.isEmpty()) both.add("");   // disjoint: matches nothing (no service code is empty)
+            in = both;
+        }
+        f.set("in", in);
     }
 
     // ---- narrowing eq filter ----

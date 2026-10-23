@@ -64,6 +64,7 @@ export function reconcileFiltersWithOptions(filters, filterOptions, timeZone) {
     // re-derived) even when the code survives — must propagate too.
     next.complaintTypePath !== safe.complaintTypePath ||
     next.complaintTypeLeaf !== safe.complaintTypeLeaf ||
+    String(next.complaintTypeCodes ?? "") !== String(safe.complaintTypeCodes ?? "") ||
     next.dateFrom !== safe.dateFrom ||
     next.dateTo !== safe.dateTo;
 

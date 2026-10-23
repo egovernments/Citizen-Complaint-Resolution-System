@@ -343,6 +343,8 @@ test("repair: dotted CODES repair to the surviving ancestor, not cleared", () =>
       code: "complaints.categories.sanitation",
       path: "complaints.categories.sanitation",
       leaf: false,
+      // #637: a dotted subtree goes by its codes (complaint_node_path is NULL there)
+      codes: ["complaints.categories.sanitation", "complaints.types.sewage"],
     }
   );
 });
