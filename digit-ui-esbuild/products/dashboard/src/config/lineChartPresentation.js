@@ -200,24 +200,29 @@ export function buildCompoundLineChartYAxis(series, yAxisConfig = {}) {
   const countBounds = resolveLineChartYAxisBounds(countSeries, yAxisConfig);
   const borderColor = resolveDashboardCssColor("var(--border)");
 
-  return [
-    {
-      ...buildLineChartYAxis(countBounds),
-      seriesName: countSeries.map((entry) => entry.name),
-    },
-    {
-      opposite: true,
-      min: 0,
-      max: 100,
-      tickAmount: 5,
-      forceNiceScale: false,
-      show: false,
-      seriesName: percentNames,
-      labels: { show: false },
-      axisBorder: { show: false },
-      axisTicks: { show: false },
-    },
-  ];
+  // ours (#1736, 2026-10-14): one y-axis entry per series, in series order. The pinned ApexCharts (3.45.x) maps a
+  // series to an axis by a STRING seriesName only; the two-entry form with seriesName arrays left the third and fourth
+  // series without an axis, and the first draw's path morph threw "Cannot read properties of undefined (reading '0')"
+  // (svg.js PathArray.morph) and froze every line at 0. Entries naming the same series share its scale.
+  const countAxis = buildLineChartYAxis(countBounds);
+  const countName = countSeries[0].name;
+  const percentName = percentNames[0];
+  return series.map((entry) =>
+    entry.yAxisGroup === "percent"
+      ? {
+          opposite: true,
+          min: 0,
+          max: 100,
+          tickAmount: 5,
+          forceNiceScale: false,
+          show: false,
+          seriesName: percentName,
+          labels: { show: false },
+          axisBorder: { show: false },
+          axisTicks: { show: false },
+        }
+      : { ...countAxis, seriesName: countName, show: entry === countSeries[0] }
+  );
 }
 
 export function buildLineChartAnimations() {
