@@ -7740,6 +7740,12 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.employees.departments_empty",
+    "message": "Add departments first.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.employees.designation_required",
     "message": "Choose a designation.",
     "module": "configurator-ui",
