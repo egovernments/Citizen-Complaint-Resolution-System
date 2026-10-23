@@ -8652,6 +8652,10 @@
         #   python3 migrate-notifications.py plan --all
         # The deploy itself never runs it.
         - "{{ playbook_dir }}/../scripts/migrate-notifications.py"
+        # The platform baseline's action ids, so the access phase never treats one of them as
+        # a notification action's home and can hand one back (seed-notifications.py,
+        # give_back_baseline_id).
+        - "{{ playbook_dir }}/../../backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json"
 
     # The allowlist novu-bridge falls back to for a tenant with no channel rows. Read
     # from the RUNNING container, not host_vars: a per-tenant overlay can override the
@@ -8904,6 +8908,21 @@
         label: "{{ item.item }}"
       ansible.builtin.debug:
         msg: "{{ item.stdout_lines | default([]) | select('search', 'ACL-ROLES-ABSENT') | list }}"
+
+    # Lines to read even when the access phase succeeded: a grant an older build wrote on an
+    # id that holds another URL (ACL-STALE-GRANT, left in place: the tenant may have made it
+    # itself), a notification action that is switched off (ACL-ACTION-INACTIVE), and a
+    # platform-baseline id handed back or not (ACL-BASELINE-ID-RETURNED / -KEPT).
+    - name: "notif-seed — WARNING: access-control rows to review"
+      when:
+        - seed_notifications | default(enable_novu | default(false))
+        - (item.stdout | default('')) is search('ACL-(STALE-GRANT|ACTION-INACTIVE|BASELINE-ID)')
+      tags: ['notifications', 'notification-seed']
+      loop: "{{ notif_seed_acl.results | default([]) | selectattr('rc', 'defined') | list }}"
+      loop_control:
+        label: "{{ item.item }}"
+      ansible.builtin.debug:
+        msg: "{{ item.stdout_lines | default([]) | select('search', 'ACL-(STALE-GRANT|ACTION-INACTIVE|BASELINE-ID)') | list }}"
 
     # egov-accesscontrol loads ACCESSCONTROL-ROLEACTIONS into an in-memory cache at
     # startup. Rows created just now are invisible to the running process, so Kong's
@@ -9242,7 +9261,7 @@
           {%- set fin = notif_seed_final_by_root[item] | default({}) -%}
           {%- set phase = 'access' if item not in (notif_acl_ok_roots | default([])) else 'data' -%}
           {%- set rc = (acl.rc | default('n/a')) if phase == 'access' else (fin.rc | default('n/a')) -%}
-          {%- set why = ((acl.stdout_lines | default([])) + (fin.stdout_lines | default([]))) | select('search', 'FORBIDDEN|FAILED|UNREADABLE|ABSENT|ERROR|INCOMPLETE|NOTIF-|CHANNEL-|access-control') | list -%}
+          {%- set why = ((acl.stdout_lines | default([])) + (fin.stdout_lines | default([]))) | select('search', 'FORBIDDEN|FAILED|UNREADABLE|ABSENT|ERROR|INCOMPLETE|NOTIF-|CHANNEL-|ACL-|access-control') | list -%}
           {{ item }} has {{ (notif_complaint_counts[item] | default('?')) }} complaint(s) but its
           notification seed did not finish ({{ phase }} phase exit {{ rc }}: {{ why | join(' | ') }}).
           The deploy goes on: {{ item }} is not state_root (`{{ notif_seed_tenant | trim }}`), and nothing
@@ -9284,7 +9303,7 @@
           [{{ r }}: {{ ('access phase exit ' ~ (acl.rc | default('n/a'))) if r not in (notif_acl_ok_roots | default([]))
                        else ('data phase exit ' ~ (fin.rc | default('n/a'))) }}
           {{ ((acl.stdout_lines | default([])) + (fin.stdout_lines | default([])))
-             | select('search', 'FORBIDDEN|FAILED|UNREADABLE|ABSENT|ERROR|INCOMPLETE|NOTIF-|CHANNEL-|access-control') | list }}]
+             | select('search', 'FORBIDDEN|FAILED|UNREADABLE|ABSENT|ERROR|INCOMPLETE|NOTIF-|CHANNEL-|ACL-|access-control') | list }}]
           {% endfor %}
           Exit 4 = {{ notif_seed_user | default('ADMIN') }} cannot log in there (set
           notif_seed_user / notif_seed_pass). Exit 3 = still refused with 403 after restarting
@@ -9296,9 +9315,13 @@
           token was issued with and hands the same token back on every login, so a role change
           during this deploy is invisible to Kong until the token goes (flush that user's
           auth_to_access/auth/access/uname_to_access/refresh keys in digit-redis, then re-run).
-          Exit 2 = an action row or a role-action for a role the tenant HAS failed, a core master
-          failed (NOTIFICATIONS-SEED-INCOMPLETE: a re-run finishes it), the login could not reach
-          egov-user (NOTIF-LOGIN-ERROR), or MDMS could not be read (nothing was written then).
+          An ACL-ACTION-INACTIVE line above means none of that: the action itself is deactivated
+          at that tenant, and only reactivating it ends the 403.
+          Exit 2 = an action row or a role-action for a role the tenant HAS failed, an action id
+          MDMS reported taken (ACL-ID-TAKEN: docs/releases/2.20/notifications/migration.md#access-control-actions),
+          a core master failed (NOTIFICATIONS-SEED-INCOMPLETE: a re-run finishes it), the login
+          could not reach egov-user (NOTIF-LOGIN-ERROR), or MDMS could not be read (nothing was
+          written then).
           Credentials were passed in the task environment, so none appear above. Re-run with
           `./deploy.sh {{ inventory_hostname }} --tags notifications`.
 

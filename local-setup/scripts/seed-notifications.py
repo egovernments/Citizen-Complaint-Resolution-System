@@ -81,7 +81,7 @@ and "upgrade" work from the one task. They run in this order:
                alone never reaches an existing install; these rows are how it gets
                there. FIRST, because every write below needs them: a data write that
                runs before its action exists is a 403. egov-accesscontrol caches
-               role-actions in memory, so when rows are created this prints
+               role-actions in memory, so when rows are created or changed this prints
                ACL-CHANGED and the caller must restart it before the data phase (the
                playbook does; NOTIF_SEED_PHASE=all stops here and says so).
   2. schemas   search-then-create, for BOTH the four legacy RAINMAKER-PGR.Notification*
@@ -164,8 +164,8 @@ except ImportError:  # not staged: the catalogue comes from the committed file
     gec = None
 
 # Read lazily-ish: an empty value is validated in main(). Kept as module constants so
-# test_acl_dump_parity.py can import this file and diff NOTIF_ACTIONS against the dump
-# without a live DIGIT. migrate-notifications.py imports this module too and sets URL /
+# test_notification_seed_decisions.py can import this file and diff NOTIF_ACTIONS against
+# the dump without a live DIGIT. migrate-notifications.py imports this module too and sets URL /
 # USERNAME / PASSWORD / LOGIN_TENANT / DATA_DIR itself; every I/O helper below takes the
 # tenant as an argument (defaulting to TENANT) so one process can serve many tenants.
 URL = os.environ.get("DIGIT_URL", "").rstrip("/")
@@ -274,8 +274,16 @@ ACL_ROLES_ABSENT = {}
 # for fresh dump-based installs. A tenant seeded by the dump and a tenant seeded by
 # this script must end up with the same action ids, because roleactions reference an
 # action by numeric id. 4620-4622 were already taken; these start at 4623.
-# test_acl_dump_parity.py re-derives the next free ids from the dump and asserts the
-# tuples below and the dump rows agree field-for-field — run it after any edit here.
+# test_notification_seed_decisions.py (NotificationActionIds) asserts that the dump's
+# `pg` rows hold these URLs at these ids with these grants — run it after any edit here.
+#
+# The ids are what a tenant gets when they are FREE there, not a promise. A tenant whose
+# own actions table outgrew the dump (bomet's `ke`: 4623-4640 are pgr-services analytics
+# and inbox, ACCESSCONTROL-ACTIONS and common-masters rows from 2025-12) already holds
+# them for other URLs. actions-test is x-unique on `id`, so creating the notification
+# action there is a duplicate, never an error. Granting roles to the fixed id then means
+# granting the OTHER URL. plan_notif_actions therefore matches by URL first and moves a
+# colliding action to a free id above RELOCATED_ACTION_ID_FLOOR (ACL-ID-COLLISION).
 #
 # Roles mirror what the existing rows use: the MDMS masters follow
 # NotificationRouting/Template (MDMS_ADMIN, ACCOUNT_ADMIN) plus SUPERUSER; the
@@ -370,6 +378,70 @@ NOTIF_ACTIONS = [
     (4639, "/novu-bridge/novu-adapter/v1/dispatch/_resolve", "Novu Bridge", False,
      "Resolve Thin Notification Event", "novu-bridge", PROVIDER_ADMIN_ROLES),
 ]
+
+# Where an action goes when its fixed id belongs to another URL at the tenant: the next id
+# above every id the tenant has AND above this floor. "Above the tenant's highest id"
+# alone lands in other seeds' ranges. The platform baseline
+# (backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json) creates
+# its actions by FIXED id too, at 900000-900059 and 901000-901017 so far, growing upward
+# from there. It is applied by pgr-services onboarding and by digit-mcp's tenant
+# bootstrap, which the deploy runs at state_root every time. Both skip an action whose id
+# is already there and then grant their roles to that id: this module's own bug, reversed.
+# A tenant whose highest id was 901000 (bomet's `ke`) would get 901001-901017, which are
+# the baseline's cache-bust, ComplaintHierarchy, ThemeConfig, MapConfig, invitationPolicy
+# and DashboardConfig actions (the first version of this rule did exactly that there). Every
+# fixed-id seed in the repo (full-dump.sql, default-data-handler, the Nairobi MDMS, the
+# egov-mdms migrations, pgr-services' notification defaults, digit-mcp's dashboard seed and
+# the platform baseline) stays far below this floor; test_notification_seed_decisions.py
+# fails if one of them reaches it.
+RELOCATED_ACTION_ID_FLOOR = 9000000
+
+# The platform baseline, to recognise one of our actions sitting on an id the baseline
+# defines for another URL, and to hand that id back (give_back_baseline_id). Staged next
+# to this script by the playbook; in a checkout, read from pgr-services.
+PLATFORM_BASELINE_FILE = os.environ.get("PLATFORM_BASELINE_FILE") or next(
+    (p for p in (os.path.join(_here, "platform-baseline-v1.json"),
+                 os.path.join(_here, "..", "..", "backend", "pgr-services", "src", "main",
+                              "resources", "onboarding", "platform-baseline-v1.json"))
+     if os.path.exists(p)), "")
+
+
+def _for_tenant(value, tenant):
+    """The baseline's {tenantid} placeholder filled in, as digit-mcp's substituteTenant does."""
+    if isinstance(value, str):
+        return value.replace("{tenantid}", tenant)
+    if isinstance(value, list):
+        return [_for_tenant(v, tenant) for v in value]
+    if isinstance(value, dict):
+        return {k: _for_tenant(v, tenant) for k, v in value.items()}
+    return value
+
+
+def platform_baseline_actions(path=None):
+    """{action id: {"url", "data", "roles", "grants": {role: role-action data}}} as the
+    platform baseline defines them, or None when the file is not there (then no id is known
+    to be the baseline's)."""
+    path = PLATFORM_BASELINE_FILE if path is None else path
+    if not path or not os.path.exists(path):
+        return None
+    with open(path, encoding="utf-8") as fh:
+        records = json.load(fh).get("records") or []
+    out = {}
+    for rec in records:
+        if rec.get("schemaCode") == ACTION_SCHEMA:
+            data = rec.get("data") or {}
+            aid = _action_id(data)
+            if aid is not None:
+                out[aid] = {"url": str(data.get("url") or "").strip(), "data": data, "roles": [],
+                            "grants": {}}
+    for rec in records:
+        if rec.get("schemaCode") == ROLEACTION_SCHEMA:
+            data = rec.get("data") or {}
+            aid = _action_id({"id": data.get("actionid")})
+            if aid in out and data.get("rolecode"):
+                out[aid]["roles"].append(str(data["rolecode"]))
+                out[aid]["grants"][str(data["rolecode"])] = data
+    return out
 
 
 
@@ -621,11 +693,20 @@ def count_rows(tok, code, tenant=None):
 # Paging constants. Every MDMS read in this script goes through search_rows: a single
 # limit=200 page is a known bug class in this repo (configurator #953), and a live
 # tenant's notification masters have already drifted past the repo's 24/42/14 defaults.
-PAGE = 100
-MAX_PAGES = 200  # 20k rows; a safety ceiling, not an expected bound
+#
+# Pages are large because mdms-v2's _search orders by createdtime ALONE
+# (MdmsDataQueryBuilderV2: "order by data.createdtime desc", then LIMIT/OFFSET), and rows
+# written in one batch share a createdtime. Postgres may order such a tie differently for
+# each LIMIT/OFFSET, so paging through it returns some rows twice and others never. On
+# bomet's `ke` (2026-10-22), paging actions-test 100 at a time returned 659 records, but only
+# 613 different ones: 40 came back twice, and 46 never came back. Every one of them sat in a
+# single 253-row tie of inactive rows. One page with limit=2000 returned all 659. A page that
+# holds the whole master has no OFFSET to be unstable over.
+PAGE = 1000
+MAX_PAGES = 200  # 200k rows; a safety ceiling, not an expected bound
 
 
-def search_rows(tok, code, tenant=None):
+def search_rows(tok, code, tenant=None, single_page=None):
     """EVERY row for `code`, active and inactive, as the raw mdms records.
 
     Returns None when the search itself fails, which the caller must treat as "unknown",
@@ -635,35 +716,91 @@ def search_rows(tok, code, tenant=None):
     No isActive criterion is pushed down, so inactive rows come back too: an operator who
     deactivated a routing row expects it to still be deactivated after a migration, and
     the bridge's namespace switch counts inactive NOTIFICATIONS.Routing rows as well.
+
+    Pages until one comes back EMPTY: a build that caps the server-side limit returns a
+    short page that is not the last one. A row that comes back twice means the paging was
+    unstable (see PAGE) and another row was never returned, so the master is read again in
+    one page of `single_page` rows.
     """
-    out, seen, offset = [], set(), 0
+    out, seen, offset, repeats = [], set(), 0, 0
     for _ in range(MAX_PAGES):
         body = ri(tok)
         # mdms-v2 _search takes the schemaCode in the BODY (not the path — that
         # path variant silently returns 0). Same quirk the configurator hit.
         body["MdmsCriteria"] = {"tenantId": tenant or TENANT, "schemaCode": code,
-                                "limit": PAGE, "offset": offset}
+                                "limit": single_page or PAGE, "offset": offset}
         try:
             page = json.load(_post("/mdms-v2/v2/_search", body, tok)).get("mdms") or []
         except (urllib.error.HTTPError, urllib.error.URLError, OSError, ValueError):
             return None
         if not page:
-            return out
+            break
+        fresh = 0
         for rec in page:
             uid = rec.get("uniqueIdentifier") or rec.get("id")
             if uid is not None and uid in seen:
+                repeats += 1
                 continue
             if uid is not None:
                 seen.add(uid)
             out.append(rec)
+            fresh += 1
         # Advance by the page's ACTUAL length, not the requested limit: a build that
         # caps the server-side limit below PAGE would otherwise leave gaps.
         offset += len(page)
-        if len(page) < PAGE:
-            return out
-    print("    ! %s: stopped paging at %d rows (safety ceiling) — the read may be "
-          "incomplete" % (code, len(out)))
+        if single_page or not fresh:
+            break
+    else:
+        print("    ! %s: stopped paging at %d rows (safety ceiling) — the read may be "
+              "incomplete" % (code, len(out)))
+        return out
+    if repeats and not single_page:
+        again = search_rows(tok, code, tenant, single_page=offset + PAGE)
+        if again is not None and len(again) > len(out):
+            return again
+        print("    ! %s: %d row(s) came back twice while paging, so as many were never "
+              "returned, and one page did not recover them — the read may be incomplete"
+              % (code, repeats))
     return out
+
+
+def lookup_rows(tok, code, criteria, tenant=None):
+    """The rows of `code` matching `criteria` — {"uniqueIdentifiers": [...]} or
+    {"filters": {field: string value}} (mdms-v2 matches data @> filters) — in ONE request,
+    active and inactive. Exact: no paging, so no row of a createdtime tie is lost. None when
+    MDMS does not answer, which the caller must treat as "unknown"."""
+    body = ri(tok)
+    body["MdmsCriteria"] = dict({"tenantId": tenant or TENANT, "schemaCode": code,
+                                 "limit": PAGE, "offset": 0}, **criteria)
+    try:
+        return json.load(_post("/mdms-v2/v2/_search", body, tok)).get("mdms") or []
+    except (urllib.error.HTTPError, urllib.error.URLError, OSError, ValueError):
+        return None
+
+
+def update_record(tok, code, record, data=None, is_active=None, tenant=None):
+    """Write one EXISTING record back (mdms-v2 _update takes the whole searched record),
+    with new data and/or isActive. "updated" | "forbidden" | "failed". Unlike create_row it
+    never marks the run FORBIDDEN: its callers decide whether a refusal fails anything."""
+    body = ri(tok)
+    body["Mdms"] = dict(record)
+    body["Mdms"]["tenantId"] = tenant or record.get("tenantId") or TENANT
+    body["Mdms"]["schemaCode"] = code
+    if data is not None:
+        body["Mdms"]["data"] = data
+    if is_active is not None:
+        body["Mdms"]["isActive"] = bool(is_active)
+    try:
+        _post("/mdms-v2/v2/_update/" + code, body, tok).read()
+        return "updated"
+    except urllib.error.HTTPError as e:
+        if e.code == 403:
+            return "forbidden"
+        print("    ! %s update FAILED: HTTP %s %s" % (code, e.code, e.read().decode()[:160]))
+        return "failed"
+    except (urllib.error.URLError, OSError) as e:
+        print("    ! %s update FAILED: %s" % (code, e))
+        return "failed"
 
 
 # The x-unique tuple of each new master, mirrored from
@@ -1233,8 +1370,186 @@ def tenant_roles(tok, tenant=None):
             if active} - {""}
 
 
+def _action_id(data):
+    try:
+        return int(str(data.get("id")).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def _url(data):
+    return str(data.get("url") or "").strip()
+
+
+def plan_notif_actions(existing, reserved=None):
+    """Where each NOTIF_ACTIONS row lives at this tenant, from its actions-test rows.
+
+    `existing` is [(data, active)] (_record_rows). `reserved` is {id: url} for the ids the
+    platform baseline creates by fixed id. Returns one (action id, create, held_by, active)
+    per NOTIF_ACTIONS row, in order:
+      - the URL is already an action here → that action (active first, then the fixed id,
+        then the lowest id). Nothing is created, so a re-run and a dump-seeded tenant are
+        no-ops, and `active` is that action's own flag: a deactivated one stays deactivated;
+      - unless that action sits on an id `reserved` gives to ANOTHER URL. That id is not its
+        home (give_back_baseline_id hands it back), so the URL is planned as if absent, and
+        the new home takes over its active flag;
+      - the URL is absent and the fixed id is free → created at the fixed id;
+      - the fixed id is held by ANOTHER URL (held_by) → created at the next id above every
+        id the tenant has and above RELOCATED_ACTION_ID_FLOOR, so it can never take a fixed
+        id another row of this table still needs, nor an id another seed creates by fixed
+        id later (the platform baseline's 900000+ actions).
+    Role-actions are granted to the action id, never to a fixed id held by another URL.
+    """
+    reserved = reserved or {}
+    ids_by_url, url_by_id = {}, {}
+    for data, active in existing:
+        aid = _action_id(data)
+        if aid is None:
+            continue
+        url = _url(data)
+        url_by_id.setdefault(aid, url)
+        ids_by_url.setdefault(url, []).append((aid, active))
+    next_free = max(list(url_by_id) + [a[0] for a in NOTIF_ACTIONS] + [RELOCATED_ACTION_ID_FLOOR]) + 1
+    plan = []
+    for fixed, url, *_ in NOTIF_ACTIONS:
+        holders = ids_by_url.get(url, [])
+        homes = sorted((h for h in holders if reserved.get(h[0], url) == url),
+                       key=lambda h: (not h[1], h[0] != fixed, h[0]))
+        if homes:
+            plan.append((homes[0][0], False, None, homes[0][1]))
+            continue
+        active = not holders or any(a for _aid, a in holders)
+        if fixed not in url_by_id and reserved.get(fixed, url) == url:
+            plan.append((fixed, True, None, active))
+        else:
+            plan.append((next_free, True, url_by_id.get(fixed, reserved.get(fixed, "")), active))
+            next_free += 1
+    return plan
+
+
+def foreign_fixed_ids(existing):
+    """[(fixed id, the URL holding it, our URL, our roles)] for every fixed id that another
+    URL holds at this tenant. Builds before #2603 granted our roles to those ids."""
+    url_by_id = {}
+    for data, _active in existing:
+        aid = _action_id(data)
+        if aid is not None:
+            url_by_id.setdefault(aid, _url(data))
+    return [(fixed, url_by_id[fixed], url, roles) for fixed, url, *_, roles in NOTIF_ACTIONS
+            if fixed in url_by_id and url_by_id[fixed] != url]
+
+
+def baseline_ids_to_give_back(records, reserved):
+    """[(record, id, our URL)] for every actions-test row that holds one of OUR URLs on an id
+    the platform baseline (`reserved`, {id: url}) defines for another URL."""
+    ours = {a[1] for a in NOTIF_ACTIONS}
+    out = []
+    for rec in records:
+        data = rec.get("data") or {}
+        aid, url = _action_id(data), _url(data)
+        if aid in reserved and url in ours and reserved[aid] != url:
+            out.append((rec, aid, url))
+    return out
+
+
+# The fields of a role-action this script writes. The dump, default-data-handler and a
+# tenant's own tables also carry an "id", so a grant shaped exactly like this one on an id
+# that holds another URL is one an older build of this script wrote there.
+SEEDED_GRANT_FIELDS = {"rolecode", "actionid", "actioncode", "tenantId"}
+
+# How many ids to try for one action when MDMS answers "duplicate" for ids the read showed
+# as free (see place_action).
+MAX_ID_ATTEMPTS = 5
+
+
+def _active(rec):
+    return nc.record_active(rec) if nc else rec.get("isActive") is not False
+
+
+def place_action(tok, action, active, next_id):
+    """Create `action` at action["id"]. When MDMS answers "duplicate" (a row the read did not
+    show holds that id), look the id up exactly: if it holds this very URL, that is the
+    action; otherwise try the next free id. Nothing is ever granted to an id whose URL is
+    not ours. Returns (result, id, active, next_id), result one of created | dup | failed |
+    forbidden | taken (MAX_ID_ATTEMPTS ids were all taken)."""
+    url = action["url"]
+    for _ in range(MAX_ID_ATTEMPTS):
+        r = create_row(tok, ACTION_SCHEMA, action, is_active=active)
+        if r != "dup":
+            return r, action["id"], active, next_id
+        holders = lookup_rows(tok, ACTION_SCHEMA, {"uniqueIdentifiers": [str(action["id"])]}) or []
+        mine = [rec for rec in holders if _url(rec.get("data") or {}) == url]
+        if mine:
+            return "dup", action["id"], _active(mine[0]), next_id
+        held = _url(holders[0].get("data") or {}) if holders else "a row its id lookup does not return"
+        print("ACL-ID-COLLISION: action id %d at %s is %s, which the read did not show — "
+              "creating %s as action %d" % (action["id"], TENANT, held or "(no url)", url, next_id))
+        action = dict(action, id=next_id)
+        next_id += 1
+    return "taken", action["id"], active, next_id
+
+
+def give_back_baseline_id(tok, record, bid, new_home, base, grants, roles_here):
+    """Return action `bid` to the platform baseline. Its row holds one of our URLs, which now
+    also lives at `new_home`. `base` is the baseline's {"url", "data", "roles"} for `bid`,
+    and `grants` is every role-action at the tenant. The order never widens access if it
+    stops half way:
+      1. every role that reaches our URL through `bid` is granted it at `new_home` (the
+         seeder's roles already are; this carries over one an operator added);
+      2. the grants on `bid` the baseline does not make are deactivated, since after step 3
+         they would reach the baseline's URL;
+      3. the row becomes the baseline's own again;
+      4. the baseline's grants on `bid` are made active: created from the baseline's own
+         rows, or reactivated. digit-mcp's access floor skips a (role, action) pair that
+         exists at all, so an inactive pair would stay off for good.
+    The baseline's rows are written as digit-mcp writes them, {tenantid} filled in.
+    Returns (rows written, None), or (rows written, why it stopped)."""
+    on_b = []
+    for rec in grants:
+        data = rec.get("data") or {}
+        if _action_id({"id": data.get("actionid")}) == bid:
+            on_b.append((rec, str(data.get("rolecode") or ""), _active(rec)))
+    written = 0
+    for _rec, role, active in on_b:
+        if active and role in roles_here:
+            r = create_row(tok, ROLEACTION_SCHEMA, {"rolecode": role, "actionid": new_home,
+                                                    "actioncode": "", "tenantId": TENANT})
+            if r not in ("created", "dup"):
+                return written, "could not grant %s on action %d (%s)" % (role, new_home, r)
+            written += r == "created"
+    for rec, role, active in on_b:
+        if active and role not in base["roles"]:
+            r = update_record(tok, ROLEACTION_SCHEMA, rec, is_active=False)
+            if r != "updated":
+                return written, "could not deactivate %s's grant on action %d (%s)" % (role, bid, r)
+            written += 1
+    r = update_record(tok, ACTION_SCHEMA, record, data=_for_tenant(base["data"], TENANT), is_active=True)
+    if r != "updated":
+        return written, "could not rewrite action %d (%s)" % (bid, r)
+    written += 1
+    have = {role: (rec, active) for rec, role, active in on_b}
+    for role in base["roles"]:
+        if role not in roles_here:
+            continue
+        if role in have:
+            rec, active = have[role]
+            r = "updated" if active else update_record(tok, ROLEACTION_SCHEMA, rec, is_active=True)
+            written += not active and r == "updated"
+        else:
+            row = base.get("grants", {}).get(role) or {"rolecode": role, "actionid": bid,
+                                                       "actioncode": "", "tenantId": "{tenantid}"}
+            r = create_row(tok, ROLEACTION_SCHEMA, _for_tenant(row, TENANT))
+            written += r == "created"
+            r = "updated" if r in ("created", "dup") else r
+        if r != "updated":
+            return written, "could not grant %s on action %d (%s)" % (role, bid, r)
+    return written, None
+
+
 def seed_access_control(tok):
-    """Upsert the notification actions + roleactions. Returns (created, dup, failed).
+    """Upsert the notification actions + roleactions. Returns (created, dup, failed), where
+    `created` counts every access-control row created or changed (each needs the
+    egov-accesscontrol restart).
 
     A role-action is written only for a role the tenant HAS. roleactions' x-ref-schema
     validates rolecode against the tenant's ACCESSCONTROL-ROLES.roles, so a grant to a role
@@ -1244,6 +1559,17 @@ def seed_access_control(tok):
     is its own and this does not invent roles, so those grants are skipped and listed
     (ACL-ROLES-ABSENT). An action row, or a role-action for a role the tenant has, still
     fails the phase.
+
+    Each action goes where plan_notif_actions puts it, so the grants follow the URL. Until
+    2026-10 the action was created at its fixed id unconditionally; a tenant that already
+    used the id for another URL read that as "already present" and got these grants on the
+    other URL (bomet `ke`, deploy of 2026-10-19). Those grants are listed (ACL-STALE-GRANT),
+    not removed: the tenant may have made the same grant itself.
+
+    Reads: the actions master in one page (see PAGE), plus one exact lookup per URL the plan
+    would CREATE (none on a tenant that is already seeded), one lookup of the old grants on
+    a tenant whose fixed ids hold other URLs, and the role-actions master only when an id
+    has to be handed back to the platform baseline.
     """
     created = dup = failed = 0
     for schema in (ACTION_SCHEMA, ROLEACTION_SCHEMA, ROLES_SCHEMA):
@@ -1265,14 +1591,75 @@ def seed_access_control(tok):
         print("  access-control: could not read %s at %s — nothing written (cannot tell "
               "which role-actions this tenant can hold)" % (ROLES_SCHEMA, TENANT))
         return 0, 0, 1
+    existing = search_rows(tok, ACTION_SCHEMA)
+    if existing is None:
+        print("  access-control: could not read %s at %s — nothing written (cannot tell "
+              "which action ids are free)" % (ACTION_SCHEMA, TENANT))
+        return 0, 0, 1
     absent = ACL_ROLES_ABSENT  # role -> [action id, ...] not granted: the tenant lacks the role
     absent.clear()
+    baseline = platform_baseline_actions()
+    if baseline is None:
+        print("  access-control: no platform baseline at %r — ids it defines for other URLs "
+              "are not recognised" % PLATFORM_BASELINE_FILE)
+    reserved = {aid: b["url"] for aid, b in (baseline or {}).items()}
 
-    for aid, url, name, enabled, disp, svc, roles in NOTIF_ACTIONS:
-        action = {"id": aid, "url": url, "code": "null", "name": name, "path": "",
-                  "enabled": enabled, "displayName": disp, "orderNumber": 0,
-                  "serviceCode": svc, "parentModule": ""}
-        r = create_row(tok, ACTION_SCHEMA, action)
+    # Never create an action from the paged read alone: it can miss rows (see PAGE). Each URL
+    # the plan would create is looked up exactly first, so one that exists (deactivated, or
+    # moved by an earlier run) is found and kept, never created a second time, active.
+    records = list(existing)
+    plan = plan_notif_actions(_record_rows(records), reserved)
+    unread, seen = set(), {rec.get("uniqueIdentifier") for rec in records}
+    for (_fixed, url, *_), (_aid, create, _held, _act) in zip(NOTIF_ACTIONS, plan):
+        if not create:
+            continue
+        found = lookup_rows(tok, ACTION_SCHEMA, {"filters": {"url": url}})
+        if found is None:
+            unread.add(url)
+        for rec in found or []:
+            if rec.get("uniqueIdentifier") not in seen:
+                seen.add(rec.get("uniqueIdentifier"))
+                records.append(rec)
+    rows = _record_rows(records)
+    plan = plan_notif_actions(rows, reserved)
+    spare = max([RELOCATED_ACTION_ID_FLOOR] + [p[0] for p in plan]
+                + [a for a in (_action_id(data) for data, _ in rows) if a is not None]) + 1
+
+    home = {}
+    for (fixed, url, name, enabled, disp, svc, roles), (aid, create, held_by, active) in zip(
+            NOTIF_ACTIONS, plan):
+        if url in unread:
+            print("  ! access-control: could not look %s up at %s — nothing created or granted "
+                  "for it" % (url, TENANT))
+            failed += 1
+            continue
+        if held_by is not None:
+            print("ACL-ID-COLLISION: action %d is %s at %s, not %s — creating it as action %d"
+                  % (fixed, held_by or "(no url)", TENANT, url, aid))
+        elif aid != fixed:
+            print("  access-control: %s is already action %d at %s (not %d) — granting that one"
+                  % (url, aid, TENANT, fixed))
+        if create:
+            action = {"id": aid, "url": url, "code": "null", "name": name, "path": "",
+                      "enabled": enabled, "displayName": disp, "orderNumber": 0,
+                      "serviceCode": svc, "parentModule": ""}
+            r, aid, active, spare = place_action(tok, action, active, spare)
+            if r == "taken":
+                print("ACL-ID-TAKEN: no free action id for %s at %s after %d attempts — no "
+                      "role-action granted for it (docs/releases/2.20/notifications/"
+                      "migration.md#access-control-actions)" % (url, TENANT, MAX_ID_ATTEMPTS))
+                failed += 1
+                continue
+        else:
+            r = "dup"
+        if not active:
+            # Someone deactivated it. The grants below still go to it (re-creating it active
+            # would override that), but egov-accesscontrol loads active rows only, so requests
+            # to it (the data phase's writes, the Notifications screens) stay 403 however often
+            # it is restarted. Say so, or the failure reads as a missing MDMS_ADMIN.
+            print("ACL-ACTION-INACTIVE: %s is action %d at %s and it is INACTIVE — requests "
+                  "to it stay refused (403) until it is reactivated" % (url, aid, TENANT))
+        home[url] = aid
         created += (r == "created"); dup += (r == "dup"); failed += r in ("failed", "forbidden")
         for role in roles:
             if role not in roles_here:
@@ -1288,6 +1675,51 @@ def seed_access_control(tok):
               % (TENANT, ", ".join(sorted(absent)), sum(len(v) for v in absent.values()),
                  "; ".join("%s: %s" % (r, ",".join(str(a) for a in ids))
                            for r, ids in sorted(absent.items()))))
+
+    colliding = foreign_fixed_ids(rows)
+    foreign = {fixed: (holder, url) for fixed, holder, url, _roles in colliding}
+    if foreign:
+        uids = ["%s.%d" % (role, fixed) for fixed, _holder, _ours, roles in colliding for role in roles]
+        found = lookup_rows(tok, ROLEACTION_SCHEMA, {"uniqueIdentifiers": uids})
+        if found is None:
+            print("  access-control: could not read %s at %s — old grants on ids that hold "
+                  "other URLs were not checked" % (ROLEACTION_SCHEMA, TENANT))
+        for rec in found or []:
+            data = rec.get("data") or {}
+            aid = _action_id({"id": data.get("actionid")})
+            if aid in foreign and set(data) == SEEDED_GRANT_FIELDS and _active(rec):
+                holder, url = foreign[aid]
+                print("ACL-STALE-GRANT: %s is granted action %d at %s, which is %s, not %s — "
+                      "the grant a build before #2603 wrote there. If %s should not reach %s, "
+                      "deactivate it and restart egov-accesscontrol (docs/releases/2.20/"
+                      "notifications/migration.md#access-control-actions)"
+                      % (data.get("rolecode"), aid, TENANT, holder or "(no url)", url,
+                         data.get("rolecode"), holder or "it"))
+
+    grants = None
+    for rec, bid, url in baseline_ids_to_give_back(records, reserved):
+        new_home = home.get(url)
+        if new_home is None or new_home == bid:
+            print("ACL-BASELINE-ID-KEPT: action %d at %s is %s, but the platform baseline "
+                  "defines %d as %s; %s has no other action yet, so %d was left as it is"
+                  % (bid, TENANT, url, bid, reserved[bid], url, bid))
+            continue
+        if grants is None:
+            grants = search_rows(tok, ROLEACTION_SCHEMA)
+        why = "could not read %s" % ROLEACTION_SCHEMA
+        if grants is not None:
+            written, why = give_back_baseline_id(tok, rec, bid, new_home, baseline[bid], grants,
+                                                 roles_here)
+            created += written
+        if why:
+            print("ACL-BASELINE-ID-KEPT: action %d at %s still holds %s (now action %d too), "
+                  "not the platform baseline's %s: %s. Re-run `--tags notifications`; the "
+                  "manual steps are in docs/releases/2.20/notifications/migration.md"
+                  "#access-control-actions" % (bid, TENANT, url, new_home, reserved[bid], why))
+        else:
+            print("ACL-BASELINE-ID-RETURNED: action %d at %s is %s again, as the platform "
+                  "baseline defines it; %s is action %d" % (bid, TENANT, reserved[bid], url,
+                                                            new_home))
     return created, dup, failed
 
 
@@ -1373,7 +1805,7 @@ def run_access_phase(tok):
         return 0, 0, 0
     created, dup, failed = seed_access_control(tok)
     skipped = sum(len(ids) for ids in ACL_ROLES_ABSENT.values())
-    print("  access-control  +%d created, %d already-present, %d FAILED, %d skipped (role absent) "
+    print("  access-control  +%d created or changed, %d already-present, %d FAILED, %d skipped (role absent) "
           "(%d actions, %d roleactions)"
           % (created, dup, failed, skipped, len(NOTIF_ACTIONS),
              sum(len(a[6]) for a in NOTIF_ACTIONS)))
@@ -1381,7 +1813,7 @@ def run_access_phase(tok):
         # egov-accesscontrol caches role-actions in memory: new rows are invisible until
         # it restarts. The playbook greps for this marker and restarts it before running
         # the data phase.
-        print("ACL-CHANGED: %d access-control row(s) created — restart egov-accesscontrol"
+        print("ACL-CHANGED: %d access-control row(s) created or changed — restart egov-accesscontrol"
               % created)
     return created, dup, failed
 

@@ -91,7 +91,9 @@ key into `/opt/digit/.env`; creates the Novu workflows `complaints-sms`,
 `complaints-whatsapp`, `complaints-email`; creates the Kafka topics
 ([kafka-events.md](./kafka-events.md)); grants the access-control actions (restarting
 `egov-accesscontrol` when it added any; a role the tenant does not have gets no grant and is
-listed as `ACL-ROLES-ABSENT`, which is not a failure) and then seeds the `NOTIFICATIONS.*`
+listed as `ACL-ROLES-ABSENT`, and an action whose usual id is already another endpoint's at the
+tenant is created at a free id instead, `ACL-ID-COLLISION`: neither is a failure,
+[migration.md](./migration.md#access-control-actions)) and then seeds the `NOTIFICATIONS.*`
 masters. A tenant
 with no channel rows gets one row per channel, **on only if `novu_bridge_channels_enabled` lists
 it** (unset: all three off) and with no provider selected; a tenant that has rows keeps them
@@ -435,6 +437,8 @@ Checklist:
 | WhatsApp rows skipped | `NB_TEMPLATE_NOT_APPROVED` | [§5.5](#55-whatsapp-provider-templates) |
 | `SENT` but nothing arrives | Gateway dropped it later | Gateway's own delivery report: sender id, DLT template, barred number; email: spam, SPF/DKIM |
 | 403 saving in Configurator | Missing MDMS role, or access-control rows never seeded, or a truncated tenant bootstrap | Hold `MDMS_ADMIN`/`ACCOUNT_ADMIN`/`SUPERUSER`; if everyone gets 403: `./deploy.sh mycity --tags notifications`. If the deploy printed `master-repair — ACTION` (the tenant has exactly 500 role-actions), read the `master-repair — result` rows, then `./deploy.sh mycity -e repair_tenant_masters=true --tags master-repair,notifications` |
+| The deploy fails at `notif-seed — fail: state_root could not be seeded` and names `ACL-ID-TAKEN` or `ACL-ACTION-INACTIVE` | No free id for a notification action after five tries, or a notification action the data phase needs is deactivated at that tenant | [migration.md: Access-control actions](./migration.md#access-control-actions) |
+| 403 on every Notifications save after a 2.20 deploy failed with a 403 on `RAINMAKER-PGR.NotificationChannel` | The tenant's own actions already used ids 4623–4639; a 2.20 build older than [#2603](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/2603) granted the notification roles to those other endpoints | Redeploy (`--tags notifications`); review the `ACL-STALE-GRANT` lines it prints under `notif-seed — WARNING: access-control rows to review` and deactivate the grants that should not be there ([migration.md](./migration.md#access-control-actions)) |
 | "This needs one of these roles held at a state tenant…" (`NB_ADMIN_ROLE_REQUIRED`) | No admin role, or one held only at a city | Be granted one at the state tenant |
 | `403 NB_TENANT_NOT_ALLOWED` on Logs, or on Disable / Delete | Looking at another state's tenant, or managing a provider for a state you are not an admin of | Log in at the tenant you mean |
 | `403 NB_TENANT_NOT_ALLOWED` on any provider action, as an admin of your own state | Your state does not own the deployment's providers (it is not `state_root`, and not in `novu_bridge_provider_admin_tenants`) | Add it to `novu_bridge_provider_admin_tenants` and redeploy, or use an admin of `state_root` |
