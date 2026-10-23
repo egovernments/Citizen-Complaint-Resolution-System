@@ -24,9 +24,17 @@ test.describe('employee account — confirm it is you before an account action #
     await loginViaApi(page, { tenant: TENANT, username: ADMIN_USER, password: ADMIN_PASS });
     await page.goto(`${BASE_URL}${surfacePath('employee', 'user/account')}?cb=${Date.now()}`);
     await expect(page.getByRole('heading', { name: /account and security/i })).toBeVisible({ timeout: 15_000 });
-    // IdentityAccount.js ACTIONS.UPDATE_PASSWORD; absent where the realm does not offer the action.
+    // IdentityAccount.js renders the h1 at once but the buttons only after the
+    // session (account.actions) loads, so never decide on the button before that.
+    // account.actions comes from the surface client's digit.auth.account.actions.
+    const session = await page.request.get(`${BASE_URL}/identity/v1/session?surface=employee&include=account`);
+    expect(session.ok(), 'identity session with account metadata').toBe(true);
+    const actions: string[] = (await session.json()).account?.actions ?? [];
+    // Configured but not rendered, or not configured at all, is a failure: this
+    // test exists to prove the confirmation, so it must not skip.
+    expect(actions, 'the employee surface must offer UPDATE_PASSWORD (digit.auth.account.actions)').toContain('UPDATE_PASSWORD');
     const passwordButton = page.getByRole('button', { name: /set or update password/i });
-    test.skip(!(await passwordButton.isVisible()), 'UPDATE_PASSWORD is not offered on this deployment');
+    await passwordButton.waitFor({ timeout: 15_000 });
     await passwordButton.click();
     await expect(page.locator('#kc-page-title')).toContainText(/confirm it.s you/i, { timeout: 30_000 });
   }
