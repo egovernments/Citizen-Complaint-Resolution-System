@@ -1,10 +1,13 @@
 /**
  * A sign-in the browser no longer holds offers a way back to a sign-in (#2644).
  *
- * Two tabs of one browser: tab A holds the employee sign-in page; tab B
- * finishes a password reset the way the Configurator's "Set up or reset your
- * password" does (BFF password/setup-requests, an UPDATE_PASSWORD email for the
- * BFF client), which replaces the browser's Keycloak session. Tab A's form post then hits Keycloak's lost-session error.
+ * One browser: tab A holds the employee sign-in page; the same browser's
+ * cookies (context.request) then finish a password reset the way the
+ * Configurator's "Set up or reset your password" does (BFF
+ * password/setup-requests, an UPDATE_PASSWORD email for the BFF client, whose
+ * link opens on Keycloak's "click here to proceed" info page), which replaces
+ * the browser's Keycloak session. Tab A's form post then hits Keycloak's
+ * lost-session error.
  * It must say "Start sign-in again" and lead to the workspace's own sign-in,
  * not to "Back to Application" at the site root.
  *
@@ -17,7 +20,7 @@ import { test, expect } from '@playwright/test';
 import { BASE_URL, KC_REALM } from '../utils/env';
 import { authorizeUrl, surfacePath } from '../utils/identity-bff';
 import { keycloakAdmin } from '../utils/keycloak-admin';
-import { mailedLink } from '../utils/workspace-setup';
+import { activateAccount, mailedLink } from '../utils/workspace-setup';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
@@ -55,18 +58,14 @@ test.describe('lost employee sign-in restarts at the workspace sign-in #2644', (
     await tabA.goto(authorizeUrl(BASE_URL, 'employee'));
     await expect(tabA.locator('#username')).toBeVisible();
 
-    // Tab B: the emailed password-setup link, opened in the same browser.
-    const tabB = await context.newPage();
+    // The emailed password-setup link, followed with this browser's cookies
+    // (info page, proceed, new password), as a second tab would.
     const requested = await context.request.post(`${BASE_URL}/identity/v1/password/setup-requests`, {
       headers: { Origin: new URL(BASE_URL).origin },
       data: { email, surface: 'configurator', returnTo: '/configurator/login' },
     });
     expect(requested.status()).toBe(202);
-    await tabB.goto((await mailedLink(email)).link);
-    await tabB.locator('#password-new').fill(replacement);
-    await tabB.locator('#password-confirm').fill(replacement);
-    await tabB.locator('form button[type="submit"]').first().click();
-    await tabB.close();
+    await activateAccount(context.request, (await mailedLink(email)).link, replacement);
 
     // Tab A: the first sign-in page is submitted after its session is gone.
     await tabA.locator('#username').fill(email);
