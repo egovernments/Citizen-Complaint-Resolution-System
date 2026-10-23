@@ -55,7 +55,12 @@ public class WorkspaceGateway {
     private boolean probe(Reads reads,String step) {
         String tenant=reads.tenant;
         switch(step) {
-            case "BRANDING": return !tenant(tenant).path("data").path("imageId").asText("").isBlank();
+            case "BRANDING": {
+                // A saved theme completes Branding; the logo (imageId) is optional.
+                if(!tenant(tenant).path("data").path("imageId").asText("").isBlank())return true;
+                for(JsonNode row:mdms.records(tenant,"common-masters.ThemeConfig",null)) if(ownedActive(row,tenant))return true;
+                return false;
+            }
             case "DEPARTMENTS": {
                 if(departments(tenant).isEmpty())return false;
                 for(JsonNode row:mdms.records(tenant,"common-masters.Designation",null)) if(ownedActive(row,tenant) && !code(row).isBlank() && !"ONBOARDING_FOUNDER".equals(code(row)))return true;

@@ -293,12 +293,13 @@ export function BrandingEditor({ mode }: { mode: 'onboarding' | 'console' }) {
       setLogo(null);
       setBanner(null);
       announceOrganisation({ name: saved.name, logoUrl: saved.logoUrl });
-      // PGR marks Branding done only once the tenant has a logo (imageId); without
-      // one the step is recorded as skipped, which completes it all the same. A logo
-      // this save uploaded or removed decides it rather than the re-read, which
-      // mdms-v2's persister may not have caught up with yet.
+      // A saved theme is what makes Branding done; the logo is optional. Only a
+      // save with no theme and no logo is recorded as skipped. A logo this save
+      // uploaded or removed decides it rather than the re-read, which mdms-v2's
+      // persister may not have caught up with yet.
       const hasLogo = logo ? logo.kind === 'upload' : !!saved.tenantRecord.data.imageId;
-      if (!await completePhase(STEP.number, !hasLogo)) {
+      const hasTheme = !!theme || !!saved.themeRecord;
+      if (!await completePhase(STEP.number, !(hasTheme || hasLogo))) {
         setSaveFailed(true);
         return;
       }
