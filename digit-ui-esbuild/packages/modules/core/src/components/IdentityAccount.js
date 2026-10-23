@@ -252,9 +252,15 @@ const IdentityAccount = ({ surface }) => {
       {tr("CORE_IDENTITY_UNLINK_PROVIDER", "Unlink provider")}: {provider.alias}
     </Button>),
   ] : [];
-  // Starts where other pages start (24px in from the menu), not centred in
-  // the space beside it.
-  return <main className="v2-scope" style={{ width: "100%", maxWidth: "768px", margin: "24px 0", padding: "0 24px", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: "20px" }} aria-busy={busy}>
+  // The employee `/user/*` routes render in the Edit Profile shell
+  // (`.grounded-container`, overrides.css block 63), which owns the side
+  // gutters and centres each direct child at 880px but leaves the top under
+  // the fixed header; so the page clears the header itself and keeps one
+  // full-width column child, as Edit Profile does. Centring the cards one by
+  // one is what gave them different widths. The citizen shell clears the
+  // header already, and the column sits where its other pages start.
+  return <main className="v2-scope" style={{ width: "100%", padding: surface === "employee" ? "88px 24px 24px" : "24px", boxSizing: "border-box" }} aria-busy={busy}>
+    <div style={{ width: "100%", maxWidth: "880px", display: "flex", flexDirection: "column", gap: "20px" }}>
     <h1 style={{ margin: 0, fontSize: "1.5rem", fontWeight: 700, color: "var(--color-text-heading, var(--color-text-primary, #0B0C0C))" }}>{tr("CORE_IDENTITY_ACCOUNT", "Account and security")}</h1>
     {message && <p role="status" style={{ margin: 0 }}>{message}</p>}
     {!session && <div><Button type="button" disabled={busy} onClick={() => run(refresh)}>{tr("CORE_IDENTITY_TRY_AGAIN", "Try again")}</Button></div>}
@@ -282,6 +288,7 @@ const IdentityAccount = ({ surface }) => {
         </div>
       </Card>
     </>}
+    </div>
   </main>;
 };
 
