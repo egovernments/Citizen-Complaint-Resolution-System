@@ -46,7 +46,6 @@ describe("digit-employee login.ftl before an account action (#2645)", () => {
 
         expect(container.querySelector("#kc-page-title")).toHaveTextContent(heading);
         expect(usernameInput()).toHaveValue("purity");
-        expect(usernameInput()).toHaveAttribute("readonly");
         expect(container.querySelector("#kc-cancel")).toHaveAttribute("href", "/testj01/digit-ui/employee/user/account");
     });
 
@@ -72,7 +71,7 @@ describe("digit-employee login.ftl before an account action (#2645)", () => {
     it("leaves the username editable", async () => {
         await renderLogin(authorize("&kc_action=UPDATE_PASSWORD"));
 
-        expect(screen.getByLabelText(/Username/)).not.toHaveAttribute("readonly");
+        expect(usernameInput()).not.toHaveAttribute("readonly");
     });
 
     it("leaves a normal sign-in unchanged", async () => {

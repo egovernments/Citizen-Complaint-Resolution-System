@@ -89,7 +89,7 @@ function rememberedPerTab(
     const key = tabId === undefined || storage === undefined ? undefined : prefix + tabId;
     try {
         if (isValid(candidate)) {
-            if (key !== undefined) storage?.setItem(key, candidate);
+            if (key !== undefined) storage!.setItem(key, candidate);
             return candidate;
         }
         const stored = key === undefined ? null : storage?.getItem(key);

@@ -17,11 +17,11 @@ import { employeeReturnTo, requestPasswordSetup } from "../../shared/passwordHel
 const NO_POLICY: PrivacyPolicy = { contents: [] };
 
 /** Headings for the password check Keycloak runs before an account action (#2645). */
-const CONFIRM_HEADINGS: Record<string, LoginMessageKey> = {
-    UPDATE_PASSWORD: "CORE_LOGIN_CONFIRM_UPDATE_PASSWORD",
-    CONFIGURE_TOTP: "CORE_LOGIN_CONFIRM_CONFIGURE_TOTP",
-    UPDATE_EMAIL: "CORE_LOGIN_CONFIRM_UPDATE_EMAIL"
-};
+const CONFIRM_HEADINGS = new Map<string, LoginMessageKey>([
+    ["UPDATE_PASSWORD", "CORE_LOGIN_CONFIRM_UPDATE_PASSWORD"],
+    ["CONFIGURE_TOTP", "CORE_LOGIN_CONFIRM_CONFIGURE_TOTP"],
+    ["UPDATE_EMAIL", "CORE_LOGIN_CONFIRM_UPDATE_EMAIL"]
+]);
 
 type LoginTexts = { header?: string; submitButtonLabel?: string; secondaryButtonLabel?: string };
 
@@ -96,9 +96,7 @@ export default function Login(props: DigitPageProps<Extract<KcContext, { pageId:
             displayMessage={!invalidCredentials}
             headerNode={
                 confirming
-                    ? digit.t(
-                          Object.hasOwn(CONFIRM_HEADINGS, accountAction) ? CONFIRM_HEADINGS[accountAction] : "CORE_LOGIN_CONFIRM_ACTION"
-                      )
+                    ? digit.t(CONFIRM_HEADINGS.get(accountAction) ?? "CORE_LOGIN_CONFIRM_ACTION")
                     : digit.tr(texts.header, digit.t("CORE_COMMON_LOGIN"))
             }
             toast={invalidCredentials ? digit.t("INVALID_LOGIN_CREDENTIALS") : undefined}
