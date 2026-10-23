@@ -88,14 +88,19 @@ describe('employee', () => {
 
   it('marks everything it checks before saving, and not the optional roles', () => {
     dialog();
-    for (const label of [/^Employee code/, /^Full name/, /^Mobile number/, /^Email/, /^Designation/]) {
+    for (const label of [/^Employee code/, /^Full name/, /^Mobile number/, /^Email/, /^Department/, /^Designation/]) {
       const { control, marked } = field(label);
       expect(marked, String(label)).toBe(true);
       expect(control, String(label)).toHaveAttribute('aria-required', 'true');
     }
-    expect(group(/^Departments/)).toBe(true);
     expect(group(/^Jurisdictions/)).toBe(true);
     expect(group(/^System roles/)).toBe(false);
+  });
+
+  it('says to add departments first when none can be picked', () => {
+    dialog({ options: { ...options, departments: [] } });
+    expect(screen.getByText('Add departments first.')).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: /^Department/ })).toBeNull();
   });
 
   it('drops the mark from what is read-only while editing', () => {

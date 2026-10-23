@@ -40,7 +40,7 @@ export interface NewEmployee {
   name: string;
   mobileNumber: string;
   emailId?: string;
-  departments: string[];
+  department: string;
   designation: string;
   roles: string[];
   jurisdictions: string[];
@@ -201,8 +201,7 @@ export async function addEmployee(tenantId: string, input: NewEmployee, options:
     userName: input.code,
     mobileNumber: input.mobileNumber,
     emailId: requiredEmail(input.emailId),
-    // buildEmployee makes the first the current assignment and the rest history.
-    department: input.departments.join(','),
+    department: input.department,
     designation: input.designation,
     roles: input.roles.map((code) => ({ code, name: roleByCode.get(code)?.name ?? code })),
     jurisdictions: input.jurisdictions.map((code) => {
