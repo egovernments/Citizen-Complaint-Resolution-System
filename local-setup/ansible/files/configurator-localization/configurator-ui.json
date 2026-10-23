@@ -6312,6 +6312,12 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.bulk_employees.got_account_email",
+    "message": "User account (sign in with email)",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.bulk_employees.got_email",
     "message": "New employees receive a secure password setup email.",
     "module": "configurator-ui",
@@ -8048,6 +8054,12 @@
   {
     "code": "app.onboarding.employees.signs_in_as",
     "message": "They sign in as %{username}.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.employees.signs_in_with_email",
+    "message": "They sign in with %{email}.",
     "module": "configurator-ui",
     "locale": "en_IN"
   },

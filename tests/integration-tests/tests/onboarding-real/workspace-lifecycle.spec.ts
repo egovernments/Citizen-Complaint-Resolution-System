@@ -1,5 +1,5 @@
-import { test, expect, request as playwright, type APIRequestContext } from '@playwright/test';
-import { citizenSignIn, identityJson, selectContext } from '../utils/identity-bff';
+import { test, expect, chromium, request as playwright, type APIRequestContext } from '@playwright/test';
+import { authorizeUrl, citizenSignIn, hostedSignIn, identityJson, selectContext } from '../utils/identity-bff';
 import {
   BOUNDARIES, COMPLAINT_TYPES, DEPARTMENTS, DESIGNATION, Digit, act, activateAccount, allowing, baseURL, brandingStep, commandOtp,
   complaint, complaintTypesStep, departmentsStep, downloadEmployeeTemplate, emailDomain, employeeSignIn, fileComplaint, geographyStep, hireAndLink, history,
@@ -127,6 +127,36 @@ test('signup -> workspace DONE -> complaint lifecycle -> member removal on a fre
       lme = await staffSession('lme');
       expect(gro.digit.user.roles as Array<{ code: string }>).toEqual(expect.arrayContaining([expect.objectContaining({ code: 'GRO' })]));
       expect(lme.digit.user.roles as Array<{ code: string }>).toEqual(expect.arrayContaining([expect.objectContaining({ code: 'PGR_LME' })]));
+    });
+
+    await test.step('4b. #2646: an onboarded employee signs out and signs in again with their email', async () => {
+      const member = staff.find(m => m.key === 'gro-water')!;
+      // Launched here, not through the `browser` fixture, so an unset gate never needs a browser.
+      const browser = await chromium.launch();
+      const context = await browser.newContext({ ignoreHTTPSErrors: process.env.ONBOARDING_E2E_IGNORE_HTTPS_ERRORS === '1' });
+      try {
+        const page = await context.newPage();
+        const signIn = () => hostedSignIn(page, { baseURL: base, surface: 'employee', tenantSlug: slug, username: member.email, password: passwords.get(member.key)! });
+        await signIn();
+        const logout = await page.request.post(`${base}/identity/v1/logout`, { headers: { Origin: new URL(base).origin }, data: { surface: 'employee', scope: 'current' } });
+        expect(logout.status()).toBe(204);
+        expect((await page.request.get(`${base}/identity/v1/session?surface=employee`)).status()).toBe(401);
+        // The hosted form asks for the email, not for a user name or the employee code.
+        await page.goto(authorizeUrl(base, 'employee', 'password', slug));
+        await expect(page.locator('label[for="username"]'), 'login field is labelled Email').toHaveText(/^Email\s*\*?$/);
+        await expect(page.locator('label[for="username"]')).not.toContainText(/user\s*name/i);
+        // A value without "@" (the employee code) draws the hint; the email does not.
+        await page.locator('#username').fill(member.code);
+        await expect(page.getByRole('note').filter({ hasText: /email/i }), 'hint for a value without @').toBeVisible();
+        await page.locator('#username').fill(member.email);
+        await expect(page.getByRole('note').filter({ hasText: /email/i })).toHaveCount(0);
+        await signIn();
+        const session = await identityJson<{ authenticated: boolean }>(await page.request.get(`${base}/identity/v1/session?surface=employee`));
+        expect(session.authenticated).toBe(true);
+      } finally {
+        await context.close();
+        await browser.close();
+      }
     });
 
     await test.step('5. citizen OTP sign-in at /{slug}/ and files a complaint', async () => {

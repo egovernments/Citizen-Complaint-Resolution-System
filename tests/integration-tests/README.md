@@ -193,7 +193,9 @@ against a real stack, at API level through the public origin:
    and is never activated), Complaint types (2 leaves
    with department and SLA). Every step is marked DONE and the workspace ends
    `DONE` with every probe true. The labels the steps wrote resolve for `en_IN`.
-4. GRO and LME sign in through Keycloak; a citizen signs in by OTP at `/{slug}/`
+4. GRO and LME sign in through Keycloak with their email (#2646); in a
+   browser the water GRO signs out and back in, and the login field reads
+   "Email" (needs `npx playwright install chromium`). A citizen signs in by OTP at `/{slug}/`
    and files a complaint.
 5. The GRO sees it in the TEAM inbox and assigns it, the LME sees it in the MINE
    inbox and resolves it, the citizen rates and closes it, and the workflow
