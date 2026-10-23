@@ -184,9 +184,15 @@ export async function saveBranding(
       colors: changes.theme.colors,
     };
     try {
+      // A theme the state soft-deleted still holds its uniqueIdentifier, so a create is refused
+      // DUPLICATE_RECORD; that row is brought back (update writes isActive: true) instead.
+      const deleted = themeRecord ? null : (await mdmsService.searchRecords(stateRoot, THEME_SCHEMA).catch(() => [] as MdmsRecord[]))
+        .find((r) => r.tenantId === stateRoot && r.uniqueIdentifier === THEME_UID && r.isActive === false) ?? null;
       themeRecord = themeRecord
         ? await mdmsService.update(themeRecord, themeData)
-        : await mdmsService.create(stateRoot, THEME_SCHEMA, THEME_UID, themeData);
+        : deleted
+          ? await mdmsService.update(deleted, themeData)
+          : await mdmsService.create(stateRoot, THEME_SCHEMA, THEME_UID, themeData);
     } catch (err) {
       throw new ThemeSaveError(await loadBranding(tenantId).catch(() => savedSoFar), err);
     }
