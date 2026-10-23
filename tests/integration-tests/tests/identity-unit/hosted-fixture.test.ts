@@ -202,7 +202,7 @@ for (const split of [false, true]) {
   }));
 }
 
-test('a token is selected on the employee surface unless the caller asks for the Configurator', async () => fixture({ staffOnly: true, result: 'complete' }, async (_page, base, state) => {
+test('a token is selected on the employee surface unless the caller asks for the Configurator', async () => fixture({ staffOnly: true }, async (_page, base, state) => {
   assert.equal((await token(base, 'fixture-password')).access_token, 'fixture-token');
   assert.deepEqual(state.surfaces, ['employee']);
   await assert.rejects(
