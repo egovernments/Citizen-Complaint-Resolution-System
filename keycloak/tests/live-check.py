@@ -421,14 +421,11 @@ def _():
     assert SignIn().password("emp-nameless", "Changed-pass-2").done
 
 
-@check("#2645 UPDATE_PASSWORD as the BFF asks for it: prefilled password check, then the action")
+@check("#2645 UPDATE_PASSWORD as the BFF asks for it: password check, then the action")
 def _():
     create_user("emp-reauth", "reauth@example.test")
-    # The identity BFF's action request: prompt=login and login_hint (#2645).
-    signin = SignIn(kc_action="UPDATE_PASSWORD", prompt="login", login_hint="emp-reauth",
-                    digit_tenant="bomet-county")
-    _, fields = signin.page.form("username", "password")
-    assert fields["username"] == "emp-reauth", f"username not prefilled from login_hint: {fields}"
+    # The identity BFF's action request: prompt=login and kc_action, no hint (#2645).
+    signin = SignIn(kc_action="UPDATE_PASSWORD", prompt="login", digit_tenant="bomet-county")
     signin.password("emp-reauth")
     signin.submit(("password-new", "password-confirm"),
                   {"password-new": "Reauth-pass-2", "password-confirm": "Reauth-pass-2"})

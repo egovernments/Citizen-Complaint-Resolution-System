@@ -41,8 +41,8 @@ describe("digit-employee login.ftl before an account action (#2645)", () => {
         ["CONFIGURE_TOTP", "Confirm it's you to set up an authenticator"],
         ["UPDATE_EMAIL", "Confirm it's you to change your email"],
         ["delete_credential:otp-1", "Confirm it's you to continue"]
-    ])("%s: says it is a confirmation, for the signed-in person, with a way back", async (action, heading) => {
-        const { container } = await renderLogin(authorize(`&kc_action=${action}&login_hint=purity`), "purity");
+    ])("%s: says it is a confirmation, with a way back", async (action, heading) => {
+        const { container } = await renderLogin(authorize(`&kc_action=${action}`), "purity");
 
         expect(container.querySelector("#kc-page-title")).toHaveTextContent(heading);
         expect(usernameInput()).toHaveValue("purity");
@@ -51,7 +51,7 @@ describe("digit-employee login.ftl before an account action (#2645)", () => {
     });
 
     it("stays the confirmation on the page after a wrong password", async () => {
-        const first = await renderLogin(authorize("&kc_action=UPDATE_PASSWORD&login_hint=purity"), "purity");
+        const first = await renderLogin(authorize("&kc_action=UPDATE_PASSWORD"), "purity");
         first.unmount();
         // Keycloak re-renders the form from its own action URL, without kc_action.
         const { container } = await renderLogin(LOGIN_ACTION, "purity");
@@ -60,10 +60,19 @@ describe("digit-employee login.ftl before an account action (#2645)", () => {
         expect(container.querySelector("#kc-cancel")).not.toBeNull();
     });
 
-    it("leaves the username editable when Keycloak had no hint to fill in", async () => {
+    it.each(["constructor", "__proto__", "toString", "valueOf", "hasOwnProperty"])(
+        "%s: an inherited object member is not a heading; the plain confirmation shows",
+        async action => {
+            const { container } = await renderLogin(authorize(`&kc_action=${action}`));
+
+            expect(container.querySelector("#kc-page-title")).toHaveTextContent("Confirm it's you to continue");
+        }
+    );
+
+    it("leaves the username editable", async () => {
         await renderLogin(authorize("&kc_action=UPDATE_PASSWORD"));
 
-        expect(usernameInput()).not.toHaveAttribute("readonly");
+        expect(screen.getByLabelText(/Username/)).not.toHaveAttribute("readonly");
     });
 
     it("leaves a normal sign-in unchanged", async () => {

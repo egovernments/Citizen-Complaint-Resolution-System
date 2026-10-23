@@ -295,7 +295,6 @@ Starts Authorization Code + PKCE, answering `302` to Keycloak and setting the lo
 
 - `prompt` comes from the surface registry entry, never a literal (item 1).
 - An `action` needs a session on that surface. The attempt stores `{sid, sub, action}`, and the callback refuses a different `sub`.
-- An `action` attempt also sends `login_hint` (the session's `preferred_username`, else its email), so Keycloak's password re-check is prefilled with the signed-in person. Sign-in attempts never send it.
 - Errors: `INVALID_REQUEST`, `UNSUPPORTED_SURFACE`, `UNSUPPORTED_INTENT`, `UNSUPPORTED_METHOD`, `UNSUPPORTED_RETURN_TO`, `ACTION_NOT_ALLOWED` (all 400); `SESSION_REQUIRED` 401; `TENANT_ROUTE_NOT_FOUND` 404; `CREDENTIAL_NOT_SECOND_FACTOR`, `PROVIDER_ALREADY_LINKED` (409); `TENANT_ROUTE_UNAVAILABLE`, `SIGNIN_METHODS_UNAVAILABLE`, `IDENTITY_UNAVAILABLE` (503).
 
 #### 3.2.3 `GET /identity/v1/callback` (items 4, 15)

@@ -46,8 +46,9 @@ function textsOf(loginConfig: unknown): LoginTexts {
  *
  * When the identity BFF sends someone already signed in here to change their
  * password, authenticator or email (`kc_action`), Keycloak first asks for the
- * password again. The card then says so, shows the person it is for
- * (`login_hint`) read-only, and offers a way back to the account page.
+ * password again. The card then says so and offers a way back to the account
+ * page. No username is passed in the URL (it would reach access logs), so the
+ * person types it as for any sign-in.
  */
 export default function Login(props: DigitPageProps<Extract<KcContext, { pageId: "login.ftl" }>>) {
     const { kcContext, i18n, doUseDefaultCss, Template, classes } = props;
@@ -95,7 +96,9 @@ export default function Login(props: DigitPageProps<Extract<KcContext, { pageId:
             displayMessage={!invalidCredentials}
             headerNode={
                 confirming
-                    ? digit.t(CONFIRM_HEADINGS[accountAction] ?? "CORE_LOGIN_CONFIRM_ACTION")
+                    ? digit.t(
+                          Object.hasOwn(CONFIRM_HEADINGS, accountAction) ? CONFIRM_HEADINGS[accountAction] : "CORE_LOGIN_CONFIRM_ACTION"
+                      )
                     : digit.tr(texts.header, digit.t("CORE_COMMON_LOGIN"))
             }
             toast={invalidCredentials ? digit.t("INVALID_LOGIN_CREDENTIALS") : undefined}
@@ -127,8 +130,6 @@ export default function Login(props: DigitPageProps<Extract<KcContext, { pageId:
                             type: "text",
                             autoComplete: "username",
                             value: username,
-                            // The person being confirmed, prefilled from login_hint.
-                            readOnly: confirming && (login.username ?? "") !== "",
                             onChange: event => setUsername(event.target.value)
                         }}
                     />

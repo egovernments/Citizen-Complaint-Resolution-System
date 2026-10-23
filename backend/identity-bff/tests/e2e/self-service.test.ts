@@ -53,13 +53,13 @@ describe("account self-service", () => {
       expect(new URL(response.headers.get("location")!).searchParams.get("kc_action")).toBe(action);
     }
   });
-  it("names the signed-in person to Keycloak on action attempts only (#2645)", async () => {
-    const authorize = async (sessionId: string, query: string) => new URL((await fetch(`${base}/identity/v1/authorize?${query}`, { redirect: "manual", headers: { Cookie: cookie(sessionId) } })).headers.get("location")!).searchParams;
+  it("never puts the person's username or email in the authorize URL (#2645)", async () => {
     const { sessionId } = await createIdentitySession(tokens, { sub: "identity-user-1", email: "test@example.test", preferred_username: "self-service-user" }, config.keycloakBffClientId);
-    expect((await authorize(sessionId, "action=UPDATE_PASSWORD")).get("login_hint")).toBe("self-service-user");
-    expect((await authorize(sessionId, "method=password")).has("login_hint")).toBe(false);
-    // Without a username claim the email is the hint.
-    expect((await authorize((await session()).sessionId, "action=CONFIGURE_TOTP")).get("login_hint")).toBe("test@example.test");
+    const response = await fetch(`${base}/identity/v1/authorize?action=UPDATE_PASSWORD`, { redirect: "manual", headers: { Cookie: cookie(sessionId) } });
+    const location = response.headers.get("location")!;
+    expect(new URL(location).searchParams.has("login_hint")).toBe(false);
+    expect(location).not.toContain("self-service-user");
+    expect(location).not.toContain("example.test");
   });
   it.each(["success", "cancelled", "error"])("updates the same session for action result %s", async status => {
     const { sessionId } = await session();

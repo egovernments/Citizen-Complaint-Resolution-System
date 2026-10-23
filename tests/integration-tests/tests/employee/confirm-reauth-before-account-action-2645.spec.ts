@@ -2,10 +2,11 @@
  * Account actions ask for the password again as a confirmation (CCRS #2645).
  *
  * From /<slug>/digit-ui/employee/user/account, "Set or update password" sends
- * the person to Keycloak with kc_action and login_hint. The digit-employee
- * theme then says "Confirm it's you to change your password", shows the
- * username prefilled and read-only, and offers Cancel back to the account
- * page. Signing in continues into the action: the update-password form.
+ * the person to Keycloak with kc_action. The digit-employee theme then says
+ * "Confirm it's you to change your password" and offers Cancel back to the
+ * account page. The person types the email as for any sign-in; no username is
+ * passed in the URL. Signing in continues into the action: the update-password
+ * form.
  *
  * The password is typed on a hosted page, so tracing is off for this file
  * (the same rule as hostedSignIn's guard). The update-password form is never
@@ -30,15 +31,12 @@ test.describe('employee account — confirm it is you before an account action #
     await expect(page.locator('#kc-page-title')).toContainText(/confirm it.s you/i, { timeout: 30_000 });
   }
 
-  test('Set or update password asks to confirm, prefilled, then continues into the action',
+  test('Set or update password asks to confirm, then continues into the action',
     { tag: ['@area:auth', '@persona:employee'] }, async ({ page }) => {
       await openPasswordAction(page);
       await expect(page.locator('#kc-page-title')).toContainText(/change your password/i);
 
-      const username = page.locator('input[name="username"]');
-      await expect(username).toHaveValue(ADMIN_USER);
-      await expect(username).toHaveAttribute('readonly', /.*/);
-
+      await page.locator('input[name="username"]').fill(ADMIN_USER);
       await page.locator('#password').fill(ADMIN_PASS);
       const consent = page.locator('#privacy-component-check');
       if (await consent.count()) await consent.check({ force: true });
