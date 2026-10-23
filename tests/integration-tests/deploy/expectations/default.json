@@ -15,6 +15,7 @@
     "pgr.citizenCreate": "required",
     "ui.citizen.attachmentDetailRender": "required",
     "personas.gro-with-department": "required",
+    "personas.csr": "required",
     "personas.ward-scoped-csr": "optional",
     "locales.multi": "optional",
     "tenant.citySubTenant": "optional"
@@ -24,6 +25,7 @@
     "mdms.rejectionReasons": "Required everywhere: the GRO reject modal reads this master, so its absence is always a seed gap, never a valid configuration.",
     "pgr.citizenCreate": "Required everywhere: a PGR deployment where a citizen cannot file a complaint has nothing to test.",
     "personas.gro-with-department": "Required everywhere: without an actor that can drive ASSIGN, the entire complaint workflow is untestable. Absence must be loud, not a skip.",
+    "personas.csr": "Required everywhere: filing a complaint on a citizen's behalf is core PGR, and every employee holds CSR since #2239. Without such an employee, #2640 (the complaint reaching the citizen's own account) cannot be exercised.",
     "personas.ward-scoped-csr": "Optional: a ward-scoped CSR is a bomet-specific onboarding choice.",
     "tenant.citySubTenant": "Optional: flat and two-level tenancy are both legitimate shapes."
   }

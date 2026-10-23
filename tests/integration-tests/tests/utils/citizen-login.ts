@@ -17,7 +17,8 @@ type SessionCookies = Parameters<BrowserContext['addCookies']>[0];
  */
 const phoneSessions = new Map<string, SessionCookies>();
 
-export async function citizenLoginViaApi(page: Page, phone?: string): Promise<void> {
+/** `session`: the BFF cookies of a citizen the spec provisioned itself (ProvisionedCitizen.sessionCookies). */
+export async function citizenLoginViaApi(page: Page, phone?: string, session?: SessionCookies): Promise<void> {
   const fixture = readProvisionedCitizen();
   const mobile = phone || fixture?.mobile;
   if (!mobile) throw new Error('Citizen fixture missing: run citizen-setup or supply a phone');
@@ -25,7 +26,7 @@ export async function citizenLoginViaApi(page: Page, phone?: string): Promise<vo
   // send counts against the BFF's per-phone (5/h) and per-IP (20/h) limits.
   // citizen-setup records them as `sessionCookies` (citizen-provision.ts).
   const fixtureCookies = (fixture as unknown as { sessionCookies?: SessionCookies } | null)?.sessionCookies;
-  const cookies = phoneSessions.get(mobile) ?? (mobile === fixture?.mobile ? fixtureCookies : undefined);
+  const cookies = phoneSessions.get(mobile) ?? session ?? (mobile === fixture?.mobile ? fixtureCookies : undefined);
   let context: DigitContext | null = null;
   if (cookies?.length) {
     await page.context().addCookies(cookies);
@@ -42,8 +43,8 @@ export async function citizenLoginViaApi(page: Page, phone?: string): Promise<vo
   expect(stored.uuid).toBe(context.UserRequest.uuid);
 }
 
-export async function citizenOtpLogin(page: Page, phone?: string): Promise<void> {
-  return citizenLoginViaApi(page, phone);
+export async function citizenOtpLogin(page: Page, phone?: string, session?: SessionCookies): Promise<void> {
+  return citizenLoginViaApi(page, phone, session);
 }
 
 /** UI coverage must drive both forms; it does not call the API helper or rewrite runtime config. */
