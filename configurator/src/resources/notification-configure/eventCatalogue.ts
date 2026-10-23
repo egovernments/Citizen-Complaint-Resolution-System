@@ -137,3 +137,10 @@ export function eventLabel(row: EventCatalogueRow | undefined): string {
   const label = String(row?.label ?? '').trim();
   return label || String(row?.eventName ?? '').trim();
 }
+
+/** ours (cfgreview F26, #1572): a label without its trailing status code, "Complaint assigned (PENDINGATLME)" ->
+ *  "Complaint assigned". A label that is only a code stays as it is. */
+export function plainEventLabel(label: string): string {
+  const plain = label.replace(/\s*\([A-Z0-9_.]+\)\s*$/, '').trim();
+  return plain || label;
+}
