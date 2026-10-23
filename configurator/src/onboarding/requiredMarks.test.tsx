@@ -97,6 +97,12 @@ describe('employee', () => {
     expect(group(/^System roles/)).toBe(false);
   });
 
+  it('says to add departments first when none can be picked', () => {
+    dialog({ options: { ...options, departments: [] } });
+    expect(screen.getByText('Add departments first.')).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: /^Department/ })).toBeNull();
+  });
+
   it('drops the mark from what is read-only while editing', () => {
     const employee = {
       code: 'EMP_0001',
