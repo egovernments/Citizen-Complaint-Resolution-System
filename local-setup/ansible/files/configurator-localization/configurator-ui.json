@@ -138,8 +138,8 @@
     "locale": "en_IN"
   },
   {
-    "code": "app.header.title",
-    "message": "DIGIT Management Studio",
+    "code": "app.header.studio_title",
+    "message": "DIGIT Complaint Management Studio",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -1338,8 +1338,8 @@
     "locale": "hi_IN"
   },
   {
-    "code": "app.header.title",
-    "message": "DIGIT Management Studio",
+    "code": "app.header.studio_title",
+    "message": "DIGIT Complaint Management Studio",
     "module": "configurator-ui",
     "locale": "hi_IN"
   },
@@ -2538,8 +2538,8 @@
     "locale": "fr_FR"
   },
   {
-    "code": "app.header.title",
-    "message": "DIGIT Management Studio",
+    "code": "app.header.studio_title",
+    "message": "DIGIT Complaint Management Studio",
     "module": "configurator-ui",
     "locale": "fr_FR"
   },
@@ -3738,8 +3738,8 @@
     "locale": "pt_BR"
   },
   {
-    "code": "app.header.title",
-    "message": "DIGIT Management Studio",
+    "code": "app.header.studio_title",
+    "message": "DIGIT Complaint Management Studio",
     "module": "configurator-ui",
     "locale": "pt_BR"
   },
