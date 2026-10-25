@@ -22,7 +22,7 @@
 {"code": "app.nav.boundaries", "message": "Limites", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.nav.advanced", "message": "Avancé", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.header.management_mode", "message": "Mode gestion", "module": "configurator-ui", "locale": "fr_FR"},
-{"code": "app.header.title", "message": "DIGIT Management Studio", "module": "configurator-ui", "locale": "fr_FR"},
+{"code": "app.header.studio_title", "message": "DIGIT Complaint Management Studio", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.resources.complaint_types", "message": "Types de plaintes", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.resources.departments", "message": "Départements", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.resources.designations", "message": "Fonctions", "module": "configurator-ui", "locale": "fr_FR"},
