@@ -52,7 +52,7 @@ export default function EmployeeKcPage(props: { kcContext: KcContext }) {
                         case "login-page-expired.ftl":
                             return <LoginPageExpired {...pageProps} kcContext={kcContext} />;
                         case "info.ftl":
-                            return <Info {...pageProps} kcContext={kcContext} />;
+                            return <Info {...pageProps} kcContext={kcContext} signInUrl={employeeSignInUrl} />;
                         case "error.ftl":
                             return <ErrorPage {...pageProps} kcContext={kcContext} signInUrl={employeeSignInUrl} />;
                         default:
