@@ -33,6 +33,30 @@ environments:
           opensre: false
       - ../environments/env-secrets.yaml
       - ../environments/env.yaml
+  # cms-saas.digit.org: env.yaml + environments/cms-saas.yaml, and the real
+  # secrets from the git-ignored cms-saas-secrets.yaml (scripts/cms-saas-secrets-from-cluster.sh).
+  cms-saas:
+    values:
+      - namespace: monitoring
+      # Defaults for the toggles read below. Listed BEFORE env.yaml so an
+      # operator's env.yaml overrides them, and so the keys ALWAYS exist --
+      # without this, an env.yaml predating this block renders `installed:` as
+      # `<no value>` and the helmfile fails to parse. Deliberately not using
+      # sprig's `dig` for the same reason: CI pins helmfile v0.140.0, which
+      # ships a sprig too old to have it.
+      - monitoring:
+          metrics: false
+          logs: false
+          dashboards: false
+          traces: false
+          probes: false
+          kafkaUi: false
+          gatus: false
+          opensre: false
+      - ../environments/env-secrets.yaml
+      - ../environments/cms-saas-secrets.yaml
+      - ../environments/env.yaml
+      - ../environments/cms-saas.yaml
 ---
 {{- /* Toggle lookup, written defensively on purpose (#1619).
 

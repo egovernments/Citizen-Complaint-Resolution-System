@@ -1,0 +1,108 @@
+# cms-saas.digit.org — EKS cluster `ccrs-prod` (AWS 349271159511, ap-south-1).
+#
+# Layered over env.yaml by the `cms-saas` helmfile environment:
+#
+#   helmfile -f digit-helmfile.yaml -e cms-saas apply
+#
+# Only what is specific to this deployment lives here; every other value is
+# env.yaml's. Secrets are NOT in this file: the `cms-saas` environment reads
+# them from cms-saas-secrets.yaml (git-ignored; scripts/cms-saas-secrets-from-cluster.sh
+# writes it from the running cluster) and from Kubernetes Secrets the charts
+# reference by name (identity-secrets and pgr-onboarding, created by the
+# identity-bootstrap release).
+#
+# The layout follows the Ansible deployment of a `pg`-rooted host: pg is the
+# platform tenant and gets no identity Organization route or default slug; every
+# customer signs up through the Configurator as its own root tenant and
+# Organization (as on bometfeedbackhub.digit.org).
+
+global:
+  domain: cms-saas.digit.org
+
+configmaps:
+  egov-config:
+    data:
+      db-host: ccrs-prod-db.czvokiourya9.ap-south-1.rds.amazonaws.com
+      db-name: ccrsdb
+      db-url: "jdbc:postgresql://ccrs-prod-db.czvokiourya9.ap-south-1.rds.amazonaws.com:5432/ccrsdb"
+      db-otel-url: "jdbc:otel:postgresql://ccrs-prod-db.czvokiourya9.ap-south-1.rds.amazonaws.com:5432/ccrsdb"
+      egov-services-fqdn-name: "https://cms-saas.digit.org/"
+      egov-state-level-tenant-id: "pg"
+      state-level-tenant-id: "pg"
+      host-map: "{'pg':'https://cms-saas.digit.org/'}"
+      # DEV SETTING carried over from the first install (2026-08-26) so this file
+      # describes what runs. Not a production setting: remove once confirmed unused.
+      dev-enabled: "true"
+
+egov-user:
+  egov-state-level-tenant-id: "pg"
+  # DEV SETTING carried over from the first install: every citizen can sign in
+  # through egov-user's legacy OTP login with the fixed code below. Remove for a
+  # real launch; digit-ui signs citizens in through identity-bff now.
+  citizen-otp-fixed-enabled: "true"
+  citizen-otp-fixed: "123456"
+
+egov-enc-service:
+  state-level-tenant-id: "pg"
+  egov-state-level-tenant-id: "pg"
+
+egov-hrms:
+  # DEV SETTING carried over from the first install.
+  hrms-dev-mode: "true"
+
+egov-filestore:
+  fixed-bucketname: ccrs-prod-filestore-bucket
+
+ingress-nginx:
+  controller:
+    addHeaders:
+      Access-Control-Allow-Origin: "https://cms-saas.digit.org"
+
+digit-ui:
+  globalConfigs:
+    stateTenantId: "pg"
+    mapTenant: "pg"
+
+digit-ui-v2:
+  distUrl: "https://ccrs-prod-assets-bucket.s3.ap-south-1.amazonaws.com/deploy/digit-ui-v2-pg.tgz"
+
+monitoring:
+  metrics: true      # kube-prometheus-stack
+  logs: true         # loki-stack
+  dashboards: true   # grafana
+  gatus: true        # status page at /status
+
+identity:
+  enabled: true
+  keycloak:
+    configure:
+      # Founders sign up with an emailed link (Configurator /signup).
+      magicLinkEnabled: true
+      smtp:
+        host: "smtp.gmail.com"
+        from: "digitcms@egovernments.org"
+        fromDisplayName: "DIGIT CMS"
+        port: "587"
+        starttls: true
+        auth: true
+        user: "digitcms@egovernments.org"   # password: identity-secrets' keycloak-smtp-password
+  identity-bff:
+    config:
+      # As on bometfeedbackhub, until an HTTP SMS sender exists for this cluster.
+      IDENTITY_OTP_SENDER: "log"
+      # ACCOUNT_ADMIN employee on pg, created by identity-bootstrap.
+      DIGIT_ADMIN_USERNAME: "IDENTITY_ADMIN"
+  # Creates identity-secrets, pgr-onboarding, Keycloak's database and the two
+  # DIGIT employees (DIGIT_ADMIN_USERNAME above, pgr-services' provisioner below).
+  bootstrap:
+    enabled: true
+
+pgr-services:
+  # Self-service onboarding: every signup becomes its own root tenant and
+  # identity Organization; pg stays reserved.
+  mdmsHost: "http://egov-mdms-service.egov:8080/"
+  onboarding:
+    runnerEnabled: true
+    identityBffUrl: "http://identity-bff.egov:3000"
+    provisionerUsername: "PGR_PROVISIONER"
+    provisionerTenantId: "pg"
