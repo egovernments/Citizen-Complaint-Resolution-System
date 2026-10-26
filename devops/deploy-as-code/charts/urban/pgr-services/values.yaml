@@ -258,15 +258,6 @@ env: |
     value: "RATE"
   - name: EGOV_USR_EVENTS_REOPEN_CODE
     value: "REOPEN" 
-  - name: SPRING_DATASOURCE_URL
-    valueFrom:
-      configMapKeyRef:
-        name: egov-config
-        key: db-url
-  {{- if index .Values "tracing-enabled" }}
-  - name: TRACER_OPENTRACING_ENABLED
-    value: "true" 
-  {{- end }}
   {{- if index .Values "tracing-enabled" }}
   - name: TRACER_REQUESTLOGGINGENABLED
     value: "true" 
