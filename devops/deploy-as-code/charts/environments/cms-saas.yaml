@@ -83,6 +83,10 @@ monitoring:
 identity:
   enabled: true
   keycloak:
+    # One immutable build for Keycloak and the BFF (helm-identity.md); the
+    # charts' own default is the rolling nightly-develop.
+    image:
+      tag: "master-b4adf0d"
     configure:
       # Founders sign up with an emailed link (Configurator /signup).
       magicLinkEnabled: true
@@ -99,9 +103,13 @@ identity:
         auth: true
         user: "digitcms@egovernments.org"   # password: identity-secrets' keycloak-smtp-password
   identity-bff:
+    image:
+      tag: "master-b4adf0d"
     config:
-      # As on bometfeedbackhub, until an HTTP SMS sender exists for this cluster.
-      IDENTITY_OTP_SENDER: "log"
+      # Citizen phone-OTP sign-in off until an HTTP SMS sender exists: "log"
+      # would write every code to identity-bff's log (and so to Loki), letting
+      # anyone who reads it sign in as any citizen.
+      IDENTITY_OTP_SENDER: ""
       # ACCOUNT_ADMIN employee on pg, created by identity-bootstrap.
       DIGIT_ADMIN_USERNAME: "IDENTITY_ADMIN"
       # egov-user directly, as Ansible's Kong routes /user (no RBAC). Through the
