@@ -76,6 +76,15 @@ describe('loadBranding', () => {
     expect(loaded.themeRecord).toBeNull();
   });
 
+  it('asks for the workspace record by id, so a root with over a page of tenants still finds it', async () => {
+    search.mockImplementation(async (_tenant, schema, options) =>
+      schema === 'tenant.tenants' && options?.uniqueIdentifiers?.includes('acme') ? [tenantRecord] : [],
+    );
+    const loaded = await loadBranding('acme');
+    expect(loaded.tenantRecord).toBe(tenantRecord);
+    expect(search).toHaveBeenCalledWith('acme', 'tenant.tenants', { uniqueIdentifiers: ['acme'] });
+  });
+
   it('fails clearly when the workspace has no tenant record', async () => {
     search.mockResolvedValue([]);
     await expect(loadBranding('acme')).rejects.toThrow(/no tenant record/);
