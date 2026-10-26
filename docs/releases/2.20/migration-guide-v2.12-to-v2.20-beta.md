@@ -1,52 +1,35 @@
 # Migration Guide: v2.12 → v2.20-beta (identity and Keycloak)
 
-> **Status: proven once in production.** Written from the 2.20 code and the
-> develop test-server migration (2026-10-06), then corrected by the first
-> supervised production upgrade of a v2.12.1 county install on 2026-10-19
-> (master `4c554468a`, the #2557 merge; no separate rehearsal). That upgrade hit
-> four deploy blockers that this guide now covers in
-> [step 5.1](#51-blockers-seen-on-an-existing-install). Steps still marked
-> **(unverified)** were not exercised there. Record what you find in the
-> [journey log](#9-journey-log) and fix the steps it disproves.
-
 **For:** an existing v2.12.x install deployed with Ansible (`local-setup/ansible`,
-stack under `/opt/digit`), whose staff and citizens sign in today through the
-legacy DIGIT login pages (and, on some installs, citizen Google sign-in through
-Keycloak 24 and `token-exchange-svc`).
+stack under `/opt/digit`). If you are still on 2.12.0, do
+[v2.12 → v2.12.1](../2.12/migration-guide-v2.12-to-v2.12.1.md) first.
 
-**Scope:** the **identity** move, which is the part of 2.20 that changes who can
-sign in and how. Other 2.20 changes have their own guides; this one links to
-them in [step 5](#5-deploy-order) instead of repeating them.
+**Covers:** sign-in for staff, citizens and admins, and the Keycloak upgrade.
+Notifications have their own [migration guide](notifications/migration.md).
 
-**Downtime:** the redeploy itself is about 20–40 minutes. **Staff sign-in stays
-unavailable after that until each employee is linked to a Keycloak identity and
-has set a password** ([step 4](#4-existing-users)). Plan that window with the
-county before you start.
+**Downtime:** the deploy takes 20–40 minutes. After it, **each employee can sign
+in only once they are linked to a Keycloak account and have set a password**
+([4.1](#41-staff)). Agree that window with the people who use the system.
 
-**See also:** [identity BFF deployment](../../setup/deployment/identity-bff.md) ·
-[notifications migration](notifications/migration.md) ·
-[v2.12 → v2.12.1](../2.12/migration-guide-v2.12-to-v2.12.1.md) (do that first if
-you are still on 2.12.0) · the release PR, egovernments/Citizen-Complaint-Resolution-System#2557.
+**See also:** [Identity BFF deployment](../../setup/deployment/identity-bff.md).
 
 ---
 
-## 0. What changes, and for whom
+## 0. What changes
 
 | Who | v2.12 | v2.20-beta |
 |---|---|---|
-| **Staff (employees)** | Legacy `/digit-ui/employee/user/login`: pick a city, username + password, checked by egov-user | Keycloak login page (`digit-ui-employee` client, `digit-employee` theme). The person signs in with their **email and a password held in Keycloak**. The Identity BFF then issues their own DIGIT token. Only employees **linked** to a Keycloak identity can sign in. |
-| **Staff password reset** | SMS OTP through `/user/password/nologin/_update` | Email only: "Forgot password?" or Account → set password, through the realm's SMTP. **A mobile-only employee cannot reset their own password** until they have an email address. |
-| **Citizens** | Legacy OTP page (`/user-otp/v1/_send`, often the fixed code on test installs). Some installs also had "Continue with Google" on the separate `/citizen` app. | Phone number + one-time code, verified by the Identity BFF. **There is no citizen Google sign-in in 2.20.** The `/citizen` app (digit-ui-v2) is retired. |
-| **Admins / founders** | Configurator with a DIGIT login | Configurator signs in through Keycloak (password, magic link, Google or GitHub, as configured) and then picks a workspace. |
-| **URLs** | `/digit-ui/employee/…`, `/digit-ui/citizen/…` | **Tenant routes only:** `/<slug>/digit-ui/employee/…`, `/<slug>/digit-ui/citizen/…`. For a deploy-seeded root the slug is the tenant id (e.g. `/ke/digit-ui/…`). A tenantless `/digit-ui/<page>` returns **404**, or redirects to `digit_ui_default_tenant_slug` if you set it. |
-| **Keycloak** | 24.0, a realm named after the state tenant (e.g. `ke`) with a `digit-ui` client, plus `token-exchange-svc` and the `/kc` route | **26.7.3** (`identity-keycloak` image), one shared Organizations realm (`digit` by default). Each root tenant maps to a Keycloak Organization. `token-exchange-svc` and `/kc` are gone. |
-| **Kong** | Native user endpoints open | With Keycloak on, `/user/citizen/_create`, `/user/password/nologin/_update` and `/user-otp/v1/_send` return `404 IDENTITY_LEGACY_ENDPOINT_REMOVED`. `/user/oauth/token` stays open for service accounts. `identity_legacy_user_endpoints: true` reopens them (an API rollback switch only: the old UI pages are gone either way). |
+| **Staff** | `/digit-ui/employee/user/login`: city, username, password, checked by egov-user | Keycloak login page. Staff sign in with their **email** (not their employee code) and a password held in Keycloak. Only **linked** employees can sign in. |
+| **Staff password reset** | SMS OTP | Email only. An employee without an email address cannot reset their password. |
+| **Citizens** | Legacy OTP page; on some installs "Continue with Google" on the `/citizen` app | Phone number + one-time code. **No citizen Google sign-in.** The `/citizen` app is removed. |
+| **Admins** | Configurator with a DIGIT login | Configurator signs in through Keycloak, then the admin picks a workspace. Only accounts with an admin role (`SUPERUSER`, `ACCOUNT_ADMIN`, `MDMS_ADMIN`, `LOC_ADMIN`, `HRMS_ADMIN`, `WORKFLOW_ADMIN`) can enter it. |
+| **URLs** | `/digit-ui/employee/…`, `/digit-ui/citizen/…` | `/<slug>/digit-ui/employee/…`, `/<slug>/digit-ui/citizen/…`. For a deploy-seeded root the slug is the tenant id (e.g. `/ke/digit-ui/…`). `/digit-ui/<page>` returns 404, or redirects if `digit_ui_default_tenant_slug` is set. |
+| **Keycloak** | 24.0, one realm per state tenant, plus `token-exchange-svc` | 26.7.3 (`identity-keycloak` image), one shared realm (`digit`). Each root tenant is a Keycloak Organization. `token-exchange-svc` is removed. Keycloak is mandatory. |
+| **Kong** | User endpoints open | `/user/citizen/_create`, `/user/password/nologin/_update` and `/user-otp/v1/_send` return `404 IDENTITY_LEGACY_ENDPOINT_REMOVED`. `/user/oauth/token` stays open for service accounts. |
 
-**Not supported in 2.20: staff whose home tenant is a city tenant** (`<root>.<city>`).
-The Identity BFF links staff only at a root tenant (decision D16; staff at a city
-tenant were never re-homed in the general product). Count these before you start
-([step 1.1](#11-inventory)); they cannot sign in after the upgrade unless they are
-re-created at the root.
+**Staff whose home tenant is a city tenant** (`<root>.<city>`) cannot be linked:
+2.20 links staff only at a root tenant. Count them first ([1.1](#11-inventory)).
+They lose sign-in unless you re-create them at the root.
 
 ---
 
@@ -54,391 +37,256 @@ re-created at the root.
 
 ### 1.1 Inventory
 
-Run these on the server as root and keep the output with your upgrade notes. None
-of them change anything. Never paste the output anywhere public: it describes your
-users.
+Run on the server as root. Nothing here changes anything. Keep the output
+private: it describes your users.
 
 ```bash
 cd /opt/ccrs && git log --oneline -1                      # the version you are leaving
-docker ps --format '{{.Names}} {{.Image}}' | sort         # every running image
+docker ps --format '{{.Names}} {{.Image}}' | sort
 HV=/opt/ccrs/local-setup/ansible/inventory/host_vars/<tenant>.yml
-grep -oE '^[A-Za-z_][A-Za-z0-9_]*:' "$HV" | tr -d ':'     # host_vars KEY NAMES (no values)
+grep -oE '^[A-Za-z_][A-Za-z0-9_]*:' "$HV" | tr -d ':'     # host_vars key names only
 ```
 
-**Keycloak today** (database user and name are usually `keycloak`):
+**Keycloak**, if `keycloak-postgres` is running:
 
 ```bash
 KQ() { docker exec keycloak-postgres psql -U keycloak -d keycloak -tAF'|' -c "$1"; }
 KQ "select version from migration_model order by update_time desc limit 1"   # 24.0.x expected
-KQ "select name from realm order by 1"
 KQ "select r.name, count(u.id) from realm r left join user_entity u on u.realm_id=r.id group by 1"
-KQ "select r.name, i.provider_alias, i.enabled from identity_provider i join realm r on r.id=i.realm_id"
 KQ "select r.name, f.identity_provider, count(*) from federated_identity f join realm r on r.id=f.realm_id group by 1,2"
 ```
 
-The last two tell you how many citizens use Google sign-in today. They will have to
-use phone sign-in after the upgrade ([step 4.3](#43-citizens-who-used-google)).
+The last query counts citizens who use Google today ([4.3](#43-citizens-who-used-google)).
+Without `keycloak-postgres` (v2.12 shipped with Keycloak off), skip these, backup 2
+and rollback step 4: the deploy starts Keycloak 26 on a new database.
 
-**No Keycloak on 2.12?** v2.12 and v2.12.1 ship `enable_keycloak: false`, so many
-installs never ran Keycloak 24. If `docker ps` lists no `keycloak-postgres`, skip
-the queries above, backup 2 in [1.3](#13-back-up) and rollback step 4 in
-[7](#7-rollback). Step 3 then starts Keycloak 26 on a new, empty database instead
-of migrating one, and 4.3 does not apply. Add both Keycloak secrets to OpenBao
-before the deploy ([2.2](#22-add)).
-
-**DIGIT users** (`docker-postgres`, db/user `egov`):
+**DIGIT users:**
 
 ```bash
 PQ() { docker exec docker-postgres psql -U egov -d egov -tAF'|' -c "$1"; }
-# Accounts per tenant and type
 PQ "select tenantid, type, active, count(*) from eg_user group by 1,2,3 order by 1,2,3"
-# Active employees with and without an email address, per tenant
-PQ "select tenantid, count(*) filter (where emailid is not null and emailid<>'') with_email, count(*) total
+# Employees with an email, per tenant
+PQ "select tenantid, count(*) filter (where emailid<>'') with_email, count(*) total
     from eg_user where type='EMPLOYEE' and active group by 1 order by 1"
-# Active citizens sharing one (encrypted) mobile number: these can hit CITIZEN_ACCOUNT_AMBIGUOUS
+# Citizens sharing one mobile number (they hit CITIZEN_ACCOUNT_AMBIGUOUS)
 PQ "select count(*) from (select mobilenumber from eg_user where type='CITIZEN' and active
     group by mobilenumber having count(*)>1) d"
-# Which encryption key each tenant's user rows were written under (see step 4.4)
+# Encryption key id per tenant's rows (4.4)
 PQ "select tenantid, type, split_part(username,'|',1) key_id, count(*) from eg_user group by 1,2,3 order by 1,2,3"
 PQ "select tenant_id, key_id, active from eg_enc_symmetric_keys where tenant_id not like '%.%' order by 1"
-# Roles the identity stack needs at the root tenant
+# Roles the identity stack needs at the root
 PQ "select uniqueidentifier from eg_mdms_data where schemacode='ACCESSCONTROL-ROLES.roles'
     and tenantid='<root>' and uniqueidentifier in ('ACCOUNT_ADMIN','TENANT_ADMIN','HRMS_ADMIN','LOC_ADMIN','MDMS_ADMIN')"
-PQ "select role_code, count(distinct user_id) from eg_userrole_v1 where role_tenantid='<root>'
-    and role_code in ('ACCOUNT_ADMIN','HRMS_ADMIN','SUPERUSER') group by 1"
 ```
 
-Write down:
+Write down: employees without email at the root, city-tenant employees,
+Google-linked citizens, duplicate citizen phones, rows under another tenant's key
+id, and whether `ACCOUNT_ADMIN` and `TENANT_ADMIN` exist at the root.
 
-- **N employees without email** at the root. Each needs an address before they can be linked.
-- **City-tenant employees** (`<root>.<city>` rows of type `EMPLOYEE`). They are not supported (see §0).
-- **Google-linked citizens** (from Keycloak, above).
-- **Duplicate citizen phones** and **users under another tenant's key id** (step 4.4).
-- Whether `ACCOUNT_ADMIN` and `TENANT_ADMIN` exist in `ACCESSCONTROL-ROLES.roles` at the root. If not, add them before the deploy (step 2.3).
-
-**Secrets present in OpenBao** (names only, never print values):
+**OpenBao key names** (never print values):
 
 ```bash
 T=$(python3 -c "import json;print(json.load(open('/opt/digit/.openbao/init.json'))['root_token'])")
-docker exec -e BAO_TOKEN="$T" -e BAO_ADDR=http://127.0.0.1:8200 openbao \
-  bao kv get -format=json kv/digit/<tenant> | python3 -c "import json,sys;print(sorted(json.load(sys.stdin)['data']['data']))"
+BAO() { docker exec -e BAO_TOKEN="$T" -e BAO_ADDR=http://127.0.0.1:8200 openbao bao "$@"; }
+BAO kv get -format=json kv/digit/<tenant> | python3 -c "import json,sys;print(sorted(json.load(sys.stdin)['data']['data']))"
 ```
 
-**Still on 2.12.0 with Novu?** v2.12.0 never wrote `novu_mongo_password` or
-`novu_store_encryption_key` into `.env` (v2.12.1 does), so Novu ran on the compose
-defaults even when OpenBao held real values. The first 2.12.1-or-later deploy
-writes the OpenBao values: Mongo authentication then fails, and Novu's stored keys
-and provider credentials turn into `bad decrypt`. Before that deploy, compare what
-`novu-api` runs with against OpenBao, by hash only **(unverified)**:
+**Novu, from 2.12.0.** 2.12.0 never applied OpenBao's `novu_mongo_password` and
+`novu_store_encryption_key`, so Novu may be running on the compose defaults. The
+next deploy writes the OpenBao values, and Novu then fails Mongo auth and can't
+decrypt its stored keys. Compare by hash:
 
 ```bash
-bao_get() { docker exec -e BAO_TOKEN="$T" -e BAO_ADDR=http://127.0.0.1:8200 openbao bao kv get -field="$1" kv/digit/<tenant>; }
 h() { tr -d '\n' | sha256sum | cut -c1-12; }
-echo "store key: running $(docker exec novu-api printenv STORE_ENCRYPTION_KEY | h), OpenBao $(bao_get novu_store_encryption_key | h)"
-echo "mongo:     running $(docker exec novu-api printenv MONGO_URL | sed -E 's#^[^/]*//[^:]*:([^@]*)@.*#\1#' | h), OpenBao $(bao_get novu_mongo_password | h)"
+echo "store key: $(docker exec novu-api printenv STORE_ENCRYPTION_KEY | h) vs $(BAO kv get -field=novu_store_encryption_key kv/digit/<tenant> | h)"
+echo "mongo:     $(docker exec novu-api printenv MONGO_URL | sed -E 's#^[^/]*//[^:]*:([^@]*)@.*#\1#' | h) vs $(BAO kv get -field=novu_mongo_password kv/digit/<tenant> | h)"
 ```
 
-If they differ, put the values `novu-api` runs with into OpenBao before that deploy
-(on a box that is already deployed, the deploy only warns about a published
-default), and rotate them later as a planned change ([#2619](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/2619)).
+If they differ, write the running values into OpenBao before the deploy
+([#2619](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/2619)).
 
-**nginx:** check whether host_vars has `nginx_preserve_vhost: true`. If it does, the
-deploy will **not** write the 2.20 routes into your vhost ([step 2.4](#24-nginx-on-a-hand-maintained-vhost)).
+**nginx:** if host_vars has `nginx_preserve_vhost: true`, the deploy will not add
+the 2.20 routes; see [2.4](#24-nginx-on-a-hand-maintained-vhost).
 
-### 1.2 Freeze automatic deploys
+### 1.2 Stop scheduled deploys
 
-If a cron or wrapper redeploys this server on a schedule, hold it on the current
-version for the whole upgrade. Otherwise it can redeploy halfway through and leave
-a mixed state. Keep a note of how to release it afterwards.
+Comment out any cron job or wrapper that redeploys this server
+(`cat /etc/cron.d/*redeploy*`) for the whole upgrade. Pinning it to the old commit
+is not enough: once Keycloak is on 26, an old-commit run starts Keycloak 24 on the
+migrated database and breaks it.
 
-```bash
-cat /etc/cron.d/*redeploy* 2>/dev/null          # find the schedule
-# Comment the line out for the whole upgrade, and log it.
-```
-
-**Pinning the wrapper to the old commit is not enough.** Once Keycloak has moved
-to 26, a scheduled run of the old commit starts Keycloak 24 on the migrated
-database (see "Why Keycloak is one-way" below). Stop the schedule itself, and
-re-enable it only after the wrapper points at the 2.20 commit.
-
-**Do not run the upgrade through a self-healing wrapper** that smoke-tests 2.12
-URLs and restores the database when the smoke test fails. A 2.12 smoke test fails
-on 2.20 by design (`/citizen/login` and the tenantless `/digit-ui/` are gone), and
-a database restore under a migrated Keycloak leaves a mixed state. Run
-`./deploy.sh <tenant>` by hand ([step 5](#5-deploy-order)), then update the
-wrapper's smoke checks, compose file list and profiles before re-enabling it.
+Run the upgrade with `./deploy.sh <tenant>` by hand, not through a wrapper that
+smoke-tests 2.12 URLs and restores the database on failure. 2.12 smoke tests fail
+on 2.20 by design. Update the wrapper's smoke checks before you re-enable it.
 
 ### 1.3 Back up
 
-Take backups 1–4, and 6 when `enable_novu` is on, before you change anything, and
-copy them off the server.
+Copy the backups off the server when done.
 
 ```bash
 TS=$(date -u +%Y%m%dT%H%MZ); BK=/opt/digit/predeploy-backups/$TS-v220; mkdir -p $BK
-# 1. Main Postgres (complaints, users, MDMS, localisation, onboarding tables)
+# 1. Main Postgres
 docker exec docker-postgres pg_dumpall -U egov | gzip > $BK/egov-pg_dumpall.sql.gz
-# 2. Keycloak's own database. The Keycloak 26 upgrade is ONE-WAY (see below).
-#    Only if keycloak-postgres exists (1.1); without it this leaves an empty file.
+# 2. Keycloak database (only if keycloak-postgres exists). The upgrade is one-way.
 docker exec keycloak-postgres pg_dump -U keycloak -Fc keycloak > $BK/keycloak-24.dump
-# 3. OpenBao: the unseal file and the data volume
+# 3. OpenBao
 cp -a /opt/digit/.openbao $BK/openbao-dir
 docker run --rm -v digit_openbao_data:/d:ro -v $BK:/b alpine tar czf /b/openbao-data.tgz -C /d .
-# 4. Configuration: host_vars, compose overlay, nginx vhost, .env
+# 4. Configuration
 cp -a /opt/ccrs/local-setup/ansible/inventory/host_vars/<tenant>.yml $BK/
 cp -a /opt/ccrs/local-setup/docker-compose.<tenant>.yml $BK/ 2>/dev/null
-cp -a /etc/nginx/sites-available /etc/nginx/sites-enabled $BK/
+cp -a /etc/nginx/sites-available /etc/nginx/sites-enabled $BK/   # sites-enabled may hold real files
 cp -a /opt/digit/.env $BK/digit.env
-# 5. Optional: the filestore objects (2.20 does not touch them)
+# 5. Optional: filestore (2.20 does not touch it)
 docker run --rm -v digit_minio_data:/d:ro -v $BK:/b alpine tar czf /b/minio-data.tgz -C /d .
-# 6. Novu, when enable_novu is on. The deploy mints keys and, with per-tenant Novu
-#    accounts on, rotates the Novu admin password and creates organisations.
-#    Notifications pause while Novu is stopped.
+# 6. Novu, if enable_novu is on (notifications pause meanwhile)
 docker stop novu-api novu-worker novu-ws novu-mongo
 docker run --rm -v digit_novu_mongo_data:/d:ro -v $BK:/b alpine tar czf /b/novu-mongo-data.tgz -C /d .
 docker start novu-mongo novu-api novu-worker novu-ws
 (cd $BK && sha256sum *.gz *.tgz *.dump > SHA256SUMS)
-gzip -t $BK/egov-pg_dumpall.sql.gz && ls -lh $BK   # none of the files may be empty
+gzip -t $BK/egov-pg_dumpall.sql.gz && ls -lh $BK   # no file may be empty
 ```
 
-Proven on 2026-10-19: the whole backup took about 20 seconds on a county install
-(a 1 GB `egov` database dumps to under 30 MB gzipped, mostly localisation), and
-the OpenBao file-storage volume (`digit_openbao_data`) copies safely while
-running. `sites-enabled` matters: a vhost can be a plain file there rather than a
-link into `sites-available`. Check that `pg_dumpall` covered every table:
-`zcat egov-pg_dumpall.sql.gz | grep -c '^COPY '` should match the table count of all
-databases in that Postgres.
-
-**Why Keycloak is one-way.** Keycloak 26 migrates the database schema in place the
-first time it starts. Keycloak 24 cannot start on a 26 schema. One county install
-that was moved to 26 and then redeployed with the old 24 image broke citizen Google
-sign-in (`Unable to find factory for AuthenticatorFactory: organization`) until
-the 24 dump was restored. **The only way back is restoring the 24 dump (backup 2)
-together with the 24 image.** Never point an old image at the upgraded database.
+**Keycloak is one-way.** Keycloak 26 migrates its schema in place on first start,
+and Keycloak 24 cannot run on the result. The only way back is restoring backup 2
+**and** going back to the 24 image. Never start the old image on the upgraded
+database.
 
 ---
 
-## 2. Configuration changes
+## 2. Configuration
 
-Edit `inventory/host_vars/<tenant>.yml`. The deploy, and `scripts/preflight.py`
-before it, refuse the old settings in 2.1, so a leftover one stops the deploy
-before it changes anything. The new settings in 2.2 are not all checked that
-early: a missing SMTP setting stops the deploy only after Keycloak 26 has migrated
-its database (see **SMTP** below), so check those yourself before you run it.
+Edit `inventory/host_vars/<tenant>.yml`. The settings in 2.1 stop the deploy before
+it changes anything. A missing SMTP setting (2.2) stops it only **after** Keycloak
+has migrated, so check those by hand.
 
 ### 2.1 Remove
 
-| Key | Why | If you leave it |
-|---|---|---|
-| `auth_provider: keycloak`, `citizen_auth_provider`, `employee_auth_provider` | The browser Keycloak adapter they selected was removed (#2088, D26) | The deploy fails: "selects Keycloak login on: …". Delete them, or set `digit`. |
-| `keycloak_client_id` | The per-tenant realm's `digit-ui` client is no longer used | Ignored (retired). Delete it. |
-| `enable_digit_ui_v2: true` and `nginx_features.digit_ui_v2: true` | The `/citizen` app is retired | The deploy fails: "enable_digit_ui_v2 is no longer supported". |
-| `digit_ui_v2_branch`; `digit_ui_esbuild_branch` set to an old feature branch | The citizen v2 app is gone; digit-ui builds from the vendored source | `digit_ui_esbuild_branch` is still read (group default `main`) by the static/hmr checkout and the build script. Delete it so the default applies. |
-| `login_tenant_allowlist`, `build_otp_publisher`, `build_default_data_handler` | Not read by 2.20 | Ignored. Delete them to avoid confusion. |
-| `pgr_services_image`, `configurator_image` and any other image pin | 2.20 images must come from one build ([step 5](#5-deploy-order)) | The deploy keeps your old pin and runs a 2.12-era app on a 2.20 schema. |
-| `token_exchange_system_password` (in OpenBao) | `token-exchange-svc` is gone | Still used as a **fallback** for `identity_digit_admin_password` if that is absent. Set the real one (2.2) before you delete it. |
+| Key | If you leave it |
+|---|---|
+| `auth_provider`, `citizen_auth_provider`, `employee_auth_provider` set to `keycloak` | Deploy fails ("selects Keycloak login on: …"). Delete them. |
+| `enable_keycloak` | `false` fails the deploy; `true` is ignored. Delete it. |
+| `enable_digit_ui_v2`, `nginx_features.digit_ui_v2` | Deploy fails if true. Delete them. |
+| `digit_ui_v2_branch`, `digit_ui_esbuild_branch` set to an old feature branch | The old branch is still checked out. Delete them. |
+| `keycloak_client_id`, `login_tenant_allowlist`, `build_otp_publisher`, `build_default_data_handler` | Ignored. Delete them. |
+| `pgr_services_image`, `configurator_image` and other image pins | The old image runs on the 2.20 schema. Delete them. |
+
+Keep `token_exchange_system_password` in OpenBao until `identity_digit_admin_password`
+is set (2.2): the deploy falls back to it.
 
 ### 2.2 Add
 
 ```yaml
-enable_keycloak: true              # required; the deploy refuses false (#2604, open, removes the switch)
-nginx_features:                    # merge into your existing nginx_features:, see below
-  keycloak: true
-  digit_ui_v2: false
-keycloak_organization_realm: digit # the new shared realm; leave the default
-digit_ui_default_tenant_slug: <root>   # so old /digit-ui/... bookmarks redirect instead of 404
-identity_digit_admin_username: <ACCOUNT_ADMIN employee code>  # dedicated account, see below
-identity_digit_admin_tenant_id: <root> # defaults to state_tenant_id when unset
-identity_smtp_host: <smtp host>    # REQUIRED: password setup, invitations and resets are email
+nginx_features:                    # add to your existing block; don't paste a second one
+  keycloak: true                   # the deploy then checks /auth/ serves the realm
+digit_ui_default_tenant_slug: <root>   # old /digit-ui/... links redirect instead of 404
+identity_digit_admin_username: <service account code, see below>
+identity_smtp_host: <smtp host>
 identity_smtp_from: <no-reply address>
 identity_smtp_user: <smtp user>
-identity_signin_methods: [password]          # add google only if 2.3 is done
-identity_signup_methods: [magic_link]
-identity_magic_link_enabled: true            # default false; signup needs it, see 2.6
-identity_citizen_signin_methods: [phone_otp] # needs an OTP channel, see 2.5
-# One immutable CI build for every CI-built image (see below)
-image_tag: "develop-<sha8>"                  # or the release tag once one is published
+identity_signin_methods: [password]          # add google only after 2.3
+identity_citizen_signin_methods: [phone_otp] # needs an OTP channel, 2.5
+image_tag: "master-<sha7>"                   # see Images
 image_tag_services: [pgr-services, novu-bridge, digit-config-service, digit-user-preferences-service,
                      digit-ui-esbuild, identity-bff, identity-keycloak]
 ```
 
-**`nginx_features`.** Add the two keys to the `nginx_features:` block your host_vars
-already has. Don't paste a second `nginx_features:` into the file: YAML keeps the
-last one, which silently drops `configurator`, `mcp` and every other route the first
-one listed. Once [#2604](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/2604)
-lands, `enable_keycloak` is gone and its line can be dropped.
+A second `nginx_features:` key replaces the first, which drops `configurator`,
+`mcp` and the other routes.
 
-**Images.** Until the release pins its images, the 2.20 compose defaults the new
-services (identity-bff, identity-keycloak, pgr-services, novu-bridge,
-user-preferences) to the rolling `:nightly-develop` tag, and that tag can point at
-a build of a different commit than the one you check out. Set `image_tag` to the
-`develop-<sha8>` tag of the commit you deploy (`git rev-parse --short=8 HEAD`;
-check that the tag exists on Docker Hub for every image first), and scope it with
-`image_tag_services` to the images your stack runs. The `-db` migration images
-follow their service. Leave out images you build on the box (for example the
-configurator with `build_configurator: true`): CI does not publish a tag for every
-image on every commit, and the deploy's registry check fails on a missing one.
-Docker Hub keeps only the five newest `develop-<sha8>` tags per image, so pull them
-during the upgrade. Pulled images stay on the box, but that is not enough for the
-next deploy: "Image tag — refuse a tag the registry does not have" runs on every
-deploy (`image_tag_verify: true` by default) and stops it, before `.env` is
-written, once Docker Hub has pruned the tag. That is about five nightly builds
-later, and 2.6, 4.5 and the re-runs in 5.1 all need a later full deploy. Then set
-`image_tag_verify: false`: the pull uses `--ignore-pull-failures`, so the local
-images are used. Once a release tag is published, move `image_tag` to it instead.
+**Images.** Deploy a commit on `master` and set `image_tag` to that commit's
+`master-<sha7>` tag (`git rev-parse --short=7 HEAD`). Check the tag exists on
+Docker Hub for each image in `image_tag_services` first. Leave out images built
+on the box, such as the configurator with `build_configurator: true`. `master-*`
+tags are kept; `develop-<sha8>` tags are pruned after about five builds, and every
+deploy then refuses the missing tag (`image_tag_verify`).
 
-**digit-ui.** Find out how the vhost serves `/digit-ui/`. If it aliases a host
-directory (for example `/opt/ccrs/digit-ui-esbuild/build/`), set
-`build_digit_ui: true` so the deploy rebuilds that bundle from the 2.20 source.
-Otherwise the box keeps serving the 2.12 bundle: the compose default for the
-digit-ui container is still a 2.12.1 image.
+**digit-ui.** If the vhost serves `/digit-ui/` from a host directory (for example
+`/opt/ccrs/digit-ui-esbuild/build/`), set `build_digit_ui: true`. Otherwise the
+box keeps serving the 2.12 bundle.
 
-**SMTP.** The deploy needs `identity_smtp_host`, `identity_smtp_from` and, when
-`identity_smtp_auth` is true (the default), an OpenBao `identity_smtp_password`.
-It checks them only at "identity-bootstrap — validate identity email
-configuration", after the stack is up. By then Keycloak 26 has migrated its
-database (step 3), and the `digit` realm is not created until the check passes.
-The old login pages are already gone, so nobody can sign in until SMTP is fixed and
-the deploy re-run ([#2618](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/2618)
-moves the check earlier). Check them before you run it (`$HV` and `$T` from 1.1):
+**SMTP.** All identity email (password setup and reset, verification, magic links)
+goes through the realm's SMTP. Complaint notifications don't. The deploy needs
+`identity_smtp_host`, `identity_smtp_from` and, unless `identity_smtp_auth: false`,
+`identity_smtp_password` in OpenBao. It checks them only after the stack is up, by
+which time Keycloak has migrated and the old login pages are gone
+([#2618](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/2618)).
+Check first:
 
 ```bash
-grep -E '^identity_smtp_(host|from|auth):' "$HV"     # host and from must be set
-docker exec -e BAO_TOKEN="$T" -e BAO_ADDR=http://127.0.0.1:8200 openbao \
-  bao kv get -field=identity_smtp_password kv/digit/<tenant> | grep -q . && echo smtp-password-present
+grep -E '^identity_smtp_(host|from|auth):' "$HV"
+BAO kv get -field=identity_smtp_password kv/digit/<tenant> | grep -q . && echo smtp-password-present
 ```
 
-Keycloak sends every identity email
-through this one setting, on the BFF's behalf: password setup and reset, address
-verification, and magic links. Complaint notifications do not use it; email
-notifications, if you send any, are a separate Novu integration.
-
-Every full deploy rewrites the realm's mail settings from host_vars and OpenBao,
-so change them there, never in the Keycloak console. A `--tags` run skips the
-identity tasks, so a change takes effect on the next full `./deploy.sh <tenant>`.
-
-**Real mail server.** Use any SMTP relay that will send as your domain: your mail
-provider, Amazon SES, SendGrid, Mailgun, Microsoft 365 and so on.
+A real relay:
 
 ```yaml
 identity_smtp_host: smtp.example.org
-identity_smtp_port: 587                  # default
-identity_smtp_starttls: true             # default; implicit TLS on 465 = ssl true, starttls false
-identity_smtp_ssl: false                 # default
-identity_smtp_auth: true                 # default; the password goes into OpenBao (below)
+identity_smtp_port: 587                  # default; for 465 set ssl true, starttls false
+identity_smtp_starttls: true             # default
 identity_smtp_user: <relay username>
 identity_smtp_from: no-reply@<domain>
-identity_smtp_from_display_name: "<a name staff will recognise>"  # default "DIGIT Identity"
+identity_smtp_from_display_name: "<name staff will recognise>"
 ```
 
-- **Sending domain.** Verify the `identity_smtp_from` domain with the relay and
-  publish its SPF and DKIM records, plus a DMARC policy. Without them the relay
-  rejects the mail or it lands in spam, and to the employee a setup link in spam
-  looks like no email at all.
-- **Reachability.** Many cloud hosts block outbound port 25, and some block 465 and
-  587 until asked. Check from the Keycloak container, since that is what sends:
+- Publish SPF, DKIM and DMARC for the `from` domain, or setup links land in spam.
+- Check the port is open from the Keycloak container:
+  `docker exec keycloak timeout 10 bash -c 'exec 3<>/dev/tcp/smtp.example.org/587 && head -1 <&3'`
+  should print `220 …`.
+- Every full deploy rewrites the realm's mail settings from host_vars and OpenBao.
+  Change them there, not in the Keycloak console.
 
-  ```bash
-  docker exec keycloak timeout 10 bash -c 'exec 3<>/dev/tcp/smtp.example.org/587 && head -1 <&3'
-  # a "220 ..." greeting is good; a timeout or "Connection refused" means the port is blocked
-  ```
+**No mailboxes yet?** Point the realm at a mail catcher such as Mailpit
+(`identity_smtp_host: mailpit`, port `1025`, `identity_smtp_auth/ssl/starttls: false`)
+and hand each person their setup link. Run it as its own Compose project on the
+`digit_egov-network` network, with a pinned image and a volume. Protect its UI with
+basic auth: the inbox holds working setup links. [4.5](#45-from-a-mail-catcher-to-real-email)
+moves to real email later.
 
-- **Password.** Put `identity_smtp_password` into OpenBao with the command below.
-- **After the deploy**, check delivery with the "real mailbox" rows in
-  [step 6](#6-after-the-deploy-verify-by-role). A failed send shows in
-  `docker logs keycloak 2>&1 | grep -iE 'smtp|mail'`.
-
-**Mail catcher.** An install whose staff have no usable mailboxes can point the
-realm at a mail catcher and hand each person their setup link by hand.
-[Step 4.5](#45-from-a-mail-catcher-to-real-email)
-moves such an install to real email later, without re-linking anyone.
-
-```yaml
-identity_smtp_host: "mailpit"      # container name on the DIGIT network
-identity_smtp_port: 1025
-identity_smtp_from: "no-reply@<domain>"
-identity_smtp_auth: false
-identity_smtp_ssl: false
-identity_smtp_starttls: false
-```
-
-Run Mailpit as its own Compose project joined to the external network
-`digit_egov-network`, so the CCRS deploy and a nightly `git reset` never touch it.
-Pin an image tag, give it a volume plus `MP_DATABASE` (a recreate of an unpinned
-`:latest` without a volume wipes the inbox), set `MP_WEBROOT=/mailpit`, bind the UI
-to loopback and publish it only through an nginx `location /mailpit` with its own
-basic-auth file. The inbox holds working account-setup links, so treat its
-password like an admin credential.
-
-Secrets go **into OpenBao**, not `bootstrap_secrets`. On an existing install
-`bootstrap_secrets` is only read on the tenant's first deploy (`cas=0`), so editing
-it now changes nothing:
+**Secrets go into OpenBao.** `bootstrap_secrets` is read only on a tenant's first
+deploy.
 
 ```bash
-docker exec -e BAO_TOKEN="$T" -e BAO_ADDR=http://127.0.0.1:8200 openbao \
-  bao kv patch kv/digit/<tenant> identity_digit_admin_password='<value>' identity_smtp_password='<value>'
+BAO kv patch kv/digit/<tenant> identity_digit_admin_password='<value>' identity_smtp_password='<value>'
 ```
 
-- `keycloak_admin_password` and `keycloak_db_password` are already there on an
-  install that ran Keycloak 24. **On an install without Keycloak** (v2.12 and
-  v2.12.1 ship `enable_keycloak: false`), add both to the `bao kv patch` above.
-  Without the admin password the deploy stops at "Keycloak — refuse to deploy
-  without an admin password". Without the database password, `keycloak-postgres`
-  starts with the compose default password `keycloak`.
-- The deploy **generates** the rest on its first 2.20 run and writes them back to
-  OpenBao: the BFF, magic-link, admin, employee and citizen client secrets, the
-  control-plane, introspection and onboarding tokens, the citizen OTP secret and the
-  PGR provisioner password.
-- **`identity_digit_admin_*`** is the DIGIT employee the BFF uses for its admin
-  calls. Use a dedicated employee holding only `ACCOUNT_ADMIN` at the root, not
-  `ADMIN`. Never link it to a person later ([step 4.1](#41-staff)). Without
-  `identity_digit_admin_password` in OpenBao the deploy falls back to
-  `token_exchange_system_password`, then to `eGov@123`. Create the account before
-  the deploy, once the roles in 2.3 exist, with an `ADMIN` token through Kong:
+- If the install never ran Keycloak, also add `keycloak_admin_password` and
+  `keycloak_db_password`. The deploy refuses to run without the admin password.
+- The deploy generates the remaining identity secrets on its first 2.20 run.
+- **`identity_digit_admin_*`** is the DIGIT account the BFF uses for admin calls.
+  Create a dedicated one holding only `ACCOUNT_ADMIN` at the root (after 2.3), and
+  never link it to a person:
 
   ```bash
   curl -s -X POST http://127.0.0.1:18000/user/users/_createnovalidate -H 'Content-Type: application/json' -d '{
     "RequestInfo": {"apiId": "Rainmaker", "authToken": "<ADMIN token>"},
-    "user": {"userName": "IDENTITY_ADMIN", "name": "Identity BFF service account", "mobileNumber": "<valid for the root rule>",
-             "active": true, "type": "EMPLOYEE", "tenantId": "<root>", "password": "<value also written to OpenBao>",
+    "user": {"userName": "IDENTITY_ADMIN", "name": "Identity BFF service account", "mobileNumber": "<valid for the root>",
+             "active": true, "type": "EMPLOYEE", "tenantId": "<root>", "password": "<same value as in OpenBao>",
              "roles": [{"code": "ACCOUNT_ADMIN", "name": "Account Admin", "tenantId": "<root>"}]}}'
   ```
 
-  Leave `gender` out: egov-user has no `OTHER` value and rejects the request with
-  `No enum constant ... Gender.OTHER`. Check that the account signs in through
-  `/user/oauth/token` before you store its password.
-- The **PGR provisioner** (`pgr_digit_provisioner_username`, default
-  `PGR_PROVISIONER` on the root) is created by the deploy if absent. The deploy
-  fails if an existing account of that name cannot sign in with `MDMS_ADMIN`,
-  `ACCOUNT_ADMIN`, `LOC_ADMIN` and `HRMS_ADMIN`. If you give an existing account
-  the missing roles, as the failure message suggests, the next `/user/oauth/token`
-  can still return the old role list: egov-user's Redis token store hands back the
-  existing token for the same user, client and scope. Either point
-  `pgr_digit_provisioner_username` at a new account, or, before re-running, delete
-  that account's cached token in `digit-redis`: `auth:<token>`, `access:<token>`,
-  `access_to_refresh:<token>`, its `auth_to_access:*` entry and
-  `uname_to_access:egov-user-client:<username>`, all together (deleting only some
-  of them makes the next token request fail). Never delete `client_id_to_access:*`,
-  which every user shares.
+  Leave out `gender` (egov-user rejects `OTHER`). Check it signs in through
+  `/user/oauth/token`.
+- **PGR provisioner** (`PGR_PROVISIONER` at the root): the deploy creates it, and
+  fails if an existing one lacks `MDMS_ADMIN`, `ACCOUNT_ADMIN`, `LOC_ADMIN` or
+  `HRMS_ADMIN`. After you add roles, egov-user may still return the old token and
+  its old roles. Point `pgr_digit_provisioner_username` at a new account instead,
+  or delete that user's cached token keys in `digit-redis` (`auth:`, `access:`,
+  `access_to_refresh:`, `auth_to_access:` and `uname_to_access:egov-user-client:<username>`)
+  all together. Never delete `client_id_to_access:*`.
 
-### 2.3 Data the identity stack needs at the root tenant
+### 2.3 Data at the root tenant
 
-- **Roles:** `ACCOUNT_ADMIN` and `TENANT_ADMIN` must exist in
-  `ACCESSCONTROL-ROLES.roles` at the root. Without them egov-user rejects every
-  account that carries them, and the only trace is in the egov-user log
-  (`Role(... code=ACCOUNT_ADMIN ...) is invalid`). Add them through the MDMS v2
-  `_create` API before the deploy. They may be missing at `pg` too (they were on
-  the first production install), so use these record shapes:
-  `{"code": "ACCOUNT_ADMIN", "name": "Account Admin", "description": "Tenant account administrator — owns onboarding and managed-account lifecycle"}`
-  and
-  `{"code": "TENANT_ADMIN", "name": "Tenant Admin", "description": "Organization administrator projected from Keycloak by the Identity BFF"}`,
-  each with `uniqueIdentifier` = the code. The 2.20 deploy did not add them on that
-  install.
-- **`ACCOUNT_ADMIN` role-actions on the user endpoints.** When a linked employee
-  picks the workspace (`/identity/v1/contexts/_select`), the BFF updates their DIGIT
-  credential through Kong as the `identity_digit_admin_username` account. If
-  `ACCOUNT_ADMIN` has no role-action at the root for those endpoints, every staff
-  sign-in ends in `503 DIGIT_UNAVAILABLE`, and the BFF log says
-  `DIGIT identifier update returned 403`. Compare the root with `pg`:
+- **Roles.** `ACCOUNT_ADMIN` and `TENANT_ADMIN` must exist in
+  `ACCESSCONTROL-ROLES.roles` at the root, or egov-user rejects every account that
+  holds them (`Role(... code=ACCOUNT_ADMIN ...) is invalid`, in its log only). The
+  deploy doesn't add them. Create them with MDMS v2 `_create`, `uniqueIdentifier`
+  = the code:
+  `{"code": "ACCOUNT_ADMIN", "name": "Account Admin", "description": "Tenant account administrator"}`,
+  `{"code": "TENANT_ADMIN", "name": "Tenant Admin", "description": "Organization administrator projected from Keycloak"}`.
+- **`ACCOUNT_ADMIN` on the `/user/*` endpoints.** Without these role-actions every
+  staff sign-in ends in `503 DIGIT_UNAVAILABLE` (BFF log:
+  `DIGIT identifier update returned 403`). Compare the root with `pg`:
 
   ```bash
   for t in pg <root>; do echo "== $t"; PQ "select a.data->>'url' from eg_mdms_data ra
@@ -448,186 +296,115 @@ docker exec -e BAO_TOKEN="$T" -e BAO_ADDR=http://127.0.0.1:8200 openbao \
      and ra.data->>'rolecode'='ACCOUNT_ADMIN' and a.data->>'url' like '/user/%' order by 1"; done
   ```
 
-  At minimum the root needs `/user/_search`, `/user/v1/_search`, `/user/_details`,
+  The root needs at least `/user/_search`, `/user/v1/_search`, `/user/_details`,
   `/user/users/_createnovalidate`, `/user/users/_updatenovalidate`,
-  `/user/users/{id}/_updatenovalidate` and `/user/profile/_update` for
-  `ACCOUNT_ADMIN`. Create the missing `ACCESSCONTROL-ROLEACTIONS.roleactions` rows
-  with the root's **own** action ids for those URLs (look them up by URL; ids differ
-  between installs), with a fresh role-action `id` above the root's maximum, then
-  restart `egov-accesscontrol`. A root that is missing many role-actions shows up in
-  the deploy log as "<root> looks like a truncated bootstrap"; the deploy's
-  `-e repair_tenant_masters=true --tags master-repair` restores all of them from
-  `pg`. Review that list first if the root has deliberate RBAC changes.
-- **Configurator workspace endpoints.** After
-  sign-in the configurator calls `/pgr-services/v2/onboarding/workspaces/_search`
-  (and `_update` and `_rename` later). Signup seeds these permissions for the
-  workspaces it creates. Every Ansible deploy from a checkout that has #2590
-  adds them to an existing root, MCP on or off, through the egov-mdms migration
-  `V20261022000000__workspace_route_grants.sql`. Add them by hand only on a k8s
-  install, on a box deployed from an older checkout, or for a route the
-  migration skipped because an unrelated action already holds its id. Without
-  them the admin signs in, picks the workspace, and sees
-  `AccessDeniedException`, and Kong logs a 403 on `workspaces/_search`.
-  Add the three actions and their `ACCOUNT_ADMIN` role-actions at the root,
-  through the MDMS v2 `_create` API as `ADMIN`. The shapes and ids come from
-  `backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json`;
-  check first that ids 900000, 900001 and 901000 are free at the root.
-  - `ACCESSCONTROL-ACTIONS-TEST.actions-test`:
-    `{"id": 900000, "url": "/pgr-services/v2/onboarding/workspaces/_search", "name": "platform-900000", "displayName": "/pgr-services/v2/onboarding/workspaces/_search", "orderNumber": 0, "enabled": true, "serviceCode": "PLATFORM", "path": ""}`,
-    and the same for `_update` (900001) and `_rename` (901000).
-  - `ACCESSCONTROL-ROLEACTIONS.roleactions`, one per action:
-    `{"id": 900000, "rolecode": "ACCOUNT_ADMIN", "actionid": 900000, "actioncode": "", "tenantId": "<root>"}`.
-
-  The root needs no `eg_pgr_onboarding_workspace` row. With none, `_search`
-  answers a "legacy, setup complete" workspace and the configurator opens the
-  dashboard. Don't insert one: a row also adds the root to the list of
-  signed-up workspaces that the escalation scheduler scans.
-
-  `egov-accesscontrol` caches role-actions for 15 minutes
-  (`cache.expiry.role.action.minutes`). Wait that long, or restart it.
-- **Mobile number rule:** citizen phone sign-in validates the number against the
-  root's `MobileNumberValidation` rule. The deploy also refuses an old
-  `core_mobile_configs` schema. Make sure exactly one current rule is the default.
-- **Google for staff/founders (optional):** if `keycloak_google_client_id` is set,
-  the new realm gets its own Google provider. Add
+  `/user/users/{id}/_updatenovalidate` and `/user/profile/_update`. Add missing
+  role-actions using the root's **own** action id for each URL (ids differ between
+  installs) and a new role-action id above the root's maximum. If the deploy log
+  says the root "looks like a truncated bootstrap", `-e repair_tenant_masters=true
+  --tags master-repair` copies all missing role-actions from `pg`; review its list
+  first.
+- **Configurator workspace routes.** The migration
+  `V20261022000000__workspace_route_grants.sql` grants `ACCOUNT_ADMIN`
+  `/pgr-services/v2/onboarding/workspaces/_search`, `_update` and `_rename`.
+  Without them the admin gets `AccessDeniedException` after picking the workspace.
+  It runs only once the `db-migrations` image is rebuilt (step 5). If an unrelated
+  action already holds id 900000, 900001 or 901000 at the root, it skips that route;
+  add it by hand from `backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json`.
+  Don't add an `eg_pgr_onboarding_workspace` row for the root.
+- **Role-action cache.** `egov-accesscontrol` caches role-actions for 15 minutes.
+  Wait, or restart it, after any change above.
+- **Mobile number rule.** Citizen sign-in checks numbers against the root's
+  `MobileNumberValidation` rule. Exactly one current rule must be the default.
+- **Google for staff and admins (optional).** If `keycloak_google_client_id` is set
+  and `google` is in a sign-in method list, add
   `https://<domain>/auth/realms/digit/broker/google/endpoint` to the Google OAuth
-  client's **authorized redirect URIs** before the deploy. The old
-  `/realms/<state-tenant>/…` entry can stay until rollback is no longer possible.
+  client's redirect URIs before the deploy (the deploy prints this URI). The
+  button is hidden on login pages that don't offer Google.
 
 ### 2.4 nginx on a hand-maintained vhost
 
-With `nginx_preserve_vhost: true` the deploy does not touch the site file, so none
-of the 2.20 routes reach it:
+With `nginx_preserve_vhost: true` the deploy leaves the site file alone, so you
+must add:
 
-- the tenant-route rewrite `^/<slug>/digit-ui/(.*)$ → /digit-ui/$1`;
-- the tenantless `/digit-ui/<page>` guard (302 to the default slug, or 404);
-- `/auth/realms/` and `/auth/resources/` ahead of a Novu dashboard's `/auth/` paths;
-- `/identity/v1/`, which reaches Kong through a catch-all `location /` if you have one.
+- the tenant rewrite `^/<slug>/digit-ui/(.*)$ → /digit-ui/$1`;
+- the guard that redirects or 404s a tenantless `/digit-ui/<page>`;
+- `/auth/realms/` and `/auth/resources/` to Kong, ahead of any Novu `/auth/` paths;
+- `/identity/v1/` to Kong (a catch-all `location /` to Kong covers it).
 
-Pick one before the deploy:
+Either switch to the template (`templates/nginx-site.conf.j2`): render it, diff it
+against the live vhost, move custom routes into host_vars, and set
+`nginx_preserve_vhost: false`. Or hand-edit:
 
-1. **Switch to the template (preferred).** Render it to a scratch file, diff it
-   against the live vhost, and move every custom route you still need into
-   host_vars or a documented addition. Then set `nginx_preserve_vhost: false`. You
-   can render it with
-   `ansible <tenant> -m template -a "src=templates/nginx-site.conf.j2 dest=/tmp/site.conf"`
-   from `local-setup/ansible` **(unverified invocation)**.
-2. **Hand-edit the vhost** (what the first production upgrade did). Add the four
-   items above from `templates/nginx-site.conf.j2`:
+```nginx
+location ^~ /auth/realms/    { proxy_pass http://127.0.0.1:18000; proxy_set_header Host $host; proxy_set_header X-Forwarded-For $remote_addr; proxy_set_header X-Forwarded-Proto $scheme; proxy_buffer_size 64k; proxy_buffers 8 64k; }
+location ^~ /auth/resources/ { proxy_pass http://127.0.0.1:18000; proxy_set_header Host $host; proxy_set_header X-Forwarded-For $remote_addr; proxy_set_header X-Forwarded-Proto $scheme; proxy_buffer_size 64k; proxy_buffers 8 64k; }
+location = /digit-ui { return 302 /<slug>/digit-ui/; }
+location ~ "^/([a-z0-9-]{2,63})/digit-ui$" { return 302 /$1/digit-ui/; }
+location ~ "^/[a-z0-9-]{2,63}/digit-ui/(.*)$" { rewrite "^/[a-z0-9-]{2,63}/digit-ui/(.*)$" /digit-ui/$1 last; }
+# first line inside location /digit-ui/ (and location = /digit-ui/public-dashboard):
+if ($request_uri ~ "^/digit-ui/(?![^?]*[.](?:js|css|map|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|otf|eot)(?:[?]|$))") { return 302 /<slug>$request_uri; }
+```
 
-   ```nginx
-   location ^~ /auth/realms/    { proxy_pass http://127.0.0.1:18000; proxy_set_header Host $host; proxy_set_header X-Forwarded-For $remote_addr; proxy_set_header X-Forwarded-Proto $scheme; proxy_buffer_size 64k; proxy_buffers 8 64k; }
-   location ^~ /auth/resources/ { proxy_pass http://127.0.0.1:18000; proxy_set_header Host $host; proxy_set_header X-Forwarded-For $remote_addr; proxy_set_header X-Forwarded-Proto $scheme; proxy_buffer_size 64k; proxy_buffers 8 64k; }
-   location = /digit-ui { return 302 /<slug>/digit-ui/; }
-   location ~ "^/([a-z0-9-]{2,63})/digit-ui$" { return 302 /$1/digit-ui/; }
-   location ~ "^/[a-z0-9-]{2,63}/digit-ui/(.*)$" { rewrite "^/[a-z0-9-]{2,63}/digit-ui/(.*)$" /digit-ui/$1 last; }
-   # first line inside location /digit-ui/ (and location = /digit-ui/public-dashboard):
-   if ($request_uri ~ "^/digit-ui/(?![^?]*[.](?:js|css|map|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|otf|eot)(?:[?]|$))") { return 302 /<slug>$request_uri; }
-   ```
+Then remove:
 
-   Then **remove the dead identity routes**:
+- `/citizen`, `/citizen/assets/` and `/token-exchange/`;
+- any `location /identity/` that goes straight to the BFF port;
+- a `location /auth/` that goes straight to Keycloak, and root-level `^~ /realms/`,
+  `^~ /resources/` and **`^~ /admin/`** (that last one exposes the Keycloak admin
+  console).
 
-   - `/citizen` and `/citizen/assets/` (the v2 app still calls
-     `token-exchange-svc` and bypasses the BFF), and `/token-exchange/`;
-   - any include of an older Identity BFF snippet (a `location /identity/` pointing
-     straight at the BFF port): `/identity/v1/` must go through Kong;
-   - a generic `location /auth/` that proxies straight to Keycloak's port, and the
-     root-level Keycloak 24 paths `^~ /realms/`, `^~ /resources/` and
-     **`^~ /admin/`**. A root-level `^~ /admin/` route makes the Keycloak admin
-     console public. With them gone, the rest of `/auth/` falls to
-     `location /` and Kong, which refuses the privileged paths.
+Keep `^~ /auth/sign-in`, `/auth/sign-up` and `/auth/organization-list` if they go
+to a Novu dashboard.
 
-   **Keep** `^~ /auth/sign-in`, `^~ /auth/sign-up` and `^~ /auth/organization-list`
-   if they proxy to a Novu dashboard: they are Novu's auth shim (the template has
-   them too), not identity leftovers.
+Stage the new file and swap it in just before the deploy (`nginx -t`, then
+reload); removing the old routes earlier breaks 2.12 sign-in. Disable other vhosts
+on the server that still proxy to Keycloak or `token-exchange-svc`.
 
-   Stage the new file next to the old one, and swap it in right before the deploy
-   (`nginx -t` first, then reload). Removing the old Keycloak routes earlier breaks
-   2.12 sign-in. Look at the server's **other** vhosts too: sites left over from
-   earlier Keycloak work can still proxy to Keycloak's port or to
-   `token-exchange-svc`. Disable them.
+### 2.5 Citizen one-time codes
 
-### 2.5 Choose how citizens get their one-time code
+`phone_otp` needs one delivery channel. Without one, the deploy only warns, and
+citizens can't sign in.
 
-`identity_citizen_signin_methods: [phone_otp]` needs exactly one way to deliver a
-code. Without one, citizen sign-in is unavailable: the deploy warns but does not
-fail.
-
-| Setting | What it does | When |
+| Setting | What it does | Use |
 |---|---|---|
-| `identity_dev_fixed_otp: true` | Accepts the fixed development code (`123456`) for any number; the BFF writes codes to its log | Demo and test servers only: anyone can sign in as any citizen. **Never turn it on for a production install.** |
-| `identity_citizen_otp_sender: http` | The BFF POSTs `{phone, code, purpose, tenantId, locale, expiresIn}` to `IDENTITY_OTP_SENDER_URL` | When you have an SMS gateway endpoint. host_vars does not render the URL yet, so it needs a compose overlay **(unverified)**. |
-| `enable_otp_services: true` | Starts DIGIT's older OTP services; their SMS goes through novu-bridge | Needs `enable_novu: true` and an SMS provider. The preflight counts it as a channel, but the BFF's own sender stays unset, and 2.20 notes that BFF codes do not go through notifications yet. Whether citizens actually receive a code this way is **(TO CONFIRM)**. |
+| `identity_dev_fixed_otp: true` | Accepts `123456` for any number | Demo and test only: anyone can sign in as any citizen. **Never on production.** |
+| `identity_citizen_otp_sender: http` | The BFF POSTs `{phone, code, purpose, tenantId, locale, expiresIn}` to `IDENTITY_OTP_SENDER_URL` | With an SMS gateway. The URL needs a compose overlay; host_vars doesn't set it yet. |
+| `enable_otp_services: true` | Starts DIGIT's older OTP services, sending through novu-bridge | Needs Novu and an SMS provider. Not confirmed to deliver BFF codes. |
 
-Which sender to use is a product decision for the county. A production install
-needs one of the last two rows in place before the cutover, checked by sending a
-code to a real phone. Without one, citizens cannot sign in.
+On production, test the chosen channel with a real phone before the cutover.
 
-### 2.6 Configurator signup
+### 2.6 Configurator signup (optional)
 
-Signup is how a new organisation creates its own workspace from the configurator:
-the person enters an email address, gets a one-use link, and lands in onboarding.
-Staff and admins of an existing workspace only need sign-in, which works without
-it. Enable signup during the upgrade or at any time after it:
+Signup lets a new organisation create its own workspace. Existing staff and admins
+don't need it.
 
 ```yaml
 identity_signup_methods: [magic_link]
-identity_magic_link_enabled: true
+identity_magic_link_enabled: true     # both lines are needed
 ```
 
-Then run a full `./deploy.sh <tenant>`; a `--tags` run skips the identity tasks.
-The deploy creates the `digit-identity-bff-magic-link` client in realm `digit`,
-and the BFF offers magic link only once that client exists and is enabled.
-
-- **Both lines are needed.** With `identity_signup_methods` alone, sign-in works but
-  the signup page says "No sign-in method is enabled".
-- **Check:** `curl -s https://<domain>/identity/v1/auth-methods?intent=signup`
-  lists `magic_link`.
-- **Mail:** the link goes out through the realm SMTP (2.2). With a mail catcher,
-  only someone who can read the catcher can finish a signup.
-- **Every completed signup creates a new root workspace** on the install. On a
-  single-county install, decide whether you want that before enabling it.
-- The link is valid for 30 minutes (`identity_login_ttl_seconds`). One address can
-  request 3 links per 30 minutes.
+Run a full `./deploy.sh <tenant>` (a `--tags` run skips the identity tasks). Check
+`curl -s 'https://<domain>/identity/v1/auth-methods?intent=signup'` lists
+`magic_link`. Each completed signup creates a new root workspace, so decide whether
+you want that on this install.
 
 ---
 
 ## 3. Keycloak 24 → 26.7.3
 
-The deploy does this; there is no separate command. What happens:
+The deploy does this:
 
-1. The `keycloak` service switches from `quay.io/keycloak/keycloak:24.0` to the
-   `identity-keycloak` image (26.7.3, with the login themes built in). It reuses the
-   **same** `keycloak-postgres` container and `keycloak_postgres_data` volume, so
-   the first start migrates the schema **in place**. This is the one-way step
-   ([1.3](#13-back-up)).
-2. `configure-identity-keycloak.sh` runs once Keycloak is healthy. It creates the
-   `digit` realm with Organizations on, its clients (`digit-identity-bff`, admin,
-   magic link, `digit-ui-employee`, `digit-ui-citizen`), themes, flows and SMTP. It
-   also sets the user profile's `unmanagedAttributePolicy` to `ADMIN_EDIT`.
-   Without that policy, Keycloak 24+ silently drops the BFF's `digit.*` user
-   attributes, and repeat signups appear to send no mail. The script is
-   idempotent; re-running the deploy re-applies it.
-3. The **old per-tenant realm is left as it is**, including its users, Google links
-   and `digit-ui` client. Nothing in 2.20 reads it. Keep it until the upgrade is
-   signed off and rollback is no longer needed, then decide whether to delete it.
-   Stray realms from old imports (for example one literally named
-   `__REALM_NAME__`) can go at the same time.
-4. `token-exchange-svc` is no longer in the compose files, so `up -d` leaves its
-   container running as an **orphan** (confirmed: compose reports it, with
-   `otp-publisher`, as an orphan of the project). Stop and remove it once step 6
-   passes, together with its nginx route (2.4). An older identity-bff container
-   from an earlier experiment is replaced by the 2.20 `identity-bff` service
-   automatically when its compose service name is also `identity-bff`.
+1. The `keycloak` service moves to the `identity-keycloak` image on the **same**
+   `keycloak-postgres` database, which is migrated in place (one-way, 1.3).
+2. Once Keycloak is healthy, the deploy creates the `digit` realm, its clients,
+   themes and SMTP. Re-running the deploy re-applies it.
+3. The old realm stays as it was. Nothing reads it. Delete it once rollback is no
+   longer needed.
+4. `token-exchange-svc` keeps running as an orphan. Remove it after step 6.
 
-On the first production upgrade, Keycloak 26.7.3 migrated a 24.0.5 database (an
-old realm with Google links and a stray `__REALM_NAME__` realm) in place without a
-problem and came up healthy within the deploy's normal wait.
-
-Inside the container Keycloak serves at the **root** path; `/auth` exists only at
-Kong. For `kcadm.sh` use `--server http://127.0.0.1:8180` from inside the
-`keycloak` container, not `…:8180/auth` (that gives
-`Unable to find matching target resource method`).
+Inside the container Keycloak serves at the root path. For `kcadm.sh` use
+`--server http://127.0.0.1:8180` from inside `keycloak`, not `…/auth`.
 
 Check:
 
@@ -635,9 +412,7 @@ Check:
 curl -fsS https://<domain>/auth/realms/digit/.well-known/openid-configuration >/dev/null && echo realm-ok
 curl -fsS 'https://<domain>/identity/v1/auth-methods?intent=signin'
 docker exec identity-bff wget -qO- http://127.0.0.1:3000/readyz
-# must be 404. Ask Kong directly: with the stock Novu dashboard
-# (build_novu_dashboard: false), nginx sends /auth/admin/ to Novu's page instead.
-curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: <domain>' http://127.0.0.1:18000/auth/admin/
+curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: <domain>' http://127.0.0.1:18000/auth/admin/   # must be 404
 ```
 
 ---
@@ -646,398 +421,223 @@ curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: <domain>' http://127.0.0.1:18
 
 ### 4.1 Staff
 
-Nothing moves automatically. After the deploy, **an employee can sign in only once
-they are linked**: a Keycloak user with their email, a membership in the root's
-Organization, and a binding to their existing DIGIT account (same uuid, roles,
-complaint history).
+An employee can sign in once linked: a Keycloak user with their email, a
+membership in the root's Organization, and a binding to their existing DIGIT
+account (same uuid, roles and complaints).
 
-- **Who links:** a person with live `ACCOUNT_ADMIN` at the root, from the
-  configurator (Members / Employees), or with `POST /identity/v1/workspace-members/_link {tenantId, digitUuid, email}`.
-  See the [BFF contract](../../../backend/identity-bff/docs/identity-bff.md) §3.3.6.
-- **What the employee gets:** a password-setup email through the realm SMTP. They
-  choose a Keycloak password and then sign in at `/<slug>/digit-ui/employee`.
-- **Before the deploy:** collect a real email address for every active employee
-  who has none (inventory 1.1). Without an address they cannot be linked.
-- **Do not link service accounts.** Linking replaces the account's DIGIT password
-  with one that only the BFF knows. Leave unlinked: the account in
-  `identity_digit_admin_username`, the PGR provisioner, the deploy's own bootstrap
-  user (usually `ADMIN`), and any account scripts, MCP or integration tests sign in
-  with.
-- **City-tenant staff** cannot be linked (§0). Re-create them at the root, or accept
-  that they lose access. Their complaints stay where they are.
-- **One founder Organization per root.** For a deploy-seeded root, the deploy
-  creates the Organization route itself (alias and slug = tenant id) through
-  `identity_tenant_route_backfill_roots`, which defaults to `state_root`. If it
-  reports `SLUG_TAKEN` or `ALIAS_TAKEN`, a test signup already holds that slug; fix
-  that before linking anyone.
+- **Collect an email for every active employee** before the deploy. Without one
+  they can't be linked.
+- **Don't link service accounts.** Linking replaces the DIGIT password with one
+  only the BFF knows. Leave out `identity_digit_admin_username`, the PGR
+  provisioner, `ADMIN`, and any account that scripts, MCP or integration tests use.
+- **City-tenant staff** can't be linked (§0).
+- If the deploy reports `SLUG_TAKEN` or `ALIAS_TAKEN` for the root's Organization,
+  a test signup already holds that slug. Fix it before linking anyone.
 
-**The first admin.** `_link` needs a caller who is already linked and holds live
-`ACCOUNT_ADMIN` at the root, and no deploy setting links one on a deploy-seeded
-root. Bootstrap the first one through the BFF's operator API, which is reachable
-only on the BFF's loopback port with the control-plane token:
+**First admin.** Linking needs an admin who is already linked, so link the first
+one through the BFF's internal API (loopback only):
 
-1. Create a **person** account at the root (not the service account from 2.2), for
-   example with `ACCOUNT_ADMIN`, `HRMS_ADMIN`, `MDMS_ADMIN`, `LOC_ADMIN`, `EMPLOYEE`
-   and `SUPERUSER`.
-2. Create its Keycloak user in realm `digit` with `kcadm.sh` (see step 3 for the
-   server URL), with `emailVerified=true`, and set a password, or leave the
-   required actions and send a setup email.
-3. Link it:
+1. Create a person's account at the root with `ACCOUNT_ADMIN`, `HRMS_ADMIN`,
+   `MDMS_ADMIN`, `LOC_ADMIN`, `EMPLOYEE` and `SUPERUSER`.
+2. Create their Keycloak user in realm `digit` with `kcadm.sh`
+   (`emailVerified=true`) and set a password.
+3. Link and activate:
 
    ```bash
    CP=$(docker exec identity-bff printenv IDENTITY_CONTROL_PLANE_TOKEN)
    curl -s -X POST http://127.0.0.1:18400/internal/identity/v1/account-links/_link \
      -H "Authorization: Bearer $CP" -H 'Content-Type: application/json' \
      -d '{"actor":"v220-migration","links":[{"email":"<admin email>","tenantId":"<root>","digitUserName":"<code>","userType":"EMPLOYEE"}]}'
+   docker exec identity-bff node dist/modules/jobs/convert-account-links.js   # expect "converted":1
    ```
 
-4. Turn that link into an active binding plus Organization membership:
-   `docker exec identity-bff node dist/modules/jobs/convert-account-links.js`
-   (expect `"converted":1`).
+**Everyone else.** Signed in to the Configurator as that admin, link each employee
+from People › Employees, or script
+`POST /identity/v1/workspace-members/_link {tenantId, digitUuid, email}` with the
+session cookie. Each person gets a password-setup email.
 
-**Bulk-linking the rest.** Sign in to the configurator as that admin and call
-`POST /identity/v1/workspace-members/_link {tenantId, digitUuid, email}` once per
-active HRMS employee at the root, from a script that keeps the BFF session cookie.
-The first production upgrade linked 61 of 61 staff this way in under a minute,
-every one `201` with an active binding and a setup email. Exclude every account that
-something signs in to with a DIGIT password: the BFF's service account, the PGR
-provisioner, `ADMIN` and other bootstrap or MCP accounts, smoke-test logins, and
-integration-test personas.
-
-**Addresses.** Use the employee's own address where it is valid and unique. Where
-there is none, a common synthetic scheme such as `<code-lowercased>@staff.<domain>`
-works when realm mail goes to a mail catcher (2.2): an admin reads the setup link
-there and hands it to the person. Keycloak usernames are the addresses, so pick a
-scheme you will keep: a later change of address (4.5) leaves the username as it was.
-
-**Setup links expire after 15 minutes** (`IDENTITY_PASSWORD_SETUP_TTL_SECONDS`,
-default 900). Links sent during the bulk run are dead by the time an admin hands
-them out, so send a fresh one at hand-out time ("Resend" in the console, or
-`_link` with `resend: true`), or have the person use "Set up or reset your password"
-on the configurator sign-in page. Open a link in a private window: a browser that
-is signed in to Keycloak as someone else gets `different_user_authenticated`.
+- **Tell staff where to sign in:** `/<slug>/digit-ui/employee`, with their email.
+  The setup email returns to the Configurator sign-in, which refuses staff
+  without an admin role and links them to the employee app
+  ([#2611](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/2611)).
+- **Setup links expire after 15 minutes.** If you hand them out from a mail
+  catcher, resend at hand-out time ("Resend email", or `_link` with
+  `resend: true`), or have the person use "Forgot password?". Open links in a
+  private window: a browser signed in as someone else gets
+  `different_user_authenticated`.
+- **No email?** A synthetic address such as `<code>@staff.<domain>` works with a
+  mail catcher. The Keycloak username stays that address even after a later email
+  change (4.5), so pick a scheme you will keep.
 
 ### 4.2 Citizens
 
-Nothing to migrate in advance. At a citizen's first phone sign-in, the BFF finds
-their DIGIT account by verified phone number, after its own records:
+Nothing to do in advance. At first phone sign-in the BFF finds the DIGIT account by
+phone number:
 
-- **Found** → same account and history.
-- **Two active accounts share the number** → `CITIZEN_ACCOUNT_AMBIGUOUS`, and that
-  citizen cannot sign in until one account is deactivated. Resolve the duplicates
-  from inventory 1.1 first.
-- **Not found** → a new citizen account. Old complaints are not shown to it.
-  This can happen when a stored phone was encrypted under another tenant's key
-  (4.4) **(unverified)**.
-
-To check: phone + code at `/<slug>/digit-ui/citizen` → `_send` 202, `_verify`
-200, citizen context at the root, "My complaints" and PGR search 200.
+- **one match:** same account and complaints;
+- **two active accounts:** `CITIZEN_ACCOUNT_AMBIGUOUS` until one is deactivated
+  (fix the duplicates from 1.1 first);
+- **no match:** a new account, without the old complaints. This can also happen
+  when the stored phone is under another tenant's key (4.4).
 
 ### 4.3 Citizens who used Google
 
-2.20 has no citizen Google sign-in. Those citizens sign in with their phone number
-instead. If their DIGIT account has that number, 4.2 applies. If it was created
-through Google with no number, or with a placeholder, they get a new account
-**(TO CONFIRM in rehearsal: what phone the old Google flow stored)**. Tell these
-citizens before the change. The inventory count says how many there are.
+They sign in with their phone number instead. If their DIGIT account has that
+number, 4.2 applies; if not, they get a new account. Tell them before the change.
 
 ### 4.4 Encryption keys
 
-2.20 does not change egov-user's encryption, but it reads users the same way 2.12
-does: by the **request tenant's** key. Before you upgrade, confirm every active
-tenant has an active key, and look at the key-id prefixes from inventory 1.1:
+egov-user reads users with the **request tenant's** key, as in 2.12.
 
-- Every root and city tenant needs a row in `eg_enc_symmetric_keys` with
-  `active = true`. A tenant without one fails every user and HRMS write with
-  "Unknown error occurred in encryption process". `POST /egov-enc-service/crypto/v1/_generatekey {"tenantId": "<t>"}`
-  is create-if-missing and safe to repeat.
-- Rows whose `username` prefix is **another tenant's** key id are unfindable by
-  login and by the BFF's phone search. The fix is re-encrypting those fields under
-  the right tenant's key (decrypt with the old key, encrypt with the new, update),
-  as done in the v2.12 upgrade. Count them; do not rotate keys.
+- Every tenant needs an active row in `eg_enc_symmetric_keys`, or user and HRMS
+  writes fail with "Unknown error occurred in encryption process".
+  `POST /egov-enc-service/crypto/v1/_generatekey {"tenantId": "<t>"}` creates a
+  missing one and is safe to repeat.
+- Rows whose `username` prefix is another tenant's key id can't be found by login
+  or by phone. Re-encrypt them under the right key; don't rotate keys.
 
 ### 4.5 From a mail catcher to real email
 
-An install that went live with a mail catcher and synthetic addresses (4.1) can
-move to real email at any time. Nobody is re-linked. Passwords, roles, bindings and
-complaint history stay as they are.
+Nobody is re-linked; passwords, roles and history stay.
 
-1. **Switch the realm to the real relay** (2.2) and run a full deploy. From then on,
-   all identity mail goes out for real, including mail to synthetic addresses,
-   which bounces. Do not link, resend or reset anyone at a synthetic address after
-   this point.
-2. **Give each employee their real address.** As a linked `ACCOUNT_ADMIN`, use
-   Configurator → Employees → edit the email (for an Active member this changes
-   their sign-in email), or Members → Change email. A script can use the session
-   that bulk-linked staff (4.1):
+1. Point the realm at a real relay (2.2) and run a full deploy. From now on mail
+   to synthetic addresses bounces, so don't link or reset anyone at one.
+2. Change each employee's address: Configurator › Employees › edit, or
    `POST /identity/v1/workspace-members/_updateEmail {tenantId, digitUuid, email}`
-   → `202 {status: "verification_sent"}`. Keycloak emails a verification link to
-   the new address.
-   - Keycloak's email changes at once. DIGIT's (`eg_user.emailid`) changes only once
-     the person clicks the link.
-   - The Keycloak **username** stays the synthetic address. The person can sign in
-     with either.
-   - `403 ADMIN_EMAIL_CHANGE_NOT_ALLOWED`: the target is you, holds an
-     administrative role you don't hold, has a citizen account or a verified phone,
-     or belongs to another workspace. That person changes it themselves:
-     Configurator → Account → Change email (Keycloak's `UPDATE_EMAIL`). For your
-     own address, a second admin can also do it.
-   - `409 IDENTITY_EMAIL_CHANGED`: another Keycloak user already has that address.
-3. **Staff who never set a password** (their handed-out link expired, or was never
-   handed out): once the address has changed, send setup with Employees →
-   "Resend email", or `_link` with `resend: true` and the **new** address. Wait at
-   least 60 s after the change (`429 RESEND_TOO_SOON`). That email covers both
-   verification and the password, so the person can ignore the first one.
-4. **Check** that `GET /identity/v1/workspace-members?tenantId=<root>&state=active`
-   (`max` up to 500) lists no email at the synthetic domain. As people verify,
-   their `eg_user.emailid` follows.
-5. **Retire the catcher** once no synthetic address is left: stop its Compose
-   project, and remove the `/mailpit` nginx location and its basic-auth file.
+   (`202`). Keycloak emails a verification link; DIGIT's `emailid` updates when
+   it's clicked.
+   - `403 ADMIN_EMAIL_CHANGE_NOT_ALLOWED`: the person is you, holds an admin role
+     you don't, has a citizen account or verified phone, or is in another
+     workspace. They change it themselves under Account › Change email.
+   - `409 IDENTITY_EMAIL_CHANGED`: another user has that address.
+3. For staff who never set a password, resend setup to the new address at least
+   60 seconds after the change.
+4. Check `GET /identity/v1/workspace-members?tenantId=<root>&state=active` lists no
+   synthetic addresses, then remove the catcher and its nginx route.
 
 ---
 
-## 5. Deploy order
-
-One `./deploy.sh <tenant>` does the whole upgrade, in this order inside the
-playbook: preflight → secrets → stack up (Keycloak 26 migrates its database here)
-→ container-health gate → identity bootstrap (wait for Keycloak, SMTP check, realm
-configure, Organization route) → validation → notification seed. 5.1 #3 depends on
-that order. What you control:
-
-1. **One build for the PGR and notification images.** pgr-services,
-   pgr-services-db, novu-bridge, novu-bridge-db and user-preferences (+db) must
-   share one tag (`notification_stack_tag`). See the
-   [notifications migration, step 1](notifications/migration.md#1-take-all-four-images-from-one-build).
-2. **pgr-services with or before the configurator.** A 2.20 configurator served
-   with an older pgr-services cannot resume onboarding drafts (#2515). A single
-   deploy from one commit ships both; only a hand-pinned upgrade can get this wrong.
-3. **identity-bff and identity-keycloak from the same commit.**
-4. **Workspace seed upgrade (platform baseline v8):** runs in the background for
-   **self-serve workspaces only** (rows in `eg_pgr_onboarding_signup`). It is
-   create-if-absent and never overwrites a founder's edits. A deploy-seeded root
-   has no workspace row and reads as onboarded already.
-5. **Notifications:** the deploy upgrades the software only. Moving each tenant's
-   notification configuration to the `NOTIFICATIONS.*` masters is a separate,
-   reviewed step (`migrate-notifications.py plan` / `apply`). See
-   [notifications/migration.md](notifications/migration.md). Book it per tenant.
-6. **New 2.20 masters and labels at an existing root** (identity labels, new UI
-   text, French and Portuguese): how a deploy-seeded root receives them on upgrade
-   is **(TO CONFIRM)**.
+## 5. Deploy
 
 ```bash
-cd /opt/ccrs && git fetch origin && git checkout <v2.20-beta tag or commit>
-cd local-setup/ansible && ./deploy.sh <tenant> 2>&1 | tee /var/log/deploy-v220-$(date -u +%Y%m%dT%H%MZ).log
+cd /opt/ccrs && git fetch origin && git checkout <master commit>
+cd local-setup/ansible && setsid ./deploy.sh <tenant> > /var/log/deploy-v220-$(date -u +%Y%m%dT%H%MZ).log 2>&1 &
 ```
 
-Read the end of the log for `ACTION:` lines (for example "a deploy-seeded root has
-no Organization route"). They are not failures, but each one needs action.
+Order inside the deploy: preflight → secrets → stack up (Keycloak migrates here) →
+container-health check → identity setup (SMTP check, realm, Organization) →
+validation → notification seed. Every task is idempotent: fix a blocker (5.1) and
+run it again. Read the end of the log for `ACTION:` lines; each needs follow-up.
 
-Run the deploy detached (`setsid`, output to a log file) and let it finish. Every
-task is idempotent, so after fixing a blocker you simply run it again. On the first
-production upgrade it took four runs of 2 to 15 minutes each.
+Then **rebuild the MDMS migrations image**. The deploy reuses the image built on
+the box, so the 2.20 `egov-mdms` migrations (including the workspace routes in
+2.3) don't run until it is rebuilt:
 
-### 5.1 Blockers seen on an existing install
+```bash
+cd /opt/digit
+COMPOSE_PROFILES=<profiles> docker compose <-f files> build db-migrations
+COMPOSE_PROFILES=<profiles> docker compose <-f files> up --no-deps db-migrations
+```
 
-Each of these stopped the first production upgrade. None modified data before it
-stopped.
+Use the profiles and `-f` files the deploy uses (`docker-compose.egov-digit.yaml`,
+`docker-compose.migrations.yml`, your overlay, and any others in host_vars).
+
+Also:
+
+- **One build for the PGR and notification images**: pgr-services, novu-bridge and
+  user-preferences, with their `-db` images, share one tag. `image_tag` covers this.
+  See the [notifications migration](notifications/migration.md#1-take-all-four-images-from-one-build).
+- **Notification configuration** moves to the `NOTIFICATIONS.*` masters in a
+  separate, per-tenant step (`migrate-notifications.py plan` / `apply`). The 2.12
+  configuration keeps working until then.
+
+### 5.1 Known blockers on an existing install
 
 1. **`db-history-normalize` ABORT: `digit-user-preferences-service: user_preference has N rows, but no Flyway history table exists`.**
-   The 2.12 user-preferences service was a Go program that created its table
-   without Flyway history. The guard refuses to run the 2.20 migrators, and the
-   deploy stops at "novu-bridge ordering" with novu-bridge, config-service and
-   user-preferences left created but stopped (**notifications are down until this is
-   fixed**). The 2.20 migration `V20260205120000__create_user_preference.sql` was
-   written for exactly this table (`CREATE TABLE IF NOT EXISTS`, a de-duplication,
-   `CREATE INDEX IF NOT EXISTS`), and the migrator runs Flyway with
-   `baselineOnMigrate=true`. So dump the table, then run that one migrator without
-   the guard:
+   The 2.12 service created the table without Flyway. Notifications stay down until
+   fixed. The 2.20 migration handles the existing table, so dump it and run that
+   migrator alone, then re-run the deploy:
 
    ```bash
    docker exec docker-postgres pg_dump -U egov -d egov -t user_preference > $BK/user_preference.sql
-   cd /opt/digit && COMPOSE_PROFILES=<the deploy's profiles> docker compose <the deploy's -f files> \
+   cd /opt/digit && COMPOSE_PROFILES=<profiles> docker compose <-f files> \
      run --rm --no-deps digit-user-preferences-service-migration
    ```
 
-   Expect a BASELINE row at version 1 and `V20260205120000` applied, with the rows
-   kept. The guard then finds a canonical history table. Re-run the deploy.
-
 2. **"novu tenant accounts — move the Novu admin off the legacy password" fails
-   with `FAILED 422`.** Per-tenant Novu accounts default to on with Keycloak. On an
-   existing Novu the task signs in as `admin@digit.local` with the legacy password
-   and calls `/v1/auth/update-password`, which Novu 2.3.0 rejects with
-   `environmentId should not be empty`: the login token carries no environment. The
-   task runs only when per-tenant Novu accounts are on, so `novu_tenant_accounts:
-   false` gets any install past it, whether or not it pins `novu_api_key`. Set it
-   until the rotation is fixed; per-tenant Novu organisations stay off.
+   with `422` (`environmentId should not be empty`).** Set
+   `novu_tenant_accounts: false`. Per-tenant Novu organisations stay off.
 
-3. **"validate — no container is restarting / unhealthy / crash-looping" fails on
-   `digit-tempo`.** A Tempo that never becomes ready (check its restart count and
-   `/ready`) trips the gate, and every task after it is skipped, **including the
-   Keycloak realm configuration**. Fix Tempo, or drop the trace tier with
-   `observability_level: logs` (metrics and logs stay; the deploy removes the tempo
-   container and keeps its volume).
+3. **"validate — no container is restarting / unhealthy" fails on `digit-tempo`.**
+   Everything after it is skipped, including the Keycloak realm setup. Fix Tempo,
+   or set `observability_level: logs` to drop tracing.
 
-4. **The notification seed fails at the root with
-   `RAINMAKER-PGR.NotificationChannel row FORBIDDEN (403)` and exit 3, and it grants
-   permissions on the wrong endpoints.** `seed-notifications.py` uses fixed action
-   ids (4623–4639) and treats an action as present when the id exists at the
-   tenant, without comparing the URL. On an install whose own actions already use
-   those ids, it creates its role-actions on **unrelated endpoints** (on the first
-   production install, 23 rows: for example CSR, GRO and PGR_LME on
-   `/mdms-v2/v2/_update/common-masters.UserValidation`, and MDMS_ADMIN on PGR
-   migration and analytics endpoints). [#2603](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/2603)
-   (open) fixes the seed by matching actions on URL. Until it lands, check right
-   after every 2.20 deploy:
-
-   ```bash
-   PQ "select a.data->>'id', a.data->>'url' from eg_mdms_data a where a.schemacode='ACCESSCONTROL-ACTIONS-TEST.actions-test'
-       and a.tenantid='<root>' and a.isactive and (a.data->>'id')::int between 4623 and 4639 order by 1"
-   ```
-
-   If those ids are not the `/mdms-v2/v2/_create|_update/RAINMAKER-PGR.NotificationChannel`,
-   `NOTIFICATIONS.*` and `/novu-bridge/novu-adapter/v1/…` actions the seed lists,
-   save and **deactivate** (`isactive=false`; deactivated rows still hold their
-   unique key, so the next seed run does not recreate them) the role-actions the
-   seed created in this deploy, restart `egov-accesscontrol`, and confirm that an
-   affected role now gets 403. The root then stays on its 2.12 notification
-   configuration, which keeps delivering. Everything after the seed in the
-   playbook is CI test tasks, so the identity upgrade itself is complete at this
-   point. Every later full deploy (for example, to enable signup, 2.6) stops at the
-   same task until the seed is fixed. Everything it needed to change has been applied
-   by then, so the failure is safe to ignore. To skip the seed, pass a JSON boolean:
-   `./deploy.sh <tenant> -e '{"seed_notifications": false}'`. The form
-   `-e seed_notifications=false` passes the string `"false"`, which the seed's
-   condition treats as true. A re-run logs `+23 created` again, but nothing is written:
-   the deactivated rows keep their unique key, and an `_authorize` check against
-   egov-accesscontrol still refuses all 23 grants. Do not check through Kong, which
-   answers 401 to every `/access` call.
+The notification seed no longer grants permissions on unrelated endpoints when an
+install's action ids differ (fixed in
+[#2603](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/2603)).
+It now places colliding actions at new ids and prints `ACL-ID-COLLISION` lines;
+these are informational.
 
 ---
 
-## 6. After the deploy: verify by role
+## 6. Verify
 
-| Role | Check | Expected |
+| Who | Check | Expected |
 |---|---|---|
-| Platform | `/auth/realms/digit/.well-known/openid-configuration`, `/identity/v1/auth-methods`, BFF `/readyz` | 200 / methods listed / ready |
-| Platform | `/auth/admin/`, `/auth/realms/master/protocol/openid-connect/token`, through Kong as in step 3 | 404 (privileged Keycloak paths are not public). Through nginx with the stock Novu dashboard, `/auth/admin/` shows Novu's page instead. |
-| Platform | `/digit-ui/employee` | 302 to `/<slug>/digit-ui/employee` (or 404 without a default slug) |
-| Admin | Configurator sign-in, then pick the root workspace | Lands on the management console |
-| Admin | Members → link one test employee with a real mailbox | Password-setup email arrives |
-| Employee | That employee sets a password, then signs in at `/<slug>/digit-ui/employee` | Inbox loads with their roles and old complaints |
+| Platform | Realm well-known, `/identity/v1/auth-methods`, BFF `/readyz` | OK |
+| Platform | `/auth/admin/` and `/auth/realms/master/protocol/openid-connect/token` through Kong (step 3) | 404 |
+| Platform | `/digit-ui/employee` | 302 to `/<slug>/digit-ui/employee` |
+| Admin | Configurator sign-in, pick the root workspace | Management console |
+| Admin | Link a test employee with a real mailbox | Setup email arrives |
+| Employee | Set password, sign in at `/<slug>/digit-ui/employee` | Inbox with their roles and old complaints |
 | Employee | "Forgot password?" | Reset email arrives |
-| Citizen (OTP) | `/<slug>/digit-ui/citizen`, phone + code | Signs in to the **existing** account and sees their complaints |
-| Citizen | File, assign and resolve a complaint end to end | Each step works, and notifications go out on the configured channels |
-| Founder | New signup through the configurator | Workspace reaches ACTIVE; the five onboarding steps work |
-| Service accounts | Integration tests / MCP / scripts that use `/user/oauth/token` | Still sign in (their accounts are not linked) |
-| Platform | Escalation system user env on pgr-services, `eg_enc_symmetric_keys` for the root, novu-bridge `NOVU_API_KEY` not `changeme` | Unchanged from 2.12 |
-
-To script the employee check, follow the browser flow:
-`GET /identity/v1/authorize?surface=employee&method=password&intent=signin&tenantSlug=<slug>`,
-post the Keycloak login form, then `POST /identity/v1/contexts/_select
-{tenantId, surface: "employee"}`, which returns the DIGIT token and roles. On the
-first production upgrade the admin, GRO, LME and CSR all landed on
-`/<slug>/digit-ui/employee/` with their own roles and a working PGR inbox.
+| Citizen | Phone + code at `/<slug>/digit-ui/citizen` | Existing account and complaints |
+| Citizen | File, assign and resolve a complaint | Each step works; notifications go out |
+| Service accounts | Integration tests, MCP, scripts using `/user/oauth/token` | Still sign in |
 
 Then:
 
-- **Gatus:** a check that 2.20 switches off keeps its last red result forever.
-  Clear switched-off endpoints from `gatus.db` once, with a backup, as in
-  [#2549](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/2549).
-  The "Kong Admin API" tile (#2511) is the known one.
-- **Remove orphans:** `token-exchange-svc` and any old identity-bff container that
-  `docker ps` still shows, plus their nginx routes (2.4).
-- **Release the deploy freeze** (1.2) only after the above passes.
+- Remove `token-exchange-svc`, any old identity-bff container, and their nginx routes.
+- Clear Gatus checks that 2.20 switched off: they keep their last red result
+  ([#2549](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/2549)).
+- Re-enable scheduled deploys (1.2), pointed at the 2.20 commit.
 
 ---
 
 ## 7. Rollback
 
-Decide in advance who calls it and by when. After real users have linked accounts
-or filed complaints, rolling back loses that work.
+Decide in advance who calls it. Once users have linked accounts or filed
+complaints, rolling back loses that work.
 
-1. Re-freeze automatic deploys.
-2. Stop the stack: `cd /opt/digit && docker compose … down --remove-orphans`.
-   **Never** use `-v`.
-3. Put `/opt/ccrs` back on the old commit, and restore host_vars, the compose
-   overlay, the nginx vhost and `.env` from backup 4. Reload nginx.
-4. **Keycloak:** drop and recreate the `keycloak` database, `pg_restore` backup 2,
-   and start the **24** image. Do not start 24 before the restore.
-5. **Main database:** restore backup 1 **only if** a 2.20 migration left the 2.12
-   services unable to start. 2.20 adds tables and columns (onboarding, notification
-   delivery log, user-preferences), and whether 2.12 tolerates them is
-   **(TO CONFIRM)**. A restore discards every complaint, user and edit made since
-   the backup.
-6. OpenBao: the deploy only **added** keys, so the 2.12 stack ignores them. Restore
-   backup 3 only if something else changed.
-7. **Novu**, when `enable_novu` is on. If the 2.20 deploy rotated the Novu admin
-   (per-tenant Novu accounts on), the 2.12.1 key mint fails: it signs in with
-   `novu_admin_password` from host_vars (default `Digit@12345`). It works if
-   host_vars pins `novu_api_key`, or sets `novu_admin_password` to the rotated value
-   OpenBao now holds under that name. Restoring backup 6 (with the Novu containers
-   stopped) also brings back the old admin. Then follow the
-   [notifications rollback](notifications/migration.md#rollback): it covers the 2.12
-   checkout and `PGR_NOTIFICATION_CONFIG_DRIVEN`, and `migrate-notifications.py
-   apply` is one-way per tenant, so Configurator edits made after it are lost.
-8. Redeploy the old version with `./deploy.sh <tenant>`. Check legacy staff and
-   citizen sign-in, then release the freeze.
+1. Stop scheduled deploys.
+2. `cd /opt/digit && docker compose … down --remove-orphans`. **Never** `-v`.
+3. Check out the old commit in `/opt/ccrs`; restore host_vars, the compose overlay,
+   the vhost and `.env` from backup 4; reload nginx.
+4. **Keycloak:** drop and recreate the `keycloak` database, restore backup 2, then
+   start the 24 image.
+5. **Main database:** restore backup 1 only if the 2.12 services won't start on the
+   2.20 schema. It discards everything since the backup.
+6. **OpenBao:** the deploy only added keys. Restore backup 3 only if something else
+   changed.
+7. **Novu:** if the deploy rotated the Novu admin, 2.12.1 can't sign in to Novu
+   unless host_vars pins `novu_api_key` or sets `novu_admin_password` to the value
+   now in OpenBao. Or restore backup 6 with Novu stopped. Then follow the
+   [notifications rollback](notifications/migration.md#rollback).
+8. `./deploy.sh <tenant>` on the old commit. Check staff and citizen sign-in.
 
-**Limits.**
-- Emails already sent (password setup, invitations) cannot be recalled. Their
-  links stop working after a Keycloak restore.
-- A linked employee's DIGIT password was replaced. Without a main-database restore
-  they cannot sign in on 2.12 with their old password; reset it in egov-user.
-- Anything created on 2.20 that exists only in 2.20 tables is lost on a restore.
+Linked employees' DIGIT passwords were replaced; without a main-database restore,
+reset them in egov-user. Emails already sent can't be recalled.
 
 ---
 
-## 8. Known gaps
+## 8. Open questions
 
-Answered by the first production upgrade (2026-10-19): **1** yes, cleanly, within
-the normal wait; **2** a script over `_link` (step 4.1); **5** a hand-edited vhost
-works (2.4); **6** yes, an orphan,
-and no 2.20 path calls it; **11** yes, unlinked service accounts still sign in;
-**12** yes, for OpenBao file storage. The rest are still open.
-
-| # | Question | Why it matters |
-|---|---|---|
-| 1 | Does Keycloak 26.7.3 migrate a real 24.0.5 database with an old realm, Google links and stray realms cleanly? How long does the first start take? | One-way step; a Keycloak timeout aborts the deploy |
-| 2 | How do we bulk-link staff with real emails, and how fast can a county collect them? Who sends the emails? | Staff cannot sign in until linked |
-| 3 | What phone number did the old citizen Google flow store, and do Google citizens find their account by phone? | They may get a new, empty account |
-| 4 | Which OTP delivery (2.5) does the county accept for citizens, and does the chosen one actually deliver a code to a real phone? | Without one, citizens cannot sign in |
-| 5 | Does a hand-maintained vhost carry everything 2.20 needs, or can it move to the template? | Tenant routes 404 and sign-in breaks |
-| 6 | Is `token-exchange-svc` really left as an orphan? What else (the old `/citizen` bundle) still calls it? | A path around the BFF stays open |
-| 7 | How does an existing root get 2.20's new MDMS masters and localisation? | Raw keys or missing screens in the UI |
-| 8 | Do 2.12 services start on a database 2.20 has migrated (rollback without a restore)? | Decides whether rollback costs data |
-| 9 | Does the WhatsApp chatbot's citizen creation (`user/citizen/_create`) go to egov-user directly or through Kong, where 2.20 closes it? | Chatbot complaints may stop |
-| 10 | Do users under another tenant's key (4.4) need re-encryption first? How many are there? | They cannot sign in or be found by phone |
-| 11 | Do integration tests, MCP and other scripts still sign in with service accounts after the upgrade? | Nightly runs and bootstrap break |
-| 12 | Does the OpenBao backup command in 1.3 match the install's storage backend? | A backup that cannot be restored is no backup |
-| 13 | Does the deploy's Organization backfill for the root succeed when a test signup used the same slug? | No staff sign-in at that root |
-| 14 | When are the four blockers in 5.1 fixed in the code (seed action ids: [#2603](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/2603), open; Novu admin rotation; the user-preferences history guard)? | Every existing install hits them |
-| 15 | How does a nightly wrapper's integration-test run sign in after the upgrade? Linked test personas need Keycloak passwords. | Nightly results go red for the wrong reason |
-
----
-
-## 9. Journey log
-
-Fill one row per meaningful step, during the rehearsal and during the production
-upgrade. Fix this guide wherever a row disproves it, and drop the **(unverified)**
-marks once a step is proven.
-
-| Date (UTC) | Environment | Step | Result | Gotcha / follow-up |
-|---|---|---|---|---|
-| 2026-10-19 04:05 | — | #2557 merged | master `4c554468a` (same tree as develop `a5877085`) | Release test-plan items still open. |
-| 05:15 | County production (v2.12.1) | Backup (1.3) | Done in 20 s, checksums verified, copied off the server | `sites-enabled` held a real file, not a link. |
-| 05:20 | same | Freeze (1.2) | Cron line commented out | The wrapper pin alone would have restarted Keycloak 24 on the migrated DB. |
-| 05:20 | same | Roles + service account (2.2, 2.3) | `ACCOUNT_ADMIN`/`TENANT_ADMIN` created; `IDENTITY_ADMIN` signs in | Roles were absent at `pg` too; egov-user rejects `gender: OTHER`. |
-| 05:22 | same | host_vars (2.1, 2.2) | Preflight passes | `build_digit_ui: true` needed: the vhost served a host-built bundle. |
-| 05:24 | same | Mail settings, vhost staged (2.2, 2.4) | Done | The old vhost still carried the root-level Keycloak 24 routes (2.4). |
-| 06:10 | same | Deploy run 1 | Stopped in 2 min | 5.1 #1 (user-preferences history guard). Notifications down until fixed (3 min). |
-| 06:14 | same | Deploy run 2 | Stopped after 10 min; Keycloak 26 healthy | 5.1 #2 (Novu admin rotation, 422). |
-| 06:25 | same | Deploy run 3 | Stopped after 6 min | 5.1 #3 (Tempo unhealthy; realm not configured yet). |
-| 06:33 | same | Deploy run 4 | Realm `digit`, BFF ready; stopped at the notification seed | 5.1 #4: 23 role-actions on the wrong endpoints, deactivated and verified 403. |
-| 06:50 | same | First admin + staff (4.1) | 61 of 61 linked | Staff sign-in returned 503 until `ACCOUNT_ADMIN` got its `/user/*` role-actions (2.3). |
-| 06:58 | same | Verify by role (6) | Admin, GRO, LME, CSR, citizen OTP and service accounts all pass | Orphan cleanup and re-enabling the nightly still to do. |
-| 14:22 | same | Configurator signup reported broken; enable it (2.6) | Sign-in had worked all along. The signup page said "No sign-in method is enabled" | `identity_signup_methods: [magic_link]` had been set without `identity_magic_link_enabled: true`. Backed up Keycloak and Postgres, set the flag, ran a full deploy. |
-| 14:34 | same | Same deploy, end | Signup offers magic link; the link arrives and lands signed in on `/configurator/signup`. Every role still signs in. Stopped at the notification seed (rc 2), as expected | The skip flag was passed as `=false`, so the seed ran: it logged `+23 created` but wrote nothing, and egov-accesscontrol still refuses all 23 (5.1 #4). |
-| 10-20 07:33 | same | A colleague reports the configurator admin getting `AccessDeniedException` | Sign-in and workspace pick work, then `workspaces/_search` returns 403 from Kong | The root predates 2.20, so signup never seeded the onboarding workspace role-actions. Added them (2.3); they take effect once the 15-minute role-action cache expires. A workspace row added at the same time turned out to be unnecessary and was removed. |
+| Question | Why it matters |
+|---|---|
+| What phone number did the old citizen Google flow store? | Google citizens may get a new, empty account |
+| Does the `http` or `enable_otp_services` channel deliver a code to a real phone? | Without one, citizens can't sign in |
+| How does an existing root get 2.20's new masters and labels? | Raw keys or missing screens |
+| Do 2.12 services start on a database 2.20 has migrated? | Decides whether rollback needs a restore |
+| Does the WhatsApp chatbot create citizens through Kong, where `/user/citizen/_create` is closed? | Chatbot complaints may stop |
+| How do scheduled integration-test runs sign in after the upgrade? | Nightly results fail for the wrong reason |
+| When are blockers 1–3 in 5.1 fixed in the deploy? | Every existing install hits them |
