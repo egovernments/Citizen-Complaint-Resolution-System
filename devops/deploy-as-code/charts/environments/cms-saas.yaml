@@ -96,6 +96,11 @@ identity:
       IDENTITY_OTP_SENDER: "log"
       # ACCOUNT_ADMIN employee on pg, created by identity-bootstrap.
       DIGIT_ADMIN_USERNAME: "IDENTITY_ADMIN"
+      # egov-user directly, as Ansible's Kong routes /user (no RBAC). Through the
+      # gateway, access control refuses the pg ACCOUNT_ADMIN on every new
+      # workspace's own root tenant, and onboarding stops at BINDING with
+      # DIGIT_UNAVAILABLE.
+      DIGIT_USER_SERVICE_URL: "http://egov-user.egov:8080/user"
   # Creates identity-secrets, pgr-onboarding, Keycloak's database and the two
   # DIGIT employees (DIGIT_ADMIN_USERNAME above, pgr-services' provisioner below).
   bootstrap:
