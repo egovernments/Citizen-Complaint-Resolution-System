@@ -52,6 +52,7 @@ spec:
             - {name: IDENTITY_SECRET, value: {{ .Values.identitySecret | quote }}}
             - {name: ONBOARDING_SECRET, value: {{ .Values.onboardingSecret | quote }}}
             - {name: SMTP_AUTH, value: {{ .Values.smtpAuth | toString | quote }}}
+            - {name: GOOGLE_SIGNIN, value: {{ .Values.googleSignin | toString | quote }}}
           volumeMounts:
             - {name: scripts, mountPath: /scripts}
         - name: keycloak-db

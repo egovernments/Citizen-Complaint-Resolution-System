@@ -272,6 +272,10 @@ describe('identity helmfile wiring', () => {
       'digit-admin-password']) {
       expect(script).toContain(`"${key}=`);
     }
+    // Keys from outside accounts are required when their feature is on, never generated.
+    expect(script).toContain('[ "$SMTP_AUTH" = "true" ] && require keycloak-smtp-password');
+    expect(script).toContain('[ "$GOOGLE_SIGNIN" = "true" ] && require keycloak-google-client-secret');
+    expect(helmfile).toContain('googleSignin: {{ ne (index $kcConfigure "googleClientId" | default "") "" }}');
     // pgr-services presents the BFF's values, so they are copied, not generated.
     expect(script).toContain('"onboarding-token=value \\"\\$identity\\" identity-onboarding-token"');
     expect(script).toContain('"provisioner-password=value \\"\\$identity\\" digit-provisioner-password"');

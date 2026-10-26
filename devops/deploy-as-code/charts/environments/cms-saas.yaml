@@ -78,6 +78,10 @@ identity:
     configure:
       # Founders sign up with an emailed link (Configurator /signup).
       magicLinkEnabled: true
+      # Google sign-in and signup (OAuth client in GCP project digit-egov; its
+      # redirect URI is <publicUrl>/auth/realms/digit/broker/google/endpoint).
+      # Secret: identity-secrets' keycloak-google-client-secret.
+      googleClientId: "32016611022-0mtps6ejkun3iscvmgquqfotr0q3qpk8.apps.googleusercontent.com"
       smtp:
         host: "smtp.gmail.com"
         from: "digitcms@egovernments.org"

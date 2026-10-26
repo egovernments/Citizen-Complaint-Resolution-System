@@ -67,11 +67,16 @@ ensure "$IDENTITY_SECRET" \
   "digit-provisioner-password=digit_password"
 
 identity=$(get "$IDENTITY_SECRET")
-if [ "$SMTP_AUTH" = "true" ] && ! has "$identity" keycloak-smtp-password; then
-  echo "$IDENTITY_SECRET has no keycloak-smtp-password, which SMTP auth needs. Add it:" >&2
-  echo "  kubectl -n $ns patch secret $IDENTITY_SECRET --type merge -p '{\"stringData\":{\"keycloak-smtp-password\":\"...\"}}'" >&2
+# Keys an operator supplies: they come from an outside account, so they cannot
+# be generated. require KEY "WHY"
+require() {
+  has "$identity" "$1" && return
+  echo "$IDENTITY_SECRET has no $1, which $2 needs. Add it:" >&2
+  echo "  kubectl -n $ns patch secret $IDENTITY_SECRET --type merge -p '{\"stringData\":{\"$1\":\"...\"}}'" >&2
   exit 1
-fi
+}
+[ "$SMTP_AUTH" = "true" ] && require keycloak-smtp-password "SMTP auth"
+[ "$GOOGLE_SIGNIN" = "true" ] && require keycloak-google-client-secret "Google sign-in (configure.googleClientId)"
 
 # pgr-services presents the BFF's onboarding token and signs in as the
 # provisioner: the same values, so copied rather than generated.

@@ -104,6 +104,7 @@ releases:
       - identitySecret: {{ $secret.existingSecret | quote }}
         onboardingSecret: {{ index $pgrOnboarding "secretName" | default "pgr-onboarding" | quote }}
         smtpAuth: {{ index $kcSmtp "auth" | default false }}
+        googleSignin: {{ ne (index $kcConfigure "googleClientId" | default "") "" }}
         keycloakDb:
           database: {{ index $kcDb "database" | default "keycloak" | quote }}
           username: {{ index $kcDb "username" | default "keycloak" | quote }}

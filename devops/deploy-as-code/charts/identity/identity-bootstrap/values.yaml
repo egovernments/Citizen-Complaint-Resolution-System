@@ -6,8 +6,9 @@
 # Every step creates what is missing and never rewrites what exists:
 #   1. secrets   identity-secrets and pgr-onboarding: generates each missing
 #                key, keeps every present one. keycloak-smtp-password cannot be
-#                generated: with smtpAuth on, the Job stops until an operator adds
-#                it (kubectl -n egov patch secret identity-secrets ...).
+#                generated, nor can keycloak-google-client-secret: with SMTP auth
+#                or Google sign-in on, the Job stops until an operator adds it
+#                (kubectl -n egov patch secret identity-secrets ...).
 #   2. database  Keycloak's role and database on egov-config's db-host, as the
 #                platform user from the `db` Secret.
 #   3. accounts  the ACCOUNT_ADMIN employee the BFF signs in as, and the PGR
@@ -27,6 +28,8 @@ onboardingSecret: pgr-onboarding
 
 # The keycloak-smtp-password key is required (identity.keycloak.configure.smtp.auth).
 smtpAuth: false
+# The keycloak-google-client-secret key is required (identity.keycloak.configure.googleClientId).
+googleSignin: false
 
 # Keycloak's database, as the keycloak chart's db values.
 keycloakDb:
