@@ -90,3 +90,23 @@ describe('the configurator chart renders the same runtime config as Ansible', ()
     expect(values).toContain('mountPath: /usr/share/nginx/html/configurator/config.js');
   });
 });
+
+describe('the bare domain lands on the Configurator on both tiers', () => {
+  test('Ansible: root_to_configurator (default on) redirects / exactly, after root_to_digit_ui', () => {
+    const nginx = read('local-setup/ansible/templates/nginx-site.conf.j2');
+    const digitUi = nginx.indexOf('{% if nginx_features.root_to_digit_ui | default(false) %}');
+    const configurator = nginx.indexOf('{% elif (nginx_features.root_to_configurator | default(true)) and nginx_features.configurator %}');
+    expect(digitUi).toBeGreaterThan(-1);
+    expect(configurator).toBeGreaterThan(digitUi);
+    expect(nginx.slice(configurator)).toMatch(/^ {2}location = \/ \{ return 302 \/configurator\/; \}$/m);
+    expect(read('local-setup/ansible/inventory/group_vars/digit.yml')).toMatch(/^ {2}root_to_configurator: true\b/m);
+  });
+
+  test('Helm: root-ingress redirects /$ (exact under regex) to /configurator/ when no slug is set', () => {
+    const tpl = read(`${DEPLOY}/charts/core-services/configmaps/templates/root-ingress.yaml`);
+    expect(tpl).toContain('{{- else if ne (toString (index . "configuratorRedirect")) "false" }}');
+    expect(tpl).toContain('nginx.ingress.kubernetes.io/temporal-redirect: {{ printf "%s://%s/configurator/" $scheme $.Values.global.domain | quote }}');
+    expect(tpl).toMatch(/path: \/\$\n\s+pathType: ImplementationSpecific/);
+    expect(read(`${DEPLOY}/charts/core-services/configmaps/values.yaml`)).toMatch(/^ {2}configuratorRedirect: true$/m);
+  });
+});

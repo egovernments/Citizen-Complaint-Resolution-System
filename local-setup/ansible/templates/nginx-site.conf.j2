@@ -783,6 +783,10 @@ server {
 {% else %}
   location = / { return 404; }
 {% endif %}
+{% elif (nginx_features.root_to_configurator | default(true)) and nginx_features.configurator %}
+  # Bare domain lands on the Configurator: sign in, or sign up a new
+  # workspace. Exact match, so no other path is redirected.
+  location = / { return 302 /configurator/; }
 {% endif %}
 
   # API calls go to Kong directly.

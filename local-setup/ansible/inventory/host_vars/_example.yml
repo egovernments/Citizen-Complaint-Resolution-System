@@ -1390,6 +1390,7 @@ nginx_features:
   # which is what actually makes it readable without logging in.
   grafana: true              # /grafana/ — Grafana dashboards
   root_to_digit_ui: false    # serve / (the bare domain) from digit-ui instead of the default landing
+  root_to_configurator: true # otherwise / redirects to /configurator/ (needs `configurator: true`)
 
 # If true, the playbook will NOT render `templates/nginx-site.conf.j2` into
 # /etc/nginx/sites-available/ and will NOT touch /etc/nginx/sites-enabled/.

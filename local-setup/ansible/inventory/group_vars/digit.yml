@@ -281,6 +281,8 @@ citizen_banner_enabled: false
 nginx_features:
   brand_assets: false       # /brand/ alias — requires /var/www/brand on host
   configurator: false       # /configurator + /configurator/assets
+  root_to_configurator: true  # / (the bare domain) redirects to /configurator/ when
+                            # `configurator` is on; root_to_digit_ui takes precedence
   configurator_caching: false  # /configurator/assets/ long-cache headers
   status: true              # /status/ Gatus board (sub_filter rewrites). Default
                             # on since the board is never served unauthenticated:
