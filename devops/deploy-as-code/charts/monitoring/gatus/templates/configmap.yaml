@@ -151,6 +151,7 @@ data:
         alerts:
           - type: slack
 
+{{- if .Values.gatus.checks.boundaryManagement }}
       # No HTTP health endpoint; TCP probe only (matches the k3s catalogue).
       - name: Boundary Management Service
         group: Core Services
@@ -160,6 +161,7 @@ data:
           - "[CONNECTED] == true"
         alerts:
           - type: slack
+{{- end }}
 
       - name: Access Control Service
         group: Core Services
@@ -276,6 +278,7 @@ data:
         alerts:
           - type: slack
 
+{{- if .Values.gatus.checks.inbox }}
       # No HTTP health path exposed on this tier; TCP probe only.
       - name: Inbox Service
         group: Search
@@ -285,6 +288,7 @@ data:
           - "[CONNECTED] == true"
         alerts:
           - type: slack
+{{- end }}
 {{- end }}
 
 {{- if .Values.gatus.groups.mcp }}
