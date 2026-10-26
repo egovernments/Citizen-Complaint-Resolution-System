@@ -64,11 +64,12 @@ digit-ui:
     mapTenant: "pg"
 
 configurator:
-  runtimeConfig:
-    # The shared Turbopass on naipepea.digit.org (official boundary sets for 12
-    # countries; CORS open), so the Geography step offers preconfigured
-    # boundaries without running Turbopass on this cluster.
-    TURBOPASS_URL: "https://naipepea.digit.org/turbopass"
+  # Same-origin /turbopass, proxied to the shared Turbopass on naipepea.digit.org
+  # (official boundary sets for 12 countries): the SPA's default TURBOPASS_URL,
+  # so the Geography step's Fetch and Preconfigured options work without running
+  # Turbopass on this cluster.
+  turbopassProxy:
+    host: naipepea.digit.org
 
 digit-ui-v2:
   distUrl: "https://ccrs-prod-assets-bucket.s3.ap-south-1.amazonaws.com/deploy/digit-ui-v2-pg.tgz"
