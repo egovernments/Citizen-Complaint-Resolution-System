@@ -1,0 +1,30 @@
+{{- /*
+  The configurator SPA's runtime config, <base>/config.js, rendered from
+  `runtimeConfig` like the Ansible tier's templates/configurator-config.js.j2,
+  and mounted over the copy the image ships (extraVolumes below). One image
+  then serves every deployment; a blank key falls through to the SPA's
+  build-time or in-code default, exactly as the image's own config.js does.
+
+  env.yaml overrides arrive as `configurator.runtimeConfig` in the wholesale
+  values; read them here explicitly rather than rely on common.name having
+  merged them by the time this file renders.
+*/ -}}
+{{- $cfg := merge (dict) ((index .Values .Chart.Name | default dict).runtimeConfig | default dict) (.Values.runtimeConfig | default dict) -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: configurator-runtime-config
+  namespace: {{ .Values.namespace | default .Release.Namespace }}
+  labels:
+    app: configurator
+data:
+  config.js: |
+    // Rendered by the configurator Helm chart from `runtimeConfig`
+    // (charts/urban/configurator/values.yaml). Edit the environment's values,
+    // not this file. Precedence in the app: this file > build-time VITE_* >
+    // in-code default; a blank value falls through.
+    window.__CONFIGURATOR_CONFIG__ = {
+    {{- range $key := list "STATE_TENANT_ID" "OVERPASS_URL" "TURBOPASS_URL" "BOUNDARY_SEARCH_LIMIT" "SENTRY_DSN" "POSTHOG_KEY" "POSTHOG_HOST" }}
+      {{ $key }}: {{ index $cfg $key | default "" | toString | toJson }},
+    {{- end }}
+    };

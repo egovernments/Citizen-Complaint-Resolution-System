@@ -74,3 +74,19 @@ describe('the cms-saas helmfile environment', () => {
     expect(values).not.toMatch(/^\s*[\w.-]*(password|secret|token)[\w.-]*:\s*\S/im);
   });
 });
+
+describe('the configurator chart renders the same runtime config as Ansible', () => {
+  test('config.js carries exactly the keys of configurator-config.js.j2', () => {
+    const ansible = read('local-setup/ansible/templates/configurator-config.js.j2');
+    const keysAnsible = [...ansible.matchAll(/^ {2}([A-Z_]+): \{\{/gm)].map((m) => m[1]).sort();
+    const chart = read(`${DEPLOY}/charts/urban/configurator/templates/runtime-config.yaml`);
+    const list = /range \$key := list ((?:"[A-Z_]+" ?)+)/.exec(chart);
+    expect(list).not.toBeNull();
+    const keysChart = [...list![1].matchAll(/"([A-Z_]+)"/g)].map((m) => m[1]).sort();
+    expect(keysAnsible.length).toBeGreaterThan(3);
+    expect(keysChart).toEqual(keysAnsible);
+    // Mounted over the copy the image ships, under the image's base path.
+    const values = read(`${DEPLOY}/charts/urban/configurator/values.yaml`);
+    expect(values).toContain('mountPath: /usr/share/nginx/html/configurator/config.js');
+  });
+});
