@@ -22,6 +22,12 @@ releases:
   - name: mdms-v2
     installed: true
     <<: *default
+
+  # /egov-mdms-service/* -> mdms-v2 path shim, as Compose/Ansible run it. Needed by
+  # pgr-services' self-service onboarding (see the chart's values.yaml).
+  - name: egov-mdms-service
+    installed: true
+    <<: *default
   
   - name: egov-localization
     installed: true

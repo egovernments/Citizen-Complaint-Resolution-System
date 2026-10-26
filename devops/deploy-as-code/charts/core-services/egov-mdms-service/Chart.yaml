@@ -1,0 +1,6 @@
+apiVersion: v2
+name: egov-mdms-service
+description: nginx shim mapping /egov-mdms-service/* onto mdms-v2, as Compose/Ansible run it
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

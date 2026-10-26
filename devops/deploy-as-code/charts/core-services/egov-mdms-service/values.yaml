@@ -1,0 +1,18 @@
+# Path shim for MDMS v2, the Kubernetes counterpart of Compose's egov-mdms-service
+# (local-setup/nginx/mdms-proxy.conf). pgr-services' self-service onboarding
+# writes to hardcoded /egov-mdms-service/... paths (OnboardingSteps,
+# BaselineUpgrader, NotificationDefaultsStep), which mdms-v2 answers with a 404
+# since it serves /mdms-v2. Point pgr-services' mdmsHost here; /mdms-v2/ is
+# passed through unchanged, so its ordinary MDMS calls keep working.
+image:
+  repository: egovio/nginx
+  tag: alpine
+replicas: 1
+httpPort: 8080
+upstream: "http://mdms-v2.egov:8080"
+resources: |
+  requests:
+    cpu: 10m
+    memory: 16Mi
+  limits:
+    memory: 64Mi
