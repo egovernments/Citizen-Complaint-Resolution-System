@@ -85,9 +85,8 @@ const TIME_ZONES = [...new Set(COUNTRIES.map((c) => c.timeZone))].sort();
 const LANGUAGES: { code: string; label: string }[] = [
   { code: 'en', label: 'English' },
   { code: 'fr', label: 'French' },
-  { code: 'pt', label: 'Portuguese' },
-  { code: 'sw', label: 'Swahili' },
   { code: 'hi', label: 'Hindi' },
+  { code: 'pt', label: 'Portuguese' },
 ];
 
 /**
@@ -326,7 +325,9 @@ function SignupFlow() {
     setAccountCode(record.accountCode || '');
     setUrlSlug(record.urlSlug || '');
     setCountryCode(record.countryCode || '');
-    setLanguages(record.languages?.length ? record.languages : ['en']);
+    // A draft saved before a language was withdrawn keeps only the ones still offered.
+    const offered = (record.languages || []).filter((code) => LANGUAGES.some((language) => language.code === code));
+    setLanguages(offered.length ? offered : ['en']);
     setTimeZone(record.timeZone || '');
     setFinancialYearPolicy(record.financialYearPolicy || '');
     setTenantAdminMobile(String(record.tenantMetadata?.tenantAdmin?.mobileNumber || ''));
