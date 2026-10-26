@@ -33,6 +33,16 @@ settings below exist.
 
 ## Before enabling
 
+**Or let `identity-bootstrap` do steps 1-3.** With `identity.bootstrap.enabled:
+true` (and `secrets.identity.existingSecret` set), the identity helmfile installs
+`charts/identity/identity-bootstrap` before Keycloak: an idempotent hook Job that
+creates `identity-secrets` (every missing key generated, none rewritten) and
+pgr-services' `pgr-onboarding`, Keycloak's role and database, and the BFF's
+`ACCOUNT_ADMIN` employee plus the onboarding provisioner, then checks both can
+sign in. The one key it cannot generate is `keycloak-smtp-password`: with SMTP
+auth on, add it to the Secret yourself (the Job stops and prints the command).
+cms-saas runs this way (`charts/environments/cms-saas.yaml`).
+
 1. **Database.** Keycloak uses the platform Postgres (`egov-config`'s `db-host`)
    with a database and role of its own. Create them once:
 
