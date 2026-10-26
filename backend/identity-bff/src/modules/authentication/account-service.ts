@@ -14,17 +14,14 @@ export interface AccountMetadata {
   actions: AccountAction[];
   credentials: Array<{ id: string; type: string; label: string }>;
   providers: Array<{ alias: string }>;
-  /** Keycloak's current email: token claims lag a verified change until refresh (#2645). */
-  email?: string;
 }
 
 export async function accountMetadata(session: IdentitySession, surface: IdentitySurface): Promise<AccountMetadata> {
   if (session.authMethod === "phone_otp") return { actions: [], credentials: [], providers: [] };
   const subject = encodeURIComponent(session.claims.sub);
-  const [client, credentialsResponse, providersResponse, user] = await Promise.all([
+  const [client, credentialsResponse, providersResponse] = await Promise.all([
     identityClient(surfaceConfig(surface).clientId),
     request(`/users/${subject}/credentials`), request(`/users/${subject}/federated-identity`),
-    readUser(session.claims.sub),
   ]);
   const declared = (client?.attributes["digit.auth.account.actions"] || "").split(",").map(value => value.trim());
   const credentials = await credentialsResponse.json() as Array<{ id?: string; type?: string; userLabel?: string }>;
@@ -33,7 +30,6 @@ export async function accountMetadata(session: IdentitySession, surface: Identit
     actions: client?.enabled ? ACCOUNT_ACTIONS.filter(action => declared.includes(action)) : [],
     credentials: credentials.flatMap(item => item.id && item.type ? [{ id: item.id, type: item.type, label: item.userLabel || "" }] : []),
     providers: providers.flatMap(item => item.identityProvider ? [{ alias: item.identityProvider }] : []),
-    ...(user.email && { email: user.email }),
   };
 }
 

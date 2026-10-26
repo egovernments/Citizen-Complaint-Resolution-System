@@ -29,6 +29,8 @@ const SLUG_PATTERN = /^[a-z0-9-]{2,63}$/;
 const STORAGE_PREFIX = "digit_tenant:";
 const CACHE_PREFIX = "digit_branding:";
 const CACHE_TTL_MS = 10 * 60 * 1000;
+/** How long a new tab may pick up a login tab's slug: covers the emailed link's lifespan (#2645). */
+const SHARED_TTL_MS = 12 * 60 * 60 * 1000;
 
 export function isValidSlug(value: unknown): value is string {
     return typeof value === "string" && SLUG_PATTERN.test(value);
@@ -87,8 +89,8 @@ export function resolveTenantSlug(params: {
  * A value that is valid now is remembered in sessionStorage under this tab's
  * `tab_id`; without one, the remembered value is returned, so the pages that
  * follow a form post (errors, further steps) still know it. With `shared`,
- * the latest value is also kept in localStorage, for a new tab of the same
- * `tab_id`.
+ * it is also kept in localStorage under the `tab_id`, for a new tab of the
+ * same login; that copy is used once and ignored after SHARED_TTL_MS.
  */
 function rememberedPerTab(
     prefix: string,
@@ -100,23 +102,41 @@ function rememberedPerTab(
     const storage = safeSession();
     const local = shared ? safeLocal() : undefined;
     // Error pages carry no form action; their tab_id is only in the page URL (#2644).
-    const tabId = tabIdOf(loginAction) ?? tabIdOf(window.location.href);
+    const pageTabId = tabIdOf(window.location.href);
+    const tabId = tabIdOf(loginAction) ?? pageTabId;
     const key = tabId === undefined || storage === undefined ? undefined : prefix + tabId;
     try {
         if (isValid(candidate)) {
             if (key !== undefined) storage!.setItem(key, candidate);
             // The link emailed by an email change opens a new tab with this
-            // tab_id but its own sessionStorage (#2645): keep the latest one here.
-            if (tabId !== undefined) local?.setItem(prefix, `${tabId} ${candidate}`);
+            // tab_id but its own sessionStorage (#2645).
+            if (local && tabId !== undefined) {
+                for (const name of Object.keys(local)) {
+                    if (name.startsWith(prefix) && freshShared(local, name) === undefined) local.removeItem(name);
+                }
+                local.setItem(prefix + tabId, `${Date.now()} ${candidate}`);
+            }
             return candidate;
         }
-        const [sharedTab, sharedValue] = (local?.getItem(prefix) ?? "").split(" ");
-        const stored = (key === undefined ? null : storage?.getItem(key)) ?? (sharedTab === tabId ? sharedValue : null);
+        let stored = key === undefined ? null : storage?.getItem(key);
+        // The link's own tab_id first: Keycloak may render it in a new login session.
+        for (const id of [pageTabId, tabId]) {
+            if (!local || id === undefined || isValid(stored)) continue;
+            stored = freshShared(local, prefix + id);
+            local.removeItem(prefix + id);
+            if (isValid(stored) && key !== undefined) storage!.setItem(key, stored);
+        }
         return isValid(stored) ? stored : undefined;
     } catch {
         // Private mode or quota: later pages fall back to the default look.
         return isValid(candidate) ? candidate : undefined;
     }
+}
+
+/** A localStorage copy written as `<time> <value>`, until SHARED_TTL_MS has passed. */
+function freshShared(local: Storage, name: string): string | undefined {
+    const [at, value] = (local.getItem(name) ?? "").split(" ");
+    return Date.now() - Number(at) < SHARED_TTL_MS ? value : undefined;
 }
 
 const ACTION_STORAGE_PREFIX = "digit_kc_action:";

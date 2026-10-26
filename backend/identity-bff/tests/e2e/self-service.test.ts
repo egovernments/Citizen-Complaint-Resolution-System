@@ -39,6 +39,7 @@ describe("account self-service", () => {
     expect(body.sessions).toContainEqual(expect.objectContaining({ current: true, surface: "configurator" }));
     // A verified email change shows before the token's claims catch up (#2645).
     expect(body.user.email).toBe("changed@example.test");
+    expect(body.account).not.toHaveProperty("email");
     expect(JSON.stringify(body)).not.toContain(sessionId);
     expect(body.account.credentials[0]).not.toHaveProperty("secretData");
   });
