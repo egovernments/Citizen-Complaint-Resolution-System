@@ -4,3 +4,8 @@ description: nginx shim mapping /egov-mdms-service/* onto mdms-v2, as Compose/An
 type: application
 version: 0.1.0
 appVersion: "1.0.0"
+
+dependencies:
+- name: common
+  version: 0.0.5
+  repository: file://../../common
