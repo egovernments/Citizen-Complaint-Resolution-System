@@ -1,0 +1,47 @@
+{{- /* Hook resources too, at a lower weight, so they exist before the Job runs. */ -}}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: identity-bootstrap
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: identity-bootstrap
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation
+rules:
+  # create cannot be scoped to a name; read and patch are, to the two it owns.
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [create]
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames: [{{ .Values.identitySecret | quote }}, {{ .Values.onboardingSecret | quote }}]
+    verbs: [get, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: identity-bootstrap
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: identity-bootstrap
+subjects:
+  - kind: ServiceAccount
+    name: identity-bootstrap
+    namespace: {{ .Release.Namespace }}

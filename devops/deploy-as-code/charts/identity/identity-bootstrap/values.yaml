@@ -1,0 +1,52 @@
+# identity-bootstrap: what docs/setup/deployment/helm-identity.md "Before
+# enabling" lists as manual steps, as an idempotent Job, so a cluster gets the
+# identity stack from `helmfile apply` alone. The Ansible tier does the same in
+# playbook-deploy.yml (OpenBao-backed secrets, the onboarding provisioner).
+#
+# Every step creates what is missing and never rewrites what exists:
+#   1. secrets   identity-secrets and pgr-onboarding: generates each missing
+#                key, keeps every present one. keycloak-smtp-password cannot be
+#                generated: with smtpAuth on, the Job stops until an operator adds
+#                it (kubectl -n egov patch secret identity-secrets ...).
+#   2. database  Keycloak's role and database on egov-config's db-host, as the
+#                platform user from the `db` Secret.
+#   3. accounts  the ACCOUNT_ADMIN employee the BFF signs in as, and the PGR
+#                onboarding provisioner, on the state tenant; then a sign-in check.
+#
+# The identity helmfile installs it before keycloak (identity.bootstrap.enabled).
+
+images:
+  curl: curlimages/curl:8.10.1
+  psql: postgres:16-alpine
+
+# Kubernetes Secrets this Job owns. Both charts of the identity stack read
+# identitySecret (secrets.identity.existingSecret); pgr-services reads
+# onboardingSecret (pgr-services.onboarding.secretName).
+identitySecret: identity-secrets
+onboardingSecret: pgr-onboarding
+
+# The keycloak-smtp-password key is required (identity.keycloak.configure.smtp.auth).
+smtpAuth: false
+
+# Keycloak's database, as the keycloak chart's db values.
+keycloakDb:
+  database: keycloak
+  username: keycloak
+
+# The platform Postgres user that creates it: the `db` Secret's keys.
+platformDbSecret: db
+platformDbUserKey: username
+platformDbPasswordKey: password
+platformDbSslMode: require
+
+# DIGIT employees on egov-config's state-level-tenant-id. Their passwords are
+# identity-secrets' digit-admin-password and digit-provisioner-password.
+egovUserHost: "http://egov-user.egov:8080"
+adminUsername: "IDENTITY_ADMIN"
+adminMobile: "7777777776"
+provisionerUsername: "PGR_PROVISIONER"
+provisionerMobile: "7777777777"
+
+# Ceiling for the whole Job, egov-user's start included. Below the release
+# timeout in identity-helmfile.yaml.
+activeDeadlineSeconds: 900

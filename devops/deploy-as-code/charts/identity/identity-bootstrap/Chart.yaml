@@ -1,0 +1,6 @@
+apiVersion: v2
+name: identity-bootstrap
+description: One-time prerequisites of the identity stack (Secrets, Keycloak's database, the BFF and PGR provisioner employees), idempotent
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
