@@ -73,6 +73,15 @@ def decide(
         return Decision(NOOP, service, canonical, reason="fresh install")
 
     populated = {t: row_counts.get(t, 0) for t in data_present if row_counts.get(t, 0) > 0}
+    if populated and spec.get("adopts_unversioned_tables"):
+        # The map vouches that this service's migrations were written to run over
+        # these very tables (CREATE ... IF NOT EXISTS, no DROP), and the migrator
+        # baselines an empty history, so Flyway adopts the rows instead of
+        # replaying over them.
+        return Decision(
+            NOOP, service, canonical, tables=data_present,
+            reason="no history, but the migrator adopts the existing tables",
+        )
     if populated:
         detail = ", ".join(f"{t} has {n:,} rows" for t, n in sorted(populated.items()))
         return Decision(

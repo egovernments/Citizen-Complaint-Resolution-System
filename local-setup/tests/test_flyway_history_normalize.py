@@ -72,6 +72,27 @@ def test_no_history_but_populated_data_tables_abort():
     assert "eg_user" in d.reason
 
 
+def test_adopting_service_keeps_populated_tables_without_history():
+    # The 2.12 Go user-preferences service created user_preference with no Flyway
+    # history; its 2.20 migration is written to run over that table.
+    m = load_map(MAP_PATH)
+    spec = m["digit-user-preferences-service"]
+    d = decide("digit-user-preferences-service", spec, {"user_preference"}, {"user_preference": 40})
+    assert d.action == NOOP
+    assert "adopts" in d.reason
+
+    # Without the flag the same database still aborts.
+    d = decide("digit-user-preferences-service", dict(spec, adopts_unversioned_tables=False),
+               {"user_preference"}, {"user_preference": 40})
+    assert d.action == ABORT
+
+
+def test_adopting_service_still_aborts_on_ambiguous_history():
+    spec = dict(SPEC, adopts_unversioned_tables=True)
+    d = decide("egov-user", spec, {"egov_user_schema", "egov_user_schema_version", "eg_user"}, {"eg_user": 1})
+    assert d.action == ABORT
+
+
 def test_no_service_opts_out_of_normalization():
     # Phase 4 removed the `embedded` escape hatch: every service with a schema now
     # has a migration init container, so every entry must be normalized. A stray

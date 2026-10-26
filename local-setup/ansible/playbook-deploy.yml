@@ -5897,19 +5897,41 @@
         # Bad signals: "Restarting", "Exited" (with non-zero), or
         # "(unhealthy)". One-shot init containers that finished
         # successfully report "Exited (0)" — those are fine too.
+        #
+        # The observability tier (validate_health_warn_only) is reported but
+        # does not fail the gate: a crash-looping Tempo or Loki breaks no
+        # sign-in or complaint, but failing here skips every task after it,
+        # identity bootstrap included.
         set -eo pipefail
         bad=$(docker compose -f {{ digit_dir }}/docker-compose.egov-digit.yaml ps \
                 --format '{{ "{{" }}.Name{{ "}}" }} {{ "{{" }}.Status{{ "}}" }}' \
               | grep -E 'Restarting|\(unhealthy\)|Exited \([1-9]' || true)
-        if [ -n "$bad" ]; then
+        warn_re='^({{ validate_health_warn_only | default([]) | join('|') }}) '
+        soft=$(echo "$bad" | grep -E "$warn_re" || true)
+        hard=$(echo "$bad" | grep -vE "$warn_re" | grep . || true)
+        if [ -n "$soft" ]; then
+          echo "WARN observability containers not healthy:"
+          echo "$soft"
+        fi
+        if [ -n "$hard" ]; then
           echo "Broken containers:"
-          echo "$bad"
+          echo "$hard"
           exit 1
         fi
       args:
         chdir: "{{ digit_dir }}"
         executable: /bin/bash
+      register: container_health
       changed_when: false
+
+    - name: "validate — ACTION: observability containers are not healthy (not gating)"
+      when: "'WARN observability' in (container_health.stdout | default(''))"
+      ansible.builtin.debug:
+        msg: >-
+          {{ container_health.stdout }}.
+          Traces, logs or dashboards may be missing; the stack itself is unaffected.
+          Check the container's restart count and logs. To run without tracing,
+          set observability_level: logs.
 
     # ── Service health through Kong ───────────────────────────────────────
     # Hit each core service's health endpoint via Kong (port 18000), not
@@ -6943,11 +6965,14 @@
         stdin: |
           import json, os, sys, urllib.request, urllib.error
           api = "http://127.0.0.1:14002"
-          def call(path, body, token=None):
-              req = urllib.request.Request(api + path, data=json.dumps(body).encode(), method="POST",
+          def call(path, body, token=None, env_id=None):
+              req = urllib.request.Request(api + path, method="POST" if body is not None else "GET",
+                                           data=json.dumps(body).encode() if body is not None else None,
                                            headers={"Content-Type": "application/json"})
               if token:
                   req.add_header("Authorization", "Bearer " + token)
+              if env_id:
+                  req.add_header("Novu-Environment-Id", env_id)
               try:
                   with urllib.request.urlopen(req, timeout=20) as r:
                       raw = r.read()
@@ -6962,8 +6987,15 @@
           if status not in (200, 201):
               print("NOUSER"); sys.exit(0)
           token = (body.get("data") or {}).get("token")
+          # Novu 2.x takes the session's environment only from this header, and
+          # update-password refuses a session without one (422 "environmentId
+          # should not be empty"). Any environment of the admin's organization does.
+          status, envs = call("/v1/environments", None, token)
+          env_id = next((e.get("_id") for e in (envs.get("data") or []) if e.get("_id")), None)
+          if not env_id:
+              print("FAILED no environment (%s)" % status); sys.exit(1)
           status, _ = call("/v1/auth/update-password",
-                           {"currentPassword": old, "newPassword": new, "confirmPassword": new}, token)
+                           {"currentPassword": old, "newPassword": new, "confirmPassword": new}, token, env_id)
           if status not in (200, 204):
               print("FAILED %s" % status); sys.exit(1)
           print("ROTATED")
