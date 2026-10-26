@@ -76,8 +76,8 @@ config:
         dockerfile: frontend/micro-ui/web/docker/Dockerfile
         image-name: digit-ui
   # --- newer container-served services (runtime-configured, one image per service
-  # serves every tenant). The Vite SPAs that bake build-env into the bundle are
-  # a separate group further down. Everything from here on has a self-contained
+  # serves every tenant). The Vite-built configurator comes last, under its own
+  # comment. Everything from here on has a self-contained
   # Dockerfile (context = work-dir, no WORK_DIR build-arg), so these are the
   # entries dispatchable from .github/workflows/spa-build.yml rather than
   # build.yml — keep that workflow's `options:` list in step with this group.

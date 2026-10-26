@@ -11,7 +11,7 @@ distro.
 ## What you get
 
 ~39 containers on the dump-seeded `pg` / `pg.citya` tenants — DIGIT core
-services, PGR, employee UI, citizen SPA, configurator (DIGIT Studio), Kong,
+services, PGR, employee and citizen UI, configurator (DIGIT Studio), Kong,
 host nginx on port 80, and the Grafana/Prometheus/Loki/Tempo stack. Login
 works immediately.
 
@@ -201,6 +201,9 @@ Type the URLs exactly as written, trailing slash included.
 | Grafana | http://localhost/grafana/ | http://localhost:13000/grafana/ | `admin` / generated password (below) |
 | Gatus health board | http://localhost/status/ | http://localhost:18889/ | `digit-status` / generated password (below); no password on the direct port |
 
+For `<tenant-slug>`, see [Open it](local/localhost-full-and-slim.md#3-open-it)
+in the localhost guide.
+
 > **If a port-80 URL is not reachable or returns 404, use its direct-port URL
 > from the same row instead.** To fix port 80 itself, see
 > [If the port-80 URLs return 404](#if-the-port-80-urls-return-404) below.
@@ -231,7 +234,7 @@ done
 Quick check of both columns from PowerShell:
 
 ```powershell
-foreach ($u in 'digit-ui/','citizen/','configurator/','grafana/','status/',
+foreach ($u in 'digit-ui/','configurator/','grafana/','status/',
                ':18000/digit-ui/',':18000/digit-ui/citizen/',':18890/configurator/',
                ':13000/grafana/',':18889/') {
   $url = if ($u.StartsWith(':')) { "http://localhost$u" } else { "http://localhost/$u" }

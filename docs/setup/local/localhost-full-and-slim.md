@@ -161,6 +161,12 @@ watch -n5 "docker ps --format '{{.Names}}\t{{.Status}}' | grep -E 'healthy|Exite
 | Grafana | http://localhost/grafana/ |
 | Novu dashboard (**full only**) | http://localhost/novu/ |
 
+`<tenant-slug>` is the tenant's URL slug: the tenant id for a root the deploy
+seeds (`ke` gives `http://localhost/ke/digit-ui/citizen/`), or the slug chosen
+when a workspace signs up in the configurator. These presets seed the legacy
+`pg` root, which gets no slug, so only a workspace you create has a citizen URL
+([#2617](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/2617)).
+
 Log in as `ADMIN` / `eGov@123`. That account belongs to the **state** tenant `pg` — it does
 not authenticate against `pg.citya` or any other city tenant.
 

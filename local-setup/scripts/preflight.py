@@ -135,9 +135,10 @@ def r_auth_provider_retired(cfg):
     "the stale keys. The citizen app at /<tenant-slug>/digit-ui/citizen is unaffected.",
 )
 def r_digit_ui_v2_removed(cfg):
-    stale = [k for k in ("enable_digit_ui_v2", "nginx_features.digit_ui_v2",
-                         "digit_ui_v2_repo", "digit_ui_v2_branch")
-             if get(cfg, k) not in (None, False, "")]
+    stale = [k for k in ("enable_digit_ui_v2", "nginx_features.digit_ui_v2")
+             if as_bool(get(cfg, k))]
+    stale += [k for k in ("digit_ui_v2_repo", "digit_ui_v2_branch")
+              if get(cfg, k) not in (None, False, "")]
     if stale:
         yield (WARN, f"{', '.join(stale)} ignored: digit-ui-v2 was removed and /citizen is no "
                      "longer served (use /<tenant-slug>/digit-ui/citizen). Delete these keys.")
@@ -448,6 +449,9 @@ SELF_TEST_CASES = [
      {"digit-ui-v2-removed"}),
     ("digit-ui-v2 explicitly off is clean",
      {"enable_digit_ui_v2": False, "nginx_features": {"digit_ui_v2": False}},
+     set()),
+    ("digit-ui-v2 off as a string is clean",
+     {"enable_digit_ui_v2": "false", "nginx_features": {"digit_ui_v2": "no"}},
      set()),
     ("mcp without registry fires", {"enable_mcp": True, "docker_registry": ""},
      {"mcp-needs-registry"}),

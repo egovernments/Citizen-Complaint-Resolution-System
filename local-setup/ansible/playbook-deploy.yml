@@ -187,8 +187,8 @@
     - name: "preflight — WARNING: digit-ui-v2 settings are ignored (app removed)"
       vars:
         _v2_keys: >-
-          {{ ([] if (enable_digit_ui_v2 | default(false)) in [false, '', none] else ['enable_digit_ui_v2'])
-             + ([] if ((nginx_features | default({})).digit_ui_v2 | default(false)) in [false, '', none] else ['nginx_features.digit_ui_v2'])
+          {{ (['enable_digit_ui_v2'] if (enable_digit_ui_v2 | default(false) | bool) else [])
+             + (['nginx_features.digit_ui_v2'] if ((nginx_features | default({})).digit_ui_v2 | default(false) | bool) else [])
              + ([] if (digit_ui_v2_repo | default('')) in [false, '', none] else ['digit_ui_v2_repo'])
              + ([] if (digit_ui_v2_branch | default('')) in [false, '', none] else ['digit_ui_v2_branch']) }}
       ansible.builtin.debug:
@@ -199,7 +199,7 @@
           use /{{ digit_ui_default_tenant_slug | default('<tenant-slug>', true) }}/digit-ui/citizen, which is unaffected. Delete
           {{ 'this key' if (_v2_keys | length) == 1 else 'these keys' }} from
           host_vars/{{ inventory_hostname }}.yml; this deploy removes the leftover
-          /opt/digit-ui-v2 and /var/www/citizen.
+          /opt/digit-ui-v2 and, unless nginx_preserve_vhost is set, /var/www/citizen.
       when: _v2_keys | length > 0
 
 
@@ -4443,7 +4443,10 @@
       loop:
         - /opt/digit-ui-v2
         - /var/www/citizen
-      when: ansible_system != "Darwin"
+      when:
+        - ansible_system != "Darwin"
+        # A preserved hand-written vhost may still serve /citizen from here.
+        - item != '/var/www/citizen' or not (nginx_preserve_vhost | default(false) | bool)
 
     # ==================== Wait for MCP Server ====================
     # Only when MCP is actually deployed. enable_mcp is false on Mac (the

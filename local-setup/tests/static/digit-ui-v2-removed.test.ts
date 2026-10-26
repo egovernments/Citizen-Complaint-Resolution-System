@@ -66,6 +66,13 @@ describe('digit-ui-v2 is removed', () => {
     expect(leftovers).toEqual([]);
   });
 
+  test('no tracked file links to the removed bare /citizen path outside the allowlist', () => {
+    const leftovers = gitGrepFiles('localhost(:[0-9]+)?/citizen|<host>/citizen|/var/www/citizen').filter(
+      (f) => !ALLOWED_FILES.has(f) && !ALLOWED_PREFIXES.some((p) => f.startsWith(p)),
+    );
+    expect(leftovers).toEqual([]);
+  });
+
   test('host nginx no longer has a /citizen location', () => {
     const nginx = read('local-setup/ansible/templates/nginx-site.conf.j2');
     expect(nginx).not.toMatch(/location\s+(?:[=^~]+\s*)?\/citizen\b/);
