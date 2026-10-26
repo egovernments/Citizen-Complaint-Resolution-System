@@ -28,6 +28,10 @@ releases:
     installed: false
     <<: *default
 
+  # Inbox v2: not used by this deployment, so it is disabled. The PGR employee
+  # inbox calls /inbox/v2/_search unless globalConfigs sets USE_INBOX_V1: true.
+  # Re-enable by setting installed: true here and gatus.checks.inbox: true in
+  # monitoring/gatus/values.yaml.
   - name: inbox
-    installed: true
+    installed: false
     <<: *default
