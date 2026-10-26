@@ -25,6 +25,8 @@ const CONFIRM_HEADINGS = new Map<string, LoginMessageKey>([
 
 type ResetState = "idle" | "sending" | "sent" | "failed";
 
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 type LoginTexts = { header?: string; submitButtonLabel?: string; secondaryButtonLabel?: string };
 
 function textsOf(loginConfig: unknown): LoginTexts {
@@ -65,9 +67,13 @@ export default function Login(props: DigitPageProps<Extract<KcContext, { pageId:
     const [consented, setConsented] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [forgot, setForgot] = useState(false);
+    // The sign-in messages belong to the attempt before the reset form opened; Go back must not raise them again.
+    const [leftSignIn, setLeftSignIn] = useState(false);
     const [resetState, setResetState] = useState<ResetState>("idle");
     // Bumped by each reset request and by Go back; a reply for an older value is dropped.
     const resetRequest = useRef(0);
+    // Set as the request starts, so a second submit before the re-render sends nothing.
+    const resetSending = useRef(false);
     const [accountAction] = useState(() => resolveAccountAction({ loginAction: url.loginAction }));
     const confirming = accountAction !== undefined;
     const accountPage = slug ? `${employeeReturnTo(slug)}user/account` : undefined;
@@ -86,6 +92,8 @@ export default function Login(props: DigitPageProps<Extract<KcContext, { pageId:
         !isSubmitting;
 
     const sendResetLink = (email: string) => {
+        if (resetSending.current) return;
+        resetSending.current = true;
         const request = ++resetRequest.current;
         setResetState("sending");
         void requestPasswordSetup({
@@ -95,9 +103,25 @@ export default function Login(props: DigitPageProps<Extract<KcContext, { pageId:
             surface: "employee",
             tenantSlug: slug
         }).then(ok => {
-            if (resetRequest.current === request) setResetState(ok ? "sent" : "failed");
+            if (resetRequest.current !== request) return;
+            resetSending.current = false;
+            setResetState(ok ? "sent" : "failed");
         });
     };
+
+    const view = forgot
+        ? {
+              header: digit.t("CORE_COMMON_FORGOT_PASSWORD"),
+              toast: resetState === "failed" ? digit.t("CORE_LOGIN_RESET_LINK_FAILED") : undefined,
+              displayMessage: false
+          }
+        : {
+              header: confirming
+                  ? digit.t(CONFIRM_HEADINGS.get(accountAction) ?? "CORE_LOGIN_CONFIRM_ACTION")
+                  : digit.tr(texts.header, digit.t("CORE_COMMON_LOGIN")),
+              toast: invalidCredentials && !leftSignIn ? digit.t("INVALID_LOGIN_CREDENTIALS") : undefined,
+              displayMessage: !invalidCredentials && !leftSignIn
+          };
 
     return (
         <Template
@@ -105,31 +129,18 @@ export default function Login(props: DigitPageProps<Extract<KcContext, { pageId:
             i18n={i18n}
             doUseDefaultCss={doUseDefaultCss}
             classes={classes}
-            displayMessage={!forgot && !invalidCredentials}
-            headerNode={
-                forgot
-                    ? digit.tr(texts.secondaryButtonLabel, digit.t("CORE_COMMON_FORGOT_PASSWORD"))
-                    : confirming
-                      ? digit.t(CONFIRM_HEADINGS.get(accountAction) ?? "CORE_LOGIN_CONFIRM_ACTION")
-                      : digit.tr(texts.header, digit.t("CORE_COMMON_LOGIN"))
-            }
-            toast={
-                forgot
-                    ? resetState === "failed"
-                        ? digit.t("CORE_LOGIN_RESET_LINK_FAILED")
-                        : undefined
-                    : invalidCredentials
-                      ? digit.t("INVALID_LOGIN_CREDENTIALS")
-                      : undefined
-            }
+            displayMessage={view.displayMessage}
+            headerNode={view.header}
+            toast={view.toast}
         >
             {forgot ? (
                 <ForgotPassword
-                    email={[username, login.username].find(value => value?.includes("@"))?.trim() ?? ""}
+                    email={EMAIL.test(username.trim()) ? username.trim() : ""}
                     state={resetState}
                     onSubmit={sendResetLink}
                     onBack={() => {
                         resetRequest.current++;
+                        resetSending.current = false;
                         setForgot(false);
                         setResetState("idle");
                     }}
@@ -201,7 +212,10 @@ export default function Login(props: DigitPageProps<Extract<KcContext, { pageId:
                         type="button"
                         className="dg-link dg-forgot"
                         id="kc-forgot-password"
-                        onClick={() => setForgot(true)}
+                        onClick={() => {
+                            setForgot(true);
+                            setLeftSignIn(true);
+                        }}
                     >
                         {digit.tr(texts.secondaryButtonLabel, digit.t("CORE_COMMON_FORGOT_PASSWORD"))}
                     </button>
@@ -233,7 +247,7 @@ function ForgotPassword(props: {
     const { state } = props;
     const { i18n: digit } = useBranding();
     const [email, setEmail] = useState(props.email);
-    const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+    const valid = EMAIL.test(email.trim());
 
     return (
         <form
