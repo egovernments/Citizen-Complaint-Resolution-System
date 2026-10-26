@@ -453,6 +453,27 @@ describe('provisioning', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(/couldn’t be created with it/);
   });
 
+  it('lets a founder whose setup failed sign out and start again with another email', async () => {
+    await submitWith({
+      status: 'TERMINAL_FAILED',
+      currentStep: 'FOUNDER_HRMS',
+      completedSteps: ['TENANT_FOUNDATION', 'PLATFORM_BASELINE'],
+      errorCode: 'TENANT_ADMIN_ACCOUNT_REJECTED',
+      errorMessage: 'TENANT_ADMIN_ACCOUNT_REJECTED',
+    });
+    const assign = vi.fn();
+    vi.stubGlobal('location', { ...window.location, assign });
+    vi.mocked(api.logout).mockResolvedValue(undefined);
+
+    // The page re-renders while it polls the run, so wait for the settled screen.
+    await waitFor(() => expect(screen.getByText(/signed in as f@x\.test/i)).toBeInTheDocument());
+    fireEvent.click(await screen.findByRole('button', { name: /sign out and use a different email/i }));
+
+    await waitFor(() => expect(assign).toHaveBeenCalledWith('/configurator/signup'));
+    expect(api.logout).toHaveBeenCalledWith('current');
+    vi.unstubAllGlobals();
+  });
+
   it('keeps the account code of a reopened draft when its name changes (#2353)', async () => {
     await submitWith(
       {
